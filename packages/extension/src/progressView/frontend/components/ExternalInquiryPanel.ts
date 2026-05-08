@@ -29,6 +29,7 @@ import {
 import type { ExternalInquiryPermission } from '@shared/schemas';
 import { EXTERNAL_INQUIRY_ACTIONS } from '@shared/schemas';
 import { CopyButtonController } from '@shared/controllers/CopyButtonController';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 import { ProgressEvents } from '../events';
@@ -183,18 +184,20 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
 
   private renderQuestion(question: string): TemplateResult {
     const { copied } = this.copyController.state;
+    const text = copied ? 'Copied!' : 'Copy Question';
 
     return html`
       <div class="external-inquiry-request__question">
         <div class="external-inquiry-request__question-text">${question}</div>
         <div class="external-inquiry-request__question-actions">
-          <vscode-toolbar-button
-            icon=${copied ? 'check' : 'copy'}
-            label=${copied ? 'Copied!' : 'Copy Question'}
-            title="Copy question to clipboard for pasting into an external AI model"
-            @click=${() => this.copyController.copy(question)}
-            >${copied ? 'Copied!' : 'Copy Question'}</vscode-toolbar-button
-          >
+          ${renderLabeledActionButton({
+            icon: copied ? 'check' : 'copy',
+            label: text,
+            text,
+            title:
+              'Copy question to clipboard for pasting into an external AI model',
+            onClick: () => this.copyController.copy(question),
+          })}
         </div>
       </div>
     `;
@@ -312,18 +315,18 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
 
   private renderActions(): TemplateResult {
     return html`
-      <vscode-toolbar-container class="external-inquiry-request__actions">
-        <vscode-toolbar-button
-          icon="check"
-          label="Submit Answer"
-          title="Submit the answer from the external model"
-          data-action=${EXTERNAL_INQUIRY_ACTIONS[0]}
-          ?disabled=${!this.hasAnswer}
-          @click=${this.handleSubmit}
-          >Submit Answer</vscode-toolbar-button
-        >
+      <div class="external-inquiry-request__actions">
+        ${renderLabeledActionButton({
+          icon: 'check',
+          label: 'Submit Answer',
+          text: 'Submit Answer',
+          title: 'Submit the answer from the external model',
+          action: EXTERNAL_INQUIRY_ACTIONS[0],
+          disabled: !this.hasAnswer,
+          onClick: this.handleSubmit,
+        })}
         ${this.renderRejectButton('Reject this external inquiry (n)')}
-      </vscode-toolbar-container>
+      </div>
     `;
   }
 

@@ -16,6 +16,8 @@ import { designTokens, codiconStyles } from '@shared/styles';
 import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
 import { ensureContextMenuUsesSlot } from '@shared/utils/dom';
 import { getBasename, normalizeFilePath } from '@shared/utils/path';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
+import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { MainViewEvents } from '../events';
 import { SESSION_TYPES } from '../constants';
 import { SESSION_DEFAULTS } from '../sessionDefaults';
@@ -268,19 +270,25 @@ export class FileSelectGroup extends LitElement {
 
     return html`
       <div class="dropdown-container">
-        <vscode-toolbar-button
+        <wa-button
           id="toggleToolConfig"
-          icon="tools"
+          class=${classMap({
+            'action-icon-button': true,
+            'has-options': hasChecked,
+          })}
+          appearance="plain"
+          variant="neutral"
+          size="small"
+          type="button"
+          aria-label="Tool configuration options"
           title="Tool configuration options"
-          toggleable
           aria-haspopup="true"
           aria-expanded=${this.toolConfigMenuOpen ? 'true' : 'false'}
-          class=${classMap({ 'has-options': hasChecked })}
-          ?checked=${this.toolConfigMenuOpen}
           @click=${() => this.toggleMenu('toolConfig')}
         >
+          ${waIcon('tools', { slot: 'start' })}
           <i class="codicon ${chevronClass}"></i>
-        </vscode-toolbar-button>
+        </wa-button>
         <vscode-context-menu
           id="toolConfigOptions"
           class="dropdown-menu"
@@ -328,19 +336,25 @@ export class FileSelectGroup extends LitElement {
 
     return html`
       <div class="dropdown-container">
-        <vscode-toolbar-button
+        <wa-button
           id="toggleAutoExtract"
-          icon="wand"
+          class=${classMap({
+            'action-icon-button': true,
+            'has-options': hasChecked,
+          })}
+          appearance="plain"
+          variant="neutral"
+          size="small"
+          type="button"
+          aria-label="Auto-extract options"
           title="Auto-extract options"
-          toggleable
           aria-haspopup="true"
           aria-expanded=${this.autoExtractMenuOpen ? 'true' : 'false'}
-          class=${classMap({ 'has-options': hasChecked })}
-          ?checked=${this.autoExtractMenuOpen}
           @click=${() => this.toggleMenu('autoExtract')}
         >
+          ${waIcon('wand', { slot: 'start' })}
           <i class="codicon ${chevronClass}"></i>
-        </vscode-toolbar-button>
+        </wa-button>
         <vscode-context-menu
           id="autoExtractOptions"
           class="dropdown-menu"
@@ -449,15 +463,18 @@ export class FileSelectGroup extends LitElement {
       >
         <div class="file-select-header">
           <div class="file-select-label-group">
-            <vscode-toolbar-button
+            <span
               id="refresh${config.type[0].toUpperCase()}${config.type.slice(
                 1,
               )}FileButton"
-              icon=${config.icon}
-              label=${config.refreshTitle}
-              title=${config.refreshTitle}
-              @click=${this.handleRefreshFiles}
-            ></vscode-toolbar-button>
+            >
+              ${renderIconActionButton({
+                icon: config.icon as TeXRAIconName,
+                label: config.refreshTitle,
+                title: config.refreshTitle,
+                onClick: this.handleRefreshFiles,
+              })}
+            </span>
             <label for=${this.selectId} title=${config.tooltip}
               >${config.label}</label
             >
@@ -473,25 +490,31 @@ export class FileSelectGroup extends LitElement {
                 >`
               : nothing}
           </div>
-          <vscode-toolbar-container class="file-select-actions">
-            <vscode-toolbar-button
+          <div class="file-select-actions">
+            <span
               id="current${config.type[0].toUpperCase()}${config.type.slice(
                 1,
               )}FileButton"
-              icon="file-code"
-              label=${config.currentTitle}
-              title=${config.currentTitle}
-              @click=${this.handleGetCurrentFile}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
+            >
+              ${renderIconActionButton({
+                icon: 'file-code',
+                label: config.currentTitle,
+                title: config.currentTitle,
+                onClick: this.handleGetCurrentFile,
+              })}
+            </span>
+            <span
               id="empty${config.type[0].toUpperCase()}${config.type.slice(
                 1,
               )}FileButton"
-              icon="close"
-              label=${config.emptyTitle}
-              title=${config.emptyTitle}
-              @click=${this.handleEmptyFile}
-            ></vscode-toolbar-button>
+            >
+              ${renderIconActionButton({
+                icon: 'close',
+                label: config.emptyTitle,
+                title: config.emptyTitle,
+                onClick: this.handleEmptyFile,
+              })}
+            </span>
             <button
               id=${toggleId}
               class="toggle-icon"
@@ -502,37 +525,46 @@ export class FileSelectGroup extends LitElement {
             >
               <i class="codicon ${chevronClass}"></i>
             </button>
-            <vscode-toolbar-button
+            <span
               id="addOpened${config.type[0].toUpperCase()}${config.type.slice(
                 1,
               )}FilesButton"
-              class="file-action-button"
-              icon="folder-opened"
-              label=${config.addOpenedLabel}
-              title=${config.addOpenedLabel}
-              @click=${this.handleAddOpenedFiles}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
+            >
+              ${renderIconActionButton({
+                icon: 'folder-opened',
+                label: config.addOpenedLabel,
+                title: config.addOpenedLabel,
+                className: 'file-action-button',
+                onClick: this.handleAddOpenedFiles,
+              })}
+            </span>
+            <span
               id="empty${config.type[0].toUpperCase()}${config.type.slice(
                 1,
               )}FilesButton"
-              class="file-action-button"
-              icon="trash"
-              label=${config.emptyListLabel}
-              title=${config.emptyListLabel}
-              @click=${this.handleEmptyFiles}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
+            >
+              ${renderIconActionButton({
+                icon: 'trash',
+                label: config.emptyListLabel,
+                title: config.emptyListLabel,
+                className: 'file-action-button',
+                onClick: this.handleEmptyFiles,
+              })}
+            </span>
+            <span
               id="select${config.type[0].toUpperCase()}${config.type.slice(
                 1,
               )}FilesButton"
-              class="file-action-button"
-              icon="add"
-              label=${config.selectListLabel}
-              title=${config.selectListLabel}
-              @click=${this.handleSelectMultipleFiles}
-            ></vscode-toolbar-button>
-          </vscode-toolbar-container>
+            >
+              ${renderIconActionButton({
+                icon: 'add',
+                label: config.selectListLabel,
+                title: config.selectListLabel,
+                className: 'file-action-button',
+                onClick: this.handleSelectMultipleFiles,
+              })}
+            </span>
+          </div>
         </div>
         <wa-select
           id=${this.selectId}

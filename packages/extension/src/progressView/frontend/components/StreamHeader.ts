@@ -19,6 +19,7 @@ import {
 } from '@shared/schemas';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
+import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, TOOLBAR_BUTTONS } from '../constants';
@@ -369,8 +370,9 @@ export class StreamHeader extends LitElement {
             ${this.renderProgressBadge()}
           </div>
           <div class="header-actions">
-            <vscode-toolbar-container
+            <div
               id=${ELEMENT_IDS.TOOLBAR_CONTAINER}
+              class="toolbar-container"
               data-agent-mode=${agentCategory}
               @click=${this.handleToolbarClick}
             >
@@ -391,25 +393,33 @@ export class StreamHeader extends LitElement {
                   );
                   const title =
                     isActive && btn.titleActive ? btn.titleActive : btn.title;
+                  const className = [
+                    btn.className,
+                    hidden ? 'toolbar-button--hidden' : '',
+                    isActive ? 'is-active' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ');
                   return html`
-                    <vscode-toolbar-button
+                    <wa-button
                       id=${btn.id}
-                      icon=${btn.icon}
-                      label=${title}
+                      class="action-icon-button ${className}"
+                      appearance="plain"
+                      variant="neutral"
+                      size="small"
+                      type="button"
+                      aria-label=${title}
                       title=${title}
                       data-command=${btn.command}
                       aria-hidden=${hidden ? 'true' : 'false'}
                       ?disabled=${disabled}
-                      class=${classMap({
-                        [btn.className || '']: Boolean(btn.className),
-                        'toolbar-button--hidden': hidden,
-                        'is-active': isActive,
-                      })}
-                    ></vscode-toolbar-button>
+                    >
+                      ${waIcon(btn.icon as TeXRAIconName)}
+                    </wa-button>
                   `;
                 },
               )}
-            </vscode-toolbar-container>
+            </div>
           </div>
         </div>
       </div>

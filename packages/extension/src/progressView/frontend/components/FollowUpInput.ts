@@ -8,7 +8,6 @@ import {
   type TemplateResult,
 } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
 import { when } from 'lit/directives/when.js';
 
@@ -17,6 +16,8 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { RecordingButtonController } from '@shared/controllers';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { getTextareaValue, insertTextAtCursor } from '@shared/utils/textarea';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
+import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 
@@ -92,8 +93,7 @@ export class FollowUpInput extends LitElement {
         overflow-wrap: anywhere;
       }
 
-      .follow-up-actions,
-      vscode-toolbar-container.follow-up-actions {
+      .follow-up-actions {
         display: flex;
         flex-direction: column !important;
         align-items: center;
@@ -199,42 +199,45 @@ export class FollowUpInput extends LitElement {
             ></vscode-textarea>
 
             <div class="follow-up-actions">
-              <vscode-toolbar-button
-                id=${ELEMENT_IDS.POLISH_FOLLOW_UP_BTN}
-                icon="sparkle"
-                label="Polish follow-up"
-                title="Polish follow-up with AI"
-                @click=${this.emitPolish}
-              ></vscode-toolbar-button>
+              <span id=${ELEMENT_IDS.POLISH_FOLLOW_UP_BTN}>
+                ${renderIconActionButton({
+                  icon: 'sparkle',
+                  label: 'Polish follow-up',
+                  title: 'Polish follow-up with AI',
+                  onClick: this.emitPolish,
+                })}
+              </span>
               ${when(
                 this.polishing,
                 () => html`<wa-progress-ring indeterminate></wa-progress-ring>`,
               )}
-              <vscode-toolbar-button
-                id=${ELEMENT_IDS.RECORD_FOLLOW_UP_BTN}
-                icon=${this.recordingController.state.icon}
-                label=${this.recordingController.state.title}
-                title=${this.recordingController.state.title}
-                class=${classMap({
-                  [this.recordingController.state.recordingClass]:
-                    this.recordingController.state.recording,
+              <span id=${ELEMENT_IDS.RECORD_FOLLOW_UP_BTN}>
+                ${renderIconActionButton({
+                  icon: this.recordingController.state.icon as TeXRAIconName,
+                  label: this.recordingController.state.title,
+                  title: this.recordingController.state.title,
+                  className: this.recordingController.state.recording
+                    ? this.recordingController.state.recordingClass
+                    : '',
+                  onClick: this.recordingController.handleClick,
                 })}
-                @click=${this.recordingController.handleClick}
-              ></vscode-toolbar-button>
-              <vscode-toolbar-button
-                id=${ELEMENT_IDS.CLEAR_FOLLOW_UP_BTN}
-                icon="clear-all"
-                label="Clear input"
-                title="Clear input"
-                @click=${this.emitClear}
-              ></vscode-toolbar-button>
-              <vscode-toolbar-button
-                id=${ELEMENT_IDS.SEND_FOLLOW_UP_BTN}
-                icon="send"
-                label="Send"
-                title="Send follow-up message"
-                @click=${this.emitSend}
-              ></vscode-toolbar-button>
+              </span>
+              <span id=${ELEMENT_IDS.CLEAR_FOLLOW_UP_BTN}>
+                ${renderIconActionButton({
+                  icon: 'clear-all',
+                  label: 'Clear input',
+                  title: 'Clear input',
+                  onClick: this.emitClear,
+                })}
+              </span>
+              <span id=${ELEMENT_IDS.SEND_FOLLOW_UP_BTN}>
+                ${renderIconActionButton({
+                  icon: 'send',
+                  label: 'Send',
+                  title: 'Send follow-up message',
+                  onClick: this.emitSend,
+                })}
+              </span>
             </div>
           </div>
         </div>

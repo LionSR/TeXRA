@@ -14,6 +14,7 @@ import { hljs } from '@shared/highlighting/hljs';
 // Local imports - shared utilities
 import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 import { getBasename } from '@shared/utils/path';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - Lit template utilities
 import {
@@ -111,7 +112,7 @@ export function buildCopyButton(
   const { hidden = false, content, contentId } = options;
   const copyId = content != null ? registerCopyContent(content, contentId) : '';
   // prettier-ignore
-  return html`<vscode-toolbar-button class="banner-content-copy" icon="copy" title=${title} aria-label=${title} data-default-title=${title} data-success-title="Copied!" data-copy-id=${ifDefined(copyId || undefined)} data-copy-type="banner" ?hidden=${hidden}></vscode-toolbar-button>`;
+  return html`<wa-button class="action-icon-button banner-content-copy" appearance="plain" variant="neutral" size="small" type="button" title=${title} aria-label=${title} data-default-title=${title} data-success-title="Copied!" data-copy-id=${ifDefined(copyId || undefined)} data-copy-type="banner" ?hidden=${hidden}>${waIcon('copy')}</wa-button>`;
 }
 
 /** Options for building a details summary header. */

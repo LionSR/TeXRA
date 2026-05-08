@@ -26,6 +26,8 @@ import {
   renderModelOptions,
 } from '@shared/utils/selectTemplates';
 import { getTextareaValue } from '@shared/utils/textarea';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
+import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - main view
 import { MainViewEvents } from '../events';
@@ -237,13 +239,13 @@ export class InstructionPanel extends LitElement {
       }
 
       .model-selection-footer .codicon,
-      .model-selection-footer vscode-toolbar-button {
+      .model-selection-footer wa-button {
         display: flex;
         align-items: center;
         line-height: 1;
       }
 
-      .model-selection-footer vscode-toolbar-button {
+      .model-selection-footer wa-button {
         min-width: var(--height-control);
         height: var(--height-control);
       }
@@ -359,13 +361,13 @@ export class InstructionPanel extends LitElement {
           ${copy.body}
           <span class="session-hint-time">${copy.time}</span>
         </span>
-        <vscode-toolbar-button
-          icon="close"
-          class="session-hint-dismiss"
-          title="Dismiss this reminder"
-          aria-label="Dismiss this reminder"
-          @click=${this.handleDismissSessionHint}
-        ></vscode-toolbar-button>
+        ${renderIconActionButton({
+          icon: 'close',
+          label: 'Dismiss this reminder',
+          title: 'Dismiss this reminder',
+          className: 'session-hint-dismiss',
+          onClick: this.handleDismissSessionHint,
+        })}
       </div>
     `;
   }
@@ -499,34 +501,41 @@ export class InstructionPanel extends LitElement {
               </vscode-radio-group>
             </div>
           </div>
-          <vscode-toolbar-container
+          <div
             class="instruction-header-actions"
             @click=${this.handleActionClick}
           >
-            <vscode-toolbar-button
+            <span
               id="packButton"
-              icon="archive"
-              label="Pack output to History"
-              title="Pack the output for this agent into the History folder"
               style=${styleMap({ display: session.debugMode ? '' : 'none' })}
-              data-action="pack"
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
+            >
+              ${renderIconActionButton({
+                icon: 'archive',
+                label: 'Pack output to History',
+                title: 'Pack the output for this agent into the History folder',
+                action: 'pack',
+              })}
+            </span>
+            <span
               id="cleanButton"
-              icon="trash"
-              label="Clean output"
-              title="Clean the output for this agent"
               style=${styleMap({ display: session.debugMode ? '' : 'none' })}
-              data-action="clean"
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id="magicPolishButton"
-              icon="sparkle"
-              label="Polish instruction"
-              title="Polish instruction text with AI"
-              ?disabled=${session.isPolishing}
-              data-action="polish"
-            ></vscode-toolbar-button>
+            >
+              ${renderIconActionButton({
+                icon: 'trash',
+                label: 'Clean output',
+                title: 'Clean the output for this agent',
+                action: 'clean',
+              })}
+            </span>
+            <span id="magicPolishButton">
+              ${renderIconActionButton({
+                icon: 'sparkle',
+                label: 'Polish instruction',
+                title: 'Polish instruction text with AI',
+                disabled: session.isPolishing,
+                action: 'polish',
+              })}
+            </span>
             ${session.isPolishing
               ? html`
                   <vscode-progress-ring
@@ -538,24 +547,28 @@ export class InstructionPanel extends LitElement {
                   ></vscode-progress-ring>
                 `
               : nothing}
-            <vscode-toolbar-button
-              id="recordInstructionButton"
-              icon=${session.isRecording ? 'stop-circle' : 'mic'}
-              class=${session.isRecording ? 'recording' : ''}
-              label="Record instruction"
-              title=${session.isRecording
-                ? 'Stop recording'
-                : 'Record instruction with microphone'}
-              data-action="record"
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id="eraseInstructionButton"
-              icon="clear-all"
-              label="Erase instruction"
-              title="Erase instruction"
-              data-action="erase"
-            ></vscode-toolbar-button>
-          </vscode-toolbar-container>
+            <span id="recordInstructionButton">
+              ${renderIconActionButton({
+                icon: (session.isRecording
+                  ? 'stop-circle'
+                  : 'mic') as TeXRAIconName,
+                label: 'Record instruction',
+                title: session.isRecording
+                  ? 'Stop recording'
+                  : 'Record instruction with microphone',
+                className: session.isRecording ? 'recording' : '',
+                action: 'record',
+              })}
+            </span>
+            <span id="eraseInstructionButton">
+              ${renderIconActionButton({
+                icon: 'clear-all',
+                label: 'Erase instruction',
+                title: 'Erase instruction',
+                action: 'erase',
+              })}
+            </span>
+          </div>
         </div>
         ${this.renderSessionHint(session)}
         <vscode-textarea
@@ -572,14 +585,15 @@ export class InstructionPanel extends LitElement {
             <div
               class="select-group agent-select-group agent-model-select-group"
             >
-              <vscode-toolbar-button
-                id="agentSettingsButton"
-                class="settings-button"
-                icon="sparkle"
-                label="Agent settings"
-                title="Agent settings"
-                @click=${this.handleAgentSettings}
-              ></vscode-toolbar-button>
+              <span id="agentSettingsButton">
+                ${renderIconActionButton({
+                  icon: 'sparkle',
+                  label: 'Agent settings',
+                  title: 'Agent settings',
+                  className: 'settings-button',
+                  onClick: this.handleAgentSettings,
+                })}
+              </span>
               <div class="agent-select-controls">
                 <div class="agent-select-dropdowns">
                   <vscode-single-select
@@ -650,14 +664,15 @@ export class InstructionPanel extends LitElement {
             <div
               class="select-group model-select-group agent-model-select-group"
             >
-              <vscode-toolbar-button
-                id="modelSettingsButton"
-                class="settings-button"
-                icon="robot"
-                label="Model settings"
-                title="Model settings"
-                @click=${this.handleModelSettings}
-              ></vscode-toolbar-button>
+              <span id="modelSettingsButton">
+                ${renderIconActionButton({
+                  icon: 'robot',
+                  label: 'Model settings',
+                  title: 'Model settings',
+                  className: 'settings-button',
+                  onClick: this.handleModelSettings,
+                })}
+              </span>
               <vscode-single-select
                 id="model"
                 class="model-select"

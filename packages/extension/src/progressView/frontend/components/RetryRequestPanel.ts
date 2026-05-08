@@ -23,6 +23,7 @@ import {
 
 // Local imports - shared schemas
 import type { ProviderErrorPartial, RetryPermission } from '@shared/schemas';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { BaseRequestPanel } from './BaseRequestPanel';
 
 // Local imports - base class
@@ -102,34 +103,31 @@ export class RetryRequestPanel extends BaseRequestPanel {
               `
             : nothing}
         </div>
-        <vscode-toolbar-container class="retry-request__actions">
-          ${when(
-            isCredentialExhausted,
-            () => html`
-              <vscode-toolbar-button
-                icon="key"
-                label="Use your own API key"
-                title="Use your own API key (k)"
-                @click=${() => this.emitAction('useOwnApiKey')}
-                >Use your own API key</vscode-toolbar-button
-              >
-            `,
+        <div class="retry-request__actions">
+          ${when(isCredentialExhausted, () =>
+            renderLabeledActionButton({
+              icon: 'key',
+              label: 'Use your own API key',
+              text: 'Use your own API key',
+              title: 'Use your own API key (k)',
+              onClick: () => this.emitAction('useOwnApiKey'),
+            }),
           )}
-          <vscode-toolbar-button
-            icon="refresh"
-            label="Retry"
-            title="Retry (r)"
-            @click=${() => this.emitAction('retry')}
-            >Retry</vscode-toolbar-button
-          >
-          <vscode-toolbar-button
-            icon="close"
-            label="Dismiss"
-            title="Dismiss (Esc)"
-            @click=${() => this.emitAction('cancel')}
-            >Dismiss</vscode-toolbar-button
-          >
-        </vscode-toolbar-container>
+          ${renderLabeledActionButton({
+            icon: 'refresh',
+            label: 'Retry',
+            text: 'Retry',
+            title: 'Retry (r)',
+            onClick: () => this.emitAction('retry'),
+          })}
+          ${renderLabeledActionButton({
+            icon: 'close',
+            label: 'Dismiss',
+            text: 'Dismiss',
+            title: 'Dismiss (Esc)',
+            onClick: () => this.emitAction('cancel'),
+          })}
+        </div>
       </div>
     `;
   }

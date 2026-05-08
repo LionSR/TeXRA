@@ -11,6 +11,7 @@ import { faBolt } from '@fortawesome/free-solid-svg-icons/faBolt';
 import { faBook } from '@fortawesome/free-solid-svg-icons/faBook';
 import { faBookmark } from '@fortawesome/free-solid-svg-icons/faBookmark';
 import { faBox } from '@fortawesome/free-solid-svg-icons/faBox';
+import { faBoxArchive } from '@fortawesome/free-solid-svg-icons/faBoxArchive';
 import { faBuilding } from '@fortawesome/free-solid-svg-icons/faBuilding';
 import { faCaretDown } from '@fortawesome/free-solid-svg-icons/faCaretDown';
 import { faChartLine } from '@fortawesome/free-solid-svg-icons/faChartLine';
@@ -23,6 +24,7 @@ import { faChevronRight } from '@fortawesome/free-solid-svg-icons/faChevronRight
 import { faChevronUp } from '@fortawesome/free-solid-svg-icons/faChevronUp';
 import { faCircle } from '@fortawesome/free-solid-svg-icons/faCircle';
 import { faCircleCheck } from '@fortawesome/free-solid-svg-icons/faCircleCheck';
+import { faCircleDot } from '@fortawesome/free-solid-svg-icons/faCircleDot';
 import { faCircleExclamation } from '@fortawesome/free-solid-svg-icons/faCircleExclamation';
 import { faCircleInfo } from '@fortawesome/free-solid-svg-icons/faCircleInfo';
 import { faCircleQuestion } from '@fortawesome/free-solid-svg-icons/faCircleQuestion';
@@ -33,8 +35,10 @@ import { faClock } from '@fortawesome/free-solid-svg-icons/faClock';
 import { faClockRotateLeft } from '@fortawesome/free-solid-svg-icons/faClockRotateLeft';
 import { faCloudArrowDown } from '@fortawesome/free-solid-svg-icons/faCloudArrowDown';
 import { faCloudArrowUp } from '@fortawesome/free-solid-svg-icons/faCloudArrowUp';
+import { faCode } from '@fortawesome/free-solid-svg-icons/faCode';
 import { faCodeBranch } from '@fortawesome/free-solid-svg-icons/faCodeBranch';
 import { faCodeCompare } from '@fortawesome/free-solid-svg-icons/faCodeCompare';
+import { faCodeMerge } from '@fortawesome/free-solid-svg-icons/faCodeMerge';
 import { faComment } from '@fortawesome/free-solid-svg-icons/faComment';
 import { faComments } from '@fortawesome/free-solid-svg-icons/faComments';
 import { faCopy } from '@fortawesome/free-solid-svg-icons/faCopy';
@@ -43,6 +47,7 @@ import { faDatabase } from '@fortawesome/free-solid-svg-icons/faDatabase';
 import { faDiagramProject } from '@fortawesome/free-solid-svg-icons/faDiagramProject';
 import { faDownload } from '@fortawesome/free-solid-svg-icons/faDownload';
 import { faEllipsis } from '@fortawesome/free-solid-svg-icons/faEllipsis';
+import { faEraser } from '@fortawesome/free-solid-svg-icons/faEraser';
 import { faEye } from '@fortawesome/free-solid-svg-icons/faEye';
 import { faFile } from '@fortawesome/free-solid-svg-icons/faFile';
 import { faFileCirclePlus } from '@fortawesome/free-solid-svg-icons/faFileCirclePlus';
@@ -69,9 +74,11 @@ import { faListCheck } from '@fortawesome/free-solid-svg-icons/faListCheck';
 import { faListUl } from '@fortawesome/free-solid-svg-icons/faListUl';
 import { faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons/faMagnifyingGlass';
 import { faMagnifyingGlassChart } from '@fortawesome/free-solid-svg-icons/faMagnifyingGlassChart';
+import { faMicrophone } from '@fortawesome/free-solid-svg-icons/faMicrophone';
 import { faMinus } from '@fortawesome/free-solid-svg-icons/faMinus';
 import { faNoteSticky } from '@fortawesome/free-solid-svg-icons/faNoteSticky';
 import { faPalette } from '@fortawesome/free-solid-svg-icons/faPalette';
+import { faPaperPlane } from '@fortawesome/free-solid-svg-icons/faPaperPlane';
 import { faPencil } from '@fortawesome/free-solid-svg-icons/faPencil';
 import { faPictureInPicture } from '@fortawesome/free-solid-svg-icons/faPictureInPicture';
 import { faPlay } from '@fortawesome/free-solid-svg-icons/faPlay';
@@ -93,6 +100,7 @@ import { faTrash } from '@fortawesome/free-solid-svg-icons/faTrash';
 import { faTriangleExclamation } from '@fortawesome/free-solid-svg-icons/faTriangleExclamation';
 import { faUser } from '@fortawesome/free-solid-svg-icons/faUser';
 import { faUsers } from '@fortawesome/free-solid-svg-icons/faUsers';
+import { faVideo } from '@fortawesome/free-solid-svg-icons/faVideo';
 import { faWandMagicSparkles } from '@fortawesome/free-solid-svg-icons/faWandMagicSparkles';
 import { faWindowMaximize } from '@fortawesome/free-solid-svg-icons/faWindowMaximize';
 import { faWrench } from '@fortawesome/free-solid-svg-icons/faWrench';
@@ -139,6 +147,7 @@ const icons = {
   book: faBook,
   bookmark: faBookmark,
   box: faBox,
+  'box-archive': faBoxArchive,
   building: faBuilding,
   'caret-down': faCaretDown,
   'chart-line': faChartLine,
@@ -151,6 +160,7 @@ const icons = {
   'chevron-up': faChevronUp,
   circle: faCircle,
   'circle-check': faCircleCheck,
+  'circle-dot': faCircleDot,
   'circle-exclamation': faCircleExclamation,
   'circle-info': faCircleInfo,
   'circle-question': faCircleQuestion,
@@ -161,8 +171,10 @@ const icons = {
   'clock-rotate-left': faClockRotateLeft,
   'cloud-arrow-down': faCloudArrowDown,
   'cloud-arrow-up': faCloudArrowUp,
+  code: faCode,
   'code-branch': faCodeBranch,
   'code-compare': faCodeCompare,
+  'code-merge': faCodeMerge,
   comment: faComment,
   comments: faComments,
   copy: faCopy,
@@ -171,6 +183,7 @@ const icons = {
   'diagram-project': faDiagramProject,
   download: faDownload,
   ellipsis: faEllipsis,
+  eraser: faEraser,
   eye: faEye,
   file: faFile,
   'file-circle-plus': faFileCirclePlus,
@@ -197,9 +210,11 @@ const icons = {
   'list-ul': faListUl,
   'magnifying-glass': faMagnifyingGlass,
   'magnifying-glass-chart': faMagnifyingGlassChart,
+  microphone: faMicrophone,
   minus: faMinus,
   'note-sticky': faNoteSticky,
   palette: faPalette,
+  'paper-plane': faPaperPlane,
   pencil: faPencil,
   'picture-in-picture': faPictureInPicture,
   play: faPlay,
@@ -221,6 +236,7 @@ const icons = {
   'triangle-exclamation': faTriangleExclamation,
   user: faUser,
   users: faUsers,
+  video: faVideo,
   'wand-magic-sparkles': faWandMagicSparkles,
   'window-maximize': faWindowMaximize,
   wrench: faWrench,
@@ -237,6 +253,7 @@ const icons = {
 const CODICON_ALIASES = {
   account: 'circle-user',
   add: 'plus',
+  archive: 'box-archive',
   'arrow-small-down': 'caret-down',
   beaker: 'flask',
   'check-all': 'check-double',
@@ -244,14 +261,21 @@ const CODICON_ALIASES = {
   'circle-large-outline': 'circle',
   'circle-outline': 'circle',
   'circle-slash': 'circle-xmark',
+  'clear-all': 'eraser',
   close: 'xmark',
   'cloud-download': 'cloud-arrow-down',
   'cloud-upload': 'cloud-arrow-up',
   'comment-discussion': 'comments',
   dash: 'minus',
+  'debug-continue': 'forward-step',
+  'debug-start': 'play',
   'debug-stop': 'circle-stop',
   'desktop-download': 'download',
+  'device-camera-video': 'video',
   diff: 'code-compare',
+  'diff-added': 'plus',
+  'diff-multiple': 'code-compare',
+  'diff-single': 'code-compare',
   discard: 'arrow-rotate-left',
   edit: 'pencil',
   error: 'circle-exclamation',
@@ -261,6 +285,8 @@ const CODICON_ALIASES = {
   'folder-library': 'folder-tree',
   'folder-opened': 'folder-open',
   github: 'code-branch',
+  'git-commit': 'circle-dot',
+  'git-merge': 'code-branch',
   graph: 'chart-line',
   'graph-line': 'chart-line',
   history: 'clock-rotate-left',
@@ -269,10 +295,13 @@ const CODICON_ALIASES = {
   library: 'book',
   'list-tree': 'list-ul',
   loading: 'spinner',
+  merge: 'code-merge',
+  mic: 'microphone',
   'mortar-board': 'graduation-cap',
   'new-file': 'file-circle-plus',
   note: 'note-sticky',
   organization: 'building',
+  output: 'terminal',
   package: 'box',
   'pass-filled': 'circle-check',
   'pie-chart': 'chart-pie',
@@ -282,12 +311,14 @@ const CODICON_ALIASES = {
   refresh: 'rotate-right',
   save: 'floppy-disk',
   search: 'magnifying-glass',
+  send: 'paper-plane',
   'server-process': 'server',
   'settings-gear': 'gear',
   'sign-in': 'right-to-bracket',
   'sign-out': 'right-from-bracket',
   'source-control': 'code-branch',
   sparkle: 'wand-magic-sparkles',
+  'stop-circle': 'circle-stop',
   stylesheet: 'palette',
   'symbol-method': 'cube',
   'symbol-number': 'hashtag',
@@ -298,6 +329,7 @@ const CODICON_ALIASES = {
   tasklist: 'list-check',
   tools: 'screwdriver-wrench',
   'type-hierarchy': 'diagram-project',
+  wand: 'wand-magic-sparkles',
   warning: 'triangle-exclamation',
   window: 'window-maximize',
   x: 'xmark',

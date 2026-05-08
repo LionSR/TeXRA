@@ -1,7 +1,14 @@
 // Third-party imports
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import { html, type TemplateResult } from 'lit';
+import { html, nothing, type TemplateResult } from 'lit';
+import {
+  Directive,
+  PartType,
+  directive,
+  type ElementPart,
+  type PartInfo,
+} from 'lit/directive.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - Web Awesome
@@ -18,8 +25,45 @@ export interface IconActionButtonOptions {
   readonly className?: string;
   readonly appearance?: ActionButtonAppearance;
   readonly variant?: ActionButtonVariant;
+  readonly disabled?: boolean;
+  /** Extra dataset attributes (rendered as data-<key>). Skipped when value is undefined. */
+  readonly dataset?: Readonly<Record<string, string | undefined>>;
   readonly onClick?: (event: MouseEvent) => void;
 }
+
+class DatasetDirective extends Directive {
+  constructor(partInfo: PartInfo) {
+    super(partInfo);
+    if (partInfo.type !== PartType.ELEMENT) {
+      throw new Error('datasetDirective must be used as an element directive');
+    }
+  }
+
+  override update(
+    part: ElementPart,
+    [data]: [Readonly<Record<string, string | undefined>> | undefined],
+  ): unknown {
+    const el = part.element as HTMLElement;
+    if (data) {
+      for (const [key, value] of Object.entries(data)) {
+        if (value === undefined) {
+          delete el.dataset[key];
+        } else {
+          el.dataset[key] = value;
+        }
+      }
+    }
+    return this.render(data);
+  }
+
+  override render(
+    _data: Readonly<Record<string, string | undefined>> | undefined,
+  ): unknown {
+    return nothing;
+  }
+}
+
+const datasetDirective = directive(DatasetDirective);
 
 export interface LabeledActionButtonOptions extends IconActionButtonOptions {
   readonly text: string;
@@ -34,6 +78,8 @@ function renderActionButtonBase({
   className,
   appearance = 'outlined',
   variant = 'neutral',
+  disabled,
+  dataset,
   onClick,
 }: IconActionButtonOptions & { readonly text?: string }): TemplateResult {
   const classes = [text ? 'action-button' : 'action-icon-button', className]
@@ -50,6 +96,8 @@ function renderActionButtonBase({
       aria-label=${label}
       title=${title ?? label}
       data-action=${ifDefined(action)}
+      ${datasetDirective(dataset)}
+      ?disabled=${disabled}
       @click=${onClick}
     >
       ${waIcon(icon, { slot: text ? 'start' : undefined })} ${text}

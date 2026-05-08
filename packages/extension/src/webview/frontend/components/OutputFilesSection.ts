@@ -14,6 +14,7 @@ import { when } from 'lit/directives/when.js';
 // Local imports - main view
 import { SortableController } from '@shared/controllers';
 import { designTokens, codiconStyles } from '@shared/styles';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { MainViewEvents } from '../events';
 import {
   fileStateContext,
@@ -38,7 +39,7 @@ export class OutputFilesSection extends LitElement {
         display: block;
       }
 
-      .file-select-actions vscode-toolbar-button {
+      .file-select-actions wa-button {
         width: var(--height-control);
         height: var(--height-control);
         min-width: var(--height-control);
@@ -168,22 +169,24 @@ export class OutputFilesSection extends LitElement {
               >Agent writes to all listed files</span
             >
           </div>
-          <vscode-toolbar-container class="file-select-actions">
-            <vscode-toolbar-button
-              id="emptyOutputFilesButton"
-              icon="trash"
-              label="Clear all output files"
-              title="Clear all output files"
-              @click=${this.handleEmptyFiles}
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
-              id="selectOutputFilesButton"
-              icon="add"
-              label="Add output files"
-              title="Add output files"
-              @click=${this.handleSelectFiles}
-            ></vscode-toolbar-button>
-          </vscode-toolbar-container>
+          <div class="file-select-actions">
+            <span id="emptyOutputFilesButton">
+              ${renderIconActionButton({
+                icon: 'trash',
+                label: 'Clear all output files',
+                title: 'Clear all output files',
+                onClick: this.handleEmptyFiles,
+              })}
+            </span>
+            <span id="selectOutputFilesButton">
+              ${renderIconActionButton({
+                icon: 'add',
+                label: 'Add output files',
+                title: 'Add output files',
+                onClick: this.handleSelectFiles,
+              })}
+            </span>
+          </div>
         </div>
         ${when(
           this.currentExpanded,
