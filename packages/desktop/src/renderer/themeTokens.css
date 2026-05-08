@@ -358,10 +358,10 @@ body.texra-high-contrast {
   --vscode-editorInfo-background: var(--texra-editorInfo-background);
   --vscode-editorInfo-foreground: var(--texra-editorInfo-foreground);
   --vscode-editorWarning-background: var(--texra-editorWarning-background);
-  --vscode-editorWarning-foreground: var(--texra-editorWarning-foreground);
+  --vscode-editorWarning-foreground: var(--wa-color-warning-on-quiet);
   --vscode-editorWidget-background: var(--texra-editorWidget-background);
   --vscode-editorWidget-border: var(--texra-editorWidget-border);
-  --vscode-errorForeground: var(--texra-errorForeground);
+  --vscode-errorForeground: var(--wa-color-danger-on-quiet);
   --vscode-focusBorder: var(--texra-focusBorder);
   --vscode-sideBar-background: var(--texra-sideBar-background);
   --vscode-sideBar-foreground: var(--texra-sideBar-foreground);
@@ -386,12 +386,12 @@ body.texra-high-contrast {
     --texra-button-secondaryHoverBackground
   );
   --vscode-button-separator: var(--texra-button-separator);
-  --vscode-dropdown-background: var(--texra-input-background);
+  --vscode-dropdown-background: var(--wa-form-control-background-color);
   --vscode-dropdown-border: var(--texra-dropdown-border);
-  --vscode-dropdown-foreground: var(--texra-input-foreground);
-  --vscode-input-background: var(--texra-input-background);
-  --vscode-input-border: var(--texra-input-border);
-  --vscode-input-foreground: var(--texra-input-foreground);
+  --vscode-dropdown-foreground: var(--wa-form-control-text-color);
+  --vscode-input-background: var(--wa-form-control-background-color);
+  --vscode-input-border: var(--wa-form-control-border-color);
+  --vscode-input-foreground: var(--wa-form-control-text-color);
   --vscode-input-placeholderForeground: var(
     --texra-input-placeholderForeground
   );
@@ -424,25 +424,25 @@ body.texra-high-contrast {
   --vscode-inputValidation-warningForeground: var(
     --texra-inputValidation-warningForeground
   );
-  --vscode-textArea-background: var(--texra-input-background);
-  --vscode-textArea-border: var(--texra-input-border);
-  --vscode-textArea-foreground: var(--texra-input-foreground);
+  --vscode-textArea-background: var(--wa-form-control-background-color);
+  --vscode-textArea-border: var(--wa-form-control-border-color);
+  --vscode-textArea-foreground: var(--wa-form-control-text-color);
   --vscode-textArea-placeholderForeground: var(
     --texra-input-placeholderForeground
   );
-  --vscode-checkbox-background: var(--texra-input-background);
-  --vscode-checkbox-border: var(--texra-input-border);
+  --vscode-checkbox-background: var(--wa-form-control-background-color);
+  --vscode-checkbox-border: var(--wa-form-control-border-color);
   --vscode-checkbox-foreground: var(--texra-foreground);
-  --vscode-settings-checkboxBackground: var(--texra-input-background);
-  --vscode-settings-checkboxBorder: var(--texra-input-border);
+  --vscode-settings-checkboxBackground: var(--wa-form-control-background-color);
+  --vscode-settings-checkboxBorder: var(--wa-form-control-border-color);
   --vscode-settings-checkboxForeground: var(--texra-foreground);
-  --vscode-settings-dropdownBackground: var(--texra-input-background);
+  --vscode-settings-dropdownBackground: var(--wa-form-control-background-color);
   --vscode-settings-dropdownBorder: var(--texra-dropdown-border);
-  --vscode-settings-dropdownForeground: var(--texra-input-foreground);
+  --vscode-settings-dropdownForeground: var(--wa-form-control-text-color);
   --vscode-settings-dropdownListBorder: var(--texra-dropdown-border);
-  --vscode-settings-textInputBackground: var(--texra-input-background);
-  --vscode-settings-textInputBorder: var(--texra-input-border);
-  --vscode-settings-textInputForeground: var(--texra-input-foreground);
+  --vscode-settings-textInputBackground: var(--wa-form-control-background-color);
+  --vscode-settings-textInputBorder: var(--wa-form-control-border-color);
+  --vscode-settings-textInputForeground: var(--wa-form-control-text-color);
   --vscode-list-activeSelectionBackground: var(
     --texra-list-activeSelectionBackground
   );
@@ -456,7 +456,7 @@ body.texra-high-contrast {
   --vscode-list-focusHighlightForeground: var(--texra-focusBorder);
   --vscode-list-focusOutline: var(--texra-list-focusOutline);
   --vscode-list-highlightForeground: var(--texra-focusBorder);
-  --vscode-list-hoverBackground: var(--texra-list-hoverBackground);
+  --vscode-list-hoverBackground: var(--wa-color-neutral-fill-quiet);
   --vscode-list-hoverForeground: var(--texra-list-hoverForeground);
   --vscode-list-inactiveSelectionBackground: var(
     --texra-list-inactiveSelectionBackground
@@ -474,11 +474,11 @@ body.texra-high-contrast {
   --vscode-toolbar-hoverOutline: var(--texra-toolbar-hoverOutline);
   --vscode-widget-border: var(--texra-widget-border);
   --vscode-widget-shadow: var(--texra-widget-shadow);
-  --vscode-icon-foreground: var(--texra-icon-foreground);
-  --vscode-badge-background: var(--texra-badge-background);
-  --vscode-badge-foreground: var(--texra-badge-foreground);
+  --vscode-icon-foreground: var(--wa-color-text-quiet);
+  --vscode-badge-background: var(--wa-color-neutral-fill-quiet);
+  --vscode-badge-foreground: var(--wa-color-neutral-on-quiet);
   --vscode-progressBar-background: var(--texra-progressBar-background);
-  --vscode-textBlockQuote-background: var(--texra-textBlockQuote-background);
+  --vscode-textBlockQuote-background: var(--wa-color-surface-lowered);
   --vscode-textBlockQuote-border: var(--texra-textBlockQuote-border);
   --vscode-textCodeBlock-background: var(--texra-textCodeBlock-background);
   --vscode-textLink-activeForeground: var(--texra-textLink-activeForeground);
@@ -506,8 +506,8 @@ body.texra-high-contrast {
   --vscode-terminal-ansiRed: var(--texra-terminal-ansiRed);
   --vscode-terminal-ansiWhite: var(--texra-terminal-ansiWhite);
   --vscode-terminal-ansiYellow: var(--texra-terminal-ansiYellow);
-  --vscode-testing-iconFailed: var(--texra-testing-iconFailed);
-  --vscode-testing-iconPassed: var(--texra-testing-iconPassed);
+  --vscode-testing-iconFailed: var(--wa-color-danger-fill-loud);
+  --vscode-testing-iconPassed: var(--wa-color-success-fill-loud);
   --vscode-charts-blue: var(--texra-charts-blue);
   --vscode-charts-green: var(--texra-charts-green);
   --vscode-charts-orange: var(--texra-charts-orange);

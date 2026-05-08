@@ -150,7 +150,7 @@ export const requestPanelStyles: CSSResult = css`
   /* Shared action button colors */
   :is(${ACTIONS}) vscode-toolbar-button[data-action='approve']::part(control),
   :is(${ACTIONS}) vscode-toolbar-button[data-action='submit']::part(control) {
-    color: var(--texra-testing-iconPassed);
+    color: var(--wa-color-success-fill-loud);
   }
 
   :is(${ACTIONS}) vscode-toolbar-button[data-action='setup']::part(control) {
