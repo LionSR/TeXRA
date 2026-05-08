@@ -35,6 +35,8 @@
   --desktop-color-info: light-dark(#0969da, #75beff);
   --desktop-color-info-background: light-dark(#ddf4ff, #063b49);
   --desktop-color-success: light-dark(#1a7f37, #73c991);
+  --desktop-color-success-background: light-dark(#d2f5dc, #1a4a25);
+  --desktop-color-error-background: light-dark(#ffebe9, #5a1d1d);
   --desktop-color-orange: light-dark(#bc4c00, #d18616);
   --desktop-color-yellow: light-dark(#bf8700, #cca700);
   --desktop-color-terminal-selection: light-dark(#ddf4ff, #264f78);
@@ -85,7 +87,9 @@
   --texra-inputOption-activeBackground: var(--desktop-color-accent-subtle);
   --texra-inputOption-activeBorder: var(--desktop-color-accent);
   --texra-inputOption-activeForeground: var(--desktop-color-foreground);
-  --texra-inputValidation-errorBackground: light-dark(#ffebe9, #5a1d1d);
+  --texra-inputValidation-errorBackground: var(
+    --desktop-color-error-background
+  );
   --texra-inputValidation-errorBorder: var(--desktop-color-error);
   --texra-inputValidation-infoBackground: var(--desktop-color-info-background);
   --texra-inputValidation-infoBorder: var(--desktop-color-info);
@@ -223,16 +227,26 @@
   --wa-color-danger-fill-loud: var(--desktop-color-error);
   --wa-color-danger-on-loud: #ffffff;
   --wa-color-danger-border-loud: transparent;
-  --wa-color-danger-fill-quiet: var(--desktop-color-error);
+  --wa-color-danger-fill-quiet: var(--desktop-color-error-background);
   --wa-color-danger-border-quiet: var(--desktop-color-error);
-  --wa-color-danger-on-quiet: #ffffff;
+  --wa-color-danger-on-quiet: var(--desktop-color-error);
 
   --wa-color-success-fill-loud: var(--desktop-color-success);
   --wa-color-success-on-loud: #ffffff;
   --wa-color-success-border-loud: transparent;
-  --wa-color-success-fill-quiet: var(--desktop-color-success);
+  --wa-color-success-fill-quiet: var(--desktop-color-success-background);
   --wa-color-success-border-quiet: var(--desktop-color-success);
-  --wa-color-success-on-quiet: #ffffff;
+  --wa-color-success-on-quiet: var(--desktop-color-success);
+
+  /* Neutral tokens for outlined wa-button / wa-callout variants. Wire to the
+     desktop muted palette so neutral surfaces blend with the renderer theme
+     rather than falling back to WA's default gray scale. */
+  --wa-color-neutral-fill-quiet: var(--desktop-color-sidebar-header);
+  --wa-color-neutral-border-quiet: var(--desktop-color-border);
+  --wa-color-neutral-on-quiet: var(--desktop-color-foreground);
+  --wa-color-neutral-fill-loud: var(--desktop-color-sidebar-header);
+  --wa-color-neutral-border-loud: var(--desktop-color-border);
+  --wa-color-neutral-on-loud: var(--desktop-color-foreground);
 }
 
 body.vscode-light,
