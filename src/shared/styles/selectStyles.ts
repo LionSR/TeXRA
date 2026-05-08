@@ -7,7 +7,7 @@ export const selectStyles: CSSResult = css`
     gap: var(--spacing-tiny);
   }
 
-  .select-group .codicon {
+  .select-group wa-icon {
     margin-right: var(--spacing-small);
     color: var(--text-color, var(--texra-foreground));
     vertical-align: text-bottom;
@@ -64,7 +64,7 @@ export const selectStyles: CSSResult = css`
     border-radius: var(--border-radius-small);
   }
 
-  .codicon.clickable:hover {
+  wa-icon.clickable:hover {
     color: var(--button-hover-background, var(--texra-button-hoverBackground));
   }
 
