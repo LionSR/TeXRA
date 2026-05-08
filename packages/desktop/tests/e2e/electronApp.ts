@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,6 +27,12 @@ export interface LaunchedApp {
   app: ElectronApplication;
   page: Page;
   workspacePath: string;
+  /**
+   * True when `launchTexraApp()` allocated a temp workspace itself (caller
+   * did not supply one). `closeTexraApp()` cleans this up so repeated CI
+   * runs do not litter the system temp directory.
+   */
+  ownsWorkspace: boolean;
 }
 
 /**
@@ -51,6 +57,7 @@ export async function launchTexraApp(
     );
   }
 
+  const ownsWorkspace = options.workspacePath === undefined;
   const workspacePath =
     options.workspacePath ?? mkdtempSync(join(tmpdir(), 'texra-e2e-'));
 
@@ -70,9 +77,20 @@ export async function launchTexraApp(
   await page.setViewportSize({ width: 1280, height: 800 });
   // Wait for the renderer root to mount before tests interact.
   await page.waitForSelector('#app', { state: 'attached' });
-  return { app, page, workspacePath };
+  return { app, page, workspacePath, ownsWorkspace };
 }
 
 export async function closeTexraApp(launched: LaunchedApp): Promise<void> {
   await launched.app.close();
+  // Clean up the auto-allocated temp workspace so repeated test runs do not
+  // accumulate `/tmp/texra-e2e-*` directories. If the caller supplied a
+  // workspace path, leave it alone — the caller owns its lifecycle.
+  if (launched.ownsWorkspace) {
+    try {
+      rmSync(launched.workspacePath, { recursive: true, force: true });
+    } catch {
+      // Best-effort cleanup. A stale temp dir is preferable to a noisy
+      // teardown failure that masks the real test outcome.
+    }
+  }
 }
