@@ -10,6 +10,8 @@
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 
+import { renderIconActionButton } from '@shared/wa/actionButtons';
+
 import { webviewStorage } from '../webviewStorage';
 
 const DISMISS_KEY = 'workflowHintBanner.dismissed';
@@ -59,12 +61,12 @@ export class WorkflowHintBanner extends LitElement {
           It reduces hallucinations and cuts fluff, so expect 10–30 minutes per
           run. Use Stop to cancel; pick Tool-Use mode for fast, iterative edits.
         </div>
-        <vscode-toolbar-button
-          icon="close"
-          title="Dismiss this reminder"
-          aria-label="Dismiss workflow mode reminder"
-          @click=${this.handleDismiss}
-        ></vscode-toolbar-button>
+        ${renderIconActionButton({
+          icon: 'close',
+          label: 'Dismiss workflow mode reminder',
+          title: 'Dismiss this reminder',
+          onClick: this.handleDismiss,
+        })}
       </div>
     `;
   }

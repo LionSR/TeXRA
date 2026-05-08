@@ -22,6 +22,7 @@ import {
 
 // Local imports - progress view styles
 import type { BashPermission } from '@shared/schemas';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { codeBlockStyles } from '../styles/codeBlockStyles';
 
 // Local imports - progress view formatters
@@ -57,17 +58,16 @@ export class BashRequestPanel extends BaseFeedbackPanel {
             ${buildCodeBlock(data.command ?? '', { language: 'bash' })}
           </div>
         </div>
-        <vscode-toolbar-container class="bash-approval-request__actions">
-          <vscode-toolbar-button
-            icon="check"
-            label="Approve"
-            title="Allow this command to execute (y)"
-            data-action="approve"
-            @click=${() => this.emitAction('approve')}
-            >Approve</vscode-toolbar-button
-          >
+        <div class="bash-approval-request__actions">
+          ${renderLabeledActionButton({
+            icon: 'check',
+            text: 'Approve',
+            title: 'Allow this command to execute (y)',
+            action: 'approve',
+            onClick: () => this.emitAction('approve'),
+          })}
           ${this.renderRejectButton('Reject this command (n)')}
-        </vscode-toolbar-container>
+        </div>
         ${this.renderFeedbackSection(
           'bash-approval-request__feedback',
           'bash-approval-request__feedback-input',

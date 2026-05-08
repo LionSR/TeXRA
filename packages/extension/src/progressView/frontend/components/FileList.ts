@@ -8,6 +8,7 @@ import {
   type TemplateResult,
 } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports
@@ -15,6 +16,8 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
+import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
@@ -22,6 +25,37 @@ import { webviewStorage } from '../webviewStorage';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';
+
+interface FileActionOptions {
+  readonly icon: TeXRAIconName;
+  readonly label: string;
+  readonly title: string;
+  readonly className: string;
+  readonly command: string;
+  readonly file: string;
+  readonly base?: string;
+  readonly prev?: string;
+}
+
+function renderFileActionButton(opts: FileActionOptions): TemplateResult {
+  return html`
+    <wa-button
+      class="action-icon-button ${opts.className}"
+      appearance="plain"
+      variant="neutral"
+      size="small"
+      type="button"
+      aria-label=${opts.label}
+      title=${opts.title}
+      data-command=${opts.command}
+      data-file=${opts.file}
+      data-base=${ifDefined(opts.base)}
+      data-prev=${ifDefined(opts.prev)}
+    >
+      ${waIcon(opts.icon)}
+    </wa-button>
+  `;
+}
 
 const STORAGE_HINT_DISMISS_KEY = 'generatedFilesStorageHint.dismissed';
 
@@ -155,7 +189,7 @@ export class FileList extends LitElement {
         align-items: center;
       }
 
-      .file-actions :is(vscode-button, vscode-toolbar-button) {
+      .file-actions :is(vscode-button, wa-button) {
         margin-right: 0;
         margin-left: var(--spacing-tiny);
       }
@@ -304,13 +338,13 @@ export class FileList extends LitElement {
           it, use Accept to copy it into your workspace, or use the folder
           button to open the full run.
         </span>
-        <vscode-toolbar-button
-          class="storage-hint__dismiss"
-          icon="close"
-          label="Dismiss storage explanation"
-          title="Dismiss storage explanation"
-          @click=${this.handleDismissStorageHint}
-        ></vscode-toolbar-button>
+        ${renderIconActionButton({
+          icon: 'close',
+          label: 'Dismiss storage explanation',
+          title: 'Dismiss storage explanation',
+          className: 'storage-hint__dismiss',
+          onClick: this.handleDismissStorageHint,
+        })}
       </div>
     `;
   }
@@ -397,18 +431,19 @@ export class FileList extends LitElement {
           </span>
         </span>
         ${diffStats}
-        <vscode-toolbar-container class="file-actions">
+        <div class="file-actions">
           ${failure
-            ? html`<vscode-toolbar-button
-                icon="output"
-                label="Open compile log"
-                title="Open compile log (${failure.logRelativePath})"
-                data-command=${PROGRESS_VIEW_COMMANDS.OPEN_FILE}
-                data-file=${failure.log.absolutePath}
-              ></vscode-toolbar-button>`
+            ? renderFileActionButton({
+                icon: 'output',
+                label: 'Open compile log',
+                title: `Open compile log (${failure.logRelativePath})`,
+                className: '',
+                command: PROGRESS_VIEW_COMMANDS.OPEN_FILE,
+                file: failure.log.absolutePath,
+              })
             : nothing}
           ${baseActions} ${previousAction}
-        </vscode-toolbar-container>
+        </div>
       </div>
     `;
   }
@@ -493,42 +528,42 @@ export class FileList extends LitElement {
     if (!basePath) return nothing;
 
     return html`
-      <vscode-toolbar-button
-        class="compare-btn"
-        icon="diff"
-        label="Compare with base"
-        title="Compare with base"
-        data-command=${PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL}
-        data-file=${filePath}
-        data-base=${basePath}
-      ></vscode-toolbar-button>
-      <vscode-toolbar-button
-        class="accept-btn"
-        icon="check"
-        label="Accept edits"
-        title="Accept edits"
-        data-command=${PROGRESS_VIEW_COMMANDS.ACCEPT_FILE}
-        data-file=${filePath}
-        data-base=${basePath}
-      ></vscode-toolbar-button>
-      <vscode-toolbar-button
-        class="merge-btn"
-        icon="git-merge"
-        label="Merge edits"
-        title="Merge edits"
-        data-command=${PROGRESS_VIEW_COMMANDS.MERGE_FILE}
-        data-file=${filePath}
-        data-base=${basePath}
-      ></vscode-toolbar-button>
-      <vscode-toolbar-button
-        class="diff-btn"
-        icon="diff-single"
-        label="LaTeXdiff"
-        title="LaTeXdiff"
-        data-command=${PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE}
-        data-file=${filePath}
-        data-base=${basePath}
-      ></vscode-toolbar-button>
+      ${renderFileActionButton({
+        icon: 'diff',
+        label: 'Compare with base',
+        title: 'Compare with base',
+        className: 'compare-btn',
+        command: PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL,
+        file: filePath,
+        base: basePath,
+      })}
+      ${renderFileActionButton({
+        icon: 'check',
+        label: 'Accept edits',
+        title: 'Accept edits',
+        className: 'accept-btn',
+        command: PROGRESS_VIEW_COMMANDS.ACCEPT_FILE,
+        file: filePath,
+        base: basePath,
+      })}
+      ${renderFileActionButton({
+        icon: 'git-merge',
+        label: 'Merge edits',
+        title: 'Merge edits',
+        className: 'merge-btn',
+        command: PROGRESS_VIEW_COMMANDS.MERGE_FILE,
+        file: filePath,
+        base: basePath,
+      })}
+      ${renderFileActionButton({
+        icon: 'diff-single',
+        label: 'LaTeXdiff',
+        title: 'LaTeXdiff',
+        className: 'diff-btn',
+        command: PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE,
+        file: filePath,
+        base: basePath,
+      })}
     `;
   }
 
@@ -539,17 +574,15 @@ export class FileList extends LitElement {
   ): TemplateResult | typeof nothing {
     if (!previousPath) return nothing;
 
-    return html`
-      <vscode-toolbar-button
-        class="prev-btn"
-        icon="diff-added"
-        label="Compare with previous round"
-        title="Compare with previous round"
-        data-command=${PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS}
-        data-file=${filePath}
-        data-base=${basePath}
-        data-prev=${previousPath}
-      ></vscode-toolbar-button>
-    `;
+    return renderFileActionButton({
+      icon: 'diff-added',
+      label: 'Compare with previous round',
+      title: 'Compare with previous round',
+      className: 'prev-btn',
+      command: PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS,
+      file: filePath,
+      base: basePath,
+      prev: previousPath,
+    });
   }
 }

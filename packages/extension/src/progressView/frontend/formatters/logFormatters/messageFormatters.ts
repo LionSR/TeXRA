@@ -18,6 +18,7 @@ import {
 
 // Local imports - shared utilities
 import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - Lit template utilities
 import {
@@ -144,7 +145,7 @@ export function formatErrorTemplate(message: LogMessageData): FormatResult {
   // prettier-ignore
   const labelSpan = html`<span class="label" title=${tooltipTimestamp}>[${timeDisplay}] ${summaryText}</span>`;
   // prettier-ignore
-  const copyButton = html`<vscode-toolbar-button class="banner-content-copy" icon="copy" title="Copy error details" aria-label="Copy error details" data-default-title="Copy error details" data-success-title="Copied!" data-copy-id=${copyId} data-copy-type="banner" ?hidden=${!hasDetails}></vscode-toolbar-button>`;
+  const copyButton = html`<wa-button class="action-icon-button banner-content-copy" appearance="plain" variant="neutral" size="small" type="button" title="Copy error details" aria-label="Copy error details" data-default-title="Copy error details" data-success-title="Copied!" data-copy-id=${copyId} data-copy-type="banner" ?hidden=${!hasDetails}>${waIcon('copy')}</wa-button>`;
   // prettier-ignore
   const summaryTemplate = html`<summary class="details-summary">${toggleIcon}<i class="codicon icon codicon-error"></i>${labelSpan}${copyButton}</summary>`;
   // prettier-ignore
