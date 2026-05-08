@@ -9,6 +9,9 @@ import type { ToolEditRequestPanel } from '@progressView/frontend/components/Too
 // Local imports - shared schemas
 import type { ToolEditPermission } from '@shared/schemas';
 
+// Local imports - test utilities
+import { installAttachInternalsFallback } from '../settings/litComponentTestUtils';
+
 const originalGlobals = {
   document: globalThis.document,
   window: globalThis.window,
@@ -18,6 +21,9 @@ const originalGlobals = {
   Document: globalThis.Document,
   ShadowRoot: globalThis.ShadowRoot,
   CSSStyleSheet: globalThis.CSSStyleSheet,
+  Event: globalThis.Event,
+  CustomEvent: globalThis.CustomEvent,
+  Node: (globalThis as { Node?: unknown }).Node,
 };
 
 function installDom(): JSDOM {
@@ -32,6 +38,12 @@ function installDom(): JSDOM {
   globalThis.Document = dom.window.Document;
   globalThis.ShadowRoot = dom.window.ShadowRoot;
   globalThis.CSSStyleSheet = dom.window.CSSStyleSheet;
+  globalThis.Event = dom.window.Event;
+  globalThis.CustomEvent = dom.window.CustomEvent;
+  (globalThis as { Node: unknown }).Node = dom.window.Node;
+  installAttachInternalsFallback(
+    dom.window as unknown as Parameters<typeof installAttachInternalsFallback>[0],
+  );
   return dom;
 }
 
@@ -44,6 +56,13 @@ function restoreDom(): void {
   globalThis.Document = originalGlobals.Document;
   globalThis.ShadowRoot = originalGlobals.ShadowRoot;
   globalThis.CSSStyleSheet = originalGlobals.CSSStyleSheet;
+  globalThis.Event = originalGlobals.Event;
+  globalThis.CustomEvent = originalGlobals.CustomEvent;
+  if (originalGlobals.Node === undefined) {
+    delete (globalThis as { Node?: unknown }).Node;
+  } else {
+    (globalThis as { Node: unknown }).Node = originalGlobals.Node;
+  }
 }
 
 function createPermission(data: Partial<ToolEditPermission>): PermissionState {
