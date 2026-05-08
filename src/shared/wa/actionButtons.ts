@@ -47,7 +47,7 @@ function renderActionButtonBase({
   title,
   action,
   className,
-  appearance = 'outlined',
+  appearance = 'plain',
   variant = 'neutral',
   disabled,
   onClick,
