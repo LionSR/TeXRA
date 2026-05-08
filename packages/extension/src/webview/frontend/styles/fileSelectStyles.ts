@@ -60,7 +60,7 @@ export const fileSelectLayoutStyles = css`
     opacity: var(--opacity-full);
   }
 
-  .file-select-label-group vscode-textfield {
+  .file-select-label-group wa-input {
     flex: 1;
     min-width: 0;
     margin: 0;
@@ -96,7 +96,7 @@ export const fileSelectLayoutStyles = css`
   }
 
   .file-select select,
-  .file-select vscode-single-select {
+  .file-select wa-select {
     width: 100%;
   }
 
@@ -289,7 +289,7 @@ export const dropdownStyles = css`
     padding: var(--spacing-tiny);
   }
 
-  .dropdown-container .dropdown-menu vscode-checkbox {
+  .dropdown-container .dropdown-menu wa-checkbox {
     display: flex;
     align-items: center;
     height: 20px;
@@ -297,11 +297,11 @@ export const dropdownStyles = css`
     font-size: var(--font-size-sm);
   }
 
-  .dropdown-container .dropdown-menu vscode-checkbox {
+  .dropdown-container .dropdown-menu wa-checkbox {
     transition: background-color var(--transition-fast);
   }
 
-  .dropdown-container .dropdown-menu vscode-checkbox:hover {
+  .dropdown-container .dropdown-menu wa-checkbox:hover {
     background: var(--texra-list-hoverBackground);
   }
 `;
