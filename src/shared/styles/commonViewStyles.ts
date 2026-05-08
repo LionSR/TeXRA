@@ -92,20 +92,56 @@ export const commonViewStyles: CSSResult = css`
     flex-shrink: 0;
   }
 
+  /* Compact action button (with text) — IDE-density chrome.
+   * Borderless by default; subtle hover surface; small font. */
   .action-button::part(base) {
     gap: var(--spacing-small);
+    min-height: var(--height-control);
+    padding: 0 var(--spacing-medium);
+    border: var(--border-thin) solid transparent;
+    background: transparent;
+    font-size: var(--font-size-sm);
+  }
+
+  .action-button::part(base):hover {
+    background: var(--texra-toolbar-hoverBackground, var(--texra-list-hoverBackground));
+    border-color: var(--texra-contrastBorder, transparent);
   }
 
   .action-button wa-icon {
     font-size: var(--font-size-sm);
   }
 
+  /* Compact icon-only action button — borderless, ~22px square.
+   * Mirrors VS Code toolbar icon density. */
   .action-icon-button::part(base) {
-    width: var(--height-button);
-    min-width: var(--height-button);
-    height: var(--height-button);
-    min-height: var(--height-button);
+    width: 22px;
+    min-width: 22px;
+    height: 22px;
+    min-height: 22px;
     padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--texra-icon-foreground, var(--texra-foreground));
+  }
+
+  .action-icon-button::part(base):hover {
+    background: var(--texra-toolbar-hoverBackground, var(--texra-list-hoverBackground));
+    color: var(--texra-foreground);
+  }
+
+  .action-icon-button:focus-visible::part(base) {
+    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline-offset: -1px;
+  }
+
+  .action-icon-button[disabled]::part(base) {
+    opacity: var(--opacity-disabled);
+    background: transparent;
+  }
+
+  .action-icon-button wa-icon {
+    font-size: var(--font-size);
   }
 
   .clickable-link {
