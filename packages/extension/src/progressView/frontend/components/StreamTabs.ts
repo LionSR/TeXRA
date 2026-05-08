@@ -300,13 +300,12 @@ export class StreamTab extends LitElement {
           );
       }
 
-      .tab-container.is-active *,
-      .tab-container.is-active .tab,
-      .tab-container.is-active .tab-title,
-      .tab-container.is-active .tab-meta,
-      .tab-container.is-active .tab-description,
-      .tab-container.is-active .tab-delete,
-      .tab-container.is-active .tab-expand {
+      /*
+       * Single descendant rule covers .tab, .tab-title, .tab-meta,
+       * .tab-description, .tab-delete, .tab-expand, and any nested spans
+       * (.last-active, .model) and codicon glyphs.
+       */
+      .tab-container.is-active * {
         color: var(
           --texra-list-activeSelectionForeground,
           var(--wa-color-text-normal)
@@ -319,8 +318,8 @@ export class StreamTab extends LitElement {
        * the selection foreground.
        */
       .tab-container.is-active .tab-delete:hover,
-      .tab-container.is-active .tab-delete:focus-within,
       .tab-container.is-active .tab-delete:hover *,
+      .tab-container.is-active .tab-delete:focus-within,
       .tab-container.is-active .tab-delete:focus-within * {
         color: var(--wa-color-danger-on-quiet);
       }
@@ -448,7 +447,6 @@ export class StreamTab extends LitElement {
       <div
         class=${classMap({
           'tab-container': true,
-          'stream-tab': true,
           'is-active': this.active,
           'is-compact': this.compact,
           'has-children': hasChildren,
