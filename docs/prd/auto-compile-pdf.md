@@ -162,7 +162,7 @@ In `RoundPersistedFlow.shouldContinueNextRound()`:
 
 Sub-commit 3 must not land before sub-commit 2. There must be no window in which the legacy keys exist in `package.json` but are no longer read by runtime code (would silently fall back to defaults), nor a window in which runtime readers point at empty storage while the legacy keys are gone (same outcome). Sub-commit 1 is safe to land alone because it's purely additive. Migration sequence lands first overall, isolated from feature work.
 
-**UI:** Surface all keys in the existing **LaTeX** tab (`src/settingsView/handlers/latexSettingsHandlers.ts`, `src/settingsView/frontend/SettingsApp.ts`).
+**UI:** Surface all keys in the existing **LaTeX** tab (`packages/extension/src/settingsView/handlers/latexSettingsHandlers.ts`, `packages/extension/src/settingsView/frontend/SettingsApp.ts`).
 
 ## 7. Non-functional requirements
 
@@ -177,7 +177,7 @@ Sub-commit 3 must not land before sub-commit 2. There must be no window in which
 | Area                                                             | Change                                                                                                                                                                                                     |
 | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/common/state/stateManager.ts`                               | New keys; migration helper.                                                                                                                                                                                |
-| `src/settingsView/handlers/latexSettingsHandlers.ts` + frontend  | Read/write new keys.                                                                                                                                                                                       |
+| `packages/extension/src/settingsView/handlers/latexSettingsHandlers.ts` + frontend  | Read/write new keys.                                                                                                                                                                                       |
 | `package.json`                                                   | Remove migrated `contributes.configuration` entries.                                                                                                                                                       |
 | `src/agent/output/LatexDiffManager.ts`                           | Diff write path → `<runDir>/diff/...`; pass `--exclude-textcmd` and changes-only flags; `BIBINPUTS` env.                                                                                                   |
 | `src/latex/latexdiff.ts`                                         | Accept explicit output dir; honour new flags.                                                                                                                                                              |
@@ -186,10 +186,10 @@ Sub-commit 3 must not land before sub-commit 2. There must be no window in which
 | `src/latex/extractFileDependencies.ts` (or sibling)              | Add `extractPreamble()`; add `buildParentMap()`.                                                                                                                                                           |
 | `src/agent/node/roundPersistedFlow.ts`                           | One clause in `shouldContinueNextRound`; one line of context injection.                                                                                                                                    |
 | `src/tools/`                                                     | New `open_pdf` tool (body `vscode`-free, calls an injectable opener callback). No `compile_tex` — latexFixer already calls `latexmk` via the existing `bash` tool.                                         |
-| `src/extension.ts` (or equivalent activation site)               | Register the `open_pdf` opener callback that invokes `vscode.commands.executeCommand('vscode.open', ...)`. Mirrors the `setExtensionChecker()` pattern.                                                    |
+| `packages/extension/src/extension.ts` (or equivalent activation site)               | Register the `open_pdf` opener callback that invokes `vscode.commands.executeCommand('vscode.open', ...)`. Mirrors the `setExtensionChecker()` pattern.                                                    |
 | `resources/tool_use_agents/latexFixer.yaml`                      | Existing agent — wired into the post-compile failure path. No definition changes required for the default flow; if pre-accept shadow-mode is later pursued, the YAML's tool list and prompt are revisited. |
 | `src/agent/implementations/flows/reflection/nodes/OutputNode.ts` | Hand off to latexFixer on failure when setting is on.                                                                                                                                                      |
-| `src/frontend/agents/finalOutputOpener.ts`                       | Open PDF or log via `vscode.open`.                                                                                                                                                                         |
+| `packages/extension/src/frontend/agents/finalOutputOpener.ts`                       | Open PDF or log via `vscode.open`.                                                                                                                                                                         |
 | `src/housekeeping/`                                              | Exclude `*.pdf` from cleanup under runDir.                                                                                                                                                                 |
 
 ## 9. Phases
