@@ -33,7 +33,7 @@ export interface CommandPaletteEntry {
 export interface CommandPaletteOptions {
   readonly document: Document;
   readonly entries: readonly CommandPaletteEntry[];
-  readonly onExecute: (id: string) => boolean;
+  readonly onExecute: (id: string) => boolean | Promise<boolean>;
   // Returning false suppresses ALL palette opens — both the global
   // Cmd/Ctrl+K shortcut and any direct `controller.open()` call (e.g. while
   // a first-run walkthrough is visible). The guard runs at the entry of
@@ -103,10 +103,15 @@ export function getNextCommandPaletteIndex(
 
 export function executeCommandPaletteEntry(
   entry: CommandPaletteEntry | undefined,
-  onExecute: (id: string) => boolean,
+  onExecute: (id: string) => boolean | Promise<boolean>,
 ): boolean {
   if (!entry?.enabled) return false;
-  return onExecute(entry.id);
+  // Sync handlers report their actual result; async handlers (typed-args
+  // registry, #3784) return a Promise — treat that as "handled" so the
+  // palette closes immediately and the work runs in the background.
+  // Resolution failures surface via the dispatcher's own error logging.
+  const result = onExecute(entry.id);
+  return result === false ? false : true;
 }
 
 export function isCommandPaletteShortcut(event: KeyboardEvent): boolean {
