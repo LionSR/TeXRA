@@ -70,7 +70,14 @@ export function isSafeAbsolutePdfPath(pdfPath: string): boolean {
   // Strip wrapping whitespace — if anything non-trivial was trimmed
   // the path is probably crafted; reject conservatively.
   if (pdfPath.trim() !== pdfPath) return false;
-  // Identify the path shape first. We accept three forms:
+  // Accept exactly three absolute-path shapes; everything else
+  // (relative paths, URL schemes like `http:` / `javascript:` /
+  // `data:` / even `file:`) falls through to `false`. The shape
+  // checks alone reject URL schemes — they don't start with `/`,
+  // `\\`, or a single ASCII drive letter immediately followed by a
+  // path separator — so no separate scheme-rejection branch is
+  // needed.
+  //
   //   - Posix absolute: leading `/`
   //   - Windows drive-letter absolute: `C:\...` or `C:/...`
   //   - Windows UNC absolute: `\\server\share\...`
@@ -78,15 +85,8 @@ export function isSafeAbsolutePdfPath(pdfPath: string): boolean {
   const isWindowsDriveAbs = /^[A-Za-z]:[\\/]/.test(pdfPath);
   const isWindowsUncAbs = pdfPath.startsWith('\\\\');
   if (!(isPosixAbs || isWindowsDriveAbs || isWindowsUncAbs)) return false;
-  // Reject any URL-scheme-looking prefix UNLESS we already matched a
-  // Windows drive-letter path (whose `C:` prefix would otherwise look
-  // like a scheme). `file:` prefixes are rejected too — the renderer
-  // adds `file://` itself, callers must pass a plain filesystem path.
-  if (!isWindowsDriveAbs && /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(pdfPath)) {
-    return false;
-  }
-  // Must end in `.pdf` (case-insensitive). The extension check is
-  // belt-and-suspenders — the main process only sends compiled PDFs,
-  // but the renderer shouldn't trust that exclusively.
+  // Must end in `.pdf` (case-insensitive). Belt-and-suspenders — the
+  // main process only sends compiled PDFs today, but the renderer
+  // shouldn't trust that exclusively.
   return /\.pdf$/i.test(pdfPath);
 }
