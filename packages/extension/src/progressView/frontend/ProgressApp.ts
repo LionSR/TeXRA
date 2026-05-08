@@ -205,7 +205,7 @@ export class ProgressApp extends ProgressAppBase {
           var(--wa-space-s, 16px);
         overflow: auto;
         font-family:
-          var(--texra-font-family, var(--vscode-font-family, system-ui)),
+          var(--wa-font-family-body, var(--wa-font-family-body, system-ui)),
           sans-serif;
       }
 
@@ -214,7 +214,7 @@ export class ProgressApp extends ProgressAppBase {
         width: min(720px, 100%);
         padding: var(--wa-space-l, 24px);
         border: var(--border-thin, 1px) solid
-          var(--color-border, var(--vscode-panel-border, #d0d7de));
+          var(--color-border, var(--wa-color-surface-border, #d0d7de));
         border-radius: var(--border-radius, 6px);
         background: var(--wa-color-surface-default, #fff);
       }

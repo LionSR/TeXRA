@@ -84,7 +84,7 @@ export const selectStyles: CSSResult = css`
   }
 
   wa-option {
-    font-family: var(--texra-font-family);
+    font-family: var(--wa-font-family-body);
   }
 
   wa-option[disabled],

@@ -14,7 +14,9 @@
 import '@awesome.me/webawesome/dist/styles/themes/default.css';
 
 import { registerTeXRAWebAwesomeIcons } from './webAwesomeIcons';
+import { applyInitialWaColorScheme } from './waColorScheme';
 
 registerTeXRAWebAwesomeIcons();
+applyInitialWaColorScheme();
 
 export { TEXRA_ICON_LIBRARY } from './webAwesomeIcons';

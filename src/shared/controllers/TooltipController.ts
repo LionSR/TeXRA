@@ -6,14 +6,14 @@ const TOOLTIP_SHOW_DELAY_MS = 500;
 const TOOLTIP_STYLES: Partial<CSSStyleDeclaration> = {
   position: 'fixed',
   padding: 'var(--wa-space-2xs, 4px) var(--wa-space-xs, 8px)',
-  fontSize: 'var(--texra-font-size, 13px)',
-  fontFamily: 'var(--texra-font-family, system-ui), system-ui',
+  fontSize: 'var(--wa-font-size-m, 13px)',
+  fontFamily: 'var(--wa-font-family-body, system-ui), system-ui',
   color:
     'var(--texra-editorHoverWidget-foreground, var(--wa-color-text-normal))',
   background:
-    'var(--texra-editorHoverWidget-background, var(--wa-color-surface-default))',
+    'var(--wa-color-surface-raised, var(--wa-color-surface-default))',
   border:
-    '1px solid var(--texra-editorHoverWidget-border, var(--texra-contrastBorder, transparent))',
+    '1px solid var(--wa-color-surface-border, var(--texra-contrastBorder, transparent))',
   borderRadius: 'var(--border-radius, 3px)',
   whiteSpace: 'nowrap',
   pointerEvents: 'none',

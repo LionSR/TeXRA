@@ -372,6 +372,11 @@ function applyDesktopTheme(theme: DesktopThemeKind): void {
   );
   document.body.classList.add(`vscode-${theme}`, `texra-${theme}`);
   document.body.dataset.vscodeThemeKind = theme;
+  // Apply Web Awesome's native color-scheme class on the document root so
+  // WA's --wa-* dark-mode overrides activate (per WA theming model).
+  const root = document.documentElement;
+  root.classList.remove('wa-light', 'wa-dark');
+  root.classList.add(theme === 'light' ? 'wa-light' : 'wa-dark');
 }
 
 function getWindowTargetOrigin(): string {

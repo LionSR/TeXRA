@@ -61,7 +61,7 @@ export class ProviderKeyModal extends LitElement {
       .provider-key-error {
         min-height: 1.4em;
         margin: var(--wa-space-2xs) 0 0;
-        color: var(--texra-errorForeground, var(--color-error));
+        color: var(--wa-color-danger-on-quiet, var(--color-error));
         font-size: var(--font-size-sm);
       }
 

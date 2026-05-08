@@ -53,7 +53,7 @@ export class LatexDiffsSection extends LitElement {
       .latexdiffs-section[data-expanded='true'] {
         background-color: var(--background-color);
         border: var(--border-thin) solid
-          var(--texra-widget-border, var(--dropdown-border));
+          var(--wa-color-surface-border, var(--dropdown-border));
         border-radius: var(--border-radius);
         padding: var(--wa-space-xs);
         overflow: visible;
