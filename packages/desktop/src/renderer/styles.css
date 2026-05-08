@@ -42,6 +42,13 @@ body {
   text-transform: uppercase;
 }
 
+/* Custom elements need an explicit `[hidden]` rule — the user-agent
+   stylesheet's `[hidden] { display: none }` doesn't reach into wa-button's
+   shadow DOM consistently. */
+wa-button[hidden] {
+  display: none !important;
+}
+
 wa-button.desktop-back-button::part(base) {
   height: 28px;
   padding: 0 10px;
