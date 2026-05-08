@@ -317,6 +317,33 @@ body.texra-high-contrast {
   --wa-color-list-active-fg: HighlightText;
   --wa-color-brand-on-loud: HighlightText;
   --wa-color-brand-border-loud: CanvasText;
+
+  /* Quiet variants for HC modes — without these, components fall back to
+     dark/light surface colors (low contrast against system Canvas).
+     Per the WCAG 1.4.11 + W3C high-contrast guidance, use the system
+     color keywords (Canvas/CanvasText/Highlight/Mark/ButtonFace) so the
+     OS palette dictates contrast. */
+  --wa-color-text-quiet: GrayText;
+
+  --wa-color-brand-fill-quiet: Canvas;
+  --wa-color-brand-border-quiet: Highlight;
+  --wa-color-brand-on-quiet: Highlight;
+
+  --wa-color-neutral-fill-quiet: ButtonFace;
+  --wa-color-neutral-border-quiet: CanvasText;
+  --wa-color-neutral-on-quiet: ButtonText;
+
+  --wa-color-warning-fill-quiet: Canvas;
+  --wa-color-warning-border-quiet: Mark;
+  --wa-color-warning-on-quiet: Mark;
+
+  --wa-color-danger-fill-quiet: Canvas;
+  --wa-color-danger-border-quiet: Mark;
+  --wa-color-danger-on-quiet: Mark;
+
+  --wa-color-success-fill-quiet: Canvas;
+  --wa-color-success-border-quiet: Highlight;
+  --wa-color-success-on-quiet: Highlight;
 }
 
 /* VS Code-compact dropdown items. WA defaults to ~0.5em padding which makes
