@@ -8,16 +8,12 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import type { ApiKeyBannerState } from '@shared/schemas';
 import { capitalize } from '@shared/utils/string';
-import { warningBannerStyles } from '../styles/warningBannerStyles';
+import { bannerStyles } from '../styles/bannerStyles';
 import { MainViewEvents } from '../events';
 
 @customElement('api-key-banner')
 export class ApiKeyBanner extends LitElement {
-  static override styles = [
-    designTokens,
-    commonViewStyles,
-    warningBannerStyles,
-  ];
+  static override styles = [designTokens, commonViewStyles, bannerStyles];
 
   @property({ attribute: false }) state: ApiKeyBannerState = {
     visible: false,
@@ -35,7 +31,7 @@ export class ApiKeyBanner extends LitElement {
     const providerLabel = provider ? capitalize(provider) : '';
 
     return html`
-      <wa-callout id="apiKeyBanner" class="warning-banner" variant="warning">
+      <wa-callout id="apiKeyBanner" variant="warning">
         ${waIcon('triangle-exclamation', { slot: 'icon' })}
         <div class="banner-row">
           <span>

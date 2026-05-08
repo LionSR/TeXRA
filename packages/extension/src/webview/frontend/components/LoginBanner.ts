@@ -8,6 +8,7 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { PROMO_NOTICE_SHORT } from '@shared/copy/promoNotice';
 
+import { bannerStyles } from '../styles/bannerStyles';
 import { MainViewEvents } from '../events';
 
 @customElement('login-banner')
@@ -15,22 +16,8 @@ export class LoginBanner extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    bannerStyles,
     css`
-      :host {
-        display: block;
-      }
-
-      wa-callout.login-banner {
-        margin-bottom: var(--spacing-large);
-      }
-
-      .banner-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: var(--spacing-medium);
-      }
-
       .banner-text {
         display: flex;
         flex-direction: column;
@@ -46,13 +33,6 @@ export class LoginBanner extends LitElement {
       .banner-description {
         font-size: var(--font-size-sm);
         opacity: var(--opacity-normal);
-      }
-
-      .actions {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-small);
-        flex-shrink: 0;
       }
     `,
   ];
@@ -71,7 +51,7 @@ export class LoginBanner extends LitElement {
     if (!this.visible) return nothing;
 
     return html`
-      <wa-callout id="loginBanner" class="login-banner" variant="brand">
+      <wa-callout id="loginBanner" variant="brand">
         ${waIcon('wand-magic-sparkles', { slot: 'icon' })}
         <div class="banner-row">
           <div class="banner-text">
