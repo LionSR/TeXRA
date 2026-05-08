@@ -7,6 +7,8 @@ import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import type { FileLocation } from '@utils/files';
 import { createExternalLocation } from '@utils/files';
 
+import { buildDesktopShowPdfMessage } from '../desktopPdfMessages.js';
+
 export interface DesktopShellAdapter {
   openExternal(url: string): Promise<void>;
   openPath(filePath: string): Promise<string>;
@@ -19,6 +21,27 @@ export interface DesktopPreviewHost extends ExternalOpener {
 export interface DesktopPreviewHostOptions {
   shell: DesktopShellAdapter;
   showErrorMessage?: (message: string) => Promise<void> | void;
+  /**
+   * Posts a `desktop:showPdf` IPC message to the renderer so it can
+   * mount an `<iframe>` (Electron's built-in Chromium PDF viewer)
+   * inside the wa-dialog overlay. Return `false` (or throw) when the
+   * renderer is not reachable — e.g. the IPC bridge isn't wired yet
+   * at startup, or the BrowserWindow has been destroyed. The host
+   * then transparently falls back to `shell.openPath` so the user
+   * never gets a silent failure (mirrors the diff host's contract,
+   * caught by Copilot review on PR #3815).
+   *
+   * When undefined, `openBuildDisplay` skips the overlay entirely and
+   * uses the external-viewer flow — keeps tests and unattended
+   * invocations working.
+   */
+  postToRenderer?(message: unknown): boolean | void;
+  /**
+   * Force the legacy external-viewer flow (`shell.openPath`). Useful
+   * for headless tests and as an opt-out if the in-app overlay
+   * misbehaves. Defaults to `false` (prefer the in-app overlay).
+   */
+  forceExternal?: boolean;
 }
 
 function toErrorMessage(error: unknown): string {
@@ -73,6 +96,30 @@ export function createDesktopPreviewHost(
     }
   }
 
+  // Try to render the PDF inside the desktop via the wa-dialog overlay.
+  // Returns `true` when the renderer accepted the IPC, `false` when we
+  // should fall back to the external viewer. Mirrors the diff host's
+  // contract: a `false` return value or a thrown error opts into
+  // `shell.openPath`. Bot review on #3815 explicitly required not
+  // silently swallowing IPC failures.
+  function tryShowPdfInRenderer(pdfPath: string, title: string): boolean {
+    if (!options.postToRenderer || options.forceExternal) return false;
+    try {
+      const result = options.postToRenderer(
+        buildDesktopShowPdfMessage({ title, pdfPath }),
+      );
+      // `void` (the common case) is treated as success; explicit
+      // `false` opts into the external-viewer fallback.
+      return result !== false;
+    } catch (error) {
+      console.error(
+        '[desktop] desktopPreviewHost: postToRenderer failed; falling back to external viewer',
+        error,
+      );
+      return false;
+    }
+  }
+
   async function openBuildDisplay(fileLocation: FileLocation): Promise<void> {
     const sourcePath = fileLocation.absolutePath;
     await ensurePathExists(sourcePath);
@@ -103,6 +150,15 @@ export function createDesktopPreviewHost(
         `LaTeX build failed for ${sourcePath}. See the LaTeX log next to the source for details.`,
       );
     }
+
+    // Confirm the PDF is on disk before rendering it (the iframe will
+    // happily load nothing and present a blank surface otherwise).
+    await ensurePathExists(pdfPath);
+
+    // Prefer the in-app overlay (audit item B / trajectory #17).
+    // External-viewer fallback covers headless tests and the
+    // `forceExternal` escape hatch.
+    if (tryShowPdfInRenderer(pdfPath, path.basename(pdfPath))) return;
 
     await openPath(pdfPath);
   }
