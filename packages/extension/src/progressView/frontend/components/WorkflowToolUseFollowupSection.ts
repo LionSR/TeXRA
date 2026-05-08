@@ -10,6 +10,8 @@ import { customElement, property, state } from 'lit/decorators.js';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/select/select.js';
+import '@awesome.me/webawesome/dist/components/option/option.js';
 
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -170,27 +172,27 @@ export class WorkflowToolUseFollowupSection extends LitElement {
                 <div class="followup__controls">
                   <label class="followup__field">
                     <span class="followup__label">Agent</span>
-                    <vscode-single-select
-                      position="above"
+                    <wa-select
+                      placement="top"
                       aria-label="Follow-up tool-use agent"
                       .value=${this.selectedAgent}
                       ?disabled=${agents.length === 0}
                       @change=${this.handleAgentChange}
                     >
                       ${renderAgentOptions(agents, this.selectedAgent)}
-                    </vscode-single-select>
+                    </wa-select>
                   </label>
                   <label class="followup__field">
                     <span class="followup__label">Model</span>
-                    <vscode-single-select
-                      position="above"
+                    <wa-select
+                      placement="top"
                       aria-label="Follow-up model"
                       .value=${this.selectedModel}
                       ?disabled=${models.length === 0}
                       @change=${this.handleModelChange}
                     >
                       ${renderModelOptions(models, this.selectedModel)}
-                    </vscode-single-select>
+                    </wa-select>
                   </label>
                 </div>
                 <vscode-textarea
