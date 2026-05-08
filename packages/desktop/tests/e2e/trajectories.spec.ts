@@ -352,3 +352,142 @@ test('desktop:showDiff opens the in-app diff overlay', async () => {
     { timeout: 5000 },
   );
 });
+
+/**
+ * Trajectory 17 — in-app PDF preview overlay (audit item B).
+ *
+ * `desktopPreviewHost.openBuildDisplay` posts `desktop:showPdf` to the
+ * renderer; the renderer lazy-creates a wa-dialog overlay containing
+ * an `<iframe>` pointed at `file://${pdfPath}` (Electron's bundled
+ * Chromium PDF viewer). We simulate the IPC by `window.postMessage`-ing
+ * the same payload and assert the dialog opens with an iframe whose
+ * `src` resolves to the supplied PDF path.
+ *
+ * We don't wait for the iframe to load the PDF (Chromium's PDF plugin
+ * is heavy + the test PDF doesn't exist on disk); verifying the
+ * contract — dialog open, title populated, iframe src matches — is
+ * enough to catch wiring regressions.
+ */
+test('desktop:showPdf opens the in-app PDF overlay', async () => {
+  // Reset chrome — previous tests may have left dialogs open.
+  await launched.page.evaluate(() => {
+    const dialogs = document.querySelectorAll('wa-dialog');
+    dialogs.forEach((d) => {
+      (d as unknown as { open: boolean }).open = false;
+    });
+  });
+
+  const pdfPath = '/tmp/texra-trajectory/output.pdf';
+  const payload = {
+    command: 'desktop:showPdf',
+    title: 'output.pdf',
+    pdfPath,
+  };
+
+  await launched.page.evaluate((message) => {
+    window.postMessage(message, '*');
+  }, payload);
+
+  await launched.page.waitForFunction(
+    () => {
+      const dialog = document.querySelector('wa-dialog.desktop-pdf-overlay');
+      if (!dialog) return false;
+      const open = (dialog as unknown as { open: boolean }).open === true;
+      return open || dialog.hasAttribute('open');
+    },
+    undefined,
+    { timeout: 5000 },
+  );
+
+  const dialog = launched.page.locator('wa-dialog.desktop-pdf-overlay');
+  await expect(dialog).toHaveCount(1);
+  await expect(dialog.locator('.desktop-pdf-title')).toHaveText('output.pdf');
+  await expect(dialog.locator('.desktop-pdf-subtitle')).toHaveText(pdfPath);
+
+  const iframeProps = await launched.page.evaluate(() => {
+    const el = document.querySelector(
+      'wa-dialog.desktop-pdf-overlay iframe.desktop-pdf-frame',
+    ) as HTMLIFrameElement | null;
+    if (!el) return null;
+    return {
+      src: el.getAttribute('src'),
+      sandbox: el.getAttribute('sandbox'),
+    };
+  });
+  expect(iframeProps).not.toBeNull();
+  expect(iframeProps?.src).toBe(`file://${pdfPath}`);
+  expect(iframeProps?.sandbox).toBe('allow-same-origin');
+
+  // Unsafe paths must be rejected — the renderer logs + ignores them
+  // rather than assigning to iframe.src. Reset the dialog first so
+  // we can prove no state change.
+  await launched.page.evaluate(() => {
+    const dialog = document.querySelector('wa-dialog.desktop-pdf-overlay');
+    if (dialog) (dialog as unknown as { open: boolean }).open = false;
+  });
+  await launched.page.waitForFunction(
+    () => {
+      const dialog = document.querySelector('wa-dialog.desktop-pdf-overlay');
+      return (
+        dialog == null || (dialog as unknown as { open: boolean }).open === false
+      );
+    },
+    undefined,
+    { timeout: 5000 },
+  );
+  await launched.page.evaluate(() => {
+    window.postMessage(
+      {
+        command: 'desktop:showPdf',
+        title: 'malicious',
+        pdfPath: 'http://evil.com/x.pdf',
+      },
+      '*',
+    );
+  });
+  // Give the message handler a chance to run; the dialog must NOT
+  // open because the path was rejected.
+  await launched.page.waitForTimeout(200);
+  const stillClosed = await launched.page.evaluate(() => {
+    const dialog = document.querySelector('wa-dialog.desktop-pdf-overlay');
+    return (
+      dialog == null || (dialog as unknown as { open: boolean }).open === false
+    );
+  });
+  expect(stillClosed).toBe(true);
+
+  // Re-open with a valid path to verify the close pathway.
+  await launched.page.evaluate((path) => {
+    window.postMessage(
+      {
+        command: 'desktop:showPdf',
+        title: 'output.pdf',
+        pdfPath: path,
+      },
+      '*',
+    );
+  }, pdfPath);
+  await launched.page.waitForFunction(
+    () => {
+      const dialog = document.querySelector('wa-dialog.desktop-pdf-overlay');
+      if (!dialog) return false;
+      return (dialog as unknown as { open: boolean }).open === true;
+    },
+    undefined,
+    { timeout: 5000 },
+  );
+
+  // Close via desktop:closePdf — the dialog should close.
+  await launched.page.evaluate(() => {
+    window.postMessage({ command: 'desktop:closePdf' }, '*');
+  });
+  await launched.page.waitForFunction(
+    () => {
+      const dialog = document.querySelector('wa-dialog.desktop-pdf-overlay');
+      if (!dialog) return true;
+      return (dialog as unknown as { open: boolean }).open === false;
+    },
+    undefined,
+    { timeout: 5000 },
+  );
+});

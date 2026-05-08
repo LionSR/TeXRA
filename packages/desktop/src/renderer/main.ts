@@ -94,6 +94,13 @@ import {
   type DesktopShowDiffMessage,
   type DesktopCloseDiffMessage,
 } from '../desktopDiffMessages';
+import {
+  DesktopShowPdfMessageSchema,
+  DesktopClosePdfMessageSchema,
+  isSafeAbsolutePdfPath,
+  type DesktopShowPdfMessage,
+  type DesktopClosePdfMessage,
+} from '../desktopPdfMessages';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
 import { createFirstRunWalkthrough } from './desktopOnboarding';
 
@@ -676,6 +683,125 @@ function closeDiffOverlay(): void {
 }
 
 // =============================================================================
+// PDF preview overlay (audit item B, trajectory #17)
+// =============================================================================
+//
+// Replaces `desktopPreviewHost.openBuildDisplay`'s old "open the PDF in
+// the OS viewer" flow with an in-app `<iframe src="file://...">` mounted
+// inside a wa-dialog overlay — Electron's bundled Chromium renders PDFs
+// natively, so no extra dependency is required. Mirrors the diff
+// overlay shape so the two surfaces share UX + keyboard handling
+// (Esc dismisses; clicking the close button hides the dialog without
+// unmounting it).
+//
+// Note: this is the second overlay (settings was first via the
+// drawer/dialog refactor; diff via #3815). If a third overlay arrives
+// we should extract a shared `createOverlay()` factory; today the
+// duplication is small enough that an abstraction would be premature.
+
+let pdfDialog: WaDialog | null = null;
+let pdfFrameElement: HTMLIFrameElement | null = null;
+let pdfTitleElement: HTMLElement | null = null;
+let pdfSubtitleElement: HTMLElement | null = null;
+
+function ensurePdfDialog(): WaDialog {
+  if (pdfDialog) return pdfDialog;
+  const dialog = document.createElement('wa-dialog') as WaDialog;
+  dialog.classList.add('desktop-pdf-overlay');
+  dialog.withoutHeader = true;
+  dialog.lightDismiss = false;
+  dialog.setAttribute('aria-label', 'PDF preview');
+
+  const body = document.createElement('section');
+  body.classList.add('desktop-pdf-body');
+
+  const header = document.createElement('header');
+  header.classList.add('desktop-pdf-header');
+  const titleEl = document.createElement('h2');
+  titleEl.classList.add('desktop-pdf-title');
+  titleEl.textContent = 'Preview';
+  pdfTitleElement = titleEl;
+  const subtitleEl = document.createElement('p');
+  subtitleEl.classList.add('desktop-pdf-subtitle');
+  pdfSubtitleElement = subtitleEl;
+  header.append(titleEl, subtitleEl);
+
+  // Use an `<iframe>` (not `<webview>`) — `<webview>` requires
+  // `webviewTag: true` in webPreferences which we don't enable.
+  // Electron's main BrowserWindow renders PDFs in iframes via the
+  // bundled Chromium PDF plugin, no flag needed. The src is set
+  // when the overlay is opened (we keep it empty initially so
+  // dormant dialogs don't load anything).
+  const frame = document.createElement('iframe');
+  frame.classList.add('desktop-pdf-frame');
+  frame.setAttribute('title', 'PDF preview');
+  // sandbox: allow same-origin so the PDF viewer's controls (toolbar,
+  // page nav) work; deny scripts so a malformed PDF can't run JS into
+  // our renderer. The Chromium PDF viewer itself runs in a separate
+  // origin so this restriction is benign.
+  frame.setAttribute('sandbox', 'allow-same-origin');
+  pdfFrameElement = frame;
+
+  body.append(header, frame);
+  dialog.append(body);
+
+  // Explicit close button — wa-dialog handles Esc natively, but the
+  // visible affordance matches the settings + diff overlays.
+  const close = document.createElement('wa-button');
+  close.classList.add('desktop-pdf-close');
+  close.setAttribute('appearance', 'plain');
+  close.setAttribute('size', 'small');
+  close.setAttribute('aria-label', 'Close PDF preview');
+  close.setAttribute('title', 'Close PDF preview');
+  render(waIcon('xmark'), close);
+  close.addEventListener('click', () => {
+    dialog.open = false;
+  });
+  dialog.append(close);
+
+  // Clear the iframe src when the dialog hides so we don't keep the
+  // PDF resident in memory across closes. Re-opening reassigns the
+  // src in `openPdfOverlay`.
+  dialog.addEventListener('wa-after-hide', () => {
+    if (pdfFrameElement) pdfFrameElement.removeAttribute('src');
+  });
+
+  appRoot.append(dialog);
+  pdfDialog = dialog;
+  return dialog;
+}
+
+function openPdfOverlay(payload: DesktopShowPdfMessage): void {
+  // Extra defense in depth: even though the schema parsed `pdfPath`
+  // as a non-empty string, the renderer enforces an absolute-fs-path
+  // contract before assigning to `iframe.src`. Anything that smells
+  // like a non-`file:` URL is rejected (logged + ignored). The main
+  // process is the only producer today, but the renderer should not
+  // trust messages it didn't originate (Cursor Bugbot guidance).
+  if (!isSafeAbsolutePdfPath(payload.pdfPath)) {
+    console.error(
+      '[desktop] desktopPdfOverlay: rejected unsafe PDF path',
+      payload.pdfPath,
+    );
+    return;
+  }
+  const dialog = ensurePdfDialog();
+  if (pdfTitleElement) pdfTitleElement.textContent = payload.title;
+  if (pdfSubtitleElement) pdfSubtitleElement.textContent = payload.pdfPath;
+  if (pdfFrameElement) {
+    // `encodeURI` keeps `/`, `:`, and the drive-letter colon intact
+    // while escaping spaces and other path characters that would
+    // otherwise produce a malformed URL.
+    pdfFrameElement.src = `file://${encodeURI(payload.pdfPath)}`;
+  }
+  dialog.open = true;
+}
+
+function closePdfOverlay(): void {
+  if (pdfDialog) pdfDialog.open = false;
+}
+
+// =============================================================================
 // Onboarding + command palette
 // =============================================================================
 
@@ -781,6 +907,18 @@ function isDesktopCloseDiffMessage(
   return DesktopCloseDiffMessageSchema.safeParse(message).success;
 }
 
+function isDesktopShowPdfMessage(
+  message: unknown,
+): message is DesktopShowPdfMessage {
+  return DesktopShowPdfMessageSchema.safeParse(message).success;
+}
+
+function isDesktopClosePdfMessage(
+  message: unknown,
+): message is DesktopClosePdfMessage {
+  return DesktopClosePdfMessageSchema.safeParse(message).success;
+}
+
 // Bridge for legacy `desktop:setRoute` IPC. The shell no longer has four
 // routes, so map the old route names onto the new surfaces:
 //   - 'main' / 'progress' → center pane (clear active stream for 'main')
@@ -840,6 +978,15 @@ window.addEventListener('message', (event) => {
   }
   if (isDesktopCloseDiffMessage(event.data)) {
     closeDiffOverlay();
+    return;
+  }
+  if (isDesktopShowPdfMessage(event.data)) {
+    const parsed = DesktopShowPdfMessageSchema.safeParse(event.data);
+    if (parsed.success) openPdfOverlay(parsed.data);
+    return;
+  }
+  if (isDesktopClosePdfMessage(event.data)) {
+    closePdfOverlay();
     return;
   }
   // Progress view messages: dispatch directly into the shared messageDispatcher
@@ -1039,4 +1186,6 @@ export {
   openLogsDrawer,
   openDiffOverlay,
   closeDiffOverlay,
+  openPdfOverlay,
+  closePdfOverlay,
 };

@@ -171,6 +171,24 @@ function createWindow(options: {
   const previewHost = createDesktopPreviewHost({
     shell,
     showErrorMessage,
+    // Audit item B / trajectory #17: prefer the in-app PDF overlay
+    // (<iframe> mounted inside a wa-dialog so Electron's bundled
+    // Chromium PDF viewer renders the build output). The external
+    // viewer (`shell.openPath`) is preserved as a fallback when
+    // `postToRenderer` is unavailable or the renderer rejects the
+    // post — mirrors the diff-host wiring just above.
+    //
+    // Return `false` when the IPC bridge is not yet wired (startup
+    // race) or the BrowserWindow has been destroyed; the host then
+    // falls back to the external viewer so previews never silently
+    // disappear.
+    postToRenderer: (message) => {
+      const ipc = ipcRef.current;
+      if (!ipc) return false;
+      if (window.isDestroyed()) return false;
+      ipc.postToRenderer(message);
+      return true;
+    },
   });
   const refreshDesktopAuthSurfaces = async () => {
     const profile = await desktopAuth.getProfileData();
