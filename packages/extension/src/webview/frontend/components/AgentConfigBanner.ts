@@ -7,16 +7,12 @@ import { customElement, property } from 'lit/decorators.js';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import type { AgentConfigBannerState } from '@shared/schemas';
-import { warningBannerStyles } from '../styles/warningBannerStyles';
+import { bannerStyles } from '../styles/bannerStyles';
 import { MainViewEvents } from '../events';
 
 @customElement('agent-config-banner')
 export class AgentConfigBanner extends LitElement {
-  static override styles = [
-    designTokens,
-    commonViewStyles,
-    warningBannerStyles,
-  ];
+  static override styles = [designTokens, commonViewStyles, bannerStyles];
 
   @property({ attribute: false }) state: AgentConfigBannerState = {
     visible: false,
@@ -37,7 +33,6 @@ export class AgentConfigBanner extends LitElement {
     return html`
       <wa-callout
         id="agentConfigBanner"
-        class="warning-banner"
         variant="warning"
         data-custom-dir-set=${this.state.customDirSet ? 'true' : 'false'}
       >
