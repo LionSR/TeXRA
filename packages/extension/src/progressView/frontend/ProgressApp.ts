@@ -2,8 +2,7 @@ import { create } from 'mutative';
 
 // Third-party imports
 import { html, css, type TemplateResult } from 'lit';
-import { provide } from '@lit/context';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 import { z } from 'zod';
@@ -34,7 +33,6 @@ import {
   TEXRA_ICON_LIBRARY,
 } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
-import { isProcessAgent } from '@shared/streams/agentKind';
 import '@shared/wa/tabs';
 import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 
@@ -49,18 +47,14 @@ import {
   type StreamState,
 } from './store';
 import {
-  activeProcessOutputs$,
   activeStreamId$,
   appState,
   childStreamsByParent$,
   hasAnyStreams$,
-  logContext$,
   narrowLayout,
   pendingApprovalIds$,
   permissions$,
   placement,
-  streamById$,
-  streamContext$,
   streamFilter$,
   streamStates$,
   tabStreams$,
@@ -93,35 +87,14 @@ import {
   type MessageHandlerContext,
 } from './messageDispatcher';
 
-// Local imports - progress view contexts
-import {
-  EMPTY_LOG_CONTEXT,
-  EMPTY_PROCESS_OUTPUTS,
-  EMPTY_STREAM_BY_ID,
-  EMPTY_STREAM_CONTEXT,
-  permissionsContext,
-  processOutputContext,
-  streamByIdContext,
-  streamLogContext,
-  streamStateContext,
-  type ProcessOutputMap,
-  type StreamByIdMap,
-  type StreamContextValue,
-  type StreamLogContextValue,
-} from './contexts/streamContexts';
 import type { FrontendEventHandlerContext } from './eventHandlers';
 // Local imports - progress view components
 import './components/StreamTabs';
-import './components/ToolUseStreamContent';
-import './components/WorkflowStreamContent';
-import './components/ProcessStreamContent';
+import './components/StreamConversation';
 import './components/UserMessage';
 import './components/StatisticsPanel';
 import './components/LatexdiffResults';
 import './components/ContextManagement';
-
-// Local imports - progress view component types
-import type { PermissionState } from './components/PermissionCard';
 
 registerTeXRAWebAwesomeIcons();
 
@@ -272,21 +245,10 @@ export class ProgressApp extends ProgressAppBase {
         max-width: 360px;
       }
 
-      .content-area {
-        display: flex;
-        flex-direction: column;
-        flex: 1;
-        min-width: 0;
-        min-height: 0;
-        overflow: hidden;
-      }
-
-      /* Stream content containers - pass-through for layout */
-      tool-use-stream-content,
-      workflow-stream-content,
-      process-stream-content {
-        display: contents;
-      }
+      /* .content-area and stream-content layout rules moved to
+         components/StreamConversation.ts (the :host block + its shadow
+         scope). The <stream-conversation> element is now the slot=start
+         element directly. */
 
       .desktop-empty-progress {
         display: grid;
@@ -352,26 +314,6 @@ export class ProgressApp extends ProgressAppBase {
     narrowLayout.set(width < 500);
   });
 
-  @provide({ context: streamStateContext })
-  @state()
-  private streamContextValue: StreamContextValue = EMPTY_STREAM_CONTEXT;
-
-  @provide({ context: streamLogContext })
-  @state()
-  private streamLogContextValue: StreamLogContextValue = EMPTY_LOG_CONTEXT;
-
-  @provide({ context: permissionsContext })
-  @state()
-  private permissionsContextValue: PermissionState[] = [];
-
-  @provide({ context: processOutputContext })
-  @state()
-  private processOutputContextValue: ProcessOutputMap = EMPTY_PROCESS_OUTPUTS;
-
-  @provide({ context: streamByIdContext })
-  @state()
-  private streamByIdContextValue: StreamByIdMap = EMPTY_STREAM_BY_ID;
-
   private prefsManager = new PersistedState(
     webviewStorage,
     'progressViewPrefs',
@@ -400,19 +342,6 @@ export class ProgressApp extends ProgressAppBase {
 
   protected get readyCommand(): string | null {
     return PROGRESS_VIEW_COMMANDS.WEBVIEW_READY;
-  }
-
-  /**
-   * Sync signal-computed values into @provide/@state context properties.
-   * SignalWatcher triggers requestUpdate() when any read signal changes,
-   * so this runs only when computed values actually propagate.
-   */
-  protected override willUpdate(): void {
-    this.streamContextValue = streamContext$.get();
-    this.streamLogContextValue = logContext$.get();
-    this.permissionsContextValue = permissions$.get();
-    this.processOutputContextValue = activeProcessOutputs$.get();
-    this.streamByIdContextValue = streamById$.get();
   }
 
   render(): TemplateResult {
@@ -497,13 +426,22 @@ export class ProgressApp extends ProgressAppBase {
           ? html`
               <div class="split-container">
                 <wa-split-panel .position=${splitPosition}>
-                  <div
+                  <stream-conversation
                     slot="start"
-                    class="content-area"
                     @stream-switch=${this.onStreamSwitch}
-                  >
-                    ${this.renderStreamContent()}
-                  </div>
+                    @toolbar-command=${this.onToolbarCommand}
+                    @permission-action=${this.onPermissionAction}
+                    @file-action=${this.onFileAction}
+                    @compile-fixer-run=${this.onCompileFixerRun}
+                    @followup-request-options=${this.onFollowupRequestOptions}
+                    @followup-setup=${this.onFollowupSetup}
+                    @followup-run=${this.onFollowupRun}
+                    @followup-change=${this.onFollowUpChange}
+                    @followup-send=${this.onFollowUpSend}
+                    @followup-polish=${this.onFollowUpPolish}
+                    @followup-clear=${this.onFollowUpClear}
+                    @followup-focus-complete=${this.onFollowUpFocusComplete}
+                  ></stream-conversation>
 
                   <stream-tabs
                     slot="end"
@@ -555,56 +493,6 @@ export class ProgressApp extends ProgressAppBase {
           })}
         </div>
       </section>
-    `;
-  }
-
-  /**
-   * Render stream content based on stream type.
-   * Single branch point - delegates to typed container components.
-   */
-  private renderStreamContent(): TemplateResult {
-    const { streamInfo, streamState, isToolUse } = this.streamContextValue;
-    if (!streamInfo || !streamState) {
-      // No active stream - show empty log-list
-      return html`<log-list></log-list>`;
-    }
-
-    // Process agents (e.g. bash) proxy raw stdout/stderr — render them with a
-    // dedicated terminal-style container, not the LLM workflow/tool-use chrome.
-    if (isProcessAgent(streamInfo.agent)) {
-      return html`
-        <process-stream-content
-          @toolbar-command=${this.onToolbarCommand}
-        ></process-stream-content>
-      `;
-    }
-
-    // Single branch point: delegate to typed container component
-    if (isToolUse) {
-      return html`
-        <tool-use-stream-content
-          @toolbar-command=${this.onToolbarCommand}
-          @permission-action=${this.onPermissionAction}
-          @followup-change=${this.onFollowUpChange}
-          @followup-send=${this.onFollowUpSend}
-          @followup-polish=${this.onFollowUpPolish}
-          @followup-clear=${this.onFollowUpClear}
-          @followup-focus-complete=${this.onFollowUpFocusComplete}
-        ></tool-use-stream-content>
-      `;
-    }
-
-    // Workflow stream (default for non-tool-use)
-    return html`
-      <workflow-stream-content
-        @toolbar-command=${this.onToolbarCommand}
-        @permission-action=${this.onPermissionAction}
-        @file-action=${this.onFileAction}
-        @compile-fixer-run=${this.onCompileFixerRun}
-        @followup-request-options=${this.onFollowupRequestOptions}
-        @followup-setup=${this.onFollowupSetup}
-        @followup-run=${this.onFollowupRun}
-      ></workflow-stream-content>
     `;
   }
 
