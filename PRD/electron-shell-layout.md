@@ -106,11 +106,11 @@ Both hosts continue importing from the same packages. No component lives in `pac
 
 ## 8. Phasing & PRs
 
-| PR | Phase | Touches | Visible change |
-|---|---|---|---|
-| 1 | State hoist | `progressState.ts` (new), `ProgressApp.ts`, `messageDispatcher.ts`, possibly `slices/*` | None — extension and desktop render identically |
-| 2 | Extract `<stream-conversation>` + slim `<progress-app>` | `components/StreamConversation.ts` (new), `ProgressApp.ts` | None |
-| 3 | Electron shell + workspace-explorer removal | `desktop/src/renderer/{main.ts,index.html,styles.css}`, `desktop/src/main/desktopWorkspaceExplorer.ts` (deleted) and IPC unwired, `desktopMenu.ts`, `main/index.ts` | Desktop layout flips; extension unchanged |
+| PR  | Phase                                                   | Touches                                                                                                                                                             | Visible change                                  |
+| --- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| 1   | State hoist                                             | `progressState.ts` (new), `ProgressApp.ts`, `messageDispatcher.ts`, possibly `slices/*`                                                                             | None — extension and desktop render identically |
+| 2   | Extract `<stream-conversation>` + slim `<progress-app>` | `components/StreamConversation.ts` (new), `ProgressApp.ts`                                                                                                          | None                                            |
+| 3   | Electron shell + workspace-explorer removal             | `desktop/src/renderer/{main.ts,index.html,styles.css}`, `desktop/src/main/desktopWorkspaceExplorer.ts` (deleted) and IPC unwired, `desktopMenu.ts`, `main/index.ts` | Desktop layout flips; extension unchanged       |
 
 Each PR independently shippable and revertable. Extension users see no diff until or after all three.
 
