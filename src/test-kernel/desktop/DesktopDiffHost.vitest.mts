@@ -63,7 +63,10 @@ describe('createDesktopDiffHost', () => {
     const { createDesktopDiffHost } = await loadDesktopDiffHost();
     const host = createDesktopDiffHost({
       openPath,
-      postToRenderer: (message) => posted.push(message),
+      postToRenderer: (message) => {
+        posted.push(message);
+        return true;
+      },
     });
 
     await host.openDiff(
@@ -169,7 +172,10 @@ describe('createDesktopDiffHost', () => {
       openPath: vi.fn(async (filePath: string) => {
         openedPaths.push(filePath);
       }),
-      postToRenderer: (message) => posted.push(message),
+      postToRenderer: (message) => {
+        posted.push(message);
+        return true;
+      },
       forceExternal: true,
     });
 
