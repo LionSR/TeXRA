@@ -2,6 +2,8 @@
 import * as vscode from 'vscode';
 import { z } from 'zod';
 
+import type { CommandId } from './catalog';
+
 // Local imports
 import {
   signIn as authSignIn,
@@ -102,17 +104,13 @@ const CreateAgentWithAIArgSchema = AgentCategorySchema.optional();
 
 /**
  * Optional `{ inPlace }` argument for `texra.showProgressView`. The
- * legacy registration accepted any object and only honoured the
- * `inPlace` boolean — modelling that as an optional schema keeps the
- * VS Code-side semantics intact when the command is invoked from
- * keybindings (no args) vs. internal callers (`{ inPlace: true }`).
+ * legacy registration accepted any argument shape and only honoured the
+ * `inPlace` boolean — `z.unknown()` here preserves that best-effort
+ * semantics so callers passing `null`, booleans, or stringified flags
+ * still open the progress view (just without the in-place flag) instead
+ * of being rejected by the dispatcher as unhandled.
  */
-const ShowProgressViewArgSchema = z
-  .object({ inPlace: z.boolean().optional() })
-  .partial()
-  .optional();
-
-import type { CommandId } from './catalog';
+const ShowProgressViewArgSchema = z.unknown();
 
 const RESET_CHANNEL = 'mainViewCommands';
 
@@ -453,8 +451,13 @@ const EXTENSION_COMMAND_HANDLERS = {
   'texra.toggleView': (actions) => awaitTrue(actions.toggleView()),
   'texra.showProgressView': definedHandler(
     ShowProgressViewArgSchema,
-    (actions: ExtensionCommandActions, parsed) =>
-      awaitTrue(actions.showProgressView(parsed?.inPlace === true)),
+    (actions: ExtensionCommandActions, parsed) => {
+      const inPlace =
+        typeof parsed === 'object' &&
+        parsed !== null &&
+        (parsed as { inPlace?: unknown }).inPlace === true;
+      return awaitTrue(actions.showProgressView(inPlace));
+    },
   ),
   'texra.setApiKey': definedHandler(
     SetApiKeyArgSchema,
