@@ -21,6 +21,13 @@ function readRendererOnboarding(): string {
   );
 }
 
+function readSharedWalkthroughDialog(): string {
+  return readFileSync(
+    repoPath('src/shared/wa/walkthroughDialog.ts'),
+    'utf8',
+  );
+}
+
 describe('desktop renderer shell', () => {
   it('mounts the reused launcher, progress, and settings Lit apps', () => {
     const rendererMain = readRendererMain();
@@ -44,13 +51,16 @@ describe('desktop renderer shell', () => {
   it('provides persistent shell controls for returning between routes', () => {
     const rendererMain = readRendererMain();
 
-    expect(rendererMain).toContain("{ route: 'main', label: 'Launcher' }");
-    expect(rendererMain).toContain("{ route: 'progress', label: 'Progress' }");
-    expect(rendererMain).toContain("{ route: 'settings', label: 'Settings' }");
-    expect(rendererMain).toContain("{ route: 'logs', label: 'Logs' }");
-    expect(rendererMain).toContain('data-route-button=${route}');
-    expect(rendererMain).toContain("button.addEventListener('click'");
-    expect(rendererMain).toContain("button.setAttribute('aria-pressed'");
+    // The chrome was simplified to show only Settings + Logs as icon
+    // buttons; other routes are reachable through the command palette and
+    // the "Back to Launcher" affordance. CHROME_ICON_BUTTONS keeps both
+    // lists aligned so future contributors update them together.
+    expect(rendererMain).toContain('CHROME_ICON_BUTTONS');
+    expect(rendererMain).toContain("route: 'settings'");
+    expect(rendererMain).toContain("route: 'logs'");
+    expect(rendererMain).toContain('data-route-button=${spec.route}');
+    expect(rendererMain).toContain('aria-pressed=${String(currentRoute');
+    expect(rendererMain).toContain('toggleRoute');
   });
 
   it('mounts a persistent workspace explorer sidebar', () => {
@@ -67,7 +77,11 @@ describe('desktop renderer shell', () => {
     const rendererMain = readRendererMain();
 
     expect(rendererMain).toContain('createDesktopCommandPalette');
-    expect(rendererMain).toContain('data-command-palette-button');
+    // The chrome exposes a "Commands" button that opens the palette via the
+    // module-scoped commandPalette controller. Earlier revisions used a
+    // data-command-palette-button hook; the WA migration switched to a
+    // direct @click=${openCommandPalette} binding instead.
+    expect(rendererMain).toContain('openCommandPalette');
     expect(rendererMain).toContain('buildDesktopSettingsTabMessage');
     expect(rendererMain).toContain('showSettings: (tabIndex, agentSubTab)');
   });
@@ -75,6 +89,7 @@ describe('desktop renderer shell', () => {
   it('mounts desktop-only first-run onboarding controls', () => {
     const rendererMain = readRendererMain();
     const rendererOnboarding = readRendererOnboarding();
+    const sharedWalkthrough = readSharedWalkthroughDialog();
 
     expect(rendererMain).toContain('createFirstRunWalkthrough');
     expect(rendererMain).toContain('DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE');
@@ -86,17 +101,22 @@ describe('desktop renderer shell', () => {
     expect(rendererMain).toContain(
       'canOpen: () => !firstRunWalkthrough?.isVisible()',
     );
-    // wa-dialog handles focus trap, escape, and modal backdrop natively.
-    // Assert the dialog wiring + the one custom keydown interceptor.
-    expect(rendererOnboarding).toContain("document.createElement('wa-dialog')");
-    expect(rendererOnboarding).toContain(
+    // The desktop wrapper now delegates wa-dialog wiring to the host-neutral
+    // helper in `src/shared/wa/walkthroughDialog.ts`. The wrapper supplies
+    // copy + classes; the shared helper owns the dialog lifecycle so both
+    // hosts (extension webview + Electron renderer) share the same focus,
+    // dismiss, and shortcut-interception behavior.
+    expect(rendererOnboarding).toContain('createWalkthroughDialog');
+    expect(rendererOnboarding).toContain('Welcome to TeXRA Desktop');
+    expect(sharedWalkthrough).toContain("document.createElement('wa-dialog')");
+    expect(sharedWalkthrough).toContain(
       "dialog.addEventListener('wa-after-show'",
     );
-    expect(rendererOnboarding).toContain(
+    expect(sharedWalkthrough).toContain(
       "dialog.addEventListener('wa-after-hide'",
     );
-    expect(rendererOnboarding).toContain("dialog.addEventListener('keydown'");
-    expect(rendererOnboarding).toContain('isCommandPaletteShortcut(event)');
+    expect(sharedWalkthrough).toContain("dialog.addEventListener('keydown'");
+    expect(sharedWalkthrough).toContain('isCommandPaletteShortcut(event)');
   });
 
   it('mounts an in-app log viewer with copy and export actions', () => {
