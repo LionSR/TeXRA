@@ -62,7 +62,7 @@ export const searchHighlightStyles: CSSResult = css`
 
   mark[data-current='true'] {
     background-color: var(--texra-editor-findMatchBackground, #ff8b0088);
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
   }
 `;
 
