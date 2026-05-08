@@ -259,9 +259,9 @@ Migrate imports file-by-file, prioritizing the most-used modules first.
 | `src/utils/files/baseFS.ts`               | Use `platform().fs`                        |
 | `src/utils/files/storageFS.ts`            | Use `platform().fs` + `platform().context` |
 | `src/utils/files/workspaceFS.ts`          | Use `platform().fs` + `platform().context` |
-| `src/frontend/secretManager.ts`           | Use `platform().secrets`                   |
+| `packages/extension/src/frontend/secretManager.ts`           | Use `platform().secrets`                   |
 | `src/common/state/stateManager.ts`        | Use `platform().context.getState/setState` |
-| `src/common/errors/errorHandlingUtils.ts` | Use `platform().ui` for error dialogs      |
+| `packages/extension/src/frontend/ui/errorHandlingUtils.ts` | Use `platform().ui` for error dialogs      |
 
 This alone removes ~30 transitive `vscode` dependencies.
 
