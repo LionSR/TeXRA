@@ -14,9 +14,9 @@ export const designTokens: CSSResult = css`
     --color-border: var(--wa-color-surface-border);
 
     /* Status colors */
-    --color-success: var(--texra-testing-iconPassed, #2ea043);
+    --color-success: var(--wa-color-success-on-quiet, #2ea043);
     --color-error: var(--texra-editorError-foreground, #f14c4c);
-    --color-warning: var(--texra-editorWarning-foreground, #cca700);
+    --color-warning: var(--wa-color-warning-on-quiet, #cca700);
     --color-info: var(--texra-charts-blue, #3794ff);
     --color-added: var(--texra-charts-green, #4caf50);
     --color-removed: var(--texra-charts-red, #f44336);
@@ -25,7 +25,7 @@ export const designTokens: CSSResult = css`
     --background-color: var(--color-bg-secondary);
     --text-color: var(--texra-sideBar-foreground);
     --button-hover-background: var(--texra-button-hoverBackground);
-    --dropdown-border: var(--texra-dropdown-border);
+    --dropdown-border: var(--wa-color-surface-border);
 
     /* Typography */
     --font-size: var(--texra-font-size);

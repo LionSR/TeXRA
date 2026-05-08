@@ -45,7 +45,7 @@ export const markdownStyles = css`
   }
 
   .markdown-content :is(h1, h2, h3, h4) {
-    color: var(--texra-textLink-foreground, #3794ff);
+    color: var(--wa-color-text-link, #3794ff);
     font-size: var(--font-size-lg);
     font-weight: var(--font-weight-semibold);
     line-height: var(--line-height-heading);
@@ -171,7 +171,7 @@ export const markdownStyles = css`
   .markdown-content hr {
     margin: 0.7em 0;
     height: var(--border-thin);
-    background-color: var(--texra-editorWidget-border);
+    background-color: var(--wa-color-surface-border);
     border: none;
   }
 
