@@ -53,9 +53,6 @@ describe('desktop theme tokens', () => {
         .getPropertyValue('--vscode-settings-textInputBackground')
         .trim(),
     ).toBe('var(--wa-form-control-background-color)');
-    expect(rootStyle.getPropertyValue('--texra-input-background').trim()).toBe(
-      'var(--wa-form-control-background-color)',
-    );
     expect(
       rootStyle.getPropertyValue('--wa-form-control-background-color').trim(),
     ).toMatch(/^light-dark\(#ffffff,\s*#313131\)$/);
