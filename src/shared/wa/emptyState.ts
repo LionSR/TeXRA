@@ -63,7 +63,9 @@ export function renderEmptyState({
         kicker
           ? html`
               <div class="empty-state-kicker">
-                ${waIcon(kickerIcon ?? icon, { className: 'empty-state-kicker-icon' })}
+                ${waIcon(kickerIcon ?? icon, {
+                  className: 'empty-state-kicker-icon',
+                })}
                 <span>${kicker}</span>
               </div>
             `
