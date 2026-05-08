@@ -2,8 +2,10 @@
 import type * as vscode from 'vscode';
 
 // Local imports - utils
-// Path constant kept here so other modules continue to import it without
-// pulling in the (now-empty) command registration shim.
+// The `settingsCommands.openSettings` id is kept here as a stable import
+// surface for other modules; the actual command is now registered via the
+// shared registry in `extensionCommandSurface.ts`. See the JSDoc on
+// `registerSettingsCommands` below.
 
 export const settingsCommands = {
   openSettings: 'texra.openSettings',

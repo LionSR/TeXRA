@@ -465,6 +465,14 @@ export class InstructionPanel extends LitElement {
         visibility: hidden;
         max-height: 0;
         overflow: hidden;
+        /*
+         * The visibility delay (200ms) MUST match the duration of
+         * --transition-normal (currently 0.2s ease, see
+         * src/shared/styles/litStyles.ts). CSS doesn't let us extract
+         * just the duration component from the var(), so the literal
+         * stays inline; if the token value changes, update this delay
+         * in lockstep.
+         */
         transition:
           opacity var(--transition-normal),
           max-height var(--transition-normal),
