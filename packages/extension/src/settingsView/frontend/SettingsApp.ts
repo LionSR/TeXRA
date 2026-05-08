@@ -177,8 +177,8 @@ export class SettingsApp extends SettingsAppBase {
         border-radius: var(--wa-border-radius-s, 4px)
           var(--wa-border-radius-s, 4px) 0 0;
         transition:
-          color 140ms ease,
-          background-color 140ms ease;
+          color var(--transition-fast),
+          background-color var(--transition-fast);
       }
 
       wa-tab-group.settings-tabs wa-tab::part(base):hover {

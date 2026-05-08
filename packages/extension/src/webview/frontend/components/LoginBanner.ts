@@ -58,9 +58,9 @@ export class LoginBanner extends LitElement {
           0 1px 1px rgb(0 0 0 / 6%),
           inset 0 1px 0 rgb(255 255 255 / 12%);
         transition:
-          filter 160ms ease,
-          box-shadow 160ms ease,
-          transform 120ms ease;
+          filter var(--transition-fast),
+          box-shadow var(--transition-fast),
+          transform var(--transition-fast);
       }
 
       #loginBannerButton::part(base):hover {

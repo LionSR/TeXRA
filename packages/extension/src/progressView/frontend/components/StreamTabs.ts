@@ -254,7 +254,7 @@ export class StreamTab extends LitElement {
         color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
         opacity: 0;
         transition:
-          opacity 120ms ease,
+          opacity var(--transition-fast),
           color var(--transition-fast),
           background-color var(--transition-fast);
       }
