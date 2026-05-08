@@ -1,18 +1,20 @@
 // Shared utility functions for the progress view frontend.
 
 /**
- * Type for VSCode web components that expose a value property.
- * Used for vscode-radio-group, vscode-single-select, etc.
+ * Type for radio-group-like components that expose a value property.
+ * Used for wa-radio-group / vscode-radio-group / vscode-single-select.
  */
 export type VSCodeValueElement = HTMLElement & { value?: string };
 
 /**
- * Extract value from a VSCode radio group change event.
- * Works around vscode-radio-group not updating .value synchronously on change.
- * Prefers the clicked radio element's value, falls back to group value.
+ * Extract value from a radio-group change event. Prefers the clicked
+ * radio element's value, falls back to group value. Works for both
+ * `wa-radio` (Web Awesome) and the legacy `vscode-radio` elements.
  */
 export function getRadioValue<T extends string>(event: Event): T | null {
-  const radio = getComposedPathElement(event, 'vscode-radio');
+  const radio =
+    getComposedPathElement(event, 'wa-radio') ||
+    getComposedPathElement(event, 'vscode-radio');
   const radioGroup = event.currentTarget as VSCodeValueElement | null;
   const value = radio?.getAttribute('value') || radioGroup?.value;
   return (value as T) || null;

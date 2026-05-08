@@ -20,6 +20,9 @@ import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
 import { webviewStorage } from '../webviewStorage';
 
+// Web Awesome native components
+import '@awesome.me/webawesome/dist/components/details/details.js';
+
 const STORAGE_HINT_DISMISS_KEY = 'generatedFilesStorageHint.dismissed';
 
 /** Parsed path components for display */
@@ -255,10 +258,10 @@ export class FileList extends LitElement {
     }
 
     return html`
-      <vscode-collapsible
+      <wa-details
         id=${ELEMENT_IDS.GENERATED_FILES_COLLAPSIBLE}
         class="panel-collapsible"
-        title="Generated Files"
+        summary="Generated Files"
         open
       >
         ${this.renderStorageHint()}
@@ -286,7 +289,7 @@ export class FileList extends LitElement {
               </div>
             `
           : nothing}
-      </vscode-collapsible>
+      </wa-details>
     `;
   }
 
@@ -327,9 +330,9 @@ export class FileList extends LitElement {
     }
 
     return html`
-      <vscode-collapsible
+      <wa-details
         class="round-collapsible panel-collapsible"
-        title=${`r${round}`}
+        summary=${`r${round}`}
         ?open=${true}
       >
         <div class="round-content">
@@ -339,7 +342,7 @@ export class FileList extends LitElement {
             (file) => this.renderFileItem(file, round),
           )}
         </div>
-      </vscode-collapsible>
+      </wa-details>
     `;
   }
 

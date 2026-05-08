@@ -161,7 +161,7 @@ export class LogList extends LitElement {
       // Force scroll to bottom when switching to a different stream tab.
       // Re-sticky so future content updates auto-scroll.
       // Must wait for child TaskGroupList to finish rendering (updateComplete)
-      // and then for a layout pass (requestAnimationFrame) so vscode-scrollable
+      // and then for a layout pass (requestAnimationFrame) so the log container
       // has an accurate scrollMax before we scroll.
       this.shouldScrollToBottom = false;
       void activeEl?.updateComplete.then(() => {

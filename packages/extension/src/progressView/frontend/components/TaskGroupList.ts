@@ -189,8 +189,8 @@ export class TaskGroupList extends LitElement {
   /** True after a terminal cache rebuild, when incremental append is invalid. */
   private terminalCommittedNeedsReset = true;
 
-  /** Handle scroll events from vscode-scrollable to track user intent */
-  private handleVscScroll = (): void => {
+  /** Handle native scroll events from the log container to track user intent */
+  private handleScroll = (): void => {
     this.isSticky = this.isNearBottom(TaskGroupList.STICKY_THRESHOLD);
   };
 
@@ -770,13 +770,13 @@ export class TaskGroupList extends LitElement {
     // Show placeholder only when there are no streams in the current filter
     if (!this.hasStreams) {
       return html`
-        <vscode-scrollable
+        <div
           id=${ELEMENT_IDS.LOG_CONTENT}
           class="log-container"
-          @vsc-scrollable-scroll=${this.handleVscScroll}
+          @scroll=${this.handleScroll}
         >
           <div class="log-placeholder">${unsafeHTML(PLACEHOLDER_HTML)}</div>
-        </vscode-scrollable>
+        </div>
       `;
     }
 
@@ -789,29 +789,29 @@ export class TaskGroupList extends LitElement {
         ? ACTIVE_STREAM_STATUSES.has(this.streamStatus)
         : false;
       return html`
-        <vscode-scrollable
+        <div
           id=${ELEMENT_IDS.LOG_CONTENT}
           class="log-container"
-          @vsc-scrollable-scroll=${this.handleVscScroll}
+          @scroll=${this.handleScroll}
         >
           <div class="log-placeholder">
             ${active
               ? 'Run is starting. Progress updates will appear here.'
               : 'No log output for this stream yet.'}
           </div>
-        </vscode-scrollable>
+        </div>
       `;
     }
 
     if (this.terminal) {
       return html`
-        <vscode-scrollable
+        <div
           id=${ELEMENT_IDS.LOG_CONTENT}
           class="log-container"
-          @vsc-scrollable-scroll=${this.handleVscScroll}
+          @scroll=${this.handleScroll}
         >
           ${this.renderTerminalOutput()}
-        </vscode-scrollable>
+        </div>
       `;
     }
 
@@ -821,10 +821,10 @@ export class TaskGroupList extends LitElement {
     // the earliest timestamp. Timeline is memoized in willUpdate() — only
     // rebuilt when inputs change.
     return html`
-      <vscode-scrollable
+      <div
         id=${ELEMENT_IDS.LOG_CONTENT}
         class="log-container"
-        @vsc-scrollable-scroll=${this.handleVscScroll}
+        @scroll=${this.handleScroll}
       >
         ${repeat(
           this.cachedTimeline,
@@ -834,7 +834,7 @@ export class TaskGroupList extends LitElement {
               ? guard([item.msg], () => formatLogEntry(item.msg))
               : this.renderGroupNode(item.tree),
         )}
-      </vscode-scrollable>
+      </div>
     `;
   }
 }
