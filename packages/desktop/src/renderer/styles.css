@@ -388,46 +388,30 @@ wa-tree.desktop-explorer-tree wa-tree-item.desktop-explorer-file wa-icon {
   height: 100%;
 }
 
-.desktop-command-palette {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: grid;
-  place-items: start center;
-  padding: 12vh var(--wa-space-m) var(--wa-space-m);
-  box-sizing: border-box;
-  background: rgb(0 0 0 / 35%);
+/* wa-dialog supplies the backdrop, modal positioning, focus trap, and panel
+   chrome; only the body content layout lives here. The dialog is positioned
+   near the top of the viewport (12vh) like a typical command palette. */
+wa-dialog.desktop-command-palette {
+  --width: min(560px, calc(100vw - var(--wa-space-m) * 2));
 }
 
-.desktop-command-palette[hidden] {
-  display: none;
+wa-dialog.desktop-command-palette::part(dialog) {
+  margin-block-start: 12vh;
+  align-self: flex-start;
 }
 
-.desktop-command-palette-panel {
-  width: min(560px, 100%);
-  border: 1px solid var(--wa-color-surface-border);
-  border-radius: var(--wa-border-radius-l, 4px);
-  background: var(--wa-color-surface-default);
-  box-shadow: 0 16px 40px rgb(0 0 0 / 32%);
-  overflow: hidden;
+wa-dialog.desktop-command-palette::part(body) {
+  padding: 0;
 }
 
-.desktop-command-palette-input {
+wa-input.desktop-command-palette-input {
   width: 100%;
-  height: 42px;
-  padding: 0 var(--wa-space-s);
-  box-sizing: border-box;
+}
+
+wa-input.desktop-command-palette-input::part(base) {
   border: 0;
   border-bottom: 1px solid var(--wa-color-surface-border);
-  outline: 0;
-  background: var(--wa-form-control-background-color);
-  color: var(--wa-form-control-text-color);
-  font: inherit;
-}
-
-.desktop-command-palette-input:focus {
-  outline: 2px solid var(--wa-color-focus);
-  outline-offset: -2px;
+  border-radius: 0;
 }
 
 .desktop-command-palette-list {

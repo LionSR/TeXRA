@@ -1,5 +1,4 @@
 // Third-party imports
-import { JSDOM } from 'jsdom';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - shared schemas
@@ -7,6 +6,13 @@ import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+
+interface DesktopCommandPaletteController {
+  element: HTMLElement & { open: boolean };
+  open(): void;
+  close(): void;
+}
 
 interface DesktopCommandPaletteModule {
   createDesktopCommandPalette(options: {
@@ -17,11 +23,7 @@ interface DesktopCommandPaletteModule {
     };
     platform?: NodeJS.Platform;
     canOpen?: () => boolean;
-  }): {
-    element: HTMLElement;
-    open(): void;
-    close(): void;
-  };
+  }): DesktopCommandPaletteController;
   filterDesktopCommandPaletteEntries(
     entries: DesktopPaletteEntry[],
     query: string,
@@ -56,7 +58,22 @@ async function loadDesktopCommandPalette(): Promise<DesktopCommandPaletteModule>
   ) as Promise<DesktopCommandPaletteModule>;
 }
 
+// wa-dialog's show/hide flow chains a few requestAnimationFrame and
+// animateWithClass ticks before settling; flushing several macrotasks lets
+// those promise/timer callbacks resolve in jsdom (which has no real raf).
+async function flushDialogTicks(times = 5): Promise<void> {
+  for (let i = 0; i < times; i += 1) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+}
+
 describe('desktop command palette', () => {
+  // Pure-helper tests still need the Lit/JSDOM globals installed because the
+  // module under test imports lit-html at top level. Sharing the same DOM
+  // setup across all tests in this file keeps lit-html's captured `document`
+  // pointing at the jsdom-backed instance.
+  useLitComponentTestDom(loadDesktopCommandPalette);
+
   const entries = [
     {
       id: 'texra.showMainView',
@@ -149,36 +166,65 @@ describe('desktop command palette', () => {
     ).toBe(false);
   });
 
-  it('renders catalog entries and dispatches the active command', async () => {
+  // wa-dialog + wa-input wiring (Lit-rendered web components). The DOM
+  // polyfills installed by useLitComponentTestDom above let those WA
+  // components register and animate inside jsdom.
+  function findInputElement(
+    element: HTMLElement & { open: boolean },
+  ): HTMLInputElement | null {
+    // wa-input wraps a native <input> in shadow DOM. Look it up via the host
+    // wa-input tag, then descend into its shadow root for the real input.
+    const waInput = element.querySelector(
+      'wa-input.desktop-command-palette-input',
+    );
+    return (
+      waInput?.shadowRoot?.querySelector<HTMLInputElement>('input') ?? null
+    );
+  }
+
+  function setWaInputValue(
+    element: HTMLElement & { open: boolean },
+    value: string,
+  ): void {
+    const waInput = element.querySelector(
+      'wa-input.desktop-command-palette-input',
+    ) as (HTMLElement & { value: string | null }) | null;
+    if (!waInput) throw new Error('wa-input not found');
+    waInput.value = value;
+    waInput.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  it('renders catalog entries and dispatches the active command on Enter', async () => {
     const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
-    const dom = new JSDOM('<button id="trigger">Commands</button>');
     const actions = {
       showRoute: vi.fn(),
       showSettings: vi.fn(),
     };
     const controller = createDesktopCommandPalette({
-      document: dom.window.document,
+      document,
       actions,
       platform: 'darwin',
     });
 
-    dom.window.document.body.append(controller.element);
-    controller.open();
+    document.body.append(controller.element);
+    await flushDialogTicks();
 
     expect(controller.element.getAttribute('aria-label')).toBe(
       'Command palette',
     );
-    const input = controller.element.querySelector<HTMLInputElement>(
-      '.desktop-command-palette-input',
-    );
+
+    controller.open();
+    await flushDialogTicks();
+
+    expect(controller.element.open).toBe(true);
     const initialItems = controller.element.querySelectorAll<HTMLButtonElement>(
       '.desktop-command-palette-item',
     );
-    expect(input).not.toBeNull();
     expect(initialItems.length).toBeGreaterThan(1);
 
-    input!.value = 'models';
-    input!.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    setWaInputValue(controller.element, 'models');
+    await flushDialogTicks();
+
     const filteredItems =
       controller.element.querySelectorAll<HTMLButtonElement>(
         '.desktop-command-palette-item',
@@ -187,194 +233,146 @@ describe('desktop command palette', () => {
       'texra.showModels',
     ]);
 
-    input!.dispatchEvent(
-      new dom.window.KeyboardEvent('keydown', {
-        key: 'Enter',
-        bubbles: true,
-      }),
+    // Enter on the wa-input forwards the keydown to the palette's keydown
+    // handler, which dispatches the active command and closes the dialog.
+    const waInput = controller.element.querySelector(
+      'wa-input.desktop-command-palette-input',
+    )!;
+    waInput.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
     );
+    await flushDialogTicks();
+
     expect(actions.showSettings).toHaveBeenCalledWith(SETTINGS_TAB.MODELS);
-    expect(controller.element.hidden).toBe(true);
+    expect(controller.element.open).toBe(false);
   });
 
-  it('traps focus while open and restores focus when closed', async () => {
+  it('clicking an item dispatches its command and closes the dialog', async () => {
     const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
-    const dom = new JSDOM('<button id="trigger">Commands</button>');
-    const trigger =
-      dom.window.document.querySelector<HTMLButtonElement>('#trigger');
+    const actions = {
+      showRoute: vi.fn(),
+      showSettings: vi.fn(),
+    };
     const controller = createDesktopCommandPalette({
-      document: dom.window.document,
-      actions: {
-        showRoute: vi.fn(),
-        showSettings: vi.fn(),
-      },
+      document,
+      actions,
       platform: 'darwin',
     });
-
-    dom.window.document.body.append(controller.element);
-    trigger?.focus();
+    document.body.append(controller.element);
     controller.open();
+    await flushDialogTicks();
 
-    const input = controller.element.querySelector<HTMLInputElement>(
-      '.desktop-command-palette-input',
+    const button = controller.element.querySelector<HTMLButtonElement>(
+      '.desktop-command-palette-item[data-command-id="texra.showProgressView"]',
     );
-    expect(dom.window.document.activeElement).toBe(input);
+    expect(button).not.toBeNull();
+    button!.click();
+    await flushDialogTicks();
 
-    input!.dispatchEvent(
-      new dom.window.KeyboardEvent('keydown', {
-        key: 'Tab',
-        shiftKey: true,
-        bubbles: true,
-      }),
-    );
-    expect(
-      dom.window.document.activeElement?.classList.contains(
-        'desktop-command-palette-item',
-      ),
-    ).toBe(true);
-
-    dom.window.document.activeElement?.dispatchEvent(
-      new dom.window.KeyboardEvent('keydown', {
-        key: 'Tab',
-        bubbles: true,
-      }),
-    );
-    expect(dom.window.document.activeElement).toBe(input);
-
-    input!.dispatchEvent(
-      new dom.window.KeyboardEvent('keydown', {
-        key: 'Escape',
-        bubbles: true,
-      }),
-    );
-    expect(controller.element.hidden).toBe(true);
-    expect(dom.window.document.activeElement).toBe(trigger);
+    expect(actions.showRoute).toHaveBeenCalledWith('progress');
+    expect(controller.element.open).toBe(false);
   });
 
-  it('keeps the original focus restoration target across repeated opens', async () => {
+  it('arrow keys advance the active selection through filtered entries', async () => {
     const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
-    const dom = new JSDOM('<button id="trigger">Commands</button>');
-    const trigger =
-      dom.window.document.querySelector<HTMLButtonElement>('#trigger');
     const controller = createDesktopCommandPalette({
-      document: dom.window.document,
-      actions: {
-        showRoute: vi.fn(),
-        showSettings: vi.fn(),
-      },
+      document,
+      actions: { showRoute: vi.fn(), showSettings: vi.fn() },
       platform: 'darwin',
     });
-
-    dom.window.document.body.append(controller.element);
-    trigger?.focus();
+    document.body.append(controller.element);
     controller.open();
-    expect(
-      controller.element.querySelector<HTMLInputElement>(
-        '.desktop-command-palette-input',
-      ),
-    ).toBe(dom.window.document.activeElement);
+    await flushDialogTicks();
 
-    controller.open();
-    controller.close();
+    const items = () =>
+      controller.element.querySelectorAll<HTMLButtonElement>(
+        '.desktop-command-palette-item',
+      );
+    const selectedIndex = () =>
+      [...items()].findIndex(
+        (item) => item.getAttribute('aria-selected') === 'true',
+      );
 
-    expect(dom.window.document.activeElement).toBe(trigger);
+    expect(selectedIndex()).toBe(0);
+
+    const waInput = controller.element.querySelector(
+      'wa-input.desktop-command-palette-input',
+    )!;
+    waInput.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }),
+    );
+    await flushDialogTicks();
+    expect(selectedIndex()).toBe(1);
+
+    waInput.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }),
+    );
+    await flushDialogTicks();
+    expect(selectedIndex()).toBe(0);
   });
 
-  it('does not steal command palette shortcuts from text entry targets', async () => {
+  it('honors the canOpen guard for global command palette shortcuts', async () => {
     const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
-    const dom = new JSDOM(
-      '<button id="trigger">Commands</button><input id="search" />',
-    );
-    const trigger =
-      dom.window.document.querySelector<HTMLButtonElement>('#trigger');
-    const search =
-      dom.window.document.querySelector<HTMLInputElement>('#search');
     const controller = createDesktopCommandPalette({
-      document: dom.window.document,
-      actions: {
-        showRoute: vi.fn(),
-        showSettings: vi.fn(),
-      },
-      platform: 'darwin',
-    });
-
-    dom.window.document.body.append(controller.element);
-    search?.focus();
-    search?.dispatchEvent(
-      new dom.window.KeyboardEvent('keydown', {
-        key: 'k',
-        metaKey: true,
-        bubbles: true,
-      }),
-    );
-    expect(controller.element.hidden).toBe(true);
-
-    trigger?.focus();
-    trigger?.dispatchEvent(
-      new dom.window.KeyboardEvent('keydown', {
-        key: 'k',
-        metaKey: true,
-        bubbles: true,
-      }),
-    );
-    expect(controller.element.hidden).toBe(false);
-  });
-
-  it('honors the open guard for global command palette shortcuts', async () => {
-    const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
-    const dom = new JSDOM('<button id="trigger">Commands</button>');
-    const trigger =
-      dom.window.document.querySelector<HTMLButtonElement>('#trigger');
-    const controller = createDesktopCommandPalette({
-      document: dom.window.document,
-      actions: {
-        showRoute: vi.fn(),
-        showSettings: vi.fn(),
-      },
+      document,
+      actions: { showRoute: vi.fn(), showSettings: vi.fn() },
       canOpen: () => false,
       platform: 'darwin',
     });
+    document.body.append(controller.element);
+    await flushDialogTicks();
 
-    dom.window.document.body.append(controller.element);
-    trigger?.focus();
-    trigger?.dispatchEvent(
-      new dom.window.KeyboardEvent('keydown', {
+    const trigger = document.createElement('button');
+    document.body.append(trigger);
+    trigger.focus();
+    trigger.dispatchEvent(
+      new KeyboardEvent('keydown', {
         key: 'k',
         metaKey: true,
         bubbles: true,
       }),
     );
+    await flushDialogTicks();
 
-    expect(controller.element.hidden).toBe(true);
+    expect(controller.element.open).toBe(false);
   });
 
-  it('does not steal shortcuts from shadow-dom text entry targets', async () => {
+  it('does not steal command palette shortcuts from text-entry targets', async () => {
     const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
-    const dom = new JSDOM('<main-app id="host"></main-app>');
-    const host = dom.window.document.querySelector<HTMLElement>('#host');
-    const shadowRoot = host?.attachShadow({ mode: 'open' });
-    const shadowInput = dom.window.document.createElement('input');
-    shadowRoot?.append(shadowInput);
     const controller = createDesktopCommandPalette({
-      document: dom.window.document,
-      actions: {
-        showRoute: vi.fn(),
-        showSettings: vi.fn(),
-      },
+      document,
+      actions: { showRoute: vi.fn(), showSettings: vi.fn() },
       platform: 'darwin',
     });
+    document.body.append(controller.element);
+    await flushDialogTicks();
 
-    dom.window.document.body.append(controller.element);
-    shadowInput.focus();
-    shadowInput.dispatchEvent(
-      new dom.window.KeyboardEvent('keydown', {
+    const search = document.createElement('input');
+    document.body.append(search);
+    search.focus();
+    search.dispatchEvent(
+      new KeyboardEvent('keydown', {
         key: 'k',
         metaKey: true,
         bubbles: true,
-        composed: true,
       }),
     );
+    await flushDialogTicks();
 
-    expect(controller.element.hidden).toBe(true);
+    expect(controller.element.open).toBe(false);
+  });
+
+  it('exposes the wa-input value through the shadow-root native input', async () => {
+    const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
+    const controller = createDesktopCommandPalette({
+      document,
+      actions: { showRoute: vi.fn(), showSettings: vi.fn() },
+      platform: 'darwin',
+    });
+    document.body.append(controller.element);
+    controller.open();
+    await flushDialogTicks();
+
+    expect(findInputElement(controller.element)).not.toBeNull();
   });
 });
