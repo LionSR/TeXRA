@@ -35,7 +35,7 @@ export const categoryBadgeStyles: CSSResult = css`
       --texra-editorInfo-background,
       rgba(0, 127, 212, 0.15)
     );
-    color: var(--texra-editorInfo-foreground, #3794ff);
+    color: var(--wa-color-brand-on-quiet, #3794ff);
   }
 
   .category-tool-use,

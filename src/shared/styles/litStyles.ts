@@ -15,7 +15,7 @@ export const designTokens: CSSResult = css`
 
     /* Status colors */
     --color-success: var(--wa-color-success-on-quiet, #2ea043);
-    --color-error: var(--texra-editorError-foreground, #f14c4c);
+    --color-error: var(--wa-color-danger-on-quiet, #f14c4c);
     --color-warning: var(--wa-color-warning-on-quiet, #cca700);
     --color-info: var(--texra-charts-blue, #3794ff);
     --color-added: var(--texra-charts-green, #4caf50);
@@ -25,12 +25,12 @@ export const designTokens: CSSResult = css`
     --background-color: var(--color-bg-secondary);
     --text-color: var(--texra-sideBar-foreground);
     --button-hover-background: var(--texra-button-hoverBackground);
-    --dropdown-border: var(--wa-color-surface-border);
+    --dropdown-border: var(--wa-form-control-border-color);
 
     /* Typography */
-    --font-size: var(--texra-font-size);
-    --font-family: var(--texra-font-family);
-    --font-weight: var(--texra-font-weight);
+    --font-size: var(--wa-font-size-m);
+    --font-family: var(--wa-font-family-body);
+    --font-weight: var(--wa-font-weight-normal);
     --font-weight-medium: 500;
     --font-weight-semibold: 600;
     --font-weight-bold: 700;

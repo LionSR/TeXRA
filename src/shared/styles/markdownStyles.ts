@@ -92,7 +92,7 @@ export const markdownStyles = css`
   }
 
   .markdown-content code {
-    background-color: var(--texra-textCodeBlock-background);
+    background-color: var(--wa-color-surface-lowered);
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
     border-radius: var(--border-radius);
     font-family: var(--font-family);
@@ -103,7 +103,7 @@ export const markdownStyles = css`
     padding: var(--wa-space-xs) var(--wa-space-s);
     margin: 0.5em 0;
     border-radius: var(--border-radius);
-    background-color: var(--texra-textCodeBlock-background);
+    background-color: var(--wa-color-surface-lowered);
     border-left: var(--wa-space-3xs) solid
       var(--texra-activityBarBadge-background);
     overflow-x: auto;
@@ -177,7 +177,7 @@ export const markdownStyles = css`
 
   .markdown-content em strong,
   .markdown-content strong em {
-    color: var(--texra-editorInfo-foreground);
+    color: var(--wa-color-brand-on-quiet);
   }
 
   .banner-content--scratchpad p:has(strong:first-child) {

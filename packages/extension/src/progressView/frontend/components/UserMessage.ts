@@ -133,7 +133,7 @@ export class UserMessage extends LitElement {
         overflow: auto;
         padding: var(--wa-space-2xs);
         background: var(
-          --texra-textCodeBlock-background,
+          --wa-color-surface-lowered,
           var(--wa-color-surface-default)
         );
         border-radius: var(--border-radius-small);

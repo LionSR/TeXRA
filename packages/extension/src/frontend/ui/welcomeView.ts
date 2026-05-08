@@ -34,9 +34,9 @@ function renderWelcomeHtml(): string {
   />
   <style>
     body {
-      font-family: var(--vscode-font-family);
-      font-size: var(--vscode-font-size);
-      color: var(--vscode-foreground);
+      font-family: var(--wa-font-family-body);
+      font-size: var(--wa-font-size-m);
+      color: var(--wa-color-text-normal);
       background: transparent;
       padding: 16px;
       line-height: 1.5;
