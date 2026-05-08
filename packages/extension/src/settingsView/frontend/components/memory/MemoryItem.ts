@@ -43,13 +43,13 @@ export class MemoryItem extends LitElement {
       }
 
       .memory-meta {
-        margin-top: var(--spacing-small);
+        margin-top: var(--wa-space-2xs);
       }
 
       .memory-preview {
         font-size: var(--font-size-sm);
         line-height: var(--line-height-normal);
-        padding: var(--spacing-medium);
+        padding: var(--wa-space-xs);
         border-radius: var(--border-radius);
         margin: 0;
         max-height: 200px;
@@ -58,7 +58,7 @@ export class MemoryItem extends LitElement {
 
       .memory-item.pinned {
         border-left: 3px solid var(--texra-textLink-foreground);
-        padding-left: calc(var(--spacing-medium) - 3px);
+        padding-left: calc(var(--wa-space-xs) - 3px);
       }
     `,
   ];

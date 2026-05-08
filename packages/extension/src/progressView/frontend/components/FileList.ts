@@ -105,8 +105,8 @@ export class FileList extends LitElement {
       .storage-hint {
         display: flex;
         align-items: flex-start;
-        gap: var(--spacing-small);
-        padding: var(--spacing-tiny) 0 var(--spacing-small);
+        gap: var(--wa-space-2xs);
+        padding: var(--wa-space-3xs) 0 var(--wa-space-2xs);
         color: var(--color-text-secondary);
         font-size: var(--font-size-sm);
         line-height: 1.4;
@@ -129,8 +129,8 @@ export class FileList extends LitElement {
       .file-item {
         display: flex;
         align-items: center;
-        gap: var(--spacing-tiny);
-        padding: var(--spacing-tiny) 0;
+        gap: var(--wa-space-3xs);
+        padding: var(--wa-space-3xs) 0;
         margin-bottom: 0;
       }
 
@@ -173,19 +173,19 @@ export class FileList extends LitElement {
 
       .added {
         color: var(--texra-charts-green, green);
-        margin-left: var(--spacing-small);
+        margin-left: var(--wa-space-2xs);
         font-size: var(--font-size-sm);
       }
 
       .removed {
         color: var(--texra-charts-red, red);
-        margin-left: var(--spacing-small);
+        margin-left: var(--wa-space-2xs);
         font-size: var(--font-size-sm);
       }
 
       .file-actions {
         display: flex;
-        gap: var(--spacing-tiny);
+        gap: var(--wa-space-3xs);
         flex-shrink: 0;
         flex-wrap: nowrap;
         align-items: center;
@@ -193,7 +193,7 @@ export class FileList extends LitElement {
 
       .file-actions wa-button {
         margin-right: 0;
-        margin-left: var(--spacing-tiny);
+        margin-left: var(--wa-space-3xs);
       }
 
       /* Nested round collapsibles */
@@ -206,7 +206,7 @@ export class FileList extends LitElement {
       }
 
       .round-collapsible::part(header) {
-        padding: var(--spacing-tiny) 0;
+        padding: var(--wa-space-3xs) 0;
         font-size: var(--font-size-sm);
       }
 
@@ -222,15 +222,15 @@ export class FileList extends LitElement {
       .compile-actions {
         display: flex;
         justify-content: flex-end;
-        padding: var(--spacing-small) 0;
+        padding: var(--wa-space-2xs) 0;
         border-top: var(--border-thin) solid var(--color-border);
-        margin-top: var(--spacing-tiny);
+        margin-top: var(--wa-space-3xs);
       }
 
       @media (max-width: 500px) {
         .file-item {
           flex-wrap: wrap;
-          gap: var(--spacing-small);
+          gap: var(--wa-space-2xs);
           align-items: center;
         }
 

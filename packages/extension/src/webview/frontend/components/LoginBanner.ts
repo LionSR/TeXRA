@@ -21,7 +21,7 @@ export class LoginBanner extends LitElement {
       .banner-text {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-tiny);
+        gap: var(--wa-space-3xs);
         min-width: 0;
       }
 

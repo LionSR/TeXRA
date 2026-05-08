@@ -4,11 +4,11 @@ import { css, type CSSResult } from 'lit';
 export const profileViewStyles: CSSResult = css`
   h2 {
     color: var(--texra-foreground);
-    margin-top: var(--spacing-xlarge);
-    margin-bottom: var(--spacing-medium);
+    margin-top: var(--wa-space-l);
+    margin-bottom: var(--wa-space-xs);
     font-size: var(--font-size-lg);
     border-bottom: var(--border-thin) solid var(--color-border);
-    padding-bottom: var(--spacing-small);
+    padding-bottom: var(--wa-space-2xs);
   }
 
   .profile-container {
@@ -17,20 +17,20 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .profile-info {
-    margin-bottom: var(--spacing-xlarge);
+    margin-bottom: var(--wa-space-l);
   }
 
   .profile-actions {
     display: flex;
     justify-content: flex-end;
-    margin-top: var(--spacing-medium);
+    margin-top: var(--wa-space-xs);
   }
 
   .info-row {
-    margin: var(--spacing-medium) 0;
+    margin: var(--wa-space-xs) 0;
     display: flex;
     align-items: center;
-    gap: var(--spacing-medium);
+    gap: var(--wa-space-xs);
   }
 
   .label {
@@ -49,7 +49,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .profile-notice {
-    margin: var(--spacing-small) 0 var(--spacing-medium);
+    margin: var(--wa-space-2xs) 0 var(--wa-space-xs);
     color: var(--texra-descriptionForeground, var(--color-text-secondary));
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
@@ -59,23 +59,23 @@ export const profileViewStyles: CSSResult = css`
   .profile-notice code {
     font-family: var(--texra-editor-font-family, monospace), monospace;
     font-size: 0.95em;
-    padding: 0 var(--spacing-tiny);
+    padding: 0 var(--wa-space-3xs);
     border-radius: var(--border-radius-small);
     background: var(--texra-textBlockQuote-background);
   }
 
   .not-authenticated {
     text-align: center;
-    padding: var(--spacing-xlarge);
+    padding: var(--wa-space-l);
   }
 
   .not-authenticated p {
-    margin-bottom: var(--spacing-xlarge);
+    margin-bottom: var(--wa-space-l);
     color: var(--color-text-secondary);
   }
 
   .remote-agents-section {
-    margin-top: var(--spacing-xlarge);
+    margin-top: var(--wa-space-l);
   }
 
   /* ============================================
@@ -85,12 +85,12 @@ export const profileViewStyles: CSSResult = css`
   .provider-keys-table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: var(--spacing-medium);
+    margin-top: var(--wa-space-xs);
   }
 
   .provider-keys-table th,
   .provider-keys-table td {
-    padding: var(--spacing-medium);
+    padding: var(--wa-space-xs);
     text-align: left;
     border-bottom: var(--border-thin) solid var(--color-border);
   }
@@ -135,27 +135,27 @@ export const profileViewStyles: CSSResult = css`
    * ============================================ */
 
   .api-access-section {
-    margin-top: var(--spacing-xlarge);
-    margin-bottom: var(--spacing-xlarge);
+    margin-top: var(--wa-space-l);
+    margin-bottom: var(--wa-space-l);
   }
 
   .api-access-description {
     color: var(--color-text-secondary);
-    margin-bottom: var(--spacing-medium);
+    margin-bottom: var(--wa-space-xs);
     line-height: var(--line-height-normal);
   }
 
   .api-access-options {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-medium);
+    gap: var(--wa-space-xs);
   }
 
   .api-access-option {
     display: flex;
     align-items: flex-start;
-    gap: var(--spacing-medium);
-    padding: var(--spacing-medium);
+    gap: var(--wa-space-xs);
+    padding: var(--wa-space-xs);
     background: var(--texra-input-background);
     border: var(--border-thin) solid var(--color-border);
     border-radius: var(--border-radius);
@@ -173,15 +173,15 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .api-access-option input[type='radio'] {
-    margin-top: var(--spacing-tiny);
+    margin-top: var(--wa-space-3xs);
     accent-color: var(--texra-focusBorder);
   }
 
   .api-access-support {
     display: flex;
     align-items: flex-start;
-    gap: var(--spacing-small);
-    padding: var(--spacing-small) var(--spacing-medium);
+    gap: var(--wa-space-2xs);
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
@@ -206,7 +206,7 @@ export const profileViewStyles: CSSResult = css`
   .option-content {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
   }
 
   .option-title {
@@ -225,7 +225,7 @@ export const profileViewStyles: CSSResult = css`
    * ============================================ */
 
   .provider-keys-section {
-    margin-top: var(--spacing-xlarge);
+    margin-top: var(--wa-space-l);
   }
 
   .provider-keys-section h2 {
@@ -234,7 +234,7 @@ export const profileViewStyles: CSSResult = css`
 
   .provider-keys-description {
     color: var(--color-text-secondary);
-    margin-bottom: var(--spacing-medium);
+    margin-bottom: var(--wa-space-xs);
     line-height: var(--line-height-normal);
   }
 
@@ -245,7 +245,7 @@ export const profileViewStyles: CSSResult = css`
 
   .provider-actions {
     display: flex;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
     white-space: nowrap;
   }
 
@@ -253,9 +253,9 @@ export const profileViewStyles: CSSResult = css`
   .global-streaming-toggle {
     display: flex;
     align-items: center;
-    gap: var(--spacing-medium);
-    margin-bottom: var(--spacing-medium);
-    padding: var(--spacing-medium);
+    gap: var(--wa-space-xs);
+    margin-bottom: var(--wa-space-xs);
+    padding: var(--wa-space-xs);
     background: var(--texra-input-background);
     border: var(--border-thin) solid var(--color-border);
     border-radius: var(--border-radius);
@@ -302,20 +302,20 @@ export const profileViewStyles: CSSResult = css`
   .provider-name-cell {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
   }
 
   /* Provider detail row (collapsible settings) */
   .provider-detail-row td {
-    padding: 0 var(--spacing-medium) var(--spacing-medium);
+    padding: 0 var(--wa-space-xs) var(--wa-space-xs);
     border-bottom: var(--border-thin) solid var(--color-border);
   }
 
   .provider-settings {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-medium);
-    padding: var(--spacing-medium);
+    gap: var(--wa-space-xs);
+    padding: var(--wa-space-xs);
     background: var(--texra-textBlockQuote-background);
     border-radius: var(--border-radius);
   }
@@ -323,7 +323,7 @@ export const profileViewStyles: CSSResult = css`
   .provider-setting {
     display: flex;
     align-items: center;
-    gap: var(--spacing-medium);
+    gap: var(--wa-space-xs);
   }
 
   .provider-setting label {
@@ -340,7 +340,7 @@ export const profileViewStyles: CSSResult = css`
   .provider-setting--block {
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
   }
 
   .provider-setting-description {
@@ -369,7 +369,7 @@ export const profileViewStyles: CSSResult = css`
     color: var(--texra-textLink-foreground);
     cursor: pointer;
     text-decoration: none;
-    margin-left: var(--spacing-small);
+    margin-left: var(--wa-space-2xs);
   }
 
   .provider-setting-link:hover {
@@ -386,7 +386,7 @@ export const profileViewStyles: CSSResult = css`
    * ============================================ */
 
   .model-selection-section {
-    margin-top: var(--spacing-xlarge);
+    margin-top: var(--wa-space-l);
   }
 
   .model-selection-section h2 {
@@ -395,15 +395,15 @@ export const profileViewStyles: CSSResult = css`
 
   .model-selection-description {
     color: var(--color-text-secondary);
-    margin-bottom: var(--spacing-medium);
+    margin-bottom: var(--wa-space-xs);
     line-height: var(--line-height-normal);
   }
 
   .helper-model-row {
     display: flex;
     align-items: center;
-    gap: var(--spacing-medium);
-    margin-bottom: var(--spacing-large);
+    gap: var(--wa-space-xs);
+    margin-bottom: var(--wa-space-s);
   }
 
   .helper-model-row label {
@@ -420,14 +420,14 @@ export const profileViewStyles: CSSResult = css`
   .provider-group {
     border: var(--border-thin) solid var(--color-border);
     border-radius: var(--border-radius);
-    margin-bottom: var(--spacing-small);
+    margin-bottom: var(--wa-space-2xs);
     overflow: hidden;
   }
 
   .provider-group-header {
     display: flex;
     align-items: center;
-    gap: var(--spacing-medium);
+    gap: var(--wa-space-xs);
     width: 100%;
     background: var(--texra-editor-background);
     border: none;
@@ -446,7 +446,7 @@ export const profileViewStyles: CSSResult = css`
     align-items: center;
     flex: 1;
     min-width: 0;
-    padding: var(--spacing-medium);
+    padding: var(--wa-space-xs);
     background: none;
     border: none;
     color: inherit;
@@ -467,7 +467,7 @@ export const profileViewStyles: CSSResult = css`
     justify-content: center;
     width: 16px;
     height: 16px;
-    margin-right: var(--spacing-small);
+    margin-right: var(--wa-space-2xs);
     transition: transform var(--transition-fast);
     color: var(--color-text-secondary);
   }
@@ -491,8 +491,8 @@ export const profileViewStyles: CSSResult = css`
   .provider-group-actions {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
-    padding-right: var(--spacing-medium);
+    gap: var(--wa-space-2xs);
+    padding-right: var(--wa-space-xs);
     white-space: nowrap;
   }
 
@@ -506,14 +506,14 @@ export const profileViewStyles: CSSResult = css`
 
   .provider-group-content {
     border-top: var(--border-thin) solid var(--color-border);
-    padding: var(--spacing-small) 0;
+    padding: var(--wa-space-2xs) 0;
   }
 
   .model-row {
     display: flex;
     align-items: center;
-    padding: var(--spacing-small) var(--spacing-medium);
-    gap: var(--spacing-medium);
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
+    gap: var(--wa-space-xs);
   }
 
   .model-row:hover {
@@ -529,8 +529,8 @@ export const profileViewStyles: CSSResult = css`
   .short-names-toggle {
     display: flex;
     align-items: center;
-    gap: var(--spacing-medium);
-    margin-bottom: var(--spacing-medium);
+    gap: var(--wa-space-xs);
+    margin-bottom: var(--wa-space-xs);
     font-size: var(--font-size-sm);
   }
 
@@ -551,7 +551,7 @@ export const profileViewStyles: CSSResult = css`
 
   .model-metadata {
     display: flex;
-    gap: var(--spacing-medium);
+    gap: var(--wa-space-xs);
     color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
     white-space: nowrap;
@@ -567,8 +567,8 @@ export const profileViewStyles: CSSResult = css`
   .deprecated-toggle {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
-    padding: var(--spacing-small) var(--spacing-medium);
+    gap: var(--wa-space-2xs);
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
     background: none;
     border: none;
     color: var(--color-text-secondary);
@@ -607,7 +607,7 @@ export const profileViewStyles: CSSResult = css`
    */
   .model-row-icon {
     font-size: var(--font-size-xs);
-    margin-left: var(--spacing-tiny);
+    margin-left: var(--wa-space-3xs);
     color: var(--_icon-color, var(--color-text-secondary));
   }
 

@@ -43,10 +43,10 @@ export class LatexDiffsSection extends LitElement {
 
       .latexdiffs-section {
         margin-top: auto;
-        padding: var(--spacing-large) 0 0;
+        padding: var(--wa-space-s) 0 0;
         background-color: transparent;
         border: none;
-        margin-bottom: var(--spacing-large);
+        margin-bottom: var(--wa-space-s);
       }
 
       .latexdiffs-section[data-expanded='true'] {
@@ -54,7 +54,7 @@ export class LatexDiffsSection extends LitElement {
         border: var(--border-thin) solid
           var(--texra-widget-border, var(--dropdown-border));
         border-radius: var(--border-radius);
-        padding: var(--spacing-medium);
+        padding: var(--wa-space-xs);
         overflow: visible;
       }
 

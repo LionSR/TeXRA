@@ -36,7 +36,7 @@ export class LatexdiffResults extends LitElement {
     css`
       :host {
         display: block;
-        margin: var(--spacing-small) 0;
+        margin: var(--wa-space-2xs) 0;
       }
 
       details {

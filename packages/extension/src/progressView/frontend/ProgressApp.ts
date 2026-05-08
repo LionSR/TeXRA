@@ -167,8 +167,8 @@ export class ProgressApp extends ProgressAppBase {
       .view-header {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
-        padding: var(--spacing-small) var(--spacing-small) var(--spacing-tiny);
+        gap: var(--wa-space-2xs);
+        padding: var(--wa-space-2xs) var(--wa-space-2xs) var(--wa-space-3xs);
         border-bottom: var(--border-thin) solid var(--color-border);
         flex-shrink: 0;
       }
@@ -201,8 +201,8 @@ export class ProgressApp extends ProgressAppBase {
         flex: 1;
         min-height: 0;
         place-items: start center;
-        padding: clamp(var(--spacing-large, 16px), 7vh, 72px)
-          var(--spacing-large, 16px);
+        padding: clamp(var(--wa-space-s, 16px), 7vh, 72px)
+          var(--wa-space-s, 16px);
         overflow: auto;
         font-family:
           var(--texra-font-family, var(--vscode-font-family, system-ui)),
@@ -212,7 +212,7 @@ export class ProgressApp extends ProgressAppBase {
       .progress-empty-panel {
         box-sizing: border-box;
         width: min(720px, 100%);
-        padding: var(--spacing-xlarge, 24px);
+        padding: var(--wa-space-l, 24px);
         border: var(--border-thin, 1px) solid
           var(--color-border, var(--vscode-panel-border, #d0d7de));
         border-radius: var(--border-radius, 6px);
@@ -222,15 +222,15 @@ export class ProgressApp extends ProgressAppBase {
       .progress-empty-panel .empty-state-kicker {
         display: inline-flex;
         align-items: center;
-        gap: var(--spacing-small, 8px);
-        margin-bottom: var(--spacing-medium, 12px);
+        gap: var(--wa-space-2xs, 8px);
+        margin-bottom: var(--wa-space-xs, 12px);
         color: var(--color-text-secondary, #57606a);
         font-size: var(--font-size-sm, 13px);
         font-weight: var(--font-weight-semibold, 600);
       }
 
       .progress-empty-panel .empty-state-title {
-        margin: 0 0 var(--spacing-small, 8px);
+        margin: 0 0 var(--wa-space-2xs, 8px);
         color: var(--texra-foreground, #24292f);
         font-size: var(--font-size-h2, 1.25em);
         font-weight: var(--font-weight-semibold, 600);
@@ -246,8 +246,8 @@ export class ProgressApp extends ProgressAppBase {
       .progress-empty-panel .empty-state-actions {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--spacing-small, 8px);
-        margin-top: var(--spacing-large, 16px);
+        gap: var(--wa-space-2xs, 8px);
+        margin-top: var(--wa-space-s, 16px);
       }
 
       .progress-empty-panel .empty-state-actions wa-button::part(base) {
@@ -305,7 +305,7 @@ export class ProgressApp extends ProgressAppBase {
       .desktop-empty-progress__body {
         display: grid;
         justify-items: center;
-        gap: var(--spacing-medium);
+        gap: var(--wa-space-xs);
         max-width: 560px;
         text-align: center;
         color: var(--wa-color-text-quiet);
@@ -317,7 +317,7 @@ export class ProgressApp extends ProgressAppBase {
       }
 
       .desktop-empty-progress h1 {
-        margin: var(--spacing-small) 0 0;
+        margin: var(--wa-space-2xs) 0 0;
         color: var(--wa-color-text-normal);
         font-size: 24px;
         font-weight: 600;
@@ -334,8 +334,8 @@ export class ProgressApp extends ProgressAppBase {
         display: flex;
         justify-content: center;
         flex-wrap: wrap;
-        gap: var(--spacing-medium);
-        margin-top: var(--spacing-small);
+        gap: var(--wa-space-xs);
+        margin-top: var(--wa-space-2xs);
       }
 
       .desktop-empty-progress wa-button::part(base) {
