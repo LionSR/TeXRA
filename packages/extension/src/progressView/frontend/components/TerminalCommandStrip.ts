@@ -19,10 +19,10 @@ export class TerminalCommandStrip extends LitElement {
       margin: 0 0 var(--wa-space-2xs) 0;
       background: var(
         --texra-terminal-background,
-        var(--texra-editor-background, transparent)
+        var(--wa-color-surface-default, transparent)
       );
       color: var(--texra-terminal-foreground, var(--wa-color-text-normal));
-      border: var(--border-thin) solid var(--texra-panel-border, transparent);
+      border: var(--border-thin) solid var(--wa-color-surface-border, transparent);
       border-radius: var(--border-radius-small);
       font-family: var(
         --texra-editor-font-family,

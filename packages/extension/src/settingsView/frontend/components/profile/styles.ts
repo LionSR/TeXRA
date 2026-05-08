@@ -50,7 +50,7 @@ export const profileViewStyles: CSSResult = css`
 
   .profile-notice {
     margin: var(--wa-space-2xs) 0 var(--wa-space-xs);
-    color: var(--texra-descriptionForeground, var(--color-text-secondary));
+    color: var(--wa-color-text-quiet, var(--color-text-secondary));
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
     max-width: 640px;
