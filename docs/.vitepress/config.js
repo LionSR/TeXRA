@@ -188,6 +188,15 @@ const baseConfig = {
     },
   },
   ignoreDeadLinks: true,
+  vite: {
+    vue: {
+      template: {
+        compilerOptions: {
+          isCustomElement: (tag) => tag.startsWith('wa-'),
+        },
+      },
+    },
+  },
 };
 
 // Export the config wrapped with withMermaid, including optional configs
