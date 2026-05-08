@@ -376,11 +376,7 @@ export class ToolsTab extends LitElement {
     return html`
       <div class="setting-row">
         <label>${label}</label>
-        <wa-select
-          class="setting-select"
-          .value=${value}
-          @change=${onChange}
-        >
+        <wa-select class="setting-select" .value=${value} @change=${onChange}>
           ${options.map(
             (opt) => html`
               <wa-option value=${opt.value}> ${opt.label} </wa-option>

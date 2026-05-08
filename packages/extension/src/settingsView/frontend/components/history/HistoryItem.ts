@@ -107,25 +107,12 @@ export class HistoryItem extends LitElement {
     }
   }
 
-  private handleShow(event: Event): void {
+  private dispatchToggle(event: Event, open: boolean): void {
     if (!this.item) return;
+    // Ignore wa-show/wa-hide bubbling up from any nested wa-details.
     if (event.target !== event.currentTarget) return;
     this.dispatchEvent(
-      HistoryViewEvents.toggleItem({
-        historyId: this.item.id,
-        open: true,
-      }),
-    );
-  }
-
-  private handleHide(event: Event): void {
-    if (!this.item) return;
-    if (event.target !== event.currentTarget) return;
-    this.dispatchEvent(
-      HistoryViewEvents.toggleItem({
-        historyId: this.item.id,
-        open: false,
-      }),
+      HistoryViewEvents.toggleItem({ historyId: this.item.id, open }),
     );
   }
 
@@ -388,8 +375,8 @@ export class HistoryItem extends LitElement {
                 class="collapsible"
                 summary="More details"
                 ?open=${this.open}
-                @wa-show=${this.handleShow}
-                @wa-hide=${this.handleHide}
+                @wa-show=${(e: Event) => this.dispatchToggle(e, true)}
+                @wa-hide=${(e: Event) => this.dispatchToggle(e, false)}
                 data-id=${this.item.id}
               >
                 <div class="history-details extra-details">${extraDetails}</div>
