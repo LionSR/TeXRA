@@ -8,7 +8,11 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens } from '@shared/styles';
+
+// Web Awesome icon + spinner bundles (side-effect imports)
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 
 // Local imports - shared schemas
 import {
@@ -160,7 +164,6 @@ const RECOMMENDED_SETTINGS: SettingInfo[] = [
 export class LaTeXTab extends LitElement {
   static override styles = [
     designTokens,
-    codiconStyles,
     commonViewStyles,
     css`
       :host {
@@ -544,11 +547,11 @@ export class LaTeXTab extends LitElement {
     return html`
       <div class="dependency-card">
         <div class="dependency-row">
-          <span
-            class="codicon dependency-icon ${installed
-              ? 'installed codicon-check'
-              : 'missing codicon-warning'}"
-          ></span>
+          <wa-icon
+            library="texra"
+            name=${installed ? 'check' : 'warning'}
+            class="dependency-icon ${installed ? 'installed' : 'missing'}"
+          ></wa-icon>
           <div class="dependency-info">
             <div class="dependency-name">${dep.name}</div>
             <div class="dependency-description">
@@ -573,7 +576,7 @@ export class LaTeXTab extends LitElement {
                       )}
                     title="${dep.actionLabel ?? 'Install'}"
                   >
-                    <span class="codicon codicon-cloud-download"></span>
+                    <wa-icon library="texra" name="cloud-download"></wa-icon>
                     ${dep.actionLabel ?? 'Install'}
                   </button>
                 `
@@ -588,7 +591,7 @@ export class LaTeXTab extends LitElement {
                   @click=${(e: Event) =>
                     this.handleCopyCommand(e, installCmd.command)}
                 >
-                  <span class="codicon codicon-copy"></span>
+                  <wa-icon library="texra" name="copy"></wa-icon>
                   Copy
                 </button>
                 <button
@@ -596,7 +599,7 @@ export class LaTeXTab extends LitElement {
                   title="Run: ${installCmd.command}"
                   @click=${() => this.handleRunInTerminal(installCmd.command)}
                 >
-                  <span class="codicon codicon-terminal"></span>
+                  <wa-icon library="texra" name="terminal"></wa-icon>
                   Run in Terminal
                 </button>
               </div>
@@ -608,11 +611,10 @@ export class LaTeXTab extends LitElement {
                 class="dependency-guide-toggle"
                 @click=${() => this.toggleGuide(dep.key)}
               >
-                <span
-                  class="codicon ${expanded
-                    ? 'codicon-chevron-down'
-                    : 'codicon-chevron-right'}"
-                ></span>
+                <wa-icon
+                  library="texra"
+                  name=${expanded ? 'chevron-down' : 'chevron-right'}
+                ></wa-icon>
                 Installation Guide
               </button>
               ${expanded
@@ -664,7 +666,7 @@ export class LaTeXTab extends LitElement {
   ): TemplateResult {
     return html`
       <div class="prerequisite-hint">
-        <span class="codicon codicon-info hint-icon"></span>
+        <wa-icon library="texra" name="info" class="hint-icon"></wa-icon>
         <div class="hint-body">
           <div class="hint-title">${title}</div>
           <div class="hint-description">${description}</div>
@@ -675,7 +677,7 @@ export class LaTeXTab extends LitElement {
               title="Copy ${pmName} install command"
               @click=${(e: Event) => this.handleCopyCommand(e, installCommand)}
             >
-              <span class="codicon codicon-copy"></span>
+              <wa-icon library="texra" name="copy"></wa-icon>
               Copy
             </button>
             <button
@@ -685,7 +687,7 @@ export class LaTeXTab extends LitElement {
                 : `Run ${pmName} installer in VS Code terminal`}
               @click=${() => this.handleRunInTerminal(installCommand)}
             >
-              <span class="codicon codicon-terminal"></span>
+              <wa-icon library="texra" name="terminal"></wa-icon>
               Run in Terminal
             </button>
           </div>
@@ -701,7 +703,7 @@ export class LaTeXTab extends LitElement {
 
     return html`
       <div class="section-header">
-        <span class="codicon codicon-package"></span>
+        <wa-icon library="texra" name="package"></wa-icon>
         Dependencies
       </div>
       ${this.renderPrerequisiteHint()}
@@ -713,11 +715,11 @@ export class LaTeXTab extends LitElement {
     const isSet = this.settings[info.key];
     return html`
       <div class="setting-card">
-        <span
-          class="codicon setting-status-icon ${isSet
-            ? 'is-set'
-            : 'not-set'} ${isSet ? 'codicon-check' : 'codicon-warning'}"
-        ></span>
+        <wa-icon
+          library="texra"
+          name=${isSet ? 'check' : 'warning'}
+          class="setting-status-icon ${isSet ? 'is-set' : 'not-set'}"
+        ></wa-icon>
         <div class="setting-info">
           <div class="setting-name">${info.name}</div>
           <div class="setting-config-key">${info.configKey}</div>
@@ -731,7 +733,7 @@ export class LaTeXTab extends LitElement {
                 @click=${() => this.handleApply(info.key, true)}
                 title="Reset this setting to default"
               >
-                <span class="codicon codicon-discard"></span>
+                <wa-icon library="texra" name="discard"></wa-icon>
                 Reset
               </button>
             `
@@ -741,7 +743,7 @@ export class LaTeXTab extends LitElement {
                 @click=${() => this.handleApply(info.key)}
                 title="Apply this setting"
               >
-                <span class="codicon codicon-check"></span>
+                <wa-icon library="texra" name="check"></wa-icon>
                 Apply
               </button>
             `}
@@ -756,7 +758,7 @@ export class LaTeXTab extends LitElement {
           <div
             style="text-align:center;padding:var(--spacing-large);color:var(--color-text-secondary)"
           >
-            <span class="codicon codicon-loading codicon-modifier-spin"></span>
+            <wa-spinner></wa-spinner>
             Loading LaTeX settings...
           </div>
         </div>
@@ -773,7 +775,7 @@ export class LaTeXTab extends LitElement {
                   @click=${() => this.handleApply()}
                   title="Apply all recommended settings"
                 >
-                  <span class="codicon codicon-check-all"></span>
+                  <wa-icon library="texra" name="check-all"></wa-icon>
                   Apply All
                 </button>
               </div>
@@ -787,7 +789,7 @@ export class LaTeXTab extends LitElement {
                 class="section-header"
                 style="margin-top:var(--spacing-large)"
               >
-                <span class="codicon codicon-settings-gear"></span>
+                <wa-icon library="texra" name="settings-gear"></wa-icon>
                 Recommended Settings
               </div>
 
@@ -810,15 +812,17 @@ export class LaTeXTab extends LitElement {
   private renderInlineCriticismSetting(): TemplateResult {
     return html`
       <div class="section-header" style="margin-top:var(--spacing-large)">
-        <span class="codicon codicon-comment-discussion"></span>
+        <wa-icon library="texra" name="comment-discussion"></wa-icon>
         Inline Criticism
       </div>
       <div class="setting-card">
-        <span
-          class="codicon setting-status-icon ${this.inlineCriticismEnabled
-            ? 'is-set codicon-check'
-            : 'not-set codicon-circle-slash'}"
-        ></span>
+        <wa-icon
+          library="texra"
+          name=${this.inlineCriticismEnabled ? 'check' : 'circle-slash'}
+          class="setting-status-icon ${this.inlineCriticismEnabled
+            ? 'is-set'
+            : 'not-set'}"
+        ></wa-icon>
         <div class="setting-info">
           <div class="setting-name">Surface \\criticize annotations</div>
           <div class="setting-description">
@@ -856,7 +860,7 @@ export class LaTeXTab extends LitElement {
     const cv = this.configValues;
     return html`
       <div class="section-header" style="margin-top:var(--spacing-large)">
-        <span class="codicon codicon-zap"></span>
+        <wa-icon library="texra" name="zap"></wa-icon>
         Compile &amp; Diff
       </div>
       <div class="latex-description">
@@ -938,11 +942,11 @@ export class LaTeXTab extends LitElement {
     const isCustom = opts.currentValue !== undefined;
     return html`
       <div class="setting-card">
-        <span
-          class="codicon setting-status-icon ${effective
-            ? 'is-set codicon-check'
-            : 'not-set codicon-circle-slash'}"
-        ></span>
+        <wa-icon
+          library="texra"
+          name=${effective ? 'check' : 'circle-slash'}
+          class="setting-status-icon ${effective ? 'is-set' : 'not-set'}"
+        ></wa-icon>
         <div class="setting-info">
           <div class="setting-name">${opts.label}</div>
           <div class="setting-description">${opts.description}</div>
@@ -960,7 +964,7 @@ export class LaTeXTab extends LitElement {
               @click=${() => this.dispatchSetConfigValue(opts.field, undefined)}
               title="Reset to default (${opts.defaultValue ? 'On' : 'Off'})"
             >
-              <span class="codicon codicon-discard"></span>
+              <wa-icon library="texra" name="discard"></wa-icon>
             </button>`
           : nothing}
       </div>
@@ -980,11 +984,11 @@ export class LaTeXTab extends LitElement {
     const isCustom = opts.currentValue !== undefined;
     return html`
       <div class="setting-card">
-        <span
-          class="codicon setting-status-icon ${isCustom
-            ? 'is-set codicon-edit'
-            : 'not-set codicon-circle-outline'}"
-        ></span>
+        <wa-icon
+          library="texra"
+          name=${isCustom ? 'edit' : 'circle-outline'}
+          class="setting-status-icon ${isCustom ? 'is-set' : 'not-set'}"
+        ></wa-icon>
         <div class="setting-info">
           <div class="setting-name">${opts.label}</div>
           <div class="setting-description">${opts.description}</div>
@@ -1014,7 +1018,7 @@ export class LaTeXTab extends LitElement {
               @click=${() => this.dispatchSetConfigValue(opts.field, undefined)}
               title="Reset to default (${opts.defaultValue})"
             >
-              <span class="codicon codicon-discard"></span>
+              <wa-icon library="texra" name="discard"></wa-icon>
             </button>`
           : nothing}
       </div>
@@ -1035,11 +1039,11 @@ export class LaTeXTab extends LitElement {
     const isCustom = opts.currentValue !== undefined;
     return html`
       <div class="setting-card">
-        <span
-          class="codicon setting-status-icon ${isCustom
-            ? 'is-set codicon-edit'
-            : 'not-set codicon-circle-outline'}"
-        ></span>
+        <wa-icon
+          library="texra"
+          name=${isCustom ? 'edit' : 'circle-outline'}
+          class="setting-status-icon ${isCustom ? 'is-set' : 'not-set'}"
+        ></wa-icon>
         <div class="setting-info">
           <div class="setting-name">${opts.label}</div>
           <div class="setting-description">${opts.description}</div>
@@ -1066,7 +1070,7 @@ export class LaTeXTab extends LitElement {
               @click=${() => this.dispatchSetConfigValue(opts.field, undefined)}
               title="Reset to default (${opts.defaultValue})"
             >
-              <span class="codicon codicon-discard"></span>
+              <wa-icon library="texra" name="discard"></wa-icon>
             </button>`
           : nothing}
       </div>
