@@ -23,8 +23,11 @@ const domGlobalKeys = [
   'document',
   'Document',
   'customElements',
+  'Element',
   'HTMLElement',
   'HTMLInputElement',
+  'HTMLSlotElement',
+  'HTMLDialogElement',
   'CustomEvent',
   'Event',
   'KeyboardEvent',
@@ -239,8 +242,16 @@ export function useLitComponentTestDom(
       document: dom.window.document,
       Document: dom.window.Document,
       customElements: dom.window.customElements,
+      // Web Awesome components (wa-popup, wa-option, wa-dialog) read these
+      // constructors as bare globals via instanceof checks and getAnimations
+      // calls inside microtasks. Bind the jsdom-backed implementations onto
+      // globalThis so those references resolve even after a test's beforeEach
+      // tears down the previous DOM tree.
+      Element: dom.window.Element,
       HTMLElement: dom.window.HTMLElement,
       HTMLInputElement: dom.window.HTMLInputElement,
+      HTMLSlotElement: dom.window.HTMLSlotElement,
+      HTMLDialogElement: dom.window.HTMLDialogElement,
       CustomEvent: dom.window.CustomEvent,
       Event: dom.window.Event,
       KeyboardEvent: dom.window.KeyboardEvent,
