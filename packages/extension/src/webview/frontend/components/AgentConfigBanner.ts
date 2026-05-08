@@ -1,34 +1,24 @@
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/callout/callout.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import type { AgentConfigBannerState } from '@shared/schemas';
 import { warningBannerStyles } from '../styles/warningBannerStyles';
 import { MainViewEvents } from '../events';
 
 @customElement('agent-config-banner')
 export class AgentConfigBanner extends LitElement {
-  static override styles = [
-    designTokens,
-    codiconStyles,
-    commonViewStyles,
-    warningBannerStyles,
-  ];
+  static override styles = [designTokens, commonViewStyles, warningBannerStyles];
 
   @property({ attribute: false }) state: AgentConfigBannerState = {
     visible: false,
   };
 
-  private handleActionClick(event: MouseEvent): void {
-    const button = (event.target as HTMLElement).closest<HTMLElement>(
-      '[data-action]',
-    );
-    const action = button?.dataset.action as
-      | 'edit'
-      | 'dir'
-      | 'docs'
-      | undefined;
-    if (!action) return;
+  private handleAction(action: 'edit' | 'dir' | 'docs'): void {
     this.dispatchEvent(
       MainViewEvents.agentConfigAction({
         action,
@@ -41,40 +31,50 @@ export class AgentConfigBanner extends LitElement {
     if (!this.state.visible) return nothing;
 
     return html`
-      <div
+      <wa-callout
         id="agentConfigBanner"
         class="warning-banner"
+        variant="warning"
         data-custom-dir-set=${this.state.customDirSet ? 'true' : 'false'}
       >
-        <span>
-          ${this.state.agentName
-            ? `Agent file for "${this.state.agentName}" is missing.`
-            : 'Agent configuration is missing.'}
-        </span>
-        <div class="actions" @click=${this.handleActionClick}>
-          <vscode-toolbar-button
-            id="agentConfigEditButton"
-            icon="edit"
-            data-action="edit"
-          >
-            Edit Agents
-          </vscode-toolbar-button>
-          <vscode-toolbar-button
-            id="agentConfigDirButton"
-            icon="folder"
-            data-action="dir"
-          >
-            ${this.state.customDirSet ? 'Open Directory' : 'Set Directory'}
-          </vscode-toolbar-button>
-          <vscode-toolbar-button
-            id="agentConfigDocButton"
-            icon="book"
-            data-action="docs"
-          >
-            Docs
-          </vscode-toolbar-button>
+        ${waIcon('triangle-exclamation', { slot: 'icon' })}
+        <div class="banner-row">
+          <span>
+            ${this.state.agentName
+              ? `Agent file for "${this.state.agentName}" is missing.`
+              : 'Agent configuration is missing.'}
+          </span>
+          <div class="actions">
+            <wa-button
+              id="agentConfigEditButton"
+              appearance="plain"
+              size="small"
+              @click=${() => this.handleAction('edit')}
+            >
+              ${waIcon('pencil', { slot: 'start' })}
+              Edit Agents
+            </wa-button>
+            <wa-button
+              id="agentConfigDirButton"
+              appearance="plain"
+              size="small"
+              @click=${() => this.handleAction('dir')}
+            >
+              ${waIcon('folder', { slot: 'start' })}
+              ${this.state.customDirSet ? 'Open Directory' : 'Set Directory'}
+            </wa-button>
+            <wa-button
+              id="agentConfigDocButton"
+              appearance="plain"
+              size="small"
+              @click=${() => this.handleAction('docs')}
+            >
+              ${waIcon('book', { slot: 'start' })}
+              Docs
+            </wa-button>
+          </div>
         </div>
-      </div>
+      </wa-callout>
     `;
   }
 }
