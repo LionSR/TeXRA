@@ -99,13 +99,13 @@ export class InstructionPanel extends LitElement {
     css`
       :host {
         display: block;
-        --agent-select-min-width: 8rem;
-        --agent-select-max-width: min(13rem, calc(100vw - 9rem));
-        --model-select-min-width: 8rem;
-        --model-select-max-width: min(15rem, calc(100vw - 9rem));
-        --agent-model-listbox-min-width: 17rem;
+        --agent-select-min-width: 6rem;
+        --agent-select-max-width: min(11rem, calc(100vw - 9rem));
+        --model-select-min-width: 6rem;
+        --model-select-max-width: min(13rem, calc(100vw - 9rem));
+        --agent-model-listbox-min-width: 12rem;
         --agent-model-listbox-max-width: min(
-          26rem,
+          20rem,
           calc(100vw - var(--wa-space-l))
         );
       }
