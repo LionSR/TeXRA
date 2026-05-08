@@ -5,6 +5,12 @@ import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
+import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import '@awesome.me/webawesome/dist/components/select/select.js';
+import '@awesome.me/webawesome/dist/components/option/option.js';
+import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
+
 import { SortableController } from '@shared/controllers';
 import { designTokens, codiconStyles } from '@shared/styles';
 import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
@@ -157,8 +163,9 @@ export class FileSelectGroup extends LitElement {
   }
 
   private handleSelectChange(event: Event): void {
-    const target = event.currentTarget as HTMLSelectElement | null;
-    this.handleFileChange(target?.value ?? '');
+    const target = event.currentTarget as WaSelect | null;
+    const value = target?.value;
+    this.handleFileChange(typeof value === 'string' ? value : '');
   }
 
   private handleFocus(): void {
@@ -242,20 +249,11 @@ export class FileSelectGroup extends LitElement {
       a.localeCompare(b),
     );
     return html`
-      <vscode-option value="" ?selected=${this.currentSelectedValue === ''}
-        >None</vscode-option
-      >
+      <wa-option value="">None</wa-option>
       ${repeat(
         sortedOptions,
         (opt) => opt,
-        (opt) => html`
-          <vscode-option
-            value=${opt}
-            ?selected=${opt === this.currentSelectedValue}
-          >
-            ${opt}
-          </vscode-option>
-        `,
+        (opt) => html` <wa-option value=${opt}>${opt}</wa-option> `,
       )}
     `;
   }
@@ -289,30 +287,30 @@ export class FileSelectGroup extends LitElement {
           ?show=${this.toolConfigMenuOpen}
         >
           <div class="dropdown-menu-content">
-            <vscode-checkbox
+            <wa-checkbox
               id="attachTeXCount"
               ?checked=${this.currentCheckboxValues.attachTeXCount}
               ?disabled=${this.isFileInputDisabled}
               @change=${(event: Event) =>
                 this.handleCheckboxChange(
                   'attachTeXCount',
-                  (event.target as HTMLInputElement).checked,
+                  (event.target as WaCheckbox).checked,
                 )}
             >
               Attach TeX Count
-            </vscode-checkbox>
-            <vscode-checkbox
+            </wa-checkbox>
+            <wa-checkbox
               id="attachDiagnostics"
               ?checked=${this.currentCheckboxValues.attachDiagnostics}
               ?disabled=${this.isFileInputDisabled}
               @change=${(event: Event) =>
                 this.handleCheckboxChange(
                   'attachDiagnostics',
-                  (event.target as HTMLInputElement).checked,
+                  (event.target as WaCheckbox).checked,
                 )}
             >
               Attach Diagnostics
-            </vscode-checkbox>
+            </wa-checkbox>
           </div>
         </vscode-context-menu>
       </div>
@@ -349,39 +347,39 @@ export class FileSelectGroup extends LitElement {
           ?show=${this.autoExtractMenuOpen}
         >
           <div class="dropdown-menu-content">
-            <vscode-checkbox
+            <wa-checkbox
               id="autoExtractFigure"
               ?checked=${this.currentCheckboxValues.autoExtractFigure}
               @change=${(event: Event) =>
                 this.handleCheckboxChange(
                   'autoExtractFigure',
-                  (event.target as HTMLInputElement).checked,
+                  (event.target as WaCheckbox).checked,
                 )}
             >
               Figures
-            </vscode-checkbox>
-            <vscode-checkbox
+            </wa-checkbox>
+            <wa-checkbox
               id="autoExtractTikzFigure"
               ?checked=${this.currentCheckboxValues.autoExtractTikzFigure}
               @change=${(event: Event) =>
                 this.handleCheckboxChange(
                   'autoExtractTikzFigure',
-                  (event.target as HTMLInputElement).checked,
+                  (event.target as WaCheckbox).checked,
                 )}
             >
               TikZ Figures
-            </vscode-checkbox>
-            <vscode-checkbox
+            </wa-checkbox>
+            <wa-checkbox
               id="autoCompileInputPdf"
               ?checked=${this.currentCheckboxValues.autoCompileInputPdf}
               @change=${(event: Event) =>
                 this.handleCheckboxChange(
                   'autoCompileInputPdf',
-                  (event.target as HTMLInputElement).checked,
+                  (event.target as WaCheckbox).checked,
                 )}
             >
               Compile Input PDF
-            </vscode-checkbox>
+            </wa-checkbox>
           </div>
         </vscode-context-menu>
       </div>
@@ -536,14 +534,14 @@ export class FileSelectGroup extends LitElement {
             ></vscode-toolbar-button>
           </vscode-toolbar-container>
         </div>
-        <vscode-single-select
+        <wa-select
           id=${this.selectId}
           .value=${this.currentSelectedValue}
           @focus=${this.handleFocus}
           @change=${this.handleSelectChange}
         >
           ${this.renderFileOptions()}
-        </vscode-single-select>
+        </wa-select>
         ${when(
           this.currentListVisible,
           () => html`
