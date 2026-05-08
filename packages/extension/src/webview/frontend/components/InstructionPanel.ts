@@ -99,7 +99,9 @@ export class InstructionPanel extends LitElement {
     css`
       :host {
         display: block;
-        --agent-select-min-width: 6rem;
+        /* Bumped from 6rem so the "Agent…" placeholder is readable on a
+           cold-start launcher (no agent selected yet) without clipping. */
+        --agent-select-min-width: 7rem;
         --agent-select-max-width: min(11rem, calc(100vw - 9rem));
         --model-select-min-width: 6rem;
         --model-select-max-width: min(13rem, calc(100vw - 9rem));
@@ -833,6 +835,7 @@ export class InstructionPanel extends LitElement {
                       ? 'false'
                       : 'true'}
                     placement="top"
+                    placeholder="Agent…"
                     .value=${session.workflowAgent}
                     @focus=${this.handleAgentFocus}
                     @change=${this.handleAgentChange}
@@ -862,6 +865,7 @@ export class InstructionPanel extends LitElement {
                       ? 'false'
                       : 'true'}
                     placement="top"
+                    placeholder="Agent…"
                     .value=${session.toolUseAgent}
                     @focus=${this.handleAgentFocus}
                     @change=${this.handleAgentChange}
@@ -890,6 +894,7 @@ export class InstructionPanel extends LitElement {
                 class="model-select"
                 placement="top"
                 aria-label="Model"
+                placeholder="Select model…"
                 title=${this.getModelTooltip(
                   session.modelOptions,
                   session.model,
