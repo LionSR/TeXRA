@@ -135,60 +135,36 @@ wa-button.desktop-explorer-icon-button[disabled]::part(base) {
   cursor: default;
 }
 
-.desktop-explorer-tree {
+wa-tree.desktop-explorer-tree {
   min-width: 0;
   overflow: auto;
   padding: 4px 0;
+  --indent-size: 14px;
 }
 
-.desktop-explorer-directory {
+wa-tree.desktop-explorer-tree wa-tree-item::part(item) {
+  min-height: 24px;
+  padding-inline-end: 8px;
+  color: var(--texra-foreground);
+}
+
+wa-tree.desktop-explorer-tree wa-tree-item::part(label) {
+  flex: 1 1 auto;
   min-width: 0;
-}
-
-.desktop-explorer-directory > summary {
-  list-style: none;
-}
-
-.desktop-explorer-directory > summary::-webkit-details-marker {
-  display: none;
-}
-
-.desktop-explorer-directory[open] > summary .desktop-explorer-chevron {
-  transform: rotate(90deg);
-}
-
-.desktop-explorer-row {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
   gap: 4px;
-  width: 100%;
-  min-height: 24px;
-  padding: 0 8px 0 calc(8px + var(--tree-depth, 0) * 14px);
-  border: 0;
-  border-radius: 0;
-  box-sizing: border-box;
-  background: transparent;
-  color: var(--texra-foreground);
-  font: inherit;
-  text-align: left;
 }
 
-.desktop-explorer-folder-row {
-  cursor: pointer;
-}
-
-.desktop-explorer-file-row {
-  cursor: default;
-}
-
-.desktop-explorer-row:hover {
+wa-tree.desktop-explorer-tree wa-tree-item:not([aria-disabled='true']):hover::part(item) {
   background: var(--texra-list-hoverBackground);
 }
 
-.desktop-explorer-file-row[data-selected='true'] {
+wa-tree.desktop-explorer-tree
+  wa-tree-item:state(selected):not([aria-disabled='true'])::part(item) {
   background: var(--texra-list-activeSelectionBackground);
   color: var(--texra-list-activeSelectionForeground);
+  border-inline-start-color: var(--texra-list-activeSelectionForeground);
 }
 
 .desktop-explorer-name {
