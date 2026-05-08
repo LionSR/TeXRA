@@ -198,7 +198,9 @@ export class ModelSelectionList extends LitElement {
         <wa-option value=""> ${defaultLabel} </wa-option>
         ${REASONING_LEVELS.map(
           (level) => html`
-            <wa-option value=${level}> ${REASONING_LEVEL_LABELS[level]} </wa-option>
+            <wa-option value=${level}>
+              ${REASONING_LEVEL_LABELS[level]}
+            </wa-option>
           `,
         )}
       </wa-select>
