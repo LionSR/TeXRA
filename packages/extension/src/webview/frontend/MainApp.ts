@@ -13,7 +13,6 @@ import { PersistedState, createWebviewStorage } from '@shared/state';
 import {
   designTokens,
   commonViewStyles,
-  codiconStyles,
   viewTabStyles,
 } from '@shared/styles';
 import {
@@ -148,7 +147,6 @@ export class MainApp extends MainAppBase {
   static styles = [
     designTokens,
     commonViewStyles,
-    codiconStyles,
     viewTabStyles,
     mainViewStyles,
   ];
