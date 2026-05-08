@@ -429,7 +429,8 @@ test('desktop:showPdf opens the in-app PDF overlay', async () => {
     () => {
       const dialog = document.querySelector('wa-dialog.desktop-pdf-overlay');
       return (
-        dialog == null || (dialog as unknown as { open: boolean }).open === false
+        dialog == null ||
+        (dialog as unknown as { open: boolean }).open === false
       );
     },
     undefined,
