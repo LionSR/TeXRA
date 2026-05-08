@@ -5,6 +5,10 @@
  * commit selector, and diff action buttons.
  */
 
+// Side-effect imports - register WA select & option components
+import '@awesome.me/webawesome/dist/components/select/select.js';
+import '@awesome.me/webawesome/dist/components/option/option.js';
+
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -209,30 +213,22 @@ export class LatexDiffsSection extends LitElement {
 
   private renderFileOptions(
     options: string[],
-    selectedValue: string,
+    _selectedValue: string,
   ): TemplateResult {
     const sortedOptions = [...options].sort((a, b) => a.localeCompare(b));
     return html`
-      <vscode-option value="" ?selected=${selectedValue === ''}
-        >None</vscode-option
-      >
+      <wa-option value="">None</wa-option>
       ${repeat(
         sortedOptions,
         (opt) => opt,
-        (opt) => html`
-          <vscode-option value=${opt} ?selected=${opt === selectedValue}>
-            ${opt}
-          </vscode-option>
-        `,
+        (opt) => html` <wa-option value=${opt}> ${opt} </wa-option> `,
       )}
     `;
   }
 
   private renderCommitOptions(): TemplateResult {
     if (!this.isGitRepo) {
-      return html`<vscode-option value="" selected
-        >Not a Git repository</vscode-option
-      >`;
+      return html`<wa-option value="">Not a Git repository</wa-option>`;
     }
     const entries = this.commitOptions.some((commit) =>
       commit.startsWith('HEAD'),
@@ -245,11 +241,7 @@ export class LatexDiffsSection extends LitElement {
         (commit) => commit,
         (commit) => {
           const [hash] = commit.split(': ');
-          return html`
-            <vscode-option value=${hash} ?selected=${hash === this.commit}>
-              ${commit}
-            </vscode-option>
-          `;
+          return html` <wa-option value=${hash}> ${commit} </wa-option> `;
         },
       )}
     `;
@@ -308,14 +300,14 @@ export class LatexDiffsSection extends LitElement {
                 })}
               </div>
             </div>
-            <vscode-single-select
+            <wa-select
               id="baseFile"
-              position="above"
+              placement="top"
               .value=${this.baseFile}
               @change=${this.handleBaseSelectChange}
             >
               ${this.renderFileOptions(this.baseFileOptions, this.baseFile)}
-            </vscode-single-select>
+            </wa-select>
           </div>
           <div class="file-select">
             <div class="file-select-header">
@@ -388,14 +380,14 @@ export class LatexDiffsSection extends LitElement {
                 })}
               </div>
             </div>
-            <vscode-single-select
+            <wa-select
               id="editedFile"
-              position="above"
+              placement="top"
               .value=${this.editedFile}
               @change=${this.handleEditedSelectChange}
             >
               ${this.renderFileOptions(this.editedFileOptions, this.editedFile)}
-            </vscode-single-select>
+            </wa-select>
           </div>
           <div class="file-select">
             <div class="file-select-header">
@@ -437,15 +429,15 @@ export class LatexDiffsSection extends LitElement {
                 })}
               </div>
             </div>
-            <vscode-single-select
+            <wa-select
               id="commit"
-              position="above"
+              placement="top"
               .value=${this.commit}
               ?disabled=${!this.isGitRepo}
               @change=${this.handleCommitSelectChange}
             >
               ${this.renderCommitOptions()}
-            </vscode-single-select>
+            </wa-select>
           </div>
         </div>
       </div>

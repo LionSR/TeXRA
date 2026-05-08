@@ -13,7 +13,7 @@ export const selectStyles: CSSResult = css`
     vertical-align: text-bottom;
   }
 
-  .select-group vscode-single-select {
+  .select-group wa-select {
     flex: 1;
     min-width: 6rem;
     max-width: 10rem;
@@ -32,20 +32,20 @@ export const selectStyles: CSSResult = css`
     max-width: 10rem;
   }
 
-  vscode-option {
+  wa-option {
     font-family: var(--texra-font-family);
   }
 
-  vscode-option.disabled-option,
-  vscode-option.disabled-model,
-  vscode-option.disabled-agent,
-  vscode-option[data-requires-key='true'] {
+  wa-option.disabled-option,
+  wa-option.disabled-model,
+  wa-option.disabled-agent,
+  wa-option[data-requires-key='true'] {
     color: var(--color-text-secondary, var(--texra-descriptionForeground));
     opacity: var(--opacity-subtle, 0.7);
     font-style: italic;
   }
 
-  vscode-option[data-tool-use='true'] {
+  wa-option[data-tool-use='true'] {
     font-style: italic;
   }
 
@@ -68,7 +68,7 @@ export const selectStyles: CSSResult = css`
     color: var(--button-hover-background, var(--texra-button-hoverBackground));
   }
 
-  vscode-single-select::part(listbox) {
+  wa-select::part(listbox) {
     max-height: var(--height-large, 300px);
   }
 
