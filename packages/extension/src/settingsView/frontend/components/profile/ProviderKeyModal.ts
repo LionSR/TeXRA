@@ -83,15 +83,9 @@ export class ProviderKeyModal extends LitElement {
       }
 
       .provider-key-primary {
-<<<<<<< HEAD
         color: var(--wa-color-brand-on-loud);
-        background: var(--texra-button-background);
-        border: var(--border-thin) solid var(--texra-button-background);
-=======
-        color: var(--texra-button-foreground);
         background: var(--wa-color-brand-fill-loud);
         border: var(--border-thin) solid var(--wa-color-brand-fill-loud);
->>>>>>> origin/main
       }
 
       .provider-key-primary:hover {

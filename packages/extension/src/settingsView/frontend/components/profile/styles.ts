@@ -168,13 +168,8 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .api-access-option:has(input:checked) {
-<<<<<<< HEAD
-    border-color: var(--texra-focusBorder);
-    background: var(--wa-color-neutral-fill-quiet);
-=======
     border-color: var(--wa-color-focus);
-    background: var(--texra-list-hoverBackground);
->>>>>>> origin/main
+    background: var(--wa-color-neutral-fill-quiet);
   }
 
   .api-access-option input[type='radio'] {
@@ -585,13 +580,8 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .deprecated-toggle:hover {
-<<<<<<< HEAD
-    color: var(--texra-foreground);
-    background: var(--wa-color-neutral-fill-quiet);
-=======
     color: var(--wa-color-text-normal);
-    background: var(--texra-list-hoverBackground);
->>>>>>> origin/main
+    background: var(--wa-color-neutral-fill-quiet);
   }
 
   .deprecated-toggle:focus-visible {
