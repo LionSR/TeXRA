@@ -12,7 +12,6 @@ import {
   registerImageCommands,
   registerFigureCommands,
   registerLinterCommands,
-  registerArXivCommands,
   registerCompareCommands,
 } from '@commands/latex';
 import {
@@ -22,21 +21,16 @@ import {
 import {
   registerMergeCommands,
   registerExecuteCommand,
-  registerAgentCommands,
   registerAgentCreatorCommands,
   registerFollowUpCommand,
   registerResumeAgentCommand,
 } from '@commands/agent';
 import {
-  registerTestCommands,
   registerXmlCommands,
   registerYamlCommands,
   registerTextEditorCommands,
-  registerHelpCommands,
   registerSettingsCommands,
   registerMainViewCommands,
-  registerSampleProjectCommands,
-  registerWalkthroughCommands,
 } from '@commands/system';
 import { registerStateRestoreCommand } from '@commands/history';
 import {
@@ -44,7 +38,6 @@ import {
   initializeSettingsViewProvider,
 } from '@commands/settings';
 import { registerAuthCommands } from '@commands/auth';
-import { registerSetupAssistantCommand } from '@commands/setup';
 import {
   createExtensionCommandActions,
   registerExtensionCommandRegistry,
@@ -73,10 +66,8 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   registerLatexCommands(context);
   registerImageCommands(context);
   registerFigureCommands(context);
-  registerTestCommands(context);
   registerXmlCommands(context);
   registerYamlCommands(context);
-  registerAgentCommands(context);
   registerAgentCreatorCommands(context);
   registerApiKeyCommands(context);
   registerAuthCommands(context);
@@ -84,29 +75,27 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   registerTextEditorCommands(context);
   registerLinterCommands(context);
   registerSettingsViewCommands(context);
-  registerArXivCommands(context);
   registerCompareCommands(context);
   registerProgressViewCommands(context);
   registerFollowUpCommand(context);
   registerResumeAgentCommand(context);
   registerOpenFileCommands(context);
-  registerHelpCommands(context);
   registerMainViewCommands(context);
   registerSettingsCommands(context);
-  registerSampleProjectCommands(context);
-  registerWalkthroughCommands(context);
-  registerSetupAssistantCommand(context);
 
-  // The shared registry now also owns the no-arg housekeeping (cleanOutput,
-  // cleanBuild, indentTeX) and auth (signIn/signOut/viewProfile) commands
-  // alongside the original settings/main-view routes — same dispatch path
-  // as the desktop registry. See `extensionCommandSurface.ts` for the
-  // handler map.
+  // The shared registry now owns the no-arg housekeeping (cleanOutput,
+  // cleanBuild, indentTeX), auth (signIn/signOut/viewProfile), system
+  // entry points (runSetupAssistant, openGettingStarted, createSampleProject,
+  // testConnection, testAgentLoading, loadSpecificAgent, openProgressViewInTab,
+  // downloadArXivSource), and the typed-arg handlers for
+  // openDoc/stopAgent/compactResponse — all alongside the original
+  // settings/main-view routes via the same dispatch path as the desktop
+  // registry. See `extensionCommandSurface.ts` for the handler map.
   //
-  // FOLLOW_UP (#3771): the remaining ~70 per-command registrations all
-  // take VS Code-specific arguments (TextEditor, Range, Uri, FileLocation,
+  // FOLLOW_UP (#3775): the remaining per-command registrations carry
+  // VS Code-specific arguments (TextEditor, Range, Uri, FileLocation,
   // pack/clean configs, agent execution payloads). Migrating those needs
-  // either: (a) the new `definedHandler` typed-args path in
+  // either: (a) the `definedHandler` typed-args path in
   // `@shared/commands/registry` plus per-command Zod arg schemas, or
   // (b) staying on per-command registration where the handler captures
   // VS Code state directly (e.g. `vscode.window.activeTextEditor`).
@@ -115,7 +104,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   const settingsViewProvider = initializeSettingsViewProvider(context);
   registerExtensionCommandRegistry(
     context,
-    createExtensionCommandActions(settingsViewProvider),
+    createExtensionCommandActions(context, settingsViewProvider),
   );
 
   mainViewProviderInstance = new MainViewProvider(context);
