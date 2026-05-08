@@ -1,5 +1,3 @@
-export const CHEVRON_RIGHT_CLASS = 'codicon codicon-chevron-right';
-
 /**
  * Model provider decorator configuration - single source of truth for provider indicators.
  * Used in model dropdowns to visually distinguish different AI providers.
