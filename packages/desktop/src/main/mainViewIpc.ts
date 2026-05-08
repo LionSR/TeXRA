@@ -20,7 +20,6 @@ import {
 import type { DesktopProgressIpc } from './desktopProgressIpc.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
-import type { DesktopWorkspaceExplorer } from './desktopWorkspaceExplorer.js';
 import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionController';
 import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
 import type { MainViewStartupOptions } from '@controllers/mainView/MainViewStartupController';
@@ -30,7 +29,6 @@ export interface DesktopMainViewIpcOptions {
   debugMode?: boolean;
   getTheme?: () => DesktopTheme;
   fileSelection?: DesktopFileSelection;
-  workspaceExplorer?: DesktopWorkspaceExplorer;
   settings?: DesktopSettingsIpc;
   progress?: DesktopProgressIpc;
   onboarding?: DesktopMessageHandler;
@@ -95,7 +93,6 @@ export function installDesktopMainViewIpc(
   });
   messageHandlers = [
     startup,
-    options.workspaceExplorer,
     options.fileSelection,
     options.settings,
     options.progress,

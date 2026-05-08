@@ -163,9 +163,7 @@ export function createWalkthroughDialog({
   // first" policy so keyboard users can dismiss with one Enter, and intercept
   // the command-palette shortcut so it does not fire while the dialog is open.
   dialog.addEventListener('wa-after-show', () => {
-    dialog
-      .querySelector<HTMLElement>('[data-walkthrough-primary]')
-      ?.focus();
+    dialog.querySelector<HTMLElement>('[data-walkthrough-primary]')?.focus();
   });
   // Every user-initiated dismissal (Escape, footer buttons) posts the
   // dismissed signal back to the host. Programmatic hide() suppresses the
