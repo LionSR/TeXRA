@@ -18,6 +18,9 @@ export function isAllowedExternalUrl(url: string): boolean {
   if (parsed.host === 'texra.ai' || parsed.host.endsWith('.texra.ai')) {
     return true;
   }
+  if (parsed.host.endsWith('.supabase.co')) {
+    return true;
+  }
   return ALLOWED_HTTPS_HOSTS.has(parsed.host);
 }
 
