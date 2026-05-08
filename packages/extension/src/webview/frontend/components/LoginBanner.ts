@@ -1,88 +1,58 @@
-/**
- * Banner component for the Researcher Access Program sign-in.
- *
- * Displays an info banner encouraging users to sign in for
- * access to AI models without their own API keys.
- *
- * @fires sign-in - When sign in button is clicked
- * @fires dismiss-login - When dismiss button is clicked
- */
-
-// Third-party imports
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/callout/callout.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-// Local imports - shared styles
-import { designTokens, codiconStyles, commonViewStyles } from '@shared/styles';
-
-// Local imports - shared copy
+import { designTokens, commonViewStyles } from '@shared/styles';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { PROMO_NOTICE_SHORT } from '@shared/copy/promoNotice';
 
-// Local imports - main view events
 import { MainViewEvents } from '../events';
 
 @customElement('login-banner')
 export class LoginBanner extends LitElement {
   static override styles = [
     designTokens,
-    codiconStyles,
     commonViewStyles,
     css`
       :host {
         display: block;
       }
 
-      .login-banner {
-        background: var(--texra-inputValidation-infoBackground);
-        color: var(--texra-inputValidation-infoForeground);
-        border: var(--border-thin) solid var(--texra-inputValidation-infoBorder);
-        border-radius: var(--border-radius);
-        padding: var(--spacing-medium);
+      wa-callout.login-banner {
         margin-bottom: var(--spacing-large);
+      }
+
+      .banner-row {
         display: flex;
+        align-items: center;
         justify-content: space-between;
-        align-items: center;
         gap: var(--spacing-medium);
       }
 
-      .login-banner-content {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-medium);
-        flex: 1;
-      }
-
-      .login-banner-icon {
-        font-size: 1.5em;
-        color: var(--texra-button-background);
-        display: flex;
-        align-items: center;
-      }
-
-      .login-banner-text {
+      .banner-text {
         display: flex;
         flex-direction: column;
         gap: var(--spacing-tiny);
+        min-width: 0;
       }
 
-      .login-banner-title {
+      .banner-title {
         font-weight: var(--font-weight-semibold);
         font-size: 1em;
       }
 
-      .login-banner-description {
+      .banner-description {
         font-size: var(--font-size-sm);
         opacity: var(--opacity-normal);
-      }
-
-      .login-banner .actions {
-        flex-shrink: 0;
       }
 
       .actions {
         display: flex;
         align-items: center;
         gap: var(--spacing-small);
+        flex-shrink: 0;
       }
     `,
   ];
@@ -101,36 +71,36 @@ export class LoginBanner extends LitElement {
     if (!this.visible) return nothing;
 
     return html`
-      <div id="loginBanner" class="login-banner">
-        <div class="login-banner-content">
-          <span class="login-banner-icon"
-            ><i class="codicon codicon-sparkle"></i
-          ></span>
-          <div class="login-banner-text">
-            <span class="login-banner-title">Researcher Access Program</span>
-            <span class="login-banner-description">
-              ${PROMO_NOTICE_SHORT}
-            </span>
+      <wa-callout id="loginBanner" class="login-banner" variant="brand">
+        ${waIcon('wand-magic-sparkles', { slot: 'icon' })}
+        <div class="banner-row">
+          <div class="banner-text">
+            <span class="banner-title">Researcher Access Program</span>
+            <span class="banner-description">${PROMO_NOTICE_SHORT}</span>
+          </div>
+          <div class="actions">
+            <wa-button
+              id="loginBannerButton"
+              appearance="filled"
+              variant="brand"
+              size="small"
+              @click=${this.handleSignIn}
+            >
+              ${waIcon('right-to-bracket', { slot: 'start' })} Sign In
+            </wa-button>
+            <wa-button
+              id="loginBannerDismissButton"
+              appearance="plain"
+              size="small"
+              title="Dismiss (can be re-enabled in settings)"
+              aria-label="Dismiss login banner"
+              @click=${this.handleDismiss}
+            >
+              ${waIcon('xmark')}
+            </wa-button>
           </div>
         </div>
-        <div class="actions">
-          <vscode-button
-            id="loginBannerButton"
-            appearance="primary"
-            @click=${this.handleSignIn}
-          >
-            <span slot="start" class="codicon codicon-sign-in"></span>
-            Sign In
-          </vscode-button>
-          <vscode-toolbar-button
-            id="loginBannerDismissButton"
-            icon="close"
-            title="Dismiss (can be re-enabled in settings)"
-            aria-label="Dismiss login banner"
-            @click=${this.handleDismiss}
-          ></vscode-toolbar-button>
-        </div>
-      </div>
+      </wa-callout>
     `;
   }
 }
