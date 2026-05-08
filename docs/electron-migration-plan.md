@@ -253,14 +253,14 @@ Migrate imports file-by-file, prioritizing the most-used modules first.
 
 #### 3.1 High Priority: Foundation Layer
 
-| Current                                   | Change to                                  |
-| ----------------------------------------- | ------------------------------------------ |
-| `src/utils/config/configUtils.ts`         | Use `platform().config`                    |
-| `src/utils/files/baseFS.ts`               | Use `platform().fs`                        |
-| `src/utils/files/storageFS.ts`            | Use `platform().fs` + `platform().context` |
-| `src/utils/files/workspaceFS.ts`          | Use `platform().fs` + `platform().context` |
-| `packages/extension/src/frontend/secretManager.ts`           | Use `platform().secrets`                   |
-| `src/common/state/stateManager.ts`        | Use `platform().context.getState/setState` |
+| Current                                                    | Change to                                  |
+| ---------------------------------------------------------- | ------------------------------------------ |
+| `src/utils/config/configUtils.ts`                          | Use `platform().config`                    |
+| `src/utils/files/baseFS.ts`                                | Use `platform().fs`                        |
+| `src/utils/files/storageFS.ts`                             | Use `platform().fs` + `platform().context` |
+| `src/utils/files/workspaceFS.ts`                           | Use `platform().fs` + `platform().context` |
+| `packages/extension/src/frontend/secretManager.ts`         | Use `platform().secrets`                   |
+| `src/common/state/stateManager.ts`                         | Use `platform().context.getState/setState` |
 | `packages/extension/src/frontend/ui/errorHandlingUtils.ts` | Use `platform().ui` for error dialogs      |
 
 This alone removes ~30 transitive `vscode` dependencies.
