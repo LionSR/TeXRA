@@ -41,6 +41,16 @@ export interface DesktopShellActionFactoryOptions {
   openPath?: (filePath: string) => Promise<void>;
   openWorkspaceFolder?: () => Promise<void>;
   signIn?: () => Promise<void>;
+  /**
+   * Synchronous probe for "is the active workspace a git repo". Used by
+   * `setRecentCommitsUnavailable` so the desktop reports the correct
+   * `isGitRepo` state to the renderer banner — previously this always
+   * reported `false`, which made the launcher claim the user is outside
+   * a repo even when they're inside one. The desktop never wires recent
+   * commits (no vscode.git API in standalone), but the boolean still
+   * drives banner copy.
+   */
+  isWorkspaceGitRepo?: () => boolean;
   onAsyncError?: (error: unknown) => void;
 }
 
@@ -137,10 +147,22 @@ export function createDesktopShellActions(
     openWorkspaceFolder,
     resetMainView,
     setRecentCommitsUnavailable: () => {
+      // Defaults to `false` so consumers without a workspace probe behave
+      // like the original code. When `isWorkspaceGitRepo` is supplied
+      // (production wiring in `index.ts`), the renderer learns the real
+      // repo state even though the commit list itself is unavailable.
+      let isGitRepo = false;
+      try {
+        isGitRepo = options.isWorkspaceGitRepo?.() ?? false;
+      } catch (error) {
+        // Probe failures should never break the IPC reply — fall back
+        // to the conservative "not a repo" answer.
+        reportAsyncError(error);
+      }
       renderer.postToRenderer({
         command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
         commits: [],
-        isGitRepo: false,
+        isGitRepo,
       });
     },
     showRoute: postRoute,
