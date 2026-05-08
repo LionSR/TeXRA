@@ -6,6 +6,10 @@ import {
   type SwitchViewTarget,
 } from '@shared/schemas/commonViewMessages';
 import {
+  OpenAgentDirectoryMessageSchema,
+  OpenAgentSettingsMessageSchema,
+} from '@shared/schemas/mainView';
+import {
   SETTINGS_TAB,
   type SettingsTab,
 } from '@shared/schemas/settingsViewMessages';
@@ -62,10 +66,19 @@ const SWITCH_VIEW_ROUTES = {
   dashboard: 'settings',
 } satisfies Record<SwitchViewTarget, DesktopRoute>;
 
-function getAgentSettingsSubTab(message: DesktopCommandMessage) {
-  return message.sessionType === AGENT_CATEGORY.TOOL_USE
+function getAgentSettingsSubTab(
+  message: DesktopCommandMessage,
+): AgentCategory | undefined {
+  const result = OpenAgentSettingsMessageSchema.safeParse(message);
+  if (!result.success) return undefined;
+  return result.data.sessionType === AGENT_CATEGORY.TOOL_USE
     ? AGENT_CATEGORY.TOOL_USE
     : undefined;
+}
+
+function getCustomDirSet(message: DesktopCommandMessage): boolean {
+  const result = OpenAgentDirectoryMessageSchema.safeParse(message);
+  return result.success && result.data.customDirSet === true;
 }
 
 export function createDesktopShellActions(
@@ -200,7 +213,7 @@ export function createDesktopShellIpc(
           actions.showSettings(SETTINGS_TAB.MULTI_AGENT);
           return true;
         case MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY:
-          actions.openAgentDirectory(message.customDirSet === true);
+          actions.openAgentDirectory(getCustomDirSet(message));
           return true;
         case MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS:
           actions.setRecentCommitsUnavailable();

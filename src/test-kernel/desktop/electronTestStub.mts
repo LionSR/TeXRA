@@ -79,3 +79,8 @@ export const dialog = {
     _options?: MessageBoxOptions,
   ) => ({ response: 0, checkboxChecked: false }),
 };
+
+export const shell = {
+  openExternal: async (_url: string) => undefined,
+  openPath: async (_path: string) => '',
+};
