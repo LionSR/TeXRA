@@ -307,7 +307,8 @@ export class InstructionPanel extends LitElement {
 
       wa-button.execute-button::part(base) {
         min-width: 64px;
-        min-height: 30px;
+        min-height: 24px;
+        height: 24px;
         padding: 0 var(--wa-space-s);
         gap: var(--wa-space-2xs);
         border-radius: var(--wa-border-radius-m);
