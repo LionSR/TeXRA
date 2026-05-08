@@ -40,6 +40,60 @@ export class OutputFilesSection extends LitElement {
       :host {
         display: block;
       }
+
+      /*
+       * OutputFilesSection feed treatment — tighter row chrome, soft inset
+       * highlight on hover, brand-tinted remove affordance. Sits on top of
+       * the shared multiFilesStyles so other consumers (latexdiffs) keep
+       * their leaner row chrome.
+       */
+      .multiple-files-list {
+        background: color-mix(
+          in srgb,
+          var(--wa-color-neutral-fill-quiet) 25%,
+          transparent
+        );
+        padding: var(--wa-space-3xs);
+      }
+
+      .file-item {
+        padding: 5px var(--wa-space-2xs);
+        border-radius: var(--border-radius-small);
+        transition:
+          background-color 140ms ease,
+          box-shadow 140ms ease;
+      }
+
+      .file-item:hover {
+        background-color: var(--wa-color-neutral-fill-quiet);
+        box-shadow: inset 1px 0 0
+          color-mix(in srgb, var(--wa-color-brand-fill-loud) 40%, transparent);
+      }
+
+      .file-item .file-name {
+        font-size: var(--font-size-sm);
+        color: var(--wa-color-text-normal);
+      }
+
+      .file-item .remove-button {
+        opacity: 0;
+        transition: opacity 140ms ease;
+      }
+
+      .file-item:hover .remove-button,
+      .file-item:focus-within .remove-button {
+        opacity: 1;
+      }
+
+      .file-item .remove-button:hover::part(base) {
+        color: var(--wa-color-danger-fill-loud);
+      }
+
+      .file-list-placeholder {
+        font-size: var(--font-size-sm);
+        line-height: var(--line-height-relaxed);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
+      }
     `,
   ];
 
