@@ -24,8 +24,8 @@ export const categoryBadgeStyles: CSSResult = css`
     color: var(--texra-badge-foreground);
   }
 
-  .category-badge .codicon,
-  .agent-category-badge .codicon {
+  .category-badge wa-icon,
+  .agent-category-badge wa-icon {
     font-size: var(--font-size-sm);
   }
 
@@ -110,7 +110,7 @@ export const tintedBadgeStyles: CSSResult = css`
     white-space: nowrap;
   }
 
-  .tinted-badge .codicon {
+  .tinted-badge wa-icon {
     font-size: var(--font-size-xs);
   }
 `;
