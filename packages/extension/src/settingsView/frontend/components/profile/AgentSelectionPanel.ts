@@ -696,7 +696,6 @@ export class AgentSelectionPanel extends LitElement {
                 ${renderLabeledActionButton({
                   icon: 'folder-open',
                   text: 'Reveal in File Explorer',
-                  label: 'Reveal in File Explorer',
                   title: 'Show this file in your system file explorer',
                   className: 'agent-action-btn',
                   onClick: () => this.handleRevealAgentFile(agent),

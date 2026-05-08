@@ -87,7 +87,6 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
           ${this.renderDiffActions()}
           ${renderLabeledActionButton({
             icon: 'check',
-            label: 'Approve',
             text: 'Approve',
             title: 'Approve (y)',
             action: 'approve',
@@ -125,7 +124,6 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
       <div class="diff-dropdown">
         ${renderLabeledActionButton({
           icon: 'diff',
-          label: diffLabel,
           text: diffLabel,
           title: diffTitle,
           className: 'diff-main-button',

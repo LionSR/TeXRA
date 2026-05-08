@@ -107,7 +107,6 @@ export class RetryRequestPanel extends BaseRequestPanel {
           ${when(isCredentialExhausted, () =>
             renderLabeledActionButton({
               icon: 'key',
-              label: 'Use your own API key',
               text: 'Use your own API key',
               title: 'Use your own API key (k)',
               onClick: () => this.emitAction('useOwnApiKey'),
@@ -115,14 +114,12 @@ export class RetryRequestPanel extends BaseRequestPanel {
           )}
           ${renderLabeledActionButton({
             icon: 'refresh',
-            label: 'Retry',
             text: 'Retry',
             title: 'Retry (r)',
             onClick: () => this.emitAction('retry'),
           })}
           ${renderLabeledActionButton({
             icon: 'close',
-            label: 'Dismiss',
             text: 'Dismiss',
             title: 'Dismiss (Esc)',
             onClick: () => this.emitAction('cancel'),

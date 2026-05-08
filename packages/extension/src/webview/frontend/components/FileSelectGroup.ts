@@ -463,18 +463,15 @@ export class FileSelectGroup extends LitElement {
       >
         <div class="file-select-header">
           <div class="file-select-label-group">
-            <span
-              id="refresh${config.type[0].toUpperCase()}${config.type.slice(
+            ${renderIconActionButton({
+              id: `refresh${config.type[0].toUpperCase()}${config.type.slice(
                 1,
-              )}FileButton"
-            >
-              ${renderIconActionButton({
-                icon: config.icon as TeXRAIconName,
-                label: config.refreshTitle,
-                title: config.refreshTitle,
-                onClick: this.handleRefreshFiles,
-              })}
-            </span>
+              )}FileButton`,
+              icon: config.icon as TeXRAIconName,
+              label: config.refreshTitle,
+              title: config.refreshTitle,
+              onClick: this.handleRefreshFiles,
+            })}
             <label for=${this.selectId} title=${config.tooltip}
               >${config.label}</label
             >
@@ -491,30 +488,24 @@ export class FileSelectGroup extends LitElement {
               : nothing}
           </div>
           <div class="file-select-actions">
-            <span
-              id="current${config.type[0].toUpperCase()}${config.type.slice(
+            ${renderIconActionButton({
+              id: `current${config.type[0].toUpperCase()}${config.type.slice(
                 1,
-              )}FileButton"
-            >
-              ${renderIconActionButton({
-                icon: 'file-code',
-                label: config.currentTitle,
-                title: config.currentTitle,
-                onClick: this.handleGetCurrentFile,
-              })}
-            </span>
-            <span
-              id="empty${config.type[0].toUpperCase()}${config.type.slice(
+              )}FileButton`,
+              icon: 'file-code',
+              label: config.currentTitle,
+              title: config.currentTitle,
+              onClick: this.handleGetCurrentFile,
+            })}
+            ${renderIconActionButton({
+              id: `empty${config.type[0].toUpperCase()}${config.type.slice(
                 1,
-              )}FileButton"
-            >
-              ${renderIconActionButton({
-                icon: 'close',
-                label: config.emptyTitle,
-                title: config.emptyTitle,
-                onClick: this.handleEmptyFile,
-              })}
-            </span>
+              )}FileButton`,
+              icon: 'close',
+              label: config.emptyTitle,
+              title: config.emptyTitle,
+              onClick: this.handleEmptyFile,
+            })}
             <button
               id=${toggleId}
               class="toggle-icon"
@@ -525,45 +516,36 @@ export class FileSelectGroup extends LitElement {
             >
               <i class="codicon ${chevronClass}"></i>
             </button>
-            <span
-              id="addOpened${config.type[0].toUpperCase()}${config.type.slice(
+            ${renderIconActionButton({
+              id: `addOpened${config.type[0].toUpperCase()}${config.type.slice(
                 1,
-              )}FilesButton"
-            >
-              ${renderIconActionButton({
-                icon: 'folder-opened',
-                label: config.addOpenedLabel,
-                title: config.addOpenedLabel,
-                className: 'file-action-button',
-                onClick: this.handleAddOpenedFiles,
-              })}
-            </span>
-            <span
-              id="empty${config.type[0].toUpperCase()}${config.type.slice(
+              )}FilesButton`,
+              icon: 'folder-opened',
+              label: config.addOpenedLabel,
+              title: config.addOpenedLabel,
+              className: 'file-action-button',
+              onClick: this.handleAddOpenedFiles,
+            })}
+            ${renderIconActionButton({
+              id: `empty${config.type[0].toUpperCase()}${config.type.slice(
                 1,
-              )}FilesButton"
-            >
-              ${renderIconActionButton({
-                icon: 'trash',
-                label: config.emptyListLabel,
-                title: config.emptyListLabel,
-                className: 'file-action-button',
-                onClick: this.handleEmptyFiles,
-              })}
-            </span>
-            <span
-              id="select${config.type[0].toUpperCase()}${config.type.slice(
+              )}FilesButton`,
+              icon: 'trash',
+              label: config.emptyListLabel,
+              title: config.emptyListLabel,
+              className: 'file-action-button',
+              onClick: this.handleEmptyFiles,
+            })}
+            ${renderIconActionButton({
+              id: `select${config.type[0].toUpperCase()}${config.type.slice(
                 1,
-              )}FilesButton"
-            >
-              ${renderIconActionButton({
-                icon: 'add',
-                label: config.selectListLabel,
-                title: config.selectListLabel,
-                className: 'file-action-button',
-                onClick: this.handleSelectMultipleFiles,
-              })}
-            </span>
+              )}FilesButton`,
+              icon: 'add',
+              label: config.selectListLabel,
+              title: config.selectListLabel,
+              className: 'file-action-button',
+              onClick: this.handleSelectMultipleFiles,
+            })}
           </div>
         </div>
         <wa-select

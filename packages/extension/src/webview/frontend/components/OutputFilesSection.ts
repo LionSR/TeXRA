@@ -170,22 +170,20 @@ export class OutputFilesSection extends LitElement {
             >
           </div>
           <div class="file-select-actions">
-            <span id="emptyOutputFilesButton">
-              ${renderIconActionButton({
-                icon: 'trash',
-                label: 'Clear all output files',
-                title: 'Clear all output files',
-                onClick: this.handleEmptyFiles,
-              })}
-            </span>
-            <span id="selectOutputFilesButton">
-              ${renderIconActionButton({
-                icon: 'add',
-                label: 'Add output files',
-                title: 'Add output files',
-                onClick: this.handleSelectFiles,
-              })}
-            </span>
+            ${renderIconActionButton({
+              id: 'emptyOutputFilesButton',
+              icon: 'trash',
+              label: 'Clear all output files',
+              title: 'Clear all output files',
+              onClick: this.handleEmptyFiles,
+            })}
+            ${renderIconActionButton({
+              id: 'selectOutputFilesButton',
+              icon: 'add',
+              label: 'Add output files',
+              title: 'Add output files',
+              onClick: this.handleSelectFiles,
+            })}
           </div>
         </div>
         ${when(

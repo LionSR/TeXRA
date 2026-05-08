@@ -824,15 +824,14 @@ export class StreamTabs extends LitElement {
                 </wa-radio-group>
 
                 <div class="stream-list-actions">
-                  <span id=${ELEMENT_IDS.DELETE_ALL_BTN}>
-                    ${renderIconActionButton({
-                      icon: 'trash',
-                      label: 'Clear all streams',
-                      title: 'Clear all streams',
-                      className: 'delete-all-streams',
-                      onClick: this.handleDeleteAll,
-                    })}
-                  </span>
+                  ${renderIconActionButton({
+                    id: ELEMENT_IDS.DELETE_ALL_BTN,
+                    icon: 'trash',
+                    label: 'Clear all streams',
+                    title: 'Clear all streams',
+                    className: 'delete-all-streams',
+                    onClick: this.handleDeleteAll,
+                  })}
                 </div>
               </div>
             </div>`}

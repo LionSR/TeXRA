@@ -393,17 +393,16 @@ export class StreamHeader extends LitElement {
                   );
                   const title =
                     isActive && btn.titleActive ? btn.titleActive : btn.title;
-                  const className = [
-                    btn.className,
-                    hidden ? 'toolbar-button--hidden' : '',
-                    isActive ? 'is-active' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ');
+                  const classes = classMap({
+                    'action-icon-button': true,
+                    ...(btn.className ? { [btn.className]: true } : {}),
+                    'toolbar-button--hidden': hidden,
+                    'is-active': isActive,
+                  });
                   return html`
                     <wa-button
                       id=${btn.id}
-                      class="action-icon-button ${className}"
+                      class=${classes}
                       appearance="plain"
                       variant="neutral"
                       size="small"

@@ -61,7 +61,6 @@ export class BashRequestPanel extends BaseFeedbackPanel {
         <div class="bash-approval-request__actions">
           ${renderLabeledActionButton({
             icon: 'check',
-            label: 'Approve',
             text: 'Approve',
             title: 'Allow this command to execute (y)',
             action: 'approve',

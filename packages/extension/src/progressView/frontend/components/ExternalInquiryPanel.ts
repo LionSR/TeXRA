@@ -192,7 +192,6 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
         <div class="external-inquiry-request__question-actions">
           ${renderLabeledActionButton({
             icon: copied ? 'check' : 'copy',
-            label: text,
             text,
             title:
               'Copy question to clipboard for pasting into an external AI model',
@@ -318,7 +317,6 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
       <div class="external-inquiry-request__actions">
         ${renderLabeledActionButton({
           icon: 'check',
-          label: 'Submit Answer',
           text: 'Submit Answer',
           title: 'Submit the answer from the external model',
           action: EXTERNAL_INQUIRY_ACTIONS[0],

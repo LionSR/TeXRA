@@ -169,7 +169,6 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
         <div class="workflow-proposal__actions">
           ${renderLabeledActionButton({
             icon: 'check',
-            label: 'Approve',
             text: 'Approve',
             title: 'Approve (y)',
             action: 'approve',
@@ -178,7 +177,6 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
           ${this.renderRejectButton('Reject (n)')}
           ${renderLabeledActionButton({
             icon: 'reply',
-            label: 'Setup',
             text: 'Setup',
             title: 'Setup (s)',
             action: 'setup',

@@ -87,7 +87,6 @@ export class PlanApprovalRequestPanel extends BaseFeedbackPanel {
         <div class="plan-approval-request__actions">
           ${renderLabeledActionButton({
             icon: 'check',
-            label: 'Approve',
             text: 'Approve',
             title: 'Approve this plan (y)',
             action: 'approve',

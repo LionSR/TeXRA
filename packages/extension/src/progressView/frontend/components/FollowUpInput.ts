@@ -17,7 +17,6 @@ import { RecordingButtonController } from '@shared/controllers';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { getTextareaValue, insertTextAtCursor } from '@shared/utils/textarea';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 
@@ -199,45 +198,41 @@ export class FollowUpInput extends LitElement {
             ></vscode-textarea>
 
             <div class="follow-up-actions">
-              <span id=${ELEMENT_IDS.POLISH_FOLLOW_UP_BTN}>
-                ${renderIconActionButton({
-                  icon: 'sparkle',
-                  label: 'Polish follow-up',
-                  title: 'Polish follow-up with AI',
-                  onClick: this.emitPolish,
-                })}
-              </span>
+              ${renderIconActionButton({
+                id: ELEMENT_IDS.POLISH_FOLLOW_UP_BTN,
+                icon: 'sparkle',
+                label: 'Polish follow-up',
+                title: 'Polish follow-up with AI',
+                onClick: this.emitPolish,
+              })}
               ${when(
                 this.polishing,
                 () => html`<wa-progress-ring indeterminate></wa-progress-ring>`,
               )}
-              <span id=${ELEMENT_IDS.RECORD_FOLLOW_UP_BTN}>
-                ${renderIconActionButton({
-                  icon: this.recordingController.state.icon as TeXRAIconName,
-                  label: this.recordingController.state.title,
-                  title: this.recordingController.state.title,
-                  className: this.recordingController.state.recording
-                    ? this.recordingController.state.recordingClass
-                    : '',
-                  onClick: this.recordingController.handleClick,
-                })}
-              </span>
-              <span id=${ELEMENT_IDS.CLEAR_FOLLOW_UP_BTN}>
-                ${renderIconActionButton({
-                  icon: 'clear-all',
-                  label: 'Clear input',
-                  title: 'Clear input',
-                  onClick: this.emitClear,
-                })}
-              </span>
-              <span id=${ELEMENT_IDS.SEND_FOLLOW_UP_BTN}>
-                ${renderIconActionButton({
-                  icon: 'send',
-                  label: 'Send',
-                  title: 'Send follow-up message',
-                  onClick: this.emitSend,
-                })}
-              </span>
+              ${renderIconActionButton({
+                id: ELEMENT_IDS.RECORD_FOLLOW_UP_BTN,
+                icon: this.recordingController.state.icon,
+                label: this.recordingController.state.title,
+                title: this.recordingController.state.title,
+                className: this.recordingController.state.recording
+                  ? this.recordingController.state.recordingClass
+                  : '',
+                onClick: this.recordingController.handleClick,
+              })}
+              ${renderIconActionButton({
+                id: ELEMENT_IDS.CLEAR_FOLLOW_UP_BTN,
+                icon: 'clear-all',
+                label: 'Clear input',
+                title: 'Clear input',
+                onClick: this.emitClear,
+              })}
+              ${renderIconActionButton({
+                id: ELEMENT_IDS.SEND_FOLLOW_UP_BTN,
+                icon: 'send',
+                label: 'Send',
+                title: 'Send follow-up message',
+                onClick: this.emitSend,
+              })}
             </div>
           </div>
         </div>

@@ -73,11 +73,9 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
   }
 
   protected renderRejectButton(rejectTitle: string): TemplateResult {
-    const text = this.showFeedback ? 'Submit' : 'Reject';
     return renderLabeledActionButton({
       icon: this.showFeedback ? 'check' : 'close',
-      label: text,
-      text,
+      text: this.showFeedback ? 'Submit' : 'Reject',
       title: this.showFeedback ? 'Submit rejection (n)' : rejectTitle,
       action: 'reject',
       onClick: () => this.handleRejectAction(),

@@ -27,7 +27,6 @@ import {
 } from '@shared/utils/selectTemplates';
 import { getTextareaValue } from '@shared/utils/textarea';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - main view
 import { MainViewEvents } from '../events';
@@ -506,10 +505,10 @@ export class InstructionPanel extends LitElement {
             @click=${this.handleActionClick}
           >
             <span
-              id="packButton"
               style=${styleMap({ display: session.debugMode ? '' : 'none' })}
             >
               ${renderIconActionButton({
+                id: 'packButton',
                 icon: 'archive',
                 label: 'Pack output to History',
                 title: 'Pack the output for this agent into the History folder',
@@ -517,25 +516,24 @@ export class InstructionPanel extends LitElement {
               })}
             </span>
             <span
-              id="cleanButton"
               style=${styleMap({ display: session.debugMode ? '' : 'none' })}
             >
               ${renderIconActionButton({
+                id: 'cleanButton',
                 icon: 'trash',
                 label: 'Clean output',
                 title: 'Clean the output for this agent',
                 action: 'clean',
               })}
             </span>
-            <span id="magicPolishButton">
-              ${renderIconActionButton({
-                icon: 'sparkle',
-                label: 'Polish instruction',
-                title: 'Polish instruction text with AI',
-                disabled: session.isPolishing,
-                action: 'polish',
-              })}
-            </span>
+            ${renderIconActionButton({
+              id: 'magicPolishButton',
+              icon: 'sparkle',
+              label: 'Polish instruction',
+              title: 'Polish instruction text with AI',
+              disabled: session.isPolishing,
+              action: 'polish',
+            })}
             ${session.isPolishing
               ? html`
                   <vscode-progress-ring
@@ -547,27 +545,23 @@ export class InstructionPanel extends LitElement {
                   ></vscode-progress-ring>
                 `
               : nothing}
-            <span id="recordInstructionButton">
-              ${renderIconActionButton({
-                icon: (session.isRecording
-                  ? 'stop-circle'
-                  : 'mic') as TeXRAIconName,
-                label: 'Record instruction',
-                title: session.isRecording
-                  ? 'Stop recording'
-                  : 'Record instruction with microphone',
-                className: session.isRecording ? 'recording' : '',
-                action: 'record',
-              })}
-            </span>
-            <span id="eraseInstructionButton">
-              ${renderIconActionButton({
-                icon: 'clear-all',
-                label: 'Erase instruction',
-                title: 'Erase instruction',
-                action: 'erase',
-              })}
-            </span>
+            ${renderIconActionButton({
+              id: 'recordInstructionButton',
+              icon: session.isRecording ? 'stop-circle' : 'mic',
+              label: 'Record instruction',
+              title: session.isRecording
+                ? 'Stop recording'
+                : 'Record instruction with microphone',
+              className: session.isRecording ? 'recording' : '',
+              action: 'record',
+            })}
+            ${renderIconActionButton({
+              id: 'eraseInstructionButton',
+              icon: 'clear-all',
+              label: 'Erase instruction',
+              title: 'Erase instruction',
+              action: 'erase',
+            })}
           </div>
         </div>
         ${this.renderSessionHint(session)}
@@ -585,15 +579,14 @@ export class InstructionPanel extends LitElement {
             <div
               class="select-group agent-select-group agent-model-select-group"
             >
-              <span id="agentSettingsButton">
-                ${renderIconActionButton({
-                  icon: 'sparkle',
-                  label: 'Agent settings',
-                  title: 'Agent settings',
-                  className: 'settings-button',
-                  onClick: this.handleAgentSettings,
-                })}
-              </span>
+              ${renderIconActionButton({
+                id: 'agentSettingsButton',
+                icon: 'sparkle',
+                label: 'Agent settings',
+                title: 'Agent settings',
+                className: 'settings-button',
+                onClick: this.handleAgentSettings,
+              })}
               <div class="agent-select-controls">
                 <div class="agent-select-dropdowns">
                   <vscode-single-select
@@ -664,15 +657,14 @@ export class InstructionPanel extends LitElement {
             <div
               class="select-group model-select-group agent-model-select-group"
             >
-              <span id="modelSettingsButton">
-                ${renderIconActionButton({
-                  icon: 'robot',
-                  label: 'Model settings',
-                  title: 'Model settings',
-                  className: 'settings-button',
-                  onClick: this.handleModelSettings,
-                })}
-              </span>
+              ${renderIconActionButton({
+                id: 'modelSettingsButton',
+                icon: 'robot',
+                label: 'Model settings',
+                title: 'Model settings',
+                className: 'settings-button',
+                onClick: this.handleModelSettings,
+              })}
               <vscode-single-select
                 id="model"
                 class="model-select"

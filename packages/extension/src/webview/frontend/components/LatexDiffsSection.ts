@@ -8,12 +8,14 @@
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { styleMap } from 'lit/directives/style-map.js';
 
 // Local imports - main view
 import { designTokens, codiconStyles } from '@shared/styles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
+import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { MainViewEvents } from '../events';
 import {
   fileSelectLayoutStyles,
@@ -169,6 +171,42 @@ export class LatexDiffsSection extends LitElement {
     }
   }
 
+  private renderDatasetButton({
+    id,
+    icon,
+    label,
+    title,
+    diffAction,
+    fileAction,
+    fileType,
+  }: {
+    id: string;
+    icon: TeXRAIconName;
+    label: string;
+    title?: string;
+    diffAction?: string;
+    fileAction?: string;
+    fileType?: string;
+  }): TemplateResult {
+    return html`
+      <wa-button
+        id=${id}
+        class="action-icon-button"
+        appearance="outlined"
+        variant="neutral"
+        size="small"
+        type="button"
+        aria-label=${label}
+        title=${title ?? label}
+        data-diff-action=${ifDefined(diffAction)}
+        data-file-action=${ifDefined(fileAction)}
+        data-file-type=${ifDefined(fileType)}
+      >
+        ${waIcon(icon)}
+      </wa-button>
+    `;
+  }
+
   private renderFileOptions(
     options: string[],
     selectedValue: string,
@@ -252,22 +290,22 @@ export class LatexDiffsSection extends LitElement {
                 class="file-select-actions"
                 @click=${this.handleToolbarClick}
               >
-                <span id="currentBaseFileButton">
-                  ${renderIconActionButton({
-                    icon: 'file-code',
-                    label: 'Set current file as base',
-                    title: 'Set current file as base',
-                    dataset: { fileAction: 'current', fileType: 'base' },
-                  })}
-                </span>
-                <span id="emptyBaseFileButton">
-                  ${renderIconActionButton({
-                    icon: 'close',
-                    label: 'Clear base file',
-                    title: 'Clear base file',
-                    dataset: { fileAction: 'empty', fileType: 'base' },
-                  })}
-                </span>
+                ${this.renderDatasetButton({
+                  id: 'currentBaseFileButton',
+                  icon: 'file-code',
+                  label: 'Set current file as base',
+                  title: 'Set current file as base',
+                  fileAction: 'current',
+                  fileType: 'base',
+                })}
+                ${this.renderDatasetButton({
+                  id: 'emptyBaseFileButton',
+                  icon: 'close',
+                  label: 'Clear base file',
+                  title: 'Clear base file',
+                  fileAction: 'empty',
+                  fileType: 'base',
+                })}
               </div>
             </div>
             <vscode-single-select
@@ -282,14 +320,13 @@ export class LatexDiffsSection extends LitElement {
           <div class="file-select">
             <div class="file-select-header">
               <div class="file-select-label-group">
-                <span id="refreshEditedFileButton">
-                  ${renderIconActionButton({
-                    icon: 'edit',
-                    label: 'Refresh edited files',
-                    title: 'Refresh edited files',
-                    onClick: this.handleRefreshEditedFiles,
-                  })}
-                </span>
+                ${renderIconActionButton({
+                  id: 'refreshEditedFileButton',
+                  icon: 'edit',
+                  label: 'Refresh edited files',
+                  title: 'Refresh edited files',
+                  onClick: this.handleRefreshEditedFiles,
+                })}
                 <label
                   for="editedFile"
                   title="File containing edits to merge into the base file"
@@ -301,58 +338,54 @@ export class LatexDiffsSection extends LitElement {
                 class="file-select-actions"
                 @click=${this.handleToolbarClick}
               >
-                <span id="acceptButton">
-                  ${renderIconActionButton({
-                    icon: 'check',
-                    label: 'Accept changes',
-                    title:
-                      'Accept changes from edited file and overwrite base file',
-                    dataset: { diffAction: 'accept' },
-                  })}
-                </span>
-                <span id="compareButton">
-                  ${renderIconActionButton({
-                    icon: 'diff',
-                    label: 'Compare files',
-                    title:
-                      'Compare the selected edited file with the selected base file',
-                    dataset: { diffAction: 'compare' },
-                  })}
-                </span>
-                <span id="mergeButton">
-                  ${renderIconActionButton({
-                    icon: 'merge',
-                    label: 'Merge edits',
-                    title:
-                      'Create a new version of the base file by merging the edits suggested by the edited file',
-                    dataset: { diffAction: 'merge' },
-                  })}
-                </span>
-                <span id="latexdiffButton">
-                  ${renderIconActionButton({
-                    icon: 'diff-single',
-                    label: 'LaTeXdiff',
-                    title:
-                      'LaTeXdiff the selected edited file with the selected base file',
-                    dataset: { diffAction: 'latexdiff' },
-                  })}
-                </span>
-                <span id="currentEditedFileButton">
-                  ${renderIconActionButton({
-                    icon: 'file-code',
-                    label: 'Set current file as edited',
-                    title: 'Set current file as edited',
-                    dataset: { fileAction: 'current', fileType: 'edited' },
-                  })}
-                </span>
-                <span id="emptyEditedFileButton">
-                  ${renderIconActionButton({
-                    icon: 'close',
-                    label: 'Clear edited file',
-                    title: 'Clear edited file',
-                    dataset: { fileAction: 'empty', fileType: 'edited' },
-                  })}
-                </span>
+                ${this.renderDatasetButton({
+                  id: 'acceptButton',
+                  icon: 'check',
+                  label: 'Accept changes',
+                  title:
+                    'Accept changes from edited file and overwrite base file',
+                  diffAction: 'accept',
+                })}
+                ${this.renderDatasetButton({
+                  id: 'compareButton',
+                  icon: 'diff',
+                  label: 'Compare files',
+                  title:
+                    'Compare the selected edited file with the selected base file',
+                  diffAction: 'compare',
+                })}
+                ${this.renderDatasetButton({
+                  id: 'mergeButton',
+                  icon: 'merge',
+                  label: 'Merge edits',
+                  title:
+                    'Create a new version of the base file by merging the edits suggested by the edited file',
+                  diffAction: 'merge',
+                })}
+                ${this.renderDatasetButton({
+                  id: 'latexdiffButton',
+                  icon: 'diff-single',
+                  label: 'LaTeXdiff',
+                  title:
+                    'LaTeXdiff the selected edited file with the selected base file',
+                  diffAction: 'latexdiff',
+                })}
+                ${this.renderDatasetButton({
+                  id: 'currentEditedFileButton',
+                  icon: 'file-code',
+                  label: 'Set current file as edited',
+                  title: 'Set current file as edited',
+                  fileAction: 'current',
+                  fileType: 'edited',
+                })}
+                ${this.renderDatasetButton({
+                  id: 'emptyEditedFileButton',
+                  icon: 'close',
+                  label: 'Clear edited file',
+                  title: 'Clear edited file',
+                  fileAction: 'empty',
+                  fileType: 'edited',
+                })}
               </div>
             </div>
             <vscode-single-select
@@ -367,46 +400,41 @@ export class LatexDiffsSection extends LitElement {
           <div class="file-select">
             <div class="file-select-header">
               <div class="file-select-label-group">
-                <span id="refreshCommitsButton">
-                  ${renderIconActionButton({
-                    icon: 'git-commit',
-                    label: 'Refresh commit list',
-                    title: 'Refresh commit list',
-                    onClick: this.handleRefreshCommits,
-                  })}
-                </span>
+                ${renderIconActionButton({
+                  id: 'refreshCommitsButton',
+                  icon: 'git-commit',
+                  label: 'Refresh commit list',
+                  title: 'Refresh commit list',
+                  onClick: this.handleRefreshCommits,
+                })}
                 <label for="commit">Commit</label>
               </div>
               <div
                 class="file-select-actions"
                 @click=${this.handleToolbarClick}
               >
-                <span id="latexdiffvcButton">
-                  ${renderIconActionButton({
-                    icon: 'diff-single',
-                    label: 'LaTeXdiff with commit',
-                    title:
-                      'LaTeXdiff the selected base file with another git commit',
-                    dataset: { diffAction: 'latexdiffvc' },
-                  })}
-                </span>
-                <span id="packLatexdiffvcButton">
-                  ${renderIconActionButton({
-                    icon: 'archive',
-                    label: 'Pack latexdiff output',
-                    title:
-                      'Pack the latexdiff-vc output into the History folder',
-                    dataset: { diffAction: 'packLatexdiffvc' },
-                  })}
-                </span>
-                <span id="cleanLatexdiffvcButton">
-                  ${renderIconActionButton({
-                    icon: 'trash',
-                    label: 'Clean latexdiff output',
-                    title: 'Clean the latexdiff-vc output',
-                    dataset: { diffAction: 'cleanLatexdiffvc' },
-                  })}
-                </span>
+                ${this.renderDatasetButton({
+                  id: 'latexdiffvcButton',
+                  icon: 'diff-single',
+                  label: 'LaTeXdiff with commit',
+                  title:
+                    'LaTeXdiff the selected base file with another git commit',
+                  diffAction: 'latexdiffvc',
+                })}
+                ${this.renderDatasetButton({
+                  id: 'packLatexdiffvcButton',
+                  icon: 'archive',
+                  label: 'Pack latexdiff output',
+                  title: 'Pack the latexdiff-vc output into the History folder',
+                  diffAction: 'packLatexdiffvc',
+                })}
+                ${this.renderDatasetButton({
+                  id: 'cleanLatexdiffvcButton',
+                  icon: 'trash',
+                  label: 'Clean latexdiff output',
+                  title: 'Clean the latexdiff-vc output',
+                  diffAction: 'cleanLatexdiffvc',
+                })}
               </div>
             </div>
             <vscode-single-select
