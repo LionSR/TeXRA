@@ -218,9 +218,7 @@ export class StreamTab extends LitElement {
 
       .tab-delete {
         flex-shrink: 0;
-        display: flex !important;
-        visibility: visible !important;
-        opacity: var(--opacity-full) !important;
+        display: flex;
         align-items: center;
         justify-content: center;
         width: var(--height-control);
@@ -228,9 +226,20 @@ export class StreamTab extends LitElement {
         height: var(--height-control);
         margin: 0;
         color: var(--texra-icon-foreground, var(--texra-foreground));
+        opacity: 0;
         transition:
+          opacity 120ms ease,
           color var(--transition-fast),
           background-color var(--transition-fast);
+      }
+
+      /* Reveal the delete affordance only when the row is hovered,
+       * focused, or selected — keeps the tabs clean at rest. */
+      .tab-container:hover .tab-delete,
+      .tab-container.is-active .tab-delete,
+      .tab-delete:focus-visible,
+      .tab-delete:focus-within {
+        opacity: 1;
       }
 
       .tab-container:hover {
