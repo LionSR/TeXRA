@@ -169,6 +169,7 @@ wa-tree.desktop-explorer-tree
 }
 
 .desktop-explorer-name {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -178,6 +179,8 @@ wa-tree.desktop-explorer-tree
 .desktop-explorer-category-strip {
   display: flex;
   gap: 3px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .desktop-explorer-category-dot {
@@ -578,7 +581,7 @@ wa-dialog.desktop-onboarding {
     justify-content: stretch;
   }
 
-  .desktop-onboarding-actions button {
+  .desktop-onboarding-actions wa-button {
     flex: 1 1 150px;
   }
 }

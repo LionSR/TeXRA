@@ -73,7 +73,7 @@ export class DependencyBanner extends LitElement {
       <wa-callout id="dependencyBanner" variant="warning">
         ${waIcon('triangle-exclamation', { slot: 'icon' })}
         <div class="banner-row">
-          <span class="missing-tools">
+          <div class="missing-tools">
             ${when(
               tools.length === 0,
               () => html`Missing dependencies: none`,
@@ -96,7 +96,7 @@ export class DependencyBanner extends LitElement {
                   `,
                 ),
             )}
-          </span>
+          </div>
           <div class="actions">
             <wa-button
               id="dependencyRecheckButton"
