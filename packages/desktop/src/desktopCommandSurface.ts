@@ -315,7 +315,7 @@ const DESKTOP_COMMAND_HANDLERS = {
 export function dispatchDesktopCommand(
   id: DesktopCommandId,
   actions: DesktopCommandActions,
-): boolean {
+): boolean | Promise<boolean> {
   return dispatchCommandFromRegistry(
     id,
     DESKTOP_COMMAND_HANDLERS,
