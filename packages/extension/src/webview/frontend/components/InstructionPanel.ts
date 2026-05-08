@@ -249,7 +249,7 @@ export class InstructionPanel extends LitElement {
       .model-selection-footer {
         display: flex;
         align-items: center;
-        gap: var(--wa-space-2xs);
+        gap: var(--wa-space-s);
         flex: 1 1 auto;
         flex-wrap: wrap;
         min-width: 0;
