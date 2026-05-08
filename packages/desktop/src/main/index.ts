@@ -13,7 +13,9 @@ import {
 
 import { platform } from '@platform/platform';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
+import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
 import { getServerSideKeyService } from '@auth/serverKeys';
+import { interruptAllCodexSessions } from '@tools/codex';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
@@ -28,6 +30,7 @@ import {
   readDesktopLogSnapshot,
 } from './desktopAppLog.js';
 import { installDesktopMenu } from './desktopMenu.js';
+import { installDesktopNavigationPolicy } from './desktopNavigationPolicy.js';
 import { createDesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import { refreshDesktopModelListStateIfNeeded } from './desktopModelListRefresh.js';
 import { promptInRenderer } from './desktopPrompt.js';
@@ -140,6 +143,8 @@ function createWindow(options: {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
       additionalArguments: [
         serializeWorkspacePresenceArg(options.workspacePath != null),
       ],
@@ -147,6 +152,9 @@ function createWindow(options: {
   });
   mainWindow = window;
   const reportAsyncError = (error: unknown) => console.error(error);
+  installDesktopNavigationPolicy(window.webContents, {
+    onAsyncError: reportAsyncError,
+  });
   const modelListRefresh = refreshDesktopModelListStateIfNeeded({
     onError: reportAsyncError,
   });
@@ -384,6 +392,18 @@ if (protocolLifecycle.shouldContinue) {
     .whenReady()
     .then(async () => {
       const platformInit = await initializeElectronPlatform(__dirname);
+      const { lifecycle } = platformInit;
+      lifecycle.onShutdown('beforeShutdown', () => killBackgroundProcesses());
+      lifecycle.onShutdown('beforeShutdown', () => interruptAllCodexSessions());
+
+      let isShuttingDown = false;
+      app.on('before-quit', (event) => {
+        if (isShuttingDown) return;
+        event.preventDefault();
+        isShuttingDown = true;
+        void lifecycle.runShutdown().finally(() => app.quit());
+      });
+
       let crashReportingInitialized = false;
       let crashReportingInitialization: Promise<void> | undefined;
       const initializeCrashReporting = async (): Promise<void> => {
