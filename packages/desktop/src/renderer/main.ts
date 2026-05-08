@@ -345,6 +345,18 @@ let logViewerState: LogViewerState = {
   text: 'Open Logs to load recent entries.',
 };
 
+// Workspace-explorer reactive state. Declared up here (above the bootstrap
+// `rerenderShell()` below) so the initial shell render does not hit a TDZ on
+// `explorerState` — without this the very first synchronous render reaches
+// `explorerTemplate()`, reads `explorerState.kind`, and crashes the
+// bootstrap with `Cannot read properties of undefined (reading 'kind')`.
+type ExplorerState =
+  | { kind: 'loading'; title: string }
+  | { kind: 'no-workspace' }
+  | { kind: 'tree'; title: string; tree: readonly WorkspaceTreeNode[] };
+
+let explorerState: ExplorerState = { kind: 'loading', title: 'Workspace' };
+
 let bootstrapFailed = false;
 try {
   // Render the log viewer template into its dedicated container so that
@@ -582,13 +594,6 @@ function requestWorkspaceTree(): void {
   }
   postMessage(DESKTOP_WORKSPACE_EXPLORER_COMMANDS.REQUEST_TREE);
 }
-
-type ExplorerState =
-  | { kind: 'loading'; title: string }
-  | { kind: 'no-workspace' }
-  | { kind: 'tree'; title: string; tree: readonly WorkspaceTreeNode[] };
-
-let explorerState: ExplorerState = { kind: 'loading', title: 'Workspace' };
 
 function receiveWorkspaceTree(message: DesktopWorkspaceTreeMessage): void {
   explorerState = {
