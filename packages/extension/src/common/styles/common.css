@@ -183,15 +183,26 @@
   --wa-color-terminal-ansi-bright-white: var(--vscode-terminal-ansiBrightWhite);
   --wa-color-terminal-ansi-bright-yellow: var(--vscode-terminal-ansiBrightYellow);
 
-  /* Typography. Lead with `ui-sans-serif` / `system-ui` so the OS picks
-     its native UI font on every platform; `--vscode-font-family` (when
-     present) merely refines that. Avoids the "almost native but slightly
-     off" look from a hardcoded Apple/BlinkMac fallback chain. */
-  --wa-font-family-body: var(--vscode-font-family),
-    ui-sans-serif, system-ui, sans-serif;
+  /* Typography. Inside the VS Code extension webview, always inherit
+     VS Code's chosen UI font so the webview matches the host chrome.
+     The `var()` fallback only fires if the var is somehow unset (e.g.,
+     in a unit-test polyfill). */
+  --wa-font-family-body: var(
+    --vscode-font-family,
+    ui-sans-serif,
+    system-ui,
+    sans-serif
+  );
   --wa-font-family-heading: var(--wa-font-family-body);
-  --wa-font-family-mono: var(--vscode-editor-font-family),
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --wa-font-family-mono: var(
+    --vscode-editor-font-family,
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace
+  );
   --wa-font-size-m: var(--vscode-font-size, 13px);
   --wa-font-weight-normal: var(--vscode-font-weight, 400);
   --wa-editor-font-size: var(--vscode-editor-font-size, 13px);
