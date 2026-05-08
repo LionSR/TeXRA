@@ -32,6 +32,13 @@ export const gitCommands = {
 
 export function registerGitCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
+    // `isGitRepository`, `getRecentCommits`, and `findCommitInHistory`
+    // return values to `executeCommand` callers (sync `boolean`,
+    // `string[] | null`, `string | null` respectively) and accept
+    // optional positional arguments — they keep their per-command
+    // registration. `texra.cloneOverleafProject` migrated through the
+    // shared command registry in #3781 batch 3 (see
+    // `extensionCommandSurface.ts`).
     vscode.commands.registerCommand(
       gitCommands.isGitRepository,
       isGitRepository,
@@ -44,11 +51,10 @@ export function registerGitCommands(context: vscode.ExtensionContext): void {
       gitCommands.findCommitInHistory,
       findCommitInHistory,
     ),
-    vscode.commands.registerCommand(gitCommands.cloneOverleafProject, () =>
-      cloneOverleafProject(context),
-    ),
   );
 }
+
+export { cloneOverleafProject };
 
 /**
  * Check if the workspace (or a given path) is inside a git repository.
