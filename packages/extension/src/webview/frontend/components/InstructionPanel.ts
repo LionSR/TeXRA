@@ -284,14 +284,14 @@ export class InstructionPanel extends LitElement {
       wa-button.execute-button::part(base) {
         min-width: 64px;
         min-height: 32px;
-        padding: 0 var(--wa-space-m, 0.75rem);
-        gap: var(--wa-space-2xs, 0.25rem);
-        border-radius: var(--wa-border-radius-m, 6px);
+        padding: 0 var(--wa-space-m);
+        gap: var(--wa-space-2xs);
+        border-radius: var(--wa-border-radius-m);
         background: var(--wa-color-brand-fill-loud);
         color: var(--wa-color-brand-on-loud);
-        border: 1px solid transparent;
+        border: var(--border-thin) solid transparent;
         box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
-        font-weight: 600;
+        font-weight: var(--font-weight-semibold, 600);
         letter-spacing: 0.01em;
         transition:
           transform 120ms ease,
@@ -320,7 +320,7 @@ export class InstructionPanel extends LitElement {
       }
 
       .execute-button__label {
-        font-size: var(--font-size-sm, 0.85rem);
+        font-size: var(--font-size-sm);
         line-height: 1;
       }
 
@@ -328,9 +328,9 @@ export class InstructionPanel extends LitElement {
         display: inline-flex;
         align-items: center;
         height: 18px;
-        padding: 0 var(--wa-space-2xs, 0.25rem);
-        margin-left: var(--wa-space-2xs, 0.25rem);
-        border-radius: 4px;
+        padding: 0 var(--wa-space-2xs);
+        margin-left: var(--wa-space-2xs);
+        border-radius: var(--wa-border-radius-s, 4px);
         background: rgb(255 255 255 / 18%);
         color: inherit;
         font-family: var(--wa-font-family-mono, ui-monospace, monospace);

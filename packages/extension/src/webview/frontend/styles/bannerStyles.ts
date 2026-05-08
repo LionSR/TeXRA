@@ -35,17 +35,14 @@ export const bannerStyles: CSSResult = css`
   wa-callout {
     margin-bottom: var(--wa-space-s);
     opacity: 0;
-    transform: translateY(-4px);
-    /* Defer 'visibility: hidden' until the fade-out completes so hidden
-       banners are removed from the keyboard tab order while still allowing
-       the close transition to animate. Without this, focusable descendants
-       (e.g. wa-button) remain reachable via Tab when opacity is 0. */
-    visibility: hidden;
+    transform: translateY(calc(-1 * var(--wa-space-2xs)));
     transition:
       opacity 180ms ease,
       transform 180ms ease,
       visibility 0s linear 180ms;
     pointer-events: none;
+    /* Compact callout chrome — stricter minimalism, tight banner padding. */
+    --padding: var(--wa-space-2xs) var(--wa-space-xs);
   }
 
   :host([data-visible='true']) wa-callout {
@@ -67,17 +64,12 @@ export const bannerStyles: CSSResult = css`
     margin-bottom: 0;
   }
 
-  /* Compact callout chrome — stricter minimalism, tight banner padding. */
-  wa-callout {
-    --padding: 4px 8px;
-  }
-
   wa-callout::part(message) {
-    padding-block: 4px;
+    padding-block: var(--wa-space-2xs);
   }
 
   wa-callout::part(icon) {
-    padding-inline-end: 6px;
+    padding-inline-end: var(--wa-space-2xs);
   }
 
   .banner-row {
