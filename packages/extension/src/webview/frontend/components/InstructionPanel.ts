@@ -119,6 +119,17 @@ export class InstructionPanel extends LitElement {
         border-radius: var(--border-radius);
         margin-bottom: var(--wa-space-s);
         border: var(--border-thin) solid var(--color-border);
+        transition: border-color 160ms ease;
+      }
+
+      /* Subtle lift when the user is composing — signals focus without
+         imposing a heavy ring on the textarea wrapper. */
+      .instruction-box:focus-within {
+        border-color: color-mix(
+          in srgb,
+          var(--wa-color-brand-fill-loud) 35%,
+          var(--color-border)
+        );
       }
 
       .instruction-header {
@@ -164,7 +175,19 @@ export class InstructionPanel extends LitElement {
         align-items: flex-start;
         margin-top: var(--wa-space-2xs);
         padding: var(--wa-space-3xs) var(--wa-space-2xs);
-        border-left: 2px solid var(--wa-color-text-link);
+        border-left: 2px solid
+          color-mix(
+            in srgb,
+            var(--wa-color-brand-fill-loud) 70%,
+            transparent
+          );
+        background: color-mix(
+          in srgb,
+          var(--wa-color-brand-fill-quiet) 35%,
+          transparent
+        );
+        border-radius: 0 var(--wa-border-radius-s, 4px)
+          var(--wa-border-radius-s, 4px) 0;
         color: var(--wa-color-text-quiet);
         font-size: var(--font-size-sm);
         line-height: var(--line-height-relaxed);
@@ -283,61 +306,94 @@ export class InstructionPanel extends LitElement {
 
       wa-button.execute-button::part(base) {
         min-width: 64px;
-        min-height: 32px;
-        padding: 0 var(--wa-space-m, 0.75rem);
-        gap: var(--wa-space-2xs, 0.25rem);
-        border-radius: var(--wa-border-radius-m, 6px);
+        min-height: 30px;
+        padding: 0 var(--wa-space-s);
+        gap: var(--wa-space-2xs);
+        border-radius: var(--wa-border-radius-m);
         background: var(--wa-color-brand-fill-loud);
         color: var(--wa-color-brand-on-loud);
-        border: 1px solid transparent;
-        box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
-        font-weight: 600;
+        border: var(--border-thin) solid
+          color-mix(in srgb, black 8%, var(--wa-color-brand-fill-loud));
+        box-shadow:
+          0 1px 1px rgb(0 0 0 / 8%),
+          inset 0 1px 0 rgb(255 255 255 / 12%);
+        font-weight: var(--font-weight-semibold, 600);
         letter-spacing: 0.01em;
         transition:
           transform 120ms ease,
-          box-shadow 120ms ease,
-          background-color 120ms ease;
+          box-shadow 160ms ease,
+          background-color 160ms ease,
+          filter 160ms ease;
       }
 
       wa-button.execute-button::part(base):hover {
         transform: translateY(-0.5px);
-        box-shadow: 0 2px 6px rgb(0 0 0 / 12%);
+        filter: brightness(1.06);
+        box-shadow:
+          0 3px 8px
+            color-mix(
+              in srgb,
+              var(--wa-color-brand-fill-loud) 28%,
+              transparent
+            ),
+          inset 0 1px 0 rgb(255 255 255 / 18%);
       }
 
       wa-button.execute-button::part(base):active {
         transform: translateY(0.5px);
-        box-shadow: 0 0 0 transparent;
+        filter: brightness(0.97);
+        box-shadow:
+          0 0 0 transparent,
+          inset 0 1px 0 rgb(0 0 0 / 8%);
       }
 
       wa-button.execute-button:focus-visible::part(base) {
         outline: 2px solid
           var(--wa-color-focus, var(--wa-color-brand-fill-loud));
-        outline-offset: 1px;
+        outline-offset: 2px;
       }
 
       wa-button.execute-button wa-icon {
-        font-size: 14px;
+        font-size: 13px;
       }
 
       .execute-button__label {
-        font-size: var(--font-size-sm, 0.85rem);
+        font-size: var(--font-size-sm);
         line-height: 1;
       }
 
+      /*
+       * Hairline separator + compact monospace badge — distinctive but
+       * disciplined. Uses inset shadow instead of a fill so the chip
+       * remains legible against the brand-fill background in both
+       * light and dark themes.
+       */
       .execute-button__kbd {
         display: inline-flex;
         align-items: center;
-        height: 18px;
-        padding: 0 var(--wa-space-2xs, 0.25rem);
-        margin-left: var(--wa-space-2xs, 0.25rem);
-        border-radius: 4px;
-        background: rgb(255 255 255 / 18%);
+        height: 16px;
+        padding: 0 5px;
+        margin-left: var(--wa-space-2xs);
+        border-radius: 3px;
+        background: transparent;
         color: inherit;
         font-family: var(--wa-font-family-mono, ui-monospace, monospace);
         font-size: 10px;
         font-weight: 500;
-        letter-spacing: 0.02em;
-        opacity: 0.85;
+        letter-spacing: 0.04em;
+        opacity: 0.75;
+        box-shadow: inset 0 0 0 1px rgb(255 255 255 / 28%);
+        position: relative;
+      }
+
+      .execute-button__kbd::before {
+        content: '';
+        position: absolute;
+        left: calc(-1 * var(--wa-space-2xs));
+        top: 18%;
+        bottom: 18%;
+        width: 1px;
+        background: rgb(255 255 255 / 22%);
       }
 
       /*

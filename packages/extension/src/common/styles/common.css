@@ -259,6 +259,13 @@
 
   --wa-color-focus: var(--texra-focusBorder);
 
+  /* WA form-control tokens — wire to TeXRA input palette so wa-input,
+     wa-textarea, wa-select, etc. inherit the host theme's editor surface
+     rather than WA's default form-control colors. */
+  --wa-form-control-background-color: var(--wa-form-control-background-color);
+  --wa-form-control-text-color: var(--wa-form-control-text-color);
+  --wa-form-control-border-color: var(--wa-form-control-border-color);
+
   --wa-color-brand-fill-loud: var(--texra-button-background);
   --wa-color-brand-on-loud: var(--texra-button-foreground);
   --wa-color-brand-border-loud: var(--texra-button-border);
@@ -294,12 +301,21 @@
      Aligned with desktop bridge (themeTokens.css) for cross-host parity. */
   --wa-color-danger-on-loud: #ffffff;
 
+  --wa-color-success-fill-loud: var(
+    --texra-charts-green,
+    var(--texra-inputValidation-infoBackground)
+  );
+  --wa-color-success-on-loud: #ffffff;
+  --wa-color-success-border-loud: transparent;
   --wa-color-success-fill-quiet: var(
     --texra-charts-green,
     var(--texra-inputValidation-infoBackground)
   );
   --wa-color-success-border-quiet: var(--texra-inputValidation-infoBorder);
   --wa-color-success-on-quiet: var(--texra-foreground);
+
+  --wa-color-danger-fill-loud: var(--wa-color-danger-on-quiet);
+  --wa-color-danger-border-loud: transparent;
 }
 
 body {

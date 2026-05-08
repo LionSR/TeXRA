@@ -100,8 +100,8 @@ export class GitTab extends LitElement {
       }
 
       .token-remove-btn:hover {
-        color: var(--texra-errorForeground);
-        border-color: var(--texra-errorForeground);
+        color: var(--wa-color-danger-on-quiet);
+        border-color: var(--wa-color-danger-on-quiet);
       }
 
       .instructions {
@@ -117,7 +117,7 @@ export class GitTab extends LitElement {
         margin: 2px 0;
       }
       .instructions code {
-        background: var(--texra-textBlockQuote-background);
+        background: var(--wa-color-surface-lowered);
         padding: 0 var(--wa-space-2xs);
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
@@ -136,7 +136,7 @@ export class GitTab extends LitElement {
         padding: var(--wa-space-3xs) 0;
       }
       .subscriptions-list code {
-        background: var(--texra-textBlockQuote-background);
+        background: var(--wa-color-surface-lowered);
         padding: var(--border-thin) var(--wa-space-xs);
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);

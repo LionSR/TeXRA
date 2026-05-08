@@ -20,7 +20,7 @@ export const groupStyles = css`
   }
 
   .log-group-header:hover {
-    background-color: var(--texra-list-hoverBackground);
+    background-color: var(--wa-color-neutral-fill-quiet);
   }
 
   .log-group-header {
@@ -29,11 +29,11 @@ export const groupStyles = css`
     }
 
     &.is-error {
-      border-left-color: var(--texra-errorForeground);
+      border-left-color: var(--wa-color-danger-on-quiet);
     }
 
     &.is-stopped {
-      border-left-color: var(--texra-testing-iconPassed);
+      border-left-color: var(--wa-color-success-fill-loud);
     }
   }
 

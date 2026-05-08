@@ -25,7 +25,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .list-item:hover {
-    background-color: var(--texra-list-hoverBackground);
+    background-color: var(--wa-color-neutral-fill-quiet);
   }
 
   .list-item:focus-within {
@@ -179,8 +179,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .action-icon-button:focus-visible::part(base) {
-    outline: var(--border-thin) solid
-      var(--wa-color-focus, var(--wa-color-focus));
+    outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
   }
 

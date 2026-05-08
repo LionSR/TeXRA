@@ -112,7 +112,33 @@ export class StreamTab extends LitElement {
         border-left: var(--border-thick) solid transparent;
         transition:
           border-left-color var(--transition-normal),
-          background-color var(--transition-fast);
+          background-color var(--transition-fast),
+          box-shadow var(--transition-fast);
+      }
+
+      /*
+       * Subtle hairline below each row — keeps a refined rhythm for long
+       * stream lists without imposing hard grid lines. Drops to invisible
+       * on selected/hovered rows so the highlight reads cleanly.
+       */
+      .tab-container::after {
+        content: '';
+        position: absolute;
+        left: var(--wa-space-3xs);
+        right: var(--wa-space-3xs);
+        bottom: 0;
+        height: 1px;
+        background: color-mix(
+          in srgb,
+          var(--color-border) 50%,
+          transparent
+        );
+        pointer-events: none;
+      }
+
+      .tab-container:hover::after,
+      .tab-container.is-active::after {
+        opacity: 0;
       }
 
       .tab-container.status-running {
@@ -243,7 +269,11 @@ export class StreamTab extends LitElement {
       }
 
       .tab-container:hover {
-        background-color: var(--texra-list-hoverBackground);
+        background-color: color-mix(
+          in srgb,
+          var(--wa-color-neutral-fill-quiet) 70%,
+          transparent
+        );
       }
 
       /*
@@ -253,11 +283,21 @@ export class StreamTab extends LitElement {
        * color even when intermediate elements define their own.
        */
       .tab-container.is-active {
-        background-color: var(--texra-list-activeSelectionBackground);
+        background-color: color-mix(
+          in srgb,
+          var(--wa-color-brand-fill-quiet) 85%,
+          transparent
+        );
         color: var(
           --texra-list-activeSelectionForeground,
           var(--wa-color-text-normal)
         );
+        box-shadow: inset 0 0 0 1px
+          color-mix(
+            in srgb,
+            var(--wa-color-brand-fill-loud) 18%,
+            transparent
+          );
       }
 
       .tab-container.is-active *,
@@ -282,7 +322,7 @@ export class StreamTab extends LitElement {
       .tab-container.is-active .tab-delete:focus-within,
       .tab-container.is-active .tab-delete:hover *,
       .tab-container.is-active .tab-delete:focus-within * {
-        color: var(--texra-errorForeground);
+        color: var(--wa-color-danger-on-quiet);
       }
 
       /* Drop the dim-by-default opacity so the flipped foreground renders
@@ -329,7 +369,7 @@ export class StreamTab extends LitElement {
 
       .tab-delete:hover,
       .tab-delete:focus-within {
-        color: var(--texra-errorForeground);
+        color: var(--wa-color-danger-on-quiet);
       }
 
       /* Expand/collapse chevron for parent tabs with children */
@@ -355,7 +395,7 @@ export class StreamTab extends LitElement {
 
       .tab-expand wa-icon {
         font-size: var(--font-size-xs);
-        transition: transform var(--transition-fast);
+        transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1);
       }
 
       .tab-expand[aria-expanded='true'] wa-icon {
