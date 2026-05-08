@@ -185,7 +185,13 @@ function createWindow(options: {
     postToRenderer: (message) => {
       const ipc = ipcRef.current;
       if (!ipc) return false;
-      if (window.isDestroyed()) return false;
+      // `installDesktopHostBridge.postToRenderer` is itself a no-op when
+      // `webContents.isDestroyed()`. Without checking that here too, this
+      // wrapper would falsely report success and the preview host would
+      // skip the external-viewer fallback. Bot review (#3816) caught it.
+      if (window.isDestroyed() || window.webContents.isDestroyed()) {
+        return false;
+      }
       ipc.postToRenderer(message);
       return true;
     },

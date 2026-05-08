@@ -789,12 +789,53 @@ function openPdfOverlay(payload: DesktopShowPdfMessage): void {
   if (pdfTitleElement) pdfTitleElement.textContent = payload.title;
   if (pdfSubtitleElement) pdfSubtitleElement.textContent = payload.pdfPath;
   if (pdfFrameElement) {
-    // `encodeURI` keeps `/`, `:`, and the drive-letter colon intact
-    // while escaping spaces and other path characters that would
-    // otherwise produce a malformed URL.
-    pdfFrameElement.src = `file://${encodeURI(payload.pdfPath)}`;
+    pdfFrameElement.src = pdfPathToFileUrl(payload.pdfPath);
   }
   dialog.open = true;
+}
+
+/**
+ * Convert an absolute filesystem path (already shape-validated by
+ * `isSafeAbsolutePdfPath`) into a `file:` URL safe for an iframe `src`.
+ *
+ * - posix `/abs/path.pdf` → `file:///abs/path.pdf`
+ * - Windows drive `C:\path\file.pdf` → `file:///C:/path/file.pdf`
+ * - Windows UNC `\\server\share\file.pdf` → `file://server/share/file.pdf`
+ *
+ * Per-segment `encodeURIComponent` percent-encodes `#`, `?`, spaces, and
+ * other URL-unsafe characters that `encodeURI` leaves intact, so the
+ * iframe doesn't truncate or alter the loaded path. Bot review (#3816)
+ * caught the prior `file://${encodeURI(path)}` form which produced
+ * invalid URLs for Windows drive-letter and UNC paths.
+ */
+function pdfPathToFileUrl(absolutePath: string): string {
+  const normalised = absolutePath.replace(/\\/g, '/');
+  // Windows UNC: //server/share/file → file://server/share/file
+  if (normalised.startsWith('//')) {
+    const segments = normalised.slice(2).split('/').map(encodeURIComponent);
+    return `file://${segments.join('/')}`;
+  }
+  // posix absolute: /abs/file → file:///abs/file
+  if (normalised.startsWith('/')) {
+    const segments = normalised.slice(1).split('/').map(encodeURIComponent);
+    return `file:///${segments.join('/')}`;
+  }
+  // Windows drive: C:/path/file → file:///C:/path/file
+  // Drive letter colon stays unescaped; only the rest of the segments are
+  // percent-encoded.
+  const driveMatch = normalised.match(/^([A-Za-z]):\/(.*)$/);
+  if (driveMatch) {
+    const drive = driveMatch[1];
+    const rest = driveMatch[2]
+      .split('/')
+      .map(encodeURIComponent)
+      .join('/');
+    return `file:///${drive}:/${rest}`;
+  }
+  // Defensive fallback — shouldn't happen because `isSafeAbsolutePdfPath`
+  // already accepted only the three shapes above. Encode the whole string
+  // so we still produce a parseable URL.
+  return `file:///${encodeURIComponent(normalised)}`;
 }
 
 function closePdfOverlay(): void {
