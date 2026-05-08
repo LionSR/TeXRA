@@ -309,17 +309,17 @@ export class ProgressApp extends ProgressAppBase {
         gap: var(--spacing-medium);
         max-width: 560px;
         text-align: center;
-        color: var(--texra-descriptionForeground, var(--color-text-secondary));
+        color: var(--wa-color-text-quiet);
       }
 
       .desktop-empty-progress__icon {
-        color: var(--texra-button-background, var(--color-text-link));
+        color: var(--wa-color-brand-fill-loud);
         font-size: 44px;
       }
 
       .desktop-empty-progress h1 {
         margin: var(--spacing-small) 0 0;
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
         font-size: 24px;
         font-weight: 600;
         letter-spacing: 0;
