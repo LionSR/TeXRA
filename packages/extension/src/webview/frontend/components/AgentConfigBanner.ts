@@ -12,7 +12,11 @@ import { MainViewEvents } from '../events';
 
 @customElement('agent-config-banner')
 export class AgentConfigBanner extends LitElement {
-  static override styles = [designTokens, commonViewStyles, warningBannerStyles];
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    warningBannerStyles,
+  ];
 
   @property({ attribute: false }) state: AgentConfigBannerState = {
     visible: false,
@@ -51,8 +55,7 @@ export class AgentConfigBanner extends LitElement {
               size="small"
               @click=${() => this.handleAction('edit')}
             >
-              ${waIcon('pencil', { slot: 'start' })}
-              Edit Agents
+              ${waIcon('pencil', { slot: 'start' })} Edit Agents
             </wa-button>
             <wa-button
               id="agentConfigDirButton"
@@ -69,8 +72,7 @@ export class AgentConfigBanner extends LitElement {
               size="small"
               @click=${() => this.handleAction('docs')}
             >
-              ${waIcon('book', { slot: 'start' })}
-              Docs
+              ${waIcon('book', { slot: 'start' })} Docs
             </wa-button>
           </div>
         </div>

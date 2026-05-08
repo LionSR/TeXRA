@@ -86,8 +86,7 @@ export class LoginBanner extends LitElement {
               size="small"
               @click=${this.handleSignIn}
             >
-              ${waIcon('right-to-bracket', { slot: 'start' })}
-              Sign In
+              ${waIcon('right-to-bracket', { slot: 'start' })} Sign In
             </wa-button>
             <wa-button
               id="loginBannerDismissButton"

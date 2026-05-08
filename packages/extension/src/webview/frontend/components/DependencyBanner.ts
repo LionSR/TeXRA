@@ -94,8 +94,7 @@ export class DependencyBanner extends LitElement {
                         size="small"
                         @click=${() => this.handleInstall(tool)}
                       >
-                        ${waIcon('cloud-arrow-down', { slot: 'start' })}
-                        Install
+                        ${waIcon('cloud-arrow-down', { slot: 'start' })} Install
                       </wa-button>
                     </div>
                   `,
@@ -109,8 +108,7 @@ export class DependencyBanner extends LitElement {
               size="small"
               @click=${this.handleRecheck}
             >
-              ${waIcon('rotate-right', { slot: 'start' })}
-              Re-check
+              ${waIcon('rotate-right', { slot: 'start' })} Re-check
             </wa-button>
             <wa-button
               id="dependencyDismissButton"
@@ -119,8 +117,7 @@ export class DependencyBanner extends LitElement {
               title="Dismiss (can be re-enabled in settings)"
               @click=${this.handleDismiss}
             >
-              ${waIcon('xmark', { slot: 'start' })}
-              Dismiss
+              ${waIcon('xmark', { slot: 'start' })} Dismiss
             </wa-button>
           </div>
         </div>
