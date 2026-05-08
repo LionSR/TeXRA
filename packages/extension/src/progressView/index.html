@@ -10,11 +10,6 @@
     <link rel="stylesheet" href="${commonStyleUri}" />
     <link rel="stylesheet" href="${progressStyleUri}" />
     <style nonce="${nonce}">
-      @font-face {
-        font-family: 'codicon';
-        font-display: block;
-        src: url('${codiconsFontUri}') format('truetype');
-      }
       body {
         padding: 0;
         display: flex;
@@ -22,23 +17,9 @@
         background-color: var(--texra-sideBar-background);
       }
     </style>
-    <link
-      rel="stylesheet"
-      href="${codiconUri}"
-      id="vscode-codicon-stylesheet"
-    />
   </head>
   <body>
     <progress-app></progress-app>
-    <script nonce="${nonce}">
-      // Expose codicon font URI for Lit shadow DOM components
-      window.__CODICON_FONT_URI__ = '${codiconsFontUri}';
-    </script>
-    <script
-      type="module"
-      nonce="${nonce}"
-      src="${vscodeElementsBundleUri}"
-    ></script>
     <script nonce="${nonce}" src="${commonsBundleUri}"></script>
     <script type="module" nonce="${nonce}" src="${progressBundleUri}"></script>
   </body>

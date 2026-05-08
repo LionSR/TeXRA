@@ -304,7 +304,7 @@ body.texra-high-contrast {
   --wa-color-brand-border-loud: CanvasText;
 }
 
-/* Compatibility exports for reused VS Code webview CSS and @vscode-elements. */
+/* Compatibility exports for reused VS Code webview CSS. */
 :root {
   --vscode-font-family: var(--texra-font-family);
   --vscode-font-size: var(--texra-font-size);

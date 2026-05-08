@@ -34,13 +34,7 @@ test-loader.mjs
 AGENTS.md
 CLAUDE.md
 
-!node_modules/@vscode/codicons/dist/**
 !node_modules/split.js/**
-!node_modules/@vscode-elements/elements/dist/**
-
-# Exclude dependency codicon fonts, but keep Vite-emitted webview fonts.
-**/codicon.ttf
-!dist/**/codicon.ttf
 
 !resources/**
 !src/webview/*.js
