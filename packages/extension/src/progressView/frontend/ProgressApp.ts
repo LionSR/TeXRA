@@ -55,6 +55,7 @@ import {
   pendingApprovalIds$,
   permissions$,
   placement,
+  resetProgressState,
   streamFilter$,
   streamStates$,
   tabStreams$,
@@ -322,7 +323,11 @@ export class ProgressApp extends ProgressAppBase {
 
   constructor() {
     super();
-    // Restore persisted preferences
+    // Module-level state is shared across remounts. Reset everything to
+    // initial values before re-applying persisted preferences so a remount
+    // (tests, hot reload, future multi-instance hosts) doesn't surface
+    // stale placement / approval pulses / narrow-layout state.
+    resetProgressState();
     const prefs = this.prefsManager.getState();
     appState.set({
       ...createInitialState(),
