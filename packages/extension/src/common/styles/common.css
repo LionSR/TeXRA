@@ -242,6 +242,16 @@
   --wa-color-brand-on-loud: var(--texra-button-foreground);
   --wa-color-brand-border-loud: var(--texra-button-border);
 
+  /* Neutral tokens for outlined wa-button / wa-callout variants. Wire to the
+     VS Code secondary-button palette so neutral surfaces blend with the host
+     theme rather than falling back to WA's default gray scale. */
+  --wa-color-neutral-fill-quiet: var(--texra-button-secondaryBackground);
+  --wa-color-neutral-border-quiet: var(--texra-button-border);
+  --wa-color-neutral-on-quiet: var(--texra-button-secondaryForeground);
+  --wa-color-neutral-fill-loud: var(--texra-button-secondaryBackground);
+  --wa-color-neutral-border-loud: var(--texra-button-border);
+  --wa-color-neutral-on-loud: var(--texra-button-secondaryForeground);
+
   /* Variant tokens for wa-callout / wa-button — wire VS Code validation
      palettes through the WA color stack so brand/warning/danger/success
      callouts blend with the host theme rather than the WA defaults. */

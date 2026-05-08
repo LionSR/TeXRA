@@ -98,18 +98,21 @@ export function createFirstRunWalkthrough({
       </ol>
       <div slot="footer" class="desktop-onboarding-actions">
         <wa-button
+          class="desktop-secondary-button"
           appearance="outlined"
           @click=${() => navigateAndClose('settings')}
         >
           Open Settings
         </wa-button>
         <wa-button
+          class="desktop-secondary-button"
           appearance="outlined"
           @click=${() => navigateAndClose('main')}
         >
           Go to Launcher
         </wa-button>
         <wa-button
+          class="desktop-primary-button"
           appearance="filled"
           variant="brand"
           data-onboarding-dismiss

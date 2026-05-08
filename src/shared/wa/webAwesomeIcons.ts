@@ -230,7 +230,11 @@ const icons = {
 // Codicon-name aliases. Lets existing markup keep using familiar codicon names
 // (e.g. <wa-icon name="warning">) while resolving to the closest Font Awesome
 // glyph in the registry above. Prefer canonical names for new code.
-const CODICON_ALIASES: Readonly<Record<string, string>> = {
+//
+// `as const satisfies …` keeps alias keys as a literal union (so
+// `keyof typeof CODICON_ALIASES` narrows TeXRAIconName) and compile-checks
+// every alias value against the registered icon names.
+const CODICON_ALIASES = {
   account: 'circle-user',
   add: 'plus',
   'arrow-small-down': 'caret-down',
@@ -298,7 +302,7 @@ const CODICON_ALIASES: Readonly<Record<string, string>> = {
   window: 'window-maximize',
   x: 'xmark',
   zap: 'bolt',
-} as const;
+} as const satisfies Readonly<Record<string, keyof typeof icons>>;
 
 let isRegistered = false;
 
@@ -307,7 +311,8 @@ function dataUri(svg: string): string {
 }
 
 function resolveIcon(name: string): FontAwesomeIconDefinition | undefined {
-  const canonical = CODICON_ALIASES[name] ?? name;
+  const aliased = (CODICON_ALIASES as Readonly<Record<string, keyof typeof icons>>)[name];
+  const canonical = aliased ?? name;
   return icons[canonical as keyof typeof icons];
 }
 

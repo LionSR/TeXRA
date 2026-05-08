@@ -369,17 +369,20 @@ function createNoWorkspacePlaceholder(kind: 'launcher' | 'progress'): Element {
       icon: 'folder-open',
       title,
       body,
+      headingTag: 'h1',
       actions: [
         {
           label: 'Open Folder',
           appearance: 'filled',
           variant: 'brand',
+          className: 'desktop-primary-button',
           onClick: () =>
             postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
         },
         {
           label: 'Logs',
           appearance: 'outlined',
+          className: 'desktop-secondary-button',
           onClick: () => postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
         },
       ],
@@ -557,6 +560,7 @@ function explorerNoWorkspaceTemplate(): TemplateResult {
         label: 'Open Folder',
         appearance: 'filled',
         variant: 'brand',
+        className: 'desktop-primary-button',
         onClick: () =>
           postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
       },
