@@ -19,8 +19,6 @@
  */
 
 import { execFile } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -102,14 +100,26 @@ export function createDesktopGitHost(
       if (!workspace) {
         return { commits: [], isGitRepo: false };
       }
-      // Cheap synchronous probe before paying for `git log`. Same heuristic
-      // the existing `isWorkspaceGitRepo` shim used — it deliberately accepts
-      // sub-worktrees that have a `.git` file pointer, not just directories.
+      // Bot review (#3817) flagged that the prior `existsSync('.git')` probe
+      // wrongly reports `false` when the user opens a subdirectory inside a
+      // repo (`.git` only exists at the repo root). Use `git rev-parse
+      // --is-inside-work-tree` instead — that's also what handles the
+      // `.git`-as-pointer-file case for worktrees and submodules. The cost
+      // is one extra `git` invocation up front but the call is fast (<10ms
+      // typical) so we eat it for correctness.
       let isGitRepo = false;
       try {
-        isGitRepo = existsSync(join(workspace, '.git'));
-      } catch (error) {
-        options.onError?.(error);
+        const { stdout } = await execFileAsync(
+          'git',
+          ['rev-parse', '--is-inside-work-tree'],
+          { cwd: workspace, timeout: GIT_TIMEOUT_MS },
+        );
+        isGitRepo = stdout.trim() === 'true';
+      } catch {
+        // `git` missing from PATH, not a repo, or rev-parse failed for any
+        // other reason — treat as "not a repo". Avoid surfacing this via
+        // `onError` because it's the steady-state for any non-git workspace
+        // and would spam logs.
         return { commits: [], isGitRepo: false };
       }
       if (!isGitRepo) {
@@ -120,6 +130,11 @@ export function createDesktopGitHost(
         const { stdout } = await execFileAsync(
           'git',
           [
+            // `--no-pager` is portable across platforms (no dependency on
+            // `cat` being on PATH, which broke on Windows per #3817).
+            // `execFile` already runs git non-tty so a pager wouldn't
+            // normally engage, but we pin it explicitly anyway.
+            '--no-pager',
             'log',
             '-n',
             String(limit),
@@ -129,18 +144,15 @@ export function createDesktopGitHost(
             cwd: workspace,
             timeout: GIT_TIMEOUT_MS,
             maxBuffer: MAX_BUFFER_BYTES,
-            // Disable any pager git would otherwise spin up — it would never
-            // close on a non-tty parent and we'd hit the timeout instead.
-            env: { ...process.env, GIT_PAGER: 'cat', PAGER: 'cat' },
           },
         );
         return { commits: parseCommitLog(stdout), isGitRepo: true };
       } catch (error) {
         // `git` missing from PATH, not a repo, or any other failure -> empty
-        // list. We still report `isGitRepo: true` because the `.git` probe
-        // already passed; surfacing "no commits yet" is more accurate than
-        // pretending the user is outside a repo and would otherwise mask
-        // legitimate empty-repo states.
+        // list. We still report `isGitRepo: true` because the rev-parse
+        // probe already passed; surfacing "no commits yet" is more accurate
+        // than pretending the user is outside a repo and would otherwise
+        // mask legitimate empty-repo states.
         options.onError?.(error);
         return { commits: [], isGitRepo: true };
       }

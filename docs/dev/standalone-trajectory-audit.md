@@ -109,7 +109,7 @@ close it:
 
 ### A. Real desktop Git host (closes trajectory #16) — DONE
 
-- Shipped in `desktop/git-host`. `packages/desktop/src/main/desktopGitHost.ts`
+- Implemented in `packages/desktop/src/main/desktopGitHost.ts` (PR #3817).
   spawns `git log -n 20 --pretty=format:'%h\t%s\t%cr'` via
   `child_process.execFile` inside the workspace, parses tab-separated
   fields, and rebuilds the `<short>: <subject> (<relative>)` label
