@@ -415,10 +415,10 @@ These settings, accessible directly in the main TeXRA webview, control how agent
 
 ![Agent Execution Settings](/images/agent-execution-settings.png)
 
-**Tool Configuration Dropdown** (<i class="codicon codicon-tools"></i> ○<i class="codicon codicon-chevron-down"></i> next to Instruction label):
+**Tool Configuration Dropdown** (<wa-icon library="texra" name="tools"></wa-icon> ○<wa-icon library="texra" name="chevron-down"></wa-icon> next to Instruction label):
 
-- **Attach TeX Count** (<i class="codicon codicon-symbol-numeric"></i>): Includes `texcount` output (word/header/math stats) in the agent's context. Requires `texcount` installed.
-- **Attach Diagnostics** (<i class="codicon codicon-tools"></i>): Appends LaTeX compilation logs and other diagnostics to the agent prompt.
+- **Attach TeX Count** (<wa-icon library="texra" name="symbol-numeric"></wa-icon>): Includes `texcount` output (word/header/math stats) in the agent's context. Requires `texcount` installed.
+- **Attach Diagnostics** (<wa-icon library="texra" name="tools"></wa-icon>): Appends LaTeX compilation logs and other diagnostics to the agent prompt.
 
 Reflection rounds are now controlled entirely by the agent definition. Choose agents whose `userRequest` prompt list includes follow-up entries (or create custom ones) when you need an automatic follow-up critique.
 
@@ -426,14 +426,14 @@ To capture the full prompt sent to the model, enable the `Save Input Prompt` deb
 
 **Model/Agent Selection:**
 
-- **Agent** (<i class="codicon codicon-sparkle"></i>): Select the agent (see [Built-in](./built-in-agents.md) / [Custom](./custom-agents.md)).
-- **Model** (<i class="codicon codicon-robot"></i>): Select the language model (see [Models](./models.md)).
+- **Agent** (<wa-icon library="texra" name="sparkle"></wa-icon>): Select the agent (see [Built-in](./built-in-agents.md) / [Custom](./custom-agents.md)).
+- **Model** (<wa-icon library="texra" name="robot"></wa-icon>): Select the language model (see [Models](./models.md)).
 
 **Instruction Header Actions:**
 
-- **Settings** (<i class="codicon codicon-gear"></i>): Open TeXRA extension settings.
-- **History** (<i class="codicon codicon-history"></i>): Open Agent Execution History panel.
-- **Pack** (<i class="codicon codicon-archive"></i>): Archive the current run's task storage folder to `History`.
-- **Clean** (<i class="codicon codicon-trash"></i>): Delete the current run's task storage folder.
-- **Magic Polish** (<i class="codicon codicon-sparkle"></i>): Use selected model to polish the instruction text.
-- **Erase Instruction** (<i class="codicon codicon-clear-all"></i>): Clear the instruction box.
+- **Settings** (<wa-icon library="texra" name="gear"></wa-icon>): Open TeXRA extension settings.
+- **History** (<wa-icon library="texra" name="history"></wa-icon>): Open Agent Execution History panel.
+- **Pack** (<wa-icon library="texra" name="archive"></wa-icon>): Archive the current run's task storage folder to `History`.
+- **Clean** (<wa-icon library="texra" name="trash"></wa-icon>): Delete the current run's task storage folder.
+- **Magic Polish** (<wa-icon library="texra" name="sparkle"></wa-icon>): Use selected model to polish the instruction text.
+- **Erase Instruction** (<wa-icon library="texra" name="clear-all"></wa-icon>): Clear the instruction box.

@@ -6,17 +6,17 @@ TeXRA can hand off tasks to [OpenAI Codex](https://developers.openai.com/codex/c
 
 Set everything up from the TeXRA Dashboard — no terminal copy-paste.
 
-1. Open **TeXRA: Show Dashboard** (`Ctrl+Shift+P`) → **Tools** tab (<i class="codicon codicon-tools"></i>) → **Computation** (<i class="codicon codicon-symbol-operator"></i>).
+1. Open **TeXRA: Show Dashboard** (`Ctrl+Shift+P`) → **Tools** tab (<wa-icon library="texra" name="tools"></wa-icon>) → **Computation** (<wa-icon library="texra" name="symbol-operator"></wa-icon>).
 2. Find the **OpenAI Codex CLI** card. When it's **Not Found**, the setup actions expand automatically.
 3. Click the two buttons in order:
-   - <i class="codicon codicon-terminal"></i> **Install in Terminal** — opens an integrated terminal and runs `npm install -g @openai/codex`.
-   - <i class="codicon codicon-sign-in"></i> **Sign in** — runs `codex login`, which completes the OAuth flow in your browser using your ChatGPT Plus / Pro account.
-4. After both finish, click the card's **Recheck** action. The status flips to <i class="codicon codicon-check"></i> **Available** and the `codex` tool is ready.
+   - <wa-icon library="texra" name="terminal"></wa-icon> **Install in Terminal** — opens an integrated terminal and runs `npm install -g @openai/codex`.
+   - <wa-icon library="texra" name="sign-in"></wa-icon> **Sign in** — runs `codex login`, which completes the OAuth flow in your browser using your ChatGPT Plus / Pro account.
+4. After both finish, click the card's **Recheck** action. The status flips to <wa-icon library="texra" name="check"></wa-icon> **Available** and the `codex` tool is ready.
 
 That's it — any tool-use agent with the `codex` tool enabled can now delegate to Codex.
 
 ::: tip Prefer API-key billing?
-Skip **Sign in** and export `OPENAI_API_KEY` in the shell you launch VS Code from. Codex picks it up automatically. You can also use the <i class="codicon codicon-link-external"></i> **Open Install Page** button on the card for the official installer if you'd rather do it outside VS Code.
+Skip **Sign in** and export `OPENAI_API_KEY` in the shell you launch VS Code from. Codex picks it up automatically. You can also use the <wa-icon library="texra" name="link-external"></wa-icon> **Open Install Page** button on the card for the official installer if you'd rather do it outside VS Code.
 :::
 
 ::: warning Windows
@@ -35,21 +35,21 @@ All Codex options live on the Codex card in **Dashboard → Tools** and are scop
 | **Sandbox mode**     | `read-only`, `workspace-write`, `danger-full-access`                        | `workspace-write` | File-system access. Agents may override per call via `sandbox_mode`.       |
 | **Reasoning effort** | `low`, `medium`, `high`, `xhigh`                                            | `high`            | How deeply Codex deliberates. `xhigh` is capped to `high` before hand-off. |
 | **Approval policy**  | `auto approve`, `ask when requested`, `ask for untrusted`, `ask on failure` | `auto approve`    | When the Codex child process may stop to ask before running commands.      |
-| **Require approval** | checkbox under _Approval & Safety_ (<i class="codicon codicon-shield"></i>) | on                | Show a confirmation prompt before every Codex call.                        |
+| **Require approval** | checkbox under _Approval & Safety_ (<wa-icon library="texra" name="shield"></wa-icon>) | on                | Show a confirmation prompt before every Codex call.                        |
 
 TeXRA always drives Codex with the short model name `gpt-5.5` — OpenAI's latest flagship, well-suited to the planning, tool use, and multi-step execution Codex relies on. Everything else (providers, MCP servers, custom instructions) comes from Codex's own `~/.codex/config.toml`.
 
 ## Running Codex
 
-Check which agents have the `codex` tool enabled on the **Agents** tab (<i class="codicon codicon-sparkle"></i>), then prompt one of them:
+Check which agents have the `codex` tool enabled on the **Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>), then prompt one of them:
 
 > Use codex to sketch a minimal FastAPI server that returns a JSON healthcheck.
 
 When it fires:
 
-1. A child stream tab `codex@codex-sdk` opens on the ProgressBoard (<i class="codicon codicon-type-hierarchy"></i>).
-2. Reasoning, commands, file diffs, web searches (<i class="codicon codicon-globe"></i>), and todos stream in live.
-3. When the turn ends, the tab sits in **WAITING**. Type a follow-up to continue the thread, or press <i class="codicon codicon-debug-stop"></i> **Stop** to end it.
+1. A child stream tab `codex@codex-sdk` opens on the ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>).
+2. Reasoning, commands, file diffs, web searches (<wa-icon library="texra" name="globe"></wa-icon>), and todos stream in live.
+3. When the turn ends, the tab sits in **WAITING**. Type a follow-up to continue the thread, or press <wa-icon library="texra" name="debug-stop"></wa-icon> **Stop** to end it.
 4. Every turn is delivered to the calling agent as a follow-up message (final response, token usage, and `thread_id`). Calls are async — the tool returns immediately with an execution ID.
 
 ::: tip Follow-up instructions
@@ -58,7 +58,7 @@ To send a follow-up from the calling agent, call `codex` again with `thread_id` 
 
 ## Troubleshooting
 
-**Card shows <i class="codicon codicon-warning"></i> Not Found after install.** Hover the card for the exact message:
+**Card shows <wa-icon library="texra" name="warning"></wa-icon> Not Found after install.** Hover the card for the exact message:
 
 | Message                                        | Fix                                                                                                                |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |

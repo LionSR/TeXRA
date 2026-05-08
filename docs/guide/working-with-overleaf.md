@@ -50,15 +50,15 @@ This guide outlines a workflow to clone your Overleaf project, leverage TeXRA lo
 2.  Use TeXRA as usual:
     - Select files, agent, model.
     - Write instructions.
-    - Execute (<i class="codicon codicon-play"></i>).
+    - Execute (<wa-icon library="texra" name="play"></wa-icon>).
     - Review outputs (`r0/output.tex`, etc.) from task storage.
-    - Use `latexdiff` (<i class="codicon codicon-diff-single"></i>) or merge (<i class="codicon codicon-merge"></i>).
-    - Leverage features like auto-extract (<i class="codicon codicon-wand"></i>) and tool options (<i class="codicon codicon-tools"></i>).
+    - Use `latexdiff` (<wa-icon library="texra" name="diff-single"></wa-icon>) or merge (<wa-icon library="texra" name="merge"></wa-icon>).
+    - Leverage features like auto-extract (<wa-icon library="texra" name="wand"></wa-icon>) and tool options (<wa-icon library="texra" name="tools"></wa-icon>).
     - Optionally use LaTeX Workshop for local previews ([Setup](./latex-compilation.md)).
 
 ### 3. Commit Local Changes
 
-As you work, commit changes frequently using VS Code\'s Source Control (<i class="codicon codicon-source-control"></i>) or the terminal:
+As you work, commit changes frequently using VS Code\'s Source Control (<wa-icon library="texra" name="source-control"></wa-icon>) or the terminal:
 
 ```bash
 # Stage changes (e.g., all modified files)
