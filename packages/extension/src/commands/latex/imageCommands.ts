@@ -16,20 +16,12 @@ logger.initialize(CHANNEL);
 
 const PDF_FILTERS = { 'PDF files': ['pdf'] };
 
-export function registerImageCommands(context: vscode.ExtensionContext) {
-  context.subscriptions.push(
-    // `texra.countPdfPages` is registered through `extensionCommandSurface`
-    // (see #3775). The remaining per-command registrations stay here
-    // because they return values to `executeCommand` callers.
-    vscode.commands.registerCommand(
-      'texra.encodeImageToBase64',
-      handleEncodeImageToBase64,
-    ),
-    vscode.commands.registerCommand(
-      'texra.convertPdfToImages',
-      handleConvertPdfToImages,
-    ),
-  );
+export function registerImageCommands(_context: vscode.ExtensionContext) {
+  // `texra.countPdfPages`, `texra.encodeImageToBase64`, and
+  // `texra.convertPdfToImages` are now registered through
+  // `extensionCommandSurface` (see #3775 / #3781 batch 3). This stub
+  // remains so `commands.ts` can keep its existing call site; the
+  // exported handlers above are referenced by the registry's actions.
 }
 
 export async function handleCountPdfPages(): Promise<void> {
@@ -59,7 +51,7 @@ export async function handleCountPdfPages(): Promise<void> {
   }
 }
 
-async function handleEncodeImageToBase64(): Promise<string | undefined> {
+export async function handleEncodeImageToBase64(): Promise<string | undefined> {
   try {
     const selection = await dialogUtils.selectFileFromWorkspace({
       openLabel: 'Select file',
@@ -94,7 +86,7 @@ async function handleEncodeImageToBase64(): Promise<string | undefined> {
   }
 }
 
-async function handleConvertPdfToImages(): Promise<
+export async function handleConvertPdfToImages(): Promise<
   string[] | string | undefined
 > {
   try {
