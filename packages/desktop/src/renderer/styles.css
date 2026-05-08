@@ -151,6 +151,11 @@ wa-button.desktop-command-button {
   min-height: 34px;
   padding: 0 var(--wa-space-xs) 0 var(--wa-space-s);
   border-bottom: 1px solid var(--wa-color-surface-border);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--wa-color-surface-default) 60%, transparent),
+    transparent
+  );
   box-sizing: border-box;
 }
 
@@ -162,6 +167,7 @@ wa-button.desktop-command-button {
   color: var(--wa-color-text-normal);
   font-size: 11px;
   font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
@@ -199,6 +205,12 @@ wa-tree.desktop-explorer-tree wa-tree-item::part(item) {
   min-height: 24px;
   padding-inline-end: var(--wa-space-xs);
   color: var(--wa-color-text-normal);
+  border-radius: var(--wa-border-radius-s, 3px);
+  margin-inline: var(--wa-space-3xs);
+  transition:
+    background-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease;
 }
 
 wa-tree.desktop-explorer-tree wa-tree-item::part(label) {
@@ -212,6 +224,8 @@ wa-tree.desktop-explorer-tree wa-tree-item::part(label) {
 wa-tree.desktop-explorer-tree
   wa-tree-item:not([aria-disabled='true']):hover::part(item) {
   background: var(--wa-color-neutral-fill-quiet);
+  box-shadow: inset 1px 0 0
+    color-mix(in srgb, var(--wa-color-text-normal) 8%, transparent);
 }
 
 wa-tree.desktop-explorer-tree
@@ -219,6 +233,24 @@ wa-tree.desktop-explorer-tree
   background: var(--wa-color-brand-fill-quiet);
   color: var(--wa-color-brand-on-quiet);
   border-inline-start-color: var(--wa-color-brand-on-quiet);
+  box-shadow: inset 2px 0 0 var(--wa-color-brand-fill-loud);
+}
+
+wa-tree.desktop-explorer-tree wa-tree-item:focus-visible::part(item) {
+  outline: var(--wa-focus-ring, 2px solid var(--wa-color-focus));
+  outline-offset: -1px;
+}
+
+/*
+ * Folder icons render with brand tint, file icons with quiet tint, so the
+ * tree's hierarchical structure reads at a glance without adding new colour.
+ */
+wa-tree.desktop-explorer-tree wa-tree-item.desktop-explorer-directory wa-icon {
+  color: color-mix(in srgb, var(--wa-color-brand-fill-loud) 70%, transparent);
+}
+
+wa-tree.desktop-explorer-tree wa-tree-item.desktop-explorer-file wa-icon {
+  color: var(--wa-color-text-quiet);
 }
 
 .desktop-explorer-name {
@@ -241,6 +273,8 @@ wa-tree.desktop-explorer-tree
   height: 6px;
   border-radius: 50%;
   background: var(--wa-color-text-quiet);
+  box-shadow: 0 0 0 1px
+    color-mix(in srgb, var(--wa-color-surface-default) 70%, transparent);
 }
 
 .desktop-explorer-category-dot[data-category='input'] {
@@ -270,12 +304,19 @@ wa-tree.desktop-explorer-tree
 
 .desktop-explorer-selection {
   border-top: 1px solid var(--wa-color-surface-border);
+  background: color-mix(
+    in srgb,
+    var(--wa-color-surface-default) 50%,
+    transparent
+  );
 }
 
 .desktop-explorer-selected-path {
   min-width: 0;
   overflow: hidden;
   color: var(--wa-color-text-normal);
+  font-family: var(--wa-font-family-code, monospace), monospace;
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
