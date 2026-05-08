@@ -187,6 +187,7 @@ export async function activate(context: vscode.ExtensionContext) {
     secrets: new VscodeSecrets(context),
     lifecycle,
   });
+  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => disposeStatusListener?.());
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killBackgroundProcesses());
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
     interruptAllCodexSessions(),
@@ -207,7 +208,6 @@ export async function activate(context: vscode.ExtensionContext) {
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => disposeDiffRefresh());
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => statusBarItem?.dispose());
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => disposeStatusListener?.());
   setDefaultAgentRuntimeHost(extensionAgentRuntimeHost);
   await StorageFS.ensureDir(TASK_RUNS_DIR);
   FileLister.initialize(context);

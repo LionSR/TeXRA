@@ -1,6 +1,6 @@
 export type CommandHandler<TActions> = (actions: TActions) => boolean;
 
-export type CommandHandlerMap<TId extends string, TActions> = Partial<
+type CommandHandlerMap<TId extends string, TActions> = Partial<
   Record<TId, CommandHandler<TActions>>
 >;
 
