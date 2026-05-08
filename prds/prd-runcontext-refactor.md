@@ -47,26 +47,26 @@ A May 2026 audit of `src/agent/`, `src/tools/approval/`, `src/auth/`, `src/event
 
 ### 4.2 Module-level setter/getter pairs (19)
 
-| Concern                         | Setter                            | File:line                                       |
-| ------------------------------- | --------------------------------- | ----------------------------------------------- |
-| Default progress sink           | `setDefaultProgressSink`          | `src/agent/runtime/ProgressSink.ts:14`          |
-| Default runtime host            | `setDefaultAgentRuntimeHost`      | `src/agent/runtime/AgentRuntimeHost.ts:11`      |
-| Run storage service             | `setRunStorageService`            | `src/agent/runtime/RunStorageService.ts:10`     |
-| Tool-edit approval handler      | `setToolEditApprovalHandler`      | `src/tools/approval/toolEditApproval.ts:74,113` |
-| Latex build-display handler     | `setOpenBuildDisplay`             | `src/tools/approval/latexPreview.ts:22,24`      |
-| GitHub token provider           | `setGitHubTokenProvider`          | `src/tools/github/githubAuth.ts:13`             |
-| Extension checker               | `setExtensionChecker`             | `src/tools/externalToolDefs.ts:35`              |
-| Linter provider                 | `setLinterProvider`               | `src/tools/DiagnosticsTool.ts:10,12`            |
-| Lean VS Code services           | `setLeanVscodeServices`           | `src/tools/lean/leanVscodeServices.ts:45,47`    |
-| Setup platform                  | `setSetupPlatform`                | `src/tools/setup/platform.ts:108,111`           |
-| Tool-unavailable notification   | `setToolNotificationHandler`      | `src/tools/toolUnavailableNotification.ts:21,28` |
-| Worktree support flag           | `setWorktreeSupportEnabled`       | `src/tools/worktreeConfig.ts:12,14`             |
-| Server-side key service         | `setServerSideKeyService`         | `src/auth/serverKeys/index.ts:34`               |
-| Tier service                    | `setTierService`                  | `src/auth/tier/index.ts:31`                     |
-| Auth callback resolver          | `setExternalAuthCallbackResolver` | `src/auth/config.ts:183`                        |
-| Runtime extension id            | `setRuntimeExtensionId`           | `src/auth/config.ts:137`                        |
-| Output-channel factory (logger) | `setOutputChannelFactory`         | `src/logger/logUtils.ts:108`                    |
-| Default stream-log store        | `setDefaultStreamLogStore`        | `src/logger/StreamLogStore.ts:668,675`          |
+| Concern                         | Setter                            | File:line                                          |
+| ------------------------------- | --------------------------------- | -------------------------------------------------- |
+| Default progress sink           | `setDefaultProgressSink`          | `src/agent/runtime/ProgressSink.ts:14`             |
+| Default runtime host            | `setDefaultAgentRuntimeHost`      | `src/agent/runtime/AgentRuntimeHost.ts:11`         |
+| Run storage service             | `setRunStorageService`            | `src/agent/runtime/RunStorageService.ts:10`        |
+| Tool-edit approval handler      | `setToolEditApprovalHandler`      | `src/tools/approval/toolEditApproval.ts:74,113`    |
+| Latex build-display handler     | `setOpenBuildDisplay`             | `src/tools/approval/latexPreview.ts:22,24`         |
+| GitHub token provider           | `setGitHubTokenProvider`          | `src/tools/github/githubAuth.ts:13`                |
+| Extension checker               | `setExtensionChecker`             | `src/tools/externalToolDefs.ts:35`                 |
+| Linter provider                 | `setLinterProvider`               | `src/tools/DiagnosticsTool.ts:10,12`               |
+| Lean VS Code services           | `setLeanVscodeServices`           | `src/tools/lean/leanVscodeServices.ts:45,47`       |
+| Setup platform                  | `setSetupPlatform`                | `src/tools/setup/platform.ts:108,111`              |
+| Tool-unavailable notification   | `setToolNotificationHandler`      | `src/tools/toolUnavailableNotification.ts:21,28`   |
+| Worktree support flag           | `setWorktreeSupportEnabled`       | `src/tools/worktreeConfig.ts:12,14`                |
+| Server-side key service         | `setServerSideKeyService`         | `src/auth/serverKeys/index.ts:34`                  |
+| Tier service                    | `setTierService`                  | `src/auth/tier/index.ts:31`                        |
+| Auth callback resolver          | `setExternalAuthCallbackResolver` | `src/auth/config.ts:183`                           |
+| Runtime extension id            | `setRuntimeExtensionId`           | `src/auth/config.ts:137`                           |
+| Output-channel factory (logger) | `setOutputChannelFactory`         | `src/logger/logUtils.ts:108`                       |
+| Default stream-log store        | `setDefaultStreamLogStore`        | `src/logger/StreamLogStore.ts:668,675`             |
 | Agent directories               | `setAgentDirectories`             | `src/agent/index/agentDirectoriesRegistry.ts:8,11` |
 
 Counted via `git grep "^export function set[A-Z]" packages/core/src/{agent,tools,auth,logger,eventBus}/` against the v1 audit cutoff. The list is exhaustive within those zones; categories outside (e.g. `src/extension/`) are intentionally excluded.
@@ -242,7 +242,7 @@ Each phase is independently mergeable and ships a concrete kernel improvement.
 | 3         | 4 capability setters                                                  | `tools/{approval,github,externalToolDefs}/*`                                   | +60 / -110      | 1                 |
 | 4         | 4 auth singletons + extension-id setter                               | `auth/*`                                                                       | +80 / -130      | 1                 |
 | 5         | (sweep)                                                               | `executionRegistry.ts` + lint rule cleanups                                    | +20 / -30       | 0.5               |
-| **Total** | **19 ambient bindings + 3 coordinators**                             |                                                                                | **+460 / -470** | **~6.5**          |
+| **Total** | **19 ambient bindings + 3 coordinators**                              |                                                                                | **+460 / -470** | **~6.5**          |
 
 Net code change: **~-10 LOC** (the refactor pays for itself in deleted boilerplate). The CLI consumes Phase 1 deliverables for v1.0 and Phase 2 for v1.1; the extension and desktop benefit from every phase but don't gate on them.
 

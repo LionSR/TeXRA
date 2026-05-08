@@ -41,7 +41,7 @@ The total kernel work is ~430 LOC new + ~130 LOC modified + ~5 LOC deleted. None
 
 ### 4.1 Module-level state collides under concurrency
 
-`outputChannelFactory` (line 21) and the `channels` Map (line 19) are module-level. The general concurrency case for retiring this kind of binding is in `prd-runcontext-refactor.md` §4.5 (and `setOutputChannelFactory` is one of the 19 setter pairs in that PRD's §4.2 table). Logger-specific consequence: the `setOutputChannelFactory(null)` reset in test teardown calls `dispose?.()` on every cached channel and disposes channels for *other* concurrent runs — visible today only as occasional vitest flakes; visible always in an MCP-server or re-entrant-SDK process.
+`outputChannelFactory` (line 21) and the `channels` Map (line 19) are module-level. The general concurrency case for retiring this kind of binding is in `prd-runcontext-refactor.md` §4.5 (and `setOutputChannelFactory` is one of the 19 setter pairs in that PRD's §4.2 table). Logger-specific consequence: the `setOutputChannelFactory(null)` reset in test teardown calls `dispose?.()` on every cached channel and disposes channels for _other_ concurrent runs — visible today only as occasional vitest flakes; visible always in an MCP-server or re-entrant-SDK process.
 
 ### 4.2 Two ALS scopes that shadow each other
 

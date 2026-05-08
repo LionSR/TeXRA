@@ -1297,14 +1297,14 @@ Three policies for those inner gates, selected by tool argument:
 
 ### 24.6 LOC
 
-| Item                                                                           | New      | Modified |
-| ------------------------------------------------------------------------------ | -------- | -------- |
-| `packages/cli/src/mcp/server.ts` (server bootstrap, capability advertising)    | ~120     | —        |
-| `packages/cli/src/mcp/tools/{runWorkflow,runChat,listAgents}.ts`               | ~250     | —        |
+| Item                                                                                                     | New      | Modified |
+| -------------------------------------------------------------------------------------------------------- | -------- | -------- |
+| `packages/cli/src/mcp/server.ts` (server bootstrap, capability advertising)                              | ~120     | —        |
+| `packages/cli/src/mcp/tools/{runWorkflow,runChat,listAgents}.ts`                                         | ~250     | —        |
 | `packages/cli/src/mcp/sinks/McpProgressSink.ts` (also used by Logger v2; see `prd-logger-v2.md` Phase 5) | ~80      | —        |
-| `packages/cli/src/runtime/initPlatform.ts` (McpHostAdapter branch)             | —        | ~30      |
-| `packages/cli/src/commands/mcp.ts` (`texra mcp serve`)                         | ~40      | —        |
-| **Subtotal**                                                                   | **~490** | **~30**  |
+| `packages/cli/src/runtime/initPlatform.ts` (McpHostAdapter branch)                                       | —        | ~30      |
+| `packages/cli/src/commands/mcp.ts` (`texra mcp serve`)                                                   | ~40      | —        |
+| **Subtotal**                                                                                             | **~490** | **~30**  |
 
 ## 25. Hook system (Claude Code-style)
 
@@ -1606,7 +1606,7 @@ No other round-1 picks change.
 
 ## 29. Cross-platform shared structure → see [`prd-runcontext-refactor.md`](./prd-runcontext-refactor.md) §8
 
-The CLI is purely a *consumer* of the three-ring structure: imports Rings 1 + 2 + 3 from `packages/core/` plus its own deps (`commander`, `ink`, `@modelcontextprotocol/sdk`, `@clack/prompts`, `picocolors`, `log-update`, `ora`); contributes nothing into the rings (CLI-side platform adapters `ConfConfigProvider` and `KeyringSecrets` from §7.3 live in the CLI package, not Ring 3). Cross-host imports (CLI → extension, CLI → desktop) are forbidden by the same ESLint rule that scopes `vscode` / `electron` to the extension and desktop packages.
+The CLI is purely a _consumer_ of the three-ring structure: imports Rings 1 + 2 + 3 from `packages/core/` plus its own deps (`commander`, `ink`, `@modelcontextprotocol/sdk`, `@clack/prompts`, `picocolors`, `log-update`, `ora`); contributes nothing into the rings (CLI-side platform adapters `ConfConfigProvider` and `KeyringSecrets` from §7.3 live in the CLI package, not Ring 3). Cross-host imports (CLI → extension, CLI → desktop) are forbidden by the same ESLint rule that scopes `vscode` / `electron` to the extension and desktop packages.
 
 ## 30. Container & GitHub-runner target matrix
 
@@ -1664,26 +1664,26 @@ Documented as `texra config path` output for fast diagnosis from `texra doctor`.
 
 Round 2 adds new work into existing phases plus one new phase (Phase 1.5) for the MCP-server surface. Phases 0, 2, 3, 4, 5 from round 1 keep their scope; Phase 1 absorbs §22 + §23 + §26 (all kernel-side, all on the critical path for tool-use agents).
 
-| Phase     | Round-1 scope                        | Round-2 additions                                                                  |
-| --------- | ------------------------------------ | ---------------------------------------------------------------------------------- |
-| 0         | Workspace + headless workflow runner | + `RunContext` shim (`prd-runcontext-refactor.md` Phase 0) + Ring 1/2/3 reorg (`prd-runcontext-refactor.md` §8) |
+| Phase     | Round-1 scope                        | Round-2 additions                                                                                                                      |
+| --------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 0         | Workspace + headless workflow runner | + `RunContext` shim (`prd-runcontext-refactor.md` Phase 0) + Ring 1/2/3 reorg (`prd-runcontext-refactor.md` §8)                        |
 | 1         | Tool-use + approval engine           | + per-context coordinators (`prd-runcontext-refactor.md` Phase 1) + Logger v2 (`prd-logger-v2.md` Phases 0–1) + bash predicate (§26.3) |
-| 1.5 (new) | —                                    | `texra mcp serve` v1.0 surface (§24.5) + Logger MCP sink (`prd-logger-v2.md` Phase 5) + integration test (§30.3) |
-| 2         | Config + secrets + auth              | unchanged                                                                          |
-| 3         | Interactive REPL                     | unchanged                                                                          |
-| 4         | GitHub Action                        | composite-action revision (§28)                                                    |
-| 5         | Polish, docs                         | + JSONL session migration (§27.5) + hook system v1 (§25.5)                         |
+| 1.5 (new) | —                                    | `texra mcp serve` v1.0 surface (§24.5) + Logger MCP sink (`prd-logger-v2.md` Phase 5) + integration test (§30.3)                       |
+| 2         | Config + secrets + auth              | unchanged                                                                                                                              |
+| 3         | Interactive REPL                     | unchanged                                                                                                                              |
+| 4         | GitHub Action                        | composite-action revision (§28)                                                                                                        |
+| 5         | Polish, docs                         | + JSONL session migration (§27.5) + hook system v1 (§25.5)                                                                             |
 
 ### 31.2 Aggregate LOC
 
 After the §22/§23/§29 split into dedicated kernel PRDs, the CLI PRD's LOC accounting only counts CLI-package work. Kernel-side LOC is tracked in those PRDs.
 
-| Bucket                                                             | Round-1 net      | Round-2 additions (CLI-only after split)                                                                     | Round-2 total    |
-| ------------------------------------------------------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------ | ---------------- |
+| Bucket                                                             | Round-1 net      | Round-2 additions (CLI-only after split)                                                                                                                           | Round-2 total    |
+| ------------------------------------------------------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------- |
 | `packages/cli/`                                                    | 2,800–3,800      | +730 (round-2 CLI-package work: MCP §24, hooks adapter §25, session writer §27.6) + ~350 (CLI-side RunContext + Logger sinks + bootstrap wiring, per §§22.3, 23.2) | **~3,880–4,880** |
-| `packages/core/` (CLI's _own_ pre-refactors only — C1–C8 from §14) | ~730             | +220 (HookHost §25.6, sessionStore §27.6, approval predicates §26 — minus the items moved to dedicated PRDs) | **~950**         |
-| `texra-ai/texra-action` (separate repo)                            | ~800             | -300 (no JS shim; YAML composite + small TS for the high-level action only)                                  | **~500**         |
-| **Total v1 (this PRD's scope)**                                    | **~4,330–5,330** | **+~1,000**                                                                                                  | **~5,330–6,330** |
+| `packages/core/` (CLI's _own_ pre-refactors only — C1–C8 from §14) | ~730             | +220 (HookHost §25.6, sessionStore §27.6, approval predicates §26 — minus the items moved to dedicated PRDs)                                                       | **~950**         |
+| `texra-ai/texra-action` (separate repo)                            | ~800             | -300 (no JS shim; YAML composite + small TS for the high-level action only)                                                                                        | **~500**         |
+| **Total v1 (this PRD's scope)**                                    | **~4,330–5,330** | **+~1,000**                                                                                                                                                        | **~5,330–6,330** |
 
 Kernel work that the CLI consumes but does not own (sized in the linked PRDs):
 
