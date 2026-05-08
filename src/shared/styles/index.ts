@@ -1,5 +1,4 @@
 // Core styles
-export { codiconStyles, codiconIconClasses } from './codiconStyles';
 export {
   commonViewStyles,
   filledButtonStyles,
