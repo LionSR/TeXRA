@@ -230,11 +230,14 @@ export interface ExtensionCommandActions {
   showLinterMessages(): Promise<void>;
   countLinterMessages(): Promise<void>;
   extractFigurePaths(): Promise<void>;
-  // Batch 3 (#3781). The image/PDF handlers return data to
-  // `executeCommand` callers (palette invocations don't consume the
-  // value, but the existing return-type surface is preserved). The
-  // registry's typed return is `Promise<boolean>`, so handlers below
-  // discard the data values after awaiting.
+  // Batch 3 (#3781). The action functions return data (the underlying
+  // `string | string[] | undefined`) for direct callers, but the
+  // registry's typed return is `Promise<boolean>`, so the dispatcher
+  // wraps them with `awaitTrue(...)` and the resolved data is
+  // intentionally dropped. Palette / `executeCommand` callers don't
+  // consume the value today; if a future caller needs the original
+  // payload it must call the action helper directly instead of going
+  // through `vscode.commands.executeCommand`.
   encodeImageToBase64(): Promise<string | undefined>;
   convertPdfToImages(): Promise<string[] | string | undefined>;
   extractTikzFigures(): Promise<void>;
