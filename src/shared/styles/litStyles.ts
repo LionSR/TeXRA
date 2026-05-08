@@ -5,7 +5,7 @@ export const designTokens: CSSResult = css`
     /* Text colors */
     --color-text-secondary: var(--wa-color-text-quiet);
     --color-text-link: var(--wa-color-text-link);
-    --color-text-link-active: var(--texra-textLink-activeForeground);
+    --color-text-link-active: var(--wa-color-text-link-active);
 
     /* Background colors */
     --color-bg-secondary: var(--wa-color-surface-lowered);
@@ -17,14 +17,14 @@ export const designTokens: CSSResult = css`
     --color-success: var(--wa-color-success-on-quiet, #2ea043);
     --color-error: var(--wa-color-danger-on-quiet, #f14c4c);
     --color-warning: var(--wa-color-warning-on-quiet, #cca700);
-    --color-info: var(--texra-charts-blue, #3794ff);
-    --color-added: var(--texra-charts-green, #4caf50);
-    --color-removed: var(--texra-charts-red, #f44336);
+    --color-info: var(--wa-color-chart-blue, #3794ff);
+    --color-added: var(--wa-color-chart-green, #4caf50);
+    --color-removed: var(--wa-color-chart-red, #f44336);
 
     /* Component aliases */
     --background-color: var(--color-bg-secondary);
-    --text-color: var(--texra-sideBar-foreground);
-    --button-hover-background: var(--texra-button-hoverBackground);
+    --text-color: var(--wa-color-text-normal);
+    --button-hover-background: var(--wa-color-button-hover);
     --dropdown-border: var(--wa-form-control-border-color);
 
     /* Typography */

@@ -154,7 +154,10 @@ export class AgentSelectionPanel extends LitElement {
 
       .agent-list-item.selected {
         background: var(--wa-color-brand-fill-quiet);
-        color: var(--wa-color-text-normal);
+        color: var(
+          --wa-color-list-active-fg,
+          var(--wa-color-text-normal)
+        );
         border-left-color: var(--wa-color-brand-fill-loud);
         box-shadow: inset 0 0 0 1px
           color-mix(in srgb, var(--wa-color-brand-fill-loud) 12%, transparent);
@@ -296,7 +299,7 @@ export class AgentSelectionPanel extends LitElement {
 
       .agent-detail-path {
         font-size: var(--font-size-xs);
-        font-family: var(--texra-editor-font-family, monospace), monospace;
+        font-family: var(--wa-font-family-mono, monospace), monospace;
         color: var(--color-text-secondary);
         margin-bottom: var(--wa-space-s);
         overflow: hidden;
