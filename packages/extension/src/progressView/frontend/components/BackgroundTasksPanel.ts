@@ -1,7 +1,7 @@
 /**
  * Collapsible panel for displaying background tasks (processes and subagents).
  *
- * Uses `<vscode-collapsible>` for consistent styling with other panels (Todos,
+ * Uses `<wa-details>` for consistent styling with other panels (Todos,
  * Files, etc.). Each active subagent is clickable to navigate to its stream tab.
  * Processes don't have their own tab so they are not clickable.
  */
@@ -43,6 +43,9 @@ import {
 
 // Side-effect imports - sibling components
 import './TerminalOutput';
+
+// Web Awesome native components
+import '@awesome.me/webawesome/dist/components/details/details.js';
 
 @customElement('background-tasks-panel')
 export class BackgroundTasksPanel extends LitElement {
@@ -240,11 +243,12 @@ export class BackgroundTasksPanel extends LitElement {
     if (active + finished === 0) return nothing;
 
     return html`
-      <vscode-collapsible
+      <wa-details
         class="panel-collapsible"
-        title="Background Tasks"
+        summary="Background Tasks"
         ?open=${this.open}
-        @vsc-collapsible-toggle=${this.handleCollapsibleToggle}
+        @wa-show=${this.handleShow}
+        @wa-hide=${this.handleHide}
       >
         <div class="task-list">
           ${this.renderSection(
@@ -258,7 +262,7 @@ export class BackgroundTasksPanel extends LitElement {
             'subagent',
           )}
         </div>
-      </vscode-collapsible>
+      </wa-details>
     `;
   }
 
@@ -392,8 +396,14 @@ export class BackgroundTasksPanel extends LitElement {
     `;
   }
 
-  private handleCollapsibleToggle(e: CustomEvent<{ open?: boolean }>): void {
-    this.open = e.detail?.open ?? this.open;
+  private handleShow(e: Event): void {
+    if (e.target !== e.currentTarget) return;
+    this.open = true;
+  }
+
+  private handleHide(e: Event): void {
+    if (e.target !== e.currentTarget) return;
+    this.open = false;
   }
 
   private navigateToStream(streamId: string): void {
