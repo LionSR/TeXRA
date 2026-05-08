@@ -5,6 +5,7 @@
  */
 
 // Third-party imports
+import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import {
   LitElement,
   html,
@@ -228,15 +229,8 @@ export class AgentSelectionPanel extends LitElement {
         gap: var(--spacing-small);
       }
 
-      .agent-tool-badge {
-        display: inline-block;
-        padding: var(--border-thin) var(--spacing-small);
-        font-size: var(--font-size-xs);
+      wa-tag.agent-tool-badge {
         font-family: var(--texra-editor-font-family);
-        background: var(--texra-textBlockQuote-background);
-        border: var(--border-thin) solid var(--color-border);
-        border-radius: var(--border-radius);
-        color: var(--color-text-secondary);
       }
 
       .agent-detail-actions {
@@ -286,15 +280,6 @@ export class AgentSelectionPanel extends LitElement {
         font-style: italic;
       }
 
-      .agent-source-badge {
-        display: inline-block;
-        padding: var(--border-thin) var(--spacing-small);
-        font-size: var(--font-size-xs);
-        font-weight: var(--font-weight-medium);
-        border-radius: var(--border-radius);
-        background: var(--texra-badge-background, rgba(128, 128, 128, 0.15));
-        color: var(--texra-badge-foreground);
-      }
 
       .agent-detail-path {
         font-size: var(--font-size-xs);
@@ -627,16 +612,16 @@ export class AgentSelectionPanel extends LitElement {
         <div class="agent-detail-header">
           <span class="agent-detail-name">${agent.name}</span>
           ${builtIn
-            ? html`<span class="agent-source-badge">Built-in</span>`
+            ? html`<wa-tag variant="neutral" size="small">Built-in</wa-tag>`
             : nothing}
           ${isCustom
-            ? html`<span class="agent-source-badge" title="Custom agent"
-                >★ Custom</span
+            ? html`<wa-tag variant="neutral" size="small" title="Custom agent"
+                >★ Custom</wa-tag
               >`
             : nothing}
           ${agent.source === AGENT_SOURCE.REMOTE
-            ? html`<span class="agent-source-badge" title="Remote agent"
-                >☁ Remote</span
+            ? html`<wa-tag variant="neutral" size="small" title="Remote agent"
+                >☁ Remote</wa-tag
               >`
             : nothing}
         </div>
@@ -664,7 +649,13 @@ export class AgentSelectionPanel extends LitElement {
                 <div class="agent-detail-meta-value">
                   <div class="agent-detail-tools">
                     ${agent.tools.map(
-                      (t) => html`<span class="agent-tool-badge">${t}</span>`,
+                      (t) =>
+                        html`<wa-tag
+                          class="agent-tool-badge"
+                          variant="neutral"
+                          size="small"
+                          >${t}</wa-tag
+                        >`,
                     )}
                   </div>
                 </div>
