@@ -8,8 +8,11 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens } from '@shared/styles';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared constants
 import {
@@ -62,7 +65,6 @@ function sortFastFirst(items: ModelSelectionItem[]): ModelSelectionItem[] {
 export class ModelSelectionList extends LitElement {
   static override styles = [
     designTokens,
-    codiconStyles,
     commonViewStyles,
     profileViewStyles,
   ];
@@ -204,11 +206,13 @@ export class ModelSelectionList extends LitElement {
         )}
       </vscode-single-select>
       ${includedAccessCap
-        ? html`<span
-            class="codicon codicon-warning model-row-icon model-row-icon--warning"
+        ? html`<wa-icon
+            library="texra"
+            name="warning"
+            class="model-row-icon model-row-icon--warning"
             title=${title}
             aria-hidden="true"
-          ></span>`
+          ></wa-icon>`
         : nothing}
     `;
   }
@@ -234,17 +238,21 @@ export class ModelSelectionList extends LitElement {
           <span class="model-name">${model.label}</span>
           <span class="model-shortname">(${model.name})</span>
           ${!available
-            ? html`<span
-                class="codicon codicon-key model-row-icon"
+            ? html`<wa-icon
+                library="texra"
+                name="key"
+                class="model-row-icon"
                 title="Requires ${PROVIDER_DISPLAY_NAMES[model.provider] ??
                 model.provider} API key — set via TeXRA: Set API Key command"
-              ></span>`
+              ></wa-icon>`
             : nothing}
           ${isExpensiveModel(model.provider, model.name)
-            ? html`<span
-                class="codicon codicon-warning model-row-icon model-row-icon--warning"
+            ? html`<wa-icon
+                library="texra"
+                name="warning"
+                class="model-row-icon model-row-icon--warning"
                 title=${EXPENSIVE_MODEL_HINT}
-              ></span>`
+              ></wa-icon>`
             : nothing}
         </vscode-checkbox>
         ${this.renderReasoningDropdown(model)}
@@ -305,11 +313,11 @@ export class ModelSelectionList extends LitElement {
             class="provider-group-toggle"
             @click=${() => this.toggleProvider(group.provider)}
           >
-            <span
-              class="provider-group-chevron codicon codicon-chevron-right ${isExpanded
-                ? 'expanded'
-                : ''}"
-            ></span>
+            <wa-icon
+              library="texra"
+              name="chevron-right"
+              class="provider-group-chevron ${isExpanded ? 'expanded' : ''}"
+            ></wa-icon>
             <span class="provider-group-name">${group.displayName}</span>
             <span class="provider-group-count">
               ${enabledCount}/${totalCount} enabled

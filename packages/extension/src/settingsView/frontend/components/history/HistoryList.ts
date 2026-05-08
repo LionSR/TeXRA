@@ -20,6 +20,9 @@ import { repeat } from 'lit/directives/repeat.js';
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
 // Local imports - shared components & pagination utility
 import { paginate, type PageChangeDetail } from '../shared/Pagination';
 
@@ -216,7 +219,7 @@ export class HistoryList extends LitElement {
   override render(): TemplateResult {
     if (!this.items.length) {
       return html`<div class="empty-state">
-        <span class="codicon codicon-history"></span>
+        <wa-icon library="texra" name="history"></wa-icon>
         <p>No history items found.</p>
         <p class="text-secondary">
           History is recorded when you run agent commands. Past results will

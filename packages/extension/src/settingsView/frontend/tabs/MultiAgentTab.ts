@@ -9,7 +9,10 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { codiconStyles, designTokens, commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
+
+// Web Awesome icon bundle (side-effect import)
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared utils
 import { createEvent } from '@shared/utils/events';
@@ -36,7 +39,6 @@ function clampSetting(value: number, min?: number, max?: number): number {
 export class MultiAgentTab extends LitElement {
   static override styles = [
     designTokens,
-    codiconStyles,
     commonViewStyles,
     css`
       :host {
@@ -134,7 +136,7 @@ export class MultiAgentTab extends LitElement {
         border-radius: var(--border-radius-medium);
       }
 
-      .preset-active-badge .codicon {
+      .preset-active-badge wa-icon {
         font-size: var(--font-size-xs);
       }
 
@@ -351,11 +353,15 @@ export class MultiAgentTab extends LitElement {
         title="Apply ${preset.name} team"
       >
         <div class="preset-card-header">
-          <span class="codicon ${preset.icon} preset-card-icon"></span>
+          <wa-icon
+            library="texra"
+            name=${preset.icon.replace('codicon-', '')}
+            class="preset-card-icon"
+          ></wa-icon>
           <span class="preset-card-name">${preset.name}</span>
           ${isActive
             ? html`<span class="preset-active-badge">
-                <span class="codicon codicon-check"></span> Active
+                <wa-icon library="texra" name="check"></wa-icon> Active
               </span>`
             : nothing}
         </div>
@@ -388,7 +394,7 @@ export class MultiAgentTab extends LitElement {
               @click=${(e: Event) => this.handleDeletePreset(e, preset)}
               title="Delete team"
             >
-              <span class="codicon codicon-trash"></span>
+              <wa-icon library="texra" name="trash"></wa-icon>
             </button>`
           : nothing}
       </div>
@@ -422,9 +428,11 @@ export class MultiAgentTab extends LitElement {
     return html`
       <div class="multi-agent-container tab-content-container">
         <div class="settings-reminder">
-          <span
-            class="codicon codicon-organization settings-reminder-icon"
-          ></span>
+          <wa-icon
+            library="texra"
+            name="organization"
+            class="settings-reminder-icon"
+          ></wa-icon>
           <div class="settings-reminder-body">
             <div class="settings-reminder-title">Multi-agent workflow</div>
             <div class="settings-reminder-description">
