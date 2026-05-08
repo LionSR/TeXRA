@@ -87,10 +87,14 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   // cleanBuild, indentTeX), auth (signIn/signOut/viewProfile), system
   // entry points (runSetupAssistant, openGettingStarted, createSampleProject,
   // testConnection, testAgentLoading, loadSpecificAgent, openProgressViewInTab,
-  // downloadArXivSource), and the typed-arg handlers for
-  // openDoc/stopAgent/compactResponse — all alongside the original
-  // settings/main-view routes via the same dispatch path as the desktop
-  // registry. See `extensionCommandSurface.ts` for the handler map.
+  // downloadArXivSource), batch-2 host-context entry points (parseXml,
+  // parseYaml, testTextEditor, indentCurrentTeX,
+  // applyReplacements, fixCompilation, getTeXCount, countPdfPages,
+  // showLinterMessages, countLinterMessages, extractFigurePaths), and the
+  // typed-arg handlers for openDoc/stopAgent/compactResponse — all
+  // alongside the original settings/main-view routes via the same
+  // dispatch path as the desktop registry. See
+  // `extensionCommandSurface.ts` for the handler map.
   //
   // FOLLOW_UP (#3775): the remaining per-command registrations carry
   // VS Code-specific arguments (TextEditor, Range, Uri, FileLocation,
