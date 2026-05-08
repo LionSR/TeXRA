@@ -185,8 +185,8 @@ Tool-use agents are interactive: instead of producing a single polished file, th
 
 To create your own tool-use agent, set `agentCategory: toolUse` and list the tools you want to grant. TeXRA groups tools by category (matching **Dashboard → Tools** <wa-icon library="texra" name="tools"></wa-icon>):
 
-| Category                                                             | What it lets the agent do                                           | Example tool names                                                                                       |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Category                                                                        | What it lets the agent do                                           | Example tool names                                                                                       |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | <wa-icon library="texra" name="files"></wa-icon> **File & Shell**               | Read, write, edit, search, list, and run commands in your project   | `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `ls`, `bash`                                     |
 | <wa-icon library="texra" name="file-code"></wa-icon> **LaTeX**                  | Extract figures, TikZ, and bibliography; report compile diagnostics | `extract_figures`, `extract_tikz_figures`, `extract_bib_entries`, `diagnostics`, `texcount`              |
 | <wa-icon library="texra" name="mortar-board"></wa-icon> **Academic Research**   | Search arXiv and Crossref, resolve DOIs, manage Zotero              | `arxiv_search`, `arxiv_metadata`, `download_arxiv_source`, `crossref_doi`, `crossref_search`, `zotero_*` |

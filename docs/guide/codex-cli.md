@@ -30,11 +30,11 @@ TeXRA looks up Codex in the same environment as the VS Code extension host, so i
 
 All Codex options live on the Codex card in **Dashboard → Tools** and are scoped to the current workspace.
 
-| Setting              | Options                                                                     | Default           | What it controls                                                           |
-| -------------------- | --------------------------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------- |
-| **Sandbox mode**     | `read-only`, `workspace-write`, `danger-full-access`                        | `workspace-write` | File-system access. Agents may override per call via `sandbox_mode`.       |
-| **Reasoning effort** | `low`, `medium`, `high`, `xhigh`                                            | `high`            | How deeply Codex deliberates. `xhigh` is capped to `high` before hand-off. |
-| **Approval policy**  | `auto approve`, `ask when requested`, `ask for untrusted`, `ask on failure` | `auto approve`    | When the Codex child process may stop to ask before running commands.      |
+| Setting              | Options                                                                                | Default           | What it controls                                                           |
+| -------------------- | -------------------------------------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------- |
+| **Sandbox mode**     | `read-only`, `workspace-write`, `danger-full-access`                                   | `workspace-write` | File-system access. Agents may override per call via `sandbox_mode`.       |
+| **Reasoning effort** | `low`, `medium`, `high`, `xhigh`                                                       | `high`            | How deeply Codex deliberates. `xhigh` is capped to `high` before hand-off. |
+| **Approval policy**  | `auto approve`, `ask when requested`, `ask for untrusted`, `ask on failure`            | `auto approve`    | When the Codex child process may stop to ask before running commands.      |
 | **Require approval** | checkbox under _Approval & Safety_ (<wa-icon library="texra" name="shield"></wa-icon>) | on                | Show a confirmation prompt before every Codex call.                        |
 
 TeXRA always drives Codex with the short model name `gpt-5.5` — OpenAI's latest flagship, well-suited to the planning, tool use, and multi-step execution Codex relies on. Everything else (providers, MCP servers, custom instructions) comes from Codex's own `~/.codex/config.toml`.

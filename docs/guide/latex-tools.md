@@ -4,8 +4,8 @@ TeXRA doesn't just send text to an AI and hope for the best. It plugs into battl
 
 ## Overview
 
-| What it does                                                       | Tool behind the scenes     |
-| ------------------------------------------------------------------ | -------------------------- |
+| What it does                                                                  | Tool behind the scenes     |
+| ----------------------------------------------------------------------------- | -------------------------- |
 | <wa-icon library="texra" name="symbol-keyword"></wa-icon> Code formatting     | `latexindent` or `tex-fmt` |
 | <wa-icon library="texra" name="diff-single"></wa-icon> Version comparison     | `latexdiff`                |
 | <wa-icon library="texra" name="symbol-numeric"></wa-icon> Document statistics | `texcount`                 |
