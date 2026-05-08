@@ -1,8 +1,8 @@
 :root {
   --desktop-nav-height: 40px;
   font-family: var(--texra-font-family);
-  background: var(--texra-editor-background);
-  color: var(--texra-editor-foreground);
+  background: var(--wa-color-surface-default);
+  color: var(--wa-color-text-normal);
 }
 
 body {
@@ -18,8 +18,8 @@ body {
   height: 100vh;
   display: grid;
   grid-template-rows: var(--desktop-nav-height) minmax(0, 1fr);
-  background: var(--texra-editor-background);
-  color: var(--texra-editor-foreground);
+  background: var(--wa-color-surface-default);
+  color: var(--wa-color-text-normal);
 }
 
 .desktop-nav {
@@ -89,7 +89,7 @@ wa-button.desktop-nav-button::part(base):hover {
 }
 
 wa-button.desktop-nav-button[aria-pressed='true']::part(base) {
-  border-color: var(--texra-focusBorder);
+  border-color: var(--wa-color-focus);
   background: var(--wa-color-neutral-fill-quiet);
 }
 
@@ -141,8 +141,8 @@ wa-button.desktop-folder-button::part(base):hover {
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-width: 0;
   min-height: 0;
-  border-right: 1px solid var(--texra-panel-border);
-  background: var(--texra-sideBar-background);
+  border-right: 1px solid var(--wa-color-surface-border);
+  background: var(--wa-color-surface-lowered);
   color: var(--texra-sideBar-foreground);
 }
 
@@ -152,7 +152,7 @@ wa-button.desktop-folder-button::part(base):hover {
   gap: 8px;
   min-height: 34px;
   padding: 0 8px 0 12px;
-  border-bottom: 1px solid var(--texra-panel-border);
+  border-bottom: 1px solid var(--wa-color-surface-border);
   box-sizing: border-box;
 }
 
@@ -161,7 +161,7 @@ wa-button.desktop-folder-button::part(base):hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--texra-foreground);
+  color: var(--wa-color-text-normal);
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
@@ -178,7 +178,7 @@ wa-button.desktop-explorer-icon-button::part(base) {
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: var(--texra-foreground);
+  color: var(--wa-color-text-normal);
 }
 
 wa-button.desktop-explorer-icon-button::part(base):hover {
@@ -200,7 +200,7 @@ wa-tree.desktop-explorer-tree {
 wa-tree.desktop-explorer-tree wa-tree-item::part(item) {
   min-height: 24px;
   padding-inline-end: 8px;
-  color: var(--texra-foreground);
+  color: var(--wa-color-text-normal);
 }
 
 wa-tree.desktop-explorer-tree wa-tree-item::part(label) {
@@ -242,7 +242,7 @@ wa-tree.desktop-explorer-tree
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--texra-descriptionForeground);
+  background: var(--wa-color-text-quiet);
 }
 
 .desktop-explorer-category-dot[data-category='input'] {
@@ -265,19 +265,19 @@ wa-tree.desktop-explorer-tree
 .desktop-explorer-selection,
 .desktop-explorer-empty {
   padding: 12px;
-  color: var(--texra-descriptionForeground);
+  color: var(--wa-color-text-quiet);
   font-size: 12px;
   line-height: 1.4;
 }
 
 .desktop-explorer-selection {
-  border-top: 1px solid var(--texra-panel-border);
+  border-top: 1px solid var(--wa-color-surface-border);
 }
 
 .desktop-explorer-selected-path {
   min-width: 0;
   overflow: hidden;
-  color: var(--texra-foreground);
+  color: var(--wa-color-text-normal);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -295,13 +295,13 @@ wa-tree.desktop-explorer-tree
 }
 
 .desktop-explorer-empty .empty-state-icon {
-  color: var(--texra-button-background);
+  color: var(--wa-color-brand-fill-loud);
   font-size: 30px;
 }
 
 .desktop-explorer-empty .empty-state-title {
   margin: 12px 0 6px;
-  color: var(--texra-foreground);
+  color: var(--wa-color-text-normal);
   font-size: var(--font-size-h2);
   font-weight: 600;
 }
@@ -318,7 +318,7 @@ wa-tree.desktop-explorer-tree
 
   .desktop-explorer {
     border-right: 0;
-    border-bottom: 1px solid var(--texra-panel-border);
+    border-bottom: 1px solid var(--wa-color-surface-border);
   }
 }
 
@@ -366,9 +366,9 @@ wa-tree.desktop-explorer-tree
 
 .desktop-command-palette-panel {
   width: min(560px, 100%);
-  border: 1px solid var(--texra-panel-border);
+  border: 1px solid var(--wa-color-surface-border);
   border-radius: 6px;
-  background: var(--texra-editor-background);
+  background: var(--wa-color-surface-default);
   box-shadow: 0 16px 40px rgb(0 0 0 / 32%);
   overflow: hidden;
 }
@@ -379,7 +379,7 @@ wa-tree.desktop-explorer-tree
   padding: 0 12px;
   box-sizing: border-box;
   border: 0;
-  border-bottom: 1px solid var(--texra-panel-border);
+  border-bottom: 1px solid var(--wa-color-surface-border);
   outline: 0;
   background: var(--texra-input-background);
   color: var(--texra-input-foreground);
@@ -387,7 +387,7 @@ wa-tree.desktop-explorer-tree
 }
 
 .desktop-command-palette-input:focus {
-  outline: 2px solid var(--texra-focusBorder);
+  outline: 2px solid var(--wa-color-focus);
   outline-offset: -2px;
 }
 
@@ -408,7 +408,7 @@ wa-tree.desktop-explorer-tree
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: var(--texra-foreground);
+  color: var(--wa-color-text-normal);
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -428,7 +428,7 @@ wa-tree.desktop-explorer-tree
 }
 
 .desktop-command-palette-meta {
-  color: var(--texra-descriptionForeground);
+  color: var(--wa-color-text-quiet);
   font-size: 12px;
 }
 
@@ -445,20 +445,20 @@ wa-tree.desktop-explorer-tree
 }
 
 .desktop-empty-workspace-panel .empty-state-icon {
-  color: var(--texra-button-background);
+  color: var(--wa-color-brand-fill-loud);
   font-size: 44px;
 }
 
 .desktop-empty-workspace-panel .empty-state-title {
   margin: 20px 0 10px;
-  color: var(--texra-foreground);
+  color: var(--wa-color-text-normal);
   font-size: var(--font-size-h1);
   font-weight: 600;
 }
 
 .desktop-empty-workspace-panel .empty-state-body {
   margin: 0;
-  color: var(--texra-descriptionForeground);
+  color: var(--wa-color-text-quiet);
   font-size: 15px;
   line-height: 1.5;
 }
@@ -485,19 +485,19 @@ wa-tree.desktop-explorer-tree
   align-items: flex-start;
   justify-content: space-between;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--texra-panel-border);
+  border-bottom: 1px solid var(--wa-color-surface-border);
 }
 
 .desktop-log-viewer-header h2 {
   margin: 0 0 4px;
-  color: var(--texra-foreground);
+  color: var(--wa-color-text-normal);
   font-size: var(--font-size-h2);
   font-weight: 600;
 }
 
 .desktop-log-viewer-header p {
   margin: 0;
-  color: var(--texra-descriptionForeground);
+  color: var(--wa-color-text-quiet);
   font-size: 12px;
 }
 
@@ -513,10 +513,10 @@ wa-tree.desktop-explorer-tree
   margin: 0;
   padding: 12px;
   overflow: auto;
-  border: 1px solid var(--texra-panel-border);
+  border: 1px solid var(--wa-color-surface-border);
   border-radius: 6px;
-  background: var(--texra-editor-background);
-  color: var(--texra-editor-foreground);
+  background: var(--wa-color-surface-default);
+  color: var(--wa-color-text-normal);
   font-family: var(--texra-font-family-monospace);
   font-size: 12px;
   line-height: 1.45;
@@ -560,7 +560,7 @@ wa-dialog.desktop-onboarding {
   gap: 14px;
   padding-bottom: 18px;
   margin-bottom: 18px;
-  border-bottom: 1px solid var(--texra-panel-border);
+  border-bottom: 1px solid var(--wa-color-surface-border);
 }
 
 .desktop-onboarding-icon {
@@ -570,20 +570,20 @@ wa-dialog.desktop-onboarding {
   height: 38px;
   border-radius: 6px;
   background: var(--wa-color-neutral-fill-quiet);
-  color: var(--texra-button-background);
+  color: var(--wa-color-brand-fill-loud);
   font-size: 20px;
 }
 
 .desktop-onboarding h1 {
   margin: 0;
-  color: var(--texra-foreground);
+  color: var(--wa-color-text-normal);
   font-size: var(--font-size-h1);
   font-weight: 600;
 }
 
 .desktop-onboarding p {
   margin: 8px 0 0;
-  color: var(--texra-descriptionForeground);
+  color: var(--wa-color-text-quiet);
   font-size: 14px;
   line-height: 1.45;
 }
@@ -601,7 +601,7 @@ wa-dialog.desktop-onboarding {
   grid-template-columns: 26px minmax(0, 1fr);
   gap: 12px;
   padding: 14px 0;
-  border-bottom: 1px solid var(--texra-panel-border);
+  border-bottom: 1px solid var(--wa-color-surface-border);
 }
 
 .desktop-onboarding-steps li:last-child {
@@ -613,9 +613,9 @@ wa-dialog.desktop-onboarding {
   place-items: center;
   width: 24px;
   height: 24px;
-  border: 1px solid var(--texra-panel-border);
+  border: 1px solid var(--wa-color-surface-border);
   border-radius: 50%;
-  color: var(--texra-foreground);
+  color: var(--wa-color-text-normal);
   font-size: 12px;
   font-weight: 600;
 }
@@ -627,14 +627,14 @@ wa-dialog.desktop-onboarding {
 }
 
 .desktop-onboarding-steps strong {
-  color: var(--texra-foreground);
+  color: var(--wa-color-text-normal);
   font-size: 13px;
   font-weight: 600;
 }
 
 .desktop-onboarding-steps span {
   margin-top: 4px;
-  color: var(--texra-descriptionForeground);
+  color: var(--wa-color-text-quiet);
   font-size: 13px;
   line-height: 1.4;
 }
