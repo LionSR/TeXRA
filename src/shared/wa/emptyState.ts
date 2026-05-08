@@ -17,6 +17,10 @@ export interface EmptyStateAction {
   // Forwarded onto the underlying <wa-button>. Lets callers re-apply host-
   // specific button classes (e.g. desktop-primary-button) for theming hooks.
   readonly className?: string;
+  // Optional leading icon, rendered with slot="start" inside the button.
+  // Lets callers preserve action-icon affordances (e.g. play/gear) without
+  // forking the helper or dropping back to inline templates.
+  readonly icon?: TeXRAIconName;
 }
 
 export type EmptyStateHeadingTag = 'h1' | 'h2' | 'h3';
@@ -85,6 +89,9 @@ export function renderEmptyState({
                       variant=${action.variant ?? 'neutral'}
                       @click=${action.onClick}
                     >
+                      ${action.icon
+                        ? waIcon(action.icon, { slot: 'start' })
+                        : nothing}
                       ${action.label}
                     </wa-button>
                   `,

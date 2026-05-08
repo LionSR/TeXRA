@@ -19,6 +19,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
+import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 // Local imports - shared styles
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -306,14 +307,19 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   };
 
   private handleSelectChange = (event: Event): void => {
-    const value = (event.target as HTMLSelectElement).value;
+    // Read from currentTarget (the wa-select host) instead of target — wa-select
+    // can retarget events from internal elements, and HTMLSelectElement is the
+    // wrong type for this Web Component anyway.
+    const select = event.currentTarget as WaSelect | null;
+    const value = typeof select?.value === 'string' ? select.value : '';
     if (value) {
       this.selectedModel = value;
     }
   };
 
   private handleAgentSelectChange = (event: Event): void => {
-    const value = (event.target as HTMLSelectElement).value;
+    const select = event.currentTarget as WaSelect | null;
+    const value = typeof select?.value === 'string' ? select.value : '';
     if (value) {
       this.selectedAgent = value;
     }

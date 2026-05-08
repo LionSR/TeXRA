@@ -14,6 +14,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
+import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -283,11 +284,15 @@ export class WorkflowToolUseFollowupSection extends LitElement {
   };
 
   private handleAgentChange = (event: Event): void => {
-    this.selectedAgent = (event.currentTarget as HTMLSelectElement).value;
+    const select = event.currentTarget as WaSelect | null;
+    const value = typeof select?.value === 'string' ? select.value : '';
+    this.selectedAgent = value;
   };
 
   private handleModelChange = (event: Event): void => {
-    this.selectedModel = (event.currentTarget as HTMLSelectElement).value;
+    const select = event.currentTarget as WaSelect | null;
+    const value = typeof select?.value === 'string' ? select.value : '';
+    this.selectedModel = value;
   };
 
   private handleQuestionInput = (event: Event): void => {
