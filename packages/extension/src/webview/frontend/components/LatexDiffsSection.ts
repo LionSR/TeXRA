@@ -22,6 +22,8 @@ import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { MainViewEvents } from '../events';
 import {
+  compactActionButtonStyles,
+  compactFormControlStyles,
   fileSelectLayoutStyles,
   toggleStyles,
 } from '../styles/fileSelectStyles';
@@ -31,6 +33,8 @@ export class LatexDiffsSection extends LitElement {
   static override styles = [
     designTokens,
     codiconStyles,
+    compactActionButtonStyles,
+    compactFormControlStyles,
     fileSelectLayoutStyles,
     toggleStyles,
     css`
@@ -57,13 +61,6 @@ export class LatexDiffsSection extends LitElement {
 
       .latexdiffs-section .file-select-header {
         margin-bottom: 0;
-      }
-
-      .latexdiffs-section wa-button {
-        width: var(--height-control);
-        height: var(--height-control);
-        min-width: var(--height-control);
-        min-height: var(--height-control);
       }
 
       .latexdiffs-section[data-expanded='true'] .optional-label,
@@ -196,7 +193,7 @@ export class LatexDiffsSection extends LitElement {
       <wa-button
         id=${id}
         class="action-icon-button"
-        appearance="outlined"
+        appearance="plain"
         variant="neutral"
         size="small"
         type="button"
