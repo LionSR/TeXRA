@@ -38,7 +38,7 @@ export class QueuedFollowUps extends LitElement {
       .queued-collapsible {
         border: var(--border-thin) solid var(--wa-color-brand-border-quiet);
         border-radius: var(--border-radius);
-        background-color: var(--texra-inputValidation-infoBackground);
+        background-color: var(--wa-color-brand-fill-quiet);
       }
 
       .queued-collapsible::part(header) {

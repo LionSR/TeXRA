@@ -91,7 +91,7 @@ export class ProviderKeyModal extends LitElement {
       }
 
       .provider-key-primary:hover {
-        background: var(--texra-button-hoverBackground);
+        background: var(--wa-color-button-hover);
       }
 
       .provider-key-secondary {

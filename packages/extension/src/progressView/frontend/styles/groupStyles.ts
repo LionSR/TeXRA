@@ -36,11 +36,11 @@ export const groupStyles = css`
 
   .log-group-header {
     &.is-running {
-      border-left-color: var(--texra-statusBarItem-warningBackground);
+      border-left-color: var(--wa-color-status-warning-bg);
       box-shadow: inset 2px 0 0
         color-mix(
           in srgb,
-          var(--texra-statusBarItem-warningBackground) 35%,
+          var(--wa-color-status-warning-bg) 35%,
           transparent
         );
     }
@@ -57,7 +57,7 @@ export const groupStyles = css`
   .log-group-content {
     padding-left: var(--wa-space-2xs);
     border-left: var(--border-thin) dashed
-      var(--texra-editorGroupHeader-tabsBorder);
+      var(--wa-color-tabs-border);
   }
 
   .log-run {

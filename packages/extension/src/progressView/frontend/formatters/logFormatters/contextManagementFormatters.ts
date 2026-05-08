@@ -47,27 +47,27 @@ const ACTION_CONFIG: Record<
   compaction: {
     icon: 'fold',
     label: 'Compacted',
-    color: 'var(--texra-charts-blue)',
+    color: 'var(--wa-color-chart-blue)',
   },
   clear_tool_uses: {
     icon: 'trash',
     label: 'Cleared Tool Uses',
-    color: 'var(--texra-charts-green)',
+    color: 'var(--wa-color-chart-green)',
   },
   clear_thinking: {
     icon: 'lightbulb',
     label: 'Cleared Thinking',
-    color: 'var(--texra-charts-green)',
+    color: 'var(--wa-color-chart-green)',
   },
   truncation: {
     icon: 'ellipsis',
     label: 'Truncated',
-    color: 'var(--texra-charts-orange)',
+    color: 'var(--wa-color-chart-orange)',
   },
   max_tokens_reduced: {
     icon: 'arrow-small-down',
     label: 'Max Tokens Reduced',
-    color: 'var(--texra-charts-yellow)',
+    color: 'var(--wa-color-chart-yellow)',
   },
 };
 

@@ -1,20 +1,15 @@
 /**
  * Document-level theme tokens for the TeXRA desktop (Electron) renderer.
  *
- * Web Awesome native theming: --wa-* tokens are the single source of truth.
- * Palette values (light-dark() pairs) live directly on --wa-color-* tokens —
- * there is no intermediate --desktop-color-* indirection. The renderer entry
- * (main.ts) imports the WA default theme stylesheet via @shared/wa, and
- * applyDesktopTheme() mirrors the active theme kind onto
- * <html class="wa-light|wa-dark"> so WA's color-scheme classes activate.
+ * Single token system: --wa-* tokens are the ONLY tokens consumer code
+ * references. They are sourced directly from the desktop's native
+ * --desktop-color-* palette below. There is no --texra-* shim layer and
+ * consumers never reference --vscode-* directly.
  *
- * --texra-* tokens remain as a thin compatibility alias layer for the niche
- * VS Code-shaped tokens (terminal ansi, symbol icons, charts, list rows,
- * scrollbar) consumed by webviews reused inside the desktop shell. Wa-aligned
- * --texra-* aliases collapse to --wa-* tokens.
- *
- * --vscode-* tokens are re-exported at the bottom so VS Code-styled CSS reused
- * in the desktop renderer keeps working without per-file rewrites.
+ * Niche palette tokens with no clean WA semantic equivalent (terminal ansi,
+ * symbol icons, charts, git decoration, debug tokens, diff editor, etc.) are
+ * promoted into the --wa-color-* namespace so the consumer surface stays
+ * uniform across both hosts.
  */
 
 :root {
@@ -26,32 +21,70 @@
   --font-size-h1: 1.5em;
   --font-size-h2: 1.25em;
   --font-size-h3: 1em;
+
+  --desktop-color-background: light-dark(#ffffff, #1e1e1e);
+  --desktop-color-foreground: light-dark(#1f2328, #d4d4d4);
+  --desktop-color-muted: light-dark(#57606a, #a6a6a6);
+  --desktop-color-sidebar: light-dark(#f6f8fa, #181818);
+  --desktop-color-sidebar-header: light-dark(#eaeef2, #222222);
+  --desktop-color-border: light-dark(#d0d7de, #2b2b2b);
+  --desktop-color-widget-border: light-dark(#d0d7de, #454545);
+  --desktop-color-input-background: light-dark(#ffffff, #313131);
+  --desktop-color-input-border: light-dark(#d0d7de, #3c3c3c);
+  --desktop-color-input-foreground: light-dark(#1f2328, #cccccc);
+  --desktop-color-placeholder: light-dark(#6e7781, #a6a6a6);
+  --desktop-color-accent: light-dark(#0969da, #0e639c);
+  --desktop-color-accent-hover: light-dark(#0757b7, #1177bb);
+  --desktop-color-accent-subtle: light-dark(#ddf4ff, #04395e);
+  --desktop-color-button-secondary: light-dark(#f6f8fa, #313131);
+  --desktop-color-button-secondary-hover: light-dark(#eaeef2, #3c3c3c);
+  --desktop-color-toolbar-active: light-dark(#dbeafe, #37373d);
+  --desktop-color-toolbar-hover: light-dark(#eaeef2, #2a2d2e);
+  --desktop-color-list-hover: light-dark(#eef2f6, #2a2d2e);
+  --desktop-color-menu-background: light-dark(#ffffff, #252526);
+  --desktop-color-menu-border: light-dark(#d0d7de, #454545);
+  --desktop-color-shadow: light-dark(rgb(31 35 40 / 15%), rgb(0 0 0 / 36%));
+  --desktop-color-error: light-dark(#cf222e, #f48771);
+  --desktop-color-warning: light-dark(#9a6700, #cca700);
+  --desktop-color-warning-background: light-dark(#fff8c5, #332a00);
+  --desktop-color-info: light-dark(#0969da, #75beff);
+  --desktop-color-info-background: light-dark(#ddf4ff, #063b49);
+  --desktop-color-success: light-dark(#1a7f37, #73c991);
+  --desktop-color-success-background: light-dark(#d2f5dc, #1a4a25);
+  --desktop-color-error-background: light-dark(#ffebe9, #5a1d1d);
+  --desktop-color-orange: light-dark(#bc4c00, #d18616);
+  --desktop-color-yellow: light-dark(#bf8700, #cca700);
+  --desktop-color-purple: light-dark(#8250df, #c586c0);
+  --desktop-color-terminal-selection: light-dark(#ddf4ff, #264f78);
 }
 
 /*
  * Web Awesome design-token bridge — single source of truth.
- * Palette literals live here directly via light-dark(). Consumers should
- * always reach for --wa-* tokens; the --texra-* / --vscode-* aliases below
- * re-export these for legacy consumers.
+ * Sourced directly from the native --desktop-color-* palette above.
  */
 :root,
 .wa-light,
 .wa-dark .wa-invert {
-  --wa-font-family-body:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    'Segoe UI', sans-serif;
-  --wa-font-family-heading: var(--wa-font-family-body);
+  /* Typography. */
+  --wa-font-family-body: var(--desktop-font-family);
+  --wa-font-family-heading: var(--desktop-font-family);
   --wa-font-family-mono: 'SF Mono', Monaco, monospace;
-  --wa-font-size-m: 13px;
-  --wa-font-weight-normal: 400;
+  --wa-font-size-m: var(--desktop-font-size);
+  --wa-font-weight-normal: var(--desktop-font-weight);
+  --wa-editor-font-size: var(--desktop-font-size);
 
-  --wa-color-text-normal: light-dark(#1f2328, #d4d4d4);
-  --wa-color-text-quiet: light-dark(#57606a, #a6a6a6);
-  --wa-color-text-link: light-dark(#0969da, #0e639c);
-  --wa-color-surface-default: light-dark(#ffffff, #1e1e1e);
-  --wa-color-surface-raised: light-dark(#f6f8fa, #181818);
-  --wa-color-surface-lowered: light-dark(#eaeef2, #222222);
-  --wa-color-surface-border: light-dark(#d0d7de, #2b2b2b);
+  /* Surface / text. */
+  --wa-color-text-normal: var(--desktop-color-foreground);
+  --wa-color-text-quiet: var(--desktop-color-muted);
+  --wa-color-text-link: var(--desktop-color-accent);
+  --wa-color-text-link-active: var(--desktop-color-accent-hover);
+  --wa-color-text-preformat: var(--desktop-color-input-foreground);
+  --wa-color-text-placeholder: var(--desktop-color-placeholder);
+  --wa-color-surface-default: var(--desktop-color-background);
+  --wa-color-surface-raised: var(--desktop-color-sidebar);
+  --wa-color-surface-lowered: var(--desktop-color-sidebar-header);
+  --wa-color-surface-border: var(--desktop-color-border);
+  --wa-color-surface-shadow: var(--desktop-color-shadow);
 
   --wa-color-focus: light-dark(#0969da, #0e639c);
 
@@ -117,6 +150,104 @@
   --wa-border-radius-circle: 50%;
   --wa-border-radius-square: 0px;
 
+  /* Buttons — niche tokens consumers still need. */
+  --wa-color-button-hover: var(--desktop-color-accent-hover);
+  --wa-color-button-border: transparent;
+  --wa-color-button-separator: rgb(255 255 255 / 40%);
+
+  /* Lists — no native WA equivalent yet (#3690). */
+  --wa-color-list-active-bg: var(--desktop-color-accent);
+  --wa-color-list-active-fg: #ffffff;
+  --wa-color-list-hover-bg: var(--desktop-color-list-hover);
+  --wa-color-list-warning-fg: var(--desktop-color-warning);
+
+  /* Menus. */
+  --wa-color-menu-background: var(--desktop-color-menu-background);
+  --wa-color-menu-border: var(--desktop-color-menu-border);
+  --wa-color-menu-foreground: var(--desktop-color-input-foreground);
+
+  /* Toolbar. */
+  --wa-color-toolbar-active: var(--desktop-color-toolbar-active);
+  --wa-color-toolbar-hover: var(--desktop-color-toolbar-hover);
+
+  /* Charts. */
+  --wa-color-chart-blue: var(--desktop-color-accent);
+  --wa-color-chart-green: var(--desktop-color-success);
+  --wa-color-chart-orange: var(--desktop-color-orange);
+  --wa-color-chart-red: var(--desktop-color-error);
+  --wa-color-chart-yellow: var(--desktop-color-yellow);
+  --wa-color-chart-purple: var(--desktop-color-purple);
+
+  /* Diff editor. */
+  --wa-color-diff-inserted: light-dark(rgb(46 160 67 / 15%), rgb(46 160 67 / 30%));
+  --wa-color-diff-removed: light-dark(rgb(248 81 73 / 15%), rgb(248 81 73 / 30%));
+
+  /* Git decoration. */
+  --wa-color-git-added: var(--desktop-color-success);
+  --wa-color-git-deleted: var(--desktop-color-error);
+  --wa-color-git-modified: var(--desktop-color-orange);
+
+  /* Debug token expressions. */
+  --wa-color-debug-name: var(--desktop-color-accent);
+  --wa-color-debug-number: var(--desktop-color-orange);
+  --wa-color-debug-string: var(--desktop-color-success);
+
+  /* Symbol icons. */
+  --wa-color-symbol-class: var(--desktop-color-orange);
+  --wa-color-symbol-constant: var(--desktop-color-accent);
+  --wa-color-symbol-function: var(--desktop-color-yellow);
+  --wa-color-symbol-keyword: var(--desktop-color-purple);
+  --wa-color-symbol-property: var(--desktop-color-accent);
+  --wa-color-symbol-variable: var(--desktop-color-input-foreground);
+
+  /* Editor surface details. */
+  --wa-color-editor-selection: var(--desktop-color-accent-subtle);
+  --wa-color-editor-inactive-selection: var(--desktop-color-accent-subtle);
+  --wa-color-editor-line-highlight: light-dark(rgb(31 35 40 / 6%), rgb(255 255 255 / 4%));
+  --wa-color-editor-find-match: light-dark(#fff8c5, #623315);
+  --wa-color-editor-find-match-highlight: light-dark(#ffe09c, #4a3219);
+  --wa-color-editor-find-match-highlight-fg: var(--desktop-color-foreground);
+
+  /* Tabs. */
+  --wa-color-tabs-background: var(--desktop-color-sidebar-header);
+  --wa-color-tabs-border: var(--desktop-color-border);
+
+  /* Block quote. */
+  --wa-color-blockquote-border: var(--desktop-color-accent);
+
+  /* Misc indicators. */
+  --wa-color-progress-bg: var(--desktop-color-accent);
+  --wa-color-status-warning-bg: var(--desktop-color-warning);
+  --wa-color-icon-info: var(--desktop-color-info);
+  --wa-color-activity-badge-bg: var(--desktop-color-accent);
+  --wa-color-badge-bg: var(--desktop-color-accent);
+
+  /* Testing icons. */
+  --wa-color-testing-passed: var(--desktop-color-success);
+  --wa-color-testing-failed: var(--desktop-color-error);
+
+  /* Terminal — full palette, no WA equivalent. */
+  --wa-color-terminal-background: var(--desktop-color-background);
+  --wa-color-terminal-foreground: var(--desktop-color-input-foreground);
+  --wa-color-terminal-selection-bg: var(--desktop-color-terminal-selection);
+  --wa-color-terminal-cursor: var(--desktop-color-input-foreground);
+  --wa-color-terminal-ansi-black: light-dark(#24292f, #000000);
+  --wa-color-terminal-ansi-blue: var(--desktop-color-accent);
+  --wa-color-terminal-ansi-cyan: light-dark(#1b7c83, #4ec9b0);
+  --wa-color-terminal-ansi-green: var(--desktop-color-success);
+  --wa-color-terminal-ansi-magenta: light-dark(#8250df, #c586c0);
+  --wa-color-terminal-ansi-red: var(--desktop-color-error);
+  --wa-color-terminal-ansi-white: light-dark(#6e7781, #cccccc);
+  --wa-color-terminal-ansi-yellow: var(--desktop-color-yellow);
+  --wa-color-terminal-ansi-bright-black: light-dark(#6e7781, #666666);
+  --wa-color-terminal-ansi-bright-blue: light-dark(#0550ae, #3794ff);
+  --wa-color-terminal-ansi-bright-cyan: light-dark(#1b7c83, #39cccc);
+  --wa-color-terminal-ansi-bright-green: var(--desktop-color-success);
+  --wa-color-terminal-ansi-bright-magenta: light-dark(#8250df, #d670d6);
+  --wa-color-terminal-ansi-bright-red: var(--desktop-color-error);
+  --wa-color-terminal-ansi-bright-white: light-dark(#ffffff, #ffffff);
+  --wa-color-terminal-ansi-bright-yellow: var(--desktop-color-yellow);
+
   /* Web Awesome canonical space scale — kept in sync with WA default theme. */
   --wa-space-scale: 1;
   --wa-space-3xs: calc(var(--wa-space-scale) * 0.125rem);
@@ -130,159 +261,6 @@
   --wa-space-3xl: calc(var(--wa-space-scale) * 3rem);
   --wa-space-4xl: calc(var(--wa-space-scale) * 4rem);
   --wa-space-5xl: calc(var(--wa-space-scale) * 5rem);
-}
-
-/*
- * --texra-* compatibility alias layer.
- * Wa-aligned aliases collapse to --wa-* tokens. Niche aliases (terminal,
- * symbol icons, charts, list rows, scrollbar) hold light-dark() literals
- * directly since WA has no semantic equivalent.
- */
-:root {
-  /* Wa-aligned aliases. */
-  --texra-foreground: var(--wa-color-text-normal);
-  --texra-descriptionForeground: var(--wa-color-text-quiet);
-  --texra-icon-foreground: var(--wa-color-text-quiet);
-  --texra-editor-background: var(--wa-color-surface-default);
-  --texra-editor-foreground: var(--wa-color-text-normal);
-  --texra-editorWidget-background: var(--wa-color-surface-raised);
-  --texra-editorWidget-border: var(--wa-color-surface-border);
-  --texra-editorHoverWidget-background: var(--wa-color-surface-raised);
-  --texra-editorHoverWidget-border: var(--wa-color-surface-border);
-  --texra-editorHoverWidget-foreground: var(--wa-color-text-normal);
-  --texra-sideBar-background: var(--wa-color-surface-lowered);
-  --texra-sideBar-foreground: var(--wa-color-text-normal);
-  --texra-sideBarSectionHeader-background: var(--wa-color-surface-lowered);
-  --texra-sideBarTitle-foreground: var(--wa-color-text-normal);
-  --texra-panel-border: var(--wa-color-surface-border);
-  --texra-panelSection-border: var(--wa-color-surface-border);
-  --texra-widget-border: light-dark(#d0d7de, #454545);
-  --texra-widget-shadow: light-dark(rgb(31 35 40 / 15%), rgb(0 0 0 / 36%));
-  --texra-textCodeBlock-background: var(--wa-color-surface-lowered);
-  --texra-textBlockQuote-background: light-dark(#ddf4ff, #04395e);
-  --texra-textBlockQuote-border: var(--wa-color-brand-fill-loud);
-  --texra-textLink-foreground: var(--wa-color-text-link);
-  --texra-textLink-activeForeground: light-dark(#0757b7, #1177bb);
-  --texra-textPreformat-foreground: var(--wa-form-control-text-color);
-  --texra-input-background: var(--wa-form-control-background-color);
-  --texra-input-foreground: var(--wa-form-control-text-color);
-  --texra-input-border: var(--wa-form-control-border-color);
-  --texra-input-placeholderForeground: light-dark(#6e7781, #a6a6a6);
-  --texra-dropdown-border: var(--wa-form-control-border-color);
-  --texra-button-background: var(--wa-color-brand-fill-loud);
-  --texra-button-foreground: var(--wa-color-brand-on-loud);
-  --texra-button-border: transparent;
-  --texra-button-hoverBackground: light-dark(#0757b7, #1177bb);
-  --texra-button-secondaryBackground: var(--wa-color-neutral-fill-quiet);
-  --texra-button-secondaryForeground: var(--wa-color-neutral-on-quiet);
-  --texra-button-secondaryHoverBackground: light-dark(#eaeef2, #3c3c3c);
-  --texra-button-separator: rgb(255 255 255 / 40%);
-  --texra-errorForeground: var(--wa-color-danger-on-quiet);
-  --texra-editorError-foreground: var(--wa-color-danger-on-quiet);
-  --texra-editorWarning-foreground: var(--wa-color-warning-on-quiet);
-  --texra-editorWarning-background: var(--wa-color-warning-fill-quiet);
-  --texra-editorInfo-foreground: var(--wa-color-brand-on-quiet);
-  --texra-editorInfo-background: var(--wa-color-brand-fill-quiet);
-  --texra-editor-inactiveSelectionBackground: light-dark(#ddf4ff, #04395e);
-  --texra-editor-selectionBackground: light-dark(#ddf4ff, #04395e);
-  --texra-inputOption-activeBackground: light-dark(#ddf4ff, #04395e);
-  --texra-inputOption-activeBorder: var(--wa-color-brand-fill-loud);
-  --texra-inputOption-activeForeground: var(--wa-color-text-normal);
-  --texra-inputValidation-errorBackground: var(--wa-color-danger-fill-quiet);
-  --texra-inputValidation-errorBorder: var(--wa-color-danger-fill-loud);
-  --texra-inputValidation-infoBackground: var(--wa-color-brand-fill-quiet);
-  --texra-inputValidation-infoBorder: var(--wa-color-brand-on-quiet);
-  --texra-inputValidation-infoForeground: var(--wa-color-brand-on-quiet);
-  --texra-inputValidation-warningBackground: var(--wa-color-warning-fill-quiet);
-  --texra-inputValidation-warningBorder: var(--wa-color-warning-on-quiet);
-  --texra-inputValidation-warningForeground: var(--wa-color-warning-on-quiet);
-  --texra-progressBar-background: var(--wa-color-brand-fill-loud);
-  --texra-statusBarItem-warningBackground: var(--wa-color-warning-fill-loud);
-  --texra-notificationsInfoIcon-foreground: var(--wa-color-brand-on-quiet);
-  --texra-activityBarBadge-background: var(--wa-color-brand-fill-loud);
-  --texra-badge-background: var(--wa-color-brand-fill-loud);
-  --texra-badge-foreground: #ffffff;
-  --texra-toolbar-activeBackground: light-dark(#dbeafe, #37373d);
-  --texra-toolbar-hoverBackground: light-dark(#eaeef2, #2a2d2e);
-  --texra-toolbar-hoverOutline: var(--wa-color-text-quiet);
-  --texra-focusBorder: var(--wa-color-focus);
-
-  /* List/menu/scrollbar — no WA equivalent. */
-  --texra-list-activeSelectionBackground: var(--wa-color-brand-fill-loud);
-  --texra-list-activeSelectionForeground: #ffffff;
-  --texra-list-focusOutline: var(--wa-color-brand-fill-loud);
-  --texra-list-hoverForeground: var(--wa-color-text-normal);
-  --texra-list-inactiveSelectionBackground: light-dark(#ddf4ff, #04395e);
-  --texra-list-hoverBackground: light-dark(#eef2f6, #2a2d2e);
-  --texra-list-warningForeground: var(--wa-color-warning-fill-loud);
-  --texra-menu-background: light-dark(#ffffff, #252526);
-  --texra-menu-border: light-dark(#d0d7de, #454545);
-  --texra-menu-foreground: var(--wa-form-control-text-color);
-  --texra-menu-selectionBackground: var(--wa-color-brand-fill-loud);
-  --texra-menu-selectionForeground: #ffffff;
-  --texra-menu-separatorBackground: light-dark(#d0d7de, #454545);
-  --texra-scrollbar-shadow: light-dark(rgb(31 35 40 / 15%), rgb(0 0 0 / 36%));
-  --texra-scrollbarSlider-background: light-dark(
-    rgb(31 35 40 / 20%),
-    rgb(121 121 121 / 40%)
-  );
-  --texra-scrollbarSlider-hoverBackground: light-dark(
-    rgb(31 35 40 / 30%),
-    rgb(100 100 100 / 70%)
-  );
-  --texra-scrollbarSlider-activeBackground: light-dark(
-    rgb(31 35 40 / 45%),
-    rgb(191 191 191 / 40%)
-  );
-
-  /* Charts — palette tokens with no WA semantic equivalent. */
-  --texra-charts-blue: var(--wa-color-brand-fill-loud);
-  --texra-charts-green: var(--wa-color-success-fill-loud);
-  --texra-charts-orange: var(--wa-color-data-orange);
-  --texra-charts-red: var(--wa-color-danger-fill-loud);
-  --texra-charts-yellow: var(--wa-color-data-yellow);
-
-  /* Testing icons. */
-  --texra-testing-iconPassed: var(--wa-color-success-fill-loud);
-  --texra-testing-iconFailed: var(--wa-color-danger-fill-loud);
-
-  /* Symbol icons — no WA equivalent. */
-  --texra-symbolIcon-classForeground: var(--wa-color-data-orange);
-  --texra-symbolIcon-constantForeground: var(--wa-color-brand-fill-loud);
-  --texra-symbolIcon-functionForeground: var(--wa-color-data-yellow);
-  --texra-symbolIcon-keywordForeground: light-dark(#8250df, #c586c0);
-  --texra-symbolIcon-propertyForeground: var(--wa-color-brand-fill-loud);
-  --texra-symbolIcon-variableForeground: var(--wa-form-control-text-color);
-
-  /* Terminal — no WA equivalent. */
-  --texra-terminal-background: var(--wa-color-surface-default);
-  --texra-terminal-foreground: var(--wa-form-control-text-color);
-  --texra-terminal-selectionBackground: light-dark(#ddf4ff, #264f78);
-  --texra-terminalCursor-foreground: var(--wa-form-control-text-color);
-  --texra-terminal-ansiBlack: light-dark(#24292f, #000000);
-  --texra-terminal-ansiBlue: var(--wa-color-brand-fill-loud);
-  --texra-terminal-ansiBrightBlack: light-dark(#6e7781, #666666);
-  --texra-terminal-ansiBrightBlue: light-dark(#0550ae, #3794ff);
-  --texra-terminal-ansiBrightCyan: light-dark(#1b7c83, #39cccc);
-  --texra-terminal-ansiBrightGreen: var(--wa-color-success-fill-loud);
-  --texra-terminal-ansiBrightMagenta: light-dark(#8250df, #d670d6);
-  --texra-terminal-ansiBrightRed: var(--wa-color-danger-fill-loud);
-  --texra-terminal-ansiBrightWhite: light-dark(#ffffff, #ffffff);
-  --texra-terminal-ansiBrightYellow: var(--wa-color-data-yellow);
-  --texra-terminal-ansiCyan: light-dark(#1b7c83, #4ec9b0);
-  --texra-terminal-ansiGreen: var(--wa-color-success-fill-loud);
-  --texra-terminal-ansiMagenta: light-dark(#8250df, #c586c0);
-  --texra-terminal-ansiRed: var(--wa-color-danger-fill-loud);
-  --texra-terminal-ansiWhite: light-dark(#6e7781, #cccccc);
-  --texra-terminal-ansiYellow: var(--wa-color-data-yellow);
-
-  /* Legacy font/typography aliases. */
-  --texra-font-family: var(--wa-font-family-body);
-  --texra-font-family-monospace: var(--wa-font-family-mono);
-  --texra-font-size: var(--wa-font-size-m);
-  --texra-font-weight: var(--wa-font-weight-normal);
-  --texra-editor-font-family: var(--wa-font-family-body);
-  --texra-editor-font-size: var(--wa-font-size-m);
 }
 
 body.vscode-light,
@@ -299,204 +277,34 @@ body.vscode-high-contrast,
 body.vscode-high-contrast-light,
 body.texra-high-contrast {
   color-scheme: light dark;
-
-  /* Override --wa-* tokens directly to system high-contrast palette. */
-  --wa-color-text-normal: CanvasText;
-  --wa-color-text-quiet: GrayText;
-  --wa-color-text-link: LinkText;
-  --wa-color-surface-default: Canvas;
-  --wa-color-surface-raised: Canvas;
-  --wa-color-surface-lowered: Canvas;
-  --wa-color-surface-border: CanvasText;
-  --wa-color-focus: Highlight;
-  --wa-form-control-background-color: Field;
-  --wa-form-control-text-color: FieldText;
-  --wa-form-control-border-color: CanvasText;
-  --wa-color-brand-fill-loud: Highlight;
+  --desktop-color-background: Canvas;
+  --desktop-color-foreground: CanvasText;
+  --desktop-color-muted: GrayText;
+  --desktop-color-sidebar: Canvas;
+  --desktop-color-sidebar-header: Canvas;
+  --desktop-color-border: CanvasText;
+  --desktop-color-widget-border: CanvasText;
+  --desktop-color-input-background: Field;
+  --desktop-color-input-border: CanvasText;
+  --desktop-color-input-foreground: FieldText;
+  --desktop-color-placeholder: GrayText;
+  --desktop-color-accent: Highlight;
+  --desktop-color-accent-hover: Highlight;
+  --desktop-color-accent-subtle: Canvas;
+  --desktop-color-button-secondary: ButtonFace;
+  --desktop-color-button-secondary-hover: ButtonFace;
+  --desktop-color-toolbar-active: Highlight;
+  --desktop-color-toolbar-hover: ButtonFace;
+  --desktop-color-list-hover: ButtonFace;
+  --desktop-color-menu-background: Canvas;
+  --desktop-color-menu-border: CanvasText;
+  --desktop-color-error: Mark;
+  --desktop-color-warning: Mark;
+  --desktop-color-info: Highlight;
+  --desktop-color-success: Highlight;
+  --wa-color-list-active-fg: HighlightText;
   --wa-color-brand-on-loud: HighlightText;
   --wa-color-brand-border-loud: CanvasText;
-  --wa-color-warning-fill-loud: Mark;
-  --wa-color-danger-fill-loud: Mark;
-  --wa-color-success-fill-loud: Highlight;
-
-  /* High-contrast-only --texra-* overrides. */
-  --texra-widget-border: CanvasText;
-  --texra-button-foreground: HighlightText;
-  --texra-button-secondaryHoverBackground: ButtonFace;
-  --texra-toolbar-activeBackground: Highlight;
-  --texra-toolbar-hoverBackground: ButtonFace;
-  --texra-list-activeSelectionForeground: HighlightText;
-  --texra-list-hoverBackground: ButtonFace;
-  --texra-menu-background: Canvas;
-  --texra-menu-border: CanvasText;
-  --texra-menu-selectionForeground: HighlightText;
-  --texra-badge-foreground: HighlightText;
-  --texra-contrastBorder: CanvasText;
-  --texra-input-placeholderForeground: GrayText;
-  --texra-editor-selectionBackground: Canvas;
-  --texra-editor-inactiveSelectionBackground: Canvas;
-  --texra-textBlockQuote-background: Canvas;
-  --texra-inputOption-activeBackground: Canvas;
-  --texra-list-inactiveSelectionBackground: Canvas;
-  --texra-terminal-selectionBackground: Highlight;
-}
-
-/*
- * VS Code variable re-exports for reused webview CSS.
- * Sourced from --wa-* tokens so existing rules referencing --vscode-*
- * still resolve in the desktop renderer.
- */
-:root {
-  --vscode-font-family: var(--wa-font-family-body);
-  --vscode-font-size: var(--wa-font-size-m);
-  --vscode-font-weight: var(--wa-font-weight-normal);
-  --vscode-foreground: var(--wa-color-text-normal);
-  --vscode-descriptionForeground: var(--wa-color-text-quiet);
-  --vscode-editor-background: var(--wa-color-surface-default);
-  --vscode-editor-font-family: var(--wa-font-family-mono);
-  --vscode-editor-font-size: var(--wa-font-size-m);
-  --vscode-editor-foreground: var(--wa-color-text-normal);
-  --vscode-editor-inactiveSelectionBackground: var(--texra-editor-inactiveSelectionBackground);
-  --vscode-editor-selectionBackground: var(--texra-editor-selectionBackground);
-  --vscode-editorError-foreground: var(--wa-color-danger-on-quiet);
-  --vscode-editorHoverWidget-background: var(--wa-color-surface-raised);
-  --vscode-editorHoverWidget-border: var(--wa-color-surface-border);
-  --vscode-editorHoverWidget-foreground: var(--wa-color-text-normal);
-  --vscode-editorInfo-background: var(--wa-color-brand-fill-quiet);
-  --vscode-editorInfo-foreground: var(--wa-color-brand-on-quiet);
-  --vscode-editorWarning-background: var(--wa-color-warning-fill-quiet);
-  --vscode-editorWarning-foreground: var(--wa-color-warning-on-quiet);
-  --vscode-editorWidget-background: var(--wa-color-surface-raised);
-  --vscode-editorWidget-border: var(--wa-color-surface-border);
-  --vscode-errorForeground: var(--wa-color-danger-on-quiet);
-  --vscode-focusBorder: var(--wa-color-focus);
-  --vscode-sideBar-background: var(--wa-color-surface-lowered);
-  --vscode-sideBar-foreground: var(--wa-color-text-normal);
-  --vscode-sideBarSectionHeader-background: var(--wa-color-surface-lowered);
-  --vscode-sideBarTitle-foreground: var(--wa-color-text-normal);
-  --vscode-panel-border: var(--wa-color-surface-border);
-  --vscode-panel-background: var(--wa-color-surface-default);
-  --vscode-panelTitle-activeBorder: var(--wa-color-focus);
-  --vscode-panelTitle-activeForeground: var(--wa-color-text-normal);
-  --vscode-panelTitle-inactiveForeground: var(--wa-color-text-quiet);
-  --vscode-panelSection-border: var(--wa-color-surface-border);
-  --vscode-settings-headerBorder: var(--wa-color-surface-border);
-  --vscode-button-background: var(--wa-color-brand-fill-loud);
-  --vscode-button-border: transparent;
-  --vscode-button-foreground: var(--wa-color-brand-on-loud);
-  --vscode-button-hoverBackground: var(--texra-button-hoverBackground);
-  --vscode-button-secondaryBackground: var(--wa-color-neutral-fill-quiet);
-  --vscode-button-secondaryForeground: var(--wa-color-neutral-on-quiet);
-  --vscode-button-secondaryHoverBackground: var(--texra-button-secondaryHoverBackground);
-  --vscode-button-separator: rgb(255 255 255 / 40%);
-  --vscode-dropdown-background: var(--wa-form-control-background-color);
-  --vscode-dropdown-border: var(--wa-form-control-border-color);
-  --vscode-dropdown-foreground: var(--wa-form-control-text-color);
-  --vscode-input-background: var(--wa-form-control-background-color);
-  --vscode-input-border: var(--wa-form-control-border-color);
-  --vscode-input-foreground: var(--wa-form-control-text-color);
-  --vscode-input-placeholderForeground: var(--texra-input-placeholderForeground);
-  --vscode-inputOption-activeBackground: var(--texra-inputOption-activeBackground);
-  --vscode-inputOption-activeBorder: var(--wa-color-brand-fill-loud);
-  --vscode-inputOption-activeForeground: var(--wa-color-text-normal);
-  --vscode-inputValidation-errorBackground: var(--wa-color-danger-fill-quiet);
-  --vscode-inputValidation-errorBorder: var(--wa-color-danger-fill-loud);
-  --vscode-inputValidation-infoBackground: var(--wa-color-brand-fill-quiet);
-  --vscode-inputValidation-infoBorder: var(--wa-color-brand-on-quiet);
-  --vscode-inputValidation-infoForeground: var(--wa-color-brand-on-quiet);
-  --vscode-inputValidation-warningBackground: var(--wa-color-warning-fill-quiet);
-  --vscode-inputValidation-warningBorder: var(--wa-color-warning-on-quiet);
-  --vscode-inputValidation-warningForeground: var(--wa-color-warning-on-quiet);
-  --vscode-textArea-background: var(--wa-form-control-background-color);
-  --vscode-textArea-border: var(--wa-form-control-border-color);
-  --vscode-textArea-foreground: var(--wa-form-control-text-color);
-  --vscode-textArea-placeholderForeground: var(--texra-input-placeholderForeground);
-  --vscode-checkbox-background: var(--wa-form-control-background-color);
-  --vscode-checkbox-border: var(--wa-form-control-border-color);
-  --vscode-checkbox-foreground: var(--wa-color-text-normal);
-  --vscode-settings-checkboxBackground: var(--wa-form-control-background-color);
-  --vscode-settings-checkboxBorder: var(--wa-form-control-border-color);
-  --vscode-settings-checkboxForeground: var(--wa-color-text-normal);
-  --vscode-settings-dropdownBackground: var(--wa-form-control-background-color);
-  --vscode-settings-dropdownBorder: var(--wa-form-control-border-color);
-  --vscode-settings-dropdownForeground: var(--wa-form-control-text-color);
-  --vscode-settings-dropdownListBorder: var(--wa-form-control-border-color);
-  --vscode-settings-textInputBackground: var(--wa-form-control-background-color);
-  --vscode-settings-textInputBorder: var(--wa-form-control-border-color);
-  --vscode-settings-textInputForeground: var(--wa-form-control-text-color);
-  --vscode-list-activeSelectionBackground: var(--wa-color-brand-fill-loud);
-  --vscode-list-activeSelectionForeground: #ffffff;
-  --vscode-list-activeSelectionIconForeground: #ffffff;
-  --vscode-list-focusAndSelectionOutline: var(--wa-color-brand-fill-loud);
-  --vscode-list-focusHighlightForeground: var(--wa-color-focus);
-  --vscode-list-focusOutline: var(--wa-color-brand-fill-loud);
-  --vscode-list-highlightForeground: var(--wa-color-focus);
-  --vscode-list-hoverBackground: var(--wa-color-neutral-fill-quiet);
-  --vscode-list-hoverForeground: var(--wa-color-text-normal);
-  --vscode-list-inactiveSelectionBackground: var(--texra-list-inactiveSelectionBackground);
-  --vscode-list-warningForeground: var(--wa-color-warning-fill-loud);
-  --vscode-menu-background: var(--texra-menu-background);
-  --vscode-menu-border: var(--texra-menu-border);
-  --vscode-menu-foreground: var(--wa-form-control-text-color);
-  --vscode-menu-selectionBackground: var(--wa-color-brand-fill-loud);
-  --vscode-menu-selectionBorder: var(--wa-color-brand-fill-loud);
-  --vscode-menu-selectionForeground: #ffffff;
-  --vscode-menu-separatorBackground: var(--texra-menu-separatorBackground);
-  --vscode-toolbar-activeBackground: var(--texra-toolbar-activeBackground);
-  --vscode-toolbar-hoverBackground: var(--texra-toolbar-hoverBackground);
-  --vscode-toolbar-hoverOutline: var(--wa-color-text-quiet);
-  --vscode-widget-border: var(--texra-widget-border);
-  --vscode-widget-shadow: var(--texra-widget-shadow);
-  --vscode-icon-foreground: var(--wa-color-text-quiet);
-  --vscode-badge-background: var(--wa-color-neutral-fill-quiet);
-  --vscode-badge-foreground: var(--wa-color-neutral-on-quiet);
-  --vscode-progressBar-background: var(--wa-color-brand-fill-loud);
-  --vscode-textBlockQuote-background: var(--wa-color-surface-lowered);
-  --vscode-textBlockQuote-border: var(--wa-color-brand-fill-loud);
-  --vscode-textCodeBlock-background: var(--wa-color-surface-raised);
-  --vscode-textLink-activeForeground: var(--texra-textLink-activeForeground);
-  --vscode-textLink-foreground: var(--wa-color-text-link);
-  --vscode-textPreformat-foreground: var(--wa-form-control-text-color);
-  --vscode-terminal-background: var(--texra-terminal-background);
-  --vscode-terminal-foreground: var(--texra-terminal-foreground);
-  --vscode-terminal-selectionBackground: var(--texra-terminal-selectionBackground);
-  --vscode-terminalCursor-foreground: var(--texra-terminalCursor-foreground);
-  --vscode-terminal-ansiBlack: var(--texra-terminal-ansiBlack);
-  --vscode-terminal-ansiBlue: var(--wa-color-brand-fill-loud);
-  --vscode-terminal-ansiBrightBlack: var(--texra-terminal-ansiBrightBlack);
-  --vscode-terminal-ansiBrightBlue: var(--texra-terminal-ansiBrightBlue);
-  --vscode-terminal-ansiBrightCyan: var(--texra-terminal-ansiBrightCyan);
-  --vscode-terminal-ansiBrightGreen: var(--wa-color-success-fill-loud);
-  --vscode-terminal-ansiBrightMagenta: var(--texra-terminal-ansiBrightMagenta);
-  --vscode-terminal-ansiBrightRed: var(--wa-color-danger-fill-loud);
-  --vscode-terminal-ansiBrightWhite: var(--texra-terminal-ansiBrightWhite);
-  --vscode-terminal-ansiBrightYellow: var(--wa-color-data-yellow);
-  --vscode-terminal-ansiCyan: var(--texra-terminal-ansiCyan);
-  --vscode-terminal-ansiGreen: var(--wa-color-success-fill-loud);
-  --vscode-terminal-ansiMagenta: var(--texra-terminal-ansiMagenta);
-  --vscode-terminal-ansiRed: var(--wa-color-danger-fill-loud);
-  --vscode-terminal-ansiWhite: var(--texra-terminal-ansiWhite);
-  --vscode-terminal-ansiYellow: var(--wa-color-data-yellow);
-  --vscode-testing-iconFailed: var(--wa-color-danger-fill-loud);
-  --vscode-testing-iconPassed: var(--wa-color-success-fill-loud);
-  --vscode-charts-blue: var(--wa-color-brand-fill-loud);
-  --vscode-charts-green: var(--wa-color-success-fill-loud);
-  --vscode-charts-orange: var(--wa-color-data-orange);
-  --vscode-charts-red: var(--wa-color-danger-fill-loud);
-  --vscode-charts-yellow: var(--wa-color-data-yellow);
-  --vscode-scrollbar-shadow: var(--texra-scrollbar-shadow);
-  --vscode-scrollbarSlider-background: var(--texra-scrollbarSlider-background);
-  --vscode-scrollbarSlider-hoverBackground: var(--texra-scrollbarSlider-hoverBackground);
-  --vscode-scrollbarSlider-activeBackground: var(--texra-scrollbarSlider-activeBackground);
-  --vscode-activityBarBadge-background: var(--wa-color-brand-fill-loud);
-  --vscode-notificationsInfoIcon-foreground: var(--wa-color-brand-on-quiet);
-  --vscode-statusBarItem-warningBackground: var(--wa-color-warning-fill-loud);
-  --vscode-symbolIcon-classForeground: var(--wa-color-data-orange);
-  --vscode-symbolIcon-constantForeground: var(--wa-color-brand-fill-loud);
-  --vscode-symbolIcon-functionForeground: var(--wa-color-data-yellow);
-  --vscode-symbolIcon-keywordForeground: light-dark(#8250df, #c586c0);
-  --vscode-symbolIcon-propertyForeground: var(--wa-color-brand-fill-loud);
-  --vscode-symbolIcon-variableForeground: var(--wa-form-control-text-color);
 }
 
 /* VS Code-compact dropdown items. WA defaults to ~0.5em padding which makes

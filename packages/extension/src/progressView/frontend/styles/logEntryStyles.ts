@@ -38,8 +38,8 @@ export const logEntryStyles = css`
     gap: var(--wa-space-2xs);
     padding: var(--wa-space-2xs) var(--wa-space-xs);
     margin: var(--wa-space-2xs) 0;
-    background: var(--texra-inputValidation-warningBackground);
-    border: var(--border-thin) solid var(--texra-inputValidation-warningBorder);
+    background: var(--wa-color-warning-fill-quiet);
+    border: var(--border-thin) solid var(--wa-color-warning-border-quiet);
     border-radius: var(--border-radius);
     color: var(--color-warning);
     font-style: italic;
@@ -209,11 +209,11 @@ export const logEntryStyles = css`
   }
 
   .level-debug {
-    color: var(--texra-debugTokenExpression-name, #4b9ef9);
+    color: var(--wa-color-debug-name, #4b9ef9);
   }
 
   .level-info {
-    color: var(--texra-notificationsInfoIcon-foreground, #75beff);
+    color: var(--wa-color-icon-info, #75beff);
   }
 
   .level-warn,
@@ -227,7 +227,7 @@ export const logEntryStyles = css`
   }
 
   .message-debug {
-    color: var(--texra-textPreformat-foreground, #a9b7c6);
+    color: var(--wa-color-text-preformat, #a9b7c6);
   }
 
   .message-info {
@@ -274,18 +274,18 @@ export const logEntryStyles = css`
      so their stdout/stderr reads like a terminal instead of a logger. */
   :host([terminal]) .log-container {
     font-family: var(
-      --texra-editor-font-family,
+      --wa-font-family-mono,
       ui-monospace,
       SFMono-Regular,
       Consolas,
       monospace
     );
-    font-size: var(--texra-editor-font-size, var(--font-size));
+    font-size: var(--wa-editor-font-size, var(--font-size));
     background-color: var(
       --texra-terminal-background,
       var(--wa-color-surface-default, transparent)
     );
-    color: var(--texra-terminal-foreground, var(--wa-color-text-normal));
+    color: var(--wa-color-terminal-foreground, var(--wa-color-text-normal));
   }
 
   :host([terminal]) .log-line {
@@ -307,11 +307,11 @@ export const logEntryStyles = css`
   }
 
   :host([terminal]) .message-warn {
-    color: var(--texra-terminal-ansiYellow, var(--color-warning));
+    color: var(--wa-color-terminal-ansi-yellow, var(--color-warning));
   }
 
   :host([terminal]) .message-error {
-    color: var(--texra-terminal-ansiRed, var(--color-error));
+    color: var(--wa-color-terminal-ansi-red, var(--color-error));
   }
 
   /* Pre-formatted text nodes for terminal-mode streams.

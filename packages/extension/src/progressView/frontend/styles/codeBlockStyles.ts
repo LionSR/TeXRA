@@ -17,7 +17,7 @@ export const codeBlockStyles = css`
     align-items: center;
     justify-content: space-between;
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
-    background-color: var(--texra-editorGroupHeader-tabsBackground);
+    background-color: var(--wa-color-tabs-background);
     border-bottom: var(--border-thin) solid var(--color-border);
     font-size: var(--font-size-xs);
   }
@@ -67,13 +67,13 @@ export const codeBlockStyles = css`
 
     &:active {
       background-color: var(
-        --texra-toolbar-activeBackground,
+        --wa-color-toolbar-active,
         rgba(99, 102, 103, 0.31)
       );
     }
 
     &.copied {
-      color: var(--texra-gitDecoration-addedResourceForeground, #3fb950);
+      color: var(--wa-color-git-added, #3fb950);
     }
 
     &:focus-visible {
@@ -109,7 +109,7 @@ export const codeBlockStyles = css`
   .hljs-keyword,
   .hljs-selector-tag,
   .hljs-tag {
-    color: var(--texra-symbolIcon-keywordForeground, var(--wa-color-text-link));
+    color: var(--wa-color-symbol-keyword, var(--wa-color-text-link));
   }
 
   .hljs-string,
@@ -117,21 +117,21 @@ export const codeBlockStyles = css`
   .hljs-regexp,
   .hljs-template-tag,
   .hljs-template-variable {
-    color: var(--texra-debugTokenExpression-string, #a31515);
+    color: var(--wa-color-debug-string, #a31515);
   }
 
   .hljs-number,
   .hljs-literal,
   .hljs-built_in,
   .hljs-type {
-    color: var(--texra-debugTokenExpression-number, #098658);
+    color: var(--wa-color-debug-number, #098658);
   }
 
   .hljs-variable,
   .hljs-params,
   .hljs-attr {
     color: var(
-      --texra-symbolIcon-variableForeground,
+      --wa-color-symbol-variable,
       var(--wa-color-text-normal)
     );
   }
@@ -139,19 +139,19 @@ export const codeBlockStyles = css`
   .hljs-function,
   .hljs-title,
   .hljs-title.function_ {
-    color: var(--texra-symbolIcon-functionForeground, #795e26);
+    color: var(--wa-color-symbol-function, #795e26);
   }
 
   .hljs-class .hljs-title,
   .hljs-title.class_,
   .hljs-title.class_.inherited__ {
-    color: var(--texra-symbolIcon-classForeground, #267f99);
+    color: var(--wa-color-symbol-class, #267f99);
   }
 
   .hljs-property,
   .hljs-name {
     color: var(
-      --texra-symbolIcon-propertyForeground,
+      --wa-color-symbol-property,
       var(--wa-color-text-normal)
     );
   }
@@ -170,17 +170,17 @@ export const codeBlockStyles = css`
   .hljs-meta,
   .hljs-meta .hljs-keyword,
   .hljs-meta .hljs-string {
-    color: var(--texra-symbolIcon-keywordForeground, #0000ff);
+    color: var(--wa-color-symbol-keyword, #0000ff);
   }
 
   .hljs-addition {
-    background-color: var(--texra-diffEditor-insertedTextBackground);
-    color: var(--texra-gitDecoration-addedResourceForeground, #22863a);
+    background-color: var(--wa-color-diff-inserted);
+    color: var(--wa-color-git-added, #22863a);
   }
 
   .hljs-deletion {
-    background-color: var(--texra-diffEditor-removedTextBackground);
-    color: var(--texra-gitDecoration-deletedResourceForeground, #b31d28);
+    background-color: var(--wa-color-diff-removed);
+    color: var(--wa-color-git-deleted, #b31d28);
   }
 
   .hljs-emphasis {
@@ -193,7 +193,7 @@ export const codeBlockStyles = css`
 
   .hljs-symbol,
   .hljs-bullet {
-    color: var(--texra-symbolIcon-constantForeground, #36acaa);
+    color: var(--wa-color-symbol-constant, #36acaa);
   }
 
   .hljs-link {
