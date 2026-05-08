@@ -45,13 +45,13 @@ import {
 } from '@commands/settings';
 import { registerAuthCommands } from '@commands/auth';
 import { registerSetupAssistantCommand } from '@commands/setup';
-import { registerApiKeyCommands } from '@commands/api/apiKeyCommands';
-import { registerGitCommands } from '@commands/git/gitCommands';
-import { registerProgressViewCommands } from '@commands/progress/progressViewCommands';
 import {
   createExtensionCommandActions,
   registerExtensionCommandRegistry,
 } from '@commands/extensionCommandSurface';
+import { registerApiKeyCommands } from '@commands/api/apiKeyCommands';
+import { registerGitCommands } from '@commands/git/gitCommands';
+import { registerProgressViewCommands } from '@commands/progress/progressViewCommands';
 
 // Local file imports
 import { MainViewProvider } from './MainViewProvider';
@@ -97,11 +97,21 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   registerWalkthroughCommands(context);
   registerSetupAssistantCommand(context);
 
-  // Settings tab routes, workbench-settings shortcut, and main-view reset
-  // share their dispatch shape with the desktop registry, so they're
-  // registered through the shared `dispatchCommandFromRegistry` helper
-  // rather than per-command `registerCommand` call sites. The remaining
-  // commands stay on the per-command pattern for now (tracked in #3693).
+  // The shared registry now also owns the no-arg housekeeping (cleanOutput,
+  // cleanBuild, indentTeX) and auth (signIn/signOut/viewProfile) commands
+  // alongside the original settings/main-view routes — same dispatch path
+  // as the desktop registry. See `extensionCommandSurface.ts` for the
+  // handler map.
+  //
+  // FOLLOW_UP (#3771): the remaining ~70 per-command registrations all
+  // take VS Code-specific arguments (TextEditor, Range, Uri, FileLocation,
+  // pack/clean configs, agent execution payloads). Migrating those needs
+  // either: (a) the new `definedHandler` typed-args path in
+  // `@shared/commands/registry` plus per-command Zod arg schemas, or
+  // (b) staying on per-command registration where the handler captures
+  // VS Code state directly (e.g. `vscode.window.activeTextEditor`).
+  // Host-exclusive commands like `texra.showGitSettings` follow the same
+  // `Exclude<>` pattern desktop already uses.
   const settingsViewProvider = initializeSettingsViewProvider(context);
   registerExtensionCommandRegistry(
     context,
