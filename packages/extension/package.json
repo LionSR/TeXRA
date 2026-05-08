@@ -1589,7 +1589,7 @@
     "signal-polyfill": "^0.2.2",
     "sortablejs": "^1.15.7",
     "strip-ansi": "^7.2.0",
-    "tar": "^7.5.14",
+    "tar": "^7.5.15",
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",
     "yaml": "^2.8.3",
