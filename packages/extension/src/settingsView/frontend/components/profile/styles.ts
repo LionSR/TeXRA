@@ -541,7 +541,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .model-name {
-    font-family: var(--texra-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     white-space: nowrap;
   }
 
