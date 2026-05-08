@@ -157,7 +157,7 @@ export class ToolsTab extends LitElement {
 
       .tools-health-ring__available {
         fill: none;
-        stroke: var(--texra-testing-iconPassed, #73c991);
+        stroke: var(--wa-color-testing-passed, #73c991);
         stroke-width: 4;
         stroke-linecap: round;
         transition: stroke-dashoffset var(--transition-slow);
@@ -165,7 +165,7 @@ export class ToolsTab extends LitElement {
 
       .tools-health-ring__missing {
         fill: none;
-        stroke: var(--texra-testing-iconFailed, #f48771);
+        stroke: var(--wa-color-testing-failed, #f48771);
         stroke-width: 4;
         stroke-linecap: round;
         transition: stroke-dashoffset var(--transition-slow);
@@ -188,11 +188,11 @@ export class ToolsTab extends LitElement {
       }
 
       .tools-stat-available {
-        color: var(--texra-testing-iconPassed, #73c991);
+        color: var(--wa-color-testing-passed, #73c991);
       }
 
       .tools-stat-missing {
-        color: var(--texra-testing-iconFailed, #f48771);
+        color: var(--wa-color-testing-failed, #f48771);
       }
 
       /* Base recheck-btn styles provided by .tab-action-btn in commonViewStyles */

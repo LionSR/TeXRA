@@ -132,7 +132,7 @@ export const commonViewStyles: CSSResult = css`
   .panel-collapsible::part(header) {
     padding: var(--wa-space-2xs) var(--wa-space-xs);
     background-color: var(--wa-color-surface-lowered, transparent);
-    color: var(--texra-sideBarTitle-foreground, var(--wa-color-text-normal));
+    color: var(--wa-color-text-normal, var(--wa-color-text-normal));
   }
 
   /* "body" part is used by vscode-collapsible; "content" part by wa-details. */
@@ -368,7 +368,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .tab-action-btn:active {
-    background: var(--texra-toolbar-activeBackground, rgba(99, 102, 103, 0.31));
+    background: var(--wa-color-toolbar-active, rgba(99, 102, 103, 0.31));
   }
 
   .tab-action-btn:focus-visible {
@@ -555,7 +555,7 @@ export const filledButtonStyles: CSSResult = css`
     font-family: inherit;
     color: var(--wa-color-brand-on-loud);
     background: var(--wa-color-brand-fill-loud);
-    border: var(--border-thin) solid var(--texra-button-border, transparent);
+    border: var(--border-thin) solid var(--wa-color-button-border, transparent);
     border-radius: var(--border-radius);
     cursor: pointer;
     transition:
@@ -564,7 +564,7 @@ export const filledButtonStyles: CSSResult = css`
   }
 
   .filled-button:hover {
-    background: var(--texra-button-hoverBackground);
+    background: var(--wa-color-button-hover);
   }
 
   .filled-button:active {

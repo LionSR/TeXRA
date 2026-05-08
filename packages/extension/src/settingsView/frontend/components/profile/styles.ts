@@ -35,7 +35,7 @@ export const profileViewStyles: CSSResult = css`
 
   .label {
     font-weight: var(--font-weight-bold);
-    color: var(--texra-textPreformat-foreground);
+    color: var(--wa-color-text-preformat);
     min-width: 80px;
   }
 
@@ -57,7 +57,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .profile-notice code {
-    font-family: var(--texra-editor-font-family, monospace), monospace;
+    font-family: var(--wa-font-family-mono, monospace), monospace;
     font-size: 0.95em;
     padding: 0 var(--wa-space-3xs);
     border-radius: var(--border-radius-small);
@@ -186,7 +186,7 @@ export const profileViewStyles: CSSResult = css`
   .api-access-support-icon {
     flex-shrink: 0;
     margin-top: var(--wa-space-3xs);
-    color: var(--texra-charts-red, var(--wa-color-danger-on-quiet));
+    color: var(--wa-color-chart-red, var(--wa-color-danger-on-quiet));
   }
 
   .api-access-support a {
@@ -195,7 +195,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .api-access-support a:hover {
-    color: var(--texra-textLink-activeForeground);
+    color: var(--wa-color-text-link-active);
     text-decoration: underline;
   }
 
@@ -586,7 +586,7 @@ export const profileViewStyles: CSSResult = css`
 
   .model-row-icon--warning {
     --_icon-color: var(
-      --texra-list-warningForeground,
+      --wa-color-list-warning-fg,
       var(--wa-color-warning-on-quiet)
     );
   }

@@ -236,12 +236,12 @@ export class LaTeXTab extends LitElement {
 
       .dependency-icon.installed,
       .setting-status-icon.is-set {
-        color: var(--wa-color-success-fill-loud);
+        color: var(--wa-color-testing-passed, #73c991);
       }
 
       .dependency-icon.missing,
       .setting-status-icon.not-set {
-        color: var(--wa-color-danger-fill-loud);
+        color: var(--wa-color-testing-failed, #f48771);
       }
 
       .dependency-info {
@@ -295,7 +295,7 @@ export class LaTeXTab extends LitElement {
 
       .dependency-path {
         margin-top: var(--wa-space-3xs);
-        font-family: var(--texra-editor-font-family, monospace), monospace;
+        font-family: var(--wa-font-family-mono, monospace), monospace;
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
       }
@@ -315,7 +315,7 @@ export class LaTeXTab extends LitElement {
           rgba(128, 128, 128, 0.08)
         );
         border-radius: var(--border-radius-small);
-        font-family: var(--texra-editor-font-family, monospace), monospace;
+        font-family: var(--wa-font-family-mono, monospace), monospace;
         font-size: var(--font-size-sm);
         color: var(--wa-color-text-normal);
         overflow: hidden;
@@ -323,9 +323,9 @@ export class LaTeXTab extends LitElement {
         white-space: nowrap;
       }
 
-      .tab-action-btn.copy-success {
-        color: var(--wa-color-success-fill-loud);
-        border-color: var(--wa-color-success-fill-loud);
+      .copy-success {
+        color: var(--wa-color-testing-passed, #73c991) !important;
+        border-color: var(--wa-color-testing-passed, #73c991) !important;
       }
 
       /* Prerequisite hint uses wa-callout; only layout for actions row + the
@@ -368,14 +368,14 @@ export class LaTeXTab extends LitElement {
       }
 
       .setting-config-key {
-        font-family: var(--texra-editor-font-family, monospace), monospace;
+        font-family: var(--wa-font-family-mono, monospace), monospace;
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
         margin-bottom: var(--wa-space-2xs);
       }
 
       .setting-value {
-        font-family: var(--texra-editor-font-family, monospace), monospace;
+        font-family: var(--wa-font-family-mono, monospace), monospace;
         font-size: var(--font-size-sm);
         color: var(--wa-color-text-link);
       }

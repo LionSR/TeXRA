@@ -26,7 +26,7 @@ const COMPACTION_THRESHOLD = 75;
 function fillColor(percent: number): string {
   if (percent <= 65) return 'var(--wa-color-success-on-quiet, #73c991)';
   if (percent <= 80) return 'var(--wa-color-warning-on-quiet, #cca700)';
-  return 'var(--texra-testing-iconFailed, #f48771)';
+  return 'var(--wa-color-testing-failed, #f48771)';
 }
 
 @customElement('usage-panel')

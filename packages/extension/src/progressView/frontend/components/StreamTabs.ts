@@ -167,7 +167,7 @@ export class StreamTab extends LitElement {
       @keyframes pulse-border {
         0%,
         100% {
-          border-left-color: var(--texra-charts-orange, #d18616);
+          border-left-color: var(--wa-color-chart-orange, #d18616);
         }
         50% {
           border-left-color: transparent;
@@ -289,7 +289,7 @@ export class StreamTab extends LitElement {
           transparent
         );
         color: var(
-          --texra-list-activeSelectionForeground,
+          --wa-color-list-active-fg,
           var(--wa-color-text-normal)
         );
         box-shadow: inset 0 0 0 1px
@@ -307,7 +307,7 @@ export class StreamTab extends LitElement {
        */
       .tab-container.is-active * {
         color: var(
-          --texra-list-activeSelectionForeground,
+          --wa-color-list-active-fg,
           var(--wa-color-text-normal)
         );
       }

@@ -126,7 +126,7 @@ export class AgentsTab extends LitElement {
       }
 
       .agents-dir-path {
-        font-family: var(--texra-editor-font-family, monospace), monospace;
+        font-family: var(--wa-font-family-mono, monospace), monospace;
         color: var(--wa-color-text-normal);
         overflow: hidden;
         text-overflow: ellipsis;
