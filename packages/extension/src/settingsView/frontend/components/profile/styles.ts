@@ -104,7 +104,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .provider-keys-table tbody tr:hover {
-    background: var(--texra-list-hoverBackground);
+    background: var(--wa-color-neutral-fill-quiet);
   }
 
   /* Profile-specific badge modifiers (base category styles from @shared/styles) */
@@ -118,12 +118,12 @@ export const profileViewStyles: CSSResult = css`
 
   .badge.visibility-badge.public {
     background: var(--texra-testing-iconPassed);
-    color: var(--texra-button-foreground);
+    color: var(--wa-color-brand-on-loud);
   }
 
   .badge.visibility-badge.custom {
-    background: var(--texra-badge-background);
-    color: var(--texra-badge-foreground);
+    background: var(--wa-color-neutral-fill-quiet);
+    color: var(--wa-color-neutral-on-quiet);
   }
 
   .select-btn {
@@ -156,7 +156,7 @@ export const profileViewStyles: CSSResult = css`
     align-items: flex-start;
     gap: var(--wa-space-xs);
     padding: var(--wa-space-xs);
-    background: var(--texra-input-background);
+    background: var(--wa-form-control-background-color);
     border: var(--border-thin) solid var(--color-border);
     border-radius: var(--border-radius);
     cursor: pointer;
@@ -169,7 +169,7 @@ export const profileViewStyles: CSSResult = css`
 
   .api-access-option:has(input:checked) {
     border-color: var(--wa-color-focus);
-    background: var(--texra-list-hoverBackground);
+    background: var(--wa-color-neutral-fill-quiet);
   }
 
   .api-access-option input[type='radio'] {
@@ -190,7 +190,7 @@ export const profileViewStyles: CSSResult = css`
   .api-access-support-icon {
     flex-shrink: 0;
     margin-top: 2px;
-    color: var(--texra-charts-red, var(--texra-errorForeground));
+    color: var(--texra-charts-red, var(--wa-color-danger-on-quiet));
   }
 
   .api-access-support a {
@@ -256,7 +256,7 @@ export const profileViewStyles: CSSResult = css`
     gap: var(--wa-space-xs);
     margin-bottom: var(--wa-space-xs);
     padding: var(--wa-space-xs);
-    background: var(--texra-input-background);
+    background: var(--wa-form-control-background-color);
     border: var(--border-thin) solid var(--color-border);
     border-radius: var(--border-radius);
   }
@@ -438,7 +438,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .provider-group-header:hover {
-    background: var(--texra-list-hoverBackground);
+    background: var(--wa-color-neutral-fill-quiet);
   }
 
   .provider-group-toggle {
@@ -517,7 +517,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .model-row:hover {
-    background: var(--texra-list-hoverBackground);
+    background: var(--wa-color-neutral-fill-quiet);
   }
 
   .model-row wa-checkbox {
@@ -581,7 +581,7 @@ export const profileViewStyles: CSSResult = css`
 
   .deprecated-toggle:hover {
     color: var(--wa-color-text-normal);
-    background: var(--texra-list-hoverBackground);
+    background: var(--wa-color-neutral-fill-quiet);
   }
 
   .deprecated-toggle:focus-visible {
