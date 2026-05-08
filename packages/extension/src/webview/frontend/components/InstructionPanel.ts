@@ -121,7 +121,7 @@ export class InstructionPanel extends LitElement {
         border-radius: var(--border-radius);
         margin-bottom: var(--wa-space-3xs);
         border: var(--border-thin) solid var(--color-border);
-        transition: border-color 160ms ease;
+        transition: border-color var(--transition-fast);
       }
 
       /* Subtle lift when the user is composing — signals focus without
@@ -324,10 +324,10 @@ export class InstructionPanel extends LitElement {
         font-weight: var(--font-weight-semibold, 600);
         letter-spacing: 0.01em;
         transition:
-          transform 120ms ease,
-          box-shadow 160ms ease,
-          background-color 160ms ease,
-          filter 160ms ease;
+          transform var(--transition-fast),
+          box-shadow var(--transition-fast),
+          background-color var(--transition-fast),
+          filter var(--transition-fast);
       }
 
       wa-button.execute-button::part(base):hover {
@@ -466,8 +466,8 @@ export class InstructionPanel extends LitElement {
         max-height: 0;
         overflow: hidden;
         transition:
-          opacity 200ms ease,
-          max-height 200ms ease,
+          opacity var(--transition-normal),
+          max-height var(--transition-normal),
           visibility 0s linear 200ms;
       }
 
@@ -476,8 +476,8 @@ export class InstructionPanel extends LitElement {
         visibility: visible;
         max-height: var(--height-large, 200px);
         transition:
-          opacity 200ms ease,
-          max-height 200ms ease,
+          opacity var(--transition-normal),
+          max-height var(--transition-normal),
           visibility 0s linear 0s;
       }
 
@@ -505,7 +505,7 @@ export class InstructionPanel extends LitElement {
         width: var(--font-size-icon, 1em);
         height: var(--font-size-icon, 1em);
         opacity: 0;
-        transition: opacity 150ms ease;
+        transition: opacity var(--transition-fast);
       }
 
       .polish-spinner-slot[aria-hidden='false'] {
