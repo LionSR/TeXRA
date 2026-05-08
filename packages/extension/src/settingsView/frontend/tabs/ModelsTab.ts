@@ -9,7 +9,10 @@ import { LitElement, html, nothing, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens } from '@shared/styles';
+
+// Web Awesome icon bundle (side-effect import)
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared schemas
 import type {
@@ -27,7 +30,6 @@ export class ModelsTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    codiconStyles,
     css`
       :host {
         display: block;
@@ -80,7 +82,11 @@ export class ModelsTab extends LitElement {
 
     return html`
       <div class="settings-reminder">
-        <span class="codicon codicon-info settings-reminder-icon"></span>
+        <wa-icon
+          library="texra"
+          name="info"
+          class="settings-reminder-icon"
+        ></wa-icon>
         <div class="settings-reminder-body">
           <div class="settings-reminder-title">API key settings</div>
           <div class="settings-reminder-description">${description}</div>
@@ -90,7 +96,7 @@ export class ModelsTab extends LitElement {
               class="tab-action-btn"
               @click=${this.handleScrollToApiConfig}
             >
-              <span class="codicon codicon-key"></span>
+              <wa-icon library="texra" name="key"></wa-icon>
               Jump to API Configuration
             </button>
           </div>

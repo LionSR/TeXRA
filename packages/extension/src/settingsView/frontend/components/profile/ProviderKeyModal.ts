@@ -8,7 +8,10 @@ import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { codiconStyles, designTokens } from '@shared/styles';
+import { designTokens } from '@shared/styles';
+
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared events
 import { createEvent } from '@shared/utils/events';
@@ -17,7 +20,6 @@ import { createEvent } from '@shared/utils/events';
 export class ProviderKeyModal extends LitElement {
   static override styles = [
     designTokens,
-    codiconStyles,
     css`
       :host {
         position: fixed;
@@ -279,12 +281,14 @@ export class ProviderKeyModal extends LitElement {
           <div class="provider-key-header">
             <h2 id="provider-key-title">Set ${displayName} API key</h2>
             <button
-              class="provider-key-icon codicon codicon-close"
+              class="provider-key-icon"
               type="button"
               title="Cancel"
               aria-label="Cancel"
               @click=${this.close}
-            ></button>
+            >
+              <wa-icon library="texra" name="close"></wa-icon>
+            </button>
           </div>
           <p class="provider-key-description">
             The key is stored by TeXRA on this device and is not shown again
@@ -310,7 +314,7 @@ export class ProviderKeyModal extends LitElement {
               Cancel
             </button>
             <button class="provider-key-primary" type="submit">
-              <span class="codicon codicon-key"></span>
+              <wa-icon library="texra" name="key"></wa-icon>
               Save Key
             </button>
           </div>

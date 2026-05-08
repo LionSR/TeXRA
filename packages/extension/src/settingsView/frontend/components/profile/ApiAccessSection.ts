@@ -7,7 +7,10 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { codiconStyles, designTokens } from '@shared/styles';
+import { designTokens } from '@shared/styles';
+
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared copy
 import { PROMO_NOTICE_LONG } from '@shared/copy/promoNotice';
@@ -20,7 +23,7 @@ import { ProfileViewEvents } from './events';
 
 @customElement('api-access-section')
 export class ApiAccessSection extends LitElement {
-  static override styles = [designTokens, codiconStyles, profileViewStyles];
+  static override styles = [designTokens, profileViewStyles];
 
   @property({ attribute: false }) mode: 'included' | 'personal' = 'personal';
 
@@ -76,10 +79,12 @@ export class ApiAccessSection extends LitElement {
         ${this.mode === 'included'
           ? html`
               <div class="api-access-support">
-                <span
-                  class="codicon codicon-heart api-access-support-icon"
+                <wa-icon
+                  library="texra"
+                  name="heart"
+                  class="api-access-support-icon"
                   aria-hidden="true"
-                ></span>
+                ></wa-icon>
                 <span class="api-access-support-copy">
                   ${PROMO_NOTICE_LONG.supportLead}<a
                     href=${PROMO_NOTICE_LONG.supportSponsorsUrl}
