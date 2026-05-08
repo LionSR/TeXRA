@@ -94,8 +94,8 @@ export const requestPanelStyles: CSSResult = css`
     display: flex;
     flex-direction: column;
     border-radius: var(--border-radius);
-    border: var(--border-thin) solid var(--texra-editorHoverWidget-border);
-    background: var(--texra-editorHoverWidget-background);
+    border: var(--border-thin) solid var(--wa-color-surface-border);
+    background: var(--wa-color-surface-raised);
     padding: ${sp.medium};
     gap: ${sp.medium};
     position: relative;
@@ -352,7 +352,7 @@ export const requestPanelStyles: CSSResult = css`
   .retry-request__error-body {
     margin-top: ${sp.tiny};
     padding: ${sp.small};
-    background: var(--texra-textBlockQuote-background, rgba(0, 0, 0, 0.1));
+    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.1));
     border-radius: var(--border-radius-small);
     font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-xs);
@@ -628,7 +628,7 @@ export const requestPanelStyles: CSSResult = css`
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-quiet);
     padding: ${sp.small} ${sp.medium};
-    background: var(--texra-textBlockQuote-background, rgba(0, 0, 0, 0.1));
+    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.1));
     border-radius: var(--border-radius-small);
     border-left: var(--border-thick) solid
       var(--texra-textBlockQuote-border, var(--wa-color-focus));
@@ -636,8 +636,8 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .external-inquiry-request__question {
-    background: var(--texra-textCodeBlock-background, rgba(0, 0, 0, 0.05));
-    border: var(--border-thin) solid var(--texra-editorHoverWidget-border);
+    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.05));
+    border: var(--border-thin) solid var(--wa-color-surface-border);
     border-radius: var(--border-radius);
     padding: ${sp.medium};
     position: relative;
@@ -659,7 +659,7 @@ export const requestPanelStyles: CSSResult = css`
     justify-content: flex-end;
     margin-top: ${sp.small};
     padding-top: ${sp.small};
-    border-top: var(--border-thin) solid var(--texra-editorHoverWidget-border);
+    border-top: var(--border-thin) solid var(--wa-color-surface-border);
   }
 
   .external-inquiry-request__search-hint {
@@ -667,7 +667,7 @@ export const requestPanelStyles: CSSResult = css`
     align-items: center;
     gap: ${sp.small};
     font-size: var(--font-size-sm);
-    color: var(--texra-editorInfo-foreground, var(--wa-color-focus));
+    color: var(--wa-color-brand-on-quiet, var(--wa-color-focus));
     padding: ${sp.small} 0;
   }
 
@@ -691,7 +691,7 @@ export const requestPanelStyles: CSSResult = css`
     flex-direction: column;
     gap: ${sp.tiny};
     padding: ${sp.small};
-    background: var(--texra-textBlockQuote-background, rgba(0, 0, 0, 0.1));
+    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.1));
     border-radius: var(--border-radius-small);
   }
 
@@ -734,7 +734,7 @@ export const requestPanelStyles: CSSResult = css`
     flex-direction: column;
     gap: ${sp.tiny};
     padding: ${sp.small};
-    background: var(--texra-textBlockQuote-background, rgba(0, 0, 0, 0.1));
+    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.1));
     border-radius: var(--border-radius-small);
   }
 

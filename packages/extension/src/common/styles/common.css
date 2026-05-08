@@ -1,187 +1,231 @@
 /**
- * Document-level styles for TeXRA webviews.
- * These styles target elements outside Shadow DOM (body, document root).
+ * Document-level styles for TeXRA webviews (VS Code host).
  *
- * Theme tokens map the extension host's VS Code variables to TeXRA-owned
- * variables. Electron can provide the same --texra-* contract without VS Code.
+ * Web Awesome native theming: --wa-* tokens are the single source of truth and
+ * are sourced directly from the host's --vscode-* variables. The webview entry
+ * (index.ts under @shared/wa) imports the WA default theme stylesheet, and
+ * MainApp / SettingsApp / ProgressApp mirror the VS Code theme kind onto
+ * <html class="wa-light|wa-dark"> so WA's color-scheme classes activate.
+ *
+ * --texra-* tokens remain as a thin compatibility alias layer for tokens that
+ * have no clean WA equivalent (terminal ansi, symbol icons, charts, list rows,
+ * git decoration, etc.) and a few legacy aliases consumers still reference.
+ * They no longer round-trip through --wa-*.
  */
 
+:root,
+.wa-light,
+.wa-dark .wa-invert {
+  /* ── Web Awesome surface / text tokens (light + default) ────────────── */
+  --wa-color-text-normal: var(--vscode-editor-foreground, var(--vscode-foreground));
+  --wa-color-text-quiet: var(--vscode-descriptionForeground);
+  --wa-color-text-link: var(--vscode-textLink-foreground);
+
+  --wa-color-surface-default: var(--vscode-editor-background);
+  --wa-color-surface-raised: var(--vscode-editorWidget-background);
+  --wa-color-surface-lowered: var(--vscode-sideBar-background);
+  --wa-color-surface-border: var(--vscode-panel-border, var(--vscode-widget-border));
+
+  --wa-color-focus: var(--vscode-focusBorder);
+
+  /* WA form-control tokens — wired to VS Code input palette so wa-input,
+     wa-textarea, wa-select inherit the host theme's editor surface. */
+  --wa-form-control-background-color: var(--vscode-input-background);
+  --wa-form-control-text-color: var(--vscode-input-foreground);
+  --wa-form-control-border-color: var(--vscode-input-border);
+
+  /* Brand variant — primary buttons, links, focus accents. */
+  --wa-color-brand-fill-loud: var(--vscode-button-background);
+  --wa-color-brand-on-loud: var(--vscode-button-foreground);
+  --wa-color-brand-border-loud: var(--vscode-button-border, transparent);
+  --wa-color-brand-fill-quiet: var(--vscode-inputValidation-infoBackground);
+  --wa-color-brand-border-quiet: var(--vscode-inputValidation-infoBorder);
+  --wa-color-brand-on-quiet: var(--vscode-inputValidation-infoForeground);
+
+  /* Neutral variant — outlined wa-button / wa-callout, hovers. */
+  --wa-color-neutral-fill-quiet: var(--vscode-button-secondaryBackground);
+  --wa-color-neutral-border-quiet: var(--vscode-button-border, var(--vscode-widget-border));
+  --wa-color-neutral-on-quiet: var(--vscode-button-secondaryForeground);
+  --wa-color-neutral-fill-loud: var(--vscode-button-secondaryBackground);
+  --wa-color-neutral-border-loud: var(--vscode-button-border, var(--vscode-widget-border));
+  --wa-color-neutral-on-loud: var(--vscode-button-secondaryForeground);
+
+  /* Warning variant. */
+  --wa-color-warning-fill-loud: var(--vscode-statusBarItem-warningBackground);
+  --wa-color-warning-on-loud: var(--vscode-editor-foreground);
+  --wa-color-warning-border-loud: var(--vscode-inputValidation-warningBorder);
+  --wa-color-warning-fill-quiet: var(--vscode-editorWarning-background, var(--vscode-inputValidation-warningBackground));
+  --wa-color-warning-border-quiet: var(--vscode-inputValidation-warningBorder);
+  --wa-color-warning-on-quiet: var(--vscode-editorWarning-foreground, var(--vscode-inputValidation-warningForeground));
+
+  /* Danger variant. */
+  --wa-color-danger-fill-loud: var(--vscode-editorError-foreground);
+  --wa-color-danger-on-loud: #ffffff;
+  --wa-color-danger-border-loud: transparent;
+  --wa-color-danger-fill-quiet: var(--vscode-inputValidation-errorBackground);
+  --wa-color-danger-border-quiet: var(--vscode-inputValidation-errorBorder);
+  --wa-color-danger-on-quiet: var(--vscode-editorError-foreground, var(--vscode-errorForeground));
+
+  /* Success variant. */
+  --wa-color-success-fill-loud: var(--vscode-charts-green, var(--vscode-testing-iconPassed));
+  --wa-color-success-on-loud: #ffffff;
+  --wa-color-success-border-loud: transparent;
+  --wa-color-success-fill-quiet: var(--vscode-charts-green, var(--vscode-inputValidation-infoBackground));
+  --wa-color-success-border-quiet: var(--vscode-inputValidation-infoBorder);
+  --wa-color-success-on-quiet: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+
+  /* Typography. */
+  --wa-font-family-body: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  --wa-font-family-heading: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  --wa-font-family-mono: var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  --wa-font-size-m: var(--vscode-font-size, 13px);
+  --wa-font-weight-normal: var(--vscode-font-weight, 400);
+
+  /* Web Awesome canonical space scale. Mirrors the values from the WA default
+     theme so consumers can rely on --wa-space-* even if the WA color-scheme
+     class hasn't been mounted yet. */
+  --wa-space-scale: 1;
+  --wa-space-3xs: calc(var(--wa-space-scale) * 0.125rem); /* 2px */
+  --wa-space-2xs: calc(var(--wa-space-scale) * 0.25rem); /* 4px */
+  --wa-space-xs: calc(var(--wa-space-scale) * 0.5rem); /* 8px */
+  --wa-space-s: calc(var(--wa-space-scale) * 0.75rem); /* 12px */
+  --wa-space-m: calc(var(--wa-space-scale) * 1rem); /* 16px */
+  --wa-space-l: calc(var(--wa-space-scale) * 1.5rem); /* 24px */
+  --wa-space-xl: calc(var(--wa-space-scale) * 2rem); /* 32px */
+  --wa-space-2xl: calc(var(--wa-space-scale) * 2.5rem); /* 40px */
+  --wa-space-3xl: calc(var(--wa-space-scale) * 3rem); /* 48px */
+  --wa-space-4xl: calc(var(--wa-space-scale) * 4rem); /* 64px */
+  --wa-space-5xl: calc(var(--wa-space-scale) * 5rem); /* 80px */
+}
+
+/*
+ * --texra-* compatibility alias layer.
+ *
+ * These tokens fall into two buckets:
+ *   1. Niche VS Code tokens with no clean WA equivalent (terminal ansi, symbol
+ *      icons, charts, list rows, git decoration, debug tokens, diff editor).
+ *      They remain texra-prefixed and source --vscode-* directly.
+ *   2. Legacy aliases that map cleanly to a --wa-* token. New code should
+ *      prefer the --wa-* token; these aliases exist to keep ~120 consumer
+ *      files working without a churn-heavy single-PR migration.
+ */
 :root {
-  --texra-activityBarBadge-background: var(
-    --vscode-activityBarBadge-background
-  );
-  --texra-badge-background: var(--vscode-badge-background);
-  --texra-badge-foreground: var(--vscode-badge-foreground);
-  --texra-button-background: var(--vscode-button-background);
-  --texra-button-border: var(--vscode-button-border);
-  --texra-button-foreground: var(--vscode-button-foreground);
+  /* Bucket 2 — wa-aligned aliases (prefer --wa-* in new code). */
+  --texra-foreground: var(--wa-color-text-normal);
+  --texra-descriptionForeground: var(--wa-color-text-quiet);
+  --texra-icon-foreground: var(--wa-color-text-quiet);
+  --texra-editor-background: var(--wa-color-surface-default);
+  --texra-editor-foreground: var(--wa-color-text-normal);
+  --texra-editorWidget-background: var(--wa-color-surface-raised);
+  --texra-editorWidget-border: var(--wa-color-surface-border);
+  --texra-editorHoverWidget-background: var(--wa-color-surface-raised);
+  --texra-editorHoverWidget-border: var(--wa-color-surface-border);
+  --texra-editorHoverWidget-foreground: var(--wa-color-text-normal);
+  --texra-sideBar-background: var(--wa-color-surface-lowered);
+  --texra-sideBar-foreground: var(--wa-color-text-normal);
+  --texra-sideBarSectionHeader-background: var(--wa-color-surface-lowered);
+  --texra-sideBarTitle-foreground: var(--wa-color-text-normal);
+  --texra-panel-border: var(--wa-color-surface-border);
+  --texra-panelSection-border: var(--wa-color-surface-border);
+  --texra-widget-border: var(--wa-color-surface-border);
+  --texra-textCodeBlock-background: var(--wa-color-surface-lowered);
+  --texra-textBlockQuote-background: var(--wa-color-surface-lowered);
+  --texra-textLink-foreground: var(--wa-color-text-link);
+  --texra-textLink-activeForeground: var(--vscode-textLink-activeForeground);
+  --texra-input-background: var(--wa-form-control-background-color);
+  --texra-input-foreground: var(--wa-form-control-text-color);
+  --texra-input-border: var(--wa-form-control-border-color);
+  --texra-input-placeholderForeground: var(--vscode-input-placeholderForeground);
+  --texra-dropdown-border: var(--wa-form-control-border-color);
+  --texra-button-secondaryBackground: var(--wa-color-neutral-fill-quiet);
+  --texra-button-secondaryForeground: var(--wa-color-neutral-on-quiet);
   --texra-button-hoverBackground: var(--vscode-button-hoverBackground);
-  --texra-button-secondaryBackground: var(--vscode-button-secondaryBackground);
-  --texra-button-secondaryForeground: var(--vscode-button-secondaryForeground);
-  --texra-button-secondaryHoverBackground: var(
-    --vscode-button-secondaryHoverBackground
-  );
-  --texra-button-separator: var(--vscode-button-separator);
+  --texra-button-border: var(--vscode-button-border, transparent);
+  --texra-button-separator: var(--vscode-button-separator, rgb(255 255 255 / 40%));
+  --texra-errorForeground: var(--wa-color-danger-on-quiet);
+  --texra-editorError-foreground: var(--wa-color-danger-on-quiet);
+  --texra-editorWarning-foreground: var(--wa-color-warning-on-quiet);
+  --texra-editorWarning-background: var(--wa-color-warning-fill-quiet);
+  --texra-editorInfo-foreground: var(--wa-color-brand-on-quiet);
+  --texra-editorInfo-background: var(--wa-color-brand-fill-quiet);
+  --texra-inputValidation-errorBackground: var(--wa-color-danger-fill-quiet);
+  --texra-inputValidation-errorBorder: var(--vscode-inputValidation-errorBorder);
+  --texra-inputValidation-errorForeground: var(--wa-color-danger-on-quiet);
+  --texra-inputValidation-infoBackground: var(--wa-color-brand-fill-quiet);
+  --texra-inputValidation-infoBorder: var(--wa-color-brand-border-quiet);
+  --texra-inputValidation-infoForeground: var(--wa-color-brand-on-quiet);
+  --texra-inputValidation-warningBackground: var(--wa-color-warning-fill-quiet);
+  --texra-inputValidation-warningBorder: var(--wa-color-warning-border-quiet);
+  --texra-inputValidation-warningForeground: var(--wa-color-warning-on-quiet);
+  --texra-progressBar-background: var(--vscode-progressBar-background);
+  --texra-statusBarItem-warningBackground: var(--vscode-statusBarItem-warningBackground);
+  --texra-notificationsInfoIcon-foreground: var(--vscode-notificationsInfoIcon-foreground);
+  --texra-activityBarBadge-background: var(--vscode-activityBarBadge-background);
+  --texra-badge-background: var(--vscode-badge-background);
+  --texra-toolbar-activeBackground: var(--vscode-toolbar-activeBackground);
+  --texra-toolbar-hoverBackground: var(--vscode-toolbar-hoverBackground);
+  --texra-widget-shadow: var(--vscode-widget-shadow);
+  --texra-contrastBorder: var(--vscode-contrastBorder);
+  --texra-focusBorder: var(--wa-color-focus);
+
+  /* Bucket 1 — niche VS Code tokens with no clean WA equivalent. */
+  /* TODO(token-pass-3): WA does not yet expose list-row hover/selection
+     equivalents. Keep these texra aliases until WA introduces semantic tokens
+     for tree/list rows (or until consumers move to wa-tree::part(item) styling
+     hooks); see #3690. */
+  --texra-list-activeSelectionBackground: var(--vscode-list-activeSelectionBackground);
+  --texra-list-activeSelectionForeground: var(--vscode-list-activeSelectionForeground);
+  --texra-list-hoverBackground: var(--vscode-list-hoverBackground);
+  --texra-list-warningForeground: var(--vscode-list-warningForeground);
+
+  --texra-menu-background: var(--vscode-menu-background);
+  --texra-menu-border: var(--vscode-menu-border);
+  --texra-menu-foreground: var(--vscode-menu-foreground);
+
+  /* Charts — no WA equivalent. Keep as native palette tokens. */
   --texra-charts-blue: var(--vscode-charts-blue);
   --texra-charts-green: var(--vscode-charts-green);
   --texra-charts-orange: var(--vscode-charts-orange);
   --texra-charts-red: var(--vscode-charts-red);
   --texra-charts-yellow: var(--vscode-charts-yellow);
-  --texra-contrastBorder: var(--vscode-contrastBorder);
-  --texra-debugTokenExpression-name: var(--vscode-debugTokenExpression-name);
-  --texra-debugTokenExpression-number: var(
-    --vscode-debugTokenExpression-number
-  );
-  --texra-debugTokenExpression-string: var(
-    --vscode-debugTokenExpression-string
-  );
-  --texra-descriptionForeground: var(--vscode-descriptionForeground);
-  --texra-diffEditor-insertedTextBackground: var(
-    --vscode-diffEditor-insertedTextBackground
-  );
-  --texra-diffEditor-removedTextBackground: var(
-    --vscode-diffEditor-removedTextBackground
-  );
-  --texra-dropdown-border: var(--vscode-dropdown-border);
-  --texra-editor-background: var(--vscode-editor-background);
-  --texra-editor-findMatchBackground: var(--vscode-editor-findMatchBackground);
-  --texra-editor-findMatchHighlightBackground: var(
-    --vscode-editor-findMatchHighlightBackground
-  );
-  --texra-editor-findMatchHighlightForeground: var(
-    --vscode-editor-findMatchHighlightForeground
-  );
-  --texra-editor-font-family: var(
-    --vscode-editor-font-family,
-    ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Monaco,
-    Consolas,
-    monospace
-  );
+
+  /* Editor surface details — fine-grained tokens with no WA equivalent. */
+  --texra-editor-font-family: var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
   --texra-editor-font-size: var(--vscode-editor-font-size, 13px);
-  --texra-editor-foreground: var(--vscode-editor-foreground);
-  --texra-editor-inactiveSelectionBackground: var(
-    --vscode-editor-inactiveSelectionBackground
-  );
-  --texra-editor-lineHighlightBackground: var(
-    --vscode-editor-lineHighlightBackground
-  );
+  --texra-editor-findMatchBackground: var(--vscode-editor-findMatchBackground);
+  --texra-editor-findMatchHighlightBackground: var(--vscode-editor-findMatchHighlightBackground);
+  --texra-editor-findMatchHighlightForeground: var(--vscode-editor-findMatchHighlightForeground);
+  --texra-editor-inactiveSelectionBackground: var(--vscode-editor-inactiveSelectionBackground);
+  --texra-editor-lineHighlightBackground: var(--vscode-editor-lineHighlightBackground);
   --texra-editor-selectionBackground: var(--vscode-editor-selectionBackground);
-  --texra-editorError-foreground: var(--vscode-editorError-foreground);
-  --texra-editorGroupHeader-tabsBackground: var(
-    --vscode-editorGroupHeader-tabsBackground
-  );
-  --texra-editorGroupHeader-tabsBorder: var(
-    --vscode-editorGroupHeader-tabsBorder
-  );
-  --texra-editorHoverWidget-background: var(
-    --vscode-editorHoverWidget-background
-  );
-  --texra-editorHoverWidget-border: var(--vscode-editorHoverWidget-border);
-  --texra-editorHoverWidget-foreground: var(
-    --vscode-editorHoverWidget-foreground
-  );
-  --texra-editorInfo-background: var(--vscode-editorInfo-background);
-  --texra-editorInfo-foreground: var(--vscode-editorInfo-foreground);
-  --texra-editorWarning-background: var(--vscode-editorWarning-background);
-  --texra-editorWarning-foreground: var(--vscode-editorWarning-foreground);
-  --texra-editorWidget-background: var(--vscode-editorWidget-background);
-  --texra-editorWidget-border: var(--vscode-editorWidget-border);
-  --texra-errorForeground: var(--vscode-errorForeground);
-  --texra-focusBorder: var(--vscode-focusBorder);
-  --texra-font-family: var(
-    --vscode-font-family,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif
-  );
-  --texra-font-size: var(--vscode-font-size, 13px);
-  --texra-font-weight: var(--vscode-font-weight, 400);
-  --texra-foreground: var(--vscode-foreground);
-  --texra-gitDecoration-addedResourceForeground: var(
-    --vscode-gitDecoration-addedResourceForeground
-  );
-  --texra-gitDecoration-deletedResourceForeground: var(
-    --vscode-gitDecoration-deletedResourceForeground
-  );
-  --texra-gitDecoration-modifiedResourceForeground: var(
-    --vscode-gitDecoration-modifiedResourceForeground
-  );
-  --texra-icon-foreground: var(--vscode-icon-foreground);
-  --texra-input-background: var(--vscode-input-background);
-  --texra-input-border: var(--vscode-input-border);
-  --texra-input-foreground: var(--vscode-input-foreground);
-  --texra-input-placeholderForeground: var(
-    --vscode-input-placeholderForeground
-  );
-  --texra-inputValidation-errorBackground: var(
-    --vscode-inputValidation-errorBackground
-  );
-  --texra-inputValidation-infoBackground: var(
-    --vscode-inputValidation-infoBackground
-  );
-  --texra-inputValidation-infoBorder: var(--vscode-inputValidation-infoBorder);
-  --texra-inputValidation-infoForeground: var(
-    --vscode-inputValidation-infoForeground
-  );
-  --texra-inputValidation-warningBackground: var(
-    --vscode-inputValidation-warningBackground
-  );
-  --texra-inputValidation-warningBorder: var(
-    --vscode-inputValidation-warningBorder
-  );
-  --texra-inputValidation-warningForeground: var(
-    --vscode-inputValidation-warningForeground
-  );
-  /* TODO(token-pass-3): WA does not yet expose list-row hover/selection
-     equivalents. Keep these texra aliases until WA introduces semantic tokens
-     for tree/list rows (or until consumers move to wa-tree::part(item) styling
-     hooks); see #3690. */
-  --texra-list-activeSelectionBackground: var(
-    --vscode-list-activeSelectionBackground
-  );
-  --texra-list-activeSelectionForeground: var(
-    --vscode-list-activeSelectionForeground
-  );
-  --texra-list-hoverBackground: var(--vscode-list-hoverBackground);
-  --texra-list-warningForeground: var(--vscode-list-warningForeground);
-  --texra-menu-background: var(--vscode-menu-background);
-  --texra-menu-border: var(--vscode-menu-border);
-  --texra-menu-foreground: var(--vscode-menu-foreground);
-  --texra-notificationsInfoIcon-foreground: var(
-    --vscode-notificationsInfoIcon-foreground
-  );
-  --texra-panel-border: var(--vscode-panel-border);
-  --texra-panelSection-border: var(--vscode-panelSection-border);
-  --texra-progressBar-background: var(--vscode-progressBar-background);
-  --texra-sideBar-background: var(--vscode-sideBar-background);
-  --texra-sideBar-foreground: var(--vscode-sideBar-foreground);
-  --texra-sideBarSectionHeader-background: var(
-    --vscode-sideBarSectionHeader-background
-  );
-  --texra-sideBarTitle-foreground: var(--vscode-sideBarTitle-foreground);
-  --texra-statusBarItem-warningBackground: var(
-    --vscode-statusBarItem-warningBackground
-  );
+  --texra-editorGroupHeader-tabsBackground: var(--vscode-editorGroupHeader-tabsBackground);
+  --texra-editorGroupHeader-tabsBorder: var(--vscode-editorGroupHeader-tabsBorder);
+  --texra-textBlockQuote-border: var(--vscode-textBlockQuote-border);
+  --texra-textPreformat-foreground: var(--vscode-textPreformat-foreground);
+
+  /* Diff editor — no WA equivalent. */
+  --texra-diffEditor-insertedTextBackground: var(--vscode-diffEditor-insertedTextBackground);
+  --texra-diffEditor-removedTextBackground: var(--vscode-diffEditor-removedTextBackground);
+
+  /* Git decoration — no WA equivalent. */
+  --texra-gitDecoration-addedResourceForeground: var(--vscode-gitDecoration-addedResourceForeground);
+  --texra-gitDecoration-deletedResourceForeground: var(--vscode-gitDecoration-deletedResourceForeground);
+  --texra-gitDecoration-modifiedResourceForeground: var(--vscode-gitDecoration-modifiedResourceForeground);
+
+  /* Debug token expressions — no WA equivalent. */
+  --texra-debugTokenExpression-name: var(--vscode-debugTokenExpression-name);
+  --texra-debugTokenExpression-number: var(--vscode-debugTokenExpression-number);
+  --texra-debugTokenExpression-string: var(--vscode-debugTokenExpression-string);
+
+  /* Symbol icons — no WA equivalent. */
   --texra-symbolIcon-classForeground: var(--vscode-symbolIcon-classForeground);
-  --texra-symbolIcon-constantForeground: var(
-    --vscode-symbolIcon-constantForeground
-  );
-  --texra-symbolIcon-functionForeground: var(
-    --vscode-symbolIcon-functionForeground
-  );
-  --texra-symbolIcon-keywordForeground: var(
-    --vscode-symbolIcon-keywordForeground
-  );
-  --texra-symbolIcon-propertyForeground: var(
-    --vscode-symbolIcon-propertyForeground
-  );
-  --texra-symbolIcon-variableForeground: var(
-    --vscode-symbolIcon-variableForeground
-  );
+  --texra-symbolIcon-constantForeground: var(--vscode-symbolIcon-constantForeground);
+  --texra-symbolIcon-functionForeground: var(--vscode-symbolIcon-functionForeground);
+  --texra-symbolIcon-keywordForeground: var(--vscode-symbolIcon-keywordForeground);
+  --texra-symbolIcon-propertyForeground: var(--vscode-symbolIcon-propertyForeground);
+  --texra-symbolIcon-variableForeground: var(--vscode-symbolIcon-variableForeground);
+
+  /* Terminal — no WA equivalent. */
   --texra-terminal-ansiBlack: var(--vscode-terminal-ansiBlack);
   --texra-terminal-ansiBlue: var(--vscode-terminal-ansiBlue);
   --texra-terminal-ansiBrightBlack: var(--vscode-terminal-ansiBrightBlack);
@@ -200,139 +244,25 @@
   --texra-terminal-ansiYellow: var(--vscode-terminal-ansiYellow);
   --texra-terminal-background: var(--vscode-terminal-background);
   --texra-terminal-foreground: var(--vscode-terminal-foreground);
-  --texra-terminal-selectionBackground: var(
-    --vscode-terminal-selectionBackground
-  );
+  --texra-terminal-selectionBackground: var(--vscode-terminal-selectionBackground);
   --texra-terminalCursor-foreground: var(--vscode-terminalCursor-foreground);
-  --texra-testing-iconFailed: var(--vscode-testing-iconFailed);
-  --texra-testing-iconPassed: var(--vscode-testing-iconPassed);
-  --texra-textBlockQuote-background: var(--vscode-textBlockQuote-background);
-  --texra-textBlockQuote-border: var(--vscode-textBlockQuote-border);
-  --texra-textCodeBlock-background: var(--vscode-textCodeBlock-background);
-  --texra-textLink-activeForeground: var(--vscode-textLink-activeForeground);
-  --texra-textLink-foreground: var(--vscode-textLink-foreground);
-  --texra-textPreformat-foreground: var(--vscode-textPreformat-foreground);
-  --texra-toolbar-activeBackground: var(--vscode-toolbar-activeBackground);
-  --texra-toolbar-hoverBackground: var(--vscode-toolbar-hoverBackground);
-  --texra-widget-border: var(--vscode-widget-border);
-  --texra-widget-shadow: var(--vscode-widget-shadow);
-}
 
-/*
- * Web Awesome design-token bridge.
- *
- * WA components read --wa-*. The host (VS Code webview) supplies --vscode-*,
- * which is normalized once into --texra-* above. This block keeps Web Awesome
- * dependent on that TeXRA token contract rather than reading host tokens
- * directly.
- */
-:root {
-  --wa-font-family-body: var(--texra-font-family);
-  --wa-font-family-heading: var(--texra-font-family);
-  --wa-font-family-mono: var(--vscode-editor-font-family, var(--wa-font-family-mono));
-  --wa-font-size-m: var(--texra-font-size);
-  --wa-font-weight-normal: var(--texra-font-weight);
+  /* Testing icon colors. */
+  --texra-testing-iconFailed: var(--vscode-testing-iconFailed, var(--wa-color-danger-fill-loud));
+  --texra-testing-iconPassed: var(--vscode-testing-iconPassed, var(--wa-color-success-fill-loud));
 
-  /* Web Awesome canonical space scale. Mirrors the values from
-     @awesome.me/webawesome/dist/styles/themes/default.css so that consumers
-     (and WA components) can rely on --wa-space-* without importing the full
-     default theme — the theme import would override our color bridge above. */
-  --wa-space-scale: 1;
-  --wa-space-3xs: calc(var(--wa-space-scale) * 0.125rem); /* 2px */
-  --wa-space-2xs: calc(var(--wa-space-scale) * 0.25rem); /* 4px */
-  --wa-space-xs: calc(var(--wa-space-scale) * 0.5rem); /* 8px */
-  --wa-space-s: calc(var(--wa-space-scale) * 0.75rem); /* 12px */
-  --wa-space-m: calc(var(--wa-space-scale) * 1rem); /* 16px */
-  --wa-space-l: calc(var(--wa-space-scale) * 1.5rem); /* 24px */
-  --wa-space-xl: calc(var(--wa-space-scale) * 2rem); /* 32px */
-  --wa-space-2xl: calc(var(--wa-space-scale) * 2.5rem); /* 40px */
-  --wa-space-3xl: calc(var(--wa-space-scale) * 3rem); /* 48px */
-  --wa-space-4xl: calc(var(--wa-space-scale) * 4rem); /* 64px */
-  --wa-space-5xl: calc(var(--wa-space-scale) * 5rem); /* 80px */
-
-  --wa-color-text-normal: var(--wa-color-text-normal);
-  --wa-color-text-quiet: var(--wa-color-text-quiet);
-  --wa-color-text-link: var(--wa-color-text-link);
-  --wa-color-surface-default: var(--wa-color-surface-default);
-  --wa-color-surface-raised: var(--texra-editorWidget-background);
-  --wa-color-surface-lowered: var(--wa-color-surface-lowered);
-  --wa-color-surface-border: var(--wa-color-surface-border);
-
-  --wa-color-focus: var(--wa-color-focus);
-
-  /* WA form-control tokens — wire to TeXRA input palette so wa-input,
-     wa-textarea, wa-select, etc. inherit the host theme's editor surface
-     rather than WA's default form-control colors. */
-  --wa-form-control-background-color: var(--wa-form-control-background-color);
-  --wa-form-control-text-color: var(--wa-form-control-text-color);
-  --wa-form-control-border-color: var(--wa-form-control-border-color);
-
-  --wa-color-brand-fill-loud: var(--wa-color-brand-fill-loud);
-  --wa-color-brand-on-loud: var(--wa-color-brand-on-loud);
-  --wa-color-brand-border-loud: var(--texra-button-border);
-
-  /* Neutral tokens for outlined wa-button / wa-callout variants. Wire to the
-     VS Code secondary-button palette so neutral surfaces blend with the host
-     theme rather than falling back to WA's default gray scale. */
-  --wa-color-neutral-fill-quiet: var(--texra-button-secondaryBackground);
-  --wa-color-neutral-border-quiet: var(--texra-button-border);
-  --wa-color-neutral-on-quiet: var(--texra-button-secondaryForeground);
-  --wa-color-neutral-fill-loud: var(--texra-button-secondaryBackground);
-  --wa-color-neutral-border-loud: var(--texra-button-border);
-  --wa-color-neutral-on-loud: var(--texra-button-secondaryForeground);
-
-  /* Variant tokens for wa-callout / wa-button — wire VS Code validation
-     palettes through the WA color stack so brand/warning/danger/success
-     callouts blend with the host theme rather than the WA defaults. */
-  --wa-color-brand-fill-quiet: var(--texra-inputValidation-infoBackground);
-  --wa-color-brand-border-quiet: var(--texra-inputValidation-infoBorder);
-  --wa-color-brand-on-quiet: var(--texra-inputValidation-infoForeground);
-
-  --wa-color-warning-fill-loud: var(--texra-statusBarItem-warningBackground);
-  --wa-color-warning-on-loud: var(--wa-color-text-normal);
-  --wa-color-warning-border-loud: var(--texra-inputValidation-warningBorder);
-  --wa-color-warning-fill-quiet: var(--texra-inputValidation-warningBackground);
-  --wa-color-warning-border-quiet: var(--texra-inputValidation-warningBorder);
-  --wa-color-warning-on-quiet: var(--texra-inputValidation-warningForeground);
-
-  --wa-color-danger-fill-quiet: var(--texra-inputValidation-errorBackground);
-  --wa-color-danger-border-quiet: var(--texra-inputValidation-errorBorder);
-  --wa-color-danger-on-quiet: var(--texra-inputValidation-errorForeground);
-  /* Foreground on a loud danger fill (high-contrast text on red).
-     Aligned with desktop bridge (themeTokens.css) for cross-host parity. */
-  --wa-color-danger-on-loud: #ffffff;
-
-  --wa-color-success-fill-loud: var(
-    --texra-charts-green,
-    var(--texra-inputValidation-infoBackground)
-  );
-  --wa-color-success-on-loud: #ffffff;
-  --wa-color-success-border-loud: transparent;
-  --wa-color-success-fill-quiet: var(
-    --texra-charts-green,
-    var(--texra-inputValidation-infoBackground)
-  );
-  --wa-color-success-border-quiet: var(--texra-inputValidation-infoBorder);
-  --wa-color-success-on-quiet: var(--wa-color-text-normal);
-
-  --wa-color-danger-fill-loud: var(--wa-color-danger-on-quiet);
-  --wa-color-danger-border-loud: transparent;
-
-  /* Font monospace bridge for code/terminal contexts. Maps VS Code editor
-     font to WA canonical monospace token. */
-  --wa-font-family-mono: var(--vscode-editor-font-family, var(--wa-font-family-mono));
-
-  /* Testing status color bridge. Wire green text for passed tests to WA success
-     semantic token so test icons inherit host theme status colors. */
-  --wa-color-success-on-quiet: var(--wa-color-success-on-quiet);
-  --wa-color-warning-fill-quiet: var(--texra-editorWarning-background);
+  /* Legacy alias kept for monospace consumers. */
+  --texra-font-family-monospace: var(--wa-font-family-mono);
+  --texra-font-family: var(--wa-font-family-body);
+  --texra-font-size: var(--wa-font-size-m);
+  --texra-font-weight: var(--wa-font-weight-normal);
 }
 
 body {
   margin: 0;
   padding: 20px;
-  font-family: var(--texra-font-family);
-  font-size: var(--texra-font-size);
+  font-family: var(--wa-font-family-body);
+  font-size: var(--wa-font-size-m);
   color: var(--wa-color-text-normal);
   background-color: var(--wa-color-surface-default);
   box-sizing: border-box;
