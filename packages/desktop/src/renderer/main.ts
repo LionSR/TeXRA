@@ -316,6 +316,18 @@ function renderBootstrapFallback(error: unknown): void {
                 try {
                   renderLogViewer();
                   rerenderShell();
+                  // Clear the bootstrap-failed latch so chrome icon buttons
+                  // (Settings, Logs, etc.) can drive `setRoute()` →
+                  // `rerenderShell()` after recovery. Without this, the
+                  // `if (bootstrapFailed) return;` guard in setRoute makes
+                  // chrome navigation silently do nothing even though the
+                  // shell is mounted.
+                  bootstrapFailed = false;
+                  // Drive the same minimal post-mount IPC the original boot
+                  // path runs so the recovered shell isn't permanently empty
+                  // (workspace tree + onboarding state).
+                  requestWorkspaceTree();
+                  postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
                 } catch (recoveryError) {
                   console.error(
                     'TeXRA desktop renderer recovery failed',
