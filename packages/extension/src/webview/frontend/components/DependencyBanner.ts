@@ -9,7 +9,7 @@ import { when } from 'lit/directives/when.js';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import type { DependencyBannerState } from '@shared/schemas';
-import { warningBannerStyles } from '../styles/warningBannerStyles';
+import { bannerStyles } from '../styles/bannerStyles';
 import { MainViewEvents } from '../events';
 
 @customElement('dependency-banner')
@@ -17,7 +17,7 @@ export class DependencyBanner extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    warningBannerStyles,
+    bannerStyles,
     css`
       .dependency-item {
         display: flex;
@@ -70,11 +70,7 @@ export class DependencyBanner extends LitElement {
     );
 
     return html`
-      <wa-callout
-        id="dependencyBanner"
-        class="warning-banner"
-        variant="warning"
-      >
+      <wa-callout id="dependencyBanner" variant="warning">
         ${waIcon('triangle-exclamation', { slot: 'icon' })}
         <div class="banner-row">
           <span class="missing-tools">
