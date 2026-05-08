@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@fortawesome/free-solid-svg-icons": "^7.2.0",
-    "@openai/codex-sdk": "^0.128.0",
+    "@openai/codex-sdk": "^0.129.0",
     "@sentry/electron": "^7.13.0",
     "fix-path": "^5.0.0"
   }
