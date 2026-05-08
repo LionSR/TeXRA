@@ -87,7 +87,9 @@
   --texra-inputOption-activeBackground: var(--desktop-color-accent-subtle);
   --texra-inputOption-activeBorder: var(--desktop-color-accent);
   --texra-inputOption-activeForeground: var(--desktop-color-foreground);
-  --texra-inputValidation-errorBackground: var(--desktop-color-error-background);
+  --texra-inputValidation-errorBackground: var(
+    --desktop-color-error-background
+  );
   --texra-inputValidation-errorBorder: var(--desktop-color-error);
   --texra-inputValidation-infoBackground: var(--desktop-color-info-background);
   --texra-inputValidation-infoBorder: var(--desktop-color-info);

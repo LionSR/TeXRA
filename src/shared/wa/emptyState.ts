@@ -54,24 +54,26 @@ export function renderEmptyState({
       ${waIcon(icon, { className: 'empty-state-icon' })}
       <${tag} class="empty-state-title">${title}</${tag}>
       ${body ? html`<p class="empty-state-body">${body}</p>` : nothing}
-      ${actions && actions.length > 0
-        ? html`
-            <div class="empty-state-actions">
-              ${actions.map(
-                (action) => html`
-                  <wa-button
-                    class=${ifDefined(action.className)}
-                    appearance=${action.appearance ?? 'outlined'}
-                    variant=${action.variant ?? 'neutral'}
-                    @click=${action.onClick}
-                  >
-                    ${action.label}
-                  </wa-button>
-                `,
-              )}
-            </div>
-          `
-        : nothing}
+      ${
+        actions && actions.length > 0
+          ? html`
+              <div class="empty-state-actions">
+                ${actions.map(
+                  (action) => html`
+                    <wa-button
+                      class=${ifDefined(action.className)}
+                      appearance=${action.appearance ?? 'outlined'}
+                      variant=${action.variant ?? 'neutral'}
+                      @click=${action.onClick}
+                    >
+                      ${action.label}
+                    </wa-button>
+                  `,
+                )}
+              </div>
+            `
+          : nothing
+      }
     </section>
   `;
 }

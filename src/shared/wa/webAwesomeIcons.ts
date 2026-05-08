@@ -311,7 +311,9 @@ function dataUri(svg: string): string {
 }
 
 function resolveIcon(name: string): FontAwesomeIconDefinition | undefined {
-  const aliased = (CODICON_ALIASES as Readonly<Record<string, keyof typeof icons>>)[name];
+  const aliased = (
+    CODICON_ALIASES as Readonly<Record<string, keyof typeof icons>>
+  )[name];
   const canonical = aliased ?? name;
   return icons[canonical as keyof typeof icons];
 }
