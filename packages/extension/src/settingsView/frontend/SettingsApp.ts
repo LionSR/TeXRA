@@ -150,6 +150,51 @@ export class SettingsApp extends SettingsAppBase {
         min-height: 0;
       }
 
+      /*
+       * Settings has 8 tabs — the strip needs a touch more breathing
+       * room for icon+label rows than the inline view-tabs. The shared
+       * waTabThemeTokenStyles (above) sets the indicator weight + colour;
+       * here we tune density + the active-state polish for this surface.
+       */
+      wa-tab-group.settings-tabs::part(nav) {
+        padding-inline: var(--wa-space-2xs);
+        gap: 1px;
+      }
+
+      wa-tab-group.settings-tabs wa-tab {
+        font-size: var(--font-size-sm);
+        letter-spacing: -0.005em;
+      }
+
+      wa-tab-group.settings-tabs wa-tab::part(base) {
+        padding-block: 6px;
+        padding-inline: var(--wa-space-s);
+        color: color-mix(
+          in srgb,
+          var(--wa-color-text-normal) 65%,
+          transparent
+        );
+        border-radius: var(--wa-border-radius-s, 4px)
+          var(--wa-border-radius-s, 4px) 0 0;
+        transition:
+          color 140ms ease,
+          background-color 140ms ease;
+      }
+
+      wa-tab-group.settings-tabs wa-tab::part(base):hover {
+        color: var(--wa-color-text-normal);
+        background-color: color-mix(
+          in srgb,
+          var(--wa-color-neutral-fill-quiet) 50%,
+          transparent
+        );
+      }
+
+      wa-tab-group.settings-tabs wa-tab[active]::part(base) {
+        color: var(--wa-color-text-normal);
+        font-weight: var(--font-weight-semibold, 600);
+      }
+
       wa-tab-panel {
         flex: 1;
         overflow: auto;
@@ -180,7 +225,13 @@ export class SettingsApp extends SettingsAppBase {
       }
 
       wa-tab .settings-tab-icon {
-        margin-inline-end: 0.5em;
+        margin-inline-end: 0.45em;
+        opacity: 0.85;
+      }
+
+      wa-tab[active] .settings-tab-icon {
+        opacity: 1;
+        color: var(--wa-color-brand-fill-loud);
       }
     `,
   ];
