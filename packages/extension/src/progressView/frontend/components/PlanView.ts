@@ -129,7 +129,7 @@ export class PlanView extends LitElement {
 
       .plan-step__file {
         font-size: var(--font-size-sm);
-        color: var(--texra-textLink-foreground);
+        color: var(--wa-color-text-link);
         background: var(--texra-badge-background);
         padding: var(--border-thin) var(--wa-space-xs);
         border-radius: var(--border-radius);

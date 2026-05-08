@@ -184,7 +184,7 @@ export class LaTeXTab extends LitElement {
         gap: var(--wa-space-2xs);
         font-size: var(--font-size-lg);
         font-weight: var(--font-weight-medium);
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
       }
 
       .latex-description {
@@ -199,7 +199,7 @@ export class LaTeXTab extends LitElement {
         margin-bottom: var(--wa-space-xs);
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius);
-        background: var(--texra-editor-background);
+        background: var(--wa-color-surface-default);
       }
 
       .dependency-row {
@@ -228,7 +228,7 @@ export class LaTeXTab extends LitElement {
 
       .dependency-name {
         font-weight: var(--font-weight-medium);
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
       }
 
       .dependency-description {
@@ -265,7 +265,7 @@ export class LaTeXTab extends LitElement {
         );
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
         line-height: var(--line-height-relaxed);
         white-space: pre-wrap;
       }
@@ -294,7 +294,7 @@ export class LaTeXTab extends LitElement {
         border-radius: var(--border-radius-small);
         font-family: var(--texra-editor-font-family, monospace), monospace;
         font-size: var(--font-size-sm);
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -314,7 +314,7 @@ export class LaTeXTab extends LitElement {
         border: var(--border-thin) solid
           var(--texra-editorInfo-foreground, #3794ff);
         border-radius: var(--border-radius);
-        background: var(--texra-editor-background);
+        background: var(--wa-color-surface-default);
       }
 
       .prerequisite-hint .hint-icon {
@@ -330,7 +330,7 @@ export class LaTeXTab extends LitElement {
 
       .prerequisite-hint .hint-title {
         font-weight: var(--font-weight-medium);
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
         margin-bottom: var(--wa-space-3xs);
       }
 
@@ -369,7 +369,7 @@ export class LaTeXTab extends LitElement {
         margin-bottom: var(--wa-space-xs);
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius);
-        background: var(--texra-editor-background);
+        background: var(--wa-color-surface-default);
       }
 
       .setting-status-icon {
@@ -400,7 +400,7 @@ export class LaTeXTab extends LitElement {
 
       .setting-name {
         font-weight: var(--font-weight-medium);
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
         margin-bottom: 2px;
       }
 
@@ -414,7 +414,7 @@ export class LaTeXTab extends LitElement {
       .setting-value {
         font-family: var(--texra-editor-font-family, monospace), monospace;
         font-size: var(--font-size-sm);
-        color: var(--texra-textLink-foreground);
+        color: var(--wa-color-text-link);
       }
 
       .setting-description {

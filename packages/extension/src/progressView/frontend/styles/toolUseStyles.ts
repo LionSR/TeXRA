@@ -8,7 +8,7 @@ export const toolUseStyles = css`
   .tool-use-section {
     margin: var(--wa-space-2xs) 0;
     border-left: var(--border-medium) solid
-      color-mix(in srgb, var(--texra-textLink-foreground) 30%, transparent);
+      color-mix(in srgb, var(--wa-color-text-link) 30%, transparent);
     padding-left: var(--wa-space-xs);
   }
 
@@ -40,7 +40,7 @@ export const toolUseStyles = css`
 
   .tool-use-sublabel {
     font-weight: var(--font-weight-medium);
-    color: var(--texra-foreground);
+    color: var(--wa-color-text-normal);
     opacity: var(--opacity-normal);
     font-size: var(--font-size-sm);
   }
@@ -139,7 +139,7 @@ export const toolUseStyles = css`
     display: block;
     border-radius: var(--border-radius-small);
     overflow: hidden;
-    background: var(--texra-editor-background);
+    background: var(--wa-color-surface-default);
     border: var(--border-thin) solid var(--color-border);
   }
 
@@ -158,7 +158,7 @@ export const toolUseStyles = css`
   }
 
   .proposal-restore-link:focus-visible {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -194,7 +194,7 @@ export const toolUseStyles = css`
     margin: 0;
     padding: var(--wa-space-2xs);
     border-radius: var(--border-radius-small);
-    background-color: var(--texra-editor-background);
+    background-color: var(--wa-color-surface-default);
     white-space: pre-wrap;
     word-break: break-word;
     line-height: var(--line-height-relaxed);
