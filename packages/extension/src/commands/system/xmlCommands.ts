@@ -50,8 +50,11 @@ export async function handleParseXml(): Promise<void> {
   }
 }
 
-export function registerXmlCommands(context: vscode.ExtensionContext): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand(xmlCommands.parseXml, handleParseXml),
-  );
+/**
+ * `texra.parseXml` is now registered through the shared command registry
+ * in `extensionCommandSurface.ts` (see #3775). This stub is kept for the
+ * existing `registerXmlCommands(context)` call site.
+ */
+export function registerXmlCommands(_context: vscode.ExtensionContext): void {
+  /* registration handled by extensionCommandSurface */
 }

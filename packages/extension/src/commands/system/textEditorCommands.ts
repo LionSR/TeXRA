@@ -18,22 +18,22 @@ export const textEditorCommands = {
   testTextEditor: 'texra.testTextEditor',
 };
 
+/**
+ * `texra.testTextEditor` is now registered through the shared command
+ * registry in `extensionCommandSurface.ts` (see #3775). This stub is kept
+ * for the existing `registerTextEditorCommands(context)` call site.
+ */
 export function registerTextEditorCommands(
-  context: vscode.ExtensionContext,
+  _context: vscode.ExtensionContext,
 ): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      textEditorCommands.testTextEditor,
-      handleTestTextEditor,
-    ),
-  );
+  /* registration handled by extensionCommandSurface */
 }
 
 /**
  * Handle the test text editor command
  * This command allows testing the TextEditorTool with different commands
  */
-async function handleTestTextEditor(): Promise<void> {
+export async function handleTestTextEditor(): Promise<void> {
   try {
     // Get active editor
     const editor = vscode.window.activeTextEditor;

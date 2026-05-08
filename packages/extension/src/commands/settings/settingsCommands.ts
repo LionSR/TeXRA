@@ -44,7 +44,8 @@ export async function showSettingsView(): Promise<void> {
  * shared command registry in `extensionCommandSurface.ts` (mirroring the
  * desktop's `DESKTOP_COMMAND_HANDLERS`). The remaining per-command
  * registration here covers `texra.showGitSettings`, which is not yet on
- * the desktop's menu surface so it stays VS Code-only for now.
+ * the desktop's menu surface and is also absent from `commandCatalog`,
+ * so it stays VS Code-only via direct `registerCommand`.
  */
 export function registerSettingsViewCommands(
   context: vscode.ExtensionContext,
