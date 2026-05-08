@@ -15,9 +15,9 @@ export const groupStyles = css`
     background-color: transparent;
     border-left: var(--border-medium) solid var(--color-border);
     transition:
-      border-left-color 180ms ease,
-      background-color 140ms ease,
-      box-shadow 140ms ease;
+      border-left-color var(--transition-normal),
+      background-color var(--transition-fast),
+      box-shadow var(--transition-fast);
   }
 
   /*

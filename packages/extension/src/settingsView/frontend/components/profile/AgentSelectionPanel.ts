@@ -121,9 +121,9 @@ export class AgentSelectionPanel extends LitElement {
         color: var(--wa-color-text-normal);
         border-left: var(--border-medium) solid transparent;
         transition:
-          background-color 140ms ease,
-          border-left-color 140ms ease,
-          box-shadow 140ms ease;
+          background-color var(--transition-fast),
+          border-left-color var(--transition-fast),
+          box-shadow var(--transition-fast);
         outline: none;
       }
 
