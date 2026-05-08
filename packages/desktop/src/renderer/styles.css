@@ -46,7 +46,7 @@ wa-button.desktop-back-button::part(base) {
   height: 28px;
   padding: 0 10px;
   border-color: transparent;
-  border-radius: 4px;
+  border-radius: var(--wa-border-radius-m);
   background: transparent;
   color: var(--wa-color-text-normal);
 }
@@ -60,7 +60,7 @@ wa-button.desktop-icon-button::part(base) {
   height: 28px;
   padding: 0;
   border-color: transparent;
-  border-radius: 4px;
+  border-radius: var(--wa-border-radius-m);
   background: transparent;
   color: var(--wa-color-text-normal);
 }
@@ -80,7 +80,7 @@ wa-button.desktop-command-button::part(base),
 wa-button.desktop-folder-button::part(base) {
   height: 28px;
   padding: 0 var(--wa-space-s);
-  border-radius: var(--wa-border-radius-m, 4px);
+  border-radius: var(--wa-border-radius-m, 3px);
   color: var(--wa-color-text-normal);
 }
 
@@ -180,7 +180,7 @@ wa-button.desktop-explorer-icon-button::part(base) {
   height: 24px;
   padding: 0;
   border: 0;
-  border-radius: var(--wa-border-radius-m, 4px);
+  border-radius: var(--wa-border-radius-m, 3px);
   background: transparent;
   color: var(--wa-color-text-normal);
 }
@@ -205,7 +205,7 @@ wa-tree.desktop-explorer-tree wa-tree-item::part(item) {
   min-height: 24px;
   padding-inline-end: var(--wa-space-xs);
   color: var(--wa-color-text-normal);
-  border-radius: var(--wa-border-radius-s, 3px);
+  border-radius: var(--wa-border-radius-s, 2px);
   margin-inline: var(--wa-space-3xs);
   transition:
     background-color 140ms ease,
@@ -406,7 +406,7 @@ wa-tree.desktop-explorer-tree wa-tree-item.desktop-explorer-file wa-icon {
 .desktop-command-palette-panel {
   width: min(560px, 100%);
   border: 1px solid var(--wa-color-surface-border);
-  border-radius: var(--wa-border-radius-l, 6px);
+  border-radius: var(--wa-border-radius-l, 4px);
   background: var(--wa-color-surface-default);
   box-shadow: 0 16px 40px rgb(0 0 0 / 32%);
   overflow: hidden;
@@ -445,7 +445,7 @@ wa-tree.desktop-explorer-tree wa-tree-item.desktop-explorer-file wa-icon {
   min-height: 34px;
   padding: 0 var(--wa-space-xs);
   border: 0;
-  border-radius: var(--wa-border-radius-m, 4px);
+  border-radius: var(--wa-border-radius-m, 3px);
   background: transparent;
   color: var(--wa-color-text-normal);
   font: inherit;
@@ -553,7 +553,7 @@ wa-tree.desktop-explorer-tree wa-tree-item.desktop-explorer-file wa-icon {
   padding: var(--wa-space-s);
   overflow: auto;
   border: 1px solid var(--wa-color-surface-border);
-  border-radius: var(--wa-border-radius-l, 6px);
+  border-radius: var(--wa-border-radius-l, 4px);
   background: var(--wa-color-surface-default);
   color: var(--wa-color-text-normal);
   font-family: var(--wa-font-family-body-monospace);
@@ -568,7 +568,7 @@ wa-button.desktop-secondary-button::part(base) {
      at the same visual scale across both hosts. */
   min-height: 30px;
   padding: 0 var(--wa-space-m);
-  border-radius: var(--wa-border-radius-l, 6px);
+  border-radius: var(--wa-border-radius-l, 4px);
 }
 
 wa-button.desktop-primary-button::part(base) {
@@ -607,7 +607,7 @@ wa-dialog.desktop-onboarding {
   place-items: center;
   width: 38px;
   height: 38px;
-  border-radius: var(--wa-border-radius-l, 6px);
+  border-radius: var(--wa-border-radius-l, 4px);
   background: var(--wa-color-neutral-fill-quiet);
   color: var(--wa-color-brand-fill-loud);
   font-size: 20px;
