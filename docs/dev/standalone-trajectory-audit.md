@@ -34,7 +34,7 @@ one at a time.
 | 16  | Recent commits banner / Git tab             | Works   | `desktopGitHost.ts` shells out to `git log` (audit item A)                               |
 | 17  | LaTeX preview / build                       | Partial | `desktopPreviewHost.openBuildDisplay` opens externally; no in-app PDF tab                |
 | 18  | Diff view inside the desktop                | Partial | `desktopDiffHost` opens diff in external editor only                                     |
-| 19  | Cross-launch session restoration            | Partial | Auth session + workspace path restore; in-flight agent runs do not                       |
+| 19  | Cross-launch session restoration            | Works   | Auth + workspace + visual stream rail restore via `desktopStreamSnapshot.ts` (audit item D) |
 | 20  | Crash reporting opt-in flow                 | Works   | `desktopCrashReporting.ts`                                                               |
 
 Legend: **Works** = end-to-end on the standalone build · **Partial** =
@@ -131,13 +131,24 @@ close it:
 - Notes: reuse `<texra-diff-view>` (already imported in `main.ts`); wire
   `desktopDiffHost.openDiff` to set a diff route + payload.
 
-### D. In-flight session restoration (closes #19)
+### D. In-flight session restoration (closes #19) — shipped (visual)
 
-- **Done when:** killing the desktop while an agent is running and
-  re-launching surfaces the in-flight stream on the Progress route with
-  the same `executionId`.
-- Notes: `RunStorageService` already persists run metadata; the missing
-  piece is rehydrating it on cold start.
+- **Status:** Phase 1 (visual rail restoration) shipped. The desktop
+  persists a slim snapshot of the active stream rail to
+  `app.getPath('userData')/streams.json` whenever streams are
+  created/updated/deleted, and hydrates the snapshot on launch as
+  "ghost" entries on the Progress rail so the user can see the runs
+  they had going. See `packages/desktop/src/main/desktopStreamSnapshot.ts`
+  and the snapshot/syncStreams hook in `desktopAgentExecution.ts`.
+  Atomic writes (temp + rename) live in `platform/jsonStore.ts` so a
+  crash mid-flush leaves the previous file intact.
+- **Phase 2 (deferred):** live re-attach to in-flight runtimes is out
+  of scope for this PR. When the user clicks "Resume" on a ghost
+  stream we surface a clear "this run is from a previous session,
+  please start fresh" info dialog rather than silently no-op'ing.
+  Reviving the runtime would require restoring `taskState` + the
+  in-flight conversation from `RunStorageService` and re-attaching
+  PocketFlow handles — substantial work tracked separately.
 
 ### E. Multi-launch settings persistence test
 

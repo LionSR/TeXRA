@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 type JsonRecord = Record<string, unknown>;
@@ -60,6 +60,25 @@ export class JsonStore {
 
   private async flush(snapshot: JsonRecord): Promise<void> {
     await mkdir(dirname(this.filePath), { recursive: true });
-    await writeFile(this.filePath, `${JSON.stringify(snapshot, null, 2)}\n`);
+    // Atomic write: stage to a sibling temp path, then rename. A crash
+    // mid-write leaves the previous file intact; without this we could
+    // corrupt the snapshot if the app is force-quit during persistence.
+    // The temp suffix is process-unique so concurrent JsonStore writers
+    // (different files in the same dir) don't collide.
+    const tempPath = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
+    try {
+      await writeFile(tempPath, `${JSON.stringify(snapshot, null, 2)}\n`);
+      await rename(tempPath, this.filePath);
+    } catch (error) {
+      // Best-effort cleanup of stale temp file. Swallow ENOENT (rename
+      // already consumed it) and similar — the original error is what
+      // matters.
+      try {
+        await unlink(tempPath);
+      } catch {
+        // ignore
+      }
+      throw error;
+    }
   }
 }

@@ -72,6 +72,8 @@ import {
 import { getConfig } from '@utils/config/configUtils';
 
 import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
+import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
+import type { RestoredStreamSnapshot } from '@shared/schemas';
 import {
   createDesktopToolEditApprovalController,
   type DesktopToolEditApprovalController,
@@ -86,6 +88,13 @@ export interface DesktopAgentExecutionOptions {
   confirmAcceptFile?: (message: string) => Promise<boolean>;
   showErrorMessage?: (message: string) => Promise<void> | void;
   showInfoMessage?: (message: string) => Promise<void> | void;
+  /**
+   * Optional snapshot store wired by the desktop entrypoint. When
+   * provided, the bridge persists a slim snapshot of the rail on each
+   * stream change (audit item D / trajectory #19) and surfaces
+   * previously-persisted "ghost" streams in the rail at launch.
+   */
+  streamSnapshotStore?: DesktopStreamSnapshotStore;
 }
 
 export interface DesktopAgentExecution {
@@ -112,6 +121,7 @@ export interface DesktopProgressBridgeOptions {
   confirmAcceptFile?: (message: string) => Promise<boolean>;
   showInfoMessage?: (message: string) => Promise<void>;
   showErrorMessage?: (message: string) => Promise<void>;
+  streamSnapshotStore?: DesktopStreamSnapshotStore;
 }
 
 function toFileLocation(filePath: string): FileLocation {
@@ -144,6 +154,16 @@ export class DesktopProgressBridge {
   private agentFilter: AgentCategoryFilter = 'all';
   private readonly unsubscribe: () => void;
   private readonly toolEditApprovals: DesktopToolEditApprovalController;
+  /**
+   * Restored "ghost" streams hydrated from the cross-launch snapshot.
+   * Keyed by streamId. An entry is removed once a live progress event
+   * with the same id arrives (the live entry takes over and the
+   * ghost is no longer needed). Audit item D / trajectory #19.
+   */
+  private readonly restoredStreams = new Map<
+    StreamTabId,
+    RestoredStreamSnapshot
+  >();
 
   readonly runtimeHost: AgentRuntimeHost;
 
@@ -236,6 +256,86 @@ export class DesktopProgressBridge {
           },
         );
       },
+    });
+
+    // Hydrate previously-persisted "ghost" streams so the rail shows
+    // the user's prior runs at launch (audit item D / trajectory #19).
+    // We seed creation timestamps, statuses, descriptions, executionIds,
+    // and categories from the snapshot — but NOT taskState, since we
+    // can't resurrect runtime state. The renderer will show these as
+    // stopped/orphaned entries; "Resume run" funnels back through the
+    // existing storage-backed resume path when an executionId is
+    // available, otherwise falls back to "start fresh".
+    const hydrated = options.streamSnapshotStore?.hydrated ?? [];
+    for (const snapshot of hydrated) {
+      this.restoredStreams.set(snapshot.streamId, snapshot);
+      this.creationTimestamps.set(
+        snapshot.streamId,
+        snapshot.creationTimestamp,
+      );
+      this.categories.set(snapshot.streamId, snapshot.agentCategory);
+      this.statuses.set(snapshot.streamId, snapshot.lastKnownStatus);
+      if (snapshot.description) {
+        this.descriptions.set(snapshot.streamId, snapshot.description);
+      }
+      if (snapshot.executionId) {
+        this.executionIds.set(snapshot.streamId, snapshot.executionId);
+      }
+    }
+  }
+
+  /**
+   * Build a RestoredStreamSnapshot for `streamId` from current bridge
+   * state and forward it to the persistence store. Best-effort: any
+   * write error is logged but never thrown — persistence problems
+   * must not break agent execution.
+   */
+  private persistStreamSnapshot(streamId: StreamTabId): void {
+    const store = this.options.streamSnapshotStore;
+    if (!store) return;
+
+    const taskState = this.taskStates.get(streamId);
+    const restored = this.restoredStreams.get(streamId);
+    const category =
+      taskState?.agentConfig.agentCategory ??
+      this.categories.get(streamId) ??
+      restored?.agentCategory ??
+      AGENT_CATEGORY.WORKFLOW;
+    const info = this.buildStreamInfo(streamId);
+    const snapshot: RestoredStreamSnapshot = {
+      streamId,
+      label: info.label,
+      agent: info.agent ?? restored?.agent,
+      agentCategory: category,
+      inputFile: info.inputFile || restored?.inputFile,
+      instruction:
+        taskState?.agentConfig.instruction || restored?.instruction,
+      lastKnownStatus:
+        this.statuses.get(streamId) ??
+        restored?.lastKnownStatus ??
+        STREAM_STATUS.STOPPED,
+      description: this.descriptions.get(streamId) ?? restored?.description,
+      executionId: this.executionIds.get(streamId) ?? restored?.executionId,
+      creationTimestamp: this.getCreationTimestamp(streamId),
+      lastTimestamp:
+        this.streamLogs.getLastTimestamp(streamId) ?? restored?.lastTimestamp,
+      persistedAt: Date.now(),
+    };
+    void store.upsert(snapshot).catch((error: unknown) => {
+      this.logger.warn('Failed to persist stream snapshot', {
+        data: error instanceof Error ? error : { error },
+      });
+    });
+  }
+
+  private removePersistedStream(streamId: StreamTabId): void {
+    this.restoredStreams.delete(streamId);
+    const store = this.options.streamSnapshotStore;
+    if (!store) return;
+    void store.remove(streamId).catch((error: unknown) => {
+      this.logger.warn('Failed to remove persisted stream snapshot', {
+        data: error instanceof Error ? error : { error },
+      });
     });
   }
 
@@ -368,9 +468,21 @@ export class DesktopProgressBridge {
   }
 
   private syncStreams(): void {
-    const streams = this.streamLogs
-      .keys()
-      .map((id) => this.buildStreamInfo(id));
+    const liveIds = new Set(this.streamLogs.keys());
+    const liveStreams = [...liveIds].map((id) => this.buildStreamInfo(id));
+
+    // Restored "ghost" entries that haven't been replaced by live
+    // events yet. We surface them on the rail so the user can see the
+    // runs they had going (audit item D / trajectory #19). Skipping
+    // ghosts whose id is already in `liveIds` prevents duplicates when
+    // a previous run resumed in the same launch.
+    const ghostStreams: StreamTabInfo[] = [];
+    for (const [id, snapshot] of this.restoredStreams) {
+      if (liveIds.has(id)) continue;
+      ghostStreams.push(this.buildGhostStreamInfo(snapshot));
+    }
+
+    const streams = [...liveStreams, ...ghostStreams];
     const streamStates = Object.fromEntries(
       streams.map((stream) => [
         stream.name,
@@ -384,6 +496,21 @@ export class DesktopProgressBridge {
       agentFilter: this.agentFilter,
       streamStates,
     });
+  }
+
+  private buildGhostStreamInfo(
+    snapshot: RestoredStreamSnapshot,
+  ): StreamTabInfo {
+    return {
+      name: snapshot.streamId,
+      label: snapshot.label,
+      agent: snapshot.agent,
+      agentCategory: snapshot.agentCategory,
+      inputFile: snapshot.inputFile ?? '',
+      creationTimestamp: snapshot.creationTimestamp,
+      executionId: snapshot.executionId,
+      description: snapshot.description,
+    };
   }
 
   private flushLogs(streamId: StreamTabId): void {
@@ -444,6 +571,10 @@ export class DesktopProgressBridge {
         this.taskStates.set(data.streamId, data.taskState);
         if (data.executionId)
           this.executionIds.set(data.streamId, data.executionId);
+        // Live event arrived for what may have been a ghost. Drop the
+        // ghost entry — the live stream owns the rail row now.
+        this.restoredStreams.delete(data.streamId);
+        this.persistStreamSnapshot(data.streamId);
         this.syncStreams();
         break;
       }
@@ -452,6 +583,8 @@ export class DesktopProgressBridge {
         const wasKnownStream = this.streamLogs.has(data.streamId);
         this.ensureStream(data.streamId);
         this.statuses.set(data.streamId, data.status);
+        this.restoredStreams.delete(data.streamId);
+        this.persistStreamSnapshot(data.streamId);
         if (!wasKnownStream) {
           this.syncStreams();
         }
@@ -539,6 +672,7 @@ export class DesktopProgressBridge {
         const data =
           payload as ProgressEventPayloads['updateStreamDescription'];
         this.descriptions.set(data.streamId, data.description);
+        this.persistStreamSnapshot(data.streamId);
         this.send({
           command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION,
           stream: data.streamId,
@@ -748,7 +882,11 @@ export class DesktopProgressBridge {
   }
 
   setActiveStream(streamId: StreamTabId): void {
-    if (!this.streamLogs.has(streamId) && !this.taskStates.has(streamId)) {
+    if (
+      !this.streamLogs.has(streamId) &&
+      !this.taskStates.has(streamId) &&
+      !this.restoredStreams.has(streamId)
+    ) {
       return;
     }
     this.activeStream = streamId;
@@ -767,8 +905,11 @@ export class DesktopProgressBridge {
 
   async deleteStream(streamId: StreamTabId): Promise<void> {
     const hadStream =
-      this.streamLogs.has(streamId) || this.taskStates.has(streamId);
+      this.streamLogs.has(streamId) ||
+      this.taskStates.has(streamId) ||
+      this.restoredStreams.has(streamId);
     if (!hadStream) return;
+    this.removePersistedStream(streamId);
 
     cleanupApprovalsForStream(streamId);
     retryCoordinator.clearRequest(streamId);
@@ -813,6 +954,19 @@ export class DesktopProgressBridge {
       retryCoordinator.clearRequest(streamId);
       ToolUseFollowUpQueue.release(streamId);
     }
+    // Drop persisted ghosts too: a "delete all" should leave nothing
+    // for the next launch to hydrate, otherwise users would see the
+    // ghosts come back zombie-style after relaunch.
+    this.restoredStreams.clear();
+    if (this.options.streamSnapshotStore) {
+      void this.options.streamSnapshotStore
+        .replaceAll([])
+        .catch((error: unknown) => {
+          this.logger.warn('Failed to clear stream snapshot store', {
+            data: error instanceof Error ? error : { error },
+          });
+        });
+    }
 
     await this.streamLogs.clear();
     this.cursors.clear();
@@ -848,7 +1002,17 @@ export class DesktopProgressBridge {
 
   async resumeStream(streamId: StreamTabId): Promise<void> {
     const taskState = this.taskStates.get(streamId);
-    if (!taskState) return;
+    if (!taskState) {
+      // Ghost stream from a prior launch: we don't have taskState in
+      // memory and reviving the runtime is out of scope (audit item
+      // D Phase 2). Surface a clear message rather than silently no-op.
+      if (this.restoredStreams.has(streamId)) {
+        await this.showInfoMessage(
+          'This run is from a previous session. Live resume is not yet supported — please start a fresh run.',
+        );
+      }
+      return;
+    }
 
     const executionId = this.executionIds.get(streamId);
     await this.runExecution({
@@ -1149,6 +1313,7 @@ export function createDesktopAgentExecution(
     confirmAcceptFile: options.confirmAcceptFile,
     showInfoMessage: async (message) => options.showInfoMessage?.(message),
     showErrorMessage: async (message) => options.showErrorMessage?.(message),
+    streamSnapshotStore: options.streamSnapshotStore,
   });
 
   return {
