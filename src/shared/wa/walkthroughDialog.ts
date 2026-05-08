@@ -61,7 +61,20 @@ export interface WalkthroughDialogController {
   hide(): void;
 }
 
-const TITLE_ID = 'shared-walkthrough-title';
+// Per-instance counter fallback for environments without crypto.randomUUID
+// (older webviews). Each createWalkthroughDialog() call grabs a unique id so
+// two co-existing dialogs cannot collide on aria-labelledby.
+let walkthroughTitleCounter = 0;
+
+function nextWalkthroughTitleId(): string {
+  const cryptoApi: Crypto | undefined =
+    typeof crypto !== 'undefined' ? crypto : undefined;
+  if (typeof cryptoApi?.randomUUID === 'function') {
+    return `walkthrough-title-${cryptoApi.randomUUID()}`;
+  }
+  walkthroughTitleCounter += 1;
+  return `walkthrough-title-${walkthroughTitleCounter}`;
+}
 
 export function createWalkthroughDialog({
   document,
@@ -73,13 +86,14 @@ export function createWalkthroughDialog({
   icon = 'circle-info',
   classes,
 }: WalkthroughDialogOptions): WalkthroughDialogController {
+  const titleId = nextWalkthroughTitleId();
   const dialog = document.createElement('wa-dialog');
   if (classes?.dialog) dialog.classList.add(classes.dialog);
   dialog.withoutHeader = true;
   // The visible <h1> inside the body is the dialog's accessible name; ARIA
   // resolves it via aria-labelledby below. Skip the redundant `label`
   // attribute that would otherwise add an extra aria-label.
-  dialog.setAttribute('aria-labelledby', TITLE_ID);
+  dialog.setAttribute('aria-labelledby', titleId);
 
   // Distinguishes user-initiated close (Escape / button click) — which fires
   // the dismissed callback back to the host — from programmatic close from
@@ -116,7 +130,7 @@ export function createWalkthroughDialog({
       <header class=${headerClass ?? ''}>
         ${waIcon(icon, { className: iconClass })}
         <div>
-          <h1 id=${TITLE_ID}>${title}</h1>
+          <h1 id=${titleId}>${title}</h1>
           <p>${description}</p>
         </div>
       </header>
