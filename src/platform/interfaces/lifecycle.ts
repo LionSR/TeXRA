@@ -5,7 +5,8 @@ export const SHUTDOWN_PHASE = {
   ON: 'onShutdown',
 } as const;
 
-export type ShutdownPhase = (typeof SHUTDOWN_PHASE)[keyof typeof SHUTDOWN_PHASE];
+export type ShutdownPhase =
+  (typeof SHUTDOWN_PHASE)[keyof typeof SHUTDOWN_PHASE];
 
 export interface LifecycleHost {
   onShutdown(
