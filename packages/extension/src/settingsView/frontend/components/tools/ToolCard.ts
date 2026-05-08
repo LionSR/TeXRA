@@ -40,13 +40,13 @@ export class ToolCard extends LitElement {
         margin-bottom: var(--wa-space-xs);
         background: var(
           --texra-editor-background,
-          var(--texra-sideBar-background)
+          var(--wa-color-surface-lowered)
         );
         transition: border-color var(--transition-fast);
       }
 
       .tool-card:hover {
-        border-color: var(--texra-focusBorder);
+        border-color: var(--wa-color-focus);
       }
 
       .tool-header {
@@ -69,7 +69,7 @@ export class ToolCard extends LitElement {
       .tool-name {
         font-weight: var(--font-weight-medium);
         font-size: var(--font-size);
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
         white-space: nowrap;
       }
 
@@ -114,7 +114,7 @@ export class ToolCard extends LitElement {
         );
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
         line-height: var(--line-height-relaxed);
         white-space: pre-wrap;
       }

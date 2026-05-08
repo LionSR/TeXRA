@@ -32,7 +32,7 @@ export const codeBlockStyles = css`
   .code-block pre {
     margin: 0;
     padding: var(--wa-space-2xs);
-    background-color: var(--texra-editor-background);
+    background-color: var(--wa-color-surface-default);
     border: var(--border-thin) solid var(--texra-editorWidget-border);
     border-radius: 0;
     overflow-x: auto;
@@ -62,7 +62,7 @@ export const codeBlockStyles = css`
         --texra-toolbar-hoverBackground,
         rgba(90, 93, 94, 0.31)
       );
-      color: var(--texra-foreground);
+      color: var(--wa-color-text-normal);
     }
 
     &:active {
@@ -77,7 +77,7 @@ export const codeBlockStyles = css`
     }
 
     &:focus-visible {
-      outline: var(--border-thin) solid var(--texra-focusBorder);
+      outline: var(--border-thin) solid var(--wa-color-focus);
       outline-offset: 1px;
     }
   }
@@ -96,13 +96,13 @@ export const codeBlockStyles = css`
   /* Highlight.js theme - VS Code colors for Shadow DOM */
   pre.hljs,
   .hljs {
-    background: var(--texra-editor-background);
-    color: var(--texra-editor-foreground);
+    background: var(--wa-color-surface-default);
+    color: var(--wa-color-text-normal);
   }
 
   .hljs-comment,
   .hljs-quote {
-    color: var(--texra-descriptionForeground);
+    color: var(--wa-color-text-quiet);
     font-style: italic;
   }
 
@@ -111,7 +111,7 @@ export const codeBlockStyles = css`
   .hljs-tag {
     color: var(
       --texra-symbolIcon-keywordForeground,
-      var(--texra-textLink-foreground)
+      var(--wa-color-text-link)
     );
   }
 
@@ -135,7 +135,7 @@ export const codeBlockStyles = css`
   .hljs-attr {
     color: var(
       --texra-symbolIcon-variableForeground,
-      var(--texra-editor-foreground)
+      var(--wa-color-text-normal)
     );
   }
 
@@ -155,19 +155,19 @@ export const codeBlockStyles = css`
   .hljs-name {
     color: var(
       --texra-symbolIcon-propertyForeground,
-      var(--texra-editor-foreground)
+      var(--wa-color-text-normal)
     );
   }
 
   .hljs-operator,
   .hljs-punctuation {
-    color: var(--texra-editor-foreground);
+    color: var(--wa-color-text-normal);
   }
 
   .hljs-section,
   .hljs-selector-class,
   .hljs-selector-id {
-    color: var(--texra-textLink-foreground);
+    color: var(--wa-color-text-link);
   }
 
   .hljs-meta,
@@ -200,7 +200,7 @@ export const codeBlockStyles = css`
   }
 
   .hljs-link {
-    color: var(--texra-textLink-foreground);
+    color: var(--wa-color-text-link);
     text-decoration: underline;
   }
 `;

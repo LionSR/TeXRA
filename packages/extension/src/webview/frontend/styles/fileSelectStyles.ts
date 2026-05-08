@@ -74,7 +74,7 @@ export const compactActionButtonStyles = css`
     background: transparent;
     color: var(
       --wa-color-text-quiet,
-      var(--texra-icon-foreground, var(--texra-foreground))
+      var(--texra-icon-foreground, var(--wa-color-text-normal))
     );
     opacity: var(--opacity-subtle);
     transition: opacity 120ms ease;
@@ -87,7 +87,7 @@ export const compactActionButtonStyles = css`
 
   .action-icon-button:focus-visible::part(base) {
     outline: var(--border-thin) solid
-      var(--wa-color-focus, var(--texra-focusBorder));
+      var(--wa-color-focus, var(--wa-color-focus));
     outline-offset: 1px;
   }
 
@@ -222,14 +222,14 @@ export const toggleStyles = css`
   }
 
   .toggle-icon:focus-visible {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
 
   .file-select[data-expanded='true'] .optional-label,
   .file-select[data-expanded='true'] .toggle-icon {
-    color: var(--texra-foreground);
+    color: var(--wa-color-text-normal);
   }
 `;
 
@@ -292,7 +292,7 @@ export const multiFilesStyles = css`
   }
 
   .file-name-main {
-    color: var(--texra-foreground);
+    color: var(--wa-color-text-normal);
   }
 
   .file-folder {
@@ -306,7 +306,7 @@ export const multiFilesStyles = css`
   }
 
   .remove-button {
-    color: var(--texra-icon-foreground, var(--texra-foreground));
+    color: var(--texra-icon-foreground, var(--wa-color-text-normal));
     cursor: pointer;
     flex-shrink: 0;
     opacity: var(--opacity-subtle);
@@ -324,7 +324,7 @@ export const multiFilesStyles = css`
 
   .remove-button:focus-visible {
     opacity: var(--opacity-full);
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -351,7 +351,7 @@ export const dropdownStyles = css`
   .dropdown-container wa-button.has-options::part(base),
   wa-button.has-options::part(base) {
     box-shadow: inset 0 0 0 1px
-      var(--texra-inputValidation-infoBorder, var(--texra-focusBorder));
+      var(--texra-inputValidation-infoBorder, var(--wa-color-focus));
   }
 
   .dropdown-container .dropdown-menu {

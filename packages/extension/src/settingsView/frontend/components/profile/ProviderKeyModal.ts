@@ -54,7 +54,7 @@ export class ProviderKeyModal extends LitElement {
       }
 
       input:focus {
-        outline: var(--border-thin) solid var(--texra-focusBorder);
+        outline: var(--border-thin) solid var(--wa-color-focus);
         outline-offset: 1px;
       }
 
@@ -83,9 +83,15 @@ export class ProviderKeyModal extends LitElement {
       }
 
       .provider-key-primary {
+<<<<<<< HEAD
         color: var(--wa-color-brand-on-loud);
         background: var(--texra-button-background);
         border: var(--border-thin) solid var(--texra-button-background);
+=======
+        color: var(--texra-button-foreground);
+        background: var(--wa-color-brand-fill-loud);
+        border: var(--border-thin) solid var(--wa-color-brand-fill-loud);
+>>>>>>> origin/main
       }
 
       .provider-key-primary:hover {
@@ -93,7 +99,7 @@ export class ProviderKeyModal extends LitElement {
       }
 
       .provider-key-secondary {
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
         background: transparent;
         border: var(--border-thin) solid var(--color-border);
       }

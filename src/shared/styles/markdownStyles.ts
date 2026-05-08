@@ -160,7 +160,7 @@ export const markdownStyles = css`
   }
 
   .markdown-content strong {
-    color: var(--texra-editor-foreground);
+    color: var(--wa-color-text-normal);
     font-weight: var(--font-weight-semibold);
   }
 

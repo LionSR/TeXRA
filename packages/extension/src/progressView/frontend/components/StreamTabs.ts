@@ -125,7 +125,7 @@ export class StreamTab extends LitElement {
 
       .tab-container.status-waiting,
       .tab-container.status-resuming {
-        border-left-color: var(--texra-textLink-foreground);
+        border-left-color: var(--wa-color-text-link);
       }
 
       .tab-container.status-stopped,
@@ -161,7 +161,7 @@ export class StreamTab extends LitElement {
         cursor: pointer;
         border: none;
         background: none;
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
         text-align: left;
         font-family: var(--font-family);
         min-width: 0;
@@ -184,7 +184,7 @@ export class StreamTab extends LitElement {
 
       .tab-description {
         font-size: var(--font-size-sm);
-        color: var(--texra-descriptionForeground, var(--texra-foreground));
+        color: var(--texra-descriptionForeground, var(--wa-color-text-normal));
         opacity: 0.8;
         white-space: nowrap;
         overflow: hidden;
@@ -205,7 +205,7 @@ export class StreamTab extends LitElement {
         align-items: center;
         gap: var(--wa-space-2xs);
         font-size: var(--font-size-sm);
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
         opacity: var(--opacity-subtle);
         width: 100%;
       }
@@ -225,7 +225,7 @@ export class StreamTab extends LitElement {
         min-width: var(--height-control);
         height: var(--height-control);
         margin: 0;
-        color: var(--texra-icon-foreground, var(--texra-foreground));
+        color: var(--texra-icon-foreground, var(--wa-color-text-normal));
         opacity: 0;
         transition:
           opacity 120ms ease,
@@ -256,7 +256,7 @@ export class StreamTab extends LitElement {
         background-color: var(--wa-color-brand-fill-quiet);
         color: var(
           --texra-list-activeSelectionForeground,
-          var(--texra-foreground)
+          var(--wa-color-text-normal)
         );
       }
 
@@ -269,7 +269,7 @@ export class StreamTab extends LitElement {
       .tab-container.is-active .tab-expand {
         color: var(
           --texra-list-activeSelectionForeground,
-          var(--texra-foreground)
+          var(--wa-color-text-normal)
         );
       }
 
@@ -317,7 +317,7 @@ export class StreamTab extends LitElement {
         border-radius: var(--border-radius-small);
         background-color: color-mix(
           in srgb,
-          var(--texra-icon-foreground, var(--texra-foreground)) 10%,
+          var(--texra-icon-foreground, var(--wa-color-text-normal)) 10%,
           transparent
         );
       }
@@ -343,7 +343,7 @@ export class StreamTab extends LitElement {
         border: none;
         background: none;
         cursor: pointer;
-        color: var(--texra-icon-foreground, var(--texra-foreground));
+        color: var(--texra-icon-foreground, var(--wa-color-text-normal));
         opacity: 0.6;
         padding: 0;
       }

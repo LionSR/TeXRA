@@ -131,7 +131,7 @@ export const logEntryStyles = css`
   }
 
   :is(.file-link, .web-search-link):focus-visible {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -191,7 +191,7 @@ export const logEntryStyles = css`
   .banner-details:focus-within .banner-content-copy,
   .banner-content-copy:focus-visible {
     opacity: var(--opacity-full);
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
   }
 
   .banner-content-copy.copy-success {
@@ -231,7 +231,7 @@ export const logEntryStyles = css`
   }
 
   .message-info {
-    color: var(--texra-foreground);
+    color: var(--wa-color-text-normal);
   }
 
   .banner-summary {
@@ -285,7 +285,7 @@ export const logEntryStyles = css`
       --texra-terminal-background,
       var(--texra-editor-background, transparent)
     );
-    color: var(--texra-terminal-foreground, var(--texra-foreground));
+    color: var(--texra-terminal-foreground, var(--wa-color-text-normal));
   }
 
   :host([terminal]) .log-line {
