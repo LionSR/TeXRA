@@ -34,6 +34,14 @@ Each launch passes `--texra-workspace <tmpdir>` so the app doesn't pop the
 "open folder" dialog. Pass `workspacePath` to `launchTexraApp()` if a
 specific layout is required.
 
+## Cross-package imports
+
+Playwright's ESM loader cannot resolve a relative `.js` import of a TS file
+from `src/shared/...` (it sees the `.js` suffix and treats the resolved
+module as CommonJS, then fails on named exports). To stay safe, prefer
+inlining constants the suite needs from the shared schemas with a comment
+pointing back at the source of truth.
+
 ## macOS keychain caveat
 
 The harness sets `TEXRA_DISABLE_KEYCHAIN=1` (see `electronApp.ts`) which the
