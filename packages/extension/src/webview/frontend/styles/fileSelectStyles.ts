@@ -36,7 +36,7 @@ export const compactFormControlStyles = css`
   }
 
   wa-select::part(expand-icon) {
-    margin-inline-start: var(--spacing-tiny);
+    margin-inline-start: var(--wa-space-3xs);
   }
 
   wa-input {
@@ -104,21 +104,21 @@ export const compactActionButtonStyles = css`
 /** Core file-select layout styles. */
 export const fileSelectLayoutStyles = css`
   .file-select {
-    margin-bottom: var(--spacing-small);
+    margin-bottom: var(--wa-space-2xs);
   }
 
   .file-select:has(.optional-label) {
-    margin-bottom: var(--spacing-tiny);
+    margin-bottom: var(--wa-space-3xs);
   }
 
   .file-select-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--spacing-small);
+    margin-bottom: var(--wa-space-2xs);
     flex-wrap: nowrap;
     line-height: var(--line-height-normal);
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
     min-height: 22px;
   }
 
@@ -128,19 +128,19 @@ export const fileSelectLayoutStyles = css`
   }
 
   .file-select-header label {
-    margin-right: var(--spacing-small);
+    margin-right: var(--wa-space-2xs);
   }
 
   .file-select label {
     display: block;
-    margin-bottom: var(--spacing-tiny);
+    margin-bottom: var(--wa-space-3xs);
     font-size: var(--font-size);
   }
 
   .file-select-label-group {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
     flex-wrap: nowrap;
     flex: 1;
     min-width: 0;
@@ -158,7 +158,7 @@ export const fileSelectLayoutStyles = css`
   }
 
   .file-select-label-group label {
-    margin-right: var(--spacing-small);
+    margin-right: var(--wa-space-2xs);
   }
 
   .file-select-hint {
@@ -176,7 +176,7 @@ export const fileSelectLayoutStyles = css`
     flex-direction: column !important;
     flex-wrap: nowrap;
     margin-left: auto;
-    gap: var(--spacing-tiny);
+    gap: var(--wa-space-3xs);
   }
 
   .file-select-actions wa-button {
@@ -212,7 +212,7 @@ export const toggleStyles = css`
     user-select: none;
     margin: 0;
     position: relative;
-    padding: 0 var(--spacing-tiny);
+    padding: 0 var(--wa-space-3xs);
     color: var(--text-color);
     display: flex;
     align-items: center;
@@ -239,7 +239,7 @@ export const multiFilesStyles = css`
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-top: var(--spacing-small);
+    margin-top: var(--wa-space-2xs);
     padding: 0;
   }
 
@@ -253,14 +253,14 @@ export const multiFilesStyles = css`
     border: var(--border-thin) solid
       var(--texra-widget-border, var(--dropdown-border));
     border-radius: var(--border-radius);
-    padding: var(--spacing-small);
+    padding: var(--wa-space-2xs);
     font-size: var(--font-size);
     max-height: var(--height-small);
     overflow-y: auto;
   }
 
   .file-item {
-    padding: var(--spacing-tiny) var(--spacing-small);
+    padding: var(--wa-space-3xs) var(--wa-space-2xs);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -302,7 +302,7 @@ export const multiFilesStyles = css`
 
   .file-folder wa-icon {
     font-size: var(--font-size-xs);
-    margin-right: var(--spacing-tiny);
+    margin-right: var(--wa-space-3xs);
   }
 
   .remove-button {
@@ -332,7 +332,7 @@ export const multiFilesStyles = css`
   .file-list-placeholder {
     color: var(--color-text-secondary);
     font-style: italic;
-    padding: var(--spacing-tiny) var(--spacing-small);
+    padding: var(--wa-space-3xs) var(--wa-space-2xs);
   }
 `;
 
@@ -355,7 +355,7 @@ export const dropdownStyles = css`
 
   .dropdown-container .dropdown-menu {
     position: absolute;
-    top: calc(100% + var(--spacing-tiny));
+    top: calc(100% + var(--wa-space-3xs));
     left: 0;
     right: auto;
     z-index: 100;
@@ -375,14 +375,14 @@ export const dropdownStyles = css`
     display: flex;
     flex-direction: column;
     gap: 0;
-    padding: var(--spacing-tiny);
+    padding: var(--wa-space-3xs);
   }
 
   .dropdown-container .dropdown-menu wa-checkbox {
     display: flex;
     align-items: center;
     height: 20px;
-    padding: var(--spacing-tiny);
+    padding: var(--wa-space-3xs);
     font-size: var(--font-size-sm);
   }
 

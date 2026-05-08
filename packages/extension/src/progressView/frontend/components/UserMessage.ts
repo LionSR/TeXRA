@@ -76,11 +76,11 @@ export class UserMessage extends LitElement {
       .user-message-container {
         display: flex;
         justify-content: flex-end;
-        margin: var(--spacing-small) 0;
+        margin: var(--wa-space-2xs) 0;
       }
 
       .user-message {
-        padding: var(--spacing-small);
+        padding: var(--wa-space-2xs);
         max-width: 85%;
         background-color: var(--texra-editor-selectionBackground);
         border: var(--border-thin) solid var(--texra-panel-border);
@@ -90,8 +90,8 @@ export class UserMessage extends LitElement {
       .user-message-header {
         display: flex;
         align-items: center;
-        gap: var(--spacing-tiny);
-        margin-bottom: var(--spacing-tiny);
+        gap: var(--wa-space-3xs);
+        margin-bottom: var(--wa-space-3xs);
         font-size: var(--font-size-xs);
         color: var(--texra-descriptionForeground);
       }
@@ -99,7 +99,7 @@ export class UserMessage extends LitElement {
       .user-message-header-left {
         display: flex;
         align-items: center;
-        gap: var(--spacing-tiny);
+        gap: var(--wa-space-3xs);
         flex: 1;
       }
 
@@ -131,7 +131,7 @@ export class UserMessage extends LitElement {
       .user-message--structured-delivery .user-message-content {
         max-height: min(45vh, 520px);
         overflow: auto;
-        padding: var(--spacing-small);
+        padding: var(--wa-space-2xs);
         background: var(
           --texra-textCodeBlock-background,
           var(--texra-editor-background)

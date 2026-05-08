@@ -45,7 +45,7 @@ export class UsagePanel extends LitElement {
       .usage-summary-footer {
         border-top: var(--border-thin) solid var(--color-border);
         background-color: var(--texra-sideBarSectionHeader-background);
-        padding: var(--spacing-small) var(--spacing-medium);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -56,7 +56,7 @@ export class UsagePanel extends LitElement {
       :is(.run-summary, .context-state) {
         display: inline-flex;
         align-items: center;
-        gap: var(--spacing-tiny);
+        gap: var(--wa-space-3xs);
         color: var(--color-text-secondary);
         font-size: var(--font-size-sm);
         opacity: var(--opacity-normal);
@@ -71,7 +71,7 @@ export class UsagePanel extends LitElement {
       .context-gauge {
         display: inline-flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
       }
 
       .context-gauge__track {

@@ -37,7 +37,7 @@ export class ContextManagement extends LitElement {
     css`
       :host {
         display: block;
-        margin: var(--spacing-small) 0;
+        margin: var(--wa-space-2xs) 0;
       }
 
       details {
@@ -52,7 +52,7 @@ export class ContextManagement extends LitElement {
       }
 
       .context-icon {
-        margin-right: var(--spacing-small);
+        margin-right: var(--wa-space-2xs);
       }
 
       .context-title {
@@ -62,13 +62,13 @@ export class ContextManagement extends LitElement {
       .context-content {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--spacing-large);
+        gap: var(--wa-space-s);
       }
 
       .stat-item {
         display: inline-flex;
         align-items: center;
-        gap: var(--spacing-tiny);
+        gap: var(--wa-space-3xs);
         font-size: var(--font-size-sm);
       }
 
@@ -77,7 +77,7 @@ export class ContextManagement extends LitElement {
       }
 
       .summary-block {
-        margin-top: var(--spacing-small);
+        margin-top: var(--wa-space-2xs);
         display: block;
         width: 100%;
       }
@@ -85,15 +85,15 @@ export class ContextManagement extends LitElement {
       .summary-title {
         display: inline-flex;
         align-items: center;
-        gap: var(--spacing-tiny);
+        gap: var(--wa-space-3xs);
         font-size: var(--font-size-sm);
         font-weight: var(--font-weight-medium);
-        margin-bottom: var(--spacing-tiny);
+        margin-bottom: var(--wa-space-3xs);
       }
 
       .summary-text {
         margin: 0;
-        padding: var(--spacing-small);
+        padding: var(--wa-space-2xs);
         white-space: pre-wrap;
         word-break: break-word;
         border: var(--border-thin) solid var(--texra-widget-border);

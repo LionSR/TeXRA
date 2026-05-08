@@ -29,7 +29,7 @@ export class ProviderKeyModal extends LitElement {
       }
 
       .provider-key-description {
-        margin: 0 0 var(--spacing-large);
+        margin: 0 0 var(--wa-space-s);
         color: var(--color-text-secondary);
         line-height: var(--line-height-normal);
       }
@@ -37,7 +37,7 @@ export class ProviderKeyModal extends LitElement {
       label {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         font-weight: var(--font-weight-medium);
       }
 
@@ -45,7 +45,7 @@ export class ProviderKeyModal extends LitElement {
         width: 100%;
         box-sizing: border-box;
         height: 34px;
-        padding: var(--spacing-small) var(--spacing-medium);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
         color: var(--texra-input-foreground);
         background: var(--texra-input-background);
         border: var(--border-thin) solid var(--texra-input-border);
@@ -60,7 +60,7 @@ export class ProviderKeyModal extends LitElement {
 
       .provider-key-error {
         min-height: 1.4em;
-        margin: var(--spacing-small) 0 0;
+        margin: var(--wa-space-2xs) 0 0;
         color: var(--texra-errorForeground, var(--color-error));
         font-size: var(--font-size-sm);
       }
@@ -68,15 +68,15 @@ export class ProviderKeyModal extends LitElement {
       .provider-key-actions {
         display: flex;
         justify-content: flex-end;
-        gap: var(--spacing-medium);
+        gap: var(--wa-space-xs);
       }
 
       button {
         display: inline-flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         min-height: var(--height-button);
-        padding: var(--spacing-small) var(--spacing-large);
+        padding: var(--wa-space-2xs) var(--wa-space-s);
         border-radius: var(--border-radius);
         font: inherit;
         cursor: pointer;

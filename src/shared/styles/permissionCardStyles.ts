@@ -23,7 +23,7 @@ export const permissionCardStyles: CSSResult = css`
     background: var(--texra-editor-background);
     border: var(--border-thin) solid var(--texra-panel-border);
     border-radius: var(--border-radius-large);
-    padding: var(--spacing-xlarge);
+    padding: var(--wa-space-l);
     max-width: 600px;
     width: min(92vw, 600px);
     max-height: min(80vh, 44rem);
@@ -34,9 +34,9 @@ export const permissionCardStyles: CSSResult = css`
   .permission-header {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
     font-weight: var(--font-weight-semibold);
-    margin-bottom: var(--spacing-medium);
+    margin-bottom: var(--wa-space-xs);
   }
 
   .permission-body {
@@ -49,7 +49,7 @@ export const permissionCardStyles: CSSResult = css`
 
   .code-block {
     display: block;
-    padding: var(--spacing-medium);
+    padding: var(--wa-space-xs);
     background: var(--texra-textCodeBlock-background);
     border-radius: var(--border-radius);
     color: var(--texra-terminal-foreground);
@@ -62,8 +62,8 @@ export const permissionCardStyles: CSSResult = css`
   .permission-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--spacing-medium);
-    margin-top: var(--spacing-xlarge);
+    gap: var(--wa-space-xs);
+    margin-top: var(--wa-space-l);
     justify-content: flex-end;
   }
 
@@ -71,7 +71,7 @@ export const permissionCardStyles: CSSResult = css`
   .primary-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--spacing-medium);
+    gap: var(--wa-space-xs);
   }
 
   .primary-actions {
@@ -88,7 +88,7 @@ export const permissionCardStyles: CSSResult = css`
   .diff-info {
     display: inline-flex;
     align-items: baseline;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
     font-size: var(--font-size-sm);
     font-family: var(--texra-editor-font-family);
   }
@@ -105,34 +105,34 @@ export const permissionCardStyles: CSSResult = css`
 
   .meta-text {
     color: var(--texra-descriptionForeground);
-    margin-left: var(--spacing-small);
+    margin-left: var(--wa-space-2xs);
   }
 
   .extract-flags {
     display: flex;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
     flex-wrap: wrap;
   }
 
   .extract-flag {
     display: inline-flex;
     align-items: center;
-    gap: var(--spacing-tiny);
+    gap: var(--wa-space-3xs);
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-semibold);
-    padding: var(--spacing-tiny) var(--spacing-small);
+    padding: var(--wa-space-3xs) var(--wa-space-2xs);
     border-radius: var(--border-radius);
     background: var(--texra-badge-background);
     color: var(--texra-badge-foreground);
   }
 
   .file-list {
-    margin: var(--spacing-small) 0;
+    margin: var(--wa-space-2xs) 0;
   }
 
   .file-list-label {
     color: var(--texra-descriptionForeground);
-    margin-right: var(--spacing-small);
+    margin-right: var(--wa-space-2xs);
   }
 
   .file-link {
@@ -153,21 +153,21 @@ export const permissionCardStyles: CSSResult = css`
   }
 
   .plan-steps-list {
-    margin: var(--spacing-small) 0;
-    padding-left: var(--spacing-xlarge);
+    margin: var(--wa-space-2xs) 0;
+    padding-left: var(--wa-space-l);
   }
 
   .plan-steps-list li {
-    margin-bottom: var(--spacing-small);
+    margin-bottom: var(--wa-space-2xs);
   }
 
   .feedback-section {
-    margin-top: var(--spacing-large);
+    margin-top: var(--wa-space-s);
   }
 
   .feedback-label {
     display: block;
-    margin-bottom: var(--spacing-small);
+    margin-bottom: var(--wa-space-2xs);
     font-size: var(--font-size-sm);
     color: var(--texra-descriptionForeground);
   }
@@ -175,7 +175,7 @@ export const permissionCardStyles: CSSResult = css`
   .feedback-input {
     width: 100%;
     min-height: 60px;
-    padding: var(--spacing-medium);
+    padding: var(--wa-space-xs);
     border: var(--border-thin) solid var(--texra-input-border);
     background: var(--texra-input-background);
     color: var(--texra-input-foreground);
