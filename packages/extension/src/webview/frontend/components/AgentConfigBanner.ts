@@ -12,7 +12,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import type { AgentConfigBannerState } from '@shared/schemas';
-import { bannerStyles } from '../styles/bannerStyles';
+import { applyBannerVisibility, bannerStyles } from '../styles/bannerStyles';
 import { MainViewEvents } from '../events';
 
 @customElement('agent-config-banner')
@@ -25,9 +25,7 @@ export class AgentConfigBanner extends LitElement {
 
   override updated(changed: PropertyValues<this>): void {
     if (changed.has('state')) {
-      const visible = this.state.visible === true;
-      this.dataset.visible = visible ? 'true' : 'false';
-      this.setAttribute('aria-hidden', visible ? 'false' : 'true');
+      applyBannerVisibility(this, this.state.visible === true);
     }
   }
 

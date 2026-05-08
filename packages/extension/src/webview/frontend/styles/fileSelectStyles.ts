@@ -10,96 +10,19 @@
  */
 
 import { css } from 'lit';
+import {
+  compactFormControlStyles,
+  compactIconActionButtonStyles,
+} from '@shared/styles';
 
-/** Compact wa-input / wa-select sizing — stricter IDE-density form controls.
- * WA defaults to ~38px tall; reduce to ~22px to match minimal VS Code chrome.
- * Keep selectors in sync with the canonical rules in
- * `src/shared/styles/selectStyles.ts`. */
-export const compactFormControlStyles = css`
-  wa-select {
-    font-size: var(--font-size-sm);
-  }
-
-  wa-select::part(combobox) {
-    min-height: 22px;
-    min-width: 0;
-    padding-block: 0;
-    padding-inline: 6px;
-    border: var(--border-thin) solid
-      var(--wa-color-surface-border, var(--color-border));
-  }
-
-  wa-select::part(display-input) {
-    padding-block: 1px;
-    padding-inline: 6px;
-    font-size: var(--font-size-sm);
-  }
-
-  wa-select::part(expand-icon) {
-    margin-inline-start: var(--wa-space-3xs);
-  }
-
-  wa-input {
-    font-size: var(--font-size-sm);
-  }
-
-  wa-input::part(base) {
-    min-height: 22px;
-    padding-block: 0;
-    border: var(--border-thin) solid
-      var(--wa-color-surface-border, var(--color-border));
-  }
-
-  wa-input::part(input) {
-    padding-block: 1px;
-    padding-inline: 6px;
-    font-size: var(--font-size-sm);
-  }
-`;
-
-/** Compact icon action button styles — duplicated from commonViewStyles
- * so file-select components don't need to import the full common view sheet
- * just to size their toolbar icons. Keep selectors in sync with the canonical
- * rules in `src/shared/styles/commonViewStyles.ts`.
- *
- * Stricter minimalism: 20×20, opacity-driven hover (no fill swap). */
-export const compactActionButtonStyles = css`
-  .action-icon-button::part(base) {
-    width: 20px;
-    min-width: 0;
-    height: 20px;
-    min-height: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(
-      --wa-color-text-quiet,
-      var(--texra-icon-foreground, var(--wa-color-text-normal))
-    );
-    opacity: var(--opacity-subtle);
-    transition: opacity 120ms ease;
-  }
-
-  .action-icon-button::part(base):hover {
-    opacity: var(--opacity-full);
-    background: transparent;
-  }
-
-  .action-icon-button:focus-visible::part(base) {
-    outline: var(--border-thin) solid
-      var(--wa-color-focus, var(--wa-color-focus));
-    outline-offset: 1px;
-  }
-
-  .action-icon-button[disabled]::part(base) {
-    opacity: 0.35;
-    background: transparent;
-  }
-
-  .action-icon-button wa-icon {
-    font-size: 13px;
-  }
-`;
+/**
+ * Re-exported under the legacy names so existing imports keep working. The
+ * canonical definitions live in `@shared/styles/selectStyles` and
+ * `@shared/styles/commonViewStyles`; importing from here keeps file-select
+ * components from having to pull the full common view / select sheets.
+ */
+export const compactActionButtonStyles = compactIconActionButtonStyles;
+export { compactFormControlStyles };
 
 /** Core file-select layout styles. */
 export const fileSelectLayoutStyles = css`

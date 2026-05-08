@@ -13,7 +13,7 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import type { ApiKeyBannerState } from '@shared/schemas';
 import { capitalize } from '@shared/utils/string';
-import { bannerStyles } from '../styles/bannerStyles';
+import { applyBannerVisibility, bannerStyles } from '../styles/bannerStyles';
 import { MainViewEvents } from '../events';
 
 @customElement('api-key-banner')
@@ -26,9 +26,7 @@ export class ApiKeyBanner extends LitElement {
 
   override updated(changed: PropertyValues<this>): void {
     if (changed.has('state')) {
-      const visible = this.state.visible === true;
-      this.dataset.visible = visible ? 'true' : 'false';
-      this.setAttribute('aria-hidden', visible ? 'false' : 'true');
+      applyBannerVisibility(this, this.state.visible === true);
     }
   }
 

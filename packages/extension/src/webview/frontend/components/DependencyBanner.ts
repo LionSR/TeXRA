@@ -15,7 +15,7 @@ import { when } from 'lit/directives/when.js';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import type { DependencyBannerState } from '@shared/schemas';
-import { bannerStyles } from '../styles/bannerStyles';
+import { applyBannerVisibility, bannerStyles } from '../styles/bannerStyles';
 import { MainViewEvents } from '../events';
 
 @customElement('dependency-banner')
@@ -46,9 +46,7 @@ export class DependencyBanner extends LitElement {
 
   override updated(changed: PropertyValues<this>): void {
     if (changed.has('state')) {
-      const visible = this.state.visible === true;
-      this.dataset.visible = visible ? 'true' : 'false';
-      this.setAttribute('aria-hidden', visible ? 'false' : 'true');
+      applyBannerVisibility(this, this.state.visible === true);
     }
   }
 
