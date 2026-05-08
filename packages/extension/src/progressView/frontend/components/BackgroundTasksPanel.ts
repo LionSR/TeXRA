@@ -21,11 +21,11 @@ import { repeat } from 'lit/directives/repeat.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports
+import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { STREAM_STATUS, type ActiveChildInfo } from '@shared/schemas';
 import {
   designTokens,
   commonViewStyles,
-  tintedBadgeStyles,
 } from '@shared/styles';
 import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
@@ -53,7 +53,6 @@ export class BackgroundTasksPanel extends LitElement {
     designTokens,
     commonViewStyles,
     codiconIconClasses,
-    tintedBadgeStyles,
     css`
       :host {
         display: block;
@@ -134,15 +133,6 @@ export class BackgroundTasksPanel extends LitElement {
         flex-shrink: 0;
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
-      }
-
-      /* Variant tints for shared .tinted-badge */
-      .tinted-badge--running {
-        --_tint: var(--color-warning);
-      }
-
-      .tinted-badge--waiting {
-        --_tint: var(--color-text-secondary);
       }
 
       .section-label {
@@ -363,13 +353,10 @@ export class BackgroundTasksPanel extends LitElement {
           ${child.elapsed
             ? html`<span class="task-elapsed">(${child.elapsed})</span>`
             : nothing}
-          <span
-            class=${classMap({
-              'tinted-badge': true,
-              'tinted-badge--running': !waiting,
-              'tinted-badge--waiting': waiting,
-            })}
-            >${waiting ? 'waiting' : 'running'}</span
+          <wa-tag
+            variant=${waiting ? 'neutral' : 'warning'}
+            size="small"
+            >${waiting ? 'waiting' : 'running'}</wa-tag
           >
         </div>
         ${entry?.stdout

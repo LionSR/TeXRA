@@ -1,4 +1,5 @@
 // Third-party imports
+import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -10,7 +11,6 @@ import {
   designTokens,
   animationStyles,
   commonViewStyles,
-  tintedBadgeStyles,
 } from '@shared/styles';
 import {
   STREAM_STATUS,
@@ -122,7 +122,6 @@ export class StreamHeader extends LitElement {
     commonViewStyles,
     codiconIconClasses,
     statusIndicatorStyles,
-    tintedBadgeStyles,
     css`
       :host {
         display: block;
@@ -306,7 +305,9 @@ export class StreamHeader extends LitElement {
         font-size: var(--font-size-xs);
       }
 
-      /* Uses shared .tinted-badge base; no --_tint override = inherits text-secondary default */
+      wa-tag.progress-badge .codicon {
+        font-size: var(--font-size-xs);
+      }
 
       @media (max-width: 500px) {
         .log-header {
@@ -429,8 +430,10 @@ export class StreamHeader extends LitElement {
   private renderProgressBadge(): TemplateResult | typeof nothing {
     const p = this.progress;
     if (!p || p.conversationTurns <= 0) return nothing;
-    return html`<span
-      class="tinted-badge"
+    return html`<wa-tag
+      class="progress-badge"
+      variant="neutral"
+      size="small"
       title="Conversation turns: ${p.conversationTurns}, Tool calls: ${p.toolCallCount}"
     >
       <i class="codicon codicon-pulse"></i>
@@ -438,7 +441,7 @@ export class StreamHeader extends LitElement {
       turns${p.toolCallCount > 0
         ? html`, ${p.toolCallCount} tool calls`
         : nothing}
-    </span>`;
+    </wa-tag>`;
   }
 
   private renderParentLink(): TemplateResult | typeof nothing {

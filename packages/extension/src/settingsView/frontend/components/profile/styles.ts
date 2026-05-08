@@ -43,7 +43,7 @@ export const profileViewStyles: CSSResult = css`
     color: var(--texra-foreground);
   }
 
-  .tier-badge {
+  wa-tag.tier-badge {
     text-transform: uppercase;
     font-weight: var(--font-weight-semibold);
   }
@@ -62,21 +62,6 @@ export const profileViewStyles: CSSResult = css`
     padding: 0 var(--spacing-tiny);
     border-radius: var(--border-radius-small);
     background: var(--texra-textBlockQuote-background);
-  }
-
-  .tier-badge.free {
-    background: var(--texra-inputValidation-warningBackground);
-    color: var(--texra-inputValidation-warningForeground);
-  }
-
-  .tier-badge.max {
-    background: var(--texra-badge-background);
-    color: var(--texra-badge-foreground);
-  }
-
-  .tier-badge.ultra {
-    background: var(--texra-textLink-activeForeground);
-    color: var(--texra-button-foreground);
   }
 
   .not-authenticated {
@@ -256,31 +241,6 @@ export const profileViewStyles: CSSResult = css`
   .provider-name {
     font-weight: var(--font-weight-medium);
     white-space: nowrap;
-  }
-
-  .key-status-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-small);
-    font-size: var(--font-size-sm);
-    padding: var(--spacing-tiny) var(--spacing-small);
-    border-radius: var(--border-radius);
-  }
-
-  .key-status-badge.set {
-    background: var(--texra-testing-iconPassed);
-    color: var(--texra-button-foreground);
-  }
-
-  .key-status-badge.env {
-    background: var(--texra-badge-background);
-    color: var(--texra-badge-foreground);
-  }
-
-  .key-status-badge.not-set {
-    background: var(--texra-input-background);
-    color: var(--color-text-secondary);
-    border: var(--border-thin) solid var(--color-border);
   }
 
   .provider-actions {

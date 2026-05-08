@@ -5,6 +5,7 @@
  */
 
 // Third-party imports
+import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
@@ -115,28 +116,11 @@ export class MultiAgentTab extends LitElement {
 
       .preset-card.active .preset-card-name,
       .preset-card.active .preset-card-description,
-      .preset-card.active .preset-card-icon,
-      .preset-card.active .preset-active-badge {
+      .preset-card.active .preset-card-icon {
         color: inherit;
       }
 
-      .preset-active-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--spacing-tiny);
-        padding: var(--border-thin) var(--border-radius-large);
-        font-size: var(--font-size-xs);
-        font-weight: var(--font-weight-medium);
-        color: var(--texra-focusBorder);
-        background: color-mix(
-          in srgb,
-          var(--texra-focusBorder) 15%,
-          transparent
-        );
-        border-radius: var(--border-radius-medium);
-      }
-
-      .preset-active-badge wa-icon {
+      wa-tag.preset-active-badge wa-icon {
         font-size: var(--font-size-xs);
       }
 
@@ -184,22 +168,7 @@ export class MultiAgentTab extends LitElement {
         margin-top: var(--spacing-tiny);
       }
 
-      .preset-agent-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--spacing-tiny);
-        padding: var(--border-thin) var(--border-radius-large);
-        font-size: var(--font-size-xs);
-        color: var(--texra-badge-foreground);
-        background: var(--texra-badge-background, rgba(128, 128, 128, 0.15));
-        border-radius: var(--border-radius);
-      }
-
-      .preset-agent-badge--orchestrator {
-        color: var(--texra-button-foreground);
-        background: var(--texra-button-background);
-        border: var(--border-thin) solid
-          var(--texra-button-background, var(--texra-focusBorder));
+      wa-tag.preset-agent-badge--orchestrator {
         font-weight: var(--font-weight-semibold);
       }
 
@@ -360,9 +329,13 @@ export class MultiAgentTab extends LitElement {
           ></wa-icon>
           <span class="preset-card-name">${preset.name}</span>
           ${isActive
-            ? html`<span class="preset-active-badge">
+            ? html`<wa-tag
+                class="preset-active-badge"
+                variant="brand"
+                size="small"
+              >
                 <wa-icon library="texra" name="check"></wa-icon> Active
-              </span>`
+              </wa-tag>`
             : nothing}
         </div>
         <p class="preset-card-description">${preset.description}</p>
@@ -370,22 +343,30 @@ export class MultiAgentTab extends LitElement {
           ? html`<div class="preset-card-orchestrators">
               ${orchestratorAgents.map(
                 (name) => html`
-                  <span
+                  <wa-tag
                     class="preset-agent-badge preset-agent-badge--orchestrator"
+                    variant="brand"
+                    size="small"
                     title="${name} is the orchestrator for this team"
                   >
                     <span class="preset-orchestrator-icon" aria-hidden="true"
                       >🎯</span
                     >
                     ${name}
-                  </span>
+                  </wa-tag>
                 `,
               )}
             </div>`
           : nothing}
         <div class="preset-card-agents">
           ${teammateAgents.map(
-            (name) => html`<span class="preset-agent-badge">${name}</span>`,
+            (name) =>
+              html`<wa-tag
+                class="preset-agent-badge"
+                variant="neutral"
+                size="small"
+                >${name}</wa-tag
+              >`,
           )}
         </div>
         ${deletable

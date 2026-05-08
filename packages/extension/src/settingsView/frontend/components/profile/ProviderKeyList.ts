@@ -4,6 +4,7 @@
  */
 
 // Third-party imports
+import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
@@ -27,6 +28,15 @@ const STATUS_LABELS: Record<ProviderKeyStatus['status'], string> = {
   set: 'Set',
   env: 'Env',
   'not-set': 'Not Set',
+};
+
+const STATUS_VARIANTS: Record<
+  ProviderKeyStatus['status'],
+  'brand' | 'neutral' | 'success' | 'warning' | 'danger'
+> = {
+  set: 'success',
+  env: 'neutral',
+  'not-set': 'neutral',
 };
 
 @customElement('provider-key-list')
@@ -200,8 +210,11 @@ export class ProviderKeyList extends LitElement {
           </div>
         </td>
         <td>
-          <span class="key-status-badge ${entry.status}"
-            >${STATUS_LABELS[entry.status]}</span
+          <wa-tag
+            class="key-status-badge"
+            variant=${STATUS_VARIANTS[entry.status]}
+            size="small"
+            >${STATUS_LABELS[entry.status]}</wa-tag
           >
         </td>
         <td>${this.renderActions(entry)}</td>

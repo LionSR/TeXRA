@@ -4,6 +4,7 @@
  */
 
 // Third-party imports
+import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import {
   LitElement,
   html,
@@ -137,13 +138,8 @@ export class AgentsTab extends LitElement {
         min-width: 0;
       }
 
-      .agents-dir-default-badge {
+      wa-tag.agents-dir-default-badge {
         flex-shrink: 0;
-        padding: 0 var(--spacing-small);
-        font-size: var(--font-size-xs);
-        color: var(--texra-badge-foreground);
-        background: var(--texra-badge-background, rgba(128, 128, 128, 0.15));
-        border-radius: var(--border-radius);
       }
 
       .agents-dir-actions {
@@ -303,7 +299,12 @@ export class AgentsTab extends LitElement {
             >${this.customAgentDir}</span
           >
           ${this.customAgentDirIsDefault
-            ? html`<span class="agents-dir-default-badge">default</span>`
+            ? html`<wa-tag
+                class="agents-dir-default-badge"
+                variant="neutral"
+                size="small"
+                >default</wa-tag
+              >`
             : nothing}
           <div class="agents-dir-actions">
             <button
