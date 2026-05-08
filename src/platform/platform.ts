@@ -14,6 +14,7 @@ import type { LogBackend } from './interfaces/log';
 import type { FileSystemProvider } from './interfaces/filesystem';
 import type { WorkspaceProvider } from './interfaces/workspace';
 import type { StorageProvider } from './interfaces/storage';
+import type { LifecycleHost } from './interfaces/lifecycle';
 import type { PlatformSecrets } from './secrets';
 
 /**
@@ -29,6 +30,7 @@ export interface Platform {
   readonly workspace: WorkspaceProvider;
   readonly storage: StorageProvider;
   readonly secrets: PlatformSecrets;
+  readonly lifecycle: LifecycleHost;
 }
 
 let _platform: Readonly<Platform> | null = null;
