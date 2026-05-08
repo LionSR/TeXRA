@@ -2032,8 +2032,21 @@ export class MainApp extends MainAppBase {
                 <wa-details
                   class="file-selection-details"
                   ?open=${this.fileSelectionOpen.get()}
-                  @wa-show=${() => this.fileSelectionOpen.set(true)}
-                  @wa-hide=${() => this.fileSelectionOpen.set(false)}
+                  @wa-show=${(event: Event) => {
+                    // Filter by event source: child wa-dropdown components
+                    // inside the panel also emit wa-show/wa-hide which bubble
+                    // up. Without this guard, opening any dropdown inside
+                    // the Files panel re-flips fileSelectionOpen on the next
+                    // dropdown close (see webawesome#1540).
+                    if (event.target === event.currentTarget) {
+                      this.fileSelectionOpen.set(true);
+                    }
+                  }}
+                  @wa-hide=${(event: Event) => {
+                    if (event.target === event.currentTarget) {
+                      this.fileSelectionOpen.set(false);
+                    }
+                  }}
                 >
                   <span slot="summary" class="file-selection-summary">
                     <wa-icon
