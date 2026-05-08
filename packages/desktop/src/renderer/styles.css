@@ -70,7 +70,7 @@ wa-button.desktop-icon-button::part(base):hover {
 }
 
 wa-button.desktop-icon-button[aria-pressed='true']::part(base) {
-  border-color: var(--texra-focusBorder);
+  border-color: var(--wa-color-focus);
   background: var(--wa-color-neutral-fill-quiet);
 }
 
@@ -150,7 +150,7 @@ wa-button.desktop-command-button {
   gap: var(--wa-space-xs);
   min-height: 34px;
   padding: 0 var(--wa-space-xs) 0 var(--wa-space-s);
-  border-bottom: 1px solid var(--texra-panel-border);
+  border-bottom: 1px solid var(--wa-color-surface-border);
   box-sizing: border-box;
 }
 
@@ -198,7 +198,7 @@ wa-tree.desktop-explorer-tree {
 wa-tree.desktop-explorer-tree wa-tree-item::part(item) {
   min-height: 24px;
   padding-inline-end: var(--wa-space-xs);
-  color: var(--texra-foreground);
+  color: var(--wa-color-text-normal);
 }
 
 wa-tree.desktop-explorer-tree wa-tree-item::part(label) {
@@ -263,7 +263,7 @@ wa-tree.desktop-explorer-tree
 .desktop-explorer-selection,
 .desktop-explorer-empty {
   padding: var(--wa-space-s);
-  color: var(--texra-descriptionForeground);
+  color: var(--wa-color-text-quiet);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -299,7 +299,7 @@ wa-tree.desktop-explorer-tree
 
 .desktop-explorer-empty .empty-state-title {
   margin: var(--wa-space-s) 0 var(--wa-space-2xs);
-  color: var(--texra-foreground);
+  color: var(--wa-color-text-normal);
   font-size: var(--font-size-h2);
   font-weight: 600;
 }
@@ -364,9 +364,9 @@ wa-tree.desktop-explorer-tree
 
 .desktop-command-palette-panel {
   width: min(560px, 100%);
-  border: 1px solid var(--texra-panel-border);
+  border: 1px solid var(--wa-color-surface-border);
   border-radius: var(--wa-border-radius-l, 6px);
-  background: var(--texra-editor-background);
+  background: var(--wa-color-surface-default);
   box-shadow: 0 16px 40px rgb(0 0 0 / 32%);
   overflow: hidden;
 }
@@ -449,7 +449,7 @@ wa-tree.desktop-explorer-tree
 
 .desktop-empty-workspace-panel .empty-state-title {
   margin: var(--wa-space-l) 0 var(--wa-space-xs);
-  color: var(--texra-foreground);
+  color: var(--wa-color-text-normal);
   font-size: var(--font-size-h1);
   font-weight: 600;
 }
@@ -483,12 +483,12 @@ wa-tree.desktop-explorer-tree
   align-items: flex-start;
   justify-content: space-between;
   padding-bottom: var(--wa-space-s);
-  border-bottom: 1px solid var(--texra-panel-border);
+  border-bottom: 1px solid var(--wa-color-surface-border);
 }
 
 .desktop-log-viewer-header h2 {
   margin: 0 0 var(--wa-space-2xs);
-  color: var(--texra-foreground);
+  color: var(--wa-color-text-normal);
   font-size: var(--font-size-h2);
   font-weight: 600;
 }
@@ -511,10 +511,10 @@ wa-tree.desktop-explorer-tree
   margin: 0;
   padding: var(--wa-space-s);
   overflow: auto;
-  border: 1px solid var(--texra-panel-border);
+  border: 1px solid var(--wa-color-surface-border);
   border-radius: var(--wa-border-radius-l, 6px);
-  background: var(--texra-editor-background);
-  color: var(--texra-editor-foreground);
+  background: var(--wa-color-surface-default);
+  color: var(--wa-color-text-normal);
   font-family: var(--texra-font-family-monospace);
   font-size: 12px;
   line-height: 1.45;
@@ -558,7 +558,7 @@ wa-dialog.desktop-onboarding {
   gap: var(--wa-space-s);
   padding-bottom: var(--wa-space-m);
   margin-bottom: var(--wa-space-m);
-  border-bottom: 1px solid var(--texra-panel-border);
+  border-bottom: 1px solid var(--wa-color-surface-border);
 }
 
 .desktop-onboarding-icon {
@@ -581,7 +581,7 @@ wa-dialog.desktop-onboarding {
 
 .desktop-onboarding p {
   margin: var(--wa-space-xs) 0 0;
-  color: var(--texra-descriptionForeground);
+  color: var(--wa-color-text-quiet);
   font-size: 14px;
   line-height: 1.45;
 }
@@ -599,7 +599,7 @@ wa-dialog.desktop-onboarding {
   grid-template-columns: 26px minmax(0, 1fr);
   gap: var(--wa-space-s);
   padding: var(--wa-space-s) 0;
-  border-bottom: 1px solid var(--texra-panel-border);
+  border-bottom: 1px solid var(--wa-color-surface-border);
 }
 
 .desktop-onboarding-steps li:last-child {
@@ -632,7 +632,7 @@ wa-dialog.desktop-onboarding {
 
 .desktop-onboarding-steps span {
   margin-top: var(--wa-space-2xs);
-  color: var(--texra-descriptionForeground);
+  color: var(--wa-color-text-quiet);
   font-size: 13px;
   line-height: 1.4;
 }
