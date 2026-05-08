@@ -25,7 +25,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .list-item:hover {
-    background-color: var(--texra-list-hoverBackground);
+    background-color: var(--wa-color-neutral-fill-quiet);
   }
 
   .list-item:focus-within {
@@ -524,7 +524,7 @@ export const filledButtonStyles: CSSResult = css`
     padding: var(--wa-space-2xs) var(--wa-space-xs);
     font-size: var(--font-size);
     font-family: inherit;
-    color: var(--texra-button-foreground);
+    color: var(--wa-color-brand-on-loud);
     background: var(--wa-color-brand-fill-loud);
     border: var(--border-thin) solid var(--texra-button-border, transparent);
     border-radius: var(--border-radius);

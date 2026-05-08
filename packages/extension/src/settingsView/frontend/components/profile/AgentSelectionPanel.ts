@@ -119,7 +119,7 @@ export class AgentSelectionPanel extends LitElement {
       }
 
       .agent-list-item:hover {
-        background: var(--texra-list-hoverBackground);
+        background: var(--wa-color-neutral-fill-quiet);
       }
 
       .agent-list-item:focus-visible {
@@ -128,7 +128,7 @@ export class AgentSelectionPanel extends LitElement {
       }
 
       .agent-list-item.selected {
-        background: var(--texra-list-activeSelectionBackground);
+        background: var(--wa-color-brand-fill-quiet);
         color: var(
           --texra-list-activeSelectionForeground,
           var(--wa-color-text-normal)
