@@ -826,10 +826,7 @@ function pdfPathToFileUrl(absolutePath: string): string {
   const driveMatch = normalised.match(/^([A-Za-z]):\/(.*)$/);
   if (driveMatch) {
     const drive = driveMatch[1];
-    const rest = driveMatch[2]
-      .split('/')
-      .map(encodeURIComponent)
-      .join('/');
+    const rest = driveMatch[2].split('/').map(encodeURIComponent).join('/');
     return `file:///${drive}:/${rest}`;
   }
   // Defensive fallback — shouldn't happen because `isSafeAbsolutePdfPath`

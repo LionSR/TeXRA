@@ -22,6 +22,11 @@ interface DesktopShellIpcModule {
       getCustomAgentDirectory?: () => Promise<string>;
       openPath?: (filePath: string) => Promise<void>;
       signIn?: () => Promise<void>;
+      isWorkspaceGitRepo?: () => boolean;
+      getRecentCommits?: () => Promise<{
+        commits: string[];
+        isGitRepo: boolean;
+      }>;
       onAsyncError?: (error: unknown) => void;
     },
   ): {
@@ -247,6 +252,82 @@ describe('desktop IPC adapters', () => {
       command: SETTINGS_VIEW_COMMANDS.SET_TAB,
       tabIndex: SETTINGS_TAB.AGENTS,
     });
+  });
+
+  it('forwards real recent commits when a git host is wired', async () => {
+    // Closes audit item A: `getRecentCommits` is now a first-class shell
+    // option, so the launcher banner sees the actual `git log` output
+    // instead of the legacy empty stub.
+    const { createDesktopShellIpc } = await loadDesktopShellIpc();
+    const postToRenderer = vi.fn();
+    const getRecentCommits = vi.fn(async () => ({
+      commits: ['abc1234: Add feature (2 days ago)'],
+      isGitRepo: true,
+    }));
+    const shellIpc = createDesktopShellIpc(
+      { postToRenderer },
+      { getRecentCommits },
+    );
+
+    expect(
+      shellIpc.handleMessage({
+        command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
+      }),
+    ).toBe(true);
+    // Resolve the inner promise then the .then() chain.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(getRecentCommits).toHaveBeenCalledOnce();
+    expect(postToRenderer).toHaveBeenCalledWith({
+      command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
+      commits: ['abc1234: Add feature (2 days ago)'],
+      isGitRepo: true,
+    });
+  });
+
+  it('falls back to empty list + isWorkspaceGitRepo when no git host is wired', async () => {
+    const { createDesktopShellIpc } = await loadDesktopShellIpc();
+    const postToRenderer = vi.fn();
+    const isWorkspaceGitRepo = vi.fn(() => true);
+    const shellIpc = createDesktopShellIpc(
+      { postToRenderer },
+      { isWorkspaceGitRepo },
+    );
+
+    shellIpc.handleMessage({
+      command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
+    });
+
+    expect(isWorkspaceGitRepo).toHaveBeenCalledOnce();
+    expect(postToRenderer).toHaveBeenCalledWith({
+      command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
+      commits: [],
+      isGitRepo: true,
+    });
+  });
+
+  it('parses tab-separated git log output into renderer-shaped labels', async () => {
+    // The git host parser shapes lines into `<hash>: <subject>
+    // (<relative>)` so the renderer can keep its existing string[] schema.
+    const { parseCommitLog } = (await import(
+      moduleFileUrl(desktopSourcePath('main', 'desktopGitHost.ts'))
+    )) as { parseCommitLog: (stdout: string) => string[] };
+
+    const stdout = [
+      'abc1234\tAdd feature\t2 days ago',
+      'def5678\tFix: handle edge case\t3 days ago',
+      // Blank lines are silently skipped.
+      '',
+      // Lines missing a relative date are skipped (defensive — should not
+      // happen with our format but proves the parser doesn't crash).
+      'badrow',
+    ].join('\n');
+
+    expect(parseCommitLog(stdout)).toEqual([
+      'abc1234: Add feature (2 days ago)',
+      'def5678: Fix: handle edge case (3 days ago)',
+    ]);
+    expect(parseCommitLog('')).toEqual([]);
   });
 
   it('wires the main login banner to desktop sign-in', async () => {
