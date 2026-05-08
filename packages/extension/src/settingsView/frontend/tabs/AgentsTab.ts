@@ -71,18 +71,18 @@ export class AgentsTab extends LitElement {
       }
 
       .agents-sub-tab:hover {
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
       }
 
       .agents-sub-tab:focus-visible {
-        outline: var(--border-thin) solid var(--texra-focusBorder);
+        outline: var(--border-thin) solid var(--wa-color-focus);
         outline-offset: 1px;
         border-radius: var(--border-radius-small);
       }
 
       .agents-sub-tab.active {
-        color: var(--texra-foreground);
-        border-bottom-color: var(--texra-focusBorder);
+        color: var(--wa-color-text-normal);
+        border-bottom-color: var(--wa-color-focus);
         font-weight: var(--font-weight-medium);
       }
 
@@ -100,8 +100,8 @@ export class AgentsTab extends LitElement {
       }
 
       .agents-create-btn {
-        color: var(--texra-foreground);
-        border-color: var(--texra-focusBorder);
+        color: var(--wa-color-text-normal);
+        border-color: var(--wa-color-focus);
         font-weight: var(--font-weight-medium);
       }
 
@@ -131,7 +131,7 @@ export class AgentsTab extends LitElement {
 
       .agents-dir-path {
         font-family: var(--texra-editor-font-family, monospace), monospace;
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -163,11 +163,11 @@ export class AgentsTab extends LitElement {
       }
 
       .agents-dir-icon-btn:hover {
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
       }
 
       .agents-dir-icon-btn:focus-visible {
-        outline: var(--border-thin) solid var(--texra-focusBorder);
+        outline: var(--border-thin) solid var(--wa-color-focus);
         outline-offset: 1px;
         border-radius: var(--border-radius-small);
       }

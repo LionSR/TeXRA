@@ -65,7 +65,7 @@ export class LatexDiffsSection extends LitElement {
 
       .latexdiffs-section[data-expanded='true'] .optional-label,
       .latexdiffs-section[data-expanded='true'] .toggle-icon {
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
       }
 
       #latexdiffsContent {

@@ -96,7 +96,7 @@ export class UsagePanel extends LitElement {
         top: 0;
         bottom: 0;
         width: var(--border-thin);
-        background: var(--texra-foreground);
+        background: var(--wa-color-text-normal);
         opacity: var(--opacity-separator);
       }
 
@@ -110,7 +110,7 @@ export class UsagePanel extends LitElement {
       }
 
       :is(.run-summary__value, .context-state__value) {
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
       }
     `,
   ];
