@@ -8,6 +8,7 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { COMMAND_LINKS } from '@shared/utils/uiConstants';
 
+import { bannerStyles } from '../styles/bannerStyles';
 import { MainViewEvents } from '../events';
 
 @customElement('getting-started-banner')
@@ -15,15 +16,8 @@ export class GettingStartedBanner extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    bannerStyles,
     css`
-      :host {
-        display: block;
-      }
-
-      wa-callout.getting-started-banner {
-        margin-bottom: var(--spacing-large);
-      }
-
       wa-callout.getting-started-banner a {
         color: var(--color-text-link);
         text-decoration: none;
