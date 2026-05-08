@@ -31,7 +31,7 @@ export const fileSelectLayoutStyles = css`
     gap: var(--spacing-small);
   }
 
-  .file-select-header > vscode-toolbar-button {
+  .file-select-header > wa-button {
     opacity: var(--opacity-full);
     flex-shrink: 0;
   }
@@ -56,7 +56,7 @@ export const fileSelectLayoutStyles = css`
     min-height: var(--height-control);
   }
 
-  .file-select-label-group vscode-toolbar-button {
+  .file-select-label-group wa-button {
     opacity: var(--opacity-full);
   }
 
@@ -80,14 +80,15 @@ export const fileSelectLayoutStyles = css`
     min-width: 0;
   }
 
-  .file-select-actions,
-  vscode-toolbar-container.file-select-actions {
+  .file-select-actions {
+    display: flex;
     flex-direction: column !important;
     flex-wrap: nowrap;
     margin-left: auto;
+    gap: var(--spacing-tiny);
   }
 
-  .file-select-actions vscode-toolbar-button {
+  .file-select-actions wa-button {
     opacity: var(--opacity-full);
     width: var(--height-control);
     height: var(--height-control);
@@ -255,11 +256,11 @@ export const dropdownStyles = css`
     align-items: center;
   }
 
-  .dropdown-container vscode-toolbar-button {
+  .dropdown-container wa-button {
     flex-shrink: 0;
   }
 
-  .dropdown-container vscode-toolbar-button.has-options::part(control) {
+  .dropdown-container wa-button.has-options::part(base) {
     box-shadow: inset 0 0 0 1px
       var(--texra-inputValidation-infoBorder, var(--texra-focusBorder));
   }
