@@ -259,7 +259,6 @@ export class ProgressApp extends ProgressAppBase {
       }
 
       wa-split-panel {
-        display: flex;
         width: 100%;
         height: 100%;
       }
