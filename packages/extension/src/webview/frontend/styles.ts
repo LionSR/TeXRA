@@ -54,8 +54,8 @@ export const mainViewStyles: CSSResult = css`
     border: var(--border-thin) solid
       var(--texra-widget-border, var(--dropdown-border));
     border-radius: var(--border-radius);
-    padding: var(--wa-space-xs);
-    margin-bottom: var(--wa-space-s);
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
+    margin-bottom: var(--wa-space-2xs);
     overflow: visible;
   }
 
