@@ -19,6 +19,7 @@ import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 // Local imports - shared schemas
 import { createEvent } from '@shared/utils/events';
@@ -125,7 +126,7 @@ export class ToolsTab extends LitElement {
         gap: var(--wa-space-2xs);
         font-size: var(--font-size-lg);
         font-weight: var(--font-weight-medium);
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
       }
 
       .tools-summary {
@@ -255,7 +256,7 @@ export class ToolsTab extends LitElement {
       .desktop-settings-description {
         margin: var(--wa-space-2xs) 0 0 0;
         font-size: var(--font-size-sm);
-        color: var(--texra-descriptionForeground);
+        color: var(--wa-color-text-quiet);
       }
 
       .desktop-settings-row {
@@ -321,7 +322,10 @@ export class ToolsTab extends LitElement {
   };
 
   private emitSelect(eventName: string, key: string, e: Event): void {
-    const value = (e.target as HTMLSelectElement | null)?.value;
+    // Read from currentTarget (the wa-select host) to avoid relying on the
+    // shadow-DOM retargeted target, which is brittle for Web Components.
+    const select = e.currentTarget as WaSelect | null;
+    const value = typeof select?.value === 'string' ? select.value : '';
     if (value) {
       this.dispatchEvent(createEvent(eventName, { [key]: value }));
     }

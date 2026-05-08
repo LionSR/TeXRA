@@ -23,7 +23,7 @@ The ProgressBoard interface is split into two main sections (usually side-by-sid
 This section lists all the agent execution streams from your current VS Code session.
 
 - **Switching Streams**: Click on a stream name (e.g., `polish@sonnet46: paper.tex`) to view its specific logs and status in the Content Area.
-- **Delete All**: The <i class="codicon codicon-trash"></i> **Delete All** button at the bottom permanently removes all streams and their logs from the ProgressBoard view for the current session.
+- **Delete All**: The <wa-icon library="texra" name="trash"></wa-icon> **Delete All** button at the bottom permanently removes all streams and their logs from the ProgressBoard view for the current session.
 - **Metadata**: Tabs display the model and when the stream was last active on a second line. Icons indicate the agent type and if multiple output files were generated.
 - **Sorting**: Use the buttons below the tab list to order streams by time, input file, or agent name. The chosen order is saved for the workspace.
 
@@ -45,18 +45,18 @@ The header provides a summary and actions for the selected stream:
   - **Yellow (Ready/Initial)**: The view is ready, but no stream is active yet.
 - **Token & Cost Summary**: Displays the combined input and output token counts from all completed rounds (`r0` and `r1`) along with the estimated cost.
 - **Stream Header Actions**:
-  - <i class="codicon codicon-debug-stop"></i> **Stop**: Attempts to gracefully stop the currently running task for this stream. For providers supporting `AbortController` (like OpenAI or Anthropic) the active request is aborted immediately; otherwise the current API call will finish before stopping.
-  - <i class="codicon codicon-debug-rerun"></i> **Run Again**: Re-runs the task associated with this stream using the _exact same configuration_ (agent, model, files, instruction) that was used when it originally ran. Useful for retrying failed tasks or reproducing results.
-  - <i class="codicon codicon-reply"></i> **Restore**: Loads the configuration (agent, model, files, instruction) from this stream back into the main TeXRA webview interface. This allows you to easily modify and re-run a previous task.
-  - <i class="codicon codicon-diff-multiple"></i> **Diff**: Triggers the `latexdiff` process to compare the original input file(s) with the generated output `.tex` file(s) from this stream. If no base file was selected, TeXRA automatically falls back to the original file. Requires `latexdiff` to be installed. See [LaTeX Diff](./latex-diff.md).
-  - <i class="codicon codicon-check"></i> **Accept**: After reviewing a diff, replace the base file with the edited version.
-  - <i class="codicon codicon-folder-opened"></i> **Open in task storage**:
+  - <wa-icon library="texra" name="debug-stop"></wa-icon> **Stop**: Attempts to gracefully stop the currently running task for this stream. For providers supporting `AbortController` (like OpenAI or Anthropic) the active request is aborted immediately; otherwise the current API call will finish before stopping.
+  - <wa-icon library="texra" name="debug-rerun"></wa-icon> **Run Again**: Re-runs the task associated with this stream using the _exact same configuration_ (agent, model, files, instruction) that was used when it originally ran. Useful for retrying failed tasks or reproducing results.
+  - <wa-icon library="texra" name="reply"></wa-icon> **Restore**: Loads the configuration (agent, model, files, instruction) from this stream back into the main TeXRA webview interface. This allows you to easily modify and re-run a previous task.
+  - <wa-icon library="texra" name="diff-multiple"></wa-icon> **Diff**: Triggers the `latexdiff` process to compare the original input file(s) with the generated output `.tex` file(s) from this stream. If no base file was selected, TeXRA automatically falls back to the original file. Requires `latexdiff` to be installed. See [LaTeX Diff](./latex-diff.md).
+  - <wa-icon library="texra" name="check"></wa-icon> **Accept**: After reviewing a diff, replace the base file with the edited version.
+  - <wa-icon library="texra" name="folder-opened"></wa-icon> **Open in task storage**:
     Reveals the run folder under task-run storage so you can browse generated
     files, compile logs, mirrored dependencies, and intermediate artifacts
     manually.
-  - <i class="codicon codicon-archive"></i> **Pack**: Archives the output files and log for this stream into the `History` folder. See [File Management](./file-management.md).
-  - <i class="codicon codicon-trash"></i> **Clean**: Deletes the task storage folder associated with this stream.
-  - <i class="codicon codicon-clear-all"></i> **Erase**: Removes this stream and its log content entirely from the ProgressBoard.
+  - <wa-icon library="texra" name="archive"></wa-icon> **Pack**: Archives the output files and log for this stream into the `History` folder. See [File Management](./file-management.md).
+  - <wa-icon library="texra" name="trash"></wa-icon> **Clean**: Deletes the task storage folder associated with this stream.
+  - <wa-icon library="texra" name="clear-all"></wa-icon> **Erase**: Removes this stream and its log content entirely from the ProgressBoard.
 
 ### YOLO Mode
 
@@ -94,6 +94,6 @@ This scrollable area displays the detailed, timestamped logs for the selected ag
 
 Understanding the log content is key to diagnosing problems and seeing how TeXRA and the AI models process your requests. Refer to the [Troubleshooting](./troubleshooting.md) guide for more tips on using logs.
 
-At the bottom of the tab list, there is a "Delete All" button (<i class="codicon codicon-close-all"></i>) that allows you to clear all streams and their associated logs from the ProgressBoard view.
+At the bottom of the tab list, there is a "Delete All" button (<wa-icon library="texra" name="close-all"></wa-icon>) that allows you to clear all streams and their associated logs from the ProgressBoard view.
 Above the sorter, the **All / Workflow / Tool Use** buttons let you focus the tab list on specific agent types.
-Next to "Delete All" are sorting buttons (<i class="codicon codicon-clock"></i>, <i class="codicon codicon-file"></i>, <i class="codicon codicon-account"></i>) for ordering the tabs.
+Next to "Delete All" are sorting buttons (<wa-icon library="texra" name="clock"></wa-icon>, <wa-icon library="texra" name="file"></wa-icon>, <wa-icon library="texra" name="account"></wa-icon>) for ordering the tabs.

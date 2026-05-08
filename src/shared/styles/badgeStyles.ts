@@ -20,8 +20,8 @@ export const categoryBadgeStyles: CSSResult = css`
     display: inline-flex;
     align-items: center;
     gap: var(--wa-space-2xs);
-    background: var(--texra-badge-background);
-    color: var(--texra-badge-foreground);
+    background: var(--wa-color-neutral-fill-quiet);
+    color: var(--wa-color-neutral-on-quiet);
   }
 
   .category-badge wa-icon,
@@ -62,7 +62,7 @@ export const searchHighlightStyles: CSSResult = css`
 
   mark[data-current='true'] {
     background-color: var(--texra-editor-findMatchBackground, #ff8b0088);
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
   }
 `;
 

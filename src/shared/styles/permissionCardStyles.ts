@@ -10,7 +10,7 @@ export const permissionCardStyles: CSSResult = css`
     z-index: 1000;
     background: color-mix(
       in srgb,
-      var(--texra-editor-background) 70%,
+      var(--wa-color-surface-default) 70%,
       transparent
     );
   }
@@ -20,8 +20,8 @@ export const permissionCardStyles: CSSResult = css`
   }
 
   .permission-card {
-    background: var(--texra-editor-background);
-    border: var(--border-thin) solid var(--texra-panel-border);
+    background: var(--wa-color-surface-default);
+    border: var(--border-thin) solid var(--wa-color-surface-border);
     border-radius: var(--border-radius-large);
     padding: var(--wa-space-l);
     max-width: 600px;
@@ -81,7 +81,7 @@ export const permissionCardStyles: CSSResult = css`
   .file-path {
     font-family: var(--texra-editor-font-family);
     font-size: var(--font-size-sm);
-    color: var(--texra-textLink-foreground);
+    color: var(--wa-color-text-link);
     word-break: break-word;
   }
 
@@ -104,7 +104,7 @@ export const permissionCardStyles: CSSResult = css`
   }
 
   .meta-text {
-    color: var(--texra-descriptionForeground);
+    color: var(--wa-color-text-quiet);
     margin-left: var(--wa-space-2xs);
   }
 
@@ -122,8 +122,8 @@ export const permissionCardStyles: CSSResult = css`
     font-weight: var(--font-weight-semibold);
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
     border-radius: var(--border-radius);
-    background: var(--texra-badge-background);
-    color: var(--texra-badge-foreground);
+    background: var(--wa-color-neutral-fill-quiet);
+    color: var(--wa-color-neutral-on-quiet);
   }
 
   .file-list {
@@ -131,12 +131,12 @@ export const permissionCardStyles: CSSResult = css`
   }
 
   .file-list-label {
-    color: var(--texra-descriptionForeground);
+    color: var(--wa-color-text-quiet);
     margin-right: var(--wa-space-2xs);
   }
 
   .file-link {
-    color: var(--texra-textLink-foreground);
+    color: var(--wa-color-text-link);
     cursor: pointer;
     text-decoration: none;
     transition: color var(--transition-fast);
@@ -147,7 +147,7 @@ export const permissionCardStyles: CSSResult = css`
   }
 
   .file-link:focus-visible {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -169,16 +169,16 @@ export const permissionCardStyles: CSSResult = css`
     display: block;
     margin-bottom: var(--wa-space-2xs);
     font-size: var(--font-size-sm);
-    color: var(--texra-descriptionForeground);
+    color: var(--wa-color-text-quiet);
   }
 
   .feedback-input {
     width: 100%;
     min-height: 60px;
     padding: var(--wa-space-xs);
-    border: var(--border-thin) solid var(--texra-input-border);
-    background: var(--texra-input-background);
-    color: var(--texra-input-foreground);
+    border: var(--border-thin) solid var(--wa-form-control-border-color);
+    background: var(--wa-form-control-background-color);
+    color: var(--wa-form-control-text-color);
     border-radius: var(--border-radius);
     font-family: inherit;
     font-size: var(--font-size);
@@ -187,6 +187,6 @@ export const permissionCardStyles: CSSResult = css`
   }
 
   .feedback-input:focus-visible {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
   }
 `;

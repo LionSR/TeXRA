@@ -64,7 +64,7 @@ export class QueuedFollowUps extends LitElement {
         padding: var(--wa-space-3xs) var(--wa-space-2xs);
         font-size: var(--font-size);
         line-height: var(--line-height-normal);
-        background-color: var(--texra-editor-background);
+        background-color: var(--wa-color-surface-default);
         border-radius: var(--border-radius-small);
         border: var(--border-thin) solid var(--color-border);
         min-width: 0;
@@ -83,7 +83,7 @@ export class QueuedFollowUps extends LitElement {
         min-width: 0;
         overflow-wrap: anywhere;
         white-space: pre-wrap;
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
       }
     `,
   ];

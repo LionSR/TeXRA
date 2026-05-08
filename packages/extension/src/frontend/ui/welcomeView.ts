@@ -42,12 +42,12 @@ function renderWelcomeHtml(): string {
       line-height: 1.5;
     }
     p { margin: 0 0 12px; }
-    .muted { color: var(--vscode-descriptionForeground); }
+    .muted { color: var(--wa-color-text-quiet); }
     ol { margin: 0 0 12px; padding-left: 22px; }
     li { margin-bottom: 6px; }
     .actions { display: flex; flex-direction: column; gap: 6px; margin: 16px 0; }
     a {
-      color: var(--vscode-textLink-foreground);
+      color: var(--wa-color-text-link);
       text-decoration: none;
     }
     a:hover { text-decoration: underline; }

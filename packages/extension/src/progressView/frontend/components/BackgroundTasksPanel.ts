@@ -102,7 +102,7 @@ export class BackgroundTasksPanel extends LitElement {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
       }
 
       .task-name--clickable {
@@ -113,7 +113,7 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       .task-name--clickable:hover {
-        text-decoration-color: var(--texra-foreground);
+        text-decoration-color: var(--wa-color-text-normal);
       }
 
       .task-description {
@@ -152,7 +152,7 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       .section-label:hover {
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
       }
 
       .section-label wa-icon {
@@ -181,7 +181,7 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       details.task-output > summary:hover {
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
       }
 
       .output-container {

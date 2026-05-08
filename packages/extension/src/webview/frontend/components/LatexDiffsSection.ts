@@ -8,6 +8,7 @@
 // Side-effect imports - register WA select & option components
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
+import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
@@ -64,7 +65,7 @@ export class LatexDiffsSection extends LitElement {
 
       .latexdiffs-section[data-expanded='true'] .optional-label,
       .latexdiffs-section[data-expanded='true'] .toggle-icon {
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
       }
 
       #latexdiffsContent {
@@ -108,17 +109,20 @@ export class LatexDiffsSection extends LitElement {
   }
 
   private handleBaseSelectChange(event: Event): void {
-    const value = (event.currentTarget as HTMLSelectElement).value;
+    const select = event.currentTarget as WaSelect | null;
+    const value = typeof select?.value === 'string' ? select.value : '';
     this.dispatchEvent(MainViewEvents.baseFileChange({ value }));
   }
 
   private handleEditedSelectChange(event: Event): void {
-    const value = (event.currentTarget as HTMLSelectElement).value;
+    const select = event.currentTarget as WaSelect | null;
+    const value = typeof select?.value === 'string' ? select.value : '';
     this.dispatchEvent(MainViewEvents.editedFileChange({ value }));
   }
 
   private handleCommitSelectChange(event: Event): void {
-    const value = (event.currentTarget as HTMLSelectElement).value;
+    const select = event.currentTarget as WaSelect | null;
+    const value = typeof select?.value === 'string' ? select.value : '';
     this.dispatchEvent(MainViewEvents.commitChange({ value }));
   }
 

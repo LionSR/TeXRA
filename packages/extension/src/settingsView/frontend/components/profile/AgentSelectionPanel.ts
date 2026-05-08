@@ -90,7 +90,7 @@ export class AgentSelectionPanel extends LitElement {
         color: var(--color-text-secondary);
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        background: var(--texra-editor-background);
+        background: var(--wa-color-surface-default);
         border-bottom: var(--border-thin) solid var(--color-border);
         position: sticky;
         top: 0;
@@ -112,28 +112,28 @@ export class AgentSelectionPanel extends LitElement {
         padding: var(--wa-space-2xs) var(--wa-space-xs);
         cursor: pointer;
         font-size: var(--font-size-sm);
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
         border-left: var(--border-medium) solid transparent;
         transition: background var(--transition-fast);
         outline: none;
       }
 
       .agent-list-item:hover {
-        background: var(--texra-list-hoverBackground);
+        background: var(--wa-color-neutral-fill-quiet);
       }
 
       .agent-list-item:focus-visible {
-        outline: var(--border-thin) solid var(--texra-focusBorder);
+        outline: var(--border-thin) solid var(--wa-color-focus);
         outline-offset: -1px;
       }
 
       .agent-list-item.selected {
-        background: var(--texra-list-activeSelectionBackground);
+        background: var(--wa-color-brand-fill-quiet);
         color: var(
           --texra-list-activeSelectionForeground,
-          var(--texra-foreground)
+          var(--wa-color-text-normal)
         );
-        border-left-color: var(--texra-focusBorder);
+        border-left-color: var(--wa-color-focus);
       }
 
       .agent-list-item.selected .agent-list-item-name,
@@ -146,7 +146,7 @@ export class AgentSelectionPanel extends LitElement {
       }
 
       .agent-list-item-checkbox {
-        accent-color: var(--texra-focusBorder);
+        accent-color: var(--wa-color-focus);
         cursor: pointer;
         flex-shrink: 0;
       }
@@ -196,11 +196,11 @@ export class AgentSelectionPanel extends LitElement {
         font-size: var(--font-size-lg);
         font-weight: var(--font-weight-semibold);
         font-family: var(--texra-editor-font-family);
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
       }
 
       .agent-detail-description {
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
         line-height: var(--line-height-relaxed);
         margin-bottom: var(--wa-space-s);
       }
@@ -220,7 +220,7 @@ export class AgentSelectionPanel extends LitElement {
       }
 
       .agent-detail-meta-value {
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
       }
 
       .agent-detail-tools {
@@ -251,13 +251,13 @@ export class AgentSelectionPanel extends LitElement {
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
         border-top: var(--border-thin) solid var(--color-border);
-        background: var(--texra-editor-background);
+        background: var(--wa-color-surface-default);
       }
 
       .agent-count-link {
         font-size: var(--font-size-xs);
         font-family: inherit;
-        color: var(--texra-textLink-foreground);
+        color: var(--wa-color-text-link);
         background: none;
         border: none;
         cursor: pointer;
@@ -270,7 +270,7 @@ export class AgentSelectionPanel extends LitElement {
       }
 
       .agent-count-link:focus-visible {
-        outline: var(--border-thin) solid var(--texra-focusBorder);
+        outline: var(--border-thin) solid var(--wa-color-focus);
         outline-offset: 1px;
         border-radius: var(--border-radius-small);
       }
@@ -315,7 +315,7 @@ export class AgentSelectionPanel extends LitElement {
         border: var(--border-thin) solid var(--texra-errorForeground, #f44);
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
       }
 
       .agent-delete-confirm-text {

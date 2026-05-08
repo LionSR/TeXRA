@@ -11,7 +11,7 @@ const settingsHeaderStyles: CSSResult = css`
     align-items: center;
     justify-content: space-between;
     padding: var(--wa-space-xs) var(--wa-space-s);
-    background: var(--texra-sideBar-background);
+    background: var(--wa-color-surface-lowered);
     border-bottom: var(--border-thin) solid var(--color-border);
     margin-bottom: var(--wa-space-xs);
   }
@@ -38,7 +38,7 @@ const settingsHeaderStyles: CSSResult = css`
 
   .settings-header-email {
     font-weight: var(--font-weight-medium);
-    color: var(--texra-foreground);
+    color: var(--wa-color-text-normal);
   }
 
   .settings-header-tier {

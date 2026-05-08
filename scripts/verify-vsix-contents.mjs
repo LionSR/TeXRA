@@ -159,6 +159,9 @@ function verifyDistEntrypoints(entries, failures) {
     'extension/dist/progressView/bundle.js',
     'extension/dist/settingsView/bundle.js',
     'extension/dist/webview/bundle.js',
+    // Shared commons bundle is referenced from every webview HTML template via
+    // BaseViewContentProvider. Missing this file would silently break webviews.
+    'extension/dist/shared/commons.js',
   ]) {
     assertEntryExists(entries, entryPath, failures);
   }

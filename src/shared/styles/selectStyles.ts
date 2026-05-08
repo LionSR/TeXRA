@@ -9,7 +9,7 @@ export const selectStyles: CSSResult = css`
 
   .select-group wa-icon {
     margin-right: var(--wa-space-2xs);
-    color: var(--text-color, var(--texra-foreground));
+    color: var(--text-color, var(--wa-color-text-normal));
     vertical-align: text-bottom;
   }
 
@@ -36,11 +36,9 @@ export const selectStyles: CSSResult = css`
     font-family: var(--texra-font-family);
   }
 
-  wa-option.disabled-option,
-  wa-option.disabled-model,
-  wa-option.disabled-agent,
+  wa-option[disabled],
   wa-option[data-requires-key='true'] {
-    color: var(--color-text-secondary, var(--texra-descriptionForeground));
+    color: var(--color-text-secondary, var(--wa-color-text-quiet));
     opacity: var(--opacity-subtle, 0.7);
     font-style: italic;
   }
@@ -55,11 +53,11 @@ export const selectStyles: CSSResult = css`
   }
 
   .clickable:hover {
-    color: var(--texra-foreground);
+    color: var(--wa-color-text-normal);
   }
 
   .clickable:focus-visible {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -116,7 +114,7 @@ export const selectStyles: CSSResult = css`
   }
 
   .api-key-missing {
-    color: var(--texra-errorForeground);
+    color: var(--wa-color-danger-on-quiet);
     opacity: var(--opacity-full);
     font-style: normal;
     margin-left: var(--wa-space-3xs);

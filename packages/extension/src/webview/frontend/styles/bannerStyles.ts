@@ -38,7 +38,8 @@ export const bannerStyles: CSSResult = css`
     transform: translateY(calc(-1 * var(--wa-space-2xs)));
     transition:
       opacity 180ms ease,
-      transform 180ms ease;
+      transform 180ms ease,
+      visibility 0s linear 180ms;
     pointer-events: none;
     /* Compact callout chrome — stricter minimalism, tight banner padding. */
     --padding: var(--wa-space-2xs) var(--wa-space-xs);
@@ -47,6 +48,11 @@ export const bannerStyles: CSSResult = css`
   :host([data-visible='true']) wa-callout {
     opacity: 1;
     transform: translateY(0);
+    visibility: visible;
+    transition:
+      opacity 180ms ease,
+      transform 180ms ease,
+      visibility 0s linear 0s;
     pointer-events: auto;
   }
 

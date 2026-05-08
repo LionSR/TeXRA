@@ -38,7 +38,7 @@ export class MemoryItem extends LitElement {
         font-family: var(--texra-editor-font-family, monospace), monospace;
         font-size: var(--font-size);
         font-weight: var(--font-weight-medium);
-        color: var(--texra-textLink-foreground);
+        color: var(--wa-color-text-link);
         word-break: break-all;
       }
 
@@ -57,7 +57,7 @@ export class MemoryItem extends LitElement {
       }
 
       .memory-item.pinned {
-        border-left: 3px solid var(--texra-textLink-foreground);
+        border-left: 3px solid var(--wa-color-text-link);
         padding-left: calc(var(--wa-space-xs) - 3px);
       }
     `,
