@@ -163,8 +163,8 @@ export class InstructionPanel extends LitElement {
         align-items: flex-start;
         margin-top: var(--spacing-small);
         padding: var(--spacing-tiny) var(--spacing-small);
-        border-left: 2px solid var(--texra-textLink-foreground);
-        color: var(--texra-descriptionForeground);
+        border-left: 2px solid var(--wa-color-brand-fill-loud);
+        color: var(--wa-color-text-quiet);
         font-size: var(--font-size-sm);
         line-height: var(--line-height-relaxed);
         animation: session-hint-fade 150ms ease;
@@ -180,7 +180,7 @@ export class InstructionPanel extends LitElement {
       }
 
       .session-hint-lede {
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
         font-weight: 600;
         letter-spacing: 0.01em;
         white-space: nowrap;
@@ -191,7 +191,7 @@ export class InstructionPanel extends LitElement {
       }
 
       .session-hint-time {
-        color: var(--texra-descriptionForeground);
+        color: var(--wa-color-text-quiet);
         opacity: 0.85;
       }
 
@@ -347,7 +347,7 @@ export class InstructionPanel extends LitElement {
       }
 
       .recording {
-        color: var(--texra-errorForeground);
+        color: var(--wa-color-danger-on-loud);
         animation: pulse-record 1.2s ease-in-out infinite;
         transform-origin: center;
       }
