@@ -204,7 +204,7 @@ export const requestPanelStyles: CSSResult = css`
    * Approval requests (tool edits)
    * ================================================================ */
 
-  .approval-requests__header .codicon {
+  .approval-requests__header wa-icon {
     color: var(--texra-editor-foreground);
   }
 
@@ -283,7 +283,7 @@ export const requestPanelStyles: CSSResult = css`
    * Bash approval requests
    * ================================================================ */
 
-  .bash-approval-requests__header .codicon {
+  .bash-approval-requests__header wa-icon {
     color: var(--texra-terminal-ansiYellow);
   }
 
@@ -305,7 +305,7 @@ export const requestPanelStyles: CSSResult = css`
    * Retry requests
    * ================================================================ */
 
-  .retry-requests__header .codicon {
+  .retry-requests__header wa-icon {
     color: var(--color-warning);
   }
 
@@ -370,7 +370,7 @@ export const requestPanelStyles: CSSResult = css`
    * Workflow proposals
    * ================================================================ */
 
-  .workflow-proposals__header .codicon {
+  .workflow-proposals__header wa-icon {
     color: var(--texra-textLink-foreground);
   }
 
@@ -419,8 +419,8 @@ export const requestPanelStyles: CSSResult = css`
     gap: ${sp.small};
   }
 
-  .workflow-proposal__agent-select .codicon,
-  .workflow-proposal__model-select .codicon {
+  .workflow-proposal__agent-select wa-icon,
+  .workflow-proposal__model-select wa-icon {
     color: var(--texra-descriptionForeground);
     flex-shrink: 0;
   }
@@ -525,7 +525,7 @@ export const requestPanelStyles: CSSResult = css`
    * Plan approval requests
    * ================================================================ */
 
-  .plan-approval-requests__header .codicon {
+  .plan-approval-requests__header wa-icon {
     color: var(--texra-textLink-foreground);
   }
 
@@ -579,7 +579,7 @@ export const requestPanelStyles: CSSResult = css`
    * External inquiry requests
    * ================================================================ */
 
-  .external-inquiry-requests__header .codicon {
+  .external-inquiry-requests__header wa-icon {
     color: var(--texra-focusBorder);
   }
 

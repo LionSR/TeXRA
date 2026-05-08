@@ -163,7 +163,7 @@ export class InstructionPanel extends LitElement {
         align-items: flex-start;
         margin-top: var(--spacing-small);
         padding: var(--spacing-tiny) var(--spacing-small);
-        border-left: 2px solid var(--wa-color-brand-fill-loud);
+        border-left: 2px solid var(--wa-color-text-link);
         color: var(--wa-color-text-quiet);
         font-size: var(--font-size-sm);
         line-height: var(--line-height-relaxed);
@@ -257,7 +257,7 @@ export class InstructionPanel extends LitElement {
         );
       }
 
-      .model-selection-footer .codicon,
+      .model-selection-footer wa-icon,
       .model-selection-footer wa-button {
         display: flex;
         align-items: center;
@@ -347,7 +347,7 @@ export class InstructionPanel extends LitElement {
       }
 
       .recording {
-        color: var(--wa-color-danger-on-loud);
+        color: var(--wa-color-danger-on-quiet);
         animation: pulse-record 1.2s ease-in-out infinite;
         transform-origin: center;
       }
