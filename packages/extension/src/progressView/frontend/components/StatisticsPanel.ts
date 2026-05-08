@@ -40,13 +40,30 @@ export class StatisticsPanel extends LitElement {
       .statistics-content {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--wa-space-s);
+        gap: var(--wa-space-2xs) var(--wa-space-s);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
+        margin-top: var(--wa-space-2xs);
+        background: color-mix(
+          in srgb,
+          var(--wa-color-neutral-fill-quiet) 50%,
+          transparent
+        );
+        border-radius: var(--border-radius-small);
+        border: var(--border-thin) solid
+          color-mix(in srgb, var(--color-border) 70%, transparent);
       }
 
       .stat-item {
-        display: flex;
+        display: inline-flex;
         align-items: center;
         gap: var(--wa-space-2xs);
+        font-variant-numeric: tabular-nums;
+        color: var(--wa-color-text-normal);
+      }
+
+      .stat-item wa-icon {
+        color: var(--wa-color-text-quiet);
+        font-size: var(--font-size-sm);
       }
     `,
   ];
