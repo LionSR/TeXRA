@@ -1,20 +1,19 @@
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
-import { customElement, property, query, state } from 'lit/decorators.js';
+import { customElement, property, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
-import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
+import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
-import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 import { SortableController } from '@shared/controllers';
 import { designTokens, codiconStyles } from '@shared/styles';
 import type { CheckboxValues, FileSelectConfig } from '@shared/schemas';
-import { ensureContextMenuUsesSlot } from '@shared/utils/dom';
 import { getBasename, normalizeFilePath } from '@shared/utils/path';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
@@ -47,20 +46,8 @@ export class FileSelectGroup extends LitElement {
   @consume({ context: fileStateContext, subscribe: true })
   private fileState?: FileStateContextValue;
 
-  /** Auto-extract menu open state */
-  @state() private autoExtractMenuOpen = false;
-
-  /** Tool config menu open state */
-  @state() private toolConfigMenuOpen = false;
-
   @query('.multiple-files-list')
   private fileListElement?: HTMLElement;
-
-  @query('#toolConfigOptions')
-  private toolConfigMenu?: HTMLElement;
-
-  @query('#autoExtractOptions')
-  private autoExtractMenu?: HTMLElement;
 
   private sortableController = new SortableController(
     this,
@@ -84,10 +71,6 @@ export class FileSelectGroup extends LitElement {
       this.sortableController.reinitialize();
     }
     this.wasExpanded = isExpanded;
-
-    // Workaround for vscode-context-menu slot rendering
-    ensureContextMenuUsesSlot(this.toolConfigMenu);
-    ensureContextMenuUsesSlot(this.autoExtractMenu);
   }
 
   private get listId(): string {
@@ -96,15 +79,6 @@ export class FileSelectGroup extends LitElement {
 
   private get selectId(): string {
     return `${this.config.type}File`;
-  }
-
-  private toggleMenu(type: 'autoExtract' | 'toolConfig'): void {
-    const wasOpen =
-      type === 'autoExtract'
-        ? this.autoExtractMenuOpen
-        : this.toolConfigMenuOpen;
-    this.autoExtractMenuOpen = type === 'autoExtract' && !wasOpen;
-    this.toolConfigMenuOpen = type === 'toolConfig' && !wasOpen;
   }
 
   private handleFileChange(value: string): void {
@@ -214,38 +188,6 @@ export class FileSelectGroup extends LitElement {
     return !SESSION_DEFAULTS[sessionType].fileInputEnabled;
   }
 
-  private handleFocusOut(event: FocusEvent): void {
-    const root = this.getRootNode();
-    const activeElement =
-      root instanceof Document || root instanceof ShadowRoot
-        ? root.activeElement
-        : null;
-    const nextTarget = (event.relatedTarget ?? activeElement) as Node | null;
-
-    if (nextTarget !== null && this.isWithinComponent(nextTarget)) return;
-    this.autoExtractMenuOpen = false;
-    this.toolConfigMenuOpen = false;
-  }
-
-  private isWithinComponent(target: Node): boolean {
-    if (this.contains(target) || this.shadowRoot?.contains(target)) {
-      return true;
-    }
-
-    const MAX_SHADOW_DEPTH = 20;
-    let root = target.getRootNode();
-    let depth = 0;
-    while (root instanceof ShadowRoot && depth < MAX_SHADOW_DEPTH) {
-      if (this.contains(root.host)) {
-        return true;
-      }
-      root = root.host.getRootNode();
-      depth++;
-    }
-
-    return false;
-  }
-
   private renderFileOptions(): TemplateResult {
     const sortedOptions = [...this.currentOptions].sort((a, b) =>
       a.localeCompare(b),
@@ -260,17 +202,32 @@ export class FileSelectGroup extends LitElement {
     `;
   }
 
+  /**
+   * Handle wa-select on the checkbox-type dropdown items: keep the menu open
+   * (preventDefault), translate the toggle into a checkboxChange event,
+   * and react to the auto-toggle wa-dropdown applies before this fires.
+   */
+  private handleMenuSelect = (
+    event: CustomEvent<{ item: HTMLElement }>,
+  ): void => {
+    event.preventDefault();
+    const item = event.detail?.item as
+      | (HTMLElement & { value?: string; checked?: boolean })
+      | undefined;
+    const id = item?.value;
+    if (!id) return;
+    this.handleCheckboxChange(id, Boolean(item?.checked));
+  };
+
   private renderToolConfigMenu(): TemplateResult {
-    const hasChecked =
-      this.currentCheckboxValues.attachTeXCount ||
-      this.currentCheckboxValues.attachDiagnostics;
-    const chevronClass = this.toolConfigMenuOpen
-      ? 'codicon-chevron-up'
-      : 'codicon-chevron-down';
+    const values = this.currentCheckboxValues;
+    const hasChecked = values.attachTeXCount || values.attachDiagnostics;
+    const disabled = this.isFileInputDisabled;
 
     return html`
-      <div class="dropdown-container">
+      <wa-dropdown placement="bottom-start" @wa-select=${this.handleMenuSelect}>
         <wa-button
+          slot="trigger"
           id="toggleToolConfig"
           class=${classMap({
             'action-icon-button': true,
@@ -282,61 +239,40 @@ export class FileSelectGroup extends LitElement {
           type="button"
           aria-label="Tool configuration options"
           title="Tool configuration options"
-          aria-haspopup="true"
-          aria-expanded=${this.toolConfigMenuOpen ? 'true' : 'false'}
-          @click=${() => this.toggleMenu('toolConfig')}
         >
-          ${waIcon('tools', { slot: 'start' })}
-          <i class="codicon ${chevronClass}"></i>
+          ${waIcon('tools', { slot: 'start' })} ${waIcon('chevron-down')}
         </wa-button>
-        <vscode-context-menu
-          id="toolConfigOptions"
-          class="dropdown-menu"
-          ?show=${this.toolConfigMenuOpen}
+        <wa-dropdown-item
+          type="checkbox"
+          value="attachTeXCount"
+          ?checked=${values.attachTeXCount}
+          ?disabled=${disabled}
         >
-          <div class="dropdown-menu-content">
-            <wa-checkbox
-              id="attachTeXCount"
-              ?checked=${this.currentCheckboxValues.attachTeXCount}
-              ?disabled=${this.isFileInputDisabled}
-              @change=${(event: Event) =>
-                this.handleCheckboxChange(
-                  'attachTeXCount',
-                  (event.target as WaCheckbox).checked,
-                )}
-            >
-              Attach TeX Count
-            </wa-checkbox>
-            <wa-checkbox
-              id="attachDiagnostics"
-              ?checked=${this.currentCheckboxValues.attachDiagnostics}
-              ?disabled=${this.isFileInputDisabled}
-              @change=${(event: Event) =>
-                this.handleCheckboxChange(
-                  'attachDiagnostics',
-                  (event.target as WaCheckbox).checked,
-                )}
-            >
-              Attach Diagnostics
-            </wa-checkbox>
-          </div>
-        </vscode-context-menu>
-      </div>
+          Attach TeX Count
+        </wa-dropdown-item>
+        <wa-dropdown-item
+          type="checkbox"
+          value="attachDiagnostics"
+          ?checked=${values.attachDiagnostics}
+          ?disabled=${disabled}
+        >
+          Attach Diagnostics
+        </wa-dropdown-item>
+      </wa-dropdown>
     `;
   }
 
   private renderAutoExtractMenu(): TemplateResult {
+    const values = this.currentCheckboxValues;
     const hasChecked =
-      this.currentCheckboxValues.autoExtractFigure ||
-      this.currentCheckboxValues.autoExtractTikzFigure ||
-      this.currentCheckboxValues.autoCompileInputPdf;
-    const chevronClass = this.autoExtractMenuOpen
-      ? 'codicon-chevron-up'
-      : 'codicon-chevron-down';
+      values.autoExtractFigure ||
+      values.autoExtractTikzFigure ||
+      values.autoCompileInputPdf;
 
     return html`
-      <div class="dropdown-container">
+      <wa-dropdown placement="bottom-start" @wa-select=${this.handleMenuSelect}>
         <wa-button
+          slot="trigger"
           id="toggleAutoExtract"
           class=${classMap({
             'action-icon-button': true,
@@ -348,55 +284,31 @@ export class FileSelectGroup extends LitElement {
           type="button"
           aria-label="Auto-extract options"
           title="Auto-extract options"
-          aria-haspopup="true"
-          aria-expanded=${this.autoExtractMenuOpen ? 'true' : 'false'}
-          @click=${() => this.toggleMenu('autoExtract')}
         >
-          ${waIcon('wand', { slot: 'start' })}
-          <i class="codicon ${chevronClass}"></i>
+          ${waIcon('wand', { slot: 'start' })} ${waIcon('chevron-down')}
         </wa-button>
-        <vscode-context-menu
-          id="autoExtractOptions"
-          class="dropdown-menu"
-          ?show=${this.autoExtractMenuOpen}
+        <wa-dropdown-item
+          type="checkbox"
+          value="autoExtractFigure"
+          ?checked=${values.autoExtractFigure}
         >
-          <div class="dropdown-menu-content">
-            <wa-checkbox
-              id="autoExtractFigure"
-              ?checked=${this.currentCheckboxValues.autoExtractFigure}
-              @change=${(event: Event) =>
-                this.handleCheckboxChange(
-                  'autoExtractFigure',
-                  (event.target as WaCheckbox).checked,
-                )}
-            >
-              Figures
-            </wa-checkbox>
-            <wa-checkbox
-              id="autoExtractTikzFigure"
-              ?checked=${this.currentCheckboxValues.autoExtractTikzFigure}
-              @change=${(event: Event) =>
-                this.handleCheckboxChange(
-                  'autoExtractTikzFigure',
-                  (event.target as WaCheckbox).checked,
-                )}
-            >
-              TikZ Figures
-            </wa-checkbox>
-            <wa-checkbox
-              id="autoCompileInputPdf"
-              ?checked=${this.currentCheckboxValues.autoCompileInputPdf}
-              @change=${(event: Event) =>
-                this.handleCheckboxChange(
-                  'autoCompileInputPdf',
-                  (event.target as WaCheckbox).checked,
-                )}
-            >
-              Compile Input PDF
-            </wa-checkbox>
-          </div>
-        </vscode-context-menu>
-      </div>
+          Figures
+        </wa-dropdown-item>
+        <wa-dropdown-item
+          type="checkbox"
+          value="autoExtractTikzFigure"
+          ?checked=${values.autoExtractTikzFigure}
+        >
+          TikZ Figures
+        </wa-dropdown-item>
+        <wa-dropdown-item
+          type="checkbox"
+          value="autoCompileInputPdf"
+          ?checked=${values.autoCompileInputPdf}
+        >
+          Compile Input PDF
+        </wa-dropdown-item>
+      </wa-dropdown>
     `;
   }
 
@@ -417,8 +329,7 @@ export class FileSelectGroup extends LitElement {
                 <span class="file-name-main">${display.name}</span>
                 ${display.folder
                   ? html`<span class="file-folder">
-                      <i class="codicon codicon-folder" aria-hidden="true"></i>
-                      ${display.folder}
+                      ${waIcon('folder')} ${display.folder}
                     </span>`
                   : nothing}
               </span>
@@ -451,16 +362,10 @@ export class FileSelectGroup extends LitElement {
   override render(): TemplateResult {
     const { config } = this;
     const toggleId = `toggle${config.type[0].toUpperCase()}${config.type.slice(1)}Files`;
-    const chevronClass = this.currentListVisible
-      ? 'codicon-chevron-up'
-      : 'codicon-chevron-down';
+    const chevronName = this.currentListVisible ? 'chevron-up' : 'chevron-down';
 
     return html`
-      <div
-        class="file-select"
-        data-expanded=${String(this.currentListVisible)}
-        @focusout=${this.handleFocusOut}
-      >
+      <div class="file-select" data-expanded=${String(this.currentListVisible)}>
         <div class="file-select-header">
           <div class="file-select-label-group">
             ${renderIconActionButton({
@@ -514,7 +419,7 @@ export class FileSelectGroup extends LitElement {
               aria-label=${config.toggleTitle}
               @click=${this.handleToggleList}
             >
-              <i class="codicon ${chevronClass}"></i>
+              ${waIcon(chevronName)}
             </button>
             ${renderIconActionButton({
               id: `addOpened${config.type[0].toUpperCase()}${config.type.slice(
