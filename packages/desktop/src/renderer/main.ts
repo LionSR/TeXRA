@@ -605,10 +605,7 @@ function treeNodeTemplate(
 ): TemplateResult {
   if (node.type === 'directory') {
     return html`
-      <wa-tree-item
-        class="desktop-explorer-directory"
-        ?expanded=${depth < 2}
-      >
+      <wa-tree-item class="desktop-explorer-directory" ?expanded=${depth < 2}>
         ${waIcon('folder')}
         <span class="desktop-explorer-name">${node.name}</span>
         ${treeNodesTemplate(node.children ?? [], depth + 1)}

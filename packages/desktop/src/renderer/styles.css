@@ -156,7 +156,8 @@ wa-tree.desktop-explorer-tree wa-tree-item::part(label) {
   gap: 4px;
 }
 
-wa-tree.desktop-explorer-tree wa-tree-item:not([aria-disabled='true']):hover::part(item) {
+wa-tree.desktop-explorer-tree
+  wa-tree-item:not([aria-disabled='true']):hover::part(item) {
   background: var(--texra-list-hoverBackground);
 }
 
