@@ -43,6 +43,7 @@ import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 // Local imports - shared utilities
 import { getBasename } from '@shared/utils/path';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
@@ -165,25 +166,23 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
           ${isWorkflow ? this.renderExtractFlags(data) : nothing}
           ${this.renderProposalFiles(data)}
         </div>
-        <vscode-toolbar-container class="workflow-proposal__actions">
-          <vscode-toolbar-button
-            icon="check"
-            label="Approve"
-            title="Approve (y)"
-            data-action="approve"
-            @click=${() => this.emitAction('approve')}
-            >Approve</vscode-toolbar-button
-          >
+        <div class="workflow-proposal__actions">
+          ${renderLabeledActionButton({
+            icon: 'check',
+            text: 'Approve',
+            title: 'Approve (y)',
+            action: 'approve',
+            onClick: () => this.emitAction('approve'),
+          })}
           ${this.renderRejectButton('Reject (n)')}
-          <vscode-toolbar-button
-            icon="reply"
-            label="Setup"
-            title="Setup (s)"
-            data-action="setup"
-            @click=${() => this.emitAction('setup')}
-            >Setup</vscode-toolbar-button
-          >
-        </vscode-toolbar-container>
+          ${renderLabeledActionButton({
+            icon: 'reply',
+            text: 'Setup',
+            title: 'Setup (s)',
+            action: 'setup',
+            onClick: () => this.emitAction('setup'),
+          })}
+        </div>
         ${this.renderFeedbackSection(
           'workflow-proposal__feedback',
           'workflow-proposal__feedback-input',

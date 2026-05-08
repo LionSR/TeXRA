@@ -23,6 +23,8 @@ import {
 
 // Local imports - shared schemas
 import type { ToolEditPermission } from '@shared/schemas';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
@@ -81,18 +83,17 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
             ${diffMeta}
           </div>
         </div>
-        <vscode-toolbar-container class="approval-request__actions">
+        <div class="approval-request__actions">
           ${this.renderDiffActions()}
-          <vscode-toolbar-button
-            icon="check"
-            label="Approve"
-            title="Approve (y)"
-            data-action="approve"
-            @click=${() => this.emitAction('approve')}
-            >Approve</vscode-toolbar-button
-          >
+          ${renderLabeledActionButton({
+            icon: 'check',
+            text: 'Approve',
+            title: 'Approve (y)',
+            action: 'approve',
+            onClick: () => this.emitAction('approve'),
+          })}
           ${this.renderRejectButton('Reject (n)')}
-        </vscode-toolbar-container>
+        </div>
         ${this.renderFeedbackSection(
           'approval-request__feedback',
           'approval-request__feedback-input',
@@ -111,36 +112,39 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
     const showDropdown = Boolean(data.isLatex);
     const hasInlineDiff = this.hasInlineDiff(data);
 
+    const diffLabel =
+      hasInlineDiff && this.inlineDiffOpen ? 'Hide diff' : 'Open diff';
+    const diffTitle = hasInlineDiff
+      ? this.inlineDiffOpen
+        ? 'Hide inline diff (d)'
+        : 'Open inline diff (d)'
+      : 'Open diff (d)';
+
     return html`
       <div class="diff-dropdown">
-        <vscode-toolbar-button
-          icon="diff"
-          class="diff-main-button"
-          label=${hasInlineDiff && this.inlineDiffOpen
-            ? 'Hide diff'
-            : 'Open diff'}
-          title=${hasInlineDiff
-            ? this.inlineDiffOpen
-              ? 'Hide inline diff (d)'
-              : 'Open inline diff (d)'
-            : 'Open diff (d)'}
-          @click=${this.handleDiffAction}
-          >${hasInlineDiff && this.inlineDiffOpen
-            ? 'Hide diff'
-            : 'Open diff'}</vscode-toolbar-button
-        >
+        ${renderLabeledActionButton({
+          icon: 'diff',
+          text: diffLabel,
+          title: diffTitle,
+          className: 'diff-main-button',
+          onClick: this.handleDiffAction,
+        })}
         ${showDropdown
           ? html`
-              <vscode-toolbar-button
-                class="diff-dropdown-trigger"
+              <wa-button
+                class="action-icon-button diff-dropdown-trigger"
+                appearance="plain"
+                variant="neutral"
+                size="small"
+                type="button"
                 aria-haspopup="true"
                 aria-expanded=${this.diffMenuOpen ? 'true' : 'false'}
-                label="More diff actions"
+                aria-label="More diff actions"
                 title="More diff actions"
                 @click=${this.toggleDiffMenu}
               >
-                <i class="codicon codicon-chevron-down"></i>
-              </vscode-toolbar-button>
+                ${waIcon('chevron-down')}
+              </wa-button>
               <vscode-context-menu
                 class="diff-dropdown-menu"
                 ?show=${this.diffMenuOpen}

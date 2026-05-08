@@ -12,6 +12,7 @@ import { query, state } from 'lit/decorators.js';
 
 // Local imports - shared utilities
 import { FEEDBACK_ELIGIBLE_KINDS } from '@shared/utils/uiConstants';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - base class
 import { BaseRequestPanel } from './BaseRequestPanel';
@@ -72,16 +73,13 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
   }
 
   protected renderRejectButton(rejectTitle: string): TemplateResult {
-    return html`
-      <vscode-toolbar-button
-        icon=${this.showFeedback ? 'check' : 'close'}
-        label=${this.showFeedback ? 'Submit' : 'Reject'}
-        title=${this.showFeedback ? 'Submit rejection (n)' : rejectTitle}
-        data-action="reject"
-        @click=${() => this.handleRejectAction()}
-        >${this.showFeedback ? 'Submit' : 'Reject'}</vscode-toolbar-button
-      >
-    `;
+    return renderLabeledActionButton({
+      icon: this.showFeedback ? 'check' : 'close',
+      text: this.showFeedback ? 'Submit' : 'Reject',
+      title: this.showFeedback ? 'Submit rejection (n)' : rejectTitle,
+      action: 'reject',
+      onClick: () => this.handleRejectAction(),
+    });
   }
 
   protected renderFeedbackSection(
