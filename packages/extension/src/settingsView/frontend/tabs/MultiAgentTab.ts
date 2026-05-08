@@ -97,7 +97,7 @@ export class MultiAgentTab extends LitElement {
       }
 
       .preset-card:hover {
-        border-color: var(--texra-focusBorder);
+        border-color: var(--wa-color-focus);
         background-color: var(
           --texra-list-hoverBackground,
           rgba(128, 128, 128, 0.1)
@@ -105,7 +105,7 @@ export class MultiAgentTab extends LitElement {
       }
 
       .preset-card:focus-visible {
-        outline: var(--border-thin) solid var(--texra-focusBorder);
+        outline: var(--border-thin) solid var(--wa-color-focus);
         outline-offset: 1px;
       }
 
@@ -113,9 +113,9 @@ export class MultiAgentTab extends LitElement {
         background-color: var(--texra-list-activeSelectionBackground);
         color: var(
           --texra-list-activeSelectionForeground,
-          var(--texra-foreground)
+          var(--wa-color-text-normal)
         );
-        border-color: var(--texra-focusBorder);
+        border-color: var(--wa-color-focus);
       }
 
       .preset-card.active .preset-card-name,
@@ -136,14 +136,14 @@ export class MultiAgentTab extends LitElement {
 
       .preset-card-icon {
         font-size: var(--font-size-lg);
-        color: var(--texra-focusBorder);
+        color: var(--wa-color-focus);
         flex-shrink: 0;
       }
 
       .preset-card-name {
         font-size: var(--font-size-sm);
         font-weight: var(--font-weight-medium);
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
         flex: 1;
         min-width: 0;
         overflow: hidden;
@@ -202,7 +202,7 @@ export class MultiAgentTab extends LitElement {
       }
 
       .preset-delete-btn:focus-visible {
-        outline: var(--border-thin) solid var(--texra-focusBorder);
+        outline: var(--border-thin) solid var(--wa-color-focus);
         outline-offset: 1px;
         border-radius: var(--border-radius-small);
       }
@@ -222,7 +222,7 @@ export class MultiAgentTab extends LitElement {
       .reliability-row label {
         min-width: 140px;
         font-size: var(--font-size-sm);
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
       }
 
       .reliability-input {

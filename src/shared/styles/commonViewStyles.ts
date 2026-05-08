@@ -21,7 +21,7 @@ export const commonViewStyles: CSSResult = css`
     border: var(--border-thin) solid var(--texra-panelSection-border);
     border-radius: var(--border-radius-large);
     padding: var(--wa-space-xs);
-    background-color: var(--texra-editor-background);
+    background-color: var(--wa-color-surface-default);
   }
 
   .list-item:hover {
@@ -29,7 +29,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .list-item:focus-within {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
   }
 
   .list-item-header {
@@ -82,7 +82,7 @@ export const commonViewStyles: CSSResult = css`
   .panel-collapsible::part(header) {
     padding: var(--wa-space-2xs) var(--wa-space-xs);
     background-color: var(--texra-sideBarSectionHeader-background, transparent);
-    color: var(--texra-sideBarTitle-foreground, var(--texra-foreground));
+    color: var(--texra-sideBarTitle-foreground, var(--wa-color-text-normal));
   }
 
   /* "body" part is used by vscode-collapsible; "content" part by wa-details. */
@@ -165,7 +165,7 @@ export const commonViewStyles: CSSResult = css`
     padding: 0;
     border: 0;
     background: transparent;
-    color: var(--wa-color-text-quiet, var(--texra-icon-foreground, var(--texra-foreground)));
+    color: var(--wa-color-text-quiet, var(--texra-icon-foreground, var(--wa-color-text-normal)));
     opacity: var(--opacity-subtle);
     transition: opacity 120ms ease;
   }
@@ -176,7 +176,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .action-icon-button:focus-visible::part(base) {
-    outline: var(--border-thin) solid var(--wa-color-focus, var(--texra-focusBorder));
+    outline: var(--border-thin) solid var(--wa-color-focus, var(--wa-color-focus));
     outline-offset: 1px;
   }
 
@@ -220,7 +220,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .clickable-link:focus-visible {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -261,7 +261,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .details-summary:focus-visible {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -319,7 +319,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .btn-secondary:focus-visible {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -349,8 +349,8 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .tab-action-btn:hover {
-    color: var(--texra-foreground);
-    border-color: var(--texra-focusBorder);
+    color: var(--wa-color-text-normal);
+    border-color: var(--wa-color-focus);
   }
 
   .tab-action-btn:active {
@@ -358,7 +358,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .tab-action-btn:focus-visible {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
   }
 
@@ -370,21 +370,21 @@ export const commonViewStyles: CSSResult = css`
     row-gap: var(--wa-space-2xs);
     padding: var(--wa-space-xs);
     margin-bottom: var(--wa-space-s);
-    border: var(--border-thin) solid var(--texra-focusBorder);
+    border: var(--border-thin) solid var(--wa-color-focus);
     border-radius: var(--border-radius);
-    background: var(--texra-editor-background);
+    background: var(--wa-color-surface-default);
   }
 
   .settings-reminder-icon {
     grid-row: 1 / -1;
     margin-top: 2px;
     font-size: var(--font-size-lg);
-    color: var(--texra-focusBorder);
+    color: var(--wa-color-focus);
   }
 
   .settings-reminder-title {
     font-weight: var(--font-weight-medium);
-    color: var(--texra-foreground);
+    color: var(--wa-color-text-normal);
   }
 
   .settings-reminder-description {
@@ -430,8 +430,8 @@ export const commonViewStyles: CSSResult = css`
     height: 18px;
     flex: 0 0 18px;
     border-radius: 50%;
-    color: var(--texra-editor-background);
-    background: var(--texra-focusBorder);
+    color: var(--wa-color-surface-default);
+    background: var(--wa-color-focus);
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-bold);
     line-height: var(--line-height-tight);
@@ -467,7 +467,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .icon-btn-reset:focus-visible {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
@@ -488,13 +488,13 @@ export const commonViewStyles: CSSResult = css`
  */
 export const focusRingStyles: CSSResult = css`
   .focus-ring:focus-visible {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
 
   .focus-ring--inset:focus-visible {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: -1px;
     border-radius: var(--border-radius-small);
   }
@@ -522,7 +522,7 @@ export const filledButtonStyles: CSSResult = css`
     font-size: var(--font-size);
     font-family: inherit;
     color: var(--texra-button-foreground);
-    background: var(--texra-button-background);
+    background: var(--wa-color-brand-fill-loud);
     border: var(--border-thin) solid var(--texra-button-border, transparent);
     border-radius: var(--border-radius);
     cursor: pointer;
@@ -540,7 +540,7 @@ export const filledButtonStyles: CSSResult = css`
   }
 
   .filled-button:focus-visible {
-    outline: var(--border-thin) solid var(--texra-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
   }
 

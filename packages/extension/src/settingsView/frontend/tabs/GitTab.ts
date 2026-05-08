@@ -55,7 +55,7 @@ export class GitTab extends LitElement {
       .setting-description {
         margin: var(--wa-space-2xs) 0 0 0;
         font-size: var(--font-size-sm);
-        color: var(--texra-descriptionForeground);
+        color: var(--wa-color-text-quiet);
       }
 
       .input-row {
@@ -89,7 +89,7 @@ export class GitTab extends LitElement {
 
       .token-row-label {
         font-size: var(--font-size-sm);
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
       }
 
       .token-actions {
@@ -107,7 +107,7 @@ export class GitTab extends LitElement {
       .instructions {
         margin: var(--wa-space-2xs) 0 0 0;
         font-size: var(--font-size-sm);
-        color: var(--texra-descriptionForeground);
+        color: var(--wa-color-text-quiet);
       }
       .instructions ol {
         margin: var(--wa-space-3xs) 0 0 0;
@@ -164,7 +164,7 @@ export class GitTab extends LitElement {
       .subscription-owner-label,
       .subscription-owner-placeholder {
         font-size: var(--font-size-sm);
-        color: var(--texra-descriptionForeground);
+        color: var(--wa-color-text-quiet);
       }
       .subscription-owner-placeholder {
         margin: 0;

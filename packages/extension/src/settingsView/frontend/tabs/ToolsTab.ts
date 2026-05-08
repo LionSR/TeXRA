@@ -125,7 +125,7 @@ export class ToolsTab extends LitElement {
         gap: var(--wa-space-2xs);
         font-size: var(--font-size-lg);
         font-weight: var(--font-weight-medium);
-        color: var(--texra-foreground);
+        color: var(--wa-color-text-normal);
       }
 
       .tools-summary {
@@ -255,7 +255,7 @@ export class ToolsTab extends LitElement {
       .desktop-settings-description {
         margin: var(--wa-space-2xs) 0 0 0;
         font-size: var(--font-size-sm);
-        color: var(--texra-descriptionForeground);
+        color: var(--wa-color-text-quiet);
       }
 
       .desktop-settings-row {
