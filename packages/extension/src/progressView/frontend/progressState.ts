@@ -144,17 +144,22 @@ export const pendingApprovalIds$ = new Signal.Computed(() => {
 
 /**
  * Reset every writable signal to its initial value. Called from
- * `ProgressApp`'s constructor so a remount in the same JS context (tests,
- * hot reload, future multi-instance hosts) gets a clean slate — without
- * this, `placement` / `narrowLayout` / `permissions$` and the
- * `_prevApprovalIds` memo Set would carry stale values across mounts.
+ * `ProgressApp`'s constructor on remount in the same JS context (tests,
+ * hot reload). Progress state is singleton-scoped per the file header, so
+ * the reset is a per-mount slate, not multi-instance coordination.
+ *
+ * Order matters: `_prevApprovalIds` must be cleared BEFORE
+ * `permissions$.set([])` because that setter triggers `pendingApprovalIds$`
+ * recomputation, which reads `_prevApprovalIds` for the stable-Set memo —
+ * if we clear the cache after, the next read sees a stale prior Set and
+ * returns it instead of the empty post-reset value.
  */
 export function resetProgressState(): void {
+  _prevApprovalIds = new Set();
   appState.set(createInitialState());
   placement.set('sidebar');
   narrowLayout.set(false);
   permissions$.set([]);
-  _prevApprovalIds = new Set();
 }
 
 // ---------------------------------------------------------------------------
