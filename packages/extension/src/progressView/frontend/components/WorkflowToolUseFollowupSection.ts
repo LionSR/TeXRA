@@ -9,9 +9,11 @@ import {
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
+import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -88,7 +90,7 @@ export class WorkflowToolUseFollowupSection extends LitElement {
         color: var(--color-text-secondary);
       }
 
-      vscode-textarea {
+      wa-textarea {
         width: 100%;
       }
 
@@ -195,17 +197,19 @@ export class WorkflowToolUseFollowupSection extends LitElement {
                     </wa-select>
                   </label>
                 </div>
-                <vscode-textarea
+                <wa-textarea
                   aria-label="Follow-up note"
                   placeholder="Ask what the tool-use agent should do with these results."
                   rows="3"
                   resize="vertical"
                   .value=${this.initialQuestion}
                   @input=${this.handleQuestionInput}
-                ></vscode-textarea>
+                ></wa-textarea>
                 <div class="followup__actions">
-                  <vscode-button
-                    appearance="secondary"
+                  <wa-button
+                    appearance="outlined"
+                    variant="neutral"
+                    size="small"
                     ?disabled=${!ready}
                     @click=${this.setupFollowup}
                   >
@@ -216,9 +220,11 @@ export class WorkflowToolUseFollowupSection extends LitElement {
                       aria-hidden="true"
                     ></wa-icon>
                     Setup
-                  </vscode-button>
-                  <vscode-button
-                    appearance="primary"
+                  </wa-button>
+                  <wa-button
+                    appearance="filled"
+                    variant="brand"
+                    size="small"
                     ?disabled=${!ready}
                     @click=${this.runFollowup}
                   >
@@ -229,7 +235,7 @@ export class WorkflowToolUseFollowupSection extends LitElement {
                       aria-hidden="true"
                     ></wa-icon>
                     Run
-                  </vscode-button>
+                  </wa-button>
                 </div>
               </div>
             `
