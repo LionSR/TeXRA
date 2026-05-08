@@ -20,8 +20,9 @@ import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
 
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
 import {
-  codiconIconClasses,
   commonViewStyles,
   designTokens,
   requestPanelStyles,
@@ -64,12 +65,7 @@ export function clearInquiryDraft(requestId: string): void {
 
 @customElement('external-inquiry-panel')
 export class ExternalInquiryPanel extends BaseFeedbackPanel {
-  static override styles = [
-    designTokens,
-    commonViewStyles,
-    codiconIconClasses,
-    requestPanelStyles,
-  ];
+  static override styles = [designTokens, commonViewStyles, requestPanelStyles];
 
   @state() private answerText = '';
   @state() private sessionLinksText = '';
@@ -205,7 +201,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
   private renderSearchHint(): TemplateResult {
     return html`
       <div class="external-inquiry-request__search-hint">
-        <i class="codicon codicon-lightbulb"></i>
+        <wa-icon library="texra" name="lightbulb" aria-hidden="true"></wa-icon>
         Consider enabling <strong>Search</strong> mode in the external tool for
         this question
       </div>
@@ -216,14 +212,22 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
     return html`
       <div class="external-inquiry-request__attach-files">
         <div class="external-inquiry-request__attach-label">
-          <i class="codicon codicon-cloud-upload"></i>
+          <wa-icon
+            library="texra"
+            name="cloud-upload"
+            aria-hidden="true"
+          ></wa-icon>
           Files to upload to the external model:
         </div>
         <div class="external-inquiry-request__file-list">
           ${files.map(
             (file) => html`
               <div class="external-inquiry-request__file-item">
-                <i class="codicon codicon-file"></i>
+                <wa-icon
+                  library="texra"
+                  name="file"
+                  aria-hidden="true"
+                ></wa-icon>
                 <span>${file}</span>
               </div>
             `,

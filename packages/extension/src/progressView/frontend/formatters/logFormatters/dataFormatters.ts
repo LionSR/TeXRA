@@ -42,20 +42,18 @@ export function formatFileListTemplate(
   if (!parseResult.success) {
     // prettier-ignore
     return html`<details class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
-      iconClass: 'codicon-file',
+      iconName: 'file',
       label: 'Files (raw)',
       labelClass: 'summary-text',
-      includeIconClass: false,
     })}<ul class="file-list-content" data-log-id=${ifDefined(id)}><pre>${text ?? ''}</pre></ul></details>`;
   }
 
   const renderData = buildFileListRender(parseResult.data);
   // prettier-ignore
   return html`<details class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
-    iconClass: 'codicon-file',
+    iconName: 'file',
     label: renderData?.summary ?? 'Files',
     labelClass: 'summary-text',
-    includeIconClass: false,
   })}<ul class="file-list-content" data-log-id=${ifDefined(id)}>${renderData?.items ?? ''}</ul></details>`;
 }
 
@@ -63,7 +61,7 @@ export function formatFileListTemplate(
 function renderXmlLink(xmlFile: string, documentTag: string | null) {
   const xmlFileName = getBasename(xmlFile);
   // prettier-ignore
-  return html`<div class="xml-link-container"><i class="codicon codicon-file-code"></i> <span>Open XML to check tag consistency:</span> <span class="file-link clickable-link" data-file=${xmlFile}>${xmlFileName}</span>${documentTag ? html` <span class="document-tag">(Expected &lt;${documentTag}&gt; block)</span>` : ''}</div>`;
+  return html`<div class="xml-link-container"><wa-icon library="texra" name="file-code" aria-hidden="true"></wa-icon> <span>Open XML to check tag consistency:</span> <span class="file-link clickable-link" data-file=${xmlFile}>${xmlFileName}</span>${documentTag ? html` <span class="document-tag">(Expected &lt;${documentTag}&gt; block)</span>` : ''}</div>`;
 }
 
 /** Format missing outputs entry as TemplateResult. */
@@ -90,14 +88,13 @@ export function formatMissingOutputsTemplate(
   const listItems = missing.map((f) => {
     const filePath = String(f);
     const basename = getBasename(filePath);
-    return html`<li class="detail-item" title=${filePath}><i class="codicon codicon-warning"></i> <span class="file-link clickable-link" data-file=${filePath}>${basename}</span></li>`;
+    return html`<li class="detail-item" title=${filePath}><wa-icon library="texra" name="warning" aria-hidden="true"></wa-icon> <span class="file-link clickable-link" data-file=${filePath}>${basename}</span></li>`;
   });
   // prettier-ignore
   return html`<details class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
-    iconClass: 'codicon-warning',
+    iconName: 'warning',
     label: `Missing outputs (${missing.length})`,
     labelClass: 'summary-text',
-    includeIconClass: false,
   })}<ul class="file-list-content" data-log-id=${ifDefined(id)}>${listItems}</ul>${xmlFile ? renderXmlLink(xmlFile, documentTag) : ''}</details>`;
 }
 
@@ -133,31 +130,16 @@ type StatFieldConfig = readonly [
 
 // Statistics field configuration
 const STAT_FIELDS: readonly StatFieldConfig[] = [
-  ['inputTokens', 'codicon-arrow-up', 'Input tokens', formatTokens],
-  ['outputTokens', 'codicon-arrow-down', 'Output tokens', formatTokens],
-  ['cacheReadInputTokens', 'codicon-history', 'Cache hits', formatTokens],
-  [
-    'cacheMissInputTokens',
-    'codicon-cloud-upload',
-    'Cache misses',
-    formatTokens,
-  ],
-  ['cacheCreationInputTokens', 'codicon-save', 'Cache writes', formatTokens],
-  [
-    'percentageCached',
-    'codicon-graph-line',
-    'Cached %',
-    (v) => `${v.toFixed(2)}%`,
-  ],
-  [
-    'reasoningTokens',
-    'codicon-comment-discussion',
-    'Reasoning tokens',
-    formatTokens,
-  ],
-  ['toolUseTokens', 'codicon-tools', 'Tool tokens', formatTokens],
-  ['elapsedTime', 'codicon-clock', 'Elapsed time', (v) => `${v}s`],
-  ['cost', 'codicon-rocket', 'Cost', (v) => `$${v.toFixed(3)}`],
+  ['inputTokens', 'arrow-up', 'Input tokens', formatTokens],
+  ['outputTokens', 'arrow-down', 'Output tokens', formatTokens],
+  ['cacheReadInputTokens', 'history', 'Cache hits', formatTokens],
+  ['cacheMissInputTokens', 'cloud-upload', 'Cache misses', formatTokens],
+  ['cacheCreationInputTokens', 'save', 'Cache writes', formatTokens],
+  ['percentageCached', 'graph-line', 'Cached %', (v) => `${v.toFixed(2)}%`],
+  ['reasoningTokens', 'comment-discussion', 'Reasoning tokens', formatTokens],
+  ['toolUseTokens', 'tools', 'Tool tokens', formatTokens],
+  ['elapsedTime', 'clock', 'Elapsed time', (v) => `${v}s`],
+  ['cost', 'rocket', 'Cost', (v) => `$${v.toFixed(3)}`],
 ];
 
 /** Format statistics entry as TemplateResult. */

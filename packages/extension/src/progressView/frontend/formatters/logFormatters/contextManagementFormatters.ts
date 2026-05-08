@@ -45,27 +45,27 @@ const ACTION_CONFIG: Record<
   { icon: string; label: string; color: string }
 > = {
   compaction: {
-    icon: 'codicon-fold',
+    icon: 'fold',
     label: 'Compacted',
     color: 'var(--texra-charts-blue)',
   },
   clear_tool_uses: {
-    icon: 'codicon-trash',
+    icon: 'trash',
     label: 'Cleared Tool Uses',
     color: 'var(--texra-charts-green)',
   },
   clear_thinking: {
-    icon: 'codicon-lightbulb',
+    icon: 'lightbulb',
     label: 'Cleared Thinking',
     color: 'var(--texra-charts-green)',
   },
   truncation: {
-    icon: 'codicon-ellipsis',
+    icon: 'ellipsis',
     label: 'Truncated',
     color: 'var(--texra-charts-orange)',
   },
   max_tokens_reduced: {
-    icon: 'codicon-arrow-small-down',
+    icon: 'arrow-small-down',
     label: 'Max Tokens Reduced',
     color: 'var(--texra-charts-yellow)',
   },
@@ -80,7 +80,7 @@ function buildContextManagementItems(data: ContextManagementData): {
   const { action } = data;
 
   const config: ActionConfig = ACTION_CONFIG[action] || {
-    icon: 'codicon-history',
+    icon: 'history',
     label: action || 'Context Management',
     color: 'var(--texra-foreground)',
   };
@@ -94,7 +94,7 @@ function buildContextManagementItems(data: ContextManagementData): {
     data.reducedMaxTokens !== undefined
   ) {
     items.push({
-      icon: 'codicon-arrow-down',
+      icon: 'arrow-down',
       label: 'Max tokens reduced',
       value: `${formatTokens(data.originalMaxTokens)} → ${formatTokens(data.reducedMaxTokens)}`,
     });
@@ -105,7 +105,7 @@ function buildContextManagementItems(data: ContextManagementData): {
     const tokensFreed = data.tokensBefore - data.tokensAfter;
     if (tokensFreed > 0) {
       items.push({
-        icon: 'codicon-dash',
+        icon: 'dash',
         label: 'Tokens freed',
         value: formatTokens(tokensFreed),
       });
@@ -118,20 +118,20 @@ function buildContextManagementItems(data: ContextManagementData): {
       ? `${data.utilizationBefore.toFixed(1)}% → ${data.utilizationAfter.toFixed(1)}%`
       : `${data.utilizationBefore.toFixed(1)}%`;
   items.push({
-    icon: 'codicon-pie-chart',
+    icon: 'pie-chart',
     label: 'Context utilization',
     value: utilizationDisplay,
   });
 
   items.push({
-    icon: 'codicon-window',
+    icon: 'window',
     label: 'Context window',
     value: formatTokens(data.contextWindow),
   });
 
   if (data.details) {
     items.push({
-      icon: 'codicon-info',
+      icon: 'info',
       label: 'Details',
       value: data.details,
     });

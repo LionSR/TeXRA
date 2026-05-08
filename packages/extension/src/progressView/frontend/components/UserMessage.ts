@@ -9,10 +9,12 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
 // Local imports - shared styles
 import { CopyButtonController } from '@shared/controllers';
 import { designTokens } from '@shared/styles/litStyles';
-import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - formatter helpers
@@ -66,7 +68,6 @@ function decodeXmlEntitiesForDisplay(text: string): string {
 export class UserMessage extends LitElement {
   static override styles = [
     designTokens,
-    codiconIconClasses,
     css`
       :host {
         display: block;
@@ -221,7 +222,12 @@ export class UserMessage extends LitElement {
         >
           <div class="user-message-header">
             <span class="user-message-header-left">
-              <i class="codicon codicon-comment user-message-icon"></i>
+              <wa-icon
+                library="texra"
+                name="comment"
+                class="user-message-icon"
+                aria-hidden="true"
+              ></wa-icon>
               <span class="user-message-timestamp" title=${tooltipTimestamp}
                 >${timeDisplay}</span
               >
