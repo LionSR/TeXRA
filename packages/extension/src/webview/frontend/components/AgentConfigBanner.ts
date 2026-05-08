@@ -1,7 +1,7 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { LitElement, html, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -18,6 +18,14 @@ export class AgentConfigBanner extends LitElement {
     visible: false,
   };
 
+  override updated(changed: PropertyValues<this>): void {
+    if (changed.has('state')) {
+      const visible = this.state.visible === true;
+      this.dataset.visible = visible ? 'true' : 'false';
+      this.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    }
+  }
+
   private handleAction(action: 'edit' | 'dir' | 'docs'): void {
     this.dispatchEvent(
       MainViewEvents.agentConfigAction({
@@ -27,51 +35,51 @@ export class AgentConfigBanner extends LitElement {
     );
   }
 
-  override render(): TemplateResult | typeof nothing {
-    if (!this.state.visible) return nothing;
-
+  override render(): TemplateResult {
     return html`
-      <wa-callout
-        id="agentConfigBanner"
-        variant="warning"
-        data-custom-dir-set=${this.state.customDirSet ? 'true' : 'false'}
-      >
-        ${waIcon('triangle-exclamation', { slot: 'icon' })}
-        <div class="banner-row">
-          <span>
-            ${this.state.agentName
-              ? `Agent file for "${this.state.agentName}" is missing.`
-              : 'Agent configuration is missing.'}
-          </span>
-          <div class="actions">
-            <wa-button
-              id="agentConfigEditButton"
-              appearance="plain"
-              size="small"
-              @click=${() => this.handleAction('edit')}
-            >
-              ${waIcon('pencil', { slot: 'start' })} Edit Agents
-            </wa-button>
-            <wa-button
-              id="agentConfigDirButton"
-              appearance="plain"
-              size="small"
-              @click=${() => this.handleAction('dir')}
-            >
-              ${waIcon('folder', { slot: 'start' })}
-              ${this.state.customDirSet ? 'Open Directory' : 'Set Directory'}
-            </wa-button>
-            <wa-button
-              id="agentConfigDocButton"
-              appearance="plain"
-              size="small"
-              @click=${() => this.handleAction('docs')}
-            >
-              ${waIcon('book', { slot: 'start' })} Docs
-            </wa-button>
+      <div class="banner-frame">
+        <wa-callout
+          id="agentConfigBanner"
+          variant="warning"
+          data-custom-dir-set=${this.state.customDirSet ? 'true' : 'false'}
+        >
+          ${waIcon('triangle-exclamation', { slot: 'icon' })}
+          <div class="banner-row">
+            <span>
+              ${this.state.agentName
+                ? `Agent file for "${this.state.agentName}" is missing.`
+                : 'Agent configuration is missing.'}
+            </span>
+            <div class="actions">
+              <wa-button
+                id="agentConfigEditButton"
+                appearance="plain"
+                size="small"
+                @click=${() => this.handleAction('edit')}
+              >
+                ${waIcon('pencil', { slot: 'start' })} Edit Agents
+              </wa-button>
+              <wa-button
+                id="agentConfigDirButton"
+                appearance="plain"
+                size="small"
+                @click=${() => this.handleAction('dir')}
+              >
+                ${waIcon('folder', { slot: 'start' })}
+                ${this.state.customDirSet ? 'Open Directory' : 'Set Directory'}
+              </wa-button>
+              <wa-button
+                id="agentConfigDocButton"
+                appearance="plain"
+                size="small"
+                @click=${() => this.handleAction('docs')}
+              >
+                ${waIcon('book', { slot: 'start' })} Docs
+              </wa-button>
+            </div>
           </div>
-        </div>
-      </wa-callout>
+        </wa-callout>
+      </div>
     `;
   }
 }

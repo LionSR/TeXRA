@@ -43,6 +43,12 @@ export const commonViewStyles: CSSResult = css`
     margin-top: var(--spacing-small);
   }
 
+  /*
+   * Legacy vscode-collapsible support: 'body' is the part name for that
+   * component. Long content historically clipped at --height-max; the grid
+   * trick below replaces the discrete max-height jump for wa-details
+   * ('content' part), which is the modern variant.
+   */
   .collapsible::part(body) {
     max-height: var(--height-medium);
     overflow: hidden;
@@ -51,6 +57,21 @@ export const commonViewStyles: CSSResult = css`
 
   .collapsible[open]::part(body) {
     max-height: var(--height-max);
+  }
+
+  .collapsible::part(content) {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 220ms ease;
+  }
+
+  .collapsible:not([open])::part(content) {
+    grid-template-rows: 0fr;
+  }
+
+  .collapsible::part(content) > * {
+    overflow: hidden;
+    min-height: 0;
   }
 
   /* Panel collapsible - consistent styling for collapsible panels */
@@ -68,6 +89,28 @@ export const commonViewStyles: CSSResult = css`
   .panel-collapsible::part(body),
   .panel-collapsible::part(content) {
     padding: 0 var(--spacing-small) var(--spacing-small);
+  }
+
+  /*
+   * Smooth open/close for the wa-details version of the panel using the
+   * grid 1fr/0fr trick so long content scales without a fixed max-height
+   * cap. wa-details exposes the body via the 'content' part. The direct
+   * child wrapper carries 'overflow: hidden' and 'min-height: 0' so the
+   * grid row can clamp it without truncation jumps.
+   */
+  .panel-collapsible::part(content) {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 220ms ease;
+  }
+
+  .panel-collapsible:not([open])::part(content) {
+    grid-template-rows: 0fr;
+  }
+
+  .panel-collapsible::part(content) > * {
+    overflow: hidden;
+    min-height: 0;
   }
 
   vscode-toolbar-container {
