@@ -77,8 +77,12 @@ wa-button.desktop-icon-button::part(base):hover {
 }
 
 wa-button.desktop-icon-button[aria-pressed='true']::part(base) {
-  border-color: var(--wa-color-focus);
-  background: var(--wa-color-neutral-fill-quiet);
+  /* Subdued active indicator — a quiet brand fill instead of a vivid focus
+     ring so a route-active icon button doesn't read as if it's stuck in
+     keyboard focus. */
+  border-color: var(--wa-color-brand-border-quiet);
+  background: var(--wa-color-brand-fill-quiet);
+  color: var(--wa-color-brand-on-quiet);
 }
 
 /* Top-nav wa-button overrides — shadow DOM tinting via ::part(base). */
@@ -103,8 +107,11 @@ wa-button.desktop-folder-button::part(base):hover {
 }
 
 wa-button.desktop-nav-button[aria-pressed='true']::part(base) {
-  border-color: var(--wa-color-focus);
-  background: var(--wa-color-neutral-fill-quiet);
+  /* Match the icon-button active treatment so the active route reads as a
+     subtle brand-tinted chip rather than a vivid focus-ring outline. */
+  border-color: var(--wa-color-brand-border-quiet);
+  background: var(--wa-color-brand-fill-quiet);
+  color: var(--wa-color-brand-on-quiet);
 }
 
 wa-button.desktop-command-button::part(base),
