@@ -12,7 +12,7 @@ import {
 } from '@shared/schemas/settingsViewMessages';
 import {
   dispatchCommandFromRegistry,
-  type CommandHandlerMap,
+  type CommandHandler,
 } from '@shared/commands/registry';
 import type { MenuItemConstructorOptions } from 'electron';
 import type { DesktopRoute } from './desktopShellMessages.js';
@@ -156,29 +156,32 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
   ],
 ]);
 
-const DESKTOP_UNAVAILABLE_COMMANDS = new Map<CommandId, string>([
+const DESKTOP_UNAVAILABLE_COMMAND_ENTRIES = [
   [
     'texra.execute',
     'Use the Launcher execute button after choosing an agent and files.',
   ],
-  [
-    'texra.runSetupAssistant',
-    'The setup assistant agent is still VS Code-only.',
-  ],
+  ['texra.runSetupAssistant', 'The setup assistant agent is still VS Code-only.'],
   ['texra.showImportOptions', 'Project import choices are still VS Code-only.'],
   [
     'texra.openGettingStarted',
     'The VS Code walkthrough is not available in desktop.',
   ],
-  [
-    'texra.cleanOutput',
-    'Workspace cleanup commands are not wired in desktop yet.',
-  ],
-  [
-    'texra.cleanBuild',
-    'Workspace cleanup commands are not wired in desktop yet.',
-  ],
-]);
+  ['texra.cleanOutput', 'Workspace cleanup commands are not wired in desktop yet.'],
+  ['texra.cleanBuild', 'Workspace cleanup commands are not wired in desktop yet.'],
+] as const satisfies readonly (readonly [CommandId, string])[];
+
+type DesktopUnavailableCommandId =
+  (typeof DESKTOP_UNAVAILABLE_COMMAND_ENTRIES)[number][0];
+
+type DesktopAvailableCommandId = Exclude<
+  DesktopCommandId,
+  DesktopUnavailableCommandId
+>;
+
+const DESKTOP_UNAVAILABLE_COMMANDS = new Map<CommandId, string>(
+  DESKTOP_UNAVAILABLE_COMMAND_ENTRIES,
+);
 
 export function getDesktopCommandMenuEntries(
   ids: readonly DesktopCommandId[] = DESKTOP_COMMAND_IDS,
@@ -229,10 +232,7 @@ export function toElectronAccelerator(
   return key.split('+').map(toElectronAcceleratorPart).join('+');
 }
 
-const DESKTOP_COMMAND_HANDLERS: CommandHandlerMap<
-  DesktopCommandId,
-  DesktopCommandActions
-> = {
+const DESKTOP_COMMAND_HANDLERS = {
   'texra.showMainView': (a) => {
     a.showRoute('main');
     return true;
@@ -298,7 +298,10 @@ const DESKTOP_COMMAND_HANDLERS: CommandHandlerMap<
     a.openDesktopDocs();
     return true;
   },
-};
+} as const satisfies Record<
+  DesktopAvailableCommandId,
+  CommandHandler<DesktopCommandActions>
+>;
 
 export function dispatchDesktopCommand(
   id: DesktopCommandId,
