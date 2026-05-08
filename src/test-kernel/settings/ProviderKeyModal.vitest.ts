@@ -39,7 +39,9 @@ describe('ProviderKeyModal', () => {
       submitted.push((event as CustomEvent).detail);
     });
 
-    const input = modal.shadowRoot!.querySelector('input')!;
+    const input = modal.shadowRoot!.querySelector(
+      'wa-input',
+    ) as HTMLElement & { value: string };
     input.value = '  sk-test  ';
     input.dispatchEvent(new Event('input', { bubbles: true }));
     modal
@@ -71,12 +73,17 @@ describe('ProviderKeyModal', () => {
       submitted += 1;
     });
 
-    const input = modal.shadowRoot!.querySelector('input')!;
+    const input = modal.shadowRoot!.querySelector(
+      'wa-input',
+    ) as HTMLElement & { value: string };
     input.value = 'sk-cancel';
     input.dispatchEvent(new Event('input', { bubbles: true }));
-    modal
-      .shadowRoot!.querySelector<HTMLButtonElement>('.provider-key-secondary')!
-      .click();
+    // First wa-button in the footer is "Cancel" (outlined / neutral); clicking
+    // it triggers the user-initiated close path that fires provider-key-cancel.
+    const cancelButton = modal
+      .shadowRoot!.querySelectorAll<HTMLElement>('wa-button')
+      .item(0);
+    cancelButton.click();
     await flushDialogTicks();
 
     expect(cancelled).toBe(1);
@@ -105,7 +112,9 @@ describe('ProviderKeyModal', () => {
       cancelled += 1;
     });
 
-    const input = modal.shadowRoot!.querySelector('input')!;
+    const input = modal.shadowRoot!.querySelector(
+      'wa-input',
+    ) as HTMLElement & { value: string };
     input.value = 'sk-after-submit';
     input.dispatchEvent(new Event('input', { bubbles: true }));
     modal
