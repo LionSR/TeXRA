@@ -10,7 +10,7 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { codiconStyles, commonViewStyles, designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens } from '@shared/styles';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa';
 
 // Local imports - shared schemas
@@ -24,7 +24,6 @@ import type {
 export class ToolCard extends LitElement {
   static override styles = [
     designTokens,
-    codiconStyles,
     commonViewStyles,
     css`
       :host {
@@ -267,9 +266,9 @@ export class ToolCard extends LitElement {
     ToolDashboardItem['status'],
     { icon: string; label: string }
   > = {
-    available: { icon: 'codicon-check', label: 'Ready' },
-    'not-found': { icon: 'codicon-warning', label: 'Needs setup' },
-    unknown: { icon: 'codicon-question', label: 'Not checked' },
+    available: { icon: 'check', label: 'Ready' },
+    'not-found': { icon: 'warning', label: 'Needs setup' },
+    unknown: { icon: 'question', label: 'Not checked' },
   };
 
   private renderBadge(): TemplateResult {
@@ -279,7 +278,7 @@ export class ToolCard extends LitElement {
 
     return html`
       <span class="tool-badge tool-badge--${status}">
-        <span class="codicon ${config.icon}"></span>
+        <wa-icon library="texra" name=${config.icon}></wa-icon>
         ${this.item.statusLabel ?? config.label}
       </span>
     `;
@@ -431,7 +430,7 @@ export class ToolCard extends LitElement {
     if (!this.item.authNote) return nothing;
     return html`
       <span class="tool-auth-note">
-        <span class="codicon codicon-key"></span>
+        <wa-icon library="texra" name="key"></wa-icon>
         ${this.item.authNote}
       </span>
     `;
