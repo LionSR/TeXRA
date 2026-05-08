@@ -1124,7 +1124,7 @@ default and replaces the `<h3>` style in `MultiAgentTab.ts:458, 470` and
 the bespoke `.section-title` in `GitTab.ts:76`.
 
 The shared style ships as `.section-header` in
-`src/settingsView/frontend/styles.ts` (the file already exists, currently
+`packages/extension/src/settingsView/frontend/styles.ts` (the file already exists, currently
 66 lines for `.settings-header` only). Tab-local definitions of
 `.section-header`, `.category-header`, and `.section-title` are deleted.
 
@@ -1146,7 +1146,7 @@ sentence, one inline action.
 ```
 
 The shared component is `<settings-empty-state icon=… text=… action=…>`
-in `src/settingsView/frontend/components/`. LaTeX and Tools loading
+in `packages/extension/src/settingsView/frontend/components/`. LaTeX and Tools loading
 spinners are kept distinct (loading is not empty); they get a shared
 `<settings-loading-state label=…>` partner. Tabs that cannot be empty
 (Models, Agents built-in group, Multi-Agent built-in group) do not adopt
@@ -1618,29 +1618,29 @@ current workspace; it does not override an active workspace selection.
 | `agentRole` field on agent YAMLs                           | `resources/agents/*.yaml`, `resources/tool_use_agents/*.yaml`, `reference-agents/**/*.yaml`                                                   |
 | `agentRole` derivation + `AgentEntry.ref()`                | `src/agent/index/agentRegistry.ts`                                                                                                            |
 | Team schema, built-in records, migration                   | `src/shared/schemas/agentPresets.ts`                                                                                                          |
-| Custom team CRUD handlers                                  | `src/settingsView/handlers/agentHandlers.ts`                                                                                                  |
-| Multi-Agent tab grid + team editor                         | `src/settingsView/frontend/tabs/MultiAgentTab.ts`                                                                                             |
-| Agents tab role badges, "Used by teams", setup-locked rows | `src/settingsView/frontend/tabs/AgentsTab.ts`, `AgentSelectionPanel.ts`                                                                       |
-| Cross-tab vocabulary, save model, action placement         | every `src/settingsView/frontend/tabs/*.ts` (one-line text changes per tab)                                                                   |
-| `<settings-empty-state>`, `<settings-loading-state>`       | `src/settingsView/frontend/components/` (new)                                                                                                 |
+| Custom team CRUD handlers                                  | `packages/extension/src/settingsView/handlers/agentHandlers.ts`                                                                                                  |
+| Multi-Agent tab grid + team editor                         | `packages/extension/src/settingsView/frontend/tabs/MultiAgentTab.ts`                                                                                             |
+| Agents tab role badges, "Used by teams", setup-locked rows | `packages/extension/src/settingsView/frontend/tabs/AgentsTab.ts`, `AgentSelectionPanel.ts`                                                                       |
+| Cross-tab vocabulary, save model, action placement         | every `packages/extension/src/settingsView/frontend/tabs/*.ts` (one-line text changes per tab)                                                                   |
+| `<settings-empty-state>`, `<settings-loading-state>`       | `packages/extension/src/settingsView/frontend/components/` (new)                                                                                                 |
 | Confirmation modals for destructive actions                | `MultiAgentTab.ts`, `AgentsTab.ts`, `MemoryTab.ts`, `GitTab.ts`, `LaTeXTab.ts`                                                                |
-| Reset-to-default revert icon                               | `src/settingsView/frontend/components/RevertButton.ts` (new), adopted across tabs                                                             |
-| `SET_TAB` deep-link by id + sub-section                    | `src/settingsView/frontend/SettingsApp.ts`, `src/shared/schemas/settingsViewMessages.ts`                                                      |
-| Codex settings move from Tools to Models                   | `src/settingsView/frontend/tabs/ToolsTab.ts`, `ModelsTab.ts`                                                                                  |
-| History team filter                                        | `src/settingsView/frontend/tabs/HistoryTab.ts`, `HistoryList.ts`                                                                              |
-| Shared section header, card, badge, mono-path styles       | `src/settingsView/frontend/styles.ts`, `cardStyles.ts` (new), `monoStyles.ts` (new), `iconButtonStyles.ts` (new), `badgeStyles.ts` (extended) |
+| Reset-to-default revert icon                               | `packages/extension/src/settingsView/frontend/components/RevertButton.ts` (new), adopted across tabs                                                             |
+| `SET_TAB` deep-link by id + sub-section                    | `packages/extension/src/settingsView/frontend/SettingsApp.ts`, `src/shared/schemas/settingsViewMessages.ts`                                                      |
+| Codex settings move from Tools to Models                   | `packages/extension/src/settingsView/frontend/tabs/ToolsTab.ts`, `ModelsTab.ts`                                                                                  |
+| History team filter                                        | `packages/extension/src/settingsView/frontend/tabs/HistoryTab.ts`, `HistoryList.ts`                                                                              |
+| Shared section header, card, badge, mono-path styles       | `packages/extension/src/settingsView/frontend/styles.ts`, `cardStyles.ts` (new), `monoStyles.ts` (new), `iconButtonStyles.ts` (new), `badgeStyles.ts` (extended) |
 | Imperative→declarative refactors                           | `LaTeXTab.ts:472–481`, `HistoryList.ts:135, 191`, `AgentSelectionPanel.ts:468–472`, `SearchBar.ts:24–42`, `TaskGroupList.ts:623`              |
 | Batched workspace updates                                  | `src/common/state/WorkspaceStateManager.ts` (`updateMany([[k, v], ...])`)                                                                     |
-| Launcher team picker + agent grouped picker                | `src/webview/frontend/components/InstructionPanel.ts`                                                                                         |
+| Launcher team picker + agent grouped picker                | `packages/extension/src/webview/frontend/components/InstructionPanel.ts`                                                                                         |
 | Grouped option rendering (team-aware)                      | `src/shared/utils/selectTemplates.ts`                                                                                                         |
-| Launcher persisted state + session override                | `src/shared/schemas/mainView.ts`, `src/webview/frontend/MainApp.ts`                                                                           |
-| First-run team selection + welcome banner                  | `src/webview/frontend/MainApp.ts`, `src/commands/setup/setupAssistantCommand.ts`                                                              |
+| Launcher persisted state + session override                | `src/shared/schemas/mainView.ts`, `packages/extension/src/webview/frontend/MainApp.ts`                                                                           |
+| First-run team selection + welcome banner                  | `packages/extension/src/webview/frontend/MainApp.ts`, `packages/extension/src/commands/setup/setupAssistantCommand.ts`                                                              |
 | Setup agent system prompt — phases 8 and 9, intent table   | `resources/tool_use_agents/setup.yaml`                                                                                                        |
 | `update_config` allowlist gains `selectedTeamId`           | `src/tools/setup/UpdateConfigTool.ts` (or current update_config implementation)                                                               |
 | Walkthrough rewrite — collapse step 6 into 7, retitle      | `package.json` `contributes.walkthroughs.texra.gettingStarted`, `resources/walkthroughs/getting-started.md`                                   |
-| Status-bar pill third state ("Pick your team")             | `src/extension.ts:108–112`                                                                                                                    |
-| Re-run-setup banner after upgrade                          | `src/webview/frontend/MainApp.ts` (gated on workspace-state version key)                                                                      |
-| Credentials-removed inline banner                          | `src/webview/frontend/MainApp.ts`                                                                                                             |
+| Status-bar pill third state ("Pick your team")             | `packages/extension/src/extension.ts:108–112`                                                                                                                    |
+| Re-run-setup banner after upgrade                          | `packages/extension/src/webview/frontend/MainApp.ts` (gated on workspace-state version key)                                                                      |
+| Credentials-removed inline banner                          | `packages/extension/src/webview/frontend/MainApp.ts`                                                                                                             |
 | Effective-roster dispatch payload to lead                  | `src/agent/runtime/` (lead receives `effectiveRoster: AgentRef[]` in its delegate context)                                                    |
 
 ### Implementation order
