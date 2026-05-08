@@ -7,6 +7,13 @@
   --desktop-font-size: 13px;
   --desktop-font-weight: 400;
 
+  /* Heading scale shared with extension litStyles.ts. Use these tokens
+     instead of hardcoded heading sizes so extension and desktop hosts
+     render headings at the same visual scale. */
+  --font-size-h1: 1.5em;
+  --font-size-h2: 1.25em;
+  --font-size-h3: 1em;
+
   --desktop-color-background: light-dark(#ffffff, #1e1e1e);
   --desktop-color-foreground: light-dark(#1f2328, #d4d4d4);
   --desktop-color-muted: light-dark(#57606a, #a6a6a6);

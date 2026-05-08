@@ -247,7 +247,7 @@ wa-tree.desktop-explorer-tree
 .desktop-explorer-empty .empty-state-title {
   margin: 12px 0 6px;
   color: var(--texra-foreground);
-  font-size: 16px;
+  font-size: var(--font-size-h2);
   font-weight: 600;
 }
 
@@ -384,7 +384,7 @@ wa-tree.desktop-explorer-tree
 .desktop-empty-workspace-panel .empty-state-title {
   margin: 20px 0 10px;
   color: var(--texra-foreground);
-  font-size: 24px;
+  font-size: var(--font-size-h1);
   font-weight: 600;
 }
 
@@ -423,7 +423,7 @@ wa-tree.desktop-explorer-tree
 .desktop-log-viewer-header h2 {
   margin: 0 0 4px;
   color: var(--texra-foreground);
-  font-size: 18px;
+  font-size: var(--font-size-h2);
   font-weight: 600;
 }
 
@@ -457,7 +457,9 @@ wa-tree.desktop-explorer-tree
 
 wa-button.desktop-primary-button::part(base),
 wa-button.desktop-secondary-button::part(base) {
-  min-height: 34px;
+  /* 30px matches the extension's --height-button so chrome buttons render
+     at the same visual scale across both hosts. */
+  min-height: 30px;
   padding: 0 14px;
   border-radius: 6px;
 }
@@ -507,7 +509,7 @@ wa-dialog.desktop-onboarding {
 .desktop-onboarding h1 {
   margin: 0;
   color: var(--texra-foreground);
-  font-size: 21px;
+  font-size: var(--font-size-h1);
   font-weight: 600;
 }
 
