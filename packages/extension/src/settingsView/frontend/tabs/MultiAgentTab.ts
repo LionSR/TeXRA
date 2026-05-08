@@ -58,7 +58,7 @@ export class MultiAgentTab extends LitElement {
 
       .setting-block {
         padding: var(--wa-space-xs);
-        background-color: var(--texra-editor-inactiveSelectionBackground);
+        background-color: var(--wa-color-neutral-fill-quiet);
         border-radius: var(--border-radius);
       }
 
@@ -87,7 +87,7 @@ export class MultiAgentTab extends LitElement {
         flex-direction: column;
         gap: var(--wa-space-2xs);
         padding: var(--wa-space-xs);
-        background-color: var(--texra-editor-inactiveSelectionBackground);
+        background-color: var(--wa-color-neutral-fill-quiet);
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius);
         cursor: pointer;

@@ -36,7 +36,7 @@ export class QueuedFollowUps extends LitElement {
 
       /* Info-style collapsible for queued messages */
       .queued-collapsible {
-        border: var(--border-thin) solid var(--texra-inputValidation-infoBorder);
+        border: var(--border-thin) solid var(--wa-color-brand-border-quiet);
         border-radius: var(--border-radius);
         background-color: var(--texra-inputValidation-infoBackground);
       }
@@ -75,7 +75,7 @@ export class QueuedFollowUps extends LitElement {
         font-size: var(--font-size-icon-sm);
         line-height: var(--line-height-normal);
         margin-top: var(--border-thin);
-        color: var(--texra-inputValidation-infoBorder);
+        color: var(--wa-color-brand-border-quiet);
       }
 
       .queued-follow-up-text {

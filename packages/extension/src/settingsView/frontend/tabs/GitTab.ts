@@ -48,7 +48,7 @@ export class GitTab extends LitElement {
 
       .setting-block {
         padding: var(--wa-space-xs);
-        background-color: var(--texra-editor-inactiveSelectionBackground);
+        background-color: var(--wa-color-neutral-fill-quiet);
         border-radius: var(--border-radius);
       }
 

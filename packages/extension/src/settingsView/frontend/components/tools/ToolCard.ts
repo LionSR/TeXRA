@@ -39,7 +39,7 @@ export class ToolCard extends LitElement {
         padding: var(--wa-space-xs) var(--wa-space-s);
         margin-bottom: var(--wa-space-xs);
         background: var(
-          --texra-editor-background,
+          --wa-color-surface-default,
           var(--wa-color-surface-lowered)
         );
         transition: border-color var(--transition-fast);
