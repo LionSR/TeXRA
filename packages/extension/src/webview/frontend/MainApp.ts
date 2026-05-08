@@ -175,6 +175,14 @@ export class MainApp extends MainAppBase {
   private readonly checkboxValues = signal<CheckboxValues>({
     ...DEFAULT_CHECKBOX_VALUES,
   });
+  // Tracks whether the workflow Files <wa-details> is open. Initialized to
+  // match the initial session type and updated imperatively from
+  // wa-show/wa-hide so user toggles survive across re-renders. Without this,
+  // binding `?open=${isWorkflow}` would force the section open on every render
+  // pass, defeating user collapses.
+  private readonly fileSelectionOpen = signal(
+    DEFAULT_STATE.sessionType === SESSION_TYPES.WORKFLOW,
+  );
   private readonly isRecording = signal(false);
   private readonly isPolishing = signal(false);
   private readonly modelOptions = signal<ModelOptionData[]>([]);
@@ -459,6 +467,7 @@ export class MainApp extends MainAppBase {
     const state = this.stateManager.getState();
 
     this.sessionType.set(state.sessionType);
+    this.fileSelectionOpen.set(state.sessionType === SESSION_TYPES.WORKFLOW);
     this.workflowAgent.set(state.workflowAgent);
     this.toolUseAgent.set(state.toolUseAgent);
     this.model.set(state.model);
@@ -1202,6 +1211,11 @@ export class MainApp extends MainAppBase {
 
     this.swapModeInstruction(prev, parsed);
     this.sessionType.set(parsed);
+    // Auto-open the Files <wa-details> when the user enters workflow mode,
+    // and auto-close when leaving. This is the one-shot behavior the bound
+    // `?open` template expression used to encode — but tracking it here
+    // means subsequent user collapses survive re-renders.
+    this.fileSelectionOpen.set(parsed === SESSION_TYPES.WORKFLOW);
     this.refreshInstructionPlaceholder(false);
     if (parsed === SESSION_TYPES.TOOL_USE) {
       this.outputFilesActive.set(false);
@@ -1898,7 +1912,6 @@ export class MainApp extends MainAppBase {
 
   render(): TemplateResult {
     const isToolUse = this.sessionType.get() === SESSION_TYPES.TOOL_USE;
-    const isWorkflow = this.sessionType.get() === SESSION_TYPES.WORKFLOW;
     const fileSelectionClasses = classMap({
       'file-selection-group': true,
       'file-selection-group--disabled': isToolUse,
@@ -2018,7 +2031,9 @@ export class MainApp extends MainAppBase {
                 <div class="section-separator" role="presentation"></div>
                 <wa-details
                   class="file-selection-details"
-                  ?open=${isWorkflow}
+                  ?open=${this.fileSelectionOpen.get()}
+                  @wa-show=${() => this.fileSelectionOpen.set(true)}
+                  @wa-hide=${() => this.fileSelectionOpen.set(false)}
                 >
                   <span slot="summary" class="file-selection-summary">
                     <wa-icon
