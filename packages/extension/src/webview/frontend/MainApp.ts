@@ -1898,6 +1898,7 @@ export class MainApp extends MainAppBase {
 
   render(): TemplateResult {
     const isToolUse = this.sessionType.get() === SESSION_TYPES.TOOL_USE;
+    const isWorkflow = this.sessionType.get() === SESSION_TYPES.WORKFLOW;
     const fileSelectionClasses = classMap({
       'file-selection-group': true,
       'file-selection-group--disabled': isToolUse,
@@ -2015,7 +2016,10 @@ export class MainApp extends MainAppBase {
             ? nothing
             : html`
                 <div class="section-separator" role="presentation"></div>
-                <wa-details class="file-selection-details">
+                <wa-details
+                  class="file-selection-details"
+                  ?open=${isWorkflow}
+                >
                   <span slot="summary" class="file-selection-summary">
                     <wa-icon
                       library=${TEXRA_ICON_LIBRARY}
