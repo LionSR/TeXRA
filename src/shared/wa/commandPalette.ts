@@ -109,9 +109,19 @@ export function executeCommandPaletteEntry(
   // Sync handlers report their actual result; async handlers (typed-args
   // registry, #3784) return a Promise — treat that as "handled" so the
   // palette closes immediately and the work runs in the background.
-  // Resolution failures surface via the dispatcher's own error logging.
+  //
+  // Bot review (#3818): an async handler that rejects would otherwise
+  // surface as an unhandled rejection at the host. Attach a catch that
+  // logs but doesn't propagate — sync handler errors still throw
+  // synchronously and bubble to the caller.
   const result = onExecute(entry.id);
-  return result === false ? false : true;
+  if (typeof (result as { then?: unknown })?.then === 'function') {
+    (result as Promise<boolean>).catch((error) => {
+      console.error('[command-palette] async dispatch rejected', error);
+    });
+    return true;
+  }
+  return result !== false;
 }
 
 export function isCommandPaletteShortcut(event: KeyboardEvent): boolean {
