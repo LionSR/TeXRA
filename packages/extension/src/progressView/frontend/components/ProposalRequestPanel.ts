@@ -15,10 +15,12 @@ import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
 // Local imports - shared styles
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import {
-  codiconIconClasses,
   commonViewStyles,
   designTokens,
   requestPanelStyles,
@@ -60,7 +62,6 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   static override styles = [
     designTokens,
     commonViewStyles,
-    codiconIconClasses,
     requestPanelStyles,
     selectStyles,
   ];
@@ -130,7 +131,11 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
             ${hasAgentOptions
               ? html`
                   <div class="workflow-proposal__agent-select">
-                    <i class="codicon codicon-sparkle"></i>
+                    <wa-icon
+                      library="texra"
+                      name="sparkle"
+                      aria-hidden="true"
+                    ></wa-icon>
                     <vscode-single-select
                       class="proposal-agent-dropdown"
                       position="below"
@@ -147,7 +152,11 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
             ${hasModelOptions
               ? html`
                   <div class="workflow-proposal__model-select">
-                    <i class="codicon codicon-robot"></i>
+                    <wa-icon
+                      library="texra"
+                      name="robot"
+                      aria-hidden="true"
+                    ></wa-icon>
                     <vscode-single-select
                       class="proposal-model-dropdown"
                       position="below"
@@ -243,7 +252,12 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
         (flag) =>
           html`<span
             class="workflow-proposal__category-badge workflow-proposal__category-badge--workflow workflow-proposal__extract-flag"
-            ><i class="codicon codicon-file-media"></i> ${flag}</span
+            ><wa-icon
+              library="texra"
+              name="file-media"
+              aria-hidden="true"
+            ></wa-icon>
+            ${flag}</span
           >`,
       )}
     </div>`;

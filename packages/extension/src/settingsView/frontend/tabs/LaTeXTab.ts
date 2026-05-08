@@ -549,10 +549,7 @@ export class LaTeXTab extends LitElement {
             )}
           </div>
           ${installed
-            ? html`<wa-tag
-                class="setting-badge"
-                variant="success"
-                size="small"
+            ? html`<wa-tag class="setting-badge" variant="success" size="small"
                 >Installed</wa-tag
               >`
             : dep.actionEvent

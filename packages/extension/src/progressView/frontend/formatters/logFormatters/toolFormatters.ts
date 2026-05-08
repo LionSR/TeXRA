@@ -47,13 +47,14 @@ import {
 import {
   buildToolUseSection,
   wrapInPre,
-  getToolIconClass,
+  getToolIconName,
   buildFileLinkWithLines,
   buildEditDiffSection,
   buildMemoryPathDisplay,
   buildExecutionsPathDisplay,
   buildCodeBlock,
   buildDetailsSummary,
+  SPINNER_ICON_NAME,
 } from '../htmlBuilders';
 import { normalizeToolUseData } from '../logDataParsers';
 import { registerProposalInput } from '../proposalInputStore';
@@ -161,10 +162,10 @@ const STATUS_SUFFIXES: Record<string, string> = {
   failed: ' (failed)',
 };
 
-// Web search status-based icon classes
+// Web search status-based wa-icon names; SPINNER_ICON_NAME triggers a spinner.
 const STATUS_ICONS: Record<string, string> = {
-  failed: 'codicon codicon-error',
-  in_progress: 'codicon codicon-sync spin',
+  failed: 'error',
+  in_progress: SPINNER_ICON_NAME,
 };
 
 /** Build the banner content wrapper shared by tool-use and web-search entries. */
@@ -432,7 +433,7 @@ function buildAcceptRunFilesSections(
         ? html` <span class="file-stats"><span class="added">+${edit.lineChanges.added}</span><span class="removed" style="margin-left:var(--spacing-small)">-${edit.lineChanges.removed}</span></span>`
         : nothing;
       // prettier-ignore
-      return html`<li class="detail-item"><i class="codicon codicon-file"></i> <span class="file-link clickable-link" data-file=${dest}>${dest}</span>${isMapped ? html` <span class="file-source">(from ${source})</span>` : nothing}${diffStats}</li>`;
+      return html`<li class="detail-item"><wa-icon library="texra" name="file" aria-hidden="true"></wa-icon> <span class="file-link clickable-link" data-file=${dest}>${dest}</span>${isMapped ? html` <span class="file-source">(from ${source})</span>` : nothing}${diffStats}</li>`;
     })}`;
     // prettier-ignore
     sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
@@ -478,13 +479,13 @@ function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
     extractFlags.push('Extract TikZ');
   if (extractFlags.length > 0) {
     // prettier-ignore
-    sections.push(buildToolUseSection('Extraction:', html`${extractFlags.map((f) => html`<span class="extract-flag"><i class="codicon codicon-file-media"></i> ${f}</span>`)}`));
+    sections.push(buildToolUseSection('Extraction:', html`${extractFlags.map((f) => html`<span class="extract-flag"><wa-icon library="texra" name="file-media" aria-hidden="true"></wa-icon> ${f}</span>`)}`));
   }
 
   const fileGroups = getProposalFileGroups(delegateInput);
   if (fileGroups.length > 0) {
     // prettier-ignore
-    const fileItems = html`${fileGroups.flatMap((g) => g.files.map((f) => html`<li class="detail-item"><i class="codicon codicon-file"></i> <span class="${g.clickable ? 'file-link clickable-link' : 'file-label'}" data-file=${ifDefined(g.clickable ? f : undefined)}>${f}</span> <span class="file-source">(${g.label})</span></li>`))}`;
+    const fileItems = html`${fileGroups.flatMap((g) => g.files.map((f) => html`<li class="detail-item"><wa-icon library="texra" name="file" aria-hidden="true"></wa-icon> <span class="${g.clickable ? 'file-link clickable-link' : 'file-label'}" data-file=${ifDefined(g.clickable ? f : undefined)}>${f}</span> <span class="file-source">(${g.label})</span></li>`))}`;
     // prettier-ignore
     sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
   }
@@ -534,16 +535,21 @@ function buildMcpSections(ctx: ToolSectionContext): TemplateResult[] {
   const otherBlocks = contentBlocks.filter((block) => !isMcpTextBlock(block));
 
   if (typeof mcpOutput?.status === 'string') {
-    let statusIcon: string;
+    const statusIsInProgress = mcpOutput.status === 'in_progress';
+    let statusIconName: string;
     if (mcpOutput.status === 'failed') {
-      statusIcon = 'codicon-error';
-    } else if (mcpOutput.status === 'in_progress') {
-      statusIcon = 'codicon-sync spin';
+      statusIconName = 'error';
+    } else if (statusIsInProgress) {
+      statusIconName = '';
     } else {
-      statusIcon = 'codicon-check';
+      statusIconName = 'check';
     }
     // prettier-ignore
-    sections.push(buildToolUseSection('Status:', html`<span class="extract-flag"><i class="codicon ${statusIcon}"></i> ${mcpOutput.status}</span>`));
+    const statusIconTemplate = statusIsInProgress
+      ? html`<wa-spinner></wa-spinner>`
+      : html`<wa-icon library="texra" name=${statusIconName} aria-hidden="true"></wa-icon>`;
+    // prettier-ignore
+    sections.push(buildToolUseSection('Status:', html`<span class="extract-flag">${statusIconTemplate} ${mcpOutput.status}</span>`));
     renderedMcpOutput = true;
   }
 
@@ -690,13 +696,13 @@ export function formatToolUseTemplate(
   // Determine display state
   const isInProgress = status === 'in_progress';
   const showAsError = normalizedToolLog.isError && !isUserFeedback;
-  let iconClass: string;
+  let iconName: string;
   if (isUserFeedback) {
-    iconClass = 'codicon-comment';
+    iconName = 'comment';
   } else if (isInProgress) {
-    iconClass = 'codicon-sync spin';
+    iconName = SPINNER_ICON_NAME;
   } else {
-    iconClass = getToolIconClass(toolName, showAsError);
+    iconName = getToolIconName(toolName, showAsError);
   }
 
   const titleBase = toolName.startsWith('mcp:')
@@ -803,7 +809,7 @@ export function formatToolUseTemplate(
       : null;
 
   // prettier-ignore
-  const extraContent = html`${timerTemplate ?? nothing}${proposalId ? html`<span class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Setup this proposal configuration"><i class="codicon codicon-reply"></i> Setup</span>` : nothing}`;
+  const extraContent = html`${timerTemplate ?? nothing}${proposalId ? html`<span class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Setup this proposal configuration"><wa-icon library="texra" name="reply" aria-hidden="true"></wa-icon> Setup</span>` : nothing}`;
 
   // prettier-ignore
   return html`<details class=${classMap({
@@ -813,10 +819,9 @@ export function formatToolUseTemplate(
     'tool-use-user-feedback': isUserFeedback,
     'tool-use-in-progress': isInProgress,
   })} ?open=${shouldOpen}>${buildDetailsSummary({
-    iconClass,
+    iconName,
     label: titleText,
     labelClass: 'tool-use-title',
-    includeIconClass: false,
     extraContent,
   })}${bannerContentTemplate}</details>`;
 }
@@ -836,7 +841,7 @@ export function formatWebSearchTemplate(
 
   const providerLabel = PROVIDER_LABELS[providerKey] ?? 'Web';
   const statusSuffix = STATUS_SUFFIXES[statusKey] ?? '';
-  const iconClass = STATUS_ICONS[statusKey] ?? 'codicon codicon-globe';
+  const iconName = STATUS_ICONS[statusKey] ?? 'globe';
 
   let titleText = `${providerLabel} Search`;
   if (query) titleText += `: "${query}"`;
@@ -848,7 +853,7 @@ export function formatWebSearchTemplate(
   if (resultCount > 0) {
     // prettier-ignore
     const resultItems = (results ?? []).map(
-      (r) => html`<li class="detail-item"><i class="codicon codicon-link"></i> <a href=${r.url ?? ''} class="web-search-link" target="_blank" rel="noopener noreferrer">${r.title ?? r.domain ?? r.url}</a>${r.domain ? html` <span class="file-source">(${r.domain})</span>` : ''}</li>`,
+      (r) => html`<li class="detail-item"><wa-icon library="texra" name="link" aria-hidden="true"></wa-icon> <a href=${r.url ?? ''} class="web-search-link" target="_blank" rel="noopener noreferrer">${r.title ?? r.domain ?? r.url}</a>${r.domain ? html` <span class="file-source">(${r.domain})</span>` : ''}</li>`,
     );
     // prettier-ignore
     const resultsTemplate = html`<span class="file-list-summary">Results (${resultCount})</span><ul class="detail-list">${resultItems}</ul>`;
@@ -876,10 +881,9 @@ export function formatWebSearchTemplate(
     'tool-use-details': true,
     'tool-use-error': statusKey === 'failed',
   })} ?open=${shouldOpen}>${buildDetailsSummary({
-    iconClass,
+    iconName,
     label: titleText,
     labelClass: 'tool-use-title',
-    includeIconClass: false,
   })}${bannerContentTemplate}</details>`;
 }
 
@@ -907,9 +911,7 @@ export function formatWebFetchTemplate(
   const statusKey = typeof status === 'string' ? status : '';
   const isFailed = statusKey === 'failed';
 
-  const iconClass = isFailed
-    ? 'codicon codicon-error'
-    : 'codicon codicon-cloud-download';
+  const iconName = isFailed ? 'error' : 'cloud-download';
 
   let titleText = 'Web Fetch';
   if (url) {
@@ -952,9 +954,8 @@ export function formatWebFetchTemplate(
     'tool-use-details': true,
     'tool-use-error': isFailed,
   })} ?open=${shouldOpen}>${buildDetailsSummary({
-    iconClass,
+    iconName,
     label: titleText,
     labelClass: 'tool-use-title',
-    includeIconClass: false,
   })}${bannerContentTemplate}</details>`;
 }
