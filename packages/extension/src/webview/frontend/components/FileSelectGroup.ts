@@ -239,7 +239,7 @@ export class FileSelectGroup extends LitElement {
           aria-label="Tool configuration options"
           title="Tool configuration options"
         >
-          ${waIcon('tools', { slot: 'start' })} ${waIcon('chevron-down')}
+          ${waIcon('tools')}
         </wa-button>
         <wa-dropdown-item
           type="checkbox"
@@ -284,7 +284,7 @@ export class FileSelectGroup extends LitElement {
           aria-label="Auto-extract options"
           title="Auto-extract options"
         >
-          ${waIcon('wand', { slot: 'start' })} ${waIcon('chevron-down')}
+          ${waIcon('wand')}
         </wa-button>
         <wa-dropdown-item
           type="checkbox"
