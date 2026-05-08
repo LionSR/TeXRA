@@ -157,7 +157,7 @@ export class AgentSelectionPanel extends LitElement {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        font-family: var(--texra-editor-font-family);
+        font-family: var(--wa-font-family-mono);
       }
 
       .agent-list-item-badges {
@@ -195,7 +195,7 @@ export class AgentSelectionPanel extends LitElement {
       .agent-detail-name {
         font-size: var(--font-size-lg);
         font-weight: var(--font-weight-semibold);
-        font-family: var(--texra-editor-font-family);
+        font-family: var(--wa-font-family-mono);
         color: var(--wa-color-text-normal);
       }
 
@@ -230,7 +230,7 @@ export class AgentSelectionPanel extends LitElement {
       }
 
       wa-tag.agent-tool-badge {
-        font-family: var(--texra-editor-font-family);
+        font-family: var(--wa-font-family-mono);
       }
 
       .agent-detail-actions {
