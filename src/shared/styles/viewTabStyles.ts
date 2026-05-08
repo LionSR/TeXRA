@@ -3,8 +3,8 @@ import { css, type CSSResult } from 'lit';
 export const waTabThemeTokenStyles: CSSResult = css`
   --track-width: var(--border-thin);
   --track-color: var(--color-border);
-  --indicator-color: var(--wa-color-focus);
-  --indicator-width: 1.5px;
+  --indicator-color: var(--wa-color-brand-fill-loud);
+  --indicator-width: 2px;
 `;
 
 export const viewTabStyles: CSSResult = css`
@@ -21,10 +21,41 @@ export const viewTabStyles: CSSResult = css`
   /* Stricter compactness — small font, tight vertical padding. */
   wa-tab {
     font-size: var(--font-size-sm);
+    letter-spacing: -0.005em;
   }
 
   wa-tab::part(base) {
-    padding-block: 4px;
-    padding-inline: var(--wa-space-xs);
+    padding-block: 5px;
+    padding-inline: var(--wa-space-s);
+    color: color-mix(
+      in srgb,
+      var(--wa-color-text-normal) 70%,
+      transparent
+    );
+    transition:
+      color 140ms ease,
+      background-color 140ms ease;
+    border-radius: var(--wa-border-radius-s, 4px)
+      var(--wa-border-radius-s, 4px) 0 0;
+  }
+
+  wa-tab::part(base):hover {
+    color: var(--wa-color-text-normal);
+    background-color: color-mix(
+      in srgb,
+      var(--wa-color-neutral-fill-quiet) 60%,
+      transparent
+    );
+  }
+
+  /*
+   * Selected tab: full text contrast + slight font-weight bump. The brand
+   * indicator bar (--indicator-color above) provides the chromatic accent;
+   * the label itself stays neutral so the active row reads as "anchored",
+   * not coloured.
+   */
+  wa-tab[active]::part(base) {
+    color: var(--wa-color-text-normal);
+    font-weight: var(--font-weight-semibold, 600);
   }
 `;
