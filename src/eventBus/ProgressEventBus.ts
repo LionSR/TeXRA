@@ -41,6 +41,12 @@ interface SetActiveStreamPayload {
   agentCategory?: AgentCategory;
   /** Hint whether this is a remote agent (for UI display before TaskState is set) */
   isRemote?: boolean;
+  /**
+   * When true, register the stream (state, logs, hints) but do NOT switch the
+   * active tab to it. Used by background child streams (bash, codex) so the
+   * stream tab appears without yanking the user away from their current view.
+   */
+  suppressViewSwitch?: boolean;
 }
 
 interface SetTaskStatePayload {

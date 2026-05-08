@@ -72,6 +72,16 @@ describe('child stream progress events', () => {
         previousStatus: STREAM_STATUS.READY,
       },
     });
+    // Background child streams register without yanking the active tab —
+    // suppressViewSwitch: true keeps the user's current view stable.
+    expect(events[1]).toEqual({
+      event: 'setActiveStream',
+      payload: {
+        streamId: childStreamId,
+        agentCategory: AgentCategory.ToolUse,
+        suppressViewSwitch: true,
+      },
+    });
     expect(events[2]).toEqual({
       event: 'setTaskState',
       payload: {
