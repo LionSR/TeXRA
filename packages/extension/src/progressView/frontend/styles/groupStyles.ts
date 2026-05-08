@@ -15,17 +15,34 @@ export const groupStyles = css`
     background-color: transparent;
     border-left: var(--border-medium) solid var(--color-border);
     transition:
-      border-left-color var(--transition-normal),
-      background-color var(--transition-fast);
+      border-left-color 180ms ease,
+      background-color 140ms ease,
+      box-shadow 140ms ease;
   }
 
+  /*
+   * Subtle inset highlight on hover gives each group row a tactile "lift"
+   * without pulling focus from running-state colour cues.
+   */
   .log-group-header:hover {
-    background-color: var(--wa-color-neutral-fill-quiet);
+    background-color: color-mix(
+      in srgb,
+      var(--wa-color-neutral-fill-quiet) 70%,
+      transparent
+    );
+    box-shadow: inset 1px 0 0
+      color-mix(in srgb, var(--wa-color-text-normal) 8%, transparent);
   }
 
   .log-group-header {
     &.is-running {
       border-left-color: var(--texra-statusBarItem-warningBackground);
+      box-shadow: inset 2px 0 0
+        color-mix(
+          in srgb,
+          var(--texra-statusBarItem-warningBackground) 35%,
+          transparent
+        );
     }
 
     &.is-error {

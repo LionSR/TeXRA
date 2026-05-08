@@ -134,13 +134,18 @@ export class StreamHeader extends LitElement {
       }
 
       .log-header {
-        padding: var(--wa-space-3xs) var(--wa-space-2xs);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
         font-size: var(--font-size-sm);
         display: flex;
         flex-direction: column;
         gap: var(--wa-space-2xs);
         color: var(--color-text-secondary);
         border-bottom: var(--border-thin) solid var(--color-border);
+        background: linear-gradient(
+          to bottom,
+          color-mix(in srgb, var(--wa-color-surface-default) 80%, transparent),
+          transparent
+        );
       }
 
       .log-header__primary {
@@ -170,6 +175,9 @@ export class StreamHeader extends LitElement {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        color: var(--wa-color-text-normal);
+        font-weight: var(--font-weight-medium);
+        letter-spacing: -0.005em;
       }
 
       .header-actions {
@@ -293,17 +301,23 @@ export class StreamHeader extends LitElement {
         display: inline-flex;
         align-items: center;
         gap: var(--wa-space-3xs);
+        padding: var(--wa-space-3xs) var(--wa-space-2xs);
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
         cursor: pointer;
         white-space: nowrap;
         opacity: var(--opacity-subtle);
-        transition: opacity var(--transition-fast);
+        border-radius: var(--border-radius-small);
+        transition:
+          opacity 140ms ease,
+          background-color 140ms ease,
+          color 140ms ease;
       }
 
       .parent-link:hover {
         opacity: var(--opacity-full);
         color: var(--color-text-link);
+        background-color: var(--wa-color-neutral-fill-quiet);
       }
 
       .parent-link:focus-visible {
