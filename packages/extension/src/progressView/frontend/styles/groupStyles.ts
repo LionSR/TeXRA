@@ -33,7 +33,7 @@ export const groupStyles = css`
     }
 
     &.is-stopped {
-      border-left-color: var(--texra-testing-iconPassed);
+      border-left-color: var(--wa-color-success-fill-loud);
     }
   }
 
