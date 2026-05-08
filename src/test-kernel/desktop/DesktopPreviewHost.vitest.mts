@@ -13,6 +13,8 @@ interface DesktopPreviewHostModule {
       openPath(filePath: string): Promise<string>;
     };
     showErrorMessage?: (message: string) => Promise<void> | void;
+    postToRenderer?: (message: unknown) => boolean | void;
+    forceExternal?: boolean;
   }): {
     openBuildDisplay(location: { absolutePath: string }): Promise<void>;
     openExternal(url: string): Promise<void>;
@@ -267,5 +269,106 @@ describe('desktop preview host', () => {
 
     await host.openExternal('https://texra.ai');
     expect(shell.openExternal).toHaveBeenCalledWith('https://texra.ai');
+  });
+
+  // --- Audit item B / trajectory #17: in-app PDF overlay ----------------
+
+  it('prefers the in-app PDF overlay when postToRenderer accepts the post', async () => {
+    const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
+    const dir = await makeTempDir();
+    const texPath = path.join(dir, 'paper.tex');
+    const pdfPath = path.join(dir, 'paper.pdf');
+    await writeFile(texPath, '\\documentclass{article}');
+    await writeFile(pdfPath, 'pdf');
+    const shell = {
+      openExternal: vi.fn(async (_url: string) => {}),
+      openPath: vi.fn(async (_path: string) => ''),
+    };
+    const postToRenderer = vi.fn((_message: unknown) => true);
+
+    const host = createDesktopPreviewHost({ shell, postToRenderer });
+
+    await host.openBuildDisplay({ absolutePath: texPath });
+    // The overlay path is taken; shell.openPath is NOT called.
+    expect(postToRenderer).toHaveBeenCalledTimes(1);
+    expect(postToRenderer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'desktop:showPdf',
+        title: 'paper.pdf',
+        pdfPath,
+      }),
+    );
+    expect(shell.openPath).not.toHaveBeenCalled();
+  });
+
+  it('falls back to external viewer when postToRenderer returns false', async () => {
+    const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
+    const dir = await makeTempDir();
+    const texPath = path.join(dir, 'paper.tex');
+    const pdfPath = path.join(dir, 'paper.pdf');
+    await writeFile(texPath, '\\documentclass{article}');
+    await writeFile(pdfPath, 'pdf');
+    const shell = {
+      openExternal: vi.fn(async (_url: string) => {}),
+      openPath: vi.fn(async (_path: string) => ''),
+    };
+    const postToRenderer = vi.fn((_message: unknown) => false);
+
+    const host = createDesktopPreviewHost({ shell, postToRenderer });
+
+    await host.openBuildDisplay({ absolutePath: texPath });
+    expect(postToRenderer).toHaveBeenCalledTimes(1);
+    expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
+  });
+
+  it('falls back to external viewer when postToRenderer throws', async () => {
+    const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
+    const dir = await makeTempDir();
+    const texPath = path.join(dir, 'paper.tex');
+    const pdfPath = path.join(dir, 'paper.pdf');
+    await writeFile(texPath, '\\documentclass{article}');
+    await writeFile(pdfPath, 'pdf');
+    const shell = {
+      openExternal: vi.fn(async (_url: string) => {}),
+      openPath: vi.fn(async (_path: string) => ''),
+    };
+    const postToRenderer = vi.fn((_message: unknown) => {
+      throw new Error('IPC bridge not ready');
+    });
+    // Silence the expected console.error so the test output is clean.
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+
+    const host = createDesktopPreviewHost({ shell, postToRenderer });
+
+    await host.openBuildDisplay({ absolutePath: texPath });
+    expect(postToRenderer).toHaveBeenCalledTimes(1);
+    expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('forceExternal=true skips the overlay path entirely', async () => {
+    const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
+    const dir = await makeTempDir();
+    const texPath = path.join(dir, 'paper.tex');
+    const pdfPath = path.join(dir, 'paper.pdf');
+    await writeFile(texPath, '\\documentclass{article}');
+    await writeFile(pdfPath, 'pdf');
+    const shell = {
+      openExternal: vi.fn(async (_url: string) => {}),
+      openPath: vi.fn(async (_path: string) => ''),
+    };
+    const postToRenderer = vi.fn((_message: unknown) => true);
+
+    const host = createDesktopPreviewHost({
+      shell,
+      postToRenderer,
+      forceExternal: true,
+    });
+
+    await host.openBuildDisplay({ absolutePath: texPath });
+    expect(postToRenderer).not.toHaveBeenCalled();
+    expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
   });
 });

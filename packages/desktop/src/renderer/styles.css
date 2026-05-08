@@ -378,6 +378,87 @@ wa-button.desktop-diff-close::part(base) {
 }
 
 /* =====================================================================
+   PDF preview overlay (wa-dialog) — audit item B, trajectory #17
+   --------------------------------------------------------------------- */
+
+wa-dialog.desktop-pdf-overlay {
+  --width: 100vw;
+  --height: 100vh;
+}
+
+wa-dialog.desktop-pdf-overlay::part(dialog) {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  margin: 0;
+  border-radius: 0;
+}
+
+wa-dialog.desktop-pdf-overlay::part(body) {
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+wa-dialog.desktop-pdf-overlay .desktop-pdf-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--wa-color-surface-default);
+}
+
+wa-dialog.desktop-pdf-overlay .desktop-pdf-header {
+  padding: var(--wa-space-m) var(--wa-space-l);
+  border-bottom: var(--wa-border-style-default, solid)
+    var(--wa-border-width-default, 1px) var(--wa-color-neutral-fill-quiet);
+  background: var(--wa-color-surface-raised);
+}
+
+wa-dialog.desktop-pdf-overlay .desktop-pdf-title {
+  margin: 0;
+  font-size: var(--wa-font-size-l);
+  font-weight: var(--wa-font-weight-semibold);
+  color: var(--wa-color-text-normal);
+}
+
+wa-dialog.desktop-pdf-overlay .desktop-pdf-subtitle {
+  margin: var(--wa-space-2xs) 0 0;
+  font-size: var(--wa-font-size-s);
+  color: var(--wa-color-text-quiet);
+  font-family: var(--wa-font-family-code, monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+wa-dialog.desktop-pdf-overlay .desktop-pdf-frame {
+  flex: 1;
+  min-height: 0;
+  display: block;
+  width: 100%;
+  border: 0;
+  background: var(--wa-color-surface-default);
+}
+
+wa-button.desktop-pdf-close {
+  position: absolute;
+  top: var(--wa-space-s);
+  right: var(--wa-space-s);
+  z-index: 10;
+}
+
+wa-button.desktop-pdf-close::part(base) {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--wa-border-radius-m, 3px);
+  background: var(--wa-color-surface-raised);
+  color: var(--wa-color-text-normal);
+}
+
+/* =====================================================================
    Logs drawer (wa-drawer)
    --------------------------------------------------------------------- */
 
