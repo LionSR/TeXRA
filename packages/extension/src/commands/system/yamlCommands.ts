@@ -169,14 +169,6 @@ export async function handleParseYaml(): Promise<void> {
 
 export function registerYamlCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand(
-      yamlCommands.testAgentLoading,
-      handleTestAgentLoading,
-    ),
-    vscode.commands.registerCommand(
-      yamlCommands.loadSpecificAgent,
-      handleLoadSpecificAgent,
-    ),
     vscode.commands.registerCommand(yamlCommands.parseYaml, handleParseYaml),
   );
 }
