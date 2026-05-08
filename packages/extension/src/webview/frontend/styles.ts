@@ -29,8 +29,8 @@ export const mainViewStyles: CSSResult = css`
   .view-header {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
-    padding: 0 var(--spacing-tiny) var(--spacing-small);
+    gap: var(--wa-space-2xs);
+    padding: 0 var(--wa-space-3xs) var(--wa-space-2xs);
     flex-shrink: 0;
   }
 
@@ -54,8 +54,8 @@ export const mainViewStyles: CSSResult = css`
     border: var(--border-thin) solid
       var(--texra-widget-border, var(--dropdown-border));
     border-radius: var(--border-radius);
-    padding: var(--spacing-medium);
-    margin-bottom: var(--spacing-large);
+    padding: var(--wa-space-xs);
+    margin-bottom: var(--wa-space-s);
     overflow: visible;
   }
 

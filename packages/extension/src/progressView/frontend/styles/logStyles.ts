@@ -59,7 +59,7 @@ export const layoutStyles = css`
   .log-placeholder {
     text-align: center;
     color: var(--color-text-secondary);
-    padding: var(--spacing-large) var(--spacing-medium);
+    padding: var(--wa-space-s) var(--wa-space-xs);
   }
 
   .log-placeholder a {

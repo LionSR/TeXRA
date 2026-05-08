@@ -36,8 +36,8 @@ export class ToolCard extends LitElement {
       .tool-card {
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius);
-        padding: var(--spacing-medium) var(--spacing-large);
-        margin-bottom: var(--spacing-medium);
+        padding: var(--wa-space-xs) var(--wa-space-s);
+        margin-bottom: var(--wa-space-xs);
         background: var(
           --texra-editor-background,
           var(--texra-sideBar-background)
@@ -54,15 +54,15 @@ export class ToolCard extends LitElement {
         align-items: center;
         justify-content: space-between;
         flex-wrap: wrap;
-        gap: var(--spacing-medium);
-        margin-bottom: var(--spacing-small);
+        gap: var(--wa-space-xs);
+        margin-bottom: var(--wa-space-2xs);
       }
 
       .tool-title-group {
         display: flex;
         align-items: center;
         flex-wrap: wrap;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         min-width: 0;
       }
 
@@ -80,15 +80,15 @@ export class ToolCard extends LitElement {
       .tool-description {
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
-        margin-bottom: var(--spacing-small);
+        margin-bottom: var(--wa-space-2xs);
         line-height: var(--line-height-normal);
       }
 
       .tool-ids {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--spacing-small);
-        margin-bottom: var(--spacing-small);
+        gap: var(--wa-space-2xs);
+        margin-bottom: var(--wa-space-2xs);
       }
 
       .tool-id-tag {
@@ -106,8 +106,8 @@ export class ToolCard extends LitElement {
       }
 
       .tool-guide {
-        margin-top: var(--spacing-small);
-        padding: var(--spacing-medium);
+        margin-top: var(--wa-space-2xs);
+        padding: var(--wa-space-xs);
         background: var(
           --texra-textCodeBlock-background,
           rgba(128, 128, 128, 0.08)
@@ -122,8 +122,8 @@ export class ToolCard extends LitElement {
       .tool-guide-actions {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--spacing-small);
-        margin-top: var(--spacing-small);
+        gap: var(--wa-space-2xs);
+        margin-top: var(--wa-space-2xs);
       }
 
       .tool-guide-actions wa-button::part(base) {
@@ -133,8 +133,8 @@ export class ToolCard extends LitElement {
       .tool-auth-note {
         display: inline-flex;
         align-items: center;
-        gap: var(--spacing-small);
-        padding: var(--border-thin) var(--spacing-small);
+        gap: var(--wa-space-2xs);
+        padding: var(--border-thin) var(--wa-space-2xs);
         font-size: var(--font-size-xs);
         border-radius: var(--border-radius);
         white-space: nowrap;
@@ -168,7 +168,7 @@ export class ToolCard extends LitElement {
       }
 
       .tool-config-note {
-        margin-top: var(--spacing-small);
+        margin-top: var(--wa-space-2xs);
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
         font-style: italic;

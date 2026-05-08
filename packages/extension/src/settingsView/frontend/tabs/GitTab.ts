@@ -43,17 +43,17 @@ export class GitTab extends LitElement {
       .git-container {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-medium);
+        gap: var(--wa-space-xs);
       }
 
       .setting-block {
-        padding: var(--spacing-medium);
+        padding: var(--wa-space-xs);
         background-color: var(--texra-editor-inactiveSelectionBackground);
         border-radius: var(--border-radius);
       }
 
       .setting-description {
-        margin: var(--spacing-small) 0 0 0;
+        margin: var(--wa-space-2xs) 0 0 0;
         font-size: var(--font-size-sm);
         color: var(--texra-descriptionForeground);
       }
@@ -61,8 +61,8 @@ export class GitTab extends LitElement {
       .input-row {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
-        margin-top: var(--spacing-small);
+        gap: var(--wa-space-2xs);
+        margin-top: var(--wa-space-2xs);
       }
 
       .input-row label {
@@ -82,8 +82,8 @@ export class GitTab extends LitElement {
       .token-row {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
-        margin-top: var(--spacing-small);
+        gap: var(--wa-space-2xs);
+        margin-top: var(--wa-space-2xs);
         flex-wrap: wrap;
       }
 
@@ -95,7 +95,7 @@ export class GitTab extends LitElement {
       .token-actions {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         flex-wrap: wrap;
       }
 
@@ -105,12 +105,12 @@ export class GitTab extends LitElement {
       }
 
       .instructions {
-        margin: var(--spacing-small) 0 0 0;
+        margin: var(--wa-space-2xs) 0 0 0;
         font-size: var(--font-size-sm);
         color: var(--texra-descriptionForeground);
       }
       .instructions ol {
-        margin: var(--spacing-tiny) 0 0 0;
+        margin: var(--wa-space-3xs) 0 0 0;
         padding-left: 1.25em;
       }
       .instructions li {
@@ -118,7 +118,7 @@ export class GitTab extends LitElement {
       }
       .instructions code {
         background: var(--texra-textBlockQuote-background);
-        padding: 0 var(--spacing-small);
+        padding: 0 var(--wa-space-2xs);
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
       }
@@ -126,18 +126,18 @@ export class GitTab extends LitElement {
       .subscriptions-list {
         list-style: none;
         padding: 0;
-        margin: var(--spacing-small) 0 0 0;
+        margin: var(--wa-space-2xs) 0 0 0;
       }
       .subscriptions-list li {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
         align-items: start;
-        gap: var(--spacing-small);
-        padding: var(--spacing-tiny) 0;
+        gap: var(--wa-space-2xs);
+        padding: var(--wa-space-3xs) 0;
       }
       .subscriptions-list code {
         background: var(--texra-textBlockQuote-background);
-        padding: var(--border-thin) var(--spacing-medium);
+        padding: var(--border-thin) var(--wa-space-xs);
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
       }
@@ -145,7 +145,7 @@ export class GitTab extends LitElement {
         min-width: 0;
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
       }
       .subscription-key {
         overflow-wrap: anywhere;
@@ -153,12 +153,12 @@ export class GitTab extends LitElement {
       .subscription-owners {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-tiny);
+        gap: var(--wa-space-3xs);
       }
       .subscription-owner-row {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         flex-wrap: wrap;
       }
       .subscription-owner-label,

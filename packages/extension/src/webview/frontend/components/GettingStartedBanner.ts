@@ -31,12 +31,12 @@ export class GettingStartedBanner extends LitElement {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
       }
 
       .getting-started-list {
-        margin: var(--spacing-tiny) 0 0 0;
-        padding-left: var(--spacing-large);
+        margin: var(--wa-space-3xs) 0 0 0;
+        padding-left: var(--wa-space-s);
         line-height: var(--line-height-relaxed);
       }
     `,

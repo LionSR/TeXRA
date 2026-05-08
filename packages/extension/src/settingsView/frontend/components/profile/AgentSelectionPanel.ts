@@ -84,7 +84,7 @@ export class AgentSelectionPanel extends LitElement {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: var(--spacing-small) var(--spacing-medium);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
         font-size: var(--font-size-xs);
         font-weight: var(--font-weight-semibold);
         color: var(--color-text-secondary);
@@ -99,7 +99,7 @@ export class AgentSelectionPanel extends LitElement {
 
       .agent-list-section-actions {
         display: flex;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         text-transform: none;
         letter-spacing: normal;
         font-weight: normal;
@@ -108,8 +108,8 @@ export class AgentSelectionPanel extends LitElement {
       .agent-list-item {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
-        padding: var(--spacing-small) var(--spacing-medium);
+        gap: var(--wa-space-2xs);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
         cursor: pointer;
         font-size: var(--font-size-sm);
         color: var(--texra-foreground);
@@ -162,7 +162,7 @@ export class AgentSelectionPanel extends LitElement {
 
       .agent-list-item-badges {
         display: flex;
-        gap: var(--spacing-tiny);
+        gap: var(--wa-space-3xs);
         font-size: var(--font-size-xs);
         opacity: var(--opacity-normal);
         flex-shrink: 0;
@@ -172,7 +172,7 @@ export class AgentSelectionPanel extends LitElement {
       .agent-detail-pane {
         flex: 1;
         overflow-y: auto;
-        padding: var(--spacing-large);
+        padding: var(--wa-space-s);
         min-width: 0;
       }
 
@@ -188,8 +188,8 @@ export class AgentSelectionPanel extends LitElement {
       .agent-detail-header {
         display: flex;
         align-items: center;
-        gap: var(--spacing-medium);
-        margin-bottom: var(--spacing-large);
+        gap: var(--wa-space-xs);
+        margin-bottom: var(--wa-space-s);
       }
 
       .agent-detail-name {
@@ -202,14 +202,14 @@ export class AgentSelectionPanel extends LitElement {
       .agent-detail-description {
         color: var(--texra-foreground);
         line-height: var(--line-height-relaxed);
-        margin-bottom: var(--spacing-large);
+        margin-bottom: var(--wa-space-s);
       }
 
       .agent-detail-meta {
         display: grid;
         grid-template-columns: auto 1fr;
-        gap: var(--spacing-small) var(--spacing-large);
-        margin-bottom: var(--spacing-large);
+        gap: var(--wa-space-2xs) var(--wa-space-s);
+        margin-bottom: var(--wa-space-s);
         font-size: var(--font-size-sm);
       }
 
@@ -226,7 +226,7 @@ export class AgentSelectionPanel extends LitElement {
       .agent-detail-tools {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
       }
 
       wa-tag.agent-tool-badge {
@@ -235,7 +235,7 @@ export class AgentSelectionPanel extends LitElement {
 
       .agent-detail-actions {
         display: flex;
-        gap: var(--spacing-medium);
+        gap: var(--wa-space-xs);
         flex-wrap: wrap;
       }
 
@@ -247,7 +247,7 @@ export class AgentSelectionPanel extends LitElement {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: var(--spacing-small) var(--spacing-medium);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
         border-top: var(--border-thin) solid var(--color-border);
@@ -284,7 +284,7 @@ export class AgentSelectionPanel extends LitElement {
         font-size: var(--font-size-xs);
         font-family: var(--texra-editor-font-family, monospace), monospace;
         color: var(--color-text-secondary);
-        margin-bottom: var(--spacing-large);
+        margin-bottom: var(--wa-space-s);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -306,8 +306,8 @@ export class AgentSelectionPanel extends LitElement {
       .agent-delete-confirm {
         display: flex;
         align-items: center;
-        gap: var(--spacing-medium);
-        padding: var(--spacing-small) var(--spacing-medium);
+        gap: var(--wa-space-xs);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
         background: var(
           --texra-inputValidation-errorBackground,
           rgba(255, 0, 0, 0.05)
@@ -324,7 +324,7 @@ export class AgentSelectionPanel extends LitElement {
 
       .agent-delete-confirm-actions {
         display: flex;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         flex-shrink: 0;
       }
     `,

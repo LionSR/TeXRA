@@ -53,40 +53,40 @@ export class MultiAgentTab extends LitElement {
       .multi-agent-container {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-medium);
+        gap: var(--wa-space-xs);
       }
 
       .setting-block {
-        padding: var(--spacing-medium);
+        padding: var(--wa-space-xs);
         background-color: var(--texra-editor-inactiveSelectionBackground);
         border-radius: var(--border-radius);
       }
 
       .setting-description {
-        margin: var(--spacing-small) 0 0 0;
+        margin: var(--wa-space-2xs) 0 0 0;
         font-size: var(--font-size-sm);
       }
 
       .multi-agent-reminder-steps {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-        gap: var(--spacing-small) var(--spacing-large);
-        margin-top: var(--spacing-tiny);
+        gap: var(--wa-space-2xs) var(--wa-space-s);
+        margin-top: var(--wa-space-3xs);
       }
 
       /* Team cards */
       .preset-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-        gap: var(--spacing-medium);
+        gap: var(--wa-space-xs);
       }
 
       .preset-card {
         position: relative;
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-small);
-        padding: var(--spacing-medium);
+        gap: var(--wa-space-2xs);
+        padding: var(--wa-space-xs);
         background-color: var(--texra-editor-inactiveSelectionBackground);
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius);
@@ -131,7 +131,7 @@ export class MultiAgentTab extends LitElement {
       .preset-card-header {
         display: flex;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
       }
 
       .preset-card-icon {
@@ -161,15 +161,15 @@ export class MultiAgentTab extends LitElement {
       .preset-card-agents {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--spacing-small);
-        margin-top: var(--spacing-tiny);
+        gap: var(--wa-space-2xs);
+        margin-top: var(--wa-space-3xs);
       }
 
       .preset-card-orchestrators {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--spacing-small);
-        margin-top: var(--spacing-tiny);
+        gap: var(--wa-space-2xs);
+        margin-top: var(--wa-space-3xs);
       }
 
       wa-tag.preset-agent-badge--orchestrator {
@@ -183,12 +183,12 @@ export class MultiAgentTab extends LitElement {
 
       .preset-delete-btn {
         position: absolute;
-        top: var(--spacing-small);
-        right: var(--spacing-small);
+        top: var(--wa-space-2xs);
+        right: var(--wa-space-2xs);
         display: none;
         align-items: center;
         justify-content: center;
-        padding: var(--spacing-tiny);
+        padding: var(--wa-space-3xs);
         color: var(--color-text-secondary);
         background: none;
         border: none;
@@ -215,8 +215,8 @@ export class MultiAgentTab extends LitElement {
       .reliability-row {
         display: flex;
         align-items: center;
-        gap: var(--spacing-medium);
-        padding: var(--spacing-small) 0;
+        gap: var(--wa-space-xs);
+        padding: var(--wa-space-2xs) 0;
       }
 
       .reliability-row label {
@@ -238,7 +238,7 @@ export class MultiAgentTab extends LitElement {
         color: var(--color-text-secondary);
         font-size: var(--font-size-xs);
         margin: 0;
-        padding-left: calc(140px + var(--spacing-medium));
+        padding-left: calc(140px + var(--wa-space-xs));
       }
     `,
   ];
