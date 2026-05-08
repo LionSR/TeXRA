@@ -142,6 +142,21 @@ export const pendingApprovalIds$ = new Signal.Computed(() => {
   return ids;
 });
 
+/**
+ * Reset every writable signal to its initial value. Called from
+ * `ProgressApp`'s constructor so a remount in the same JS context (tests,
+ * hot reload, future multi-instance hosts) gets a clean slate — without
+ * this, `placement` / `narrowLayout` / `permissions$` and the
+ * `_prevApprovalIds` memo Set would carry stale values across mounts.
+ */
+export function resetProgressState(): void {
+  appState.set(createInitialState());
+  placement.set('sidebar');
+  narrowLayout.set(false);
+  permissions$.set([]);
+  _prevApprovalIds = new Set();
+}
+
 // ---------------------------------------------------------------------------
 // Fine-grained active-stream selectors.
 // These return stable Map entry values (via Mutative structural sharing).
