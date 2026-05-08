@@ -220,6 +220,23 @@ function createWindow(options: {
     opener: previewHost,
     diff: createDesktopDiffHost({
       openPath: previewHost.openPath,
+      // Audit item C / trajectory #18: prefer the in-app overlay
+      // (<texra-diff-view> inside a wa-dialog). The external-editor
+      // path is preserved as a fallback when `postToRenderer` is
+      // unavailable or `forceExternal` is set.
+      //
+      // Return `false` when the IPC bridge is not yet wired (startup
+      // race) or the BrowserWindow has been destroyed — the host then
+      // falls back to the external-editor flow so diffs never silently
+      // disappear. Bot review (#3815): the previous arrow form
+      // silently no-op'd on `ipcRef.current === undefined`.
+      postToRenderer: (message) => {
+        const ipc = ipcRef.current;
+        if (!ipc) return false;
+        if (window.isDestroyed()) return false;
+        ipc.postToRenderer(message);
+        return true;
+      },
     }),
     confirmAcceptFile: async (message) => {
       const result = await dialog.showMessageBox(window, {
