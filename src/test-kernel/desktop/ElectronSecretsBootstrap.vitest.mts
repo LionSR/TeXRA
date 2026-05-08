@@ -70,7 +70,7 @@ describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
     const { ElectronSecrets } = await loadElectronSecrets();
     const warnings: string[] = [];
     const fakeStore = {
-      get: <T>(_key: string): T | undefined =>
+      get: <T,>(_key: string): T | undefined =>
         ({
           encrypted: true,
           value: Buffer.from('encrypted:value').toString('base64'),
@@ -100,7 +100,7 @@ describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
     const { ElectronSecrets } = await loadElectronSecrets();
     const warnings: string[] = [];
     const fakeStore = {
-      get: <T>(_key: string): T | undefined =>
+      get: <T,>(_key: string): T | undefined =>
         ({
           encrypted: true,
           value: Buffer.from('encrypted:value').toString('base64'),
