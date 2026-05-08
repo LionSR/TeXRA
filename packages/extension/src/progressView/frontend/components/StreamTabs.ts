@@ -251,7 +251,7 @@ export class StreamTab extends LitElement {
         min-width: var(--height-control);
         height: var(--height-control);
         margin: 0;
-        color: var(--texra-icon-foreground, var(--wa-color-text-normal));
+        color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
         opacity: 0;
         transition:
           opacity 120ms ease,
@@ -357,7 +357,7 @@ export class StreamTab extends LitElement {
         border-radius: var(--border-radius-small);
         background-color: color-mix(
           in srgb,
-          var(--texra-icon-foreground, var(--wa-color-text-normal)) 10%,
+          var(--wa-color-text-quiet, var(--wa-color-text-normal)) 10%,
           transparent
         );
       }
@@ -383,7 +383,7 @@ export class StreamTab extends LitElement {
         border: none;
         background: none;
         cursor: pointer;
-        color: var(--texra-icon-foreground, var(--wa-color-text-normal));
+        color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
         opacity: 0.6;
         padding: 0;
       }

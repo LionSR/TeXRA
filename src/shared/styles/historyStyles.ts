@@ -118,7 +118,7 @@ export const historyListStyles: CSSResult = css`
 
   .config-key {
     font-weight: var(--font-weight-medium);
-    color: var(--texra-editorInfo-foreground);
+    color: var(--wa-color-brand-on-quiet);
     min-width: calc(
       var(--width-button-min) + var(--wa-space-l) + var(--wa-space-l)
     );

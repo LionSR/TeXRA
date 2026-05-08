@@ -151,7 +151,7 @@ export class ToolsTab extends LitElement {
 
       .tools-health-ring__track {
         fill: none;
-        stroke: var(--texra-editorWidget-border, rgba(128, 128, 128, 0.25));
+        stroke: var(--wa-color-surface-border, rgba(128, 128, 128, 0.25));
         stroke-width: 4;
       }
 
@@ -259,7 +259,7 @@ export class ToolsTab extends LitElement {
         margin-bottom: var(--wa-space-2xs);
         border-radius: var(--border-radius);
         background: var(
-          --texra-textCodeBlock-background,
+          --wa-color-surface-lowered,
           rgba(128, 128, 128, 0.08)
         );
       }

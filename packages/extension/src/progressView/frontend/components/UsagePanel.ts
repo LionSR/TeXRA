@@ -44,7 +44,7 @@ export class UsagePanel extends LitElement {
 
       .usage-summary-footer {
         border-top: var(--border-thin) solid var(--color-border);
-        background-color: var(--texra-sideBarSectionHeader-background);
+        background-color: var(--wa-color-surface-lowered);
         padding: var(--wa-space-2xs) var(--wa-space-xs);
         display: flex;
         justify-content: space-between;

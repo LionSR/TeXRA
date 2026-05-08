@@ -309,8 +309,8 @@ export class AgentSelectionPanel extends LitElement {
       }
 
       .agent-action-btn--danger::part(base) {
-        color: var(--texra-errorForeground, #f44);
-        border-color: var(--texra-errorForeground, #f44);
+        color: var(--wa-color-danger-on-quiet, #f44);
+        border-color: var(--wa-color-danger-on-quiet, #f44);
       }
 
       .agent-action-btn--danger:hover::part(base) {
@@ -318,7 +318,7 @@ export class AgentSelectionPanel extends LitElement {
           --texra-inputValidation-errorBackground,
           rgba(255, 0, 0, 0.1)
         );
-        border-color: var(--texra-errorForeground, #f44);
+        border-color: var(--wa-color-danger-on-quiet, #f44);
       }
 
       .agent-delete-confirm {
@@ -330,7 +330,7 @@ export class AgentSelectionPanel extends LitElement {
           --texra-inputValidation-errorBackground,
           rgba(255, 0, 0, 0.05)
         );
-        border: var(--border-thin) solid var(--texra-errorForeground, #f44);
+        border: var(--border-thin) solid var(--wa-color-danger-on-quiet, #f44);
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
         color: var(--wa-color-text-normal);

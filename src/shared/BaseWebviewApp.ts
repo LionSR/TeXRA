@@ -65,10 +65,24 @@ export abstract class BaseWebviewApp<TMessage = any> extends LitElement {
 
   /**
    * Handle theme updates from the extension host.
+   *
+   * Mirrors the theme kind onto `<html>` as `wa-light` / `wa-dark` so Web
+   * Awesome's color-scheme classes activate (per WA's native theming model).
+   * Also keeps the legacy `body.<theme>` class for downstream rules.
    */
   protected onThemeChange(theme: string): void {
     this.theme = theme;
     document.body.className = theme;
+    const root = document.documentElement;
+    root.classList.remove('wa-light', 'wa-dark');
+    // 'high-contrast' renders against the active OS color-scheme — pick dark
+    // unless the body class explicitly signals light HC.
+    const wantsDark =
+      theme === 'dark' ||
+      theme === 'high-contrast' ||
+      document.body.classList.contains('vscode-dark') ||
+      document.body.classList.contains('vscode-high-contrast');
+    root.classList.add(wantsDark ? 'wa-dark' : 'wa-light');
   }
 
   /**

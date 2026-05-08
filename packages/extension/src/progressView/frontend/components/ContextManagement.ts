@@ -98,7 +98,7 @@ export class ContextManagement extends LitElement {
         word-break: break-word;
         border: var(--border-thin) solid var(--wa-color-surface-border);
         border-radius: var(--border-radius-small);
-        background: var(--texra-editorWidget-background);
+        background: var(--wa-color-surface-raised);
       }
     `,
   ];
