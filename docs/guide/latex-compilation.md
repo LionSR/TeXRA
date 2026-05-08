@@ -31,7 +31,7 @@ To keep your project directory clean, it's highly recommended to configure LaTeX
 
 You can configure this setting via:
 
-1.  Open VS Code Settings (<i class="codicon codicon-gear"></i> icon or `Ctrl+,`).
+1.  Open VS Code Settings (<wa-icon library="texra" name="gear"></wa-icon> icon or `Ctrl+,`).
 2.  Search for `Latex-workshop: Latex: Out Dir`.
 3.  Set the value to `./build` or `%DIR%/build`.
 
