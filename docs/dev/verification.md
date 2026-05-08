@@ -30,15 +30,15 @@ cd packages/desktop && pnpm exec playwright test
 
 ## Surfaces to confirm by hand
 
-| Surface | Extension (VS Code) | Desktop (Electron) |
-| --- | --- | --- |
-| Launcher (main view) | Open the TeXRA sidebar; the launcher renders with agent + model pickers. | `pnpm --filter @texra/desktop dev` and confirm the launcher mounts on the `main` route. |
-| Progress board | Run a tiny agent; the Progress view shows the stream as it ticks. | Run a tiny agent; switch to Progress (chrome icon button) and confirm the same stream appears. |
-| Settings tabs | Open `TeXRA: Open Settings`; cycle tabs (History, Memory, Models, Agents, Multi-Agent, LaTeX, Tools). | Click the Settings chrome icon; cycle the same tabs. |
-| Onboarding / walkthrough | First install: VS Code's native walkthrough opens. | First launch: the in-renderer first-run dialog opens; "Got it" persists dismissal. |
-| Command palette | VS Code's native palette (`Cmd/Ctrl+Shift+P`) lists `TeXRA: …` commands. | The renderer's palette (`Cmd/Ctrl+K` or chrome "Commands" button) lists the same actions. |
-| Theme switching | Toggle VS Code light/dark/HC; the webviews follow within ~200ms. | Toggle the OS theme; the renderer follows within ~200ms (`nativeTheme` 'updated' → `applyHostBodyTheme()`). |
-| Workspace explorer | n/a — VS Code's native explorer drives selection. | Confirm the desktop explorer lists files and supports double-click → "Use as input/reference/...". |
+| Surface                  | Extension (VS Code)                                                                                   | Desktop (Electron)                                                                                          |
+| ------------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Launcher (main view)     | Open the TeXRA sidebar; the launcher renders with agent + model pickers.                              | `pnpm --filter @texra/desktop dev` and confirm the launcher mounts on the `main` route.                     |
+| Progress board           | Run a tiny agent; the Progress view shows the stream as it ticks.                                     | Run a tiny agent; switch to Progress (chrome icon button) and confirm the same stream appears.              |
+| Settings tabs            | Open `TeXRA: Open Settings`; cycle tabs (History, Memory, Models, Agents, Multi-Agent, LaTeX, Tools). | Click the Settings chrome icon; cycle the same tabs.                                                        |
+| Onboarding / walkthrough | First install: VS Code's native walkthrough opens.                                                    | First launch: the in-renderer first-run dialog opens; "Got it" persists dismissal.                          |
+| Command palette          | VS Code's native palette (`Cmd/Ctrl+Shift+P`) lists `TeXRA: …` commands.                              | The renderer's palette (`Cmd/Ctrl+K` or chrome "Commands" button) lists the same actions.                   |
+| Theme switching          | Toggle VS Code light/dark/HC; the webviews follow within ~200ms.                                      | Toggle the OS theme; the renderer follows within ~200ms (`nativeTheme` 'updated' → `applyHostBodyTheme()`). |
+| Workspace explorer       | n/a — VS Code's native explorer drives selection.                                                     | Confirm the desktop explorer lists files and supports double-click → "Use as input/reference/...".          |
 
 ## Files that should never diverge between hosts
 

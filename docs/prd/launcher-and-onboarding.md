@@ -1613,35 +1613,35 @@ current workspace; it does not override an active workspace selection.
 
 ## Implementation surface
 
-| Concern                                                    | File                                                                                                                                          |
-| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agentRole` field on agent YAMLs                           | `resources/agents/*.yaml`, `resources/tool_use_agents/*.yaml`, `reference-agents/**/*.yaml`                                                   |
-| `agentRole` derivation + `AgentEntry.ref()`                | `src/agent/index/agentRegistry.ts`                                                                                                            |
-| Team schema, built-in records, migration                   | `src/shared/schemas/agentPresets.ts`                                                                                                          |
+| Concern                                                    | File                                                                                                                                                             |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agentRole` field on agent YAMLs                           | `resources/agents/*.yaml`, `resources/tool_use_agents/*.yaml`, `reference-agents/**/*.yaml`                                                                      |
+| `agentRole` derivation + `AgentEntry.ref()`                | `src/agent/index/agentRegistry.ts`                                                                                                                               |
+| Team schema, built-in records, migration                   | `src/shared/schemas/agentPresets.ts`                                                                                                                             |
 | Custom team CRUD handlers                                  | `packages/extension/src/settingsView/handlers/agentHandlers.ts`                                                                                                  |
 | Multi-Agent tab grid + team editor                         | `packages/extension/src/settingsView/frontend/tabs/MultiAgentTab.ts`                                                                                             |
 | Agents tab role badges, "Used by teams", setup-locked rows | `packages/extension/src/settingsView/frontend/tabs/AgentsTab.ts`, `AgentSelectionPanel.ts`                                                                       |
 | Cross-tab vocabulary, save model, action placement         | every `packages/extension/src/settingsView/frontend/tabs/*.ts` (one-line text changes per tab)                                                                   |
 | `<settings-empty-state>`, `<settings-loading-state>`       | `packages/extension/src/settingsView/frontend/components/` (new)                                                                                                 |
-| Confirmation modals for destructive actions                | `MultiAgentTab.ts`, `AgentsTab.ts`, `MemoryTab.ts`, `GitTab.ts`, `LaTeXTab.ts`                                                                |
+| Confirmation modals for destructive actions                | `MultiAgentTab.ts`, `AgentsTab.ts`, `MemoryTab.ts`, `GitTab.ts`, `LaTeXTab.ts`                                                                                   |
 | Reset-to-default revert icon                               | `packages/extension/src/settingsView/frontend/components/RevertButton.ts` (new), adopted across tabs                                                             |
 | `SET_TAB` deep-link by id + sub-section                    | `packages/extension/src/settingsView/frontend/SettingsApp.ts`, `src/shared/schemas/settingsViewMessages.ts`                                                      |
 | Codex settings move from Tools to Models                   | `packages/extension/src/settingsView/frontend/tabs/ToolsTab.ts`, `ModelsTab.ts`                                                                                  |
 | History team filter                                        | `packages/extension/src/settingsView/frontend/tabs/HistoryTab.ts`, `HistoryList.ts`                                                                              |
 | Shared section header, card, badge, mono-path styles       | `packages/extension/src/settingsView/frontend/styles.ts`, `cardStyles.ts` (new), `monoStyles.ts` (new), `iconButtonStyles.ts` (new), `badgeStyles.ts` (extended) |
-| Imperative→declarative refactors                           | `LaTeXTab.ts:472–481`, `HistoryList.ts:135, 191`, `AgentSelectionPanel.ts:468–472`, `SearchBar.ts:24–42`, `TaskGroupList.ts:623`              |
-| Batched workspace updates                                  | `src/common/state/WorkspaceStateManager.ts` (`updateMany([[k, v], ...])`)                                                                     |
+| Imperative→declarative refactors                           | `LaTeXTab.ts:472–481`, `HistoryList.ts:135, 191`, `AgentSelectionPanel.ts:468–472`, `SearchBar.ts:24–42`, `TaskGroupList.ts:623`                                 |
+| Batched workspace updates                                  | `src/common/state/WorkspaceStateManager.ts` (`updateMany([[k, v], ...])`)                                                                                        |
 | Launcher team picker + agent grouped picker                | `packages/extension/src/webview/frontend/components/InstructionPanel.ts`                                                                                         |
-| Grouped option rendering (team-aware)                      | `src/shared/utils/selectTemplates.ts`                                                                                                         |
+| Grouped option rendering (team-aware)                      | `src/shared/utils/selectTemplates.ts`                                                                                                                            |
 | Launcher persisted state + session override                | `src/shared/schemas/mainView.ts`, `packages/extension/src/webview/frontend/MainApp.ts`                                                                           |
-| First-run team selection + welcome banner                  | `packages/extension/src/webview/frontend/MainApp.ts`, `packages/extension/src/commands/setup/setupAssistantCommand.ts`                                                              |
-| Setup agent system prompt — phases 8 and 9, intent table   | `resources/tool_use_agents/setup.yaml`                                                                                                        |
-| `update_config` allowlist gains `selectedTeamId`           | `src/tools/setup/UpdateConfigTool.ts` (or current update_config implementation)                                                               |
-| Walkthrough rewrite — collapse step 6 into 7, retitle      | `package.json` `contributes.walkthroughs.texra.gettingStarted`, `resources/walkthroughs/getting-started.md`                                   |
+| First-run team selection + welcome banner                  | `packages/extension/src/webview/frontend/MainApp.ts`, `packages/extension/src/commands/setup/setupAssistantCommand.ts`                                           |
+| Setup agent system prompt — phases 8 and 9, intent table   | `resources/tool_use_agents/setup.yaml`                                                                                                                           |
+| `update_config` allowlist gains `selectedTeamId`           | `src/tools/setup/UpdateConfigTool.ts` (or current update_config implementation)                                                                                  |
+| Walkthrough rewrite — collapse step 6 into 7, retitle      | `package.json` `contributes.walkthroughs.texra.gettingStarted`, `resources/walkthroughs/getting-started.md`                                                      |
 | Status-bar pill third state ("Pick your team")             | `packages/extension/src/extension.ts:108–112`                                                                                                                    |
 | Re-run-setup banner after upgrade                          | `packages/extension/src/webview/frontend/MainApp.ts` (gated on workspace-state version key)                                                                      |
 | Credentials-removed inline banner                          | `packages/extension/src/webview/frontend/MainApp.ts`                                                                                                             |
-| Effective-roster dispatch payload to lead                  | `src/agent/runtime/` (lead receives `effectiveRoster: AgentRef[]` in its delegate context)                                                    |
+| Effective-roster dispatch payload to lead                  | `src/agent/runtime/` (lead receives `effectiveRoster: AgentRef[]` in its delegate context)                                                                       |
 
 ### Implementation order
 

@@ -51,10 +51,7 @@ export const categoryBadgeStyles: CSSResult = css`
 
 export const searchHighlightStyles: CSSResult = css`
   mark {
-    background-color: var(
-      --wa-color-editor-find-match-highlight,
-      #ffef0b80
-    );
+    background-color: var(--wa-color-editor-find-match-highlight, #ffef0b80);
     color: var(--wa-color-editor-find-match-highlight-fg, inherit);
     padding: 0;
     border-radius: var(--border-radius-small);

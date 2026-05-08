@@ -119,7 +119,9 @@ test('first launch shows a usable launcher chrome', async () => {
   // The main view itself either renders <main-app> or the no-workspace empty
   // state — both are valid first-launch outcomes. The audit doc tracks which
   // one each user actually hits.
-  const mainSection = launched.page.locator('.desktop-route[data-route="main"]');
+  const mainSection = launched.page.locator(
+    '.desktop-route[data-route="main"]',
+  );
   await expect(mainSection).toBeVisible();
 });
 
@@ -201,7 +203,9 @@ test('logs route renders the desktop log viewer', async () => {
   const header = launched.page.locator('.desktop-log-viewer-header');
   await expect(header).toBeVisible();
   // Header has Refresh / Copy / Export / Open Folder buttons.
-  const actions = launched.page.locator('.desktop-log-viewer-actions wa-button');
+  const actions = launched.page.locator(
+    '.desktop-log-viewer-actions wa-button',
+  );
   await expect(actions).toHaveCount(4);
 });
 
@@ -301,11 +305,13 @@ test('desktop:showDiff opens an in-app diff dialog', async () => {
   const diffViewProps = await launched.page.evaluate(() => {
     const view = document.querySelector(
       'wa-dialog.desktop-diff-dialog texra-diff-view',
-    ) as (HTMLElement & {
-      originalText?: string;
-      proposedText?: string;
-      language?: string;
-    }) | null;
+    ) as
+      | (HTMLElement & {
+          originalText?: string;
+          proposedText?: string;
+          language?: string;
+        })
+      | null;
     if (!view) return null;
     return {
       original: view.originalText,

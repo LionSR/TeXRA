@@ -457,7 +457,9 @@ const commandPalette = bootstrapFailed
     });
 if (commandPalette) appRoot.append(commandPalette.element);
 
-const diffDialog = bootstrapFailed ? undefined : createDesktopDiffDialog(document);
+const diffDialog = bootstrapFailed
+  ? undefined
+  : createDesktopDiffDialog(document);
 if (diffDialog) appRoot.append(diffDialog.element);
 
 function openCommandPalette(): void {
