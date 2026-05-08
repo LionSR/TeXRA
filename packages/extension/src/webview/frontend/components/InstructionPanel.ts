@@ -14,6 +14,7 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
 import { customElement, property, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
+import { keyed } from 'lit/directives/keyed.js';
 import { styleMap } from 'lit/directives/style-map.js';
 import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 import '@awesome.me/webawesome/dist/components/radio/radio.js';
@@ -167,6 +168,16 @@ export class InstructionPanel extends LitElement {
         color: var(--texra-descriptionForeground);
         font-size: var(--font-size-sm);
         line-height: var(--line-height-relaxed);
+        animation: session-hint-fade 150ms ease;
+      }
+
+      @keyframes session-hint-fade {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
       }
 
       .session-hint-lede {
@@ -301,12 +312,33 @@ export class InstructionPanel extends LitElement {
         max-width: var(--agent-model-listbox-max-width);
       }
 
-      .agent-select--hidden {
-        display: none;
+      /*
+       * Cross-fade between the workflow agent select and the tool-use agent
+       * select when the session toggles. Both selects stay in DOM; the
+       * inactive one collapses to zero height and removes itself from the
+       * tab/click order via visibility:hidden + tabindex/aria-hidden in the
+       * template. visibility transitions on a delay so it only flips once
+       * the opacity/height fade has finished.
+       */
+      .agent-select {
+        opacity: 0;
+        visibility: hidden;
+        max-height: 0;
+        overflow: hidden;
+        transition:
+          opacity 200ms ease,
+          max-height 200ms ease,
+          visibility 0s linear 200ms;
       }
 
       .agent-select--active {
-        display: block;
+        opacity: 1;
+        visibility: visible;
+        max-height: var(--height-large, 200px);
+        transition:
+          opacity 200ms ease,
+          max-height 200ms ease,
+          visibility 0s linear 0s;
       }
 
       /* Dropdowns in footer open upward */
@@ -317,16 +349,38 @@ export class InstructionPanel extends LitElement {
 
       .recording {
         color: var(--texra-errorForeground);
-        animation: pulse 1s infinite;
+        animation: pulse-record 1.2s ease-in-out infinite;
+        transform-origin: center;
       }
 
-      @keyframes pulse {
+      /*
+       * Reserve a fixed slot for the polish spinner so the toolbar layout
+       * doesn't jump when isPolishing toggles. Width matches the wa-spinner
+       * font-size (16px) used inside the slot.
+       */
+      .polish-spinner-slot {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        opacity: 0;
+        transition: opacity 150ms ease;
+      }
+
+      .polish-spinner-slot[aria-hidden='false'] {
+        opacity: 1;
+      }
+
+      @keyframes pulse-record {
         0%,
         100% {
           opacity: 1;
+          transform: scale(1);
         }
         50% {
           opacity: var(--opacity-disabled);
+          transform: scale(1.05);
         }
       }
     `,
@@ -357,28 +411,38 @@ export class InstructionPanel extends LitElement {
     return options.find((o) => o.value === selectedValue)?.hint ?? '';
   }
 
-  private renderSessionHint(
-    session: SessionContextValue,
-  ): TemplateResult | typeof nothing {
+  private renderSessionHint(session: SessionContextValue): unknown {
     if (!this.showSessionHint) return nothing;
 
-    const copy = SESSION_HINT_COPY[resolveSessionHintKey(session)];
-    return html`
-      <div class="session-hint" role="note" aria-label=${copy.ariaLabel}>
-        <span class="session-hint-lede">${copy.lede}</span>
-        <span class="session-hint-body">
-          ${copy.body}
-          <span class="session-hint-time">${copy.time}</span>
-        </span>
-        ${renderIconActionButton({
-          icon: 'close',
-          label: 'Dismiss this reminder',
-          title: 'Dismiss this reminder',
-          className: 'session-hint-dismiss',
-          onClick: this.handleDismissSessionHint,
-        })}
-      </div>
-    `;
+    const hintKey = resolveSessionHintKey(session);
+    const copy = SESSION_HINT_COPY[hintKey];
+    // `keyed` forces the wrapping div to be re-created when the hint key
+    // changes, which restarts the `session-hint-fade` CSS animation defined
+    // in the host stylesheet so copy swaps cross-fade instead of jump-cutting.
+    return keyed(
+      hintKey,
+      html`
+        <div
+          class="session-hint"
+          role="note"
+          data-hint-key=${hintKey}
+          aria-label=${copy.ariaLabel}
+        >
+          <span class="session-hint-lede">${copy.lede}</span>
+          <span class="session-hint-body">
+            ${copy.body}
+            <span class="session-hint-time">${copy.time}</span>
+          </span>
+          ${renderIconActionButton({
+            icon: 'close',
+            label: 'Dismiss this reminder',
+            title: 'Dismiss this reminder',
+            className: 'session-hint-dismiss',
+            onClick: this.handleDismissSessionHint,
+          })}
+        </div>
+      `,
+    );
   }
 
   private handleDismissSessionHint(): void {
@@ -542,16 +606,21 @@ export class InstructionPanel extends LitElement {
               disabled: session.isPolishing,
               action: 'polish',
             })}
-            ${session.isPolishing
-              ? html`
-                  <wa-spinner
-                    id="polishProgressContainer"
-                    style=${styleMap({
-                      fontSize: '16px',
-                    })}
-                  ></wa-spinner>
-                `
-              : nothing}
+            <span
+              class="polish-spinner-slot"
+              aria-hidden=${session.isPolishing ? 'false' : 'true'}
+            >
+              ${session.isPolishing
+                ? html`
+                    <wa-spinner
+                      id="polishProgressContainer"
+                      style=${styleMap({
+                        fontSize: '16px',
+                      })}
+                    ></wa-spinner>
+                  `
+                : nothing}
+            </span>
             ${renderIconActionButton({
               id: 'recordInstructionButton',
               icon: session.isRecording ? 'stop-circle' : 'mic',
@@ -600,8 +669,6 @@ export class InstructionPanel extends LitElement {
                     id="workflowAgent"
                     class=${classMap({
                       'agent-select': true,
-                      'agent-select--hidden':
-                        session.sessionType !== SESSION_TYPES.WORKFLOW,
                       'agent-select--active':
                         session.sessionType === SESSION_TYPES.WORKFLOW,
                     })}
@@ -631,8 +698,6 @@ export class InstructionPanel extends LitElement {
                     id="toolUseAgent"
                     class=${classMap({
                       'agent-select': true,
-                      'agent-select--hidden':
-                        session.sessionType !== SESSION_TYPES.TOOL_USE,
                       'agent-select--active':
                         session.sessionType === SESSION_TYPES.TOOL_USE,
                     })}

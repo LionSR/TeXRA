@@ -1,7 +1,7 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { LitElement, html, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -19,53 +19,61 @@ export class ApiKeyBanner extends LitElement {
     visible: false,
   };
 
+  override updated(changed: PropertyValues<this>): void {
+    if (changed.has('state')) {
+      const visible = this.state.visible === true;
+      this.dataset.visible = visible ? 'true' : 'false';
+      this.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    }
+  }
+
   private handleAction(action: 'set' | 'guide'): void {
     const provider = this.state.provider ?? '';
     this.dispatchEvent(MainViewEvents.apiKeyAction({ action, provider }));
   }
 
-  override render(): TemplateResult | typeof nothing {
-    if (!this.state.visible) return nothing;
-
+  override render(): TemplateResult {
     const provider = this.state.provider ?? '';
     const providerLabel = provider ? capitalize(provider) : '';
 
     return html`
-      <wa-callout id="apiKeyBanner" variant="warning">
-        ${waIcon('triangle-exclamation', { slot: 'icon' })}
-        <div class="banner-row">
-          <span>
-            ${provider
-              ? html`<strong>${providerLabel}</strong> API key missing.`
-              : 'TeXRA requires an API key to run.'}
-          </span>
-          <div class="actions">
-            <wa-button
-              id="apiKeyBannerButton"
-              appearance="plain"
-              size="small"
-              @click=${() => this.handleAction('set')}
-            >
-              ${waIcon('key', { slot: 'start' })}
-              ${provider ? 'Set Key' : 'Set API Key'}
-            </wa-button>
-            <wa-button
-              id="apiKeyGuideButton"
-              appearance="plain"
-              size="small"
-              @click=${() => this.handleAction('guide')}
-            >
-              ${waIcon('book', { slot: 'start' })}
-              ${provider ? 'Get Key' : 'API Key Guide'}
-            </wa-button>
+      <div class="banner-frame">
+        <wa-callout id="apiKeyBanner" variant="warning">
+          ${waIcon('triangle-exclamation', { slot: 'icon' })}
+          <div class="banner-row">
+            <span>
+              ${provider
+                ? html`<strong>${providerLabel}</strong> API key missing.`
+                : 'TeXRA requires an API key to run.'}
+            </span>
+            <div class="actions">
+              <wa-button
+                id="apiKeyBannerButton"
+                appearance="plain"
+                size="small"
+                @click=${() => this.handleAction('set')}
+              >
+                ${waIcon('key', { slot: 'start' })}
+                ${provider ? 'Set Key' : 'Set API Key'}
+              </wa-button>
+              <wa-button
+                id="apiKeyGuideButton"
+                appearance="plain"
+                size="small"
+                @click=${() => this.handleAction('guide')}
+              >
+                ${waIcon('book', { slot: 'start' })}
+                ${provider ? 'Get Key' : 'API Key Guide'}
+              </wa-button>
+            </div>
+            <span class="hint">
+              Chat subscriptions (ChatGPT Plus, Claude Pro, etc.) do not include
+              API access. You need a separate API key from the provider's
+              developer platform.
+            </span>
           </div>
-          <span class="hint">
-            Chat subscriptions (ChatGPT Plus, Claude Pro, etc.) do not include
-            API access. You need a separate API key from the provider's
-            developer platform.
-          </span>
-        </div>
-      </wa-callout>
+        </wa-callout>
+      </div>
     `;
   }
 }
