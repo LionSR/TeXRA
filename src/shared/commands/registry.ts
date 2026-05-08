@@ -4,23 +4,34 @@ import type { z } from 'zod';
 /**
  * Handler for a registry-dispatched command.
  *
- * No-arg commands keep the legacy callable shape for backward compatibility
- * (the existing 10 view-routing handlers and the desktop registry are all
- * no-arg). Parameterized commands declare a Zod schema for their arguments
- * via `definedHandler` — the dispatcher parses the raw arg at the boundary
- * and only calls `run` once parsing succeeds, keeping handlers free of
- * parsing boilerplate.
+ * Handlers may be sync (return `boolean`) or async (return
+ * `Promise<boolean>`). The dispatcher returns whatever the handler
+ * returns, so async work performed by the handler is observable to
+ * callers — they can `await` the dispatch and surface rejections.
+ *
+ * Returning `void`-ish promises is unsafe inside a handler: the
+ * dispatcher would settle before the work finished, swallowing errors
+ * (the bug fixed by #3782). Handlers that perform async work must
+ * either `return actions.X()` (let the dispatcher forward the promise)
+ * or `await` and return `true`.
+ *
+ * No-arg commands keep the legacy callable shape for backward
+ * compatibility (the existing 10 view-routing handlers and the desktop
+ * registry are all no-arg). Parameterized commands declare a Zod schema
+ * for their arguments via `definedHandler` — the dispatcher parses the
+ * raw arg at the boundary and only calls `run` once parsing succeeds,
+ * keeping handlers free of parsing boilerplate.
  *
  * The legacy shape is preserved as a callable so existing entries like
  * `(actions) => actions.showSettings()` still type-check; the new shape
  * is an object with `run` + `argsSchema`.
  */
 export type CommandHandler<TActions, TArgs = unknown> =
-  | ((actions: TActions) => boolean)
+  | ((actions: TActions) => boolean | Promise<boolean>)
   | TypedCommandHandler<TActions, TArgs>;
 
 export interface TypedCommandHandler<TActions, TArgs> {
-  run: (actions: TActions, args: TArgs) => boolean;
+  run: (actions: TActions, args: TArgs) => boolean | Promise<boolean>;
   argsSchema: z.ZodType<TArgs>;
 }
 
@@ -46,18 +57,25 @@ type CommandHandlerMap<TId extends string, TActions> = Partial<
  */
 export function definedHandler<TActions, TArgs>(
   argsSchema: z.ZodType<TArgs>,
-  run: (actions: TActions, args: TArgs) => boolean,
+  run: (actions: TActions, args: TArgs) => boolean | Promise<boolean>,
 ): TypedCommandHandler<TActions, TArgs> {
   return { run, argsSchema };
 }
 
+/**
+ * Dispatch a command through its registered handler. Returns the
+ * handler's result directly — sync handlers settle immediately;
+ * async handlers return a promise that callers can `await` so
+ * rejections propagate (rather than the fire-and-forget pattern that
+ * regressed in #3778 and was caught in #3782).
+ */
 export function dispatchCommandFromRegistry<TId extends string, TActions>(
   id: TId,
   registry: CommandHandlerMap<TId, TActions>,
   actions: TActions,
   onUnhandled?: (id: TId) => void,
   rawArgs?: unknown,
-): boolean {
+): boolean | Promise<boolean> {
   const handler = registry[id];
   if (!handler) {
     onUnhandled?.(id);
