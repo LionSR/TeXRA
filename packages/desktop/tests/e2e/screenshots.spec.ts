@@ -15,6 +15,22 @@ let launched: LaunchedApp;
 
 test.beforeAll(async () => {
   launched = await launchTexraApp();
+  // Wait for IPC bootstrap (which sets walkthrough state from disk),
+  // then click the walkthrough's "Got it" button to dismiss persistently.
+  await launched.page.waitForTimeout(500);
+  const dismissed = await launched.page.evaluate(() => {
+    const btn = Array.from(document.querySelectorAll('wa-button')).find(
+      (b) => b.textContent?.trim() === 'Got it',
+    );
+    if (btn instanceof HTMLElement) {
+      btn.click();
+      return true;
+    }
+    return false;
+  });
+  if (dismissed) {
+    await launched.page.waitForTimeout(300);
+  }
 });
 
 test.afterAll(async () => {
