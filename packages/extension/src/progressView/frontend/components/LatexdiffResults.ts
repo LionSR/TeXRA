@@ -10,23 +10,22 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { DiffResultDisplay, DiffStatus } from '@shared/schemas';
-import { codiconIconClasses } from '@shared/styles/codiconStyles';
-
-// Local imports - shared utilities
-import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 
 // Local imports - progress view events
 import { ProgressEvents } from '../events';
 
 // Local imports - schemas
 
-/** Status icon class lookup for latexdiff entries. */
+/** Status wa-icon name lookup for latexdiff entries. */
 const LATEXDIFF_STATUS_ICONS: Record<DiffStatus, string> = {
-  success: 'codicon-check',
-  error: 'codicon-error',
+  success: 'check',
+  error: 'error',
 };
 
 @customElement('latexdiff-results')
@@ -34,7 +33,6 @@ export class LatexdiffResults extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    codiconIconClasses,
     css`
       :host {
         display: block;
@@ -121,7 +119,7 @@ export class LatexdiffResults extends LitElement {
         data-run-id=${ifDefined(runId)}
         title=${ifDefined(message)}
       >
-        <i class="codicon ${icon}"></i>
+        <wa-icon library="texra" name=${icon} aria-hidden="true"></wa-icon>
         ${this.renderFileLink(baseFile, baseLabel)}
         <span class="arrow">→</span>
         ${this.renderFileLink(revisedFile, revisedLabel)}
@@ -143,8 +141,13 @@ export class LatexdiffResults extends LitElement {
     return html`
       <details open>
         <summary class="details-summary">
-          <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
-          <i class="codicon codicon-diff"></i>
+          <wa-icon
+            library="texra"
+            name="chevron-right"
+            class="toggle-icon"
+            aria-hidden="true"
+          ></wa-icon>
+          <wa-icon library="texra" name="diff" aria-hidden="true"></wa-icon>
           <span>${summaryText}</span>
         </summary>
         <ul

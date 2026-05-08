@@ -19,7 +19,11 @@ import stripAnsi from 'strip-ansi';
 import { STREAM_STATUS } from '@shared/schemas';
 
 // Local imports - shared utilities
-import { designTokens, codiconStyles } from '@shared/styles';
+// Side-effect imports - register WA icon and spinner components
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
+
+import { designTokens } from '@shared/styles';
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { scrollToBottom } from '@shared/utils/dom';
@@ -103,11 +107,11 @@ function processTerminalText(text: string): string {
     .join('\n');
 }
 
-/** Maps group status to codicon class (with optional animation) */
-function getStatusIcon(status: string): string {
+/** Maps group status to a wa-icon name; null indicates an animated spinner. */
+function getStatusIcon(status: string): string | null {
   switch (status) {
     case STREAM_STATUS.RUNNING:
-      return 'sync spin';
+      return null;
     case STREAM_STATUS.ERROR:
       return 'error';
     case STREAM_STATUS.STOPPED:
@@ -119,7 +123,7 @@ function getStatusIcon(status: string): string {
 
 @customElement('task-group-list')
 export class TaskGroupList extends LitElement {
-  static override styles = [designTokens, codiconStyles, ...logStyles];
+  static override styles = [designTokens, ...logStyles];
 
   /** All task groups to render */
   @property({ attribute: false }) groups: TaskGroup[] = [];
@@ -639,14 +643,22 @@ export class TaskGroupList extends LitElement {
       ? formatDuration(group.endTime - group.startTime)
       : '';
 
+    const statusIcon = getStatusIcon(group.status);
     return html`
       <span class="group-status-icon">
-        <i class="codicon codicon-${getStatusIcon(group.status)}"></i>
+        ${statusIcon
+          ? html`<wa-icon
+              library="texra"
+              name=${statusIcon}
+              aria-hidden="true"
+            ></wa-icon>`
+          : html`<wa-spinner></wa-spinner>`}
       </span>
       <span class="group-title">${group.name}</span>
       <span class="group-time">
         <span class="group-start-time" data-start=${String(group.startTime)}>
-          <i class="codicon codicon-clock"></i> ${formattedStartTime}
+          <wa-icon library="texra" name="clock" aria-hidden="true"></wa-icon>
+          ${formattedStartTime}
         </span>
         ${durationText
           ? html`<span class="group-duration">${durationText}</span>`

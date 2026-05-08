@@ -89,7 +89,7 @@ export const logEntryStyles = css`
     gap: var(--spacing-small);
   }
 
-  .xml-link-container .codicon {
+  .xml-link-container wa-icon {
     opacity: var(--opacity-subtle);
   }
 
@@ -109,7 +109,7 @@ export const logEntryStyles = css`
     gap: var(--spacing-tiny);
   }
 
-  .xml-link-container .xml-fix-hint .codicon {
+  .xml-link-container .xml-fix-hint wa-icon {
     opacity: var(--opacity-full);
     color: var(--color-text-link);
   }
@@ -144,7 +144,7 @@ export const logEntryStyles = css`
     color: var(--color-text-secondary);
   }
 
-  .memory-path .codicon {
+  .memory-path wa-icon {
     margin-right: var(--spacing-small);
   }
 

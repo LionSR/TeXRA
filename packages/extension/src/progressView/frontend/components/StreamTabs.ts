@@ -16,11 +16,13 @@ import {
   animationStyles,
   commonViewStyles,
 } from '@shared/styles';
-import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import {
   AGENT_DECORATORS,
   getAgentCategoryDecorator,
 } from '@shared/utils/icons';
+
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { formatRelativeTime } from '@shared/utils/string';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -95,7 +97,6 @@ export class StreamTab extends LitElement {
   static override styles = [
     designTokens,
     animationStyles,
-    codiconIconClasses,
     css`
       :host {
         display: block;
@@ -343,12 +344,12 @@ export class StreamTab extends LitElement {
         background-color: var(--texra-toolbar-hoverBackground);
       }
 
-      .tab-expand .codicon {
+      .tab-expand wa-icon {
         font-size: var(--font-size-xs);
         transition: transform var(--transition-fast);
       }
 
-      .tab-expand[aria-expanded='true'] .codicon {
+      .tab-expand[aria-expanded='true'] wa-icon {
         transform: rotate(90deg);
       }
     `,
@@ -416,7 +417,11 @@ export class StreamTab extends LitElement {
                 : childStreamLabel}
               aria-expanded=${this.expanded ? 'true' : 'false'}
             >
-              <i class="codicon codicon-chevron-right"></i>
+              <wa-icon
+                library="texra"
+                name="chevron-right"
+                aria-hidden="true"
+              ></wa-icon>
             </button>`
           : nothing}
         <button
@@ -431,12 +436,14 @@ export class StreamTab extends LitElement {
               stream.name}</span
             >
             ${this.childCount > 0 && this.compact
-              ? html`<i
-                  class="codicon codicon-chevron-right compact-subagent-hint"
+              ? html`<wa-icon
+                  library="texra"
+                  name="chevron-right"
+                  class="compact-subagent-hint"
                   role="img"
                   aria-label=${childStreamLabel}
                   title=${childStreamLabel}
-                ></i>`
+                ></wa-icon>`
               : nothing}
           </div>
           ${this.compact
@@ -456,17 +463,23 @@ export class StreamTab extends LitElement {
                   <span class="model"
                     >${stream.modelLabel ?? stream.model ?? ''}</span
                   >
-                  <i
-                    class=${`codicon codicon-${agentDecorator.icon} agent-category`}
+                  <wa-icon
+                    library="texra"
+                    name=${agentDecorator.icon}
+                    class="agent-category"
+                    aria-hidden="true"
                     title=${`Category: ${agentDecorator.label}`}
-                  ></i>
+                  ></wa-icon>
                   ${when(
                     stream.isRemote,
                     () => html`
-                      <i
-                        class=${`codicon codicon-${AGENT_DECORATORS.properties.remote.icon} remote-agent`}
+                      <wa-icon
+                        library="texra"
+                        name=${AGENT_DECORATORS.properties.remote.icon}
+                        class="remote-agent"
+                        aria-hidden="true"
                         title=${AGENT_DECORATORS.properties.remote.hint}
-                      ></i>
+                      ></wa-icon>
                     `,
                   )}
                 </div>

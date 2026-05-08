@@ -71,11 +71,7 @@ export class ProfileInfo extends LitElement {
         </div>
         <div class="info-row">
           <span class="label">Tier:</span>
-          <wa-tag
-            class="tier-badge"
-            variant=${this.tierVariant()}
-            size="small"
-          >
+          <wa-tag class="tier-badge" variant=${this.tierVariant()} size="small">
             ${this.tier}
           </wa-tag>
         </div>

@@ -10,12 +10,11 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { codiconIconClasses } from '@shared/styles/codiconStyles';
-
-// Local imports - shared utilities
-import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 
 // Local imports - local components (re-use StatItem type)
 import type { StatItem } from './StatisticsPanel';
@@ -35,7 +34,6 @@ export class ContextManagement extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    codiconIconClasses,
     css`
       :host {
         display: block;
@@ -74,7 +72,7 @@ export class ContextManagement extends LitElement {
         font-size: var(--font-size-sm);
       }
 
-      .stat-item .codicon {
+      .stat-item wa-icon {
         opacity: var(--opacity-subtle);
       }
 
@@ -110,7 +108,7 @@ export class ContextManagement extends LitElement {
 
   /** Action configuration (icon, label, color) */
   @property({ attribute: false }) config: ActionConfig = {
-    icon: 'codicon-history',
+    icon: 'history',
     label: 'Context Management',
     color: 'var(--texra-foreground)',
   };
@@ -129,8 +127,18 @@ export class ContextManagement extends LitElement {
     return html`
       <details style="--accent-color: ${this.config.color}">
         <summary class="details-summary">
-          <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
-          <i class="codicon ${this.config.icon} context-icon"></i>
+          <wa-icon
+            library="texra"
+            name="chevron-right"
+            class="toggle-icon"
+            aria-hidden="true"
+          ></wa-icon>
+          <wa-icon
+            library="texra"
+            name=${this.config.icon}
+            class="context-icon"
+            aria-hidden="true"
+          ></wa-icon>
           <span class="context-title">${this.config.label}</span>
         </summary>
         <div class="context-content" data-log-id=${this.logId}>
@@ -139,7 +147,11 @@ export class ContextManagement extends LitElement {
             (item) => item.label,
             (item) => html`
               <span class="stat-item" title=${item.label}>
-                <i class="codicon ${item.icon}"></i>
+                <wa-icon
+                  library="texra"
+                  name=${item.icon}
+                  aria-hidden="true"
+                ></wa-icon>
                 ${item.value}
               </span>
             `,
@@ -148,7 +160,11 @@ export class ContextManagement extends LitElement {
             ? html`
                 <div class="summary-block">
                   <div class="summary-title">
-                    <i class="codicon codicon-note"></i>
+                    <wa-icon
+                      library="texra"
+                      name="note"
+                      aria-hidden="true"
+                    ></wa-icon>
                     Compaction summary
                   </div>
                   <pre class="summary-text">${this.summary}</pre>

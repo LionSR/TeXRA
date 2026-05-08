@@ -4,10 +4,12 @@ import { customElement, property } from 'lit/decorators.js';
 import { styleMap } from 'lit/directives/style-map.js';
 import { when } from 'lit/directives/when.js';
 
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
 import type { TokenUsageStats } from '@shared/schemas';
-import { codiconIconClasses } from '@shared/styles/codiconStyles';
 
 // Local imports - progress view
 import { formatTokens } from '../formatters/timestampUtils';
@@ -31,7 +33,6 @@ function fillColor(percent: number): string {
 export class UsagePanel extends LitElement {
   static override styles = [
     designTokens,
-    codiconIconClasses,
     css`
       :host {
         display: block;
@@ -61,7 +62,7 @@ export class UsagePanel extends LitElement {
         opacity: var(--opacity-normal);
       }
 
-      :is(.run-summary, .context-state) .codicon {
+      :is(.run-summary, .context-state) wa-icon {
         font-size: var(--font-size-icon-sm);
         opacity: var(--opacity-subtle);
       }
@@ -171,43 +172,59 @@ export class UsagePanel extends LitElement {
     const cacheWrite = this.usage.cacheCreationInputTokens ?? 0;
 
     return html`
-      <i class="codicon codicon-pie-chart"></i>
+      <wa-icon library="texra" name="pie-chart" aria-hidden="true"></wa-icon>
       <span class="run-summary__label">Total usage:</span>
       <span class="run-summary__value">
-        <i class="codicon codicon-arrow-up" title="Input tokens"></i
+        <wa-icon
+          library="texra"
+          name="arrow-up"
+          title="Input tokens"
+          aria-hidden="true"
+        ></wa-icon
         >${formatTokens(inputTokens)}
         ${when(
           cacheRead > 0,
           () =>
             html` ·
-              <i
-                class="codicon codicon-cloud-download"
+              <wa-icon
+                library="texra"
+                name="cloud-download"
                 title="Cache read tokens (discounted)"
-              ></i>
+                aria-hidden="true"
+              ></wa-icon>
               ${formatTokens(cacheRead)}`,
         )}
         ${when(
           cacheMiss > 0,
           () =>
             html` ·
-              <i
-                class="codicon codicon-cloud-upload"
+              <wa-icon
+                library="texra"
+                name="cloud-upload"
                 title="Cache miss tokens (full price)"
-              ></i>
+                aria-hidden="true"
+              ></wa-icon>
               ${formatTokens(cacheMiss)}`,
         )}
         ${when(
           cacheWrite > 0,
           () =>
             html` ·
-              <i
-                class="codicon codicon-database"
+              <wa-icon
+                library="texra"
+                name="database"
                 title="Cache creation tokens (1.25x cost)"
-              ></i>
+                aria-hidden="true"
+              ></wa-icon>
               ${formatTokens(cacheWrite)}`,
         )}
         ·
-        <i class="codicon codicon-arrow-down" title="Output tokens"></i
+        <wa-icon
+          library="texra"
+          name="arrow-down"
+          title="Output tokens"
+          aria-hidden="true"
+        ></wa-icon
         >${formatTokens(outputTokens)} · $${cost.toFixed(3)}
       </span>
     `;
@@ -221,7 +238,7 @@ export class UsagePanel extends LitElement {
 
     return html`
       <span class="context-gauge" title="${clamped.toFixed(0)}% context used">
-        <i class="codicon codicon-window"></i>
+        <wa-icon library="texra" name="window" aria-hidden="true"></wa-icon>
         <span class="context-gauge__track">
           <span
             class="context-gauge__fill"
