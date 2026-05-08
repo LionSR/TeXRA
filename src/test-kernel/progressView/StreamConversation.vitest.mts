@@ -16,7 +16,7 @@ function readSource(relativePath: string): string {
 }
 
 describe('<stream-conversation>', () => {
-  it('is registered as a custom element with the expected tag name', () => {
+  it('declares the @customElement decorator with the expected tag name (static source check)', () => {
     const source = readSource(
       'packages/extension/src/progressView/frontend/components/StreamConversation.ts',
     );
@@ -96,6 +96,7 @@ describe('<stream-conversation>', () => {
     // The provider responsibility now lives on <stream-conversation>.
     expect(source).not.toContain('streamStateContext');
     expect(source).not.toContain('streamLogContext');
+    expect(source).not.toContain('permissionsContext');
     expect(source).not.toContain('processOutputContext');
     expect(source).not.toContain('streamByIdContext');
     // No bespoke renderStreamContent() anymore — the body is one element.
