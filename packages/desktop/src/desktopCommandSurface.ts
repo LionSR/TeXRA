@@ -242,69 +242,69 @@ export function toElectronAccelerator(
 }
 
 const DESKTOP_COMMAND_HANDLERS = {
-  'texra.showMainView': (a) => {
-    a.showRoute('main');
+  'texra.showMainView': (actions) => {
+    actions.showRoute('main');
     return true;
   },
-  'texra.showProgressView': (a) => {
-    a.showRoute('progress');
+  'texra.showProgressView': (actions) => {
+    actions.showRoute('progress');
     return true;
   },
-  [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: (a) => {
-    a.showRoute('logs');
+  [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: (actions) => {
+    actions.showRoute('logs');
     return true;
   },
-  'texra.openSettings': (a) => {
-    a.showSettings();
+  'texra.openSettings': (actions) => {
+    actions.showSettings();
     return true;
   },
-  'texra.mainView.reset': (a) => {
-    if (!a.resetMainView) return false;
-    a.resetMainView();
+  'texra.mainView.reset': (actions) => {
+    if (!actions.resetMainView) return false;
+    actions.resetMainView();
     return true;
   },
-  'texra.showMemory': (a) => {
-    a.showSettings(SETTINGS_TAB.MEMORY);
+  'texra.showMemory': (actions) => {
+    actions.showSettings(SETTINGS_TAB.MEMORY);
     return true;
   },
-  'texra.showAgentHistory': (a) => {
-    a.showSettings(SETTINGS_TAB.HISTORY);
+  'texra.showAgentHistory': (actions) => {
+    actions.showSettings(SETTINGS_TAB.HISTORY);
     return true;
   },
-  'texra.showModels': (a) => {
-    a.showSettings(SETTINGS_TAB.MODELS);
+  'texra.showModels': (actions) => {
+    actions.showSettings(SETTINGS_TAB.MODELS);
     return true;
   },
-  'texra.showAgents': (a) => {
-    a.showSettings(SETTINGS_TAB.AGENTS);
+  'texra.showAgents': (actions) => {
+    actions.showSettings(SETTINGS_TAB.AGENTS);
     return true;
   },
-  'texra.showTools': (a) => {
-    a.showSettings(SETTINGS_TAB.TOOLS);
+  'texra.showTools': (actions) => {
+    actions.showSettings(SETTINGS_TAB.TOOLS);
     return true;
   },
-  'texra.showMultiAgent': (a) => {
-    a.showSettings(SETTINGS_TAB.MULTI_AGENT);
+  'texra.showMultiAgent': (actions) => {
+    actions.showSettings(SETTINGS_TAB.MULTI_AGENT);
     return true;
   },
-  [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: (a) => {
-    if (!a.openLogFolder) return false;
-    a.openLogFolder();
+  [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: (actions) => {
+    if (!actions.openLogFolder) return false;
+    actions.openLogFolder();
     return true;
   },
-  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: (a) => {
-    if (!a.openWorkspaceFolder) return false;
-    a.openWorkspaceFolder();
+  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: (actions) => {
+    if (!actions.openWorkspaceFolder) return false;
+    actions.openWorkspaceFolder();
     return true;
   },
-  [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: (a) => {
-    if (!a.showFirstRunWalkthrough) return false;
-    a.showFirstRunWalkthrough();
+  [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: (actions) => {
+    if (!actions.showFirstRunWalkthrough) return false;
+    actions.showFirstRunWalkthrough();
     return true;
   },
-  [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: (a) => {
-    if (!a.openDesktopDocs) return false;
-    a.openDesktopDocs();
+  [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: (actions) => {
+    if (!actions.openDesktopDocs) return false;
+    actions.openDesktopDocs();
     return true;
   },
 } as const satisfies Record<

@@ -8,7 +8,10 @@ import dotenv from 'dotenv';
 // Local imports - core
 import { initPlatform } from '@platform/platform';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
+import {
+  SHUTDOWN_PHASE,
+  type LifecycleHost,
+} from '@platform/interfaces/lifecycle';
 import { loadAgents, setAgentDirectories } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
 import { setDefaultAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -106,12 +109,10 @@ let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
 let disposeStatusListener: (() => void) | undefined;
 let progressViewProviderInstance: ProgressViewProvider | undefined;
-const lifecycleHost = createLifecycleHost({
-  onError: (phase, error) =>
-    logger.error('extension', `Lifecycle ${phase} handler failed`, {
-      data: error,
-    }),
-});
+// Re-instantiated on every activate(): runShutdown() trips an internal
+// idempotency flag, so a stale module-level instance would silently swallow
+// handlers registered by a second activate() in the same process.
+let lifecycleHost: LifecycleHost | undefined;
 
 async function refreshApiKeyStatus() {
   if (!apiKeyStatusBarItem) {
@@ -168,6 +169,13 @@ export async function activate(context: vscode.ExtensionContext) {
   );
   initializePolishModel(context.extensionPath);
   initializeStateManagers(context, gitRepoRoot);
+  const lifecycle = createLifecycleHost({
+    onError: (phase, error) =>
+      logger.error('extension', `Lifecycle ${phase} handler failed`, {
+        data: error,
+      }),
+  });
+  lifecycleHost = lifecycle;
   initPlatform({
     config: new VscodeConfigProvider(),
     globalState: context.globalState,
@@ -177,37 +185,27 @@ export async function activate(context: vscode.ExtensionContext) {
     workspace: new VscodeWorkspace(),
     storage: new VscodeStorage(context),
     secrets: new VscodeSecrets(context),
-    lifecycle: lifecycleHost,
+    lifecycle,
   });
-  lifecycleHost.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    killBackgroundProcesses(),
-  );
-  lifecycleHost.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    interruptAllCodexSessions(),
-  );
-  lifecycleHost.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killActiveRecording());
-  lifecycleHost.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    UsageLogService.dispose(),
-  );
-  lifecycleHost.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
+  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killBackgroundProcesses());
+  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => interruptAllCodexSessions());
+  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killActiveRecording());
+  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => UsageLogService.dispose());
+  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
     progressViewProviderInstance?.flushState(),
   );
-  lifecycleHost.onShutdown(SHUTDOWN_PHASE.ON, () => clearStoreCache());
-  lifecycleHost.onShutdown(SHUTDOWN_PHASE.ON, () =>
-    prPollingSource.disposeAll(),
-  );
-  lifecycleHost.onShutdown(SHUTDOWN_PHASE.ON, () =>
-    repoPollingSource.disposeAll(),
-  );
-  lifecycleHost.onShutdown(SHUTDOWN_PHASE.ON, () =>
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearStoreCache());
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => prPollingSource.disposeAll());
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => repoPollingSource.disposeAll());
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
     issuePollingSource.disposeAll(),
   );
-  lifecycleHost.onShutdown(SHUTDOWN_PHASE.ON, () =>
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
     bus.emit('extensionDeactivating', undefined),
   );
-  lifecycleHost.onShutdown(SHUTDOWN_PHASE.ON, () => disposeDiffRefresh());
-  lifecycleHost.onShutdown(SHUTDOWN_PHASE.ON, () => statusBarItem?.dispose());
-  lifecycleHost.onShutdown(SHUTDOWN_PHASE.ON, () => disposeStatusListener?.());
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => disposeDiffRefresh());
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => statusBarItem?.dispose());
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => disposeStatusListener?.());
   setDefaultAgentRuntimeHost(extensionAgentRuntimeHost);
   await StorageFS.ensureDir(TASK_RUNS_DIR);
   FileLister.initialize(context);
@@ -649,5 +647,7 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 export async function deactivate() {
-  await lifecycleHost.runShutdown();
+  const host = lifecycleHost;
+  lifecycleHost = undefined;
+  await host?.runShutdown();
 }

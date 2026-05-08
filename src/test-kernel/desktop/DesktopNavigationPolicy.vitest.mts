@@ -31,11 +31,13 @@ describe('desktop navigation policy', () => {
       );
     });
 
-    it('allows supabase project subdomains but not the apex', async () => {
+    it('does not allow third-party Supabase project subdomains', async () => {
       const { isAllowedExternalUrl } = await loadNavigationPolicy();
 
+      // Auth uses remote.texra.ai (covered by *.texra.ai); a blanket
+      // *.supabase.co allow-rule would let any Supabase project be opened.
       expect(isAllowedExternalUrl('https://abc.supabase.co/auth/v1')).toBe(
-        true,
+        false,
       );
       expect(isAllowedExternalUrl('https://supabase.co/')).toBe(false);
     });
