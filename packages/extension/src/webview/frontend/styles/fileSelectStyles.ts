@@ -201,11 +201,6 @@ export const multiFilesStyles = css`
     justify-content: space-between;
     align-items: center;
     border-radius: var(--border-radius-small);
-    transition: background-color var(--transition-fast);
-  }
-
-  .file-item:hover {
-    background-color: var(--wa-color-neutral-fill-quiet);
   }
 
   .file-name {
