@@ -23,6 +23,10 @@ import { ProgressEvents } from '../events';
 // Local imports - progress view components
 import './QueuedFollowUps';
 
+// Web Awesome native components
+import '@awesome.me/webawesome/dist/components/details/details.js';
+import '@awesome.me/webawesome/dist/components/progress-ring/progress-ring.js';
+
 @customElement('follow-up-input')
 export class FollowUpInput extends LitElement {
   static override styles = [
@@ -177,7 +181,7 @@ export class FollowUpInput extends LitElement {
 
   override render(): TemplateResult | typeof nothing {
     return html`
-      <vscode-collapsible class="panel-collapsible" title="Follow-up Input">
+      <wa-details class="panel-collapsible" summary="Follow-up Input">
         <div id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER} class="follow-up-container">
           <queued-follow-ups
             .messages=${this.queuedMessages}
@@ -204,7 +208,7 @@ export class FollowUpInput extends LitElement {
               ></vscode-toolbar-button>
               ${when(
                 this.polishing,
-                () => html`<vscode-progress-ring></vscode-progress-ring>`,
+                () => html`<wa-progress-ring indeterminate></wa-progress-ring>`,
               )}
               <vscode-toolbar-button
                 id=${ELEMENT_IDS.RECORD_FOLLOW_UP_BTN}
@@ -234,7 +238,7 @@ export class FollowUpInput extends LitElement {
             </div>
           </div>
         </div>
-      </vscode-collapsible>
+      </wa-details>
     `;
   }
 
