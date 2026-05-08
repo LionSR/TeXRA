@@ -308,8 +308,7 @@ export class DesktopProgressBridge {
       agent: info.agent ?? restored?.agent,
       agentCategory: category,
       inputFile: info.inputFile || restored?.inputFile,
-      instruction:
-        taskState?.agentConfig.instruction || restored?.instruction,
+      instruction: taskState?.agentConfig.instruction || restored?.instruction,
       lastKnownStatus:
         this.statuses.get(streamId) ??
         restored?.lastKnownStatus ??

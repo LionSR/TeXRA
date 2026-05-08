@@ -114,9 +114,9 @@ describe('DesktopStreamSnapshot', () => {
     );
 
     const reopened = await openDesktopStreamSnapshotStore(filePath);
-    expect(reopened.hydrated.every((s) => s.lastKnownStatus === 'stopped')).toBe(
-      true,
-    );
+    expect(
+      reopened.hydrated.every((s) => s.lastKnownStatus === 'stopped'),
+    ).toBe(true);
   });
 
   it('upsert overwrites an existing snapshot with the same id', async () => {
