@@ -13,9 +13,11 @@ import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { when } from 'lit/directives/when.js';
 
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
 // Local imports - shared styles
 import {
-  codiconIconClasses,
   commonViewStyles,
   designTokens,
   requestPanelStyles,
@@ -34,12 +36,7 @@ import { monacoLanguageForPath } from './monacoLanguage';
 
 @customElement('tool-edit-request-panel')
 export class ToolEditRequestPanel extends BaseFeedbackPanel {
-  static override styles = [
-    designTokens,
-    commonViewStyles,
-    codiconIconClasses,
-    requestPanelStyles,
-  ];
+  static override styles = [designTokens, commonViewStyles, requestPanelStyles];
 
   @state() private diffMenuOpen = false;
   @state() private inlineDiffOpen = false;

@@ -11,11 +11,13 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { ELEMENT_IDS } from '../constants';
@@ -81,7 +83,6 @@ function parsePath(path: string): ParsedPath {
 export class FileList extends LitElement {
   static override styles = [
     designTokens,
-    codiconIconClasses,
     commonViewStyles,
     css`
       :host {
@@ -110,7 +111,7 @@ export class FileList extends LitElement {
         line-height: 1.4;
       }
 
-      .storage-hint .codicon {
+      .storage-hint wa-icon {
         flex-shrink: 0;
       }
 
@@ -317,7 +318,12 @@ export class FileList extends LitElement {
                   appearance="primary"
                   @click=${this.runLatexFixer}
                 >
-                  <span slot="start" class="codicon codicon-tools"></span>
+                  <wa-icon
+                    slot="start"
+                    library="texra"
+                    name="tools"
+                    aria-hidden="true"
+                  ></wa-icon>
                   Run latexFixer
                 </vscode-button>
               </div>
@@ -332,7 +338,11 @@ export class FileList extends LitElement {
 
     return html`
       <div class="storage-hint" role="note">
-        <i class="codicon codicon-folder-opened" aria-hidden="true"></i>
+        <wa-icon
+          library="texra"
+          name="folder-opened"
+          aria-hidden="true"
+        ></wa-icon>
         <span class="storage-hint__text">
           Files stay in task-run storage until accepted. Click a file to preview
           it, use Accept to copy it into your workspace, or use the folder
@@ -413,11 +423,13 @@ export class FileList extends LitElement {
     return html`
       <div class="file-item">
         ${failure
-          ? html`<i
-              class="codicon codicon-warning compile-warning"
+          ? html`<wa-icon
+              library="texra"
+              name="warning"
+              class="compile-warning"
               title="Compile check failed"
               aria-label="Compile check failed"
-            ></i>`
+            ></wa-icon>`
           : nothing}
         <span class="file-name">
           <span

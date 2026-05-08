@@ -15,7 +15,6 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
 import {
-  codiconIconClasses,
   commonViewStyles,
   designTokens,
   requestPanelStyles,
@@ -33,12 +32,7 @@ import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 
 @customElement('plan-approval-request-panel')
 export class PlanApprovalRequestPanel extends BaseFeedbackPanel {
-  static override styles = [
-    designTokens,
-    commonViewStyles,
-    codiconIconClasses,
-    requestPanelStyles,
-  ];
+  static override styles = [designTokens, commonViewStyles, requestPanelStyles];
 
   override render(): TemplateResult {
     const data = this.permission.data as PlanApprovalPermission;

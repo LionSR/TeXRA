@@ -137,76 +137,77 @@ export const TOOL_LABEL_MAP: Record<string, string> = {
 
 /**
  * Tool icon mapping for different tool types.
- * Maps tool names to VS Code codicon classes.
+ * Maps tool names to wa-icon names (codicon-style aliases supported via the
+ * shared TeXRA icon library).
  */
 export const TOOL_ICON_MAP: Record<string, string> = {
   // File operations
-  read_file: 'codicon-file',
-  write_file: 'codicon-new-file',
-  edit_file: 'codicon-edit',
-  str_replace_editor: 'codicon-edit',
-  apply_path: 'codicon-diff',
+  read_file: 'file',
+  write_file: 'new-file',
+  edit_file: 'edit',
+  str_replace_editor: 'edit',
+  apply_path: 'diff',
 
   // Search/find
-  glob: 'codicon-search',
-  grep: 'codicon-search',
-  ls: 'codicon-folder-opened',
+  glob: 'search',
+  grep: 'search',
+  ls: 'folder-opened',
 
   // Shell
-  bash: 'codicon-terminal',
-  wolfram: 'codicon-symbol-operator',
+  bash: 'terminal',
+  wolfram: 'symbol-operator',
 
   // Web/research
-  web_fetch: 'codicon-globe',
-  web_search: 'codicon-globe',
-  arxiv_search: 'codicon-book',
-  arxiv_metadata: 'codicon-book',
-  download_arxiv_source: 'codicon-cloud-download',
-  crossref_search: 'codicon-references',
-  crossref_doi: 'codicon-references',
+  web_fetch: 'globe',
+  web_search: 'globe',
+  arxiv_search: 'book',
+  arxiv_metadata: 'book',
+  download_arxiv_source: 'cloud-download',
+  crossref_search: 'references',
+  crossref_doi: 'references',
 
   // LaTeX
-  texcount: 'codicon-symbol-numeric',
-  extract_figures: 'codicon-file-media',
-  extract_tikz_figures: 'codicon-file-media',
-  extract_bib_entries: 'codicon-library',
+  texcount: 'symbol-numeric',
+  extract_figures: 'file-media',
+  extract_tikz_figures: 'file-media',
+  extract_bib_entries: 'library',
 
   // Diagnostics
-  diagnostics: 'codicon-checklist',
+  diagnostics: 'checklist',
 
   // Task management
-  todo_write: 'codicon-tasklist',
+  todo_write: 'tasklist',
 
   // Memory
-  memory: 'codicon-database',
+  memory: 'database',
 
   // Zotero
-  zotero_add: 'codicon-library',
-  zotero_search: 'codicon-library',
-  zotero_export: 'codicon-library',
+  zotero_add: 'library',
+  zotero_search: 'library',
+  zotero_export: 'library',
 
   // Lean 4
-  lean_diagnostics: 'codicon-warning',
-  lean_file: 'codicon-file-code',
-  lean_project: 'codicon-folder-library',
-  lean_inspect: 'codicon-inspect',
-  lean_loogle: 'codicon-search',
+  lean_diagnostics: 'warning',
+  lean_file: 'file-code',
+  lean_project: 'folder-library',
+  lean_inspect: 'inspect',
+  lean_loogle: 'search',
 
   // Workflow/delegation (includes legacy names for historical log entries)
-  delegate_workflow: 'codicon-list-tree',
-  delegate_agent: 'codicon-account',
-  propose_workflow: 'codicon-list-tree',
-  propose_agent: 'codicon-account',
+  delegate_workflow: 'list-tree',
+  delegate_agent: 'account',
+  propose_workflow: 'list-tree',
+  propose_agent: 'account',
 
   // Execution history
-  executions: 'codicon-history',
-  runs: 'codicon-history',
-  accept_run_files: 'codicon-check',
+  executions: 'history',
+  runs: 'history',
+  accept_run_files: 'check',
 
   // External agents
-  codex: 'codicon-robot',
-  codex_patch: 'codicon-diff',
-  codex_thread: 'codicon-comment-discussion',
-  codex_todo: 'codicon-checklist',
-  codex_turn: 'codicon-check-all',
+  codex: 'robot',
+  codex_patch: 'diff',
+  codex_thread: 'comment-discussion',
+  codex_todo: 'checklist',
+  codex_turn: 'check-all',
 };

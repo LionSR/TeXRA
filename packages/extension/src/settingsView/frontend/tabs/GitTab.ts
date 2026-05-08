@@ -9,10 +9,7 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import {
-  commonViewStyles,
-  designTokens,
-} from '@shared/styles';
+import { commonViewStyles, designTokens } from '@shared/styles';
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/icon/icon.js';

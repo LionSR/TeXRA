@@ -280,7 +280,6 @@ export class AgentSelectionPanel extends LitElement {
         font-style: italic;
       }
 
-
       .agent-detail-path {
         font-size: var(--font-size-xs);
         font-family: var(--texra-editor-font-family, monospace), monospace;
