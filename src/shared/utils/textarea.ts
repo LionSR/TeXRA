@@ -11,12 +11,14 @@ interface VscodeTextarea extends HTMLElement {
 }
 
 /**
- * Resolve a vscode-textarea element to its underlying HTMLTextAreaElement.
- * This is an internal helper for insertTextAtCursor - selection operations
- * (.selectionStart, .selectionEnd) are NOT proxied by vscode-textarea.
+ * Resolve a vscode-textarea or wa-textarea element to its underlying
+ * HTMLTextAreaElement. This is an internal helper for insertTextAtCursor —
+ * selection operations (.selectionStart, .selectionEnd) are NOT proxied by
+ * either host element.
  *
- * For .value access, use the host element directly - vscode-textarea proxies .value.
- * For .focus(), use the host element directly - it works on the vscode-textarea host.
+ * For .value access, use the host element directly — both vscode-textarea
+ * and wa-textarea expose .value as a property on the host.
+ * For .focus(), use the host element directly.
  */
 function resolveTextareaTarget(target: TextareaTarget): TextareaResolution {
   if (!target) {
@@ -30,6 +32,14 @@ function resolveTextareaTarget(target: TextareaTarget): TextareaResolution {
   const host = target as VscodeTextarea;
   if (host.wrappedElement instanceof HTMLTextAreaElement) {
     return { host: target, textarea: host.wrappedElement };
+  }
+
+  // wa-textarea (and similar shadow-DOM-based hosts) keep the underlying
+  // <textarea> inside their shadow root rather than exposing wrappedElement.
+  const shadowTextarea =
+    host.shadowRoot?.querySelector<HTMLTextAreaElement>('textarea') ?? null;
+  if (shadowTextarea) {
+    return { host: target, textarea: shadowTextarea };
   }
 
   return { host: null, textarea: null };
