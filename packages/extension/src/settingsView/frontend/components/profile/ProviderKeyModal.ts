@@ -4,6 +4,7 @@
  */
 
 // Third-party imports
+import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 
@@ -21,48 +22,10 @@ export class ProviderKeyModal extends LitElement {
   static override styles = [
     designTokens,
     css`
-      :host {
-        position: fixed;
-        inset: 0;
-        z-index: 1000;
-      }
-
-      .provider-key-backdrop {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        height: 100%;
-        padding: var(--spacing-xlarge);
-        background: color-mix(
-          in srgb,
-          var(--texra-editor-background) 35%,
-          transparent
-        );
-      }
-
-      .provider-key-dialog {
-        width: min(560px, 100%);
-        padding: var(--spacing-xlarge);
-        color: var(--texra-foreground);
-        background: var(--texra-editor-background);
-        border: var(--border-thin) solid var(--color-border);
-        border-radius: var(--border-radius-large);
-        box-shadow: 0 12px 32px
-          color-mix(in srgb, var(--texra-editor-foreground) 18%, transparent);
-      }
-
-      .provider-key-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: var(--spacing-large);
-        margin-bottom: var(--spacing-medium);
-      }
-
-      h2 {
-        margin: 0;
-        font-size: var(--font-size-lg);
+      /* wa-dialog supplies the backdrop, modal positioning, focus trap, escape
+         handling, and panel chrome; only the body content layout lives here. */
+      wa-dialog.provider-key-dialog {
+        --width: min(560px, calc(100vw - 32px));
       }
 
       .provider-key-description {
@@ -106,7 +69,6 @@ export class ProviderKeyModal extends LitElement {
         display: flex;
         justify-content: flex-end;
         gap: var(--spacing-medium);
-        margin-top: var(--spacing-large);
       }
 
       button {
@@ -130,22 +92,14 @@ export class ProviderKeyModal extends LitElement {
         background: var(--texra-button-hoverBackground);
       }
 
-      .provider-key-secondary,
-      .provider-key-icon {
+      .provider-key-secondary {
         color: var(--texra-foreground);
         background: transparent;
         border: var(--border-thin) solid var(--color-border);
       }
 
-      .provider-key-secondary:hover,
-      .provider-key-icon:hover {
+      .provider-key-secondary:hover {
         background: var(--texra-list-hoverBackground);
-      }
-
-      .provider-key-icon {
-        min-width: 30px;
-        justify-content: center;
-        padding: var(--spacing-small);
       }
     `,
   ];
@@ -157,21 +111,15 @@ export class ProviderKeyModal extends LitElement {
   @state() private error = '';
 
   @query('input') private keyInput?: HTMLInputElement;
-  @query('.provider-key-dialog') private dialog?: HTMLFormElement;
 
-  private previousFocus: HTMLElement | null = null;
+  // Drives wa-dialog's `open` reactive property; toggled by close() so the
+  // dialog plays its hide animation and dispatches wa-after-hide.
+  @state() private dialogOpen = true;
 
-  override connectedCallback(): void {
-    super.connectedCallback();
-    this.previousFocus =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
-  }
-
-  override firstUpdated(): void {
-    this.keyInput?.focus();
-  }
+  // Distinguishes a user-initiated close (Escape / Cancel button / dialog close
+  // button) from a programmatic close after submit. Submit dispatches its own
+  // event and suppresses the cancel dispatch on the subsequent wa-after-hide.
+  private suppressCancel = false;
 
   private clearSecretValue(): void {
     this.value = '';
@@ -180,21 +128,26 @@ export class ProviderKeyModal extends LitElement {
     }
   }
 
-  private restoreFocus(): void {
-    this.previousFocus?.focus();
+  private close(): void {
+    this.dialogOpen = false;
   }
 
-  private close(): void {
+  private handleAfterShow(): void {
+    this.keyInput?.focus();
+  }
+
+  private handleAfterHide(): void {
+    if (this.suppressCancel) {
+      this.suppressCancel = false;
+      return;
+    }
     this.clearSecretValue();
     this.error = '';
     this.dispatchEvent(createEvent('provider-key-cancel'));
-    this.restoreFocus();
   }
 
-  private handleBackdropClick(event: MouseEvent): void {
-    if (event.target === event.currentTarget) {
-      this.close();
-    }
+  private handleCancelClick(): void {
+    this.close();
   }
 
   private handleInput(event: Event): void {
@@ -215,81 +168,27 @@ export class ProviderKeyModal extends LitElement {
 
     this.clearSecretValue();
     this.error = '';
+    this.suppressCancel = true;
     this.dispatchEvent(
       createEvent('provider-key-submit', {
         provider: this.provider,
         apiKey,
       }),
     );
-    this.restoreFocus();
-  }
-
-  private getFocusableElements(): HTMLElement[] {
-    const selector = [
-      'button:not([disabled])',
-      'input:not([disabled])',
-      '[href]',
-      '[tabindex]:not([tabindex="-1"])',
-    ].join(',');
-    return [...(this.dialog?.querySelectorAll<HTMLElement>(selector) ?? [])];
-  }
-
-  private handleDialogKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      this.close();
-      return;
-    }
-
-    if (event.key !== 'Tab') {
-      return;
-    }
-
-    const focusable = this.getFocusableElements();
-    const first = focusable.at(0);
-    const last = focusable.at(-1);
-    if (!first || !last) {
-      return;
-    }
-
-    const active = this.shadowRoot?.activeElement;
-    if (event.shiftKey && active === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && active === last) {
-      event.preventDefault();
-      first.focus();
-    }
+    this.close();
   }
 
   override render(): TemplateResult {
     const displayName = this.displayName || this.provider;
     return html`
-      <div
-        class="provider-key-backdrop"
-        role="presentation"
-        @click=${this.handleBackdropClick}
+      <wa-dialog
+        class="provider-key-dialog"
+        label=${`Set ${displayName} API key`}
+        ?open=${this.dialogOpen}
+        @wa-after-show=${this.handleAfterShow}
+        @wa-after-hide=${this.handleAfterHide}
       >
-        <form
-          class="provider-key-dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="provider-key-title"
-          @submit=${this.handleSubmit}
-          @keydown=${this.handleDialogKeydown}
-        >
-          <div class="provider-key-header">
-            <h2 id="provider-key-title">Set ${displayName} API key</h2>
-            <button
-              class="provider-key-icon"
-              type="button"
-              title="Cancel"
-              aria-label="Cancel"
-              @click=${this.close}
-            >
-              <wa-icon library="texra" name="close"></wa-icon>
-            </button>
-          </div>
+        <form id="provider-key-form" @submit=${this.handleSubmit}>
           <p class="provider-key-description">
             The key is stored by TeXRA on this device and is not shown again
             after saving.
@@ -305,21 +204,25 @@ export class ProviderKeyModal extends LitElement {
             />
           </label>
           <p class="provider-key-error" aria-live="polite">${this.error}</p>
-          <div class="provider-key-actions">
-            <button
-              class="provider-key-secondary"
-              type="button"
-              @click=${this.close}
-            >
-              Cancel
-            </button>
-            <button class="provider-key-primary" type="submit">
-              <wa-icon library="texra" name="key"></wa-icon>
-              Save Key
-            </button>
-          </div>
         </form>
-      </div>
+        <div slot="footer" class="provider-key-actions">
+          <button
+            class="provider-key-secondary"
+            type="button"
+            @click=${this.handleCancelClick}
+          >
+            Cancel
+          </button>
+          <button
+            class="provider-key-primary"
+            type="submit"
+            form="provider-key-form"
+          >
+            <wa-icon library="texra" name="key"></wa-icon>
+            Save Key
+          </button>
+        </div>
+      </wa-dialog>
     `;
   }
 }
