@@ -97,7 +97,7 @@ export const tintedBadgeStyles: CSSResult = css`
     display: inline-flex;
     align-items: center;
     gap: var(--wa-space-3xs);
-    padding: 1px var(--wa-space-2xs);
+    padding: var(--border-thin) var(--wa-space-2xs);
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-semibold);
     color: var(--_tint, var(--color-text-secondary));
