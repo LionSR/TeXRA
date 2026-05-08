@@ -17,9 +17,11 @@ import {
   type ConversationProgress,
   type StreamTabInfo,
 } from '@shared/schemas';
-import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
+
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, TOOLBAR_BUTTONS } from '../constants';
@@ -121,7 +123,6 @@ export class StreamHeader extends LitElement {
     designTokens,
     animationStyles,
     commonViewStyles,
-    codiconIconClasses,
     statusIndicatorStyles,
     css`
       :host {
@@ -302,11 +303,11 @@ export class StreamHeader extends LitElement {
         border-radius: var(--border-radius-small);
       }
 
-      .parent-link .codicon {
+      .parent-link wa-icon {
         font-size: var(--font-size-xs);
       }
 
-      wa-tag.progress-badge .codicon {
+      wa-tag.progress-badge wa-icon {
         font-size: var(--font-size-xs);
       }
 
@@ -445,7 +446,7 @@ export class StreamHeader extends LitElement {
       size="small"
       title="Conversation turns: ${p.conversationTurns}, Tool calls: ${p.toolCallCount}"
     >
-      <i class="codicon codicon-pulse"></i>
+      <wa-icon library="texra" name="pulse" aria-hidden="true"></wa-icon>
       ${p.conversationTurns}
       turns${p.toolCallCount > 0
         ? html`, ${p.toolCallCount} tool calls`
@@ -469,7 +470,7 @@ export class StreamHeader extends LitElement {
         title="Go to parent: ${displayName}"
         @click=${this.navigateToParent}
       >
-        <i class="codicon codicon-arrow-left"></i>
+        <wa-icon library="texra" name="arrow-left" aria-hidden="true"></wa-icon>
         ${displayName}
       </span>
     `;

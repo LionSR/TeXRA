@@ -8,9 +8,11 @@ import {
 } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { selectStyles } from '@shared/styles/selectStyles';
 import {
   renderAgentOptions,
@@ -25,7 +27,6 @@ export class WorkflowToolUseFollowupSection extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    codiconIconClasses,
     selectStyles,
     css`
       :host {
@@ -145,12 +146,17 @@ export class WorkflowToolUseFollowupSection extends LitElement {
           aria-expanded=${this.expanded ? 'true' : 'false'}
           @click=${this.toggleExpanded}
         >
-          <i
-            class=${`codicon codicon-chevron-${this.expanded ? 'down' : 'right'}`}
+          <wa-icon
+            library="texra"
+            name=${this.expanded ? 'chevron-down' : 'chevron-right'}
             aria-hidden="true"
-          ></i>
+          ></wa-icon>
           <span class="followup__title">Tool-use follow-up</span>
-          <i class="codicon codicon-comment-discussion" aria-hidden="true"></i>
+          <wa-icon
+            library="texra"
+            name="comment-discussion"
+            aria-hidden="true"
+          ></wa-icon>
         </button>
 
         ${this.expanded
@@ -201,7 +207,12 @@ export class WorkflowToolUseFollowupSection extends LitElement {
                     ?disabled=${!ready}
                     @click=${this.setupFollowup}
                   >
-                    <span slot="start" class="codicon codicon-reply"></span>
+                    <wa-icon
+                      slot="start"
+                      library="texra"
+                      name="reply"
+                      aria-hidden="true"
+                    ></wa-icon>
                     Setup
                   </vscode-button>
                   <vscode-button
@@ -209,7 +220,12 @@ export class WorkflowToolUseFollowupSection extends LitElement {
                     ?disabled=${!ready}
                     @click=${this.runFollowup}
                   >
-                    <span slot="start" class="codicon codicon-play"></span>
+                    <wa-icon
+                      slot="start"
+                      library="texra"
+                      name="play"
+                      aria-hidden="true"
+                    ></wa-icon>
                     Run
                   </vscode-button>
                 </div>

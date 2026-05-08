@@ -19,9 +19,11 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { keyed } from 'lit/directives/keyed.js';
 import { repeat } from 'lit/directives/repeat.js';
 
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
 // Local imports - shared styles
 import {
-  codiconIconClasses,
   commonViewStyles,
   designTokens,
   requestPanelStyles,
@@ -111,12 +113,7 @@ const SECTION_CONFIGS: Record<string, SectionConfig> = {
 
 @customElement('request-panels')
 export class RequestPanels extends LitElement {
-  static override styles = [
-    designTokens,
-    commonViewStyles,
-    codiconIconClasses,
-    requestPanelStyles,
-  ];
+  static override styles = [designTokens, commonViewStyles, requestPanelStyles];
 
   @property({ attribute: false }) permissions: PermissionState[] = [];
 
@@ -177,7 +174,11 @@ export class RequestPanels extends LitElement {
   ): TemplateResult {
     return html`
       <div class="${config.cssClass}__header">
-        <i class="codicon codicon-${config.icon}"></i>
+        <wa-icon
+          library="texra"
+          name=${config.icon}
+          aria-hidden="true"
+        ></wa-icon>
         <span>${config.title}</span>
         ${extra}
       </div>
@@ -232,7 +233,11 @@ export class RequestPanels extends LitElement {
           ?disabled=${this._eiIndex === 0}
           @click=${this._eiPrev}
         >
-          <i class="codicon codicon-chevron-left"></i>
+          <wa-icon
+            library="texra"
+            name="chevron-left"
+            aria-hidden="true"
+          ></wa-icon>
         </button>
         <span class="external-inquiry-requests__counter">
           ${this._eiIndex + 1} / ${perms.length}
@@ -243,7 +248,11 @@ export class RequestPanels extends LitElement {
           ?disabled=${this._eiIndex === perms.length - 1}
           @click=${this._eiNext}
         >
-          <i class="codicon codicon-chevron-right"></i>
+          <wa-icon
+            library="texra"
+            name="chevron-right"
+            aria-hidden="true"
+          ></wa-icon>
         </button>
       </div>
     `;

@@ -12,7 +12,6 @@ import type { FileListEntry } from '@shared/schemas';
 import { hljs } from '@shared/highlighting/hljs';
 
 // Local imports - shared utilities
-import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 import { getBasename } from '@shared/utils/path';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -102,7 +101,7 @@ export function wrapInPre(text: string, className = ''): TemplateResult {
 }
 
 // Note: Toggle icons now use CSS-only rotation via details[open] selector.
-// Always render with CHEVRON_RIGHT_CLASS and CSS will rotate when open.
+// Always render the chevron-right icon and CSS will rotate when open.
 
 /** Build a copy button for banner content. */
 export function buildCopyButton(
@@ -115,12 +114,18 @@ export function buildCopyButton(
   return html`<wa-button class="action-icon-button banner-content-copy" appearance="plain" variant="neutral" size="small" type="button" title=${title} aria-label=${title} data-default-title=${title} data-success-title="Copied!" data-copy-id=${ifDefined(copyId || undefined)} data-copy-type="banner" ?hidden=${hidden}>${waIcon('copy')}</wa-button>`;
 }
 
+/**
+ * Sentinel value for {@link DetailsSummaryOptions.iconName} that renders an
+ * inline `<wa-spinner>` instead of a `<wa-icon>`. Used for in-progress states.
+ */
+export const SPINNER_ICON_NAME = '__spinner__';
+
 /** Options for building a details summary header. */
 export interface DetailsSummaryOptions {
-  iconClass: string;
+  /** wa-icon name (codicon-style aliases supported), or {@link SPINNER_ICON_NAME}. */
+  iconName: string;
   label: string;
   labelClass?: string;
-  includeIconClass?: boolean;
   timestamp?: { display: string; tooltip: string };
   copyButton?: {
     title: string;
@@ -137,17 +142,17 @@ export function buildDetailsSummary(
   options: DetailsSummaryOptions,
 ): TemplateResult {
   const {
-    iconClass,
+    iconName,
     label,
     labelClass = 'label',
-    includeIconClass = true,
     timestamp,
     copyButton,
     extraContent,
   } = options;
-  const iconClasses = includeIconClass
-    ? `codicon icon ${iconClass}`
-    : `codicon ${iconClass}`;
+  // prettier-ignore
+  const iconTemplate = iconName === SPINNER_ICON_NAME
+    ? html`<wa-spinner class="icon"></wa-spinner>`
+    : html`<wa-icon library="texra" name=${iconName} class="icon" aria-hidden="true"></wa-icon>`;
   // prettier-ignore
   const timestampTemplate = timestamp
     ? html` <span class="timestamp" title=${timestamp.tooltip}>${timestamp.display}</span>`
@@ -158,7 +163,7 @@ export function buildDetailsSummary(
   const extraTemplate = extraContent ?? nothing;
   // Toggle icon uses CSS rotation via details[open] selector - always start with chevron-right
   // prettier-ignore
-  return html`<summary class="details-summary"><i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i> <i class=${iconClasses}></i> <span class=${labelClass}>${label}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</summary>`;
+  return html`<summary class="details-summary"><wa-icon library="texra" name="chevron-right" class="toggle-icon" aria-hidden="true"></wa-icon> ${iconTemplate} <span class=${labelClass}>${label}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</summary>`;
 }
 
 /** Build rendered templates for file list. */
@@ -170,7 +175,7 @@ export function buildFileListRender(files: FileListEntry[]): {
 
   // prettier-ignore
   const items = html`${files.map((file) => {
-    const icon = file.ok ? 'codicon-check' : 'codicon-warning';
+    const iconName = file.ok ? 'check' : 'warning';
     const filePath = file.path;
     const fileName = getBasename(filePath);
 
@@ -179,7 +184,7 @@ export function buildFileListRender(files: FileListEntry[]): {
     const sourceText = file.sourceDisplay ?? source;
 
     // prettier-ignore
-    return html`<li class="detail-item" title=${filePath}><i class=${`codicon ${icon}`}></i> <span class="file-link clickable-link" data-file=${filePath}>${fileName}</span>${file.varName ? html` <span class="file-var">[${file.varName}]</span>` : ''}${showSource ? html` <span class="file-source">(${sourceText})</span>` : ''}</li>`;
+    return html`<li class="detail-item" title=${filePath}><wa-icon library="texra" name=${iconName} aria-hidden="true"></wa-icon> <span class="file-link clickable-link" data-file=${filePath}>${fileName}</span>${file.varName ? html` <span class="file-var">[${file.varName}]</span>` : ''}${showSource ? html` <span class="file-source">(${sourceText})</span>` : ''}</li>`;
   })}`;
 
   const loadedFiles = files.filter((file) => file.ok).length;
@@ -190,10 +195,10 @@ export function buildFileListRender(files: FileListEntry[]): {
   return { items, summary };
 }
 
-/** Get appropriate icon class for a tool. */
-export function getToolIconClass(toolName: string, isError = false): string {
-  if (isError) return 'codicon-error';
-  return TOOL_ICON_MAP[toolName] ?? 'codicon-wrench';
+/** Get appropriate wa-icon name for a tool. */
+export function getToolIconName(toolName: string, isError = false): string {
+  if (isError) return 'error';
+  return TOOL_ICON_MAP[toolName] ?? 'wrench';
 }
 
 // ============================================================================
@@ -259,7 +264,7 @@ export function buildCodeBlock(
   // prettier-ignore
   const languageBadge = showLanguage ? html`<span class="code-block-language">${getLanguageLabel(language)}</span>` : nothing;
   // prettier-ignore
-  const copyButton = showCopy ? html`<button class="code-block-copy" title="Copy to clipboard" data-copy-id=${registerCopyContent(text)} data-copy-type="code-block"><i class="codicon codicon-copy"></i></button>` : nothing;
+  const copyButton = showCopy ? html`<button class="code-block-copy" title="Copy to clipboard" data-copy-id=${registerCopyContent(text)} data-copy-type="code-block"><wa-icon library="texra" name="copy" aria-hidden="true"></wa-icon></button>` : nothing;
   // prettier-ignore
   const codeTemplate = html`<pre class=${classMap(preClasses)}><code>${isHighlighted ? unsafeHTML(highlighted) : text}</code></pre>`;
   // prettier-ignore
@@ -285,7 +290,7 @@ export function buildFileLinkWithLines(
   const displayText = fileName + lineInfo;
 
   // prettier-ignore
-  return html`<span class="file-link clickable-link" data-file=${filePath} data-file-line=${ifDefined(startLine)}><i class="codicon codicon-file"></i> ${displayText}</span>`;
+  return html`<span class="file-link clickable-link" data-file=${filePath} data-file-line=${ifDefined(startLine)}><wa-icon library="texra" name="file" aria-hidden="true"></wa-icon> ${displayText}</span>`;
 }
 
 // ============================================================================
@@ -297,7 +302,7 @@ export function buildMemoryPathDisplay(memoryPath: string): TemplateResult {
   if (!memoryPath) return html``;
   const fileName = getBasename(memoryPath) || memoryPath;
   // prettier-ignore
-  return html`<span class="memory-path"><i class="codicon codicon-database"></i> ${fileName} <span class="file-source">(${memoryPath})</span></span>`;
+  return html`<span class="memory-path"><wa-icon library="texra" name="database" aria-hidden="true"></wa-icon> ${fileName} <span class="file-source">(${memoryPath})</span></span>`;
 }
 
 // ============================================================================
@@ -308,7 +313,7 @@ export function buildMemoryPathDisplay(memoryPath: string): TemplateResult {
 export function buildExecutionsPathDisplay(execPath: string): TemplateResult {
   if (!execPath) return html``;
   // prettier-ignore
-  return html`<span class="memory-path"><i class="codicon codicon-history"></i> ${execPath}</span>`;
+  return html`<span class="memory-path"><wa-icon library="texra" name="history" aria-hidden="true"></wa-icon> ${execPath}</span>`;
 }
 
 // ============================================================================

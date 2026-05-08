@@ -28,9 +28,11 @@ import {
   PERMISSION_KIND,
 } from '@shared/utils/uiConstants';
 import { designTokens } from '@shared/styles/litStyles';
-import { codiconIconClasses } from '@shared/styles/codiconStyles';
 import { filledButtonStyles } from '@shared/styles/commonViewStyles';
 import { permissionCardStyles } from '@shared/styles/permissionCardStyles';
+
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - progress view
 import { ProgressEvents } from '../events';
@@ -70,14 +72,14 @@ type ActionConfig = {
 // Configuration
 // =============================================================================
 
-/** Icon for each permission type header */
+/** wa-icon name for each permission type header */
 const PERMISSION_ICONS: Record<PermissionState['kind'], string> = {
-  [PERMISSION_KIND.TOOL_EDIT]: 'codicon-diff',
-  [PERMISSION_KIND.BASH]: 'codicon-terminal',
-  [PERMISSION_KIND.RETRY]: 'codicon-refresh',
-  [PERMISSION_KIND.PROPOSAL]: 'codicon-rocket',
-  [PERMISSION_KIND.PLAN_APPROVAL]: 'codicon-tasklist',
-  [PERMISSION_KIND.EXTERNAL_INQUIRY]: 'codicon-globe',
+  [PERMISSION_KIND.TOOL_EDIT]: 'diff',
+  [PERMISSION_KIND.BASH]: 'terminal',
+  [PERMISSION_KIND.RETRY]: 'refresh',
+  [PERMISSION_KIND.PROPOSAL]: 'rocket',
+  [PERMISSION_KIND.PLAN_APPROVAL]: 'tasklist',
+  [PERMISSION_KIND.EXTERNAL_INQUIRY]: 'globe',
 };
 
 /** Title for each permission type */
@@ -93,74 +95,39 @@ const PERMISSION_TITLES: Record<PermissionState['kind'], string> = {
 /** Primary actions (approve/reject) for each permission type */
 const PRIMARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
   [PERMISSION_KIND.TOOL_EDIT]: [
-    {
-      action: 'approve',
-      label: 'Approve',
-      icon: 'codicon-check',
-      variant: 'approve',
-    },
-    { action: 'reject', label: 'Reject', icon: 'codicon-x', variant: 'reject' },
+    { action: 'approve', label: 'Approve', icon: 'check', variant: 'approve' },
+    { action: 'reject', label: 'Reject', icon: 'x', variant: 'reject' },
   ],
   [PERMISSION_KIND.BASH]: [
-    {
-      action: 'approve',
-      label: 'Approve',
-      icon: 'codicon-check',
-      variant: 'approve',
-    },
-    { action: 'reject', label: 'Reject', icon: 'codicon-x', variant: 'reject' },
+    { action: 'approve', label: 'Approve', icon: 'check', variant: 'approve' },
+    { action: 'reject', label: 'Reject', icon: 'x', variant: 'reject' },
   ],
   [PERMISSION_KIND.RETRY]: [
-    {
-      action: 'retry',
-      label: 'Retry',
-      icon: 'codicon-refresh',
-      variant: 'approve',
-    },
-    { action: 'cancel', label: 'Cancel', icon: 'codicon-x', variant: 'reject' },
+    { action: 'retry', label: 'Retry', icon: 'refresh', variant: 'approve' },
+    { action: 'cancel', label: 'Cancel', icon: 'x', variant: 'reject' },
   ],
   [PERMISSION_KIND.PROPOSAL]: [
-    {
-      action: 'approve',
-      label: 'Approve',
-      icon: 'codicon-check',
-      variant: 'approve',
-    },
-    { action: 'reject', label: 'Reject', icon: 'codicon-x', variant: 'reject' },
+    { action: 'approve', label: 'Approve', icon: 'check', variant: 'approve' },
+    { action: 'reject', label: 'Reject', icon: 'x', variant: 'reject' },
   ],
   [PERMISSION_KIND.PLAN_APPROVAL]: [
-    {
-      action: 'approve',
-      label: 'Approve',
-      icon: 'codicon-check',
-      variant: 'approve',
-    },
-    { action: 'reject', label: 'Reject', icon: 'codicon-x', variant: 'reject' },
+    { action: 'approve', label: 'Approve', icon: 'check', variant: 'approve' },
+    { action: 'reject', label: 'Reject', icon: 'x', variant: 'reject' },
   ],
   // External inquiry uses its own panel with answer textarea; only reject here as fallback.
   [PERMISSION_KIND.EXTERNAL_INQUIRY]: [
-    {
-      action: 'reject',
-      label: 'Reject',
-      icon: 'codicon-x',
-      variant: 'reject',
-    },
+    { action: 'reject', label: 'Reject', icon: 'x', variant: 'reject' },
   ],
 };
 
 /** Secondary actions for each permission type */
 const SECONDARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
   [PERMISSION_KIND.TOOL_EDIT]: [
-    {
-      action: 'openDiff',
-      label: 'Diff',
-      icon: 'codicon-diff',
-      variant: 'secondary',
-    },
+    { action: 'openDiff', label: 'Diff', icon: 'diff', variant: 'secondary' },
     {
       action: 'previewProposed',
       label: 'Preview',
-      icon: 'codicon-eye',
+      icon: 'eye',
       variant: 'secondary',
     },
     {
@@ -173,12 +140,7 @@ const SECONDARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
   [PERMISSION_KIND.BASH]: [],
   [PERMISSION_KIND.RETRY]: [],
   [PERMISSION_KIND.PROPOSAL]: [
-    {
-      action: 'setup',
-      label: 'Setup',
-      icon: 'codicon-reply',
-      variant: 'secondary',
-    },
+    { action: 'setup', label: 'Setup', icon: 'reply', variant: 'secondary' },
   ],
   [PERMISSION_KIND.PLAN_APPROVAL]: [],
   [PERMISSION_KIND.EXTERNAL_INQUIRY]: [],
@@ -192,7 +154,6 @@ const SECONDARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
 export class PermissionCard extends LitElement {
   static override styles = [
     designTokens,
-    codiconIconClasses,
     filledButtonStyles,
     permissionCardStyles,
   ];
@@ -213,7 +174,11 @@ export class PermissionCard extends LitElement {
     return html`
       <div class="permission-card" data-type=${this.permission.kind}>
         <div class="permission-header">
-          <i class="codicon ${PERMISSION_ICONS[this.permission.kind]}"></i>
+          <wa-icon
+            library="texra"
+            name=${PERMISSION_ICONS[this.permission.kind]}
+            aria-hidden="true"
+          ></wa-icon>
           <span>${this.getTitle()}</span>
         </div>
         <div class="permission-body">${this.renderBody()}</div>
@@ -326,7 +291,12 @@ export class PermissionCard extends LitElement {
         (flag) => flag,
         (flag) =>
           html`<span class="extract-flag"
-            ><i class="codicon codicon-file-media"></i> ${flag}</span
+            ><wa-icon
+              library="texra"
+              name="file-media"
+              aria-hidden="true"
+            ></wa-icon>
+            ${flag}</span
           >`,
       )}
     </p>`;
@@ -461,7 +431,13 @@ export class PermissionCard extends LitElement {
         data-action=${action}
         @click=${this.handleActionClick}
       >
-        ${icon ? html`<i class="codicon ${icon}"></i>` : nothing}
+        ${icon
+          ? html`<wa-icon
+              library="texra"
+              name=${icon}
+              aria-hidden="true"
+            ></wa-icon>`
+          : nothing}
         ${displayLabel}
       </button>
     `;

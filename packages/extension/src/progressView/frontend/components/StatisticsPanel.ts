@@ -9,12 +9,11 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { codiconIconClasses } from '@shared/styles/codiconStyles';
-
-// Local imports - shared utilities
-import { CHEVRON_RIGHT_CLASS } from '@shared/utils/icons';
 
 /** Stat item to display */
 export interface StatItem {
@@ -28,7 +27,6 @@ export class StatisticsPanel extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    codiconIconClasses,
     css`
       :host {
         display: block;
@@ -67,8 +65,18 @@ export class StatisticsPanel extends LitElement {
     return html`
       <details>
         <summary class="details-summary">
-          <i class="${CHEVRON_RIGHT_CLASS} toggle-icon"></i>
-          <i class="codicon codicon-graph"></i>
+          <wa-icon
+            library="texra"
+            name="chevron-right"
+            class="toggle-icon"
+            aria-hidden="true"
+          ></wa-icon>
+          <wa-icon
+            library="texra"
+            name="graph"
+            class="icon"
+            aria-hidden="true"
+          ></wa-icon>
           <span>Statistics</span>
         </summary>
         <div class="statistics-content" data-log-id=${this.logId}>
@@ -77,7 +85,11 @@ export class StatisticsPanel extends LitElement {
             (item) => item.label,
             (item) => html`
               <span class="stat-item" title=${item.label}>
-                <i class="codicon ${item.icon}"></i>
+                <wa-icon
+                  library="texra"
+                  name=${item.icon}
+                  aria-hidden="true"
+                ></wa-icon>
                 ${item.value}
               </span>
             `,

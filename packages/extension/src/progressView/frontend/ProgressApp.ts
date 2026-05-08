@@ -9,6 +9,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { z } from 'zod';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 
 // Local imports - shared webview
 import {
@@ -37,7 +38,7 @@ import {
   select,
   combine,
 } from '@shared/signals';
-import { codiconStyles, designTokens, viewTabStyles } from '@shared/styles';
+import { designTokens, viewTabStyles } from '@shared/styles';
 import {
   registerTeXRAWebAwesomeIcons,
   TEXRA_ICON_LIBRARY,
@@ -142,7 +143,6 @@ const ProgressAppBase = SignalWatcher(
 export class ProgressApp extends ProgressAppBase {
   // Static 'styles' override lost through mixin type erasure; still works at runtime.
   static styles = [
-    codiconStyles,
     designTokens,
     viewTabStyles,
     css`
