@@ -209,7 +209,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .approval-request__path {
-    font-family: var(--texra-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-sm);
     color: var(--color-text-link);
     word-break: break-word;
@@ -288,7 +288,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .bash-approval-request__command {
-    font-family: var(--texra-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-sm);
   }
 
@@ -314,7 +314,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .retry-request__operation {
-    font-family: var(--texra-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-normal);
     font-weight: var(--font-weight-medium);
@@ -354,7 +354,7 @@ export const requestPanelStyles: CSSResult = css`
     padding: ${sp.small};
     background: var(--texra-textBlockQuote-background, rgba(0, 0, 0, 0.1));
     border-radius: var(--border-radius-small);
-    font-family: var(--texra-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-xs);
     white-space: pre-wrap;
     word-break: break-word;
@@ -396,7 +396,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .workflow-proposal__agent {
-    font-family: var(--texra-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     font-size: var(--font-size);
     font-weight: var(--font-weight-semibold);
     color: var(--wa-color-text-link);
@@ -486,7 +486,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .workflow-proposal__file-name {
-    font-family: var(--texra-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     color: var(--wa-color-text-link);
     cursor: pointer;
   }
@@ -546,7 +546,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .plan-approval-request__step-files {
-    font-family: var(--texra-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-xs);
     color: var(--color-text-secondary);
     margin-top: ${sp.tiny};
@@ -700,7 +700,7 @@ export const requestPanelStyles: CSSResult = css`
     align-items: center;
     gap: ${sp.small};
     font-size: var(--font-size-sm);
-    font-family: var(--texra-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     color: var(--wa-color-text-link);
   }
 
@@ -740,7 +740,7 @@ export const requestPanelStyles: CSSResult = css`
 
   .external-inquiry-request__session-link-item {
     font-size: var(--font-size-sm);
-    font-family: var(--texra-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     color: var(--wa-color-text-link);
     word-break: break-word;
   }
@@ -750,7 +750,7 @@ export const requestPanelStyles: CSSResult = css`
     min-height: 72px;
     max-height: min(18vh, 8rem);
     resize: vertical;
-    font-family: var(--texra-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
     padding: ${sp.medium};
@@ -800,7 +800,7 @@ export const requestPanelStyles: CSSResult = css`
     min-height: 96px;
     max-height: min(24vh, 12rem);
     resize: vertical;
-    font-family: var(--texra-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     font-size: var(--font-size);
     line-height: var(--line-height-normal);
     padding: ${sp.medium};

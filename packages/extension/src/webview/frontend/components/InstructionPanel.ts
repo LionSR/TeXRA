@@ -227,7 +227,7 @@ export class InstructionPanel extends LitElement {
       wa-textarea#instruction {
         width: 100%;
         margin: var(--wa-space-xs) 0;
-        font-family: var(--texra-editor-font-family);
+        font-family: var(--wa-font-family-mono);
         font-size: var(--font-size);
       }
 
