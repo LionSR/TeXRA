@@ -25,15 +25,16 @@ export function registerProgressViewCommands(
         await provider.showProgressView({ inPlace });
       },
     ),
-    vscode.commands.registerCommand('texra.openProgressViewInTab', async () => {
-      const provider = ProgressViewProvider.getInstance();
-      if (!provider) {
-        await vscode.window.showErrorMessage(
-          'Progress View is not available. Please try again.',
-        );
-        return;
-      }
-      await provider.popOutToEditor();
-    }),
   );
+}
+
+export async function openProgressViewInTab(): Promise<void> {
+  const provider = ProgressViewProvider.getInstance();
+  if (!provider) {
+    await vscode.window.showErrorMessage(
+      'Progress View is not available. Please try again.',
+    );
+    return;
+  }
+  await provider.popOutToEditor();
 }

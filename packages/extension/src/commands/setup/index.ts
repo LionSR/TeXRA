@@ -1,1 +1,1 @@
-export { registerSetupAssistantCommand } from './setupAssistantCommand';
+export { runSetupAssistant } from './setupAssistantCommand';

@@ -1,5 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import { z } from 'zod';
 
 // Local imports
 import {
@@ -7,15 +8,32 @@ import {
   signOut as authSignOut,
   viewProfile as authViewProfile,
 } from '@auth/authCommands';
+import {
+  stopAgent as agentStopAgent,
+  compactResponse as agentCompactResponse,
+} from '@commands/agent';
+import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex';
+import { runSetupAssistant as setupRunAssistant } from '@commands/setup';
+import {
+  createSampleProject as sysCreateSampleProject,
+  handleTestConnection as sysHandleTestConnection,
+  handleTestAgentLoading as sysHandleTestAgentLoading,
+  handleLoadSpecificAgent as sysHandleLoadSpecificAgent,
+} from '@commands/system';
 import { handleIndentTeX } from '@commands/latex/latexCommands';
+import { openProgressViewInTab as progressOpenInTab } from '@commands/progress/progressViewCommands';
+import { openDoc as sysOpenDoc } from '@commands/system/helpCommands';
+import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { runCleanBuild, runCleanOutput } from '@housekeeping';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import {
+  definedHandler,
   dispatchCommandFromRegistry,
   type CommandHandler,
 } from '@shared/commands/registry';
+import { StreamTabIdSchema } from '@shared/schemas/identifiers';
 import {
   SETTINGS_TAB,
   type SettingsTab,
@@ -55,6 +73,17 @@ export type ExtensionRegistryCommandId = Extract<
   | 'texra.auth.signIn'
   | 'texra.auth.signOut'
   | 'texra.auth.viewProfile'
+  | 'texra.runSetupAssistant'
+  | 'texra.openGettingStarted'
+  | 'texra.createSampleProject'
+  | 'texra.downloadArXivSource'
+  | 'texra.testConnection'
+  | 'texra.testAgentLoading'
+  | 'texra.loadSpecificAgent'
+  | 'texra.openProgressViewInTab'
+  | 'texra.openDoc'
+  | 'texra.stopAgent'
+  | 'texra.compactResponse'
 >;
 
 /**
@@ -72,9 +101,21 @@ export interface ExtensionCommandActions {
   signIn(): Promise<boolean>;
   signOut(): Promise<void>;
   viewProfile(): Promise<void>;
+  runSetupAssistant(): Promise<void>;
+  openGettingStarted(): Thenable<unknown>;
+  createSampleProject(): Promise<void>;
+  downloadArXivSource(): Promise<void>;
+  testConnection(): Promise<void>;
+  testAgentLoading(): Promise<void>;
+  loadSpecificAgent(): Promise<void>;
+  openProgressViewInTab(): Promise<void>;
+  openDoc(page: string): Promise<void>;
+  stopAgent(streamId: string): void;
+  compactResponse(streamId: string): Promise<void>;
 }
 
 export function createExtensionCommandActions(
+  context: vscode.ExtensionContext,
   settingsViewProvider: SettingsViewProvider,
 ): ExtensionCommandActions {
   return {
@@ -107,6 +148,17 @@ export function createExtensionCommandActions(
     signIn: authSignIn,
     signOut: authSignOut,
     viewProfile: authViewProfile,
+    runSetupAssistant: setupRunAssistant,
+    openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
+    createSampleProject: () => sysCreateSampleProject(context.extensionPath),
+    downloadArXivSource: latexDownloadArXivSource,
+    testConnection: sysHandleTestConnection,
+    testAgentLoading: sysHandleTestAgentLoading,
+    loadSpecificAgent: sysHandleLoadSpecificAgent,
+    openProgressViewInTab: progressOpenInTab,
+    openDoc: sysOpenDoc,
+    stopAgent: agentStopAgent,
+    compactResponse: agentCompactResponse,
   };
 }
 
@@ -171,9 +223,66 @@ const EXTENSION_COMMAND_HANDLERS = {
     void actions.viewProfile();
     return true;
   },
+  'texra.runSetupAssistant': (actions) => {
+    void actions.runSetupAssistant();
+    return true;
+  },
+  'texra.openGettingStarted': (actions) => {
+    void actions.openGettingStarted();
+    return true;
+  },
+  'texra.createSampleProject': (actions) => {
+    void actions.createSampleProject();
+    return true;
+  },
+  'texra.downloadArXivSource': (actions) => {
+    void actions.downloadArXivSource();
+    return true;
+  },
+  'texra.testConnection': (actions) => {
+    void actions.testConnection();
+    return true;
+  },
+  'texra.testAgentLoading': (actions) => {
+    void actions.testAgentLoading();
+    return true;
+  },
+  'texra.loadSpecificAgent': (actions) => {
+    void actions.loadSpecificAgent();
+    return true;
+  },
+  'texra.openProgressViewInTab': (actions) => {
+    void actions.openProgressViewInTab();
+    return true;
+  },
+  'texra.openDoc': definedHandler(
+    z.string(),
+    (actions: ExtensionCommandActions, page) => {
+      void actions.openDoc(page);
+      return true;
+    },
+  ),
+  'texra.stopAgent': definedHandler(
+    StreamTabIdSchema,
+    (actions: ExtensionCommandActions, streamId) => {
+      actions.stopAgent(streamId);
+      return true;
+    },
+  ),
+  'texra.compactResponse': definedHandler(
+    StreamTabIdSchema,
+    (actions: ExtensionCommandActions, streamId) => {
+      void actions.compactResponse(streamId);
+      return true;
+    },
+  ),
 } as const satisfies Record<
   Exclude<ExtensionRegistryCommandId, 'texra.showAgents'>,
-  CommandHandler<ExtensionCommandActions>
+  // The typed handlers (`openDoc`, `stopAgent`, `compactResponse`) carry
+  // their own argument shapes via `definedHandler`. Matching the registry
+  // map's per-entry TArgs widening (`any`) keeps inference per entry
+  // without unifying every entry on `unknown`.
+  CommandHandler<ExtensionCommandActions, any>
 >;
 
 // `texra.showAgents` accepts an optional `AgentCategory` argument from
@@ -207,7 +316,7 @@ export function registerExtensionCommandRegistry(
     keyof typeof EXTENSION_COMMAND_HANDLERS
   >) {
     context.subscriptions.push(
-      vscode.commands.registerCommand(id, () => {
+      vscode.commands.registerCommand(id, (rawArg?: unknown) => {
         dispatchCommandFromRegistry(
           id,
           EXTENSION_COMMAND_HANDLERS,
@@ -217,6 +326,7 @@ export function registerExtensionCommandRegistry(
               `[extension] dispatch: unhandled command ${unhandledId}`,
             );
           },
+          rawArg,
         );
       }),
     );

@@ -15,48 +15,36 @@ import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { STREAM_STATUS } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
 
-export function registerAgentCommands(context: vscode.ExtensionContext): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'texra.stopAgent',
-      (streamId: StreamTabId) => {
-        if (
-          workspaceSM.get<boolean>(
-            WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-            false,
-          )
-        ) {
-          detachActiveChildren(streamId);
-        } else {
-          interruptActiveChildren(streamId);
-        }
-        getInterruptible(streamId)?.interrupt();
-        StreamStatusService.set(streamId, STREAM_STATUS.STOPPED);
-      },
-    ),
-    vscode.commands.registerCommand(
-      'texra.compactResponse',
-      async (streamId: StreamTabId) => {
-        const flowContext = getToolUseFlowContext(streamId);
-        if (!flowContext) {
-          await vscode.window.showInformationMessage(
-            'No active tool-use session found for this stream.',
-          );
-          return;
-        }
+export function stopAgent(streamId: StreamTabId): void {
+  if (
+    workspaceSM.get<boolean>(WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP, false)
+  ) {
+    detachActiveChildren(streamId);
+  } else {
+    interruptActiveChildren(streamId);
+  }
+  getInterruptible(streamId)?.interrupt();
+  StreamStatusService.set(streamId, STREAM_STATUS.STOPPED);
+}
 
-        if (!flowContext.modelHandler.supportsManualCompaction) {
-          await vscode.window.showInformationMessage(
-            'Manual context compaction is not yet available for this model. Stay tuned!',
-          );
-          return;
-        }
+export async function compactResponse(streamId: StreamTabId): Promise<void> {
+  const flowContext = getToolUseFlowContext(streamId);
+  if (!flowContext) {
+    await vscode.window.showInformationMessage(
+      'No active tool-use session found for this stream.',
+    );
+    return;
+  }
 
-        flowContext.modelHandler.requestCompaction();
-        await vscode.window.showInformationMessage(
-          'Context compaction requested. The conversation will be compacted on the next API call.',
-        );
-      },
-    ),
+  if (!flowContext.modelHandler.supportsManualCompaction) {
+    await vscode.window.showInformationMessage(
+      'Manual context compaction is not yet available for this model. Stay tuned!',
+    );
+    return;
+  }
+
+  flowContext.modelHandler.requestCompaction();
+  await vscode.window.showInformationMessage(
+    'Context compaction requested. The conversation will be compacted on the next API call.',
   );
 }

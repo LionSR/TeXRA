@@ -1,5 +1,5 @@
 // Barrel export for latex commands
-export { arXivCommands, registerArXivCommands } from './arXivCommands';
+export { arXivCommands, downloadArXivSource } from './arXivCommands';
 export { registerCompareCommands } from './compareCommands';
 export { registerFigureCommands } from './figCommands';
 export { registerImageCommands } from './imageCommands';
