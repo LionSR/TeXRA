@@ -14,6 +14,8 @@ import { classMap } from 'lit/directives/class-map.js';
 import { when } from 'lit/directives/when.js';
 
 // Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
+import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared styles
@@ -38,18 +40,7 @@ import { monacoLanguageForPath } from './monacoLanguage';
 export class ToolEditRequestPanel extends BaseFeedbackPanel {
   static override styles = [designTokens, commonViewStyles, requestPanelStyles];
 
-  @state() private diffMenuOpen = false;
   @state() private inlineDiffOpen = false;
-
-  override connectedCallback(): void {
-    super.connectedCallback();
-    document.addEventListener('click', this.handleOutsideClick, true);
-  }
-
-  override disconnectedCallback(): void {
-    document.removeEventListener('click', this.handleOutsideClick, true);
-    super.disconnectedCallback();
-  }
 
   protected override handleExtraKey(key: string): boolean {
     if (key === 'd') {
@@ -128,29 +119,30 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
         })}
         ${showDropdown
           ? html`
-              <wa-button
-                class="action-icon-button diff-dropdown-trigger"
-                appearance="plain"
-                variant="neutral"
-                size="small"
-                type="button"
-                aria-haspopup="true"
-                aria-expanded=${this.diffMenuOpen ? 'true' : 'false'}
-                aria-label="More diff actions"
-                title="More diff actions"
-                @click=${this.toggleDiffMenu}
-              >
-                ${waIcon('chevron-down')}
-              </wa-button>
-              <vscode-context-menu
+              <wa-dropdown
                 class="diff-dropdown-menu"
-                ?show=${this.diffMenuOpen}
-                .data=${[
-                  { label: 'Preview', value: 'previewProposed' },
-                  { label: 'LaTeXdiff', value: 'showLatexdiff' },
-                ]}
-                @vsc-click=${this.handleMenuClick}
-              ></vscode-context-menu>
+                placement="bottom-end"
+                @wa-select=${this.handleMenuSelect}
+              >
+                <wa-button
+                  slot="trigger"
+                  class="action-icon-button diff-dropdown-trigger"
+                  appearance="plain"
+                  variant="neutral"
+                  size="small"
+                  type="button"
+                  aria-label="More diff actions"
+                  title="More diff actions"
+                >
+                  ${waIcon('chevron-down')}
+                </wa-button>
+                <wa-dropdown-item value="previewProposed">
+                  Preview
+                </wa-dropdown-item>
+                <wa-dropdown-item value="showLatexdiff">
+                  LaTeXdiff
+                </wa-dropdown-item>
+              </wa-dropdown>
             `
           : nothing}
       </div>
@@ -215,31 +207,11 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
   // Diff menu handlers
   // ===========================================================================
 
-  private handleMenuClick = (event: CustomEvent): void => {
-    const action = event.detail?.value ?? '';
+  private handleMenuSelect = (event: CustomEvent<{ item: HTMLElement }>): void => {
+    const action =
+      (event.detail?.item as HTMLElement & { value?: string })?.value ?? '';
     if (!action) return;
-    this.diffMenuOpen = false;
     this.emitAction(action);
-  };
-
-  private handleOutsideClick = (event: MouseEvent): void => {
-    if (!this.diffMenuOpen) return;
-
-    const path = event.composedPath?.() ?? [];
-    const clickedInside = path.some(
-      (node) =>
-        node instanceof Element &&
-        (node.classList.contains('diff-dropdown') ||
-          node.classList.contains('diff-dropdown-menu')),
-    );
-    if (!clickedInside) {
-      this.diffMenuOpen = false;
-    }
-  };
-
-  private toggleDiffMenu = (event: MouseEvent): void => {
-    event.stopPropagation();
-    this.diffMenuOpen = !this.diffMenuOpen;
   };
 
   private handleDiffAction = (): void => {

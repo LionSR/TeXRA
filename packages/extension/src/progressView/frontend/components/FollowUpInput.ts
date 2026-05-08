@@ -26,6 +26,7 @@ import './QueuedFollowUps';
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/progress-ring/progress-ring.js';
+import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 @customElement('follow-up-input')
 export class FollowUpInput extends LitElement {
@@ -81,7 +82,7 @@ export class FollowUpInput extends LitElement {
         height: auto;
       }
 
-      #followUpInput::part(control) {
+      #followUpInput::part(textarea) {
         min-height: 106px;
         max-height: var(--height-xlarge);
         width: 100%;
@@ -187,7 +188,7 @@ export class FollowUpInput extends LitElement {
           ></queued-follow-ups>
 
           <div class="follow-up-input-row">
-            <vscode-textarea
+            <wa-textarea
               id=${ELEMENT_IDS.FOLLOW_UP_INPUT}
               placeholder="Send follow-up message"
               rows="10"
@@ -195,7 +196,7 @@ export class FollowUpInput extends LitElement {
               .value=${live(this.value)}
               @input=${this.handleInput}
               @keydown=${this.handleKeydown}
-            ></vscode-textarea>
+            ></wa-textarea>
 
             <div class="follow-up-actions">
               ${renderIconActionButton({
@@ -254,7 +255,7 @@ export class FollowUpInput extends LitElement {
 
     if (!this.textAreaEl || !this.visible) return;
 
-    // Focus the host element directly - vscode-textarea handles focus properly
+    // Focus the host element directly - wa-textarea handles focus properly
     this.textAreaEl.focus();
     if (options.scrollIntoView) {
       this.textAreaEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });

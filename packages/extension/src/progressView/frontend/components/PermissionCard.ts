@@ -33,6 +33,7 @@ import { permissionCardStyles } from '@shared/styles/permissionCardStyles';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 // Local imports - progress view
 import { ProgressEvents } from '../events';
@@ -332,11 +333,11 @@ export class PermissionCard extends LitElement {
     return html`
       <div class="feedback-section">
         <label class="feedback-label">Rejection feedback (optional):</label>
-        <vscode-textarea
+        <wa-textarea
           class="feedback-input"
           placeholder="Why are you rejecting?"
           rows="2"
-        ></vscode-textarea>
+        ></wa-textarea>
       </div>
     `;
   }

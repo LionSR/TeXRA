@@ -12,6 +12,7 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports
@@ -190,7 +191,7 @@ export class FileList extends LitElement {
         align-items: center;
       }
 
-      .file-actions :is(vscode-button, wa-button) {
+      .file-actions wa-button {
         margin-right: 0;
         margin-left: var(--spacing-tiny);
       }
@@ -314,8 +315,10 @@ export class FileList extends LitElement {
         ${this.failureByPath.size > 0
           ? html`
               <div class="compile-actions">
-                <vscode-button
-                  appearance="primary"
+                <wa-button
+                  appearance="filled"
+                  variant="brand"
+                  size="small"
                   @click=${this.runLatexFixer}
                 >
                   <wa-icon
@@ -325,7 +328,7 @@ export class FileList extends LitElement {
                     aria-hidden="true"
                   ></wa-icon>
                   Run latexFixer
-                </vscode-button>
+                </wa-button>
               </div>
             `
           : nothing}

@@ -248,9 +248,7 @@ export class LatexDiffsSection extends LitElement {
   }
 
   override render(): TemplateResult {
-    const chevronClass = this.visible
-      ? 'codicon-chevron-up'
-      : 'codicon-chevron-down';
+    const chevronName = this.visible ? 'chevron-up' : 'chevron-down';
 
     return html`
       <div class="latexdiffs-section" data-expanded=${String(this.visible)}>
@@ -262,10 +260,10 @@ export class LatexDiffsSection extends LitElement {
               title="LaTeXDiffs"
               @click=${this.handleToggle}
             >
-              <i class="codicon ${chevronClass}"></i>
+              ${waIcon(chevronName)}
             </span>
             <span class="optional-label"
-              ><i class="codicon codicon-source-control"></i> LaTeXDiffs</span
+              >${waIcon('source-control')} LaTeXDiffs</span
             >
           </div>
         </div>

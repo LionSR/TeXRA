@@ -15,6 +15,7 @@ import { when } from 'lit/directives/when.js';
 import { SortableController } from '@shared/controllers';
 import { designTokens, codiconStyles } from '@shared/styles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { MainViewEvents } from '../events';
 import {
   fileStateContext,
@@ -140,9 +141,7 @@ export class OutputFilesSection extends LitElement {
   }
 
   override render(): TemplateResult {
-    const chevronClass = this.currentExpanded
-      ? 'codicon-chevron-up'
-      : 'codicon-chevron-down';
+    const chevronName = this.currentExpanded ? 'chevron-up' : 'chevron-down';
 
     return html`
       <div class="file-select" data-expanded=${String(this.currentExpanded)}>
@@ -156,7 +155,7 @@ export class OutputFilesSection extends LitElement {
               aria-label="Show or hide additional files for the agent's output"
               @click=${this.handleToggle}
             >
-              <i class="codicon ${chevronClass}"></i>
+              ${waIcon(chevronName)}
             </button>
             <span
               class="optional-label"

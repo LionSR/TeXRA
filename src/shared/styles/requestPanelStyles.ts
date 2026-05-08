@@ -264,22 +264,14 @@ export const requestPanelStyles: CSSResult = css`
       var(--texra-button-separator, var(--texra-input-border));
   }
 
+  /* wa-dropdown handles its own popup positioning, but we still want
+     the trigger button to lay out alongside the main diff button. */
   .approval-request__actions .diff-dropdown .diff-dropdown-menu {
-    position: absolute;
-    top: calc(100% + ${sp.tiny});
-    left: 0;
-    z-index: 100;
-    min-width: 150px;
-    display: block;
+    flex: 0 0 auto;
+    display: inline-flex;
   }
 
-  .approval-request__actions .diff-dropdown .diff-dropdown-menu:not([show]) {
-    display: none;
-  }
-
-  .approval-request__actions
-    .diff-dropdown-trigger[aria-expanded='true']
-    .codicon-chevron-down {
+  .approval-request__actions .diff-dropdown wa-dropdown[open] .diff-dropdown-trigger wa-icon {
     transform: rotate(180deg);
   }
 
