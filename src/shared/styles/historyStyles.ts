@@ -104,7 +104,7 @@ export const historyListStyles: CSSResult = css`
     display: flex;
     flex-direction: column;
     gap: var(--wa-space-2xs);
-    background-color: var(--texra-editor-inactiveSelectionBackground);
+    background-color: var(--wa-color-neutral-fill-quiet);
     padding: var(--wa-space-xs);
     border-radius: var(--border-radius);
     margin: var(--wa-space-xs) 0;

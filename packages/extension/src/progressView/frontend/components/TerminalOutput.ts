@@ -223,10 +223,10 @@ export class TerminalOutput extends LitElement {
 
     const theme: Record<string, string> = {
       background:
-        styles.getPropertyValue('--texra-editor-background').trim() ||
+        styles.getPropertyValue('--wa-color-surface-default').trim() ||
         DEFAULT_THEME.background,
       foreground:
-        styles.getPropertyValue('--texra-editor-foreground').trim() ||
+        styles.getPropertyValue('--wa-color-text-normal').trim() ||
         DEFAULT_THEME.foreground,
     };
 
