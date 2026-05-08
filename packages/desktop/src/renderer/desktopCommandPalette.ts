@@ -1,9 +1,15 @@
+import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
+import '@awesome.me/webawesome/dist/components/input/input.js';
+import { html, render } from 'lit';
+import { repeat } from 'lit/directives/repeat.js';
 import {
   dispatchDesktopCommand,
   getDesktopCommandMenuEntries,
   type DesktopCommandActions,
   type DesktopCommandMenuEntry,
 } from '../desktopCommandSurface';
+import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
+import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 export interface DesktopCommandPaletteOptions {
   document: Document;
@@ -61,130 +67,34 @@ export function createDesktopCommandPalette({
 }: DesktopCommandPaletteOptions): DesktopCommandPaletteController {
   const view = document.defaultView;
   const entries = getDesktopCommandMenuEntries(undefined, platform);
-  let visibleEntries = entries;
+
+  // Reactive state — every mutation calls renderTemplate() to keep the DOM
+  // in sync. wa-dialog handles modal backdrop, focus trap, escape key, and
+  // focus restoration natively, so we no longer manage those by hand.
+  let visibleEntries: DesktopCommandMenuEntry[] = [...entries];
   let activeIndex = entries.length > 0 ? 0 : -1;
-  let previouslyFocusedElement: HTMLElement | null = null;
+  let query = '';
 
-  const element = document.createElement('div');
-  element.className = 'desktop-command-palette';
-  element.hidden = true;
-  element.setAttribute('role', 'dialog');
-  element.setAttribute('aria-modal', 'true');
-  element.setAttribute('aria-label', 'Command palette');
-
-  const panel = document.createElement('div');
-  panel.className = 'desktop-command-palette-panel';
-
-  const input = document.createElement('input');
-  input.className = 'desktop-command-palette-input';
-  input.type = 'search';
-  input.autocomplete = 'off';
-  input.spellcheck = false;
-  input.placeholder = 'Run command';
-  input.setAttribute('aria-label', 'Run command');
-
-  const list = document.createElement('div');
-  list.className = 'desktop-command-palette-list';
-  list.setAttribute('role', 'listbox');
-
-  panel.append(input, list);
-  element.append(panel);
+  const dialog = document.createElement('wa-dialog') as WaDialog;
+  dialog.classList.add('desktop-command-palette');
+  dialog.withoutHeader = true;
+  dialog.lightDismiss = true;
+  dialog.setAttribute('aria-label', 'Command palette');
 
   const executeActiveCommand = (): void => {
     const entry = visibleEntries[activeIndex];
     if (executeDesktopCommandPaletteEntry(entry, actions)) close();
   };
 
-  const renderEntries = (): void => {
-    list.replaceChildren();
-    visibleEntries.forEach((entry, index) => {
-      const item = document.createElement('button');
-      item.className = 'desktop-command-palette-item';
-      item.type = 'button';
-      item.disabled = !entry.enabled;
-      item.dataset.commandId = entry.id;
-      item.setAttribute('role', 'option');
-      item.setAttribute(
-        'aria-selected',
-        index === activeIndex ? 'true' : 'false',
-      );
-
-      const label = document.createElement('span');
-      label.className = 'desktop-command-palette-label';
-      label.textContent = entry.label;
-
-      const meta = document.createElement('span');
-      meta.className = 'desktop-command-palette-meta';
-      meta.textContent =
-        entry.unavailableReason ?? entry.accelerator ?? entry.category;
-
-      item.append(label, meta);
-      item.addEventListener('mouseenter', () => {
-        activeIndex = index;
-        syncActiveItem();
-      });
-      item.addEventListener('click', () => {
-        if (executeDesktopCommandPaletteEntry(entry, actions)) close();
-      });
-      list.append(item);
-    });
-  };
-
-  const syncActiveItem = (): void => {
-    const items = list.querySelectorAll<HTMLButtonElement>(
-      '.desktop-command-palette-item',
-    );
-    items.forEach((item, index) => {
-      item.setAttribute(
-        'aria-selected',
-        index === activeIndex ? 'true' : 'false',
-      );
-      if (index === activeIndex) item.scrollIntoView({ block: 'nearest' });
-    });
-  };
-
-  const refreshFilter = (): void => {
-    visibleEntries = filterDesktopCommandPaletteEntries(entries, input.value);
+  const handleFilterInput = (event: Event): void => {
+    const target = event.target as WaInput | null;
+    query = target?.value ?? '';
+    visibleEntries = filterDesktopCommandPaletteEntries(entries, query);
     activeIndex = visibleEntries.length > 0 ? 0 : -1;
-    renderEntries();
+    renderTemplate();
   };
 
-  const open = (): void => {
-    if (canOpen?.() === false) return;
-    if (element.hidden) {
-      previouslyFocusedElement = isHTMLElement(view, document.activeElement)
-        ? document.activeElement
-        : null;
-    }
-    element.hidden = false;
-    input.value = '';
-    refreshFilter();
-    input.focus();
-  };
-
-  const close = (): void => {
-    element.hidden = true;
-    if (previouslyFocusedElement?.isConnected) {
-      previouslyFocusedElement.focus();
-    }
-    previouslyFocusedElement = null;
-  };
-
-  element.addEventListener('click', (event) => {
-    if (event.target === element) close();
-  });
-  input.addEventListener('input', refreshFilter);
-  element.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      close();
-      return;
-    }
-    if (event.key === 'Tab') {
-      trapPaletteFocus(event, panel);
-    }
-  });
-  input.addEventListener('keydown', (event) => {
+  const handleFilterKeydown = (event: KeyboardEvent): void => {
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
@@ -193,7 +103,8 @@ export function createDesktopCommandPalette({
           visibleEntries.length,
           1,
         );
-        syncActiveItem();
+        renderTemplate();
+        scrollActiveItemIntoView();
         break;
       case 'ArrowUp':
         event.preventDefault();
@@ -202,21 +113,107 @@ export function createDesktopCommandPalette({
           visibleEntries.length,
           -1,
         );
-        syncActiveItem();
+        renderTemplate();
+        scrollActiveItemIntoView();
         break;
       case 'Enter':
         event.preventDefault();
         executeActiveCommand();
         break;
-      case 'Escape':
-        event.preventDefault();
-        close();
-        break;
       default:
         break;
     }
+  };
+
+  const handleItemMouseEnter = (index: number) => (): void => {
+    activeIndex = index;
+    renderTemplate();
+  };
+
+  const handleItemClick = (entry: DesktopCommandMenuEntry) => (): void => {
+    if (executeDesktopCommandPaletteEntry(entry, actions)) close();
+  };
+
+  const renderTemplate = (): void => {
+    render(
+      html`
+        <wa-input
+          class="desktop-command-palette-input"
+          type="search"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Run command"
+          aria-label="Run command"
+          .value=${query}
+          @input=${handleFilterInput}
+          @keydown=${handleFilterKeydown}
+        ></wa-input>
+        <div class="desktop-command-palette-list" role="listbox">
+          ${repeat(
+            visibleEntries,
+            (entry) => entry.id,
+            (entry, index) => html`
+              <button
+                class="desktop-command-palette-item"
+                type="button"
+                role="option"
+                data-command-id=${entry.id}
+                ?disabled=${!entry.enabled}
+                aria-selected=${index === activeIndex ? 'true' : 'false'}
+                @mouseenter=${handleItemMouseEnter(index)}
+                @click=${handleItemClick(entry)}
+              >
+                <span class="desktop-command-palette-label"
+                  >${entry.label}</span
+                >
+                <span class="desktop-command-palette-meta">
+                  ${entry.unavailableReason ??
+                  entry.accelerator ??
+                  entry.category}
+                </span>
+              </button>
+            `,
+          )}
+        </div>
+      `,
+      dialog,
+    );
+  };
+
+  const scrollActiveItemIntoView = (): void => {
+    const items = dialog.querySelectorAll<HTMLButtonElement>(
+      '.desktop-command-palette-item',
+    );
+    items.item(activeIndex)?.scrollIntoView({ block: 'nearest' });
+  };
+
+  const open = (): void => {
+    if (canOpen?.() === false) return;
+    if (dialog.open) return;
+    query = '';
+    visibleEntries = [...entries];
+    activeIndex = visibleEntries.length > 0 ? 0 : -1;
+    renderTemplate();
+    dialog.open = true;
+  };
+
+  const close = (): void => {
+    if (!dialog.open) return;
+    dialog.open = false;
+  };
+
+  // wa-dialog focuses its first focusable child on show. Override that to
+  // focus the filter input directly so users can start typing immediately.
+  dialog.addEventListener('wa-after-show', () => {
+    const input = dialog.querySelector<WaInput>(
+      '.desktop-command-palette-input',
+    );
+    input?.focus();
   });
 
+  // Global Cmd/Ctrl+K shortcut — must live on the document so it fires when
+  // no palette descendant is focused. canOpen guards against the onboarding
+  // dialog stealing the shortcut while it's visible.
   document.defaultView?.addEventListener('keydown', (event) => {
     if (!isCommandPaletteShortcut(event)) return;
     if (isTextEntryShortcutTarget(view, document, event)) return;
@@ -224,8 +221,8 @@ export function createDesktopCommandPalette({
     open();
   });
 
-  renderEntries();
-  return { element, open, close };
+  renderTemplate();
+  return { element: dialog, open, close };
 }
 
 export function isCommandPaletteShortcut(event: KeyboardEvent): boolean {
@@ -242,53 +239,6 @@ function getRendererPlatform(view: Window | null): NodeJS.Platform {
   if (platform.includes('mac')) return 'darwin';
   if (platform.includes('win')) return 'win32';
   return 'linux';
-}
-
-function trapPaletteFocus(event: KeyboardEvent, panel: HTMLElement): void {
-  const focusableElements = getFocusableElements(panel);
-  if (focusableElements.length === 0) return;
-
-  const activeElement = panel.ownerDocument.activeElement;
-  const firstElement = focusableElements[0];
-  const lastElement = focusableElements.at(-1);
-  if (!firstElement || !lastElement) return;
-
-  if (event.shiftKey && activeElement === firstElement) {
-    event.preventDefault();
-    lastElement.focus();
-    return;
-  }
-  if (!event.shiftKey && activeElement === lastElement) {
-    event.preventDefault();
-    firstElement.focus();
-  }
-}
-
-function getFocusableElements(container: HTMLElement): HTMLElement[] {
-  return [
-    ...container.querySelectorAll<HTMLElement>(
-      [
-        'button:not([disabled])',
-        'input:not([disabled])',
-        'select:not([disabled])',
-        'textarea:not([disabled])',
-        '[tabindex]:not([tabindex="-1"])',
-      ].join(','),
-    ),
-  ].filter((element) => !element.hidden);
-}
-
-function isHTMLElement(
-  view: Window | null,
-  element: Element | null,
-): element is HTMLElement {
-  const htmlElementConstructor =
-    view == null
-      ? undefined
-      : (view as Window & { HTMLElement?: typeof HTMLElement }).HTMLElement;
-  return (
-    htmlElementConstructor != null && element instanceof htmlElementConstructor
-  );
 }
 
 function isElement(
