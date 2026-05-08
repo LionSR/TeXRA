@@ -21,7 +21,7 @@ export class TerminalCommandStrip extends LitElement {
         --texra-terminal-background,
         var(--texra-editor-background, transparent)
       );
-      color: var(--texra-terminal-foreground, var(--texra-foreground));
+      color: var(--texra-terminal-foreground, var(--wa-color-text-normal));
       border: 1px solid var(--texra-panel-border, transparent);
       border-radius: 3px;
       font-family: var(

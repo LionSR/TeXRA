@@ -48,7 +48,7 @@ export class ContextManagement extends LitElement {
       summary,
       .context-icon,
       .context-title {
-        color: var(--accent-color, var(--texra-foreground));
+        color: var(--accent-color, var(--wa-color-text-normal));
       }
 
       .context-icon {
@@ -110,7 +110,7 @@ export class ContextManagement extends LitElement {
   @property({ attribute: false }) config: ActionConfig = {
     icon: 'history',
     label: 'Context Management',
-    color: 'var(--texra-foreground)',
+    color: 'var(--wa-color-text-normal)',
   };
 
   /** Statistics items to display */
