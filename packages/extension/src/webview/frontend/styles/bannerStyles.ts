@@ -36,15 +36,26 @@ export const bannerStyles: CSSResult = css`
     margin-bottom: var(--spacing-large);
     opacity: 0;
     transform: translateY(-4px);
+    /* Defer 'visibility: hidden' until the fade-out completes so hidden
+       banners are removed from the keyboard tab order while still allowing
+       the close transition to animate. Without this, focusable descendants
+       (e.g. wa-button) remain reachable via Tab when opacity is 0. */
+    visibility: hidden;
     transition:
       opacity 180ms ease,
-      transform 180ms ease;
+      transform 180ms ease,
+      visibility 0s linear 180ms;
     pointer-events: none;
   }
 
   :host([data-visible='true']) wa-callout {
     opacity: 1;
     transform: translateY(0);
+    visibility: visible;
+    transition:
+      opacity 180ms ease,
+      transform 180ms ease,
+      visibility 0s linear 0s;
     pointer-events: auto;
   }
 

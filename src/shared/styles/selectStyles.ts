@@ -36,9 +36,7 @@ export const selectStyles: CSSResult = css`
     font-family: var(--texra-font-family);
   }
 
-  wa-option.disabled-option,
-  wa-option.disabled-model,
-  wa-option.disabled-agent,
+  wa-option[disabled],
   wa-option[data-requires-key='true'] {
     color: var(--color-text-secondary, var(--texra-descriptionForeground));
     opacity: var(--opacity-subtle, 0.7);

@@ -715,18 +715,19 @@ export class ProgressApp extends ProgressAppBase {
           ${renderEmptyState({
             icon: 'robot',
             kicker: 'Progress',
-            kickerIcon: 'robot',
             title: 'No runs yet',
             body: 'Start an agent from the Launcher or Commands. New runs, streamed logs, approvals, and follow-up controls will appear here.',
             actions: [
               {
                 label: 'Open Launcher',
+                icon: 'play',
                 appearance: 'filled',
                 variant: 'brand',
                 onClick: this.onOpenLauncher,
               },
               {
                 label: 'Open Dashboard',
+                icon: 'gear',
                 appearance: 'outlined',
                 variant: 'neutral',
                 onClick: this.onOpenDashboard,

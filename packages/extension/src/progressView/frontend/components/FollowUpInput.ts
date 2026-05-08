@@ -25,7 +25,7 @@ import './QueuedFollowUps';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';
-import '@awesome.me/webawesome/dist/components/progress-ring/progress-ring.js';
+import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 @customElement('follow-up-input')
@@ -208,7 +208,7 @@ export class FollowUpInput extends LitElement {
               })}
               ${when(
                 this.polishing,
-                () => html`<wa-progress-ring indeterminate></wa-progress-ring>`,
+                () => html`<wa-spinner></wa-spinner>`,
               )}
               ${renderIconActionButton({
                 id: ELEMENT_IDS.RECORD_FOLLOW_UP_BTN,

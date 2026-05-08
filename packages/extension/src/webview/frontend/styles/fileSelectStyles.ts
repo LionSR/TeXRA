@@ -348,7 +348,8 @@ export const dropdownStyles = css`
     flex-shrink: 0;
   }
 
-  .dropdown-container wa-button.has-options::part(base) {
+  .dropdown-container wa-button.has-options::part(base),
+  wa-button.has-options::part(base) {
     box-shadow: inset 0 0 0 1px
       var(--texra-inputValidation-infoBorder, var(--texra-focusBorder));
   }
