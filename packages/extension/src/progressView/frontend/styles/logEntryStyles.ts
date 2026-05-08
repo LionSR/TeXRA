@@ -282,7 +282,7 @@ export const logEntryStyles = css`
     );
     font-size: var(--wa-editor-font-size, var(--font-size));
     background-color: var(
-      --texra-terminal-background,
+      --wa-color-terminal-background,
       var(--wa-color-surface-default, transparent)
     );
     color: var(--wa-color-terminal-foreground, var(--wa-color-text-normal));
