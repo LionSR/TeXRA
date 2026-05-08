@@ -306,7 +306,7 @@ See `docs/pocketflow/` for full framework documentation.
 - Generate HTML through `BaseViewContentProvider` (`src/common/webview/BaseViewContentProvider.ts`) and `buildWebviewHtml` (`packages/extension/src/frontend/webview/html.ts`). Extend `BaseViewMessageHandler` for consistent lifecycle management across views.
 - Use Web Awesome (`<wa-icon>` via `waIcon()` from `@shared/wa/webAwesomeIcons`) and shared utilities from `@utils/text/stringUtils` and `@utils/files/pathUtils` for consistent interactions.
 - For webview dependencies, prefer CDN builds (jsdelivr for static assets, esm.sh for ES modules) for complex packages like markdown-it, KaTeX, or highlight.js, while keeping lightweight bundles (split.js) local to reduce extension size.
-- Keep CSS modular (per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `src/common/styles/common.css`) and use Web Awesome icons (e.g., `${waIcon('chevron-down')}`) for toggle affordances.
+- Keep CSS modular (per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`) and use Web Awesome icons (e.g., `${waIcon('chevron-down')}`) for toggle affordances.
 
 **Progress view**
 
@@ -315,7 +315,7 @@ See `docs/pocketflow/` for full framework documentation.
 
 **Error handling and types**
 
-- Format and surface errors through `logErrorMessage`, `showLoggedErrorMessage`, and `showLoggedMessageWithDocs` in `src/common/errors/errorHandlingUtils.ts` for consistent telemetry and documentation links.
+- Format and surface errors through `logErrorMessage`, `showLoggedErrorMessage`, and `showLoggedMessageWithDocs` in `packages/extension/src/frontend/ui/errorHandlingUtils.ts` for consistent telemetry and documentation links.
 - Keep shared type definitions colocated with their domains (e.g., `src/agent/types`) and derive runtime-safe interfaces with `zod` plus `z.infer`.
 
 **Miscellaneous**
@@ -340,7 +340,7 @@ See `docs/pocketflow/` for full framework documentation.
 - **Module Structure**: Keep UI managers focused on a single responsibility
 - **Trust Dependencies**: Use APIs as documented. When behavior is unclear, check the source in `node_modules/` first. Add a workaround only for a documented quirk, with a comment explaining it
 - **Dropdown Menus**: Should close when clicking outside, not just on toggle
-- **CSS Organization**: Keep per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `src/common/styles/common.css`
+- **CSS Organization**: Keep per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`
 
 ### Source Organization
 
