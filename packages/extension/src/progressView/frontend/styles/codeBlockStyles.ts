@@ -59,7 +59,7 @@ export const codeBlockStyles = css`
 
     &:hover {
       background-color: var(
-        --texra-toolbar-hoverBackground,
+        --wa-color-toolbar-hover,
         rgba(90, 93, 94, 0.31)
       );
       color: var(--wa-color-text-normal);

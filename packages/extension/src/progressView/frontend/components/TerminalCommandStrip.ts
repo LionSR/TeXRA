@@ -18,7 +18,7 @@ export class TerminalCommandStrip extends LitElement {
       padding: var(--wa-space-2xs) var(--wa-space-s);
       margin: 0 0 var(--wa-space-2xs) 0;
       background: var(
-        --texra-terminal-background,
+        --wa-color-terminal-background,
         var(--wa-color-surface-default, transparent)
       );
       color: var(--wa-color-terminal-foreground, var(--wa-color-text-normal));
