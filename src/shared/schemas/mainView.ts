@@ -58,9 +58,20 @@ export type ExtendedFileType = z.infer<typeof ExtendedFileTypeSchema>;
 // Option Data Schemas
 // ============================================================
 
-export const ModelOptionDataSchema = z.object({
+/**
+ * Shared base for picker option rows (`<wa-select>`-style entries). Both the
+ * model and agent picker shapes carry an opaque `value` (the id sent back to
+ * the host) and a user-facing `label`. Consolidating this base via `.extend()`
+ * keeps the two field names in lockstep — historically a typo in either schema
+ * would have silently broken option matching in only one picker.
+ */
+export const PickerOptionBaseSchema = z.object({
   value: z.string(),
   label: z.string(),
+});
+export type PickerOptionBase = z.infer<typeof PickerOptionBaseSchema>;
+
+export const ModelOptionDataSchema = PickerOptionBaseSchema.extend({
   provider: z.string().optional(),
   context: z.string().optional(),
   cost: z.string().optional(),
@@ -70,9 +81,7 @@ export const ModelOptionDataSchema = z.object({
 });
 export type ModelOptionData = z.infer<typeof ModelOptionDataSchema>;
 
-export const AgentOptionDataSchema = z.object({
-  value: z.string(),
-  label: z.string(),
+export const AgentOptionDataSchema = PickerOptionBaseSchema.extend({
   isToolUse: z.boolean().optional(),
   isOrchestrator: z.boolean().optional(),
   isRemote: z.boolean().optional(),
