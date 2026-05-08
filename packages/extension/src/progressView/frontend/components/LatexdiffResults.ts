@@ -10,8 +10,9 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
-// Side-effect imports - register WA icon component
+// Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -39,7 +40,7 @@ export class LatexdiffResults extends LitElement {
         margin: var(--wa-space-2xs) 0;
       }
 
-      details {
+      wa-details {
         margin: 0;
       }
 
@@ -139,17 +140,11 @@ export class LatexdiffResults extends LitElement {
         : `Latexdiff results (${this.entries.length})`;
 
     return html`
-      <details open>
-        <summary class="details-summary">
-          <wa-icon
-            library="texra"
-            name="chevron-right"
-            class="toggle-icon"
-            aria-hidden="true"
-          ></wa-icon>
+      <wa-details open>
+        <span slot="summary" class="details-summary">
           <wa-icon library="texra" name="diff" aria-hidden="true"></wa-icon>
           <span>${summaryText}</span>
-        </summary>
+        </span>
         <ul
           class="latexdiff-content"
           data-log-id=${this.logId}
@@ -162,7 +157,7 @@ export class LatexdiffResults extends LitElement {
             (entry) => this.renderEntry(entry),
           )}
         </ul>
-      </details>
+      </wa-details>
     `;
   }
 }

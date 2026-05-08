@@ -9,8 +9,11 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
 
-// Side-effect imports - register WA icon component
+// Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/radio/radio.js';
+import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
+import type WaRadioGroup from '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 
 // Local imports - shared copy
 import { PROMO_NOTICE_LONG } from '@shared/copy/promoNotice';
@@ -28,7 +31,7 @@ export class ApiAccessSection extends LitElement {
   @property({ attribute: false }) mode: 'included' | 'personal' = 'personal';
 
   private handleModeChange(event: Event): void {
-    const target = event.currentTarget as HTMLInputElement | null;
+    const target = event.currentTarget as WaRadioGroup | null;
     const mode = target?.value === 'included' ? 'included' : 'personal';
     if (mode !== this.mode) {
       this.dispatchEvent(ProfileViewEvents.setApiAccessMode({ mode }));
@@ -39,15 +42,13 @@ export class ApiAccessSection extends LitElement {
     return html`
       <div class="api-access-section">
         <h2>Model Access</h2>
-        <div class="api-access-options">
-          <label class="api-access-option">
-            <input
-              type="radio"
-              name="apiAccessMode"
-              value="included"
-              .checked=${this.mode === 'included'}
-              @change=${this.handleModeChange}
-            />
+        <wa-radio-group
+          class="api-access-options"
+          name="apiAccessMode"
+          .value=${this.mode}
+          @change=${this.handleModeChange}
+        >
+          <wa-radio class="api-access-option" value="included">
             <span class="option-content">
               <span class="option-title">Use Included Access</span>
               <span class="option-description"
@@ -57,15 +58,8 @@ export class ApiAccessSection extends LitElement {
                 avoid relay caps.</span
               >
             </span>
-          </label>
-          <label class="api-access-option">
-            <input
-              type="radio"
-              name="apiAccessMode"
-              value="personal"
-              .checked=${this.mode === 'personal'}
-              @change=${this.handleModeChange}
-            />
+          </wa-radio>
+          <wa-radio class="api-access-option" value="personal">
             <span class="option-content">
               <span class="option-title">Use My Own Keys</span>
               <span class="option-description"
@@ -74,8 +68,8 @@ export class ApiAccessSection extends LitElement {
                 outside Included Access.</span
               >
             </span>
-          </label>
-        </div>
+          </wa-radio>
+        </wa-radio-group>
         ${this.mode === 'included'
           ? html`
               <div class="api-access-support">
