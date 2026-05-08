@@ -110,7 +110,7 @@ export class MultiAgentTab extends LitElement {
       }
 
       .preset-card.active {
-        background-color: var(--texra-list-activeSelectionBackground);
+        background-color: var(--wa-color-brand-fill-quiet);
         color: var(
           --texra-list-activeSelectionForeground,
           var(--wa-color-text-normal)
@@ -198,7 +198,7 @@ export class MultiAgentTab extends LitElement {
       }
 
       .preset-delete-btn:hover {
-        color: var(--texra-errorForeground);
+        color: var(--wa-color-danger-on-quiet);
       }
 
       .preset-delete-btn:focus-visible {

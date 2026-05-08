@@ -259,6 +259,13 @@
 
   --wa-color-focus: var(--texra-focusBorder);
 
+  /* WA form-control tokens — wire to TeXRA input palette so wa-input,
+     wa-textarea, wa-select, etc. inherit the host theme's editor surface
+     rather than WA's default form-control colors. */
+  --wa-form-control-background-color: var(--texra-input-background);
+  --wa-form-control-text-color: var(--texra-input-foreground);
+  --wa-form-control-border-color: var(--texra-input-border);
+
   --wa-color-brand-fill-loud: var(--texra-button-background);
   --wa-color-brand-on-loud: var(--texra-button-foreground);
   --wa-color-brand-border-loud: var(--texra-button-border);

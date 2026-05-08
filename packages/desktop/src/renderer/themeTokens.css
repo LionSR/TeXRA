@@ -234,6 +234,13 @@
 
   --wa-color-focus: var(--desktop-color-accent);
 
+  /* WA form-control tokens — wire to desktop input palette so wa-input,
+     wa-textarea, wa-select, etc. inherit the renderer theme's input surface
+     rather than WA's default form-control colors. */
+  --wa-form-control-background-color: var(--desktop-color-input-background);
+  --wa-form-control-text-color: var(--desktop-color-input-foreground);
+  --wa-form-control-border-color: var(--desktop-color-input-border);
+
   --wa-color-brand-fill-loud: var(--desktop-color-accent);
   --wa-color-brand-on-loud: #ffffff;
   --wa-color-brand-border-loud: transparent;

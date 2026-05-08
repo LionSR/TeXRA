@@ -109,10 +109,7 @@ export const codeBlockStyles = css`
   .hljs-keyword,
   .hljs-selector-tag,
   .hljs-tag {
-    color: var(
-      --texra-symbolIcon-keywordForeground,
-      var(--wa-color-text-link)
-    );
+    color: var(--texra-symbolIcon-keywordForeground, var(--wa-color-text-link));
   }
 
   .hljs-string,
