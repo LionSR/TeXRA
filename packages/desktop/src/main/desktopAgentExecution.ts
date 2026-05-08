@@ -353,6 +353,9 @@ export class DesktopProgressBridge {
     this.creationTimestamps.clear();
     this.conversationProgress.clear();
     this.streamBadges.clear();
+    // Bot review (#3819) caught the omission — `deleteAllStreams()`
+    // already clears `restoredStreams`; `dispose()` should match.
+    this.restoredStreams.clear();
     this.workflowFileActions.clearAllBackups();
   }
 
