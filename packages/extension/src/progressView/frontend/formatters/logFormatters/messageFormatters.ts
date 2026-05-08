@@ -19,7 +19,6 @@ import {
 // Local imports - shared utilities
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
-
 // Local imports - Lit template utilities
 import {
   html,

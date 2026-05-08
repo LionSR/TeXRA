@@ -26,10 +26,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 // Local imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { STREAM_STATUS, type ActiveChildInfo } from '@shared/schemas';
-import {
-  designTokens,
-  commonViewStyles,
-} from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 import { ProgressEvents } from '../events';
 
 // Local imports - contexts
@@ -358,9 +355,7 @@ export class BackgroundTasksPanel extends LitElement {
           ${child.elapsed
             ? html`<span class="task-elapsed">(${child.elapsed})</span>`
             : nothing}
-          <wa-tag
-            variant=${waiting ? 'neutral' : 'warning'}
-            size="small"
+          <wa-tag variant=${waiting ? 'neutral' : 'warning'} size="small"
             >${waiting ? 'waiting' : 'running'}</wa-tag
           >
         </div>
