@@ -104,6 +104,7 @@ jobs:
       - name: Run Claude Code Review
         if: steps.claude-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true' && steps.trusted-provider-wrapper.outputs.available == 'true'
         id: claude-review
+        continue-on-error: true
         uses: ./.trusted-actions/.github/actions/claude-code-with-provider
         with:
           provider: ${{ matrix.provider }}
@@ -121,3 +122,22 @@ jobs:
             Review provider: ${{ matrix.provider }}
             Trigger event: ${{ github.event.action }}
           system-prompt-file: .trusted-actions/.github/prompts/claude-code-review-system-prompt.md
+
+      - name: Check for Claude quota errors and post comment
+        if: |
+          steps.claude-switch.outputs.skip != 'true' &&
+          steps.provider-token.outputs.skip != 'true' &&
+          steps.trusted-provider-wrapper.outputs.available == 'true' &&
+          steps.claude-review.outcome != 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const outcomeText = '${{ steps.claude-review.outcome }}';
+            if (outcomeText === 'failure' || outcomeText === 'cancelled') {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: '⏳ Claude quota exhausted or rate limit reached. Code review will be retried on the next push.\n\n(If this persists, please check the [Claude Code action logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}))'
+              });
+            }
