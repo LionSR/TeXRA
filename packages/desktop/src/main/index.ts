@@ -221,6 +221,7 @@ function createWindow(options: {
     opener: previewHost,
     diff: createDesktopDiffHost({
       openPath: previewHost.openPath,
+      postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     }),
     confirmAcceptFile: async (message) => {
       const result = await dialog.showMessageBox(window, {

@@ -726,3 +726,46 @@ wa-dialog.desktop-onboarding {
     flex: 1 1 150px;
   }
 }
+
+/* In-app diff dialog. wa-dialog supplies the modal chrome; only the body
+   layout lives here so the embedded <texra-diff-view> can fill the panel. */
+wa-dialog.desktop-diff-dialog {
+  --width: min(1100px, calc(100vw - var(--wa-space-xl)));
+}
+
+.desktop-diff-dialog-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wa-space-2xs);
+  padding-bottom: var(--wa-space-s);
+  margin-bottom: var(--wa-space-s);
+  border-bottom: 1px solid var(--wa-color-surface-border);
+}
+
+.desktop-diff-dialog-header h1 {
+  margin: 0;
+  font-size: var(--wa-font-size-l);
+  line-height: var(--wa-line-height-condensed);
+}
+
+.desktop-diff-dialog-paths {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wa-space-2xs);
+  align-items: center;
+  color: var(--wa-color-text-quiet);
+  font-family: var(--wa-font-family-code, monospace);
+  font-size: var(--wa-font-size-s);
+}
+
+.desktop-diff-dialog-view {
+  display: block;
+  width: 100%;
+}
+
+.desktop-diff-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--wa-space-s);
+}

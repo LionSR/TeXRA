@@ -250,3 +250,78 @@ test('rapid settings-tab switching does not crash the renderer', async () => {
   // The chrome must still be alive after the burst.
   await expect(launched.page.locator('.desktop-brand')).toBeVisible();
 });
+
+/**
+ * Trajectory 18 — In-app diff view (audit item C).
+ *
+ * The main process posts `desktop:showDiff` after reading both files; the
+ * renderer slots the contents into a wa-dialog hosting <texra-diff-view>.
+ * Posting via window.postMessage lets us simulate the IPC arrival without
+ * running an actual agent. We assert the dialog opens and the diff component
+ * is mounted with the expected props — Monaco itself loads asynchronously,
+ * so we only assert structural mount, not editor content.
+ */
+test('desktop:showDiff opens an in-app diff dialog', async () => {
+  await setRoute('main');
+  await launched.page.evaluate(() => {
+    window.postMessage(
+      {
+        command: 'desktop:showDiff',
+        diff: {
+          title: 'Trajectory 18 diff',
+          originalPath: '/tmp/original.tex',
+          proposedPath: '/tmp/proposed.tex',
+          originalText: 'Hello\nworld',
+          proposedText: 'Hello\nbrave new world',
+          language: 'latex',
+        },
+      },
+      '*',
+    );
+  });
+  // The dialog should mount and become visible. wa-dialog flips its `open`
+  // attribute synchronously; we wait for it to be reflected as visible.
+  const dialog = launched.page.locator('wa-dialog.desktop-diff-dialog');
+  await dialog.waitFor({ state: 'attached', timeout: 5000 });
+  await launched.page.waitForFunction(
+    () => {
+      const d = document.querySelector<HTMLElement & { open?: boolean }>(
+        'wa-dialog.desktop-diff-dialog',
+      );
+      return d != null && d.open === true;
+    },
+    undefined,
+    { timeout: 5000 },
+  );
+  // Title and embedded <texra-diff-view> with the right props are present.
+  const title = await launched.page
+    .locator('wa-dialog.desktop-diff-dialog h1')
+    .innerText();
+  expect(title).toBe('Trajectory 18 diff');
+  const diffViewProps = await launched.page.evaluate(() => {
+    const view = document.querySelector(
+      'wa-dialog.desktop-diff-dialog texra-diff-view',
+    ) as (HTMLElement & {
+      originalText?: string;
+      proposedText?: string;
+      language?: string;
+    }) | null;
+    if (!view) return null;
+    return {
+      original: view.originalText,
+      proposed: view.proposedText,
+      language: view.language,
+    };
+  });
+  expect(diffViewProps).not.toBeNull();
+  expect(diffViewProps?.original).toBe('Hello\nworld');
+  expect(diffViewProps?.proposed).toBe('Hello\nbrave new world');
+  expect(diffViewProps?.language).toBe('latex');
+  // Close the dialog so subsequent tests start from a clean state.
+  await launched.page.evaluate(() => {
+    const d = document.querySelector<HTMLElement & { open?: boolean }>(
+      'wa-dialog.desktop-diff-dialog',
+    );
+    if (d) d.open = false;
+  });
+});

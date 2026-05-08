@@ -41,6 +41,10 @@ import {
   type DesktopSetLogMessage,
 } from '../desktopLogMessages';
 import {
+  DesktopShowDiffMessageSchema,
+  type DesktopShowDiffMessage,
+} from '../desktopDiffMessages';
+import {
   buildDesktopMainViewResetMessage,
   buildDesktopSettingsTabMessage,
   DESKTOP_LOCAL_COMMANDS,
@@ -57,6 +61,7 @@ import {
   type DesktopWorkspaceTreeMessage,
 } from '../desktopWorkspaceExplorerMessages';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
+import { createDesktopDiffDialog } from './desktopDiffDialog';
 import { createFirstRunWalkthrough } from './desktopOnboarding';
 
 interface WorkspaceTreeNode {
@@ -452,6 +457,9 @@ const commandPalette = bootstrapFailed
     });
 if (commandPalette) appRoot.append(commandPalette.element);
 
+const diffDialog = bootstrapFailed ? undefined : createDesktopDiffDialog(document);
+if (diffDialog) appRoot.append(diffDialog.element);
+
 function openCommandPalette(): void {
   commandPalette?.open();
 }
@@ -476,6 +484,12 @@ function isDesktopSetLogMessage(
   message: unknown,
 ): message is DesktopSetLogMessage {
   return DesktopSetLogMessageSchema.safeParse(message).success;
+}
+
+function isDesktopShowDiffMessage(
+  message: unknown,
+): message is DesktopShowDiffMessage {
+  return DesktopShowDiffMessageSchema.safeParse(message).success;
 }
 
 function isThemeMessage(message: unknown): message is SetThemeMessage {
@@ -511,6 +525,8 @@ window.addEventListener('message', (event) => {
     receiveWorkspaceTree(event.data);
   } else if (isDesktopSetLogMessage(event.data)) {
     renderLogSnapshot(event.data);
+  } else if (isDesktopShowDiffMessage(event.data)) {
+    diffDialog?.open(event.data.diff);
   }
 });
 if (!bootstrapFailed) {
