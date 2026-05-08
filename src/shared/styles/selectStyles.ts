@@ -114,7 +114,7 @@ export const selectStyles: CSSResult = css`
   }
 
   wa-icon.clickable:hover {
-    color: var(--button-hover-background, var(--texra-button-hoverBackground));
+    color: var(--button-hover-background, var(--wa-color-button-hover));
   }
 
   wa-select::part(listbox) {

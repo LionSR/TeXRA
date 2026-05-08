@@ -21,17 +21,17 @@ export class TerminalCommandStrip extends LitElement {
         --texra-terminal-background,
         var(--wa-color-surface-default, transparent)
       );
-      color: var(--texra-terminal-foreground, var(--wa-color-text-normal));
+      color: var(--wa-color-terminal-foreground, var(--wa-color-text-normal));
       border: var(--border-thin) solid var(--wa-color-surface-border, transparent);
       border-radius: var(--border-radius-small);
       font-family: var(
-        --texra-editor-font-family,
+        --wa-font-family-mono,
         ui-monospace,
         SFMono-Regular,
         Consolas,
         monospace
       );
-      font-size: var(--texra-editor-font-size, var(--font-size-sm));
+      font-size: var(--wa-editor-font-size, var(--font-size-sm));
       max-height: min(32vh, 320px);
       overflow: auto;
       white-space: pre;
@@ -44,7 +44,7 @@ export class TerminalCommandStrip extends LitElement {
     }
 
     .prompt {
-      color: var(--texra-terminal-ansiGreen, var(--color-success, #0a0));
+      color: var(--wa-color-terminal-ansi-green, var(--color-success, #0a0));
       font-weight: var(--font-weight-semibold);
       user-select: none;
     }

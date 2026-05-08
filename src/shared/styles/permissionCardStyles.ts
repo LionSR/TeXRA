@@ -28,7 +28,7 @@ export const permissionCardStyles: CSSResult = css`
     width: min(92vw, 600px);
     max-height: min(80vh, 44rem);
     overflow: hidden;
-    box-shadow: 0 2px 8px var(--texra-widget-shadow, rgba(0, 0, 0, 0.24));
+    box-shadow: 0 2px 8px var(--wa-color-surface-shadow, rgba(0, 0, 0, 0.24));
   }
 
   .permission-header {
@@ -52,7 +52,7 @@ export const permissionCardStyles: CSSResult = css`
     padding: var(--wa-space-xs);
     background: var(--wa-color-surface-lowered);
     border-radius: var(--border-radius);
-    color: var(--texra-terminal-foreground);
+    color: var(--wa-color-terminal-foreground);
     font-family: var(--wa-font-family-mono);
     font-size: var(--font-size);
     white-space: pre-wrap;
@@ -94,12 +94,12 @@ export const permissionCardStyles: CSSResult = css`
   }
 
   .diff-added {
-    color: var(--texra-gitDecoration-addedResourceForeground, #89d185);
+    color: var(--wa-color-git-added, #89d185);
     font-weight: var(--font-weight-medium);
   }
 
   .diff-removed {
-    color: var(--texra-gitDecoration-deletedResourceForeground, #f48771);
+    color: var(--wa-color-git-deleted, #f48771);
     font-weight: var(--font-weight-medium);
   }
 
