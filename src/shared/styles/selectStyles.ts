@@ -114,7 +114,7 @@ export const selectStyles: CSSResult = css`
   }
 
   .api-key-missing {
-    color: var(--texra-errorForeground);
+    color: var(--wa-color-danger-on-quiet);
     opacity: var(--opacity-full);
     font-style: normal;
     margin-left: var(--wa-space-3xs);

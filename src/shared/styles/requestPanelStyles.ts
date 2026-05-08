@@ -67,7 +67,7 @@ export const requestPanelStyles: CSSResult = css`
   :is(${CONTAINERS}) {
     margin: ${sp.large} 0;
     padding: ${sp.large};
-    border: var(--border-thin) solid var(--texra-input-border);
+    border: var(--border-thin) solid var(--wa-form-control-border-color);
     border-radius: var(--border-radius-large);
     background: var(--texra-editor-background);
     box-shadow: 0 2px 8px var(--texra-widget-shadow, rgba(0, 0, 0, 0.12));
@@ -261,7 +261,7 @@ export const requestPanelStyles: CSSResult = css`
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
     border-left: var(--border-thin) solid
-      var(--texra-button-separator, var(--texra-input-border));
+      var(--texra-button-separator, var(--wa-form-control-border-color));
   }
 
   /* wa-dropdown handles its own popup positioning, but we still want
@@ -386,8 +386,8 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .workflow-proposal__category-badge--workflow {
-    background: var(--texra-badge-background);
-    color: var(--texra-badge-foreground);
+    background: var(--wa-color-neutral-fill-quiet);
+    color: var(--wa-color-neutral-on-quiet);
   }
 
   .workflow-proposal__category-badge--tool-use {
@@ -623,8 +623,8 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .external-inquiry-request__mode-badge {
-    background: var(--texra-badge-background);
-    color: var(--texra-badge-foreground);
+    background: var(--wa-color-neutral-fill-quiet);
+    color: var(--wa-color-neutral-on-quiet);
   }
 
   .external-inquiry-request__context {
@@ -757,9 +757,9 @@ export const requestPanelStyles: CSSResult = css`
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
     padding: ${sp.medium};
-    background: var(--texra-input-background);
-    color: var(--texra-input-foreground);
-    border: var(--border-thin) solid var(--texra-input-border);
+    background: var(--wa-form-control-background-color);
+    color: var(--wa-form-control-text-color);
+    border: var(--border-thin) solid var(--wa-form-control-border-color);
     border-radius: var(--border-radius);
     outline: none;
     transition: border-color 0.15s ease;
@@ -807,9 +807,9 @@ export const requestPanelStyles: CSSResult = css`
     font-size: var(--font-size);
     line-height: var(--line-height-normal);
     padding: ${sp.medium};
-    background: var(--texra-input-background);
-    color: var(--texra-input-foreground);
-    border: var(--border-thin) solid var(--texra-input-border);
+    background: var(--wa-form-control-background-color);
+    color: var(--wa-form-control-text-color);
+    border: var(--border-thin) solid var(--wa-form-control-border-color);
     border-radius: var(--border-radius);
     outline: none;
     transition: border-color 0.15s ease;

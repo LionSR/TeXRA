@@ -213,14 +213,14 @@ wa-tree.desktop-explorer-tree wa-tree-item::part(label) {
 
 wa-tree.desktop-explorer-tree
   wa-tree-item:not([aria-disabled='true']):hover::part(item) {
-  background: var(--texra-list-hoverBackground);
+  background: var(--wa-color-neutral-fill-quiet);
 }
 
 wa-tree.desktop-explorer-tree
   wa-tree-item:state(selected):not([aria-disabled='true'])::part(item) {
-  background: var(--texra-list-activeSelectionBackground);
-  color: var(--texra-list-activeSelectionForeground);
-  border-inline-start-color: var(--texra-list-activeSelectionForeground);
+  background: var(--wa-color-brand-fill-quiet);
+  color: var(--wa-color-brand-on-quiet);
+  border-inline-start-color: var(--wa-color-brand-on-quiet);
 }
 
 .desktop-explorer-name {
@@ -381,8 +381,8 @@ wa-tree.desktop-explorer-tree
   border: 0;
   border-bottom: 1px solid var(--texra-panel-border);
   outline: 0;
-  background: var(--texra-input-background);
-  color: var(--texra-input-foreground);
+  background: var(--wa-form-control-background-color);
+  color: var(--wa-form-control-text-color);
   font: inherit;
 }
 
@@ -415,8 +415,8 @@ wa-tree.desktop-explorer-tree
 }
 
 .desktop-command-palette-item[aria-selected='true'] {
-  background: var(--texra-list-activeSelectionBackground);
-  color: var(--texra-list-activeSelectionForeground);
+  background: var(--wa-color-brand-fill-quiet);
+  color: var(--wa-color-brand-on-quiet);
 }
 
 .desktop-command-palette-label,

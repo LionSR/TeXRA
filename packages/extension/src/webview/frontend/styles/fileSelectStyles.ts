@@ -269,7 +269,7 @@ export const multiFilesStyles = css`
   }
 
   .file-item:hover {
-    background-color: var(--texra-list-hoverBackground);
+    background-color: var(--wa-color-neutral-fill-quiet);
   }
 
   .file-name {
@@ -392,7 +392,7 @@ export const dropdownStyles = css`
   }
 
   .dropdown-container .dropdown-menu wa-checkbox:hover {
-    background: var(--texra-list-hoverBackground);
+    background: var(--wa-color-neutral-fill-quiet);
   }
 `;
 

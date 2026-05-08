@@ -264,8 +264,8 @@ export const logEntryStyles = css`
     font-weight: var(--font-weight-semibold);
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
     border-radius: var(--border-radius);
-    background: var(--texra-badge-background);
-    color: var(--texra-badge-foreground);
+    background: var(--wa-color-neutral-fill-quiet);
+    color: var(--wa-color-neutral-on-quiet);
     margin-right: var(--wa-space-2xs);
   }
 

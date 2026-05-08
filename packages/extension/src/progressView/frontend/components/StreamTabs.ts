@@ -243,7 +243,7 @@ export class StreamTab extends LitElement {
       }
 
       .tab-container:hover {
-        background-color: var(--texra-list-hoverBackground);
+        background-color: var(--wa-color-neutral-fill-quiet);
       }
 
       /*
@@ -253,7 +253,7 @@ export class StreamTab extends LitElement {
        * color even when intermediate elements define their own.
        */
       .tab-container.is-active {
-        background-color: var(--texra-list-activeSelectionBackground);
+        background-color: var(--wa-color-brand-fill-quiet);
         color: var(
           --texra-list-activeSelectionForeground,
           var(--texra-foreground)
@@ -282,7 +282,7 @@ export class StreamTab extends LitElement {
       .tab-container.is-active .tab-delete:focus-within,
       .tab-container.is-active .tab-delete:hover *,
       .tab-container.is-active .tab-delete:focus-within * {
-        color: var(--texra-errorForeground);
+        color: var(--wa-color-danger-on-quiet);
       }
 
       /* Drop the dim-by-default opacity so the flipped foreground renders
@@ -329,7 +329,7 @@ export class StreamTab extends LitElement {
 
       .tab-delete:hover,
       .tab-delete:focus-within {
-        color: var(--texra-errorForeground);
+        color: var(--wa-color-danger-on-quiet);
       }
 
       /* Expand/collapse chevron for parent tabs with children */

@@ -20,8 +20,8 @@ export const categoryBadgeStyles: CSSResult = css`
     display: inline-flex;
     align-items: center;
     gap: var(--wa-space-2xs);
-    background: var(--texra-badge-background);
-    color: var(--texra-badge-foreground);
+    background: var(--wa-color-neutral-fill-quiet);
+    color: var(--wa-color-neutral-on-quiet);
   }
 
   .category-badge wa-icon,
