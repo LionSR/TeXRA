@@ -369,7 +369,11 @@ export class FileSelectGroup extends LitElement {
     const chevronName = this.currentListVisible ? 'chevron-up' : 'chevron-down';
 
     return html`
-      <div class="file-select" data-expanded=${String(this.currentListVisible)}>
+      <div
+        class="file-select"
+        data-expanded=${String(this.currentListVisible)}
+        data-has-current=${String(Boolean(this.currentSelectedValue))}
+      >
         <div class="file-select-header">
           <div class="file-select-label-group">
             ${renderIconActionButton({
