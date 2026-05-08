@@ -27,12 +27,21 @@ import {
   handleFixCompilation as latexFixCompilation,
   handleGetTeXCount as latexGetTeXCount,
 } from '@commands/latex/latexCommands';
-import { handleCountPdfPages as latexCountPdfPages } from '@commands/latex/imageCommands';
+import {
+  handleCountPdfPages as latexCountPdfPages,
+  handleEncodeImageToBase64 as latexEncodeImageToBase64,
+  handleConvertPdfToImages as latexConvertPdfToImages,
+} from '@commands/latex/imageCommands';
 import {
   handleShowLinterMessages as latexShowLinterMessages,
   handleCountLinterMessages as latexCountLinterMessages,
 } from '@commands/latex/linterCommands';
-import { handleExtractFigurePaths as latexExtractFigurePaths } from '@commands/latex/figCommands';
+import {
+  handleExtractFigurePaths as latexExtractFigurePaths,
+  handleExtractTikzFigures as latexExtractTikzFigures,
+  handleCompileTikzFigures as latexCompileTikzFigures,
+} from '@commands/latex/figCommands';
+import { cloneOverleafProject as gitCloneOverleafProject } from '@commands/git/gitCommands';
 import { openProgressViewInTab as progressOpenInTab } from '@commands/progress/progressViewCommands';
 import { openDoc as sysOpenDoc } from '@commands/system/helpCommands';
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
@@ -113,6 +122,16 @@ export type ExtensionRegistryCommandId = Extract<
   | 'texra.showLinterMessages'
   | 'texra.countLinterMessages'
   | 'texra.extractFigurePaths'
+  // Batch 3 (#3781) — additional no-arg commands. Each handler runs
+  // its own user prompt internally (file picker, input box) so the
+  // VS Code call site doesn't pass arguments. The `cloneOverleafProject`
+  // entry needs `vscode.ExtensionContext` for `secrets` access; that's
+  // captured as a closure inside the action factory below.
+  | 'texra.encodeImageToBase64'
+  | 'texra.convertPdfToImages'
+  | 'texra.extractTikzFigures'
+  | 'texra.compileTikzFigures'
+  | 'texra.cloneOverleafProject'
 >;
 
 /**
@@ -152,6 +171,16 @@ export interface ExtensionCommandActions {
   showLinterMessages(): Promise<void>;
   countLinterMessages(): Promise<void>;
   extractFigurePaths(): Promise<void>;
+  // Batch 3 (#3781). The image/PDF handlers return data to
+  // `executeCommand` callers (palette invocations don't consume the
+  // value, but the existing return-type surface is preserved). The
+  // registry's typed return is `Promise<boolean>`, so handlers below
+  // discard the data values after awaiting.
+  encodeImageToBase64(): Promise<string | undefined>;
+  convertPdfToImages(): Promise<string[] | string | undefined>;
+  extractTikzFigures(): Promise<void>;
+  compileTikzFigures(): Promise<void>;
+  cloneOverleafProject(): Promise<void>;
 }
 
 export function createExtensionCommandActions(
@@ -210,7 +239,25 @@ export function createExtensionCommandActions(
     showLinterMessages: latexShowLinterMessages,
     countLinterMessages: latexCountLinterMessages,
     extractFigurePaths: latexExtractFigurePaths,
+    encodeImageToBase64: latexEncodeImageToBase64,
+    convertPdfToImages: latexConvertPdfToImages,
+    extractTikzFigures: latexExtractTikzFigures,
+    compileTikzFigures: latexCompileTikzFigures,
+    cloneOverleafProject: () => gitCloneOverleafProject(context),
   };
+}
+
+/**
+ * Dispatch a no-arg `actions.X()` call through the registry while
+ * preserving async semantics. Sync handlers that miss this helper
+ * regressed in #3778 — the original `void actions.X(); return true;`
+ * shape fired-and-forgot the promise, swallowing rejections (#3782).
+ *
+ * Wrap promise-returning actions through `awaitTrue` so the dispatcher
+ * actually awaits the work and surfaces failures.
+ */
+function awaitTrue(p: Promise<unknown> | Thenable<unknown>): Promise<boolean> {
+  return Promise.resolve(p).then(() => true);
 }
 
 const EXTENSION_COMMAND_HANDLERS = {
@@ -242,76 +289,29 @@ const EXTENSION_COMMAND_HANDLERS = {
     actions.showSettings(SETTINGS_TAB.MULTI_AGENT);
     return true;
   },
-  'texra.openSettings': (actions) => {
-    void actions.openWorkbenchSettings();
-    return true;
-  },
-  'texra.mainView.reset': (actions) => {
-    void actions.resetMainView();
-    return true;
-  },
-  'texra.cleanOutput': (actions) => {
-    void actions.cleanOutput();
-    return true;
-  },
-  'texra.cleanBuild': (actions) => {
-    void actions.cleanBuild();
-    return true;
-  },
-  'texra.indentTeX': (actions) => {
-    void actions.indentTeX();
-    return true;
-  },
-  'texra.auth.signIn': (actions) => {
-    void actions.signIn();
-    return true;
-  },
-  'texra.auth.signOut': (actions) => {
-    void actions.signOut();
-    return true;
-  },
-  'texra.auth.viewProfile': (actions) => {
-    void actions.viewProfile();
-    return true;
-  },
-  'texra.runSetupAssistant': (actions) => {
-    void actions.runSetupAssistant();
-    return true;
-  },
-  'texra.openGettingStarted': (actions) => {
-    void actions.openGettingStarted();
-    return true;
-  },
-  'texra.createSampleProject': (actions) => {
-    void actions.createSampleProject();
-    return true;
-  },
-  'texra.downloadArXivSource': (actions) => {
-    void actions.downloadArXivSource();
-    return true;
-  },
-  'texra.testConnection': (actions) => {
-    void actions.testConnection();
-    return true;
-  },
-  'texra.testAgentLoading': (actions) => {
-    void actions.testAgentLoading();
-    return true;
-  },
-  'texra.loadSpecificAgent': (actions) => {
-    void actions.loadSpecificAgent();
-    return true;
-  },
-  'texra.openProgressViewInTab': (actions) => {
-    void actions.openProgressViewInTab();
-    return true;
-  },
+  'texra.openSettings': (actions) => awaitTrue(actions.openWorkbenchSettings()),
+  'texra.mainView.reset': (actions) => awaitTrue(actions.resetMainView()),
+  'texra.cleanOutput': (actions) => awaitTrue(actions.cleanOutput()),
+  'texra.cleanBuild': (actions) => awaitTrue(actions.cleanBuild()),
+  'texra.indentTeX': (actions) => awaitTrue(actions.indentTeX()),
+  'texra.auth.signIn': (actions) => awaitTrue(actions.signIn()),
+  'texra.auth.signOut': (actions) => awaitTrue(actions.signOut()),
+  'texra.auth.viewProfile': (actions) => awaitTrue(actions.viewProfile()),
+  'texra.runSetupAssistant': (actions) => awaitTrue(actions.runSetupAssistant()),
+  'texra.openGettingStarted': (actions) =>
+    awaitTrue(actions.openGettingStarted()),
+  'texra.createSampleProject': (actions) =>
+    awaitTrue(actions.createSampleProject()),
+  'texra.downloadArXivSource': (actions) =>
+    awaitTrue(actions.downloadArXivSource()),
+  'texra.testConnection': (actions) => awaitTrue(actions.testConnection()),
+  'texra.testAgentLoading': (actions) => awaitTrue(actions.testAgentLoading()),
+  'texra.loadSpecificAgent': (actions) => awaitTrue(actions.loadSpecificAgent()),
+  'texra.openProgressViewInTab': (actions) =>
+    awaitTrue(actions.openProgressViewInTab()),
   'texra.openDoc': definedHandler(
     z.string(),
-    (actions: ExtensionCommandActions, page) => {
-      void actions.openDoc(page);
-      return true;
-    },
+    (actions: ExtensionCommandActions, page) => awaitTrue(actions.openDoc(page)),
   ),
   'texra.stopAgent': definedHandler(
     StreamTabIdSchema,
@@ -322,55 +322,34 @@ const EXTENSION_COMMAND_HANDLERS = {
   ),
   'texra.compactResponse': definedHandler(
     StreamTabIdSchema,
-    (actions: ExtensionCommandActions, streamId) => {
-      void actions.compactResponse(streamId);
-      return true;
-    },
+    (actions: ExtensionCommandActions, streamId) =>
+      awaitTrue(actions.compactResponse(streamId)),
   ),
-  'texra.parseXml': (actions) => {
-    void actions.parseXml();
-    return true;
-  },
-  'texra.parseYaml': (actions) => {
-    void actions.parseYaml();
-    return true;
-  },
-  'texra.testTextEditor': (actions) => {
-    void actions.testTextEditor();
-    return true;
-  },
-  'texra.indentCurrentTeX': (actions) => {
-    void actions.indentCurrentTeX();
-    return true;
-  },
-  'texra.applyReplacements': (actions) => {
-    void actions.applyReplacements();
-    return true;
-  },
-  'texra.fixCompilation': (actions) => {
-    void actions.fixCompilation();
-    return true;
-  },
-  'texra.getTeXCount': (actions) => {
-    void actions.getTeXCount();
-    return true;
-  },
-  'texra.countPdfPages': (actions) => {
-    void actions.countPdfPages();
-    return true;
-  },
-  'texra.showLinterMessages': (actions) => {
-    void actions.showLinterMessages();
-    return true;
-  },
-  'texra.countLinterMessages': (actions) => {
-    void actions.countLinterMessages();
-    return true;
-  },
-  'texra.extractFigurePaths': (actions) => {
-    void actions.extractFigurePaths();
-    return true;
-  },
+  'texra.parseXml': (actions) => awaitTrue(actions.parseXml()),
+  'texra.parseYaml': (actions) => awaitTrue(actions.parseYaml()),
+  'texra.testTextEditor': (actions) => awaitTrue(actions.testTextEditor()),
+  'texra.indentCurrentTeX': (actions) => awaitTrue(actions.indentCurrentTeX()),
+  'texra.applyReplacements': (actions) => awaitTrue(actions.applyReplacements()),
+  'texra.fixCompilation': (actions) => awaitTrue(actions.fixCompilation()),
+  'texra.getTeXCount': (actions) => awaitTrue(actions.getTeXCount()),
+  'texra.countPdfPages': (actions) => awaitTrue(actions.countPdfPages()),
+  'texra.showLinterMessages': (actions) =>
+    awaitTrue(actions.showLinterMessages()),
+  'texra.countLinterMessages': (actions) =>
+    awaitTrue(actions.countLinterMessages()),
+  'texra.extractFigurePaths': (actions) =>
+    awaitTrue(actions.extractFigurePaths()),
+  // Batch 3 (#3781).
+  'texra.encodeImageToBase64': (actions) =>
+    awaitTrue(actions.encodeImageToBase64()),
+  'texra.convertPdfToImages': (actions) =>
+    awaitTrue(actions.convertPdfToImages()),
+  'texra.extractTikzFigures': (actions) =>
+    awaitTrue(actions.extractTikzFigures()),
+  'texra.compileTikzFigures': (actions) =>
+    awaitTrue(actions.compileTikzFigures()),
+  'texra.cloneOverleafProject': (actions) =>
+    awaitTrue(actions.cloneOverleafProject()),
 } as const satisfies Record<
   Exclude<ExtensionRegistryCommandId, 'texra.showAgents'>,
   // The typed handlers (`openDoc`, `stopAgent`, `compactResponse`) carry
@@ -401,7 +380,11 @@ const EXTENSION_PARAMETERIZED_HANDLERS = {
 /**
  * Register every command in the shared registry against `vscode.commands`,
  * routing each invocation through `dispatchCommandFromRegistry` so the
- * dispatch path is identical to the desktop's.
+ * dispatch path is identical to the desktop's. The registered callback
+ * returns the dispatch result (a `boolean | Promise<boolean>`) so VS Code
+ * forwards the underlying promise to `executeCommand` callers — async
+ * rejections propagate instead of being swallowed (the bug fixed by
+ * #3782).
  */
 export function registerExtensionCommandRegistry(
   context: vscode.ExtensionContext,
@@ -411,7 +394,7 @@ export function registerExtensionCommandRegistry(
     keyof typeof EXTENSION_COMMAND_HANDLERS
   >) {
     context.subscriptions.push(
-      vscode.commands.registerCommand(id, (rawArg?: unknown) => {
+      vscode.commands.registerCommand(id, (rawArg?: unknown) =>
         dispatchCommandFromRegistry(
           id,
           EXTENSION_COMMAND_HANDLERS,
@@ -422,8 +405,8 @@ export function registerExtensionCommandRegistry(
             );
           },
           rawArg,
-        );
-      }),
+        ),
+      ),
     );
   }
 

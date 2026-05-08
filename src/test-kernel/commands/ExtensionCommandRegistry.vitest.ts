@@ -15,78 +15,51 @@ import { StreamTabIdSchema } from '@shared/schemas/identifiers';
 // can't import the real `extensionCommandSurface.ts` from a vitest run
 // because it transitively pulls in `vscode`. The point of this test is
 // not to re-test the dispatcher (covered in CommandRegistry.vitest.ts);
-// it's to lock in that each newly migrated id (#3771, #3775) calls the
-// right `actions.*` method, which is what would silently regress if
-// someone re-wires the handler map.
+// it's to lock in that each newly migrated id (#3771, #3775, #3781)
+// calls the right `actions.*` method, AND that async failures
+// propagate through the dispatcher (regression guard for #3782).
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
+function awaitTrue(p: Promise<unknown> | Thenable<unknown>): Promise<boolean> {
+  return Promise.resolve(p).then(() => true);
+}
+
 const HANDLERS = {
-  'texra.cleanOutput': (actions: ExtensionCommandActions) => {
-    void actions.cleanOutput();
-    return true;
-  },
-  'texra.cleanBuild': (actions: ExtensionCommandActions) => {
-    void actions.cleanBuild();
-    return true;
-  },
-  'texra.indentTeX': (actions: ExtensionCommandActions) => {
-    void actions.indentTeX();
-    return true;
-  },
-  'texra.auth.signIn': (actions: ExtensionCommandActions) => {
-    void actions.signIn();
-    return true;
-  },
-  'texra.auth.signOut': (actions: ExtensionCommandActions) => {
-    void actions.signOut();
-    return true;
-  },
-  'texra.auth.viewProfile': (actions: ExtensionCommandActions) => {
-    void actions.viewProfile();
-    return true;
-  },
+  'texra.cleanOutput': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.cleanOutput()),
+  'texra.cleanBuild': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.cleanBuild()),
+  'texra.indentTeX': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.indentTeX()),
+  'texra.auth.signIn': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.signIn()),
+  'texra.auth.signOut': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.signOut()),
+  'texra.auth.viewProfile': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.viewProfile()),
   'texra.showMemory': (actions: ExtensionCommandActions) => {
     actions.showSettings(SETTINGS_TAB.MEMORY);
     return true;
   },
-  'texra.runSetupAssistant': (actions: ExtensionCommandActions) => {
-    void actions.runSetupAssistant();
-    return true;
-  },
-  'texra.openGettingStarted': (actions: ExtensionCommandActions) => {
-    void actions.openGettingStarted();
-    return true;
-  },
-  'texra.createSampleProject': (actions: ExtensionCommandActions) => {
-    void actions.createSampleProject();
-    return true;
-  },
-  'texra.downloadArXivSource': (actions: ExtensionCommandActions) => {
-    void actions.downloadArXivSource();
-    return true;
-  },
-  'texra.testConnection': (actions: ExtensionCommandActions) => {
-    void actions.testConnection();
-    return true;
-  },
-  'texra.testAgentLoading': (actions: ExtensionCommandActions) => {
-    void actions.testAgentLoading();
-    return true;
-  },
-  'texra.loadSpecificAgent': (actions: ExtensionCommandActions) => {
-    void actions.loadSpecificAgent();
-    return true;
-  },
-  'texra.openProgressViewInTab': (actions: ExtensionCommandActions) => {
-    void actions.openProgressViewInTab();
-    return true;
-  },
+  'texra.runSetupAssistant': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.runSetupAssistant()),
+  'texra.openGettingStarted': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.openGettingStarted()),
+  'texra.createSampleProject': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.createSampleProject()),
+  'texra.downloadArXivSource': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.downloadArXivSource()),
+  'texra.testConnection': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.testConnection()),
+  'texra.testAgentLoading': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.testAgentLoading()),
+  'texra.loadSpecificAgent': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.loadSpecificAgent()),
+  'texra.openProgressViewInTab': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.openProgressViewInTab()),
   'texra.openDoc': definedHandler(
     z.string(),
-    (actions: ExtensionCommandActions, page) => {
-      void actions.openDoc(page);
-      return true;
-    },
+    (actions: ExtensionCommandActions, page) => awaitTrue(actions.openDoc(page)),
   ),
   'texra.stopAgent': definedHandler(
     StreamTabIdSchema,
@@ -97,56 +70,43 @@ const HANDLERS = {
   ),
   'texra.compactResponse': definedHandler(
     StreamTabIdSchema,
-    (actions: ExtensionCommandActions, streamId) => {
-      void actions.compactResponse(streamId);
-      return true;
-    },
+    (actions: ExtensionCommandActions, streamId) =>
+      awaitTrue(actions.compactResponse(streamId)),
   ),
   // Batch 2 (#3775) — no-arg host-context commands.
-  'texra.parseXml': (actions: ExtensionCommandActions) => {
-    void actions.parseXml();
-    return true;
-  },
-  'texra.parseYaml': (actions: ExtensionCommandActions) => {
-    void actions.parseYaml();
-    return true;
-  },
-  'texra.testTextEditor': (actions: ExtensionCommandActions) => {
-    void actions.testTextEditor();
-    return true;
-  },
-  'texra.indentCurrentTeX': (actions: ExtensionCommandActions) => {
-    void actions.indentCurrentTeX();
-    return true;
-  },
-  'texra.applyReplacements': (actions: ExtensionCommandActions) => {
-    void actions.applyReplacements();
-    return true;
-  },
-  'texra.fixCompilation': (actions: ExtensionCommandActions) => {
-    void actions.fixCompilation();
-    return true;
-  },
-  'texra.getTeXCount': (actions: ExtensionCommandActions) => {
-    void actions.getTeXCount();
-    return true;
-  },
-  'texra.countPdfPages': (actions: ExtensionCommandActions) => {
-    void actions.countPdfPages();
-    return true;
-  },
-  'texra.showLinterMessages': (actions: ExtensionCommandActions) => {
-    void actions.showLinterMessages();
-    return true;
-  },
-  'texra.countLinterMessages': (actions: ExtensionCommandActions) => {
-    void actions.countLinterMessages();
-    return true;
-  },
-  'texra.extractFigurePaths': (actions: ExtensionCommandActions) => {
-    void actions.extractFigurePaths();
-    return true;
-  },
+  'texra.parseXml': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.parseXml()),
+  'texra.parseYaml': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.parseYaml()),
+  'texra.testTextEditor': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.testTextEditor()),
+  'texra.indentCurrentTeX': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.indentCurrentTeX()),
+  'texra.applyReplacements': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.applyReplacements()),
+  'texra.fixCompilation': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.fixCompilation()),
+  'texra.getTeXCount': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.getTeXCount()),
+  'texra.countPdfPages': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.countPdfPages()),
+  'texra.showLinterMessages': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.showLinterMessages()),
+  'texra.countLinterMessages': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.countLinterMessages()),
+  'texra.extractFigurePaths': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.extractFigurePaths()),
+  // Batch 3 (#3781) — additional no-arg commands; same async pattern.
+  'texra.encodeImageToBase64': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.encodeImageToBase64()),
+  'texra.convertPdfToImages': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.convertPdfToImages()),
+  'texra.extractTikzFigures': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.extractTikzFigures()),
+  'texra.compileTikzFigures': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.compileTikzFigures()),
+  'texra.cloneOverleafProject': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.cloneOverleafProject()),
   // The typed handlers carry their own argument shapes via
   // `definedHandler`. Matching the registry map's per-entry TArgs widening
   // (`any`) keeps inference per entry without unifying every entry on
@@ -187,10 +147,15 @@ function makeActions(): ExtensionCommandActions {
     showLinterMessages: vi.fn().mockResolvedValue(undefined),
     countLinterMessages: vi.fn().mockResolvedValue(undefined),
     extractFigurePaths: vi.fn().mockResolvedValue(undefined),
+    encodeImageToBase64: vi.fn().mockResolvedValue(undefined),
+    convertPdfToImages: vi.fn().mockResolvedValue(undefined),
+    extractTikzFigures: vi.fn().mockResolvedValue(undefined),
+    compileTikzFigures: vi.fn().mockResolvedValue(undefined),
+    cloneOverleafProject: vi.fn().mockResolvedValue(undefined),
   };
 }
 
-describe('extension command surface — newly migrated commands (#3771, #3775)', () => {
+describe('extension command surface — newly migrated commands (#3771, #3775, #3781)', () => {
   it.each([
     ['texra.cleanOutput', 'cleanOutput'],
     ['texra.cleanBuild', 'cleanBuild'],
@@ -218,9 +183,17 @@ describe('extension command surface — newly migrated commands (#3771, #3775)',
     ['texra.showLinterMessages', 'showLinterMessages'],
     ['texra.countLinterMessages', 'countLinterMessages'],
     ['texra.extractFigurePaths', 'extractFigurePaths'],
-  ] as const)('%s dispatches to actions.%s', (id, actionKey) => {
+    // Batch 3 (#3781)
+    ['texra.encodeImageToBase64', 'encodeImageToBase64'],
+    ['texra.convertPdfToImages', 'convertPdfToImages'],
+    ['texra.extractTikzFigures', 'extractTikzFigures'],
+    ['texra.compileTikzFigures', 'compileTikzFigures'],
+    ['texra.cloneOverleafProject', 'cloneOverleafProject'],
+  ] as const)('%s dispatches to actions.%s', async (id, actionKey) => {
     const actions = makeActions();
-    expect(dispatchCommandFromRegistry(id, HANDLERS, actions)).toBe(true);
+    const result = dispatchCommandFromRegistry(id, HANDLERS, actions);
+    // Async handlers return a promise; awaiting must resolve to `true`.
+    await expect(Promise.resolve(result)).resolves.toBe(true);
     expect(actions[actionKey]).toHaveBeenCalledOnce();
   });
 
@@ -234,17 +207,16 @@ describe('extension command surface — newly migrated commands (#3771, #3775)',
     );
   });
 
-  it('texra.openDoc forwards parsed page argument', () => {
+  it('texra.openDoc forwards parsed page argument', async () => {
     const actions = makeActions();
-    expect(
-      dispatchCommandFromRegistry(
-        'texra.openDoc',
-        HANDLERS,
-        actions,
-        undefined,
-        'getting-started',
-      ),
-    ).toBe(true);
+    const result = dispatchCommandFromRegistry(
+      'texra.openDoc',
+      HANDLERS,
+      actions,
+      undefined,
+      'getting-started',
+    );
+    await expect(Promise.resolve(result)).resolves.toBe(true);
     expect(actions.openDoc).toHaveBeenCalledExactlyOnceWith('getting-started');
   });
 
@@ -276,17 +248,16 @@ describe('extension command surface — newly migrated commands (#3771, #3775)',
     expect(actions.stopAgent).toHaveBeenCalledExactlyOnceWith('stream-1');
   });
 
-  it('texra.compactResponse forwards parsed streamId', () => {
+  it('texra.compactResponse forwards parsed streamId', async () => {
     const actions = makeActions();
-    expect(
-      dispatchCommandFromRegistry(
-        'texra.compactResponse',
-        HANDLERS,
-        actions,
-        undefined,
-        'stream-2',
-      ),
-    ).toBe(true);
+    const result = dispatchCommandFromRegistry(
+      'texra.compactResponse',
+      HANDLERS,
+      actions,
+      undefined,
+      'stream-2',
+    );
+    await expect(Promise.resolve(result)).resolves.toBe(true);
     expect(actions.compactResponse).toHaveBeenCalledExactlyOnceWith('stream-2');
   });
 
@@ -302,5 +273,44 @@ describe('extension command surface — newly migrated commands (#3771, #3775)',
       ),
     ).toBe(false);
     expect(actions.compactResponse).not.toHaveBeenCalled();
+  });
+
+  // Regression guard for #3782: the migrated handlers must propagate
+  // async rejections instead of swallowing them through `void
+  // actions.X(); return true;`. Each asserted handler returns a
+  // promise that rejects — the dispatcher should surface the same
+  // rejection so VS Code's `executeCommand` callers (and the bot
+  // reviewer that filed #3782) actually see the failure.
+  describe('async rejection propagation (regression guard for #3782)', () => {
+    it.each([
+      ['texra.cleanOutput', 'cleanOutput'],
+      ['texra.signIn'.replace('signIn', 'auth.signIn'), 'signIn'],
+      ['texra.encodeImageToBase64', 'encodeImageToBase64'],
+      ['texra.cloneOverleafProject', 'cloneOverleafProject'],
+    ] as const)('%s rejection bubbles up', async (id, actionKey) => {
+      const actions = makeActions();
+      const failure = new Error(`boom-${actionKey}`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (actions[actionKey] as any).mockRejectedValueOnce(failure);
+
+      const result = dispatchCommandFromRegistry(id, HANDLERS, actions);
+      await expect(Promise.resolve(result)).rejects.toBe(failure);
+    });
+
+    it('typed handler texra.compactResponse rejection bubbles up', async () => {
+      const actions = makeActions();
+      const failure = new Error('boom-compactResponse');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (actions.compactResponse as any).mockRejectedValueOnce(failure);
+
+      const result = dispatchCommandFromRegistry(
+        'texra.compactResponse',
+        HANDLERS,
+        actions,
+        undefined,
+        'stream-3',
+      );
+      await expect(Promise.resolve(result)).rejects.toBe(failure);
+    });
   });
 });
