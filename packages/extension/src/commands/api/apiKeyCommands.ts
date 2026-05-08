@@ -80,67 +80,80 @@ async function setApiKeyForProvider(
   }
 }
 
-export function registerApiKeyCommands(context: vscode.ExtensionContext): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      apiKeyCommands.setApiKey,
-      async (provider?: ApiProvider) => {
-        if (provider) {
-          await setApiKeyForProvider(provider, true);
-          return;
-        }
+/**
+ * Set an API key. Migrated to the shared command registry in
+ * #3781 batch 4. The registry forwards a single typed argument so the
+ * optional `provider` is parsed at the dispatch boundary.
+ */
+export async function setApiKey(provider?: ApiProvider): Promise<void> {
+  if (provider) {
+    await setApiKeyForProvider(provider, true);
+    return;
+  }
 
-        const providerItems =
-          await SecretManager.getApiProviderQuickPickItems();
-        const providerPick = await vscode.window.showQuickPick(providerItems, {
-          placeHolder: 'Select API provider',
-        });
+  const providerItems = await SecretManager.getApiProviderQuickPickItems();
+  const providerPick = await vscode.window.showQuickPick(providerItems, {
+    placeHolder: 'Select API provider',
+  });
 
-        if (providerPick?.provider) {
-          await setApiKeyForProvider(providerPick.provider);
-        }
-      },
-    ),
+  if (providerPick?.provider) {
+    await setApiKeyForProvider(providerPick.provider);
+  }
+}
 
-    vscode.commands.registerCommand(apiKeyCommands.removeApiKey, async () => {
-      const providerItems = await SecretManager.getApiProviderQuickPickItems();
-      const providerPick = await vscode.window.showQuickPick(providerItems, {
-        placeHolder: 'Select API provider to remove key',
-      });
+/**
+ * Remove an API key after a confirmation prompt. Migrated to the shared
+ * command registry in #3781 batch 4.
+ */
+export async function removeApiKey(): Promise<void> {
+  const providerItems = await SecretManager.getApiProviderQuickPickItems();
+  const providerPick = await vscode.window.showQuickPick(providerItems, {
+    placeHolder: 'Select API provider to remove key',
+  });
 
-      const provider = providerPick?.provider;
-      if (!provider) {
-        return;
-      }
+  const provider = providerPick?.provider;
+  if (!provider) {
+    return;
+  }
 
-      const confirm = await vscode.window.showWarningMessage(
-        `Remove the ${provider} API key? This cannot be undone.`,
-        'Remove',
-        'Cancel',
-      );
-      if (confirm !== 'Remove') {
-        return;
-      }
-
-      try {
-        await SecretManager.delete(SecretManager.getApiKeySecretName(provider));
-        vscode.window.showInformationMessage(
-          `${provider} API key has been removed`,
-        );
-        await refreshApiKeyUI();
-        const view = await getMainWebview();
-        view?.webview.postMessage({
-          command: (await SecretManager.anyApiKeyExists())
-            ? MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER
-            : MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
-        });
-      } catch (err) {
-        await showLoggedErrorMessage(
-          CHANNEL,
-          `Failed to remove ${provider} API key`,
-          err,
-        );
-      }
-    }),
+  const confirm = await vscode.window.showWarningMessage(
+    `Remove the ${provider} API key? This cannot be undone.`,
+    'Remove',
+    'Cancel',
   );
+  if (confirm !== 'Remove') {
+    return;
+  }
+
+  try {
+    await SecretManager.delete(SecretManager.getApiKeySecretName(provider));
+    vscode.window.showInformationMessage(
+      `${provider} API key has been removed`,
+    );
+    await refreshApiKeyUI();
+    const view = await getMainWebview();
+    view?.webview.postMessage({
+      command: (await SecretManager.anyApiKeyExists())
+        ? MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER
+        : MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
+    });
+  } catch (err) {
+    await showLoggedErrorMessage(
+      CHANNEL,
+      `Failed to remove ${provider} API key`,
+      err,
+    );
+  }
+}
+
+/**
+ * Both `texra.setApiKey` and `texra.removeApiKey` are now registered through
+ * the shared command registry in `extensionCommandSurface.ts`. The
+ * registration function is kept as a no-op so existing call sites in
+ * `commands.ts` don't have to be reshuffled — removing the dependency would
+ * require dropping it from the `registerCommands` call list, which is
+ * outside the scope of this batch.
+ */
+export function registerApiKeyCommands(_context: vscode.ExtensionContext): void {
+  // Intentionally empty: handlers moved to the shared registry (#3781 batch 4).
 }

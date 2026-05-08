@@ -9,6 +9,7 @@ import {
   dispatchCommandFromRegistry,
   type CommandHandler,
 } from '@shared/commands/registry';
+import { AgentCategorySchema } from '@shared/schemas/agent';
 import { StreamTabIdSchema } from '@shared/schemas/identifiers';
 
 // Re-implement the extension's no-arg handler map here in test form. We
@@ -107,6 +108,53 @@ const HANDLERS = {
     awaitTrue(actions.compileTikzFigures()),
   'texra.cloneOverleafProject': (actions: ExtensionCommandActions) =>
     awaitTrue(actions.cloneOverleafProject()),
+  // Batch 4 (#3781) — settings/api/agent surface follow-ups. Mirrors the
+  // real `EXTENSION_COMMAND_HANDLERS` shape so each migrated id is
+  // exercised through the dispatcher without importing the host-coupled
+  // surface. The `ApiProvider` schema is duplicated locally because
+  // `SecretManager` carries a `vscode` import.
+  'texra.removeApiKey': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.removeApiKey()),
+  'texra.showImportOptions': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.showImportOptions()),
+  'texra.toggleView': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.toggleView()),
+  'texra.showProgressView': definedHandler(
+    z
+      .object({ inPlace: z.boolean().optional() })
+      .partial()
+      .optional(),
+    (actions: ExtensionCommandActions, parsed) =>
+      awaitTrue(actions.showProgressView(parsed?.inPlace === true)),
+  ),
+  'texra.setApiKey': definedHandler(
+    z
+      .enum([
+        'openai',
+        'anthropic',
+        'openRouter',
+        'google',
+        'xai',
+        'deepseek',
+        'moonshot',
+        'dashscope',
+        'minimax',
+        'glm',
+      ])
+      .optional(),
+    (actions: ExtensionCommandActions, provider) =>
+      awaitTrue(actions.setApiKey(provider)),
+  ),
+  'texra.createAgentWithAI': definedHandler(
+    AgentCategorySchema.optional(),
+    (actions: ExtensionCommandActions, category) =>
+      awaitTrue(actions.createAgentWithAI(category ?? 'workflow')),
+  ),
+  'texra.execute': definedHandler(
+    z.unknown(),
+    (actions: ExtensionCommandActions, input) =>
+      awaitTrue(actions.execute(input)),
+  ),
   // The typed handlers carry their own argument shapes via
   // `definedHandler`. Matching the registry map's per-entry TArgs widening
   // (`any`) keeps inference per entry without unifying every entry on
@@ -152,6 +200,14 @@ function makeActions(): ExtensionCommandActions {
     extractTikzFigures: vi.fn().mockResolvedValue(undefined),
     compileTikzFigures: vi.fn().mockResolvedValue(undefined),
     cloneOverleafProject: vi.fn().mockResolvedValue(undefined),
+    // Batch 4 (#3781).
+    removeApiKey: vi.fn().mockResolvedValue(undefined),
+    showImportOptions: vi.fn().mockResolvedValue(undefined),
+    toggleView: vi.fn().mockResolvedValue(undefined),
+    showProgressView: vi.fn().mockResolvedValue(undefined),
+    setApiKey: vi.fn().mockResolvedValue(undefined),
+    createAgentWithAI: vi.fn().mockResolvedValue(undefined),
+    execute: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -189,6 +245,10 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     ['texra.extractTikzFigures', 'extractTikzFigures'],
     ['texra.compileTikzFigures', 'compileTikzFigures'],
     ['texra.cloneOverleafProject', 'cloneOverleafProject'],
+    // Batch 4 (#3781)
+    ['texra.removeApiKey', 'removeApiKey'],
+    ['texra.showImportOptions', 'showImportOptions'],
+    ['texra.toggleView', 'toggleView'],
   ] as const)('%s dispatches to actions.%s', async (id, actionKey) => {
     const actions = makeActions();
     const result = dispatchCommandFromRegistry(id, HANDLERS, actions);
@@ -273,6 +333,111 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
       ),
     ).toBe(false);
     expect(actions.compactResponse).not.toHaveBeenCalled();
+  });
+
+  // Batch 4 (#3781) typed-arg coverage.
+  it('texra.showProgressView with no arg defaults to inPlace=false', async () => {
+    const actions = makeActions();
+    const result = dispatchCommandFromRegistry(
+      'texra.showProgressView',
+      HANDLERS,
+      actions,
+    );
+    await expect(Promise.resolve(result)).resolves.toBe(true);
+    expect(actions.showProgressView).toHaveBeenCalledExactlyOnceWith(false);
+  });
+
+  it('texra.showProgressView forwards inPlace=true', async () => {
+    const actions = makeActions();
+    const result = dispatchCommandFromRegistry(
+      'texra.showProgressView',
+      HANDLERS,
+      actions,
+      undefined,
+      { inPlace: true },
+    );
+    await expect(Promise.resolve(result)).resolves.toBe(true);
+    expect(actions.showProgressView).toHaveBeenCalledExactlyOnceWith(true);
+  });
+
+  it('texra.setApiKey forwards parsed provider', async () => {
+    const actions = makeActions();
+    const result = dispatchCommandFromRegistry(
+      'texra.setApiKey',
+      HANDLERS,
+      actions,
+      undefined,
+      'anthropic',
+    );
+    await expect(Promise.resolve(result)).resolves.toBe(true);
+    expect(actions.setApiKey).toHaveBeenCalledExactlyOnceWith('anthropic');
+  });
+
+  it('texra.setApiKey passes undefined when no provider given', async () => {
+    const actions = makeActions();
+    const result = dispatchCommandFromRegistry(
+      'texra.setApiKey',
+      HANDLERS,
+      actions,
+    );
+    await expect(Promise.resolve(result)).resolves.toBe(true);
+    expect(actions.setApiKey).toHaveBeenCalledExactlyOnceWith(undefined);
+  });
+
+  it('texra.setApiKey rejects unknown provider', () => {
+    const actions = makeActions();
+    expect(
+      dispatchCommandFromRegistry(
+        'texra.setApiKey',
+        HANDLERS,
+        actions,
+        undefined,
+        'not-a-provider',
+      ),
+    ).toBe(false);
+    expect(actions.setApiKey).not.toHaveBeenCalled();
+  });
+
+  it('texra.createAgentWithAI defaults to workflow when no category given', async () => {
+    const actions = makeActions();
+    const result = dispatchCommandFromRegistry(
+      'texra.createAgentWithAI',
+      HANDLERS,
+      actions,
+    );
+    await expect(Promise.resolve(result)).resolves.toBe(true);
+    expect(actions.createAgentWithAI).toHaveBeenCalledExactlyOnceWith(
+      'workflow',
+    );
+  });
+
+  it('texra.createAgentWithAI forwards parsed toolUse category', async () => {
+    const actions = makeActions();
+    const result = dispatchCommandFromRegistry(
+      'texra.createAgentWithAI',
+      HANDLERS,
+      actions,
+      undefined,
+      'toolUse',
+    );
+    await expect(Promise.resolve(result)).resolves.toBe(true);
+    expect(actions.createAgentWithAI).toHaveBeenCalledExactlyOnceWith(
+      'toolUse',
+    );
+  });
+
+  it('texra.execute forwards raw input through z.unknown() schema', async () => {
+    const actions = makeActions();
+    const payload = { config: { name: 'test' } };
+    const result = dispatchCommandFromRegistry(
+      'texra.execute',
+      HANDLERS,
+      actions,
+      undefined,
+      payload,
+    );
+    await expect(Promise.resolve(result)).resolves.toBe(true);
+    expect(actions.execute).toHaveBeenCalledExactlyOnceWith(payload);
   });
 
   // Regression guard for #3782: the migrated handlers must propagate

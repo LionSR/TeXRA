@@ -640,18 +640,18 @@ function createAgentCreatorFlow(): Flow<AgentCreatorShared> {
   return new Flow<AgentCreatorShared>(gatherInput);
 }
 
-export function registerAgentCreatorCommands(context: vscode.ExtensionContext) {
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      agentCreatorCommands.createAgentWithAI,
-      (category?: AgentCategory) =>
-        handleCreateAgentWithAI(context, category ?? 'workflow'),
-    ),
-  );
+/**
+ * `texra.createAgentWithAI` migrated to the shared command registry in
+ * #3781 batch 4. Kept as a no-op for backward compatibility with the
+ * existing call list in `commands.ts`.
+ */
+export function registerAgentCreatorCommands(
+  _context: vscode.ExtensionContext,
+) {
   return agentCreatorCommands;
 }
 
-async function handleCreateAgentWithAI(
+export async function handleCreateAgentWithAI(
   context: vscode.ExtensionContext,
   category: AgentCategory,
 ) {
