@@ -1,13 +1,14 @@
 // Core styles
 export {
   commonViewStyles,
+  compactIconActionButtonStyles,
   filledButtonStyles,
   focusRingStyles,
 } from './commonViewStyles';
 export { designTokens, animationStyles } from './litStyles';
 
 // Component styles
-export { selectStyles } from './selectStyles';
+export { selectStyles, compactFormControlStyles } from './selectStyles';
 export { statusIndicatorStyles } from './statusIndicatorStyles';
 export { permissionCardStyles } from './permissionCardStyles';
 export { requestPanelStyles } from './requestPanelStyles';
