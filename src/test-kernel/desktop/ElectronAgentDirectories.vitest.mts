@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Local imports - common
 
 // Local imports - platform
+import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 
@@ -138,6 +139,7 @@ describe('desktop agent directory bootstrap', () => {
       workspace: createNodeWorkspace(() => workspacePath),
       storage,
       secrets: new FakeSecrets(),
+      lifecycle: createLifecycleHost(),
     });
 
     return {
