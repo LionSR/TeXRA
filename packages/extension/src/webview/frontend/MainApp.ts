@@ -1,10 +1,11 @@
-import { html, type TemplateResult } from 'lit';
+import { html, nothing, type TemplateResult } from 'lit';
 import { provide } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { SignalWatcher, signal, Signal } from '@shared/signals';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
@@ -1967,38 +1968,6 @@ export class MainApp extends MainAppBase {
         </div>
 
         <div class="main-content">
-          <div class=${fileSelectionClasses}>
-            ${repeat(
-              FILE_SELECT_CONFIGS,
-              (config) => config.type,
-              (config) => html`
-                <file-select-group
-                  .config=${config}
-                  @file-change=${this.handleComponentFileChange}
-                  @refresh-files=${this.handleComponentRefreshFiles}
-                  @get-current-file=${this.handleComponentGetCurrentFile}
-                  @empty-file=${this.handleComponentEmptyFile}
-                  @toggle-list=${this.handleComponentToggleList}
-                  @add-opened-files=${this.handleComponentAddOpenedFiles}
-                  @empty-files=${this.handleComponentEmptyFiles}
-                  @select-multiple-files=${this
-                    .handleComponentSelectMultipleFiles}
-                  @remove-file=${this.handleComponentRemoveFile}
-                  @files-reordered=${this.handleComponentFilesReordered}
-                  @checkbox-change=${this.handleComponentCheckboxChange}
-                  @focus-instruction=${this.handleComponentFocusInstruction}
-                ></file-select-group>
-              `,
-            )}
-            <output-files-section
-              @toggle-list=${this.handleComponentToggleList}
-              @empty-files=${this.handleComponentEmptyFiles}
-              @select-multiple-files=${this.handleComponentSelectMultipleFiles}
-              @remove-file=${this.handleComponentRemoveFile}
-              @files-reordered=${this.handleComponentFilesReordered}
-            ></output-files-section>
-          </div>
-
           <instruction-panel
             .showSessionHint=${!this.sessionHintDismissed.get()}
             @session-type-change=${this.handleComponentSessionTypeChange}
@@ -2041,6 +2010,58 @@ export class MainApp extends MainAppBase {
             @dismiss-getting-started=${this
               .handleComponentDismissGettingStarted}
           ></banner-group>
+
+          ${isToolUse
+            ? nothing
+            : html`
+                <div class="section-separator" role="presentation"></div>
+                <wa-details class="file-selection-details">
+                  <span slot="summary" class="file-selection-summary">
+                    <wa-icon
+                      library=${TEXRA_ICON_LIBRARY}
+                      name="folder-tree"
+                      variant="solid"
+                    ></wa-icon>
+                    Files
+                  </span>
+                  <div class=${fileSelectionClasses}>
+                    ${repeat(
+                      FILE_SELECT_CONFIGS,
+                      (config) => config.type,
+                      (config) => html`
+                        <file-select-group
+                          .config=${config}
+                          @file-change=${this.handleComponentFileChange}
+                          @refresh-files=${this.handleComponentRefreshFiles}
+                          @get-current-file=${this
+                            .handleComponentGetCurrentFile}
+                          @empty-file=${this.handleComponentEmptyFile}
+                          @toggle-list=${this.handleComponentToggleList}
+                          @add-opened-files=${this
+                            .handleComponentAddOpenedFiles}
+                          @empty-files=${this.handleComponentEmptyFiles}
+                          @select-multiple-files=${this
+                            .handleComponentSelectMultipleFiles}
+                          @remove-file=${this.handleComponentRemoveFile}
+                          @files-reordered=${this
+                            .handleComponentFilesReordered}
+                          @checkbox-change=${this.handleComponentCheckboxChange}
+                          @focus-instruction=${this
+                            .handleComponentFocusInstruction}
+                        ></file-select-group>
+                      `,
+                    )}
+                    <output-files-section
+                      @toggle-list=${this.handleComponentToggleList}
+                      @empty-files=${this.handleComponentEmptyFiles}
+                      @select-multiple-files=${this
+                        .handleComponentSelectMultipleFiles}
+                      @remove-file=${this.handleComponentRemoveFile}
+                      @files-reordered=${this.handleComponentFilesReordered}
+                    ></output-files-section>
+                  </div>
+                </wa-details>
+              `}
         </div>
 
         <latexdiffs-section
