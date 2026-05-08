@@ -42,15 +42,25 @@ export interface DesktopShellActionFactoryOptions {
   openWorkspaceFolder?: () => Promise<void>;
   signIn?: () => Promise<void>;
   /**
-   * Synchronous probe for "is the active workspace a git repo". Used by
-   * `setRecentCommitsUnavailable` so the desktop reports the correct
-   * `isGitRepo` state to the renderer banner — previously this always
-   * reported `false`, which made the launcher claim the user is outside
-   * a repo even when they're inside one. The desktop never wires recent
-   * commits (no vscode.git API in standalone), but the boolean still
-   * drives banner copy.
+   * Synchronous probe for "is the active workspace a git repo". Used as a
+   * fallback when `getRecentCommits` is not supplied so the desktop still
+   * reports the correct `isGitRepo` state to the renderer banner. When
+   * `getRecentCommits` is wired (production path in `index.ts`), this probe
+   * is unused — the git host's own result is authoritative.
    */
   isWorkspaceGitRepo?: () => boolean;
+  /**
+   * Async git log host — closes audit item A from
+   * `docs/dev/standalone-trajectory-audit.md` (trajectory #16). When
+   * provided, the shell forwards the workspace's most recent commits to
+   * the renderer instead of replying with an empty list. Errors are
+   * swallowed by the host itself; failures surface as `commits: []` plus
+   * the best-effort `isGitRepo` boolean.
+   */
+  getRecentCommits?: () => Promise<{
+    commits: string[];
+    isGitRepo: boolean;
+  }>;
   onAsyncError?: (error: unknown) => void;
 }
 
@@ -64,7 +74,14 @@ export interface DesktopShellActionInstanceOptions {
 export interface DesktopShellActions extends DesktopCommandActions {
   signIn(): void;
   openAgentDirectory(customDirSet?: boolean): void;
-  setRecentCommitsUnavailable(): void;
+  /**
+   * Posts the most recent git commits to the renderer in response to
+   * `MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS`. When the host has a real
+   * git port wired (`getRecentCommits`), the response includes the actual
+   * `git log` output; otherwise it falls back to an empty list with a
+   * best-effort `isGitRepo` flag derived from `isWorkspaceGitRepo`.
+   */
+  sendRecentCommits(): void;
 }
 
 const SWITCH_VIEW_ROUTES = {
@@ -146,11 +163,36 @@ export function createDesktopShellActions(
     openLogFolder,
     openWorkspaceFolder,
     resetMainView,
-    setRecentCommitsUnavailable: () => {
-      // Defaults to `false` so consumers without a workspace probe behave
-      // like the original code. When `isWorkspaceGitRepo` is supplied
-      // (production wiring in `index.ts`), the renderer learns the real
-      // repo state even though the commit list itself is unavailable.
+    sendRecentCommits: () => {
+      // Prefer the real git host when wired (closes audit item A from
+      // `docs/dev/standalone-trajectory-audit.md`). Falls back to the
+      // synchronous `.git` probe so the boolean stays honest even when no
+      // git host is supplied (e.g. in tests, or before the host is wired).
+      const getRecentCommits = options.getRecentCommits;
+      if (getRecentCommits) {
+        void getRecentCommits()
+          .then(({ commits, isGitRepo }) => {
+            renderer.postToRenderer({
+              command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
+              commits,
+              isGitRepo,
+            });
+          })
+          .catch((error) => {
+            // The git host already swallows expected errors; reaching this
+            // catch implies a programmer bug. Surface the error so it gets
+            // logged, but still send a conservative reply so the launcher
+            // banner doesn't hang waiting for a response.
+            reportAsyncError(error);
+            renderer.postToRenderer({
+              command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
+              commits: [],
+              isGitRepo: false,
+            });
+          });
+        return;
+      }
+      // No git host: best-effort `isGitRepo` boolean, empty commit list.
       let isGitRepo = false;
       try {
         isGitRepo = options.isWorkspaceGitRepo?.() ?? false;
@@ -219,7 +261,7 @@ function dispatchMainViewInboundOnShell(
       actions.openAgentDirectory(message.customDirSet === true);
       return true;
     case MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS:
-      actions.setRecentCommitsUnavailable();
+      actions.sendRecentCommits();
       return true;
     default:
       return false;
