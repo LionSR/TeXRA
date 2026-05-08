@@ -193,10 +193,6 @@ export class StreamHeader extends LitElement {
         position: relative;
       }
 
-      .status-indicator:hover {
-        opacity: var(--opacity-full);
-      }
-
       /* Tooltip on hover */
       .status-indicator::after {
         content: attr(data-status);
