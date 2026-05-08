@@ -81,10 +81,11 @@ function installDialogPolyfill(window: JSDOM['window']): void {
     };
   }
   if (typeof proto.show !== 'function') {
-    (proto as HTMLDialogElement & { show: () => void }).show =
-      function show(this: HTMLDialogElement) {
-        this.setAttribute('open', '');
-      };
+    (proto as HTMLDialogElement & { show: () => void }).show = function show(
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '');
+    };
   }
   if (typeof proto.close !== 'function') {
     proto.close = function close(this: HTMLDialogElement) {
