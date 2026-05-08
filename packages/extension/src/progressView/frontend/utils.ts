@@ -2,7 +2,7 @@
 
 /**
  * Type for radio-group-like components that expose a value property.
- * Used for wa-radio-group / vscode-radio-group / vscode-single-select.
+ * Used for wa-radio-group / vscode-radio-group.
  */
 export type VSCodeValueElement = HTMLElement & { value?: string };
 
