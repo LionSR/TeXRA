@@ -122,14 +122,17 @@ export class OutputFilesSection extends LitElement {
         (file) => html`
           <div class="file-item" data-path=${file}>
             <span class="file-name">${file}</span>
-            <button
-              class="remove-button"
+            <wa-button
+              class="action-icon-button remove-button"
+              appearance="plain"
+              variant="neutral"
+              size="small"
               type="button"
               aria-label="Remove output file"
               data-remove-file=${file}
             >
               ${waIcon('trash')}
-            </button>
+            </wa-button>
           </div>
         `,
       )}

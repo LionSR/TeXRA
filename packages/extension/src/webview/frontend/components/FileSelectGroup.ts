@@ -332,14 +332,17 @@ export class FileSelectGroup extends LitElement {
                     </span>`
                   : nothing}
               </span>
-              <button
-                class="remove-button"
+              <wa-button
+                class="action-icon-button remove-button"
+                appearance="plain"
+                variant="neutral"
+                size="small"
                 type="button"
                 aria-label="Remove file"
                 data-remove-file=${file}
               >
                 ${waIcon('trash')}
-              </button>
+              </wa-button>
             </div>
           `;
         },
