@@ -61,8 +61,7 @@ export const markdownStyles = css`
     padding-left: var(--wa-space-xs);
     margin-top: var(--wa-space-s);
     margin-bottom: var(--wa-space-2xs);
-    border-left: var(--border-thick) solid
-      var(--wa-color-activity-badge-bg);
+    border-left: var(--border-thick) solid var(--wa-color-activity-badge-bg);
     border-bottom: var(--border-thin) solid var(--color-border);
     padding-bottom: var(--wa-space-3xs);
     border-radius: var(--border-radius) 0 0 var(--border-radius);
@@ -104,8 +103,7 @@ export const markdownStyles = css`
     margin: 0.5em 0;
     border-radius: var(--border-radius);
     background-color: var(--wa-color-surface-lowered);
-    border-left: var(--wa-space-3xs) solid
-      var(--wa-color-activity-badge-bg);
+    border-left: var(--wa-space-3xs) solid var(--wa-color-activity-badge-bg);
     overflow-x: auto;
   }
 
@@ -131,8 +129,7 @@ export const markdownStyles = css`
   }
 
   .markdown-content blockquote {
-    border-left: var(--border-thick) solid
-      var(--wa-color-activity-badge-bg);
+    border-left: var(--border-thick) solid var(--wa-color-activity-badge-bg);
     margin: var(--wa-space-xs) 0;
     padding-left: var(--wa-space-l);
     color: var(--color-text-secondary);
@@ -181,8 +178,7 @@ export const markdownStyles = css`
   }
 
   .banner-content--scratchpad p:has(strong:first-child) {
-    border-left: calc(var(--wa-space-2xs) - 1px) solid
-      var(--wa-color-icon-info);
+    border-left: calc(var(--wa-space-2xs) - 1px) solid var(--wa-color-icon-info);
     padding-left: var(--wa-space-xs);
   }
 

@@ -39,9 +39,9 @@ describe('ProviderKeyModal', () => {
       submitted.push((event as CustomEvent).detail);
     });
 
-    const input = modal.shadowRoot!.querySelector(
-      'wa-input',
-    ) as HTMLElement & { value: string };
+    const input = modal.shadowRoot!.querySelector('wa-input') as HTMLElement & {
+      value: string;
+    };
     input.value = '  sk-test  ';
     input.dispatchEvent(new Event('input', { bubbles: true }));
     modal
@@ -73,9 +73,9 @@ describe('ProviderKeyModal', () => {
       submitted += 1;
     });
 
-    const input = modal.shadowRoot!.querySelector(
-      'wa-input',
-    ) as HTMLElement & { value: string };
+    const input = modal.shadowRoot!.querySelector('wa-input') as HTMLElement & {
+      value: string;
+    };
     input.value = 'sk-cancel';
     input.dispatchEvent(new Event('input', { bubbles: true }));
     // First wa-button in the footer is "Cancel" (outlined / neutral); clicking
@@ -112,9 +112,9 @@ describe('ProviderKeyModal', () => {
       cancelled += 1;
     });
 
-    const input = modal.shadowRoot!.querySelector(
-      'wa-input',
-    ) as HTMLElement & { value: string };
+    const input = modal.shadowRoot!.querySelector('wa-input') as HTMLElement & {
+      value: string;
+    };
     input.value = 'sk-after-submit';
     input.dispatchEvent(new Event('input', { bubbles: true }));
     modal

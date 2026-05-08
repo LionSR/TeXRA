@@ -349,4 +349,3 @@ export async function runSetupAssistant(): Promise<void> {
     );
   }
 }
-
