@@ -25,7 +25,7 @@ export class ProviderKeyModal extends LitElement {
       /* wa-dialog supplies the backdrop, modal positioning, focus trap, escape
          handling, and panel chrome; only the body content layout lives here. */
       wa-dialog.provider-key-dialog {
-        --width: min(560px, calc(100vw - 32px));
+        --width: min(560px, calc(100vw - var(--wa-space-xl, 32px)));
       }
 
       .provider-key-description {
@@ -44,7 +44,7 @@ export class ProviderKeyModal extends LitElement {
       input {
         width: 100%;
         box-sizing: border-box;
-        height: 34px;
+        height: var(--height-control);
         padding: var(--wa-space-2xs) var(--wa-space-xs);
         color: var(--wa-form-control-text-color);
         background: var(--wa-form-control-background-color);
@@ -71,13 +71,15 @@ export class ProviderKeyModal extends LitElement {
         gap: var(--wa-space-xs);
       }
 
-      button {
+      /* Action buttons share base layout; variants set color + background */
+      .provider-key-actions button {
         display: inline-flex;
         align-items: center;
         gap: var(--wa-space-2xs);
         min-height: var(--height-button);
         padding: var(--wa-space-2xs) var(--wa-space-s);
         border-radius: var(--border-radius);
+        border: var(--border-thin) solid transparent;
         font: inherit;
         cursor: pointer;
       }
@@ -85,7 +87,7 @@ export class ProviderKeyModal extends LitElement {
       .provider-key-primary {
         color: var(--wa-color-brand-on-loud);
         background: var(--wa-color-brand-fill-loud);
-        border: var(--border-thin) solid var(--wa-color-brand-fill-loud);
+        border-color: var(--wa-color-brand-fill-loud);
       }
 
       .provider-key-primary:hover {
@@ -95,7 +97,7 @@ export class ProviderKeyModal extends LitElement {
       .provider-key-secondary {
         color: var(--wa-color-text-normal);
         background: transparent;
-        border: var(--border-thin) solid var(--color-border);
+        border-color: var(--color-border);
       }
 
       .provider-key-secondary:hover {

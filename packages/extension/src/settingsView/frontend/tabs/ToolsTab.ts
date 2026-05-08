@@ -174,7 +174,7 @@ export class ToolsTab extends LitElement {
       .tools-health-labels {
         display: flex;
         flex-direction: column;
-        gap: 1px;
+        gap: var(--wa-space-3xs);
       }
 
       .tools-summary-stat {
@@ -201,20 +201,7 @@ export class ToolsTab extends LitElement {
         margin-bottom: var(--wa-space-s);
       }
 
-      .category-header {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        padding-bottom: var(--wa-space-2xs);
-        margin-bottom: var(--wa-space-xs);
-        border-bottom: var(--border-thin) solid var(--color-border);
-        font-size: var(--font-size-sm);
-        font-weight: var(--font-weight-medium);
-        color: var(--color-text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-
+      /* .category-header chrome lives in commonViewStyles. */
       .category-header wa-icon {
         font-size: var(--font-size);
       }
@@ -249,7 +236,7 @@ export class ToolsTab extends LitElement {
       }
 
       .desktop-settings-title {
-        font-weight: 600;
+        font-weight: var(--font-weight-semibold);
         margin: 0;
       }
 
