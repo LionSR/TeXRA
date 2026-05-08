@@ -204,6 +204,7 @@
    */
   --wa-font-family-body: var(--desktop-font-family);
   --wa-font-family-heading: var(--desktop-font-family);
+  --wa-font-family-mono: 'SF Mono', Monaco, monospace;
   --wa-font-size-m: var(--desktop-font-size);
   --wa-font-weight-normal: var(--desktop-font-weight);
 
@@ -282,6 +283,11 @@
   --wa-color-neutral-fill-loud: var(--desktop-color-sidebar-header);
   --wa-color-neutral-border-loud: var(--desktop-color-border);
   --wa-color-neutral-on-loud: var(--desktop-color-foreground);
+
+  /* Testing status color bridge. Wire success/warning test icons to WA semantic
+     tokens so they inherit host theme status colors. */
+  --wa-color-success-on-quiet: var(--desktop-color-success);
+  --wa-color-warning-fill-quiet: var(--desktop-color-warning-background);
 }
 
 body.vscode-light,
@@ -337,12 +343,12 @@ body.texra-high-contrast {
   --vscode-font-family: var(--texra-font-family);
   --vscode-font-size: var(--texra-font-size);
   --vscode-font-weight: var(--texra-font-weight);
-  --vscode-foreground: var(--texra-foreground);
-  --vscode-descriptionForeground: var(--texra-descriptionForeground);
-  --vscode-editor-background: var(--texra-editor-background);
-  --vscode-editor-font-family: var(--texra-editor-font-family);
+  --vscode-foreground: var(--wa-color-text-normal);
+  --vscode-descriptionForeground: var(--wa-color-text-quiet);
+  --vscode-editor-background: var(--wa-color-surface-default);
+  --vscode-editor-font-family: var(--wa-font-family-mono);
   --vscode-editor-font-size: var(--texra-editor-font-size);
-  --vscode-editor-foreground: var(--texra-editor-foreground);
+  --vscode-editor-foreground: var(--wa-color-text-normal);
   --vscode-editor-inactiveSelectionBackground: var(
     --texra-editor-inactiveSelectionBackground
   );
@@ -362,23 +368,23 @@ body.texra-high-contrast {
   --vscode-editorWidget-background: var(--texra-editorWidget-background);
   --vscode-editorWidget-border: var(--texra-editorWidget-border);
   --vscode-errorForeground: var(--wa-color-danger-on-quiet);
-  --vscode-focusBorder: var(--texra-focusBorder);
-  --vscode-sideBar-background: var(--texra-sideBar-background);
+  --vscode-focusBorder: var(--wa-color-focus);
+  --vscode-sideBar-background: var(--wa-color-surface-lowered);
   --vscode-sideBar-foreground: var(--texra-sideBar-foreground);
   --vscode-sideBarSectionHeader-background: var(
     --texra-sideBarSectionHeader-background
   );
   --vscode-sideBarTitle-foreground: var(--texra-sideBarTitle-foreground);
-  --vscode-panel-border: var(--texra-panel-border);
-  --vscode-panel-background: var(--texra-editor-background);
-  --vscode-panelTitle-activeBorder: var(--texra-focusBorder);
-  --vscode-panelTitle-activeForeground: var(--texra-foreground);
-  --vscode-panelTitle-inactiveForeground: var(--texra-descriptionForeground);
+  --vscode-panel-border: var(--wa-color-surface-border);
+  --vscode-panel-background: var(--wa-color-surface-default);
+  --vscode-panelTitle-activeBorder: var(--wa-color-focus);
+  --vscode-panelTitle-activeForeground: var(--wa-color-text-normal);
+  --vscode-panelTitle-inactiveForeground: var(--wa-color-text-quiet);
   --vscode-panelSection-border: var(--texra-panelSection-border);
-  --vscode-settings-headerBorder: var(--texra-panel-border);
-  --vscode-button-background: var(--texra-button-background);
+  --vscode-settings-headerBorder: var(--wa-color-surface-border);
+  --vscode-button-background: var(--wa-color-brand-fill-loud);
   --vscode-button-border: var(--texra-button-border);
-  --vscode-button-foreground: var(--texra-button-foreground);
+  --vscode-button-foreground: var(--wa-color-brand-on-loud);
   --vscode-button-hoverBackground: var(--texra-button-hoverBackground);
   --vscode-button-secondaryBackground: var(--texra-button-secondaryBackground);
   --vscode-button-secondaryForeground: var(--texra-button-secondaryForeground);
@@ -432,10 +438,10 @@ body.texra-high-contrast {
   );
   --vscode-checkbox-background: var(--wa-form-control-background-color);
   --vscode-checkbox-border: var(--wa-form-control-border-color);
-  --vscode-checkbox-foreground: var(--texra-foreground);
+  --vscode-checkbox-foreground: var(--wa-color-text-normal);
   --vscode-settings-checkboxBackground: var(--wa-form-control-background-color);
   --vscode-settings-checkboxBorder: var(--wa-form-control-border-color);
-  --vscode-settings-checkboxForeground: var(--texra-foreground);
+  --vscode-settings-checkboxForeground: var(--wa-color-text-normal);
   --vscode-settings-dropdownBackground: var(--wa-form-control-background-color);
   --vscode-settings-dropdownBorder: var(--texra-dropdown-border);
   --vscode-settings-dropdownForeground: var(--wa-form-control-text-color);
@@ -453,9 +459,9 @@ body.texra-high-contrast {
     --texra-list-activeSelectionForeground
   );
   --vscode-list-focusAndSelectionOutline: var(--texra-list-focusOutline);
-  --vscode-list-focusHighlightForeground: var(--texra-focusBorder);
+  --vscode-list-focusHighlightForeground: var(--wa-color-focus);
   --vscode-list-focusOutline: var(--texra-list-focusOutline);
-  --vscode-list-highlightForeground: var(--texra-focusBorder);
+  --vscode-list-highlightForeground: var(--wa-color-focus);
   --vscode-list-hoverBackground: var(--wa-color-neutral-fill-quiet);
   --vscode-list-hoverForeground: var(--texra-list-hoverForeground);
   --vscode-list-inactiveSelectionBackground: var(
@@ -482,7 +488,7 @@ body.texra-high-contrast {
   --vscode-textBlockQuote-border: var(--texra-textBlockQuote-border);
   --vscode-textCodeBlock-background: var(--texra-textCodeBlock-background);
   --vscode-textLink-activeForeground: var(--texra-textLink-activeForeground);
-  --vscode-textLink-foreground: var(--texra-textLink-foreground);
+  --vscode-textLink-foreground: var(--wa-color-text-link);
   --vscode-textPreformat-foreground: var(--texra-textPreformat-foreground);
   --vscode-terminal-background: var(--texra-terminal-background);
   --vscode-terminal-foreground: var(--texra-terminal-foreground);

@@ -229,6 +229,7 @@
 :root {
   --wa-font-family-body: var(--texra-font-family);
   --wa-font-family-heading: var(--texra-font-family);
+  --wa-font-family-mono: var(--vscode-editor-font-family, var(--wa-font-family-mono));
   --wa-font-size-m: var(--texra-font-size);
   --wa-font-weight-normal: var(--texra-font-weight);
 
@@ -249,15 +250,15 @@
   --wa-space-4xl: calc(var(--wa-space-scale) * 4rem); /* 64px */
   --wa-space-5xl: calc(var(--wa-space-scale) * 5rem); /* 80px */
 
-  --wa-color-text-normal: var(--texra-foreground);
-  --wa-color-text-quiet: var(--texra-descriptionForeground);
-  --wa-color-text-link: var(--texra-textLink-foreground);
-  --wa-color-surface-default: var(--texra-editor-background);
+  --wa-color-text-normal: var(--wa-color-text-normal);
+  --wa-color-text-quiet: var(--wa-color-text-quiet);
+  --wa-color-text-link: var(--wa-color-text-link);
+  --wa-color-surface-default: var(--wa-color-surface-default);
   --wa-color-surface-raised: var(--texra-editorWidget-background);
-  --wa-color-surface-lowered: var(--texra-sideBar-background);
-  --wa-color-surface-border: var(--texra-panel-border);
+  --wa-color-surface-lowered: var(--wa-color-surface-lowered);
+  --wa-color-surface-border: var(--wa-color-surface-border);
 
-  --wa-color-focus: var(--texra-focusBorder);
+  --wa-color-focus: var(--wa-color-focus);
 
   /* WA form-control tokens — wire to TeXRA input palette so wa-input,
      wa-textarea, wa-select, etc. inherit the host theme's editor surface
@@ -266,8 +267,8 @@
   --wa-form-control-text-color: var(--wa-form-control-text-color);
   --wa-form-control-border-color: var(--wa-form-control-border-color);
 
-  --wa-color-brand-fill-loud: var(--texra-button-background);
-  --wa-color-brand-on-loud: var(--texra-button-foreground);
+  --wa-color-brand-fill-loud: var(--wa-color-brand-fill-loud);
+  --wa-color-brand-on-loud: var(--wa-color-brand-on-loud);
   --wa-color-brand-border-loud: var(--texra-button-border);
 
   /* Neutral tokens for outlined wa-button / wa-callout variants. Wire to the
@@ -288,7 +289,7 @@
   --wa-color-brand-on-quiet: var(--texra-inputValidation-infoForeground);
 
   --wa-color-warning-fill-loud: var(--texra-statusBarItem-warningBackground);
-  --wa-color-warning-on-loud: var(--texra-foreground);
+  --wa-color-warning-on-loud: var(--wa-color-text-normal);
   --wa-color-warning-border-loud: var(--texra-inputValidation-warningBorder);
   --wa-color-warning-fill-quiet: var(--texra-inputValidation-warningBackground);
   --wa-color-warning-border-quiet: var(--texra-inputValidation-warningBorder);
@@ -312,10 +313,19 @@
     var(--texra-inputValidation-infoBackground)
   );
   --wa-color-success-border-quiet: var(--texra-inputValidation-infoBorder);
-  --wa-color-success-on-quiet: var(--texra-foreground);
+  --wa-color-success-on-quiet: var(--wa-color-text-normal);
 
   --wa-color-danger-fill-loud: var(--wa-color-danger-on-quiet);
   --wa-color-danger-border-loud: transparent;
+
+  /* Font monospace bridge for code/terminal contexts. Maps VS Code editor
+     font to WA canonical monospace token. */
+  --wa-font-family-mono: var(--vscode-editor-font-family, var(--wa-font-family-mono));
+
+  /* Testing status color bridge. Wire green text for passed tests to WA success
+     semantic token so test icons inherit host theme status colors. */
+  --wa-color-success-on-quiet: var(--wa-color-success-on-quiet);
+  --wa-color-warning-fill-quiet: var(--texra-editorWarning-background);
 }
 
 body {
@@ -323,7 +333,7 @@ body {
   padding: 20px;
   font-family: var(--texra-font-family);
   font-size: var(--texra-font-size);
-  color: var(--texra-editor-foreground);
-  background-color: var(--texra-editor-background);
+  color: var(--wa-color-text-normal);
+  background-color: var(--wa-color-surface-default);
   box-sizing: border-box;
 }
