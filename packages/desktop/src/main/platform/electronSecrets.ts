@@ -19,6 +19,30 @@ export const KEYCHAIN_DENIED_WARNING_MESSAGE =
 const SAFE_STORAGE_UNAVAILABLE_MESSAGE =
   'Electron safeStorage is unavailable for secret writes.';
 
+/**
+ * Test-harness shim: when `TEXRA_DISABLE_KEYCHAIN` is set the secrets layer
+ * skips every `safeStorage` call so headless Playwright runs do not block on
+ * the macOS keychain prompt. Not exposed as a user-facing toggle — env-var
+ * API keys still work via the existing override in `ElectronSecrets.get()`.
+ */
+function isKeychainDisabled(): boolean {
+  return (
+    process.env.TEXRA_DISABLE_KEYCHAIN === '1' ||
+    process.env.TEXRA_DISABLE_KEYCHAIN === 'true'
+  );
+}
+
+let warnedAboutKeychainDisabled = false;
+function warnKeychainDisabledOnce(): void {
+  if (warnedAboutKeychainDisabled) return;
+  warnedAboutKeychainDisabled = true;
+  console.warn(
+    'ElectronSecrets: TEXRA_DISABLE_KEYCHAIN is set; safeStorage is bypassed. ' +
+      'Persisted secrets will not be readable or writable in this session. ' +
+      'API keys can still be supplied through environment variables.',
+  );
+}
+
 function isStoredSecret(value: unknown): value is StoredSecret {
   return (
     value != null &&
@@ -42,6 +66,15 @@ export class ElectronSecrets implements PlatformSecrets {
     const envValue = process.env[key];
     if (envValue !== undefined) return envValue;
 
+    // Test-harness shim: skip safeStorage entirely when the env var is set so
+    // headless Playwright runs do not block on the macOS keychain prompt.
+    // Env-var API key overrides above already returned; here we just report
+    // "no saved secret" rather than touching safeStorage.
+    if (isKeychainDisabled()) {
+      warnKeychainDisabledOnce();
+      return undefined;
+    }
+
     const stored = this.store.get<unknown>(key);
     if (!isStoredSecret(stored)) return undefined;
     try {
@@ -64,6 +97,14 @@ export class ElectronSecrets implements PlatformSecrets {
   }
 
   async set(key: string, value: string): Promise<void> {
+    // Test-harness shim: with the env var set, swallow writes instead of
+    // throwing on the unavailable storage mode. The harness explicitly opts
+    // out of persisted secrets, so a thrown error would break the same
+    // bootstrap path we are trying to keep alive.
+    if (isKeychainDisabled()) {
+      warnKeychainDisabledOnce();
+      return;
+    }
     const storageMode = getSecretStorageMode();
     switch (storageMode) {
       case 'encrypted': {
@@ -132,6 +173,13 @@ export class ElectronSecrets implements PlatformSecrets {
 let keychainPrewarmed = false;
 export async function prewarmElectronKeychain(): Promise<boolean> {
   if (keychainPrewarmed) return true;
+  // Test-harness shim: skip the prompt entirely. We do NOT set the prewarmed
+  // latch so a subsequent run without the env var still goes through the
+  // real prompt path.
+  if (isKeychainDisabled()) {
+    warnKeychainDisabledOnce();
+    return false;
+  }
   if (!safeStorage.isEncryptionAvailable()) return false;
   try {
     safeStorage.encryptString('texra-keychain-prewarm');
@@ -153,9 +201,13 @@ export async function prewarmElectronKeychain(): Promise<boolean> {
 /** Test-only: reset the prewarm latch so unit tests can re-exercise the path. */
 export function __resetKeychainPrewarmedForTests(): void {
   keychainPrewarmed = false;
+  warnedAboutKeychainDisabled = false;
 }
 
 export function getSecretStorageMode(): SecretStorageMode {
+  // Test-harness shim: report unavailable without ever calling safeStorage,
+  // which is the path that would otherwise prompt the macOS keychain.
+  if (isKeychainDisabled()) return 'unavailable';
   if (!safeStorage.isEncryptionAvailable()) return 'unavailable';
   if (
     process.platform === 'linux' &&
