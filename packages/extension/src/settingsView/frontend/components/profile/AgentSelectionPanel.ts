@@ -6,6 +6,7 @@
 
 // Third-party imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
+import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import {
   LitElement,
   html,
@@ -172,8 +173,6 @@ export class AgentSelectionPanel extends LitElement {
       }
 
       .agent-list-item-checkbox {
-        accent-color: var(--wa-color-focus);
-        cursor: pointer;
         flex-shrink: 0;
       }
 
@@ -309,16 +308,13 @@ export class AgentSelectionPanel extends LitElement {
       }
 
       .agent-action-btn--danger::part(base) {
-        color: var(--wa-color-danger-on-quiet, #f44);
-        border-color: var(--wa-color-danger-on-quiet, #f44);
+        color: var(--wa-color-danger-on-quiet);
+        border-color: var(--wa-color-danger-on-quiet);
       }
 
       .agent-action-btn--danger:hover::part(base) {
-        background: var(
-          --texra-inputValidation-errorBackground,
-          rgba(255, 0, 0, 0.1)
-        );
-        border-color: var(--wa-color-danger-on-quiet, #f44);
+        background: var(--wa-color-danger-fill-quiet);
+        border-color: var(--wa-color-danger-on-quiet);
       }
 
       .agent-delete-confirm {
@@ -326,11 +322,8 @@ export class AgentSelectionPanel extends LitElement {
         align-items: center;
         gap: var(--wa-space-xs);
         padding: var(--wa-space-2xs) var(--wa-space-xs);
-        background: var(
-          --texra-inputValidation-errorBackground,
-          rgba(255, 0, 0, 0.05)
-        );
-        border: var(--border-thin) solid var(--wa-color-danger-on-quiet, #f44);
+        background: var(--wa-color-danger-fill-quiet);
+        border: var(--border-thin) solid var(--wa-color-danger-on-quiet);
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
         color: var(--wa-color-text-normal);
@@ -543,10 +536,9 @@ export class AgentSelectionPanel extends LitElement {
         }}
         title=${agent.description ?? agent.name}
       >
-        <input
-          type="checkbox"
+        <wa-checkbox
           class="agent-list-item-checkbox"
-          .checked=${agent.enabled}
+          ?checked=${agent.enabled}
           @click=${(e: Event) => {
             e.stopPropagation();
             this.handleToggleEnabled(agent);
@@ -554,7 +546,7 @@ export class AgentSelectionPanel extends LitElement {
           title=${agent.enabled
             ? 'Hide from agent selector'
             : 'Show in agent selector'}
-        />
+        ></wa-checkbox>
         <span class="agent-list-item-name">${agent.name}</span>
         <span class="agent-list-item-badges">
           ${agent.source === AGENT_SOURCE.REMOTE

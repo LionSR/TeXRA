@@ -42,11 +42,6 @@ export class ToolCard extends LitElement {
           --wa-color-surface-default,
           var(--wa-color-surface-lowered)
         );
-        transition: border-color var(--transition-fast);
-      }
-
-      .tool-card:hover {
-        border-color: var(--wa-color-focus);
       }
 
       .tool-header {

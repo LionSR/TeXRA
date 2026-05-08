@@ -89,15 +89,6 @@ export class PlanView extends LitElement {
         border-radius: var(--border-radius-small);
         font-size: var(--font-size);
         line-height: var(--line-height-normal);
-        transition: background-color 140ms ease;
-      }
-
-      .plan-step:hover {
-        background-color: color-mix(
-          in srgb,
-          var(--wa-color-neutral-fill-quiet) 50%,
-          transparent
-        );
       }
 
       .plan-step__number {
@@ -167,10 +158,6 @@ export class PlanView extends LitElement {
         );
         box-shadow: inset 2px 0 0
           color-mix(in srgb, var(--wa-color-brand-fill-loud) 50%, transparent);
-      }
-
-      .plan-step--in-progress:hover {
-        background-color: var(--wa-color-brand-fill-quiet);
       }
 
       .plan-step--in-progress .plan-step__icon {

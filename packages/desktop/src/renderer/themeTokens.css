@@ -15,12 +15,6 @@
 :root {
   color-scheme: light dark;
 
-  --desktop-font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    'Segoe UI', sans-serif;
-  --desktop-font-size: 13px;
-  --desktop-font-weight: 400;
-
   /* Heading scale shared with extension litStyles.ts. Use these tokens
      instead of hardcoded heading sizes so extension and desktop hosts
      render headings at the same visual scale. */
@@ -92,47 +86,69 @@
   --wa-color-surface-border: var(--desktop-color-border);
   --wa-color-surface-shadow: var(--desktop-color-shadow);
 
-  --wa-color-focus: var(--desktop-color-accent);
+  --wa-color-focus: light-dark(#0969da, #0e639c);
 
   /* WA form-control tokens. */
-  --wa-form-control-background-color: var(--desktop-color-input-background);
-  --wa-form-control-text-color: var(--desktop-color-input-foreground);
-  --wa-form-control-border-color: var(--desktop-color-input-border);
+  --wa-form-control-background-color: light-dark(#ffffff, #313131);
+  --wa-form-control-text-color: light-dark(#1f2328, #cccccc);
+  --wa-form-control-border-color: light-dark(#d0d7de, #3c3c3c);
 
-  --wa-color-brand-fill-loud: var(--desktop-color-accent);
+  /* Brand variant — primary buttons, links, focus accents. */
+  --wa-color-brand-fill-loud: light-dark(#0969da, #0e639c);
   --wa-color-brand-on-loud: #ffffff;
   --wa-color-brand-border-loud: transparent;
-  --wa-color-brand-fill-quiet: var(--desktop-color-info-background);
-  --wa-color-brand-border-quiet: var(--desktop-color-info);
-  --wa-color-brand-on-quiet: var(--desktop-color-info);
+  --wa-color-brand-fill-quiet: light-dark(#ddf4ff, #063b49);
+  --wa-color-brand-border-quiet: light-dark(#0969da, #75beff);
+  --wa-color-brand-on-quiet: light-dark(#0969da, #75beff);
 
-  --wa-color-warning-fill-loud: var(--desktop-color-warning);
+  /* Warning variant. */
+  --wa-color-warning-fill-loud: light-dark(#9a6700, #cca700);
   --wa-color-warning-on-loud: #ffffff;
   --wa-color-warning-border-loud: transparent;
-  --wa-color-warning-fill-quiet: var(--desktop-color-warning-background);
-  --wa-color-warning-border-quiet: var(--desktop-color-warning);
-  --wa-color-warning-on-quiet: var(--desktop-color-warning);
+  --wa-color-warning-fill-quiet: light-dark(#fff8c5, #332a00);
+  --wa-color-warning-border-quiet: light-dark(#9a6700, #cca700);
+  --wa-color-warning-on-quiet: light-dark(#9a6700, #cca700);
 
-  --wa-color-danger-fill-loud: var(--desktop-color-error);
+  /* Danger variant. */
+  --wa-color-danger-fill-loud: light-dark(#cf222e, #f48771);
   --wa-color-danger-on-loud: #ffffff;
   --wa-color-danger-border-loud: transparent;
-  --wa-color-danger-fill-quiet: var(--desktop-color-error-background);
-  --wa-color-danger-border-quiet: var(--desktop-color-error);
-  --wa-color-danger-on-quiet: var(--desktop-color-error);
+  --wa-color-danger-fill-quiet: light-dark(#ffebe9, #5a1d1d);
+  --wa-color-danger-border-quiet: light-dark(#cf222e, #f48771);
+  --wa-color-danger-on-quiet: light-dark(#cf222e, #f48771);
 
-  --wa-color-success-fill-loud: var(--desktop-color-success);
+  /* Success variant. */
+  --wa-color-success-fill-loud: light-dark(#1a7f37, #73c991);
   --wa-color-success-on-loud: #ffffff;
   --wa-color-success-border-loud: transparent;
-  --wa-color-success-fill-quiet: var(--desktop-color-success-background);
-  --wa-color-success-border-quiet: var(--desktop-color-success);
-  --wa-color-success-on-quiet: var(--desktop-color-success);
+  --wa-color-success-fill-quiet: light-dark(#d2f5dc, #1a4a25);
+  --wa-color-success-border-quiet: light-dark(#1a7f37, #73c991);
+  --wa-color-success-on-quiet: light-dark(#1a7f37, #73c991);
 
-  --wa-color-neutral-fill-quiet: var(--desktop-color-sidebar-header);
-  --wa-color-neutral-border-quiet: var(--desktop-color-border);
-  --wa-color-neutral-on-quiet: var(--desktop-color-foreground);
-  --wa-color-neutral-fill-loud: var(--desktop-color-sidebar-header);
-  --wa-color-neutral-border-loud: var(--desktop-color-border);
-  --wa-color-neutral-on-loud: var(--desktop-color-foreground);
+  /* Neutral variant. */
+  --wa-color-neutral-fill-quiet: light-dark(#eaeef2, #222222);
+  --wa-color-neutral-border-quiet: light-dark(#d0d7de, #2b2b2b);
+  --wa-color-neutral-on-quiet: light-dark(#1f2328, #d4d4d4);
+  --wa-color-neutral-fill-loud: light-dark(#eaeef2, #222222);
+  --wa-color-neutral-border-loud: light-dark(#d0d7de, #2b2b2b);
+  --wa-color-neutral-on-loud: light-dark(#1f2328, #d4d4d4);
+
+  /* Data palette — chart/identity colors with no semantic WA equivalent. */
+  --wa-color-data-orange: light-dark(#bc4c00, #d18616);
+  --wa-color-data-yellow: light-dark(#bf8700, #cca700);
+
+  /* Border-radius — VS Code-square overrides. WA default theme ships
+     s≈3px / m≈6px / l≈12px which feels too rounded against VS Code's
+     near-flat form-control aesthetic. Pin to the in-house --border-radius
+     scale (litStyles.ts) so wa-button, wa-input, wa-callout, wa-dialog,
+     wa-card all read as native VS Code controls. */
+  --wa-border-radius-s: 2px;
+  --wa-border-radius-m: 3px;
+  --wa-border-radius-l: 4px;
+  --wa-border-radius-xl: 6px;
+  --wa-border-radius-pill: 9999px;
+  --wa-border-radius-circle: 50%;
+  --wa-border-radius-square: 0px;
 
   /* Buttons — niche tokens consumers still need. */
   --wa-color-button-hover: var(--desktop-color-accent-hover);

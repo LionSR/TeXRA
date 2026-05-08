@@ -596,29 +596,6 @@ export const requestPanelStyles: CSSResult = css`
     text-align: center;
   }
 
-  .external-inquiry-requests__nav-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    border: none;
-    border-radius: var(--border-radius-small);
-    background: transparent;
-    color: var(--wa-color-text-normal);
-    cursor: pointer;
-  }
-
-  .external-inquiry-requests__nav-btn:hover:not(:disabled) {
-    background: var(--wa-color-surface-raised);
-  }
-
-  .external-inquiry-requests__nav-btn:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-
   .external-inquiry-request__mode-badge {
     background: var(--wa-color-neutral-fill-quiet);
     color: var(--wa-color-neutral-on-quiet);

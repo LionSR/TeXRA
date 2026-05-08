@@ -99,13 +99,13 @@ export class InstructionPanel extends LitElement {
     css`
       :host {
         display: block;
-        --agent-select-min-width: 8rem;
-        --agent-select-max-width: min(13rem, calc(100vw - 9rem));
-        --model-select-min-width: 8rem;
-        --model-select-max-width: min(15rem, calc(100vw - 9rem));
-        --agent-model-listbox-min-width: 17rem;
+        --agent-select-min-width: 6rem;
+        --agent-select-max-width: min(11rem, calc(100vw - 9rem));
+        --model-select-min-width: 6rem;
+        --model-select-max-width: min(13rem, calc(100vw - 9rem));
+        --agent-model-listbox-min-width: 12rem;
         --agent-model-listbox-max-width: min(
-          26rem,
+          20rem,
           calc(100vw - var(--wa-space-l))
         );
       }
@@ -249,7 +249,7 @@ export class InstructionPanel extends LitElement {
       .model-selection-footer {
         display: flex;
         align-items: center;
-        gap: var(--wa-space-2xs);
+        gap: var(--wa-space-s);
         flex: 1 1 auto;
         flex-wrap: wrap;
         min-width: 0;
@@ -307,7 +307,8 @@ export class InstructionPanel extends LitElement {
 
       wa-button.execute-button::part(base) {
         min-width: 64px;
-        min-height: 30px;
+        min-height: 24px;
+        height: 24px;
         padding: 0 var(--wa-space-s);
         gap: var(--wa-space-2xs);
         border-radius: var(--wa-border-radius-m);

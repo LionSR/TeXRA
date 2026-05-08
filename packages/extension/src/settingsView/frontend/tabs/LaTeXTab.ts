@@ -6,6 +6,13 @@
 // Third-party imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/callout/callout.js';
+import '@awesome.me/webawesome/dist/components/input/input.js';
+import '@awesome.me/webawesome/dist/components/select/select.js';
+import '@awesome.me/webawesome/dist/components/option/option.js';
+import '@awesome.me/webawesome/dist/components/switch/switch.js';
+import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
+import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
+import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
@@ -354,13 +361,6 @@ export class LaTeXTab extends LitElement {
         min-width: 0;
       }
 
-      .setting-toggle {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        white-space: nowrap;
-      }
-
       .setting-name {
         font-weight: var(--font-weight-medium);
         color: var(--wa-color-text-normal);
@@ -391,13 +391,6 @@ export class LaTeXTab extends LitElement {
         flex-shrink: 0;
       }
 
-      .checkbox-row {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        margin-top: var(--wa-space-2xs);
-        cursor: pointer;
-      }
     `,
   ];
 
@@ -414,6 +407,17 @@ export class LaTeXTab extends LitElement {
   @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
 
   @state() private expandedGuides = new Set<string>();
+  /** Command string most recently copied; clears after a brief flash. */
+  @state() private copiedCommand: string | null = null;
+  private copyResetTimer: ReturnType<typeof setTimeout> | null = null;
+
+  override disconnectedCallback(): void {
+    if (this.copyResetTimer) {
+      clearTimeout(this.copyResetTimer);
+      this.copyResetTimer = null;
+    }
+    super.disconnectedCallback();
+  }
 
   private toggleGuide(key: string): void {
     const next = new Set(this.expandedGuides);
@@ -429,7 +433,7 @@ export class LaTeXTab extends LitElement {
   private handleInlineCriticismToggle(event: Event): void {
     this.dispatchEvent(
       createEvent('inline-criticism-toggle', {
-        enabled: (event.target as HTMLInputElement).checked,
+        enabled: Boolean((event.target as WaSwitch | null)?.checked),
       }),
     );
   }
@@ -459,17 +463,15 @@ export class LaTeXTab extends LitElement {
     );
   }
 
-  private async handleCopyCommand(e: Event, command: string): Promise<void> {
-    const button = (e.currentTarget ?? e.target) as HTMLElement;
+  private async handleCopyCommand(command: string): Promise<void> {
     const ok = await copyTextToClipboard(command);
-    if (ok) {
-      button.classList.add('copy-success');
-      button.setAttribute('title', 'Copied!');
-      setTimeout(() => {
-        button.classList.remove('copy-success');
-        button.setAttribute('title', 'Copy command');
-      }, 2000);
-    }
+    if (!ok) return;
+    this.copiedCommand = command;
+    if (this.copyResetTimer) clearTimeout(this.copyResetTimer);
+    this.copyResetTimer = setTimeout(() => {
+      this.copiedCommand = null;
+      this.copyResetTimer = null;
+    }, 2000);
   }
 
   private handleRunInTerminal(command: string): void {
@@ -543,10 +545,13 @@ export class LaTeXTab extends LitElement {
           ? html`
               <div class="dependency-install-actions">
                 <button
-                  class="tab-action-btn"
-                  title="Copy: ${installCmd.command}"
-                  @click=${(e: Event) =>
-                    this.handleCopyCommand(e, installCmd.command)}
+                  class="tab-action-btn ${this.copiedCommand === installCmd.command
+                    ? 'copy-success'
+                    : ''}"
+                  title=${this.copiedCommand === installCmd.command
+                    ? 'Copied!'
+                    : `Copy: ${installCmd.command}`}
+                  @click=${() => this.handleCopyCommand(installCmd.command)}
                 >
                   <wa-icon library="texra" name="copy"></wa-icon>
                   Copy
@@ -629,9 +634,13 @@ export class LaTeXTab extends LitElement {
         <div class="hint-actions">
           <code class="install-command-text">${installCommand}</code>
           <button
-            class="tab-action-btn"
-            title="Copy ${pmName} install command"
-            @click=${(e: Event) => this.handleCopyCommand(e, installCommand)}
+            class="tab-action-btn ${this.copiedCommand === installCommand
+              ? 'copy-success'
+              : ''}"
+            title=${this.copiedCommand === installCommand
+              ? 'Copied!'
+              : `Copy ${pmName} install command`}
+            @click=${() => this.handleCopyCommand(installCommand)}
           >
             <wa-icon library="texra" name="copy"></wa-icon>
             Copy
@@ -782,14 +791,12 @@ export class LaTeXTab extends LitElement {
             agent-revised LaTeX files and show them as editor diagnostics.
           </div>
         </div>
-        <label class="setting-toggle">
-          <input
-            type="checkbox"
-            .checked=${this.inlineCriticismEnabled}
-            @change=${this.handleInlineCriticismToggle}
-          />
-          <span>${this.inlineCriticismEnabled ? 'On' : 'Off'}</span>
-        </label>
+        <wa-switch
+          ?checked=${this.inlineCriticismEnabled}
+          @change=${this.handleInlineCriticismToggle}
+        >
+          ${this.inlineCriticismEnabled ? 'On' : 'Off'}
+        </wa-switch>
       </div>
     `;
   }
@@ -944,13 +951,13 @@ export class LaTeXTab extends LitElement {
         <div class="setting-info">
           <div class="setting-name">${opts.label}</div>
           <div class="setting-description">${opts.description}</div>
-          <input
+          <wa-input
             type="number"
             min=${opts.min}
-            max=${opts.max ?? ''}
+            max=${opts.max ?? nothing}
             .value=${String(effective)}
             @change=${(e: Event) => {
-              const raw = (e.target as HTMLInputElement).valueAsNumber;
+              const raw = Number((e.target as WaInput).value);
               if (Number.isNaN(raw)) return;
               // Coerce to integer first — paste / spinner can produce decimals
               // that the backend `.int()` schema would silently reject.
@@ -962,7 +969,7 @@ export class LaTeXTab extends LitElement {
               this.dispatchSetConfigValue(opts.field, clamped);
             }}
             style="margin-top:var(--wa-space-2xs);width:140px;"
-          />
+          ></wa-input>
         </div>
         ${isCustom
           ? html`<button
@@ -999,9 +1006,10 @@ export class LaTeXTab extends LitElement {
         <div class="setting-info">
           <div class="setting-name">${opts.label}</div>
           <div class="setting-description">${opts.description}</div>
-          <select
+          <wa-select
+            .value=${String(effective)}
             @change=${(e: Event) => {
-              const v = (e.target as HTMLSelectElement)
+              const v = (e.target as WaSelect)
                 .value as LatexConfigValueFor<F>;
               this.dispatchSetConfigValue(opts.field, v);
             }}
@@ -1009,12 +1017,10 @@ export class LaTeXTab extends LitElement {
           >
             ${opts.options.map(
               (o) => html`
-                <option value=${o.value} ?selected=${o.value === effective}>
-                  ${o.label}
-                </option>
+                <wa-option value=${String(o.value)}>${o.label}</wa-option>
               `,
             )}
-          </select>
+          </wa-select>
         </div>
         ${isCustom
           ? html`<button
