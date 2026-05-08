@@ -14,6 +14,10 @@ import { renderIconActionButton } from '@shared/wa/actionButtons';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import '@awesome.me/webawesome/dist/components/input/input.js';
+import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - profile view styles and events
 import type {
@@ -97,10 +101,10 @@ export class ProviderKeyList extends LitElement {
   private renderDetailRow(entry: ProviderKeyStatus): TemplateResult {
     const streamingToggle = html`
       <div class="provider-setting">
-        <vscode-checkbox
+        <wa-checkbox
           ?checked=${entry.streaming}
           @change=${(e: Event) => {
-            const checked = (e.target as HTMLInputElement).checked;
+            const checked = (e.target as WaCheckbox).checked;
             this.dispatchEvent(
               ProviderKeyEvents.setStreaming({
                 provider: entry.provider,
@@ -110,7 +114,7 @@ export class ProviderKeyList extends LitElement {
           }}
         >
           Streaming
-        </vscode-checkbox>
+        </wa-checkbox>
       </div>
     `;
 
@@ -118,12 +122,12 @@ export class ProviderKeyList extends LitElement {
       ? html`
           <div class="provider-setting">
             <label>Custom endpoint</label>
-            <vscode-textfield
+            <wa-input
               class="endpoint-input"
               .value=${entry.customEndpoint}
               placeholder="Leave blank for default"
               @change=${(e: Event) => {
-                const value = (e.target as HTMLInputElement).value.trim();
+                const value = (e.target as WaInput).value?.trim() ?? '';
                 this.dispatchEvent(
                   ProviderKeyEvents.setEndpoint({
                     provider: entry.provider,
@@ -131,7 +135,7 @@ export class ProviderKeyList extends LitElement {
                   }),
                 );
               }}
-            ></vscode-textfield>
+            ></wa-input>
           </div>
         `
       : nothing;
@@ -170,10 +174,10 @@ export class ProviderKeyList extends LitElement {
 
     return html`
       <div class="provider-setting provider-setting--block">
-        <vscode-checkbox
+        <wa-checkbox
           ?checked=${setting.value}
           @change=${(e: Event) => {
-            const checked = (e.target as HTMLInputElement).checked;
+            const checked = (e.target as WaCheckbox).checked;
             this.dispatchEvent(
               ProviderKeyEvents.setVscodeSetting({
                 key: setting.key,
@@ -183,7 +187,7 @@ export class ProviderKeyList extends LitElement {
           }}
         >
           ${setting.label}
-        </vscode-checkbox>
+        </wa-checkbox>
         <span class="provider-setting-description">${setting.description}</span>
         ${warning}
       </div>
@@ -230,17 +234,17 @@ export class ProviderKeyList extends LitElement {
   private renderGlobalStreamingToggle(): TemplateResult {
     return html`
       <div class="global-streaming-toggle">
-        <vscode-checkbox
+        <wa-checkbox
           ?checked=${this.globalStreamingDefault}
           @change=${(e: Event) => {
-            const checked = (e.target as HTMLInputElement).checked;
+            const checked = (e.target as WaCheckbox).checked;
             this.dispatchEvent(
               ProviderKeyEvents.setGlobalStreaming({ enabled: checked }),
             );
           }}
         >
           Enable streaming
-        </vscode-checkbox>
+        </wa-checkbox>
         <span class="global-streaming-description"
           >Global default for all providers</span
         >

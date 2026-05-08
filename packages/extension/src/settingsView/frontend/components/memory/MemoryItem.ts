@@ -6,6 +6,7 @@
 import { LitElement, html, nothing, css, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -109,10 +110,9 @@ export class MemoryItem extends LitElement {
     }
   }
 
-  private handleContentsToggle(event: CustomEvent<{ open?: boolean }>): void {
-    if (event.detail?.open) {
-      this.contentsOpened = true;
-    }
+  private handleContentsShow(event: Event): void {
+    if (event.target !== event.currentTarget) return;
+    this.contentsOpened = true;
   }
 
   private renderMeta(item: MemoryViewItem): string {
@@ -166,10 +166,10 @@ export class MemoryItem extends LitElement {
         <div class="text-secondary memory-meta">
           ${this.renderMeta(this.item)}
         </div>
-        <vscode-collapsible
+        <wa-details
           class="collapsible"
-          heading="Contents"
-          @vsc-collapsible-toggle=${this.handleContentsToggle}
+          summary="Contents"
+          @wa-show=${this.handleContentsShow}
         >
           ${this.contentsOpened
             ? html`<div class="memory-preview">
@@ -180,7 +180,7 @@ export class MemoryItem extends LitElement {
                   : html`<em class="text-secondary">This note is empty.</em>`}
               </div>`
             : nothing}
-        </vscode-collapsible>
+        </wa-details>
       </div>
     `;
   }

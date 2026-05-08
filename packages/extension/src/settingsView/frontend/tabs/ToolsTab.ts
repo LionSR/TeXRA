@@ -17,6 +17,8 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
+import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 
 // Local imports - shared schemas
 import { createEvent } from '@shared/utils/events';
@@ -308,7 +310,7 @@ export class ToolsTab extends LitElement {
   }
 
   private emitToggle(eventName: string, e: Event): void {
-    const target = e.target as HTMLInputElement | null;
+    const target = e.target as WaCheckbox | null;
     this.dispatchEvent(
       createEvent(eventName, { enabled: Boolean(target?.checked) }),
     );
@@ -354,12 +356,12 @@ export class ToolsTab extends LitElement {
         </div>
 
         <div class="setting-block">
-          <vscode-checkbox
+          <wa-checkbox
             ?checked=${this.bashApprovalEnabled}
             @change=${this.handleBashApprovalToggle}
           >
             Require approval for shell commands &amp; Codex sessions
-          </vscode-checkbox>
+          </wa-checkbox>
         </div>
       </div>
     `;
@@ -429,12 +431,12 @@ export class ToolsTab extends LitElement {
             are scrubbed before upload and performance tracing stays disabled.
           </p>
           <div class="desktop-settings-row">
-            <vscode-checkbox
+            <wa-checkbox
               ?checked=${this.desktopCrashReportingEnabled}
               @change=${this.handleDesktopCrashReportingToggle}
             >
               Enable native crash reporting
-            </vscode-checkbox>
+            </wa-checkbox>
             <wa-tag
               variant=${this.desktopCrashReportingConfigured
                 ? 'success'
