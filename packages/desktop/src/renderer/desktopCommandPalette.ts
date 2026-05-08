@@ -107,6 +107,10 @@ function toPaletteEntry(
     id: entry.id,
     label: entry.label,
     meta,
+    // Always include `category` so the palette filter can match it even when
+    // `meta` is occupied by an accelerator or unavailable-reason — restoring
+    // the original imperative haystack which always carried `category`.
+    category: entry.category,
     enabled: entry.enabled,
   };
 }
