@@ -30,6 +30,12 @@ export interface EmptyStateOptions {
   // Defaults to 'h2'. Callers that own the surrounding semantic outline can
   // promote (h1) or demote (h3) the title without forking the helper.
   readonly headingTag?: EmptyStateHeadingTag;
+  // Optional eyebrow/kicker label rendered above the title. Used by callers
+  // that want a section badge (e.g. "Progress") without forking the helper.
+  readonly kicker?: string;
+  // Icon used inside the kicker. Defaults to the main `icon` prop so the
+  // helper stays minimal when callers want a simple eyebrow.
+  readonly kickerIcon?: TeXRAIconName;
 }
 
 const HEADING_TAGS = {
@@ -45,13 +51,26 @@ export function renderEmptyState({
   actions,
   className,
   headingTag = 'h2',
+  kicker,
+  kickerIcon,
 }: EmptyStateOptions): TemplateResult {
   const tag = HEADING_TAGS[headingTag] ?? HEADING_TAGS.h2;
   // staticHtml + literal lets the heading element stay parameterizable
   // (semantic outline) while keeping interpolated children type-checked.
   return staticHtml`
     <section class=${ifDefined(className)}>
-      ${waIcon(icon, { className: 'empty-state-icon' })}
+      ${
+        kicker
+          ? html`
+              <div class="empty-state-kicker">
+                ${waIcon(kickerIcon ?? icon, {
+                  className: 'empty-state-kicker-icon',
+                })}
+                <span>${kicker}</span>
+              </div>
+            `
+          : waIcon(icon, { className: 'empty-state-icon' })
+      }
       <${tag} class="empty-state-title">${title}</${tag}>
       ${body ? html`<p class="empty-state-body">${body}</p>` : nothing}
       ${

@@ -555,6 +555,9 @@ function explorerNoWorkspaceTemplate(): TemplateResult {
     icon: 'folder-open',
     title: 'No workspace',
     body: 'Open a folder before selecting files for agents.',
+    // Explorer is a subordinate sidebar; keep its title at h2 so it does not
+    // compete with the workbench's h1 main empty-state heading.
+    headingTag: 'h2',
     actions: [
       {
         label: 'Open Folder',

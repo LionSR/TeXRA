@@ -44,6 +44,7 @@ import {
   registerTeXRAWebAwesomeIcons,
   TEXRA_ICON_LIBRARY,
 } from '@shared/wa/webAwesomeIcons';
+import { renderEmptyState } from '@shared/wa/emptyState';
 import { isProcessAgent } from '@shared/streams/agentKind';
 import '@shared/wa/tabs';
 import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
@@ -218,7 +219,7 @@ export class ProgressApp extends ProgressAppBase {
         background: var(--texra-editor-background, #fff);
       }
 
-      .progress-empty-kicker {
+      .progress-empty-panel .empty-state-kicker {
         display: inline-flex;
         align-items: center;
         gap: var(--spacing-small, 8px);
@@ -228,27 +229,28 @@ export class ProgressApp extends ProgressAppBase {
         font-weight: var(--font-weight-semibold, 600);
       }
 
-      .progress-empty-panel h2 {
+      .progress-empty-panel .empty-state-title {
         margin: 0 0 var(--spacing-small, 8px);
         color: var(--texra-foreground, #24292f);
-        font-size: var(--font-size-xl, 22px);
-        line-height: 1.25;
+        font-size: var(--font-size-h2, 1.25em);
+        font-weight: var(--font-weight-semibold, 600);
+        line-height: var(--line-height-heading, 1.25);
       }
 
-      .progress-empty-panel p {
+      .progress-empty-panel .empty-state-body {
         margin: 0;
         color: var(--color-text-secondary, #57606a);
         line-height: var(--line-height-normal, 1.5);
       }
 
-      .progress-empty-actions {
+      .progress-empty-panel .empty-state-actions {
         display: flex;
         flex-wrap: wrap;
         gap: var(--spacing-small, 8px);
         margin-top: var(--spacing-large, 16px);
       }
 
-      .progress-empty-actions wa-button::part(base) {
+      .progress-empty-panel .empty-state-actions wa-button::part(base) {
         min-height: var(--height-button, 30px);
       }
 
@@ -711,51 +713,27 @@ export class ProgressApp extends ProgressAppBase {
     return html`
       <section class="progress-empty-state">
         <div class="progress-empty-panel">
-          <div class="progress-empty-kicker">
-            <wa-icon
-              library=${TEXRA_ICON_LIBRARY}
-              name="robot"
-              variant="solid"
-            ></wa-icon>
-            Progress
-          </div>
-          <h2>No runs yet</h2>
-          <p>
-            Start an agent from the Launcher or Commands. New runs, streamed
-            logs, approvals, and follow-up controls will appear here.
-          </p>
-          <div class="progress-empty-actions">
-            <wa-button
-              appearance="filled"
-              variant="brand"
-              size="medium"
-              type="button"
-              @click=${this.onOpenLauncher}
-            >
-              <wa-icon
-                slot="start"
-                library=${TEXRA_ICON_LIBRARY}
-                name="play"
-                variant="solid"
-              ></wa-icon>
-              Open Launcher
-            </wa-button>
-            <wa-button
-              appearance="outlined"
-              variant="neutral"
-              size="medium"
-              type="button"
-              @click=${this.onOpenDashboard}
-            >
-              <wa-icon
-                slot="start"
-                library=${TEXRA_ICON_LIBRARY}
-                name="gear"
-                variant="solid"
-              ></wa-icon>
-              Open Dashboard
-            </wa-button>
-          </div>
+          ${renderEmptyState({
+            icon: 'robot',
+            kicker: 'Progress',
+            kickerIcon: 'robot',
+            title: 'No runs yet',
+            body: 'Start an agent from the Launcher or Commands. New runs, streamed logs, approvals, and follow-up controls will appear here.',
+            actions: [
+              {
+                label: 'Open Launcher',
+                appearance: 'filled',
+                variant: 'brand',
+                onClick: this.onOpenLauncher,
+              },
+              {
+                label: 'Open Dashboard',
+                appearance: 'outlined',
+                variant: 'neutral',
+                onClick: this.onOpenDashboard,
+              },
+            ],
+          })}
         </div>
       </section>
     `;
