@@ -5,6 +5,9 @@
 
 // Third-party imports
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
+import '@awesome.me/webawesome/dist/components/input/input.js';
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 
@@ -34,28 +37,16 @@ export class ProviderKeyModal extends LitElement {
         line-height: var(--line-height-normal);
       }
 
-      label {
+      .provider-key-label {
         display: flex;
         flex-direction: column;
         gap: var(--wa-space-2xs);
         font-weight: var(--font-weight-medium);
       }
 
-      input {
+      wa-input.provider-key-input {
+        display: block;
         width: 100%;
-        box-sizing: border-box;
-        height: var(--height-control);
-        padding: var(--wa-space-2xs) var(--wa-space-xs);
-        color: var(--wa-form-control-text-color);
-        background: var(--wa-form-control-background-color);
-        border: var(--border-thin) solid var(--wa-form-control-border-color);
-        border-radius: var(--border-radius);
-        font: inherit;
-      }
-
-      input:focus {
-        outline: var(--border-thin) solid var(--wa-color-focus);
-        outline-offset: 1px;
       }
 
       .provider-key-error {
@@ -70,39 +61,6 @@ export class ProviderKeyModal extends LitElement {
         justify-content: flex-end;
         gap: var(--wa-space-xs);
       }
-
-      /* Action buttons share base layout; variants set color + background */
-      .provider-key-actions button {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        min-height: var(--height-button);
-        padding: var(--wa-space-2xs) var(--wa-space-s);
-        border-radius: var(--border-radius);
-        border: var(--border-thin) solid transparent;
-        font: inherit;
-        cursor: pointer;
-      }
-
-      .provider-key-primary {
-        color: var(--wa-color-brand-on-loud);
-        background: var(--wa-color-brand-fill-loud);
-        border-color: var(--wa-color-brand-fill-loud);
-      }
-
-      .provider-key-primary:hover {
-        background: var(--wa-color-button-hover);
-      }
-
-      .provider-key-secondary {
-        color: var(--wa-color-text-normal);
-        background: transparent;
-        border-color: var(--color-border);
-      }
-
-      .provider-key-secondary:hover {
-        background: var(--wa-color-neutral-fill-quiet);
-      }
     `,
   ];
 
@@ -112,7 +70,7 @@ export class ProviderKeyModal extends LitElement {
   @state() private value = '';
   @state() private error = '';
 
-  @query('input') private keyInput?: HTMLInputElement;
+  @query('wa-input.provider-key-input') private keyInput?: WaInput;
 
   // Drives wa-dialog's `open` reactive property; toggled by close() so the
   // dialog plays its hide animation and dispatches wa-after-hide.
@@ -153,7 +111,7 @@ export class ProviderKeyModal extends LitElement {
   }
 
   private handleInput(event: Event): void {
-    this.value = (event.target as HTMLInputElement).value;
+    this.value = (event.target as WaInput).value ?? '';
     if (this.error) {
       this.error = '';
     }
@@ -195,34 +153,37 @@ export class ProviderKeyModal extends LitElement {
             The key is stored by TeXRA on this device and is not shown again
             after saving.
           </p>
-          <label>
+          <label class="provider-key-label">
             ${displayName} API key
-            <input
+            <wa-input
+              class="provider-key-input"
               type="password"
               autocomplete="off"
               spellcheck="false"
               .value=${this.value}
               @input=${this.handleInput}
-            />
+            ></wa-input>
           </label>
           <p class="provider-key-error" aria-live="polite">${this.error}</p>
         </form>
         <div slot="footer" class="provider-key-actions">
-          <button
-            class="provider-key-secondary"
+          <wa-button
+            appearance="outlined"
+            variant="neutral"
             type="button"
             @click=${this.handleCancelClick}
           >
             Cancel
-          </button>
-          <button
-            class="provider-key-primary"
+          </wa-button>
+          <wa-button
+            appearance="filled"
+            variant="brand"
             type="submit"
             form="provider-key-form"
           >
-            <wa-icon library="texra" name="key"></wa-icon>
+            <wa-icon library="texra" name="key" slot="start"></wa-icon>
             Save Key
-          </button>
+          </wa-button>
         </div>
       </wa-dialog>
     `;

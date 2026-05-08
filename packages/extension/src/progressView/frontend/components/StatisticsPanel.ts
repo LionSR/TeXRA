@@ -9,8 +9,9 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-// Side-effect imports - register WA icon component
+// Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -33,7 +34,7 @@ export class StatisticsPanel extends LitElement {
         margin: var(--wa-space-2xs) 0;
       }
 
-      details {
+      wa-details {
         margin: 0;
       }
 
@@ -80,14 +81,8 @@ export class StatisticsPanel extends LitElement {
     }
 
     return html`
-      <details>
-        <summary class="details-summary">
-          <wa-icon
-            library="texra"
-            name="chevron-right"
-            class="toggle-icon"
-            aria-hidden="true"
-          ></wa-icon>
+      <wa-details>
+        <span slot="summary" class="details-summary">
           <wa-icon
             library="texra"
             name="graph"
@@ -95,7 +90,7 @@ export class StatisticsPanel extends LitElement {
             aria-hidden="true"
           ></wa-icon>
           <span>Statistics</span>
-        </summary>
+        </span>
         <div class="statistics-content" data-log-id=${this.logId}>
           ${repeat(
             this.items,
@@ -112,7 +107,7 @@ export class StatisticsPanel extends LitElement {
             `,
           )}
         </div>
-      </details>
+      </wa-details>
     `;
   }
 }
