@@ -299,6 +299,85 @@ wa-button.desktop-settings-close::part(base) {
 }
 
 /* =====================================================================
+   Diff overlay (wa-dialog) — audit item C, trajectory #18
+   --------------------------------------------------------------------- */
+
+wa-dialog.desktop-diff-overlay {
+  --width: 100vw;
+  --height: 100vh;
+}
+
+wa-dialog.desktop-diff-overlay::part(dialog) {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  margin: 0;
+  border-radius: 0;
+}
+
+wa-dialog.desktop-diff-overlay::part(body) {
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+wa-dialog.desktop-diff-overlay .desktop-diff-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--wa-color-surface-default);
+}
+
+wa-dialog.desktop-diff-overlay .desktop-diff-header {
+  padding: var(--wa-space-m) var(--wa-space-l);
+  border-bottom: var(--wa-border-style-default, solid)
+    var(--wa-border-width-default, 1px) var(--wa-color-neutral-fill-quiet);
+  background: var(--wa-color-surface-raised);
+}
+
+wa-dialog.desktop-diff-overlay .desktop-diff-title {
+  margin: 0;
+  font-size: var(--wa-font-size-l);
+  font-weight: var(--wa-font-weight-semibold);
+  color: var(--wa-color-text-normal);
+}
+
+wa-dialog.desktop-diff-overlay .desktop-diff-subtitle {
+  margin: var(--wa-space-2xs) 0 0;
+  font-size: var(--wa-font-size-s);
+  color: var(--wa-color-text-quiet);
+  font-family: var(--wa-font-family-code, monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+wa-dialog.desktop-diff-overlay .desktop-diff-view {
+  flex: 1;
+  min-height: 0;
+  display: block;
+  width: 100%;
+}
+
+wa-button.desktop-diff-close {
+  position: absolute;
+  top: var(--wa-space-s);
+  right: var(--wa-space-s);
+  z-index: 10;
+}
+
+wa-button.desktop-diff-close::part(base) {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--wa-border-radius-m, 3px);
+  background: var(--wa-color-surface-raised);
+  color: var(--wa-color-text-normal);
+}
+
+/* =====================================================================
    Logs drawer (wa-drawer)
    --------------------------------------------------------------------- */
 
