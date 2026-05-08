@@ -21,7 +21,9 @@ export function registerImageCommands(_context: vscode.ExtensionContext) {
   // `texra.convertPdfToImages` are now registered through
   // `extensionCommandSurface` (see #3775 / #3781 batch 3). This stub
   // remains so `commands.ts` can keep its existing call site; the
-  // exported handlers above are referenced by the registry's actions.
+  // exported handlers (`handleCountPdfPages`,
+  // `handleEncodeImageToBase64`, `handleConvertPdfToImages`) defined
+  // below are referenced by the registry's actions.
 }
 
 export async function handleCountPdfPages(): Promise<void> {

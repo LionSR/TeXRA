@@ -449,7 +449,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
   describe('async rejection propagation (regression guard for #3782)', () => {
     it.each([
       ['texra.cleanOutput', 'cleanOutput'],
-      ['texra.signIn'.replace('signIn', 'auth.signIn'), 'signIn'],
+      ['texra.auth.signIn', 'signIn'],
       ['texra.encodeImageToBase64', 'encodeImageToBase64'],
       ['texra.cloneOverleafProject', 'cloneOverleafProject'],
     ] as const)('%s rejection bubbles up', async (id, actionKey) => {

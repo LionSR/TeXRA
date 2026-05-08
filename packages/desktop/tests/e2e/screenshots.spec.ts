@@ -25,12 +25,16 @@ test.beforeAll(async () => {
   launched = await launchTexraApp();
   // Wait for IPC bootstrap (which sets walkthrough state from disk) by checking
   // for the "Got it" button, then click to dismiss persistently.
-  await launched.page.waitForFunction(() => {
-    const btn = Array.from(document.querySelectorAll('wa-button')).find(
-      (b) => b.textContent?.trim() === 'Got it',
-    );
-    return btn instanceof HTMLElement;
-  });
+  await launched.page.waitForFunction(
+    () => {
+      const btn = Array.from(document.querySelectorAll('wa-button')).find(
+        (b) => b.textContent?.trim() === 'Got it',
+      );
+      return btn instanceof HTMLElement;
+    },
+    undefined,
+    { timeout: 10000 },
+  );
   const dismissed = await launched.page.evaluate(() => {
     const btn = Array.from(document.querySelectorAll('wa-button')).find(
       (b) => b.textContent?.trim() === 'Got it',
@@ -42,8 +46,14 @@ test.beforeAll(async () => {
     return false;
   });
   if (dismissed) {
-    // Wait for the walkthrough dialog to be hidden after dismissing.
-    await launched.page.locator('wa-dialog[walkthrough-dialog]').waitFor({ state: 'hidden', timeout: 5000 });
+    // Wait for the onboarding walkthrough dialog to detach after dismissing.
+    // The dialog is rendered as `<wa-dialog class="desktop-onboarding">` (see
+    // `packages/desktop/src/renderer/desktopOnboarding.ts`), so target that
+    // class — the previous `wa-dialog[walkthrough-dialog]` selector matched
+    // nothing and made the wait a no-op.
+    await launched.page
+      .locator('wa-dialog.desktop-onboarding')
+      .waitFor({ state: 'hidden', timeout: 5000 });
   }
 });
 
@@ -105,16 +115,32 @@ test('settings screenshot', async () => {
   await launched.page.evaluate((tabIndex) => {
     window.postMessage({ command: 'setTab', tabIndex }, '*');
   }, multiAgentTabIndex);
-  // Wait for the webview/iframe to signal tab content is ready.
-  // The settings webview processes the message and renders the tab asynchronously.
-  // Check for a known element that appears when the Multi-Agent tab is active.
-  await launched.page.waitForFunction(() => {
-    // Settings webview loads asynchronously; wait for it to have rendered content.
-    const settingsSection = document.querySelector('.desktop-route[data-route="settings"]');
-    if (!settingsSection) return false;
-    // Check if the webview has any child content (iframe or custom elements).
-    return settingsSection.querySelector('*') != null;
-  }, { timeout: 10000 });
+  // Wait for the Multi-Agent tab to actually be active. The settings webview
+  // loads `<settings-app>` asynchronously, then the tab-group activates the
+  // requested panel. We probe the shadow DOM to confirm the multi-agent panel
+  // is rendered and visible — a generic `querySelector('*')` check passed
+  // immediately and made the wait a no-op.
+  await launched.page.waitForFunction(
+    () => {
+      const settingsSection = document.querySelector(
+        '.desktop-route[data-route="settings"]',
+      );
+      if (!settingsSection) return false;
+      const settingsApp = settingsSection.querySelector('settings-app');
+      const root = settingsApp?.shadowRoot;
+      if (!root) return false;
+      const activeTab = root.querySelector(
+        'wa-tab[panel="multi-agent"][active]',
+      );
+      const activePanel = root.querySelector(
+        'wa-tab-panel[name="multi-agent"][active]',
+      );
+      // Either signal indicates the multi-agent tab has been activated.
+      return activeTab != null || activePanel != null;
+    },
+    undefined,
+    { timeout: 10000 },
+  );
   await launched.page.screenshot({
     path: join(SCREENSHOTS_DIR, 'settings.png'),
     fullPage: false,
@@ -141,18 +167,25 @@ test('command palette opens and dismisses', async () => {
   });
   expect(opened).toBe(true);
   // Wait for the command palette dialog to appear and contain entries.
-  await launched.page.waitForFunction(() => {
-    const dialog = document.querySelector<HTMLElement>(
-      '.desktop-command-palette',
-    );
-    if (!dialog) return false;
-    // Entries are rendered as buttons inside the palette body; falling back
-    // to any clickable item lets the test survive class-name churn.
-    const entries = dialog.querySelectorAll(
-      'button, [role="option"], .desktop-command-palette-entry',
-    );
-    return entries.length > 0;
-  }, { timeout: 5000 });
+  // NOTE: `waitForFunction(pageFn, arg, options)` — pass timeout in the 3rd
+  // parameter, not as the predicate's arg, otherwise Playwright falls back
+  // to its default timeout.
+  await launched.page.waitForFunction(
+    () => {
+      const dialog = document.querySelector<HTMLElement>(
+        '.desktop-command-palette',
+      );
+      if (!dialog) return false;
+      // Entries are rendered as buttons inside the palette body; falling back
+      // to any clickable item lets the test survive class-name churn.
+      const entries = dialog.querySelectorAll(
+        'button, [role="option"], .desktop-command-palette-entry',
+      );
+      return entries.length > 0;
+    },
+    undefined,
+    { timeout: 5000 },
+  );
   const entryCount = await launched.page.evaluate(() => {
     const dialog = document.querySelector<HTMLElement>(
       '.desktop-command-palette',
@@ -167,13 +200,18 @@ test('command palette opens and dismisses', async () => {
   // Dismiss with Escape and verify the dialog closes.
   await launched.page.keyboard.press('Escape');
   // Wait for the dialog to close by checking for the `open` attribute removal.
-  await launched.page.waitForFunction(() => {
-    const dialog = document.querySelector<HTMLElement>(
-      '.desktop-command-palette',
-    );
-    if (!dialog) return true;
-    return dialog.getAttribute('open') == null;
-  }, { timeout: 5000 });
+  // Pass timeout via options (3rd param), not as the predicate arg.
+  await launched.page.waitForFunction(
+    () => {
+      const dialog = document.querySelector<HTMLElement>(
+        '.desktop-command-palette',
+      );
+      if (!dialog) return true;
+      return dialog.getAttribute('open') == null;
+    },
+    undefined,
+    { timeout: 5000 },
+  );
   const closed = await launched.page.evaluate(() => {
     const dialog = document.querySelector<HTMLElement>(
       '.desktop-command-palette',
