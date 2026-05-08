@@ -35,29 +35,21 @@ export interface CreateRunContextOptions {
 
 const noopLog = (): void => undefined;
 
-function createRunLogger(logger?: Partial<RunLogger>): RunLogger {
-  return Object.freeze({
-    debug: logger?.debug ?? noopLog,
-    info: logger?.info ?? noopLog,
-    warn: logger?.warn ?? noopLog,
-    error: logger?.error ?? noopLog,
-  });
-}
-
-function createApprovalHandlers(
-  approvals?: ApprovalHandlers,
-): ApprovalHandlers {
-  return Object.freeze({ ...approvals });
-}
-
 export function createRunContext(options: CreateRunContextOptions): RunContext {
   if (options.runtimeHost == null) {
     throw new Error('createRunContext requires an explicit runtimeHost');
   }
 
+  const { logger, approvals } = options;
+
   return Object.freeze({
     runtimeHost: options.runtimeHost,
-    logger: createRunLogger(options.logger),
-    approvals: createApprovalHandlers(options.approvals),
+    logger: Object.freeze({
+      debug: logger?.debug ?? noopLog,
+      info: logger?.info ?? noopLog,
+      warn: logger?.warn ?? noopLog,
+      error: logger?.error ?? noopLog,
+    }),
+    approvals: Object.freeze({ ...approvals }),
   });
 }

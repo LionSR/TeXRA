@@ -7,7 +7,6 @@ import {
 import {
   DEFAULT_TOTALS,
   RunUsageAccumulatorJSONSchema,
-  createUsageAccumulator,
   recordNormalizedUsage,
 } from './RunUsageAccumulator';
 export const ConversationRoundStateSnapshotSchema = z.object({
@@ -51,7 +50,10 @@ export function createRunState(): AgentRunStateSnapshot {
   return {
     totalRounds: 0,
     totalResponseTimeMs: 0,
-    usageAccumulator: createUsageAccumulator(),
+    usageAccumulator: {
+      totals: { ...DEFAULT_TOTALS },
+      normalizedSnapshots: [],
+    },
   };
 }
 
