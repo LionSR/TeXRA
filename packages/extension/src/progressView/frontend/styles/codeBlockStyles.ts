@@ -23,7 +23,7 @@ export const codeBlockStyles = css`
   }
 
   .code-block-language {
-    color: var(--texra-descriptionForeground, #888);
+    color: var(--wa-color-text-quiet, #888);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     font-weight: var(--font-weight-medium);
@@ -33,7 +33,7 @@ export const codeBlockStyles = css`
     margin: 0;
     padding: var(--wa-space-2xs);
     background-color: var(--wa-color-surface-default);
-    border: var(--border-thin) solid var(--texra-editorWidget-border);
+    border: var(--border-thin) solid var(--wa-color-surface-border);
     border-radius: 0;
     overflow-x: auto;
   }
@@ -49,7 +49,7 @@ export const codeBlockStyles = css`
     padding: var(--wa-space-2xs) var(--wa-space-xs);
     border: none;
     background: transparent;
-    color: var(--texra-descriptionForeground, #888);
+    color: var(--wa-color-text-quiet, #888);
     cursor: pointer;
     border-radius: var(--border-radius-small);
     transition:

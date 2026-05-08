@@ -216,7 +216,7 @@ export class ProgressApp extends ProgressAppBase {
         border: var(--border-thin, 1px) solid
           var(--color-border, var(--vscode-panel-border, #d0d7de));
         border-radius: var(--border-radius, 6px);
-        background: var(--texra-editor-background, #fff);
+        background: var(--wa-color-surface-default, #fff);
       }
 
       .progress-empty-panel .empty-state-kicker {
@@ -231,7 +231,7 @@ export class ProgressApp extends ProgressAppBase {
 
       .progress-empty-panel .empty-state-title {
         margin: 0 0 var(--wa-space-2xs, 8px);
-        color: var(--texra-foreground, #24292f);
+        color: var(--wa-color-text-normal, #24292f);
         font-size: var(--font-size-h2, 1.25em);
         font-weight: var(--font-weight-semibold, 600);
         line-height: var(--line-height-heading, 1.25);
@@ -299,7 +299,7 @@ export class ProgressApp extends ProgressAppBase {
         min-height: 0;
         padding: clamp(32px, 8vh, 72px) 32px;
         box-sizing: border-box;
-        background: var(--texra-editor-background, var(--background-color));
+        background: var(--wa-color-surface-default, var(--background-color));
       }
 
       .desktop-empty-progress__body {
