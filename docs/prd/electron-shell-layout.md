@@ -96,7 +96,7 @@ New `packages/extension/src/progressView/frontend/progressState.ts` exports toda
 The body currently rendered by `ProgressApp.renderStreamContent()` (plus the empty-state) moves into a new Lit element that subscribes to `progressState`. Internal children unchanged: `<stream-header>`, `<context-management>`, `<todo-list>`, `<background-tasks-panel>`, `<log-list>` / `<task-group-list>`, request panels, `<usage-panel>`, `<follow-up-input>`.
 
 **C. `<progress-app>` becomes a thin shell.**
-For VS Code: renders `view-header` plus `<vscode-split-layout>` containing `<stream-conversation>` and `<stream-tabs>` — identical UX to today. For Electron: not mounted at all; the children mount directly in window panes.
+For VS Code: renders `view-header` plus `<wa-split-panel>` containing `<stream-conversation>` and `<stream-tabs>` — identical UX to today. For Electron: not mounted at all; the children mount directly in window panes. (The PRD originally referenced `<vscode-split-layout>`; that component was retired during the Web Awesome migration session, so `wa-split-panel` is now the project's canonical split control.)
 
 **D. Electron renderer shell.**
 Replaces the four-route tab router. Three panes. Center swaps between `<main-app>` and `<stream-conversation>` driven by `activeStreamId$`. Settings overlay on gear. Workspace explorer deleted.
