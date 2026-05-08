@@ -5,7 +5,10 @@ import './codiconStylesheet';
 import '@shared/wa';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/tree/tree.js';
+import '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
 import type WaButton from '@awesome.me/webawesome/dist/components/button/button.js';
+import type WaTreeItem from '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import { renderEmptyState } from '@shared/wa/emptyState';
@@ -520,13 +523,27 @@ function explorerTemplate(): TemplateResult {
   }
   return html`
     ${explorerHeaderTemplate(explorerState.title)}
-    <div class="desktop-explorer-tree" role="tree">
+    <wa-tree
+      class="desktop-explorer-tree"
+      selection="single"
+      @wa-selection-change=${handleExplorerSelectionChange}
+    >
       ${treeNodesTemplate(explorerState.tree, 0)}
-    </div>
+    </wa-tree>
     <section class="desktop-explorer-selection" aria-live="polite">
       ${selectionPanelTemplate(explorerState.tree)}
     </section>
   `;
+}
+
+function handleExplorerSelectionChange(
+  event: CustomEvent<{ selection: WaTreeItem[] }>,
+): void {
+  const selected = event.detail.selection[0];
+  if (selected == null) return;
+  const filePath = selected.dataset.filePath;
+  if (filePath == null || filePath === '') return;
+  selectExplorerFile(filePath);
 }
 
 function explorerNoWorkspaceTemplate(): TemplateResult {
@@ -588,35 +605,19 @@ function treeNodeTemplate(
 ): TemplateResult {
   if (node.type === 'directory') {
     return html`
-      <details
-        class="desktop-explorer-directory"
-        ?open=${depth < 2}
-        style=${`--tree-depth: ${depth}`}
-      >
-        <summary
-          class="desktop-explorer-row desktop-explorer-folder-row"
-          role="treeitem"
-        >
-          ${waIcon('chevron-right', { className: 'desktop-explorer-chevron' })}
-          ${waIcon('folder')}
-          <span class="desktop-explorer-name">${node.name}</span>
-        </summary>
-        <div role="group">
-          ${treeNodesTemplate(node.children ?? [], depth + 1)}
-        </div>
-      </details>
+      <wa-tree-item class="desktop-explorer-directory" ?expanded=${depth < 2}>
+        ${waIcon('folder')}
+        <span class="desktop-explorer-name">${node.name}</span>
+        ${treeNodesTemplate(node.children ?? [], depth + 1)}
+      </wa-tree-item>
     `;
   }
   return html`
-    <button
-      class="desktop-explorer-row desktop-explorer-file-row"
-      type="button"
-      role="treeitem"
+    <wa-tree-item
+      class="desktop-explorer-file"
       title=${node.path}
       data-file-path=${node.path}
-      data-selected=${selectedExplorerFile === node.path}
-      style=${`--tree-depth: ${depth}`}
-      @click=${() => selectExplorerFile(node.path)}
+      ?selected=${selectedExplorerFile === node.path}
       @dblclick=${() => openWorkspaceFile(node.path)}
     >
       ${waIcon('file-lines')}
@@ -632,7 +633,7 @@ function treeNodeTemplate(
           `,
         )}
       </span>
-    </button>
+    </wa-tree-item>
   `;
 }
 
