@@ -85,6 +85,74 @@ describe('createDesktopDiffHost', () => {
     });
   });
 
+  it('falls back to the external editor when postToRenderer returns false', async () => {
+    // Simulates the renderer not being reachable — IPC bridge not yet
+    // wired at startup or BrowserWindow already destroyed. Bot review
+    // (#3815, Copilot + Cursor): the host previously silently dropped
+    // the diff in this case.
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'texra-diff-host-test-'));
+    const originalPath = path.join(tempDir, 'a.tex');
+    const proposedPath = path.join(tempDir, 'b.tex');
+    await Promise.all([
+      writeFile(originalPath, 'a\n', 'utf8'),
+      writeFile(proposedPath, 'b\n', 'utf8'),
+    ]);
+    const openedPaths: string[] = [];
+    const { createDesktopDiffHost } = await loadDesktopDiffHost();
+    const host = createDesktopDiffHost({
+      openPath: vi.fn(async (filePath: string) => {
+        openedPaths.push(filePath);
+      }),
+      postToRenderer: () => false,
+    });
+
+    await host.openDiff(
+      { filePath: originalPath },
+      { filePath: proposedPath },
+      'Compare',
+    );
+
+    expect(openedPaths).toHaveLength(1);
+    expect(path.extname(openedPaths[0])).toBe('.diff');
+  });
+
+  it('falls back to the external editor when postToRenderer throws', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'texra-diff-host-test-'));
+    const originalPath = path.join(tempDir, 'a.tex');
+    const proposedPath = path.join(tempDir, 'b.tex');
+    await Promise.all([
+      writeFile(originalPath, 'a\n', 'utf8'),
+      writeFile(proposedPath, 'b\n', 'utf8'),
+    ]);
+    const openedPaths: string[] = [];
+    const { createDesktopDiffHost } = await loadDesktopDiffHost();
+    // Suppress the deliberate console.error from the host so the test
+    // output stays clean.
+    const consoleSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    const host = createDesktopDiffHost({
+      openPath: vi.fn(async (filePath: string) => {
+        openedPaths.push(filePath);
+      }),
+      postToRenderer: () => {
+        throw new Error('renderer destroyed');
+      },
+    });
+
+    await host.openDiff(
+      { filePath: originalPath },
+      { filePath: proposedPath },
+      'Compare',
+    );
+
+    expect(openedPaths).toHaveLength(1);
+    expect(path.extname(openedPaths[0])).toBe('.diff');
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
   it('honors forceExternal even when postToRenderer is wired', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'texra-diff-host-test-'));
     const originalPath = path.join(tempDir, 'a.txt');

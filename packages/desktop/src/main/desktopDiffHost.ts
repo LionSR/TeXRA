@@ -24,11 +24,18 @@ export interface DesktopDiffHostOptions {
   openPath(filePath: string): Promise<void>;
   /**
    * Posts a `desktop:showDiff` IPC message to the renderer so it can
-   * mount `<texra-diff-view>` inside the wa-dialog overlay. When
-   * undefined the host falls back to the external-editor flow — keeps
-   * tests and unattended invocations working.
+   * mount `<texra-diff-view>` inside the wa-dialog overlay. Return
+   * `false` (or throw) when the renderer is not reachable — e.g. the
+   * IPC bridge isn't wired yet at startup, or the BrowserWindow has
+   * been destroyed. The host then transparently falls back to the
+   * external-editor flow so the user never gets a silent failure
+   * (caught by Copilot review on PR #3815).
+   *
+   * When undefined, `openDiff` skips the overlay entirely and uses
+   * the external-editor flow — keeps tests and unattended invocations
+   * working.
    */
-  postToRenderer?(message: unknown): void;
+  postToRenderer?(message: unknown): boolean | void;
   /**
    * Force the legacy external-editor flow (writes a `.diff` patch file).
    * Useful for headless tests and as an opt-out if the in-app overlay
@@ -52,23 +59,41 @@ export function createDesktopDiffHost(
 
     // Prefer the in-app overlay when wired. Falling back to the external
     // editor is intentional for headless tests + the audit-item-C escape
-    // hatch (`forceExternal`).
+    // hatch (`forceExternal`). Wrap the post in try/catch and respect a
+    // `false` return value from `postToRenderer` so we transparently
+    // fall back when the IPC bridge isn't reachable yet (startup race)
+    // or the BrowserWindow has been destroyed (Copilot/Cursor review
+    // on #3815 — silent overlay failure was the only previous failure
+    // mode).
     if (options.postToRenderer && !options.forceExternal) {
       // Pick a language hint from the proposed file extension; the
       // proposed path is the one the user is reviewing for acceptance,
       // so its extension wins over the (possibly stale) original.
       const language = monacoLanguageForFilePath(proposed.filePath);
-      options.postToRenderer(
-        buildDesktopShowDiffMessage({
-          title,
-          originalText: originalContent,
-          proposedText: proposedContent,
-          language,
-          originalPath: original.filePath,
-          proposedPath: proposed.filePath,
-        }),
-      );
-      return { original, proposed, title };
+      let posted = false;
+      try {
+        const result = options.postToRenderer(
+          buildDesktopShowDiffMessage({
+            title,
+            originalText: originalContent,
+            proposedText: proposedContent,
+            language,
+            originalPath: original.filePath,
+            proposedPath: proposed.filePath,
+          }),
+        );
+        // `void` (the common case) is treated as success; explicit
+        // `false` opts into the external-editor fallback.
+        posted = result !== false;
+      } catch (error) {
+        console.error(
+          '[desktop] desktopDiffHost: postToRenderer failed; falling back to external editor',
+          error,
+        );
+        posted = false;
+      }
+      if (posted) return { original, proposed, title };
+      // fall through to the external-editor flow below.
     }
 
     // External-editor fallback: keep the previous behaviour — write a
