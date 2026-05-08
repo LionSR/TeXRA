@@ -39,6 +39,13 @@ export const designTokens: CSSResult = css`
     --font-size-xs: calc(var(--font-size) * 0.8);
     --font-size-icon: var(--font-size-lg);
     --font-size-icon-sm: var(--font-size);
+
+    /* Heading scale shared with desktop themeTokens.css. Use these tokens
+       instead of hardcoded heading sizes so extension and desktop hosts
+       render headings at the same visual scale. */
+    --font-size-h1: 1.5em;
+    --font-size-h2: 1.25em;
+    --font-size-h3: 1em;
     --line-height-tight: 1;
     --line-height-heading: 1.25;
     --line-height-normal: 1.4;
