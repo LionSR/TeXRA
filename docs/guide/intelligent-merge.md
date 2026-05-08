@@ -12,12 +12,12 @@ This generated _full_ document can then be cleanly compared against your origina
 
 ## The Merge Workflow
 
-Access the merge functionality via the "LaTeXdiffs" section (<i class="codicon codicon-chevron-down"></i> LaTeXDiffs) in the main TeXRA interface:
+Access the merge functionality via the "LaTeXdiffs" section (<wa-icon library="texra" name="chevron-down"></wa-icon> LaTeXDiffs) in the main TeXRA interface:
 
-1.  **Select Base File**: Choose the original document you want to merge changes _into_ using the "Base File" dropdown (<i class="codicon codicon-file"></i> Base).
-2.  **Select Edited File**: Choose the document containing the suggested changes using the "Edited File" dropdown (<i class="codicon codicon-edit"></i> Edited).
-3.  **Choose Merge Model**: Select an appropriate language model from the main Model dropdown (<i class="codicon codicon-robot"></i> Model) below the instruction box. Models capable of strong reasoning (like GPT-4, Claude 3 Opus) are recommended for complex merges.
-4.  **Click Merge**: Press the "Merge" button (<i class="codicon codicon-merge"></i>) located in the "Edited File" row.
+1.  **Select Base File**: Choose the original document you want to merge changes _into_ using the "Base File" dropdown (<wa-icon library="texra" name="file"></wa-icon> Base).
+2.  **Select Edited File**: Choose the document containing the suggested changes using the "Edited File" dropdown (<wa-icon library="texra" name="edit"></wa-icon> Edited).
+3.  **Choose Merge Model**: Select an appropriate language model from the main Model dropdown (<wa-icon library="texra" name="robot"></wa-icon> Model) below the instruction box. Models capable of strong reasoning (like GPT-4, Claude 3 Opus) are recommended for complex merges.
+4.  **Click Merge**: Press the "Merge" button (<wa-icon library="texra" name="merge"></wa-icon>) located in the "Edited File" row.
 
 TeXRA will then invoke the specialized `merge` agent:
 

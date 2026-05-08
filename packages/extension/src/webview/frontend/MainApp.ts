@@ -10,11 +10,7 @@ import { SignalWatcher, signal, Signal } from '@shared/signals';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { hostBridge, postMessage } from '@shared/hostBridge';
 import { PersistedState, createWebviewStorage } from '@shared/state';
-import {
-  designTokens,
-  commonViewStyles,
-  viewTabStyles,
-} from '@shared/styles';
+import { designTokens, commonViewStyles, viewTabStyles } from '@shared/styles';
 import {
   mainViewMessages,
   MainViewPersistedStateSchema,

@@ -9,13 +9,6 @@ const baseConfig = {
   head: [
     ['link', { rel: 'icon', href: '/logo-128x128.svg' }],
     [
-      'link',
-      {
-        rel: 'stylesheet',
-        href: '/assets/fonts/codicon/codicon.css',
-      },
-    ],
-    [
       'script',
       {},
       `

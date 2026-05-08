@@ -110,7 +110,7 @@ Enable the `texra.debug.saveInputPrompt` setting if you want TeXRA to store the 
 
 ### Step 6: Execute the Agent
 
-1. Click the "Execute" button (<i class="codicon codicon-play"></i>)
+1. Click the "Execute" button (<wa-icon library="texra" name="play"></wa-icon>)
 2. The ProgressBoard panel (typically at the bottom) will show the progress. See the [ProgressBoard guide](./progress-board.md) for more details on interpreting the logs.
 3. Wait for the process to complete - this may take a few moments depending on the document size and model choice
 
@@ -121,7 +121,7 @@ Enable the `texra.debug.saveInputPrompt` setting if you want TeXRA to store the 
 1. When the agent completes, VS Code will open the generated output file from the run's task storage folder (e.g., `r0/output.tex`).
 2. Review the changes made by the AI. Remember, it's smart, but hasn't passed its quals yet!
 3. You can compare the original and modified versions using:
-   - **ProgressBoard Diff**: Click the <i class="codicon codicon-diff-multiple"></i> Diff button on the completed stream to compare the original file against the generated task-storage output.
+   - **ProgressBoard Diff**: Click the <wa-icon library="texra" name="diff-multiple"></wa-icon> Diff button on the completed stream to compare the original file against the generated task-storage output.
 
      ![VS Code Compare View](/images/vscode-compare.png)
 

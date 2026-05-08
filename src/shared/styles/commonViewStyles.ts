@@ -165,7 +165,10 @@ export const commonViewStyles: CSSResult = css`
     padding: 0;
     border: 0;
     background: transparent;
-    color: var(--wa-color-text-quiet, var(--texra-icon-foreground, var(--texra-foreground)));
+    color: var(
+      --wa-color-text-quiet,
+      var(--texra-icon-foreground, var(--texra-foreground))
+    );
     opacity: var(--opacity-subtle);
     transition: opacity 120ms ease;
   }
@@ -176,7 +179,8 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .action-icon-button:focus-visible::part(base) {
-    outline: var(--border-thin) solid var(--wa-color-focus, var(--texra-focusBorder));
+    outline: var(--border-thin) solid
+      var(--wa-color-focus, var(--texra-focusBorder));
     outline-offset: 1px;
   }
 

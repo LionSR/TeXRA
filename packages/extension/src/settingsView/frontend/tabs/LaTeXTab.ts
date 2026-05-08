@@ -779,10 +779,7 @@ export class LaTeXTab extends LitElement {
         ${this.desktopHost
           ? nothing
           : html`
-              <div
-                class="section-header"
-                style="margin-top:var(--wa-space-s)"
-              >
+              <div class="section-header" style="margin-top:var(--wa-space-s)">
                 <wa-icon library="texra" name="settings-gear"></wa-icon>
                 Recommended Settings
               </div>
