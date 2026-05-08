@@ -290,9 +290,12 @@ export class ProgressEventHandler {
     // Don't switch away from the current stream if it has pending permissions
     // (retry, tool-edit, bash approval, or agent proposal) — the user needs to
     // interact with the approval panel before losing sight of it.
+    // Background child streams (bash, codex) pass `suppressViewSwitch` so the
+    // tab appears without auto-switching the active view.
     const currentStream = this.state.activeStream;
     const shouldSwitch =
-      !currentStream || !this.hasPendingPermissions(currentStream);
+      payload.suppressViewSwitch !== true &&
+      (!currentStream || !this.hasPendingPermissions(currentStream));
     if (shouldSwitch) {
       // Update the category filter only when actually switching. If we change
       // the filter while suppressing the switch, sendStreamMetadata →
