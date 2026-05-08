@@ -3,6 +3,7 @@
  */
 
 // Third-party imports
+import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
@@ -48,6 +49,14 @@ export class ProfileInfo extends LitElement {
     });
   }
 
+  private tierVariant(): 'brand' | 'neutral' | 'warning' {
+    const t = this.tier.toLowerCase();
+    if (t === 'ultra') return 'brand';
+    if (t === 'max') return 'neutral';
+    // 'free' or unknown — emphasize upgrade path with a warning tint.
+    return 'warning';
+  }
+
   override render(): TemplateResult {
     const expiration = this.formatExpiration();
     return html`
@@ -62,9 +71,13 @@ export class ProfileInfo extends LitElement {
         </div>
         <div class="info-row">
           <span class="label">Tier:</span>
-          <span class="badge tier-badge ${this.tier.toLowerCase()}">
+          <wa-tag
+            class="tier-badge"
+            variant=${this.tierVariant()}
+            size="small"
+          >
             ${this.tier}
-          </span>
+          </wa-tag>
         </div>
         <div class="profile-notice">
           ${PROMO_NOTICE_LONG.promoLead}<code>${PROMO_NOTICE_LONG.promoCode}</code>${PROMO_NOTICE_LONG.promoTail}
