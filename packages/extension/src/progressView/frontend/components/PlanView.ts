@@ -33,6 +33,9 @@ import { codiconIconClasses } from '@shared/styles/codiconStyles';
 // Local imports - progress view constants
 import { ELEMENT_IDS } from '../constants';
 
+// Web Awesome native components
+import '@awesome.me/webawesome/dist/components/details/details.js';
+
 @customElement('plan-view')
 export class PlanView extends LitElement {
   static override styles = [
@@ -190,12 +193,13 @@ export class PlanView extends LitElement {
     const total = this.plan.steps.length;
 
     return html`
-      <vscode-collapsible
+      <wa-details
         id=${ELEMENT_IDS.PLAN_VIEW_CONTAINER}
         class="plan-collapsible panel-collapsible"
-        title=${`Plan (${completed}/${total})`}
+        summary=${`Plan (${completed}/${total})`}
         ?open=${this.open}
-        @vsc-collapsible-toggle=${this.handleCollapsibleToggle}
+        @wa-show=${this.handleShow}
+        @wa-hide=${this.handleHide}
       >
         <div class="plan-summary">${this.plan.summary}</div>
         <div id=${ELEMENT_IDS.PLAN_VIEW} class="plan-steps">
@@ -205,7 +209,7 @@ export class PlanView extends LitElement {
             (step, index) => this.renderStep(step, index),
           )}
         </div>
-      </vscode-collapsible>
+      </wa-details>
     `;
   }
 
@@ -250,7 +254,13 @@ export class PlanView extends LitElement {
     `;
   }
 
-  private handleCollapsibleToggle(e: CustomEvent<{ open?: boolean }>): void {
-    this.open = e.detail?.open ?? this.open;
+  private handleShow(e: Event): void {
+    if (e.target !== e.currentTarget) return;
+    this.open = true;
+  }
+
+  private handleHide(e: Event): void {
+    if (e.target !== e.currentTarget) return;
+    this.open = false;
   }
 }
