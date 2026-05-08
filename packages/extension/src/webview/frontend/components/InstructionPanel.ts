@@ -5,6 +5,10 @@
  * action buttons, agent/model selectors, and execute button.
  */
 
+// Side-effect imports - register WA select & option components
+import '@awesome.me/webawesome/dist/components/select/select.js';
+import '@awesome.me/webawesome/dist/components/option/option.js';
+
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
@@ -268,24 +272,24 @@ export class InstructionPanel extends LitElement {
       }
 
       .agent-select-dropdowns select,
-      .agent-select-dropdowns vscode-single-select,
+      .agent-select-dropdowns wa-select,
       .agent-select {
         width: 100%;
       }
 
       .model-selection-footer .agent-model-select-group select,
-      .model-selection-footer .agent-model-select-group vscode-single-select,
-      .model-selection-footer .model-select-group vscode-single-select {
+      .model-selection-footer .agent-model-select-group wa-select,
+      .model-selection-footer .model-select-group wa-select {
         font-size: var(--font-size-sm);
       }
 
-      .model-selection-footer .agent-select-group vscode-single-select {
+      .model-selection-footer .agent-select-group wa-select {
         flex: 0 1 var(--agent-select-max-width);
         min-width: var(--agent-select-min-width);
         max-width: var(--agent-select-max-width);
       }
 
-      .model-selection-footer .model-select-group vscode-single-select {
+      .model-selection-footer .model-select-group wa-select {
         flex: 0 1 var(--model-select-max-width);
         min-width: var(--model-select-min-width);
         max-width: var(--model-select-max-width);
@@ -306,7 +310,7 @@ export class InstructionPanel extends LitElement {
       }
 
       /* Dropdowns in footer open upward */
-      vscode-single-select::part(listbox) {
+      wa-select::part(listbox) {
         bottom: 100%;
         top: auto;
       }
@@ -592,7 +596,7 @@ export class InstructionPanel extends LitElement {
               })}
               <div class="agent-select-controls">
                 <div class="agent-select-dropdowns">
-                  <vscode-single-select
+                  <wa-select
                     id="workflowAgent"
                     class=${classMap({
                       'agent-select': true,
@@ -613,7 +617,7 @@ export class InstructionPanel extends LitElement {
                     aria-hidden=${session.sessionType === SESSION_TYPES.WORKFLOW
                       ? 'false'
                       : 'true'}
-                    position="above"
+                    placement="top"
                     .value=${session.workflowAgent}
                     @focus=${this.handleAgentFocus}
                     @change=${this.handleAgentChange}
@@ -622,8 +626,8 @@ export class InstructionPanel extends LitElement {
                       session.workflowAgentOptions,
                       session.workflowAgent,
                     )}
-                  </vscode-single-select>
-                  <vscode-single-select
+                  </wa-select>
+                  <wa-select
                     id="toolUseAgent"
                     class=${classMap({
                       'agent-select': true,
@@ -644,7 +648,7 @@ export class InstructionPanel extends LitElement {
                     aria-hidden=${session.sessionType === SESSION_TYPES.TOOL_USE
                       ? 'false'
                       : 'true'}
-                    position="above"
+                    placement="top"
                     .value=${session.toolUseAgent}
                     @focus=${this.handleAgentFocus}
                     @change=${this.handleAgentChange}
@@ -653,7 +657,7 @@ export class InstructionPanel extends LitElement {
                       session.toolUseAgentOptions,
                       session.toolUseAgent,
                     )}
-                  </vscode-single-select>
+                  </wa-select>
                 </div>
               </div>
             </div>
@@ -668,10 +672,10 @@ export class InstructionPanel extends LitElement {
                 className: 'settings-button',
                 onClick: this.handleModelSettings,
               })}
-              <vscode-single-select
+              <wa-select
                 id="model"
                 class="model-select"
-                position="above"
+                placement="top"
                 aria-label="Model"
                 title=${this.getModelTooltip(
                   session.modelOptions,
@@ -682,7 +686,7 @@ export class InstructionPanel extends LitElement {
                 @change=${this.handleModelChange}
               >
                 ${renderModelOptions(session.modelOptions, session.model)}
-              </vscode-single-select>
+              </wa-select>
             </div>
           </div>
           <wa-button
