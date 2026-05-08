@@ -957,7 +957,11 @@ export class LaTeXTab extends LitElement {
             max=${opts.max ?? nothing}
             .value=${String(effective)}
             @change=${(e: Event) => {
-              const raw = Number((e.target as WaInput).value);
+              const value = (e.target as WaInput).value;
+              // Treat a cleared field as "no change" — `Number('')` would
+              // silently coerce to 0/min and overwrite the saved value.
+              if (typeof value !== 'string' || value.trim() === '') return;
+              const raw = Number(value);
               if (Number.isNaN(raw)) return;
               // Coerce to integer first — paste / spinner can produce decimals
               // that the backend `.int()` schema would silently reject.
