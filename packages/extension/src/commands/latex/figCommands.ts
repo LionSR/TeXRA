@@ -42,10 +42,10 @@ async function runLaTeXCommand(
 
 export function registerFigureCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand(
-      figureCommands.extractFigurePaths,
-      handleExtractFigurePaths,
-    ),
+    // `texra.extractFigurePaths` is registered through
+    // `extensionCommandSurface` (see #3775). The remaining tikz commands
+    // stay here for now — same no-arg shape, but #3775 batched only one
+    // entry per file to keep the diff focused.
     vscode.commands.registerCommand(
       figureCommands.extractTikzFigures,
       handleExtractTikzFigures,
@@ -57,7 +57,7 @@ export function registerFigureCommands(context: vscode.ExtensionContext): void {
   );
 }
 
-async function handleExtractFigurePaths(): Promise<void> {
+export async function handleExtractFigurePaths(): Promise<void> {
   await runLaTeXCommand(
     'extract figure paths',
     'extractFigurePaths',

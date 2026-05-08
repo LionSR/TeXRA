@@ -18,7 +18,9 @@ const PDF_FILTERS = { 'PDF files': ['pdf'] };
 
 export function registerImageCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('texra.countPdfPages', handleCountPdfPages),
+    // `texra.countPdfPages` is registered through `extensionCommandSurface`
+    // (see #3775). The remaining per-command registrations stay here
+    // because they return values to `executeCommand` callers.
     vscode.commands.registerCommand(
       'texra.encodeImageToBase64',
       handleEncodeImageToBase64,
@@ -30,7 +32,7 @@ export function registerImageCommands(context: vscode.ExtensionContext) {
   );
 }
 
-async function handleCountPdfPages(): Promise<void> {
+export async function handleCountPdfPages(): Promise<void> {
   try {
     const selection = await dialogUtils.selectFileFromWorkspace({
       openLabel: 'Select PDF file',
