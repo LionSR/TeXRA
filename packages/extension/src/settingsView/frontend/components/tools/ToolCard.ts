@@ -109,7 +109,7 @@ export class ToolCard extends LitElement {
         margin-top: var(--wa-space-2xs);
         padding: var(--wa-space-xs);
         background: var(
-          --texra-textCodeBlock-background,
+          --wa-color-surface-lowered,
           rgba(128, 128, 128, 0.08)
         );
         border-radius: var(--border-radius);

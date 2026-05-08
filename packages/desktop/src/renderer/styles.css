@@ -1,13 +1,13 @@
 :root {
   --desktop-nav-height: 40px;
-  font-family: var(--texra-font-family);
+  font-family: var(--wa-font-family-body);
   background: var(--wa-color-surface-default);
   color: var(--wa-color-text-normal);
 }
 
 body {
   margin: 0;
-  font-size: var(--texra-font-size);
+  font-size: var(--wa-font-size-m);
 }
 
 .desktop-shell {
@@ -556,7 +556,7 @@ wa-tree.desktop-explorer-tree wa-tree-item.desktop-explorer-file wa-icon {
   border-radius: var(--wa-border-radius-l, 6px);
   background: var(--wa-color-surface-default);
   color: var(--wa-color-text-normal);
-  font-family: var(--texra-font-family-monospace);
+  font-family: var(--wa-font-family-body-monospace);
   font-size: 12px;
   line-height: 1.45;
   white-space: pre-wrap;
