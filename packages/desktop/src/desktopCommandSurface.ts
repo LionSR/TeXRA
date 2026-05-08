@@ -10,6 +10,10 @@ import {
   SETTINGS_TAB,
   type SettingsTab,
 } from '@shared/schemas/settingsViewMessages';
+import {
+  dispatchCommandFromRegistry,
+  type CommandHandlerMap,
+} from '@shared/commands/registry';
 import type { MenuItemConstructorOptions } from 'electron';
 import type { DesktopRoute } from './desktopShellMessages.js';
 
@@ -225,75 +229,82 @@ export function toElectronAccelerator(
   return key.split('+').map(toElectronAcceleratorPart).join('+');
 }
 
+const DESKTOP_COMMAND_HANDLERS: CommandHandlerMap<
+  DesktopCommandId,
+  DesktopCommandActions
+> = {
+  'texra.showMainView': (a) => {
+    a.showRoute('main');
+    return true;
+  },
+  'texra.showProgressView': (a) => {
+    a.showRoute('progress');
+    return true;
+  },
+  [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: (a) => {
+    a.showRoute('logs');
+    return true;
+  },
+  'texra.openSettings': (a) => {
+    a.showSettings();
+    return true;
+  },
+  'texra.mainView.reset': (a) => {
+    if (!a.resetMainView) return false;
+    a.resetMainView();
+    return true;
+  },
+  'texra.showMemory': (a) => {
+    a.showSettings(SETTINGS_TAB.MEMORY);
+    return true;
+  },
+  'texra.showAgentHistory': (a) => {
+    a.showSettings(SETTINGS_TAB.HISTORY);
+    return true;
+  },
+  'texra.showModels': (a) => {
+    a.showSettings(SETTINGS_TAB.MODELS);
+    return true;
+  },
+  'texra.showAgents': (a) => {
+    a.showSettings(SETTINGS_TAB.AGENTS);
+    return true;
+  },
+  'texra.showTools': (a) => {
+    a.showSettings(SETTINGS_TAB.TOOLS);
+    return true;
+  },
+  'texra.showMultiAgent': (a) => {
+    a.showSettings(SETTINGS_TAB.MULTI_AGENT);
+    return true;
+  },
+  [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: (a) => {
+    if (!a.openLogFolder) return false;
+    a.openLogFolder();
+    return true;
+  },
+  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: (a) => {
+    if (!a.openWorkspaceFolder) return false;
+    a.openWorkspaceFolder();
+    return true;
+  },
+  [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: (a) => {
+    if (!a.showFirstRunWalkthrough) return false;
+    a.showFirstRunWalkthrough();
+    return true;
+  },
+  [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: (a) => {
+    if (!a.openDesktopDocs) return false;
+    a.openDesktopDocs();
+    return true;
+  },
+};
+
 export function dispatchDesktopCommand(
   id: DesktopCommandId,
   actions: DesktopCommandActions,
 ): boolean {
-  switch (id) {
-    case 'texra.showMainView':
-      actions.showRoute('main');
-      return true;
-    case 'texra.showProgressView':
-      actions.showRoute('progress');
-      return true;
-    case DESKTOP_LOCAL_COMMANDS.SHOW_LOGS:
-      actions.showRoute('logs');
-      return true;
-    case 'texra.openSettings':
-      actions.showSettings();
-      return true;
-    case 'texra.mainView.reset':
-      if (!actions.resetMainView) return false;
-      actions.resetMainView();
-      return true;
-    case 'texra.showMemory':
-      actions.showSettings(SETTINGS_TAB.MEMORY);
-      return true;
-    case 'texra.showAgentHistory':
-      actions.showSettings(SETTINGS_TAB.HISTORY);
-      return true;
-    case 'texra.showModels':
-      actions.showSettings(SETTINGS_TAB.MODELS);
-      return true;
-    case 'texra.showAgents':
-      actions.showSettings(SETTINGS_TAB.AGENTS);
-      return true;
-    case 'texra.showTools':
-      actions.showSettings(SETTINGS_TAB.TOOLS);
-      return true;
-    case 'texra.showMultiAgent':
-      actions.showSettings(SETTINGS_TAB.MULTI_AGENT);
-      return true;
-    case DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER:
-      if (!actions.openLogFolder) return false;
-      actions.openLogFolder();
-      return true;
-    case DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER:
-      if (!actions.openWorkspaceFolder) return false;
-      actions.openWorkspaceFolder();
-      return true;
-    case DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH:
-      if (!actions.showFirstRunWalkthrough) return false;
-      actions.showFirstRunWalkthrough();
-      return true;
-    case DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS:
-      if (!actions.openDesktopDocs) return false;
-      actions.openDesktopDocs();
-      return true;
-    case 'texra.execute':
-    case 'texra.runSetupAssistant':
-    case 'texra.showImportOptions':
-    case 'texra.openGettingStarted':
-    case 'texra.cleanOutput':
-    case 'texra.cleanBuild':
-      return false;
-    default:
-      return assertNever(id);
-  }
-}
-
-function assertNever(value: never): never {
-  throw new Error(`Unhandled desktop command: ${value}`);
+  return dispatchCommandFromRegistry(id, DESKTOP_COMMAND_HANDLERS, actions);
 }
 
 function isDesktopLocalCommandId(id: string): id is DesktopLocalCommandId {
