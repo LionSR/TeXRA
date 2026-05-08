@@ -19,8 +19,9 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { keyed } from 'lit/directives/keyed.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-// Side-effect imports - register WA icon component
+// Side-effect imports - register WA icon and button components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/button/button.js';
 
 // Local imports - shared styles
 import {
@@ -227,8 +228,9 @@ export class RequestPanels extends LitElement {
     const current = perms[this._eiIndex];
     const nav = html`
       <div class="external-inquiry-requests__nav">
-        <button
-          class="external-inquiry-requests__nav-btn"
+        <wa-button
+          appearance="plain"
+          size="small"
           title="Previous inquiry"
           ?disabled=${this._eiIndex === 0}
           @click=${this._eiPrev}
@@ -238,12 +240,13 @@ export class RequestPanels extends LitElement {
             name="chevron-left"
             aria-hidden="true"
           ></wa-icon>
-        </button>
+        </wa-button>
         <span class="external-inquiry-requests__counter">
           ${this._eiIndex + 1} / ${perms.length}
         </span>
-        <button
-          class="external-inquiry-requests__nav-btn"
+        <wa-button
+          appearance="plain"
+          size="small"
           title="Next inquiry"
           ?disabled=${this._eiIndex === perms.length - 1}
           @click=${this._eiNext}
@@ -253,7 +256,7 @@ export class RequestPanels extends LitElement {
             name="chevron-right"
             aria-hidden="true"
           ></wa-icon>
-        </button>
+        </wa-button>
       </div>
     `;
 
