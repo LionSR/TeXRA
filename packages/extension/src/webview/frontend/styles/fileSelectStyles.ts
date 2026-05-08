@@ -96,7 +96,8 @@ export const fileSelectLayoutStyles = css`
 
   .file-select-actions {
     display: flex;
-    flex-direction: column !important;
+    flex-direction: row;
+    align-items: center;
     flex-wrap: nowrap;
     margin-left: auto;
     gap: var(--wa-space-3xs);
@@ -110,6 +111,15 @@ export const fileSelectLayoutStyles = css`
   .file-select select,
   .file-select wa-select {
     width: 100%;
+  }
+
+  /* Hide the inline wa-select when there's no current selection AND the list
+     isn't expanded — saves a wasted row showing "None". The select still
+     surfaces as soon as the user expands, picks a current file, or starts
+     filtering. */
+  .file-select:not([data-expanded='true']):not([data-has-current='true'])
+    wa-select {
+    display: none;
   }
 
   .file-select:not([data-expanded='true']) .file-action-button {
