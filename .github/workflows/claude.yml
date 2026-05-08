@@ -78,6 +78,7 @@ jobs:
       - name: Run Claude Code
         id: claude
         if: steps.trusted-provider-wrapper.outputs.available == 'true'
+        continue-on-error: true
         uses: ./.trusted-actions/.github/actions/claude-code-with-provider
         with:
           provider: ${{ env.CLAUDE_CODE_PROVIDER }}
@@ -88,6 +89,30 @@ jobs:
           additional-permissions: |
             actions: read
           system-prompt-file: .trusted-actions/.github/prompts/claude-code-system-prompt.md
+
+      - name: Check for Claude quota errors and post comment
+        if: |
+          steps.trusted-provider-wrapper.outputs.available == 'true' &&
+          steps.claude.outcome != 'success' &&
+          (github.event_name == 'issues' ||
+           (github.event_name == 'issue_comment' && !github.event.issue.pull_request) ||
+           github.event_name == 'pull_request_review_comment' ||
+           github.event_name == 'pull_request_review')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue_number = context.issue.number;
+            if (!issue_number) {
+              console.log('No issue/PR number found, skipping comment');
+              return;
+            }
+            github.rest.issues.createComment({
+              issue_number: issue_number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '⏳ Claude ran into a quota or rate limit. Will retry on the next interaction.\n\n(See [action logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details)'
+            });
+
 
       - name: Auto-create PR for completed issue work
         if: |

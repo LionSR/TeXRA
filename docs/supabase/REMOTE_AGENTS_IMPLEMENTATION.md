@@ -14,7 +14,7 @@ We've successfully implemented a complete authentication and remote agents syste
 - **`src/auth/SupabaseAuthProvider.ts`** - VS Code AuthenticationProvider implementation
 - **`src/auth/authCommands.ts`** - Sign in/out and profile commands
 - **`src/auth/UriHandler.ts`** - OAuth callback handler (for future use)
-- **`src/commands/auth/index.ts`** - Command registration
+- **`packages/extension/src/commands/auth/index.ts`** - Command registration
 
 ### Remote Agents
 
@@ -44,12 +44,12 @@ We've successfully implemented a complete authentication and remote agents syste
 
 ### Extension & Commands
 
-- **`src/extension.ts`**
+- **`packages/extension/src/extension.ts`**
   - Added Supabase client initialization
   - Registered authentication provider
   - Conditional initialization based on settings
 
-- **`src/commands.ts`**
+- **`packages/extension/src/commands.ts`**
   - Imported and registered auth commands
 
 ### Configuration
