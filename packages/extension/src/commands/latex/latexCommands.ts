@@ -28,27 +28,15 @@ export const latexCommands = {
   fixCompilation: 'texra.fixCompilation',
 };
 
-export function registerLatexCommands(context: vscode.ExtensionContext): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      latexCommands.indentCurrentTeX,
-      handleIndentCurrentTeX,
-    ),
-    vscode.commands.registerCommand(
-      latexCommands.getTeXCount,
-      handleGetTeXCount,
-    ),
-    // `texra.indentTeX` is registered through `extensionCommandSurface` so
-    // the dispatch path matches the desktop registry (see #3771).
-    vscode.commands.registerCommand(
-      latexCommands.applyReplacements,
-      handleApplyReplacements,
-    ),
-    vscode.commands.registerCommand(
-      latexCommands.fixCompilation,
-      handleFixCompilation,
-    ),
-  );
+/**
+ * All LaTeX entry-point commands (`indentTeX`, `indentCurrentTeX`,
+ * `getTeXCount`, `applyReplacements`, `fixCompilation`) are now
+ * registered through the shared command registry in
+ * `extensionCommandSurface.ts` (#3771, #3775). This stub is kept for
+ * the existing `registerLatexCommands(context)` call site.
+ */
+export function registerLatexCommands(_context: vscode.ExtensionContext): void {
+  /* registration handled by extensionCommandSurface */
 }
 
 export async function handleIndentTeX(): Promise<void> {
@@ -72,7 +60,7 @@ export async function handleIndentTeX(): Promise<void> {
   }
 }
 
-async function handleFixCompilation(): Promise<void> {
+export async function handleFixCompilation(): Promise<void> {
   try {
     await withLaTeXGuard(
       { channel: CHANNEL, action: 'fix compilation', saveDocument: true },
@@ -97,7 +85,7 @@ async function handleFixCompilation(): Promise<void> {
   }
 }
 
-async function handleApplyReplacements(): Promise<void> {
+export async function handleApplyReplacements(): Promise<void> {
   try {
     await withLaTeXGuard(
       { channel: CHANNEL, action: 'apply replacements', saveDocument: true },
@@ -130,7 +118,7 @@ async function handleApplyReplacements(): Promise<void> {
   }
 }
 
-async function handleIndentCurrentTeX(): Promise<void> {
+export async function handleIndentCurrentTeX(): Promise<void> {
   try {
     await withLaTeXGuard(
       {
@@ -159,7 +147,7 @@ async function handleIndentCurrentTeX(): Promise<void> {
   }
 }
 
-async function handleGetTeXCount(): Promise<void> {
+export async function handleGetTeXCount(): Promise<void> {
   try {
     await withLaTeXGuard(
       { channel: CHANNEL, action: 'get TeX count' },
