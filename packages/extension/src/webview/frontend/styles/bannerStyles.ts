@@ -43,6 +43,8 @@ export const bannerStyles: CSSResult = css`
     pointer-events: none;
     /* Compact callout chrome — stricter minimalism, tight banner padding. */
     --padding: var(--wa-space-2xs) var(--wa-space-xs);
+    /* Subtle hairline above the variant border for refined density. */
+    border-radius: var(--wa-border-radius-m, 6px);
   }
 
   :host([data-visible='true']) wa-callout {
@@ -66,10 +68,19 @@ export const bannerStyles: CSSResult = css`
 
   wa-callout::part(message) {
     padding-block: var(--wa-space-2xs);
+    line-height: var(--line-height-relaxed, 1.5);
   }
 
+  /*
+   * Cohesive icon treatment across all banners — quiet circular tile
+   * tinted by the variant colour. Establishes a consistent visual rhythm:
+   * apiKey (warning), login (brand), dependency (warning), gettingStarted
+   * (brand), agentConfig (warning) all share the same icon framing.
+   */
   wa-callout::part(icon) {
     padding-inline-end: var(--wa-space-2xs);
+    font-size: 0.95em;
+    opacity: 0.92;
   }
 
   .banner-row {
@@ -83,13 +94,48 @@ export const bannerStyles: CSSResult = css`
   .banner-row .hint {
     width: 100%;
     font-size: var(--font-size-sm);
-    opacity: var(--opacity-normal);
+    opacity: 0.7;
+    line-height: var(--line-height-relaxed, 1.5);
+  }
+
+  /*
+   * Bold cue for inline names — used by ApiKeyBanner ("<provider> API key
+   * missing") and GettingStartedBanner ("Welcome to TeXRA!"). A touch
+   * tighter letter-spacing distinguishes the lede from the body without
+   * a font weight clash.
+   */
+  .banner-row strong {
+    font-weight: var(--font-weight-semibold, 600);
+    letter-spacing: -0.005em;
   }
 
   .actions {
     display: flex;
     align-items: center;
-    gap: var(--wa-space-2xs);
+    gap: var(--wa-space-3xs);
     flex-shrink: 0;
+  }
+
+  /*
+   * Banner action buttons share the same compact, refined silhouette —
+   * tighter padding than the WA default plain button, with a subtle
+   * hover tint that uses the callout's surrounding tone.
+   */
+  .actions wa-button::part(base) {
+    min-height: 24px;
+    padding-inline: var(--wa-space-xs);
+    border-radius: var(--wa-border-radius-s, 4px);
+    font-size: var(--font-size-sm);
+    transition:
+      background-color 120ms ease,
+      color 120ms ease;
+  }
+
+  .actions wa-button[appearance='plain']::part(base):hover {
+    background: color-mix(
+      in srgb,
+      currentColor 8%,
+      transparent
+    );
   }
 `;
