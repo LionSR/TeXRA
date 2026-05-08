@@ -180,7 +180,7 @@ export class SettingsApp extends SettingsAppBase {
       }
 
       wa-tab .settings-tab-icon {
-        margin-inline-end: var(--spacing-xsmall);
+        margin-inline-end: 0.5em;
       }
     `,
   ];
