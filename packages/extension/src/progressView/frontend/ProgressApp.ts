@@ -24,21 +24,10 @@ import { PersistedState } from '@shared/state';
 // Local imports - shared schemas
 import {
   AgentCategoryFilterSchema,
-  createStreamState,
-  STREAM_STATUS,
-  type ProgressViewPlacement,
   type ProgressViewOutboundMessage,
   type StreamTabId,
-  type StreamTabInfo,
-  type TaskGroup,
 } from '@shared/schemas';
-import {
-  SignalWatcher,
-  signal,
-  Signal,
-  select,
-  combine,
-} from '@shared/signals';
+import { SignalWatcher } from '@shared/signals';
 import { designTokens, viewTabStyles } from '@shared/styles';
 import {
   registerTeXRAWebAwesomeIcons,
@@ -51,7 +40,6 @@ import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 
 // Local imports - progress view frontend
 import { webviewStorage } from './webviewStorage';
-import { setsEqual } from './utils';
 import {
   createInitialState,
   EMPTY_STREAM_LOGS,
@@ -60,12 +48,23 @@ import {
   type StreamLogs,
   type StreamState,
 } from './store';
-
-/** Stable empty array for activeTaskGroups$ default (avoids new [] per read). */
-const EMPTY_TASK_GROUPS: TaskGroup[] = [];
-
-/** Stable empty map returned when no parent has active children. */
-const EMPTY_CHILD_MAP: Map<StreamTabId, StreamTabInfo[]> = new Map();
+import {
+  activeProcessOutputs$,
+  activeStreamId$,
+  appState,
+  childStreamsByParent$,
+  hasAnyStreams$,
+  logContext$,
+  narrowLayout,
+  pendingApprovalIds$,
+  permissions$,
+  placement,
+  streamById$,
+  streamContext$,
+  streamFilter$,
+  streamStates$,
+  tabStreams$,
+} from './progressState';
 
 /** Schema for persisted preferences. */
 const ProgressViewPrefsSchema = z.object({
@@ -125,13 +124,6 @@ import './components/ContextManagement';
 import type { PermissionState } from './components/PermissionCard';
 
 registerTeXRAWebAwesomeIcons();
-
-// ---------------------------------------------------------------------------
-// Collection equality helpers — avoid allocating temporary arrays in
-// Signal.Computed evaluations that run on every state change.
-// ---------------------------------------------------------------------------
-
-// setsEqual is provided by the shared frontend utils module.
 
 // Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
 // Safe because ProgressApp implements all abstract members below.
@@ -349,36 +341,15 @@ export class ProgressApp extends ProgressAppBase {
   ];
 
   // --- Signal-based state ---
-  // Single source of truth: monolithic state wrapped in a signal.
-  // Mutative's structural sharing ensures unchanged branches keep their
-  // reference, so selector computeds auto-skip via Object.is().
-  private appState = signal(createInitialState());
-  private placement = signal<ProgressViewPlacement>('sidebar');
-  private narrowLayout = signal(false);
-  private permissions$ = signal<PermissionState[]>([]);
+  // State lives at module scope in `progressState.ts` (PRD: docs/prd/electron-shell-layout.md § 7.A)
+  // so the rail and the conversation can mount independently in different DOM
+  // trees. Identity is preserved — selectors here are simple imports.
   private hasHandledInitialProgressTabShow = false;
   private suppressNextResetProgressTabShow = false;
 
-  /** Stream IDs with pending approval requests — drives tab pulse indicator. */
-  private _prevApprovalIds: Set<string> = new Set();
-  private pendingApprovalIds$ = new Signal.Computed(() => {
-    const ids = new Set<string>();
-    for (const p of this.permissions$.get()) {
-      const streamId = p.data.streamId;
-      if (streamId) ids.add(streamId);
-    }
-    // Return stable reference when unchanged — Signal.Computed uses Object.is(),
-    // so a new Set with identical contents would still propagate.
-    if (setsEqual(ids, this._prevApprovalIds)) {
-      return this._prevApprovalIds;
-    }
-    this._prevApprovalIds = ids;
-    return ids;
-  });
-
   private readonly resizeObserver = new ResizeObserver((entries) => {
     const width = entries[0]?.contentRect.width ?? this.clientWidth;
-    this.narrowLayout.set(width < 500);
+    narrowLayout.set(width < 500);
   });
 
   @provide({ context: streamStateContext })
@@ -401,162 +372,6 @@ export class ProgressApp extends ProgressAppBase {
   @state()
   private streamByIdContextValue: StreamByIdMap = EMPTY_STREAM_BY_ID;
 
-  // --- Selector computeds: extract fields, auto-memoized by Object.is ---
-  private streamById$ = select(this.appState, (s) => s.streamById);
-  private streamFilter$ = select(this.appState, (s) => s.streamFilter);
-  private streamStates$ = select(this.appState, (s) => s.streamStates);
-  private streamLogs$ = select(this.appState, (s) => s.streamLogs);
-  private activeStreamId$ = select(this.appState, (s) => s.activeStreamId);
-  private processOutputs$ = select(this.appState, (s) => s.processOutputs);
-  private followupOptions$ = select(
-    this.appState,
-    (s) => s.followupOptionsByStream,
-  );
-
-  // --- Derived computeds: only re-evaluate when selector inputs propagate ---
-
-  private streams$ = new Signal.Computed(() => [
-    ...this.streamById$.get().values(),
-  ]);
-
-  /** Top-level streams for the tab list (child streams excluded). */
-  private tabStreams$ = combine(
-    [this.streams$, this.streamFilter$] as const,
-    (streams, filter) => {
-      const topLevel = streams.filter((s) => !s.parentStreamId);
-      if (filter === 'all') return topLevel;
-      return topLevel.filter((s) => s.agentCategory === filter);
-    },
-  );
-
-  /**
-   * Child streams grouped by parent stream ID.
-   * Depends only on streamById$ (stream registry), NOT streamStates$,
-   * so it only recomputes when streams are added/removed — not on
-   * every status or timestamp update.
-   */
-  private childStreamsByParent$ = new Signal.Computed(() => {
-    const grouped = new Map<StreamTabId, StreamTabInfo[]>();
-    for (const stream of this.streamById$.get().values()) {
-      if (!stream.parentStreamId) continue;
-      const siblings = grouped.get(stream.parentStreamId);
-      if (siblings) {
-        siblings.push(stream);
-      } else {
-        grouped.set(stream.parentStreamId, [stream]);
-      }
-    }
-    return grouped.size > 0 ? grouped : EMPTY_CHILD_MAP;
-  });
-
-  // --- Fine-grained active-stream selectors ---
-  // These return stable Map entry values (via Mutative structural sharing).
-  // When stream B's state changes, activeStreamState$ still returns stream A's
-  // state (same reference) → Object.is() passes → no downstream propagation.
-
-  /** Only changes when active stream switches or stream list changes. */
-  private activeStreamInfo$ = new Signal.Computed(() => {
-    const id = this.activeStreamId$.get();
-    return id ? (this.streamById$.get().get(id) ?? null) : null;
-  });
-
-  /**
-   * True when the current filter yields at least one tab. Gates the
-   * "no streams match" placeholder — backend now sends every stream
-   * unfiltered, so `streamById.size` alone can't distinguish "nothing
-   * visible" from "everything hidden by filter".
-   */
-  private hasStreams$ = new Signal.Computed(
-    () => this.tabStreams$.get().length > 0,
-  );
-
-  /** True only when the backend knows no streams at all, independent of filter. */
-  private hasAnyStreams$ = new Signal.Computed(
-    () => this.streamById$.get().size > 0,
-  );
-
-  /** Only changes when the ACTIVE stream's state changes, not any stream. */
-  private activeStreamState$ = new Signal.Computed(() => {
-    const info = this.activeStreamInfo$.get();
-    if (!info) return null;
-    return (
-      this.streamStates$.get().get(info.name) ??
-      createStreamState(info.agentCategory)
-    );
-  });
-
-  /** Only changes when the ACTIVE stream's logs change, not any stream. */
-  private activeStreamLogs$ = new Signal.Computed(() => {
-    const info = this.activeStreamInfo$.get();
-    if (!info) return EMPTY_STREAM_LOGS;
-    return this.streamLogs$.get().get(info.name) ?? EMPTY_STREAM_LOGS;
-  });
-
-  /** Only changes when the ACTIVE stream's process outputs change. */
-  private activeProcessOutputs$ = new Signal.Computed((): ProcessOutputMap => {
-    const info = this.activeStreamInfo$.get();
-    if (!info) return EMPTY_PROCESS_OUTPUTS;
-    return this.processOutputs$.get().get(info.name) ?? EMPTY_PROCESS_OUTPUTS;
-  });
-
-  // --- Leaf selectors for logContext$ ---
-  // These extract the specific fields logContext$ needs from activeStreamState$,
-  // so logContext$ doesn't depend on the full state. When conversationProgress,
-  // badges, or status change, activeStreamState$ propagates but these return
-  // the same refs (Mutative structural sharing) → logContext$ stays cached →
-  // LogList doesn't re-render.
-
-  private activeTaskGroups$ = new Signal.Computed(
-    () => this.activeStreamState$.get()?.taskGroups ?? EMPTY_TASK_GROUPS,
-  );
-
-  private activeIsToolUse$ = new Signal.Computed(() => {
-    const state = this.activeStreamState$.get();
-    return state ? isToolUseState(state) : false;
-  });
-
-  /** Stream context derived from active stream + state. */
-  private streamContext$ = new Signal.Computed((): StreamContextValue => {
-    const activeStreamInfo = this.activeStreamInfo$.get();
-    const hasStreams = this.hasStreams$.get();
-    if (!activeStreamInfo) return { ...EMPTY_STREAM_CONTEXT, hasStreams };
-
-    const streamState = this.activeStreamState$.get();
-    const isToolUse = streamState ? isToolUseState(streamState) : false;
-    const followupOptions =
-      this.followupOptions$.get().get(activeStreamInfo.name) ?? null;
-    return {
-      streamInfo: activeStreamInfo,
-      streamState,
-      isToolUse,
-      hasStreams,
-      followupOptions,
-    };
-  });
-
-  /**
-   * Log context derived from active stream + logs.
-   * Depends on leaf selectors so status/badge/progress changes
-   * don't cause LogList re-renders.
-   */
-  private logContext$ = new Signal.Computed((): StreamLogContextValue => {
-    const activeStreamInfo = this.activeStreamInfo$.get();
-    const hasStreams = this.hasStreams$.get();
-    if (!activeStreamInfo) return { ...EMPTY_LOG_CONTEXT, hasStreams };
-
-    return {
-      logs: this.activeStreamLogs$.get().logs,
-      taskGroups: this.activeTaskGroups$.get(),
-      isToolUse: this.activeIsToolUse$.get(),
-      hasStreams,
-      streamName: activeStreamInfo.name,
-      streamStatus: this.activeStreamState$.get()?.status ?? null,
-      // Process agents emit raw stdout/stderr; render them terminal-style
-      // (monospace, no timestamps, tight spacing) rather than logger entries.
-      terminalMode: isProcessAgent(activeStreamInfo.agent),
-    };
-  });
-
   private prefsManager = new PersistedState(
     webviewStorage,
     'progressViewPrefs',
@@ -567,7 +382,7 @@ export class ProgressApp extends ProgressAppBase {
     super();
     // Restore persisted preferences
     const prefs = this.prefsManager.getState();
-    this.appState.set({
+    appState.set({
       ...createInitialState(),
       streamFilter: prefs.streamFilter,
     });
@@ -593,18 +408,18 @@ export class ProgressApp extends ProgressAppBase {
    * so this runs only when computed values actually propagate.
    */
   protected override willUpdate(): void {
-    this.streamContextValue = this.streamContext$.get();
-    this.streamLogContextValue = this.logContext$.get();
-    this.permissionsContextValue = this.permissions$.get();
-    this.processOutputContextValue = this.activeProcessOutputs$.get();
-    this.streamByIdContextValue = this.streamById$.get();
+    this.streamContextValue = streamContext$.get();
+    this.streamLogContextValue = logContext$.get();
+    this.permissionsContextValue = permissions$.get();
+    this.processOutputContextValue = activeProcessOutputs$.get();
+    this.streamByIdContextValue = streamById$.get();
   }
 
   render(): TemplateResult {
-    const isEditorMode = this.placement.get() === 'editor';
+    const isEditorMode = placement.get() === 'editor';
     const isDesktopMode = this.hasAttribute('data-desktop-view');
-    const compactTabs = this.narrowLayout.get() && !isEditorMode;
-    const hasAnyStreams = this.hasAnyStreams$.get();
+    const compactTabs = narrowLayout.get() && !isEditorMode;
+    const hasAnyStreams = hasAnyStreams$.get();
     const splitPosition =
       this.getAttribute('data-desktop-view') === 'progress' ? 68 : 80;
 
@@ -693,12 +508,12 @@ export class ProgressApp extends ProgressAppBase {
                   <stream-tabs
                     slot="end"
                     .compact=${compactTabs}
-                    .streams=${this.tabStreams$.get()}
-                    .activeStreamId=${this.activeStreamId$.get()}
-                    .filter=${this.streamFilter$.get()}
-                    .streamStates=${this.streamStates$.get()}
-                    .pendingApprovalStreamIds=${this.pendingApprovalIds$.get()}
-                    .childStreamsByParent=${this.childStreamsByParent$.get()}
+                    .streams=${tabStreams$.get()}
+                    .activeStreamId=${activeStreamId$.get()}
+                    .filter=${streamFilter$.get()}
+                    .streamStates=${streamStates$.get()}
+                    .pendingApprovalStreamIds=${pendingApprovalIds$.get()}
+                    .childStreamsByParent=${childStreamsByParent$.get()}
                     @stream-switch=${this.onStreamSwitch}
                     @stream-delete=${this.onStreamDelete}
                     @filter-change=${this.onFilterChange}
@@ -801,7 +616,7 @@ export class ProgressApp extends ProgressAppBase {
     streamId: StreamTabId,
     updater: (prev: StreamState) => StreamState,
   ): void {
-    const state = this.appState.get();
+    const state = appState.get();
     // Fast path: stream already has state (common during streaming).
     // Only fall back to streamById lookup when creating default state for new streams.
     let current = state.streamStates.get(streamId);
@@ -814,7 +629,7 @@ export class ProgressApp extends ProgressAppBase {
     const updated = updater(current);
     // Skip no-op updates: avoid Map copy + appState spread + willUpdate cycle
     if (updated === current) return;
-    this.appState.set(
+    appState.set(
       create(state, (draft) => {
         draft.streamStates.set(streamId, updated);
       }),
@@ -825,14 +640,14 @@ export class ProgressApp extends ProgressAppBase {
     streamId: StreamTabId,
     updater: (prev: StreamLogs) => StreamLogs,
   ): void {
-    const state = this.appState.get();
+    const state = appState.get();
     // Skip unknown streams — prevents orphan streamLogs entries that survive
     // updateStreamInfo cleanup (which only iterates streamStates keys)
     if (!state.streamStates.has(streamId)) return;
     const current = state.streamLogs.get(streamId) ?? EMPTY_STREAM_LOGS;
     const updated = updater(current);
     if (updated === current) return;
-    this.appState.set(
+    appState.set(
       create(state, (draft) => {
         draft.streamLogs.set(streamId, updated);
       }),
@@ -845,9 +660,9 @@ export class ProgressApp extends ProgressAppBase {
    */
   private getEventHandlerContext(): FrontendEventHandlerContext {
     return {
-      getState: () => this.appState.get(),
+      getState: () => appState.get(),
       setState: (updater) => {
-        this.appState.set(updater(this.appState.get()));
+        appState.set(updater(appState.get()));
       },
       setStreamState: (streamId, updater) =>
         this.setStreamState(streamId, updater),
@@ -860,12 +675,12 @@ export class ProgressApp extends ProgressAppBase {
   private createMessageHandlerContext(): MessageHandlerContext {
     return {
       ...this.getEventHandlerContext(),
-      getPermissions: () => this.permissions$.get(),
+      getPermissions: () => permissions$.get(),
       setPermissions: (permissions) => {
-        this.permissions$.set(permissions);
+        permissions$.set(permissions);
       },
-      setPlacement: (placement) => {
-        this.placement.set(placement);
+      setPlacement: (next) => {
+        placement.set(next);
       },
     };
   }
@@ -884,7 +699,7 @@ export class ProgressApp extends ProgressAppBase {
     }
     const view = event.detail.name === 'launcher' ? 'main' : 'progress';
     const tabs = event.currentTarget as MutableWaTabGroup;
-    if (view === 'main' && this.placement.get() === 'editor') {
+    if (view === 'main' && placement.get() === 'editor') {
       this.focusLauncherSidebar(tabs);
       return;
     }
@@ -897,7 +712,7 @@ export class ProgressApp extends ProgressAppBase {
   };
 
   private onFocusLauncherTab = (event: Event): void => {
-    if (this.placement.get() !== 'editor') return;
+    if (placement.get() !== 'editor') return;
     event.preventDefault();
     event.stopPropagation();
     const tabs = (event.currentTarget as HTMLElement).closest(
@@ -990,7 +805,7 @@ export class ProgressApp extends ProgressAppBase {
    * Part of Lit-native Phase 9e reactive property pattern.
    */
   private onFollowUpFocusComplete(): void {
-    const streamId = this.appState.get().activeStreamId;
+    const streamId = appState.get().activeStreamId;
     if (!streamId) return;
 
     this.setStreamState(streamId, (prev) => {
