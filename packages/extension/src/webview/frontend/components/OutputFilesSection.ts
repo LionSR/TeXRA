@@ -57,7 +57,7 @@ export class OutputFilesSection extends LitElement {
       }
 
       .file-item {
-        padding: 5px var(--wa-space-2xs);
+        padding: var(--wa-space-3xs) var(--wa-space-2xs);
         border-radius: var(--border-radius-small);
         transition:
           background-color 140ms ease,
@@ -91,8 +91,8 @@ export class OutputFilesSection extends LitElement {
 
       .file-list-placeholder {
         font-size: var(--font-size-sm);
-        line-height: var(--line-height-relaxed);
-        padding: var(--wa-space-2xs) var(--wa-space-xs);
+        line-height: var(--line-height-normal);
+        padding: var(--wa-space-3xs) var(--wa-space-2xs);
       }
     `,
   ];
