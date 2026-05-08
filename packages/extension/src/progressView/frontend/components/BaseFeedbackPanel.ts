@@ -10,6 +10,9 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { query, state } from 'lit/decorators.js';
 
+// Side-effect imports - register WA textarea component
+import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
+
 // Local imports - shared utilities
 import { FEEDBACK_ELIGIBLE_KINDS } from '@shared/utils/uiConstants';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
@@ -96,12 +99,12 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
 
     return html`
       <div class=${containerClass}>
-        <vscode-textarea
+        <wa-textarea
           class=${inputClass}
           placeholder=${placeholder}
           rows="3"
           data-feedback-input
-        ></vscode-textarea>
+        ></wa-textarea>
       </div>
     `;
   }
