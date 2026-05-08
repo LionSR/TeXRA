@@ -11,6 +11,12 @@ import { consume } from '@lit/context';
 import { customElement, property, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { styleMap } from 'lit/directives/style-map.js';
+import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
+import '@awesome.me/webawesome/dist/components/radio/radio.js';
+import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
+import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared schemas and types
 import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
@@ -138,12 +144,12 @@ export class InstructionPanel extends LitElement {
         align-items: center;
       }
 
-      .instruction-session-toggle vscode-radio-group {
+      .instruction-session-toggle wa-radio-group {
         display: flex;
         gap: var(--spacing-small);
       }
 
-      .instruction-session-toggle vscode-radio {
+      .instruction-session-toggle wa-radio {
         font-size: var(--font-size-sm);
       }
 
@@ -180,14 +186,14 @@ export class InstructionPanel extends LitElement {
         margin-left: var(--spacing-tiny);
       }
 
-      vscode-textarea#instruction {
+      wa-textarea#instruction {
         width: 100%;
         margin: var(--spacing-medium) 0;
         font-family: var(--texra-editor-font-family);
         font-size: var(--font-size);
       }
 
-      vscode-textarea#instruction::part(control) {
+      wa-textarea#instruction::part(textarea) {
         max-height: var(--height-xlarge);
         transition: height var(--transition-fast);
       }
@@ -474,30 +480,28 @@ export class InstructionPanel extends LitElement {
                 id="sessionType"
                 .value=${session.sessionType}
               />
-              <vscode-radio-group
+              <wa-radio-group
                 id="sessionTypeToggle"
                 aria-label="Choose the session type"
                 orientation="horizontal"
                 .value=${session.sessionType}
                 @change=${this.handleSessionTypeChange}
               >
-                <vscode-radio
+                <wa-radio
                   value="toolUse"
                   data-session-type="toolUse"
-                  ?checked=${session.sessionType === SESSION_TYPES.TOOL_USE}
                   title=${getSessionTitle(SESSION_TYPES.TOOL_USE)}
                 >
                   Interactive
-                </vscode-radio>
-                <vscode-radio
+                </wa-radio>
+                <wa-radio
                   value="workflow"
                   data-session-type="workflow"
-                  ?checked=${session.sessionType === SESSION_TYPES.WORKFLOW}
                   title=${getSessionTitle(SESSION_TYPES.WORKFLOW)}
                 >
                   Workflow
-                </vscode-radio>
-              </vscode-radio-group>
+                </wa-radio>
+              </wa-radio-group>
             </div>
           </div>
           <div
@@ -536,13 +540,12 @@ export class InstructionPanel extends LitElement {
             })}
             ${session.isPolishing
               ? html`
-                  <vscode-progress-ring
+                  <wa-spinner
                     id="polishProgressContainer"
                     style=${styleMap({
-                      width: '16px',
-                      height: '16px',
+                      fontSize: '16px',
                     })}
-                  ></vscode-progress-ring>
+                  ></wa-spinner>
                 `
               : nothing}
             ${renderIconActionButton({
@@ -565,7 +568,7 @@ export class InstructionPanel extends LitElement {
           </div>
         </div>
         ${this.renderSessionHint(session)}
-        <vscode-textarea
+        <wa-textarea
           id="instruction"
           rows="10"
           resize="none"
@@ -573,7 +576,7 @@ export class InstructionPanel extends LitElement {
           .value=${session.instruction}
           @input=${this.handleInput}
           @paste=${this.handleInstructionPaste}
-        ></vscode-textarea>
+        ></wa-textarea>
         <div class="instruction-controls">
           <div class="model-selection-footer">
             <div
@@ -682,13 +685,15 @@ export class InstructionPanel extends LitElement {
               </vscode-single-select>
             </div>
           </div>
-          <vscode-button
+          <wa-button
             id="executeButton"
-            icon="play"
             title="Execute"
-            appearance="primary"
+            appearance="filled"
+            variant="brand"
             @click=${this.handleExecute}
-          ></vscode-button>
+          >
+            <wa-icon slot="start" library="texra" name="play"></wa-icon>
+          </wa-button>
         </div>
       </div>
     `;
