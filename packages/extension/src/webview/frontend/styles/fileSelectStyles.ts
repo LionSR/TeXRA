@@ -300,7 +300,7 @@ export const multiFilesStyles = css`
     font-size: var(--font-size-xs);
   }
 
-  .file-folder .codicon {
+  .file-folder wa-icon {
     font-size: var(--font-size-xs);
     margin-right: var(--spacing-tiny);
   }

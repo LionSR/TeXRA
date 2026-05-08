@@ -33,6 +33,7 @@ import { faCircleUser } from '@fortawesome/free-solid-svg-icons/faCircleUser';
 import { faCircleXmark } from '@fortawesome/free-solid-svg-icons/faCircleXmark';
 import { faClock } from '@fortawesome/free-solid-svg-icons/faClock';
 import { faClockRotateLeft } from '@fortawesome/free-solid-svg-icons/faClockRotateLeft';
+import { faCloud } from '@fortawesome/free-solid-svg-icons/faCloud';
 import { faCloudArrowDown } from '@fortawesome/free-solid-svg-icons/faCloudArrowDown';
 import { faCloudArrowUp } from '@fortawesome/free-solid-svg-icons/faCloudArrowUp';
 import { faCode } from '@fortawesome/free-solid-svg-icons/faCode';
@@ -169,6 +170,7 @@ const icons = {
   'circle-xmark': faCircleXmark,
   clock: faClock,
   'clock-rotate-left': faClockRotateLeft,
+  cloud: faCloud,
   'cloud-arrow-down': faCloudArrowDown,
   'cloud-arrow-up': faCloudArrowUp,
   code: faCode,
@@ -286,7 +288,7 @@ const CODICON_ALIASES = {
   'folder-opened': 'folder-open',
   github: 'code-branch',
   'git-commit': 'circle-dot',
-  'git-merge': 'code-branch',
+  'git-merge': 'code-merge',
   graph: 'chart-line',
   'graph-line': 'chart-line',
   history: 'clock-rotate-left',

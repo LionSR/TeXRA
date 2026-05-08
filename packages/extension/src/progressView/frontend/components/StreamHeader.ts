@@ -215,6 +215,15 @@ export class StreamHeader extends LitElement {
 
       /* Note: .is-ready and other status states from statusIndicatorStyles */
 
+      /* Replaces flex layout previously provided by vscode-toolbar-container.
+         Without this, toolbar buttons would stack vertically in block flow. */
+      .toolbar-container {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-xs, 4px);
+        align-items: center;
+      }
+
       .toolbar-button--hidden {
         display: none;
       }
