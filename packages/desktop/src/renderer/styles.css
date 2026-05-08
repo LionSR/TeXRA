@@ -509,6 +509,40 @@ wa-tree.desktop-explorer-tree wa-tree-item.desktop-explorer-file wa-icon {
   margin-top: var(--wa-space-l);
 }
 
+.desktop-bootstrap-fallback {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: var(--wa-space-3xl) var(--wa-space-l);
+  background: var(--wa-color-surface-default);
+}
+
+.desktop-bootstrap-fallback-panel {
+  max-width: 560px;
+  text-align: center;
+  color: var(--wa-color-text-normal);
+}
+
+.desktop-bootstrap-fallback-panel h1 {
+  margin: 0 0 var(--wa-space-m);
+  font-size: var(--font-size-h1);
+  font-weight: 600;
+}
+
+.desktop-bootstrap-fallback-panel p {
+  margin: 0 0 var(--wa-space-s);
+  color: var(--wa-color-text-quiet);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.desktop-bootstrap-fallback-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--wa-space-s);
+  margin-top: var(--wa-space-l);
+}
+
 .desktop-log-viewer {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
