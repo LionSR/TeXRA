@@ -49,13 +49,66 @@ export const mainViewStyles: CSSResult = css`
     min-height: 0;
   }
 
-  .file-selection-group {
-    background-color: var(--background-color);
-    border: var(--border-thin) solid
-      var(--texra-widget-border, var(--dropdown-border));
-    border-radius: var(--border-radius);
-    padding: var(--wa-space-xs);
+  /*
+   * Hairline separator between sections of the launcher. Kept subtle
+   * (single-pixel surface-border line) so the primary instruction flow
+   * stays the dominant visual element, with secondary regions like the
+   * file-select group quietly demarcated below.
+   */
+  .section-separator {
+    border-top: var(--border-thin) solid
+      var(--wa-color-surface-border, var(--color-border));
+    margin: 0 0 var(--wa-space-2xs);
+  }
+
+  /*
+   * Files section sits BELOW the instruction-panel (textarea + toolbar).
+   * Wrapped in a wa-details so the four file slots (Input/Reference/
+   * Auxiliary/Media) plus Multiple Outputs collapse to a single slim
+   * summary row by default — keeping the primary "what do you want to
+   * do?" textarea front-and-center and unblocked.
+   */
+  wa-details.file-selection-details {
     margin-bottom: var(--wa-space-s);
+    background: transparent;
+  }
+
+  wa-details.file-selection-details::part(base) {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+  }
+
+  wa-details.file-selection-details::part(header) {
+    padding: var(--wa-space-3xs) var(--wa-space-2xs);
+    min-height: 22px;
+    font-size: var(--font-size-sm);
+    color: var(--wa-color-text-quiet);
+  }
+
+  wa-details.file-selection-details[open]::part(header) {
+    color: var(--wa-color-text-normal);
+  }
+
+  wa-details.file-selection-details::part(content) {
+    padding: var(--wa-space-2xs) 0 0;
+  }
+
+  wa-details.file-selection-details .file-selection-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+  }
+
+  wa-details.file-selection-details .file-selection-summary wa-icon {
+    color: var(--wa-color-text-quiet);
+  }
+
+  .file-selection-group {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
     overflow: visible;
   }
 
