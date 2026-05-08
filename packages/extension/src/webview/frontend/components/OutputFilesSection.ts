@@ -13,7 +13,7 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports - main view
 import { SortableController } from '@shared/controllers';
-import { designTokens, codiconStyles } from '@shared/styles';
+import { designTokens } from '@shared/styles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { MainViewEvents } from '../events';
@@ -32,7 +32,6 @@ import {
 export class OutputFilesSection extends LitElement {
   static override styles = [
     designTokens,
-    codiconStyles,
     compactActionButtonStyles,
     fileSelectLayoutStyles,
     toggleStyles,
@@ -124,11 +123,13 @@ export class OutputFilesSection extends LitElement {
           <div class="file-item" data-path=${file}>
             <span class="file-name">${file}</span>
             <button
-              class="remove-button codicon codicon-trash"
+              class="remove-button"
               type="button"
               aria-label="Remove output file"
               data-remove-file=${file}
-            ></button>
+            >
+              ${waIcon('trash')}
+            </button>
           </div>
         `,
       )}

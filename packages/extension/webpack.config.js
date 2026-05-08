@@ -77,7 +77,6 @@ const webviewExternals = {
   '@shared/schemas/contextManagement': 'WebviewCommons',
   '@shared/styles': 'WebviewCommons',
   '@shared/styles/index': 'WebviewCommons',
-  '@shared/styles/codiconStyles': 'WebviewCommons',
   '@shared/styles/commonViewStyles': 'WebviewCommons',
   '@shared/styles/litStyles': 'WebviewCommons',
   '@shared/styles/selectStyles': 'WebviewCommons',
@@ -131,7 +130,6 @@ const extensionConfig = {
     'utf-8-validate': 'utf-8-validate',
     fsevents: 'require("fsevents")',
     'split.js': 'Split',
-    '@vscode/codicons': 'commonjs @vscode/codicons',
     vscode: 'commonjs vscode', // the vscode-module is created on-the-fly and must be excluded. Add other modules that cannot be webpack'ed, 📖 -> https://webpack.js.org/configuration/externals/
     '@openai/codex-sdk': 'commonjs @openai/codex-sdk', // ESM-only; use esbuild builds which bundle it
     // modules added here also need to be added in the .vscodeignore file

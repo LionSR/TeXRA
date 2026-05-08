@@ -1500,7 +1500,6 @@
   ],
   "requiredVscodeIgnoreLines": [
     "src/**",
-    "!dist/**/codicon.ttf",
     "!resources/**",
     "!src/common/styles/*.css",
     "!src/progressView/*.html",

@@ -17,7 +17,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { styleMap } from 'lit/directives/style-map.js';
 
 // Local imports - main view
-import { designTokens, codiconStyles } from '@shared/styles';
+import { designTokens } from '@shared/styles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { MainViewEvents } from '../events';
@@ -32,7 +32,6 @@ import {
 export class LatexDiffsSection extends LitElement {
   static override styles = [
     designTokens,
-    codiconStyles,
     compactActionButtonStyles,
     compactFormControlStyles,
     fileSelectLayoutStyles,
