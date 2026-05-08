@@ -88,6 +88,12 @@ import {
   DesktopOnboardingSetStateMessageSchema,
   type DesktopOnboardingSetStateMessage,
 } from '../desktopOnboardingMessages';
+import {
+  DesktopShowDiffMessageSchema,
+  DesktopCloseDiffMessageSchema,
+  type DesktopShowDiffMessage,
+  type DesktopCloseDiffMessage,
+} from '../desktopDiffMessages';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
 import { createFirstRunWalkthrough } from './desktopOnboarding';
 
@@ -576,6 +582,100 @@ function openSettingsOverlay(): void {
 }
 
 // =============================================================================
+// Diff overlay (audit item C, trajectory #18)
+// =============================================================================
+//
+// Replaces `desktopDiffHost`'s old "open the patch in the OS editor" flow
+// with an in-app `<texra-diff-view>` mounted inside a wa-dialog overlay.
+// Mirrors the settings-overlay pattern so the two surfaces share UX +
+// keyboard handling (Esc dismisses; clicking the close button hides the
+// dialog without unmounting it).
+
+interface DiffViewElement extends HTMLElement {
+  originalText: string;
+  proposedText: string;
+  language: string;
+}
+
+let diffDialog: WaDialog | null = null;
+let diffViewElement: DiffViewElement | null = null;
+let diffTitleElement: HTMLElement | null = null;
+let diffSubtitleElement: HTMLElement | null = null;
+
+function ensureDiffDialog(): WaDialog {
+  if (diffDialog) return diffDialog;
+  const dialog = document.createElement('wa-dialog') as WaDialog;
+  dialog.classList.add('desktop-diff-overlay');
+  dialog.withoutHeader = true;
+  dialog.lightDismiss = false;
+  dialog.setAttribute('aria-label', 'Compare files');
+
+  const body = document.createElement('section');
+  body.classList.add('desktop-diff-body');
+
+  const header = document.createElement('header');
+  header.classList.add('desktop-diff-header');
+  const titleEl = document.createElement('h2');
+  titleEl.classList.add('desktop-diff-title');
+  titleEl.textContent = 'Compare';
+  diffTitleElement = titleEl;
+  const subtitleEl = document.createElement('p');
+  subtitleEl.classList.add('desktop-diff-subtitle');
+  diffSubtitleElement = subtitleEl;
+  header.append(titleEl, subtitleEl);
+
+  // Lazily create the <texra-diff-view> on first show (Monaco is heavy
+  // to import; defer until actually needed). The element is reused
+  // across re-opens — Lit's @property setter handles content swaps.
+  const view = document.createElement('texra-diff-view') as DiffViewElement;
+  view.classList.add('desktop-diff-view');
+  diffViewElement = view;
+
+  body.append(header, view);
+  dialog.append(body);
+
+  // Explicit close button — wa-dialog handles Esc natively but we want a
+  // visible affordance to match the settings overlay.
+  const close = document.createElement('wa-button');
+  close.classList.add('desktop-diff-close');
+  close.setAttribute('appearance', 'plain');
+  close.setAttribute('size', 'small');
+  close.setAttribute('aria-label', 'Close diff');
+  close.setAttribute('title', 'Close diff');
+  render(waIcon('xmark'), close);
+  close.addEventListener('click', () => {
+    dialog.open = false;
+  });
+  dialog.append(close);
+
+  appRoot.append(dialog);
+  diffDialog = dialog;
+  return dialog;
+}
+
+function openDiffOverlay(payload: DesktopShowDiffMessage): void {
+  const dialog = ensureDiffDialog();
+  if (diffTitleElement) diffTitleElement.textContent = payload.title;
+  if (diffSubtitleElement) {
+    // Show the proposed path (the file the user is reviewing) — fall
+    // back to the original or empty string. This is purely informative;
+    // payload contains the full text already.
+    diffSubtitleElement.textContent =
+      payload.proposedPath ?? payload.originalPath ?? '';
+  }
+  if (diffViewElement) {
+    diffViewElement.originalText = payload.originalText;
+    diffViewElement.proposedText = payload.proposedText;
+    diffViewElement.language = payload.language;
+  }
+  dialog.open = true;
+}
+
+function closeDiffOverlay(): void {
+  if (diffDialog) diffDialog.open = false;
+}
+
+// =============================================================================
 // Onboarding + command palette
 // =============================================================================
 
@@ -669,6 +769,18 @@ function isThemeMessage(message: unknown): message is SetThemeMessage {
   return SetThemeMessageSchema.safeParse(message).success;
 }
 
+function isDesktopShowDiffMessage(
+  message: unknown,
+): message is DesktopShowDiffMessage {
+  return DesktopShowDiffMessageSchema.safeParse(message).success;
+}
+
+function isDesktopCloseDiffMessage(
+  message: unknown,
+): message is DesktopCloseDiffMessage {
+  return DesktopCloseDiffMessageSchema.safeParse(message).success;
+}
+
 // Bridge for legacy `desktop:setRoute` IPC. The shell no longer has four
 // routes, so map the old route names onto the new surfaces:
 //   - 'main' / 'progress' → center pane (clear active stream for 'main')
@@ -716,6 +828,18 @@ window.addEventListener('message', (event) => {
   }
   if (isDesktopSetLogMessage(event.data)) {
     renderLogSnapshot(event.data);
+    return;
+  }
+  if (isDesktopShowDiffMessage(event.data)) {
+    // Parse again to pick up the schema's `.default('plaintext')` for
+    // language — the type guard accepts it either way, but we want the
+    // runtime fallback so a missing language doesn't break Monaco.
+    const parsed = DesktopShowDiffMessageSchema.safeParse(event.data);
+    if (parsed.success) openDiffOverlay(parsed.data);
+    return;
+  }
+  if (isDesktopCloseDiffMessage(event.data)) {
+    closeDiffOverlay();
     return;
   }
   // Progress view messages: dispatch directly into the shared messageDispatcher
@@ -909,4 +1033,10 @@ function renderLogSnapshot(message: DesktopSetLogMessage): void {
 // Re-export references that downstream modules (or future hooks) may want to
 // drive imperatively. Keeps the API surface explicit even though the desktop
 // shell currently consumes them directly.
-export { setRoute, openSettingsOverlay, openLogsDrawer };
+export {
+  setRoute,
+  openSettingsOverlay,
+  openLogsDrawer,
+  openDiffOverlay,
+  closeDiffOverlay,
+};
