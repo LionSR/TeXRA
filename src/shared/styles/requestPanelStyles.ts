@@ -493,10 +493,7 @@ export const requestPanelStyles: CSSResult = css`
 
   .workflow-proposal__file-name:hover {
     text-decoration: underline;
-    color: var(
-      --texra-textLink-activeForeground,
-      var(--wa-color-text-link)
-    );
+    color: var(--texra-textLink-activeForeground, var(--wa-color-text-link));
   }
 
   .workflow-proposal__file-name--readonly {
