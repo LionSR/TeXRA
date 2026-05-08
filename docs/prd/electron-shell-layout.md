@@ -1,11 +1,10 @@
-# PRD — Electron desktop layout adaptation
+# PRD: Electron desktop layout adaptation
 
-**Status:** Draft
-**Owner:** TBD
-**Branch:** `claude/improve-electron-app-abqQx`
-**Scope:** Layout-only adaptation of the VS Code extension's UX into the Electron window, plus a small refactor to enable component sharing.
+## Status: Draft
 
 ## 1. Summary
+
+Layout-only adaptation of the VS Code extension's UX into the Electron window, plus a small refactor to enable component sharing.
 
 Replace the Electron app's tab routing and workspace-explorer sidebar with a three-pane window layout that mounts the existing extension components (`<main-app>`, `<stream-tabs>`, a new `<stream-conversation>`, `<settings-app>`) without changing their content or behavior. Refactor the Progress view's state to a module-level singleton so the rail and the conversation can be mounted independently and stay in sync.
 
