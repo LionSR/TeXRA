@@ -231,7 +231,7 @@ export class ToolsTab extends LitElement {
       .desktop-settings {
         padding: var(--wa-space-xs);
         margin-bottom: var(--wa-space-xs);
-        background-color: var(--texra-editor-inactiveSelectionBackground);
+        background-color: var(--wa-color-neutral-fill-quiet);
         border-radius: var(--border-radius);
       }
 

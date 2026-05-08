@@ -24,8 +24,8 @@ const COMPACTION_THRESHOLD = 75;
 
 /** Solid fill color based on context utilization. */
 function fillColor(percent: number): string {
-  if (percent <= 65) return 'var(--texra-testing-iconPassed, #73c991)';
-  if (percent <= 80) return 'var(--texra-editorWarning-foreground, #cca700)';
+  if (percent <= 65) return 'var(--wa-color-success-on-quiet, #73c991)';
+  if (percent <= 80) return 'var(--wa-color-warning-on-quiet, #cca700)';
   return 'var(--texra-testing-iconFailed, #f48771)';
 }
 
@@ -78,7 +78,7 @@ export class UsagePanel extends LitElement {
         position: relative;
         width: 80px;
         height: 6px;
-        background: var(--texra-editorWidget-border, rgba(128, 128, 128, 0.3));
+        background: var(--wa-color-surface-border, rgba(128, 128, 128, 0.3));
         border-radius: var(--border-radius);
         overflow: hidden;
       }

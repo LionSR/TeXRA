@@ -82,7 +82,7 @@ export const logEntryStyles = css`
   .xml-link-container {
     margin-top: var(--wa-space-2xs);
     padding-top: var(--wa-space-2xs);
-    border-top: var(--border-thin) solid var(--texra-widget-border);
+    border-top: var(--border-thin) solid var(--wa-color-surface-border);
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -283,7 +283,7 @@ export const logEntryStyles = css`
     font-size: var(--texra-editor-font-size, var(--font-size));
     background-color: var(
       --texra-terminal-background,
-      var(--texra-editor-background, transparent)
+      var(--wa-color-surface-default, transparent)
     );
     color: var(--texra-terminal-foreground, var(--wa-color-text-normal));
   }
