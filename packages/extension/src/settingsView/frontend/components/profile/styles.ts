@@ -61,7 +61,7 @@ export const profileViewStyles: CSSResult = css`
     font-size: 0.95em;
     padding: 0 var(--wa-space-3xs);
     border-radius: var(--border-radius-small);
-    background: var(--texra-textBlockQuote-background);
+    background: var(--wa-color-surface-lowered);
   }
 
   .not-authenticated {
@@ -117,7 +117,7 @@ export const profileViewStyles: CSSResult = css`
   }
 
   .badge.visibility-badge.public {
-    background: var(--texra-testing-iconPassed);
+    background: var(--wa-color-success-fill-loud);
     color: var(--wa-color-brand-on-loud);
   }
 
@@ -316,7 +316,7 @@ export const profileViewStyles: CSSResult = css`
     flex-direction: column;
     gap: var(--wa-space-xs);
     padding: var(--wa-space-xs);
-    background: var(--texra-textBlockQuote-background);
+    background: var(--wa-color-surface-lowered);
     border-radius: var(--border-radius);
   }
 
@@ -357,7 +357,7 @@ export const profileViewStyles: CSSResult = css`
   .provider-setting-warning {
     color: var(
       --texra-inputValidation-warningForeground,
-      var(--texra-editorWarning-foreground)
+      var(--wa-color-warning-on-quiet)
     );
   }
 
@@ -593,7 +593,7 @@ export const profileViewStyles: CSSResult = css`
 
   .deprecated-models {
     border-top: var(--border-thin) solid var(--color-border);
-    background: var(--texra-textBlockQuote-background);
+    background: var(--wa-color-surface-lowered);
   }
 
   /* Unavailable model rows (not in relay allowlist) */
@@ -615,7 +615,7 @@ export const profileViewStyles: CSSResult = css`
   .model-row-icon--warning {
     --_icon-color: var(
       --texra-list-warningForeground,
-      var(--texra-editorWarning-foreground)
+      var(--wa-color-warning-on-quiet)
     );
   }
 `;
