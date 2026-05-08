@@ -6,6 +6,7 @@
 // Third-party imports
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
@@ -70,38 +71,8 @@ export class ToolCard extends LitElement {
         white-space: nowrap;
       }
 
-      .tool-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--spacing-small);
-        padding: var(--border-thin) var(--spacing-small);
-        font-size: var(--font-size-xs);
-        border-radius: var(--border-radius);
+      wa-tag.tool-badge {
         white-space: nowrap;
-        font-weight: var(--font-weight-medium);
-      }
-
-      .tool-badge--available {
-        color: var(--texra-testing-iconPassed, #73c991);
-        background: color-mix(
-          in srgb,
-          var(--texra-testing-iconPassed, #73c991) 12%,
-          transparent
-        );
-      }
-
-      .tool-badge--not-found {
-        color: var(--texra-testing-iconFailed, #f48771);
-        background: color-mix(
-          in srgb,
-          var(--texra-testing-iconFailed, #f48771) 12%,
-          transparent
-        );
-      }
-
-      .tool-badge--unknown {
-        color: var(--texra-badge-foreground);
-        background: var(--texra-badge-background, rgba(128, 128, 128, 0.15));
       }
 
       .tool-description {
@@ -264,11 +235,23 @@ export class ToolCard extends LitElement {
 
   private static readonly STATUS_CONFIG: Record<
     ToolDashboardItem['status'],
-    { icon: string; label: string }
+    {
+      icon: string;
+      label: string;
+      variant: 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
+    }
   > = {
-    available: { icon: 'check', label: 'Ready' },
-    'not-found': { icon: 'warning', label: 'Needs setup' },
-    unknown: { icon: 'question', label: 'Not checked' },
+    available: { icon: 'check', label: 'Ready', variant: 'success' },
+    'not-found': {
+      icon: 'warning',
+      label: 'Needs setup',
+      variant: 'danger',
+    },
+    unknown: {
+      icon: 'question',
+      label: 'Not checked',
+      variant: 'neutral',
+    },
   };
 
   private renderBadge(): TemplateResult {
@@ -277,10 +260,10 @@ export class ToolCard extends LitElement {
       ToolCard.STATUS_CONFIG[status] ?? ToolCard.STATUS_CONFIG.unknown;
 
     return html`
-      <span class="tool-badge tool-badge--${status}">
+      <wa-tag class="tool-badge" variant=${config.variant} size="small">
         <wa-icon library="texra" name=${config.icon}></wa-icon>
         ${this.item.statusLabel ?? config.label}
-      </span>
+      </wa-tag>
     `;
   }
 

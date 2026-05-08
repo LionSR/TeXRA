@@ -4,6 +4,7 @@
  */
 
 // Third-party imports
+import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
@@ -273,11 +274,15 @@ export class ModelSelectionList extends LitElement {
         : keyStatus?.status === 'env'
           ? 'Env key'
           : 'No key';
+    const keyStatusVariant: 'success' | 'neutral' =
+      keyStatus?.status === 'set' ? 'success' : 'neutral';
     const providerKeyActions = keyStatus
       ? html`
-          <span
-            class="provider-group-key-status key-status-badge ${keyStatus.status}"
-            >${keyStatusLabel}</span
+          <wa-tag
+            class="provider-group-key-status"
+            variant=${keyStatusVariant}
+            size="small"
+            >${keyStatusLabel}</wa-tag
           >
           ${renderLabeledActionButton({
             icon: 'key',
