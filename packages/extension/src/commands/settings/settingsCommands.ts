@@ -4,7 +4,6 @@ import * as vscode from 'vscode';
 // Local imports
 import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
-import type { AgentCategory } from '@shared/schemas/agent';
 
 export const settingsViewCommands = {
   showSettingsView: 'texra.showSettingsView',
@@ -30,6 +29,10 @@ export function initializeSettingsViewProvider(
   return settingsViewProvider;
 }
 
+export function getSettingsViewProvider(): SettingsViewProvider | null {
+  return settingsViewProvider;
+}
+
 export async function showSettingsView(): Promise<void> {
   if (!settingsViewProvider) {
     void vscode.window.showErrorMessage(
@@ -40,40 +43,19 @@ export async function showSettingsView(): Promise<void> {
   await settingsViewProvider.showSettingsView();
 }
 
+/**
+ * Most settings view-routing commands are now registered through the
+ * shared command registry in `extensionCommandSurface.ts` (mirroring the
+ * desktop's `DESKTOP_COMMAND_HANDLERS`). The remaining per-command
+ * registration here covers `texra.showGitSettings`, which is not yet on
+ * the desktop's menu surface so it stays VS Code-only for now.
+ */
 export function registerSettingsViewCommands(
   context: vscode.ExtensionContext,
 ): void {
   initializeSettingsViewProvider(context);
 
   context.subscriptions.push(
-    // Primary commands
-    vscode.commands.registerCommand(settingsViewCommands.showSettingsView, () =>
-      settingsViewProvider?.showSettingsView(),
-    ),
-    vscode.commands.registerCommand(settingsViewCommands.showDashboard, () =>
-      settingsViewProvider?.showSettingsView(),
-    ),
-    // Tab-specific commands
-    vscode.commands.registerCommand(settingsViewCommands.showMemory, () =>
-      settingsViewProvider?.showSettingsView(SETTINGS_TAB.MEMORY),
-    ),
-    vscode.commands.registerCommand(settingsViewCommands.showHistory, () =>
-      settingsViewProvider?.showSettingsView(SETTINGS_TAB.HISTORY),
-    ),
-    vscode.commands.registerCommand(settingsViewCommands.showModels, () =>
-      settingsViewProvider?.showSettingsView(SETTINGS_TAB.MODELS),
-    ),
-    vscode.commands.registerCommand(
-      settingsViewCommands.showAgents,
-      (subTab?: AgentCategory) =>
-        settingsViewProvider?.showSettingsView(SETTINGS_TAB.AGENTS, subTab),
-    ),
-    vscode.commands.registerCommand(settingsViewCommands.showTools, () =>
-      settingsViewProvider?.showSettingsView(SETTINGS_TAB.TOOLS),
-    ),
-    vscode.commands.registerCommand(settingsViewCommands.showMultiAgent, () =>
-      settingsViewProvider?.showSettingsView(SETTINGS_TAB.MULTI_AGENT),
-    ),
     vscode.commands.registerCommand(settingsViewCommands.showGitSettings, () =>
       settingsViewProvider?.showSettingsView(SETTINGS_TAB.GIT),
     ),
