@@ -17,6 +17,8 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/select/select.js';
+import '@awesome.me/webawesome/dist/components/option/option.js';
 
 // Local imports - shared styles
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -136,14 +138,13 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
                       name="sparkle"
                       aria-hidden="true"
                     ></wa-icon>
-                    <vscode-single-select
+                    <wa-select
                       class="proposal-agent-dropdown"
-                      position="below"
                       .value=${currentAgent}
                       @change=${this.handleAgentSelectChange}
                     >
                       ${renderAgentOptions(agentOptions, currentAgent)}
-                    </vscode-single-select>
+                    </wa-select>
                   </div>
                 `
               : html`<span class="workflow-proposal__agent"
@@ -157,14 +158,13 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
                       name="robot"
                       aria-hidden="true"
                     ></wa-icon>
-                    <vscode-single-select
+                    <wa-select
                       class="proposal-model-dropdown"
-                      position="below"
                       .value=${currentModel}
                       @change=${this.handleSelectChange}
                     >
                       ${renderModelOptions(modelOptions, currentModel)}
-                    </vscode-single-select>
+                    </wa-select>
                   </div>
                 `
               : html`<span class="workflow-proposal__model"
