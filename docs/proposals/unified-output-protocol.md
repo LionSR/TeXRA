@@ -106,7 +106,7 @@ After all built-in agents are migrated:
 - Drop `MULTIPLE_SUFFIX`, `multiplePath`, `groupByBaseName` pairing logic, `preferMultiple` parameter from `agentRegistry.ts` and `agentLoad.ts`.
 - Drop the dual code paths in model handlers, `RemoteAgentLoader.ts`, `agentHandlers.ts`, `register.ts`.
 - Drop `hasMultiplePath` from `shared/schemas/settingsViewMessages.ts`.
-- Update `src/frontend/setup.ts` `LEGACY_AGENT_FILES` to clean stale `_multiple` files from GlobalStorage.
+- Update `packages/extension/src/frontend/setup.ts` `LEGACY_AGENT_FILES` to clean stale `_multiple` files from GlobalStorage.
 
 ### Phase 4: Legacy custom agents
 
