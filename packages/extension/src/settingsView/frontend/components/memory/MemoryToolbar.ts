@@ -24,7 +24,7 @@ export class MemoryToolbar extends LitElement {
       }
 
       .view-header {
-        gap: var(--spacing-medium);
+        gap: var(--wa-space-xs);
       }
     `,
   ];

@@ -40,7 +40,7 @@ export class FollowUpInput extends LitElement {
 
       :host([visible]) {
         display: block;
-        margin-top: var(--spacing-medium);
+        margin-top: var(--wa-space-xs);
         max-width: 100%;
       }
 
@@ -51,8 +51,8 @@ export class FollowUpInput extends LitElement {
       .follow-up-container {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
-        padding: var(--spacing-small) 0;
-        gap: var(--spacing-small);
+        padding: var(--wa-space-2xs) 0;
+        gap: var(--wa-space-2xs);
         min-width: 0;
       }
 
@@ -65,7 +65,7 @@ export class FollowUpInput extends LitElement {
       .follow-up-input-row {
         display: flex;
         align-items: flex-end;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
         grid-column: 1 / -1;
         min-width: 0;
       }
@@ -97,7 +97,7 @@ export class FollowUpInput extends LitElement {
         display: flex;
         flex-direction: column !important;
         align-items: center;
-        gap: var(--spacing-small);
+        gap: var(--wa-space-2xs);
       }
     `,
   ];

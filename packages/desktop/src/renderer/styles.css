@@ -40,12 +40,12 @@ wa-button.desktop-nav-button::part(base) {
 }
 
 wa-button.desktop-nav-button::part(base):hover {
-  background: var(--texra-toolbar-hoverBackground);
+  background: var(--wa-color-surface-raised);
 }
 
 wa-button.desktop-nav-button[aria-pressed='true']::part(base) {
   border-color: var(--texra-focusBorder);
-  background: var(--texra-button-secondaryBackground);
+  background: var(--wa-color-neutral-fill-quiet);
 }
 
 wa-button.desktop-command-button::part(base),
@@ -64,7 +64,7 @@ wa-button.desktop-command-button {
 
 wa-button.desktop-command-button::part(base):hover,
 wa-button.desktop-folder-button::part(base):hover {
-  background: var(--texra-toolbar-hoverBackground);
+  background: var(--wa-color-surface-raised);
 }
 
 .desktop-view {
@@ -127,7 +127,7 @@ wa-button.desktop-explorer-icon-button::part(base) {
 }
 
 wa-button.desktop-explorer-icon-button::part(base):hover {
-  background: var(--texra-toolbar-hoverBackground);
+  background: var(--wa-color-surface-raised);
 }
 
 wa-button.desktop-explorer-icon-button[disabled]::part(base) {
@@ -472,12 +472,12 @@ wa-button.desktop-primary-button::part(base) {
 
 wa-button.desktop-secondary-button::part(base) {
   border: 1px solid var(--texra-button-border);
-  background: var(--texra-button-secondaryBackground);
-  color: var(--texra-button-secondaryForeground);
+  background: var(--wa-color-neutral-fill-quiet);
+  color: var(--wa-color-neutral-on-quiet);
 }
 
 wa-button.desktop-secondary-button::part(base):hover {
-  background: var(--texra-button-secondaryHoverBackground);
+  background: var(--wa-color-neutral-fill-loud);
 }
 
 /* wa-dialog supplies the backdrop, modal positioning, focus trap, and panel
@@ -501,7 +501,7 @@ wa-dialog.desktop-onboarding {
   width: 38px;
   height: 38px;
   border-radius: 6px;
-  background: var(--texra-button-secondaryBackground);
+  background: var(--wa-color-neutral-fill-quiet);
   color: var(--texra-button-background);
   font-size: 20px;
 }

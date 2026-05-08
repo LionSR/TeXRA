@@ -5,7 +5,7 @@ export const commonViewStyles: CSSResult = css`
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--spacing-xlarge);
+    margin-bottom: var(--wa-space-l);
   }
 
   .view-header h1,
@@ -20,7 +20,7 @@ export const commonViewStyles: CSSResult = css`
   .list-item {
     border: var(--border-thin) solid var(--texra-panelSection-border);
     border-radius: var(--border-radius-large);
-    padding: var(--spacing-medium);
+    padding: var(--wa-space-xs);
     background-color: var(--texra-editor-background);
   }
 
@@ -36,11 +36,11 @@ export const commonViewStyles: CSSResult = css`
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
   }
 
   .collapsible {
-    margin-top: var(--spacing-small);
+    margin-top: var(--wa-space-2xs);
   }
 
   /*
@@ -80,7 +80,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .panel-collapsible::part(header) {
-    padding: var(--spacing-small) var(--spacing-medium);
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
     background-color: var(--texra-sideBarSectionHeader-background, transparent);
     color: var(--texra-sideBarTitle-foreground, var(--texra-foreground));
   }
@@ -88,7 +88,7 @@ export const commonViewStyles: CSSResult = css`
   /* "body" part is used by vscode-collapsible; "content" part by wa-details. */
   .panel-collapsible::part(body),
   .panel-collapsible::part(content) {
-    padding: 0 var(--spacing-small) var(--spacing-small);
+    padding: 0 var(--wa-space-2xs) var(--wa-space-2xs);
   }
 
   /*
@@ -116,7 +116,7 @@ export const commonViewStyles: CSSResult = css`
   vscode-toolbar-container {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
     flex-wrap: nowrap;
   }
 
@@ -127,7 +127,7 @@ export const commonViewStyles: CSSResult = css`
   .action-button-group {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
     flex-wrap: nowrap;
   }
 
@@ -138,7 +138,7 @@ export const commonViewStyles: CSSResult = css`
   /* Compact action button (with text) — stricter IDE-density chrome.
    * Borderless default; hover adds a subtle border (no fill swap). */
   .action-button::part(base) {
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
     min-height: 22px;
     padding: 0 6px;
     border: var(--border-thin) solid transparent;
@@ -199,12 +199,12 @@ export const commonViewStyles: CSSResult = css`
   wa-checkbox::part(label),
   wa-radio::part(label) {
     font-size: var(--font-size-sm);
-    padding-inline-start: var(--spacing-small);
+    padding-inline-start: var(--wa-space-2xs);
   }
 
   wa-checkbox::part(base),
   wa-radio::part(base) {
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
   }
 
   .clickable-link {
@@ -226,11 +226,11 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .detail-section {
-    margin: var(--spacing-small) 0;
+    margin: var(--wa-space-2xs) 0;
   }
 
   .detail-content {
-    padding: var(--spacing-tiny) 0 var(--spacing-small) var(--spacing-large);
+    padding: var(--wa-space-3xs) 0 var(--wa-space-2xs) var(--wa-space-s);
   }
 
   .detail-list {
@@ -241,14 +241,14 @@ export const commonViewStyles: CSSResult = css`
   .detail-item {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
   }
 
   .details-summary {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
-    padding: var(--spacing-tiny) 0;
+    gap: var(--wa-space-2xs);
+    padding: var(--wa-space-3xs) 0;
     cursor: pointer;
     list-style: none;
     user-select: none;
@@ -287,8 +287,8 @@ export const commonViewStyles: CSSResult = css`
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--spacing-medium);
-    margin-top: calc(var(--spacing-xlarge) * 2);
+    gap: var(--wa-space-xs);
+    margin-top: calc(var(--wa-space-l) * 2);
     color: var(--color-text-secondary);
     font-style: italic;
   }
@@ -334,8 +334,8 @@ export const commonViewStyles: CSSResult = css`
   .tab-action-btn {
     display: inline-flex;
     align-items: center;
-    gap: var(--spacing-small);
-    padding: var(--spacing-tiny) var(--spacing-small);
+    gap: var(--wa-space-2xs);
+    padding: var(--wa-space-3xs) var(--wa-space-2xs);
     font-size: var(--font-size-xs);
     font-family: inherit;
     color: var(--color-text-secondary);
@@ -366,10 +366,10 @@ export const commonViewStyles: CSSResult = css`
   .settings-reminder {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
-    column-gap: var(--spacing-medium);
-    row-gap: var(--spacing-small);
-    padding: var(--spacing-medium);
-    margin-bottom: var(--spacing-large);
+    column-gap: var(--wa-space-xs);
+    row-gap: var(--wa-space-2xs);
+    padding: var(--wa-space-xs);
+    margin-bottom: var(--wa-space-s);
     border: var(--border-thin) solid var(--texra-focusBorder);
     border-radius: var(--border-radius);
     background: var(--texra-editor-background);
@@ -396,7 +396,7 @@ export const commonViewStyles: CSSResult = css`
   .settings-reminder-body {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
     min-width: 0;
   }
 
@@ -404,13 +404,13 @@ export const commonViewStyles: CSSResult = css`
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
   }
 
   .settings-reminder-list {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -419,7 +419,7 @@ export const commonViewStyles: CSSResult = css`
   .settings-reminder-list li {
     display: flex;
     align-items: flex-start;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
   }
 
   .settings-reminder-step {
@@ -517,8 +517,8 @@ export const filledButtonStyles: CSSResult = css`
   .filled-button {
     display: inline-flex;
     align-items: center;
-    gap: var(--spacing-small);
-    padding: var(--spacing-small) var(--spacing-medium);
+    gap: var(--wa-space-2xs);
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
     font-size: var(--font-size);
     font-family: inherit;
     color: var(--texra-button-foreground);
@@ -545,11 +545,11 @@ export const filledButtonStyles: CSSResult = css`
   }
 
   .filled-button--secondary {
-    color: var(--texra-button-secondaryForeground, inherit);
-    background: var(--texra-button-secondaryBackground, transparent);
+    color: var(--wa-color-neutral-on-quiet, inherit);
+    background: var(--wa-color-neutral-fill-quiet, transparent);
   }
 
   .filled-button--secondary:hover {
-    background: var(--texra-button-secondaryHoverBackground, transparent);
+    background: var(--wa-color-neutral-fill-loud, transparent);
   }
 `;
