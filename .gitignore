@@ -31,3 +31,8 @@ scripts/Heap-20260221T154935.heapsnapshot
 scripts/analyze_heap.py
 .claude/projects
 .claude/worktrees
+
+# Playwright e2e: per-run artifacts (screenshots baselines under
+# tests/e2e/__screenshots__/ ARE committed — only the run output is ignored).
+packages/desktop/tests/e2e/test-results/
+packages/desktop/playwright-report/
