@@ -31,6 +31,11 @@ const domGlobalKeys = [
   'MouseEvent',
   'ShadowRoot',
   'Node',
+  'AbortController',
+  'AbortSignal',
+  'getComputedStyle',
+  'requestAnimationFrame',
+  'cancelAnimationFrame',
 ] as const;
 
 const DEFAULT_VALIDITY = {
@@ -46,6 +51,48 @@ const DEFAULT_VALIDITY = {
   valid: true,
   valueMissing: false,
 } satisfies ValidityState;
+
+function installAnimationPolyfill(window: JSDOM['window']): void {
+  // jsdom doesn't implement Element.getAnimations; wa-dialog's
+  // animateWithClass calls it to detect when no CSS animation is running and
+  // resolve immediately. Returning [] means "no animations" — animateWithClass
+  // resolves on the next raf, which matches the visible behavior in tests.
+  const proto = window.Element?.prototype as
+    | (Element & { getAnimations?: () => unknown[] })
+    | undefined;
+  if (!proto) return;
+  if (typeof proto.getAnimations !== 'function') {
+    proto.getAnimations = () => [];
+  }
+}
+
+function installDialogPolyfill(window: JSDOM['window']): void {
+  // jsdom (as of 24.x) does not implement HTMLDialogElement's showModal/close.
+  // wa-dialog calls these in firstUpdated; without them, attaching wa-dialog
+  // throws and tests can't render the component. Provide a minimal polyfill
+  // that only flips the `open` attribute.
+  const proto = window.HTMLDialogElement?.prototype as
+    | (HTMLDialogElement & { showModal?: () => void; close?: () => void })
+    | undefined;
+  if (!proto) return;
+  if (typeof proto.showModal !== 'function') {
+    proto.showModal = function showModal(this: HTMLDialogElement) {
+      this.setAttribute('open', '');
+    };
+  }
+  if (typeof proto.show !== 'function') {
+    (proto as HTMLDialogElement & { show: () => void }).show =
+      function show(this: HTMLDialogElement) {
+        this.setAttribute('open', '');
+      };
+  }
+  if (typeof proto.close !== 'function') {
+    proto.close = function close(this: HTMLDialogElement) {
+      this.removeAttribute('open');
+      this.dispatchEvent(new window.Event('close'));
+    };
+  }
+}
 
 function installElementInternalsPolyfill(window: TestDomWindow): void {
   const ElementInternalsCtor = window.ElementInternals;
@@ -154,6 +201,24 @@ export function useLitComponentTestDom(
       MouseEvent: dom.window.MouseEvent,
       ShadowRoot: dom.window.ShadowRoot,
       Node: dom.window.Node,
+      // wa-dialog (and other Web Awesome components) rely on these browser
+      // globals; use the jsdom-backed implementations so AbortSignal/Event
+      // identity matches the EventTarget instances they're attached to.
+      AbortController: dom.window.AbortController,
+      AbortSignal: dom.window.AbortSignal,
+      getComputedStyle: dom.window.getComputedStyle.bind(dom.window),
+      // jsdom doesn't ship requestAnimationFrame; emulate it with setTimeout.
+      // wa-dialog's animateWithClass and other Web Awesome components use raf
+      // for "next paint" callbacks — a 0ms timeout is functionally equivalent
+      // for unit-test timing.
+      requestAnimationFrame: ((cb: FrameRequestCallback) =>
+        setTimeout(() => cb(performance.now()), 0) as unknown as number) as (
+        cb: FrameRequestCallback,
+      ) => number,
+      cancelAnimationFrame: ((handle: number) =>
+        clearTimeout(handle as unknown as ReturnType<typeof setTimeout>)) as (
+        handle: number,
+      ) => void,
     } satisfies Record<(typeof domGlobalKeys)[number], unknown>;
 
     for (const key of domGlobalKeys) {
@@ -169,6 +234,8 @@ export function useLitComponentTestDom(
     }
 
     installElementInternalsPolyfill(dom.window);
+    installDialogPolyfill(dom.window);
+    installAnimationPolyfill(dom.window);
     await importComponents();
   });
 
