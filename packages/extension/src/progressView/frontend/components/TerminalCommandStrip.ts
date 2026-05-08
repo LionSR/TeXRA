@@ -34,13 +34,13 @@ export class TerminalCommandStrip extends LitElement {
       font-size: var(--wa-editor-font-size, var(--font-size-sm));
       max-height: min(32vh, 320px);
       overflow: auto;
-      white-space: pre;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
     }
 
-    /* flex-shrink: 0 keeps the command at its intrinsic width so the strip
-       can actually scroll horizontally for long commands. */
     .strip > span {
-      flex-shrink: 0;
+      min-width: 0;
     }
 
     .prompt {

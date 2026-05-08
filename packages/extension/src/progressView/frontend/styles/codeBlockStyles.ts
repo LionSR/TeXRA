@@ -35,11 +35,16 @@ export const codeBlockStyles = css`
     background-color: var(--wa-color-surface-default);
     border: var(--border-thin) solid var(--wa-color-surface-border);
     border-radius: 0;
-    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   .code-block pre code {
     display: block;
+    white-space: inherit;
+    word-break: inherit;
+    overflow-wrap: inherit;
   }
 
   .code-block-copy {
@@ -85,12 +90,17 @@ export const codeBlockStyles = css`
   /* Syntax highlighted code blocks */
   pre.hljs {
     padding: var(--wa-space-2xs);
-    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   pre.hljs code {
     background: transparent;
     padding: 0;
+    white-space: inherit;
+    word-break: inherit;
+    overflow-wrap: inherit;
   }
 
   /* Highlight.js theme - VS Code colors for Shadow DOM */
