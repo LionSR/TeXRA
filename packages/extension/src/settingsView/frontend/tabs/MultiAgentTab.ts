@@ -531,9 +531,7 @@ export class MultiAgentTab extends LitElement {
               min=${NESTED_DELEGATION_DEPTH_RANGE.min}
               max=${NESTED_DELEGATION_DEPTH_RANGE.max}
               @change=${(e: Event) =>
-                this.handleNestedDelegationMaxDepthChange(
-                  e.target as WaInput,
-                )}
+                this.handleNestedDelegationMaxDepthChange(e.target as WaInput)}
             ></wa-input>
           </div>
           <p class="reliability-description">
