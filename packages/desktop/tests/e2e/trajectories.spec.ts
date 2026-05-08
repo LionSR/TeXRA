@@ -250,3 +250,101 @@ test('rapid settings-tab switching does not crash the renderer', async () => {
   // The chrome must still be alive after the burst.
   await expect(launched.page.locator('.desktop-brand')).toBeVisible();
 });
+
+/**
+ * Trajectory 18 — in-app diff overlay (audit item C).
+ *
+ * `desktopDiffHost` posts `desktop:showDiff` to the renderer; the renderer
+ * lazy-creates a wa-dialog overlay containing `<texra-diff-view>`. We
+ * simulate the IPC by `window.postMessage`-ing the same payload and assert
+ * the dialog opens and carries the supplied title + content.
+ *
+ * Monaco is heavy (workers + WASM) so we don't wait for the editor to
+ * finish loading — only that the dialog and the `<texra-diff-view>`
+ * element exist with the right props.
+ */
+test('desktop:showDiff opens the in-app diff overlay', async () => {
+  // Reset chrome to a known state — the previous test may have left
+  // settings open.
+  await launched.page.evaluate(() => {
+    const dialogs = document.querySelectorAll('wa-dialog');
+    dialogs.forEach((d) => {
+      (d as unknown as { open: boolean }).open = false;
+    });
+  });
+
+  const payload = {
+    command: 'desktop:showDiff',
+    title: 'Compare paper.tex',
+    originalText: '\\documentclass{article}\nold body\n',
+    proposedText: '\\documentclass{article}\nnew body\n',
+    language: 'latex',
+    originalPath: '/tmp/original/paper.tex',
+    proposedPath: '/tmp/proposed/paper.tex',
+  };
+
+  await launched.page.evaluate((message) => {
+    window.postMessage(message, '*');
+  }, payload);
+
+  // Wait for the dialog to appear and open. wa-dialog reflects `open` as
+  // an attribute when set; check both since timing of wa internals
+  // varies.
+  await launched.page.waitForFunction(
+    () => {
+      const dialog = document.querySelector('wa-dialog.desktop-diff-overlay');
+      if (!dialog) return false;
+      const open = (dialog as unknown as { open: boolean }).open === true;
+      return open || dialog.hasAttribute('open');
+    },
+    undefined,
+    { timeout: 5000 },
+  );
+
+  const dialog = launched.page.locator('wa-dialog.desktop-diff-overlay');
+  await expect(dialog).toHaveCount(1);
+  // Title + subtitle are populated from the payload.
+  await expect(dialog.locator('.desktop-diff-title')).toHaveText(
+    'Compare paper.tex',
+  );
+  await expect(dialog.locator('.desktop-diff-subtitle')).toHaveText(
+    '/tmp/proposed/paper.tex',
+  );
+  // The diff component element exists with the right props (we don't
+  // wait for Monaco to finish loading — verifying the contract is enough).
+  const diffViewProps = await launched.page.evaluate(() => {
+    const el = document.querySelector(
+      'wa-dialog.desktop-diff-overlay texra-diff-view',
+    ) as
+      | (HTMLElement & {
+          originalText: string;
+          proposedText: string;
+          language: string;
+        })
+      | null;
+    if (!el) return null;
+    return {
+      originalText: el.originalText,
+      proposedText: el.proposedText,
+      language: el.language,
+    };
+  });
+  expect(diffViewProps).not.toBeNull();
+  expect(diffViewProps?.originalText).toContain('old body');
+  expect(diffViewProps?.proposedText).toContain('new body');
+  expect(diffViewProps?.language).toBe('latex');
+
+  // Close via desktop:closeDiff — the dialog should close.
+  await launched.page.evaluate(() => {
+    window.postMessage({ command: 'desktop:closeDiff' }, '*');
+  });
+  await launched.page.waitForFunction(
+    () => {
+      const dialog = document.querySelector('wa-dialog.desktop-diff-overlay');
+      if (!dialog) return true;
+      return (dialog as unknown as { open: boolean }).open === false;
+    },
+    undefined,
+    { timeout: 5000 },
+  );
+});

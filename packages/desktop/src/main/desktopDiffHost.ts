@@ -10,8 +10,31 @@ import {
 } from '@hosts/diffViewHost';
 import { computeUserPatch } from '@tools/approval/toolEditApproval';
 
+import {
+  buildDesktopShowDiffMessage,
+  monacoLanguageForFilePath,
+} from '../desktopDiffMessages.js';
+
 export interface DesktopDiffHostOptions {
+  /**
+   * Falls back to the OS default editor (writes a `.diff` patch file and
+   * calls `openPath`). Used when the renderer overlay is unavailable or
+   * `forceExternal === true`.
+   */
   openPath(filePath: string): Promise<void>;
+  /**
+   * Posts a `desktop:showDiff` IPC message to the renderer so it can
+   * mount `<texra-diff-view>` inside the wa-dialog overlay. When
+   * undefined the host falls back to the external-editor flow — keeps
+   * tests and unattended invocations working.
+   */
+  postToRenderer?(message: unknown): void;
+  /**
+   * Force the legacy external-editor flow (writes a `.diff` patch file).
+   * Useful for headless tests and as an opt-out if the in-app overlay
+   * misbehaves. Defaults to `false` (prefer the in-app overlay).
+   */
+  forceExternal?: boolean;
 }
 
 export function createDesktopDiffHost(
@@ -26,6 +49,30 @@ export function createDesktopDiffHost(
       readFile(original.filePath, 'utf8'),
       readFile(proposed.filePath, 'utf8'),
     ]);
+
+    // Prefer the in-app overlay when wired. Falling back to the external
+    // editor is intentional for headless tests + the audit-item-C escape
+    // hatch (`forceExternal`).
+    if (options.postToRenderer && !options.forceExternal) {
+      // Pick a language hint from the proposed file extension; the
+      // proposed path is the one the user is reviewing for acceptance,
+      // so its extension wins over the (possibly stale) original.
+      const language = monacoLanguageForFilePath(proposed.filePath);
+      options.postToRenderer(
+        buildDesktopShowDiffMessage({
+          title,
+          originalText: originalContent,
+          proposedText: proposedContent,
+          language,
+          originalPath: original.filePath,
+          proposedPath: proposed.filePath,
+        }),
+      );
+      return { original, proposed, title };
+    }
+
+    // External-editor fallback: keep the previous behaviour — write a
+    // unified patch file to a tmp dir and hand off via `openPath`.
     const patch =
       computeUserPatch(originalContent, proposedContent) ??
       `No textual changes for ${path.basename(proposed.filePath)}.\n`;

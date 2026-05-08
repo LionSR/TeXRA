@@ -220,6 +220,11 @@ function createWindow(options: {
     opener: previewHost,
     diff: createDesktopDiffHost({
       openPath: previewHost.openPath,
+      // Audit item C / trajectory #18: prefer the in-app overlay
+      // (<texra-diff-view> inside a wa-dialog). The external-editor
+      // path is preserved as a fallback when `postToRenderer` is
+      // unavailable or `forceExternal` is set.
+      postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     }),
     confirmAcceptFile: async (message) => {
       const result = await dialog.showMessageBox(window, {
