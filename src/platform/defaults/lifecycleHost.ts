@@ -17,7 +17,7 @@ export function createLifecycleHost(
     [SHUTDOWN_PHASE.BEFORE]: new Set(),
     [SHUTDOWN_PHASE.ON]: new Set(),
   };
-  let running = false;
+  let shutdownPromise: Promise<void> | undefined;
 
   const onError =
     options.onError ??
@@ -48,11 +48,15 @@ export function createLifecycleHost(
         },
       };
     },
-    async runShutdown() {
-      if (running) return;
-      running = true;
-      await runPhase(SHUTDOWN_PHASE.BEFORE);
-      await runPhase(SHUTDOWN_PHASE.ON);
+    runShutdown() {
+      // Cache the in-flight promise so concurrent callers (e.g. a second
+      // before-quit firing during the first shutdown) await the same drain
+      // instead of getting an immediately-resolved noop.
+      shutdownPromise ??= (async () => {
+        await runPhase(SHUTDOWN_PHASE.BEFORE);
+        await runPhase(SHUTDOWN_PHASE.ON);
+      })();
+      return shutdownPromise;
     },
   };
 }

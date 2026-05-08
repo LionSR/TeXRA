@@ -401,12 +401,22 @@ if (protocolLifecycle.shouldContinue) {
         interruptAllCodexSessions(),
       );
 
-      let isShuttingDown = false;
+      // before-quit semantics: hold every quit event until shutdown handlers
+      // have finished draining (a second Cmd+Q while we're mid-drain must NOT
+      // be allowed to terminate the process). Only after runShutdown resolves
+      // do we let Electron's own quit sequence proceed — and we mark
+      // shutdownStarted to avoid re-entering the runShutdown chain.
+      let shutdownStarted = false;
+      let quitting = false;
       app.on('before-quit', (event) => {
-        if (isShuttingDown) return;
+        if (quitting) return;
         event.preventDefault();
-        isShuttingDown = true;
-        void lifecycle.runShutdown().finally(() => app.quit());
+        if (shutdownStarted) return;
+        shutdownStarted = true;
+        void lifecycle.runShutdown().finally(() => {
+          quitting = true;
+          app.quit();
+        });
       });
 
       let crashReportingInitialized = false;
