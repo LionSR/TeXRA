@@ -198,19 +198,19 @@ async function assertWebviewRuntime(window, view) {
           }
         }
 
+        // The codiconUsageCount > 0 guard would be tautological inside these
+        // loops (the loop body only iterates when at least one usage was
+        // found), so we just check membership directly. If the sets are
+        // empty these loops are no-ops.
         const invalidClasses = new Set();
         const invalidIconAttrs = new Set();
         for (const className of usedCodiconClasses) {
           const iconName = className.replace(/^codicon-/, '');
-          if (codiconUsageCount > 0 && !codiconNames.has(iconName)) {
-            invalidClasses.add(className);
-          }
+          if (!codiconNames.has(iconName)) invalidClasses.add(className);
         }
         for (const iconAttr of usedCodiconIconAttrs) {
           const iconName = iconAttr.replace(/^codicon-/, '');
-          if (codiconUsageCount > 0 && !codiconNames.has(iconName)) {
-            invalidIconAttrs.add(iconAttr);
-          }
+          if (!codiconNames.has(iconName)) invalidIconAttrs.add(iconAttr);
         }
 
         if (invalidClasses.size > 0 || invalidIconAttrs.size > 0) {
