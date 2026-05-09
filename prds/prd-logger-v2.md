@@ -1,10 +1,13 @@
-# PRD: Logger v2 — structured records, host sinks, schema unified with progress
+# PRD: Logger v2 — structured records, host sinks, decoupled progress schema
 
-**Status:** Draft (v1 — extracted from `prd-cli-app.md` round 2 §23; 2026-05-05)
+**Status:** Draft (v2 — round-2 revisions landed in §15; 2026-05-08)
 **Owner:** TBD
 **Date:** 2026-05-05
 **Branch:** `claude/refactor-texra-cli-tOC5U`
 **Companions:** [`prd-runcontext-refactor.md`](./prd-runcontext-refactor.md), [`prd-cli-app.md`](./prd-cli-app.md), [`prd-electron-app.md`](./prd-electron-app.md)
+
+> **Canonical status:** §15 is the current design when it differs from earlier sections. In particular, `Logger.swapSink()`
+> replaces `BootstrapLogger.flushTo()`, and logs + progress share NDJSON transport without sharing one schema.
 
 ## 1. Summary
 
@@ -13,18 +16,21 @@ Today's logger (`src/logger/logUtils.ts`) is a serviceable VS Code-shaped string
 - Emits **`LogRecord`s** (timestamp + level + message + structured fields + group stack), not pre-formatted strings.
 - Routes every record through a per-host **`LogSink`** (extension → `vscode.OutputChannel`, desktop → `electron-log`, CLI text → stderr, CLI JSON → stdout NDJSON, CLI MCP → MCP `notifications/progress`, tests → in-memory).
 - Lives on **`RunContext`** (per `prd-runcontext-refactor.md`) — one logger per run, no module globals, no second ALS scope.
-- Shares a **single Zod schema** with the round-1 CLI progress NDJSON stream — `LogRecord` is a `ProgressEvent` with `event: "log"`. Tools that parse one parse the other.
-- Provides a **`BootstrapLogger`** that buffers records emitted before `initPlatform()` returns, then flushes them through the host's chosen sink.
+- Shares the **same NDJSON transport** as the CLI progress stream while keeping `LogRecordSchema` and
+  `ProgressEventSchema` versioned independently (per §15.1).
+- Starts on an immediate stderr sink, then uses **`Logger.swapSink()`** to hand off to the resolved host sink without
+  reordering boot-time records (per §15.2).
 
 The total kernel work is ~430 LOC new + ~130 LOC modified + ~5 LOC deleted. None of it gates a v1 CLI deliverable except the structured CLI renderer (which today's logger cannot produce).
 
 ## 2. Goals
 
 - Replace `LogBackend` (`src/platform/interfaces/log.ts`) with a `LogSink` that consumes `LogRecord` objects rather than formatted strings.
-- Unify the round-1 CLI §11.2 NDJSON event stream with the log stream — one schema, one renderer pipeline, two surface modes (text vs JSON).
+- Share the round-1 CLI §11.2 NDJSON transport with the progress stream without forcing log/progress schema lockstep.
 - Move group context off its own ALS (`src/logger/logUtils.ts:10` `contextStorage`) onto a per-`Logger` stack accessible via `withGroup`/`group`.
 - Eliminate `outputChannelFactory` (line 21) and the `channels` Map (line 19) as module-level state — every host installs one `LogSink` per run via `RunContext.log`.
-- Provide a `BootstrapLogger` so log lines emitted before `initPlatform()` returns are captured and replayed (today's `console.info` boot lines are unstructured and lose group context).
+- Provide a boot-time sink handoff (`Logger.swapSink()`) so log lines emitted before `initPlatform()` returns stay
+  ordered and structured.
 - Maintain backward compatibility: `src/logger/logUtils.ts`'s public functions (`debug`, `info`, `warn`, `error`, `runWithGroupContext`, `setOutputChannelFactory`) keep working for one release, deprecated, routing to the new logger.
 
 ## 3. Non-goals
@@ -87,6 +93,8 @@ export interface Logger {
 
   /** Per-domain child — adds a static field to every emission. Cheap. */
   child(fields: LogFields): Logger;
+  /** Swap to a new sink after boot; awaits the previous sink's flush/close hooks. */
+  swapSink(next: LogSink): Promise<void>;
 }
 ```
 
@@ -104,6 +112,7 @@ export interface LogRecord {
 export interface LogSink {
   write(record: LogRecord): void;
   flush?(): Promise<void>;
+  close?(): Promise<void>;
 }
 ```
 
@@ -338,3 +347,154 @@ LogRecord (structured) + LogSink (host port) + BootstrapLogger (pre-init buffer)
 ```
 
 The logger gets honest about being structured. The CLI's two output pipelines become one. The kernel loses its second ALS scope and its last module-level state in `src/logger/`. That's the whole story.
+
+---
+
+## 15. Round 2 revisions (2026-05-08)
+
+User-feedback review after round 1 surfaces three places the design is tighter than it needs to be and one place it is too loose. The structured-record + per-host-sink + per-`RunContext` core stays — it correctly retires today's three concrete defects (§4). The four deltas:
+
+### 15.1 Cut: schema unification with progress events (was §6)
+
+**Problem.** Round 1 §6 makes `LogRecord` an `event: "log"` variant of the `RunStreamEvent` union. Every schema change in either pipeline ripples to the other. Logger fields churn often (new structured keys, new sinks, new levels); progress events are stable (driven by webview consumers and `texra-action`). Coupling slow-changing infra to fast-changing infra is the wrong direction — the _logger_ will be the one churning, and consumers of the _progress_ schema will pay for it.
+
+**Resolution.** Share the _transport_, not the _schema_. Both pipelines write NDJSON to the same stdout in `--output-format ndjson` mode, but `LogRecordSchema` and `ProgressEventSchema` are versioned independently. A new top-level `kind: "log" | "progress"` literal is added to both schemas alongside the existing per-event `event` field (which `ProgressEventSchema` already carries; for `LogRecordSchema` `event` collapses to the literal `"log"`). Consumers filter by `kind` first — cheaper than a flat discriminated union over ~20 progress event names + 1 log event, and lets a consumer that only cares about progress skip the entire `LogRecord` Zod parse.
+
+**LOC delta.** Phase 2 (was 0.5 weeks, +30/-80) is removed. The progress NDJSON renderer keeps its own schema; the log NDJSON sink keeps its own. Net: -30 LOC versus round 1's +30/-80, plus 0.5 weeks saved.
+
+### 15.2 Replace: `BootstrapLogger.flushTo` with `Logger.swapSink` (was §5.3)
+
+**Problem.** Round 1 buffers pre-`initPlatform()` records, then drains them through the host-resolved sink. Boot lines like "loaded config from …" can appear _after_ "starting agent" in the user's terminal because they were buffered until the sink resolved. Confusing for users debugging boot-time issues — exactly the case where ordering matters most.
+
+**Resolution.** Pick a default `StderrTextSink` _immediately_ at process start (no config dependency — `picocolors` auto-disables on `!isTTY`), and _swap_ to a richer sink (NDJSON, Ink, MCP) only when the mode is resolved. The swap awaits the previous sink's `flush?()` and `close?()` so no records are dropped at the boundary.
+
+```ts
+// packages/cli/src/runtime/initLogger.ts
+const initialSink = new StderrTextSink({
+  colors: process.stderr.isTTY && !process.env.NO_COLOR,
+});
+const logger = new Logger(initialSink);
+// run config load, secret resolution, agent-directory bootstrap (all log to stderr) …
+// after mode resolves:
+await logger.swapSink(resolveSink(mode)); // awaits previous flush + close
+```
+
+**Interface delta (extends §5.1 / §5.2).** `Logger` gains:
+
+```ts
+swapSink(next: LogSink): Promise<void>;
+```
+
+`LogSink` gains an optional `close?()` for sinks that hold resources (file handles, MCP transports, queued stdout writes). Sinks without resources omit it. `swapSink`'s contract: `await previous.flush?(); await previous.close?(); /* install next */`.
+
+**LOC delta.** `BootstrapLogger` class collapses to the `Logger.swapSink()` method (~30 LOC instead of ~80). The 1,000-record overflow cap from §11 becomes unnecessary — there is no buffer to overflow.
+
+### 15.3 Replace: `Logger.child({ channel })` shim pattern (was §8.1)
+
+**Problem.** Round 1's shim has every legacy `info(channel, msg)` call wrap as `bootstrapLogger.child({ channel })`. ~40 call sites; any one that forgets `.child()` loses channel attribution silently. A lint rule catches it but it is friction every time a new module logs.
+
+**Resolution.** Derive `channel` from `RunContext.streamId` + agent metadata that is already on the context. Call sites stop passing channel.
+
+```ts
+// src/logger/logUtils.ts (after migration)
+export function info(
+  channel: string,
+  message: string,
+  options: LogUtilsOptions = {},
+): void {
+  const ctx = tryUseRunContext();
+  // channel argument ignored — kept for source compatibility,
+  // deprecation warning emitted once per module
+  (ctx?.log ?? bootstrapLogger).info(
+    message,
+    options.data ? { data: options.data } : undefined,
+  );
+}
+```
+
+`channel` is no longer a logical concept; the structured `streamId` + agent name in `LogRecord.fields` is what hosts render. The extension's `VscodeOutputChannelSink` maps `streamId` → channel-per-agent (current behavior preserved); CLI sinks render `[stream-N]` prefix when more than one run is active.
+
+**LOC delta.** Shim drops from ~120 modified call sites to ~5 (just the deprecation-warning bookkeeping). Phase 3 stays at 0.5 weeks but with much less mechanical churn. Knock-on: Phase 4 (§15.6) drops from §9's 0.5w to 0.3w because the channel-derivation work that originally lived there is paid for here.
+
+### 15.4 Tighten: `LogSink.write` is sync; slow sinks queue internally (was §13 open question)
+
+**Problem.** Round 1 §13 left this open. Sync simplifies kernel call sites but means a slow sink (NDJSON serialization with deep object traversal, MCP `notifications/progress` over a slow stdio transport) blocks the agent loop.
+
+**Resolution.** Keep `write` sync at the interface — every kernel call site stays cheap. Slow sinks (`NdjsonStdoutSink`, `McpProgressSink`) maintain an internal queue + `setImmediate` flush so a million-token tool result does not stall agent execution. `flush?()` is invoked at every group pop (the closure returned by `Logger.group()` and the tail of `Logger.withGroup()`) so a sink can finalize a stanza of records together, and at process shutdown / `swapSink` (per §15.2). The example handles `process.stdout` backpressure (the `false` return + `'drain'` event per Node streams docs) and uses an index head rather than `Array.shift()` to avoid O(n²) behavior under heavy logging:
+
+```ts
+// packages/cli/src/render/sinks/NdjsonStdoutSink.ts
+class NdjsonStdoutSink implements LogSink {
+  private queue: LogRecord[] = [];
+  private head = 0;
+  private scheduled = false;
+  private waiting: Promise<void> | null = null;
+
+  write(r: LogRecord): void {
+    this.queue.push(r);
+    if (!this.scheduled) {
+      this.scheduled = true;
+      setImmediate(() => this.drain());
+    }
+  }
+
+  async flush(): Promise<void> {
+    this.drain();
+    while (this.waiting) await this.waiting;
+  }
+
+  async close(): Promise<void> {
+    await this.flush();
+  }
+
+  private drain(): void {
+    while (this.head < this.queue.length) {
+      const line = JSON.stringify(this.queue[this.head++]) + '\n';
+      const ok = process.stdout.write(line);
+      if (!ok) {
+        // backpressure: park until the kernel buffer drains
+        this.waiting = new Promise<void>((resolve) => {
+          process.stdout.once('drain', () => {
+            this.waiting = null;
+            resolve();
+            setImmediate(() => this.drain());
+          });
+        });
+        return;
+      }
+    }
+    this.queue.length = 0;
+    this.head = 0;
+    this.scheduled = false;
+  }
+}
+```
+
+`flush()` resolves only after every queued record has actually crossed the stdout boundary (waiting through any pending `drain` event); calling shutdown code can rely on it not truncating the tail.
+
+**LOC delta.** ~50 LOC added to the two slow sinks; interface gains optional `close?()` per §15.2.
+
+### 15.5 Defer: Phase 5 (`McpProgressSink`) lands when `texra mcp serve` ships
+
+**Problem.** Round 1 Phase 5 lands `McpProgressSink` for `texra mcp serve`. Per [`prd-cli-app.md`](./prd-cli-app.md) round 4 §34, `texra mcp serve` itself is deferred to CLI v1.1 (round 4 reverses round 3's "MCP first" priority — v1.0 ships interactive REPL + workflow agents instead).
+
+**Resolution.** Phase 5 stays in the plan and lands alongside `texra mcp serve` whenever that ships (currently v1.1). The CLI v1.0 logger pipeline never instantiates `McpProgressSink` — the only sinks v1.0 needs are `StderrTextSink` (headless + interactive log lines), `NdjsonStdoutSink` (for `--output-format ndjson`), `InkLogSink` (for routing log records into the `<StreamPane />` component), and `MemorySink` (tests). The unified MCP sink is a v1.1 deliverable, not a v1.0 blocker.
+
+### 15.6 Trimmed phase plan
+
+| Phase                 | Scope (revised)                                                                                                                                          | Weeks           |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| 0                     | Interface (`Logger.swapSink`, `LogSink.close?()` per §15.2) + immediate stderr default + legacy `LegacyConsoleSink`                                      | 1               |
+| 1                     | Per-host sinks (extension, desktop, CLI text, CLI ndjson, CLI Ink REPL, tests)                                                                           | 1.2             |
+| ~~2~~                 | ~~Schema unification with progress~~                                                                                                                     | **cut** (§15.1) |
+| 3                     | Group ALS retirement (`runWithGroupContext` → `Logger.withGroup`); auto-derived channel from `RunContext.streamId` (per §15.3)                           | 0.5             |
+| 4                     | `outputChannelFactory` / `channels` / `mainOutputChannel` removals (channel-derivation cleanup already landed in Phase 3, so only the deletions remain)  | 0.3             |
+| 5                     | `McpProgressSink` (lands alongside `texra mcp serve` — CLI v1.1 per round 4 §34)                                                                         | 0.3             |
+| **Total to CLI v1.0** | Phases 0 / 1 / 3 (interactive + workflow; no MCP)                                                                                                        | **~2.7**        |
+| **Total to CLI v1.1** | + Phase 4 (when `prd-runcontext-refactor.md` Phase 2 lands) + Phase 5 (when `texra mcp serve` ships); the two land independently, not as a single bundle | **~3.3**        |
+
+Net code reduction vs round 1: Phase 2 cut saves ~30 LOC, simpler bootstrap saves ~50 LOC, simpler shim saves ~80 LOC of mechanical changes. Round-1 §9 estimated +600/-290 ≈ +310 net; round-2 estimate is **~+200 net** to v1.0, **~+250 net** to v1.1.
+
+### 15.7 What round 2 does NOT change
+
+The round-1 _direction_ is correct and ships unchanged: structured `LogRecord`, host-port `LogSink`, one logger per `RunContext`, retirement of `outputChannelFactory` and `contextStorage` ALS, deprecation shims through `logUtils.ts` for one release. Round 2 is a tightening pass on the migration mechanics, not a redesign.
