@@ -1,9 +1,5 @@
-/**
- * SettingsApp component - main container for the unified settings view.
- * Combines Memory, History, and Account views into a tabbed interface.
- */
+/** Main container for the unified settings view. */
 
-// Third-party imports
 import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, query } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -172,18 +168,6 @@ export class SettingsApp extends SettingsAppBase {
         color: color-mix(in srgb, var(--wa-color-text-normal) 65%, transparent);
         border-radius: var(--wa-border-radius-s, 4px)
           var(--wa-border-radius-s, 4px) 0 0;
-        transition:
-          color var(--transition-fast),
-          background-color var(--transition-fast);
-      }
-
-      wa-tab-group.settings-tabs wa-tab::part(base):hover {
-        color: var(--wa-color-text-normal);
-        background-color: color-mix(
-          in srgb,
-          var(--wa-color-neutral-fill-quiet) 50%,
-          transparent
-        );
       }
 
       wa-tab-group.settings-tabs wa-tab[active]::part(base) {
@@ -249,11 +233,9 @@ export class SettingsApp extends SettingsAppBase {
   // Profile state
   private readonly authenticated = signal(false);
   private readonly userEmail = signal('');
-  private readonly userId = signal('');
   private readonly tier = signal('free');
   private readonly apiAccessMode = signal<'included' | 'personal'>('personal');
   private readonly allowedModels = signal<string[] | null>([]);
-  private readonly accessExpiresAt = signal<string | null>(null);
   private readonly providerKeyStatuses = signal<ProviderKeyStatus[]>([]);
   private readonly globalStreamingDefault = signal(true);
   private readonly providerKeyModal = signal<{
@@ -325,11 +307,9 @@ export class SettingsApp extends SettingsAppBase {
       historyItems: this.historyItems,
       authenticated: this.authenticated,
       userEmail: this.userEmail,
-      userId: this.userId,
       tier: this.tier,
       apiAccessMode: this.apiAccessMode,
       allowedModels: this.allowedModels,
-      accessExpiresAt: this.accessExpiresAt,
       providerKeyStatuses: this.providerKeyStatuses,
       globalStreamingDefault: this.globalStreamingDefault,
       modelSelectionItems: this.modelSelectionItems,

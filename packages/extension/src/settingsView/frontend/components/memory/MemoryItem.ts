@@ -1,8 +1,5 @@
-/**
- * MemoryItem component - displays a single memory entry with metadata and preview.
- */
+/** Single memory entry with metadata and collapsible markdown preview. */
 
-// Third-party imports
 import { LitElement, html, nothing, css, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
@@ -57,8 +54,8 @@ export class MemoryItem extends LitElement {
       }
 
       .memory-item.pinned {
-        border-left: 3px solid var(--wa-color-text-link);
-        padding-left: calc(var(--wa-space-xs) - 3px);
+        border-left: var(--border-medium) solid var(--wa-color-text-link);
+        padding-left: calc(var(--wa-space-xs) - var(--border-medium));
       }
     `,
   ];
@@ -99,15 +96,12 @@ export class MemoryItem extends LitElement {
 
   private handleTogglePin(): void {
     if (!this.item) return;
-    if (this.item.pinned) {
-      this.dispatchEvent(
-        MemoryViewEvents.unpinItem({ storagePath: this.item.storagePath }),
-      );
-    } else {
-      this.dispatchEvent(
-        MemoryViewEvents.pinItem({ storagePath: this.item.storagePath }),
-      );
-    }
+    const { storagePath, pinned } = this.item;
+    this.dispatchEvent(
+      pinned
+        ? MemoryViewEvents.unpinItem({ storagePath })
+        : MemoryViewEvents.pinItem({ storagePath }),
+    );
   }
 
   private handleContentsShow(event: Event): void {

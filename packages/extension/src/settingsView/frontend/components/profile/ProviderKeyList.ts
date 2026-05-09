@@ -1,9 +1,5 @@
-/**
- * ProviderKeyList component - displays provider API key statuses with set/remove/get-URL actions.
- * Includes collapsible per-provider settings for streaming and custom endpoints.
- */
+/** Provider API key statuses with set/remove/get-URL actions and per-provider settings. */
 
-// Third-party imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';

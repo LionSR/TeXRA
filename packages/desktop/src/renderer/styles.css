@@ -58,10 +58,6 @@ wa-button.desktop-back-button::part(base) {
   color: var(--wa-color-text-normal);
 }
 
-wa-button.desktop-back-button::part(base):hover {
-  background: var(--wa-color-surface-raised);
-}
-
 wa-button.desktop-icon-button::part(base) {
   width: 28px;
   height: 28px;
@@ -70,10 +66,6 @@ wa-button.desktop-icon-button::part(base) {
   border-radius: var(--wa-border-radius-m);
   background: transparent;
   color: var(--wa-color-text-normal);
-}
-
-wa-button.desktop-icon-button::part(base):hover {
-  background: var(--wa-color-surface-raised);
 }
 
 wa-button.desktop-icon-button[aria-pressed='true']::part(base) {
@@ -88,15 +80,6 @@ wa-button.desktop-folder-button::part(base) {
   padding: 0 var(--wa-space-s);
   border-radius: var(--wa-border-radius-m, 3px);
   color: var(--wa-color-text-normal);
-}
-
-wa-button.desktop-command-button::part(base):hover,
-wa-button.desktop-folder-button::part(base):hover {
-  background: var(--wa-color-surface-raised);
-}
-
-wa-button.desktop-command-button::part(base),
-wa-button.desktop-folder-button::part(base) {
   border-color: var(--wa-color-surface-border);
   background: var(--wa-color-neutral-fill-quiet);
 }
@@ -164,10 +147,6 @@ wa-button.desktop-rail-new::part(base) {
   color: var(--wa-color-text-normal);
 }
 
-wa-button.desktop-rail-new::part(base):hover {
-  background: var(--wa-color-surface-raised);
-}
-
 .desktop-rail-tabs {
   min-width: 0;
   min-height: 0;
@@ -200,10 +179,6 @@ wa-button.desktop-rail-settings::part(base) {
   border-color: transparent;
   background: transparent;
   color: var(--wa-color-text-normal);
-}
-
-wa-button.desktop-rail-settings::part(base):hover {
-  background: var(--wa-color-surface-raised);
 }
 
 .desktop-center {
@@ -294,7 +269,7 @@ wa-button.desktop-settings-close::part(base) {
   height: 32px;
   padding: 0;
   border-radius: var(--wa-border-radius-m, 3px);
-  background: var(--wa-color-surface-raised);
+  background: transparent;
   color: var(--wa-color-text-normal);
 }
 
@@ -373,7 +348,7 @@ wa-button.desktop-diff-close::part(base) {
   height: 32px;
   padding: 0;
   border-radius: var(--wa-border-radius-m, 3px);
-  background: var(--wa-color-surface-raised);
+  background: transparent;
   color: var(--wa-color-text-normal);
 }
 
@@ -454,7 +429,7 @@ wa-button.desktop-pdf-close::part(base) {
   height: 32px;
   padding: 0;
   border-radius: var(--wa-border-radius-m, 3px);
-  background: var(--wa-color-surface-raised);
+  background: transparent;
   color: var(--wa-color-text-normal);
 }
 
@@ -661,8 +636,6 @@ wa-input.desktop-command-palette-input::part(base) {
   margin: 0;
   padding: var(--wa-space-s);
   overflow: auto;
-  border: 1px solid var(--wa-color-surface-border);
-  border-radius: var(--wa-border-radius-l, 4px);
   background: var(--wa-color-surface-default);
   color: var(--wa-color-text-normal);
   font-family: var(--wa-font-family-body-monospace);
@@ -688,10 +661,6 @@ wa-button.desktop-secondary-button::part(base) {
   border: 1px solid var(--wa-color-brand-border-loud);
   background: var(--wa-color-neutral-fill-quiet);
   color: var(--wa-color-neutral-on-quiet);
-}
-
-wa-button.desktop-secondary-button::part(base):hover {
-  background: var(--wa-color-neutral-fill-loud);
 }
 
 /* =====================================================================

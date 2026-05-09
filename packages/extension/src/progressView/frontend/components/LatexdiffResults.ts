@@ -141,6 +141,7 @@ export class LatexdiffResults extends LitElement {
 
     return html`
       <details
+        class="banner-details"
         open
         data-log-id=${ifDefined(this.logId || undefined)}
         data-run-id=${ifDefined(this.runId || undefined)}

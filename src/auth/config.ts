@@ -73,48 +73,6 @@ export const UserAuthContextSchema = z.object({
 export type UserAuthContext = z.infer<typeof UserAuthContextSchema>;
 
 /**
- * Check if user has access to an agent's visibility levels.
- * Returns true if:
- * - Agent visibility includes 'public', OR
- * - There's any overlap between agent visibility and user permissions
- *
- * Note: Server-side RLS handles primary access control. This function is for:
- * - Client-side pre-filtering (e.g., UI hints before server roundtrip)
- * - Testing and validation
- * - Future use cases where client-side access checks are needed
- */
-export function hasVisibilityAccess(
-  permissions: string[],
-  visibility: string | string[] | undefined | null,
-): boolean {
-  // Normalize to array
-  const visibilityArray = !visibility
-    ? []
-    : (Array.isArray(visibility) ? visibility : [visibility]).filter(
-        (v): v is string => typeof v === 'string',
-      );
-
-  // Empty/null visibility or 'public' tag means accessible to all
-  if (visibilityArray.length === 0 || visibilityArray.includes('public')) {
-    return true;
-  }
-
-  return visibilityArray.some((v) => permissions.includes(v));
-}
-
-/**
- * Display labels and icons for OAuth providers.
- * Used in the sign-in QuickPick menu.
- */
-export const OAUTH_PROVIDER_LABELS: Record<
-  OAuthProvider,
-  { label: string; icon: string }
-> = {
-  github: { label: 'GitHub', icon: '$(github)' },
-  google: { label: 'Google', icon: '$(globe)' },
-};
-
-/**
  * Default OAuth provider to use.
  * Users can choose during sign-in if multiple are configured in Supabase.
  */
