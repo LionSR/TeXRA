@@ -7,9 +7,6 @@ export const MIN_COMPLETION_TOKENS = 100;
 /** Safety buffer for exact token counting (Anthropic, Google). */
 export const TOKEN_SAFETY_BUFFER = 10;
 
-/** Safety buffer for heuristic token counting (OpenAI). */
-export const HEURISTIC_TOKEN_BUFFER = 5000;
-
 /** Max output factor for tool-use agents (reserves headroom for context growth). */
 export const TOOL_USE_MAX_OUTPUT_FACTOR = 0.7;
 

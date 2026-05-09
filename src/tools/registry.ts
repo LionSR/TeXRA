@@ -76,8 +76,7 @@ let defaultRegistryInstance: IToolRegistry | null = null;
  *
  * Defined as a function (not a module-scope const) so tool constructors
  * run lazily on first `getDefaultToolRegistry()` call rather than eagerly
- * on import. This keeps imports side-effect-free and ensures
- * `resetDefaultToolRegistry()` creates genuinely fresh instances.
+ * on import. This keeps imports side-effect-free.
  */
 function createDefaultTools() {
   return {
@@ -138,23 +137,12 @@ function createDefaultTools() {
 /** Union of all tool names registered in the default registry. */
 export type RegisteredToolName = keyof ReturnType<typeof createDefaultTools>;
 
-/**
- * Get the default tool registry as an IToolRegistry.
- * Uses lazy initialization and singleton pattern.
- */
+/** Lazy singleton accessor for the default tool registry. */
 export function getDefaultToolRegistry(): IToolRegistry {
   if (!defaultRegistryInstance) {
     defaultRegistryInstance = new MapToolRegistry(createDefaultTools());
   }
   return defaultRegistryInstance;
-}
-
-/**
- * Reset the default tool registry singleton.
- * @internal For testing only - creates fresh tool instances on next access.
- */
-export function resetDefaultToolRegistry(): void {
-  defaultRegistryInstance = null;
 }
 
 /** Valid tool name pattern: starts with letter/underscore, followed by alphanumeric/underscores. */

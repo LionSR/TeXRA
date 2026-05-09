@@ -2,8 +2,9 @@
  * Shared user-facing copy for the sponsor-credit promotion and the relay
  * privacy guarantee.
  *
- * Single source of truth for LoginBanner, ProfileInfo, and any other UI that
- * needs to surface the same message. Update here when the promo terms change.
+ * Single source of truth for LoginBanner, ApiAccessSection, and any other UI
+ * that needs to surface the same message. Update here when the promo terms
+ * change.
  */
 
 /**

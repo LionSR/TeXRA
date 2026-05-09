@@ -11,6 +11,7 @@ import {
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'arXivCommands';
+logger.initialize(CHANNEL);
 
 // Command IDs
 export const arXivCommands = {
@@ -18,8 +19,6 @@ export const arXivCommands = {
 };
 
 export async function downloadArXivSource(): Promise<void> {
-  logger.initialize(CHANNEL);
-
   try {
     const arxivId = await vscode.window.showInputBox({
       placeHolder: 'e.g., 2404.12175 or https://arxiv.org/abs/2404.12175',

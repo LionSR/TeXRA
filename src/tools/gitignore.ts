@@ -205,7 +205,3 @@ export async function getGitignoreMatcher(): Promise<GitignoreMatcher> {
   }
   return gitignoreMatcherPromise;
 }
-
-export function clearGitignoreCache(): void {
-  gitignoreMatcherPromise = undefined;
-}

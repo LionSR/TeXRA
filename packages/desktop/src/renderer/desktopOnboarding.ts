@@ -1,9 +1,4 @@
-// Desktop wrapper around the host-neutral first-run walkthrough in
-// `src/shared/wa/walkthroughDialog.ts`. The shared helper owns the wa-dialog
-// shell, focus restore, command-palette-shortcut interception, and the
-// programmatic-vs-user-dismissal distinction; this wrapper supplies the
-// desktop's onboarding copy, the navigation actions (open Settings / Launcher
-// / dismiss), and the desktop CSS class hooks.
+// Desktop wrapper around shared walkthroughDialog — supplies onboarding copy and route actions.
 
 import {
   createWalkthroughDialog,
