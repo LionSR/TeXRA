@@ -380,7 +380,7 @@ export class FileList extends LitElement {
       <wa-details
         class="round-collapsible panel-collapsible"
         summary=${`r${round}`}
-        ?open=${true}
+        open
       >
         <div class="round-content">
           ${repeat(

@@ -1,12 +1,9 @@
 /**
- * HistoryList component - renders list of history items with search functionality.
- * Receives search state via reactive properties and handles navigation.
- *
- * Pagination is active when there is no search term; during search, all items
- * are shown so that match navigation works across the full list.
+ * Renders the history list with search highlighting.
+ * Pagination is active when there is no search term; during search, all
+ * items are rendered so match navigation works across the full list.
  */
 
-// Third-party imports
 import {
   LitElement,
   html,

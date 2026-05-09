@@ -1,9 +1,5 @@
-/**
- * LaTeXTab component - shows recommended LaTeX-related VS Code settings
- * and lets the user apply them with a single click.
- */
+/** Recommended LaTeX VS Code settings, dependency status, and TeXRA compile/diff options. */
 
-// Third-party imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';

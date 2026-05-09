@@ -1,8 +1,5 @@
-/**
- * ProfileInfo component - displays user email, ID, tier, and sign out button.
- */
+/** Displays user email, ID, tier, and sign-out button. */
 
-// Third-party imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';

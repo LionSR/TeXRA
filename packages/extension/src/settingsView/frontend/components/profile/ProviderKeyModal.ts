@@ -1,9 +1,8 @@
 /**
- * ProviderKeyModal component - in-app provider API key entry.
+ * In-app provider API key entry dialog.
  * Sends key values only in the submit event; it never receives stored values.
  */
 
-// Third-party imports
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';

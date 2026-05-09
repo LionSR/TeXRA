@@ -1,9 +1,5 @@
-/**
- * SearchBar component - search input with navigation controls.
- * Debounces input and dispatches search events to parent.
- */
+/** Search input with navigation controls; debounces input and dispatches search events. */
 
-// Third-party imports
 import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';

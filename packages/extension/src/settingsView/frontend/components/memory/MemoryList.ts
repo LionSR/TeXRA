@@ -1,8 +1,5 @@
-/**
- * MemoryList component - renders list of saved memory items with pagination.
- */
+/** Renders list of saved memory items with pagination. */
 
-// Third-party imports
 import {
   LitElement,
   html,

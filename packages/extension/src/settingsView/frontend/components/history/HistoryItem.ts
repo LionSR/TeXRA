@@ -1,9 +1,5 @@
-/**
- * HistoryItem component - displays a single history entry with collapsible details.
- * Uses mark.js for search highlighting.
- */
+/** Single history entry with collapsible details and mark.js-driven search highlighting. */
 
-// Third-party imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, queryAll } from 'lit/decorators.js';

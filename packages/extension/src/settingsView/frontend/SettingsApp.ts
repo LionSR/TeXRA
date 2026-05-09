@@ -1,9 +1,5 @@
-/**
- * SettingsApp component - main container for the unified settings view.
- * Combines Memory, History, and Account views into a tabbed interface.
- */
+/** Main container for the unified settings view. */
 
-// Third-party imports
 import { html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, query } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';

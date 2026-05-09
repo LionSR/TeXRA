@@ -1,10 +1,5 @@
-/**
- * AgentSelectionPanel component - split panel with agent list and detail pane.
- * Shows agents for a single category (workflow or tool-use) with a
- * master-detail layout: list on the left, details on the right.
- */
+/** Master-detail panel of agents for a single category (workflow or tool-use). */
 
-// Third-party imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import {
@@ -503,13 +498,14 @@ export class AgentSelectionPanel extends LitElement {
     const key = agentKey(agent);
     const isSelected = this.selectedKey === key;
 
-    const sourceTone = isBuiltIn(agent.source)
-      ? 'builtin'
-      : agent.source === AGENT_SOURCE.CUSTOM
-        ? 'custom'
-        : agent.source === AGENT_SOURCE.REMOTE
-          ? 'remote'
-          : 'builtin';
+    let sourceTone: 'builtin' | 'custom' | 'remote';
+    if (agent.source === AGENT_SOURCE.CUSTOM) {
+      sourceTone = 'custom';
+    } else if (agent.source === AGENT_SOURCE.REMOTE) {
+      sourceTone = 'remote';
+    } else {
+      sourceTone = 'builtin';
+    }
 
     return html`
       <div
