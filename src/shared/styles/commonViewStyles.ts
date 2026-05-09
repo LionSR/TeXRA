@@ -342,7 +342,7 @@ export const commonViewStyles: CSSResult = css`
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
     font-size: var(--font-size-xs);
     font-family: inherit;
-    color: var(--color-text-secondary);
+    color: var(--wa-color-text-normal);
     background: none;
     border: var(--border-thin) solid var(--color-border);
     border-radius: var(--border-radius);
