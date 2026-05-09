@@ -1898,16 +1898,16 @@ Three features. Same plumbing.
 
 ### 34.2 What v1.0 explicitly does NOT ship (vs §33.2)
 
-| Item                                                           | Defer to | Why                                                                                     |
-| -------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------- |
-| `texra mcp serve` (was v1.0 in §33.1)                          | **v1.1** | Per user direction: ship interactive + workflow first. MCP is leverage, not foundation. |
-| Approval policies `auto-edits` / `auto` (in-project predicate) | v1.1     | `never` / `ask` / `yolo` cover the simple cases; in-project predicate is round 2 §26.3. |
-| OAuth loopback + device-code                                   | v1.2     | Env vars cover ~95% of users.                                                           |
-| Keyring + file-secrets fallback                                | v1.2     | Env vars + a `--api-key` flag cover the gap.                                            |
-| `conf` + Zod layered config                                    | v1.2     | Env vars + flags are enough until users complain.                                       |
-| `texra resume` / `--continue` / session JSONL                  | v1.2     | Each `texra chat` is a fresh session in v1.0.                                           |
-| `texra-base-action` GitHub Action                              | v1.2     | Users `npm install -g @texra/cli` in a workflow step today.                             |
-| Hook system, `texra doctor`, Bun binaries                      | v1.2+    | Speculative or convenience-only.                                                        |
+| Item                                                           | Defer to   | Why                                                                                                                                                                                 |
+| -------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `texra mcp serve` (was v1.0 in §33.1)                          | **future** | Per user direction (round 4, reinforced 2026-05-09: "Don't do MCP yet"). Not part of the v1.x roadmap; revisit when there is concrete demand to wire TeXRA into another agent host. |
+| Approval policies `auto-edits` / `auto` (in-project predicate) | v1.1       | `never` / `ask` / `yolo` cover the simple cases; in-project predicate is round 2 §26.3.                                                                                             |
+| OAuth loopback + device-code                                   | v1.1       | Env vars cover ~95% of users; once auth is in, sessions/keyring follow.                                                                                                             |
+| Keyring + file-secrets fallback                                | v1.1       | Env vars + a `--api-key` flag cover the gap until OAuth lands.                                                                                                                      |
+| `conf` + Zod layered config                                    | v1.1       | Env vars + flags are enough until users complain.                                                                                                                                   |
+| `texra resume` / `--continue` / session JSONL                  | v1.1       | Each `texra chat` is a fresh session in v1.0.                                                                                                                                       |
+| `texra-base-action` GitHub Action                              | v1.2       | Users `npm install -g @texra/cli` in a workflow step today.                                                                                                                         |
+| Hook system, `texra doctor`, Bun binaries                      | v1.2+      | Speculative or convenience-only.                                                                                                                                                    |
 
 ### 34.3 On Ink — round 4 reverses round 3
 
@@ -1935,21 +1935,21 @@ Phase B largely gates Phase C — `texra chat` cannot _ship_ without working app
 - Cold start `texra --help` < 100 ms (Ink only loads when entering chat).
 - No regression in extension or desktop builds.
 
-### 34.6 v1.1 = MCP (not v1.0)
+### 34.6 MCP — out of the v1.x roadmap
 
-The §33 round 3 plan for `texra mcp serve` lands as v1.1, not v1.0. Three tools, one process per client connection, gated on `RunContext` Phase 2 (per `prd-runcontext-refactor.md`) for true concurrency. The interactive REPL and the MCP server share the same approval engine + `RunContext` plumbing; v1.1 is largely "expose what v1.0 already wires up" once the standalone CLI already makes sense on its own.
+Per user direction reinforced 2026-05-09 ("Don't do MCP yet"): `texra mcp serve` is not in v1.x. The round 2 §24 design stays in the PRD as a **future** option to revisit when there is concrete demand from a calling host (Claude Code / Codex / opencode user wiring TeXRA into their flow). Until then, the CLI is sized and shipped purely as a standalone product.
 
-The logger PRD's `McpProgressSink` (Phase 5, see [`prd-logger-v2.md`](./prd-logger-v2.md) §15.5) lands with v1.1 alongside `texra mcp serve`.
+The logger PRD's `McpProgressSink` (Phase 5, see [`prd-logger-v2.md`](./prd-logger-v2.md) §15.5) lands alongside MCP whenever that ships — not part of the v1.x logger work.
 
 ### 34.7 What round 4 does NOT change
 
-Round 1's architecture, platform impls, repo layout, and tech-stack picks all stand. Round 2's MCP-server design (§24) is correct — it just lands later. Round 3's logger v2 trims (§33.5, see also `prd-logger-v2.md` §15) all stay in force. Round 4 is purely a reordering of v1.0 vs v1.1 contents, not a redesign.
+Round 1's architecture, platform impls, repo layout, and tech-stack picks all stand. Round 2's MCP-server design (§24) is correct — it just is not part of v1.x. Round 3's logger v2 trims (§33.5, see also `prd-logger-v2.md` §15) all stay in force. Round 4 is a scope reordering, not a redesign.
 
-The intended shape is coherent across all three hosts:
+The intended shape stays coherent across hosts:
 
 - **Extension** stays the richest VS Code-native shell.
 - **Desktop** stays the Electron shell over the same shared kernel contracts.
-- **CLI v1.0** is the standalone shell for workflow + interactive use.
-- **MCP** is an interoperability surface layered on top in v1.1, not the thing that defines what the CLI is.
+- **CLI v1.0** is the standalone shell for workflow + interactive use — the canonical lens of round 4.
+- **MCP** is a future interoperability surface layered on top whenever it lands; it is not what defines the CLI and is not on the v1.x roadmap.
 
-The new sequencing: **interactive + workflow** (v1.0, ~5 weeks) → **MCP server** (v1.1, ~1.5 weeks) → **auth, config, sessions** (v1.2, ~3 weeks) → polish + GitHub Action (v1.3+).
+The v1.x sequencing: **interactive + workflow** (v1.0, ~5 weeks) → **auth, config, secrets, sessions, `auto-edits`/`auto` policies** (v1.1, ~3 weeks) → polish + `texra doctor` + GitHub Action (v1.2, ~1.5 weeks) → MCP and other interop surfaces if and when there is demand (post-v1.x).

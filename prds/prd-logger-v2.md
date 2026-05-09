@@ -427,20 +427,23 @@ export function info(
 class NdjsonStdoutSink implements LogSink {
   private queue: LogRecord[] = [];
   private head = 0;
-  private scheduled = false;
-  private waiting: Promise<void> | null = null;
+  private draining = false;
+  private idle = Promise.resolve();
+  private resolveIdle: (() => void) | null = null;
 
   write(r: LogRecord): void {
     this.queue.push(r);
-    if (!this.scheduled) {
-      this.scheduled = true;
+    if (!this.draining) {
+      this.draining = true;
+      this.idle = new Promise<void>((resolve) => {
+        this.resolveIdle = resolve;
+      });
       setImmediate(() => this.drain());
     }
   }
 
   async flush(): Promise<void> {
-    this.drain();
-    while (this.waiting) await this.waiting;
+    if (this.draining) await this.idle;
   }
 
   async close(): Promise<void> {
@@ -452,46 +455,46 @@ class NdjsonStdoutSink implements LogSink {
       const line = JSON.stringify(this.queue[this.head++]) + '\n';
       const ok = process.stdout.write(line);
       if (!ok) {
-        // backpressure: park until the kernel buffer drains
-        this.waiting = new Promise<void>((resolve) => {
-          process.stdout.once('drain', () => {
-            this.waiting = null;
-            resolve();
-            setImmediate(() => this.drain());
-          });
-        });
+        // backpressure: re-enter drain after the kernel buffer empties.
+        // Stay 'draining' so flush() keeps awaiting `idle` — we only
+        // resolve it once the queue is genuinely empty (below).
+        process.stdout.once('drain', () => setImmediate(() => this.drain()));
         return;
       }
     }
     this.queue.length = 0;
     this.head = 0;
-    this.scheduled = false;
+    this.draining = false;
+    const resolve = this.resolveIdle;
+    this.resolveIdle = null;
+    resolve?.();
   }
 }
 ```
 
-`flush()` resolves only after every queued record has actually crossed the stdout boundary (waiting through any pending `drain` event); calling shutdown code can rely on it not truncating the tail.
+The single `idle` promise resolves only when the queue is genuinely empty — that is, only at the bottom of `drain()` after every record has crossed `process.stdout.write()`. Backpressure re-enters `drain()` via `'drain'` + `setImmediate` without touching `idle`, so `flush()` (which awaits `idle`) keeps waiting until the final write lands. This avoids the race in earlier drafts where a `'drain'`-event handler resolved the wait promise before the next `drain()` cycle ran.
 
 **LOC delta.** ~50 LOC added to the two slow sinks; interface gains optional `close?()` per §15.2.
 
-### 15.5 Defer: Phase 5 (`McpProgressSink`) lands when `texra mcp serve` ships
+### 15.5 Defer: Phase 5 (`McpProgressSink`) is out of the v1.x roadmap
 
-**Problem.** Round 1 Phase 5 lands `McpProgressSink` for `texra mcp serve`. Per [`prd-cli-app.md`](./prd-cli-app.md) round 4 §34, `texra mcp serve` itself is deferred to CLI v1.1 (round 4 reverses round 3's "MCP first" priority — v1.0 ships interactive REPL + workflow agents instead).
+**Problem.** Round 1 Phase 5 lands `McpProgressSink` for `texra mcp serve`. Per [`prd-cli-app.md`](./prd-cli-app.md) round 4 §34.6, `texra mcp serve` itself is **not part of the v1.x roadmap** (user direction reinforced 2026-05-09: "Don't do MCP yet").
 
-**Resolution.** Phase 5 stays in the plan and lands alongside `texra mcp serve` whenever that ships (currently v1.1). The CLI v1.0 logger pipeline never instantiates `McpProgressSink` — the only sinks v1.0 needs are `StderrTextSink` (headless + interactive log lines), `NdjsonStdoutSink` (for `--output-format ndjson`), `InkLogSink` (for routing log records into the `<StreamPane />` component), and `MemorySink` (tests). The unified MCP sink is a v1.1 deliverable, not a v1.0 blocker.
+**Resolution.** Phase 5 stays in the plan as a future deliverable that lands alongside `texra mcp serve` whenever that ships. The CLI v1.x logger pipeline never instantiates `McpProgressSink` — the only sinks v1.x needs are `StderrTextSink` (headless + interactive log lines), `NdjsonStdoutSink` (for `--output-format ndjson`), `InkLogSink` (for routing log records into the `<StreamPane />` component), and `MemorySink` (tests).
 
 ### 15.6 Trimmed phase plan
 
-| Phase                 | Scope (revised)                                                                                                                                          | Weeks           |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
-| 0                     | Interface (`Logger.swapSink`, `LogSink.close?()` per §15.2) + immediate stderr default + legacy `LegacyConsoleSink`                                      | 1               |
-| 1                     | Per-host sinks (extension, desktop, CLI text, CLI ndjson, CLI Ink REPL, tests)                                                                           | 1.2             |
-| ~~2~~                 | ~~Schema unification with progress~~                                                                                                                     | **cut** (§15.1) |
-| 3                     | Group ALS retirement (`runWithGroupContext` → `Logger.withGroup`); auto-derived channel from `RunContext.streamId` (per §15.3)                           | 0.5             |
-| 4                     | `outputChannelFactory` / `channels` / `mainOutputChannel` removals (channel-derivation cleanup already landed in Phase 3, so only the deletions remain)  | 0.3             |
-| 5                     | `McpProgressSink` (lands alongside `texra mcp serve` — CLI v1.1 per round 4 §34)                                                                         | 0.3             |
-| **Total to CLI v1.0** | Phases 0 / 1 / 3 (interactive + workflow; no MCP)                                                                                                        | **~2.7**        |
-| **Total to CLI v1.1** | + Phase 4 (when `prd-runcontext-refactor.md` Phase 2 lands) + Phase 5 (when `texra mcp serve` ships); the two land independently, not as a single bundle | **~3.3**        |
+| Phase                 | Scope (revised)                                                                                                                                         | Weeks           |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| 0                     | Interface (`Logger.swapSink`, `LogSink.close?()` per §15.2) + immediate stderr default + legacy `LegacyConsoleSink`                                     | 1               |
+| 1                     | Per-host sinks (extension, desktop, CLI text, CLI ndjson, CLI Ink REPL, tests)                                                                          | 1.2             |
+| ~~2~~                 | ~~Schema unification with progress~~                                                                                                                    | **cut** (§15.1) |
+| 3                     | Group ALS retirement (`runWithGroupContext` → `Logger.withGroup`); auto-derived channel from `RunContext.streamId` (per §15.3)                          | 0.5             |
+| 4                     | `outputChannelFactory` / `channels` / `mainOutputChannel` removals (channel-derivation cleanup already landed in Phase 3, so only the deletions remain) | 0.3             |
+| 5                     | `McpProgressSink` — lands when `texra mcp serve` ships (out of v1.x per round 4 §34.6)                                                                  | 0.3             |
+| **Total to CLI v1.0** | Phases 0 / 1 / 3 (interactive + workflow; no MCP)                                                                                                       | **~2.7**        |
+| **Total to CLI v1.1** | + Phase 4 (when `prd-runcontext-refactor.md` Phase 2 lands)                                                                                             | **~3.0**        |
+| **Total to MCP**      | + Phase 5 (when `texra mcp serve` ships, post-v1.x)                                                                                                     | **+0.3**        |
 
 Net code reduction vs round 1: Phase 2 cut saves ~30 LOC, simpler bootstrap saves ~50 LOC, simpler shim saves ~80 LOC of mechanical changes. Round-1 §9 estimated +600/-290 ≈ +310 net; round-2 estimate is **~+200 net** to v1.0, **~+250 net** to v1.1.
 
