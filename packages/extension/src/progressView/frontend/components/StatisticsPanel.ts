@@ -72,7 +72,10 @@ export class StatisticsPanel extends LitElement {
     }
 
     return html`
-      <details data-log-id=${ifDefined(this.logId || undefined)}>
+      <details
+        class="banner-details"
+        data-log-id=${ifDefined(this.logId || undefined)}
+      >
         ${buildDetailsSummary({ iconName: 'graph', label: 'Statistics' })}
         <div class="statistics-content">
           ${repeat(

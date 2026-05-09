@@ -91,27 +91,3 @@ export function recordNormalizedUsage(
 
   acc.normalizedSnapshots.push({ round, usage });
 }
-
-/** Merge another accumulator's data into this one. Mutates target in place. */
-export function mergeAccumulators(
-  target: RunUsageAccumulatorJSON,
-  source: RunUsageAccumulatorJSON,
-): void {
-  const src = source.totals;
-  if (target.totals.firstInputTokens === 0) {
-    target.totals.firstInputTokens = src.firstInputTokens;
-  }
-
-  target.totals.totalInputTokens += src.totalInputTokens;
-  target.totals.totalOutputTokens += src.totalOutputTokens;
-  target.totals.totalCost += src.totalCost;
-  target.totals.totalCacheReadInputTokens += src.totalCacheReadInputTokens;
-  target.totals.totalCacheMissInputTokens += src.totalCacheMissInputTokens;
-  target.totals.totalCacheCreationInputTokens +=
-    src.totalCacheCreationInputTokens;
-  target.totals.totalReasoningTokens += src.totalReasoningTokens;
-  target.totals.totalToolUsePromptTokens += src.totalToolUsePromptTokens;
-  target.totals.totalServerToolRequests += src.totalServerToolRequests;
-
-  target.normalizedSnapshots.push(...source.normalizedSnapshots);
-}

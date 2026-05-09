@@ -109,7 +109,7 @@ export class StreamTab extends LitElement {
         position: relative;
         width: 100%;
         gap: var(--wa-space-3xs);
-        border-left: var(--border-thick) solid transparent;
+        border-left: var(--border-medium) solid transparent;
       }
 
       /*
@@ -249,7 +249,7 @@ export class StreamTab extends LitElement {
       .tab-container:hover {
         background-color: color-mix(
           in srgb,
-          var(--wa-color-neutral-fill-quiet) 25%,
+          var(--wa-color-neutral-fill-quiet) 30%,
           transparent
         );
       }
@@ -345,10 +345,6 @@ export class StreamTab extends LitElement {
         color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
         opacity: 0.6;
         padding: 0;
-      }
-
-      .tab-expand:hover {
-        opacity: 1;
       }
 
       .tab-expand wa-icon {

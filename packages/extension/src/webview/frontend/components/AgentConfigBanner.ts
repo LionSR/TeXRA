@@ -25,7 +25,7 @@ export class AgentConfigBanner extends LitElement {
 
   override updated(changed: PropertyValues<this>): void {
     if (changed.has('state')) {
-      applyBannerVisibility(this, this.state.visible === true);
+      applyBannerVisibility(this, this.state.visible);
     }
   }
 

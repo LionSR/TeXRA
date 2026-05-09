@@ -14,7 +14,6 @@ import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
 import { customElement, property, query } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
 import { keyed } from 'lit/directives/keyed.js';
 import { styleMap } from 'lit/directives/style-map.js';
 import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
@@ -99,12 +98,10 @@ export class InstructionPanel extends LitElement {
     css`
       :host {
         display: block;
-        /* Symmetric ranges for agent + model selects so the two boxes are
-           identical-width at every viewport. */
-        --agent-select-min-width: 7rem;
-        --agent-select-max-width: min(12rem, calc((100vw - 12rem) / 2));
-        --model-select-min-width: 7rem;
-        --model-select-max-width: min(12rem, calc((100vw - 12rem) / 2));
+        /* Both agent + model selects share this width so the two boxes are
+           identical at every viewport. clamp() floors at the min so the
+           formula can't go negative on viewports < 12rem. */
+        --agent-select-max-width: clamp(7rem, calc((100vw - 12rem) / 2), 12rem);
         --agent-model-listbox-min-width: 12rem;
         --agent-model-listbox-max-width: min(
           20rem,
@@ -121,11 +118,8 @@ export class InstructionPanel extends LitElement {
         border-radius: var(--border-radius);
         margin-bottom: var(--wa-space-3xs);
         border: var(--border-thin) solid var(--color-border);
-        transition: border-color var(--transition-fast);
       }
 
-      /* Subtle lift when the user is composing — signals focus without
-         imposing a heavy ring on the textarea wrapper. */
       .instruction-box:focus-within {
         border-color: color-mix(
           in srgb,
@@ -232,7 +226,6 @@ export class InstructionPanel extends LitElement {
 
       wa-textarea#instruction::part(textarea) {
         max-height: var(--height-xlarge);
-        transition: height var(--transition-fast);
       }
 
       .instruction-controls {
@@ -275,7 +268,7 @@ export class InstructionPanel extends LitElement {
 
       .model-selection-footer .model-select-group {
         max-width: calc(
-          var(--model-select-max-width) + var(--height-control) +
+          var(--agent-select-max-width) + var(--height-control) +
             var(--wa-space-2xs)
         );
       }
@@ -333,84 +326,17 @@ export class InstructionPanel extends LitElement {
         line-height: 1;
       }
 
-      /*
-       * Hairline separator + compact monospace badge — distinctive but
-       * disciplined. Uses a translucent border outline (no fill) so the
-       * chip remains legible against the brand-fill background in both
-       * light and dark themes.
-       */
-      .execute-button__kbd {
-        display: inline-flex;
-        align-items: center;
-        height: 1em;
-        padding: 0 var(--wa-space-3xs);
-        margin-left: var(--wa-space-2xs);
-        border-radius: var(--border-radius-small);
-        background: transparent;
-        color: inherit;
-        font-family: var(--wa-font-family-mono, ui-monospace, monospace);
-        font-size: var(--font-size-xs);
-        font-weight: 500;
-        letter-spacing: 0.04em;
-        opacity: 0.75;
-        border: var(--border-thin) solid rgb(255 255 255 / 28%);
-        position: relative;
-      }
-
-      .execute-button__kbd::before {
-        content: '';
-        position: absolute;
-        left: calc(-1 * var(--wa-space-2xs));
-        top: 18%;
-        bottom: 18%;
-        width: var(--border-thin);
-        background: rgb(255 255 255 / 22%);
-      }
-
-      /*
-       * Hide the keyboard-shortcut chip when the toolbar is too narrow,
-       * so the button doesn't push selects off the row on tiny widgets.
-       */
-      @media (max-width: 480px) {
-        .execute-button__kbd {
-          display: none;
-        }
-      }
-
-      .model-selection-footer .agent-select-controls,
-      .model-selection-footer .agent-select-dropdowns {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        flex: 0 1 var(--agent-select-max-width);
-        width: 100%;
-        min-width: 0;
-        max-width: var(--agent-select-max-width);
-        position: relative;
-      }
-
-      .agent-select-dropdowns select,
-      .agent-select-dropdowns wa-select,
-      .agent-select {
-        width: 100%;
-      }
-
-      .model-selection-footer .agent-model-select-group select,
-      .model-selection-footer .agent-model-select-group wa-select,
+      /* Lock both selects to identical fixed width. Without flex: 0 0, the
+         agent box would shrink/stretch with its label content (e.g.
+         "humanize" vs. "🎯 orchestrator ☁"), shifting the model select to
+         a different x position between modes. */
+      .model-selection-footer .agent-select-group wa-select,
       .model-selection-footer .model-select-group wa-select {
+        flex: 0 0 var(--agent-select-max-width);
+        width: var(--agent-select-max-width);
+        min-width: var(--agent-select-max-width);
+        max-width: var(--agent-select-max-width);
         font-size: var(--font-size-sm);
-      }
-
-      .model-selection-footer .agent-select-group wa-select {
-        flex: 0 1 var(--agent-select-max-width);
-        min-width: var(--agent-select-min-width);
-        max-width: var(--agent-select-max-width);
-      }
-
-      .model-selection-footer .model-select-group wa-select {
-        flex: 0 1 var(--model-select-max-width);
-        min-width: var(--model-select-min-width);
-        max-width: var(--model-select-max-width);
       }
 
       .model-selection-footer .model-select::part(listbox),
@@ -419,44 +345,7 @@ export class InstructionPanel extends LitElement {
         max-width: var(--agent-model-listbox-max-width);
       }
 
-      /*
-       * Cross-fade between the workflow agent select and the tool-use agent
-       * select when the session toggles. Both selects stay in DOM; the
-       * inactive one collapses to zero height and removes itself from the
-       * tab/click order via visibility:hidden + tabindex/aria-hidden in the
-       * template. visibility transitions on a delay so it only flips once
-       * the opacity/height fade has finished.
-       */
-      .agent-select {
-        opacity: 0;
-        visibility: hidden;
-        max-height: 0;
-        overflow: hidden;
-        /*
-         * The visibility delay (200ms) MUST match the duration of
-         * --transition-normal (currently 0.2s ease, see
-         * src/shared/styles/litStyles.ts). CSS doesn't let us extract
-         * just the duration component from the var(), so the literal
-         * stays inline; if the token value changes, update this delay
-         * in lockstep.
-         */
-        transition:
-          opacity var(--transition-normal),
-          max-height var(--transition-normal),
-          visibility 0s linear 200ms;
-      }
-
-      .agent-select--active {
-        opacity: 1;
-        visibility: visible;
-        max-height: var(--height-large, 200px);
-        transition:
-          opacity var(--transition-normal),
-          max-height var(--transition-normal),
-          visibility 0s linear 0s;
-      }
-
-      /* Dropdowns in footer open upward */
+      /* Footer dropdowns open upward */
       wa-select::part(listbox) {
         bottom: 100%;
         top: auto;
@@ -788,70 +677,51 @@ export class InstructionPanel extends LitElement {
                 className: 'settings-button',
                 onClick: this.handleAgentSettings,
               })}
-              <div class="agent-select-controls">
-                <div class="agent-select-dropdowns">
-                  <wa-select
-                    id="workflowAgent"
-                    class=${classMap({
-                      'agent-select': true,
-                      'agent-select--active':
-                        session.sessionType === SESSION_TYPES.WORKFLOW,
-                    })}
-                    data-session-type="workflow"
-                    aria-label="Workflow agent"
-                    title=${this.getAgentTooltip(
-                      session.workflowAgentOptions,
-                      session.workflowAgent,
-                    ) || nothing}
-                    tabindex=${session.sessionType === SESSION_TYPES.WORKFLOW
-                      ? 0
-                      : -1}
-                    aria-hidden=${session.sessionType === SESSION_TYPES.WORKFLOW
-                      ? 'false'
-                      : 'true'}
-                    placement="top"
-                    placeholder="Agent…"
-                    .value=${session.workflowAgent}
-                    @focus=${this.handleAgentFocus}
-                    @change=${this.handleAgentChange}
-                  >
-                    ${renderAgentOptions(
-                      session.workflowAgentOptions,
-                      session.workflowAgent,
-                    )}
-                  </wa-select>
-                  <wa-select
-                    id="toolUseAgent"
-                    class=${classMap({
-                      'agent-select': true,
-                      'agent-select--active':
-                        session.sessionType === SESSION_TYPES.TOOL_USE,
-                    })}
-                    data-session-type="toolUse"
-                    aria-label="Tool-use agent"
-                    title=${this.getAgentTooltip(
-                      session.toolUseAgentOptions,
-                      session.toolUseAgent,
-                    ) || nothing}
-                    tabindex=${session.sessionType === SESSION_TYPES.TOOL_USE
-                      ? 0
-                      : -1}
-                    aria-hidden=${session.sessionType === SESSION_TYPES.TOOL_USE
-                      ? 'false'
-                      : 'true'}
-                    placement="top"
-                    placeholder="Agent…"
-                    .value=${session.toolUseAgent}
-                    @focus=${this.handleAgentFocus}
-                    @change=${this.handleAgentChange}
-                  >
-                    ${renderAgentOptions(
-                      session.toolUseAgentOptions,
-                      session.toolUseAgent,
-                    )}
-                  </wa-select>
-                </div>
-              </div>
+              ${session.sessionType === SESSION_TYPES.WORKFLOW
+                ? html`
+                    <wa-select
+                      id="workflowAgent"
+                      class="agent-select"
+                      data-session-type="workflow"
+                      aria-label="Workflow agent"
+                      title=${this.getAgentTooltip(
+                        session.workflowAgentOptions,
+                        session.workflowAgent,
+                      ) || nothing}
+                      placement="top"
+                      placeholder="Agent…"
+                      .value=${session.workflowAgent}
+                      @focus=${this.handleAgentFocus}
+                      @change=${this.handleAgentChange}
+                    >
+                      ${renderAgentOptions(
+                        session.workflowAgentOptions,
+                        session.workflowAgent,
+                      )}
+                    </wa-select>
+                  `
+                : html`
+                    <wa-select
+                      id="toolUseAgent"
+                      class="agent-select"
+                      data-session-type="toolUse"
+                      aria-label="Tool-use agent"
+                      title=${this.getAgentTooltip(
+                        session.toolUseAgentOptions,
+                        session.toolUseAgent,
+                      ) || nothing}
+                      placement="top"
+                      placeholder="Agent…"
+                      .value=${session.toolUseAgent}
+                      @focus=${this.handleAgentFocus}
+                      @change=${this.handleAgentChange}
+                    >
+                      ${renderAgentOptions(
+                        session.toolUseAgentOptions,
+                        session.toolUseAgent,
+                      )}
+                    </wa-select>
+                  `}
             </div>
             <div
               class="select-group model-select-group agent-model-select-group"
@@ -892,9 +762,6 @@ export class InstructionPanel extends LitElement {
           >
             <wa-icon slot="start" library="texra" name="play"></wa-icon>
             <span class="execute-button__label">Run</span>
-            <kbd class="execute-button__kbd" aria-hidden="true"
-              >${this.executeShortcutLabel}</kbd
-            >
           </wa-button>
         </div>
       </div>

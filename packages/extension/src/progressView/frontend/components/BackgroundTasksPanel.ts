@@ -180,10 +180,6 @@ export class BackgroundTasksPanel extends LitElement {
         user-select: none;
       }
 
-      details.task-output > summary:hover {
-        color: var(--wa-color-text-normal);
-      }
-
       .output-container {
         margin-top: var(--wa-space-3xs);
         border: var(--border-thin) solid var(--color-border);
