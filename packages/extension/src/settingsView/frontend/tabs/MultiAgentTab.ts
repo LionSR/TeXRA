@@ -80,8 +80,8 @@ export class MultiAgentTab extends LitElement {
         position: relative;
         display: flex;
         flex-direction: column;
-        gap: var(--wa-space-2xs);
-        padding: var(--wa-space-xs);
+        gap: var(--wa-space-3xs);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
         background-color: var(--wa-color-neutral-fill-quiet);
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius);
@@ -146,18 +146,23 @@ export class MultiAgentTab extends LitElement {
         margin: 0;
       }
 
-      .preset-card-agents {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--wa-space-2xs);
-        margin-top: var(--wa-space-3xs);
-      }
-
+      .preset-card-agents,
       .preset-card-orchestrators {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--wa-space-2xs);
-        margin-top: var(--wa-space-3xs);
+        gap: var(--wa-space-3xs);
+        margin-top: 0;
+      }
+
+      /* Compact agent pills — WA's size="small" is still too chunky for a
+         dense grid of badges. Override the chrome-padding part to halve
+         vertical padding and trim the font size. */
+      wa-tag.preset-agent-badge::part(base),
+      wa-tag.preset-active-badge::part(base) {
+        padding: 0 var(--wa-space-2xs);
+        min-height: 18px;
+        font-size: var(--font-size-xs);
+        line-height: 1.2;
       }
 
       wa-tag.preset-agent-badge--orchestrator {
