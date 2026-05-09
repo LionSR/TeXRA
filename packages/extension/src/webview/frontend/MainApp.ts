@@ -1926,7 +1926,7 @@ export class MainApp extends MainAppBase {
     return html`
       <div class="content-wrapper">
         ${this.isDesktopHost
-          ? null
+          ? nothing
           : html`
               <div class="view-header">
                 <wa-tab-group
@@ -2100,7 +2100,7 @@ export class MainApp extends MainAppBase {
         </div>
 
         ${this.isDesktopHost
-          ? null
+          ? nothing
           : html`
               <latexdiffs-section
                 .visible=${this.latexdiffsVisible.get()}
