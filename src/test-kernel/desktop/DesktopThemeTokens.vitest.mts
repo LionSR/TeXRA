@@ -161,4 +161,3 @@ function walk(dir: string, visit: (absPath: string) => void): void {
     }
   }
 }
-
