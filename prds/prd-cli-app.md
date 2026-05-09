@@ -1864,7 +1864,7 @@ The goal of round 3: ship a useful CLI in three weeks, not a complete CLI in thr
 
 User direction after round 3: **MCP can wait. Make interactive and workflow agents work first.** Round 4 reverses round 3's "MCP before REPL" priority — the user wants TeXRA to be a usable, standalone CLI on its own before being a callable backend for other CLIs.
 
-This means Ink ships in v1.0 (round 3 §33.3 said no Ink). The MCP server moves from v1.0 to v1.1. The design goal is also to stay maximally coherent with the existing extension + Electron hosts: the CLI should be another thin host over the shared kernel, not a parallel product with its own semantics.
+This means Ink ships in v1.0 (round 3 §33.3 said no Ink). The MCP server moves out of the v1.x roadmap entirely (see §34.6). The design goal is also to stay maximally coherent with the existing extension + Electron hosts: the CLI should be another thin host over the shared kernel, not a parallel product with its own semantics.
 
 ### 34.1 What v1.0 ships (revised from §33.1)
 
@@ -1881,14 +1881,14 @@ Three features. Same plumbing.
 
 **2. `texra chat` interactive REPL** (~1,400–1,700 LOC; covers round 1 Phase 1 + Phase 3 minimum)
 
-- Ink-based TUI: `<App />`, `<StreamPane />`, `<ApprovalCard />`, `<PromptInput />`. Round 1 §11.3 also lists `<TodoList />` — deferred to v1.1 alongside the `/plan` slash command. Ink stays a lazy chunk per round 1 §11.3 — `texra run` headless does not load it.
+- Ink-based TUI: `<App />`, `<StreamPane />`, `<ApprovalCard />`, `<PromptInput />`. Round 1 §11.3 also lists `<TodoList />` — deferred (lands when `/plan` does; not on the v1.1 list — see §34.7). Ink stays a lazy chunk per round 1 §11.3 — `texra run` headless does not load it.
 - Tool-use agents: orchestrator (default), devise, search, generic chat. `--agent <name>` overrides.
 - Approval policy: `never | ask | yolo` only (skip `auto-edits` / `auto` for v1.0 — they need the in-project predicate from round 2 §26.3, fine to add in v1.1).
   - `ask` is the default in interactive mode; renders `<ApprovalCard />` inline for edit / bash / plan gates.
   - `never` and `yolo` work in interactive mode for users who want zero-prompt or all-prompt runs.
 - Slash commands (subset of round 1 §5.2): `/agent`, `/model`, `/yolo`, `/clear`, `/exit`. `/plan` and `/resume` deferred (no session store yet, no `<TodoList />` yet).
 - Multi-line input: Enter to submit, Shift-Enter (or Ctrl-J) for newline, Ctrl-C to cancel current run, Ctrl-D to exit.
-- No session persistence in v1.0 — `texra resume` and `--continue` ship in v1.2 alongside the JSONL session store (round 2 §27).
+- No session persistence in v1.0 — `texra resume` and `--continue` ship in v1.1 alongside the JSONL session store (round 2 §27).
 
 **3. Discovery + plumbing** (~150 LOC; unchanged from §33.1)
 

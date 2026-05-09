@@ -279,7 +279,7 @@ Today these go through `console.info`. After this PRD: the CLI's `bin/texra.ts` 
 - The `LogBackend` interface in `core/platform/interfaces/log.ts` is renamed to `LogSink` and moved to `core/hosts/logSink.ts` to live alongside the other host ports.
 - **Exit criteria:** `git grep "outputChannelFactory\|setOutputChannelFactory" packages/` returns zero hits. Phase aligns with `prd-runcontext-refactor.md` Phase 2 (singleton retirement); the two should land in the same release.
 
-### Phase 5 — `McpProgressSink` (gates `texra mcp serve` v1.1) (~0.3 weeks)
+### Phase 5 — `McpProgressSink` (lands when `texra mcp serve` ships, post-v1.x — see §15.5) (~0.3 weeks)
 
 - `McpProgressSink` in `packages/cli/src/mcp/sinks/`.
 - Wires into the per-`tools/call` `RunContext` in the MCP server (per `prd-cli-app.md` §24.6).
@@ -465,6 +465,8 @@ class NdjsonStdoutSink implements LogSink {
     this.queue.length = 0;
     this.head = 0;
     this.draining = false;
+    // Null before calling so a re-entrant write() inside resolve() sees
+    // a fresh idle promise on its next turn, not the one we're resolving.
     const resolve = this.resolveIdle;
     this.resolveIdle = null;
     resolve?.();
@@ -494,9 +496,9 @@ The single `idle` promise resolves only when the queue is genuinely empty — th
 | 5                     | `McpProgressSink` — lands when `texra mcp serve` ships (out of v1.x per round 4 §34.6)                                                                  | 0.3             |
 | **Total to CLI v1.0** | Phases 0 / 1 / 3 (interactive + workflow; no MCP)                                                                                                       | **~2.7**        |
 | **Total to CLI v1.1** | + Phase 4 (when `prd-runcontext-refactor.md` Phase 2 lands)                                                                                             | **~3.0**        |
-| **Total to MCP**      | + Phase 5 (when `texra mcp serve` ships, post-v1.x)                                                                                                     | **+0.3**        |
+| **Total with MCP**    | + Phase 5 (when `texra mcp serve` ships, post-v1.x)                                                                                                     | **~3.3**        |
 
-Net code reduction vs round 1: Phase 2 cut saves ~30 LOC, simpler bootstrap saves ~50 LOC, simpler shim saves ~80 LOC of mechanical changes. Round-1 §9 estimated +600/-290 ≈ +310 net; round-2 estimate is **~+200 net** to v1.0, **~+250 net** to v1.1.
+Net code reduction vs round 1: Phase 2 cut saves ~30 LOC, simpler bootstrap saves ~50 LOC, simpler shim saves ~80 LOC of mechanical changes. Round-1 §9 estimated +600/-290 ≈ +310 net; round-2 estimate is **~+200 net** to v1.0, **~+220 net** to v1.1 (Phase 4 only — Phase 5 / `McpProgressSink` is no longer in v1.x; it adds ~+80 net whenever MCP eventually ships).
 
 ### 15.7 What round 2 does NOT change
 
