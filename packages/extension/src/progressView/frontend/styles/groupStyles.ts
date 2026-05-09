@@ -14,31 +14,12 @@ export const groupStyles = css`
     align-items: center;
     background-color: transparent;
     border-left: var(--border-medium) solid var(--color-border);
-    transition:
-      border-left-color var(--transition-normal),
-      background-color var(--transition-fast),
-      box-shadow var(--transition-fast);
-  }
-
-  /*
-   * Subtle inset highlight on hover gives each group row a tactile "lift"
-   * without pulling focus from running-state colour cues.
-   */
-  .log-group-header:hover {
-    background-color: color-mix(
-      in srgb,
-      var(--wa-color-neutral-fill-quiet) 70%,
-      transparent
-    );
-    box-shadow: inset 1px 0 0
-      color-mix(in srgb, var(--wa-color-text-normal) 8%, transparent);
+    transition: border-left-color var(--transition-normal);
   }
 
   .log-group-header {
     &.is-running {
       border-left-color: var(--wa-color-status-warning-bg);
-      box-shadow: inset 2px 0 0
-        color-mix(in srgb, var(--wa-color-status-warning-bg) 35%, transparent);
     }
 
     &.is-error {
@@ -94,8 +75,16 @@ export const groupStyles = css`
     border-left: var(--border-medium) solid transparent;
   }
 
+  /* Align custom-element panels with native banner-details indent. */
   .log-group-content
-    > :is(.log-group-header, .log-group-content, .log-line, .banner-details) {
+    > :is(
+      .log-group-header,
+      .log-group-content,
+      .log-line,
+      .banner-details,
+      statistics-panel,
+      latexdiff-results
+    ) {
     margin-left: var(--wa-space-2xs);
   }
 
@@ -103,7 +92,9 @@ export const groupStyles = css`
     border-left-width: var(--border-thin);
   }
 
-  .log-group-content .log-group-content :is(.log-line, .banner-details) {
+  .log-group-content
+    .log-group-content
+    :is(.log-line, .banner-details, statistics-panel, latexdiff-results) {
     margin-left: 0;
   }
 `;

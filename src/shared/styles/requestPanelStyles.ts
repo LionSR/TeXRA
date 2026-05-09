@@ -65,12 +65,11 @@ export const requestPanelStyles: CSSResult = css`
    * ================================================================ */
 
   :is(${CONTAINERS}) {
-    margin: ${sp.large} 0;
-    padding: ${sp.large};
+    margin: ${sp.medium} 0;
+    padding: ${sp.medium};
     border: var(--border-thin) solid var(--wa-form-control-border-color);
     border-radius: var(--border-radius-large);
     background: var(--wa-color-surface-default);
-    box-shadow: 0 2px 8px var(--wa-color-surface-shadow, rgba(0, 0, 0, 0.12));
     display: flex;
     flex-direction: column;
     gap: ${sp.medium};

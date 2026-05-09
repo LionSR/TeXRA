@@ -14,6 +14,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared styles
 import { CopyButtonController } from '@shared/controllers';
+import { compactIconActionButtonStyles } from '@shared/styles';
 import { designTokens } from '@shared/styles/litStyles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 
@@ -68,6 +69,7 @@ function decodeXmlEntitiesForDisplay(text: string): string {
 export class UserMessage extends LitElement {
   static override styles = [
     designTokens,
+    compactIconActionButtonStyles,
     css`
       :host {
         display: block;
@@ -76,11 +78,11 @@ export class UserMessage extends LitElement {
       .user-message-container {
         display: flex;
         justify-content: flex-end;
-        margin: var(--wa-space-2xs) 0;
+        margin: var(--wa-space-3xs) 0;
       }
 
       .user-message {
-        padding: var(--wa-space-2xs);
+        padding: var(--wa-space-3xs) var(--wa-space-2xs);
         max-width: 85%;
         background-color: var(--wa-color-editor-selection);
         border: var(--border-thin) solid var(--wa-color-surface-border);
@@ -91,7 +93,6 @@ export class UserMessage extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--wa-space-3xs);
-        margin-bottom: var(--wa-space-3xs);
         font-size: var(--font-size-xs);
         color: var(--wa-color-text-quiet);
       }
@@ -124,7 +125,7 @@ export class UserMessage extends LitElement {
         color: var(--wa-color-text-normal);
         white-space: pre-wrap;
         word-wrap: break-word;
-        line-height: var(--line-height-relaxed);
+        line-height: var(--line-height-normal);
         font-size: var(--font-size-sm);
       }
 

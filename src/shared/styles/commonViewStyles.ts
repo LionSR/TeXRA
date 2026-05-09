@@ -75,7 +75,11 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .list-item:hover {
-    background-color: var(--wa-color-neutral-fill-quiet);
+    background-color: color-mix(
+      in srgb,
+      var(--wa-color-neutral-fill-quiet) 30%,
+      transparent
+    );
   }
 
   .list-item:focus-within {
@@ -141,17 +145,13 @@ export const commonViewStyles: CSSResult = css`
     padding: 0 var(--wa-space-2xs) var(--wa-space-2xs);
   }
 
-  /*
-   * Smooth open/close for the wa-details version of the panel using the
-   * grid 1fr/0fr trick so long content scales without a fixed max-height
-   * cap. wa-details exposes the body via the 'content' part. The direct
-   * child wrapper carries 'overflow: hidden' and 'min-height: 0' so the
-   * grid row can clamp it without truncation jumps.
-   */
+  /* wa-details exposes the body via the 'content' part. The grid 1fr/0fr
+     trick lets long content scale without a fixed max-height cap. The
+     direct child wrapper carries 'overflow: hidden' and 'min-height: 0'
+     so the grid row can clamp it without truncation jumps. */
   .panel-collapsible::part(content) {
     display: grid;
     grid-template-rows: 1fr;
-    transition: grid-template-rows var(--transition-normal);
   }
 
   .panel-collapsible:not([open])::part(content) {
@@ -266,12 +266,6 @@ export const commonViewStyles: CSSResult = css`
     cursor: pointer;
     list-style: none;
     user-select: none;
-    opacity: var(--opacity-normal);
-    transition: opacity var(--transition-fast);
-  }
-
-  .details-summary:hover {
-    opacity: var(--opacity-full);
   }
 
   .details-summary:focus-visible {
@@ -285,7 +279,6 @@ export const commonViewStyles: CSSResult = css`
     opacity: var(--opacity-subtle);
     font-size: var(--font-size-sm);
     display: inline-block;
-    transition: transform var(--transition-fast);
   }
 
   details[open] > summary .toggle-icon {
@@ -325,7 +318,6 @@ export const commonViewStyles: CSSResult = css`
 
   .btn-secondary {
     opacity: var(--opacity-normal);
-    transition: opacity var(--transition-fast);
   }
 
   .btn-secondary:hover {
@@ -475,34 +467,6 @@ export const commonViewStyles: CSSResult = css`
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-
-  /* Utility: minimal icon button reset (no background, no border) */
-  .icon-btn-reset {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-    color: inherit;
-    opacity: var(--opacity-subtle);
-    transition: opacity var(--transition-fast);
-  }
-
-  .icon-btn-reset:hover {
-    opacity: var(--opacity-full);
-  }
-
-  .icon-btn-reset:active {
-    transform: scale(0.95);
-  }
-
-  .icon-btn-reset:focus-visible {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 1px;
-    border-radius: var(--border-radius-small);
-  }
 `;
 
 /**
@@ -579,9 +543,5 @@ export const filledButtonStyles: CSSResult = css`
   .filled-button--secondary {
     color: var(--wa-color-neutral-on-quiet, inherit);
     background: var(--wa-color-neutral-fill-quiet, transparent);
-  }
-
-  .filled-button--secondary:hover {
-    background: var(--wa-color-neutral-fill-loud, transparent);
   }
 `;

@@ -262,8 +262,7 @@ export const dropdownStyles = css`
   }
 
   wa-button.has-options::part(base) {
-    box-shadow: inset 0 0 0 1px
-      var(--wa-color-brand-border-quiet, var(--wa-color-focus));
+    border-color: var(--wa-color-brand-border-quiet, var(--wa-color-focus));
   }
 
   .dropdown-container .dropdown-menu {
