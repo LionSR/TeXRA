@@ -47,7 +47,9 @@ describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () 
     // assertion is robust to formatter splits. Closing `[,)]` anchors the
     // tag-name token so a hypothetical `'stream-conversation-other-tag'`
     // doesn't satisfy the `'stream-conversation'` assertion.
-    expect(rendererMain).toMatch(/document\.createElement\(\s*'main-app'\s*[,)]/);
+    expect(rendererMain).toMatch(
+      /document\.createElement\(\s*'main-app'\s*[,)]/,
+    );
     expect(rendererMain).toMatch(
       /document\.createElement\(\s*'settings-app'\s*[,)]/,
     );
