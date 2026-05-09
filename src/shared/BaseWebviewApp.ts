@@ -57,10 +57,13 @@ export abstract class BaseWebviewApp<TMessage = any> extends LitElement {
 
   /**
    * True when this webview is mounted by the Electron desktop renderer.
-   * The desktop renderer sets `data-desktop-view` on every embedded view and
-   * exposes a `texraDesktop` global; the VS Code extension host does
-   * neither. Use this to suppress UI that the desktop shell already provides
-   * (top toolbar, view switcher, pop-out).
+   *
+   * Why two checks: under normal operation `window.texraDesktop` is wired by
+   * the preload bridge and is sufficient on its own. The `data-desktop-view`
+   * attribute is the fallback for tests and Storybook-style harnesses that
+   * mount these components without the preload bridge — they can opt into
+   * the desktop layout by setting the attribute on the host element. The VS
+   * Code extension host sets neither.
    */
   protected get isDesktopHost(): boolean {
     return (

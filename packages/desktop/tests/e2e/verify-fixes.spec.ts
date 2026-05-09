@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+import { SETTINGS_VIEW_CMD } from '../../../../src/common/webview/settingsViewCommands.js';
+import { SETTINGS_TAB } from '../../../../src/shared/schemas/settingsViewMessages.js';
 import {
   closeTexraApp,
   launchTexraApp,
@@ -85,11 +87,15 @@ test('main view no longer renders inner Launcher/Progress toolbar', async ({}, t
 
 test('settings overlay scrolls (Tools tab top + bottom)', async ({}, testInfo) => {
   await setRoute('settings');
-  // Open Tools tab (index 5: Memory(0) History(1) Models(2) Agents(3)
-  // Multi-Agent(4) Tools(5)).
-  await launched.page.evaluate(() => {
-    window.postMessage({ command: 'setTab', tabIndex: 5 }, '*');
-  });
+  await launched.page.evaluate(
+    ({ command, tabIndex }) => {
+      window.postMessage({ command, tabIndex }, '*');
+    },
+    {
+      command: SETTINGS_VIEW_CMD.SET_TAB,
+      tabIndex: SETTINGS_TAB.TOOLS,
+    },
+  );
   await launched.page.waitForFunction(
     () => {
       const dialog = document.querySelector(
