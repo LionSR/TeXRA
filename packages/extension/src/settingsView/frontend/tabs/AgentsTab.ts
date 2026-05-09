@@ -158,7 +158,6 @@ export class AgentsTab extends LitElement {
         border: none;
         border-radius: var(--border-radius);
         cursor: pointer;
-        transition: color var(--transition-fast);
       }
 
       .agents-dir-icon-btn:hover {

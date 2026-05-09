@@ -43,38 +43,11 @@ export class LoginBanner extends LitElement {
         line-height: var(--line-height-relaxed, 1.5);
       }
 
-      /*
-       * The Sign In CTA is the primary banner action across the whole UI —
-       * polish it with a quiet brand glow on hover and a tighter chrome
-       * than the surrounding plain dismiss button.
-       */
       #loginBannerButton::part(base) {
         min-height: 26px;
         padding-inline: var(--wa-space-s);
-        border-radius: var(--wa-border-radius-m, 6px);
         font-weight: var(--font-weight-semibold, 600);
         letter-spacing: 0.01em;
-        box-shadow:
-          0 1px 1px rgb(0 0 0 / 6%),
-          inset 0 1px 0 rgb(255 255 255 / 12%);
-        transition:
-          filter var(--transition-fast),
-          box-shadow var(--transition-fast),
-          transform var(--transition-fast);
-      }
-
-      #loginBannerButton::part(base):hover {
-        filter: brightness(1.06);
-        transform: translateY(-0.5px);
-        box-shadow:
-          0 3px 8px
-            color-mix(in srgb, var(--wa-color-brand-fill-loud) 28%, transparent),
-          inset 0 1px 0 rgb(255 255 255 / 18%);
-      }
-
-      #loginBannerButton::part(base):active {
-        transform: translateY(0.5px);
-        filter: brightness(0.97);
       }
     `,
   ];

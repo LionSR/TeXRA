@@ -1,10 +1,4 @@
-/**
- * Base class for request panels that support rejection feedback.
- *
- * Adds feedback state, reject/feedback rendering, and common keyboard
- * shortcuts (y/n/escape) on top of BaseRequestPanel.
- * ToolEdit, Bash, and Proposal panels extend this.
- */
+/** Base class for request panels that support rejection feedback. */
 
 // Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';

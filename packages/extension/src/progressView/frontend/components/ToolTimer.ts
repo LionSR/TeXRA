@@ -1,11 +1,4 @@
-/**
- * Live elapsed-time timer for in-progress tool calls.
- *
- * Renders a ticking counter (e.g. "3s", "1min 12s") that updates every second.
- * When a timeout limit is provided, displays "elapsed / limit" so the user
- * can see how close the command is to being killed.
- * Automatically starts on connect and stops on disconnect.
- */
+/** Live elapsed-time timer for in-progress tool calls. */
 
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
