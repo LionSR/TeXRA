@@ -100,11 +100,12 @@ export class InstructionPanel extends LitElement {
       :host {
         display: block;
         /* Symmetric ranges for agent + model selects so the two boxes are
-           identical-width at every viewport. */
+           identical-width at every viewport. clamp() floors at the min so
+           the formula can't go negative on viewports < 12rem. */
         --agent-select-min-width: 7rem;
-        --agent-select-max-width: min(12rem, calc((100vw - 12rem) / 2));
+        --agent-select-max-width: clamp(7rem, calc((100vw - 12rem) / 2), 12rem);
         --model-select-min-width: 7rem;
-        --model-select-max-width: min(12rem, calc((100vw - 12rem) / 2));
+        --model-select-max-width: clamp(7rem, calc((100vw - 12rem) / 2), 12rem);
         --agent-model-listbox-min-width: 12rem;
         --agent-model-listbox-max-width: min(
           20rem,

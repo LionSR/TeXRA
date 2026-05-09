@@ -542,4 +542,10 @@ export const filledButtonStyles: CSSResult = css`
     color: var(--wa-color-neutral-on-quiet, inherit);
     background: var(--wa-color-neutral-fill-quiet, transparent);
   }
+
+  /* Pin secondary hover so the base .filled-button:hover (higher specificity)
+     doesn't flash secondary buttons to the brand color. */
+  .filled-button--secondary:hover {
+    background: var(--wa-color-neutral-fill-quiet, transparent);
+  }
 `;
