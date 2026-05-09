@@ -335,9 +335,9 @@ export class InstructionPanel extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--wa-space-2xs);
-        flex: 0 1 var(--agent-select-max-width);
-        width: 100%;
-        min-width: 0;
+        flex: 0 0 var(--agent-select-max-width);
+        width: var(--agent-select-max-width);
+        min-width: var(--agent-select-max-width);
         max-width: var(--agent-select-max-width);
         position: relative;
       }
@@ -354,16 +354,17 @@ export class InstructionPanel extends LitElement {
         font-size: var(--font-size-sm);
       }
 
-      .model-selection-footer .agent-select-group wa-select {
-        flex: 0 1 var(--agent-select-max-width);
-        min-width: var(--agent-select-min-width);
-        max-width: var(--agent-select-max-width);
-      }
-
+      /* Lock both selects to identical fixed width (= max). Without
+         flex: 0 0, the agent box would shrink to fit short labels
+         (e.g. "humanize") and stretch for longer ones (e.g.
+         "🎯 orchestrator ☁"), shifting the model select to a different
+         x position between modes. */
+      .model-selection-footer .agent-select-group wa-select,
       .model-selection-footer .model-select-group wa-select {
-        flex: 0 1 var(--model-select-max-width);
-        min-width: var(--model-select-min-width);
-        max-width: var(--model-select-max-width);
+        flex: 0 0 var(--agent-select-max-width);
+        width: var(--agent-select-max-width);
+        min-width: var(--agent-select-max-width);
+        max-width: var(--agent-select-max-width);
       }
 
       .model-selection-footer .model-select::part(listbox),
