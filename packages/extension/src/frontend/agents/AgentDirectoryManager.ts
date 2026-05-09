@@ -225,6 +225,17 @@ export class AgentDirectoryManager {
   private async buildAgentWatchers(
     directories: Array<{ directory: string; source: AgentSource }>,
   ): Promise<void> {
+    // Snapshot the previously watched external directory paths so we can
+    // detect freshly-discovered subtrees during this rebuild and replay
+    // synthetic `create` events for any pre-existing `*.yaml` files inside
+    // them. vscode.FileSystemWatcher does not replay events for files that
+    // already exist when a watcher is attached, so a moved-in populated
+    // subtree would otherwise leave subscribers (e.g. MainViewProvider's
+    // `**/*.yaml` listener) stale until a YAML file is touched.
+    const previousExternalDirectoryPaths = new Set(
+      this.externalWatcherDirectoryPaths,
+    );
+
     // Dispose old watchers
     this.watcherDisposables.forEach((watcher) => watcher.dispose());
     this.watcherDisposables = [];
@@ -233,6 +244,10 @@ export class AgentDirectoryManager {
 
     const watchedDirectories: string[] = [];
     const skippedDirectories: string[] = [];
+    const newlyWatchedExternalDirs: Array<{
+      entry: { directory: string; source: AgentSource };
+      uri: vscode.Uri;
+    }> = [];
 
     for (const entry of directories) {
       const directoryUri = vscode.Uri.file(entry.directory);
@@ -249,8 +264,24 @@ export class AgentDirectoryManager {
         continue;
       }
 
-      await this.watchExternalCustomDirectory(entry, directoryUri);
+      const newDirs = await this.watchExternalCustomDirectory(
+        entry,
+        directoryUri,
+        previousExternalDirectoryPaths,
+      );
+      newlyWatchedExternalDirs.push(...newDirs);
       watchedDirectories.push(entry.directory);
+    }
+
+    // After all watchers are attached, replay synthetic `create` events for
+    // pre-existing YAML files in newly-discovered external subdirectories.
+    // Skip the initial build (when there were no previously watched external
+    // dirs) — agent loading on startup goes through other paths and we don't
+    // want to flood subscribers.
+    if (previousExternalDirectoryPaths.size > 0) {
+      for (const { entry, uri } of newlyWatchedExternalDirs) {
+        await this.replaySyntheticYamlCreates(entry, uri);
+      }
     }
 
     logger.info(
@@ -297,16 +328,59 @@ export class AgentDirectoryManager {
   private async watchExternalCustomDirectory(
     entry: { directory: string; source: AgentSource },
     directoryUri: vscode.Uri,
-  ): Promise<void> {
+    previouslyWatchedPaths: ReadonlySet<string>,
+  ): Promise<
+    Array<{
+      entry: { directory: string; source: AgentSource };
+      uri: vscode.Uri;
+    }>
+  > {
     const directories = await this.collectDirectoryUris(directoryUri);
+    const newlyWatched: Array<{
+      entry: { directory: string; source: AgentSource };
+      uri: vscode.Uri;
+    }> = [];
 
     for (const dirUri of directories) {
-      this.externalWatcherDirectoryPaths.add(
-        this.normalizeFsPath(dirUri.fsPath),
-      );
+      const normalized = this.normalizeFsPath(dirUri.fsPath);
+      this.externalWatcherDirectoryPaths.add(normalized);
       this.watchDirectoryTree(entry, dirUri, '*', (type, uri) =>
         this.handleExternalDirectoryTreeChange(type, uri),
       );
+      if (!previouslyWatchedPaths.has(normalized)) {
+        newlyWatched.push({ entry, uri: dirUri });
+      }
+    }
+
+    return newlyWatched;
+  }
+
+  /**
+   * Replay synthetic `create` events for `*.yaml` files at the top level of
+   * the given directory. The directory's shallow `*` watcher is already
+   * attached by the time this runs, so future events flow normally — this
+   * only catches files that already existed when the watcher was registered.
+   */
+  private async replaySyntheticYamlCreates(
+    entry: { directory: string; source: AgentSource },
+    dirUri: vscode.Uri,
+  ): Promise<void> {
+    let entries: [string, vscode.FileType][];
+    try {
+      entries = await vscode.workspace.fs.readDirectory(dirUri);
+    } catch (error) {
+      logger.debug(
+        CHANNEL,
+        `Unable to replay YAML creates for ${dirUri.fsPath}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+
+    for (const [name, type] of entries) {
+      if ((type & vscode.FileType.File) === 0) continue;
+      if (!name.toLowerCase().endsWith('.yaml')) continue;
+      const fileUri = vscode.Uri.joinPath(dirUri, name);
+      this.dispatchAgentEvent(entry, 'create', fileUri);
     }
   }
 
