@@ -42,13 +42,15 @@ describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () 
     expect(rendererMain).toContain("import '@settingsView/frontend'");
 
     // Direct mounts, not via <progress-app>. <stream-tabs> + <stream-conversation>
-    // come from the same packages as the extension.
-    expect(rendererMain).toContain("document.createElement('main-app')");
-    expect(rendererMain).toContain("document.createElement('settings-app')");
-    expect(rendererMain).toContain(
-      "document.createElement('stream-conversation')",
+    // come from the same packages as the extension. Match the tag string
+    // independently of how prettier wraps the createElement() call so the
+    // assertion is robust to formatter splits.
+    expect(rendererMain).toMatch(/document\.createElement\(\s*'main-app'/);
+    expect(rendererMain).toMatch(/document\.createElement\(\s*'settings-app'/);
+    expect(rendererMain).toMatch(
+      /document\.createElement\(\s*'stream-conversation'/,
     );
-    expect(rendererMain).toContain("document.createElement('stream-tabs')");
+    expect(rendererMain).toMatch(/document\.createElement\(\s*'stream-tabs'/);
   });
 
   it('listens for desktop route pushes from the Electron host', () => {
