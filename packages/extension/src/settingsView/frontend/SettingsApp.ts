@@ -233,11 +233,9 @@ export class SettingsApp extends SettingsAppBase {
   // Profile state
   private readonly authenticated = signal(false);
   private readonly userEmail = signal('');
-  private readonly userId = signal('');
   private readonly tier = signal('free');
   private readonly apiAccessMode = signal<'included' | 'personal'>('personal');
   private readonly allowedModels = signal<string[] | null>([]);
-  private readonly accessExpiresAt = signal<string | null>(null);
   private readonly providerKeyStatuses = signal<ProviderKeyStatus[]>([]);
   private readonly globalStreamingDefault = signal(true);
   private readonly providerKeyModal = signal<{
@@ -309,11 +307,9 @@ export class SettingsApp extends SettingsAppBase {
       historyItems: this.historyItems,
       authenticated: this.authenticated,
       userEmail: this.userEmail,
-      userId: this.userId,
       tier: this.tier,
       apiAccessMode: this.apiAccessMode,
       allowedModels: this.allowedModels,
-      accessExpiresAt: this.accessExpiresAt,
       providerKeyStatuses: this.providerKeyStatuses,
       globalStreamingDefault: this.globalStreamingDefault,
       modelSelectionItems: this.modelSelectionItems,
