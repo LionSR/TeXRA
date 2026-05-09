@@ -155,7 +155,6 @@ export const profileViewStyles: CSSResult = css`
     background: var(--wa-form-control-background-color);
     border: var(--border-thin) solid var(--color-border);
     border-radius: var(--border-radius);
-    transition: border-color var(--transition-normal);
   }
 
   wa-radio.api-access-option:hover {

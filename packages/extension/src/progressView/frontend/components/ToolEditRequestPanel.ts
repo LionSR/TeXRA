@@ -1,11 +1,4 @@
-/**
- * Individual panel component for tool edit approval requests.
- *
- * Renders a single tool edit permission with diff metadata, diff actions
- * (including LaTeX dropdown), approve/reject buttons, and feedback input.
- *
- * Extends BaseFeedbackPanel for shared feedback/reject/emit logic.
- */
+/** Tool edit approval request panel. */
 
 // Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';

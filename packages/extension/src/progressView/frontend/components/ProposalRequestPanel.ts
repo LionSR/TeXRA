@@ -1,12 +1,4 @@
-/**
- * Individual panel component for agent proposal requests.
- *
- * Renders a single proposal permission with agent/model details,
- * workflow file lists, model selection dropdown, approve/reject/setup
- * buttons, and feedback input.
- *
- * Extends BaseFeedbackPanel for shared feedback/reject/emit logic.
- */
+/** Agent proposal request panel. */
 
 // Third-party imports
 import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
