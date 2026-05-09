@@ -114,17 +114,6 @@ export function isWorkflowSetting(
   return setting.agentCategory === AgentCategory.Workflow;
 }
 
-export function requireWorkflowSetting(
-  setting: AgentSetting,
-): AgentWorkflowSetting {
-  if (!isWorkflowSetting(setting)) {
-    throw new Error(
-      'Expected workflow agent settings but received tool-use settings.',
-    );
-  }
-  return setting;
-}
-
 export function hasEndTag(
   settings: AgentSetting,
   fileContent: string,

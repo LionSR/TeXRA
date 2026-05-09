@@ -52,11 +52,9 @@ export interface SettingsMessageHandlerContext {
   historyItems: WritableSignal<HistoryItem[]>;
   authenticated: WritableSignal<boolean>;
   userEmail: WritableSignal<string>;
-  userId: WritableSignal<string>;
   tier: WritableSignal<string>;
   apiAccessMode: WritableSignal<'included' | 'personal'>;
   allowedModels: WritableSignal<string[] | null>;
-  accessExpiresAt: WritableSignal<string | null>;
   providerKeyStatuses: WritableSignal<ProviderKeyStatus[]>;
   globalStreamingDefault: WritableSignal<boolean>;
   modelSelectionItems: WritableSignal<ModelSelectionItem[]>;
@@ -303,11 +301,9 @@ export function dispatchSettingsViewMessage(
       if (!data) return false;
       ctx.authenticated.set(data.authenticated);
       ctx.userEmail.set(data.user?.email ?? 'N/A');
-      ctx.userId.set(data.user?.id ?? '');
       ctx.tier.set(data.tier ?? 'free');
       ctx.apiAccessMode.set(data.apiAccessMode);
       ctx.allowedModels.set(data.allowedModels ?? null);
-      ctx.accessExpiresAt.set(data.accessExpiresAt ?? null);
       ctx.providerKeyStatuses.set(data.providerKeyStatuses ?? []);
       ctx.globalStreamingDefault.set(data.globalStreamingDefault ?? true);
       return true;

@@ -1,10 +1,5 @@
-/**
- * ModelsTab component - API access, provider keys, and model selection for settings view.
- * Shows provider key list for all users; authenticated users also see API access mode.
- * Model selection list allows toggling which models appear in the dropdown.
- */
+/** API access, provider keys, and model selection for the settings view. */
 
-// Third-party imports
 import { LitElement, html, nothing, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 

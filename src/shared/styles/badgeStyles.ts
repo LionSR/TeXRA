@@ -1,6 +1,6 @@
 import { css, type CSSResult } from 'lit';
 
-export const baseBadgeStyles: CSSResult = css`
+const baseBadgeStyles: CSSResult = css`
   .badge {
     display: inline-block;
     padding: var(--wa-space-2xs) var(--wa-space-xs);
@@ -14,7 +14,7 @@ export const baseBadgeStyles: CSSResult = css`
   }
 `;
 
-export const categoryBadgeStyles: CSSResult = css`
+const categoryBadgeStyles: CSSResult = css`
   .category-badge,
   .agent-category-badge {
     display: inline-flex;
@@ -49,7 +49,7 @@ export const categoryBadgeStyles: CSSResult = css`
   }
 `;
 
-export const searchHighlightStyles: CSSResult = css`
+const searchHighlightStyles: CSSResult = css`
   mark {
     background-color: var(--wa-color-editor-find-match-highlight, #ffef0b80);
     color: var(--wa-color-editor-find-match-highlight-fg, inherit);
@@ -63,7 +63,7 @@ export const searchHighlightStyles: CSSResult = css`
   }
 `;
 
-export const emptyStateStyles: CSSResult = css`
+const emptyStateStyles: CSSResult = css`
   .no-data,
   .no-agents,
   .history-none {

@@ -1,16 +1,4 @@
-// Desktop wrapper around the host-neutral command palette in
-// `src/shared/wa/commandPalette.ts`. Owns desktop-specific concerns:
-//
-//   * Pulls the command list from `desktopCommandSurface` (which depends on
-//     the VS Code-coupled `@commands/catalog` and Electron accelerator
-//     formatting — both still desktop-only).
-//   * Maps each entry's accelerator/category/unavailableReason into the
-//     palette's neutral `meta` column.
-//   * Forwards the `.desktop-command-palette-*` class hooks the desktop
-//     stylesheet already targets so the visual treatment is unchanged.
-//
-// The shared module owns the wa-dialog shell, filter input, keyboard
-// handling, and the global Cmd/Ctrl+K shortcut.
+// Desktop wrapper around shared commandPalette — desktop command surface + accelerator formatting.
 
 import {
   createCommandPalette,

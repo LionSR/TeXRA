@@ -53,7 +53,6 @@ export class OutputFilesSection extends LitElement {
 
       .file-item .remove-button {
         opacity: 0;
-        transition: opacity var(--transition-fast);
       }
 
       .file-item:hover .remove-button,

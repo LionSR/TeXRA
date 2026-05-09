@@ -16,54 +16,6 @@ export const profileViewStyles: CSSResult = css`
     margin: 0 auto;
   }
 
-  .profile-info {
-    margin-bottom: var(--wa-space-l);
-  }
-
-  .profile-actions {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: var(--wa-space-xs);
-  }
-
-  .info-row {
-    margin: var(--wa-space-xs) 0;
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-xs);
-  }
-
-  .label {
-    font-weight: var(--font-weight-bold);
-    color: var(--wa-color-text-preformat);
-    min-width: 80px;
-  }
-
-  .value {
-    color: var(--wa-color-text-normal);
-  }
-
-  wa-tag.tier-badge {
-    text-transform: uppercase;
-    font-weight: var(--font-weight-semibold);
-  }
-
-  .profile-notice {
-    margin: var(--wa-space-2xs) 0 var(--wa-space-xs);
-    color: var(--wa-color-text-quiet, var(--color-text-secondary));
-    font-size: var(--font-size-sm);
-    line-height: var(--line-height-normal);
-    max-width: 640px;
-  }
-
-  .profile-notice code {
-    font-family: var(--wa-font-family-mono, monospace), monospace;
-    font-size: 0.95em;
-    padding: 0 var(--wa-space-3xs);
-    border-radius: var(--border-radius-small);
-    background: var(--wa-color-surface-lowered);
-  }
-
   .not-authenticated {
     text-align: center;
     padding: var(--wa-space-l);

@@ -1,8 +1,5 @@
-/**
- * MemoryToggle component - checkbox to enable/disable memory for chat agents.
- */
+/** Checkbox to enable/disable memory for chat agents. */
 
-// Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';

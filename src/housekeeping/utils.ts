@@ -10,7 +10,6 @@ import {
   legacyWorkflowOutputStem,
   midEraWorkflowOutputStem,
   normalizeLegacyModel,
-  parseWorkflowOutputRoundDir,
 } from '@agent/output/workflowOutputLayout';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
@@ -19,9 +18,6 @@ const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
 
 export { getAgentFirstNameChunk };
-
-/** @deprecated Re-exported for backward compatibility; prefer the SSOT helper. */
-export const parseRoundFolder = parseWorkflowOutputRoundDir;
 
 /**
  * Produce an ISO-8601 timestamp stripped of separators, suitable for use in

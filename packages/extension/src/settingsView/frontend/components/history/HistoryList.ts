@@ -1,12 +1,9 @@
 /**
- * HistoryList component - renders list of history items with search functionality.
- * Receives search state via reactive properties and handles navigation.
- *
- * Pagination is active when there is no search term; during search, all items
- * are shown so that match navigation works across the full list.
+ * Renders the history list with search highlighting.
+ * Pagination is active when there is no search term; during search, all
+ * items are rendered so match navigation works across the full list.
  */
 
-// Third-party imports
 import {
   LitElement,
   html,
@@ -32,7 +29,7 @@ const HISTORY_PAGE_SIZE = 25;
 // Local imports - history view
 import { HistoryViewEvents } from './events';
 import './HistoryItem';
-import { historyViewStyles } from './styles';
+import { historyStyles } from '@shared/styles/historyStyles';
 import type { HistoryViewState } from './state';
 
 /** Search navigation action (reactive trigger from parent) */
@@ -40,7 +37,7 @@ export type SearchAction = 'next' | 'prev' | null;
 
 @customElement('history-list')
 export class HistoryList extends LitElement {
-  static override styles = [designTokens, commonViewStyles, historyViewStyles];
+  static override styles = [designTokens, commonViewStyles, historyStyles];
 
   @property({ attribute: false }) items: HistoryItemData[] = [];
   @property({ attribute: false }) state?: HistoryViewState;

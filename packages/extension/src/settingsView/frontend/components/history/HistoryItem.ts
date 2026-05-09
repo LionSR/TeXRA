@@ -1,9 +1,5 @@
-/**
- * HistoryItem component - displays a single history entry with collapsible details.
- * Uses mark.js for search highlighting.
- */
+/** Single history entry with collapsible details and mark.js-driven search highlighting. */
 
-// Third-party imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, queryAll } from 'lit/decorators.js';
@@ -24,7 +20,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - history view styles
-import { historyViewStyles } from './styles';
+import { historyStyles } from '@shared/styles/historyStyles';
 
 // Local imports - history view events
 import { HistoryViewEvents } from './events';
@@ -37,7 +33,7 @@ export class HistoryItem extends LitElement {
     designTokens,
     commonViewStyles,
     ...badgeStyles,
-    historyViewStyles,
+    historyStyles,
     markdownStyles,
   ];
 

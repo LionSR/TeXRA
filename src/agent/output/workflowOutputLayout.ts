@@ -24,11 +24,6 @@ import { escapeRegExp } from '@utils/core/stringCore';
 /** The fixed basename of every workflow output file (no extension). */
 export const WORKFLOW_OUTPUT_BASENAME = 'output';
 
-/** Build the `r{round}` subdirectory name. */
-export function workflowOutputRoundDir(round: number): string {
-  return `r${round}`;
-}
-
 /** Parse a directory name of the form `r{round}` into its round index. */
 export function parseWorkflowOutputRoundDir(dirName: string): number | null {
   const match = /^r(\d+)$/.exec(dirName);
@@ -40,7 +35,7 @@ export function workflowOutputPath(params: {
   ext: string;
   round: number;
 }): string {
-  return `${workflowOutputRoundDir(params.round)}/${WORKFLOW_OUTPUT_BASENAME}.${params.ext}`;
+  return `r${params.round}/${WORKFLOW_OUTPUT_BASENAME}.${params.ext}`;
 }
 
 // ---------------------------------------------------------------------------

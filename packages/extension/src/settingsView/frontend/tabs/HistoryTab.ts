@@ -1,9 +1,5 @@
-/**
- * HistoryTab component - history management content for settings view.
- * Reuses history view components from historyView.
- */
+/** History management content for the settings view. */
 
-// Third-party imports
 import { LitElement, html, type TemplateResult, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 

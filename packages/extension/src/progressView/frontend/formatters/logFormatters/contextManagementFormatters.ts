@@ -7,10 +7,8 @@
  */
 
 // Local imports - shared schemas
-import type {
-  ActionConfig,
-  ContextStatItem,
-} from '@progressView/frontend/components/ContextManagement';
+import type { ActionConfig } from '@progressView/frontend/components/ContextManagement';
+import type { StatItem } from '@progressView/frontend/components/StatisticsPanel';
 import {
   ContextManagementDataSchema,
   type ContextManagementData,
@@ -74,7 +72,7 @@ const ACTION_CONFIG: Record<
 /** Build context management items from parsed data. */
 function buildContextManagementItems(data: ContextManagementData): {
   config: ActionConfig;
-  items: ContextStatItem[];
+  items: StatItem[];
   summary?: string;
 } {
   const { action } = data;
@@ -85,7 +83,7 @@ function buildContextManagementItems(data: ContextManagementData): {
     color: 'var(--wa-color-text-normal)',
   };
 
-  const items: ContextStatItem[] = [];
+  const items: StatItem[] = [];
 
   // For max_tokens_reduced, show the reduction
   if (
