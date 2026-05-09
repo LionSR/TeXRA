@@ -1,5 +1,4 @@
-/** Renders a `$ <command>` strip in VS Code terminal styling. Used above
- * process-agent stream output to show the command that spawned the session. */
+/** Renders a `$ <command>` strip above process-agent stream output. */
 
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';

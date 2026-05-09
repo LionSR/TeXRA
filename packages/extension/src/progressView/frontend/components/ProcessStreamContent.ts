@@ -1,6 +1,4 @@
-/** Container for process-agent streams (e.g. `bash` child tabs). Composes
- * the stream header, command strip, and terminal-styled log list — skipping
- * the LLM workflow/tool-use chrome that doesn't apply to raw stdout/stderr. */
+/** Container for process-agent streams (e.g. `bash` child tabs). */
 
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
@@ -34,14 +32,9 @@ export class ProcessStreamContent extends LitElement {
     const streamState = this.streamContext.streamState;
     if (!streamInfo || !streamState) return nothing;
 
-    // Bash streams register with tool-use kind, so bypass toggles live on the
-    // stream state just like any other tool-use stream — bind them so the
-    // header correctly reflects an active YOLO / Super YOLO toggle.
+    // Bash streams register as tool-use kind; bind bypass toggles so the
+    // header reflects active YOLO / Super YOLO state.
     const toolUse = isToolUseState(streamState) ? streamState : null;
-
-    // Process streams carry the full, untruncated command on `command`
-    // (pulled from the synthetic agent config's `instruction` by
-    // streamInfoUtils). Fall back to `description` for backwards compat.
     const command = streamInfo.command ?? streamInfo.description ?? '';
 
     return html`

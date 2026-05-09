@@ -1,10 +1,4 @@
-/**
- * Lightweight container for MainView banners.
- *
- * Renders individual banner components (API key, agent config,
- * dependency, getting started, login) by passing through state
- * properties. Each banner handles its own rendering and events.
- */
+/** Container for MainView banners — passes state through to each banner component. */
 
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';

@@ -262,8 +262,7 @@ export const dropdownStyles = css`
   }
 
   wa-button.has-options::part(base) {
-    box-shadow: inset 0 0 0 1px
-      var(--wa-color-brand-border-quiet, var(--wa-color-focus));
+    border-color: var(--wa-color-brand-border-quiet, var(--wa-color-focus));
   }
 
   .dropdown-container .dropdown-menu {
@@ -297,11 +296,14 @@ export const dropdownStyles = css`
     height: 20px;
     padding: var(--wa-space-3xs);
     font-size: var(--font-size-sm);
-    transition: background-color var(--transition-fast);
   }
 
   .dropdown-container .dropdown-menu wa-checkbox:hover {
-    background: var(--wa-color-neutral-fill-quiet);
+    background: color-mix(
+      in srgb,
+      var(--wa-color-neutral-fill-quiet) 30%,
+      transparent
+    );
   }
 `;
 

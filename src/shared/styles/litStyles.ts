@@ -92,18 +92,6 @@ export const designTokens: CSSResult = css`
 `;
 
 export const animationStyles: CSSResult = css`
-  @keyframes pulse-scale {
-    0%,
-    100% {
-      transform: scale(1);
-      opacity: 1;
-    }
-    50% {
-      transform: scale(1.15);
-      opacity: 0.8;
-    }
-  }
-
   @keyframes spin {
     from {
       transform: rotate(0deg);
