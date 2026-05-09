@@ -206,10 +206,7 @@ export class LatexDiffsSection extends LitElement {
     `;
   }
 
-  private renderFileOptions(
-    options: string[],
-    _selectedValue: string,
-  ): TemplateResult {
+  private renderFileOptions(options: string[]): TemplateResult {
     const sortedOptions = [...options].sort((a, b) => a.localeCompare(b));
     return html`
       <wa-option value="">None</wa-option>
@@ -299,7 +296,7 @@ export class LatexDiffsSection extends LitElement {
               .value=${this.baseFile}
               @change=${this.handleBaseSelectChange}
             >
-              ${this.renderFileOptions(this.baseFileOptions, this.baseFile)}
+              ${this.renderFileOptions(this.baseFileOptions)}
             </wa-select>
           </div>
           <div class="file-select">
@@ -379,7 +376,7 @@ export class LatexDiffsSection extends LitElement {
               .value=${this.editedFile}
               @change=${this.handleEditedSelectChange}
             >
-              ${this.renderFileOptions(this.editedFileOptions, this.editedFile)}
+              ${this.renderFileOptions(this.editedFileOptions)}
             </wa-select>
           </div>
           <div class="file-select">

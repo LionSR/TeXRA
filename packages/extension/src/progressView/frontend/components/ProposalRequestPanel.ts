@@ -291,8 +291,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   // ===========================================================================
 
   private handleFileClick = (event: MouseEvent): void => {
-    const target = event.target as HTMLElement;
-    const file = target.dataset?.file;
+    const file = (event.target as HTMLElement).dataset.file;
     if (file) {
       postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, { file });
     }

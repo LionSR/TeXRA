@@ -1,9 +1,5 @@
-/**
- * ToolCard component - displays a single tool group with status, description,
- * and optional installation guide.
- */
+/** Single tool group with status, description, and optional installation guide. */
 
-// Third-party imports
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';

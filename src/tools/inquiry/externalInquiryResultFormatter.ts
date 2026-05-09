@@ -80,7 +80,7 @@ export function buildRejectedExternalInquiryResult(
   };
 }
 
-export function buildExternalInquiryOutput(
+function buildExternalInquiryOutput(
   persisted: PersistedExternalInquiryTurn,
   answer: string,
 ): string {

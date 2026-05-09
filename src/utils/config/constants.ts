@@ -5,10 +5,7 @@ import { tryGlobalState } from '@platform/platform';
 import { GlobalStateKey } from '@common/state/stateKeys';
 
 // Local imports - config utils
-import * as logger from '@logger/logUtils';
 import { getConfig } from './configUtils';
-
-const CHANNEL = 'config';
 
 // Settings query constants for VS Code settings UI
 export const SETTINGS_QUERY = {
@@ -33,13 +30,7 @@ export const REFRESH_THRESHOLD_MS = 200;
 export const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 
 // Debounce delay constants for UI responsiveness
-export const DEBOUNCE_WATCHER_MS = 200; // File system watchers (fast response)
 export const DEBOUNCE_OPTIONS_MS = 300; // Dropdown options refresh
-export const DEBOUNCE_STATE_SAVE_MS = 500; // State persistence (slower, batched)
-
-// Tool-use persistence defaults (internal)
-const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 336; // 2 weeks
-const DEFAULT_TOOL_USE_MEMORY_ENABLED = true;
 
 // Tool groups marked `toggleable: true` in EXTERNAL_TOOL_DEFS are treated
 // as opt-in: they're disabled for new users on first install, and the Tools
@@ -49,23 +40,6 @@ const DEFAULT_TOOL_USE_MEMORY_ENABLED = true;
 /** Determine whether tool-use session persistence is enabled. */
 export function getToolUsePersistenceEnabled(): boolean {
   return getConfig<boolean>('texra.toolUse.persistence.enabled', true);
-}
-
-/** Resolve the configured TTL (in hours) for persisted tool-use sessions. */
-export function getToolUsePersistenceTtlHours(): number {
-  const value = getConfig<number>(
-    'texra.toolUse.persistence.ttlHours',
-    DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS,
-  );
-  const hours = Number(value);
-  if (!Number.isFinite(hours) || hours < 1) {
-    logger.warn(
-      CHANNEL,
-      `Invalid tool-use persistence TTL value: ${value}. Using default of ${DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS} hours.`,
-    );
-    return DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS;
-  }
-  return hours;
 }
 
 /** Set whether the memory tool is enabled for tool-use sessions. */

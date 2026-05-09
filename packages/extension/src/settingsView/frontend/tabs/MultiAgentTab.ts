@@ -1,10 +1,5 @@
-/**
- * MultiAgentTab component - multi-agent settings for the settings view.
- * Contains agent teams (built-in + custom) for quick configuration,
- * and reliability settings.
- */
+/** Multi-agent teams, coordination toggles, and reliability tuning. */
 
-// Third-party imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';

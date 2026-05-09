@@ -377,10 +377,9 @@ export class PermissionCard extends LitElement {
   }
 
   private handleFileClick(event: MouseEvent): void {
-    const target = event.target as HTMLElement;
-    const file = target.dataset?.file;
+    const file = (event.target as HTMLElement).dataset.file;
     if (file) {
-      this.openFile(file);
+      postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, { file });
     }
   }
 
@@ -479,10 +478,6 @@ export class PermissionCard extends LitElement {
     const feedback = getTextareaValue(this.feedbackInput).trim() || undefined;
     this.emitAction(action, feedback);
     this.showFeedback = false;
-  }
-
-  private openFile(filePath: string): void {
-    postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, { file: filePath });
   }
 
   private canCollectFeedback(): boolean {

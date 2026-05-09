@@ -19,10 +19,6 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 const CHANNEL = 'SetupAssistant';
 logger.initialize(CHANNEL);
 
-export const setupAssistantCommands = {
-  runSetupAssistant: 'texra.runSetupAssistant',
-};
-
 /**
  * Model to launch with when the user is signed in to Researcher Access
  * (server-side keys cover Gemini).
