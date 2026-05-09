@@ -14,7 +14,6 @@ export const groupStyles = css`
     align-items: center;
     background-color: transparent;
     border-left: var(--border-medium) solid var(--color-border);
-    transition: border-left-color var(--transition-normal);
   }
 
   .log-group-header {

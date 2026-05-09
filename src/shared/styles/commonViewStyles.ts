@@ -106,7 +106,6 @@ export const commonViewStyles: CSSResult = css`
   .collapsible::part(body) {
     max-height: var(--height-medium);
     overflow: hidden;
-    transition: max-height var(--transition-slow);
   }
 
   .collapsible[open]::part(body) {
@@ -116,7 +115,6 @@ export const commonViewStyles: CSSResult = css`
   .collapsible::part(content) {
     display: grid;
     grid-template-rows: 1fr;
-    transition: grid-template-rows var(--transition-normal);
   }
 
   .collapsible:not([open])::part(content) {

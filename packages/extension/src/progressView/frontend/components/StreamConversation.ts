@@ -1,17 +1,4 @@
-/**
- * `<stream-conversation>` — the body of the Progress view's active stream.
- *
- * Hoisted out of `ProgressApp.renderStreamContent()` (PRD:
- * docs/prd/electron-shell-layout.md § 7.B). Subscribes to module-level signals
- * from `../progressState.ts` so the conversation body can mount independently
- * of `<progress-app>` — required for the Electron three-pane shell (PR 3) where
- * `<stream-conversation>` and `<stream-tabs>` live in different DOM trees.
- *
- * Behavior preservation: the rendered tree, child events, and Lit context
- * provider values match the previous `ProgressApp` body exactly. The page-
- * level "no runs yet" empty-state remains owned by `<progress-app>` for now —
- * see the PR description for why we deferred that part of the PRD wording.
- */
+/** `<stream-conversation>` — body of the Progress view's active stream. */
 
 // Third-party imports
 import { LitElement, css, html, type TemplateResult } from 'lit';
@@ -65,19 +52,12 @@ export class StreamConversation extends SignalWatcher(LitElement) {
       overflow: hidden;
     }
 
-    /* Stream content containers - pass-through for layout, mirrors
-       the equivalent block previously in ProgressApp.styles. */
     tool-use-stream-content,
     workflow-stream-content,
     process-stream-content {
       display: contents;
     }
   `;
-
-  // ---- Lit context providers --------------------------------------------
-  // Identical shape and update timing to the providers that previously lived
-  // on `<progress-app>`. Descendants (`workflow-stream-content`, `log-list`,
-  // `background-tasks-panel`, …) are unchanged.
 
   @provide({ context: streamStateContext })
   @state()
@@ -99,12 +79,7 @@ export class StreamConversation extends SignalWatcher(LitElement) {
   @state()
   private streamByIdContextValue: StreamByIdMap = EMPTY_STREAM_BY_ID;
 
-  /**
-   * Sync signal-computed values into @provide/@state context properties.
-   * SignalWatcher triggers requestUpdate() when any read signal changes,
-   * so this runs only when computed values actually propagate. Mirrors the
-   * willUpdate() previously in ProgressApp.
-   */
+  /** Sync signal-computed values into @provide/@state context properties. */
   protected override willUpdate(): void {
     this.streamContextValue = streamContext$.get();
     this.streamLogContextValue = logContext$.get();
@@ -116,8 +91,7 @@ export class StreamConversation extends SignalWatcher(LitElement) {
   override render(): TemplateResult {
     const { streamInfo, streamState, isToolUse } = this.streamContextValue;
 
-    // No active stream — show empty log-list. Identical to the prior
-    // `renderStreamContent` early return.
+    // No active stream — show empty log-list.
     if (!streamInfo || !streamState) {
       return html`<log-list></log-list>`;
     }

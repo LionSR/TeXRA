@@ -72,17 +72,9 @@ export const toolUseStyles = css`
   }
 
   .banner-details--relay-error {
-    position: relative;
-  }
-
-  .banner-details--relay-error::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    inset-block: 0;
-    width: var(--border-thick);
-    background: var(--wa-color-warning-on-quiet, #ff8c00);
-    border-radius: var(--border-radius-small) 0 0 var(--border-radius-small);
+    border-left: var(--border-medium) solid
+      var(--wa-color-warning-on-quiet, #ff8c00);
+    border-radius: 0 var(--border-radius-small) var(--border-radius-small) 0;
   }
 
   .banner-details--relay-error > .details-summary .label {
@@ -110,7 +102,7 @@ export const toolUseStyles = css`
   :is(.tool-user-feedback, .tool-error-content) {
     padding: var(--wa-space-2xs);
     border-radius: var(--border-radius-small);
-    border-left: var(--border-thick) solid;
+    border-left: var(--border-medium) solid;
   }
 
   .tool-user-feedback {
@@ -149,9 +141,6 @@ export const toolUseStyles = css`
     display: inline-flex;
     align-items: center;
     gap: var(--wa-space-3xs);
-    transition:
-      color var(--transition-fast),
-      background-color var(--transition-fast);
   }
 
   .proposal-restore-link:focus-visible {

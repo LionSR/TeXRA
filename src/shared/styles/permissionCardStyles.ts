@@ -138,7 +138,6 @@ export const permissionCardStyles: CSSResult = css`
     color: var(--wa-color-text-link);
     cursor: pointer;
     text-decoration: none;
-    transition: color var(--transition-fast);
   }
 
   .file-link:hover {

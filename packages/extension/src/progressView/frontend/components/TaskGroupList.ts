@@ -1,10 +1,4 @@
-/**
- * Fully declarative task group list component.
- * Data flows in, DOM flows out. No imperative manipulation.
- *
- * Renders groups, headers, and log entries inline — no intermediate
- * Shadow DOM components. Uses guard() to skip unchanged templates.
- */
+/** Declarative task group list — renders groups, headers, and log entries inline. */
 
 // Third-party imports
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
