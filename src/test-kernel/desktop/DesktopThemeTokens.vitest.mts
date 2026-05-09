@@ -1,5 +1,6 @@
 // Node imports
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
 
 // Third-party imports
 import { JSDOM } from 'jsdom';
@@ -26,36 +27,26 @@ function createThemeDocument(extraCss = ''): Document {
 }
 
 describe('desktop theme tokens', () => {
-  it('exports textarea and text input colors through the WA form-control bridge', () => {
-    const document = createThemeDocument(`
-      textarea,
-      input[type='text'] {
-        background: var(--vscode-textArea-background);
-        border-color: var(--vscode-textArea-border);
-        color: var(--vscode-textArea-foreground);
-      }
-    `);
+  it('defines textarea and text input colors via the WA form-control tokens', () => {
+    // Per #3741, consumer code references --wa-* tokens directly and the
+    // --vscode-textArea-* / --vscode-settings-textInputBackground re-exports
+    // were retired (the desktop renderer no longer ships those aliases).
+    // The bridge contract is now: --wa-form-control-* are defined in the
+    // theme and consumers read them directly.
+    const document = createThemeDocument();
     const rootStyle = document.defaultView!.getComputedStyle(
       document.documentElement,
     );
 
     expect(
-      rootStyle.getPropertyValue('--vscode-textArea-background').trim(),
-    ).toBe('var(--wa-form-control-background-color)');
-    expect(rootStyle.getPropertyValue('--vscode-textArea-border').trim()).toBe(
-      'var(--wa-form-control-border-color)',
-    );
-    expect(
-      rootStyle.getPropertyValue('--vscode-textArea-foreground').trim(),
-    ).toBe('var(--wa-form-control-text-color)');
-    expect(
-      rootStyle
-        .getPropertyValue('--vscode-settings-textInputBackground')
-        .trim(),
-    ).toBe('var(--wa-form-control-background-color)');
-    expect(
       rootStyle.getPropertyValue('--wa-form-control-background-color').trim(),
     ).toMatch(/^light-dark\(#ffffff,\s*#313131\)$/);
+    expect(
+      rootStyle.getPropertyValue('--wa-form-control-text-color').trim(),
+    ).toMatch(/^light-dark\(#1f2328,\s*#cccccc\)$/);
+    expect(
+      rootStyle.getPropertyValue('--wa-form-control-border-color').trim(),
+    ).toMatch(/^light-dark\(#d0d7de,\s*#3c3c3c\)$/);
   });
 
   it('keeps light and dark palettes in one semantic token layer', () => {
@@ -93,13 +84,80 @@ describe('desktop theme tokens', () => {
     );
   });
 
-  it('does not retain --desktop-color-* / --desktop-font-* indirection (palette lives on --wa-* directly)', () => {
-    // Strip CSS comments so wording in doc-comments cannot accidentally satisfy
-    // the assertion. We only care about real declarations and var() refs.
-    const css = readThemeTokens().replace(/\/\*[\s\S]*?\*\//g, '');
-    expect(css).not.toMatch(/--desktop-color-[a-zA-Z-]+\s*:/);
-    expect(css).not.toMatch(/--desktop-font-[a-zA-Z-]+\s*:/);
-    expect(css).not.toMatch(/var\(--desktop-color-[a-zA-Z-]+\)/);
-    expect(css).not.toMatch(/var\(--desktop-font-[a-zA-Z-]+\)/);
+  it('keeps the --desktop-color-* palette layer confined to themeTokens.css (no consumer references)', () => {
+    // Per #3741, --desktop-color-* / --desktop-font-* tokens serve as an
+    // internal palette layer inside the bridge file (so the WA semantic
+    // tokens read from named palette entries rather than scattered
+    // light-dark() literals), but consumer code references only --wa-*.
+    // Verify both halves:
+    //   (a) themeTokens.css declares the palette and uses it via var().
+    //   (b) no consumer source under packages/desktop, packages/extension,
+    //       or src/ references --desktop-color-* or --desktop-font-*.
+    // Strip CSS comments before matching so prose in doc-comments cannot
+    // accidentally satisfy the inside-file expectations.
+    const insideCss = readThemeTokens().replaceAll(/\/\*[\s\S]*?\*\//g, '');
+    expect(insideCss).toMatch(/--desktop-color-[a-zA-Z-]+\s*:/);
+    expect(insideCss).toMatch(/var\(--desktop-color-[a-zA-Z-]+\)/);
+
+    const consumerOffenders = collectDesktopTokenOffenders();
+    expect(consumerOffenders).toEqual([]);
   });
 });
+
+/**
+ * Walk consumer source trees and collect any file (other than the bridge
+ * itself) that references --desktop-color-* or --desktop-font-*. The bridge
+ * file is the single place those tokens are allowed.
+ */
+function collectDesktopTokenOffenders(): string[] {
+  const repoRoot = repoPath('.');
+  const bridgeAbs = repoPath('packages/desktop/src/renderer/themeTokens.css');
+  const offenders: string[] = [];
+  const tokenPattern = /--desktop-(color|font)-[a-zA-Z-]+/;
+  // CSS comments + multi-line JS/TS comments. The regex pass ignores
+  // declarations/refs that live inside any comment so doc-comments referencing
+  // these tokens don't trip the test.
+  const stripCommentsCss = (text: string): string =>
+    text.replaceAll(/\/\*[\s\S]*?\*\//g, '');
+  const stripCommentsTs = (text: string): string =>
+    text
+      .replaceAll(/\/\*[\s\S]*?\*\//g, '')
+      .replaceAll(/(^|[^:])\/\/.*$/gm, '$1');
+
+  for (const dir of [
+    repoPath('packages/desktop/src'),
+    repoPath('packages/extension/src'),
+    repoPath('src'),
+  ]) {
+    walk(dir, (absPath) => {
+      if (absPath === bridgeAbs) return;
+      if (!/\.(css|ts|mts|tsx|js|mjs|cjs)$/.test(absPath)) return;
+      const raw = readFileSync(absPath, 'utf8');
+      const text = absPath.endsWith('.css')
+        ? stripCommentsCss(raw)
+        : stripCommentsTs(raw);
+      if (tokenPattern.test(text)) {
+        offenders.push(relative(repoRoot, absPath));
+      }
+    });
+  }
+  return offenders;
+}
+
+function walk(dir: string, visit: (absPath: string) => void): void {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.name === 'node_modules' || entry.name === 'dist') continue;
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walk(full, visit);
+    } else if (entry.isFile()) {
+      visit(full);
+    }
+  }
+}
