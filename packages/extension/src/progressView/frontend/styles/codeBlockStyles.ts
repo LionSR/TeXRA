@@ -52,21 +52,9 @@ export const codeBlockStyles = css`
     color: var(--wa-color-text-quiet, #888);
     cursor: pointer;
     border-radius: var(--border-radius-small);
-    transition:
-      background-color var(--transition-fast),
-      color var(--transition-fast),
-      transform var(--transition-fast);
 
     &:hover {
-      background-color: var(--wa-color-toolbar-hover, rgba(90, 93, 94, 0.31));
       color: var(--wa-color-text-normal);
-    }
-
-    &:active {
-      background-color: var(
-        --wa-color-toolbar-active,
-        rgba(99, 102, 103, 0.31)
-      );
     }
 
     &.copied {

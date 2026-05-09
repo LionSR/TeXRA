@@ -99,12 +99,12 @@ export class InstructionPanel extends LitElement {
     css`
       :host {
         display: block;
-        /* Bumped from 6rem so the "Agent…" placeholder is readable on a
-           cold-start launcher (no agent selected yet) without clipping. */
+        /* Symmetric ranges for agent + model selects so the two boxes are
+           identical-width at every viewport. */
         --agent-select-min-width: 7rem;
-        --agent-select-max-width: min(11rem, calc(100vw - 9rem));
-        --model-select-min-width: 6rem;
-        --model-select-max-width: min(13rem, calc(100vw - 9rem));
+        --agent-select-max-width: min(12rem, calc((100vw - 12rem) / 2));
+        --model-select-min-width: 7rem;
+        --model-select-max-width: min(12rem, calc((100vw - 12rem) / 2));
         --agent-model-listbox-min-width: 12rem;
         --agent-model-listbox-max-width: min(
           20rem,
@@ -314,33 +314,8 @@ export class InstructionPanel extends LitElement {
         color: var(--wa-color-brand-on-loud);
         border: var(--border-thin) solid
           color-mix(in srgb, black 8%, var(--wa-color-brand-fill-loud));
-        box-shadow:
-          0 1px 1px rgb(0 0 0 / 8%),
-          inset 0 1px 0 rgb(255 255 255 / 12%);
         font-weight: var(--font-weight-semibold, 600);
         letter-spacing: 0.01em;
-        transition:
-          transform var(--transition-fast),
-          box-shadow var(--transition-fast),
-          background-color var(--transition-fast),
-          filter var(--transition-fast);
-      }
-
-      wa-button.execute-button::part(base):hover {
-        transform: translateY(-0.5px);
-        filter: brightness(1.06);
-        box-shadow:
-          0 3px 8px
-            color-mix(in srgb, var(--wa-color-brand-fill-loud) 28%, transparent),
-          inset 0 1px 0 rgb(255 255 255 / 18%);
-      }
-
-      wa-button.execute-button::part(base):active {
-        transform: translateY(0.5px);
-        filter: brightness(0.97);
-        box-shadow:
-          0 0 0 transparent,
-          inset 0 1px 0 rgb(0 0 0 / 8%);
       }
 
       wa-button.execute-button:focus-visible::part(base) {
@@ -360,8 +335,8 @@ export class InstructionPanel extends LitElement {
 
       /*
        * Hairline separator + compact monospace badge — distinctive but
-       * disciplined. Uses inset shadow instead of a fill so the chip
-       * remains legible against the brand-fill background in both
+       * disciplined. Uses a translucent border outline (no fill) so the
+       * chip remains legible against the brand-fill background in both
        * light and dark themes.
        */
       .execute-button__kbd {
@@ -378,7 +353,7 @@ export class InstructionPanel extends LitElement {
         font-weight: 500;
         letter-spacing: 0.04em;
         opacity: 0.75;
-        box-shadow: inset 0 0 0 var(--border-thin) rgb(255 255 255 / 28%);
+        border: var(--border-thin) solid rgb(255 255 255 / 28%);
         position: relative;
       }
 

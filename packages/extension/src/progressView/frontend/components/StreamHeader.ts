@@ -141,11 +141,6 @@ export class StreamHeader extends LitElement {
         gap: var(--wa-space-2xs);
         color: var(--color-text-secondary);
         border-bottom: var(--border-thin) solid var(--color-border);
-        background: linear-gradient(
-          to bottom,
-          color-mix(in srgb, var(--wa-color-surface-default) 80%, transparent),
-          transparent
-        );
       }
 
       .log-header__primary {
@@ -251,10 +246,6 @@ export class StreamHeader extends LitElement {
       .yolo-toggle-button,
       .super-yolo-toggle-button {
         flex-shrink: 0;
-        transition:
-          color var(--transition-normal),
-          background-color var(--transition-normal),
-          box-shadow var(--transition-normal);
       }
 
       .yolo-toggle-button.is-active,
@@ -271,7 +262,7 @@ export class StreamHeader extends LitElement {
         --_toggle-color: var(--color-warning);
       }
 
-      /* Shared active toggle styles */
+      /* Active toggle: color + tinted background. */
       :is(.yolo-toggle-button, .super-yolo-toggle-button).is-active {
         color: var(--_toggle-color);
         background-color: color-mix(
@@ -279,18 +270,6 @@ export class StreamHeader extends LitElement {
           var(--_toggle-color) 15%,
           transparent
         );
-        box-shadow: 0 0 8px
-          color-mix(in srgb, var(--_toggle-color) 40%, transparent);
-      }
-
-      :is(.yolo-toggle-button, .super-yolo-toggle-button).is-active:hover {
-        background-color: color-mix(
-          in srgb,
-          var(--_toggle-color) 25%,
-          transparent
-        );
-        box-shadow: 0 0 12px
-          color-mix(in srgb, var(--_toggle-color) 60%, transparent);
       }
 
       .parent-link {
@@ -302,18 +281,11 @@ export class StreamHeader extends LitElement {
         color: var(--color-text-secondary);
         cursor: pointer;
         white-space: nowrap;
-        opacity: var(--opacity-subtle);
         border-radius: var(--border-radius-small);
-        transition:
-          opacity var(--transition-fast),
-          background-color var(--transition-fast),
-          color var(--transition-fast);
       }
 
       .parent-link:hover {
-        opacity: var(--opacity-full);
         color: var(--color-text-link);
-        background-color: var(--wa-color-neutral-fill-quiet);
       }
 
       .parent-link:focus-visible {

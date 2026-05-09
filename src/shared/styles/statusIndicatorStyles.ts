@@ -10,17 +10,12 @@ export const statusIndicatorStyles: CSSResult = css`
     flex-shrink: 0;
     background-color: var(--wa-color-text-quiet);
     opacity: var(--opacity-subtle, 0.7);
-    transition:
-      background-color var(--transition-slow),
-      box-shadow var(--transition-slow),
-      opacity var(--transition-slow);
   }
 
   .status-indicator.is-running,
   .tab-status.is-running {
     background-color: var(--color-success, #4caf50);
     opacity: var(--opacity-full);
-    animation: pulse-scale 2s infinite;
   }
 
   .status-indicator.is-stopped,
@@ -39,21 +34,18 @@ export const statusIndicatorStyles: CSSResult = css`
   .tab-status.is-waiting {
     background-color: var(--wa-color-text-link);
     opacity: var(--opacity-full);
-    animation: pulse-scale 3s infinite;
   }
 
   .status-indicator.is-resuming,
   .tab-status.is-resuming {
     background-color: var(--wa-color-text-link);
     opacity: var(--opacity-full);
-    animation: pulse-scale 1.5s infinite;
   }
 
   .status-indicator.is-initializing,
   .tab-status.is-initializing {
     background-color: var(--wa-color-text-quiet);
     opacity: var(--opacity-full);
-    animation: pulse-scale 2.5s infinite;
   }
 
   .status-indicator.is-ready,
