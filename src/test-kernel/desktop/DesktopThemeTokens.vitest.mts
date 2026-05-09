@@ -1,5 +1,6 @@
 // Node imports
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
 
 // Third-party imports
 import { JSDOM } from 'jsdom';
@@ -83,18 +84,81 @@ describe('desktop theme tokens', () => {
     );
   });
 
-  it('keeps the --desktop-color-* palette layer scoped to the bridge (not consumer code)', () => {
-    // Per #3741, --desktop-color-* / --desktop-font-* tokens still serve as
-    // an internal palette layer inside this bridge file (so the WA semantic
+  it('keeps the --desktop-color-* palette layer confined to themeTokens.css (no consumer references)', () => {
+    // Per #3741, --desktop-color-* / --desktop-font-* tokens serve as an
+    // internal palette layer inside the bridge file (so the WA semantic
     // tokens read from named palette entries rather than scattered
-    // light-dark() literals), but consumer code references only --wa-*. We
-    // test the bridge invariant by checking that the palette + var() refs
-    // are confined to this file. Strip CSS comments first so prose in
-    // doc-comments cannot accidentally satisfy the assertion.
-    const css = readThemeTokens().replaceAll(/\/\*[\s\S]*?\*\//g, '');
+    // light-dark() literals), but consumer code references only --wa-*.
+    // Verify both halves:
+    //   (a) themeTokens.css declares the palette and uses it via var().
+    //   (b) no consumer source under packages/desktop, packages/extension,
+    //       or src/ references --desktop-color-* or --desktop-font-*.
+    // Strip CSS comments before matching so prose in doc-comments cannot
+    // accidentally satisfy the inside-file expectations.
+    const insideCss = readThemeTokens().replaceAll(/\/\*[\s\S]*?\*\//g, '');
+    expect(insideCss).toMatch(/--desktop-color-[a-zA-Z-]+\s*:/);
+    expect(insideCss).toMatch(/var\(--desktop-color-[a-zA-Z-]+\)/);
 
-    // The palette declarations and intra-bridge var() refs are expected here:
-    expect(css).toMatch(/--desktop-color-[a-zA-Z-]+\s*:/);
-    expect(css).toMatch(/var\(--desktop-color-[a-zA-Z-]+\)/);
+    const consumerOffenders = collectDesktopTokenOffenders();
+    expect(consumerOffenders).toEqual([]);
   });
 });
+
+/**
+ * Walk consumer source trees and collect any file (other than the bridge
+ * itself) that references --desktop-color-* or --desktop-font-*. The bridge
+ * file is the single place those tokens are allowed.
+ */
+function collectDesktopTokenOffenders(): string[] {
+  const repoRoot = repoPath('.');
+  const bridgeAbs = repoPath('packages/desktop/src/renderer/themeTokens.css');
+  const offenders: string[] = [];
+  const tokenPattern = /--desktop-(color|font)-[a-zA-Z-]+/;
+  // CSS comments + multi-line JS/TS comments. The regex pass ignores
+  // declarations/refs that live inside any comment so doc-comments referencing
+  // these tokens don't trip the test.
+  const stripCommentsCss = (text: string): string =>
+    text.replaceAll(/\/\*[\s\S]*?\*\//g, '');
+  const stripCommentsTs = (text: string): string =>
+    text
+      .replaceAll(/\/\*[\s\S]*?\*\//g, '')
+      .replaceAll(/(^|[^:])\/\/.*$/gm, '$1');
+
+  for (const dir of [
+    repoPath('packages/desktop/src'),
+    repoPath('packages/extension/src'),
+    repoPath('src'),
+  ]) {
+    walk(dir, (absPath) => {
+      if (absPath === bridgeAbs) return;
+      if (!/\.(css|ts|mts|tsx|js|mjs|cjs)$/.test(absPath)) return;
+      const raw = readFileSync(absPath, 'utf8');
+      const text = absPath.endsWith('.css')
+        ? stripCommentsCss(raw)
+        : stripCommentsTs(raw);
+      if (tokenPattern.test(text)) {
+        offenders.push(relative(repoRoot, absPath));
+      }
+    });
+  }
+  return offenders;
+}
+
+function walk(dir: string, visit: (absPath: string) => void): void {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.name === 'node_modules' || entry.name === 'dist') continue;
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walk(full, visit);
+    } else if (entry.isFile()) {
+      visit(full);
+    }
+  }
+}
+
