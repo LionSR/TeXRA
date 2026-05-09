@@ -330,50 +330,6 @@ export class InstructionPanel extends LitElement {
         line-height: 1;
       }
 
-      /*
-       * Hairline separator + compact monospace badge — distinctive but
-       * disciplined. Uses a translucent border outline (no fill) so the
-       * chip remains legible against the brand-fill background in both
-       * light and dark themes.
-       */
-      .execute-button__kbd {
-        display: inline-flex;
-        align-items: center;
-        height: 1em;
-        padding: 0 var(--wa-space-3xs);
-        margin-left: var(--wa-space-2xs);
-        border-radius: var(--border-radius-small);
-        background: transparent;
-        color: inherit;
-        font-family: var(--wa-font-family-mono, ui-monospace, monospace);
-        font-size: var(--font-size-xs);
-        font-weight: 500;
-        letter-spacing: 0.04em;
-        opacity: 0.75;
-        border: var(--border-thin) solid rgb(255 255 255 / 28%);
-        position: relative;
-      }
-
-      .execute-button__kbd::before {
-        content: '';
-        position: absolute;
-        left: calc(-1 * var(--wa-space-2xs));
-        top: 18%;
-        bottom: 18%;
-        width: var(--border-thin);
-        background: rgb(255 255 255 / 22%);
-      }
-
-      /*
-       * Hide the keyboard-shortcut chip when the toolbar is too narrow,
-       * so the button doesn't push selects off the row on tiny widgets.
-       */
-      @media (max-width: 480px) {
-        .execute-button__kbd {
-          display: none;
-        }
-      }
-
       .model-selection-footer .agent-select-controls,
       .model-selection-footer .agent-select-dropdowns {
         display: flex;
@@ -889,9 +845,6 @@ export class InstructionPanel extends LitElement {
           >
             <wa-icon slot="start" library="texra" name="play"></wa-icon>
             <span class="execute-button__label">Run</span>
-            <kbd class="execute-button__kbd" aria-hidden="true"
-              >${this.executeShortcutLabel}</kbd
-            >
           </wa-button>
         </div>
       </div>

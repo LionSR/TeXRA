@@ -76,8 +76,7 @@ let defaultRegistryInstance: IToolRegistry | null = null;
  *
  * Defined as a function (not a module-scope const) so tool constructors
  * run lazily on first `getDefaultToolRegistry()` call rather than eagerly
- * on import. This keeps imports side-effect-free and ensures
- * `resetDefaultToolRegistry()` creates genuinely fresh instances.
+ * on import. This keeps imports side-effect-free.
  */
 function createDefaultTools() {
   return {
@@ -149,13 +148,6 @@ export function getDefaultToolRegistry(): IToolRegistry {
   return defaultRegistryInstance;
 }
 
-/**
- * Reset the default tool registry singleton.
- * @internal For testing only - creates fresh tool instances on next access.
- */
-export function resetDefaultToolRegistry(): void {
-  defaultRegistryInstance = null;
-}
 
 /** Valid tool name pattern: starts with letter/underscore, followed by alphanumeric/underscores. */
 const VALID_TOOL_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/;

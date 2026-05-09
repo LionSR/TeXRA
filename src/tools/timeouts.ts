@@ -15,12 +15,3 @@ export function isTimeoutErrorCode(code: string | undefined): boolean {
   return code === 'ECONNABORTED' || code === 'ETIMEDOUT';
 }
 
-/**
- * Build a consistent timeout error message.
- *
- * @example buildTimeoutMessage('Command execution', 120_000)
- * // → "Command execution timed out after 120s."
- */
-export function buildTimeoutMessage(action: string, timeoutMs: number): string {
-  return `${action} timed out after ${timeoutMs / 1000}s.`;
-}
