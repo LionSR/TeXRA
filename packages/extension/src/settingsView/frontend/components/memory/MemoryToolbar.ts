@@ -1,8 +1,5 @@
-/**
- * MemoryToolbar component - header with refresh and open folder actions.
- */
+/** Header with refresh and open-folder actions. */
 
-// Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 

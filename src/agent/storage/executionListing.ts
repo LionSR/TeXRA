@@ -62,13 +62,6 @@ export function invalidateListingCache(): void {
   cache = null;
 }
 
-/** Reset all module state (cache + migration flag). Called on workspace change. */
-export function resetListingState(): void {
-  cache = null;
-  migrated = false;
-  cachedWorkspacePath = undefined;
-}
-
 // ============================================================================
 // Public API
 // ============================================================================

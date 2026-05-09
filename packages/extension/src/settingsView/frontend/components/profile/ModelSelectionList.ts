@@ -1,9 +1,5 @@
-/**
- * ModelSelectionList component - checkbox list of models grouped by provider.
- * Includes deprecated model toggles and a helper model dropdown.
- */
+/** Checkbox list of models grouped by provider, with deprecated toggles and helper-model picker. */
 
-// Third-party imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
@@ -273,12 +269,17 @@ export class ModelSelectionList extends LitElement {
     const enabledCount = group.current.filter((m) => m.enabled).length;
     const totalCount = group.current.length;
     const keyStatus = this.getProviderKeyStatus(group.provider);
-    const keyStatusLabel =
-      keyStatus?.status === 'set'
-        ? 'Key set'
-        : keyStatus?.status === 'env'
-          ? 'Env key'
-          : 'No key';
+    let keyStatusLabel: string;
+    switch (keyStatus?.status) {
+      case 'set':
+        keyStatusLabel = 'Key set';
+        break;
+      case 'env':
+        keyStatusLabel = 'Env key';
+        break;
+      default:
+        keyStatusLabel = 'No key';
+    }
     const keyStatusVariant: 'success' | 'neutral' =
       keyStatus?.status === 'set' ? 'success' : 'neutral';
     const providerKeyActions = keyStatus

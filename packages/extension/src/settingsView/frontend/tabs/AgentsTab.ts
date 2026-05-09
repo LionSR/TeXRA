@@ -1,9 +1,5 @@
-/**
- * AgentsTab component - split panel browser for all agents (local + remote).
- * Sub-tabs for Workflow and Tool Use categories.
- */
+/** Split panel browser for all agents (local + remote). */
 
-// Third-party imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/tab/tab.js';
 import '@awesome.me/webawesome/dist/components/tab-group/tab-group.js';

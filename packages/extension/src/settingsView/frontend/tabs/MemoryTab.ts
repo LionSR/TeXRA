@@ -1,19 +1,12 @@
-/**
- * MemoryTab component - memory management content for settings view.
- * Reuses memory view components from memoryView.
- */
+/** Memory management content for the settings view. */
 
-// Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-// Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
-
-// Local imports - shared schemas
 import type { MemoryViewItem } from '@shared/schemas';
 
-// Local imports - settings view components (side-effect: register)
+// Side-effect: register child components.
 import '../components/memory/MemoryToolbar';
 import '../components/memory/MemoryToggle';
 import '../components/memory/MemoryList';

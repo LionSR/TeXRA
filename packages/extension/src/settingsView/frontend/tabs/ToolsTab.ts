@@ -1,9 +1,5 @@
-/**
- * ToolsTab component - tool dashboard showing all available tools
- * with their configuration status and installation guides.
- */
+/** Tool dashboard showing tool status and installation guides. */
 
-// Third-party imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -34,7 +30,6 @@ import type {
 // Side-effect: register tool card component
 import '../components/tools/ToolCard';
 
-/** Sandbox mode display labels — single source of truth for the UI. */
 const SANDBOX_MODE_OPTIONS: readonly {
   value: CodexSandboxMode;
   label: string;
@@ -44,7 +39,6 @@ const SANDBOX_MODE_OPTIONS: readonly {
   { value: 'danger-full-access', label: 'Full access' },
 ] as const;
 
-/** Reasoning effort display labels — single source of truth for the UI. */
 const REASONING_EFFORT_OPTIONS: readonly {
   value: CodexReasoningEffort;
   label: string;
@@ -55,7 +49,6 @@ const REASONING_EFFORT_OPTIONS: readonly {
   { value: 'xhigh', label: 'Extra high' },
 ] as const;
 
-/** Codex approval policy display labels — single source of truth for the UI. */
 const APPROVAL_POLICY_OPTIONS: readonly {
   value: CodexApprovalPolicy;
   label: string;
@@ -160,7 +153,6 @@ export class ToolsTab extends LitElement {
         stroke: var(--wa-color-testing-passed, #73c991);
         stroke-width: 4;
         stroke-linecap: round;
-        transition: stroke-dashoffset var(--transition-slow);
       }
 
       .tools-health-ring__missing {
@@ -168,7 +160,6 @@ export class ToolsTab extends LitElement {
         stroke: var(--wa-color-testing-failed, #f48771);
         stroke-width: 4;
         stroke-linecap: round;
-        transition: stroke-dashoffset var(--transition-slow);
       }
 
       .tools-health-labels {
@@ -466,16 +457,15 @@ export class ToolsTab extends LitElement {
       else if (item.status === 'not-found') missing++;
     }
 
+    // Early return above guarantees items.length > 0.
     const total = this.items.length;
-    const r = 14; // radius
+    const r = 14;
     const circ = 2 * Math.PI * r;
-    const availPct = total > 0 ? available / total : 0;
-    const missPct = total > 0 ? missing / total : 0;
-    const availLen = circ * availPct;
-    const missLen = circ * missPct;
-    const availOffset = circ - availLen;
-    // Missing arc starts after the available arc
-    const missOffset = circ - missLen;
+    const availPct = available / total;
+    const missPct = missing / total;
+    const availOffset = circ - circ * availPct;
+    // Missing arc starts after the available arc.
+    const missOffset = circ - circ * missPct;
     const missRotation = availPct * 360;
 
     return html`

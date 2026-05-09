@@ -1,13 +1,8 @@
 /**
- * Pagination component — Unix-style page navigation for list views.
- *
- * Displays a compact status bar with page info and prev/next controls,
- * inspired by Unix pagers like `less`.
- *
- * Fires `page-change` events with the new page index when the user navigates.
+ * Compact pager (status + prev/next controls) for list views.
+ * Fires `page-change` with the new page index on navigation.
  */
 
-// Third-party imports
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
