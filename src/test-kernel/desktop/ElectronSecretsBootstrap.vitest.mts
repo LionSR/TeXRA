@@ -117,7 +117,6 @@ describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
 
     expect(warnings).toHaveLength(1);
   });
-
 });
 
 describe('desktop renderer bootstrap fallback', () => {
@@ -257,4 +256,3 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
     expect(mod.getSecretStorageMode()).toBe('unavailable');
   });
 });
-

@@ -112,9 +112,7 @@ test('settings overlay scrolls (Tools tab top + bottom)', async () => {
   // Find the wa-tab-panel for tools — that's the scrollable element under
   // the new flex-body fix.
   const probeBefore = await launched.page.evaluate(() => {
-    const dialog = document.querySelector(
-      'wa-dialog.desktop-settings-overlay',
-    );
+    const dialog = document.querySelector('wa-dialog.desktop-settings-overlay');
     const settingsApp = dialog?.querySelector('settings-app');
     const root = settingsApp?.shadowRoot;
     const panel = root?.querySelector<HTMLElement>(
@@ -136,9 +134,7 @@ test('settings overlay scrolls (Tools tab top + bottom)', async () => {
 
   // Scroll the panel to the bottom and re-screenshot.
   await launched.page.evaluate(() => {
-    const dialog = document.querySelector(
-      'wa-dialog.desktop-settings-overlay',
-    );
+    const dialog = document.querySelector('wa-dialog.desktop-settings-overlay');
     const settingsApp = dialog?.querySelector('settings-app');
     const root = settingsApp?.shadowRoot;
     const panel = root?.querySelector<HTMLElement>(
@@ -149,9 +145,7 @@ test('settings overlay scrolls (Tools tab top + bottom)', async () => {
   await launched.page.waitForTimeout(150);
 
   const probeAfter = await launched.page.evaluate(() => {
-    const dialog = document.querySelector(
-      'wa-dialog.desktop-settings-overlay',
-    );
+    const dialog = document.querySelector('wa-dialog.desktop-settings-overlay');
     const settingsApp = dialog?.querySelector('settings-app');
     const root = settingsApp?.shadowRoot;
     const panel = root?.querySelector<HTMLElement>(
