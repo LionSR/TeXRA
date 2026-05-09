@@ -65,12 +65,11 @@ export const requestPanelStyles: CSSResult = css`
    * ================================================================ */
 
   :is(${CONTAINERS}) {
-    margin: ${sp.large} 0;
-    padding: ${sp.large};
+    margin: ${sp.medium} 0;
+    padding: ${sp.medium};
     border: var(--border-thin) solid var(--wa-form-control-border-color);
     border-radius: var(--border-radius-large);
     background: var(--wa-color-surface-default);
-    box-shadow: 0 2px 8px var(--wa-color-surface-shadow, rgba(0, 0, 0, 0.12));
     display: flex;
     flex-direction: column;
     gap: ${sp.medium};
@@ -176,22 +175,22 @@ export const requestPanelStyles: CSSResult = css`
 
   /* Type-specific item accent */
   .approval-request {
-    border-left: var(--border-thick) solid var(--wa-color-text-normal);
+    border-left: var(--border-medium) solid var(--wa-color-text-normal);
   }
   .bash-approval-request {
-    border-left: var(--border-thick) solid var(--wa-color-terminal-ansi-yellow);
+    border-left: var(--border-medium) solid var(--wa-color-terminal-ansi-yellow);
   }
   .retry-request {
-    border-left: var(--border-thick) solid var(--color-warning);
+    border-left: var(--border-medium) solid var(--color-warning);
   }
   .workflow-proposal {
-    border-left: var(--border-thick) solid var(--wa-color-text-link);
+    border-left: var(--border-medium) solid var(--wa-color-text-link);
   }
   .plan-approval-request {
-    border-left: var(--border-thick) solid var(--wa-color-text-link);
+    border-left: var(--border-medium) solid var(--wa-color-text-link);
   }
   .external-inquiry-request {
-    border-left: var(--border-thick) solid var(--wa-color-focus);
+    border-left: var(--border-medium) solid var(--wa-color-focus);
   }
 
   /* Shared action button width — approval and bash use the same flex-basis */
@@ -293,7 +292,7 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .bash-approval-request__command .code-block {
-    border-left: var(--border-thick) solid var(--wa-color-terminal-ansi-yellow);
+    border-left: var(--border-medium) solid var(--wa-color-terminal-ansi-yellow);
   }
 
   .bash-approval-request__command .code-block pre {
@@ -607,8 +606,6 @@ export const requestPanelStyles: CSSResult = css`
     padding: ${sp.small} ${sp.medium};
     background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.1));
     border-radius: var(--border-radius-small);
-    border-left: var(--border-thick) solid
-      var(--wa-color-blockquote-border, var(--wa-color-focus));
     line-height: var(--line-height-normal);
   }
 

@@ -156,8 +156,6 @@ export class PlanView extends LitElement {
           var(--wa-color-brand-fill-quiet) 65%,
           transparent
         );
-        box-shadow: inset 2px 0 0
-          color-mix(in srgb, var(--wa-color-brand-fill-loud) 50%, transparent);
       }
 
       .plan-step--in-progress .plan-step__icon {

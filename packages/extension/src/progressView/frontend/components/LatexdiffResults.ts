@@ -1,8 +1,4 @@
-/**
- * LatexdiffResults component for displaying latexdiff comparison results.
- *
- * Renders a collapsible details section with file comparison entries.
- */
+/** Collapsible latexdiff comparison results panel. */
 
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
@@ -12,7 +8,6 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -21,7 +16,8 @@ import type { DiffResultDisplay, DiffStatus } from '@shared/schemas';
 // Local imports - progress view events
 import { ProgressEvents } from '../events';
 
-// Local imports - schemas
+// Local imports - progress view helpers
+import { buildDetailsSummary } from '../formatters/htmlBuilders';
 
 /** Status wa-icon name lookup for latexdiff entries. */
 const LATEXDIFF_STATUS_ICONS: Record<DiffStatus, string> = {
@@ -37,17 +33,21 @@ export class LatexdiffResults extends LitElement {
     css`
       :host {
         display: block;
-        margin: var(--wa-space-2xs) 0;
       }
 
-      wa-details {
-        margin: 0;
+      details {
+        margin: var(--wa-space-2xs) 0;
+        content-visibility: auto;
+        contain-intrinsic-size: auto 40px;
       }
 
       .latexdiff-content {
         list-style: none;
         margin: 0;
-        padding: 0;
+        padding: var(--wa-space-3xs) 0 var(--wa-space-2xs) var(--wa-space-s);
+        display: flex;
+        flex-direction: column;
+        gap: var(--wa-space-3xs);
       }
 
       /* .detail-item base styles are in commonViewStyles */
@@ -140,16 +140,13 @@ export class LatexdiffResults extends LitElement {
         : `Latexdiff results (${this.entries.length})`;
 
     return html`
-      <wa-details open>
-        <span slot="summary" class="details-summary">
-          <wa-icon library="texra" name="diff" aria-hidden="true"></wa-icon>
-          <span>${summaryText}</span>
-        </span>
-        <ul
-          class="latexdiff-content"
-          data-log-id=${this.logId}
-          data-run-id=${ifDefined(this.runId || undefined)}
-        >
+      <details
+        open
+        data-log-id=${ifDefined(this.logId || undefined)}
+        data-run-id=${ifDefined(this.runId || undefined)}
+      >
+        ${buildDetailsSummary({ iconName: 'diff', label: summaryText })}
+        <ul class="latexdiff-content">
           ${repeat(
             this.entries,
             (entry, index) =>
@@ -157,7 +154,7 @@ export class LatexdiffResults extends LitElement {
             (entry) => this.renderEntry(entry),
           )}
         </ul>
-      </wa-details>
+      </details>
     `;
   }
 }

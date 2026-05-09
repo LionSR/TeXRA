@@ -1,11 +1,4 @@
-/**
- * Individual panel component for retry requests.
- *
- * Renders a single retry permission with error details,
- * retry/dismiss buttons, and stream diagnostics.
- *
- * Extends BaseRequestPanel for shared permission/emit/keyboard contract.
- */
+/** Retry request panel for failed model requests. */
 
 // Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';
