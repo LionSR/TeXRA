@@ -1,8 +1,4 @@
-/**
- * OutputFilesSection component for MainView multiple outputs.
- *
- * Renders the collapsible output files list with toggle and action buttons.
- */
+/** Collapsible output files list with toggle and action buttons. */
 
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
@@ -41,33 +37,13 @@ export class OutputFilesSection extends LitElement {
         display: block;
       }
 
-      /*
-       * OutputFilesSection feed treatment — tighter row chrome, soft inset
-       * highlight on hover, brand-tinted remove affordance. Sits on top of
-       * the shared multiFilesStyles so other consumers (latexdiffs) keep
-       * their leaner row chrome.
-       */
       .multiple-files-list {
-        background: color-mix(
-          in srgb,
-          var(--wa-color-neutral-fill-quiet) 25%,
-          transparent
-        );
         padding: var(--wa-space-3xs);
       }
 
       .file-item {
         padding: var(--wa-space-3xs) var(--wa-space-2xs);
         border-radius: var(--border-radius-small);
-        transition:
-          background-color var(--transition-fast),
-          box-shadow var(--transition-fast);
-      }
-
-      .file-item:hover {
-        background-color: var(--wa-color-neutral-fill-quiet);
-        box-shadow: inset 1px 0 0
-          color-mix(in srgb, var(--wa-color-brand-fill-loud) 40%, transparent);
       }
 
       .file-item .file-name {
@@ -83,10 +59,6 @@ export class OutputFilesSection extends LitElement {
       .file-item:hover .remove-button,
       .file-item:focus-within .remove-button {
         opacity: 1;
-      }
-
-      .file-item .remove-button:hover::part(base) {
-        color: var(--wa-color-danger-fill-loud);
       }
 
       .file-list-placeholder {

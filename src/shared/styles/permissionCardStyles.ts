@@ -28,7 +28,6 @@ export const permissionCardStyles: CSSResult = css`
     width: min(92vw, 600px);
     max-height: min(80vh, 44rem);
     overflow: hidden;
-    box-shadow: 0 2px 8px var(--wa-color-surface-shadow, rgba(0, 0, 0, 0.24));
   }
 
   .permission-header {
@@ -41,7 +40,7 @@ export const permissionCardStyles: CSSResult = css`
 
   .permission-body {
     font-size: var(--font-size);
-    line-height: var(--line-height-relaxed);
+    line-height: var(--line-height-normal);
     max-height: min(38vh, 24rem);
     overflow-y: auto;
     scrollbar-gutter: stable;
@@ -139,7 +138,6 @@ export const permissionCardStyles: CSSResult = css`
     color: var(--wa-color-text-link);
     cursor: pointer;
     text-decoration: none;
-    transition: color var(--transition-fast);
   }
 
   .file-link:hover {

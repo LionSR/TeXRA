@@ -110,10 +110,6 @@ export class StreamTab extends LitElement {
         width: 100%;
         gap: var(--wa-space-3xs);
         border-left: var(--border-thick) solid transparent;
-        transition:
-          border-left-color var(--transition-normal),
-          background-color var(--transition-fast),
-          box-shadow var(--transition-fast);
       }
 
       /*
@@ -159,19 +155,9 @@ export class StreamTab extends LitElement {
         border-left-color: var(--color-warning);
       }
 
-      /* Pending approval — pulsing orange, visually distinct from all status colors */
-      @keyframes pulse-border {
-        0%,
-        100% {
-          border-left-color: var(--wa-color-chart-orange, #d18616);
-        }
-        50% {
-          border-left-color: transparent;
-        }
-      }
-
+      /* Pending approval — solid orange left rail. */
       .tab-container.has-pending-approval {
-        animation: pulse-border 2s ease-in-out infinite;
+        border-left-color: var(--wa-color-chart-orange, #d18616);
       }
 
       .tab {
@@ -249,10 +235,6 @@ export class StreamTab extends LitElement {
         margin: 0;
         color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
         opacity: 0;
-        transition:
-          opacity var(--transition-fast),
-          color var(--transition-fast),
-          background-color var(--transition-fast);
       }
 
       /* Reveal the delete affordance only when the row is hovered,
@@ -267,14 +249,13 @@ export class StreamTab extends LitElement {
       .tab-container:hover {
         background-color: color-mix(
           in srgb,
-          var(--wa-color-neutral-fill-quiet) 70%,
+          var(--wa-color-neutral-fill-quiet) 25%,
           transparent
         );
       }
 
       /*
-       * Match VS Code's list-item selection: flip background + foreground
-       * together. The descendant-wildcard selector below forces nested spans
+       * The descendant wildcard rule below forces nested spans
        * (.last-active, .model) and codicon glyphs to inherit the selection
        * color even when intermediate elements define their own.
        */
@@ -285,8 +266,6 @@ export class StreamTab extends LitElement {
           transparent
         );
         color: var(--wa-color-list-active-fg, var(--wa-color-text-normal));
-        box-shadow: inset 0 0 0 1px
-          color-mix(in srgb, var(--wa-color-brand-fill-loud) 18%, transparent);
       }
 
       /*
@@ -347,11 +326,6 @@ export class StreamTab extends LitElement {
         );
       }
 
-      .tab-delete:hover::part(base),
-      .tab-delete:focus-within::part(base) {
-        background-color: var(--wa-color-surface-raised);
-      }
-
       .tab-delete:hover,
       .tab-delete:focus-within {
         color: var(--wa-color-danger-on-quiet);
@@ -375,12 +349,10 @@ export class StreamTab extends LitElement {
 
       .tab-expand:hover {
         opacity: 1;
-        background-color: var(--wa-color-surface-raised);
       }
 
       .tab-expand wa-icon {
         font-size: var(--font-size-xs);
-        transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1);
       }
 
       .tab-expand[aria-expanded='true'] wa-icon {

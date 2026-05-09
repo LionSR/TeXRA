@@ -1,11 +1,4 @@
-/**
- * Individual panel component for bash command approval requests.
- *
- * Renders a single bash permission with the command block,
- * approve/reject buttons, and feedback input.
- *
- * Extends BaseFeedbackPanel for shared feedback/reject/emit logic.
- */
+/** Bash command approval request panel. */
 
 // Third-party imports
 import { html, type TemplateResult } from 'lit';
