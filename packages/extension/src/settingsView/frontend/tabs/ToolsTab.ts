@@ -160,7 +160,6 @@ export class ToolsTab extends LitElement {
         stroke: var(--wa-color-testing-passed, #73c991);
         stroke-width: 4;
         stroke-linecap: round;
-        transition: stroke-dashoffset var(--transition-slow);
       }
 
       .tools-health-ring__missing {
@@ -168,7 +167,6 @@ export class ToolsTab extends LitElement {
         stroke: var(--wa-color-testing-failed, #f48771);
         stroke-width: 4;
         stroke-linecap: round;
-        transition: stroke-dashoffset var(--transition-slow);
       }
 
       .tools-health-labels {

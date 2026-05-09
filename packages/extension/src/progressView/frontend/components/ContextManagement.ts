@@ -120,7 +120,10 @@ export class ContextManagement extends LitElement {
     }
 
     return html`
-      <details style="--accent-color: ${this.config.color}">
+      <details
+        class="banner-details"
+        style="--accent-color: ${this.config.color}"
+      >
         <summary class="details-summary">
           <wa-icon
             library="texra"

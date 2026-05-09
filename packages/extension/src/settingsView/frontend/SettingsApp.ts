@@ -172,18 +172,6 @@ export class SettingsApp extends SettingsAppBase {
         color: color-mix(in srgb, var(--wa-color-text-normal) 65%, transparent);
         border-radius: var(--wa-border-radius-s, 4px)
           var(--wa-border-radius-s, 4px) 0 0;
-        transition:
-          color var(--transition-fast),
-          background-color var(--transition-fast);
-      }
-
-      wa-tab-group.settings-tabs wa-tab::part(base):hover {
-        color: var(--wa-color-text-normal);
-        background-color: color-mix(
-          in srgb,
-          var(--wa-color-neutral-fill-quiet) 50%,
-          transparent
-        );
       }
 
       wa-tab-group.settings-tabs wa-tab[active]::part(base) {

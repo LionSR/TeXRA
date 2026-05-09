@@ -272,11 +272,6 @@ export class LaTeXTab extends LitElement {
         background: none;
         border: none;
         cursor: pointer;
-        transition: opacity var(--transition-fast);
-      }
-
-      .dependency-guide-toggle:hover {
-        opacity: var(--opacity-hover);
       }
 
       .dependency-guide {

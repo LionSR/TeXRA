@@ -101,7 +101,6 @@ export class GitTab extends LitElement {
 
       .token-remove-btn:hover {
         color: var(--wa-color-danger-on-quiet);
-        border-color: var(--wa-color-danger-on-quiet);
       }
 
       .instructions {

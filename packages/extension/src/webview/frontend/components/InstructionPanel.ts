@@ -121,11 +121,8 @@ export class InstructionPanel extends LitElement {
         border-radius: var(--border-radius);
         margin-bottom: var(--wa-space-3xs);
         border: var(--border-thin) solid var(--color-border);
-        transition: border-color var(--transition-fast);
       }
 
-      /* Subtle lift when the user is composing — signals focus without
-         imposing a heavy ring on the textarea wrapper. */
       .instruction-box:focus-within {
         border-color: color-mix(
           in srgb,
@@ -232,7 +229,6 @@ export class InstructionPanel extends LitElement {
 
       wa-textarea#instruction::part(textarea) {
         max-height: var(--height-xlarge);
-        transition: height var(--transition-fast);
       }
 
       .instruction-controls {

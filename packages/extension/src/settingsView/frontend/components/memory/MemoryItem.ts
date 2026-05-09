@@ -57,8 +57,8 @@ export class MemoryItem extends LitElement {
       }
 
       .memory-item.pinned {
-        border-left: 3px solid var(--wa-color-text-link);
-        padding-left: calc(var(--wa-space-xs) - 3px);
+        border-left: var(--border-medium) solid var(--wa-color-text-link);
+        padding-left: calc(var(--wa-space-xs) - var(--border-medium));
       }
     `,
   ];
