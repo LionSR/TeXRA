@@ -22,7 +22,7 @@ export function stripLatexComments(content: string): string {
  * Matches both \bibliography{...} and \addbibresource[...]{...}.
  * matchAll clones the regex, so a single module-level instance is safe.
  */
-export const BIB_DIRECTIVE_PATTERN = new RegExp(
+const BIB_DIRECTIVE_PATTERN = new RegExp(
   '(?:bibliography|addbibresource)(?:\\s*\\[[^\\]]*\\])?\\s*\\{([^}]*)\\}',
   'g',
 );

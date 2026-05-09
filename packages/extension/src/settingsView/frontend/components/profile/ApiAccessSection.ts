@@ -1,8 +1,5 @@
-/**
- * ApiAccessSection component - radio buttons to choose between included API access or personal keys.
- */
+/** Radio buttons to choose between included API access and personal keys. */
 
-// Third-party imports
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 

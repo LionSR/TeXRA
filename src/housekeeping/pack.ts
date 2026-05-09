@@ -18,12 +18,12 @@ import {
   HISTORY_DIR,
   DEFAULT_MAX_ROUNDS,
 } from './constants';
+import { parseWorkflowOutputRoundDir } from '@agent/output/workflowOutputLayout';
 import {
   generateTimestamp,
   getAgentFirstNameChunk,
   getFilePatterns,
   findFilesFromPatterns,
-  parseRoundFolder,
 } from './utils';
 
 const CHANNEL = 'Housekeeping';
@@ -223,7 +223,7 @@ function packDestinationName(file: string): string {
   const base = path.basename(file);
   const segments = path.dirname(file).split(/[\\/]+/);
   for (let i = segments.length - 1; i >= 0; i--) {
-    const round = parseRoundFolder(segments[i]);
+    const round = parseWorkflowOutputRoundDir(segments[i]);
     if (round !== null) return `r${round}_${base}`;
   }
   return base;

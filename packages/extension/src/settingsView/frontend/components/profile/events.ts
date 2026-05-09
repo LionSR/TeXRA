@@ -2,7 +2,6 @@ import { createEvent } from '@shared/utils/events';
 import type { AgentSourceType } from '@shared/schemas/agent';
 
 export const ProfileViewEvents = {
-  signOut: () => createEvent('profile-sign-out', undefined),
   setApiAccessMode: (detail: { mode: 'included' | 'personal' }) =>
     createEvent('profile-api-access-mode', detail),
 } as const;

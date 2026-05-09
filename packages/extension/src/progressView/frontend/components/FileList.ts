@@ -206,12 +206,12 @@ export class FileList extends LitElement {
       }
 
       .round-collapsible::part(header) {
-        padding: var(--wa-space-3xs) 0;
+        padding: var(--wa-space-3xs) var(--wa-space-xs);
         font-size: var(--font-size-sm);
       }
 
       .round-collapsible::part(body) {
-        padding: 0;
+        padding: 0 var(--wa-space-xs);
       }
 
       .compile-warning {
@@ -380,7 +380,7 @@ export class FileList extends LitElement {
       <wa-details
         class="round-collapsible panel-collapsible"
         summary=${`r${round}`}
-        ?open=${true}
+        open
       >
         <div class="round-content">
           ${repeat(

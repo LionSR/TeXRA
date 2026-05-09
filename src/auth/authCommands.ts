@@ -7,9 +7,6 @@ import { SupabaseAuthProvider } from './SupabaseAuthProvider';
 import { type OAuthProvider, getExternalAuthCallbackUri } from './config';
 import { AUTH_PROVIDER_ID, AUTH_COMMANDS } from './constants';
 
-// Re-export for backwards compatibility
-export { AUTH_COMMANDS } from './constants';
-
 type AuthMethod = OAuthProvider | 'github-browser' | 'email';
 
 const EMAIL_LOGIN_ENABLED = false;

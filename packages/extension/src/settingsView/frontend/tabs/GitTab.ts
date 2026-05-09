@@ -1,9 +1,5 @@
-/**
- * GitTab component — git commit author settings for the settings view.
- * Allows marking commits made by TeXRA with a custom author identity.
- */
+/** Git commit author + GitHub token + PR subscription settings. */
 
-// Third-party imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -101,7 +97,6 @@ export class GitTab extends LitElement {
 
       .token-remove-btn:hover {
         color: var(--wa-color-danger-on-quiet);
-        border-color: var(--wa-color-danger-on-quiet);
       }
 
       .instructions {
@@ -230,13 +225,14 @@ export class GitTab extends LitElement {
   }
 
   private renderTokenStatusBadge(): TemplateResult {
-    if (this.githubTokenStatus === 'secret') {
-      return html`<wa-tag variant="success" size="small">Set</wa-tag>`;
+    switch (this.githubTokenStatus) {
+      case 'secret':
+        return html`<wa-tag variant="success" size="small">Set</wa-tag>`;
+      case 'env':
+        return html`<wa-tag variant="neutral" size="small">Env</wa-tag>`;
+      default:
+        return html`<wa-tag variant="warning" size="small">Not set</wa-tag>`;
     }
-    if (this.githubTokenStatus === 'env') {
-      return html`<wa-tag variant="neutral" size="small">Env</wa-tag>`;
-    }
-    return html`<wa-tag variant="warning" size="small">Not set</wa-tag>`;
   }
 
   override render(): TemplateResult {

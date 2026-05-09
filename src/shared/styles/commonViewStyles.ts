@@ -342,7 +342,7 @@ export const commonViewStyles: CSSResult = css`
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
     font-size: var(--font-size-xs);
     font-family: inherit;
-    color: var(--color-text-secondary);
+    color: var(--wa-color-text-normal);
     background: none;
     border: var(--border-thin) solid var(--color-border);
     border-radius: var(--border-radius);
@@ -540,6 +540,14 @@ export const filledButtonStyles: CSSResult = css`
 
   .filled-button--secondary {
     color: var(--wa-color-neutral-on-quiet, inherit);
+    background: var(--wa-color-neutral-fill-quiet, transparent);
+  }
+
+  /* Specificity-only override: pins hover to the same value as the base
+     state so the base .filled-button:hover doesn't flash secondary buttons
+     to the brand color. Intentionally produces no visual hover feedback —
+     secondary actions are quiet by design. */
+  .filled-button--secondary:hover {
     background: var(--wa-color-neutral-fill-quiet, transparent);
   }
 `;
