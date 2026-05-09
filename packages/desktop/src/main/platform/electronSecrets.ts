@@ -1,5 +1,6 @@
 import { safeStorage } from 'electron';
 
+import { toErrorMessage } from '@common/errors';
 import { JsonStore } from './jsonStore.js';
 import type { PlatformSecrets } from '@platform/secrets';
 
@@ -89,7 +90,7 @@ export class ElectronSecrets implements PlatformSecrets {
       // the user staring at a blank white window.
       console.warn(
         `ElectronSecrets: safeStorage.decryptString failed for "${key}"; treating as unset. ` +
-          `Cause: ${error instanceof Error ? error.message : String(error)}`,
+          `Cause: ${toErrorMessage(error)}`,
       );
       await this.warnAboutKeychainDenied();
       return undefined;
@@ -185,14 +186,14 @@ export async function prewarmElectronKeychain(): Promise<boolean> {
   } catch (error) {
     console.warn(
       `prewarmElectronKeychain: encryptString failed; continuing without prewarm. ` +
-        `Cause: ${error instanceof Error ? error.message : String(error)}`,
+        `Cause: ${toErrorMessage(error)}`,
     );
     return false;
   }
 }
 
 /** Test-only: reset latched module-level state so unit tests can re-exercise the path. */
-export function __resetKeychainWarningsForTests(): void {
+export function __resetKeychainStateForTests(): void {
   keychainPrewarmed = false;
   warnedAboutKeychainDisabled = false;
 }

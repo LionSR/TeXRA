@@ -20,7 +20,7 @@ interface ElectronSecretsModule {
     get(key: string): Promise<string | undefined>;
     set(key: string, value: string): Promise<void>;
   };
-  __resetKeychainWarningsForTests: () => void;
+  __resetKeychainStateForTests: () => void;
   KEYCHAIN_DENIED_WARNING_MESSAGE: string;
 }
 
@@ -44,7 +44,7 @@ describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
 
   afterEach(async () => {
     const mod = await loadElectronSecrets();
-    mod.__resetKeychainWarningsForTests();
+    mod.__resetKeychainStateForTests();
     vi.restoreAllMocks();
   });
 
@@ -160,7 +160,7 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
   afterEach(async () => {
     delete process.env.TEXRA_DISABLE_KEYCHAIN;
     const mod = await loadElectronSecrets();
-    mod.__resetKeychainWarningsForTests();
+    mod.__resetKeychainStateForTests();
     vi.restoreAllMocks();
   });
 
