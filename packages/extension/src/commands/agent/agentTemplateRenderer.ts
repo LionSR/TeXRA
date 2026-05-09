@@ -60,8 +60,10 @@ const AGENT_RUNTIME_TOKENS = [
   'OUTPUT_FILES_ORDER',
 ] as const;
 
-const PASSTHROUGH: Record<string, string> = Object.fromEntries(
-  AGENT_RUNTIME_TOKENS.map((v) => [v, `{{ ${v} }}`]),
+// Frozen so the shared module-level instance can't be mutated even if a
+// caller forgets to spread it before passing to nunjucks.renderString.
+const PASSTHROUGH: Readonly<Record<string, string>> = Object.freeze(
+  Object.fromEntries(AGENT_RUNTIME_TOKENS.map((v) => [v, `{{ ${v} }}`])),
 );
 
 const DEFAULT_TOOLS_YAML = [
