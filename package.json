@@ -21,7 +21,7 @@
     "workspace:typecheck": "corepack pnpm --recursive --if-present typecheck",
     "workspace:build": "corepack pnpm --recursive --if-present build",
     "desktop:build": "corepack pnpm --filter @texra/desktop build",
-    "desktop:package:local": "corepack pnpm run desktop:build && corepack pnpm --filter @texra/desktop package:dir",
+    "desktop:package:local": "node scripts/run-desktop-package-local.mjs",
     "desktop:package:dist": "corepack pnpm run desktop:build && corepack pnpm --filter @texra/desktop package:dist",
     "desktop:package:smoke": "node scripts/smoke-desktop-package-launch.mjs",
     "build:initial": "corepack pnpm run desktop:build && corepack pnpm run build:fast && corepack pnpm run check:initial-build-artifacts",

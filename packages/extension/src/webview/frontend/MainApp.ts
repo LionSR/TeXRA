@@ -1925,61 +1925,65 @@ export class MainApp extends MainAppBase {
 
     return html`
       <div class="content-wrapper">
-        <div class="view-header">
-          <wa-tab-group
-            class="view-tabs"
-            active="launcher"
-            without-scroll-controls
-            @wa-tab-show=${this.onViewTabShow}
-          >
-            <wa-tab panel="launcher">
-              <wa-icon
-                library=${TEXRA_ICON_LIBRARY}
-                name="pencil"
-                variant="solid"
-              ></wa-icon>
-              Launcher
-            </wa-tab>
-            <wa-tab panel="progress">
-              <wa-icon
-                library=${TEXRA_ICON_LIBRARY}
-                name="robot"
-                variant="solid"
-              ></wa-icon>
-              Progress
-            </wa-tab>
-            <wa-tab-panel name="launcher"></wa-tab-panel>
-            <wa-tab-panel name="progress"></wa-tab-panel>
-          </wa-tab-group>
-          <wa-button
-            class="header-action"
-            aria-label="Open dashboard"
-            appearance="plain"
-            size="small"
-            title="Open dashboard"
-            @click=${this.onOpenDashboard}
-          >
-            <wa-icon
-              library=${TEXRA_ICON_LIBRARY}
-              name="gear"
-              variant="solid"
-            ></wa-icon>
-          </wa-button>
-          <wa-button
-            class="header-action"
-            aria-label="Open progress sessions in editor"
-            appearance="plain"
-            size="small"
-            title="Open progress sessions in editor"
-            @click=${this.onPopOutProgress}
-          >
-            <wa-icon
-              library=${TEXRA_ICON_LIBRARY}
-              name="picture-in-picture"
-              variant="solid"
-            ></wa-icon>
-          </wa-button>
-        </div>
+        ${this.isDesktopHost
+          ? null
+          : html`
+              <div class="view-header">
+                <wa-tab-group
+                  class="view-tabs"
+                  active="launcher"
+                  without-scroll-controls
+                  @wa-tab-show=${this.onViewTabShow}
+                >
+                  <wa-tab panel="launcher">
+                    <wa-icon
+                      library=${TEXRA_ICON_LIBRARY}
+                      name="pencil"
+                      variant="solid"
+                    ></wa-icon>
+                    Launcher
+                  </wa-tab>
+                  <wa-tab panel="progress">
+                    <wa-icon
+                      library=${TEXRA_ICON_LIBRARY}
+                      name="robot"
+                      variant="solid"
+                    ></wa-icon>
+                    Progress
+                  </wa-tab>
+                  <wa-tab-panel name="launcher"></wa-tab-panel>
+                  <wa-tab-panel name="progress"></wa-tab-panel>
+                </wa-tab-group>
+                <wa-button
+                  class="header-action"
+                  aria-label="Open dashboard"
+                  appearance="plain"
+                  size="small"
+                  title="Open dashboard"
+                  @click=${this.onOpenDashboard}
+                >
+                  <wa-icon
+                    library=${TEXRA_ICON_LIBRARY}
+                    name="gear"
+                    variant="solid"
+                  ></wa-icon>
+                </wa-button>
+                <wa-button
+                  class="header-action"
+                  aria-label="Open progress sessions in editor"
+                  appearance="plain"
+                  size="small"
+                  title="Open progress sessions in editor"
+                  @click=${this.onPopOutProgress}
+                >
+                  <wa-icon
+                    library=${TEXRA_ICON_LIBRARY}
+                    name="picture-in-picture"
+                    variant="solid"
+                  ></wa-icon>
+                </wa-button>
+              </div>
+            `}
 
         <div class="main-content">
           <instruction-panel
@@ -2095,25 +2099,29 @@ export class MainApp extends MainAppBase {
               `}
         </div>
 
-        <latexdiffs-section
-          .visible=${this.latexdiffsVisible.get()}
-          .baseFile=${sf.baseFile}
-          .baseFileOptions=${fo.baseFile ?? []}
-          .editedFile=${sf.editedFile}
-          .editedFileOptions=${fo.editedFile ?? []}
-          .commit=${this.commit.get()}
-          .commitOptions=${fo.commit ?? []}
-          .isGitRepo=${this.isGitRepo.get()}
-          @latexdiffs-toggle=${this.handleComponentLatexDiffsToggle}
-          @latexdiffs-action=${this.handleComponentLatexDiffsAction}
-          @base-file-change=${this.handleComponentBaseFileChange}
-          @edited-file-change=${this.handleComponentEditedFileChange}
-          @get-current-file=${this.handleComponentGetCurrentFile}
-          @empty-file=${this.handleComponentEmptyFile}
-          @refresh-edited-files=${this.handleComponentRefreshEditedFiles}
-          @commit-change=${this.handleComponentCommitChange}
-          @refresh-commits=${this.handleComponentRefreshCommits}
-        ></latexdiffs-section>
+        ${this.isDesktopHost
+          ? null
+          : html`
+              <latexdiffs-section
+                .visible=${this.latexdiffsVisible.get()}
+                .baseFile=${sf.baseFile}
+                .baseFileOptions=${fo.baseFile ?? []}
+                .editedFile=${sf.editedFile}
+                .editedFileOptions=${fo.editedFile ?? []}
+                .commit=${this.commit.get()}
+                .commitOptions=${fo.commit ?? []}
+                .isGitRepo=${this.isGitRepo.get()}
+                @latexdiffs-toggle=${this.handleComponentLatexDiffsToggle}
+                @latexdiffs-action=${this.handleComponentLatexDiffsAction}
+                @base-file-change=${this.handleComponentBaseFileChange}
+                @edited-file-change=${this.handleComponentEditedFileChange}
+                @get-current-file=${this.handleComponentGetCurrentFile}
+                @empty-file=${this.handleComponentEmptyFile}
+                @refresh-edited-files=${this.handleComponentRefreshEditedFiles}
+                @commit-change=${this.handleComponentCommitChange}
+                @refresh-commits=${this.handleComponentRefreshCommits}
+              ></latexdiffs-section>
+            `}
       </div>
     `;
   }
