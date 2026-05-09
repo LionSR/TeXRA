@@ -87,23 +87,13 @@ function createOAuthClient() {
   };
 }
 
-function getOAuthState(oauthClient: ReturnType<typeof createOAuthClient>) {
-  const state =
-    oauthClient.auth.signInWithOAuth.mock.calls.at(-1)?.[0].options.queryParams
-      ?.state;
-  expect(state).toEqual(expect.any(String));
-  return state!;
-}
-
 function authCallbackUrl(input: {
   accessToken: string;
   refreshToken: string;
-  state: string;
 }): string {
   const fragment = new URLSearchParams({
     access_token: input.accessToken,
     refresh_token: input.refreshToken,
-    state: input.state,
   });
   return `texra://texra-ai.texra/auth-callback#${fragment}`;
 }
@@ -163,7 +153,6 @@ describe('desktop Supabase auth', () => {
       provider: 'github',
       options: {
         redirectTo: 'texra://texra-ai.texra/auth-callback',
-        queryParams: { state: expect.any(String) },
       },
     });
     expect(openExternalUrl).toHaveBeenCalledWith(
@@ -187,12 +176,10 @@ describe('desktop Supabase auth', () => {
     });
 
     await auth.signIn();
-    const state = getOAuthState(oauthClient);
     router.routeUrl(
       authCallbackUrl({
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
-        state,
       }),
     );
 
@@ -207,7 +194,7 @@ describe('desktop Supabase auth', () => {
     expect(coordinator.createSessionFromCallback).toHaveBeenCalledWith({
       path: '/auth-callback',
       query: '',
-      fragment: `access_token=access-token&refresh_token=refresh-token&state=${state}`,
+      fragment: 'access_token=access-token&refresh_token=refresh-token',
     });
     expect(onSessionChanged).toHaveBeenCalled();
 
@@ -264,14 +251,12 @@ describe('desktop Supabase auth', () => {
     });
 
     await auth.signIn();
-    const state = getOAuthState(oauthClient);
     auth.dispose();
     const persistedCallbackState = createDesktopAuthCallbackState(stateStore);
     router.routeUrl(
       authCallbackUrl({
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
-        state,
       }),
     );
 
@@ -313,7 +298,6 @@ describe('desktop Supabase auth', () => {
       });
 
       await auth.signIn();
-      const state = getOAuthState(oauthClient);
       auth.dispose();
 
       vi.setSystemTime(Date.now() + 11 * 60 * 1000);
@@ -331,12 +315,11 @@ describe('desktop Supabase auth', () => {
         authCallbackUrl({
           accessToken: 'access-token',
           refreshToken: 'refresh-token',
-          state,
         }),
       );
       await Promise.resolve();
 
-      expect(expiredCallbackState.getExpectedState()).toBeNull();
+      expect(expiredCallbackState.hasPendingSignIn()).toBe(false);
       expect(coordinator.createSessionFromCallback).not.toHaveBeenCalled();
       recreatedAuth.dispose();
     } finally {
@@ -366,19 +349,17 @@ describe('desktop Supabase auth', () => {
     });
 
     await auth.signIn();
-    const state = getOAuthState(oauthClient);
     await auth.signOut();
     router.routeUrl(
       authCallbackUrl({
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
-        state,
       }),
     );
 
     await Promise.resolve();
 
-    expect(callbackState.getExpectedState()).toBeNull();
+    expect(callbackState.hasPendingSignIn()).toBe(false);
     expect(coordinator.createSessionFromCallback).not.toHaveBeenCalled();
     expect(log.debug).toHaveBeenCalledWith(
       'Desktop auth callback ignored because no sign-in is in progress',
@@ -406,12 +387,11 @@ describe('desktop Supabase auth', () => {
     });
 
     await auth.signIn();
-    const state = getOAuthState(oauthClient);
     router.routeUrl(
-      authCallbackUrl({ accessToken: 'first', refreshToken: 'first', state }),
+      authCallbackUrl({ accessToken: 'first', refreshToken: 'first' }),
     );
     router.routeUrl(
-      authCallbackUrl({ accessToken: 'second', refreshToken: 'second', state }),
+      authCallbackUrl({ accessToken: 'second', refreshToken: 'second' }),
     );
 
     await vi.waitFor(() => {
@@ -420,42 +400,6 @@ describe('desktop Supabase auth', () => {
     expect(coordinator.storeSession).toHaveBeenCalledTimes(1);
     expect(log.debug).toHaveBeenCalledWith(
       'Desktop auth callback ignored because no sign-in is in progress',
-    );
-    auth.dispose();
-  });
-
-  it('ignores callbacks that do not match the active OAuth state', async () => {
-    const router = createDesktopProtocolCallbackRouter();
-    const coordinator = createCoordinator();
-    const log = {
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    };
-    const auth = createDesktopSupabaseAuth({
-      router,
-      coordinator,
-      oauthClient: createOAuthClient(),
-      secrets: createSecrets(),
-      openExternalUrl: vi.fn(async () => {}),
-      log,
-    });
-
-    await auth.signIn();
-    router.routeUrl(
-      authCallbackUrl({
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        state: 'wrong-state',
-      }),
-    );
-
-    await Promise.resolve();
-
-    expect(coordinator.createSessionFromCallback).not.toHaveBeenCalled();
-    expect(log.debug).toHaveBeenCalledWith(
-      'Desktop auth callback ignored because it does not match the active sign-in attempt',
     );
     auth.dispose();
   });
@@ -489,12 +433,10 @@ describe('desktop Supabase auth', () => {
     });
 
     await auth.signIn();
-    const firstState = getOAuthState(oauthClient);
     router.routeUrl(
       authCallbackUrl({
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
-        state: firstState,
       }),
     );
     await vi.waitFor(() => {
@@ -502,13 +444,12 @@ describe('desktop Supabase auth', () => {
     });
 
     await auth.signIn();
-    const secondState = getOAuthState(oauthClient);
     callbackProcessing.resolve();
 
     await vi.waitFor(() => {
       expect(coordinator.storeSession).toHaveBeenCalledOnce();
     });
-    expect(callbackState.getExpectedState()).toBe(secondState);
+    expect(callbackState.hasPendingSignIn()).toBe(true);
     auth.dispose();
   });
 
@@ -537,12 +478,10 @@ describe('desktop Supabase auth', () => {
     });
 
     await auth.signIn();
-    const state = getOAuthState(oauthClient);
     router.routeUrl(
       authCallbackUrl({
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
-        state,
       }),
     );
 

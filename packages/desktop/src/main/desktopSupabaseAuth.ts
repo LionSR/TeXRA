@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-
 import { z } from 'zod';
 
 import { platform } from '@platform/platform';
@@ -46,7 +44,6 @@ const DESKTOP_PENDING_OAUTH_STATE_KEY = 'texra.desktop.pendingOAuthState';
 const DESKTOP_PENDING_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
 const DesktopPendingOAuthStateSchema = z.object({
-  state: z.string(),
   createdAt: z.number(),
 });
 type DesktopPendingOAuthState = z.infer<typeof DesktopPendingOAuthStateSchema>;
@@ -70,8 +67,8 @@ export interface DesktopSupabaseAuth {
 }
 
 export interface DesktopAuthCallbackState {
-  getExpectedState(): string | null;
-  beginAuthAttempt(state: string): Promise<void>;
+  hasPendingSignIn(): boolean;
+  beginAuthAttempt(): Promise<void>;
   clearAwaitingCallback(): Promise<void>;
 }
 
@@ -92,7 +89,7 @@ export interface DesktopOAuthClient {
   auth: {
     signInWithOAuth(input: {
       provider: OAuthProvider;
-      options: { redirectTo: string; queryParams?: Record<string, string> };
+      options: { redirectTo: string };
     }): Promise<{
       data: { url?: string | null };
       error: { message: string } | null;
@@ -128,17 +125,17 @@ export function createDesktopAuthCallbackState(
   };
 
   return {
-    getExpectedState: () => {
-      if (!pendingState) return null;
+    hasPendingSignIn: () => {
+      if (!pendingState) return false;
       if (isPendingOAuthStateExpired(pendingState)) {
         pendingState = null;
         void persistPendingState(null).catch(() => {});
-        return null;
+        return false;
       }
-      return pendingState.state;
+      return true;
     },
-    async beginAuthAttempt(state) {
-      pendingState = { state, createdAt: Date.now() };
+    async beginAuthAttempt() {
+      pendingState = { createdAt: Date.now() };
       await persistPendingState(pendingState);
     },
     async clearAwaitingCallback() {
@@ -201,16 +198,9 @@ export function createDesktopSupabaseAuth(
     }
   };
   const subscription = options.router.subscribe((callback) => {
-    const expectedState = callbackState.getExpectedState();
-    if (!expectedState) {
+    if (!callbackState.hasPendingSignIn()) {
       options.log?.debug?.(
         'Desktop auth callback ignored because no sign-in is in progress',
-      );
-      return;
-    }
-    if (!isExpectedAuthCallback(callback, expectedState)) {
-      options.log?.debug?.(
-        'Desktop auth callback ignored because it does not match the active sign-in attempt',
       );
       return;
     }
@@ -232,10 +222,9 @@ export function createDesktopSupabaseAuth(
     async signIn(provider = DEFAULT_OAUTH_PROVIDER) {
       try {
         const redirectTo = getAuthCallbackUri(TEXRA_PROTOCOL);
-        const state = randomUUID();
         const { data, error } = await oauthClient.auth.signInWithOAuth({
           provider,
-          options: { redirectTo, queryParams: { state } },
+          options: { redirectTo },
         });
         if (error || !data.url) {
           throw new Error(
@@ -243,7 +232,7 @@ export function createDesktopSupabaseAuth(
           );
         }
 
-        await callbackState.beginAuthAttempt(state);
+        await callbackState.beginAuthAttempt();
         await options.openExternalUrl(data.url);
         await options.showInfoMessage?.(
           'Complete sign-in in your browser. TeXRA will update when the browser returns to the desktop app.',
@@ -326,17 +315,6 @@ function clearDesktopServerSideKeyCaches(
       `Desktop server-side key cache clear skipped: ${toErrorMessage(error)}`,
     );
   }
-}
-
-function isExpectedAuthCallback(
-  callback: DesktopProtocolCallback,
-  expectedState: string,
-): boolean {
-  const fragmentParams = new URLSearchParams(callback.fragment);
-  const queryParams = new URLSearchParams(callback.query);
-  return (
-    (fragmentParams.get('state') ?? queryParams.get('state')) === expectedState
-  );
 }
 
 async function processProtocolCallback(

@@ -159,32 +159,58 @@ async function assertWebviewRuntime(window, view) {
           return names;
         }
 
-        const codiconFonts = await document.fonts.load('16px "codicon"');
-        if (codiconFonts.length === 0) {
-          throw new Error('Codicon font is not available to the webview.');
-        }
-
-        const codiconNames = collectCodiconNames();
-        if (codiconNames.size === 0) {
-          throw new Error('No codicon CSS rules were loaded.');
-        }
-
+        // Walk the rendered tree first. The webviews migrated most icon
+        // usage to Web Awesome (\`<wa-icon>\`); the codicon font + CSS
+        // is only required when the template still ships
+        // \`.codicon-*\` classes or \`icon="codicon-*"\` attrs. If no
+        // codicons are rendered, the font load + CSS-rule checks are a
+        // no-op (this prevents a macOS-only flake where the font is not
+        // resolvable but no consumer needs it).
         const elements = collectElements(document);
-        const invalidClasses = new Set();
-        const invalidIconAttrs = new Set();
+        const usedCodiconClasses = new Set();
+        const usedCodiconIconAttrs = new Set();
         for (const element of elements) {
           for (const className of element.classList ?? []) {
             if (!className.startsWith('codicon-')) continue;
             if (className === 'codicon-modifier-spin') continue;
-            const iconName = className.replace(/^codicon-/, '');
-            if (!codiconNames.has(iconName)) invalidClasses.add(className);
+            usedCodiconClasses.add(className);
           }
 
           const iconAttr = element.getAttribute?.('icon');
-          if (iconAttr && /^[a-z0-9-]+$/.test(iconAttr)) {
-            const iconName = iconAttr.replace(/^codicon-/, '');
-            if (!codiconNames.has(iconName)) invalidIconAttrs.add(iconAttr);
+          if (iconAttr && iconAttr.startsWith('codicon-')) {
+            usedCodiconIconAttrs.add(iconAttr);
           }
+        }
+
+        const codiconUsageCount =
+          usedCodiconClasses.size + usedCodiconIconAttrs.size;
+
+        let codiconNames = new Set();
+        if (codiconUsageCount > 0) {
+          const codiconFonts = await document.fonts.load('16px "codicon"');
+          if (codiconFonts.length === 0) {
+            throw new Error('Codicon font is not available to the webview.');
+          }
+
+          codiconNames = collectCodiconNames();
+          if (codiconNames.size === 0) {
+            throw new Error('No codicon CSS rules were loaded.');
+          }
+        }
+
+        // The codiconUsageCount > 0 guard would be tautological inside these
+        // loops (the loop body only iterates when at least one usage was
+        // found), so we just check membership directly. If the sets are
+        // empty these loops are no-ops.
+        const invalidClasses = new Set();
+        const invalidIconAttrs = new Set();
+        for (const className of usedCodiconClasses) {
+          const iconName = className.replace(/^codicon-/, '');
+          if (!codiconNames.has(iconName)) invalidClasses.add(className);
+        }
+        for (const iconAttr of usedCodiconIconAttrs) {
+          const iconName = iconAttr.replace(/^codicon-/, '');
+          if (!codiconNames.has(iconName)) invalidIconAttrs.add(iconAttr);
         }
 
         if (invalidClasses.size > 0 || invalidIconAttrs.size > 0) {
