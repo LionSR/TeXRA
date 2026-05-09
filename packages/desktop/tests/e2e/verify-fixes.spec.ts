@@ -1,5 +1,3 @@
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
 
 import {
@@ -7,9 +5,6 @@ import {
   launchTexraApp,
   type LaunchedApp,
 } from './electronApp.js';
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-const OUT = join(HERE, 'test-results', 'verify-fixes');
 
 let launched: LaunchedApp;
 
@@ -62,10 +57,10 @@ async function setRoute(route: 'main' | 'settings'): Promise<void> {
   );
 }
 
-test('main view no longer renders inner Launcher/Progress toolbar', async () => {
+test('main view no longer renders inner Launcher/Progress toolbar', async ({}, testInfo) => {
   await setRoute('main');
   await launched.page.screenshot({
-    path: join(OUT, 'main-view.png'),
+    path: testInfo.outputPath('verify-fixes', 'main-view.png'),
     fullPage: false,
   });
   // Probe the <main-app> shadow root for the view-header div + the
@@ -88,7 +83,7 @@ test('main view no longer renders inner Launcher/Progress toolbar', async () => 
   expect(probe.latexdiffs).toBe(false);
 });
 
-test('settings overlay scrolls (Tools tab top + bottom)', async () => {
+test('settings overlay scrolls (Tools tab top + bottom)', async ({}, testInfo) => {
   await setRoute('settings');
   // Open Tools tab (index 5: Memory(0) History(1) Models(2) Agents(3)
   // Multi-Agent(4) Tools(5)).
@@ -128,7 +123,7 @@ test('settings overlay scrolls (Tools tab top + bottom)', async () => {
   console.log('tools panel before scroll:', probeBefore);
 
   await launched.page.screenshot({
-    path: join(OUT, 'settings-tools-top.png'),
+    path: testInfo.outputPath('verify-fixes', 'settings-tools-top.png'),
     fullPage: false,
   });
 
@@ -161,7 +156,7 @@ test('settings overlay scrolls (Tools tab top + bottom)', async () => {
   console.log('tools panel after scroll:', probeAfter);
 
   await launched.page.screenshot({
-    path: join(OUT, 'settings-tools-bottom.png'),
+    path: testInfo.outputPath('verify-fixes', 'settings-tools-bottom.png'),
     fullPage: false,
   });
 
