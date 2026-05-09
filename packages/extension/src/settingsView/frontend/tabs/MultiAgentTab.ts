@@ -91,17 +91,10 @@ export class MultiAgentTab extends LitElement {
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius);
         cursor: pointer;
-        transition:
-          border-color var(--transition-fast),
-          background-color var(--transition-fast);
       }
 
       .preset-card:hover {
         border-color: var(--wa-color-focus);
-        background-color: var(
-          --texra-list-hoverBackground,
-          rgba(128, 128, 128, 0.1)
-        );
       }
 
       .preset-card:focus-visible {

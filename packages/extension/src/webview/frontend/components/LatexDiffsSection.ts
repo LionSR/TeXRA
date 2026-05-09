@@ -1,9 +1,4 @@
-/**
- * LatexDiffsSection component for MainView LaTeXDiff controls.
- *
- * Renders the LaTeXDiff section with base/edited file selectors,
- * commit selector, and diff action buttons.
- */
+/** LaTeXDiff section with base/edited file selectors, commit selector, and diff actions. */
 
 // Side-effect imports - register WA select & option components
 import '@awesome.me/webawesome/dist/components/select/select.js';

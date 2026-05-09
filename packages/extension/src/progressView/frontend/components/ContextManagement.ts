@@ -1,9 +1,4 @@
-/**
- * ContextManagement component for displaying context management events.
- *
- * Displays compaction, clearing, and max_tokens reduction events
- * as collapsible details with statistics.
- */
+/** Displays compaction / clearing / max_tokens reduction events as collapsible details. */
 
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';

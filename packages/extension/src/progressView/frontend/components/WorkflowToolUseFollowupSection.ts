@@ -10,6 +10,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
@@ -38,35 +39,10 @@ export class WorkflowToolUseFollowupSection extends LitElement {
         display: block;
       }
 
-      .followup {
-        border-top: var(--border-thin) solid var(--color-border);
-        padding: var(--wa-space-2xs) 0;
-        color: var(--color-text-secondary);
-      }
-
-      .followup__header {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        width: 100%;
-        padding: 0;
-        border: none;
-        background: transparent;
-        color: var(--color-text);
-        cursor: pointer;
-      }
-
-      .followup__title {
-        flex: 1;
-        text-align: left;
-        font-weight: var(--font-weight-medium);
-      }
-
       .followup__body {
         display: flex;
         flex-direction: column;
         gap: var(--wa-space-2xs);
-        margin-top: var(--wa-space-2xs);
       }
 
       .followup__description {
@@ -118,7 +94,6 @@ export class WorkflowToolUseFollowupSection extends LitElement {
   @property({ attribute: false }) options: FollowupOptionsState | null = null;
   @property({ attribute: false }) streamModel: string | null = null;
 
-  @state() private expanded = false;
   @state() private selectedAgent = '';
   @state() private selectedModel = '';
   @state() private initialQuestion = '';
@@ -140,108 +115,86 @@ export class WorkflowToolUseFollowupSection extends LitElement {
     const ready = agents.length > 0 && models.some((model) => !model.disabled);
 
     return html`
-      <div
-        class="followup"
+      <wa-details
+        class="panel-collapsible"
+        summary="Tool-use follow-up"
+        @wa-show=${this.handleShow}
         role="region"
         aria-label="Workflow tool-use follow-up"
       >
-        <button
-          class="followup__header"
-          type="button"
-          aria-expanded=${this.expanded ? 'true' : 'false'}
-          @click=${this.toggleExpanded}
-        >
-          <wa-icon
-            library="texra"
-            name=${this.expanded ? 'chevron-down' : 'chevron-right'}
-            aria-hidden="true"
-          ></wa-icon>
-          <span class="followup__title">Tool-use follow-up</span>
-          <wa-icon
-            library="texra"
-            name="comment-discussion"
-            aria-hidden="true"
-          ></wa-icon>
-        </button>
-
-        ${this.expanded
-          ? html`
-              <div class="followup__body">
-                <div class="followup__description">
-                  Start an interactive tool-use chat from this workflow result.
-                  The new chat gets the workflow output locations and your note
-                  as context.
-                </div>
-                <div class="followup__controls">
-                  <label class="followup__field">
-                    <span class="followup__label">Agent</span>
-                    <wa-select
-                      placement="top"
-                      aria-label="Follow-up tool-use agent"
-                      .value=${this.selectedAgent}
-                      ?disabled=${agents.length === 0}
-                      @change=${this.handleAgentChange}
-                    >
-                      ${renderAgentOptions(agents, this.selectedAgent)}
-                    </wa-select>
-                  </label>
-                  <label class="followup__field">
-                    <span class="followup__label">Model</span>
-                    <wa-select
-                      placement="top"
-                      aria-label="Follow-up model"
-                      .value=${this.selectedModel}
-                      ?disabled=${models.length === 0}
-                      @change=${this.handleModelChange}
-                    >
-                      ${renderModelOptions(models, this.selectedModel)}
-                    </wa-select>
-                  </label>
-                </div>
-                <wa-textarea
-                  aria-label="Follow-up note"
-                  placeholder="Ask what the tool-use agent should do with these results."
-                  rows="3"
-                  resize="vertical"
-                  .value=${this.initialQuestion}
-                  @input=${this.handleQuestionInput}
-                ></wa-textarea>
-                <div class="followup__actions">
-                  <wa-button
-                    appearance="outlined"
-                    variant="neutral"
-                    size="small"
-                    ?disabled=${!ready}
-                    @click=${this.setupFollowup}
-                  >
-                    <wa-icon
-                      slot="start"
-                      library="texra"
-                      name="reply"
-                      aria-hidden="true"
-                    ></wa-icon>
-                    Setup
-                  </wa-button>
-                  <wa-button
-                    appearance="filled"
-                    variant="brand"
-                    size="small"
-                    ?disabled=${!ready}
-                    @click=${this.runFollowup}
-                  >
-                    <wa-icon
-                      slot="start"
-                      library="texra"
-                      name="play"
-                      aria-hidden="true"
-                    ></wa-icon>
-                    Run
-                  </wa-button>
-                </div>
-              </div>
-            `
-          : nothing}
-      </div>
+        <div class="followup__body">
+          <div class="followup__description">
+            Start an interactive tool-use chat from this workflow result. The
+            new chat gets the workflow output locations and your note as
+            context.
+          </div>
+          <div class="followup__controls">
+            <label class="followup__field">
+              <span class="followup__label">Agent</span>
+              <wa-select
+                placement="top"
+                aria-label="Follow-up tool-use agent"
+                .value=${this.selectedAgent}
+                ?disabled=${agents.length === 0}
+                @change=${this.handleAgentChange}
+              >
+                ${renderAgentOptions(agents, this.selectedAgent)}
+              </wa-select>
+            </label>
+            <label class="followup__field">
+              <span class="followup__label">Model</span>
+              <wa-select
+                placement="top"
+                aria-label="Follow-up model"
+                .value=${this.selectedModel}
+                ?disabled=${models.length === 0}
+                @change=${this.handleModelChange}
+              >
+                ${renderModelOptions(models, this.selectedModel)}
+              </wa-select>
+            </label>
+          </div>
+          <wa-textarea
+            aria-label="Follow-up note"
+            placeholder="Ask what the tool-use agent should do with these results."
+            rows="3"
+            resize="vertical"
+            .value=${this.initialQuestion}
+            @input=${this.handleQuestionInput}
+          ></wa-textarea>
+          <div class="followup__actions">
+            <wa-button
+              appearance="plain"
+              size="small"
+              ?disabled=${!ready}
+              @click=${this.setupFollowup}
+            >
+              <wa-icon
+                slot="start"
+                library="texra"
+                name="reply"
+                aria-hidden="true"
+              ></wa-icon>
+              Setup
+            </wa-button>
+            <wa-button
+              appearance="filled"
+              variant="brand"
+              size="small"
+              ?disabled=${!ready}
+              @click=${this.runFollowup}
+            >
+              <wa-icon
+                slot="start"
+                library="texra"
+                name="play"
+                aria-hidden="true"
+              ></wa-icon>
+              Run
+            </wa-button>
+          </div>
+        </div>
+      </wa-details>
     `;
   }
 
@@ -276,11 +229,10 @@ export class WorkflowToolUseFollowupSection extends LitElement {
     }
   }
 
-  private toggleExpanded = (): void => {
-    this.expanded = !this.expanded;
-    if (this.expanded) {
-      this.dispatchEvent(ProgressEvents.followupRequestOptions());
-    }
+  private handleShow = (event: Event): void => {
+    // wa-show bubbles from nested wa-select; only react to our own.
+    if (event.target !== event.currentTarget) return;
+    this.dispatchEvent(ProgressEvents.followupRequestOptions());
   };
 
   private handleAgentChange = (event: Event): void => {

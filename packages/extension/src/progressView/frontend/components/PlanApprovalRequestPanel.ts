@@ -1,11 +1,4 @@
-/**
- * Individual panel component for plan approval requests.
- *
- * Renders a plan summary, numbered step list with descriptions and
- * file references, approve/reject buttons, and feedback input.
- *
- * Extends BaseFeedbackPanel for shared feedback/reject/emit logic.
- */
+/** Plan approval request panel. */
 
 // Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';

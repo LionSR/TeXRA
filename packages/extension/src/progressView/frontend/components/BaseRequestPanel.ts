@@ -1,12 +1,4 @@
-/**
- * Minimal base class shared by all 4 request panel types.
- *
- * Provides the `permission` property, `emitAction()` helper, and the
- * `handleKeyboardShortcut()` contract that the container delegates to.
- *
- * BaseFeedbackPanel extends this to add reject-feedback support.
- * RetryRequestPanel extends this directly (no feedback).
- */
+/** Base class shared by all request panel types. */
 
 // Third-party imports
 import { LitElement } from 'lit';
