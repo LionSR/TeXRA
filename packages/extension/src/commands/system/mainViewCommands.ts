@@ -26,10 +26,8 @@ export const mainViewCommands = {
 /**
  * Registers main view commands for the extension.
  *
- * `texra.mainView.reset` and `texra.showImportOptions` are now
- * registered through the shared command registry in
- * `extensionCommandSurface.ts` (the desktop side already dispatches the
- * same commands via `DESKTOP_COMMAND_HANDLERS`).
+ * `texra.mainView.reset` and `texra.showImportOptions` are now registered
+ * through the shared command registry in `extensionCommandSurface.ts`.
  */
 export function registerMainViewCommands(
   context: vscode.ExtensionContext,

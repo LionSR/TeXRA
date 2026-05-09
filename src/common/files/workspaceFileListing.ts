@@ -59,4 +59,3 @@ export async function listWorkspaceFiles(
   await visit(options.root, '');
   return results.sort((left, right) => left.localeCompare(right));
 }
-

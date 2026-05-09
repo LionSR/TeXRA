@@ -137,17 +137,13 @@ function createDefaultTools() {
 /** Union of all tool names registered in the default registry. */
 export type RegisteredToolName = keyof ReturnType<typeof createDefaultTools>;
 
-/**
- * Get the default tool registry as an IToolRegistry.
- * Uses lazy initialization and singleton pattern.
- */
+/** Lazy singleton accessor for the default tool registry. */
 export function getDefaultToolRegistry(): IToolRegistry {
   if (!defaultRegistryInstance) {
     defaultRegistryInstance = new MapToolRegistry(createDefaultTools());
   }
   return defaultRegistryInstance;
 }
-
 
 /** Valid tool name pattern: starts with letter/underscore, followed by alphanumeric/underscores. */
 const VALID_TOOL_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/;

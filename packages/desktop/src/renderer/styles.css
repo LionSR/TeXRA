@@ -663,7 +663,6 @@ wa-button.desktop-secondary-button::part(base) {
   color: var(--wa-color-neutral-on-quiet);
 }
 
-
 /* =====================================================================
    Onboarding dialog (preserved)
    --------------------------------------------------------------------- */

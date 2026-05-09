@@ -14,9 +14,6 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 // Local imports - local components (re-use StatItem type)
 import type { StatItem } from './StatisticsPanel';
 
-/** Re-export StatItem as ContextStatItem for backward compatibility */
-export type ContextStatItem = StatItem;
-
 /** Action configuration */
 export interface ActionConfig {
   icon: string;

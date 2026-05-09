@@ -14,4 +14,3 @@
 export function isTimeoutErrorCode(code: string | undefined): boolean {
   return code === 'ECONNABORTED' || code === 'ETIMEDOUT';
 }
-

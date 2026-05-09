@@ -8,14 +8,14 @@ import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js'
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import { historyViewStyles } from './styles';
+import { historyStyles } from '@shared/styles/historyStyles';
 
 // Local imports - history view events
 import { HistoryViewEvents } from './events';
 
 @customElement('history-search-bar')
 export class SearchBar extends LitElement {
-  static override styles = [designTokens, commonViewStyles, historyViewStyles];
+  static override styles = [designTokens, commonViewStyles, historyStyles];
 
   @property({ attribute: false }) searchTerm = '';
   @property({ attribute: false }) matchCount = '';

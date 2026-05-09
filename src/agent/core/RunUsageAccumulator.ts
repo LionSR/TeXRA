@@ -91,4 +91,3 @@ export function recordNormalizedUsage(
 
   acc.normalizedSnapshots.push({ round, usage });
 }
-

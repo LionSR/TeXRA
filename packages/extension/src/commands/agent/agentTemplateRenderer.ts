@@ -60,9 +60,9 @@ const AGENT_RUNTIME_TOKENS = [
   'OUTPUT_FILES_ORDER',
 ] as const;
 
-function buildPassthrough(): Record<string, string> {
-  return Object.fromEntries(AGENT_RUNTIME_TOKENS.map((v) => [v, `{{ ${v} }}`]));
-}
+const PASSTHROUGH: Record<string, string> = Object.fromEntries(
+  AGENT_RUNTIME_TOKENS.map((v) => [v, `{{ ${v} }}`]),
+);
 
 const DEFAULT_TOOLS_YAML = [
   'bash',
@@ -101,7 +101,7 @@ export function renderAgentTemplateString(
   vars: Record<string, unknown>,
 ): string {
   return env.renderString(templateString, {
-    ...buildPassthrough(),
+    ...PASSTHROUGH,
     ...vars,
   });
 }

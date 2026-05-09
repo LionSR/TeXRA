@@ -29,7 +29,7 @@ const HISTORY_PAGE_SIZE = 25;
 // Local imports - history view
 import { HistoryViewEvents } from './events';
 import './HistoryItem';
-import { historyViewStyles } from './styles';
+import { historyStyles } from '@shared/styles/historyStyles';
 import type { HistoryViewState } from './state';
 
 /** Search navigation action (reactive trigger from parent) */
@@ -37,7 +37,7 @@ export type SearchAction = 'next' | 'prev' | null;
 
 @customElement('history-list')
 export class HistoryList extends LitElement {
-  static override styles = [designTokens, commonViewStyles, historyViewStyles];
+  static override styles = [designTokens, commonViewStyles, historyStyles];
 
   @property({ attribute: false }) items: HistoryItemData[] = [];
   @property({ attribute: false }) state?: HistoryViewState;

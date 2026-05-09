@@ -34,16 +34,14 @@ export function registerExecuteCommand(
  */
 export async function runExecuteCommand(input: unknown): Promise<void> {
   try {
-    const isWrappedInput =
-      input !== null && typeof input === 'object' && 'config' in input;
-    const wrapped = isWrappedInput
-      ? (input as { config: unknown; executionId?: unknown })
-      : null;
+    const wrapped =
+      input !== null && typeof input === 'object' && 'config' in input
+        ? (input as { config: unknown; executionId?: ExecutionId })
+        : null;
     const config = AgentConfigSchema.parse(wrapped ? wrapped.config : input);
 
-    const executionId = wrapped?.executionId as ExecutionId | undefined;
     await runValidatedExecutionRequest(
-      { config, executionId },
+      { config, executionId: wrapped?.executionId },
       { openWorkflowOutput: openFinalOutputIfAvailable },
     );
   } catch (error) {

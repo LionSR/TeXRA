@@ -19,7 +19,7 @@ const AgentConfigFieldsSchema = NullableFileFieldsSchema.extend({
 });
 
 /** Lift legacy session.agentCategory to top level for backward compatibility. */
-export function liftLegacyAgentCategory(input: unknown): unknown {
+function liftLegacyAgentCategory(input: unknown): unknown {
   if (typeof input !== 'object' || input === null) return input;
   const obj = input as Record<string, unknown>;
 
@@ -58,11 +58,9 @@ export type AgentConfig = z.output<typeof AgentConfigSchema>;
 export type AgentConfigInput = z.input<typeof AgentConfigFieldsSchema>;
 
 /** Agent configuration payload with required agent and model fields. */
-export const AgentConfigPayloadSchema = AgentConfigFieldsSchema.partial()
-  .required({
-    agent: true,
-    model: true,
-  })
-  .describe('Agent configuration payload with required agent and model fields');
+const AgentConfigPayloadSchema = AgentConfigFieldsSchema.partial().required({
+  agent: true,
+  model: true,
+});
 
 export type AgentConfigPayload = z.infer<typeof AgentConfigPayloadSchema>;
