@@ -267,7 +267,7 @@ export async function runToolUseFlow<C = unknown>(
     }
 
     sessionLifecycle.dispose();
-    getRunCoordinators().plan.clearForStream(streamId);
+    coordinators.plan.clearForStream(streamId);
     unregisterInterruptible(streamId);
   }
 
