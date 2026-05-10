@@ -142,6 +142,7 @@ export async function runToolUseFlow<C = unknown>(
 ): Promise<RunToolUseFlowResult> {
   const { logger, streamId, executionId, setting, onInterrupt } = input;
   const runtimeHost = input.runtimeHost ?? getAgentRuntimeHost();
+  const coordinators = getRunCoordinators();
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
   const registry = toolRegistry ?? getDefaultToolRegistry();
   const delegationDepth = input.delegationDepth ?? 0;
@@ -179,7 +180,6 @@ export async function runToolUseFlow<C = unknown>(
     runtimeHost,
     interrupt(): void {
       onInterrupt?.();
-      const coordinators = getRunCoordinators();
       coordinators.retry.clearRequest(streamId);
       coordinators.plan.clearForStream(streamId);
       sessionLifecycle.interrupt();
