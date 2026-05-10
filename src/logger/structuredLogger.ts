@@ -72,6 +72,20 @@ export class StructuredLogger implements Logger {
   }
 
   group(label: string): () => void {
+    return this.enterGroup(label, true);
+  }
+
+  async withGroup<T>(label: string, fn: () => Promise<T> | T): Promise<T> {
+    const pop = this.enterGroup(label, false);
+    try {
+      return await fn();
+    } finally {
+      pop();
+      await this.sinkRef.current.flush?.();
+    }
+  }
+
+  private enterGroup(label: string, flushOnPop: boolean): () => void {
     const index = this.groupStack.length;
     this.groupStack.push(label);
     let popped = false;
@@ -84,18 +98,8 @@ export class StructuredLogger implements Logger {
         const currentIndex = this.groupStack.lastIndexOf(label);
         if (currentIndex >= 0) this.groupStack.splice(currentIndex, 1);
       }
-      void this.sinkRef.current.flush?.();
+      if (flushOnPop) void this.sinkRef.current.flush?.();
     };
-  }
-
-  async withGroup<T>(label: string, fn: () => Promise<T> | T): Promise<T> {
-    const pop = this.group(label);
-    try {
-      return await fn();
-    } finally {
-      pop();
-      await this.sinkRef.current.flush?.();
-    }
   }
 
   child(fields: LogFields): Logger {
