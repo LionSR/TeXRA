@@ -8,8 +8,6 @@ import type { CliContext } from './cliContext';
 import { writeNdjsonStdout } from './logSinks';
 import { createCliLogger } from './logger';
 
-export type CliOutputFormat = 'text' | 'json' | 'ndjson';
-
 export function createCliRuntimeHost(context: CliContext): AgentRuntimeHost {
   let logger: ReturnType<typeof createCliLogger> | undefined;
   const cliLogger = (): ReturnType<typeof createCliLogger> =>
