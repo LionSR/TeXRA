@@ -34,17 +34,14 @@ export class NdjsonStdoutSink implements LogSink {
 
   write(record: LogRecord): void {
     this.queue.push(record);
-    if (!this.draining) {
-      this.draining = true;
-      this.idle = new Promise<void>((resolve) => {
-        this.resolveIdle = resolve;
-      });
-      setImmediate(() => this.drain());
-    }
+    this.scheduleDrain();
   }
 
   async flush(): Promise<void> {
-    if (this.draining) await this.idle;
+    while (this.draining || this.queue.length > 0) {
+      this.scheduleDrain();
+      await this.idle;
+    }
   }
 
   async close(): Promise<void> {
@@ -67,5 +64,14 @@ export class NdjsonStdoutSink implements LogSink {
     const resolve = this.resolveIdle;
     this.resolveIdle = null;
     resolve?.();
+  }
+
+  private scheduleDrain(): void {
+    if (this.draining) return;
+    this.draining = true;
+    this.idle = new Promise<void>((resolve) => {
+      this.resolveIdle = resolve;
+    });
+    setImmediate(() => this.drain());
   }
 }
