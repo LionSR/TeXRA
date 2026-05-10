@@ -141,9 +141,20 @@ export class SettingsApp extends SettingsAppBase {
         ${waTabThemeTokenStyles}
       }
 
+      /* WA's internal .tab-group wrapper (exposed as ::part(base)) is a flex
+         column but doesn't inherit the bounded host height. Without height
+         100% it sizes to content and the panel below grows past the dialog
+         viewport, defeating overflow:auto on the panel. */
+      wa-tab-group.settings-tabs::part(base) {
+        height: 100%;
+        min-height: 0;
+      }
+
       wa-tab-group.settings-tabs::part(body) {
         flex: 1;
         min-height: 0;
+        display: flex;
+        flex-direction: column;
       }
 
       /*
@@ -356,7 +367,7 @@ export class SettingsApp extends SettingsAppBase {
 
   override connectedCallback(): void {
     super.connectedCallback();
-    if (this.isDesktopHost() && this.selectedTabIndex.get() === 0) {
+    if (this.isDesktopHost && this.selectedTabIndex.get() === 0) {
       this.selectedTabIndex.set(SETTINGS_TAB.MODELS);
     }
   }
@@ -425,15 +436,8 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
   );
 
-  private isDesktopHost(): boolean {
-    return (
-      this.getAttribute('data-desktop-view') === 'settings' ||
-      Object.hasOwn(window, 'texraDesktop')
-    );
-  }
-
   private handleSetProviderKey(event: CustomEvent<{ provider: string }>): void {
-    if (!this.isDesktopHost()) {
+    if (!this.isDesktopHost) {
       postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, event.detail);
       return;
     }
@@ -487,7 +491,7 @@ export class SettingsApp extends SettingsAppBase {
     const target = this.getDefaultProviderKeyTarget();
     this.selectedTabIndex.set(SETTINGS_TAB.MODELS);
 
-    if (!this.isDesktopHost()) {
+    if (!this.isDesktopHost) {
       postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, {
         provider: target.provider,
       });
@@ -719,7 +723,7 @@ export class SettingsApp extends SettingsAppBase {
   );
 
   private renderHeader(): TemplateResult {
-    const settingsButton = this.isDesktopHost()
+    const settingsButton = this.isDesktopHost
       ? nothing
       : html`
           <wa-button
@@ -858,7 +862,7 @@ export class SettingsApp extends SettingsAppBase {
   }
 
   override render(): TemplateResult {
-    const desktopHost = this.isDesktopHost();
+    const desktopHost = this.isDesktopHost;
 
     return html`
       <div class="settings-container">
@@ -1047,7 +1051,7 @@ export class SettingsApp extends SettingsAppBase {
               .codexSandboxMode=${this.codexSandboxMode.get()}
               .codexReasoningEffort=${this.codexReasoningEffort.get()}
               .codexApprovalPolicy=${this.codexApprovalPolicy.get()}
-              .showDesktopCrashReporting=${this.isDesktopHost()}
+              .showDesktopCrashReporting=${this.isDesktopHost}
               .desktopCrashReportingEnabled=${this.desktopCrashReportingEnabled.get()}
               .desktopCrashReportingConfigured=${this.desktopCrashReportingConfigured.get()}
               @tool-open-url=${this.handleToolOpenUrl}
