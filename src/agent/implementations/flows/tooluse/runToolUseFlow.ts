@@ -6,7 +6,6 @@ import {
 import {
   clearPlanApprovalForStream,
   clearRetryRequest,
-  getRunCoordinators,
 } from '@agent/runtime/runCoordinators';
 import {
   PersistedFlow,
@@ -146,7 +145,6 @@ export async function runToolUseFlow<C = unknown>(
 ): Promise<RunToolUseFlowResult> {
   const { logger, streamId, executionId, setting, onInterrupt } = input;
   const runtimeHost = input.runtimeHost ?? getAgentRuntimeHost();
-  const coordinators = getRunCoordinators();
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
   const registry = toolRegistry ?? getDefaultToolRegistry();
   const delegationDepth = input.delegationDepth ?? 0;
