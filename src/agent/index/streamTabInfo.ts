@@ -68,8 +68,7 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   // is loaded, in which case `isRemoteAgent` would return false for a
   // genuinely remote agent.
   const isRemote =
-    hints?.isRemote ??
-    (rawAgentName ? isRemoteAgent(rawAgentName) : false);
+    hints?.isRemote ?? (rawAgentName ? isRemoteAgent(rawAgentName) : false);
 
   return {
     name: streamId,
