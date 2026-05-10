@@ -86,7 +86,6 @@ function splitRunArgs(args: readonly string[]): {
 
 async function listAgents(context: CliContext): Promise<CliResult> {
   await initCliPlatform(context);
-  installCliApprovalHandlers(context);
   await loadAgents();
   const agents = [
     ...getVisibleAgents('workflow').map((agent) => ({
