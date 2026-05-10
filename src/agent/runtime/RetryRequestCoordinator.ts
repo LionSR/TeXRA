@@ -56,7 +56,7 @@ interface RetryShowPayload extends Record<string, unknown> {
  * Manages pending retry requests.
  * Extends BasePromiseCoordinator with retry-specific behavior.
  */
-class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
+export class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
   RetryResult,
   RetryShowPayload
 > {
