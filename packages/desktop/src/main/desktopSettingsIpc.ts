@@ -453,7 +453,9 @@ export function createDesktopSettingsIpc(
     invalidateModelOptionsCache();
     options.postToRenderer({
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      optionsData: await computeModelOptionsData(),
+      optionsData: await computeModelOptionsData(
+        modelSelectionController.getVisibleModels(),
+      ),
     });
   }
 

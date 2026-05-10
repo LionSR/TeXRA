@@ -63,9 +63,13 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   const command =
     processAgent && config?.instruction ? config.instruction : undefined;
 
-  const isRemote = rawAgentName
-    ? isRemoteAgent(rawAgentName)
-    : (hints?.isRemote ?? false);
+  // Hint takes precedence: the runtime/event layer sometimes knows
+  // remote-ness (e.g. setActiveStream payload) before the agent registry
+  // is loaded, in which case `isRemoteAgent` would return false for a
+  // genuinely remote agent.
+  const isRemote =
+    hints?.isRemote ??
+    (rawAgentName ? isRemoteAgent(rawAgentName) : false);
 
   return {
     name: streamId,
