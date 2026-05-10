@@ -1,5 +1,7 @@
 import { access, readFile, writeFile } from 'node:fs/promises';
-import path, { basename } from 'node:path';
+import path from 'node:path';
+
+import { buildStreamTabInfo } from '@agent/index';
 
 import {
   prepareMainViewExecutionRequest,
@@ -391,29 +393,21 @@ export class DesktopProgressBridge {
 
   private buildStreamInfo(streamId: StreamTabId): StreamTabInfo {
     const taskState = this.taskStates.get(streamId);
-    const config = taskState?.agentConfig;
-    const category =
-      config?.agentCategory ??
-      this.categories.get(streamId) ??
-      AGENT_CATEGORY.WORKFLOW;
-    const inputFile = config?.inputFile ?? '';
-    const agentName = config?.agent ?? streamId.split('@')[0] ?? streamId;
-    return {
-      name: streamId,
-      label:
-        category !== AGENT_CATEGORY.TOOL_USE && inputFile
-          ? `${agentName}: ${basename(inputFile)}`
-          : agentName,
-      model: config?.model,
-      modelLabel: config?.model,
-      agent: config?.agent,
-      agentCategory: category,
-      inputFile,
+    const restored = this.restoredStreams.get(streamId);
+    return buildStreamTabInfo({
+      streamId,
+      config: taskState?.agentConfig,
+      hints: {
+        agent: restored?.agent,
+        agentCategory:
+          this.categories.get(streamId) ?? restored?.agentCategory,
+        inputFile: restored?.inputFile,
+      },
       creationTimestamp: this.getCreationTimestamp(streamId),
       executionId: this.executionIds.get(streamId),
       parentStreamId: this.parentStreams.get(streamId),
       description: this.descriptions.get(streamId),
-    };
+    });
   }
 
   private buildStreamMetadata(streamId: StreamTabId): StreamMetadata {
@@ -503,16 +497,17 @@ export class DesktopProgressBridge {
   private buildGhostStreamInfo(
     snapshot: RestoredStreamSnapshot,
   ): StreamTabInfo {
-    return {
-      name: snapshot.streamId,
-      label: snapshot.label,
-      agent: snapshot.agent,
-      agentCategory: snapshot.agentCategory,
-      inputFile: snapshot.inputFile ?? '',
+    return buildStreamTabInfo({
+      streamId: snapshot.streamId,
+      hints: {
+        agent: snapshot.agent,
+        agentCategory: snapshot.agentCategory,
+        inputFile: snapshot.inputFile,
+      },
       creationTimestamp: snapshot.creationTimestamp,
       executionId: snapshot.executionId,
       description: snapshot.description,
-    };
+    });
   }
 
   private flushLogs(streamId: StreamTabId): void {

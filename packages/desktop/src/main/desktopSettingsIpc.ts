@@ -37,11 +37,11 @@ import {
   loadApiKeyStatusMap,
   type ApiProvider,
 } from '@model/apiProviders';
+import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import {
-  DEFAULT_MODELS,
-  buildBasicModelOptionsData,
-} from '@model/modelOptionsBasic';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+  computeModelOptionsData,
+  invalidateModelOptionsCache,
+} from '@model/computeModelOptions';
 import { loadMemoryItems } from '@settingsView/utils/memoryFileSystem';
 import type { ExecutionId } from '@shared/schemas';
 import {
@@ -449,13 +449,11 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  function postMainModelOptionsData(): void {
+  async function postMainModelOptionsData(): Promise<void> {
     invalidateModelOptionsCache();
     options.postToRenderer({
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      optionsData: buildBasicModelOptionsData(
-        modelSelectionController.getVisibleModels(),
-      ),
+      optionsData: await computeModelOptionsData(),
     });
   }
 
@@ -777,7 +775,7 @@ export function createDesktopSettingsIpc(
   }): Promise<void> {
     await modelSelectionController.setModelEnabled(input);
     await postModelSelectionData();
-    postMainModelOptionsData();
+    await postMainModelOptionsData();
   }
 
   async function updateModelReasoningLevel(input: {
@@ -803,7 +801,7 @@ export function createDesktopSettingsIpc(
     invalidateModelOptionsCache();
     await postProfileData();
     await postModelSelectionData();
-    postMainModelOptionsData();
+    await postMainModelOptionsData();
   }
 
   async function setProviderKey(
@@ -921,7 +919,7 @@ export function createDesktopSettingsIpc(
 
   async function refreshAuthDependentData(): Promise<void> {
     await postModelSelectionData();
-    postMainModelOptionsData();
+    await postMainModelOptionsData();
     await Promise.all([
       postProfileData(),
       postAgentSelectionData(),
