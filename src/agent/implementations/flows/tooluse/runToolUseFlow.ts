@@ -3,7 +3,10 @@ import {
   registerInterruptible,
   unregisterInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
-import { getRunCoordinators } from '@agent/runtime/runCoordinators';
+import {
+  clearRetryRequest,
+  getRunCoordinators,
+} from '@agent/runtime/runCoordinators';
 import {
   PersistedFlow,
   flowKey,
@@ -180,7 +183,7 @@ export async function runToolUseFlow<C = unknown>(
     runtimeHost,
     interrupt(): void {
       onInterrupt?.();
-      coordinators.retry.clearRequest(streamId);
+      clearRetryRequest(streamId);
       coordinators.plan.clearForStream(streamId);
       sessionLifecycle.interrupt();
     },
