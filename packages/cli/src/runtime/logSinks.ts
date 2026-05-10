@@ -34,12 +34,18 @@ export class NdjsonStdoutSink implements LogSink {
 
   write(record: LogRecord): void {
     this.queue.push(record);
-    this.scheduleDrain();
+    if (!this.draining) {
+      this.beginDrain();
+      this.drain();
+    }
   }
 
   async flush(): Promise<void> {
     while (this.draining || this.queue.length > 0) {
-      this.scheduleDrain();
+      if (!this.draining) {
+        this.beginDrain();
+        this.drain();
+      }
       await this.idle;
     }
   }
@@ -53,7 +59,7 @@ export class NdjsonStdoutSink implements LogSink {
       const record = this.queue[this.head++];
       const line = `${JSON.stringify({ kind: 'log', ...record })}\n`;
       if (!process.stdout.write(line)) {
-        process.stdout.once('drain', () => setImmediate(() => this.drain()));
+        process.stdout.once('drain', () => this.drain());
         return;
       }
     }
@@ -66,12 +72,10 @@ export class NdjsonStdoutSink implements LogSink {
     resolve?.();
   }
 
-  private scheduleDrain(): void {
-    if (this.draining) return;
+  private beginDrain(): void {
     this.draining = true;
     this.idle = new Promise<void>((resolve) => {
       this.resolveIdle = resolve;
     });
-    setImmediate(() => this.drain());
   }
 }
