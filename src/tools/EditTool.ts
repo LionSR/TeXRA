@@ -14,6 +14,7 @@ import {
   resolveAndFormat,
   parseWorkingDirectory,
 } from '@tools/pathResolution';
+import { computeStructuredDiff } from '@tools/subagentDiffs';
 import { countOccurrences } from '@tools/utils';
 import {
   buildApprovalRejectedResult,
@@ -138,6 +139,9 @@ export class EditFileTool extends defineTool({
       ? `${replacementSummary}\n\n${userDiffNote}`
       : replacementSummary;
 
+    const structuredDiff =
+      computeStructuredDiff(currentContent, appliedContent) ?? undefined;
+
     return {
       summary,
       output,
@@ -149,6 +153,7 @@ export class EditFileTool extends defineTool({
           startLine: approval.startLine,
         },
       ],
+      ...(structuredDiff && { diff: structuredDiff }),
     };
   }
 }

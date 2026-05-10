@@ -3,7 +3,7 @@ import path from 'path';
 import { diff_match_patch } from 'diff-match-patch';
 
 import type { OutputFileSummary } from '@agent/runtime/AgentFlowResult';
-import type { ExecutionId } from '@shared/schemas';
+import type { DiffLine, ExecutionId, StructuredDiff } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files';
 import { getRunDir, ensureRunDir } from '@utils/files/taskRunStorage';
 import { countLines } from '@utils/text/stringUtils';
@@ -21,20 +21,24 @@ const LARGE_CHANGE_DIFF_LINES = 80;
  */
 const LARGE_CHANGE_RATIO = 0.4;
 
+const OP_TAG: Record<number, '+' | '-' | ' '> = { 1: '+', [-1]: '-', 0: ' ' };
+
 /**
- * Compute a human-readable line-level diff between two strings.
- * Uses diff-match-patch's line-mode diffing (diff_linesToChars_ /
- * diff_charsToLines_) to produce clean whole-line diffs with +/- prefixes.
- * Returns null if the strings are identical.
+ * Compute a structured line-level diff between two strings.
+ * Each row carries its tag (+/-/space) and a 1-based line number on the
+ * old side, the new side, or both (for context). Renderers style the rows
+ * directly — no re-running of diff-match-patch downstream.
+ *
+ * Returns null when the strings are identical.
  */
-function computeReadableDiff(
+export function computeStructuredDiff(
   original: string,
   modified: string,
-): string | null {
+): StructuredDiff | null {
   const dmp = new diff_match_patch();
 
-  // Convert to line-mode: each line becomes a single "character" so
-  // diff_main operates on whole lines, not individual characters.
+  // Line-mode: each line becomes one "character" so diff_main operates on
+  // whole lines.
   const { chars1, chars2, lineArray } = dmp.diff_linesToChars_(
     original,
     modified,
@@ -42,33 +46,50 @@ function computeReadableDiff(
   const diffs = dmp.diff_main(chars1, chars2, false);
   dmp.diff_charsToLines_(diffs, lineArray);
 
-  // Check if there are any actual changes.
   if (diffs.every(([op]) => op === 0)) return null;
 
-  const PREFIX: Record<number, string> = { 1: '+', [-1]: '-', 0: ' ' };
-  const lines: string[] = [];
+  const lines: DiffLine[] = [];
+  let oldLine = 1;
+  let newLine = 1;
+
   for (const [op, text] of diffs) {
-    const prefix = PREFIX[op] ?? ' ';
-    // Each chunk is one or more complete lines (with trailing \n).
-    // Split and prefix each line, dropping the trailing empty entry from split.
+    const tag = OP_TAG[op] ?? ' ';
     const chunkLines = text.split('\n');
     for (let i = 0; i < chunkLines.length; i++) {
-      // Skip the empty string after the final \n
+      // Drop the empty trailing entry from the split-on-\n.
       if (i === chunkLines.length - 1 && chunkLines[i] === '') continue;
-      lines.push(`${prefix}${chunkLines[i]}`);
+      const row: DiffLine = { tag, text: chunkLines[i] };
+      if (tag === ' ') {
+        row.oldLine = oldLine++;
+        row.newLine = newLine++;
+      } else if (tag === '-') {
+        row.oldLine = oldLine++;
+      } else {
+        row.newLine = newLine++;
+      }
+      lines.push(row);
     }
   }
-  return lines.join('\n');
+  return { lines };
+}
+
+/** Render a structured diff as the legacy unified-text form (for disk artifacts). */
+export function renderUnifiedDiff(diff: StructuredDiff): string {
+  const out = diff.lines.map((row) => `${row.tag}${row.text}`);
+  if (diff.truncated) out.push('[... diff truncated]');
+  return out.join('\n');
 }
 
 /**
- * Truncate diff text to a maximum number of lines.
- * Appends a truncation notice if the diff exceeds the limit.
+ * Truncate a structured diff to a maximum number of rows. Sets
+ * `truncated: true` so renderers can surface the elision.
  */
-function truncateDiff(diff: string, maxLines: number): string {
-  const lines = diff.split('\n');
-  if (lines.length <= maxLines) return diff;
-  return lines.slice(0, maxLines).join('\n') + '\n[... diff truncated]';
+export function truncateStructuredDiff(
+  diff: StructuredDiff,
+  maxLines: number,
+): StructuredDiff {
+  if (diff.lines.length <= maxLines) return diff;
+  return { lines: diff.lines.slice(0, maxLines), truncated: true };
 }
 
 /** Info about a diff file written to the execution's run directory. */
@@ -116,16 +137,19 @@ export async function computeAndWriteWorkflowDiffs(
           largeChange = changedLines / originalLines > LARGE_CHANGE_RATIO;
         }
 
-        const diff = computeReadableDiff(original, modified);
-        if (diff) {
+        const structured = computeStructuredDiff(original, modified);
+        if (structured) {
           const limit = largeChange ? LARGE_CHANGE_DIFF_LINES : MAX_DIFF_LINES;
-          const truncated = truncateDiff(diff, limit);
+          const truncated = truncateStructuredDiff(structured, limit);
           // Use full relativePath (with separators replaced) to avoid collisions
           // when multiple files share the same basename in different directories.
           const safeName = o.relativePath.replaceAll(/[\\/]/g, '_');
           const diffRelPath = `diffs/${safeName}.diff`;
           results.set(o.absolutePath, { diffRelPath, largeChange });
-          diffsToWrite.push({ diffRelPath, content: truncated });
+          diffsToWrite.push({
+            diffRelPath,
+            content: renderUnifiedDiff(truncated),
+          });
         }
       } catch {
         // File read failure is non-fatal — skip diff for this file.

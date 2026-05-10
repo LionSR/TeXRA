@@ -64,6 +64,28 @@ export const MissingOutputsPayloadSchema = z.object({
 
 const ToolUseStatusSchema = z.enum(['in_progress', 'completed']);
 
+/**
+ * Structured line-level diff for a file edit. Carried on tool-use log
+ * entries so all renderers (extension, desktop, CLI) display the same
+ * diff without recomputing — they only style the structured form.
+ *
+ * `oldLine` is set on `-` and ` ` rows; `newLine` is set on `+` and ` `.
+ */
+export const DiffLineSchema = z.object({
+  tag: z.enum(['+', '-', ' ']),
+  text: z.string(),
+  oldLine: z.int().positive().optional(),
+  newLine: z.int().positive().optional(),
+});
+export type DiffLine = z.infer<typeof DiffLineSchema>;
+
+export const StructuredDiffSchema = z.object({
+  lines: z.array(DiffLineSchema),
+  /** True when the producer dropped rows to satisfy a line cap. */
+  truncated: z.boolean().optional(),
+});
+export type StructuredDiff = z.infer<typeof StructuredDiffSchema>;
+
 export const ToolUseLogSchema = z.object({
   toolName: z.string().optional(),
   tool: z.string().optional(),
@@ -74,6 +96,8 @@ export const ToolUseLogSchema = z.object({
   isError: z.boolean().optional(),
   userInstruction: z.string().optional(),
   status: ToolUseStatusSchema.optional(),
+  /** Pre-computed structured diff for edit/write tools; renderers style it as-is. */
+  diff: StructuredDiffSchema.optional(),
 });
 export type ToolUseLog = z.infer<typeof ToolUseLogSchema>;
 

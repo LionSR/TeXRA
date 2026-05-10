@@ -4,6 +4,8 @@ import { z } from 'zod';
 // Type imports
 import type { ZodIssue } from 'zod';
 
+import { StructuredDiffSchema } from '@shared/schemas/progressView';
+
 // ============================================================================
 // Zod Schemas - Single Source of Truth
 // ============================================================================
@@ -176,6 +178,12 @@ export const ToolResultSchema = z.looseObject({
   lineChanges: LineChangesSchema.optional(),
   /** Records of edits made during tool execution */
   edits: z.array(EditRecordSchema).optional(),
+  /**
+   * Pre-computed structured diff for this tool's edit (when applicable).
+   * Surfaced on tool-use log entries so all renderers display the same diff
+   * without re-running diff-match-patch. Transient — not persisted.
+   */
+  diff: StructuredDiffSchema.optional(),
   /** Whether this result represents an error */
   isError: z.boolean().optional(),
   /** Additional diagnostic information */

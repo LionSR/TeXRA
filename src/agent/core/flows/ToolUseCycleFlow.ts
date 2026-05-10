@@ -890,6 +890,7 @@ class ToolUseDispatchNode<C> extends Node<
       input: parsedInput ?? call.raw,
       output: logOutput,
       ...(editedFiles.length && { files: editedFiles }),
+      ...(result.diff && { diff: result.diff }),
       isError: Boolean(result.isError),
     };
 
