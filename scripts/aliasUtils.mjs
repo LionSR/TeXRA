@@ -1,5 +1,10 @@
 /**
  * Utilities for deriving build-tool aliases from a package tsconfig.
+ *
+ * Note: callers (esbuild + Vite configs) pass the *root* repo dir, so the
+ * single source of truth for build-time aliases is the root `tsconfig.json`.
+ * `packages/extension/tsconfig.json` is only consulted by `tsc` for typecheck;
+ * if the two diverge, builds will silently follow the root.
  */
 
 import { readFileSync } from 'fs';
