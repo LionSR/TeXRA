@@ -89,7 +89,7 @@ export function getCurrentToolFileInteractionContext():
   return contextStack.at(-1);
 }
 
-export function getCurrentToolRunContext(): ToolRunContext | undefined {
+function getCurrentToolRunContext(): ToolRunContext | undefined {
   const context = getCurrentToolFileInteractionContext();
   if (!context) return undefined;
   const {
@@ -111,27 +111,6 @@ export function getCurrentToolRunContext(): ToolRunContext | undefined {
     runtimeHost,
     delegationDepth,
     delegationConfig,
-  };
-}
-
-export function getCurrentToolCallContext(): ToolCallContext | undefined {
-  const context = getCurrentToolFileInteractionContext();
-  if (!context) return undefined;
-  const {
-    toolCallId,
-    tracker,
-    todoState,
-    planState,
-    onExecutionReady,
-    onToolOutput,
-  } = context;
-  return {
-    toolCallId,
-    tracker,
-    todoState,
-    planState,
-    onExecutionReady,
-    onToolOutput,
   };
 }
 
