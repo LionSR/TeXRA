@@ -89,31 +89,8 @@ export function getCurrentToolFileInteractionContext():
   return contextStack.at(-1);
 }
 
-function getCurrentToolRunContext(): ToolRunContext | undefined {
-  const context = getCurrentToolFileInteractionContext();
-  if (!context) return undefined;
-  const {
-    streamId,
-    executionId,
-    model,
-    agentName,
-    workingDirectory,
-    runtimeHost,
-    delegationDepth,
-    delegationConfig,
-  } = context;
-  return {
-    streamId,
-    executionId,
-    model,
-    agentName,
-    workingDirectory,
-    runtimeHost,
-    delegationDepth,
-    delegationConfig,
-  };
-}
-
 export function getCurrentToolRuntimeHost(): AgentRuntimeHost {
-  return getCurrentToolRunContext()?.runtimeHost ?? getAgentRuntimeHost();
+  return (
+    getCurrentToolFileInteractionContext()?.runtimeHost ?? getAgentRuntimeHost()
+  );
 }

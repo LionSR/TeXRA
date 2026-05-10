@@ -11,7 +11,9 @@ import { createCliLogger } from './logger';
 export type CliOutputFormat = 'text' | 'json' | 'ndjson';
 
 export function createCliRuntimeHost(context: CliContext): AgentRuntimeHost {
-  const logger = createCliLogger(context);
+  let logger: ReturnType<typeof createCliLogger> | undefined;
+  const cliLogger = (): ReturnType<typeof createCliLogger> =>
+    (logger ??= createCliLogger(context));
 
   return {
     emit(event, payload) {
@@ -36,13 +38,13 @@ export function createCliRuntimeHost(context: CliContext): AgentRuntimeHost {
       if (event === 'requestShowError') {
         const message = (payload as ProgressEventPayloads['requestShowError'])
           .message;
-        logger.error(message);
+        cliLogger().error(message);
         return;
       }
 
       if (event === 'setTaskState') {
         const data = payload as ProgressEventPayloads['setTaskState'];
-        logger.info('Task state registered', { streamId: data.streamId });
+        cliLogger().info('Task state registered', { streamId: data.streamId });
       }
     },
   };
