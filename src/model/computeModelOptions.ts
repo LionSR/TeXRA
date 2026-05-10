@@ -161,8 +161,19 @@ export function invalidateModelOptionsCache(): void {
   _pending = null;
 }
 
-/** Compute typed model options data for Lit-native rendering. */
-export async function computeModelOptionsData(): Promise<ModelOptionData[]> {
+/**
+ * Compute typed model options data for Lit-native rendering.
+ *
+ * When `models` is provided, the caller's view of the visible-models
+ * list is honored verbatim (skipping the cache). This avoids a desync
+ * when the caller is wired against an alternate `globalState` while
+ * the default `getVisibleModels()` reads from `platform().globalState`.
+ */
+export async function computeModelOptionsData(
+  models?: readonly string[],
+): Promise<ModelOptionData[]> {
+  if (models != null) return computeModelOptionsDataUncached(models);
+
   if (_resolved && Date.now() < _resolved.expiry) return _resolved.data;
   if (_pending) return _pending;
 
@@ -181,8 +192,10 @@ export async function computeModelOptionsData(): Promise<ModelOptionData[]> {
   }
 }
 
-async function computeModelOptionsDataUncached(): Promise<ModelOptionData[]> {
-  const models = getVisibleModels();
+async function computeModelOptionsDataUncached(
+  modelsOverride?: readonly string[],
+): Promise<ModelOptionData[]> {
+  const models = modelsOverride ?? getVisibleModels();
   const availabilityCtx = await buildAvailabilityContext();
 
   return Promise.all(

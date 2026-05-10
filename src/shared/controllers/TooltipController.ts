@@ -10,8 +10,7 @@ const TOOLTIP_STYLES: Partial<CSSStyleDeclaration> = {
   fontFamily: 'var(--wa-font-family-body, system-ui), system-ui',
   color: 'var(--wa-color-text-normal)',
   background: 'var(--wa-color-surface-raised, var(--wa-color-surface-default))',
-  border:
-    '1px solid var(--wa-color-surface-border, var(--texra-contrastBorder, transparent))',
+  border: '1px solid var(--wa-color-surface-border, transparent)',
   borderRadius: 'var(--border-radius, 3px)',
   whiteSpace: 'nowrap',
   pointerEvents: 'none',
