@@ -4,6 +4,7 @@ import {
   unregisterInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import {
+  clearPlanApprovalForStream,
   clearRetryRequest,
   getRunCoordinators,
 } from '@agent/runtime/runCoordinators';
@@ -184,7 +185,7 @@ export async function runToolUseFlow<C = unknown>(
     interrupt(): void {
       onInterrupt?.();
       clearRetryRequest(streamId);
-      coordinators.plan.clearForStream(streamId);
+      clearPlanApprovalForStream(streamId);
       sessionLifecycle.interrupt();
     },
   };
@@ -270,7 +271,7 @@ export async function runToolUseFlow<C = unknown>(
     }
 
     sessionLifecycle.dispose();
-    coordinators.plan.clearForStream(streamId);
+    clearPlanApprovalForStream(streamId);
     unregisterInterruptible(streamId);
   }
 
