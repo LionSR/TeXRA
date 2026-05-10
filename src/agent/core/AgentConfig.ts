@@ -4,11 +4,15 @@ import { NullableFileFieldsSchema } from '@shared/schemas/fileFields';
 import { ToolConfigSchema } from '@shared/schemas/toolConfig';
 import { AgentCategory } from './AgentDataclass';
 
+export const DEFAULT_AGENT_NAME = 'correct';
+export const DEFAULT_AGENT_MODEL = 'gemini31p';
+export const DEFAULT_AGENT_INSTRUCTION = '';
+
 /** Pure object schema without refinements for use with .partial(). */
 const AgentConfigFieldsSchema = NullableFileFieldsSchema.extend({
-  agent: z.string().prefault('correct'),
-  model: z.string().prefault('gemini31p'),
-  instruction: z.string().prefault(''),
+  agent: z.string().prefault(DEFAULT_AGENT_NAME),
+  model: z.string().prefault(DEFAULT_AGENT_MODEL),
+  instruction: z.string().prefault(DEFAULT_AGENT_INSTRUCTION),
   agentCategory: z.enum(AgentCategory).prefault(AgentCategory.Workflow),
   editedFiles: z.array(z.string()).prefault([]),
   toolConfig: ToolConfigSchema,

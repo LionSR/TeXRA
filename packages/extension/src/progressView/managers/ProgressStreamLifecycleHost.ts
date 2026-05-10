@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import { clearRetryRequest } from '@agent/runtime/runCoordinators';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { isInFlightStatus } from '@common/constants/streamStatus';
@@ -41,14 +41,14 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
     options: { clearRetryRequest?: boolean } = {},
   ): Promise<void> {
     if (options.clearRetryRequest === true) {
-      retryCoordinator.clearRequest(stream);
+      clearRetryRequest(stream);
     }
     await vscode.commands.executeCommand('texra.stopAgent', stream);
   }
 
   cleanupDeletedStream(stream: StreamTabId): void {
     cleanupApprovalsForStream(stream);
-    retryCoordinator.clearRequest(stream);
+    clearRetryRequest(stream);
     ToolUseFollowUpQueue.release(stream);
     this.modelOutputBackups.delete(stream);
     this.provider.webviewBridge.clearStream(stream);
@@ -57,7 +57,7 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
   cleanupDeletedStreams(streams: StreamTabId[]): void {
     cleanupAllApprovals();
     for (const stream of streams) {
-      retryCoordinator.clearRequest(stream);
+      clearRetryRequest(stream);
       ToolUseFollowUpQueue.release(stream);
     }
     this.modelOutputBackups.clear();

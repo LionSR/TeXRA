@@ -15,9 +15,11 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { tryPlatform } from '@platform/platform';
 import type { ValidatedExecutionRequest } from '@agent/core/executionRequests';
 import { getWorkspaceProvider } from '@agent/core/workspace';
-import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
-import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
-import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import {
+  clearRetryRequest,
+  resolvePlanApproval,
+  resolveProposal,
+} from '@agent/runtime/runCoordinators';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
@@ -238,7 +240,7 @@ export class DesktopProgressBridge {
         return true;
       },
       resolveProposal: (proposalId, result) => {
-        proposalCoordinator.resolveRequest(proposalId, result);
+        resolveProposal(proposalId, result);
       },
       onMissingProposal: (proposalId) => {
         this.logger.warn(
@@ -908,7 +910,7 @@ export class DesktopProgressBridge {
     this.removePersistedStream(streamId);
 
     cleanupApprovalsForStream(streamId);
-    retryCoordinator.clearRequest(streamId);
+    clearRetryRequest(streamId);
     ToolUseFollowUpQueue.release(streamId);
 
     await this.streamLogs.delete(streamId);
@@ -947,7 +949,7 @@ export class DesktopProgressBridge {
   async deleteAllStreams(): Promise<void> {
     cleanupAllApprovals();
     for (const streamId of this.streamLogs.keys()) {
-      retryCoordinator.clearRequest(streamId);
+      clearRetryRequest(streamId);
       ToolUseFollowUpQueue.release(streamId);
     }
     // Drop persisted ghosts too: a "delete all" should leave nothing
@@ -984,7 +986,7 @@ export class DesktopProgressBridge {
   }
 
   stopStream(streamId: StreamTabId): void {
-    retryCoordinator.clearRequest(streamId);
+    clearRetryRequest(streamId);
     if (this.options.detachSubagentsOnStop === true) {
       detachActiveChildren(streamId);
     } else {
@@ -1106,7 +1108,7 @@ export class DesktopProgressBridge {
       { command: typeof PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION }
     >,
   ): void {
-    planApprovalCoordinator.resolveRequest(message.approvalId, {
+    resolvePlanApproval(message.approvalId, {
       action: message.action,
       ...(message.action === 'reject' && { feedback: message.feedback }),
     });

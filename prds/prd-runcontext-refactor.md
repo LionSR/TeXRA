@@ -352,3 +352,16 @@ Single AsyncLocalStorage + RunContext threaded explicitly through the kernel cal
 ```
 
 The kernel stays small. The rules stay simple. Concurrent runs stop leaking into each other. That's the whole story.
+
+## 14. Single source of truth and abstraction budget
+
+`RunContext` is the single source of truth for one execution's runtime facts: stream identity, execution identity, logger, runtime host, approval coordinators, cancellation signal, working directory, and host capabilities. Tool-call-local facts must stay in the tool call context, not in `RunContext`; host presentation facts must stay in the host package.
+
+The purpose of this refactor is to reduce ambient state, not to replace global state with a chain of forwarding objects. A new context field, accessor, or coordinator is acceptable only if it owns a real invariant: lifetime, identity, cancellation, approval settlement, or host capability selection. Accessors that merely relay data without clarifying ownership should be removed.
+
+PRs for this PRD must state:
+
+- Which runtime fact moved into `RunContext`, and why that is the correct owner.
+- Which singleton or duplicated host-specific path was removed or scheduled for removal.
+- Host impact for extension, desktop, and CLI.
+- Any abstraction added, with the invariant it enforces.
