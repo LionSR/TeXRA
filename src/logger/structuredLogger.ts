@@ -72,12 +72,18 @@ export class StructuredLogger implements Logger {
   }
 
   group(label: string): () => void {
+    const index = this.groupStack.length;
     this.groupStack.push(label);
     let popped = false;
     return () => {
       if (popped) return;
       popped = true;
-      this.groupStack.pop();
+      if (this.groupStack[index] === label) {
+        this.groupStack.splice(index, 1);
+      } else {
+        const currentIndex = this.groupStack.lastIndexOf(label);
+        if (currentIndex >= 0) this.groupStack.splice(currentIndex, 1);
+      }
       void this.sinkRef.current.flush?.();
     };
   }

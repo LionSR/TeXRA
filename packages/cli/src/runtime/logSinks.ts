@@ -5,6 +5,14 @@ export function writeNdjsonStdout(record: unknown): void {
   process.stdout.write(`${JSON.stringify(record)}\n`);
 }
 
+export function writeTextStdout(text: string): void {
+  process.stdout.write(`${text}\n`);
+}
+
+export function writeTextStderr(text: string): void {
+  process.stderr.write(`${text}\n`);
+}
+
 export class StderrTextSink implements LogSink {
   write(record: LogRecord): void {
     const groups = record.groups.length
