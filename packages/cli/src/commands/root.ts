@@ -27,9 +27,10 @@ function printHelp(): void {
 
 Usage:
   texra --help
+  texra [--cwd <dir>] [--output-format text|json|ndjson] [--approval-policy <policy>] <command>
   texra version
-  texra agents list [-o json]
-  texra models list [-o json]
+  texra agents list
+  texra models list
   texra run <workflow-agent> [options]
   texra chat [options]
 
