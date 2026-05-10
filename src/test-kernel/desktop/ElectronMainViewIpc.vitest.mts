@@ -98,6 +98,7 @@ describe('desktop main-view IPC', () => {
   afterEach(() => {
     vi.doUnmock('electron');
     vi.doUnmock('@agent/index/agentRegistry');
+    vi.doUnmock('@model/computeModelOptions');
     vi.doUnmock('@model/modelOptionsBasic');
   });
 
@@ -491,8 +492,8 @@ describe('desktop main-view IPC', () => {
         toolUse: [],
       })),
     }));
-    vi.doMock('@model/modelOptionsBasic', () => ({
-      buildBasicModelOptionsData: vi.fn(() => [{ value: 'fresh-model' }]),
+    vi.doMock('@model/computeModelOptions', () => ({
+      computeModelOptionsData: vi.fn(async () => [{ value: 'fresh-model' }]),
     }));
     const { ELECTRON_WEBVIEW_PUSH_CHANNEL, installDesktopMainViewIpc } =
       await loadDesktopMainViewIpcModule({ ipcMain, nativeTheme });
