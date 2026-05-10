@@ -1,0 +1,22 @@
+{
+  "name": "@texra/cli",
+  "version": "0.37.8",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "texra": "./dist/bin/texra.js"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "check:architecture": "node scripts/check-host-imports.mjs",
+    "bundle": "esbuild src/bin/texra.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/bin/texra.js --banner:js='#!/usr/bin/env node'",
+    "build": "pnpm run typecheck && pnpm run check:architecture && pnpm run bundle"
+  },
+  "dependencies": {
+    "@texra/core": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "typescript": "^6.0.3"
+  }
+}

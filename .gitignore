@@ -36,3 +36,6 @@ scripts/analyze_heap.py
 # tests/e2e/__screenshots__/ ARE committed — only the run output is ignored).
 packages/desktop/tests/e2e/test-results/
 packages/desktop/playwright-report/
+
+# External design references cloned locally; do not vendor them into TeXRA.
+references/openrouter-skills/

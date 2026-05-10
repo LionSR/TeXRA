@@ -20,7 +20,8 @@ import {
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
-import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
+import { waitForProposal } from '@agent/runtime/runCoordinators';
+import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
 import {
   getHandle,
   AgentExecutionHandle,
@@ -490,7 +491,7 @@ function summarizeProposal(
 
 /** Convert proposal result to ToolResult. Returns null if approved. */
 function proposalResultToToolResult(
-  result: Awaited<ReturnType<typeof proposalCoordinator.waitForProposal>>,
+  result: ProposalResult,
   agentName: string,
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
 ): ToolResult | null {
@@ -544,7 +545,7 @@ async function proposeAndExecute(
 
   const proposalId = randomUUID();
 
-  const result = await proposalCoordinator.waitForProposal(streamId, {
+  const result = await waitForProposal(streamId, {
     proposalId,
     proposal,
   });
