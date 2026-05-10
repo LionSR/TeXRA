@@ -1,4 +1,5 @@
 // Standard library imports
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,6 +23,14 @@ export interface CliContext {
   readonly resourcesPath: string;
 }
 
+const GLOBAL_FLAGS_WITH_VALUE = new Set([
+  '--approval-policy',
+  '--cwd',
+  '--output-format',
+]);
+
+const GLOBAL_BOOLEAN_FLAGS = new Set(['--print', '-p']);
+
 export function flagValue(
   args: readonly string[],
   ...names: string[]
@@ -34,7 +43,7 @@ export function flagValue(
 }
 
 function outputFormat(args: readonly string[]): CliOutputFormat {
-  const value = flagValue(args, '-o', '--output-format') ?? 'text';
+  const value = flagValue(args, '--output-format') ?? 'text';
   if (value === 'json' || value === 'ndjson') return value;
   return 'text';
 }
@@ -48,6 +57,43 @@ function cliMode(args: readonly string[]): CliMode {
   if (process.env.CI) return 'headless';
   if (!process.stdout.isTTY) return 'headless';
   return 'interactive';
+}
+
+function splitGlobalArgs(args: readonly string[]): {
+  globalArgs: readonly string[];
+  commandArgs: readonly string[];
+} {
+  const globalArgs: string[] = [];
+  let index = 0;
+
+  while (index < args.length) {
+    const arg = args[index];
+    if (
+      arg == null ||
+      !arg.startsWith('-') ||
+      arg === '--help' ||
+      arg === '-h' ||
+      arg === '--version' ||
+      arg === '-v'
+    ) {
+      break;
+    }
+
+    globalArgs.push(arg);
+    if (GLOBAL_FLAGS_WITH_VALUE.has(arg) && index + 1 < args.length) {
+      globalArgs.push(args[index + 1]);
+      index += 2;
+      continue;
+    }
+
+    if (!GLOBAL_BOOLEAN_FLAGS.has(arg)) break;
+    index += 1;
+  }
+
+  return {
+    globalArgs,
+    commandArgs: args.slice(index),
+  };
 }
 
 async function readCliVersion(): Promise<string> {
@@ -77,20 +123,21 @@ function resolveResourcesPath(): string {
     path.resolve(currentDir, '../../../extension/resources'),
     path.resolve(currentDir, '../../extension/resources'),
   ];
-  return candidates[0];
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 }
 
 export async function resolveCliContext(
   argv?: readonly string[],
 ): Promise<CliContext> {
   const resolvedArgv = argv ?? process.argv.slice(2);
-  const cwd = flagValue(resolvedArgv, '--cwd') ?? process.cwd();
+  const { globalArgs, commandArgs } = splitGlobalArgs(resolvedArgv);
+  const cwd = flagValue(globalArgs, '--cwd') ?? process.cwd();
   return {
-    argv: resolvedArgv,
+    argv: commandArgs,
     cwd,
-    mode: cliMode(resolvedArgv),
-    outputFormat: outputFormat(resolvedArgv),
-    approvalPolicy: approvalPolicy(resolvedArgv),
+    mode: cliMode(globalArgs),
+    outputFormat: outputFormat(globalArgs),
+    approvalPolicy: approvalPolicy(globalArgs),
     version: await readCliVersion(),
     resourcesPath: resolveResourcesPath(),
   };
