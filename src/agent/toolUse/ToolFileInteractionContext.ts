@@ -11,10 +11,16 @@ import {
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 
-export interface ToolFileInteractionContext {
+/**
+ * Fields that describe the run executing a tool call.
+ *
+ * These are candidates for RunContext ownership. New code should prefer passing
+ * them explicitly from the run boundary rather than reading the process-wide
+ * tool-call stack directly.
+ */
+export interface ToolRunContext {
   streamId?: StreamTabId;
   executionId?: ExecutionId;
-  toolCallId?: string;
   /** Model short name of the parent agent (e.g. "opus46T", "sonnet46T"). */
   model?: string;
   /** Agent name of the parent agent (e.g. "orchestrator", "search-agent"). */
@@ -34,6 +40,11 @@ export interface ToolFileInteractionContext {
    * a second depth value.
    */
   delegationConfig?: NestedDelegationConfig;
+}
+
+/** Fields that belong to one concrete tool call or tool-cycle state snapshot. */
+export interface ToolCallContext {
+  toolCallId?: string;
   tracker: FileInteractionState;
   /** Todo state for managing task lists. Optional for backward compatibility. */
   todoState?: TodoState;
@@ -44,6 +55,9 @@ export interface ToolFileInteractionContext {
   /** Called by tools to push partial output for live streaming to the UI. */
   onToolOutput?: (chunk: string) => void;
 }
+
+export interface ToolFileInteractionContext
+  extends ToolRunContext, ToolCallContext {}
 
 const contextStack: ToolFileInteractionContext[] = [];
 
@@ -75,8 +89,35 @@ export function getCurrentToolFileInteractionContext():
   return contextStack.at(-1);
 }
 
+export function getCurrentToolRunContext(): ToolRunContext | undefined {
+  const context = getCurrentToolFileInteractionContext();
+  if (!context) return undefined;
+  const {
+    streamId,
+    executionId,
+    model,
+    agentName,
+    workingDirectory,
+    runtimeHost,
+    delegationDepth,
+    delegationConfig,
+  } = context;
+  return {
+    streamId,
+    executionId,
+    model,
+    agentName,
+    workingDirectory,
+    runtimeHost,
+    delegationDepth,
+    delegationConfig,
+  };
+}
+
+export function getCurrentToolCallContext(): ToolCallContext | undefined {
+  return getCurrentToolFileInteractionContext();
+}
+
 export function getCurrentToolRuntimeHost(): AgentRuntimeHost {
-  return (
-    getCurrentToolFileInteractionContext()?.runtimeHost ?? getAgentRuntimeHost()
-  );
+  return getCurrentToolRunContext()?.runtimeHost ?? getAgentRuntimeHost();
 }

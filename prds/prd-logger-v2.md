@@ -513,3 +513,16 @@ Net code reduction vs round 1: Phase 2 cut saves ~30 LOC, simpler bootstrap save
 ### 15.7 What round 2 does NOT change
 
 The round-1 _direction_ is correct and ships unchanged: structured `LogRecord`, host-port `LogSink`, one logger per `RunContext`, retirement of `outputChannelFactory` and `contextStorage` ALS, deprecation shims through `logUtils.ts` for one release. Round 2 is a tightening pass on the migration mechanics, not a redesign.
+
+## 16. Single source of truth and abstraction budget
+
+Logger v2 has one shared semantic object: `LogRecord`. Its schema, grouping semantics, run identity fields, and severity vocabulary are the single source of truth for extension, desktop, and CLI logging. Host packages may implement sinks and renderers, but they must not define parallel log shapes or reinterpret log levels.
+
+A logger abstraction is acceptable only when it owns one of the following: record construction, group lifetime, sink flushing, host rendering, or temporary compatibility during migration. A file that merely renames `info`, `warn`, or `error` and forwards to another logger is not part of the design unless it is the documented migration shim and has a removal phase.
+
+PRs for this PRD must state:
+
+- The log source of truth affected by the change.
+- Which host sinks are affected: extension, desktop, CLI, tests.
+- Which old logging path was removed or intentionally left as a compatibility shim.
+- Why any new abstraction is deeper than a pass-through layer.
