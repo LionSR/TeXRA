@@ -63,9 +63,11 @@ The CLI's round-1 §11.2 NDJSON event stream is a _separate_ code path from the 
 
 ## 5. Shape
 
+**Locality rule (structural, not stylistic).** The `Logger`/`LogRecord`/`LogSink` interfaces and the bootstrap queue (§5.3) live in core with **zero heavy dependencies** — no `fs`, `vscode`, `electron-log`, `axios`, `picocolors`. Concrete sinks live in their host packages (`packages/{extension,desktop,cli}/sinks/*.ts`) and are imported only at the composition root (`extension.ts`, `cli/bin/texra.ts`, `desktop/main.ts`). This prevents import cycles and lets any deep module call `ctx.log.error(...)` without dragging host machinery into its dependency closure. CC's `utils/log.ts` (362 LOC, no fs/axios) vs. `utils/errorLogSink.ts` (235 LOC, all the heavy I/O) is the canonical shape; the split docstring at `errorLogSink.ts:9-10` calls out the import-cycle motivation explicitly. Enforce via an ESLint rule (no `vscode`/`electron-log`/`axios`/`fs` imports under `core/runtime/logger.ts` and its siblings).
+
 ### 5.1 The `Logger` interface
 
-Lives on `RunContext` (per `prd-runcontext-refactor.md` §5). One `Logger` per run, plus a `BootstrapLogger` for the pre-`initPlatform()` window.
+Lives on `RunContext` (per `prd-runcontext-refactor.md` §5). One `Logger` per run, plus a module-level bootstrap queue (§5.3) for the pre-`initPlatform()` window.
 
 ```ts
 // packages/core/src/runtime/logger.ts
@@ -118,27 +120,35 @@ export interface LogSink {
 
 `LogSink` is a host port — installed once per `RunContext` (or once per host, if the host wants a process-shared sink). It accepts structured records; formatting is its job.
 
-### 5.3 The `BootstrapLogger`
+### 5.3 Bootstrap queue (no class)
 
-A `Logger` impl that buffers records in an array. `flushTo(sink)` drains the buffer through the given sink and switches subsequent emissions to direct passthrough.
+A module-level queue + idempotent `attachSink()` function. ~50 LOC. No `BootstrapLogger`-implementing wrapper class — the queue _is_ the bootstrap behavior.
 
 ```ts
-export class BootstrapLogger implements Logger {
-  private buffer: LogRecord[] = [];
-  private downstream: LogSink | null = null;
+// packages/core/src/runtime/logger.ts
+const bootstrapQueue: LogRecord[] = [];
+let bootstrapSink: LogSink | null = null;
 
-  /* … level methods build a LogRecord, push onto buffer if downstream is null,
-     otherwise write directly … */
-
-  flushTo(sink: LogSink): void {
-    this.downstream = sink;
-    for (const r of this.buffer) sink.write(r);
-    this.buffer.length = 0;
+function emit(record: LogRecord): void {
+  if (bootstrapSink === null) {
+    bootstrapQueue.push(record);
+    return;
   }
+  bootstrapSink.write(record);
+}
+
+/** Idempotent. Safe to call from preAction hook + main setup() without coordination. */
+export function attachSink(sink: LogSink): void {
+  if (bootstrapSink !== null) return;
+  bootstrapSink = sink;
+  for (const r of bootstrapQueue) sink.write(r);
+  bootstrapQueue.length = 0;
 }
 ```
 
-The CLI's `bin/texra.ts` constructs a `BootstrapLogger` immediately, threads it through config-load + secret-resolution + agent-directory bootstrap, then calls `bootstrap.flushTo(stderrSink)` (or whichever sink the resolved mode picks) right after `initPlatform()` returns.
+The CLI's `bin/texra.ts` calls `attachSink(stderrSink)` (or whichever sink the resolved mode picks) right after `initPlatform()` returns. Records emitted before that call buffer in `bootstrapQueue`; records emitted after passthrough directly. Idempotency mirrors CC's `attachErrorLogSink` (`utils/log.ts:109-134`) — multiple call sites can attach without coordination.
+
+`Logger.swapSink()` per §15.2 keeps its existing role for _runtime_ sink replacement (theme picker preview, log-file rotation), distinct from boot handoff.
 
 ## 6. Schema unification with progress events
 
