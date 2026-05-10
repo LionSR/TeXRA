@@ -1,6 +1,10 @@
 // Local imports - logger
 import type { LogRecord, LogSink } from '@logger/structuredLogger';
 
+export function writeNdjsonStdout(record: unknown): void {
+  process.stdout.write(`${JSON.stringify(record)}\n`);
+}
+
 export class StderrTextSink implements LogSink {
   write(record: LogRecord): void {
     const groups = record.groups.length
