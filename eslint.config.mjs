@@ -59,6 +59,7 @@ const __dirname = path.dirname(__filename);
 const COMPOSITION_ROOT_FILES = new Set([
   path.join(__dirname, 'packages/extension/src/extension.ts'),
   path.join(__dirname, 'packages/desktop/src/main/platform/index.ts'),
+  path.join(__dirname, 'packages/cli/src/runtime/initPlatform.ts'),
 ]);
 
 const extensionPackageDir = path.join(__dirname, 'packages', 'extension');

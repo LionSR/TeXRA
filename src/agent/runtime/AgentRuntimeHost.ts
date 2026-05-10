@@ -5,6 +5,7 @@ import {
   setDefaultProgressSink,
   type ProgressSink,
 } from './ProgressSink';
+import { tryUseRunContext } from './RunContext';
 
 export type AgentRuntimeHost = ProgressSink;
 
@@ -21,7 +22,11 @@ export function getDefaultAgentRuntimeHost(): AgentRuntimeHost {
 }
 
 export function getAgentRuntimeHost(): AgentRuntimeHost {
-  return runtimeHostScope.getStore() ?? getDefaultAgentRuntimeHost();
+  return (
+    tryUseRunContext()?.runtimeHost ??
+    runtimeHostScope.getStore() ??
+    getDefaultAgentRuntimeHost()
+  );
 }
 
 export function runWithAgentRuntimeHost<T>(
