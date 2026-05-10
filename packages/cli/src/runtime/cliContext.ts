@@ -191,7 +191,7 @@ export async function resolveCliContext(
   return {
     argv: commandArgs,
     cwd,
-    mode: cliMode(resolvedArgv),
+    mode: cliMode(globalArgs),
     outputFormat: outputFormat(globalArgs),
     approvalPolicy: approvalPolicy(globalArgs),
     version: await readCliVersion(),

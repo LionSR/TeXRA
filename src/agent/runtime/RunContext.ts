@@ -47,6 +47,8 @@ export interface RunContext {
 
 export interface CreateRunContextOptions {
   runtimeHost: AgentRuntimeHost;
+  streamId?: StreamTabId;
+  executionId?: ExecutionId;
   logger?: Partial<RunLogger>;
   approvals?: ApprovalHandlers;
   coordinators?: RunCoordinators;
@@ -64,6 +66,8 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
 
   return Object.freeze({
     runtimeHost: options.runtimeHost,
+    streamId: options.streamId,
+    executionId: options.executionId,
     logger: Object.freeze({
       debug: logger?.debug ?? noopLog,
       info: logger?.info ?? noopLog,
