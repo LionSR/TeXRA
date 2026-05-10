@@ -27,6 +27,15 @@ interface CliResult {
   exitCode: number;
 }
 
+const RUN_VALUE_FLAGS = new Set([
+  '--input',
+  '-i',
+  '--output',
+  '--model',
+  '-m',
+  '--instruction',
+]);
+
 function printHelp(): void {
   writeTextStdout(`TeXRA CLI
 
@@ -61,7 +70,7 @@ function splitRunArgs(args: readonly string[]): {
 
     optionArgs.push(arg);
     const value = args[index + 1];
-    if (value != null && !value.startsWith('-')) {
+    if (RUN_VALUE_FLAGS.has(arg) && value != null && !value.startsWith('-')) {
       optionArgs.push(value);
       index += 2;
       continue;
@@ -95,6 +104,14 @@ async function listAgents(context: CliContext): Promise<CliResult> {
     return { exitCode: 0 };
   }
 
+  if (context.outputFormat === 'ndjson') {
+    const ts = new Date().toISOString();
+    for (const agent of agents) {
+      writeNdjsonStdout({ kind: 'agent', ts, agent });
+    }
+    return { exitCode: 0 };
+  }
+
   for (const agent of agents) {
     writeTextStdout(
       `${agent.category}\t${agent.name}\t${agent.description ?? ''}`,
@@ -109,6 +126,14 @@ async function listModels(context: CliContext): Promise<CliResult> {
 
   if (context.outputFormat === 'json') {
     writeTextStdout(JSON.stringify(models, null, 2));
+    return { exitCode: 0 };
+  }
+
+  if (context.outputFormat === 'ndjson') {
+    const ts = new Date().toISOString();
+    for (const model of models) {
+      writeNdjsonStdout({ kind: 'model', ts, model });
+    }
     return { exitCode: 0 };
   }
 
@@ -175,7 +200,7 @@ async function runWorkflowAgent(
 
 export async function runCli(argv?: readonly string[]): Promise<CliResult> {
   const context = await resolveCliContext(argv);
-  const [command, subcommand, ...rest] = context.argv;
+  const [command, subcommand] = context.argv;
 
   if (!command || command === '--help' || command === '-h') {
     printHelp();
