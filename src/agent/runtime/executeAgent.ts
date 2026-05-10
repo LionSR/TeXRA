@@ -82,6 +82,7 @@ import {
 import { generateSessionDescription } from './sessionDescription';
 import { getRunStorageService } from './RunStorageService';
 import {
+  createRunContext,
   withRunContext,
   type RunContext,
   type RunCoordinators,
@@ -106,11 +107,15 @@ interface AgentLaunchContext extends AgentCore {
   coordinators: RunCoordinators;
 }
 
-function createRunContext(ctx: AgentLaunchContext): RunContext {
-  return {
-    ...ctx,
+function createExecutionRunContext(ctx: AgentLaunchContext): RunContext {
+  return createRunContext({
+    runtimeHost: ctx.runtimeHost,
+    streamId: ctx.streamId,
+    executionId: ctx.executionId,
+    logger: ctx.logger,
     approvals: {},
-  };
+    coordinators: ctx.coordinators,
+  });
 }
 
 export async function getAgentPath(
@@ -722,7 +727,7 @@ export async function executeAgent(
       suppressErrorNotification: options?.isSubagent,
     });
     ctx.delegationDepth = options?.delegationDepth ?? 0;
-    return withRunContext(createRunContext(ctx), async () => {
+    return withRunContext(createExecutionRunContext(ctx), async () => {
       const { setting, streamId, config } = ctx;
       const { agent: agentName } = config;
       const { isSubagent } = options ?? {};
@@ -872,7 +877,7 @@ export async function executeMergeAgent(
     });
     const { streamId, executionId } = ctx;
 
-    await withRunContext(createRunContext(ctx), () =>
+    await withRunContext(createExecutionRunContext(ctx), () =>
       runFlowWithLifecycle(ctx, streamId, 'merge', async () => {
         StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
           runtimeHost: ctx.runtimeHost,
@@ -938,7 +943,7 @@ export async function resumeToolUseFromSnapshot(
     );
     const { setting, streamId } = ctx;
 
-    await withRunContext(createRunContext(ctx), async () => {
+    await withRunContext(createExecutionRunContext(ctx), async () => {
       if (setting.agentCategory !== AgentCategory.ToolUse) {
         throw new Error(
           'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
