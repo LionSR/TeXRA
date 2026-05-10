@@ -1744,3 +1744,212 @@ Round 2 ships only `command` and `prompt` handler types in §25.5. `http` (POST 
 ---
 
 End of round 2. The CLI is still a thin Node shell over a host-neutral kernel; round 2 just makes the kernel honestly host-neutral (no ambient singletons), bigger in the right direction (RunContext + Logger v2 + HookHost + SessionStore are kernel-shared infra), and _callable by every other agent that speaks MCP_ — which was the user's framing all along.
+
+---
+
+## 33. Round 3 — minimum-viable v1.0 (2026-05-08)
+
+> **Superseded by §34 (round 4)** on the Ink-vs-MCP ordering: round 4 ships the interactive REPL (Ink) in v1.0 and defers `texra mcp serve` to v1.1, reversing this round. The §33.2 deferral table below is still accurate for every row _except_ the `texra chat` Ink REPL row and the `texra mcp serve` row — those two flip in §34.2. For the canonical current v1.0 plan, read §34.
+
+User feedback after rounds 1 and 2: the scope is too large. Round 3 trims v1.0 to the two highest-leverage features and explicitly defers the rest. Rounds 1 and 2 stay as the long-range design; round 3 is what ships first.
+
+### 33.1 What v1.0 ships
+
+Two features plus minimum plumbing.
+
+**1. `texra run <workflow-agent>` headless** (~1,000 LOC; covers Phase 0 of round 1 §15)
+
+- Workflow agents only: `polish`, `correct`, `elevate`, `devise`, `criticize`, `merge`, OCR, transcribe.
+- Env-var auth only — `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc. (existing `lookupApiKey` resolution path; no keyring, no OAuth).
+- `--output-format text|ndjson`. In `text` mode (default): final output file path on stdout, progress on stderr. In `ndjson` mode: structured events on stdout (progress events per §11.2; log records per `prd-logger-v2.md` §5.2 — the two share transport but version independently per logger §15.1), human messages and errors on stderr.
+- Reuses all 6 existing Node platform defaults byte-for-byte (`consoleLog`, `nodeFilesystem`, `nodeStorage`, `nodeWorkspace`, `memoryState` — exporting `createMemoryStore()` — and `EnvSecrets`). v1.0 keeps `EnvSecrets` since auth is env-vars-only; the keyring-backed replacement (round 1 §7.3) lands in v1.2.
+- No interactive features. No approval engine — workflow agents don't trigger edit/bash gates.
+- Exit codes per round 1 §5.1.
+
+**2. `texra mcp serve`** (~500 LOC; covers round 2 §24.5 v1.0)
+
+- Three MCP tools: `run_workflow`, `run_chat` (with `approvalPolicy: "never" | "yolo"` only), `list_agents`.
+- stdio JSON-RPC 2.0; one process per client connection.
+- `notifications/progress` streaming.
+- Cancellation via `notifications/cancelled`.
+- Documented v1.0 limitation: one concurrent `tools/call` per process; concurrent calls serialize. Singleton retirement (per `prd-runcontext-refactor.md` Phase 2) gates true concurrency in v1.1.
+
+This is the leverage feature. It makes every TeXRA agent callable from Claude Code, Codex, opencode, Cursor, and any future MCP host without TeXRA writing its own TUI. Users get an interactive surface for free via the calling host's UI.
+
+**3. Discovery + plumbing** (~150 LOC)
+
+- `texra agents list [--source builtin|custom|remote] [--output-format text|json]`
+- `texra models list [--provider <name>] [--output-format text|json]`
+- `texra version`, `texra --help`.
+
+**Total v1.0: ~1,650 LOC, ~3 weeks for one engineer.** Down from round 2's ~5,330–6,330 LOC v1 bundle.
+
+### 33.2 What v1.0 explicitly does NOT ship
+
+| Round 1+2 item                                              | Defer to     | Why it can wait                                                                                   |
+| ----------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------- |
+| `texra chat` Ink REPL (round 1 §5.2 / §11.3)                | v1.1+        | MCP server gives users an interactive surface via the calling host's UI. May never need our own.  |
+| Tool-use headless with `auto-edits` / `auto` / `ask` (§9.2) | v1.1         | Only `never` and `yolo` are useful headlessly; both are exposed via MCP `run_chat`.               |
+| OAuth loopback + device-code (round 1 §10)                  | v1.2         | Env vars cover ~95% of users (CI, scripts, dev containers).                                       |
+| Keyring + file-secrets fallback (§10.3)                     | v1.2         | Env vars + a `--api-key` flag cover the gap.                                                      |
+| `conf` + Zod layered config (§6.1, §8.4)                    | v1.2         | Env vars + flags are enough until users complain.                                                 |
+| `texra-base-action` GitHub Action (§12, round 2 §28)        | v1.2         | Users `npm install -g @texra/cli` in a workflow step today.                                       |
+| `texra resume` / session JSONL (round 2 §27)                | v1.2         | Workflow agents are stateless; tool-use sessions live in the MCP client's transcript (see §33.4). |
+| Hook system (round 2 §25)                                   | v2           | Speculative. Wait for concrete user requests.                                                     |
+| `texra doctor` (§8.5)                                       | nice-to-have | ~80 LOC whenever; not blocking v1.0.                                                              |
+| Self-contained Bun binaries (§13.3)                         | nice-to-have | Convenience artifact, never the canonical install path.                                           |
+| `RunContext` Phase 2 (per `prd-runcontext-refactor.md`)     | v1.1         | Required for _concurrent_ MCP sessions; not for the documented one-call-at-a-time v1.0.           |
+| Logger v2 Phase 2 (schema unification with progress)        | cut          | Over-couples slow-changing progress events to fast-changing log records (see logger PRD §15.1).   |
+| Logger v2 Phase 5 (`McpProgressSink`)                       | v1.1         | Gated on RunContext Phase 2 anyway.                                                               |
+
+### 33.3 On Ink
+
+Round 1 §6 #2 picked Ink for the interactive REPL. Ink is the right pick _when_ `texra chat` ships — Claude Code, Codex, and Gemini CLI all use it.
+
+But **Ink is only needed for the REPL.** Headless `texra run` is plain stdout / NDJSON; `texra mcp serve` is JSON-RPC framed on stdio. Neither touches Ink.
+
+- v1.0 ships _no_ REPL → no Ink dependency at all → cold start <80ms, no React in the install, smaller npm package.
+- v1.1 may ship `texra chat` → Ink as a lazy chunk per round 1 §11.3 is the correct call.
+- The MCP-server route may make `texra chat` redundant. A user wanting an interactive TeXRA experience runs `claude` (or `codex`, or `cursor`) with `texra mcp serve` configured; the calling host's TUI is already best-in-class. Building our own competes with that for no clear win.
+
+### 33.4 Sessions and resume — round 3 position
+
+Round 2 §27 specifies a JSONL session store under `~/.texra/projects/<hash>/sessions/<id>.jsonl` matching Claude Code's layout. Round 3 keeps the _layout_ but defers _implementation_ to v1.2:
+
+- v1.0's workflow agents are stateless — input file → output file. No session to resume.
+- v1.0's `texra mcp serve` runs inside an MCP client (Claude Code, Codex, …) whose own transcript is the canonical "conversation" record. The client's `--continue` / `--resume` resumes that conversation; TeXRA's contribution shows up there as `texra__run_polish` tool calls + their results.
+- Cross-tool resume (resuming a Codex session in Claude Code, or a Claude Code session in TeXRA) **does not exist** in the ecosystem as of May 2026. Each tool's JSONL contains tool-call shapes specific to that tool's runtime; transcripts are interpretable across tools but not executable. The shared on-disk _layout_ (project-hashed JSONL directories, per `cc-sessions` and similar tooling) is the right interop level.
+
+When `texra resume` lands in v1.2, matching Claude Code's directory layout buys ecosystem-tooling reuse for free; the _event schema_ stays TeXRA-specific.
+
+### 33.5 Logger v2 — round 3 consumes a trimmed subset
+
+Logger v2's direction is right, but the v1.0 CLI consumes a trimmed subset (see [`prd-logger-v2.md`](./prd-logger-v2.md) §15 for full revisions):
+
+- **Phase 2 cut** (schema unification) — share NDJSON transport, version log/progress schemas independently.
+- **Phase 5 deferred** to v1.1 (MCP sink, gated on RunContext Phase 2).
+- **Boot logger** is `swapSink()` instead of `flushTo()` — no record reordering, no overflow cap.
+- **Channel** auto-derived from `RunContext.streamId`, not pushed at every legacy call site.
+
+Net: logger v2 timeline drops from ~3.8 to ~2.7 engineering weeks for v1.0 scope (Phases 0/1/3, with `InkLogSink` rolled into Phase 1).
+
+### 33.6 Phase plan (v1.0)
+
+| Phase     | Scope                                                                                                                                       | Weeks |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| A         | Workspace package + `texra run <workflow-agent>` + headless renderer (text + NDJSON) + `agents list` + `models list` + `version` + `--help` | 1.5   |
+| B         | `texra mcp serve` v1.0 (three tools, stdio JSON-RPC, progress notifications, cancellation)                                                  | 1     |
+| C         | Polish: release scripting, `npm publish`, README quickstart                                                                                 | 0.5   |
+| **Total** | **~3 weeks single-engineer**                                                                                                                | **3** |
+
+Phases A and B are independent after the workspace skeleton lands; two engineers run them in parallel for ~2-week delivery.
+
+### 33.7 Success criteria for v1.0
+
+- `npm install -g @texra/cli && texra run polish --input paper.tex --output paper.polished.tex` succeeds end-to-end with only `ANTHROPIC_API_KEY` set. No prior TeXRA install required.
+- `texra mcp serve` is callable from Claude Code with a default `.mcp.json` config; the user can prompt Claude Code to "ask texra to polish this paragraph" and get a result.
+- `texra agents list -o json | jq` parses; the schema matches `@shared/schemas`.
+- Cold start `texra --help` < 100 ms.
+- No regression in extension or desktop builds.
+
+### 33.8 What round 3 does NOT change
+
+Round 1's architecture (§7), platform impls (§7.3), code-reuse boundary (§7.2), repo layout (§7.1), and tech-stack picks (§6 picks 1, 3, 4, 5, 8, 10) all stand. Round 2's MCP-server design (§24) ships _as-is_ — it was already the right shape. Round 3 is purely a scope trim, not a redesign.
+
+The goal of round 3: ship a useful CLI in three weeks, not a complete CLI in three months. The complete CLI is rounds 1 + 2; v1.1, v1.2, and v2 cover everything else as user demand reveals what's worth the cost.
+
+---
+
+## 34. Round 4 — interactive + workflow first, MCP defers (2026-05-08)
+
+User direction after round 3: **MCP can wait. Make interactive and workflow agents work first.** Round 4 reverses round 3's "MCP before REPL" priority — the user wants TeXRA to be a usable, standalone CLI on its own before being a callable backend for other CLIs.
+
+This means Ink ships in v1.0 (round 3 §33.3 said no Ink). The MCP server moves out of the v1.x roadmap entirely (see §34.6). The design goal is also to stay maximally coherent with the existing extension + Electron hosts: the CLI should be another thin host over the shared kernel, not a parallel product with its own semantics.
+
+### 34.1 What v1.0 ships (revised from §33.1)
+
+Three features. Same plumbing.
+
+**1. `texra run <workflow-agent>` headless** (~1,000 LOC; unchanged from §33.1)
+
+- Workflow agents: `polish`, `correct`, `elevate`, `devise`, `criticize`, `merge`, OCR, transcribe.
+- Env-var auth, `--output-format text|ndjson`, exit codes per round 1 §5.1.
+- Reuses all 6 existing Node platform defaults byte-for-byte: `consoleLog`, `nodeFilesystem`, `nodeStorage`,
+  `nodeWorkspace`, `createMemoryStore()` from `memoryState`, and `EnvSecrets`.
+- Same kernel contracts as extension + desktop: `executeAgent`, `RunContext`, logger v2, approval hooks, and
+  shared Zod schemas stay the source of truth. The CLI contributes a host shell, not a forked agent runtime.
+
+**2. `texra chat` interactive REPL** (~1,400–1,700 LOC; covers round 1 Phase 1 + Phase 3 minimum)
+
+- Ink-based TUI: `<App />`, `<StreamPane />`, `<ApprovalCard />`, `<PromptInput />`. Round 1 §11.3 also lists `<TodoList />` — deferred (lands when `/plan` does; not on the v1.1 list — see §34.7). Ink stays a lazy chunk per round 1 §11.3 — `texra run` headless does not load it.
+- Tool-use agents: orchestrator (default), devise, search, generic chat. `--agent <name>` overrides.
+- Approval policy: `never | ask | yolo` only (skip `auto-edits` / `auto` for v1.0 — they need the in-project predicate from round 2 §26.3, fine to add in v1.1).
+  - `ask` is the default in interactive mode; renders `<ApprovalCard />` inline for edit / bash / plan gates.
+  - `never` and `yolo` work in interactive mode for users who want zero-prompt or all-prompt runs.
+- Slash commands (subset of round 1 §5.2): `/agent`, `/model`, `/yolo`, `/clear`, `/exit`. `/plan` and `/resume` deferred (no session store yet, no `<TodoList />` yet).
+- Multi-line input: Enter to submit, Shift-Enter (or Ctrl-J) for newline, Ctrl-C to cancel current run, Ctrl-D to exit.
+- No session persistence in v1.0 — `texra resume` and `--continue` ship in v1.1 alongside the JSONL session store (round 2 §27).
+
+**3. Discovery + plumbing** (~150 LOC; unchanged from §33.1)
+
+- `texra agents list`, `texra models list`, `texra version`, `texra --help`.
+
+**Total v1.0: ~2,550–2,850 LOC** (1,000 + 1,400–1,700 + 150)**, ~5 weeks single-engineer.** Larger than round 3's ~1,650 because the Ink REPL is the largest single UI investment in the CLI; smaller than rounds 1+2's ~5,330+ because MCP, OAuth, keyring, file config, sessions, hooks, and the GitHub Action all defer.
+
+### 34.2 What v1.0 explicitly does NOT ship (vs §33.2)
+
+| Item                                                           | Defer to   | Why                                                                                                                                                                                 |
+| -------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `texra mcp serve` (was v1.0 in §33.1)                          | **future** | Per user direction (round 4, reinforced 2026-05-09: "Don't do MCP yet"). Not part of the v1.x roadmap; revisit when there is concrete demand to wire TeXRA into another agent host. |
+| Approval policies `auto-edits` / `auto` (in-project predicate) | v1.1       | `never` / `ask` / `yolo` cover the simple cases; in-project predicate is round 2 §26.3.                                                                                             |
+| OAuth loopback + device-code                                   | v1.1       | Env vars cover ~95% of users; once auth is in, sessions/keyring follow.                                                                                                             |
+| Keyring + file-secrets fallback                                | v1.1       | Env vars + a `--api-key` flag cover the gap until OAuth lands.                                                                                                                      |
+| `conf` + Zod layered config                                    | v1.1       | Env vars + flags are enough until users complain.                                                                                                                                   |
+| `texra resume` / `--continue` / session JSONL                  | v1.1       | Each `texra chat` is a fresh session in v1.0.                                                                                                                                       |
+| `texra-base-action` GitHub Action                              | v1.2       | Users `npm install -g @texra/cli` in a workflow step today.                                                                                                                         |
+| Hook system, `texra doctor`, Bun binaries                      | v1.2+      | Speculative or convenience-only.                                                                                                                                                    |
+
+### 34.3 On Ink — round 4 reverses round 3
+
+Round 3 §33.3 said "v1.0 ships _no_ REPL → no Ink dependency." Round 4 reverses: **Ink ships in v1.0 as the lazy chunk for `texra chat`.** Pick, gating, and chunk-size budget all unchanged from round 1 (§6 #2, §11.3, §13.2). One-shot inline prompts use `@clack/prompts` per round 1 §6 #4; streaming-style approvals render through `<ApprovalCard />`.
+
+### 34.4 Phase plan (revised v1.0)
+
+| Phase     | Scope                                                                                                                                                              | Weeks |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- |
+| A         | Workspace package + `texra run <workflow-agent>` + headless renderer (text + NDJSON) + `agents list` + `models list` + `version` + `--help`                        | 1.5   |
+| B         | Approval engine (`never` / `ask` / `yolo`) + edit / bash / plan / proposal / retry / external-inquiry handlers + `--allowed-tools` / `--disallowed-tools` plumbing | 1.5   |
+| C         | `texra chat` Ink REPL: `<App />`, `<StreamPane />`, `<ApprovalCard />`, `<PromptInput />`, slash-command dispatch, Ctrl-C cancellation                             | 1.5   |
+| D         | Polish: release scripting, `npm publish`, README quickstart                                                                                                        | 0.5   |
+| **Total** | **~5 weeks single-engineer; ~3.5 weeks for two engineers (B + C overlap after A)**                                                                                 | **5** |
+
+Phase B largely gates Phase C — `texra chat` cannot _ship_ without working approval handlers — but Phase C can build the REPL skeleton (`<App />`, `<StreamPane />`, `<PromptInput />`, slash-command dispatch, Ctrl-C) against a stub approval handler in parallel with B once A's plumbing lands. Final wiring of B's edit / bash / plan / proposal / retry / external-inquiry handlers into the REPL is the join point. Phase B's handlers are CLI-side glue against existing kernel seams (`setToolEditApprovalHandler`, `bashApprovalController`, etc.), not kernel work.
+
+### 34.5 Success criteria for v1.0 (revised from §33.7)
+
+- `npm install -g @texra/cli && texra run polish --input paper.tex --output paper.polished.tex` succeeds with only `ANTHROPIC_API_KEY` set.
+- `texra chat` boots into the Ink REPL on TTY, runs an orchestrator session against `cwd`, streams tool calls + responses live, prompts inline for edit / bash approval, respects Ctrl-C cancellation.
+- `texra chat --approval-policy yolo` runs an end-to-end multi-tool flow without prompts.
+- `texra chat --approval-policy never` correctly fails when an approval is needed (exit code 4).
+- `texra agents list -o json | jq` parses; schema matches `@shared/schemas`.
+- Cold start `texra --help` < 100 ms (Ink only loads when entering chat).
+- No regression in extension or desktop builds.
+
+### 34.6 MCP — out of the v1.x roadmap
+
+Per user direction reinforced 2026-05-09 ("Don't do MCP yet"): `texra mcp serve` is not in v1.x. The round 2 §24 design stays in the PRD as a **future** option to revisit when there is concrete demand from a calling host (Claude Code / Codex / opencode user wiring TeXRA into their flow). Until then, the CLI is sized and shipped purely as a standalone product.
+
+The logger PRD's `McpProgressSink` (Phase 5, see [`prd-logger-v2.md`](./prd-logger-v2.md) §15.5) lands alongside MCP whenever that ships — not part of the v1.x logger work.
+
+### 34.7 What round 4 does NOT change
+
+Round 1's architecture, platform impls, repo layout, and tech-stack picks all stand. Round 2's MCP-server design (§24) is correct — it just is not part of v1.x. Round 3's logger v2 trims (§33.5, see also `prd-logger-v2.md` §15) all stay in force. Round 4 is a scope reordering, not a redesign.
+
+The intended shape stays coherent across hosts:
+
+- **Extension** stays the richest VS Code-native shell.
+- **Desktop** stays the Electron shell over the same shared kernel contracts.
+- **CLI v1.0** is the standalone shell for workflow + interactive use — the canonical lens of round 4.
+- **MCP** is a future interoperability surface layered on top whenever it lands; it is not what defines the CLI and is not on the v1.x roadmap.
+
+The v1.x sequencing: **interactive + workflow** (v1.0, ~5 weeks) → **auth, config, secrets, sessions, `auto-edits`/`auto` policies** (v1.1, ~3 weeks) → polish + `texra doctor` + GitHub Action (v1.2, ~1.5 weeks) → MCP and other interop surfaces if and when there is demand (post-v1.x).
