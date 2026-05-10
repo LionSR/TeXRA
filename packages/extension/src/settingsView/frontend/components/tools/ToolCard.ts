@@ -250,7 +250,12 @@ export class ToolCard extends LitElement {
       ToolCard.STATUS_CONFIG[status] ?? ToolCard.STATUS_CONFIG.unknown;
 
     return html`
-      <wa-tag class="tool-badge" variant=${config.variant} size="small">
+      <wa-tag
+        class="tool-badge"
+        variant=${config.variant}
+        appearance="accent"
+        size="small"
+      >
         <wa-icon library="texra" name=${config.icon}></wa-icon>
         ${this.item.statusLabel ?? config.label}
       </wa-tag>
