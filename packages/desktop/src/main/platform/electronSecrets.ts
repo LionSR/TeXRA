@@ -1,5 +1,6 @@
 import { safeStorage } from 'electron';
 
+import { toErrorMessage } from '@common/errors';
 import { JsonStore } from './jsonStore.js';
 import type { PlatformSecrets } from '@platform/secrets';
 
@@ -89,7 +90,7 @@ export class ElectronSecrets implements PlatformSecrets {
       // the user staring at a blank white window.
       console.warn(
         `ElectronSecrets: safeStorage.decryptString failed for "${key}"; treating as unset. ` +
-          `Cause: ${error instanceof Error ? error.message : String(error)}`,
+          `Cause: ${toErrorMessage(error)}`,
       );
       await this.warnAboutKeychainDenied();
       return undefined;
@@ -173,9 +174,6 @@ export class ElectronSecrets implements PlatformSecrets {
 let keychainPrewarmed = false;
 export async function prewarmElectronKeychain(): Promise<boolean> {
   if (keychainPrewarmed) return true;
-  // Test-harness shim: skip the prompt entirely. We do NOT set the prewarmed
-  // latch so a subsequent run without the env var still goes through the
-  // real prompt path.
   if (isKeychainDisabled()) {
     warnKeychainDisabledOnce();
     return false;
@@ -186,20 +184,16 @@ export async function prewarmElectronKeychain(): Promise<boolean> {
     keychainPrewarmed = true;
     return true;
   } catch (error) {
-    // We do NOT mark prewarmed when the OS rejects so a future retry path
-    // (e.g., re-running after the user changes keychain permissions) can try
-    // again. Swallow so startup keeps progressing — the per-key fallback in
-    // ElectronSecrets.get() handles the same denial path.
     console.warn(
       `prewarmElectronKeychain: encryptString failed; continuing without prewarm. ` +
-        `Cause: ${error instanceof Error ? error.message : String(error)}`,
+        `Cause: ${toErrorMessage(error)}`,
     );
     return false;
   }
 }
 
-/** Test-only: reset the prewarm latch so unit tests can re-exercise the path. */
-export function __resetKeychainPrewarmedForTests(): void {
+/** Test-only: reset latched module-level state so unit tests can re-exercise the path. */
+export function __resetKeychainStateForTests(): void {
   keychainPrewarmed = false;
   warnedAboutKeychainDisabled = false;
 }
