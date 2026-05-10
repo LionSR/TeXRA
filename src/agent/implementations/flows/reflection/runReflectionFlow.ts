@@ -15,6 +15,7 @@ import {
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import {
+  clearPlanApprovalForStream,
   clearRetryRequest,
   getRunCoordinators,
 } from '@agent/runtime/runCoordinators';
@@ -181,7 +182,7 @@ export async function runReflectionFlow<C = unknown>(
     interrupt(): void {
       input.onInterrupt?.();
       clearRetryRequest(streamId);
-      coordinators.plan.clearForStream(streamId);
+      clearPlanApprovalForStream(streamId);
     },
   };
 
@@ -321,7 +322,7 @@ export async function runReflectionFlow<C = unknown>(
     }
 
     clearRetryRequest(streamId);
-    coordinators.plan.clearForStream(streamId);
+    clearPlanApprovalForStream(streamId);
 
     unregisterInterruptible(streamId);
   }
