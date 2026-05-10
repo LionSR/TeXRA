@@ -106,6 +106,7 @@ export async function runReflectionFlow<C = unknown>(
     usageMonitor,
   } = input;
   const runtimeHost = input.runtimeHost ?? getAgentRuntimeHost();
+  const coordinators = getRunCoordinators();
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
   let shared: ReflectionFlowShared | undefined;
@@ -176,7 +177,6 @@ export async function runReflectionFlow<C = unknown>(
   const interruptible: IInterruptible = {
     interrupt(): void {
       input.onInterrupt?.();
-      const coordinators = getRunCoordinators();
       coordinators.retry.clearRequest(streamId);
       coordinators.plan.clearForStream(streamId);
     },
