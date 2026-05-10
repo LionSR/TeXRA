@@ -4,7 +4,7 @@ import {
 } from '@controllers/mainView/MainViewStartupController';
 import { computeAgentOptionsData } from '@agent/index/agentRegistry';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
-import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import { getConfig } from '@utils/config/configUtils';
 
 import {
@@ -36,10 +36,11 @@ export function createDesktopMainViewStartup({
     loadOptions: async () => {
       await modelListRefresh;
       if (loadOptions != null) return loadOptions();
-      return {
-        agentOptions: await computeAgentOptionsData(),
-        modelOptions: buildBasicModelOptionsData(),
-      };
+      const [agentOptions, modelOptions] = await Promise.all([
+        computeAgentOptionsData(),
+        computeModelOptionsData(),
+      ]);
+      return { agentOptions, modelOptions };
     },
     getAuthStatus: getAuthStatus ?? (async () => ({ authenticated: false })),
   });
