@@ -31,15 +31,54 @@ const GLOBAL_FLAGS_WITH_VALUE = new Set([
 
 const GLOBAL_BOOLEAN_FLAGS = new Set(['--print', '-p']);
 
+function isFlagLike(value: string | undefined): boolean {
+  return value != null && value.startsWith('-');
+}
+
+function isFlagValue(value: string | undefined): value is string {
+  return value != null && !value.startsWith('-');
+}
+
 export function flagValue(
   args: readonly string[],
   ...names: string[]
 ): string | undefined {
-  for (const name of names) {
-    const index = args.indexOf(name);
-    if (index >= 0) return args[index + 1];
+  let index = 0;
+  while (index < args.length) {
+    const arg = args[index];
+    if (arg == null) break;
+
+    if (names.includes(arg)) {
+      const value = args[index + 1];
+      return isFlagLike(value) ? undefined : value;
+    }
+
+    if (GLOBAL_FLAGS_WITH_VALUE.has(arg) && isFlagValue(args[index + 1])) {
+      index += 2;
+      continue;
+    }
+
+    index += 1;
   }
   return undefined;
+}
+
+function hasBooleanFlag(args: readonly string[], ...names: string[]): boolean {
+  let index = 0;
+  while (index < args.length) {
+    const arg = args[index];
+    if (arg == null) break;
+
+    if (names.includes(arg)) return true;
+
+    if (GLOBAL_FLAGS_WITH_VALUE.has(arg) && isFlagValue(args[index + 1])) {
+      index += 2;
+      continue;
+    }
+
+    index += 1;
+  }
+  return false;
 }
 
 function outputFormat(args: readonly string[]): CliOutputFormat {
@@ -53,7 +92,7 @@ function approvalPolicy(args: readonly string[]): CliApprovalPolicy {
 }
 
 function cliMode(args: readonly string[]): CliMode {
-  if (args.includes('--print') || args.includes('-p')) return 'headless';
+  if (hasBooleanFlag(args, '--print', '-p')) return 'headless';
   if (process.env.CI) return 'headless';
   if (!process.stdout.isTTY) return 'headless';
   return 'interactive';
@@ -79,14 +118,17 @@ function splitGlobalArgs(args: readonly string[]): {
       break;
     }
 
-    globalArgs.push(arg);
-    if (GLOBAL_FLAGS_WITH_VALUE.has(arg) && index + 1 < args.length) {
-      globalArgs.push(args[index + 1]);
+    if (GLOBAL_FLAGS_WITH_VALUE.has(arg)) {
+      const value = args[index + 1];
+      if (!isFlagValue(value)) break;
+      globalArgs.push(arg);
+      globalArgs.push(value);
       index += 2;
       continue;
     }
 
     if (!GLOBAL_BOOLEAN_FLAGS.has(arg)) break;
+    globalArgs.push(arg);
     index += 1;
   }
 
