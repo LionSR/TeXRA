@@ -399,8 +399,7 @@ export class DesktopProgressBridge {
       config: taskState?.agentConfig,
       hints: {
         agent: restored?.agent,
-        agentCategory:
-          this.categories.get(streamId) ?? restored?.agentCategory,
+        agentCategory: this.categories.get(streamId) ?? restored?.agentCategory,
         inputFile: restored?.inputFile,
       },
       creationTimestamp: this.getCreationTimestamp(streamId),

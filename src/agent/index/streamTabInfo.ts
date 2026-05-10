@@ -39,9 +39,7 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   const { streamId, config, hints, creationTimestamp } = inputs;
 
   const category =
-    config?.agentCategory ??
-    hints?.agentCategory ??
-    AGENT_CATEGORY.WORKFLOW;
+    config?.agentCategory ?? hints?.agentCategory ?? AGENT_CATEGORY.WORKFLOW;
 
   const inputFile = config?.inputFile ?? hints?.inputFile ?? '';
   const rawAgentName = config?.agent ?? hints?.agent ?? streamId.split('@')[0];
