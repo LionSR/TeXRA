@@ -17,13 +17,18 @@ import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { createCliRuntimeHost } from '../runtime/runtimeHost';
 import { CliExitCode } from '../runtime/exitCodes';
+import {
+  writeNdjsonStdout,
+  writeTextStderr,
+  writeTextStdout,
+} from '../runtime/logSinks';
 
 interface CliResult {
   exitCode: number;
 }
 
 function printHelp(): void {
-  console.log(`TeXRA CLI
+  writeTextStdout(`TeXRA CLI
 
 Usage:
   texra --help
@@ -35,6 +40,39 @@ Usage:
   texra chat [options]
 
 The chat command is scaffolded here and will be wired to executeAgent in the CLI implementation issues.`);
+}
+
+function splitRunArgs(args: readonly string[]): {
+  agent: string | undefined;
+  optionArgs: readonly string[];
+} {
+  const optionArgs: string[] = [];
+  let index = 0;
+
+  while (index < args.length) {
+    const arg = args[index];
+    if (arg == null) break;
+    if (!arg.startsWith('-')) {
+      return {
+        agent: arg,
+        optionArgs: [...optionArgs, ...args.slice(index + 1)],
+      };
+    }
+
+    optionArgs.push(arg);
+    const value = args[index + 1];
+    if (value != null && !value.startsWith('-')) {
+      optionArgs.push(value);
+      index += 2;
+      continue;
+    }
+    index += 1;
+  }
+
+  return {
+    agent: undefined,
+    optionArgs,
+  };
 }
 
 async function listAgents(context: CliContext): Promise<CliResult> {
@@ -53,12 +91,14 @@ async function listAgents(context: CliContext): Promise<CliResult> {
   ];
 
   if (context.outputFormat === 'json') {
-    console.log(JSON.stringify(agents, null, 2));
+    writeTextStdout(JSON.stringify(agents, null, 2));
     return { exitCode: 0 };
   }
 
   for (const agent of agents) {
-    console.log(`${agent.category}\t${agent.name}\t${agent.description ?? ''}`);
+    writeTextStdout(
+      `${agent.category}\t${agent.name}\t${agent.description ?? ''}`,
+    );
   }
   return { exitCode: 0 };
 }
@@ -68,12 +108,12 @@ async function listModels(context: CliContext): Promise<CliResult> {
   const models = await computeModelOptionsData();
 
   if (context.outputFormat === 'json') {
-    console.log(JSON.stringify(models, null, 2));
+    writeTextStdout(JSON.stringify(models, null, 2));
     return { exitCode: 0 };
   }
 
   for (const model of models) {
-    console.log(`${model.value}\t${model.label}`);
+    writeTextStdout(`${model.value}\t${model.label}`);
   }
   return { exitCode: 0 };
 }
@@ -84,7 +124,7 @@ async function runWorkflowAgent(
   context: CliContext,
 ): Promise<CliResult> {
   if (!agent || agent.startsWith('-')) {
-    console.error(
+    writeTextStderr(
       'Usage: texra run <workflow-agent> --input <file> [--output <file>] [--model <model>]',
     );
     return { exitCode: CliExitCode.Usage };
@@ -92,7 +132,7 @@ async function runWorkflowAgent(
 
   const inputFile = flagValue(args, '--input', '-i');
   if (!inputFile) {
-    console.error('Missing required flag: --input <file>');
+    writeTextStderr('Missing required flag: --input <file>');
     return { exitCode: CliExitCode.Usage };
   }
 
@@ -115,18 +155,16 @@ async function runWorkflowAgent(
   });
 
   if (context.outputFormat === 'json') {
-    console.log(JSON.stringify(result, null, 2));
+    writeTextStdout(JSON.stringify(result, null, 2));
   } else if (context.outputFormat === 'ndjson') {
-    console.log(
-      JSON.stringify({ kind: 'result', ts: new Date().toISOString(), result }),
-    );
+    writeNdjsonStdout({ kind: 'result', ts: new Date().toISOString(), result });
   } else if (result.category === 'workflow') {
     const finalOutput = result.outputs.at(-1);
-    console.log(
+    writeTextStdout(
       finalOutput?.relativePath ?? finalOutput?.absolutePath ?? result.status,
     );
   } else {
-    console.log(result.status);
+    writeTextStdout(result.status);
   }
 
   return {
@@ -145,7 +183,7 @@ export async function runCli(argv?: readonly string[]): Promise<CliResult> {
   }
 
   if (command === 'version' || command === '--version' || command === '-v') {
-    console.log(context.version);
+    writeTextStdout(context.version);
     return { exitCode: CliExitCode.Success };
   }
 
@@ -158,7 +196,8 @@ export async function runCli(argv?: readonly string[]): Promise<CliResult> {
   }
 
   if (command === 'run') {
-    return runWorkflowAgent(subcommand, rest, context);
+    const { agent, optionArgs } = splitRunArgs(context.argv.slice(1));
+    return runWorkflowAgent(agent, optionArgs, context);
   }
 
   if (command === 'chat') {
@@ -166,7 +205,7 @@ export async function runCli(argv?: readonly string[]): Promise<CliResult> {
     return runChat(context);
   }
 
-  console.error(`Unknown command: ${command}`);
+  writeTextStderr(`Unknown command: ${command}`);
   printHelp();
   return { exitCode: CliExitCode.Usage };
 }

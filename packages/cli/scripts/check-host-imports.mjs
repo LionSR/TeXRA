@@ -29,6 +29,9 @@ const processOutputAllowedFiles = new Set([
 ]);
 
 const processOutputPatterns = [
+  { name: 'console.log', pattern: /\bconsole\.log\s*\(/ },
+  { name: 'console.error', pattern: /\bconsole\.error\s*\(/ },
+  { name: 'console.warn', pattern: /\bconsole\.warn\s*\(/ },
   { name: 'process.exitCode', pattern: /\bprocess\.exitCode\b/ },
   { name: 'process.stdout', pattern: /\bprocess\.stdout\b/ },
   { name: 'process.stderr', pattern: /\bprocess\.stderr\b/ },
