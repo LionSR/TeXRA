@@ -28,9 +28,20 @@ export function getRunCoordinators(): RunCoordinators {
 }
 
 const planApprovals = new Map<string, RunCoordinators>();
+const planApprovalStreams = new Map<string, string>();
 const planStreams = new Map<string, RunCoordinators>();
 const proposals = new Map<string, RunCoordinators>();
 const retries = new Map<string, RunCoordinators>();
+
+function clearPlanBridgeForStream(streamId: string): void {
+  planStreams.delete(streamId);
+  for (const [approvalId, approvalStreamId] of planApprovalStreams) {
+    if (approvalStreamId === streamId) {
+      planApprovals.delete(approvalId);
+      planApprovalStreams.delete(approvalId);
+    }
+  }
+}
 
 export async function waitForPlanApproval(
   streamId: string,
@@ -38,11 +49,13 @@ export async function waitForPlanApproval(
 ): Promise<PlanApprovalResult> {
   const coordinators = getRunCoordinators();
   planApprovals.set(options.approvalId, coordinators);
+  planApprovalStreams.set(options.approvalId, streamId);
   planStreams.set(streamId, coordinators);
   try {
     return await coordinators.plan.waitForApproval(streamId, options);
   } finally {
     planApprovals.delete(options.approvalId);
+    planApprovalStreams.delete(options.approvalId);
     planStreams.delete(streamId);
   }
 }
@@ -60,6 +73,7 @@ export function clearPlanApprovalForStream(streamId: string): void {
   (planStreams.get(streamId)?.plan ?? legacyCoordinators.plan).clearForStream(
     streamId,
   );
+  clearPlanBridgeForStream(streamId);
 }
 
 export function clearAllPlanApprovals(): void {
@@ -69,6 +83,7 @@ export function clearAllPlanApprovals(): void {
     coordinator.plan.clearAll();
   }
   planApprovals.clear();
+  planApprovalStreams.clear();
   planStreams.clear();
 }
 
@@ -123,4 +138,5 @@ export function clearRetryRequest(streamId: string): void {
   (retries.get(streamId)?.retry ?? legacyCoordinators.retry).clearRequest(
     streamId,
   );
+  retries.delete(streamId);
 }
