@@ -14,7 +14,10 @@ import {
   type IInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
-import { getRunCoordinators } from '@agent/runtime/runCoordinators';
+import {
+  clearRetryRequest,
+  getRunCoordinators,
+} from '@agent/runtime/runCoordinators';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { createRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -177,7 +180,7 @@ export async function runReflectionFlow<C = unknown>(
   const interruptible: IInterruptible = {
     interrupt(): void {
       input.onInterrupt?.();
-      coordinators.retry.clearRequest(streamId);
+      clearRetryRequest(streamId);
       coordinators.plan.clearForStream(streamId);
     },
   };
@@ -317,7 +320,7 @@ export async function runReflectionFlow<C = unknown>(
       }
     }
 
-    coordinators.retry.clearRequest(streamId);
+    clearRetryRequest(streamId);
     coordinators.plan.clearForStream(streamId);
 
     unregisterInterruptible(streamId);
