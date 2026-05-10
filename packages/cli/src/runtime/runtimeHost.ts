@@ -5,6 +5,7 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 // Local imports - CLI runtime
 import { handleCliApprovalEvent } from './approvalAdapter';
 import type { CliContext } from './cliContext';
+import { writeNdjsonStdout } from './logSinks';
 import { createCliLogger } from './logger';
 
 export type CliOutputFormat = 'text' | 'json' | 'ndjson';
@@ -28,7 +29,7 @@ export function createCliRuntimeHost(context: CliContext): AgentRuntimeHost {
           ts: string;
           payload: ProgressEventPayloads[keyof ProgressEventPayloads];
         };
-        process.stdout.write(`${JSON.stringify(record)}\n`);
+        writeNdjsonStdout(record);
         return;
       }
 
