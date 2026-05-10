@@ -65,9 +65,9 @@ export const MissingOutputsPayloadSchema = z.object({
 const ToolUseStatusSchema = z.enum(['in_progress', 'completed']);
 
 /**
- * Structured line-level diff for a file edit. Carried on tool-use log
- * entries so all renderers (extension, desktop, CLI) display the same
- * diff without recomputing — they only style the structured form.
+ * Shared line-level diff shape that frontends compute into when rendering
+ * file-edit displays. Each frontend (extension, desktop, CLI) runs its own
+ * diff but agrees on this output shape so styling primitives are portable.
  *
  * `oldLine` is set on `-` and ` ` rows; `newLine` is set on `+` and ` `.
  */
@@ -96,8 +96,6 @@ export const ToolUseLogSchema = z.object({
   isError: z.boolean().optional(),
   userInstruction: z.string().optional(),
   status: ToolUseStatusSchema.optional(),
-  /** Pre-computed structured diff for edit/write tools; renderers style it as-is. */
-  diff: StructuredDiffSchema.optional(),
 });
 export type ToolUseLog = z.infer<typeof ToolUseLogSchema>;
 
