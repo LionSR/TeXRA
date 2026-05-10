@@ -25,7 +25,7 @@ export interface PlatformAgentDirectoryBootstrapOptions extends PlatformAgentDir
   versionStore: AgentDirectoryVersionStore;
 }
 
-export function createPlatformAgentDirectories(
+function createPlatformAgentDirectories(
   options: PlatformAgentDirectoryOptions,
 ): AgentDirectoryService {
   return new AgentDirectoryService({
