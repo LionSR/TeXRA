@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const cliSrc = join(process.cwd(), 'packages/cli/src');
+const cliRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+const repoRoot = dirname(dirname(cliRoot));
+const cliSrc = join(cliRoot, 'src');
 const forbiddenImports = new Set(['vscode', 'electron']);
 
 const processInputPatterns = [
@@ -16,6 +19,10 @@ const processInputAllowedFiles = new Set([
   'packages/cli/src/runtime/cliContext.ts',
 ]);
 
+const processTerminalInputAllowedFiles = new Set([
+  'packages/cli/src/runtime/cliContext.ts',
+]);
+
 const processOutputAllowedFiles = new Set([
   'packages/cli/src/bin/texra.ts',
   'packages/cli/src/runtime/logSinks.ts',
@@ -25,6 +32,10 @@ const processOutputPatterns = [
   { name: 'process.exitCode', pattern: /\bprocess\.exitCode\b/ },
   { name: 'process.stdout', pattern: /\bprocess\.stdout\b/ },
   { name: 'process.stderr', pattern: /\bprocess\.stderr\b/ },
+];
+
+const processTerminalInputPatterns = [
+  { name: 'process.stdout.isTTY', pattern: /\bprocess\.stdout\.isTTY\b/g },
 ];
 
 function* walk(dir) {
@@ -53,7 +64,7 @@ function importSources(source) {
 const errors = [];
 
 for (const file of walk(cliSrc)) {
-  const rel = relative(process.cwd(), file);
+  const rel = relative(repoRoot, file);
   const source = readFileSync(file, 'utf8');
 
   for (const imported of importSources(source)) {
@@ -75,9 +86,16 @@ for (const file of walk(cliSrc)) {
     }
   }
 
+  let outputSource = source;
+  if (processTerminalInputAllowedFiles.has(rel)) {
+    for (const { pattern } of processTerminalInputPatterns) {
+      outputSource = outputSource.replace(pattern, '');
+    }
+  }
+
   if (!processOutputAllowedFiles.has(rel)) {
     for (const { name, pattern } of processOutputPatterns) {
-      if (pattern.test(source)) {
+      if (pattern.test(outputSource)) {
         errors.push(`${rel}: ${name} must stay at the CLI boundary`);
       }
     }
