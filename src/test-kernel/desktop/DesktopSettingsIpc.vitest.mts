@@ -15,8 +15,14 @@ import { getGitAuthorEnv, setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
 const invalidateModelOptionsCache = vi.hoisted(() => vi.fn());
+const computeModelOptionsData = vi.hoisted(() =>
+  vi.fn(async (models: readonly string[]) =>
+    models.map((model) => ({ value: model })),
+  ),
+);
 
 vi.mock('@model/computeModelOptions', () => ({
+  computeModelOptionsData,
   invalidateModelOptionsCache,
 }));
 
