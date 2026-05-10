@@ -21,7 +21,7 @@ interface ElectronSecretsModule {
     set(key: string, value: string): Promise<void>;
   };
   prewarmElectronKeychain: () => Promise<boolean>;
-  __resetKeychainPrewarmedForTests: () => void;
+  __resetKeychainStateForTests: () => void;
   KEYCHAIN_DENIED_WARNING_MESSAGE: string;
 }
 
@@ -45,7 +45,7 @@ describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
 
   afterEach(async () => {
     const mod = await loadElectronSecrets();
-    mod.__resetKeychainPrewarmedForTests();
+    mod.__resetKeychainStateForTests();
     vi.restoreAllMocks();
   });
 
@@ -120,9 +120,9 @@ describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
   });
 
   it('prewarmElectronKeychain returns true when safeStorage encrypts cleanly', async () => {
-    const { prewarmElectronKeychain, __resetKeychainPrewarmedForTests } =
+    const { prewarmElectronKeychain, __resetKeychainStateForTests } =
       await loadElectronSecrets();
-    __resetKeychainPrewarmedForTests();
+    __resetKeychainStateForTests();
 
     expect(await prewarmElectronKeychain()).toBe(true);
     // Idempotent — second call short-circuits.
@@ -136,9 +136,9 @@ describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
     vi.spyOn(electron.safeStorage, 'isEncryptionAvailable').mockReturnValue(
       false,
     );
-    const { prewarmElectronKeychain, __resetKeychainPrewarmedForTests } =
+    const { prewarmElectronKeychain, __resetKeychainStateForTests } =
       await loadElectronSecrets();
-    __resetKeychainPrewarmedForTests();
+    __resetKeychainStateForTests();
 
     expect(await prewarmElectronKeychain()).toBe(false);
   });
@@ -185,7 +185,7 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
   afterEach(async () => {
     delete process.env.TEXRA_DISABLE_KEYCHAIN;
     const mod = await loadElectronSecrets();
-    mod.__resetKeychainPrewarmedForTests();
+    mod.__resetKeychainStateForTests();
     vi.restoreAllMocks();
   });
 
@@ -223,9 +223,9 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
     );
     const encryptSpy = vi.spyOn(electron.safeStorage, 'encryptString');
 
-    const { prewarmElectronKeychain, __resetKeychainPrewarmedForTests } =
+    const { prewarmElectronKeychain, __resetKeychainStateForTests } =
       await loadElectronSecrets();
-    __resetKeychainPrewarmedForTests();
+    __resetKeychainStateForTests();
 
     expect(await prewarmElectronKeychain()).toBe(false);
     expect(isAvailableSpy).not.toHaveBeenCalled();

@@ -478,13 +478,11 @@ if (protocolLifecycle.shouldContinue) {
   app
     .whenReady()
     .then(async () => {
-      // Trigger the OS keychain prompt as a deterministic launch step so the
-      // user sees it BEFORE the renderer asks for any saved secret. Without
-      // this, the first decrypt/encrypt happens partway through startup or
-      // user interaction; if the user is slow to click "Allow", concurrent
-      // renderer-driven secret reads can fail and surface as a blank window.
-      // Errors are swallowed here — ElectronSecrets.get() has its own
-      // per-key fallback that returns `undefined` instead of throwing.
+      // Trigger the OS keychain prompt deterministically at launch (before
+      // the renderer asks for any saved secret) so the user sees one dialog
+      // up-front rather than a surprise mid-startup. ElectronSecrets.get()
+      // also has a per-key fallback that returns undefined on decrypt
+      // failure, so a denied prompt won't crash the renderer either way.
       await prewarmElectronKeychain();
       const platformInit = await initializeElectronPlatform(__dirname);
       const { lifecycle } = platformInit;
