@@ -16,10 +16,8 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { PlanState } from '@agent/core/AgentWorkspaceState';
-import {
-  planApprovalCoordinator,
-  type PlanApprovalResult,
-} from '@agent/runtime/PlanApprovalCoordinator';
+import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
+import { waitForPlanApproval } from '@agent/runtime/runCoordinators';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
@@ -155,11 +153,10 @@ Best practices:
 
     logger.info(`Requesting approval for plan: ${plan.summary}`);
 
-    const result: PlanApprovalResult =
-      await planApprovalCoordinator.waitForApproval(streamId, {
-        approvalId,
-        plan,
-      });
+    const result: PlanApprovalResult = await waitForPlanApproval(streamId, {
+      approvalId,
+      plan,
+    });
 
     if (result.action === 'approve') {
       logger.info('Plan approved by user');

@@ -1,0 +1,100 @@
+{
+  "name": "cli-runcontext-logger-orchestration",
+  "status": "in_progress",
+  "trackingIssue": "https://github.com/LionSR/TeXRA/issues/3838",
+  "primaryPrd": "prds/prd-cli-runcontext-logger-orchestration.md",
+  "globalInvariants": [
+    "One owner per fact.",
+    "Do not introduce pass-through layers.",
+    "Shared core owns agent semantics; host packages own local effects.",
+    "Every PR must state source of truth, duplication impact, abstraction justification, host impact, scheduled refactoring, and validation."
+  ],
+  "issues": [
+    {
+      "id": 3833,
+      "title": "Logger v2",
+      "url": "https://github.com/LionSR/TeXRA/issues/3833",
+      "prd": "prds/prd-logger-v2.md",
+      "sourceOfTruth": "src/logger/structuredLogger.ts: LogRecord schema and grouping semantics",
+      "acceptance": [
+        "LogRecord is the shared schema for extension, desktop, CLI, and tests.",
+        "Host packages define sinks/renderers only.",
+        "Legacy logUtils and AgentLogger paths are migrated or explicitly scheduled as temporary compatibility shims."
+      ]
+    },
+    {
+      "id": 3834,
+      "title": "CLI texra run",
+      "url": "https://github.com/LionSR/TeXRA/issues/3834",
+      "prd": "prds/prd-cli-app.md",
+      "sourceOfTruth": "packages/cli/src/runtime/cliContext.ts for process data; packages/cli/src/runtime/exitCodes.ts for exit codes",
+      "acceptance": [
+        "texra run enters the shared executeAgent path.",
+        "CLI commands consume CliContext and do not read ambient process data.",
+        "Repository lint, typecheck, and CLI architecture guards include the CLI package.",
+        "The package build produces the manifest-declared binary."
+      ]
+    },
+    {
+      "id": 3835,
+      "title": "CLI approval policy",
+      "url": "https://github.com/LionSR/TeXRA/issues/3835",
+      "prd": "prds/prd-cli-app.md",
+      "sourceOfTruth": "packages/cli/src/runtime/approvalAdapter.ts maps CliContext.approvalPolicy to gate decisions",
+      "acceptance": [
+        "The approval policy matrix is implemented for edit, bash, plan, proposal, retry, and external inquiry gates.",
+        "never and headless ask fail closed.",
+        "Shared coordinators own request identity and lifecycle."
+      ]
+    },
+    {
+      "id": 3836,
+      "title": "CLI texra chat",
+      "url": "https://github.com/LionSR/TeXRA/issues/3836",
+      "prd": "prds/prd-cli-app.md",
+      "sourceOfTruth": "shared tool-use session lifecycle owns conversation semantics; CLI chat owns terminal input and presentation",
+      "acceptance": [
+        "Chat rejects headless mode.",
+        "Chat provides user input and follow-up turns in the same tool-use session.",
+        "Terminal renderer is lazy-loaded from the chat path only.",
+        "OpenTUI is used only after Node 20+/npm distribution proof, otherwise a Node-stable renderer is used behind the same boundary.",
+        "Chat provides grouped, minimal, and hidden tool-display modes.",
+        "Chat provides a plain fallback input mode for conservative terminals.",
+        "Chat displays session metadata: active agent, active model, working directory, usage/cost when available, and resume identity.",
+        "Chat integrates permission prompts through the CLI approval adapter rather than duplicating approval lifecycle."
+      ]
+    },
+    {
+      "id": 3837,
+      "title": "ToolFileInteractionContext ownership",
+      "url": "https://github.com/LionSR/TeXRA/issues/3837",
+      "prd": "prds/prd-runcontext-refactor.md",
+      "sourceOfTruth": "RunContext owns run facts; ToolRunContext and ToolCallContext separate run-owned and call-owned tool facts",
+      "acceptance": [
+        "Run-owned facts stay in RunContext/ToolRunContext.",
+        "Per-call facts stay in ToolCallContext.",
+        "Ownerless context bags and pass-through accessors are removed or justified by an ownership boundary."
+      ]
+    }
+  ],
+  "completionRule": "Do not mark complete until every issue acceptance gate is implemented, validated, or moved to an owned follow-up issue with acceptance criteria.",
+  "validationStatus": "not_validated",
+  "recommendedOrder": [
+    "stabilize source-of-truth guards",
+    "finish texra run on shared executeAgent path",
+    "complete CLI approval policy matrix",
+    "continue RunContext and ToolFileInteractionContext ownership cleanup",
+    "migrate Logger v2 host sinks",
+    "implement texra chat TUI over existing session lifecycle",
+    "complete publish-readiness and release gates"
+  ],
+  "references": [
+    {
+      "name": "OpenRouter create-agent-tui",
+      "path": "references/openrouter-skills/skills/create-agent-tui/",
+      "source": "https://github.com/OpenRouterTeam/skills/tree/main/skills/create-agent-tui",
+      "allowedUse": "styling and interaction reference for texra chat only",
+      "forbiddenUse": "do not copy generated agent harness or runtime architecture into TeXRA"
+    }
+  ]
+}
