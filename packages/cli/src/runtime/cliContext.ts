@@ -9,9 +9,9 @@ import {
   parseCliApprovalPolicy,
   type CliApprovalPolicy,
 } from './approvalPolicy';
-import type { CliOutputFormat } from './runtimeHost';
 
 export type CliMode = 'headless' | 'interactive';
+export type CliOutputFormat = 'text' | 'json' | 'ndjson';
 
 export interface CliContext {
   readonly argv: readonly string[];

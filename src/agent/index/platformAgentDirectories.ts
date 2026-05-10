@@ -14,7 +14,7 @@ import { isFileNotFoundError } from '@common/errors/errorPredicates';
 // Local imports - platform
 import { platform } from '@platform/platform';
 
-export interface PlatformAgentDirectoryOptions {
+interface PlatformAgentDirectoryOptions {
   channel: string;
   customDirectoryStore: { get(): string | undefined };
 }

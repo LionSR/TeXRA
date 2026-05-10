@@ -37,22 +37,23 @@ interface SinkRef {
   current: LogSink;
 }
 
+export function createStructuredLogger(sink: LogSink): Logger {
+  return new StructuredLogger({ current: sink });
+}
+
 function mergeFields(left: LogFields, right: LogFields | undefined): LogFields {
   return right ? { ...left, ...right } : left;
 }
 
-export class StructuredLogger implements Logger {
+class StructuredLogger implements Logger {
   private readonly groupStack: string[];
-  private readonly sinkRef: SinkRef;
 
   constructor(
-    sink: LogSink,
+    private readonly sinkRef: SinkRef,
     private readonly fields: LogFields = {},
     groupStack: string[] = [],
-    sinkRef?: SinkRef,
   ) {
     this.groupStack = groupStack;
-    this.sinkRef = sinkRef ?? { current: sink };
   }
 
   debug(message: string, fields?: LogFields): void {
@@ -104,10 +105,9 @@ export class StructuredLogger implements Logger {
 
   child(fields: LogFields): Logger {
     return new StructuredLogger(
-      this.sinkRef.current,
+      this.sinkRef,
       mergeFields(this.fields, fields),
       this.groupStack,
-      this.sinkRef,
     );
   }
 
