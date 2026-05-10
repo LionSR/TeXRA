@@ -100,7 +100,7 @@ interface AgentLaunchContext extends AgentCore {
   storageKey: StorageKey;
   parentStage: AgentLogStage;
   coordinators: RunCoordinators;
-  approvals: {};
+  approvals: object;
 }
 
 export async function getAgentPath(
