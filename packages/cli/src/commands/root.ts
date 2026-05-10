@@ -11,6 +11,7 @@ import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
   flagValue,
   resolveCliContext,
+  RUN_FLAGS_WITH_VALUE,
   type CliContext,
 } from '../runtime/cliContext';
 import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
@@ -26,15 +27,6 @@ import {
 interface CliResult {
   exitCode: number;
 }
-
-const RUN_VALUE_FLAGS = new Set([
-  '--input',
-  '-i',
-  '--output',
-  '--model',
-  '-m',
-  '--instruction',
-]);
 
 function printHelp(): void {
   writeTextStdout(`TeXRA CLI
@@ -70,7 +62,11 @@ function splitRunArgs(args: readonly string[]): {
 
     optionArgs.push(arg);
     const value = args[index + 1];
-    if (RUN_VALUE_FLAGS.has(arg) && value != null && !value.startsWith('-')) {
+    if (
+      RUN_FLAGS_WITH_VALUE.has(arg) &&
+      value != null &&
+      !value.startsWith('-')
+    ) {
       optionArgs.push(value);
       index += 2;
       continue;
