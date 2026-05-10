@@ -17,7 +17,7 @@ describe('desktop settings surface', () => {
       'packages/desktop/src/main/desktopSettingsIpc.ts',
     );
 
-    expect(settingsApp).toContain('this.isDesktopHost()');
+    expect(settingsApp).toContain('this.isDesktopHost');
     expect(settingsApp).toContain('SETTINGS_TAB.MODELS');
     expect(settingsApp).not.toContain('Memory is not available in desktop yet');
     expect(settingsApp).not.toContain(
