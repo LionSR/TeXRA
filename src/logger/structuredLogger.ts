@@ -33,19 +33,26 @@ export interface Logger {
   swapSink(next: LogSink): Promise<void>;
 }
 
+interface SinkRef {
+  current: LogSink;
+}
+
 function mergeFields(left: LogFields, right: LogFields | undefined): LogFields {
   return right ? { ...left, ...right } : left;
 }
 
 export class StructuredLogger implements Logger {
   private readonly groupStack: string[];
+  private readonly sinkRef: SinkRef;
 
   constructor(
-    private sink: LogSink,
+    sink: LogSink,
     private readonly fields: LogFields = {},
     groupStack: readonly string[] = [],
+    sinkRef?: SinkRef,
   ) {
     this.groupStack = [...groupStack];
+    this.sinkRef = sinkRef ?? { current: sink };
   }
 
   debug(message: string, fields?: LogFields): void {
@@ -71,7 +78,7 @@ export class StructuredLogger implements Logger {
       if (popped) return;
       popped = true;
       this.groupStack.pop();
-      void this.sink.flush?.();
+      void this.sinkRef.current.flush?.();
     };
   }
 
@@ -81,27 +88,28 @@ export class StructuredLogger implements Logger {
       return await fn();
     } finally {
       pop();
-      await this.sink.flush?.();
+      await this.sinkRef.current.flush?.();
     }
   }
 
   child(fields: LogFields): Logger {
     return new StructuredLogger(
-      this.sink,
+      this.sinkRef.current,
       mergeFields(this.fields, fields),
       this.groupStack,
+      this.sinkRef,
     );
   }
 
   async swapSink(next: LogSink): Promise<void> {
-    const previous = this.sink;
+    const previous = this.sinkRef.current;
     await previous.flush?.();
     await previous.close?.();
-    this.sink = next;
+    this.sinkRef.current = next;
   }
 
   private write(level: LogLevel, message: string, fields?: LogFields): void {
-    this.sink.write({
+    this.sinkRef.current.write({
       ts: new Date().toISOString(),
       level,
       message,

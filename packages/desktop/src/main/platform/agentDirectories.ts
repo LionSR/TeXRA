@@ -1,19 +1,6 @@
-import {
-  bootstrapPlatformAgentDirectories,
-  createPlatformAgentDirectories,
-} from '@agent/index/platformAgentDirectories';
+import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { GlobalStateKey } from '@common/state/stateKeys';
 import { platform } from '@platform/platform';
-
-export function createElectronAgentDirectories() {
-  return createPlatformAgentDirectories({
-    channel: 'desktop',
-    customDirectoryStore: {
-      get: () =>
-        platform().globalState.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR),
-    },
-  });
-}
 
 export async function bootstrapElectronAgentDirectories(
   resourcesPath: string,
