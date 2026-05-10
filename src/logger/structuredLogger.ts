@@ -48,10 +48,10 @@ export class StructuredLogger implements Logger {
   constructor(
     sink: LogSink,
     private readonly fields: LogFields = {},
-    groupStack: readonly string[] = [],
+    groupStack: string[] = [],
     sinkRef?: SinkRef,
   ) {
-    this.groupStack = [...groupStack];
+    this.groupStack = groupStack;
     this.sinkRef = sinkRef ?? { current: sink };
   }
 
