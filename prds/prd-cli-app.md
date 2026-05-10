@@ -392,7 +392,7 @@ export function listModels(opts?: {
 
 Internally `runAgent` builds an `AgentConfigPayload` (agent + model + file fields), constructs a per-call `AgentRuntimeHost` whose `ProgressSink` forwards each kernel event to the user's `onProgress`, then calls `executeAgent(payload, undefined, { runtimeHost, onProgress, onStreamResolved, … })`. Types come from `@shared/schemas` so consumers get the same Zod-validated union the kernel emits.
 
-**Caveat (today's runtime shape):** `executeAgent`'s `runtimeHost` is optional and falls back through `AsyncLocalStorage` to a process-global default set by `setDefaultAgentRuntimeHost()`. Two SDK callers in the same process can therefore step on each other's defaults, and approval handlers (`setToolEditApprovalHandler`, `bashApprovalController`) are also module-level singletons. The SDK as specified here is honest about that boundary: it is safe for one consumer per process at v1, and the tracking issue [#3397](https://github.com/LionSR/TeXRA/issues/3397) (kernel hardening: replace ambient globals with an explicit `RunContext`) is the prerequisite for safe re-entrant SDK use. v1 ships with the existing shape; concurrent in-process embedding waits on #3397.
+**Caveat (today's runtime shape):** `executeAgent`'s `runtimeHost` is optional and falls back through `AsyncLocalStorage` to a process-global default set by `setDefaultAgentRuntimeHost()`. Two SDK callers in the same process can therefore step on each other's defaults, and approval handlers (`setToolEditApprovalHandler`, `bashApprovalController`) are also module-level singletons. The SDK as specified here is honest about that boundary: it is safe for one consumer per process at v1. Concurrent in-process embedding is gated on [`prd-runcontext-refactor.md`](./prd-runcontext-refactor.md) Phase 0 + 1 (RunContext threading + coordinator retirement, ~2.5 weeks); not v1 scope. Phase 2+ of that PRD (full sink/host retirement) is the prerequisite for the post-v1 `texra mcp serve` feature, not for the v1 CLI.
 
 Total surface: ~300 LOC of facade + re-exports.
 
@@ -588,6 +588,8 @@ The runtime's existing seams (`setToolEditApprovalHandler`, `bashApprovalControl
 
 One small kernel change: per Electron PRD §9 #18 the `PromptHost` interface is already defined in `core/hosts/`. The CLI's plan-approval / proposal-approval / retry-approval handlers register a `PromptHost` adapter that calls into `@clack/prompts`. ~60 LOC; no new interfaces.
 
+**Non-goal — do not unify the approval gates during this work.** The repo today has four approval shapes (`BasePromiseCoordinator` for plan/proposal/retry; `streamApprovalQueue` + `bashApproval.ts`; `streamApprovalQueue` + `toolEditApproval.ts` with `customHandler` injection; `awaitExternalInquiryResponse`). The fragmentation is real but it encodes a real domain difference — bash approval is a permission gate, edit approval is a diff/merge workflow with file I/O, three-way patch reconciliation, line-change tracking, and per-tool rejection results (`toolEditApproval.ts:135-372`). Collapsing them into a shared `BasePromiseCoordinator` subclass relocates ~250 LOC into the new subclass without removing it, and forces the base class to absorb edit-only concerns (post-result enrichment, file write, diff compute). The CLI just registers its own handlers against the existing seams. If unification is ever right, it's a separate refactor with its own justification — not a side-effect of CLI work.
+
 ## 10. Authentication
 
 The CLI must work in three settings, each with a different "where does the token come from" answer:
@@ -699,15 +701,28 @@ We document the schema in `docs/cli/json-schema.md` and version it via the exist
 
 ### 11.3 Interactive renderer (Ink TUI)
 
-Lazy-loaded only when `selectMode() === 'interactive'`. ~600 LOC of `.tsx` components in `cli/src/render/ink/`:
+Lazy-loaded only when `selectMode() === 'interactive'`. ~600 LOC of `.tsx` components in `cli/src/render/ink/`.
 
-- `<App />` — top-level layout, manages keyboard focus and slash-command dispatch.
-- `<StreamPane />` — virtualized stream output (using Ink's `<Static />` for completed entries + `<Box />` for the active tail). Renders the same event types as the webview's `progressView`, but as text + ASCII glyphs.
+**Design baselines (commit before writing components).** TeXRA's webview already has a mature inline chat UI (`packages/extension/src/progressView/frontend/`); the TUI should mirror, not invent. Four constraints:
+
+- **Wrap `render`/`createRoot` with auto-injected ThemeProvider.** Components import only from `cli/src/render/ink/index.ts`, never directly from `'ink'`. The wrapper module re-exports themed `Box`, `Text`, and the `render`/`createRoot` functions wrapped with `<ThemeProvider>` (CC's `src/ink.ts` pattern, ~30 LOC). Eliminates "did I mount the theme provider?" footguns and locks the theme contract at one site.
+- **Polymorphic `<ApprovalCard>` dispatching on `permission.kind`.** One card component switches on `TOOL_EDIT | BASH | PLAN_APPROVAL | PROPOSAL | RETRY | EXTERNAL_INQUIRY` to a per-kind subcomponent — direct mirror of the webview's `PermissionCard.ts` (499 LOC) and its `BaseFeedbackPanel` y/n/escape contract. The keystroke contract, the per-card `handleExtraKey` extension point, and the bypass-state-per-stream model are already proven; reuse the shape.
+- **Hot/cold context split for streaming updates.** The webview uses `streamLogContext` to isolate per-chunk updates from cold UI (`packages/extension/src/progressView/frontend/contexts/streamContexts.ts`). Mirror this in the TUI but tighter — three contexts segregated by update cadence: `logsContext` (hot, every chunk), `lifecycleContext` (`taskGroups`, `streamStatus`), `renderConfigContext` (cold: `streamName`, `terminalMode`, `isToolUse`). The webview's existing context leaks cold fields into the hot path; the TUI is the chance to do this right from day one.
+- **Virtualize, don't `<Static>`/`<Box>`.** TeXRA's content is dense LaTeX (often 1,000–2,000 lines per response), not chat-shaped. Use Ink's ScrollBox + viewport-based virtual list. CC's `<Static />` workaround (`src/utils/staticRender.tsx:8-10`: writes JSX directly to stdout to bypass Ink's reflow) is a workaround for chat-density content; we don't need it. Plan for stable scroll anchoring during streaming.
+
+**Components:**
+
+- `<App />` — top-level layout. Owns the keybinding registry; subcomponents register via `useKeybinding(action, handler)` (CC's mixed pattern: raw `useInput` only here, registered keybindings everywhere else).
+- `<StreamPane />` — virtualized stream output via ScrollBox + viewport rendering. Renders the same event types as the webview's `progressView`, but as text + ASCII glyphs.
 - `<TodoList />` — renders `plan` / `todo_write` state updates as a checkbox list.
-- `<ApprovalCard />` — shown over the stream when an approval gate fires; takes focus until resolved. Renders unified diff for edits, command + cwd for bash, plan body for plan approval.
+- `<ApprovalCard />` — polymorphic per `permission.kind` (above). Takes focus until resolved.
 - `<PromptInput />` — multiline input with history (Ctrl-R search), slash-command completion, paste-friendly (Shift-Enter for explicit newline).
 
 Ink + React ship as a separate chunk (~150 KB minified). The headless renderer never imports them. `import('@texra/cli/ink')` is dynamic and gated on `selectMode()`.
+
+### 11.4 Non-goal: do not co-locate tool render with tool definition
+
+CC's pattern of attaching React render components to each tool (e.g. `BashTool/UI.tsx`) is wrong for TeXRA. TeXRA's render layer is generic-by-type, not per-tool: `formatters/logFormatters/toolFormatters.ts` (960 LOC) dispatches on `ctx.toolName` and field shape (`old_str`/`new_str` triggers diff render, `command` triggers bash render), and shared helpers like `buildEditDiffSection` are reused across `edit_file`, `memory`, and others. Co-locating render into `src/tools/<name>/` would force each tool to export a per-host renderer (Lit + Ink), duplicate the shared helpers, and inflate the surface from ~1,300 centralized LOC to ~7,300 scattered LOC. The CLI's renderer mirrors the existing dispatcher pattern: a `cli/src/render/ink/toolRenderers/` directory with one file per _render shape_ (diff-input, terminal-output, file-list, plan, etc.) — not per tool.
 
 ## 12. GitHub Actions integration
 
@@ -841,9 +856,9 @@ Most of the heavy lifting (Electron PRD's §9 Tier 1) has already shipped. The C
 
 (No `AgentDirectories` pre-refactor needed — the host-neutral `AgentDirectoryService` + `BundledAgentDirectorySync` already exist in `src/agent/index/`. The CLI's bootstrap is internal CLI adapter code, listed under Phase 0 deliverables in §15, not a kernel pre-refactor.)
 
-**C1. Unified-diff formatter for CLI approval rendering.** _(~80 LOC.)_
+**C1. Stderr unified-diff renderer in the CLI shell.** _(~80 LOC, CLI-only — not a core pre-refactor.)_
 
-The CLI's edit-approval handler renders a textual diff before prompting. Today's repo already has `diff-match-patch` infrastructure in `src/agent/output/diffComputation.ts` (`computeOutputDiffStats`) and `src/progressView/frontend/formatters/wordDiff.ts` (`generateInlineDiff`), but neither emits a unified-diff patch — they compute stats and inline word-level diffs for the webview. C1 adds a sibling `formatUnifiedDiff(left, right): string` in `src/agent/output/diffComputation.ts` (the natural home alongside the existing diff path) so the CLI's handler doesn't ship its own diff library. **Why now:** without it the CLI either pulls in `diff` or `diff-match-patch-line-mode` separately, and we end up with two diff implementations going out of sync.
+The CLI's edit-approval handler renders a textual diff before prompting. The repo already has the diff math: `src/agent/output/diffComputation.ts` (`computeOutputDiffStats`) computes stats; `packages/extension/src/progressView/frontend/formatters/wordDiff.ts` (`generateInlineDiff`) produces word-level diffs. The CLI handler reuses these functions and adds a thin renderer in `cli/src/render/diff.ts` that emits picocolors-formatted unified-diff text to stderr — _only the rendering target_ differs from the webview path. No new helper in core; no new dependency. **Removed from the previous draft:** the proposal to add `formatUnifiedDiff` to `src/agent/output/diffComputation.ts` — it would duplicate existing capability and introduce a third diff surface.
 
 **C2. `nodeStorage` honoring `XDG_DATA_HOME` / `XDG_CONFIG_HOME`.** _(~30 LOC.)_
 
