@@ -2,6 +2,7 @@ export { AgentLogger, type AgentLogStage } from './AgentLogger';
 export { AgentUsageReporter } from './AgentUsageReporter';
 export * as logUtils from './logUtils';
 export {
+  createStructuredLogger,
   type Logger,
   type LogFields,
   type LogRecord,

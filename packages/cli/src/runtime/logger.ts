@@ -1,5 +1,5 @@
 // Local imports - logger
-import { StructuredLogger, type Logger } from '@logger/structuredLogger';
+import { createStructuredLogger, type Logger } from '@logger/structuredLogger';
 
 // Local imports - CLI runtime
 import type { CliContext } from './cliContext';
@@ -10,5 +10,5 @@ export function createCliLogger(context: CliContext): Logger {
     context.outputFormat === 'ndjson'
       ? new NdjsonStdoutSink()
       : new StderrTextSink();
-  return new StructuredLogger(sink);
+  return createStructuredLogger(sink);
 }
