@@ -115,7 +115,24 @@ export function getCurrentToolRunContext(): ToolRunContext | undefined {
 }
 
 export function getCurrentToolCallContext(): ToolCallContext | undefined {
-  return getCurrentToolFileInteractionContext();
+  const context = getCurrentToolFileInteractionContext();
+  if (!context) return undefined;
+  const {
+    toolCallId,
+    tracker,
+    todoState,
+    planState,
+    onExecutionReady,
+    onToolOutput,
+  } = context;
+  return {
+    toolCallId,
+    tracker,
+    todoState,
+    planState,
+    onExecutionReady,
+    onToolOutput,
+  };
 }
 
 export function getCurrentToolRuntimeHost(): AgentRuntimeHost {
