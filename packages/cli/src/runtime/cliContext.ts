@@ -85,7 +85,7 @@ function hasBooleanFlag(args: readonly string[], ...names: string[]): boolean {
 
     if (names.includes(arg)) return true;
 
-    if (GLOBAL_FLAGS_WITH_VALUE.has(arg) && isFlagValue(args[index + 1])) {
+    if (FLAGS_WITH_VALUE.has(arg) && isFlagValue(args[index + 1])) {
       index += 2;
       continue;
     }
@@ -191,7 +191,7 @@ export async function resolveCliContext(
   return {
     argv: commandArgs,
     cwd,
-    mode: cliMode(globalArgs),
+    mode: cliMode(resolvedArgv),
     outputFormat: outputFormat(globalArgs),
     approvalPolicy: approvalPolicy(globalArgs),
     version: await readCliVersion(),

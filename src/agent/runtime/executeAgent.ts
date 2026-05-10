@@ -81,7 +81,11 @@ import {
 } from './executionRegistry';
 import { generateSessionDescription } from './sessionDescription';
 import { getRunStorageService } from './RunStorageService';
-import { withRunContext, type RunCoordinators } from './RunContext';
+import {
+  withRunContext,
+  type RunContext,
+  type RunCoordinators,
+} from './RunContext';
 import { AgentProposalCoordinator } from './AgentProposalCoordinator';
 import { PlanApprovalCoordinator } from './PlanApprovalCoordinator';
 import { RetryRequestCoordinatorImpl } from './RetryRequestCoordinator';
@@ -100,7 +104,13 @@ interface AgentLaunchContext extends AgentCore {
   storageKey: StorageKey;
   parentStage: AgentLogStage;
   coordinators: RunCoordinators;
-  approvals: object;
+}
+
+function createRunContext(ctx: AgentLaunchContext): RunContext {
+  return {
+    ...ctx,
+    approvals: {},
+  };
 }
 
 export async function getAgentPath(
@@ -315,7 +325,6 @@ async function assembleAgentLaunchContext(
       proposal: new AgentProposalCoordinator(),
       retry: new RetryRequestCoordinatorImpl(),
     },
-    approvals: {},
   };
 }
 
@@ -713,7 +722,7 @@ export async function executeAgent(
       suppressErrorNotification: options?.isSubagent,
     });
     ctx.delegationDepth = options?.delegationDepth ?? 0;
-    return withRunContext(ctx, async () => {
+    return withRunContext(createRunContext(ctx), async () => {
       const { setting, streamId, config } = ctx;
       const { agent: agentName } = config;
       const { isSubagent } = options ?? {};
@@ -863,7 +872,7 @@ export async function executeMergeAgent(
     });
     const { streamId, executionId } = ctx;
 
-    await withRunContext(ctx, () =>
+    await withRunContext(createRunContext(ctx), () =>
       runFlowWithLifecycle(ctx, streamId, 'merge', async () => {
         StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
           runtimeHost: ctx.runtimeHost,
@@ -929,7 +938,7 @@ export async function resumeToolUseFromSnapshot(
     );
     const { setting, streamId } = ctx;
 
-    await withRunContext(ctx, async () => {
+    await withRunContext(createRunContext(ctx), async () => {
       if (setting.agentCategory !== AgentCategory.ToolUse) {
         throw new Error(
           'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
