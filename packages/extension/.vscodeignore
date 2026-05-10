@@ -17,8 +17,6 @@ src/**
 .yarnrc
 vsc-extension-quickstart.md
 **/tsconfig.json
-# **/.eslintrc.json
-# eslint.config.js
 eslint.config.mjs
 tsconfig.json
 **/*.map
@@ -34,38 +32,14 @@ test-loader.mjs
 AGENTS.md
 CLAUDE.md
 
-!node_modules/split.js/**
-
+# Webview HTML entry points (loaded by BaseViewContentProvider)
 !resources/**
-!src/webview/*.js
 !src/webview/*.html
-!src/webview/*.css
-!src/webview/styles/*.css
-!src/webview/modules/*.js
-!src/webview/modules/state/*.js
-!src/webview/modules/uiManagers/*.js
-!src/webview/modules/handlers/*.js
-
-!src/common/styles/*.css
-!src/shared/styles/*.css
-!src/common/webviewState.js
-!src/common/webview/*.js
-!src/common/webview/commands.js
-!src/common/modules/*.js
-!src/common/modules/files/*.js
-!src/common/constants/*.js
-
-!src/progressView/modules/uiManagers/*.js
-!src/progressView/modules/handlers/*.js
-!src/progressView/modules/formatters/*.js
-!src/progressView/modules/formatters/logFormatters/*.js
-!src/progressView/modules/*.js
-!src/progressView/styles/*.css
-!src/progressView/*.js
 !src/progressView/*.html
-!src/progressView/*.css
-
 !src/settingsView/*.html
+
+# VS Code <-> Web Awesome theme bridge stylesheet
+!src/common/styles/*.css
 
 .env
 

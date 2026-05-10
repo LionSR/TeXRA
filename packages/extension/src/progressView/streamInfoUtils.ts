@@ -1,11 +1,6 @@
-import * as path from 'path';
-
-import { MODEL_CONFIGS } from 'llm-zoo';
-
-import { getCleanAgentName, isRemoteAgent } from '@agent/index';
+import { buildStreamTabInfo } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
-import { isProcessAgent } from '@shared/streams/agentKind';
 import { compareByNewestCreationTime } from './streamOrdering';
 import type { ProgressViewState } from './state/ProgressViewState';
 
@@ -52,51 +47,18 @@ export function buildStreamInfo(
     hints.creationTimestamp ??
     Date.now();
 
-  // Agent and file info (with fallbacks to hints)
-  const inputFile = config?.inputFile ?? '';
-  const rawAgentName = config?.agent ?? id.split('@')[0];
-  const agentName = getCleanAgentName(rawAgentName);
-
-  // Build display label (workflow agents show input file, tool-use agents don't)
-  const label =
-    category !== AgentCategory.ToolUse && inputFile
-      ? `${agentName}: ${path.basename(inputFile)}`
-      : agentName;
-
-  // Process agents (e.g. bash) carry a synthetic AgentConfig whose `model` is
-  // the schema's prefault, not a model actually used for inference — omit it
-  // so the tab doesn't display a misleading label.
-  const processAgent = isProcessAgent(config?.agent);
-
-  // For process streams, config.instruction holds the full command (set by
-  // bash.ts when registering the child stream). Expose it untruncated so the
-  // process stream view can display the exact command, while `description`
-  // stays capped for tab/tooltip rendering. AgentConfigSchema prefaults
-  // instruction to '' — normalise empty to undefined so nullish-coalescing
-  // fallbacks work as intended downstream.
-  const rawInstruction = processAgent ? config?.instruction : undefined;
-  const command = rawInstruction ? rawInstruction : undefined;
-
-  return {
-    name: id,
-    label,
-    model: processAgent ? undefined : config?.model,
-    modelLabel:
-      !processAgent && config?.model
-        ? (MODEL_CONFIGS[config.model]?.label ?? config.model)
-        : undefined,
-    agent: config?.agent,
-    agentCategory: category,
-    isRemote: taskState
-      ? isRemoteAgent(rawAgentName)
-      : (hints.isRemote ?? false),
-    inputFile,
+  return buildStreamTabInfo({
+    streamId: id,
+    config,
+    hints: {
+      agentCategory: hints.agentCategory,
+      isRemote: hints.isRemote,
+    },
     creationTimestamp,
     executionId: state.meta.getExecutionId(id),
     parentStreamId: state.meta.getParentStreamId(id),
     description: state.meta.getDescription(id),
-    command,
-  };
+  });
 }
 
 /**

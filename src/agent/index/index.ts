@@ -40,6 +40,8 @@ export {
 
 export { toRemoteAgentProfileData } from './remoteAgentProfileData';
 
+export { buildStreamTabInfo, type StreamTabInfoInputs } from './streamTabInfo';
+
 export {
   // Types
   type AgentEntry,

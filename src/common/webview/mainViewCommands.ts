@@ -6,9 +6,6 @@ import { COMMON_COMMANDS } from './commonCommands';
 // Main view specific commands
 export const MAIN_VIEW_COMMANDS = {
   ...COMMON_COMMANDS,
-  // File operations
-  FILE_SELECT: 'selectFile',
-  FILE_SELECTED: 'fileSelected',
 
   // Execution
   EXECUTE: 'execute',
@@ -143,7 +140,4 @@ export const MAIN_VIEW_COMMANDS = {
 
   // Other operations
   ACCEPT_EDITED: 'acceptEdited',
-
-  // Followup task (receives from progress view)
-  SETUP_FOLLOWUP_TASK: 'setupFollowupTask',
 } as const;
