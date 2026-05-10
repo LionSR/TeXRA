@@ -25,6 +25,13 @@ function denyMessage(policy: CliContext['approvalPolicy']): string {
     : 'Denied by CLI approval policy.';
 }
 
+function externalInquiryMessage(policy: CliContext['approvalPolicy']): string {
+  if (policy === 'yolo') {
+    return 'External inquiry requires human input; yolo mode cannot synthesize an external answer.';
+  }
+  return denyMessage(policy);
+}
+
 async function decideToolEdit(
   request: ToolEditApprovalRequest,
   context: CliContext,
@@ -90,8 +97,8 @@ export function handleCliApprovalEvent<K extends keyof ProgressEventPayloads>(
       const data = payload as ProgressEventPayloads['showExternalInquiry'];
       void handleExternalInquiryAction({
         requestId: data.requestId,
-        action: 'skip',
-        feedback: denyMessage(context.approvalPolicy),
+        action: context.approvalPolicy === 'yolo' ? 'reject' : 'skip',
+        feedback: externalInquiryMessage(context.approvalPolicy),
       });
       return true;
     }
