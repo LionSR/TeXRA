@@ -317,7 +317,6 @@ export async function runReflectionFlow<C = unknown>(
       }
     }
 
-    const coordinators = getRunCoordinators();
     coordinators.retry.clearRequest(streamId);
     coordinators.plan.clearForStream(streamId);
 
