@@ -29,6 +29,20 @@ const GLOBAL_FLAGS_WITH_VALUE = new Set([
   '--output-format',
 ]);
 
+export const RUN_FLAGS_WITH_VALUE = new Set([
+  '--input',
+  '-i',
+  '--output',
+  '--model',
+  '-m',
+  '--instruction',
+]);
+
+const FLAGS_WITH_VALUE = new Set([
+  ...GLOBAL_FLAGS_WITH_VALUE,
+  ...RUN_FLAGS_WITH_VALUE,
+]);
+
 const GLOBAL_BOOLEAN_FLAGS = new Set(['--print', '-p']);
 
 function isFlagLike(value: string | undefined): boolean {
@@ -53,7 +67,7 @@ export function flagValue(
       return isFlagLike(value) ? undefined : value;
     }
 
-    if (GLOBAL_FLAGS_WITH_VALUE.has(arg) && isFlagValue(args[index + 1])) {
+    if (FLAGS_WITH_VALUE.has(arg) && isFlagValue(args[index + 1])) {
       index += 2;
       continue;
     }

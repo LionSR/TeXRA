@@ -21,6 +21,8 @@ const noopLifecycle: LifecycleHost = {
   async runShutdown() {},
 };
 
+let agentDirectoriesInitialized = false;
+
 const cliPlatformLog: LogBackend = {
   initialize() {},
   debug: (channel, message) =>
@@ -48,14 +50,17 @@ export async function initCliPlatform(
     });
   }
 
-  await bootstrapPlatformAgentDirectories({
-    channel: 'cli',
-    resourcesPath: context.resourcesPath,
-    currentVersion: undefined,
-    customDirectoryStore: { get: () => undefined },
-    versionStore: {
-      get: () => undefined,
-      update: async () => {},
-    },
-  });
+  if (!agentDirectoriesInitialized) {
+    await bootstrapPlatformAgentDirectories({
+      channel: 'cli',
+      resourcesPath: context.resourcesPath,
+      currentVersion: undefined,
+      customDirectoryStore: { get: () => undefined },
+      versionStore: {
+        get: () => undefined,
+        update: async () => {},
+      },
+    });
+    agentDirectoriesInitialized = true;
+  }
 }
