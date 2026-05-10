@@ -1,23 +1,34 @@
-// Local imports - agent index
-import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-
 // Local imports - platform
-import { initPlatform, tryPlatform } from '@platform/platform';
-import { consoleLog } from '@platform/defaults/consoleLog';
 import { EnvSecrets } from '@platform/defaults/envSecrets';
 import { createMemoryStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { nodeStorage } from '@platform/defaults/nodeStorage';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
-import type { LifecycleHost } from '@platform/interfaces/lifecycle';
+import { initPlatform, tryPlatform } from '@platform/platform';
+
+// Local imports - agent index
+import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 
 // Local imports - CLI runtime
-import type { CliContext } from './cliContext';
+import { writeTextStderr } from './logSinks';
 import { MemoryConfigProvider } from './memoryStores';
+import type { LifecycleHost } from '@platform/interfaces/lifecycle';
+import type { LogBackend } from '@platform/interfaces/log';
+import type { CliContext } from './cliContext';
 
 const noopLifecycle: LifecycleHost = {
   onShutdown: () => ({ dispose: () => {} }),
   async runShutdown() {},
+};
+
+const cliPlatformLog: LogBackend = {
+  initialize() {},
+  debug: (channel, message) =>
+    writeTextStderr(`[debug] [${channel}] ${message}`),
+  info: (channel, message) => writeTextStderr(`[info] [${channel}] ${message}`),
+  warn: (channel, message) => writeTextStderr(`[warn] [${channel}] ${message}`),
+  error: (channel, message) =>
+    writeTextStderr(`[error] [${channel}] ${message}`),
 };
 
 export async function initCliPlatform(
@@ -28,7 +39,7 @@ export async function initCliPlatform(
       config: new MemoryConfigProvider(),
       globalState: createMemoryStore(),
       workspaceState: createMemoryStore(),
-      log: consoleLog,
+      log: cliPlatformLog,
       fs: nodeFilesystem,
       workspace: createNodeWorkspace(() => context.cwd),
       storage: nodeStorage,
