@@ -17,7 +17,6 @@ import type { BaseFlowContextInit } from '@agent/implementations/flows/common/Ba
 import {
   clearPlanApprovalForStream,
   clearRetryRequest,
-  getRunCoordinators,
 } from '@agent/runtime/runCoordinators';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { createRunState } from '@agent/core/AgentState';
@@ -110,7 +109,6 @@ export async function runReflectionFlow<C = unknown>(
     usageMonitor,
   } = input;
   const runtimeHost = input.runtimeHost ?? getAgentRuntimeHost();
-  const coordinators = getRunCoordinators();
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
   let shared: ReflectionFlowShared | undefined;
