@@ -70,7 +70,11 @@ async function askApproval(
 
   let answer: string;
   try {
-    answer = await askCliQuestion(`${summary}\nApprove? [y/N] `);
+    answer = await askCliApprovalQuestion(context, {
+      kind: 'approval',
+      summary,
+      prompt: 'Approve? [y/N] ',
+    });
   } catch {
     markApprovalDenied(context);
     return { accepted: false, userMessage: 'CLI approval prompt failed.' };
@@ -98,9 +102,11 @@ async function askExternalInquiry(
 
   let answer: string;
   try {
-    answer = await askCliQuestion(
-      `External inquiry requested:\n${question}\nAnswer (blank to skip): `,
-    );
+    answer = await askCliApprovalQuestion(context, {
+      kind: 'externalInquiry',
+      summary: `External inquiry requested:\n${question}`,
+      prompt: 'Answer (blank to skip): ',
+    });
   } catch {
     markApprovalDenied(context);
     return { submitted: false };
@@ -111,6 +117,18 @@ async function askExternalInquiry(
     return { submitted: false };
   }
   return { submitted: true, answer };
+}
+
+async function askCliApprovalQuestion(
+  context: CliContext,
+  request: NonNullable<
+    Parameters<NonNullable<CliContext['approvalPrompt']>>[0]
+  >,
+): Promise<string> {
+  if (context.approvalPrompt) {
+    return context.approvalPrompt(request);
+  }
+  return askCliQuestion(`${request.summary}\n${request.prompt}`);
 }
 
 async function decideToolEdit(
