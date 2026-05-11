@@ -33,11 +33,10 @@ import { getCliModelAccess } from '../runtime/modelAccess';
 import { createCliRuntimeHost } from '../runtime/runtimeHost';
 import {
   createCliLineReader,
-  writeRawStderr,
   writeRawStdout,
-  writeTextStderr,
   writeTextStdout,
 } from '../runtime/logSinks';
+import { ChatTerminalRenderer } from './terminalRenderer';
 
 export interface ChatResult {
   exitCode: number;
@@ -57,35 +56,24 @@ interface ChatSessionState {
   streamReadyForFollowUps: boolean;
 }
 
-function printChatHelp(): void {
-  writeTextStderr(`Commands:
-  /help            Show this help
-  /agent <name>    Set the tool-use agent before the session starts
-  /model <name>    Set the model before the session starts
-  /yolo            Explain yolo approval mode
-  /clear           Clear the terminal
-  /exit, /quit     Exit chat`);
-}
-
-function printClearScreen(): void {
-  writeRawStderr('\u001B[2J\u001B[H');
-}
-
 function parseCommand(line: string): { command: string; rest: string } {
   const [command = '', ...rest] = line.slice(1).trim().split(/\s+/);
   return { command: command.toLowerCase(), rest: rest.join(' ') };
 }
 
-async function modelAvailable(model: string): Promise<boolean> {
+async function modelAvailable(
+  model: string,
+  renderer: ChatTerminalRenderer,
+): Promise<boolean> {
   const access = await getCliModelAccess(model);
   if (!access) {
-    writeTextStderr(
+    renderer.error(
       `Unknown model: ${model}. Use texra models list to see available models.`,
     );
     return false;
   }
   if (!access.available) {
-    writeTextStderr(
+    renderer.error(
       `Model ${model} is unavailable: ${access.status}. Use /model <name> before sending a message.`,
     );
     return false;
@@ -127,13 +115,15 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
   const args = context.argv.slice(1);
   const chatContext = applyCliGlobalArgs(context, args);
   if (chatContext.mode === 'headless') {
-    writeTextStderr(
+    const renderer = new ChatTerminalRenderer(chatContext.colorEnabled);
+    renderer.error(
       'texra chat requires an interactive terminal. Did you mean texra run?',
     );
     return { exitCode: CliExitCode.Usage };
   }
   if (chatContext.approvalPolicy === 'ask') {
-    writeTextStderr(
+    const renderer = new ChatTerminalRenderer(chatContext.colorEnabled);
+    renderer.error(
       'texra chat plain mode cannot prompt for approvals yet because chat input owns stdin. Use --approval-policy yolo for trusted local runs, --approval-policy never to fail closed, or texra run for workflow execution.',
     );
     return { exitCode: CliExitCode.Usage };
@@ -151,7 +141,8 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
   installCliApprovalHandlers(sessionContext);
   await loadAgents();
 
-  const reader = createCliLineReader('user> ');
+  const renderer = new ChatTerminalRenderer(chatContext.colorEnabled);
+  const reader = createCliLineReader(renderer.prompt);
   const session: ChatSessionState = {
     readerClosed: false,
     streamId: undefined,
@@ -191,9 +182,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     session.stopRequested = true;
     if (session.runPromise && !session.runCompleted) {
       interruptActiveSession();
-      writeTextStderr(
-        'Exit requested; waiting for the active session to stop.',
-      );
+      renderer.warn('Exit requested; waiting for the active session to stop.');
     }
     closeReader();
   };
@@ -227,19 +216,19 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
           }
           const result = await sendFollowUp(session.streamId, line);
           if (result.status === 'no_session') {
-            writeTextStderr('The chat session is no longer active.');
+            renderer.error('The chat session is no longer active.');
             closeReader();
             return;
           }
           if (result.status === 'queued') {
-            writeTextStderr(
+            renderer.warn(
               `Follow-up queued while session is ${result.reason}.`,
             );
           }
         }
       })
       .catch((error) => {
-        writeTextStderr(error instanceof Error ? error.message : String(error));
+        renderer.error(error instanceof Error ? error.message : String(error));
         closeReader();
       });
   };
@@ -295,7 +284,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
           ? CliExitCode.Success
           : CliExitCode.AgentError;
         if (!session.stopRequested) {
-          writeTextStderr(
+          renderer.error(
             error instanceof Error ? error.message : String(error),
           );
         }
@@ -309,9 +298,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
   };
 
   try {
-    writeTextStderr(
-      `texra chat plain mode. Agent: ${agent}. Model: ${model}. Type /help for commands.`,
-    );
+    renderer.printBanner({ agent, model, cwd: chatContext.cwd });
     reader.prompt();
 
     for await (const rawLine of reader) {
@@ -328,43 +315,43 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
           break;
         }
         if (command === 'help') {
-          printChatHelp();
+          renderer.printHelp();
         } else if (command === 'clear') {
-          printClearScreen();
+          renderer.printClearScreen();
         } else if (command === 'agent') {
           if (session.runPromise) {
-            writeTextStderr('The active session already owns its agent.');
+            renderer.warn('The active session already owns its agent.');
           } else if (rest) {
             agent = rest;
-            writeTextStderr(`Agent set to ${agent}.`);
+            renderer.success(`Agent set to ${agent}.`);
           } else {
-            writeTextStderr('Usage: /agent <name>');
+            renderer.warn('Usage: /agent <name>');
           }
         } else if (command === 'model') {
           if (session.runPromise) {
-            writeTextStderr('The active session already owns its model.');
+            renderer.warn('The active session already owns its model.');
           } else if (rest) {
-            if (await modelAvailable(rest)) {
+            if (await modelAvailable(rest, renderer)) {
               model = rest;
               await setCliHelperModel(model);
-              writeTextStderr(`Model set to ${model}.`);
+              renderer.success(`Model set to ${model}.`);
             }
           } else {
-            writeTextStderr('Usage: /model <name>');
+            renderer.warn('Usage: /model <name>');
           }
         } else if (command === 'yolo') {
-          writeTextStderr(
+          renderer.info(
             'Use --approval-policy yolo when starting texra chat to auto-approve approval gates. External inquiry prompts still require a human answer.',
           );
         } else {
-          writeTextStderr(`Unknown command: /${command}`);
+          renderer.warn(`Unknown command: /${command}`);
         }
         if (!session.runCompleted) reader.prompt();
         continue;
       }
 
       if (!session.runPromise) {
-        if (!(await modelAvailable(model))) {
+        if (!(await modelAvailable(model, renderer))) {
           reader.prompt();
           continue;
         }
@@ -374,9 +361,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
 
       if (!session.streamId) {
         queueFollowUp(line);
-        writeTextStderr(
-          'The chat session is still starting. Follow-up queued.',
-        );
+        renderer.warn('The chat session is still starting. Follow-up queued.');
         reader.prompt();
         continue;
       }
