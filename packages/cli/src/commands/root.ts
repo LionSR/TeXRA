@@ -33,6 +33,22 @@ interface CliResult {
   exitCode: number;
 }
 
+interface RunCommandDependencies {
+  initPlatform: typeof initCliPlatform;
+  installApprovalHandlers: typeof installCliApprovalHandlers;
+  loadAgents: typeof loadAgents;
+  createRuntimeHost: typeof createCliRuntimeHost;
+  executeAgent: typeof executeAgent;
+}
+
+const DEFAULT_RUN_COMMAND_DEPENDENCIES: RunCommandDependencies = {
+  initPlatform: initCliPlatform,
+  installApprovalHandlers: installCliApprovalHandlers,
+  loadAgents,
+  createRuntimeHost: createCliRuntimeHost,
+  executeAgent,
+};
+
 function printHelp(): void {
   writeTextStdout(`TeXRA CLI
 
@@ -159,6 +175,7 @@ async function runWorkflowAgent(
   agent: string | undefined,
   args: readonly string[],
   context: CliContext,
+  dependencies: RunCommandDependencies,
 ): Promise<CliResult> {
   if (!agent || agent.startsWith('-')) {
     writeTextStderr(
@@ -174,9 +191,9 @@ async function runWorkflowAgent(
   }
 
   const runContext = applyCliGlobalArgs(context, args);
-  await initCliPlatform(runContext);
-  installCliApprovalHandlers(runContext);
-  await loadAgents();
+  await dependencies.initPlatform(runContext);
+  dependencies.installApprovalHandlers(runContext);
+  await dependencies.loadAgents();
 
   const outputFile = flagValue(args, '--output');
   const model = flagValue(args, '--model', '-m');
@@ -189,10 +206,12 @@ async function runWorkflowAgent(
     workingDirectory: runContext.cwd,
   };
 
-  const runtimeHost = createCliRuntimeHost(runContext);
+  const runtimeHost = dependencies.createRuntimeHost(runContext);
   let result: Awaited<ReturnType<typeof executeAgent>>;
   try {
-    result = await executeAgent(config, undefined, { runtimeHost });
+    result = await dependencies.executeAgent(config, undefined, {
+      runtimeHost,
+    });
   } finally {
     await runtimeHost.close();
   }
@@ -216,7 +235,10 @@ async function runWorkflowAgent(
   };
 }
 
-async function runCliResolved(argv?: readonly string[]): Promise<CliResult> {
+async function runCliResolved(
+  argv?: readonly string[],
+  runDependencies: RunCommandDependencies = DEFAULT_RUN_COMMAND_DEPENDENCIES,
+): Promise<CliResult> {
   const context = await resolveCliContext(argv);
   const [command, subcommand] = context.argv;
 
@@ -246,7 +268,7 @@ async function runCliResolved(argv?: readonly string[]): Promise<CliResult> {
       writeTextStderr(`Unknown run flag: ${unknownFlag}`);
       return { exitCode: CliExitCode.Usage };
     }
-    return runWorkflowAgent(agent, optionArgs, context);
+    return runWorkflowAgent(agent, optionArgs, context, runDependencies);
   }
 
   if (command === 'chat') {
@@ -260,8 +282,15 @@ async function runCliResolved(argv?: readonly string[]): Promise<CliResult> {
 }
 
 export async function runCli(argv?: readonly string[]): Promise<CliResult> {
+  return runCliWithDependencies(argv, DEFAULT_RUN_COMMAND_DEPENDENCIES);
+}
+
+export async function runCliWithDependencies(
+  argv: readonly string[] | undefined,
+  runDependencies: RunCommandDependencies,
+): Promise<CliResult> {
   try {
-    return await runCliResolved(argv);
+    return await runCliResolved(argv, runDependencies);
   } catch (error) {
     if (error instanceof CliUsageError) {
       writeTextStderr(error.message);
