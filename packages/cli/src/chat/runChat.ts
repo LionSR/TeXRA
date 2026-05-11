@@ -220,7 +220,12 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     closeReader();
   };
   const handleSigint = (): void => {
-    if (session.readerClosed) return;
+    if (session.stopRequested && session.runPromise && !session.runCompleted) {
+      process.off('SIGINT', handleSigint);
+      renderer.warn('Second Ctrl-C received; forcing process exit.');
+      process.kill(process.pid, 'SIGINT');
+      return;
+    }
     requestChatExit();
   };
 
