@@ -33,7 +33,23 @@ const planStreams = new Map<string, RunCoordinators>();
 const proposals = new Map<string, RunCoordinators>();
 const proposalStreams = new Map<string, string>();
 const retries = new Map<string, RunCoordinators>();
-const retryCoordinators = new Set<RunCoordinators>();
+const retryCoordinatorRefs = new Map<RunCoordinators, number>();
+
+function retainRetryCoordinator(coordinators: RunCoordinators): void {
+  retryCoordinatorRefs.set(
+    coordinators,
+    (retryCoordinatorRefs.get(coordinators) ?? 0) + 1,
+  );
+}
+
+function releaseRetryCoordinator(coordinators: RunCoordinators): void {
+  const nextCount = (retryCoordinatorRefs.get(coordinators) ?? 0) - 1;
+  if (nextCount > 0) {
+    retryCoordinatorRefs.set(coordinators, nextCount);
+  } else {
+    retryCoordinatorRefs.delete(coordinators);
+  }
+}
 
 function clearPlanBridgeForStream(streamId: string): void {
   planStreams.delete(streamId);
@@ -142,12 +158,13 @@ export async function waitForRetry(
   options: RetryRequestOptions,
 ): Promise<RetryResult> {
   const coordinators = getRunCoordinators();
-  retryCoordinators.add(coordinators);
+  retainRetryCoordinator(coordinators);
   retries.set(streamId, coordinators);
   try {
     return await coordinators.retry.waitForRetry(streamId, options);
   } finally {
     retries.delete(streamId);
+    releaseRetryCoordinator(coordinators);
   }
 }
 
@@ -164,7 +181,7 @@ export function cancelRetry(streamId: string): boolean {
 }
 
 export function clearRetryRequest(streamId: string): void {
-  const coordinators = new Set(retryCoordinators);
+  const coordinators = new Set(retryCoordinatorRefs.keys());
   const mappedCoordinators = retries.get(streamId);
   if (mappedCoordinators) coordinators.add(mappedCoordinators);
   coordinators.add(legacyCoordinators);
@@ -175,7 +192,7 @@ export function clearRetryRequest(streamId: string): void {
 }
 
 export function clearAllRetryRequests(): void {
-  const coordinators = new Set(retryCoordinators);
+  const coordinators = new Set(retryCoordinatorRefs.keys());
   for (const retryCoordinator of retries.values()) {
     coordinators.add(retryCoordinator);
   }
@@ -183,6 +200,6 @@ export function clearAllRetryRequests(): void {
   for (const coordinator of coordinators) {
     coordinator.retry.clearAll();
   }
-  retryCoordinators.clear();
+  retryCoordinatorRefs.clear();
   retries.clear();
 }
