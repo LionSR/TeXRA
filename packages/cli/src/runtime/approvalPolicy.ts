@@ -3,7 +3,7 @@ export type CliApprovalPolicy = (typeof CLI_APPROVAL_POLICIES)[number];
 
 export function parseCliApprovalPolicy(
   value: string | undefined,
-): CliApprovalPolicy {
-  if (value === 'ask' || value === 'yolo') return value;
-  return 'never';
+): CliApprovalPolicy | undefined {
+  if (value === 'never' || value === 'ask' || value === 'yolo') return value;
+  return undefined;
 }
