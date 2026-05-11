@@ -909,6 +909,7 @@ export class DesktopProgressBridge {
     if (!hadStream) return;
     this.removePersistedStream(streamId);
 
+    // Shared approval cleanup also owns retry/proposal/plan coordinator cleanup.
     cleanupApprovalsForStream(streamId);
     ToolUseFollowUpQueue.release(streamId);
 
@@ -946,6 +947,7 @@ export class DesktopProgressBridge {
   }
 
   async deleteAllStreams(): Promise<void> {
+    // Shared approval cleanup also owns retry/proposal/plan coordinator cleanup.
     cleanupAllApprovals();
     for (const streamId of this.streamLogs.keys()) {
       ToolUseFollowUpQueue.release(streamId);
