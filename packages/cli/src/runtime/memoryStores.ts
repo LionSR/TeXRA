@@ -20,6 +20,10 @@ export class MemoryConfigProvider implements ConfigProvider {
     value: T,
     _target?: ConfigTarget,
   ): Promise<void> {
+    if (value === undefined) {
+      this.values.delete(key);
+      return;
+    }
     this.values.set(key, value);
   }
 
