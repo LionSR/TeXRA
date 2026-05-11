@@ -44,7 +44,7 @@ interface SinkRef {
 type GroupContextKey = symbol;
 
 const activeGroupStacks = new AsyncLocalStorage<
-  ReadonlyMap<GroupContextKey, readonly string[]>
+  Map<GroupContextKey, string[]>
 >();
 
 export function createStructuredLogger(sink: LogSink): Logger {
@@ -109,17 +109,21 @@ class StructuredLogger implements Logger {
   }
 
   private enterGroup(label: string, flushOnPop: boolean): () => void {
-    const index = this.groupStack.length;
-    this.groupStack.push(label);
+    const activeStack = activeGroupStacks
+      .getStore()
+      ?.get(this.context.groupContextKey);
+    const groups = activeStack ?? this.groupStack;
+    const index = groups.length;
+    groups.push(label);
     let popped = false;
     return () => {
       if (popped) return;
       popped = true;
-      if (this.groupStack[index] === label) {
-        this.groupStack.splice(index, 1);
+      if (groups[index] === label) {
+        groups.splice(index, 1);
       } else {
-        const currentIndex = this.groupStack.lastIndexOf(label);
-        if (currentIndex >= 0) this.groupStack.splice(currentIndex, 1);
+        const currentIndex = groups.lastIndexOf(label);
+        if (currentIndex >= 0) groups.splice(currentIndex, 1);
       }
       if (flushOnPop) {
         const flush = this.context.sinkRef.current.flush?.();
