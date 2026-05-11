@@ -12,6 +12,7 @@ import {
   applyCliGlobalArgs,
   cliFlagName,
   CLI_BOOLEAN_FLAGS,
+  CliUsageError,
   flagValue,
   GLOBAL_FLAGS_WITH_VALUE,
   resolveCliContext,
@@ -215,7 +216,7 @@ async function runWorkflowAgent(
   };
 }
 
-export async function runCli(argv?: readonly string[]): Promise<CliResult> {
+async function runCliResolved(argv?: readonly string[]): Promise<CliResult> {
   const context = await resolveCliContext(argv);
   const [command, subcommand] = context.argv;
 
@@ -256,4 +257,16 @@ export async function runCli(argv?: readonly string[]): Promise<CliResult> {
   writeTextStderr(`Unknown command: ${command}`);
   printHelp();
   return { exitCode: CliExitCode.Usage };
+}
+
+export async function runCli(argv?: readonly string[]): Promise<CliResult> {
+  try {
+    return await runCliResolved(argv);
+  } catch (error) {
+    if (error instanceof CliUsageError) {
+      writeTextStderr(error.message);
+      return { exitCode: CliExitCode.Usage };
+    }
+    throw error;
+  }
 }

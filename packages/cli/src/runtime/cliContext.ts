@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 // Local imports - CLI runtime
 import {
+  CLI_APPROVAL_POLICIES,
   parseCliApprovalPolicy,
   type CliApprovalPolicy,
 } from './approvalPolicy';
@@ -21,6 +22,13 @@ export interface CliContext {
   readonly approvalPolicy: CliApprovalPolicy;
   readonly version: string;
   readonly resourcesPath: string;
+}
+
+export class CliUsageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CliUsageError';
+  }
 }
 
 export const GLOBAL_FLAGS_WITH_VALUE = new Set([
@@ -115,9 +123,9 @@ function hasBooleanFlag(args: readonly string[], ...names: string[]): boolean {
     const arg = args[index];
     if (arg == null) break;
 
-    if (names.includes(arg)) return true;
-
     const flagName = cliFlagName(arg);
+    if (names.includes(flagName)) return true;
+
     if (FLAGS_WITH_VALUE.has(flagName)) {
       index += arg.includes('=') || args[index + 1] == null ? 1 : 2;
       continue;
@@ -134,13 +142,24 @@ function hasBooleanFlag(args: readonly string[], ...names: string[]): boolean {
 }
 
 function outputFormat(args: readonly string[]): CliOutputFormat {
-  const value = flagValue(args, '--output-format') ?? 'text';
-  if (value === 'json' || value === 'ndjson') return value;
-  return 'text';
+  const value = flagValue(args, '--output-format');
+  if (value == null) return 'text';
+  if (value === 'text' || value === 'json' || value === 'ndjson') {
+    return value;
+  }
+  throw new CliUsageError(
+    `Unsupported --output-format: ${value}. Expected text, json, or ndjson.`,
+  );
 }
 
 function approvalPolicy(args: readonly string[]): CliApprovalPolicy {
-  return parseCliApprovalPolicy(flagValue(args, '--approval-policy'));
+  const value = flagValue(args, '--approval-policy');
+  if (value == null) return 'never';
+  const parsed = parseCliApprovalPolicy(value);
+  if (parsed) return parsed;
+  throw new CliUsageError(
+    `Unsupported --approval-policy: ${value}. Expected ${CLI_APPROVAL_POLICIES.join(', ')}.`,
+  );
 }
 
 function resolveCwdFlag(value: string | undefined, fallback: string): string {

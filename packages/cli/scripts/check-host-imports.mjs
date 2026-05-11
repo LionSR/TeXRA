@@ -55,13 +55,35 @@ function* walk(dir) {
 
 function importSources(source) {
   const sources = [];
-  const importPattern =
-    /(?:import|export)\s+(?:type\s+)?(?:[^'\"]+\s+from\s+)?['\"]([^'\"]+)['\"]/g;
-  let match;
-  while ((match = importPattern.exec(source)) != null) {
-    sources.push(match[1]);
+  const patterns = [
+    /(?:import|export)\s+(?:type\s+)?(?:[^'\"]+\s+from\s+)?['\"]([^'\"]+)['\"]/g,
+    /\bimport\s*\(\s*['\"]([^'\"]+)['\"]\s*\)/g,
+    /\brequire\s*\(\s*['\"]([^'\"]+)['\"]\s*\)/g,
+  ];
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(source)) != null) {
+      sources.push(match[1]);
+    }
   }
   return sources;
+}
+
+function isForbiddenImport(imported) {
+  const root = imported.split('/')[0];
+  return forbiddenImports.has(imported) || forbiddenImports.has(root);
+}
+
+function forbiddenImportMessage(rel, imported) {
+  return `${rel}: host import '${imported}' is forbidden in the CLI package`;
+}
+
+function checkImports(rel, source) {
+  for (const imported of importSources(source)) {
+    if (isForbiddenImport(imported)) {
+      errors.push(forbiddenImportMessage(rel, imported));
+    }
+  }
 }
 
 const errors = [];
@@ -70,14 +92,7 @@ for (const file of walk(cliSrc)) {
   const rel = relative(repoRoot, file);
   const source = readFileSync(file, 'utf8');
 
-  for (const imported of importSources(source)) {
-    const root = imported.split('/')[0];
-    if (forbiddenImports.has(imported) || forbiddenImports.has(root)) {
-      errors.push(
-        `${rel}: direct host import '${imported}' is forbidden in the CLI package`,
-      );
-    }
-  }
+  checkImports(rel, source);
 
   if (!processInputAllowedFiles.has(rel)) {
     for (const { name, pattern } of processInputPatterns) {
