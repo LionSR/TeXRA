@@ -22,7 +22,7 @@ import {
   installCliApprovalHandlers,
 } from '../runtime/approvalAdapter';
 import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
+import { initCliPlatform, setCliHelperModel } from '../runtime/initPlatform';
 import { createCliRuntimeHost } from '../runtime/runtimeHost';
 import {
   createCliLineReader,
@@ -259,6 +259,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
           } else if (rest) {
             model = rest;
             sessionContext.helperModel = model;
+            await setCliHelperModel(model);
             writeTextStderr(`Model set to ${model}.`);
           } else {
             writeTextStderr('Usage: /model <name>');

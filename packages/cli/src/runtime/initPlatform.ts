@@ -12,6 +12,7 @@ import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDir
 // Local imports - auth
 import { initializeServerSideKeyAccess } from '@auth/serverKeys';
 import { FREE_TIER } from '@auth/sharedConfig';
+import type { AuthProvider } from '@auth/serverKeys';
 
 // Local imports - common state
 import { GlobalStateKey } from '@common/state/stateKeys';
@@ -53,6 +54,19 @@ const cliPlatformLog: LogBackend = {
     writeTextStderr(`[error] [${channel}] ${message}`),
 };
 
+const cliAuthProvider: AuthProvider = {
+  isAuthenticated: async () => false,
+  getUserTier: async () => FREE_TIER,
+  getAccessToken: async () => null,
+};
+
+export async function setCliHelperModel(
+  model: string | undefined,
+): Promise<void> {
+  if (!model) return;
+  await tryPlatform()?.globalState.update(GlobalStateKey.HELPER_MODEL, model);
+}
+
 export async function initCliPlatform(
   context: Pick<
     CliContext,
@@ -81,11 +95,7 @@ export async function initCliPlatform(
         state: globalState,
         logger: cliPlatformLog,
       },
-      {
-        isAuthenticated: async () => false,
-        getUserTier: async () => FREE_TIER,
-        getAccessToken: async () => null,
-      },
+      cliAuthProvider,
     );
     serverSideKeysInitialized = true;
   } else if (!serverSideKeysInitialized) {
@@ -94,21 +104,12 @@ export async function initCliPlatform(
         state: tryPlatform()?.globalState,
         logger: cliPlatformLog,
       },
-      {
-        isAuthenticated: async () => false,
-        getUserTier: async () => FREE_TIER,
-        getAccessToken: async () => null,
-      },
+      cliAuthProvider,
     );
     serverSideKeysInitialized = true;
   }
 
-  if (context.helperModel) {
-    await tryPlatform()?.globalState.update(
-      GlobalStateKey.HELPER_MODEL,
-      context.helperModel,
-    );
-  }
+  await setCliHelperModel(context.helperModel);
 
   if (bootstrappedResourcesPath !== context.resourcesPath) {
     await bootstrapPlatformAgentDirectories({
