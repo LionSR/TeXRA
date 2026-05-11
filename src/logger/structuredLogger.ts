@@ -1,3 +1,6 @@
+// Standard library imports
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 // Local imports - shared schemas
 import type { LogLevel, StreamTabId } from '@shared/schemas';
 
@@ -41,6 +44,8 @@ interface GroupQueue {
   tail: Promise<void>;
 }
 
+const activeGroupQueue = new AsyncLocalStorage<GroupQueue>();
+
 export function createStructuredLogger(sink: LogSink): Logger {
   return new StructuredLogger({ current: sink });
 }
@@ -82,6 +87,10 @@ class StructuredLogger implements Logger {
   }
 
   async withGroup<T>(label: string, fn: () => Promise<T> | T): Promise<T> {
+    if (activeGroupQueue.getStore() === this.groupQueue) {
+      return this.runGroup(label, fn);
+    }
+
     const previousGroup = this.groupQueue.tail.catch(() => undefined);
     let releaseGroup: () => void = () => undefined;
     this.groupQueue.tail = previousGroup.then(
@@ -92,12 +101,24 @@ class StructuredLogger implements Logger {
     );
     await previousGroup;
 
+    try {
+      return await activeGroupQueue.run(this.groupQueue, () =>
+        this.runGroup(label, fn),
+      );
+    } finally {
+      releaseGroup();
+    }
+  }
+
+  private async runGroup<T>(
+    label: string,
+    fn: () => Promise<T> | T,
+  ): Promise<T> {
     const pop = this.enterGroup(label, false);
     try {
       return await fn();
     } finally {
       pop();
-      releaseGroup();
       await this.sinkRef.current.flush?.();
     }
   }
