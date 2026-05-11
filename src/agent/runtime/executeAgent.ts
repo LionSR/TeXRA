@@ -116,6 +116,16 @@ function createExecutionRunContext(ctx: AgentLaunchContext): RunContext {
     logger: ctx.logger,
     approvals: {},
     coordinators: ctx.coordinators,
+    toolRunContext: {
+      streamId: ctx.streamId,
+      executionId: ctx.executionId,
+      model: ctx.config.model,
+      agentName: ctx.config.agent,
+      workingDirectory: ctx.workingDirectory,
+      runtimeHost: ctx.runtimeHost,
+      delegationDepth: ctx.delegationDepth,
+      delegationConfig: ctx.delegationConfig,
+    },
   });
 }
 

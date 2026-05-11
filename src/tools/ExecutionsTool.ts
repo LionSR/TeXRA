@@ -19,7 +19,7 @@ import {
   listExecutions,
 } from '@agent/storage';
 import { flowKey } from '@agent/node/persistedFlow';
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
 import {
   ACTIVE_STATUSES,
   AgentExecutionHandle,
@@ -96,7 +96,7 @@ const TOOL_USE_ONLY_FIELDS = new Set(['toolConfig']);
  * Returns a cleanup function that removes the listener.
  */
 function listenForFollowUp(ac: AbortController): () => void {
-  const ctx = getCurrentToolFileInteractionContext();
+  const ctx = getCurrentToolRunContext();
   if (!ctx?.streamId) return () => {};
 
   const streamId = ctx.streamId;
@@ -344,7 +344,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
 
   private resolveExecutionId(id: string): ExecutionId {
     if (id === 'current') {
-      const ctx = getCurrentToolFileInteractionContext();
+      const ctx = getCurrentToolRunContext();
       if (!ctx?.executionId) {
         throw new ToolError(
           'No active execution. Use a specific execution ID instead of "current".',
@@ -578,7 +578,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
   }
 
   private handleKill(executionId: ExecutionId): ToolResult {
-    const ctx = getCurrentToolFileInteractionContext();
+    const ctx = getCurrentToolRunContext();
     const callerStreamId = ctx?.streamId;
 
     if (ctx?.executionId === executionId) {
@@ -630,7 +630,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
   }
 
   private handleSubscribe(executionId: ExecutionId): ToolResult {
-    const ctx = getCurrentToolFileInteractionContext();
+    const ctx = getCurrentToolRunContext();
     const streamId = ctx?.streamId;
     if (!streamId) {
       throw new ToolError(
@@ -657,7 +657,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
   }
 
   private handleUnsubscribe(executionId: ExecutionId): ToolResult {
-    const streamId = getCurrentToolFileInteractionContext()?.streamId;
+    const streamId = getCurrentToolRunContext()?.streamId;
     if (!streamId) {
       throw new ToolError(
         'unsubscribe must be called from within an agent stream.',
