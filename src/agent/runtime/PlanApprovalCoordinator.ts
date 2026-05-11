@@ -114,14 +114,6 @@ export class PlanApprovalCoordinator extends BasePromiseCoordinator<
       this.clearRequest(approvalId);
     }
   }
-
-  /**
-   * Clear all pending plan approvals.
-   * Used for cleanup when all streams are deleted.
-   */
-  override clearAll(): void {
-    super.clearAll();
-  }
 }
 
 // ============================================================================
