@@ -7,6 +7,11 @@ interface WorkspacePathOptions {
 }
 
 const WORKSPACE_PRESENT_ARG = '--texra-has-workspace=';
+const WORKSPACE_PATH_FLAGS = [
+  '--texra-workspace-path',
+  '--texra-workspace',
+] as const;
+const CANONICAL_WORKSPACE_PATH_FLAG = WORKSPACE_PATH_FLAGS[0];
 export const DESKTOP_WORKSPACE_PATH_STATE_KEY = 'texra.desktop.workspacePath';
 
 export function getWorkspacePathInput(
@@ -40,17 +45,17 @@ export function withWorkspacePathArg(
     const arg = argv[index];
     if (arg == null) continue;
     if (isDesktopProtocolUrl(arg)) continue;
-    if (arg === '--texra-workspace') {
+    if (isWorkspacePathFlag(arg)) {
       const value = argv[index + 1];
       if (value != null && !value.startsWith('--')) {
         index += 1;
       }
       continue;
     }
-    if (arg.startsWith('--texra-workspace=')) continue;
+    if (isWorkspacePathAssignment(arg)) continue;
     nextArgs.push(arg);
   }
-  nextArgs.push('--texra-workspace', workspacePath);
+  nextArgs.push(`${CANONICAL_WORKSPACE_PATH_FLAG}=${workspacePath}`);
   return nextArgs;
 }
 
@@ -72,14 +77,10 @@ export function parseWorkspacePathFromArgv(
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg == null) continue;
-    // Support both flag names for compatibility
-    if (arg === '--texra-workspace-path' || arg === '--texra-workspace') {
+    if (isWorkspacePathFlag(arg)) {
       return getPositionalWorkspacePathArg(argv[index + 1]);
     }
-    if (
-      arg.startsWith('--texra-workspace-path=') ||
-      arg.startsWith('--texra-workspace=')
-    ) {
+    if (isWorkspacePathAssignment(arg)) {
       const eqIndex = arg.indexOf('=');
       return getPositionalWorkspacePathArg(arg.slice(eqIndex + 1));
     }
@@ -95,4 +96,14 @@ function getPositionalWorkspacePathArg(
     return undefined;
   }
   return trimmed;
+}
+
+function isWorkspacePathFlag(arg: string): boolean {
+  return WORKSPACE_PATH_FLAGS.includes(
+    arg as (typeof WORKSPACE_PATH_FLAGS)[number],
+  );
+}
+
+function isWorkspacePathAssignment(arg: string): boolean {
+  return WORKSPACE_PATH_FLAGS.some((flag) => arg.startsWith(`${flag}=`));
 }
