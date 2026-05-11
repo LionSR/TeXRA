@@ -31,6 +31,7 @@ const planApprovals = new Map<string, RunCoordinators>();
 const planApprovalStreams = new Map<string, string>();
 const planStreams = new Map<string, RunCoordinators>();
 const proposals = new Map<string, RunCoordinators>();
+const proposalStreams = new Map<string, string>();
 const retries = new Map<string, RunCoordinators>();
 
 function clearPlanBridgeForStream(streamId: string): void {
@@ -93,10 +94,12 @@ export async function waitForProposal(
 ): Promise<ProposalResult> {
   const coordinators = getRunCoordinators();
   proposals.set(options.proposalId, coordinators);
+  proposalStreams.set(options.proposalId, streamId);
   try {
     return await coordinators.proposal.waitForProposal(streamId, options);
   } finally {
     proposals.delete(options.proposalId);
+    proposalStreams.delete(options.proposalId);
   }
 }
 
@@ -107,6 +110,25 @@ export function resolveProposal(
   return (
     proposals.get(proposalId)?.proposal ?? legacyCoordinators.proposal
   ).resolveRequest(proposalId, result);
+}
+
+export function clearProposalForStream(streamId: string): void {
+  for (const [proposalId, proposalStreamId] of proposalStreams) {
+    if (proposalStreamId !== streamId) continue;
+    (
+      proposals.get(proposalId)?.proposal ?? legacyCoordinators.proposal
+    ).clearRequest(proposalId);
+    proposals.delete(proposalId);
+    proposalStreams.delete(proposalId);
+  }
+}
+
+export function clearAllProposals(): void {
+  for (const [proposalId, coordinators] of proposals) {
+    coordinators.proposal.clearRequest(proposalId);
+  }
+  proposals.clear();
+  proposalStreams.clear();
 }
 
 export async function waitForRetry(
@@ -139,4 +161,11 @@ export function clearRetryRequest(streamId: string): void {
     streamId,
   );
   retries.delete(streamId);
+}
+
+export function clearAllRetryRequests(): void {
+  for (const [streamId, coordinators] of retries) {
+    coordinators.retry.clearRequest(streamId);
+  }
+  retries.clear();
 }
