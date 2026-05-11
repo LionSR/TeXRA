@@ -89,7 +89,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
   let stopRequested = false;
   const pendingFollowUps: string[] = [];
   let followUpFlush = Promise.resolve();
-  let followUpFlushScheduled = false;
+  let streamReadyForFollowUps = false;
 
   const interruptActiveSession = (): void => {
     if (!streamId) return;
@@ -112,8 +112,15 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     if (!streamId || stopRequested || pendingFollowUps.length === 0) return;
 
     const lines = pendingFollowUps.splice(0);
+    const waitForStreamActivation = !streamReadyForFollowUps;
     followUpFlush = followUpFlush
       .then(async () => {
+        if (waitForStreamActivation) {
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, 0);
+          });
+          streamReadyForFollowUps = true;
+        }
         for (const line of lines) {
           if (!streamId || stopRequested || runCompleted) return;
           const result = await sendFollowUp(streamId, line);
@@ -135,18 +142,9 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       });
   };
 
-  const schedulePendingFollowUpFlush = (): void => {
-    if (followUpFlushScheduled) return;
-    followUpFlushScheduled = true;
-    setTimeout(() => {
-      followUpFlushScheduled = false;
-      flushPendingFollowUps();
-    }, 0);
-  };
-
   const queueFollowUp = (line: string): void => {
     pendingFollowUps.push(line);
-    schedulePendingFollowUpFlush();
+    flushPendingFollowUps();
   };
 
   const startSession = (instruction: string): void => {
@@ -163,10 +161,11 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       enforceCategory: true,
       onStreamResolved: (resolvedStreamId) => {
         streamId = resolvedStreamId;
+        streamReadyForFollowUps = false;
         if (stopRequested) {
           interruptActiveSession();
         } else {
-          schedulePendingFollowUpFlush();
+          flushPendingFollowUps();
         }
       },
     })
