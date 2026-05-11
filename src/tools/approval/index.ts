@@ -46,17 +46,13 @@ export function cleanupApprovalsForStream(streamId: StreamTabId): void {
   clearRetryRequest(streamId);
 }
 
-/**
- * Clean up approval state for a set of deleted streams, then clear any
- * remaining global approval state.
- */
+/** Clean up approval state only for the listed deleted streams. */
 export function cleanupApprovalsForStreams(
   streamIds: readonly StreamTabId[],
 ): void {
   for (const streamId of streamIds) {
     cleanupApprovalsForStream(streamId);
   }
-  cleanupAllApprovals();
 }
 
 /**
