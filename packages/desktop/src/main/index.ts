@@ -154,6 +154,9 @@ function createWindow(options: {
       allowRunningInsecureContent: false,
       additionalArguments: [
         serializeWorkspacePresenceArg(options.workspacePath != null),
+        ...(options.workspacePath
+          ? [`--texra-workspace-path=${options.workspacePath}`]
+          : []),
       ],
     },
   });
