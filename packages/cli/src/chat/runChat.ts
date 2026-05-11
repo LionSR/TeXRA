@@ -59,6 +59,12 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     );
     return { exitCode: CliExitCode.Usage };
   }
+  if (chatContext.approvalPolicy === 'ask') {
+    writeTextStderr(
+      'texra chat plain mode cannot prompt for approvals yet because chat input owns stdin. Use --approval-policy yolo for trusted local runs, --approval-policy never to fail closed, or texra run for workflow execution.',
+    );
+    return { exitCode: CliExitCode.Usage };
+  }
 
   await initCliPlatform(chatContext);
   installCliApprovalHandlers(chatContext);
@@ -66,6 +72,12 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
 
   const runtimeHost = createCliRuntimeHost(chatContext);
   const reader = createCliLineReader('texra> ');
+  let readerClosed = false;
+  const closeReader = (): void => {
+    if (readerClosed) return;
+    readerClosed = true;
+    reader.close();
+  };
   let agent = flagValue(args, '--agent') ?? DEFAULT_CHAT_AGENT;
   let model = flagValue(args, '--model', '-m') ?? DEFAULT_AGENT_MODEL;
   let streamId: StreamTabId | undefined;
@@ -106,82 +118,92 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       })
       .finally(() => {
         runCompleted = true;
-        reader.close();
+        closeReader();
       });
   };
 
-  writeTextStderr(
-    `texra chat plain mode. Agent: ${agent}. Model: ${model}. Type /help for commands.`,
-  );
-  reader.prompt();
+  try {
+    writeTextStderr(
+      `texra chat plain mode. Agent: ${agent}. Model: ${model}. Type /help for commands.`,
+    );
+    reader.prompt();
 
-  for await (const rawLine of reader) {
-    const line = rawLine.trim();
-    if (!line) {
-      reader.prompt();
-      continue;
-    }
+    for await (const rawLine of reader) {
+      const line = rawLine.trim();
+      if (!line) {
+        reader.prompt();
+        continue;
+      }
 
-    if (line.startsWith('/')) {
-      const { command, rest } = parseCommand(line);
-      if (command === 'exit' || command === 'quit') {
-        reader.close();
+      if (line.startsWith('/')) {
+        const { command, rest } = parseCommand(line);
+        if (command === 'exit' || command === 'quit') {
+          closeReader();
+          break;
+        }
+        if (command === 'help') {
+          printChatHelp();
+        } else if (command === 'clear') {
+          printClearScreen();
+        } else if (command === 'agent') {
+          if (runPromise) {
+            writeTextStderr('The active session already owns its agent.');
+          } else if (rest) {
+            agent = rest;
+            writeTextStderr(`Agent set to ${agent}.`);
+          } else {
+            writeTextStderr('Usage: /agent <name>');
+          }
+        } else if (command === 'model') {
+          if (runPromise) {
+            writeTextStderr('The active session already owns its model.');
+          } else if (rest) {
+            model = rest;
+            writeTextStderr(`Model set to ${model}.`);
+          } else {
+            writeTextStderr('Usage: /model <name>');
+          }
+        } else if (command === 'yolo') {
+          writeTextStderr(
+            'Use --approval-policy yolo when starting texra chat to auto-approve safe approval gates.',
+          );
+        } else {
+          writeTextStderr(`Unknown command: /${command}`);
+        }
+        if (!runCompleted) reader.prompt();
+        continue;
+      }
+
+      if (!runPromise) {
+        startSession(line);
+        reader.prompt();
+        continue;
+      }
+
+      if (!streamId) {
+        writeTextStderr(
+          'The chat session is still starting. Try again shortly.',
+        );
+        reader.prompt();
+        continue;
+      }
+
+      const result = await sendFollowUp(streamId, line);
+      if (result.status === 'no_session') {
+        writeTextStderr('The chat session is no longer active.');
+        closeReader();
         break;
       }
-      if (command === 'help') {
-        printChatHelp();
-      } else if (command === 'clear') {
-        printClearScreen();
-      } else if (command === 'agent') {
-        if (runPromise) {
-          writeTextStderr('The active session already owns its agent.');
-        } else if (rest) {
-          agent = rest;
-          writeTextStderr(`Agent set to ${agent}.`);
-        }
-      } else if (command === 'model') {
-        if (runPromise) {
-          writeTextStderr('The active session already owns its model.');
-        } else if (rest) {
-          model = rest;
-          writeTextStderr(`Model set to ${model}.`);
-        }
-      } else if (command === 'yolo') {
-        writeTextStderr(
-          'Use --approval-policy yolo when starting texra chat to auto-approve safe approval gates.',
-        );
-      } else {
-        writeTextStderr(`Unknown command: /${command}`);
+      if (result.status === 'queued') {
+        writeTextStderr(`Follow-up queued while session is ${result.reason}.`);
       }
       if (!runCompleted) reader.prompt();
-      continue;
     }
 
-    if (!runPromise) {
-      startSession(line);
-      reader.prompt();
-      continue;
-    }
-
-    if (!streamId) {
-      writeTextStderr('The chat session is still starting. Try again shortly.');
-      reader.prompt();
-      continue;
-    }
-
-    const result = await sendFollowUp(streamId, line);
-    if (result.status === 'no_session') {
-      writeTextStderr('The chat session is no longer active.');
-      reader.close();
-      break;
-    }
-    if (result.status === 'queued') {
-      writeTextStderr(`Follow-up queued while session is ${result.reason}.`);
-    }
-    if (!runCompleted) reader.prompt();
+    await runPromise;
+    return { exitCode: runExitCode };
+  } finally {
+    closeReader();
+    await runtimeHost.close();
   }
-
-  await runPromise;
-  await runtimeHost.close();
-  return { exitCode: runExitCode };
 }
