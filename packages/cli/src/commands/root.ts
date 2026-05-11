@@ -47,6 +47,7 @@ The chat command is scaffolded here and will be wired to executeAgent in the CLI
 function splitRunArgs(args: readonly string[]): {
   agent: string | undefined;
   optionArgs: readonly string[];
+  unknownFlag?: string;
 } {
   const optionArgs: string[] = [];
   let index = 0;
@@ -64,6 +65,9 @@ function splitRunArgs(args: readonly string[]): {
     optionArgs.push(arg);
     const value = args[index + 1];
     const flagName = cliFlagName(arg);
+    if (!RUN_FLAGS_WITH_VALUE.has(flagName)) {
+      return { agent: undefined, optionArgs, unknownFlag: arg };
+    }
     if (RUN_FLAGS_WITH_VALUE.has(flagName) && arg.includes('=')) {
       index += 1;
       continue;
@@ -218,7 +222,13 @@ export async function runCli(argv?: readonly string[]): Promise<CliResult> {
   }
 
   if (command === 'run') {
-    const { agent, optionArgs } = splitRunArgs(context.argv.slice(1));
+    const { agent, optionArgs, unknownFlag } = splitRunArgs(
+      context.argv.slice(1),
+    );
+    if (unknownFlag) {
+      writeTextStderr(`Unknown run flag: ${unknownFlag}`);
+      return { exitCode: CliExitCode.Usage };
+    }
     return runWorkflowAgent(agent, optionArgs, context);
   }
 
