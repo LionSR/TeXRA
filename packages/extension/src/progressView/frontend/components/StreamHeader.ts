@@ -438,7 +438,7 @@ export class StreamHeader extends LitElement {
       class="progress-badge"
       variant="neutral"
       size="small"
-      title=${getProgressBadgeTitle(this.progress)}
+      title=${ifDefined(getProgressBadgeTitle(this.progress))}
     >
       <wa-icon library="texra" name="pulse" aria-hidden="true"></wa-icon>
       ${renderProgressBadgeContent(this.progress)}
