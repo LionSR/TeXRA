@@ -44,6 +44,8 @@ const FLAGS_WITH_VALUE = new Set([
 ]);
 
 const GLOBAL_BOOLEAN_FLAGS = new Set(['--print', '-p']);
+const ROOT_BOOLEAN_FLAGS = new Set(['--help', '-h', '--version', '-v']);
+const BOOLEAN_FLAGS = new Set([...GLOBAL_BOOLEAN_FLAGS, ...ROOT_BOOLEAN_FLAGS]);
 
 interface CliAmbientState {
   readonly isCi: boolean;
@@ -90,6 +92,11 @@ export function flagValue(
       continue;
     }
 
+    if (BOOLEAN_FLAGS.has(flagName)) {
+      index += 1;
+      continue;
+    }
+
     index += 1;
   }
   return undefined;
@@ -106,6 +113,11 @@ function hasBooleanFlag(args: readonly string[], ...names: string[]): boolean {
     const flagName = cliFlagName(arg);
     if (FLAGS_WITH_VALUE.has(flagName)) {
       index += arg.includes('=') || args[index + 1] == null ? 1 : 2;
+      continue;
+    }
+
+    if (BOOLEAN_FLAGS.has(flagName)) {
+      index += 1;
       continue;
     }
 
