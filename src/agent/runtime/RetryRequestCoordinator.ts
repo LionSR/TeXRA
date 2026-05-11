@@ -140,6 +140,11 @@ export class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
     this.loggers.delete(streamId);
     super.clearRequest(streamId);
   }
+
+  override clearAll(): void {
+    this.loggers.clear();
+    super.clearAll();
+  }
 }
 
 export const retryCoordinator = new RetryRequestCoordinatorImpl();
