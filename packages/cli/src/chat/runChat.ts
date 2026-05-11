@@ -5,8 +5,10 @@ import {
 } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { loadAgents } from '@agent/index';
+import { interruptActiveChildren } from '@agent/runtime/executionRegistry';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - CLI runtime
@@ -38,7 +40,7 @@ function printChatHelp(): void {
   /model <name> Set the model before the session starts
   /yolo          Explain yolo approval mode
   /clear         Clear the terminal
-  /exit          Exit chat`);
+  /exit, /quit   Exit chat`);
 }
 
 function printClearScreen(): void {
@@ -84,6 +86,24 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
   let runCompleted = false;
   let runExitCode: CliExitCode = CliExitCode.Success;
   let runPromise: Promise<void> | undefined;
+  let stopRequested = false;
+
+  const interruptActiveSession = (): void => {
+    if (!streamId) return;
+    interruptActiveChildren(streamId);
+    getInterruptible(streamId)?.interrupt();
+  };
+
+  const requestChatExit = (): void => {
+    stopRequested = true;
+    if (runPromise && !runCompleted) {
+      interruptActiveSession();
+      writeTextStderr(
+        'Exit requested; waiting for the active session to stop.',
+      );
+    }
+    closeReader();
+  };
 
   const startSession = (instruction: string): void => {
     const config: AgentConfigPayload = {
@@ -99,6 +119,9 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       enforceCategory: true,
       onStreamResolved: (resolvedStreamId) => {
         streamId = resolvedStreamId;
+        if (stopRequested) {
+          interruptActiveSession();
+        }
       },
     })
       .then((result) => {
@@ -138,7 +161,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       if (line.startsWith('/')) {
         const { command, rest } = parseCommand(line);
         if (command === 'exit' || command === 'quit') {
-          closeReader();
+          requestChatExit();
           break;
         }
         if (command === 'help') {
@@ -165,7 +188,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
           }
         } else if (command === 'yolo') {
           writeTextStderr(
-            'Use --approval-policy yolo when starting texra chat to auto-approve safe approval gates.',
+            'Use --approval-policy yolo when starting texra chat to auto-approve approval gates. External inquiry prompts still require a human answer.',
           );
         } else {
           writeTextStderr(`Unknown command: /${command}`);
