@@ -49,7 +49,10 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
         cliLogger().logger.info('Task state registered', {
           streamId: data.streamId,
         });
+        return;
       }
+
+      cliLogger().logger.debug(`Progress event: ${String(event)}`);
     },
     async close() {
       await logger?.close();
