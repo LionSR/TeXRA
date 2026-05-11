@@ -181,7 +181,7 @@ function splitGlobalArgs(args: readonly string[]): {
       continue;
     }
 
-    if (!GLOBAL_BOOLEAN_FLAGS.has(arg)) break;
+    if (!GLOBAL_BOOLEAN_FLAGS.has(flagName)) break;
     globalArgs.push(arg);
     index += 1;
   }
