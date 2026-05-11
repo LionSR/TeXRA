@@ -3,11 +3,11 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Local imports - agent and model surfaces
+import { getVisibleAgents, loadAgents } from '@agent/index';
 import {
   DEFAULT_AGENT_MODEL,
   type AgentConfigPayload,
 } from '@agent/core/AgentConfig';
-import { getVisibleAgents, loadAgents } from '@agent/index';
 import { executeAgent } from '@agent/runtime/executeAgent';
 
 // Local imports - CLI runtime
