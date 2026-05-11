@@ -47,9 +47,12 @@ export const RUN_FLAGS_WITH_VALUE = new Set([
   '--instruction',
 ]);
 
+export const CHAT_FLAGS_WITH_VALUE = new Set(['--agent', '--model', '-m']);
+
 const FLAGS_WITH_VALUE = new Set([
   ...GLOBAL_FLAGS_WITH_VALUE,
   ...RUN_FLAGS_WITH_VALUE,
+  ...CHAT_FLAGS_WITH_VALUE,
 ]);
 
 const GLOBAL_BOOLEAN_FLAGS = new Set(['--print', '-p']);
@@ -85,6 +88,16 @@ export async function askCliQuestion(question: string): Promise<string> {
   } finally {
     prompt.close();
   }
+}
+
+export function createCliLineReader(
+  prompt: string,
+): ReturnType<typeof createInterface> {
+  return createInterface({
+    input: process.stdin,
+    output: process.stderr,
+    prompt,
+  });
 }
 
 export function cliFlagName(arg: string): string {
