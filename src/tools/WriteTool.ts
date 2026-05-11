@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Internal imports
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import replacementEngine from '@replacement/engine';
 import { ToolResult } from '@tools/result';
@@ -42,7 +42,7 @@ export class WriteFileTool extends defineTool({
 }) {
   protected async execute(input: WriteInput): Promise<ToolResult> {
     const root = parseWorkingDirectory(
-      getCurrentToolFileInteractionContext()?.workingDirectory,
+      getCurrentToolRunContext()?.workingDirectory,
     );
     const { path: resolved, display: displayPath } = resolveAndFormat(
       input.path,
