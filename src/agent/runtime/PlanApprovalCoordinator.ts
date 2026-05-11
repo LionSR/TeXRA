@@ -112,8 +112,6 @@ export class PlanApprovalCoordinator extends BasePromiseCoordinator<
     const approvalId = this.streamApprovalMap.get(streamId);
     if (approvalId) {
       this.clearRequest(approvalId);
-      this.streamApprovalMap.delete(streamId);
-      this.approvalStreamMap.delete(approvalId);
     }
   }
 
@@ -123,8 +121,6 @@ export class PlanApprovalCoordinator extends BasePromiseCoordinator<
    */
   override clearAll(): void {
     super.clearAll();
-    this.streamApprovalMap.clear();
-    this.approvalStreamMap.clear();
   }
 }
 
