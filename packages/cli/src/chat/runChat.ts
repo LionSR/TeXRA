@@ -33,6 +33,18 @@ export interface ChatResult {
 
 const DEFAULT_CHAT_AGENT = 'chat';
 
+interface ChatSessionState {
+  readerClosed: boolean;
+  streamId: StreamTabId | undefined;
+  runCompleted: boolean;
+  runExitCode: CliExitCode;
+  runPromise: Promise<void> | undefined;
+  stopRequested: boolean;
+  pendingFollowUps: string[];
+  followUpFlush: Promise<void>;
+  streamReadyForFollowUps: boolean;
+}
+
 function printChatHelp(): void {
   writeTextStderr(`Commands:
   /help            Show this help
@@ -74,32 +86,34 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
 
   const runtimeHost = createCliRuntimeHost(chatContext);
   const reader = createCliLineReader('texra> ');
-  let readerClosed = false;
+  const session: ChatSessionState = {
+    readerClosed: false,
+    streamId: undefined,
+    runCompleted: false,
+    runExitCode: CliExitCode.Success,
+    runPromise: undefined,
+    stopRequested: false,
+    pendingFollowUps: [],
+    followUpFlush: Promise.resolve(),
+    streamReadyForFollowUps: false,
+  };
   const closeReader = (): void => {
-    if (readerClosed) return;
-    readerClosed = true;
+    if (session.readerClosed) return;
+    session.readerClosed = true;
     reader.close();
   };
   let agent = flagValue(args, '--agent') ?? DEFAULT_CHAT_AGENT;
   let model = flagValue(args, '--model', '-m') ?? DEFAULT_AGENT_MODEL;
-  let streamId: StreamTabId | undefined;
-  let runCompleted = false;
-  let runExitCode: CliExitCode = CliExitCode.Success;
-  let runPromise: Promise<void> | undefined;
-  let stopRequested = false;
-  const pendingFollowUps: string[] = [];
-  let followUpFlush = Promise.resolve();
-  let streamReadyForFollowUps = false;
 
   const interruptActiveSession = (): void => {
-    if (!streamId) return;
-    interruptActiveChildren(streamId);
-    getInterruptible(streamId)?.interrupt();
+    if (!session.streamId) return;
+    interruptActiveChildren(session.streamId);
+    getInterruptible(session.streamId)?.interrupt();
   };
 
   const requestChatExit = (): void => {
-    stopRequested = true;
-    if (runPromise && !runCompleted) {
+    session.stopRequested = true;
+    if (session.runPromise && !session.runCompleted) {
       interruptActiveSession();
       writeTextStderr(
         'Exit requested; waiting for the active session to stop.',
@@ -109,21 +123,33 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
   };
 
   const flushPendingFollowUps = (): void => {
-    if (!streamId || stopRequested || pendingFollowUps.length === 0) return;
+    if (
+      !session.streamId ||
+      session.stopRequested ||
+      session.pendingFollowUps.length === 0
+    ) {
+      return;
+    }
 
-    const lines = pendingFollowUps.splice(0);
-    const waitForStreamActivation = !streamReadyForFollowUps;
-    followUpFlush = followUpFlush
+    const lines = session.pendingFollowUps.splice(0);
+    const waitForStreamActivation = !session.streamReadyForFollowUps;
+    session.followUpFlush = session.followUpFlush
       .then(async () => {
         if (waitForStreamActivation) {
           await new Promise<void>((resolve) => {
             setTimeout(resolve, 0);
           });
-          streamReadyForFollowUps = true;
+          session.streamReadyForFollowUps = true;
         }
         for (const line of lines) {
-          if (!streamId || stopRequested || runCompleted) return;
-          const result = await sendFollowUp(streamId, line);
+          if (
+            !session.streamId ||
+            session.stopRequested ||
+            session.runCompleted
+          ) {
+            return;
+          }
+          const result = await sendFollowUp(session.streamId, line);
           if (result.status === 'no_session') {
             writeTextStderr('The chat session is no longer active.');
             closeReader();
@@ -143,7 +169,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
   };
 
   const queueFollowUp = (line: string): void => {
-    pendingFollowUps.push(line);
+    session.pendingFollowUps.push(line);
     flushPendingFollowUps();
   };
 
@@ -156,13 +182,13 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       workingDirectory: chatContext.cwd,
     };
 
-    runPromise = executeAgent(config, undefined, {
+    session.runPromise = executeAgent(config, undefined, {
       runtimeHost,
       enforceCategory: true,
       onStreamResolved: (resolvedStreamId) => {
-        streamId = resolvedStreamId;
-        streamReadyForFollowUps = false;
-        if (stopRequested) {
+        session.streamId = resolvedStreamId;
+        session.streamReadyForFollowUps = false;
+        if (session.stopRequested) {
           interruptActiveSession();
         } else {
           flushPendingFollowUps();
@@ -170,7 +196,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       },
     })
       .then((result) => {
-        runExitCode =
+        session.runExitCode =
           result.status === 'error' && hasCliApprovalDenied(chatContext)
             ? CliExitCode.ApprovalDenied
             : result.status === 'error'
@@ -181,11 +207,11 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
         }
       })
       .catch((error) => {
-        runExitCode = CliExitCode.AgentError;
+        session.runExitCode = CliExitCode.AgentError;
         writeTextStderr(error instanceof Error ? error.message : String(error));
       })
       .finally(() => {
-        runCompleted = true;
+        session.runCompleted = true;
         closeReader();
       });
   };
@@ -214,7 +240,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
         } else if (command === 'clear') {
           printClearScreen();
         } else if (command === 'agent') {
-          if (runPromise) {
+          if (session.runPromise) {
             writeTextStderr('The active session already owns its agent.');
           } else if (rest) {
             agent = rest;
@@ -223,7 +249,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
             writeTextStderr('Usage: /agent <name>');
           }
         } else if (command === 'model') {
-          if (runPromise) {
+          if (session.runPromise) {
             writeTextStderr('The active session already owns its model.');
           } else if (rest) {
             model = rest;
@@ -238,17 +264,17 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
         } else {
           writeTextStderr(`Unknown command: /${command}`);
         }
-        if (!runCompleted) reader.prompt();
+        if (!session.runCompleted) reader.prompt();
         continue;
       }
 
-      if (!runPromise) {
+      if (!session.runPromise) {
         startSession(line);
         reader.prompt();
         continue;
       }
 
-      if (!streamId) {
+      if (!session.streamId) {
         queueFollowUp(line);
         writeTextStderr(
           'The chat session is still starting. Follow-up queued.',
@@ -258,15 +284,15 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       }
 
       queueFollowUp(line);
-      if (!runCompleted) reader.prompt();
+      if (!session.runCompleted) reader.prompt();
     }
 
-    if (!stopRequested && runPromise && !runCompleted) {
+    if (!session.stopRequested && session.runPromise && !session.runCompleted) {
       requestChatExit();
     }
-    await followUpFlush;
-    await runPromise;
-    return { exitCode: runExitCode };
+    await session.followUpFlush;
+    await session.runPromise;
+    return { exitCode: session.runExitCode };
   } finally {
     closeReader();
     await runtimeHost.close();
