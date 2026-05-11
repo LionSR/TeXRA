@@ -85,7 +85,11 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
 
   let agent = flagValue(args, '--agent') ?? DEFAULT_CHAT_AGENT;
   let model = flagValue(args, '--model', '-m') ?? DEFAULT_AGENT_MODEL;
-  const sessionContext = { ...chatContext, helperModel: model };
+  const sessionContext = {
+    ...chatContext,
+    helperModel: model,
+    quietLogs: true,
+  };
 
   await initCliPlatform(sessionContext);
   installCliApprovalHandlers(sessionContext);
