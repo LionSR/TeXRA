@@ -42,7 +42,7 @@
       },
       {
         "pr": "https://github.com/LionSR/TeXRA/pull/3847",
-        "scope": "ToolFileInteractionContext async storage and runtime-host ownership cleanup",
+        "scope": "ToolFileInteractionContext async storage and split run/call context views",
         "parentIssues": [3837],
         "followUpIssue": 3849,
         "state": "open, non-draft, mergeable, GitHub checks passing"
@@ -61,7 +61,7 @@
       "Issues #3833, #3834, #3835, #3836, #3837, and #3838 are open until the stack is merged or maintainers decide to close them manually.",
       "The stack is open and unmerged; final integration must merge PRs in dependency order.",
       "texra chat rich renderer work remains outside the first plain loop and is tracked by follow-up issue #3848.",
-      "ToolFileInteractionContext reader separation remains outside the async-storage cleanup and is tracked by follow-up issue #3849.",
+      "ToolFileInteractionContext reader separation is partially implemented in PR #3847; remaining mixed or compatibility readers are tracked by follow-up issue #3849.",
       "The manifest remains in_progress until the stack lands and the remaining explicit follow-up issues have owners."
     ]
   },
@@ -146,7 +146,7 @@
         "Ownerless context bags and pass-through accessors are removed or justified by an ownership boundary.",
         "The active tool-call context follows async execution scope rather than process-global mutable state."
       ],
-      "partialDelivery": "PR #3847 removes process-global context stack lifetime and moves runtime-host fallback ownership to the tools layer. Full reader separation remains in follow-up issue #3849."
+      "partialDelivery": "PR #3847 removes process-global context stack lifetime, stores split run/call views with exhaustive field maps, moves runtime-host fallback ownership to the tools layer, and migrates clear run-owned and call-owned readers. Remaining mixed or compatibility readers stay in follow-up issue #3849."
     }
   ],
   "completionRule": "Do not mark complete until every issue acceptance gate is implemented, validated, merged, or moved to an owned follow-up issue with acceptance criteria.",
@@ -231,8 +231,8 @@
       "title": "ToolFileInteractionContext follow-up: split run-owned and call-owned access paths",
       "url": "https://github.com/LionSR/TeXRA/issues/3849",
       "parentIssues": [3837, 3838],
-      "status": "open follow-up after PR #3847 async storage cleanup",
-      "sourceOfTruth": "RunContext owns run facts; ToolFileInteractionContext owns active call facts; src/tools/toolRuntimeHost.ts owns tool-layer runtime-host fallback",
+      "status": "partially implemented in PR #3847; open for remaining mixed or compatibility readers",
+      "sourceOfTruth": "RunContext owns run facts; ToolRunContext and ToolCallContext separate tool context views; src/tools/toolRuntimeHost.ts owns tool-layer runtime-host fallback",
       "acceptance": [
         "Migrate readers that need only run facts to RunContext or ToolRunContext accessors.",
         "Migrate readers that need only call facts to ToolCallContext accessors.",
