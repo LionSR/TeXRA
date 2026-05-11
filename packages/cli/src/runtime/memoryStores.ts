@@ -1,4 +1,5 @@
 // Local imports - platform
+import { MemoryStateStore } from '@platform/defaults/memoryState';
 import type {
   ConfigInspection,
   ConfigProvider,
@@ -7,12 +8,10 @@ import type {
 import type { Disposable } from '@platform/interfaces/disposable';
 
 export class MemoryConfigProvider implements ConfigProvider {
-  private readonly values = new Map<string, unknown>();
+  private readonly values = new MemoryStateStore();
 
   get<T>(key: string, defaultValue?: T): T {
-    return this.values.has(key)
-      ? (this.values.get(key) as T)
-      : (defaultValue as T);
+    return this.values.get(key, defaultValue);
   }
 
   async update<T>(
@@ -20,16 +19,12 @@ export class MemoryConfigProvider implements ConfigProvider {
     value: T,
     _target?: ConfigTarget,
   ): Promise<void> {
-    if (value === undefined) {
-      this.values.delete(key);
-      return;
-    }
-    this.values.set(key, value);
+    await this.values.update(key, value);
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
     if (!this.values.has(key)) return undefined;
-    const value = this.values.get(key) as T;
+    const value = this.values.get<T>(key);
     return { globalValue: value, effectiveValue: value };
   }
 
