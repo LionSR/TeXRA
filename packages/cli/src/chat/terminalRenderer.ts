@@ -78,7 +78,11 @@ export class ChatTerminalRenderer {
   /status          Show active metadata and latest usage
   /yolo            Explain yolo approval mode
   /clear           Clear the terminal
-  /exit, /quit     Exit chat`);
+  /exit, /quit     Exit chat
+
+Keys:
+  Ctrl-C           Interrupt the active session, or exit if no session is running
+  Ctrl-D           Exit when the prompt is waiting for input`);
   }
 
   printStatus(
