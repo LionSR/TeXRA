@@ -130,27 +130,27 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
   const initialToolDisplay = parseToolDisplayMode(
     flagValue(args, '--tool-display'),
   );
+  let validationRenderer: ChatTerminalRenderer | undefined;
+  const usageError = (message: string): ChatResult => {
+    validationRenderer ??= new ChatTerminalRenderer(chatContext.colorEnabled);
+    validationRenderer.error(message);
+    return { exitCode: CliExitCode.Usage };
+  };
   if (initialToolDisplay == null) {
-    const renderer = new ChatTerminalRenderer(chatContext.colorEnabled);
-    renderer.error(
+    return usageError(
       'Unsupported --tool-display. Expected grouped, minimal, or hidden.',
     );
-    return { exitCode: CliExitCode.Usage };
   }
   let toolDisplay: ChatToolDisplayMode = initialToolDisplay;
   if (chatContext.mode === 'headless') {
-    const renderer = new ChatTerminalRenderer(chatContext.colorEnabled);
-    renderer.error(
+    return usageError(
       'texra chat requires an interactive terminal. Did you mean texra run?',
     );
-    return { exitCode: CliExitCode.Usage };
   }
   if (chatContext.approvalPolicy === 'ask') {
-    const renderer = new ChatTerminalRenderer(chatContext.colorEnabled);
-    renderer.error(
+    return usageError(
       'texra chat plain mode cannot prompt for approvals yet because chat input owns stdin. Use --approval-policy yolo for trusted local runs, --approval-policy never to fail closed, or texra run for workflow execution.',
     );
-    return { exitCode: CliExitCode.Usage };
   }
 
   let agent = flagValue(args, '--agent') ?? DEFAULT_CHAT_AGENT;
