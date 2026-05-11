@@ -9,6 +9,10 @@ import { initPlatform, tryPlatform } from '@platform/platform';
 // Local imports - agent index
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 
+// Local imports - auth
+import { initializeServerSideKeyAccess } from '@auth/serverKeys';
+import { FREE_TIER } from '@auth/sharedConfig';
+
 // Local imports - CLI runtime
 import { writeTextStderr } from './logSinks';
 import { MemoryConfigProvider } from './memoryStores';
@@ -24,6 +28,7 @@ const noopLifecycle: LifecycleHost = {
 };
 
 let bootstrappedResourcesPath: string | undefined;
+let serverSideKeysInitialized = false;
 let cliWorkspaceCwd = '';
 
 const cliPlatformLog: LogBackend = {
@@ -42,9 +47,10 @@ export async function initCliPlatform(
   cliWorkspaceCwd = context.cwd;
 
   if (!tryPlatform()) {
+    const globalState = createMemoryStore();
     initPlatform({
       config: new MemoryConfigProvider(),
-      globalState: createMemoryStore(),
+      globalState,
       workspaceState: createMemoryStore(),
       log: cliPlatformLog,
       fs: nodeFilesystem,
@@ -53,6 +59,31 @@ export async function initCliPlatform(
       secrets: new EnvSecrets(),
       lifecycle: noopLifecycle,
     });
+    initializeServerSideKeyAccess(
+      {
+        state: globalState,
+        logger: cliPlatformLog,
+      },
+      {
+        isAuthenticated: async () => false,
+        getUserTier: async () => FREE_TIER,
+        getAccessToken: async () => null,
+      },
+    );
+    serverSideKeysInitialized = true;
+  } else if (!serverSideKeysInitialized) {
+    initializeServerSideKeyAccess(
+      {
+        state: tryPlatform()?.globalState,
+        logger: cliPlatformLog,
+      },
+      {
+        isAuthenticated: async () => false,
+        getUserTier: async () => FREE_TIER,
+        getAccessToken: async () => null,
+      },
+    );
+    serverSideKeysInitialized = true;
   }
 
   if (bootstrappedResourcesPath !== context.resourcesPath) {

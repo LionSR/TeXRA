@@ -17,7 +17,8 @@ import {
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 
 // Local imports - CLI runtime
-import { askCliQuestion, type CliContext } from './cliContext';
+import { type CliContext } from './cliContext';
+import { askCliQuestion } from './logSinks';
 
 function denyMessage(policy: CliContext['approvalPolicy']): string {
   return policy === 'ask'
