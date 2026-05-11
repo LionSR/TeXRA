@@ -17,7 +17,7 @@ import {
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 
 // Local imports - CLI runtime
-import { type CliContext } from './cliContext';
+import { type CliContext, type CliPromptRequest } from './cliContext';
 import { askCliQuestion, writeTextStderr } from './logSinks';
 
 function denyMessage(policy: CliContext['approvalPolicy']): string {
@@ -34,6 +34,7 @@ function externalInquiryMessage(policy: CliContext['approvalPolicy']): string {
 }
 
 const deniedApprovalContexts = new WeakSet<CliContext>();
+const cliPromptQueues = new WeakMap<CliContext, Promise<unknown>>();
 
 function markApprovalDenied(context: CliContext): void {
   deniedApprovalContexts.add(context);
@@ -50,6 +51,19 @@ function approvalPromptAllowed(context: CliContext): boolean {
 function parseApprovalAnswer(answer: string): boolean {
   const normalized = answer.trim().toLowerCase();
   return normalized === 'y' || normalized === 'yes';
+}
+
+function enqueueCliPrompt<T>(
+  context: CliContext,
+  prompt: () => Promise<T>,
+): Promise<T> {
+  const previous = cliPromptQueues.get(context) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(prompt);
+  cliPromptQueues.set(
+    context,
+    next.catch(() => undefined),
+  );
+  return next;
 }
 
 async function askApproval(
@@ -70,11 +84,13 @@ async function askApproval(
 
   let answer: string;
   try {
-    answer = await askCliApprovalQuestion(context, {
-      kind: 'approval',
-      summary,
-      prompt: 'Approve? [y/N] ',
-    });
+    answer = await enqueueCliPrompt(context, () =>
+      askCliApprovalQuestion(context, {
+        kind: 'approval',
+        summary,
+        prompt: 'Approve? [y/N] ',
+      }),
+    );
   } catch {
     markApprovalDenied(context);
     return { accepted: false, userMessage: 'CLI approval prompt failed.' };
@@ -91,39 +107,46 @@ async function askApproval(
 async function askExternalInquiry(
   context: CliContext,
   question: string,
-): Promise<{ submitted: true; answer: string } | { submitted: false }> {
+): Promise<
+  { submitted: true; answer: string } | { submitted: false; feedback: string }
+> {
   if (context.approvalPolicy === 'yolo') {
-    return { submitted: false };
+    return { submitted: false, feedback: externalInquiryMessage('yolo') };
   }
   if (!approvalPromptAllowed(context)) {
     markApprovalDenied(context);
-    return { submitted: false };
+    return {
+      submitted: false,
+      feedback: denyMessage(context.approvalPolicy),
+    };
   }
 
   let answer: string;
   try {
-    answer = await askCliApprovalQuestion(context, {
-      kind: 'externalInquiry',
-      summary: `External inquiry requested:\n${question}`,
-      prompt: 'Answer (blank to skip): ',
-    });
+    answer = await enqueueCliPrompt(context, () =>
+      askCliApprovalQuestion(context, {
+        kind: 'externalInquiry',
+        summary: `External inquiry requested:\n${question}`,
+        prompt: 'Answer (blank to skip): ',
+      }),
+    );
   } catch {
     markApprovalDenied(context);
-    return { submitted: false };
+    return {
+      submitted: false,
+      feedback: 'CLI external inquiry prompt failed.',
+    };
   }
 
   if (answer.trim().length === 0) {
-    markApprovalDenied(context);
-    return { submitted: false };
+    return { submitted: false, feedback: 'External inquiry skipped by user.' };
   }
   return { submitted: true, answer };
 }
 
 async function askCliApprovalQuestion(
   context: CliContext,
-  request: NonNullable<
-    Parameters<NonNullable<CliContext['approvalPrompt']>>[0]
-  >,
+  request: CliPromptRequest,
 ): Promise<string> {
   if (context.approvalPrompt) {
     return context.approvalPrompt(request);
@@ -216,14 +239,88 @@ async function handleCliApprovalEventAsync<
         requestId: data.requestId,
         action: answer.submitted ? 'submit' : 'skip',
         answer: answer.submitted ? answer.answer : undefined,
-        feedback: answer.submitted
-          ? undefined
-          : externalInquiryMessage(context.approvalPolicy),
+        feedback: answer.submitted ? undefined : answer.feedback,
       });
       return;
     }
     default:
       return;
+  }
+}
+
+function immediateApprovalDecision(context: CliContext):
+  | {
+      accepted: boolean;
+      userMessage?: string;
+    }
+  | undefined {
+  if (context.approvalPolicy === 'yolo') return { accepted: true };
+  if (approvalPromptAllowed(context)) return undefined;
+  markApprovalDenied(context);
+  return {
+    accepted: false,
+    userMessage: denyMessage(context.approvalPolicy),
+  };
+}
+
+function handleImmediateCliApprovalEvent<K extends keyof ProgressEventPayloads>(
+  event: K,
+  payload: ProgressEventPayloads[K],
+  context: CliContext,
+): boolean {
+  if (event === 'showExternalInquiry') {
+    if (approvalPromptAllowed(context)) return false;
+    const data = payload as ProgressEventPayloads['showExternalInquiry'];
+    const feedback = externalInquiryMessage(context.approvalPolicy);
+    if (context.approvalPolicy !== 'yolo') markApprovalDenied(context);
+    void handleExternalInquiryAction({
+      requestId: data.requestId,
+      action: 'skip',
+      feedback,
+    });
+    return true;
+  }
+
+  const decision = immediateApprovalDecision(context);
+  if (!decision) return false;
+
+  switch (event) {
+    case 'showBashPermission': {
+      const data = payload as ProgressEventPayloads['showBashPermission'];
+      void handleProgressViewBashApprovalAction({
+        requestId: data.requestId,
+        action: decision.accepted ? 'approve' : 'reject',
+        feedback: decision.userMessage,
+      });
+      return true;
+    }
+    case 'showPlanApproval': {
+      const data = payload as ProgressEventPayloads['showPlanApproval'];
+      resolvePlanApproval(data.approvalId, {
+        action: decision.accepted ? 'approve' : 'reject',
+        ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
+      });
+      return true;
+    }
+    case 'showAgentProposal': {
+      const data = payload as ProgressEventPayloads['showAgentProposal'];
+      resolveProposal(data.proposalId, {
+        action: decision.accepted ? 'approve' : 'reject',
+        ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
+      });
+      return true;
+    }
+    case 'showRetryRequest': {
+      const data = payload as ProgressEventPayloads['showRetryRequest'];
+      if (decision.accepted) {
+        triggerRetry(data.streamId);
+      } else {
+        cancelRetry(data.streamId);
+      }
+      return true;
+    }
+    default:
+      return false;
   }
 }
 
@@ -238,6 +335,9 @@ export function handleCliApprovalEvent<K extends keyof ProgressEventPayloads>(
     case 'showAgentProposal':
     case 'showRetryRequest':
     case 'showExternalInquiry':
+      if (handleImmediateCliApprovalEvent(event, payload, context)) {
+        return true;
+      }
       void handleCliApprovalEventAsync(event, payload, context);
       return true;
     default:
