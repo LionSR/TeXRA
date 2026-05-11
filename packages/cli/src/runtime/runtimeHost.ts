@@ -16,6 +16,8 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   let logger: ReturnType<typeof createCliLogger> | undefined;
   const cliLogger = (): ReturnType<typeof createCliLogger> =>
     (logger ??= createCliLogger(context));
+  const quietTextMode =
+    context.mode === 'interactive' && context.outputFormat === 'text';
 
   return {
     emit(event, payload) {
@@ -41,6 +43,10 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
         const message = (payload as ProgressEventPayloads['requestShowError'])
           .message;
         cliLogger().logger.error(message);
+        return;
+      }
+
+      if (quietTextMode) {
         return;
       }
 
