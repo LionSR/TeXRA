@@ -58,6 +58,14 @@ function mergeFields(left: LogFields, right: LogFields | undefined): LogFields {
   return right ? { ...left, ...right } : left;
 }
 
+function cloneGroupStacks(
+  stacks: Map<GroupContextKey, string[]> | undefined,
+): Map<GroupContextKey, string[]> {
+  return new Map(
+    [...(stacks?.entries() ?? [])].map(([key, groups]) => [key, [...groups]]),
+  );
+}
+
 class StructuredLogger implements Logger {
   private readonly groupStack: string[];
 
@@ -99,7 +107,7 @@ class StructuredLogger implements Logger {
   async withGroup<T>(label: string, fn: () => Promise<T> | T): Promise<T> {
     const parentGroups = this.currentGroups();
     const parentStacks = activeGroupStacks.getStore();
-    const nextStacks = new Map(parentStacks);
+    const nextStacks = cloneGroupStacks(parentStacks);
     nextStacks.set(this.context.groupContextKey, [...parentGroups, label]);
     try {
       return await activeGroupStacks.run(nextStacks, fn);
