@@ -28,6 +28,7 @@ export class StderrTextSink implements LogSink {
 export class NdjsonStdoutSink implements LogSink {
   private readonly queue: LogRecord[] = [];
   private drainPromise: Promise<void> | undefined;
+  private stdoutClosed = false;
 
   write(record: LogRecord): void {
     this.queue.push(record);
@@ -49,14 +50,22 @@ export class NdjsonStdoutSink implements LogSink {
 
   private async drain(): Promise<void> {
     try {
-      while (this.queue.length > 0) {
+      while (!this.stdoutClosed && this.queue.length > 0) {
         const record = this.queue.shift();
         if (!record) continue;
         const line = `${JSON.stringify({ kind: 'log', ...record })}\n`;
-        if (!process.stdout.write(line)) {
-          await new Promise<void>((resolve) => {
-            process.stdout.once('drain', resolve);
-          });
+        let canContinue: boolean;
+        try {
+          canContinue = process.stdout.write(line);
+        } catch {
+          this.stdoutClosed = true;
+          this.queue.length = 0;
+          return;
+        }
+        if (!canContinue && !(await this.waitForStdoutDrain())) {
+          this.stdoutClosed = true;
+          this.queue.length = 0;
+          return;
         }
       }
     } finally {
@@ -65,5 +74,28 @@ export class NdjsonStdoutSink implements LogSink {
         void this.ensureDrain().catch(() => undefined);
       }
     }
+  }
+
+  private waitForStdoutDrain(): Promise<boolean> {
+    if (process.stdout.destroyed) return Promise.resolve(false);
+    return new Promise<boolean>((resolve) => {
+      let cleanup = (): void => undefined;
+      const onDrain = (): void => {
+        cleanup();
+        resolve(true);
+      };
+      const onClosed = (): void => {
+        cleanup();
+        resolve(false);
+      };
+      cleanup = (): void => {
+        process.stdout.off('drain', onDrain);
+        process.stdout.off('error', onClosed);
+        process.stdout.off('close', onClosed);
+      };
+      process.stdout.once('drain', onDrain);
+      process.stdout.once('error', onClosed);
+      process.stdout.once('close', onClosed);
+    });
   }
 }
