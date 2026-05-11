@@ -117,7 +117,7 @@ export function clearPlanApprovalForStream(
   clearPlanBridgeForStream(streamId);
 }
 
-export function clearAllPlanApprovals(): void {
+function clearAllPlanApprovals(): void {
   const coordinators = new Set(bridgeState.planStreams.values());
   for (const runCoordinators of bridgeState.runStreams.values()) {
     coordinators.add(runCoordinators);
@@ -156,7 +156,7 @@ export function resolveProposal(
   ).resolveRequest(proposalId, result);
 }
 
-export function clearProposalForStream(streamId: string): void {
+function clearProposalForStream(streamId: string): void {
   const proposalIds = [...bridgeState.proposalStreams.entries()]
     .filter(([, proposalStreamId]) => proposalStreamId === streamId)
     .map(([proposalId]) => proposalId);
@@ -170,7 +170,7 @@ export function clearProposalForStream(streamId: string): void {
   }
 }
 
-export function clearAllProposals(): void {
+function clearAllProposals(): void {
   const coordinators = new Set(bridgeState.proposals.values());
   coordinators.add(legacyCoordinators);
   for (const coordinator of coordinators) {
@@ -238,4 +238,19 @@ export function clearAllRetryRequests(): void {
   }
   bridgeState.retryCoordinatorRefs.clear();
   bridgeState.retries.clear();
+}
+
+export function cleanupCoordinatorRequestsForStream(
+  streamId: string,
+  explicitCoordinators = tryUseRunContext()?.coordinators,
+): void {
+  clearPlanApprovalForStream(streamId, explicitCoordinators);
+  clearProposalForStream(streamId);
+  clearRetryRequest(streamId, explicitCoordinators);
+}
+
+export function cleanupAllCoordinatorRequests(): void {
+  clearAllPlanApprovals();
+  clearAllProposals();
+  clearAllRetryRequests();
 }
