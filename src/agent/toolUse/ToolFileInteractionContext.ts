@@ -72,46 +72,46 @@ export interface CurrentToolContexts {
 
 const contextStackScope = new AsyncLocalStorage<readonly ToolContextFrame[]>();
 
+type ContextKeyMap<T> = { [K in keyof T]-?: true };
+
+const TOOL_RUN_CONTEXT_KEYS = {
+  streamId: true,
+  executionId: true,
+  model: true,
+  agentName: true,
+  workingDirectory: true,
+  runtimeHost: true,
+  delegationDepth: true,
+  delegationConfig: true,
+} satisfies ContextKeyMap<ToolRunContext>;
+
+const TOOL_CALL_CONTEXT_KEYS = {
+  toolCallId: true,
+  tracker: true,
+  todoState: true,
+  planState: true,
+  onExecutionReady: true,
+  onToolOutput: true,
+} satisfies ContextKeyMap<ToolCallContext>;
+
+function pickContextFields<T extends object>(
+  context: T,
+  keyMap: ContextKeyMap<T>,
+): T {
+  const fields = {} as T;
+  for (const key of Object.keys(keyMap) as (keyof T)[]) {
+    fields[key] = context[key];
+  }
+  return fields;
+}
+
 function buildContextFrame(
   context: ToolFileInteractionContext,
 ): ToolContextFrame {
-  const {
-    streamId,
-    executionId,
-    model,
-    agentName,
-    workingDirectory,
-    runtimeHost,
-    delegationDepth,
-    delegationConfig,
-    toolCallId,
-    tracker,
-    todoState,
-    planState,
-    onExecutionReady,
-    onToolOutput,
-  } = context;
-
   return {
     full: context,
-    run: {
-      streamId,
-      executionId,
-      model,
-      agentName,
-      workingDirectory,
-      runtimeHost,
-      delegationDepth,
-      delegationConfig,
-    },
-    call: {
-      toolCallId,
-      tracker,
-      todoState,
-      planState,
-      onExecutionReady,
-      onToolOutput,
-    },
+    run: pickContextFields<ToolRunContext>(context, TOOL_RUN_CONTEXT_KEYS),
+    call: pickContextFields<ToolCallContext>(context, TOOL_CALL_CONTEXT_KEYS),
   };
 }
 
