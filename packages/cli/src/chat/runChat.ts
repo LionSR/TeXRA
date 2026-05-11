@@ -127,14 +127,17 @@ function installChatResponsePrinter(session: ChatSessionState): {
 export async function runChat(context: CliContext): Promise<ChatResult> {
   const args = context.argv.slice(1);
   const chatContext = applyCliGlobalArgs(context, args);
-  let toolDisplay = parseToolDisplayMode(flagValue(args, '--tool-display'));
-  if (toolDisplay == null) {
+  const initialToolDisplay = parseToolDisplayMode(
+    flagValue(args, '--tool-display'),
+  );
+  if (initialToolDisplay == null) {
     const renderer = new ChatTerminalRenderer(chatContext.colorEnabled);
     renderer.error(
       'Unsupported --tool-display. Expected grouped, minimal, or hidden.',
     );
     return { exitCode: CliExitCode.Usage };
   }
+  let toolDisplay: ChatToolDisplayMode = initialToolDisplay;
   if (chatContext.mode === 'headless') {
     const renderer = new ChatTerminalRenderer(chatContext.colorEnabled);
     renderer.error(
