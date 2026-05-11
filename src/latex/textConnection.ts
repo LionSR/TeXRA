@@ -91,7 +91,7 @@ export async function bestConnectionMethod(
     );
     return getMajorityChoice(choices);
   } catch (err) {
-    logger.debug(
+    logger.error(
       CHANNEL,
       `Error in bestConnectionMethod: ${getSdkErrorMessage(err)}`,
     );
@@ -135,7 +135,7 @@ export async function bestConnectionMethodAnthropic(
 
     return getMajorityChoice(choices);
   } catch (err) {
-    logger.debug(
+    logger.error(
       CHANNEL,
       `Error in bestConnectionMethodAnthropic: ${getSdkErrorMessage(err)}`,
     );
