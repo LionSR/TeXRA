@@ -132,6 +132,26 @@ describe('structuredLogger', () => {
     );
   });
 
+  it('does not alias group arrays across nested logger scopes', async () => {
+    const firstSink = new MemorySink();
+    const secondSink = new MemorySink();
+    const first = createStructuredLogger(firstSink);
+    const second = createStructuredLogger(secondSink);
+
+    await first.withGroup('first', async () => {
+      await second.withGroup('second', async () => {
+        first.group('manual');
+        first.info('inside nested logger scope');
+      });
+      first.info('after nested logger scope');
+    });
+
+    assert.deepEqual(
+      firstSink.records.map((record) => record.groups),
+      [['first', 'manual'], ['first']],
+    );
+  });
+
   it('flushes and closes the old sink when swapping sinks', async () => {
     const first = new FlushCountingSink();
     const second = new FlushCountingSink();
