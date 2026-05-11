@@ -21,6 +21,7 @@ export interface CliContext {
   readonly outputFormat: CliOutputFormat;
   readonly approvalPolicy: CliApprovalPolicy;
   readonly helperModel?: string;
+  readonly quietLogs?: boolean;
   readonly version: string;
   readonly resourcesPath: string;
 }
