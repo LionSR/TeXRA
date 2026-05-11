@@ -18,7 +18,7 @@ import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy'
  * them explicitly from the run boundary rather than reading the process-wide
  * tool-call stack directly.
  */
-interface ToolRunContext {
+export interface ToolRunContext {
   streamId?: StreamTabId;
   executionId?: ExecutionId;
   /** Model short name of the parent agent (e.g. "opus46T", "sonnet46T"). */
@@ -43,7 +43,7 @@ interface ToolRunContext {
 }
 
 /** Fields that belong to one concrete tool call or tool-cycle state snapshot. */
-interface ToolCallContext {
+export interface ToolCallContext {
   toolCallId?: string;
   tracker: FileInteractionState;
   /** Todo state for managing task lists. Optional for backward compatibility. */
@@ -79,4 +79,12 @@ export function getCurrentToolFileInteractionContext():
   | ToolFileInteractionContext
   | undefined {
   return contextStackScope.getStore()?.at(-1);
+}
+
+export function getCurrentToolRunContext(): ToolRunContext | undefined {
+  return getCurrentToolFileInteractionContext();
+}
+
+export function getCurrentToolCallContext(): ToolCallContext | undefined {
+  return getCurrentToolFileInteractionContext();
 }
