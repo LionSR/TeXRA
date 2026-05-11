@@ -138,6 +138,22 @@
         "Keep request identity and lifecycle in shared coordinators; the CLI adapter owns only policy-to-decision mapping and terminal prompting.",
         "Keep tool-specific handlers free of CLI flag parsing and policy interpretation."
       ]
+    },
+    {
+      "id": 3842,
+      "title": "Logger v2 follow-up: wire host sinks and legacy shim",
+      "url": "https://github.com/LionSR/TeXRA/issues/3842",
+      "parentIssues": [3833, 3838],
+      "recommendedOrderItem": "migrate Logger v2 host sinks",
+      "sourceOfTruth": "src/logger/structuredLogger.ts for LogRecord schema and grouping semantics; host packages own sinks and renderers; compatibility shim owns migration from logUtils and AgentLogger",
+      "acceptance": [
+        "Keep LogRecord and grouping semantics as the shared source of truth.",
+        "Wire host sinks for extension, desktop, and CLI without moving host rendering into shared record construction.",
+        "Define a compatibility shim for logUtils and AgentLogger, including temporary parts and the retirement path.",
+        "Preserve nested grouped logging and sink flushing semantics.",
+        "Keep progress event schema separate from LogRecord; bridge only at the host or rendering boundary if needed.",
+        "Add focused validation for grouped logging and sink behavior."
+      ]
     }
   ],
   "references": [
