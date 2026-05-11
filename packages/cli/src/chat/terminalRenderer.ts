@@ -311,7 +311,7 @@ Keys:
         this.renderRetryApproval(payload);
         return;
       default:
-        this.renderCard('approval requested', [event]);
+        this.renderApprovalCard('approval requested', [event]);
     }
   }
 
@@ -332,13 +332,13 @@ Keys:
       const path = stringField(payload, 'path');
       if (path && path !== relativePath) lines.push(`path: ${path}`);
     }
-    this.renderCard(`approval: edit ${relativePath}`, lines);
+    this.renderApprovalCard(`approval: edit ${relativePath}`, lines);
   }
 
   private renderBashApproval(payload: unknown): void {
     const command = stringField(payload, 'command') ?? 'unknown command';
     const maxLength = this.toolDisplay === 'grouped' ? 520 : 180;
-    this.renderCard('approval: bash command', [
+    this.renderApprovalCard('approval: bash command', [
       truncateText(command.replaceAll('\n', ' && '), maxLength),
       `bypass allowed: ${booleanField(payload, 'allowBypass') ?? false}`,
     ]);
@@ -362,7 +362,7 @@ Keys:
       const maxLength = this.toolDisplay === 'grouped' ? 420 : 160;
       lines.push(`instruction: ${truncateText(instruction, maxLength)}`);
     }
-    this.renderCard('approval: agent proposal', lines);
+    this.renderApprovalCard('approval: agent proposal', lines);
   }
 
   private renderPlanApproval(payload: unknown): void {
@@ -378,7 +378,7 @@ Keys:
         lines.push(`${index + 1}. [${status}] ${truncateText(title, 120)}`);
       }
     }
-    this.renderCard('approval: plan', lines);
+    this.renderApprovalCard('approval: plan', lines);
   }
 
   private renderExternalInquiryApproval(payload: unknown): void {
@@ -396,7 +396,7 @@ Keys:
     if (sessionLinks.length > 0) {
       lines.push(`session links: ${sessionLinks.length}`);
     }
-    this.renderCard('approval: external inquiry', lines);
+    this.renderApprovalCard('approval: external inquiry', lines);
   }
 
   private renderRetryApproval(payload: unknown): void {
@@ -408,14 +408,26 @@ Keys:
       ...(model ? [`model: ${model}`] : []),
       ...(errorMessage ? [`error: ${truncateText(errorMessage, 220)}`] : []),
     ];
-    this.renderCard('approval: retry request', lines);
+    this.renderApprovalCard('approval: retry request', lines);
   }
 
-  private renderCard(title: string, lines: string[]): void {
+  private renderApprovalCard(title: string, lines: string[]): void {
+    this.renderCard(
+      title,
+      lines,
+      'approval is handled by the CLI approval adapter',
+    );
+  }
+
+  private renderCard(
+    title: string,
+    lines: string[],
+    footer: string | undefined = undefined,
+  ): void {
     const cardLines = [
       `-- ${title} --`,
       ...lines.map((line) => `| ${line}`),
-      '-- approval is handled by the CLI approval adapter --',
+      ...(footer ? [`-- ${footer} --`] : []),
     ];
     for (const line of cardLines) this.warn(line);
   }
