@@ -22,8 +22,8 @@ export function createCliLogger(context: CliContext): CliLoggerHandle {
   return {
     logger: createStructuredLogger(sink),
     async close() {
-      await sink.close?.();
       await sink.flush?.();
+      await sink.close?.();
     },
   };
 }
