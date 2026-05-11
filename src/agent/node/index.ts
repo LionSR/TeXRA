@@ -1,4 +1,5 @@
 import { delay } from '@utils/core';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 export type NonIterableObject = Partial<Record<string, unknown>> & {
   [Symbol.iterator]?: never;
@@ -82,7 +83,7 @@ class BaseNode<
   }
   getNextNode(action: Action = 'default'): BaseNode | undefined {
     const next = this._successors.get(action);
-    if (!next && action === 'complete') return undefined;
+    if (!next && action === FlowTransition.COMPLETE) return undefined;
     if (!next && this._successors.size > 0) {
       console.warn(
         `Flow ends: '${action}' not found in [${[...this._successors.keys()]}]`,
