@@ -84,7 +84,7 @@ export class ToolUseWaitNode<C> extends Node<
       this.services;
 
     if (execRes.kind === 'stop') {
-      return FlowTransition.DEFAULT;
+      return FlowTransition.COMPLETE;
     }
 
     // User sent a follow-up — clear any prior error/cancellation state
