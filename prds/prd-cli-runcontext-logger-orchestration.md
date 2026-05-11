@@ -629,6 +629,8 @@ The loop should proceed in dependency order, not issue-number order. This sequen
 2. Finish `texra run` as the first executable host path.
    Keep the parser simple unless there is a concrete need for a command framework. Validate that the CLI platform, agent directory bootstrap, approval adapter, runtime host, logger sink, and exit-code mapping all sit on the shared `executeAgent` path.
 
+   Focused follow-up #3840 owns the next narrow validation PR for this step. It should build and execute the package-local `texra` binary, validate a real workflow-agent path through shared `executeAgent`, cover text/JSON/NDJSON result output, cover command-local global flags after the `run` subcommand, and cover empty value-bearing flag handling. It should not absorb chat, interactive approval prompts, Logger v2 host sinks, or ToolFileInteractionContext cleanup.
+
 3. Complete approval policy before rich chat.
    Chat depends on approval prompts. Implement the matrix once in the CLI approval adapter; then let chat render or call that adapter rather than defining its own approval semantics.
 
