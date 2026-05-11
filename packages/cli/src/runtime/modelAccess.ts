@@ -8,7 +8,7 @@ export interface CliModelAccess {
   readonly status: string;
 }
 
-export function formatModelAccessStatus(model: ModelOptionData): string {
+function formatModelAccessStatus(model: ModelOptionData): string {
   if (!model.disabled && !model.requiresKey) return 'available';
   const provider = model.provider ? `${model.provider} ` : '';
   return `missing ${provider}key`;
