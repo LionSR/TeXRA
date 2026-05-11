@@ -582,6 +582,8 @@ PR #3839 is review-clean on the latest audited head `85f130507b8ff9fcd5746d3e748
 
 This does not complete the orchestration. PR #3839 is ready for review as a scaffold PR, and issues #3833-#3838 remain open. Logger v2 host sinks, real `texra run` runtime validation, interactive approval prompts, `texra chat` follow-up TUI, and final `ToolFileInteractionContext` ownership cleanup still need implementation or owned follow-up issues with acceptance criteria.
 
+Focused follow-up #3842 owns the next narrow Logger v2 PR. Its scope is host sinks and the legacy compatibility shim: keep `LogRecord` and grouped logging in `src/logger/structuredLogger.ts`, let extension, desktop, and CLI own their rendering effects, and define the temporary `logUtils` / `AgentLogger` migration path. It must not absorb the `texra run` packaged-runtime work from #3840, the CLI approval matrix from #3841, the chat TUI from #3836, or the tool-context ownership cleanup from #3837.
+
 ## Machine-readable manifest
 
 A compact orchestration manifest lives at `prds/prd-cli-runcontext-logger-orchestration.manifest.json`. It maps each issue to its PRD, source of truth, and acceptance gates. Loop agents should use the manifest as an index, not as a replacement for the PRD text.
