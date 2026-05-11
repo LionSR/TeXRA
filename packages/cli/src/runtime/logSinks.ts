@@ -4,15 +4,6 @@ import type { LogRecord, LogSink } from '@logger/structuredLogger';
 let stdoutClosed = false;
 let stderrClosed = false;
 
-function isClosedStreamError(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error.code === 'EPIPE' || error.code === 'ERR_STREAM_DESTROYED')
-  );
-}
-
 function writeLine(
   stream: NodeJS.WriteStream,
   text: string,
@@ -20,21 +11,18 @@ function writeLine(
   markClosed: () => void,
 ): void {
   if (streamClosed() || stream.destroyed) return;
+  const handleWriteError = (): void => {
+    // CLI output is best effort: throwing from an async write callback bypasses
+    // the command error boundary and can crash the process.
+    markClosed();
+  };
   try {
     stream.write(`${text}\n`, (error) => {
       if (!error) return;
-      if (isClosedStreamError(error)) {
-        markClosed();
-        return;
-      }
-      throw error;
+      handleWriteError();
     });
-  } catch (error) {
-    if (isClosedStreamError(error)) {
-      markClosed();
-      return;
-    }
-    throw error;
+  } catch {
+    handleWriteError();
   }
 }
 
