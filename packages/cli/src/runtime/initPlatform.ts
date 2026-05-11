@@ -24,6 +24,7 @@ const noopLifecycle: LifecycleHost = {
 };
 
 let bootstrappedResourcesPath: string | undefined;
+let cliWorkspaceCwd = '';
 
 const cliPlatformLog: LogBackend = {
   initialize() {},
@@ -38,6 +39,8 @@ const cliPlatformLog: LogBackend = {
 export async function initCliPlatform(
   context: Pick<CliContext, 'cwd' | 'resourcesPath'>,
 ): Promise<void> {
+  cliWorkspaceCwd = context.cwd;
+
   if (!tryPlatform()) {
     initPlatform({
       config: new MemoryConfigProvider(),
@@ -45,7 +48,7 @@ export async function initCliPlatform(
       workspaceState: createMemoryStore(),
       log: cliPlatformLog,
       fs: nodeFilesystem,
-      workspace: createNodeWorkspace(() => context.cwd),
+      workspace: createNodeWorkspace(() => cliWorkspaceCwd),
       storage: nodeStorage,
       secrets: new EnvSecrets(),
       lifecycle: noopLifecycle,
