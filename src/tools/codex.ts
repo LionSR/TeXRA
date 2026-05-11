@@ -27,13 +27,13 @@ import {
   writeTerminalStatus,
 } from '@agent/storage';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import {
+  getAgentRuntimeHost,
+  type AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
 import { untrackExecution } from '@agent/runtime/executionRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import {
-  getCurrentToolFileInteractionContext,
-  getCurrentToolRuntimeHost,
-} from '@agent/toolUse/ToolFileInteractionContext';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import {
   getInterruptible,
   registerInterruptible,
@@ -271,7 +271,8 @@ function formatCodexError(
 export function publishCodexTodos(
   childStreamId: StreamTabId,
   todos: TodoItem[],
-  runtimeHost: AgentRuntimeHost = getCurrentToolRuntimeHost(),
+  runtimeHost: AgentRuntimeHost = getCurrentToolFileInteractionContext()
+    ?.runtimeHost ?? getAgentRuntimeHost(),
 ): void {
   runtimeHost.emit('updateTodos', { streamId: childStreamId, todos });
 }
@@ -280,7 +281,8 @@ export function publishCodexStreamUsage(
   childStreamId: StreamTabId,
   executionId: ExecutionId,
   usage: TokenUsageStats,
-  runtimeHost: AgentRuntimeHost = getCurrentToolRuntimeHost(),
+  runtimeHost: AgentRuntimeHost = getCurrentToolFileInteractionContext()
+    ?.runtimeHost ?? getAgentRuntimeHost(),
 ): void {
   runtimeHost.emit('updateStreamUsage', {
     streamId: childStreamId,
@@ -295,7 +297,8 @@ function logCodexItem(
   item: ThreadItem,
   childStreamId: StreamTabId,
   logger: AgentLogger,
-  runtimeHost: AgentRuntimeHost = getCurrentToolRuntimeHost(),
+  runtimeHost: AgentRuntimeHost = getCurrentToolFileInteractionContext()
+    ?.runtimeHost ?? getAgentRuntimeHost(),
 ): void {
   switch (item.type) {
     case 'command_execution': {
@@ -425,7 +428,9 @@ function startCodexLoop(params: {
 
   const session = new CodexFollowUpSession();
   const queue = ToolUseFollowUpQueue.acquire(childStreamId);
-  const runtimeHost = getCurrentToolRuntimeHost();
+  const runtimeHost =
+    getCurrentToolFileInteractionContext()?.runtimeHost ??
+    getAgentRuntimeHost();
   session.setQueue(queue);
   registerInterruptible(childStreamId, session);
 
