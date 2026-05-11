@@ -196,9 +196,9 @@ async function runWorkflowAgent(
     await runtimeHost.close();
   }
 
-  if (context.outputFormat === 'json') {
+  if (runContext.outputFormat === 'json') {
     writeTextStdout(JSON.stringify(result, null, 2));
-  } else if (context.outputFormat === 'ndjson') {
+  } else if (runContext.outputFormat === 'ndjson') {
     writeNdjsonStdout({ kind: 'result', ts: new Date().toISOString(), result });
   } else if (result.category === 'workflow') {
     const finalOutput = result.outputs.at(-1);
