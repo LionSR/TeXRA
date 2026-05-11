@@ -86,6 +86,16 @@ function checkImports(rel, source) {
   }
 }
 
+function patternMatches(pattern, source) {
+  pattern.lastIndex = 0;
+  return pattern.test(source);
+}
+
+function stripPattern(source, pattern) {
+  pattern.lastIndex = 0;
+  return source.replace(pattern, '');
+}
+
 const errors = [];
 
 for (const file of walk(cliSrc)) {
@@ -96,7 +106,7 @@ for (const file of walk(cliSrc)) {
 
   if (!processInputAllowedFiles.has(rel)) {
     for (const { name, pattern } of processInputPatterns) {
-      if (pattern.test(source)) {
+      if (patternMatches(pattern, source)) {
         errors.push(
           `${rel}: ${name} must be read through runtime/cliContext.ts`,
         );
@@ -107,13 +117,13 @@ for (const file of walk(cliSrc)) {
   let outputSource = source;
   if (processTerminalInputAllowedFiles.has(rel)) {
     for (const { pattern } of processTerminalInputPatterns) {
-      outputSource = outputSource.replace(pattern, '');
+      outputSource = stripPattern(outputSource, pattern);
     }
   }
 
   if (!processOutputAllowedFiles.has(rel)) {
     for (const { name, pattern } of processOutputPatterns) {
-      if (pattern.test(outputSource)) {
+      if (patternMatches(pattern, outputSource)) {
         errors.push(`${rel}: ${name} must stay at the CLI boundary`);
       }
     }
