@@ -139,6 +139,31 @@ function approvalPolicy(args: readonly string[]): CliApprovalPolicy {
   return parseCliApprovalPolicy(flagValue(args, '--approval-policy'));
 }
 
+function resolveCwdFlag(value: string | undefined, fallback: string): string {
+  return value && value.trim().length > 0
+    ? path.resolve(value.trim())
+    : fallback;
+}
+
+export function applyCliGlobalArgs(
+  context: CliContext,
+  args: readonly string[],
+): CliContext {
+  return {
+    ...context,
+    cwd: resolveCwdFlag(flagValue(args, '--cwd'), context.cwd),
+    mode: hasBooleanFlag(args, '--print', '-p') ? 'headless' : context.mode,
+    outputFormat:
+      flagValue(args, '--output-format') == null
+        ? context.outputFormat
+        : outputFormat(args),
+    approvalPolicy:
+      flagValue(args, '--approval-policy') == null
+        ? context.approvalPolicy
+        : approvalPolicy(args),
+  };
+}
+
 function cliMode(args: readonly string[], ambient: CliAmbientState): CliMode {
   if (hasBooleanFlag(args, '--print', '-p')) return 'headless';
   if (ambient.isCi) return 'headless';
@@ -230,10 +255,7 @@ export async function resolveCliContext(
   const resolvedArgv = argv ?? process.argv.slice(2);
   const { globalArgs, commandArgs } = splitGlobalArgs(resolvedArgv);
   const cwdFlag = flagValue(globalArgs, '--cwd');
-  const cwd =
-    cwdFlag && cwdFlag.trim().length > 0
-      ? path.resolve(cwdFlag.trim())
-      : process.cwd();
+  const cwd = resolveCwdFlag(cwdFlag, process.cwd());
   return {
     argv: commandArgs,
     cwd,
