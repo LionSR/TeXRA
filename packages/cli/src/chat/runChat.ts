@@ -131,14 +131,14 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
 
   let agent = flagValue(args, '--agent') ?? DEFAULT_CHAT_AGENT;
   let model = flagValue(args, '--model', '-m') ?? DEFAULT_AGENT_MODEL;
-  const sessionContext = {
+  const currentSessionContext = (): CliContext => ({
     ...chatContext,
     helperModel: model,
     quietLogs: true,
-  };
+  });
 
-  await initCliPlatform(sessionContext);
-  installCliApprovalHandlers(sessionContext);
+  await initCliPlatform(currentSessionContext());
+  installCliApprovalHandlers(currentSessionContext());
   await loadAgents();
 
   const renderer = new ChatTerminalRenderer(chatContext.colorEnabled);
@@ -247,7 +247,8 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       workingDirectory: chatContext.cwd,
     };
 
-    const runtimeHost = createCliRuntimeHost(sessionContext);
+    const runContext = currentSessionContext();
+    const runtimeHost = createCliRuntimeHost(runContext);
     session.runPromise = executeAgent(config, undefined, {
       runtimeHost,
       enforceCategory: true,
@@ -266,7 +267,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       .then((result) => {
         session.runExitCode = session.stopRequested
           ? CliExitCode.Success
-          : result.status === 'error' && hasCliApprovalDenied(sessionContext)
+          : result.status === 'error' && hasCliApprovalDenied(runContext)
             ? CliExitCode.ApprovalDenied
             : result.status === 'error'
               ? CliExitCode.AgentError
