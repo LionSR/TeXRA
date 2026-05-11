@@ -83,8 +83,12 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     return { exitCode: CliExitCode.Usage };
   }
 
-  await initCliPlatform(chatContext);
-  installCliApprovalHandlers(chatContext);
+  let agent = flagValue(args, '--agent') ?? DEFAULT_CHAT_AGENT;
+  let model = flagValue(args, '--model', '-m') ?? DEFAULT_AGENT_MODEL;
+  const sessionContext = { ...chatContext, helperModel: model };
+
+  await initCliPlatform(sessionContext);
+  installCliApprovalHandlers(sessionContext);
   await loadAgents();
 
   const reader = createCliLineReader('texra> ');
@@ -104,10 +108,6 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     session.readerClosed = true;
     reader.close();
   };
-  let agent = flagValue(args, '--agent') ?? DEFAULT_CHAT_AGENT;
-  let model = flagValue(args, '--model', '-m') ?? DEFAULT_AGENT_MODEL;
-  const sessionContext = { ...chatContext, helperModel: model };
-
   const interruptActiveSession = (): void => {
     if (!session.streamId) return;
     interruptActiveChildren(session.streamId);
