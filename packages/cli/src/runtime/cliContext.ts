@@ -20,6 +20,7 @@ export interface CliContext {
   readonly mode: CliMode;
   readonly outputFormat: CliOutputFormat;
   readonly approvalPolicy: CliApprovalPolicy;
+  readonly helperModel?: string;
   readonly version: string;
   readonly resourcesPath: string;
 }

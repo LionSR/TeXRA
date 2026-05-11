@@ -13,6 +13,9 @@ import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDir
 import { initializeServerSideKeyAccess } from '@auth/serverKeys';
 import { FREE_TIER } from '@auth/sharedConfig';
 
+// Local imports - common state
+import { GlobalStateKey } from '@common/state/stateKeys';
+
 // Local imports - CLI runtime
 import { writeTextStderr } from './logSinks';
 import { MemoryConfigProvider } from './memoryStores';
@@ -30,21 +33,35 @@ const noopLifecycle: LifecycleHost = {
 let bootstrappedResourcesPath: string | undefined;
 let serverSideKeysInitialized = false;
 let cliWorkspaceCwd = '';
+let quietPlatformLogs = false;
 
 const cliPlatformLog: LogBackend = {
   initialize() {},
   debug: (channel, message) =>
-    writeTextStderr(`[debug] [${channel}] ${message}`),
-  info: (channel, message) => writeTextStderr(`[info] [${channel}] ${message}`),
-  warn: (channel, message) => writeTextStderr(`[warn] [${channel}] ${message}`),
+    quietPlatformLogs
+      ? undefined
+      : writeTextStderr(`[debug] [${channel}] ${message}`),
+  info: (channel, message) =>
+    quietPlatformLogs
+      ? undefined
+      : writeTextStderr(`[info] [${channel}] ${message}`),
+  warn: (channel, message) =>
+    quietPlatformLogs
+      ? undefined
+      : writeTextStderr(`[warn] [${channel}] ${message}`),
   error: (channel, message) =>
     writeTextStderr(`[error] [${channel}] ${message}`),
 };
 
 export async function initCliPlatform(
-  context: Pick<CliContext, 'cwd' | 'resourcesPath'>,
+  context: Pick<
+    CliContext,
+    'cwd' | 'resourcesPath' | 'helperModel' | 'mode' | 'outputFormat'
+  >,
 ): Promise<void> {
   cliWorkspaceCwd = context.cwd;
+  quietPlatformLogs =
+    context.mode === 'interactive' && context.outputFormat === 'text';
 
   if (!tryPlatform()) {
     const globalState = createMemoryStore();
@@ -84,6 +101,13 @@ export async function initCliPlatform(
       },
     );
     serverSideKeysInitialized = true;
+  }
+
+  if (context.helperModel) {
+    await tryPlatform()?.globalState.update(
+      GlobalStateKey.HELPER_MODEL,
+      context.helperModel,
+    );
   }
 
   if (bootstrappedResourcesPath !== context.resourcesPath) {
