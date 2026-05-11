@@ -62,6 +62,31 @@ export function hasResolvedWorkspacePath(
   return flag?.slice(WORKSPACE_PRESENT_ARG.length) === '1';
 }
 
+/**
+ * Parse workspace path from argv with flexible flag name support.
+ * Handles both `--texra-workspace-path` and `--texra-workspace` formats.
+ */
+export function parseWorkspacePathFromArgv(
+  argv: readonly string[],
+): string | undefined {
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg == null) continue;
+    // Support both flag names for compatibility
+    if (arg === '--texra-workspace-path' || arg === '--texra-workspace') {
+      return getPositionalWorkspacePathArg(argv[index + 1]);
+    }
+    if (
+      arg.startsWith('--texra-workspace-path=') ||
+      arg.startsWith('--texra-workspace=')
+    ) {
+      const eqIndex = arg.indexOf('=');
+      return getPositionalWorkspacePathArg(arg.slice(eqIndex + 1));
+    }
+  }
+  return undefined;
+}
+
 function getWorkspacePathArg(argv: readonly string[]): string | undefined {
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];

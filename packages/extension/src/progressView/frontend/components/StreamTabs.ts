@@ -8,9 +8,14 @@ import { when } from 'lit/directives/when.js';
 // Local imports
 import {
   STREAM_STATUS,
+  type ConversationProgress,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
+import {
+  renderProgressBadgeContent,
+  getProgressBadgeTitle,
+} from '../formatters/progressBadgeFormatter';
 import {
   designTokens,
   animationStyles,
@@ -381,9 +386,8 @@ export class StreamTab extends LitElement {
   /** Whether the child list is expanded. */
   @property({ type: Boolean, reflect: true }) expanded = false;
   /** Progress data (conversation turns, tool calls). */
-  @property({ attribute: false }) progress:
-    | { conversationTurns: number; toolCallCount: number }
-    | undefined = undefined;
+  @property({ attribute: false }) progress: ConversationProgress | undefined =
+    undefined;
 
   // Cached derived values — only recomputed when inputs change
   private _cachedInfo: StreamTabInfo | null = null;
@@ -522,14 +526,12 @@ export class StreamTab extends LitElement {
   }
 
   private renderProgressBadge(): TemplateResult | typeof nothing {
-    const p = this.progress;
-    if (!p || p.conversationTurns <= 0) return nothing;
+    if (!this.progress?.conversationTurns) return nothing;
     return html`<span
       class="progress-badge-inline"
-      title="Conversation turns: ${p.conversationTurns}, Tool calls: ${p.toolCallCount}"
+      title=${getProgressBadgeTitle(this.progress)}
     >
-      ${p.conversationTurns}
-      turns${p.toolCallCount > 0 ? `, ${p.toolCallCount} tool calls` : ''}
+      ${renderProgressBadgeContent(this.progress)}
     </span>`;
   }
 }
@@ -732,9 +734,7 @@ export class StreamTabs extends LitElement {
     return this.streamStates.get(name)?.lastTimestamp;
   }
 
-  private getProgress(
-    name: StreamTabId,
-  ): { conversationTurns: number; toolCallCount: number } | undefined {
+  private getProgress(name: StreamTabId): ConversationProgress | undefined {
     const state = this.streamStates.get(name);
     return state?.conversationProgress;
   }
