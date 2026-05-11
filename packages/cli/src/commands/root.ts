@@ -48,7 +48,14 @@ Usage:
   texra run <workflow-agent> [options]
   texra chat [options]
 
-The chat command is scaffolded here and will be wired to executeAgent in the CLI implementation issues.`);
+Run options:
+  --instruction <text>    Instruction passed to the workflow agent
+
+Chat options:
+  --agent <name>          Tool-use agent for the chat session
+  --model, -m <name>      Model for the chat session
+
+Use texra run for workflow agents and texra chat for an interactive tool-use session.`);
 }
 
 function splitRunArgs(args: readonly string[]): {
