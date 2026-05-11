@@ -6,7 +6,7 @@
   "currentAudit": {
     "date": "2026-05-11",
     "pr": "https://github.com/LionSR/TeXRA/pull/3839",
-    "head": "9ec2b0e1e0742fb4f0df2e8a712c29906dcd9b4a",
+    "head": "PR #3839 current head; use GitHub checks as the head-specific source of truth",
     "verified": [
       "PR #3839 thread-aware review state shows 0 unresolved, non-outdated review threads on the latest audited head.",
       "PR #3839 format, macOS validation, Ubuntu validation, Bugbot, and Claude review completed without blocking failures on the latest audited head.",
