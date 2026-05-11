@@ -3,7 +3,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { build } from 'esbuild';
 
@@ -101,7 +101,7 @@ async function buildRunHarness(tempDir) {
     entryPath,
     `
       import { DEFAULT_AGENT_MODEL, type AgentConfigPayload } from '@agent/core/AgentConfig';
-      import { runCliWithDependencies } from '${pathToFileURL(path.join(cliRoot, 'src/commands/root.ts')).href}';
+      import { runCliWithDependencies } from ${JSON.stringify(path.join(cliRoot, 'src/commands/root.ts'))};
 
       const expected = JSON.parse(process.env.TEXRA_VALIDATE_EXPECTED ?? '{}') as {
         outputFormat?: 'text' | 'json' | 'ndjson';
@@ -120,8 +120,8 @@ async function buildRunHarness(tempDir) {
         installApprovalHandlers: () => undefined,
         loadAgents: async () => undefined,
         createRuntimeHost: () => runtimeHost,
-        executeAgent: async (config: AgentConfigPayload, _token: unknown, options: { runtimeHost?: unknown }) => {
-          if (options.runtimeHost !== runtimeHost) throw new Error('runtime host was not passed to executeAgent');
+        executeAgent: async (config: AgentConfigPayload, _token: unknown, options?: { runtimeHost?: unknown }) => {
+          if (options?.runtimeHost !== runtimeHost) throw new Error('runtime host was not passed to executeAgent');
           if (config.agent !== 'polish') throw new Error('unexpected agent: ' + config.agent);
           if (config.inputFile !== 'paper.tex') throw new Error('unexpected input: ' + config.inputFile);
           if (config.outputFiles?.[0] !== 'paper.polished.tex') throw new Error('unexpected output file');
