@@ -130,6 +130,9 @@ const appRoot = root;
 let currentRoute: DesktopRoute = 'main';
 const hasWorkspace = window.texraDesktop?.hasWorkspace ?? true;
 const workspacePath = window.texraDesktop?.workspacePath;
+const workspaceFolderName = workspacePath
+  ? workspacePath.split(/[\\/]/).pop() || workspacePath
+  : undefined;
 
 // `<settings-app>` lives inside the wa-dialog overlay below; `<main-app>` and
 // `<stream-conversation>` mount directly in the center pane. These are
@@ -172,10 +175,6 @@ settingsView.setAttribute('data-desktop-view', 'settings');
 const logsContainer: HTMLElement = document.createElement('div');
 logsContainer.setAttribute('data-desktop-view', 'logs');
 logsContainer.className = 'desktop-log-host';
-
-function getWorkspaceFolderName(workspacePath: string): string {
-  return workspacePath.split(/[\\/]/).pop() || workspacePath;
-}
 
 function emptyWorkspaceTemplate(): TemplateResult {
   return html`
@@ -328,12 +327,12 @@ function shellTemplate(): TemplateResult {
         <aside class="desktop-rail" aria-label="Sessions">
           <header class="desktop-rail-header">
             <div class="desktop-rail-header-content">
-              ${workspacePath
+              ${workspaceFolderName
                 ? html`<div
                     class="desktop-workspace-name"
                     title=${workspacePath}
                   >
-                    ${getWorkspaceFolderName(workspacePath)}
+                    ${workspaceFolderName}
                   </div>`
                 : nothing}
               <span class="desktop-rail-title">Sessions</span>
