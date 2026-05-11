@@ -10,8 +10,11 @@ export interface CliModelAccess {
 
 function formatModelAccessStatus(model: ModelOptionData): string {
   if (!model.disabled && !model.requiresKey) return 'available';
-  const provider = model.provider ? `${model.provider} ` : '';
-  return `missing ${provider}key`;
+  if (model.requiresKey) {
+    const provider = model.provider ? `${model.provider} ` : '';
+    return `missing ${provider}key`;
+  }
+  return 'unavailable';
 }
 
 export async function getCliModelAccess(
