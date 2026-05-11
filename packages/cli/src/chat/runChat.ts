@@ -120,6 +120,7 @@ function installChatResponsePrinter(session: ChatSessionState): {
     if (!log) return;
 
     for (const entry of log.getRange(0)) {
+      renderer.renderStreamLogEntry(entry);
       if (entry.messageType !== MESSAGE_TYPES.MODEL_RESPONSE) continue;
       const text = entry.text ?? '';
       const previous = printedByEntry.get(entry.id) ?? '';
