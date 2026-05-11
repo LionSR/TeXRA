@@ -27,6 +27,10 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { ELEMENT_IDS, TOOLBAR_BUTTONS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
+import {
+  renderProgressBadgeContent,
+  getProgressBadgeTitle,
+} from '../formatters/progressBadgeFormatter';
 
 interface ToolbarButton {
   id: string;
@@ -429,19 +433,15 @@ export class StreamHeader extends LitElement {
   }
 
   private renderProgressBadge(): TemplateResult | typeof nothing {
-    const p = this.progress;
-    if (!p || p.conversationTurns <= 0) return nothing;
+    if (!this.progress?.conversationTurns) return nothing;
     return html`<wa-tag
       class="progress-badge"
       variant="neutral"
       size="small"
-      title="Conversation turns: ${p.conversationTurns}, Tool calls: ${p.toolCallCount}"
+      title=${getProgressBadgeTitle(this.progress)}
     >
       <wa-icon library="texra" name="pulse" aria-hidden="true"></wa-icon>
-      ${p.conversationTurns}
-      turns${p.toolCallCount > 0
-        ? html`, ${p.toolCallCount} tool calls`
-        : nothing}
+      ${renderProgressBadgeContent(this.progress)}
     </wa-tag>`;
   }
 
