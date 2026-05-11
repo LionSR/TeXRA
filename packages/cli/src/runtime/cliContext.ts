@@ -47,7 +47,7 @@ export const RUN_FLAGS_WITH_VALUE = new Set([
   '--instruction',
 ]);
 
-export const CHAT_FLAGS_WITH_VALUE = new Set(['--agent', '--model', '-m']);
+const CHAT_FLAGS_WITH_VALUE = new Set(['--agent', '--model', '-m']);
 
 const FLAGS_WITH_VALUE = new Set([
   ...GLOBAL_FLAGS_WITH_VALUE,
