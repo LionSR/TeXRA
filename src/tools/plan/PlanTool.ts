@@ -18,10 +18,7 @@ import { z } from 'zod';
 import { PlanState } from '@agent/core/AgentWorkspaceState';
 import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
 import { waitForPlanApproval } from '@agent/runtime/runCoordinators';
-import {
-  getCurrentToolCallContext,
-  getCurrentToolRunContext,
-} from '@agent/toolUse/ToolFileInteractionContext';
+import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   TODO_STATUS,
@@ -101,8 +98,9 @@ Best practices:
   schema: PlanToolInputSchema,
 }) {
   protected async execute(input: PlanToolInput): Promise<ToolResult> {
-    const callContext = getCurrentToolCallContext();
-    const runContext = getCurrentToolRunContext();
+    const contexts = getCurrentToolContexts();
+    const callContext = contexts?.callContext;
+    const runContext = contexts?.runContext;
 
     if (!callContext?.planState) {
       logger.warn(

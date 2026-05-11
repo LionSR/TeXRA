@@ -59,9 +59,61 @@ export interface ToolCallContext {
 export interface ToolFileInteractionContext
   extends ToolRunContext, ToolCallContext {}
 
-const contextStackScope = new AsyncLocalStorage<
-  readonly ToolFileInteractionContext[]
->();
+interface ToolContextFrame {
+  full: ToolFileInteractionContext;
+  run: ToolRunContext;
+  call: ToolCallContext;
+}
+
+export interface CurrentToolContexts {
+  runContext: ToolRunContext;
+  callContext: ToolCallContext;
+}
+
+const contextStackScope = new AsyncLocalStorage<readonly ToolContextFrame[]>();
+
+function buildContextFrame(
+  context: ToolFileInteractionContext,
+): ToolContextFrame {
+  const {
+    streamId,
+    executionId,
+    model,
+    agentName,
+    workingDirectory,
+    runtimeHost,
+    delegationDepth,
+    delegationConfig,
+    toolCallId,
+    tracker,
+    todoState,
+    planState,
+    onExecutionReady,
+    onToolOutput,
+  } = context;
+
+  return {
+    full: context,
+    run: {
+      streamId,
+      executionId,
+      model,
+      agentName,
+      workingDirectory,
+      runtimeHost,
+      delegationDepth,
+      delegationConfig,
+    },
+    call: {
+      toolCallId,
+      tracker,
+      todoState,
+      planState,
+      onExecutionReady,
+      onToolOutput,
+    },
+  };
+}
 
 export function withToolFileInteractionContext<T>(
   context: ToolFileInteractionContext,
@@ -69,7 +121,10 @@ export function withToolFileInteractionContext<T>(
 ): Promise<T> {
   try {
     const parentStack = contextStackScope.getStore() ?? [];
-    return contextStackScope.run([...parentStack, context], async () => run());
+    return contextStackScope.run(
+      [...parentStack, buildContextFrame(context)],
+      async () => run(),
+    );
   } catch (error) {
     return Promise.reject(error);
   }
@@ -78,13 +133,25 @@ export function withToolFileInteractionContext<T>(
 export function getCurrentToolFileInteractionContext():
   | ToolFileInteractionContext
   | undefined {
-  return contextStackScope.getStore()?.at(-1);
+  return contextStackScope.getStore()?.at(-1)?.full;
 }
 
 export function getCurrentToolRunContext(): ToolRunContext | undefined {
-  return getCurrentToolFileInteractionContext();
+  return contextStackScope.getStore()?.at(-1)?.run;
 }
 
 export function getCurrentToolCallContext(): ToolCallContext | undefined {
-  return getCurrentToolFileInteractionContext();
+  return contextStackScope.getStore()?.at(-1)?.call;
+}
+
+export function getCurrentToolContexts(): CurrentToolContexts | undefined {
+  const frame = contextStackScope.getStore()?.at(-1);
+  if (!frame) {
+    return undefined;
+  }
+
+  return {
+    runContext: frame.run,
+    callContext: frame.call,
+  };
 }
