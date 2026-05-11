@@ -29,7 +29,7 @@ The first CLI/run-context/logger stack implements the conservative part of this 
 - CLI approval policy handling and serialized terminal prompts are implemented in PR #3844.
 - `texra chat` has a plain terminal loop in PR #3846. This is the fallback input mode described below, not the final rich renderer.
 - Rich chat rendering, inline approval cards, grouped tool-display modes, and session metadata remain follow-up work tracked by #3848.
-- Tool-context reader separation is partially implemented in PR #3847: the active context is async-scoped, narrow run/call views are stored separately, and clear run-owned and call-owned readers have started moving off the combined context. Remaining mixed or compatibility readers remain follow-up work tracked by #3849.
+- Tool-context reader separation for `src/tools` is implemented in PR #3847: the active context is async-scoped, narrow run/call views are stored separately, and tool readers now use run-owned, call-owned, or explicit mixed access paths instead of the combined compatibility getter. The remaining architectural question is whether `ToolRunContext` becomes part of `RunContext`, remains an ALS-backed shim, or is passed explicitly at the tool execution boundary.
 
 This note is here to keep the PRD readable for third-party reviewers: the PRD describes the intended v1 shape, while the current stack lands the smallest coherent subset and records the rest as owned follow-up issues.
 
