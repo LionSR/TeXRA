@@ -12,6 +12,8 @@ import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDir
 // Local imports - CLI runtime
 import { writeTextStderr } from './logSinks';
 import { MemoryConfigProvider } from './memoryStores';
+
+// Type imports - platform and CLI runtime
 import type { LifecycleHost } from '@platform/interfaces/lifecycle';
 import type { LogBackend } from '@platform/interfaces/log';
 import type { CliContext } from './cliContext';
