@@ -10,7 +10,9 @@ import { computeModelOptionsData } from '@model/computeModelOptions';
 // Local imports - CLI runtime
 import {
   cliFlagName,
+  CLI_BOOLEAN_FLAGS,
   flagValue,
+  GLOBAL_FLAGS_WITH_VALUE,
   resolveCliContext,
   RUN_FLAGS_WITH_VALUE,
   type CliContext,
@@ -65,7 +67,14 @@ function splitRunArgs(args: readonly string[]): {
     optionArgs.push(arg);
     const value = args[index + 1];
     const flagName = cliFlagName(arg);
-    if (!RUN_FLAGS_WITH_VALUE.has(flagName)) {
+    const flagTakesValue =
+      RUN_FLAGS_WITH_VALUE.has(flagName) ||
+      GLOBAL_FLAGS_WITH_VALUE.has(flagName);
+    if (!flagTakesValue) {
+      if (CLI_BOOLEAN_FLAGS.has(flagName)) {
+        index += 1;
+        continue;
+      }
       return { agent: undefined, optionArgs, unknownFlag: arg };
     }
     if (arg.includes('=')) {
