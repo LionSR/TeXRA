@@ -27,59 +27,41 @@ export class StderrTextSink implements LogSink {
 
 export class NdjsonStdoutSink implements LogSink {
   private readonly queue: LogRecord[] = [];
-  private head = 0;
-  private draining = false;
-  private idle = Promise.resolve();
-  private resolveIdle: (() => void) | null = null;
+  private drainPromise: Promise<void> | undefined;
 
   write(record: LogRecord): void {
     this.queue.push(record);
-    if (!this.draining) {
-      this.beginDrain();
-      this.drain();
-    }
+    this.ensureDrain();
   }
 
   async flush(): Promise<void> {
-    while (this.draining || this.queue.length > 0) {
-      if (!this.draining) {
-        this.beginDrain();
-        this.drain();
-      }
-      await this.idle;
-    }
+    await this.ensureDrain();
   }
 
   async close(): Promise<void> {
     await this.flush();
   }
 
-  private drain(): void {
-    while (this.head < this.queue.length) {
-      const record = this.queue[this.head++];
-      const line = `${JSON.stringify({ kind: 'log', ...record })}\n`;
-      if (!process.stdout.write(line)) {
-        process.stdout.once('drain', () => this.drain());
-        return;
-      }
-    }
-
-    if (this.head > 0) this.queue.splice(0, this.head);
-    this.head = 0;
-    if (this.queue.length > 0) {
-      this.drain();
-      return;
-    }
-    this.draining = false;
-    const resolve = this.resolveIdle;
-    this.resolveIdle = null;
-    resolve?.();
+  private ensureDrain(): Promise<void> {
+    this.drainPromise ??= this.drain();
+    return this.drainPromise;
   }
 
-  private beginDrain(): void {
-    this.draining = true;
-    this.idle = new Promise<void>((resolve) => {
-      this.resolveIdle = resolve;
-    });
+  private async drain(): Promise<void> {
+    try {
+      while (this.queue.length > 0) {
+        const record = this.queue.shift();
+        if (!record) continue;
+        const line = `${JSON.stringify({ kind: 'log', ...record })}\n`;
+        if (!process.stdout.write(line)) {
+          await new Promise<void>((resolve) => {
+            process.stdout.once('drain', resolve);
+          });
+        }
+      }
+    } finally {
+      this.drainPromise = undefined;
+      if (this.queue.length > 0) this.ensureDrain();
+    }
   }
 }
