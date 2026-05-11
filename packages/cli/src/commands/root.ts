@@ -6,6 +6,7 @@ import {
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import type { ModelOptionData } from '@shared/schemas';
 
 // Local imports - CLI runtime
 import {
@@ -160,9 +161,17 @@ async function listModels(context: CliContext): Promise<CliResult> {
   }
 
   for (const model of models) {
-    writeTextStdout(`${model.value}\t${model.label}`);
+    writeTextStdout(
+      `${model.value}\t${model.label}\t${formatModelAccessStatus(model)}`,
+    );
   }
   return { exitCode: 0 };
+}
+
+function formatModelAccessStatus(model: ModelOptionData): string {
+  if (!model.disabled && !model.requiresKey) return 'available';
+  const provider = model.provider ? `${model.provider} ` : '';
+  return `missing ${provider}key`;
 }
 
 async function runWorkflowAgent(
