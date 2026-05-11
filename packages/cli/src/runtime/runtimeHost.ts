@@ -8,7 +8,11 @@ import type { CliContext } from './cliContext';
 import { writeNdjsonStdout } from './logSinks';
 import { createCliLogger } from './logger';
 
-export function createCliRuntimeHost(context: CliContext): AgentRuntimeHost {
+export type CliRuntimeHost = AgentRuntimeHost & {
+  close(): Promise<void>;
+};
+
+export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   let logger: ReturnType<typeof createCliLogger> | undefined;
   const cliLogger = (): ReturnType<typeof createCliLogger> =>
     (logger ??= createCliLogger(context));
@@ -36,14 +40,19 @@ export function createCliRuntimeHost(context: CliContext): AgentRuntimeHost {
       if (event === 'requestShowError') {
         const message = (payload as ProgressEventPayloads['requestShowError'])
           .message;
-        cliLogger().error(message);
+        cliLogger().logger.error(message);
         return;
       }
 
       if (event === 'setTaskState') {
         const data = payload as ProgressEventPayloads['setTaskState'];
-        cliLogger().info('Task state registered', { streamId: data.streamId });
+        cliLogger().logger.info('Task state registered', {
+          streamId: data.streamId,
+        });
       }
+    },
+    async close() {
+      await logger?.close();
     },
   };
 }
