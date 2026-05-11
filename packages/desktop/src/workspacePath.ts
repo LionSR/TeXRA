@@ -14,7 +14,7 @@ export function getWorkspacePathInput(
 ): string | undefined {
   const env = options.env ?? process.env;
   const argv = options.argv ?? process.argv.slice(1);
-  const argvWorkspacePath = getWorkspacePathArg(argv);
+  const argvWorkspacePath = parseWorkspacePathFromArgv(argv);
   if (argvWorkspacePath) return argvWorkspacePath;
 
   const configured = env.TEXRA_WORKSPACE_PATH?.trim();
@@ -82,22 +82,6 @@ export function parseWorkspacePathFromArgv(
     ) {
       const eqIndex = arg.indexOf('=');
       return getPositionalWorkspacePathArg(arg.slice(eqIndex + 1));
-    }
-  }
-  return undefined;
-}
-
-function getWorkspacePathArg(argv: readonly string[]): string | undefined {
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (arg == null) continue;
-    if (arg === '--texra-workspace') {
-      return getPositionalWorkspacePathArg(argv[index + 1]);
-    }
-    if (arg.startsWith('--texra-workspace=')) {
-      return getPositionalWorkspacePathArg(
-        arg.slice('--texra-workspace='.length),
-      );
     }
   }
   return undefined;
