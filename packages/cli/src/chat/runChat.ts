@@ -35,12 +35,12 @@ const DEFAULT_CHAT_AGENT = 'chat';
 
 function printChatHelp(): void {
   writeTextStderr(`Commands:
-  /help          Show this help
-  /agent <name> Set the tool-use agent before the session starts
-  /model <name> Set the model before the session starts
-  /yolo          Explain yolo approval mode
-  /clear         Clear the terminal
-  /exit, /quit   Exit chat`);
+  /help            Show this help
+  /agent <name>    Set the tool-use agent before the session starts
+  /model <name>    Set the model before the session starts
+  /yolo            Explain yolo approval mode
+  /clear           Clear the terminal
+  /exit, /quit     Exit chat`);
 }
 
 function printClearScreen(): void {
