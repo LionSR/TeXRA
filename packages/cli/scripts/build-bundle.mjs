@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
+import { chmod } from 'node:fs/promises';
 import { build } from 'esbuild';
+
+const outfile = 'dist/bin/texra.js';
 
 await build({
   entryPoints: ['src/bin/texra.ts'],
@@ -9,7 +12,7 @@ await build({
   format: 'esm',
   target: 'node20',
   external: ['fsevents'],
-  outfile: 'dist/bin/texra.js',
+  outfile,
   banner: {
     js:
       '#!/usr/bin/env node\n' +
@@ -17,3 +20,5 @@ await build({
       'const require = __texraCreateRequire(import.meta.url);',
   },
 });
+
+await chmod(outfile, 0o755);
