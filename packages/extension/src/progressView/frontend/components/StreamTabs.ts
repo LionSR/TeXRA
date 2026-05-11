@@ -238,9 +238,11 @@ export class StreamTab extends LitElement {
         width: var(--height-control);
         min-width: var(--height-control);
         height: var(--height-control);
-        margin: 0;
+        margin: 0 0 0 var(--wa-space-2xs);
         color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
         opacity: 0;
+        position: relative;
+        z-index: 10;
       }
 
       /* Reveal the delete affordance only when the row is hovered,
