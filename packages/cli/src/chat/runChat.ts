@@ -87,7 +87,6 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
   installCliApprovalHandlers(chatContext);
   await loadAgents();
 
-  const runtimeHost = createCliRuntimeHost(chatContext);
   const reader = createCliLineReader('texra> ');
   const session: ChatSessionState = {
     readerClosed: false,
@@ -107,6 +106,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
   };
   let agent = flagValue(args, '--agent') ?? DEFAULT_CHAT_AGENT;
   let model = flagValue(args, '--model', '-m') ?? DEFAULT_AGENT_MODEL;
+  const sessionContext = { ...chatContext, helperModel: model };
 
   const interruptActiveSession = (): void => {
     if (!session.streamId) return;
@@ -185,6 +185,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       workingDirectory: chatContext.cwd,
     };
 
+    const runtimeHost = createCliRuntimeHost(sessionContext);
     session.runPromise = executeAgent(config, undefined, {
       runtimeHost,
       enforceCategory: true,
@@ -216,6 +217,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       .finally(() => {
         session.runCompleted = true;
         closeReader();
+        void runtimeHost.close();
       });
   };
 
@@ -256,6 +258,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
             writeTextStderr('The active session already owns its model.');
           } else if (rest) {
             model = rest;
+            sessionContext.helperModel = model;
             writeTextStderr(`Model set to ${model}.`);
           } else {
             writeTextStderr('Usage: /model <name>');
@@ -298,6 +301,5 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     return { exitCode: session.runExitCode };
   } finally {
     closeReader();
-    await runtimeHost.close();
   }
 }
