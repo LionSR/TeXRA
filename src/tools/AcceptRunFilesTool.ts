@@ -16,8 +16,9 @@ import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports - agent
+import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { getExecutionStore } from '@agent/storage';
-import { getCurrentToolRuntimeHost } from '@agent/toolUse/ToolFileInteractionContext';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 
 // Local imports - shared
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
@@ -253,7 +254,10 @@ Optional:
 
     // Badge all accepted workspace files
     if (acceptedEntries.length > 0) {
-      getCurrentToolRuntimeHost().emit('workspaceFilesWritten', {
+      const runtimeHost =
+        getCurrentToolFileInteractionContext()?.runtimeHost ??
+        getAgentRuntimeHost();
+      runtimeHost.emit('workspaceFilesWritten', {
         absolutePaths: acceptedEntries.map((e) => e.destAbsolutePath),
       });
     }

@@ -7,10 +7,7 @@ import type {
   PlanState,
   TodoState,
 } from '@agent/core/AgentWorkspaceState';
-import {
-  getAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 
@@ -78,10 +75,4 @@ export function getCurrentToolFileInteractionContext():
   | ToolFileInteractionContext
   | undefined {
   return contextStackScope.getStore()?.at(-1);
-}
-
-export function getCurrentToolRuntimeHost(): AgentRuntimeHost {
-  return (
-    getCurrentToolFileInteractionContext()?.runtimeHost ?? getAgentRuntimeHost()
-  );
 }
