@@ -381,7 +381,6 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       }
 
       queueFollowUp(line);
-      if (!session.runCompleted) reader.prompt();
     }
 
     if (!session.stopRequested && session.runPromise && !session.runCompleted) {
