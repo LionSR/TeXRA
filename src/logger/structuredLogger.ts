@@ -41,11 +41,7 @@ interface SinkRef {
   current: LogSink;
 }
 
-interface GroupQueue {
-  tail: Promise<void>;
-}
-
-const activeGroupQueue = new AsyncLocalStorage<GroupQueue>();
+const activeGroupStack = new AsyncLocalStorage<readonly string[]>();
 
 export function createStructuredLogger(sink: LogSink): Logger {
   return new StructuredLogger({ current: sink });
@@ -62,7 +58,6 @@ class StructuredLogger implements Logger {
     private readonly sinkRef: SinkRef,
     private readonly fields: LogFields = {},
     groupStack: string[] = [],
-    private readonly groupQueue: GroupQueue = { tail: Promise.resolve() },
   ) {
     this.groupStack = groupStack;
   }
@@ -84,7 +79,7 @@ class StructuredLogger implements Logger {
   }
 
   activeGroupId(): string | undefined {
-    return this.groupStack.at(-1);
+    return this.currentGroups().at(-1);
   }
 
   group(label: string): () => void {
@@ -92,38 +87,10 @@ class StructuredLogger implements Logger {
   }
 
   async withGroup<T>(label: string, fn: () => Promise<T> | T): Promise<T> {
-    if (activeGroupQueue.getStore() === this.groupQueue) {
-      return this.runGroup(label, fn);
-    }
-
-    const previousGroup = this.groupQueue.tail.catch(() => undefined);
-    let releaseGroup: () => void = () => undefined;
-    this.groupQueue.tail = previousGroup.then(
-      () =>
-        new Promise<void>((resolve) => {
-          releaseGroup = resolve;
-        }),
-    );
-    await previousGroup;
-
+    const parentGroups = this.currentGroups();
     try {
-      return await activeGroupQueue.run(this.groupQueue, () =>
-        this.runGroup(label, fn),
-      );
+      return await activeGroupStack.run([...parentGroups, label], fn);
     } finally {
-      releaseGroup();
-    }
-  }
-
-  private async runGroup<T>(
-    label: string,
-    fn: () => Promise<T> | T,
-  ): Promise<T> {
-    const pop = this.enterGroup(label, false);
-    try {
-      return await fn();
-    } finally {
-      pop();
       await this.sinkRef.current.flush?.();
     }
   }
@@ -153,7 +120,6 @@ class StructuredLogger implements Logger {
       this.sinkRef,
       mergeFields(this.fields, fields),
       this.groupStack,
-      this.groupQueue,
     );
   }
 
@@ -170,8 +136,12 @@ class StructuredLogger implements Logger {
       level,
       message,
       fields: mergeFields(this.fields, fields),
-      groups: [...this.groupStack],
+      groups: [...this.currentGroups()],
     });
+  }
+
+  private currentGroups(): readonly string[] {
+    return activeGroupStack.getStore() ?? this.groupStack;
   }
 }
 

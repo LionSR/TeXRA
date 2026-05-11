@@ -118,22 +118,11 @@ function logWithGroup(
     options.data instanceof Error ? serializeError(options.data) : options.data;
   const legacyLogger = ensureLegacyLogger(channel, isAgent);
   const activeGroupId = legacyLogger.activeGroupId();
-  const explicitGroupId = options.groupId;
-  const shouldEnterExplicitGroup =
-    explicitGroupId !== undefined && explicitGroupId !== activeGroupId;
-  const leaveGroup = shouldEnterExplicitGroup
-    ? legacyLogger.group(explicitGroupId)
-    : undefined;
-
-  try {
-    legacyLogger[level](message, {
-      ...options,
-      groupId: options.groupId ?? activeGroupId,
-      data: resolvedData,
-    });
-  } finally {
-    leaveGroup?.();
-  }
+  legacyLogger[level](message, {
+    ...options,
+    groupId: options.groupId ?? activeGroupId,
+    data: resolvedData,
+  });
 }
 
 export function initialize(channel: string, isAgent = false): void {
