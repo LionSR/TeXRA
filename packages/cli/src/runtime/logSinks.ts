@@ -31,7 +31,7 @@ export class NdjsonStdoutSink implements LogSink {
 
   write(record: LogRecord): void {
     this.queue.push(record);
-    this.ensureDrain();
+    void this.ensureDrain().catch(() => undefined);
   }
 
   async flush(): Promise<void> {
