@@ -58,6 +58,7 @@ Run options:
 Chat options:
   --agent <name>          Tool-use agent for the chat session
   --model, -m <name>      Model for the chat session
+  --tool-display <mode>   Tool/progress rows: grouped, minimal, or hidden
 
 Use texra run for workflow agents and texra chat for an interactive tool-use session.`);
 }
