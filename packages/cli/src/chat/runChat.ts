@@ -1,21 +1,21 @@
 // Local imports - agent
+import { loadAgents } from '@agent/index';
 import {
   DEFAULT_AGENT_MODEL,
   type AgentConfigPayload,
 } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { loadAgents } from '@agent/index';
 import { interruptActiveChildren } from '@agent/runtime/executionRegistry';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
+import { AgentLogger } from '@logger/AgentLogger';
 import {
   MESSAGE_TYPES,
   STREAM_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
-import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - CLI runtime
 import {
