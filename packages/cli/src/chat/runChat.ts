@@ -106,7 +106,10 @@ async function modelAvailable(
   return true;
 }
 
-function installChatResponsePrinter(session: ChatSessionState): {
+function installChatResponsePrinter(
+  session: ChatSessionState,
+  renderer: ChatTerminalRenderer,
+): {
   didPrint: () => boolean;
   dispose: () => void;
 } {
@@ -200,7 +203,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     lines: [],
   };
   let pendingApprovalPrompt: PendingApprovalPrompt | undefined;
-  const responsePrinter = installChatResponsePrinter(session);
+  const responsePrinter = installChatResponsePrinter(session, renderer);
   const disposeStatusListener = StreamStatusService.onDidChange((change) => {
     if (
       change.streamId !== session.streamId ||
