@@ -70,12 +70,12 @@ export async function setCliHelperModel(
 export async function initCliPlatform(
   context: Pick<
     CliContext,
-    'cwd' | 'resourcesPath' | 'helperModel' | 'mode' | 'outputFormat'
+    'cwd' | 'resourcesPath' | 'helperModel' | 'outputFormat' | 'quietLogs'
   >,
 ): Promise<void> {
   cliWorkspaceCwd = context.cwd;
   quietPlatformLogs =
-    context.mode === 'interactive' && context.outputFormat === 'text';
+    context.quietLogs === true && context.outputFormat === 'text';
 
   if (!tryPlatform()) {
     const globalState = createMemoryStore();
