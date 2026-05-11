@@ -27,38 +27,41 @@ function getRunCoordinators(): RunCoordinators {
   return tryUseRunContext()?.coordinators ?? legacyCoordinators;
 }
 
-const planApprovals = new Map<string, RunCoordinators>();
-const planApprovalStreams = new Map<string, string>();
-const planStreams = new Map<string, RunCoordinators>();
-const proposals = new Map<string, RunCoordinators>();
-const proposalStreams = new Map<string, string>();
-const retries = new Map<string, RunCoordinators>();
-const retryCoordinatorRefs = new Map<RunCoordinators, number>();
+const bridgeState = {
+  planApprovals: new Map<string, RunCoordinators>(),
+  planApprovalStreams: new Map<string, string>(),
+  planStreams: new Map<string, RunCoordinators>(),
+  proposals: new Map<string, RunCoordinators>(),
+  proposalStreams: new Map<string, string>(),
+  retries: new Map<string, RunCoordinators>(),
+  retryCoordinatorRefs: new Map<RunCoordinators, number>(),
+};
 
 function retainRetryCoordinator(coordinators: RunCoordinators): void {
-  retryCoordinatorRefs.set(
+  bridgeState.retryCoordinatorRefs.set(
     coordinators,
-    (retryCoordinatorRefs.get(coordinators) ?? 0) + 1,
+    (bridgeState.retryCoordinatorRefs.get(coordinators) ?? 0) + 1,
   );
 }
 
 function releaseRetryCoordinator(coordinators: RunCoordinators): void {
-  const nextCount = (retryCoordinatorRefs.get(coordinators) ?? 0) - 1;
+  const nextCount =
+    (bridgeState.retryCoordinatorRefs.get(coordinators) ?? 0) - 1;
   if (nextCount > 0) {
-    retryCoordinatorRefs.set(coordinators, nextCount);
+    bridgeState.retryCoordinatorRefs.set(coordinators, nextCount);
   } else {
-    retryCoordinatorRefs.delete(coordinators);
+    bridgeState.retryCoordinatorRefs.delete(coordinators);
   }
 }
 
 function clearPlanBridgeForStream(streamId: string): void {
-  planStreams.delete(streamId);
-  const approvalIds = [...planApprovalStreams.entries()]
+  bridgeState.planStreams.delete(streamId);
+  const approvalIds = [...bridgeState.planApprovalStreams.entries()]
     .filter(([, approvalStreamId]) => approvalStreamId === streamId)
     .map(([approvalId]) => approvalId);
   for (const approvalId of approvalIds) {
-    planApprovals.delete(approvalId);
-    planApprovalStreams.delete(approvalId);
+    bridgeState.planApprovals.delete(approvalId);
+    bridgeState.planApprovalStreams.delete(approvalId);
   }
 }
 
@@ -67,15 +70,15 @@ export async function waitForPlanApproval(
   options: PlanApprovalRequestOptions,
 ): Promise<PlanApprovalResult> {
   const coordinators = getRunCoordinators();
-  planApprovals.set(options.approvalId, coordinators);
-  planApprovalStreams.set(options.approvalId, streamId);
-  planStreams.set(streamId, coordinators);
+  bridgeState.planApprovals.set(options.approvalId, coordinators);
+  bridgeState.planApprovalStreams.set(options.approvalId, streamId);
+  bridgeState.planStreams.set(streamId, coordinators);
   try {
     return await coordinators.plan.waitForApproval(streamId, options);
   } finally {
-    planApprovals.delete(options.approvalId);
-    planApprovalStreams.delete(options.approvalId);
-    planStreams.delete(streamId);
+    bridgeState.planApprovals.delete(options.approvalId);
+    bridgeState.planApprovalStreams.delete(options.approvalId);
+    bridgeState.planStreams.delete(streamId);
   }
 }
 
@@ -84,26 +87,26 @@ export function resolvePlanApproval(
   result: PlanApprovalResult,
 ): boolean {
   return (
-    planApprovals.get(approvalId)?.plan ?? legacyCoordinators.plan
+    bridgeState.planApprovals.get(approvalId)?.plan ?? legacyCoordinators.plan
   ).resolveRequest(approvalId, result);
 }
 
 export function clearPlanApprovalForStream(streamId: string): void {
-  (planStreams.get(streamId)?.plan ?? legacyCoordinators.plan).clearForStream(
-    streamId,
-  );
+  (
+    bridgeState.planStreams.get(streamId)?.plan ?? legacyCoordinators.plan
+  ).clearForStream(streamId);
   clearPlanBridgeForStream(streamId);
 }
 
 export function clearAllPlanApprovals(): void {
-  const coordinators = new Set(planStreams.values());
+  const coordinators = new Set(bridgeState.planStreams.values());
   coordinators.add(legacyCoordinators);
   for (const coordinator of coordinators) {
     coordinator.plan.clearAll();
   }
-  planApprovals.clear();
-  planApprovalStreams.clear();
-  planStreams.clear();
+  bridgeState.planApprovals.clear();
+  bridgeState.planApprovalStreams.clear();
+  bridgeState.planStreams.clear();
 }
 
 export async function waitForProposal(
@@ -111,13 +114,13 @@ export async function waitForProposal(
   options: ProposalRequestOptions,
 ): Promise<ProposalResult> {
   const coordinators = getRunCoordinators();
-  proposals.set(options.proposalId, coordinators);
-  proposalStreams.set(options.proposalId, streamId);
+  bridgeState.proposals.set(options.proposalId, coordinators);
+  bridgeState.proposalStreams.set(options.proposalId, streamId);
   try {
     return await coordinators.proposal.waitForProposal(streamId, options);
   } finally {
-    proposals.delete(options.proposalId);
-    proposalStreams.delete(options.proposalId);
+    bridgeState.proposals.delete(options.proposalId);
+    bridgeState.proposalStreams.delete(options.proposalId);
   }
 }
 
@@ -126,31 +129,33 @@ export function resolveProposal(
   result: ProposalResult,
 ): boolean {
   return (
-    proposals.get(proposalId)?.proposal ?? legacyCoordinators.proposal
+    bridgeState.proposals.get(proposalId)?.proposal ??
+    legacyCoordinators.proposal
   ).resolveRequest(proposalId, result);
 }
 
 export function clearProposalForStream(streamId: string): void {
-  const proposalIds = [...proposalStreams.entries()]
+  const proposalIds = [...bridgeState.proposalStreams.entries()]
     .filter(([, proposalStreamId]) => proposalStreamId === streamId)
     .map(([proposalId]) => proposalId);
   for (const proposalId of proposalIds) {
     (
-      proposals.get(proposalId)?.proposal ?? legacyCoordinators.proposal
+      bridgeState.proposals.get(proposalId)?.proposal ??
+      legacyCoordinators.proposal
     ).clearRequest(proposalId);
-    proposals.delete(proposalId);
-    proposalStreams.delete(proposalId);
+    bridgeState.proposals.delete(proposalId);
+    bridgeState.proposalStreams.delete(proposalId);
   }
 }
 
 export function clearAllProposals(): void {
-  const coordinators = new Set(proposals.values());
+  const coordinators = new Set(bridgeState.proposals.values());
   coordinators.add(legacyCoordinators);
   for (const coordinator of coordinators) {
     coordinator.proposal.clearAll();
   }
-  proposals.clear();
-  proposalStreams.clear();
+  bridgeState.proposals.clear();
+  bridgeState.proposalStreams.clear();
 }
 
 export async function waitForRetry(
@@ -159,47 +164,47 @@ export async function waitForRetry(
 ): Promise<RetryResult> {
   const coordinators = getRunCoordinators();
   retainRetryCoordinator(coordinators);
-  retries.set(streamId, coordinators);
+  bridgeState.retries.set(streamId, coordinators);
   try {
     return await coordinators.retry.waitForRetry(streamId, options);
   } finally {
-    retries.delete(streamId);
+    bridgeState.retries.delete(streamId);
     releaseRetryCoordinator(coordinators);
   }
 }
 
 export function triggerRetry(streamId: string, feedback?: string): boolean {
   return (
-    retries.get(streamId)?.retry ?? legacyCoordinators.retry
+    bridgeState.retries.get(streamId)?.retry ?? legacyCoordinators.retry
   ).triggerRetry(streamId, feedback);
 }
 
 export function cancelRetry(streamId: string): boolean {
-  return (retries.get(streamId)?.retry ?? legacyCoordinators.retry).cancelRetry(
-    streamId,
-  );
+  return (
+    bridgeState.retries.get(streamId)?.retry ?? legacyCoordinators.retry
+  ).cancelRetry(streamId);
 }
 
 export function clearRetryRequest(streamId: string): void {
-  const coordinators = new Set(retryCoordinatorRefs.keys());
-  const mappedCoordinators = retries.get(streamId);
+  const coordinators = new Set(bridgeState.retryCoordinatorRefs.keys());
+  const mappedCoordinators = bridgeState.retries.get(streamId);
   if (mappedCoordinators) coordinators.add(mappedCoordinators);
   coordinators.add(legacyCoordinators);
   for (const coordinator of coordinators) {
     coordinator.retry.clearRequest(streamId);
   }
-  retries.delete(streamId);
+  bridgeState.retries.delete(streamId);
 }
 
 export function clearAllRetryRequests(): void {
-  const coordinators = new Set(retryCoordinatorRefs.keys());
-  for (const retryCoordinator of retries.values()) {
+  const coordinators = new Set(bridgeState.retryCoordinatorRefs.keys());
+  for (const retryCoordinator of bridgeState.retries.values()) {
     coordinators.add(retryCoordinator);
   }
   coordinators.add(legacyCoordinators);
   for (const coordinator of coordinators) {
     coordinator.retry.clearAll();
   }
-  retryCoordinatorRefs.clear();
-  retries.clear();
+  bridgeState.retryCoordinatorRefs.clear();
+  bridgeState.retries.clear();
 }
