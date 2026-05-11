@@ -41,10 +41,17 @@ interface SinkRef {
   current: LogSink;
 }
 
-const activeGroupStack = new AsyncLocalStorage<readonly string[]>();
+type GroupContextKey = symbol;
+
+const activeGroupStacks = new AsyncLocalStorage<
+  ReadonlyMap<GroupContextKey, readonly string[]>
+>();
 
 export function createStructuredLogger(sink: LogSink): Logger {
-  return new StructuredLogger({ current: sink });
+  return new StructuredLogger({
+    sinkRef: { current: sink },
+    groupContextKey: Symbol('structuredLoggerGroupContext'),
+  });
 }
 
 function mergeFields(left: LogFields, right: LogFields | undefined): LogFields {
@@ -55,7 +62,10 @@ class StructuredLogger implements Logger {
   private readonly groupStack: string[];
 
   constructor(
-    private readonly sinkRef: SinkRef,
+    private readonly context: {
+      readonly sinkRef: SinkRef;
+      readonly groupContextKey: GroupContextKey;
+    },
     private readonly fields: LogFields = {},
     groupStack: string[] = [],
   ) {
@@ -88,10 +98,13 @@ class StructuredLogger implements Logger {
 
   async withGroup<T>(label: string, fn: () => Promise<T> | T): Promise<T> {
     const parentGroups = this.currentGroups();
+    const parentStacks = activeGroupStacks.getStore();
+    const nextStacks = new Map(parentStacks);
+    nextStacks.set(this.context.groupContextKey, [...parentGroups, label]);
     try {
-      return await activeGroupStack.run([...parentGroups, label], fn);
+      return await activeGroupStacks.run(nextStacks, fn);
     } finally {
-      await this.sinkRef.current.flush?.();
+      await this.context.sinkRef.current.flush?.();
     }
   }
 
@@ -109,7 +122,7 @@ class StructuredLogger implements Logger {
         if (currentIndex >= 0) this.groupStack.splice(currentIndex, 1);
       }
       if (flushOnPop) {
-        const flush = this.sinkRef.current.flush?.();
+        const flush = this.context.sinkRef.current.flush?.();
         if (flush) void flush.catch(() => undefined);
       }
     };
@@ -117,21 +130,21 @@ class StructuredLogger implements Logger {
 
   child(fields: LogFields): Logger {
     return new StructuredLogger(
-      this.sinkRef,
+      this.context,
       mergeFields(this.fields, fields),
       this.groupStack,
     );
   }
 
   async swapSink(next: LogSink): Promise<void> {
-    const previous = this.sinkRef.current;
+    const previous = this.context.sinkRef.current;
     await previous.flush?.();
     await previous.close?.();
-    this.sinkRef.current = next;
+    this.context.sinkRef.current = next;
   }
 
   private write(level: LogLevel, message: string, fields?: LogFields): void {
-    this.sinkRef.current.write({
+    this.context.sinkRef.current.write({
       ts: new Date().toISOString(),
       level,
       message,
@@ -141,7 +154,10 @@ class StructuredLogger implements Logger {
   }
 
   private currentGroups(): readonly string[] {
-    return activeGroupStack.getStore() ?? this.groupStack;
+    return (
+      activeGroupStacks.getStore()?.get(this.context.groupContextKey) ??
+      this.groupStack
+    );
   }
 }
 
