@@ -19,7 +19,10 @@ import {
   RUN_FLAGS_WITH_VALUE,
   type CliContext,
 } from '../runtime/cliContext';
-import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
+import {
+  hasCliApprovalDenied,
+  installCliApprovalHandlers,
+} from '../runtime/approvalAdapter';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { createCliRuntimeHost } from '../runtime/runtimeHost';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -212,7 +215,11 @@ async function runWorkflowAgent(
 
   return {
     exitCode:
-      result.status === 'error' ? CliExitCode.AgentError : CliExitCode.Success,
+      result.status === 'error' && hasCliApprovalDenied(runContext)
+        ? CliExitCode.ApprovalDenied
+        : result.status === 'error'
+          ? CliExitCode.AgentError
+          : CliExitCode.Success,
   };
 }
 
