@@ -87,6 +87,7 @@ import {
   type RunContext,
   type RunCoordinators,
 } from './RunContext';
+import { retainRunCoordinatorsForStream } from './runCoordinators';
 import { AgentProposalCoordinator } from './AgentProposalCoordinator';
 import { PlanApprovalCoordinator } from './PlanApprovalCoordinator';
 import { RetryRequestCoordinatorImpl } from './RetryRequestCoordinator';
@@ -116,6 +117,21 @@ function createExecutionRunContext(ctx: AgentLaunchContext): RunContext {
     approvals: {},
     coordinators: ctx.coordinators,
   });
+}
+
+async function withExecutionRunContext<T>(
+  ctx: AgentLaunchContext,
+  fn: () => T | Promise<T>,
+): Promise<T> {
+  const release = retainRunCoordinatorsForStream(
+    ctx.streamId,
+    ctx.coordinators,
+  );
+  try {
+    return await withRunContext(createExecutionRunContext(ctx), fn);
+  } finally {
+    release();
+  }
 }
 
 export async function getAgentPath(
@@ -727,7 +743,7 @@ export async function executeAgent(
       suppressErrorNotification: options?.isSubagent,
     });
     ctx.delegationDepth = options?.delegationDepth ?? 0;
-    return withRunContext(createExecutionRunContext(ctx), async () => {
+    return withExecutionRunContext(ctx, async () => {
       const { setting, streamId, config } = ctx;
       const { agent: agentName } = config;
       const { isSubagent } = options ?? {};
@@ -877,7 +893,7 @@ export async function executeMergeAgent(
     });
     const { streamId, executionId } = ctx;
 
-    await withRunContext(createExecutionRunContext(ctx), () =>
+    await withExecutionRunContext(ctx, () =>
       runFlowWithLifecycle(ctx, streamId, 'merge', async () => {
         StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
           runtimeHost: ctx.runtimeHost,
@@ -943,7 +959,7 @@ export async function resumeToolUseFromSnapshot(
     );
     const { setting, streamId } = ctx;
 
-    await withRunContext(createExecutionRunContext(ctx), async () => {
+    await withExecutionRunContext(ctx, async () => {
       if (setting.agentCategory !== AgentCategory.ToolUse) {
         throw new Error(
           'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
