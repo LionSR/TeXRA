@@ -7,6 +7,7 @@ import {
   clearPlanApprovalForStream,
   clearRetryRequest,
 } from '@agent/runtime/runCoordinators';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import {
   PersistedFlow,
   flowKey,
@@ -161,6 +162,7 @@ export async function runToolUseFlow<C = unknown>(
   );
 
   const kv = getExecutionStore(executionId);
+  const runCoordinators = tryUseRunContext()?.coordinators;
 
   const services: ToolUseServices<C> = {
     ...input,
@@ -182,8 +184,8 @@ export async function runToolUseFlow<C = unknown>(
     runtimeHost,
     interrupt(): void {
       onInterrupt?.();
-      clearRetryRequest(streamId);
-      clearPlanApprovalForStream(streamId);
+      clearRetryRequest(streamId, runCoordinators);
+      clearPlanApprovalForStream(streamId, runCoordinators);
       sessionLifecycle.interrupt();
     },
   };
