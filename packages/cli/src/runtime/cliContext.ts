@@ -2,7 +2,6 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 
 // Local imports - CLI runtime
@@ -76,28 +75,6 @@ function readCliAmbientState(): CliAmbientState {
     stdoutIsTty: process.stdout.isTTY === true,
     stderrIsTty: process.stderr.isTTY === true,
   };
-}
-
-export async function askCliQuestion(question: string): Promise<string> {
-  const prompt = createInterface({
-    input: process.stdin,
-    output: process.stderr,
-  });
-  try {
-    return await prompt.question(question);
-  } finally {
-    prompt.close();
-  }
-}
-
-export function createCliLineReader(
-  prompt: string,
-): ReturnType<typeof createInterface> {
-  return createInterface({
-    input: process.stdin,
-    output: process.stderr,
-    prompt,
-  });
 }
 
 export function cliFlagName(arg: string): string {
