@@ -59,6 +59,11 @@ interface ChatSessionState {
   streamReadyForFollowUps: boolean;
 }
 
+interface MultilineDraftState {
+  active: boolean;
+  lines: string[];
+}
+
 function parseCommand(line: string): { command: string; rest: string } {
   const [command = '', ...rest] = line.slice(1).trim().split(/\s+/);
   return { command: command.toLowerCase(), rest: rest.join(' ') };
@@ -187,6 +192,10 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     followUpFlush: Promise.resolve(),
     streamReadyForFollowUps: false,
   };
+  const multilineDraft: MultilineDraftState = {
+    active: false,
+    lines: [],
+  };
   const responsePrinter = installChatResponsePrinter(session);
   const disposeStatusListener = StreamStatusService.onDidChange((change) => {
     if (
@@ -280,6 +289,38 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     flushPendingFollowUps();
   };
 
+  const setReaderPrompt = (): void => {
+    reader.setPrompt(
+      multilineDraft.active ? renderer.continuationPrompt : renderer.prompt,
+    );
+  };
+
+  const resetMultilineDraft = (): void => {
+    multilineDraft.active = false;
+    multilineDraft.lines = [];
+    setReaderPrompt();
+  };
+
+  const submitMessage = async (message: string): Promise<void> => {
+    if (!session.runPromise) {
+      if (!(await modelAvailable(model, renderer))) {
+        reader.prompt();
+        return;
+      }
+      startSession(message);
+      return;
+    }
+
+    if (!session.streamId) {
+      queueFollowUp(message);
+      renderer.warn('The chat session is still starting. Follow-up queued.');
+      reader.prompt();
+      return;
+    }
+
+    queueFollowUp(message);
+  };
+
   const startSession = (instruction: string): void => {
     const config: AgentConfigPayload = {
       agent,
@@ -353,13 +394,32 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
 
     for await (const rawLine of reader) {
       const line = rawLine.trim();
-      if (!line) {
+      if (!line && !multilineDraft.active) {
         reader.prompt();
         continue;
       }
 
       if (line.startsWith('/')) {
         const { command, rest } = parseCommand(line);
+        if (multilineDraft.active) {
+          if (command === 'send') {
+            const message = multilineDraft.lines.join('\n').trim();
+            resetMultilineDraft();
+            if (!message) {
+              renderer.warn('Multiline draft is empty.');
+              reader.prompt();
+            } else {
+              await submitMessage(message);
+            }
+            continue;
+          }
+          if (command === 'cancel') {
+            resetMultilineDraft();
+            renderer.warn('Multiline draft canceled.');
+            reader.prompt();
+            continue;
+          }
+        }
         if (command === 'exit' || command === 'quit') {
           requestChatExit();
           break;
@@ -397,6 +457,11 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
             toolDisplay = mode;
             renderer.setToolDisplay(toolDisplay);
           }
+        } else if (command === 'multi') {
+          multilineDraft.active = true;
+          multilineDraft.lines = [];
+          setReaderPrompt();
+          renderer.info('Multiline draft started. Use /send or /cancel.');
         } else if (command === 'status') {
           renderer.printStatus(currentMetadata(), session.streamId);
         } else if (command === 'yolo') {
@@ -410,23 +475,13 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
         continue;
       }
 
-      if (!session.runPromise) {
-        if (!(await modelAvailable(model, renderer))) {
-          reader.prompt();
-          continue;
-        }
-        startSession(line);
-        continue;
-      }
-
-      if (!session.streamId) {
-        queueFollowUp(line);
-        renderer.warn('The chat session is still starting. Follow-up queued.');
+      if (multilineDraft.active) {
+        multilineDraft.lines.push(rawLine);
         reader.prompt();
         continue;
       }
 
-      queueFollowUp(line);
+      await submitMessage(line);
     }
 
     if (!session.stopRequested && session.runPromise && !session.runCompleted) {
