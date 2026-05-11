@@ -211,7 +211,7 @@ export function clearRetryRequest(
   streamId: string,
   explicitCoordinators = tryUseRunContext()?.coordinators,
 ): void {
-  const coordinators = new Set(bridgeState.retryCoordinatorRefs.keys());
+  const coordinators = new Set<RunCoordinators>();
   const mappedCoordinators = bridgeState.retries.get(streamId);
   if (mappedCoordinators) coordinators.add(mappedCoordinators);
   const runCoordinators = bridgeState.runStreams.get(streamId);
