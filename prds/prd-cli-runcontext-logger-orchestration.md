@@ -578,7 +578,7 @@ The CLI package now has separate `typecheck`, `check:architecture`, `bundle`, an
 
 ### Ledger update: PR #3839 review-clean scaffold state
 
-PR #3839 is review-clean on the latest audited head `85f130507b8ff9fcd5746d3e7489d4557a29b620`: format, validation, macOS validation, Ubuntu validation, and Claude review passed; Cursor Bugbot skipped; thread-aware review state showed zero unresolved, non-outdated review threads. The same status was posted to tracking issue #3838 and implementation issues #3833-#3837 so the next loop starts from current evidence rather than rediscovering completed scaffold work.
+PR #3839 is review-clean on the latest audited head `9ec2b0e1e0742fb4f0df2e8a712c29906dcd9b4a`: format, validation, macOS validation, Ubuntu validation, and Claude review passed; Cursor Bugbot skipped; thread-aware review state showed zero unresolved, non-outdated review threads. The same status was posted to tracking issue #3838 and implementation issues #3833-#3837 so the next loop starts from current evidence rather than rediscovering completed scaffold work.
 
 This does not complete the orchestration. PR #3839 is ready for review as a scaffold PR, and issues #3833-#3838 remain open. Logger v2 host sinks, real `texra run` runtime validation, interactive approval prompts, `texra chat` follow-up TUI, and final `ToolFileInteractionContext` ownership cleanup still need implementation or owned follow-up issues with acceptance criteria.
 
