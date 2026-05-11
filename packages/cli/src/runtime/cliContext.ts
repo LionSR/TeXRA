@@ -45,12 +45,15 @@ const FLAGS_WITH_VALUE = new Set([
 
 const GLOBAL_BOOLEAN_FLAGS = new Set(['--print', '-p']);
 
-function isFlagLike(value: string | undefined): boolean {
-  return value != null && value.startsWith('-');
+export function cliFlagName(arg: string): string {
+  return arg.split('=', 1)[0] ?? arg;
 }
 
-function isFlagValue(value: string | undefined): value is string {
-  return value != null && !value.startsWith('-');
+function inlineFlagValue(arg: string, ...names: string[]): string | undefined {
+  for (const name of names) {
+    if (arg.startsWith(`${name}=`)) return arg.slice(name.length + 1);
+  }
+  return undefined;
 }
 
 export function flagValue(
@@ -62,13 +65,16 @@ export function flagValue(
     const arg = args[index];
     if (arg == null) break;
 
+    const inlineValue = inlineFlagValue(arg, ...names);
+    if (inlineValue !== undefined) return inlineValue;
+
     if (names.includes(arg)) {
-      const value = args[index + 1];
-      return isFlagLike(value) ? undefined : value;
+      return args[index + 1];
     }
 
-    if (FLAGS_WITH_VALUE.has(arg) && isFlagValue(args[index + 1])) {
-      index += 2;
+    const flagName = cliFlagName(arg);
+    if (FLAGS_WITH_VALUE.has(flagName)) {
+      index += arg.includes('=') || args[index + 1] == null ? 1 : 2;
       continue;
     }
 
@@ -85,8 +91,9 @@ function hasBooleanFlag(args: readonly string[], ...names: string[]): boolean {
 
     if (names.includes(arg)) return true;
 
-    if (FLAGS_WITH_VALUE.has(arg) && isFlagValue(args[index + 1])) {
-      index += 2;
+    const flagName = cliFlagName(arg);
+    if (FLAGS_WITH_VALUE.has(flagName)) {
+      index += arg.includes('=') || args[index + 1] == null ? 1 : 2;
       continue;
     }
 
@@ -132,9 +139,15 @@ function splitGlobalArgs(args: readonly string[]): {
       break;
     }
 
-    if (GLOBAL_FLAGS_WITH_VALUE.has(arg)) {
+    const flagName = cliFlagName(arg);
+    if (GLOBAL_FLAGS_WITH_VALUE.has(flagName)) {
+      if (arg.includes('=')) {
+        globalArgs.push(arg);
+        index += 1;
+        continue;
+      }
       const value = args[index + 1];
-      if (!isFlagValue(value)) break;
+      if (value == null) break;
       globalArgs.push(arg);
       globalArgs.push(value);
       index += 2;
