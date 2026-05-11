@@ -27,10 +27,7 @@ import {
   writeTerminalStatus,
 } from '@agent/storage';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import {
-  getAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { untrackExecution } from '@agent/runtime/executionRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
@@ -68,6 +65,7 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { defineTool } from './core/define';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { createChildStream } from './childStream';
+import { getCurrentToolRuntimeHost } from './toolRuntimeHost';
 import {
   buildCodexCommandToolLog,
   buildCodexFileChangeToolLog,
@@ -271,8 +269,7 @@ function formatCodexError(
 export function publishCodexTodos(
   childStreamId: StreamTabId,
   todos: TodoItem[],
-  runtimeHost: AgentRuntimeHost = getCurrentToolFileInteractionContext()
-    ?.runtimeHost ?? getAgentRuntimeHost(),
+  runtimeHost: AgentRuntimeHost = getCurrentToolRuntimeHost(),
 ): void {
   runtimeHost.emit('updateTodos', { streamId: childStreamId, todos });
 }
@@ -281,8 +278,7 @@ export function publishCodexStreamUsage(
   childStreamId: StreamTabId,
   executionId: ExecutionId,
   usage: TokenUsageStats,
-  runtimeHost: AgentRuntimeHost = getCurrentToolFileInteractionContext()
-    ?.runtimeHost ?? getAgentRuntimeHost(),
+  runtimeHost: AgentRuntimeHost = getCurrentToolRuntimeHost(),
 ): void {
   runtimeHost.emit('updateStreamUsage', {
     streamId: childStreamId,
@@ -297,8 +293,7 @@ function logCodexItem(
   item: ThreadItem,
   childStreamId: StreamTabId,
   logger: AgentLogger,
-  runtimeHost: AgentRuntimeHost = getCurrentToolFileInteractionContext()
-    ?.runtimeHost ?? getAgentRuntimeHost(),
+  runtimeHost: AgentRuntimeHost = getCurrentToolRuntimeHost(),
 ): void {
   switch (item.type) {
     case 'command_execution': {
@@ -428,9 +423,7 @@ function startCodexLoop(params: {
 
   const session = new CodexFollowUpSession();
   const queue = ToolUseFollowUpQueue.acquire(childStreamId);
-  const runtimeHost =
-    getCurrentToolFileInteractionContext()?.runtimeHost ??
-    getAgentRuntimeHost();
+  const runtimeHost = getCurrentToolRuntimeHost();
   session.setQueue(queue);
   registerInterruptible(childStreamId, session);
 

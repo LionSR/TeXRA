@@ -1,7 +1,6 @@
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentCategory } from '@agent/core/AgentDataclass';
-import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   AgentExecutionHandle,
@@ -9,7 +8,6 @@ import {
   trackExecution,
   untrackExecution,
 } from '@agent/runtime/executionRegistry';
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 // Local imports - errors
@@ -25,6 +23,9 @@ import { STREAM_STATUS } from '@shared/schemas';
 // Local imports - utils
 import { formatDuration } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
+
+// Local imports - tools
+import { getCurrentToolRuntimeHost } from './toolRuntimeHost';
 
 interface CreateChildStreamOptions {
   streamPrefix: string;
@@ -55,9 +56,7 @@ export function createChildStream(
   options: CreateChildStreamOptions,
 ): { childStreamId: StreamTabId; logger: AgentLogger } {
   const childStreamId = `${options.streamPrefix}#${executionId}` as StreamTabId;
-  const runtimeHost =
-    getCurrentToolFileInteractionContext()?.runtimeHost ??
-    getAgentRuntimeHost();
+  const runtimeHost = getCurrentToolRuntimeHost();
 
   StreamStatusService.set(childStreamId, STREAM_STATUS.RUNNING, {
     runtimeHost,
@@ -104,9 +103,7 @@ export function finalizeChildStream(
 ): void {
   const hasError = options?.error != null || options?.errorMessage != null;
   const runtimeHost =
-    getHandle(executionId)?.runtimeHost ??
-    getCurrentToolFileInteractionContext()?.runtimeHost ??
-    getAgentRuntimeHost();
+    getHandle(executionId)?.runtimeHost ?? getCurrentToolRuntimeHost();
 
   if (options?.errorMessage) {
     logger.error(options.errorMessage);
