@@ -8,7 +8,7 @@ import '@awesome.me/webawesome/dist/components/drawer/drawer.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import type WaDrawer from '@awesome.me/webawesome/dist/components/drawer/drawer.js';
-import { html, render, type TemplateResult } from 'lit';
+import { html, nothing, render, type TemplateResult } from 'lit';
 import { Signal } from '@shared/signals';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import {
