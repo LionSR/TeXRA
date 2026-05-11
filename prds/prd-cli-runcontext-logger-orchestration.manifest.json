@@ -15,7 +15,7 @@
       "texra chat rejects headless mode instead of hanging."
     ],
     "remainingGaps": [
-      "PR #3839 is still draft.",
+      "PR #3839 is ready for review as a scaffold PR, not as a feature-complete implementation.",
       "Issues #3833, #3834, #3835, #3836, #3837, and #3838 are open.",
       "texra chat interactive follow-up TUI is still a stub and does not satisfy issue #3836.",
       "The manifest is intentionally still in_progress and not_validated until every issue acceptance gate is implemented or moved to an owned follow-up."
