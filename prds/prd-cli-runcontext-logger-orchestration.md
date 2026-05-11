@@ -634,6 +634,8 @@ The loop should proceed in dependency order, not issue-number order. This sequen
 3. Complete approval policy before rich chat.
    Chat depends on approval prompts. Implement the matrix once in the CLI approval adapter; then let chat render or call that adapter rather than defining its own approval semantics.
 
+   Focused follow-up #3841 owns the next narrow approval PR for this step. It should implement interactive `ask` prompts, make non-TTY/headless `ask` fail closed, validate bash/edit/plan/proposal/retry/external-inquiry behavior, and map denied or failed-closed approvals to `CliExitCode.ApprovalDenied` at the CLI boundary. It should not absorb `texra chat`, packaged `texra run` validation, Logger v2 host sinks, or ToolFileInteractionContext cleanup.
+
 4. Continue RunContext and ToolFileInteractionContext ownership cleanup.
    Remove ambient singletons and ownerless context bags as readers move to context-owned facts. Do this before adding more interactive surfaces that would otherwise depend on legacy fallback state.
 

@@ -122,6 +122,22 @@
         "Cover empty value-bearing flag normalization for inline and separate-token forms.",
         "Do not add a command-framework abstraction unless it owns a real parsing invariant."
       ]
+    },
+    {
+      "id": 3841,
+      "title": "CLI follow-up: implement ask approval prompts and matrix validation",
+      "url": "https://github.com/LionSR/TeXRA/issues/3841",
+      "parentIssues": [3835, 3838],
+      "recommendedOrderItem": "complete CLI approval policy matrix",
+      "sourceOfTruth": "packages/cli/src/runtime/approvalAdapter.ts maps CLI approval policy to decisions; shared coordinators own request identity and lifecycle",
+      "acceptance": [
+        "Implement interactive ask prompts for CLI approval requests without duplicating shared coordinator lifecycle logic.",
+        "In non-TTY or headless mode, ask fails closed with a clear message instead of waiting forever.",
+        "Validate the approval matrix for bash, edit, plan, proposal, retry, and external inquiry paths.",
+        "Map denied or failed-closed approval outcomes to CliExitCode.ApprovalDenied at the CLI boundary.",
+        "Keep request identity and lifecycle in shared coordinators; the CLI adapter owns only policy-to-decision mapping and terminal prompting.",
+        "Keep tool-specific handlers free of CLI flag parsing and policy interpretation."
+      ]
     }
   ],
   "references": [
