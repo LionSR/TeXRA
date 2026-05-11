@@ -18,6 +18,9 @@ type ModelHandlerConstructor = new (
 
 type ProviderHandlerLoader = () => Promise<ModelHandlerConstructor>;
 
+const INTERNAL_VALIDATION_MODEL_HANDLER_ENV =
+  'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER';
+
 // Record (not Map) so TypeScript enforces exhaustiveness over ModelProvider.
 // A new enum value in llm-zoo without an entry here will fail typecheck.
 // `null` marks providers that have no direct handler (routed elsewhere or unsupported).
@@ -127,6 +130,16 @@ export async function createModelHandler(
   originalConfig: ModelConfig,
 ): Promise<ModelHandler> {
   const config = withShortModelName(originalConfig);
+
+  if (process.env[INTERNAL_VALIDATION_MODEL_HANDLER_ENV] === '1') {
+    // Package validation still enters the real CLI and executeAgent path.
+    // Only the provider boundary is deterministic, so this must not become
+    // a user-facing model selector or an injected command-layer substitute.
+    const { ModelHandlerValidation } =
+      await import('@agent/modelHandlers/modelHandlerValidation');
+    return new ModelHandlerValidation(config);
+  }
+
   const useOpenRouter = getUseOpenRouter();
 
   // OpenAI Responses API (required or optional)
