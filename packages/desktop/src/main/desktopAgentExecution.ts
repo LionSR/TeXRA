@@ -910,7 +910,6 @@ export class DesktopProgressBridge {
     this.removePersistedStream(streamId);
 
     cleanupApprovalsForStream(streamId);
-    clearRetryRequest(streamId);
     ToolUseFollowUpQueue.release(streamId);
 
     await this.streamLogs.delete(streamId);
@@ -949,7 +948,6 @@ export class DesktopProgressBridge {
   async deleteAllStreams(): Promise<void> {
     cleanupAllApprovals();
     for (const streamId of this.streamLogs.keys()) {
-      clearRetryRequest(streamId);
       ToolUseFollowUpQueue.release(streamId);
     }
     // Drop persisted ghosts too: a "delete all" should leave nothing

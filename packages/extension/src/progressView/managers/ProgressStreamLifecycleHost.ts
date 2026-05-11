@@ -48,7 +48,6 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
 
   cleanupDeletedStream(stream: StreamTabId): void {
     cleanupApprovalsForStream(stream);
-    clearRetryRequest(stream);
     ToolUseFollowUpQueue.release(stream);
     this.modelOutputBackups.delete(stream);
     this.provider.webviewBridge.clearStream(stream);
@@ -57,7 +56,6 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
   cleanupDeletedStreams(streams: StreamTabId[]): void {
     cleanupAllApprovals();
     for (const stream of streams) {
-      clearRetryRequest(stream);
       ToolUseFollowUpQueue.release(stream);
     }
     this.modelOutputBackups.clear();
