@@ -45,6 +45,18 @@ const FLAGS_WITH_VALUE = new Set([
 
 const GLOBAL_BOOLEAN_FLAGS = new Set(['--print', '-p']);
 
+interface CliAmbientState {
+  readonly isCi: boolean;
+  readonly stdoutIsTty: boolean;
+}
+
+function readCliAmbientState(): CliAmbientState {
+  return {
+    isCi: Boolean(process.env.CI),
+    stdoutIsTty: process.stdout.isTTY === true,
+  };
+}
+
 export function cliFlagName(arg: string): string {
   return arg.split('=', 1)[0] ?? arg;
 }
@@ -112,10 +124,10 @@ function approvalPolicy(args: readonly string[]): CliApprovalPolicy {
   return parseCliApprovalPolicy(flagValue(args, '--approval-policy'));
 }
 
-function cliMode(args: readonly string[]): CliMode {
+function cliMode(args: readonly string[], ambient: CliAmbientState): CliMode {
   if (hasBooleanFlag(args, '--print', '-p')) return 'headless';
-  if (process.env.CI) return 'headless';
-  if (!process.stdout.isTTY) return 'headless';
+  if (ambient.isCi) return 'headless';
+  if (!ambient.stdoutIsTty) return 'headless';
   return 'interactive';
 }
 
@@ -199,13 +211,14 @@ function resolveResourcesPath(): string {
 export async function resolveCliContext(
   argv?: readonly string[],
 ): Promise<CliContext> {
+  const ambient = readCliAmbientState();
   const resolvedArgv = argv ?? process.argv.slice(2);
   const { globalArgs, commandArgs } = splitGlobalArgs(resolvedArgv);
   const cwd = flagValue(globalArgs, '--cwd') ?? process.cwd();
   return {
     argv: commandArgs,
     cwd,
-    mode: cliMode(globalArgs),
+    mode: cliMode(globalArgs, ambient),
     outputFormat: outputFormat(globalArgs),
     approvalPolicy: approvalPolicy(globalArgs),
     version: await readCliVersion(),
