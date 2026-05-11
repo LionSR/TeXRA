@@ -167,6 +167,8 @@ async function createTempFileWithCleanup(
 
 function tempPathToLocation(tempPath: string): FileLocation {
   const workspacePath = WorkspaceFS.getPath();
+  if (workspacePath == null) return createExternalLocation(tempPath);
+
   const normalizedWorkspacePath = path.normalize(workspacePath);
   const normalizedTempPath = path.normalize(tempPath);
   const relativePath = path.relative(
@@ -242,8 +244,8 @@ export async function runLatexdiff(
     );
 
     const result = await latexdiffService.runDiff(
-      pathToLocation(originalPath),
-      pathToLocation(proposedPath),
+      tempPathToLocation(originalPath),
+      tempPathToLocation(proposedPath),
       '_diff',
       false,
       'coarse',
