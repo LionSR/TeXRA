@@ -150,6 +150,9 @@ Keys:
       case 'updateActiveProcesses':
         this.renderActiveChildren('processes', payload);
         return;
+      case 'updateProcessOutput':
+        this.renderProcessOutput(payload);
+        return;
       case 'updateQueuedFollowUps':
         this.muted('follow-up queued');
         return;
@@ -209,6 +212,34 @@ Keys:
           : [];
     if (children.length === 0) return;
     this.muted(`${label}: ${children.length} active`);
+  }
+
+  private renderProcessOutput(payload: unknown): void {
+    const executionId = stringField(payload, 'executionId') ?? 'process';
+    const stdout = stringField(payload, 'stdout') ?? '';
+    const stderr = stringField(payload, 'stderr') ?? '';
+    if (!stdout && !stderr) return;
+
+    if (this.toolDisplay === 'minimal') {
+      const parts = [
+        stdout ? `${stdout.length} stdout char(s)` : undefined,
+        stderr ? `${stderr.length} stderr char(s)` : undefined,
+      ].filter((part): part is string => part != null);
+      this.muted(`${executionId}: process output (${parts.join(', ')})`);
+      return;
+    }
+
+    const lines = [
+      stdout ? `stdout: ${this.formatOutputSnippet(stdout)}` : undefined,
+      stderr ? `stderr: ${this.formatOutputSnippet(stderr)}` : undefined,
+    ].filter((line): line is string => line != null);
+    this.renderCard(`process output: ${executionId}`, lines);
+  }
+
+  private formatOutputSnippet(text: string): string {
+    const normalized = text.replaceAll('\r\n', '\n').trim();
+    if (!normalized) return '(empty)';
+    return truncateText(normalized.replaceAll('\n', ' | '), 420);
   }
 
   private isApprovalEvent(event: keyof ProgressEventPayloads): boolean {
