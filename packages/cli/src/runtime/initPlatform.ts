@@ -10,7 +10,10 @@ import { initPlatform, tryPlatform } from '@platform/platform';
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 
 // Local imports - auth
-import { initializeServerSideKeyAccess } from '@auth/serverKeys';
+import {
+  getServerSideKeyService,
+  initializeServerSideKeyAccess,
+} from '@auth/serverKeys';
 import { FREE_TIER } from '@auth/sharedConfig';
 import type { AuthProvider } from '@auth/serverKeys';
 
@@ -109,6 +112,7 @@ export async function initCliPlatform(
     serverSideKeysInitialized = true;
   }
 
+  await getServerSideKeyService().setUseIncludedModelAccess(false);
   await setCliHelperModel(context.helperModel);
 
   if (bootstrappedResourcesPath !== context.resourcesPath) {
