@@ -70,7 +70,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
   let model = flagValue(args, '--model', '-m') ?? DEFAULT_AGENT_MODEL;
   let streamId: StreamTabId | undefined;
   let runCompleted = false;
-  let runExitCode = CliExitCode.Success;
+  let runExitCode: CliExitCode = CliExitCode.Success;
   let runPromise: Promise<void> | undefined;
 
   const startSession = (instruction: string): void => {
