@@ -62,6 +62,7 @@ function truncateText(text: string, maxLength: number): string {
 
 export class ChatTerminalRenderer {
   readonly prompt = 'user> ';
+  readonly continuationPrompt = '...> ';
 
   private toolDisplay: ChatToolDisplayMode;
   private lastUsageSummary: string | undefined;
@@ -92,6 +93,9 @@ export class ChatTerminalRenderer {
   /agent <name>    Set the tool-use agent before the session starts
   /model <name>    Set the model before the session starts
   /tools <mode>    Set tool/progress rows: grouped, minimal, or hidden
+  /multi           Start a multiline message draft
+  /send            Send the current multiline draft
+  /cancel          Cancel the current multiline draft
   /status          Show active metadata and latest usage
   /yolo            Explain yolo approval mode
   /clear           Clear the terminal
