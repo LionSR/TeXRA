@@ -1,6 +1,9 @@
 // Local imports - CLI runtime
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
+// Local imports - shared schemas
+import { MESSAGE_TYPES, type StreamLogEntry } from '@shared/schemas';
+
 import { writeRawStderr, writeTextStderr } from '../runtime/logSinks';
 
 interface ChatSessionMetadata {
@@ -66,6 +69,7 @@ export class ChatTerminalRenderer {
 
   private toolDisplay: ChatToolDisplayMode;
   private lastUsageSummary: string | undefined;
+  private readonly renderedToolUseSignatures = new Map<string, string>();
 
   constructor(
     private readonly colorEnabled: boolean,
@@ -163,6 +167,36 @@ Keys:
       default:
         return;
     }
+  }
+
+  renderStreamLogEntry(entry: StreamLogEntry): void {
+    if (
+      entry.messageType !== MESSAGE_TYPES.TOOL_USE ||
+      this.toolDisplay === 'hidden'
+    ) {
+      return;
+    }
+
+    const toolLog = this.normalizeToolUseLog(entry.data);
+    const signature = JSON.stringify(toolLog);
+    if (this.renderedToolUseSignatures.get(entry.id) === signature) return;
+    this.renderedToolUseSignatures.set(entry.id, signature);
+
+    if (this.toolDisplay === 'minimal') {
+      const status = toolLog.status ? ` ${toolLog.status}` : '';
+      const summary = toolLog.summary ? `: ${toolLog.summary}` : '';
+      this.muted(`tool${status}: ${toolLog.toolName}${summary}`);
+      return;
+    }
+
+    const lines = [
+      toolLog.status ? `status: ${toolLog.status}` : undefined,
+      toolLog.summary ? `summary: ${toolLog.summary}` : undefined,
+      toolLog.input ? `input: ${toolLog.input}` : undefined,
+      toolLog.output ? `output: ${toolLog.output}` : undefined,
+      toolLog.error ? `error: ${toolLog.error}` : undefined,
+    ].filter((line): line is string => line != null);
+    this.renderCard(`tool: ${toolLog.toolName}`, lines);
   }
 
   private renderConversationProgress(payload: unknown): void {
@@ -277,6 +311,60 @@ Keys:
   private formatOutputSnippet(text: string): string {
     const normalized = text.replaceAll('\r\n', '\n').trim();
     if (!normalized) return '(empty)';
+    return truncateText(normalized.replaceAll('\n', ' | '), 420);
+  }
+
+  private normalizeToolUseLog(data: unknown): {
+    toolName: string;
+    status: string | undefined;
+    summary: string | undefined;
+    input: string | undefined;
+    output: string | undefined;
+    error: string | undefined;
+  } {
+    const toolName =
+      stringField(data, 'toolName') ?? stringField(data, 'tool') ?? 'tool';
+    const status = stringField(data, 'status');
+    const outputValue = isRecord(data) ? data.output : undefined;
+    const nestedOutput = isRecord(outputValue) ? outputValue : undefined;
+    const summary =
+      stringField(data, 'summary') ?? stringField(nestedOutput, 'summary');
+    const error =
+      stringField(data, 'error') ?? stringField(nestedOutput, 'error');
+    const output =
+      this.formatUnknownSnippet(this.extractToolOutputContent(outputValue)) ??
+      undefined;
+
+    return {
+      toolName,
+      status,
+      summary: summary ? truncateText(summary, 180) : undefined,
+      input: this.formatUnknownSnippet(isRecord(data) ? data.input : undefined),
+      output,
+      error: error ? truncateText(error, 220) : undefined,
+    };
+  }
+
+  private extractToolOutputContent(output: unknown): unknown {
+    if (!isRecord(output)) return output;
+    if (Object.hasOwn(output, 'output')) return output.output;
+    const {
+      summary: _summary,
+      error: _error,
+      isError: _isError,
+      diagnostics: _diagnostics,
+      userInstruction: _userInstruction,
+      ...rest
+    } = output;
+    return rest;
+  }
+
+  private formatUnknownSnippet(value: unknown): string | undefined {
+    if (value == null) return undefined;
+    const text =
+      typeof value === 'string' ? value : JSON.stringify(value, undefined, 2);
+    const normalized = text.trim();
+    if (!normalized || normalized === '{}') return undefined;
     return truncateText(normalized.replaceAll('\n', ' | '), 420);
   }
 
