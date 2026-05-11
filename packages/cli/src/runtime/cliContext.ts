@@ -49,7 +49,12 @@ export const RUN_FLAGS_WITH_VALUE = new Set([
   '--instruction',
 ]);
 
-const CHAT_FLAGS_WITH_VALUE = new Set(['--agent', '--model', '-m']);
+const CHAT_FLAGS_WITH_VALUE = new Set([
+  '--agent',
+  '--model',
+  '-m',
+  '--tool-display',
+]);
 
 const FLAGS_WITH_VALUE = new Set([
   ...GLOBAL_FLAGS_WITH_VALUE,
