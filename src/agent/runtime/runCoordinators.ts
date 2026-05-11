@@ -198,8 +198,8 @@ export function clearRetryRequest(streamId: string): void {
 
 export function clearAllRetryRequests(): void {
   const coordinators = new Set(bridgeState.retryCoordinatorRefs.keys());
-  for (const retryCoordinator of bridgeState.retries.values()) {
-    coordinators.add(retryCoordinator);
+  for (const runCoordinators of bridgeState.retries.values()) {
+    coordinators.add(runCoordinators);
   }
   coordinators.add(legacyCoordinators);
   for (const coordinator of coordinators) {
