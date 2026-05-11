@@ -2,6 +2,7 @@
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
+import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
@@ -529,7 +530,7 @@ export class StreamTab extends LitElement {
     if (!this.progress?.conversationTurns) return nothing;
     return html`<span
       class="progress-badge-inline"
-      title=${getProgressBadgeTitle(this.progress)}
+      title=${ifDefined(getProgressBadgeTitle(this.progress))}
     >
       ${renderProgressBadgeContent(this.progress)}
     </span>`;
