@@ -49,7 +49,7 @@ function printClearScreen(): void {
 
 function parseCommand(line: string): { command: string; rest: string } {
   const [command = '', ...rest] = line.slice(1).trim().split(/\s+/);
-  return { command, rest: rest.join(' ') };
+  return { command: command.toLowerCase(), rest: rest.join(' ') };
 }
 
 export async function runChat(context: CliContext): Promise<ChatResult> {
@@ -89,6 +89,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
   let stopRequested = false;
   const pendingFollowUps: string[] = [];
   let followUpFlush = Promise.resolve();
+  let followUpFlushScheduled = false;
 
   const interruptActiveSession = (): void => {
     if (!streamId) return;
@@ -134,9 +135,18 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       });
   };
 
+  const schedulePendingFollowUpFlush = (): void => {
+    if (followUpFlushScheduled) return;
+    followUpFlushScheduled = true;
+    setTimeout(() => {
+      followUpFlushScheduled = false;
+      flushPendingFollowUps();
+    }, 0);
+  };
+
   const queueFollowUp = (line: string): void => {
     pendingFollowUps.push(line);
-    flushPendingFollowUps();
+    schedulePendingFollowUpFlush();
   };
 
   const startSession = (instruction: string): void => {
@@ -156,7 +166,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
         if (stopRequested) {
           interruptActiveSession();
         } else {
-          flushPendingFollowUps();
+          schedulePendingFollowUpFlush();
         }
       },
     })
