@@ -66,6 +66,31 @@ describe('structuredLogger', () => {
     );
   });
 
+  it('isolates overlapping async group scopes on the same logger', async () => {
+    const sink = new MemorySink();
+    const logger = createStructuredLogger(sink);
+    let releaseOuter: () => void = () => undefined;
+
+    const outer = logger.withGroup('outer', async () => {
+      logger.info('outer start');
+      await new Promise<void>((resolve) => {
+        releaseOuter = resolve;
+      });
+      logger.info('outer end');
+    });
+
+    await logger.withGroup('other', async () => {
+      logger.info('other message');
+    });
+    releaseOuter();
+    await outer;
+
+    assert.deepEqual(
+      sink.records.map((record) => record.groups),
+      [['outer'], ['other'], ['outer']],
+    );
+  });
+
   it('flushes and closes the old sink when swapping sinks', async () => {
     const first = new FlushCountingSink();
     const second = new FlushCountingSink();
