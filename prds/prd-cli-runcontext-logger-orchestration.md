@@ -22,7 +22,7 @@ The implementation should therefore not begin with a large `packages/core` migra
 Ship a useful CLI v1.0 while improving the kernel boundary in the smallest safe steps:
 
 1. `texra run <workflow-agent>` for headless workflow runs.
-2. `texra chat` for an Ink-based interactive tool-use session.
+2. `texra chat` for a lazy-loaded interactive terminal tool-use session.
 3. `texra agents list`, `texra models list`, `texra version`, and `texra --help`.
 4. A minimal explicit `RunContext` around `executeAgent()`, sufficient for per-context approval coordinators.
 5. A minimal Logger v2 path with structured records and host sinks, sufficient for CLI text and NDJSON output.
@@ -194,7 +194,7 @@ Scheduled refactorings:
 
 - Keep rendering out of `AgentLogger`; it should produce semantic records and stages, not formatted strings.
 - Separate `LogSink` from the platform `LogBackend` compatibility surface so new hosts do not inherit the old channel-first API.
-- Move group state from `logUtils.ts` into the logger instance before adding CLI Ink rendering, otherwise the Ink sink will inherit the old ALS problem.
+- Move group state from `logUtils.ts` into the logger instance before adding CLI terminal rendering, otherwise the terminal sink will inherit the old ALS problem.
 
 Acceptance:
 
@@ -277,7 +277,7 @@ Acceptance:
 
 Work:
 
-- Add an Ink application loaded only for `texra chat`.
+- Add a terminal UI application loaded only for `texra chat`.
 - Implement:
   - stream pane
   - prompt input
@@ -289,10 +289,10 @@ Work:
 
 Scheduled refactorings:
 
-- Keep Ink components pure: they receive stream state and callbacks, but do not call `executeAgent()` directly.
-- Share the text/NDJSON/Ink stream normalization layer so the three renderers do not grow three progress-event interpreters.
-- Lazy-load Ink behind the `texra chat` command boundary and add a small architectural test or build check to preserve that boundary.
-- Keep `packages/cli/src/chat/runChat.ts` as the only static chat entry imported dynamically by the root command; Ink components should live below that boundary.
+- Keep terminal renderer components pure: they receive stream state and callbacks, but do not call `executeAgent()` directly.
+- Share the text/NDJSON/terminal stream normalization layer so the renderers do not grow separate progress-event interpreters.
+- Lazy-load the terminal renderer behind the `texra chat` command boundary and add a small architectural test or build check to preserve that boundary.
+- Keep `packages/cli/src/chat/runChat.ts` as the only static chat entry imported dynamically by the root command; renderer components should live below that boundary.
 
 Acceptance:
 
@@ -300,7 +300,7 @@ Acceptance:
 - Tool calls and assistant responses stream live.
 - Edit/bash approvals appear inline.
 - `texra chat --approval-policy yolo` can complete a multi-tool flow without prompts.
-- Ink is not loaded for `texra run` or `texra --help`.
+- The terminal renderer is not loaded for `texra run` or `texra --help`.
 
 ### Phase G: Sweep and hardening
 
@@ -374,7 +374,7 @@ Recommended GitHub issues:
    - Scope: approval policy parser, bash/edit/plan/proposal/retry/external-inquiry handlers.
    - Outcome: `never`, `ask`, and `yolo` work consistently.
 
-6. **Implement `texra chat` with lazy-loaded Ink**
+6. **Implement `texra chat` with a lazy-loaded terminal renderer**
    - Scope: TUI app, stream pane, prompt input, approval card, slash commands, cancellation.
    - Outcome: tool-use agents work interactively in a terminal.
 
@@ -410,7 +410,7 @@ Mitigation: document the limitation, then retire these gates after plan/proposal
 
 ### Risk: Logger v2 becomes too large
 
-The full logger PRD includes sinks and future MCP work. The CLI v1.0 only needs text, NDJSON, and Ink routing.
+The full logger PRD includes sinks and future MCP work. The CLI v1.0 only needs text, NDJSON, and lazy-loaded terminal routing.
 
 Mitigation: implement the interfaces and CLI sinks first; defer MCP and rich desktop sinks.
 
