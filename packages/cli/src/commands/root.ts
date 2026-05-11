@@ -9,6 +9,7 @@ import { computeModelOptionsData } from '@model/computeModelOptions';
 
 // Local imports - CLI runtime
 import {
+  applyCliGlobalArgs,
   cliFlagName,
   CLI_BOOLEAN_FLAGS,
   flagValue,
@@ -171,8 +172,9 @@ async function runWorkflowAgent(
     return { exitCode: CliExitCode.Usage };
   }
 
-  await initCliPlatform(context);
-  installCliApprovalHandlers(context);
+  const runContext = applyCliGlobalArgs(context, args);
+  await initCliPlatform(runContext);
+  installCliApprovalHandlers(runContext);
   await loadAgents();
 
   const outputFile = flagValue(args, '--output');
@@ -183,10 +185,10 @@ async function runWorkflowAgent(
     inputFile,
     outputFiles: outputFile ? [outputFile] : [],
     instruction: flagValue(args, '--instruction') ?? '',
-    workingDirectory: context.cwd,
+    workingDirectory: runContext.cwd,
   };
 
-  const runtimeHost = createCliRuntimeHost(context);
+  const runtimeHost = createCliRuntimeHost(runContext);
   let result: Awaited<ReturnType<typeof executeAgent>>;
   try {
     result = await executeAgent(config, undefined, { runtimeHost });
