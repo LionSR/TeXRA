@@ -216,6 +216,10 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     }
     closeReader();
   };
+  const handleSigint = (): void => {
+    if (session.readerClosed) return;
+    requestChatExit();
+  };
 
   const flushPendingFollowUps = (): void => {
     if (
@@ -335,6 +339,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
   };
 
   try {
+    process.on('SIGINT', handleSigint);
     renderer.printBanner(currentMetadata());
     reader.prompt();
 
@@ -423,6 +428,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     await session.runPromise;
     return { exitCode: session.runExitCode };
   } finally {
+    process.off('SIGINT', handleSigint);
     disposeStatusListener();
     responsePrinter.dispose();
     closeReader();
