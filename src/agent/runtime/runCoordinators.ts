@@ -36,11 +36,12 @@ const retries = new Map<string, RunCoordinators>();
 
 function clearPlanBridgeForStream(streamId: string): void {
   planStreams.delete(streamId);
-  for (const [approvalId, approvalStreamId] of planApprovalStreams) {
-    if (approvalStreamId === streamId) {
-      planApprovals.delete(approvalId);
-      planApprovalStreams.delete(approvalId);
-    }
+  const approvalIds = [...planApprovalStreams.entries()]
+    .filter(([, approvalStreamId]) => approvalStreamId === streamId)
+    .map(([approvalId]) => approvalId);
+  for (const approvalId of approvalIds) {
+    planApprovals.delete(approvalId);
+    planApprovalStreams.delete(approvalId);
   }
 }
 
@@ -113,8 +114,10 @@ export function resolveProposal(
 }
 
 export function clearProposalForStream(streamId: string): void {
-  for (const [proposalId, proposalStreamId] of proposalStreams) {
-    if (proposalStreamId !== streamId) continue;
+  const proposalIds = [...proposalStreams.entries()]
+    .filter(([, proposalStreamId]) => proposalStreamId === streamId)
+    .map(([proposalId]) => proposalId);
+  for (const proposalId of proposalIds) {
     (
       proposals.get(proposalId)?.proposal ?? legacyCoordinators.proposal
     ).clearRequest(proposalId);
