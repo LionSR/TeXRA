@@ -209,7 +209,8 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       change.streamId !== session.streamId ||
       change.status !== STREAM_STATUS.WAITING ||
       session.stopRequested ||
-      session.runCompleted
+      session.runCompleted ||
+      pendingApprovalPrompt
     ) {
       return;
     }
