@@ -91,9 +91,14 @@ export function resolvePlanApproval(
   ).resolveRequest(approvalId, result);
 }
 
-export function clearPlanApprovalForStream(streamId: string): void {
+export function clearPlanApprovalForStream(
+  streamId: string,
+  explicitCoordinators = tryUseRunContext()?.coordinators,
+): void {
   (
-    bridgeState.planStreams.get(streamId)?.plan ?? legacyCoordinators.plan
+    bridgeState.planStreams.get(streamId)?.plan ??
+    explicitCoordinators?.plan ??
+    legacyCoordinators.plan
   ).clearForStream(streamId);
   clearPlanBridgeForStream(streamId);
 }
@@ -185,10 +190,14 @@ export function cancelRetry(streamId: string): boolean {
   ).cancelRetry(streamId);
 }
 
-export function clearRetryRequest(streamId: string): void {
+export function clearRetryRequest(
+  streamId: string,
+  explicitCoordinators = tryUseRunContext()?.coordinators,
+): void {
   const coordinators = new Set(bridgeState.retryCoordinatorRefs.keys());
   const mappedCoordinators = bridgeState.retries.get(streamId);
   if (mappedCoordinators) coordinators.add(mappedCoordinators);
+  if (explicitCoordinators) coordinators.add(explicitCoordinators);
   coordinators.add(legacyCoordinators);
   for (const coordinator of coordinators) {
     coordinator.retry.clearRequest(streamId);
