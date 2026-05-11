@@ -47,6 +47,19 @@ export function cleanupApprovalsForStream(streamId: StreamTabId): void {
 }
 
 /**
+ * Clean up approval state for a set of deleted streams, then clear any
+ * remaining global approval state.
+ */
+export function cleanupApprovalsForStreams(
+  streamIds: readonly StreamTabId[],
+): void {
+  for (const streamId of streamIds) {
+    cleanupApprovalsForStream(streamId);
+  }
+  cleanupAllApprovals();
+}
+
+/**
  * Clean up all approval state when deleting all streams.
  * Handles pending approvals (tool edits + bash), plan approvals, and YOLO mode state.
  */
