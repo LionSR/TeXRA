@@ -1,16 +1,74 @@
 // Local imports - logger
 import type { LogRecord, LogSink } from '@logger/structuredLogger';
 
+let stdoutClosed = false;
+let stderrClosed = false;
+
+function isClosedStreamError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error.code === 'EPIPE' || error.code === 'ERR_STREAM_DESTROYED')
+  );
+}
+
+function writeLine(
+  stream: NodeJS.WriteStream,
+  text: string,
+  streamClosed: () => boolean,
+  markClosed: () => void,
+): void {
+  if (streamClosed() || stream.destroyed) return;
+  try {
+    stream.write(`${text}\n`, (error) => {
+      if (!error) return;
+      if (isClosedStreamError(error)) {
+        markClosed();
+        return;
+      }
+      throw error;
+    });
+  } catch (error) {
+    if (isClosedStreamError(error)) {
+      markClosed();
+      return;
+    }
+    throw error;
+  }
+}
+
 export function writeNdjsonStdout(record: unknown): void {
-  process.stdout.write(`${JSON.stringify(record)}\n`);
+  writeLine(
+    process.stdout,
+    JSON.stringify(record),
+    () => stdoutClosed,
+    () => {
+      stdoutClosed = true;
+    },
+  );
 }
 
 export function writeTextStdout(text: string): void {
-  process.stdout.write(`${text}\n`);
+  writeLine(
+    process.stdout,
+    text,
+    () => stdoutClosed,
+    () => {
+      stdoutClosed = true;
+    },
+  );
 }
 
 export function writeTextStderr(text: string): void {
-  process.stderr.write(`${text}\n`);
+  writeLine(
+    process.stderr,
+    text,
+    () => stderrClosed,
+    () => {
+      stderrClosed = true;
+    },
+  );
 }
 
 export class StderrTextSink implements LogSink {
@@ -19,8 +77,8 @@ export class StderrTextSink implements LogSink {
       ? ` [${record.groups.join(' > ')}]`
       : '';
     const stream = record.fields.streamId ? ` [${record.fields.streamId}]` : '';
-    process.stderr.write(
-      `${record.ts} ${record.level.toUpperCase()}${stream}${groups} ${record.message}\n`,
+    writeTextStderr(
+      `${record.ts} ${record.level.toUpperCase()}${stream}${groups} ${record.message}`,
     );
   }
 }
