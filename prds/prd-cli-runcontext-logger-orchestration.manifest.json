@@ -106,6 +106,24 @@
     "implement texra chat TUI over existing session lifecycle",
     "complete publish-readiness and release gates"
   ],
+  "focusedFollowUps": [
+    {
+      "id": 3840,
+      "title": "CLI follow-up: validate texra run packaged runtime path",
+      "url": "https://github.com/LionSR/TeXRA/issues/3840",
+      "parentIssues": [3834, 3838],
+      "recommendedOrderItem": "finish texra run on shared executeAgent path",
+      "sourceOfTruth": "packages/cli/src/runtime/cliContext.ts for process data; packages/cli/src/runtime/exitCodes.ts for exit codes; shared executeAgent runtime for execution semantics",
+      "acceptance": [
+        "Build and execute the package-local texra binary rather than only TypeScript entry points.",
+        "Validate a real workflow-agent path through shared executeAgent using a small fixture project or controlled fake runtime host.",
+        "Cover text, JSON, and NDJSON result output semantics for texra run.",
+        "Cover command-local global flags after the run subcommand: --output-format, --approval-policy, --cwd, and --print.",
+        "Cover empty value-bearing flag normalization for inline and separate-token forms.",
+        "Do not add a command-framework abstraction unless it owns a real parsing invariant."
+      ]
+    }
+  ],
   "references": [
     {
       "name": "OpenRouter create-agent-tui",
