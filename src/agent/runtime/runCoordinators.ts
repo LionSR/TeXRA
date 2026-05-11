@@ -23,7 +23,7 @@ const legacyCoordinators: RunCoordinators = {
 };
 
 /** Return the active run's coordinators, falling back to legacy singletons. */
-export function getRunCoordinators(): RunCoordinators {
+function getRunCoordinators(): RunCoordinators {
   return tryUseRunContext()?.coordinators ?? legacyCoordinators;
 }
 
