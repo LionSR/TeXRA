@@ -9,8 +9,6 @@ import {
 } from '@agent/core/AgentConfig';
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { computeModelOptionsData } from '@model/computeModelOptions';
-import type { ModelOptionData } from '@shared/schemas';
 
 // Local imports - CLI runtime
 import {
@@ -29,6 +27,7 @@ import {
   installCliApprovalHandlers,
 } from '../runtime/approvalAdapter';
 import { initCliPlatform } from '../runtime/initPlatform';
+import { getCliModelAccessList } from '../runtime/modelAccess';
 import { createCliRuntimeHost } from '../runtime/runtimeHost';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
@@ -149,33 +148,31 @@ async function listAgents(context: CliContext): Promise<CliResult> {
 
 async function listModels(context: CliContext): Promise<CliResult> {
   await initCliPlatform(context);
-  const models = await computeModelOptionsData();
+  const modelAccess = await getCliModelAccessList();
 
   if (context.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(models, null, 2));
+    writeTextStdout(
+      JSON.stringify(
+        modelAccess.map(({ model }) => model),
+        null,
+        2,
+      ),
+    );
     return { exitCode: 0 };
   }
 
   if (context.outputFormat === 'ndjson') {
     const ts = new Date().toISOString();
-    for (const model of models) {
+    for (const { model } of modelAccess) {
       writeNdjsonStdout({ kind: 'model', ts, model });
     }
     return { exitCode: 0 };
   }
 
-  for (const model of models) {
-    writeTextStdout(
-      `${model.value}\t${model.label}\t${formatModelAccessStatus(model)}`,
-    );
+  for (const { model, status } of modelAccess) {
+    writeTextStdout(`${model.value}\t${model.label}\t${status}`);
   }
   return { exitCode: 0 };
-}
-
-function formatModelAccessStatus(model: ModelOptionData): string {
-  if (!model.disabled && !model.requiresKey) return 'available';
-  const provider = model.provider ? `${model.provider} ` : '';
-  return `missing ${provider}key`;
 }
 
 async function copyWorkflowOutputToRequestedPath(
