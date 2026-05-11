@@ -37,10 +37,27 @@ function stringField(value: unknown, key: string): string | undefined {
   return typeof field === 'string' ? field : undefined;
 }
 
+function booleanField(value: unknown, key: string): boolean | undefined {
+  if (!isRecord(value)) return undefined;
+  const field = value[key];
+  return typeof field === 'boolean' ? field : undefined;
+}
+
 function numberField(value: unknown, key: string): number | undefined {
   if (!isRecord(value)) return undefined;
   const field = value[key];
   return typeof field === 'number' ? field : undefined;
+}
+
+function arrayField(value: unknown, key: string): unknown[] {
+  if (!isRecord(value)) return [];
+  const field = value[key];
+  return Array.isArray(field) ? field : [];
+}
+
+function truncateText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
 export class ChatTerminalRenderer {
@@ -209,12 +226,133 @@ Keys:
     event: keyof ProgressEventPayloads,
     payload: unknown,
   ): void {
-    const title =
-      stringField(payload, 'title') ??
-      stringField(payload, 'summary') ??
-      stringField(payload, 'command') ??
-      event;
-    this.warn(`approval: ${title}`);
+    switch (event) {
+      case 'showToolEditPermission':
+        this.renderToolEditApproval(payload);
+        return;
+      case 'showBashPermission':
+        this.renderBashApproval(payload);
+        return;
+      case 'showAgentProposal':
+        this.renderAgentProposalApproval(payload);
+        return;
+      case 'showPlanApproval':
+        this.renderPlanApproval(payload);
+        return;
+      case 'showExternalInquiry':
+        this.renderExternalInquiryApproval(payload);
+        return;
+      case 'showRetryRequest':
+        this.renderRetryApproval(payload);
+        return;
+      default:
+        this.renderCard('approval requested', [event]);
+    }
+  }
+
+  private renderToolEditApproval(payload: unknown): void {
+    const relativePath =
+      stringField(payload, 'relativePath') ??
+      stringField(payload, 'path') ??
+      'unknown file';
+    const sourceTool = stringField(payload, 'sourceTool') ?? 'unknown tool';
+    const added = numberField(payload, 'addedLines') ?? 0;
+    const removed = numberField(payload, 'removedLines') ?? 0;
+    const lines = [
+      `tool: ${sourceTool}`,
+      `delta: +${added} -${removed}`,
+      `bypass allowed: ${booleanField(payload, 'allowBypass') ?? false}`,
+    ];
+    if (this.toolDisplay === 'grouped') {
+      const path = stringField(payload, 'path');
+      if (path && path !== relativePath) lines.push(`path: ${path}`);
+    }
+    this.renderCard(`approval: edit ${relativePath}`, lines);
+  }
+
+  private renderBashApproval(payload: unknown): void {
+    const command = stringField(payload, 'command') ?? 'unknown command';
+    const maxLength = this.toolDisplay === 'grouped' ? 520 : 180;
+    this.renderCard('approval: bash command', [
+      truncateText(command.replaceAll('\n', ' && '), maxLength),
+      `bypass allowed: ${booleanField(payload, 'allowBypass') ?? false}`,
+    ]);
+  }
+
+  private renderAgentProposalApproval(payload: unknown): void {
+    const agent = stringField(payload, 'agent') ?? 'unknown agent';
+    const model = stringField(payload, 'model') ?? 'unknown model';
+    const instruction = stringField(payload, 'instruction');
+    const files = [
+      ...arrayField(payload, 'inputFiles'),
+      ...arrayField(payload, 'outputFiles'),
+      ...arrayField(payload, 'memories'),
+    ];
+    const lines = [
+      `agent: ${agent}`,
+      `model: ${model}`,
+      `files: ${files.length}`,
+    ];
+    if (instruction) {
+      const maxLength = this.toolDisplay === 'grouped' ? 420 : 160;
+      lines.push(`instruction: ${truncateText(instruction, maxLength)}`);
+    }
+    this.renderCard('approval: agent proposal', lines);
+  }
+
+  private renderPlanApproval(payload: unknown): void {
+    const plan = isRecord(payload) ? payload.plan : undefined;
+    const summary = stringField(plan, 'summary') ?? 'plan approval requested';
+    const steps = arrayField(plan, 'steps');
+    const lines = [`summary: ${truncateText(summary, 180)}`];
+    if (steps.length > 0) lines.push(`steps: ${steps.length}`);
+    if (this.toolDisplay === 'grouped') {
+      for (const [index, step] of steps.entries()) {
+        const title = stringField(step, 'title') ?? `step ${index + 1}`;
+        const status = stringField(step, 'status') ?? 'unknown';
+        lines.push(`${index + 1}. [${status}] ${truncateText(title, 120)}`);
+      }
+    }
+    this.renderCard('approval: plan', lines);
+  }
+
+  private renderExternalInquiryApproval(payload: unknown): void {
+    const question = stringField(payload, 'question') ?? 'human input needed';
+    const lines = [`question: ${truncateText(question, 220)}`];
+    const context = stringField(payload, 'context');
+    const attachFiles = arrayField(payload, 'attachFiles');
+    const sessionLinks = arrayField(payload, 'sessionLinks');
+    if (context && this.toolDisplay === 'grouped') {
+      lines.push(`context: ${truncateText(context, 260)}`);
+    }
+    if (attachFiles.length > 0) {
+      lines.push(`attached files: ${attachFiles.length}`);
+    }
+    if (sessionLinks.length > 0) {
+      lines.push(`session links: ${sessionLinks.length}`);
+    }
+    this.renderCard('approval: external inquiry', lines);
+  }
+
+  private renderRetryApproval(payload: unknown): void {
+    const operation = stringField(payload, 'operation') ?? 'operation';
+    const model = stringField(payload, 'model');
+    const errorMessage = stringField(payload, 'errorMessage');
+    const lines = [
+      `operation: ${operation}`,
+      ...(model ? [`model: ${model}`] : []),
+      ...(errorMessage ? [`error: ${truncateText(errorMessage, 220)}`] : []),
+    ];
+    this.renderCard('approval: retry request', lines);
+  }
+
+  private renderCard(title: string, lines: string[]): void {
+    const cardLines = [
+      `-- ${title} --`,
+      ...lines.map((line) => `| ${line}`),
+      '-- approval is handled by the CLI approval adapter --',
+    ];
+    for (const line of cardLines) this.warn(line);
   }
 
   info(message: string): void {
