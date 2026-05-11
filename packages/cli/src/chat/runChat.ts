@@ -7,9 +7,15 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import { loadAgents } from '@agent/index';
 import { interruptActiveChildren } from '@agent/runtime/executionRegistry';
 import { executeAgent } from '@agent/runtime/executeAgent';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
-import type { StreamTabId } from '@shared/schemas';
+import {
+  MESSAGE_TYPES,
+  STREAM_STATUS,
+  type StreamTabId,
+} from '@shared/schemas';
+import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - CLI runtime
 import {
@@ -26,6 +32,7 @@ import { initCliPlatform, setCliHelperModel } from '../runtime/initPlatform';
 import { createCliRuntimeHost } from '../runtime/runtimeHost';
 import {
   createCliLineReader,
+  writeRawStdout,
   writeTextStderr,
   writeTextStdout,
 } from '../runtime/logSinks';
@@ -67,6 +74,36 @@ function parseCommand(line: string): { command: string; rest: string } {
   return { command: command.toLowerCase(), rest: rest.join(' ') };
 }
 
+function installChatResponsePrinter(session: ChatSessionState): {
+  didPrint: () => boolean;
+  dispose: () => void;
+} {
+  const store = AgentLogger.getStreamLogStore();
+  const printedByEntry = new Map<string, string>();
+  let printed = false;
+
+  const dispose = store.onChange((streamId) => {
+    if (streamId !== session.streamId) return;
+    const log = store.get(streamId);
+    if (!log) return;
+
+    for (const entry of log.getRange(0)) {
+      if (entry.messageType !== MESSAGE_TYPES.MODEL_RESPONSE) continue;
+      const text = entry.text ?? '';
+      const previous = printedByEntry.get(entry.id) ?? '';
+      if (text.length <= previous.length) continue;
+      writeRawStdout(text.slice(previous.length));
+      printedByEntry.set(entry.id, text);
+      printed = true;
+    }
+  });
+
+  return {
+    didPrint: () => printed,
+    dispose,
+  };
+}
+
 export async function runChat(context: CliContext): Promise<ChatResult> {
   const args = context.argv.slice(1);
   const chatContext = applyCliGlobalArgs(context, args);
@@ -95,7 +132,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
   installCliApprovalHandlers(sessionContext);
   await loadAgents();
 
-  const reader = createCliLineReader('texra> ');
+  const reader = createCliLineReader('user> ');
   const session: ChatSessionState = {
     readerClosed: false,
     streamId: undefined,
@@ -107,6 +144,19 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     followUpFlush: Promise.resolve(),
     streamReadyForFollowUps: false,
   };
+  const responsePrinter = installChatResponsePrinter(session);
+  const disposeStatusListener = StreamStatusService.onDidChange((change) => {
+    if (
+      change.streamId !== session.streamId ||
+      change.status !== STREAM_STATUS.WAITING ||
+      session.stopRequested ||
+      session.runCompleted
+    ) {
+      return;
+    }
+    if (responsePrinter.didPrint()) writeRawStdout('\n');
+    reader.prompt();
+  });
   const closeReader = (): void => {
     if (session.readerClosed) return;
     session.readerClosed = true;
@@ -204,22 +254,34 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       },
     })
       .then((result) => {
-        session.runExitCode =
-          result.status === 'error' && hasCliApprovalDenied(sessionContext)
+        session.runExitCode = session.stopRequested
+          ? CliExitCode.Success
+          : result.status === 'error' && hasCliApprovalDenied(sessionContext)
             ? CliExitCode.ApprovalDenied
             : result.status === 'error'
               ? CliExitCode.AgentError
               : CliExitCode.Success;
-        if (result.category === 'toolUse' && result.lastResponse) {
+        if (
+          !responsePrinter.didPrint() &&
+          result.category === 'toolUse' &&
+          result.lastResponse
+        ) {
           writeTextStdout(result.lastResponse);
         }
       })
       .catch((error) => {
-        session.runExitCode = CliExitCode.AgentError;
-        writeTextStderr(error instanceof Error ? error.message : String(error));
+        session.runExitCode = session.stopRequested
+          ? CliExitCode.Success
+          : CliExitCode.AgentError;
+        if (!session.stopRequested) {
+          writeTextStderr(
+            error instanceof Error ? error.message : String(error),
+          );
+        }
       })
       .finally(() => {
         session.runCompleted = true;
+        if (responsePrinter.didPrint()) writeRawStdout('\n');
         closeReader();
         void runtimeHost.close();
       });
@@ -281,7 +343,6 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
 
       if (!session.runPromise) {
         startSession(line);
-        reader.prompt();
         continue;
       }
 
@@ -305,6 +366,8 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     await session.runPromise;
     return { exitCode: session.runExitCode };
   } finally {
+    disposeStatusListener();
+    responsePrinter.dispose();
     closeReader();
   }
 }
