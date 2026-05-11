@@ -9,6 +9,7 @@ import { computeModelOptionsData } from '@model/computeModelOptions';
 
 // Local imports - CLI runtime
 import {
+  cliFlagName,
   flagValue,
   resolveCliContext,
   RUN_FLAGS_WITH_VALUE,
@@ -62,11 +63,12 @@ function splitRunArgs(args: readonly string[]): {
 
     optionArgs.push(arg);
     const value = args[index + 1];
-    if (
-      RUN_FLAGS_WITH_VALUE.has(arg) &&
-      value != null &&
-      !value.startsWith('-')
-    ) {
+    const flagName = cliFlagName(arg);
+    if (RUN_FLAGS_WITH_VALUE.has(flagName) && arg.includes('=')) {
+      index += 1;
+      continue;
+    }
+    if (RUN_FLAGS_WITH_VALUE.has(flagName) && value != null) {
       optionArgs.push(value);
       index += 2;
       continue;
