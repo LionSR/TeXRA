@@ -22,6 +22,7 @@ import {
   applyCliGlobalArgs,
   flagValue,
   type CliContext,
+  type CliPromptRequest,
 } from '../runtime/cliContext';
 import {
   hasCliApprovalDenied,
@@ -62,6 +63,12 @@ interface ChatSessionState {
 interface MultilineDraftState {
   active: boolean;
   lines: string[];
+}
+
+interface PendingApprovalPrompt {
+  request: CliPromptRequest;
+  resolve: (answer: string) => void;
+  reject: (error: Error) => void;
 }
 
 function parseCommand(line: string): { command: string; rest: string } {
@@ -152,12 +159,6 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       'texra chat requires an interactive terminal. Did you mean texra run?',
     );
   }
-  if (chatContext.approvalPolicy === 'ask') {
-    return usageError(
-      'texra chat plain mode cannot prompt for approvals yet because chat input owns stdin. Use --approval-policy yolo for trusted local runs, --approval-policy never to fail closed, or texra run for workflow execution.',
-    );
-  }
-
   let agent = flagValue(args, '--agent') ?? DEFAULT_CHAT_AGENT;
   let model = flagValue(args, '--model', '-m') ?? DEFAULT_AGENT_MODEL;
   const currentMetadata = () => ({
@@ -170,6 +171,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     ...chatContext,
     helperModel: model,
     quietLogs: true,
+    approvalPrompt: (request) => askChatApprovalQuestion(request),
   });
 
   await initCliPlatform(currentSessionContext());
@@ -196,6 +198,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     active: false,
     lines: [],
   };
+  let pendingApprovalPrompt: PendingApprovalPrompt | undefined;
   const responsePrinter = installChatResponsePrinter(session);
   const disposeStatusListener = StreamStatusService.onDidChange((change) => {
     if (
@@ -210,6 +213,11 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     reader.prompt();
   });
   const closeReader = (): void => {
+    if (pendingApprovalPrompt) {
+      const pending = pendingApprovalPrompt;
+      pendingApprovalPrompt = undefined;
+      pending.reject(new Error('Chat input closed before approval answer.'));
+    }
     if (session.readerClosed) return;
     session.readerClosed = true;
     reader.close();
@@ -290,6 +298,10 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
   };
 
   const setReaderPrompt = (): void => {
+    if (pendingApprovalPrompt) {
+      reader.setPrompt(pendingApprovalPrompt.request.prompt);
+      return;
+    }
     reader.setPrompt(
       multilineDraft.active ? renderer.continuationPrompt : renderer.prompt,
     );
@@ -319,6 +331,30 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     }
 
     queueFollowUp(message);
+  };
+
+  const askChatApprovalQuestion = (
+    request: CliPromptRequest,
+  ): Promise<string> => {
+    if (pendingApprovalPrompt) {
+      return Promise.reject(
+        new Error('Another CLI approval prompt is already active.'),
+      );
+    }
+    renderer.warn(request.summary);
+    return new Promise<string>((resolve, reject) => {
+      pendingApprovalPrompt = { request, resolve, reject };
+      setReaderPrompt();
+      reader.prompt();
+    });
+  };
+
+  const resolvePendingApprovalPrompt = (answer: string): void => {
+    const pending = pendingApprovalPrompt;
+    if (!pending) return;
+    pendingApprovalPrompt = undefined;
+    pending.resolve(answer);
+    setReaderPrompt();
   };
 
   const startSession = (instruction: string): void => {
@@ -393,6 +429,11 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     reader.prompt();
 
     for await (const rawLine of reader) {
+      if (pendingApprovalPrompt) {
+        resolvePendingApprovalPrompt(rawLine);
+        continue;
+      }
+
       const line = rawLine.trim();
       if (!line && !multilineDraft.active) {
         reader.prompt();
