@@ -252,6 +252,9 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       if (!runCompleted) reader.prompt();
     }
 
+    if (!stopRequested && runPromise && !runCompleted) {
+      requestChatExit();
+    }
     await followUpFlush;
     await runPromise;
     return { exitCode: runExitCode };
