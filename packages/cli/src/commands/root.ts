@@ -112,7 +112,7 @@ function splitRunArgs(args: readonly string[]): {
 }
 
 async function listAgents(context: CliContext): Promise<CliResult> {
-  await initCliPlatform(context);
+  await initCliPlatform({ ...context, quietLogs: true });
   await loadAgents();
   const agents = [
     ...getVisibleAgents('workflow').map((agent) => ({
@@ -147,7 +147,7 @@ async function listAgents(context: CliContext): Promise<CliResult> {
 }
 
 async function listModels(context: CliContext): Promise<CliResult> {
-  await initCliPlatform(context);
+  await initCliPlatform({ ...context, quietLogs: true });
   const modelAccess = await getCliModelAccessList();
 
   if (context.outputFormat === 'json') {
@@ -195,6 +195,25 @@ async function copyWorkflowOutputToRequestedPath(
   await fs.mkdir(path.dirname(targetPath), { recursive: true });
   await fs.copyFile(finalOutput.absolutePath, targetPath);
   return targetPath;
+}
+
+function withRequestedWorkflowOutputPath(
+  result: Awaited<ReturnType<typeof executeAgent>>,
+  copiedOutput: string | undefined,
+): Awaited<ReturnType<typeof executeAgent>> {
+  if (!copiedOutput || result.category !== 'workflow') return result;
+
+  const finalOutputIndex = result.outputs.length - 1;
+  if (finalOutputIndex < 0) return result;
+
+  return {
+    ...result,
+    outputs: result.outputs.map((output, index) =>
+      index === finalOutputIndex
+        ? { ...output, absolutePath: copiedOutput }
+        : output,
+    ),
+  };
 }
 
 async function runWorkflowAgent(
@@ -251,16 +270,22 @@ async function runWorkflowAgent(
     await runtimeHost.close();
   }
 
+  const copiedOutput = await copyWorkflowOutputToRequestedPath(
+    outputFile,
+    result,
+    runContext,
+  );
+  const displayResult = withRequestedWorkflowOutputPath(result, copiedOutput);
+
   if (runContext.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(result, null, 2));
+    writeTextStdout(JSON.stringify(displayResult, null, 2));
   } else if (runContext.outputFormat === 'ndjson') {
-    writeNdjsonStdout({ kind: 'result', ts: new Date().toISOString(), result });
+    writeNdjsonStdout({
+      kind: 'result',
+      ts: new Date().toISOString(),
+      result: displayResult,
+    });
   } else if (result.category === 'workflow') {
-    const copiedOutput = await copyWorkflowOutputToRequestedPath(
-      outputFile,
-      result,
-      runContext,
-    );
     const finalOutput = result.outputs.at(-1);
     writeTextStdout(
       copiedOutput ??
