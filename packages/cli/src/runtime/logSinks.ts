@@ -115,9 +115,11 @@ export class NdjsonStdoutSink implements LogSink {
         }
       }
     } finally {
-      this.drainPromise = undefined;
-      if (this.queue.length > 0) {
-        void this.ensureDrain().catch(() => undefined);
+      if (!this.stdoutClosed && this.queue.length > 0) {
+        this.drainPromise = this.drain();
+        await this.drainPromise;
+      } else {
+        this.drainPromise = undefined;
       }
     }
   }
