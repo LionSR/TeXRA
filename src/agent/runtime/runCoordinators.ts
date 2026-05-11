@@ -127,8 +127,10 @@ export function clearProposalForStream(streamId: string): void {
 }
 
 export function clearAllProposals(): void {
-  for (const [proposalId, coordinators] of proposals) {
-    coordinators.proposal.clearRequest(proposalId);
+  const coordinators = new Set(proposals.values());
+  coordinators.add(legacyCoordinators);
+  for (const coordinator of coordinators) {
+    coordinator.proposal.clearAll();
   }
   proposals.clear();
   proposalStreams.clear();
@@ -167,8 +169,10 @@ export function clearRetryRequest(streamId: string): void {
 }
 
 export function clearAllRetryRequests(): void {
-  for (const [streamId, coordinators] of retries) {
-    coordinators.retry.clearRequest(streamId);
+  const coordinators = new Set(retries.values());
+  coordinators.add(legacyCoordinators);
+  for (const coordinator of coordinators) {
+    coordinator.retry.clearAll();
   }
   retries.clear();
 }
