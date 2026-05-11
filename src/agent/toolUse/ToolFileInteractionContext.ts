@@ -7,40 +7,12 @@ import type {
   PlanState,
   TodoState,
 } from '@agent/core/AgentWorkspaceState';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
+import {
+  tryUseRunContext,
+  type ToolRunContext,
+} from '@agent/runtime/RunContext';
 
-/**
- * Fields that describe the run executing a tool call.
- *
- * These are candidates for RunContext ownership. New code should prefer passing
- * them explicitly from the run boundary rather than reading the process-wide
- * tool-call stack directly.
- */
-export interface ToolRunContext {
-  streamId?: StreamTabId;
-  executionId?: ExecutionId;
-  /** Model short name of the parent agent (e.g. "opus46T", "sonnet46T"). */
-  model?: string;
-  /** Agent name of the parent agent (e.g. "orchestrator", "search-agent"). */
-  agentName?: string;
-  /** Working directory override for tool calls (e.g. a git worktree path). */
-  workingDirectory?: string;
-  /** Runtime host inherited from the executing agent. */
-  runtimeHost?: AgentRuntimeHost;
-  /**
-   * Delegation depth of the agent executing this tool call. 0 for root (user-initiated),
-   * N for an agent N levels deep. Read by delegation tools to compute the child's depth.
-   */
-  delegationDepth?: number;
-  /**
-   * Delegation policy snapshot for the executing agent. Keeps delegation tool
-   * enforcement aligned with the tool list shown to the model without carrying
-   * a second depth value.
-   */
-  delegationConfig?: NestedDelegationConfig;
-}
+export type { ToolRunContext } from '@agent/runtime/RunContext';
 
 /** Fields that belong to one concrete tool call or tool-cycle state snapshot. */
 export interface ToolCallContext {
@@ -108,10 +80,17 @@ function pickContextFields<T extends object>(
 function buildContextFrame(
   context: ToolFileInteractionContext,
 ): ToolContextFrame {
+  const fullContext = {
+    ...tryUseRunContext()?.toolRunContext,
+    ...context,
+  };
   return {
-    full: context,
-    run: pickContextFields<ToolRunContext>(context, TOOL_RUN_CONTEXT_KEYS),
-    call: pickContextFields<ToolCallContext>(context, TOOL_CALL_CONTEXT_KEYS),
+    full: fullContext,
+    run: pickContextFields<ToolRunContext>(fullContext, TOOL_RUN_CONTEXT_KEYS),
+    call: pickContextFields<ToolCallContext>(
+      fullContext,
+      TOOL_CALL_CONTEXT_KEYS,
+    ),
   };
 }
 
