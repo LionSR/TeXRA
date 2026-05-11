@@ -135,6 +135,10 @@ export async function createModelHandler(
     // Package validation still enters the real CLI and executeAgent path.
     // Only the provider boundary is deterministic, so this must not become
     // a user-facing model selector or an injected command-layer substitute.
+    logger.warn(
+      CHANNEL,
+      `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 is replacing provider handlers with the internal validation handler.`,
+    );
     const { ModelHandlerValidation } =
       await import('@agent/modelHandlers/modelHandlerValidation');
     return new ModelHandlerValidation(config);
