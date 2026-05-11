@@ -80,8 +80,7 @@ export async function initCliPlatform(
   >,
 ): Promise<void> {
   cliWorkspaceCwd = context.cwd;
-  quietPlatformLogs =
-    context.quietLogs === true && context.outputFormat === 'text';
+  quietPlatformLogs = context.quietLogs === true;
   setOutputChannelFactory(
     quietPlatformLogs ? () => ({ appendLine: () => undefined }) : null,
   );

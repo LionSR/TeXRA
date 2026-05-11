@@ -16,12 +16,15 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   let logger: ReturnType<typeof createCliLogger> | undefined;
   const cliLogger = (): ReturnType<typeof createCliLogger> =>
     (logger ??= createCliLogger(context));
-  const quietTextMode =
-    context.quietLogs === true && context.outputFormat === 'text';
+  const quietLogs = context.quietLogs === true;
 
   return {
     emit(event, payload) {
       if (handleCliApprovalEvent(event, payload, context)) return;
+
+      if (quietLogs && event !== 'requestShowError') {
+        return;
+      }
 
       if (context.outputFormat === 'ndjson') {
         const record = {
@@ -43,10 +46,6 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
         const message = (payload as ProgressEventPayloads['requestShowError'])
           .message;
         cliLogger().logger.error(message);
-        return;
-      }
-
-      if (quietTextMode) {
         return;
       }
 

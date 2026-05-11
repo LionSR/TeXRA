@@ -344,7 +344,6 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
           } else if (rest) {
             if (await modelAvailable(rest)) {
               model = rest;
-              sessionContext.helperModel = model;
               await setCliHelperModel(model);
               writeTextStderr(`Model set to ${model}.`);
             }
