@@ -5,8 +5,8 @@ import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import {
-  cleanupAllApprovals,
   cleanupApprovalsForStream,
+  cleanupApprovalsForStreams,
 } from '@tools/approval';
 
 import { buildStreamInfos } from '../streamInfoUtils';
@@ -54,7 +54,7 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
   }
 
   cleanupDeletedStreams(streams: StreamTabId[]): void {
-    cleanupAllApprovals();
+    cleanupApprovalsForStreams(streams);
     for (const stream of streams) {
       ToolUseFollowUpQueue.release(stream);
     }
