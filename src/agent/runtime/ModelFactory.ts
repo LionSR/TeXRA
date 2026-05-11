@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 
@@ -129,12 +126,16 @@ function withShortModelName(config: ModelConfig): ModelConfig {
   return { ...config, fullName: short };
 }
 
-function shouldUseInternalValidationModelHandler(): boolean {
+async function shouldUseInternalValidationModelHandler(): Promise<boolean> {
   if (process.env[INTERNAL_VALIDATION_MODEL_HANDLER_ENV] !== '1') {
     return false;
   }
 
   const flagPath = process.env[INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV];
+  const [{ readFileSync }, path] = await Promise.all([
+    import('node:fs'),
+    import('node:path'),
+  ]);
   if (process.env.CI !== '1' || !flagPath || !path.isAbsolute(flagPath)) {
     throw new Error(
       `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 is restricted to package validation with CI=1 and an absolute ${INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV} path.`,
@@ -169,7 +170,7 @@ export async function createModelHandler(
 ): Promise<ModelHandler> {
   const config = withShortModelName(originalConfig);
 
-  if (shouldUseInternalValidationModelHandler()) {
+  if (await shouldUseInternalValidationModelHandler()) {
     // Package validation still enters the real CLI and executeAgent path.
     // Only the provider boundary is deterministic, so this must not become
     // a user-facing model selector or an injected command-layer substitute.
