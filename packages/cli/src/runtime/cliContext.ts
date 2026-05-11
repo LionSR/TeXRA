@@ -214,7 +214,8 @@ export async function resolveCliContext(
   const ambient = readCliAmbientState();
   const resolvedArgv = argv ?? process.argv.slice(2);
   const { globalArgs, commandArgs } = splitGlobalArgs(resolvedArgv);
-  const cwd = flagValue(globalArgs, '--cwd') ?? process.cwd();
+  const cwdFlag = flagValue(globalArgs, '--cwd');
+  const cwd = cwdFlag && cwdFlag.trim().length > 0 ? cwdFlag : process.cwd();
   return {
     argv: commandArgs,
     cwd,
