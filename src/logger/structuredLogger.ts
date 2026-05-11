@@ -37,6 +37,10 @@ interface SinkRef {
   current: LogSink;
 }
 
+interface GroupQueue {
+  tail: Promise<void>;
+}
+
 export function createStructuredLogger(sink: LogSink): Logger {
   return new StructuredLogger({ current: sink });
 }
@@ -47,12 +51,12 @@ function mergeFields(left: LogFields, right: LogFields | undefined): LogFields {
 
 class StructuredLogger implements Logger {
   private readonly groupStack: string[];
-  private groupTail: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly sinkRef: SinkRef,
     private readonly fields: LogFields = {},
     groupStack: string[] = [],
+    private readonly groupQueue: GroupQueue = { tail: Promise.resolve() },
   ) {
     this.groupStack = groupStack;
   }
@@ -78,9 +82,9 @@ class StructuredLogger implements Logger {
   }
 
   async withGroup<T>(label: string, fn: () => Promise<T> | T): Promise<T> {
-    const previousGroup = this.groupTail.catch(() => undefined);
+    const previousGroup = this.groupQueue.tail.catch(() => undefined);
     let releaseGroup: () => void = () => undefined;
-    this.groupTail = previousGroup.then(
+    this.groupQueue.tail = previousGroup.then(
       () =>
         new Promise<void>((resolve) => {
           releaseGroup = resolve;
@@ -123,6 +127,7 @@ class StructuredLogger implements Logger {
       this.sinkRef,
       mergeFields(this.fields, fields),
       [...this.groupStack],
+      this.groupQueue,
     );
   }
 
