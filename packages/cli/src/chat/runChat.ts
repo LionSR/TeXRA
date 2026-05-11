@@ -267,8 +267,10 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
         session.streamReadyForFollowUps = false;
         if (session.stopRequested) {
           interruptActiveSession();
-        } else {
+        } else if (session.pendingFollowUps.length > 0) {
           flushPendingFollowUps();
+        } else {
+          session.streamReadyForFollowUps = true;
         }
       },
     })
