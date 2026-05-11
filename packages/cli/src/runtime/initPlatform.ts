@@ -76,7 +76,7 @@ export async function setCliHelperModel(
 export async function initCliPlatform(
   context: Pick<
     CliContext,
-    'cwd' | 'resourcesPath' | 'helperModel' | 'outputFormat' | 'quietLogs'
+    'cwd' | 'resourcesPath' | 'helperModel' | 'quietLogs'
   >,
 ): Promise<void> {
   cliWorkspaceCwd = context.cwd;
