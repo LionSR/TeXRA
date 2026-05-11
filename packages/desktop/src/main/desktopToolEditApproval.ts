@@ -187,7 +187,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     bus.emit('showToolEditPermission', {
       requestId,
       path: request.path,
-      relativePath: WorkspaceFS.relativePath(request.path),
+      relativePath: this.relativeDisplayPath(request.path),
       sourceTool: request.sourceTool,
       allowBypass: !isBypassed,
       streamId: request.streamId ?? '',
@@ -195,6 +195,14 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
       removedLines: lineChanges.removed,
       isLatex: isLatexFile(request.path),
     });
+  }
+
+  private relativeDisplayPath(filePath: string): string {
+    try {
+      return WorkspaceFS.relativePath(filePath);
+    } catch {
+      return path.basename(filePath);
+    }
   }
 
   private settle(requestId: string, result: ToolEditApprovalResult): void {
