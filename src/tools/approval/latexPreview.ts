@@ -12,7 +12,12 @@ import { sync as globSync } from 'glob';
 import { getConfig } from '@agent/core/config';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
-import { WorkspaceFS, pathToLocation, type FileLocation } from '@utils/files';
+import {
+  createExternalLocation,
+  createWorkspaceLocation,
+  WorkspaceFS,
+  type FileLocation,
+} from '@utils/files';
 
 type BuildDisplayFn = (
   location: FileLocation,
@@ -160,6 +165,26 @@ async function createTempFileWithCleanup(
   return tempPath;
 }
 
+function tempPathToLocation(tempPath: string): FileLocation {
+  const workspacePath = WorkspaceFS.getPath();
+  const normalizedWorkspacePath = path.normalize(workspacePath);
+  const normalizedTempPath = path.normalize(tempPath);
+  const relativePath = path.relative(
+    normalizedWorkspacePath,
+    normalizedTempPath,
+  );
+
+  if (
+    relativePath &&
+    !relativePath.startsWith('..') &&
+    !path.isAbsolute(relativePath)
+  ) {
+    return createWorkspaceLocation(tempPath, relativePath);
+  }
+
+  return createExternalLocation(tempPath);
+}
+
 /** Preview the proposed LaTeX document by creating a temp file and building it */
 export async function previewProposedLatex(
   entry: LatexPreviewEntry,
@@ -179,7 +204,7 @@ export async function previewProposedLatex(
     if (entry.isSettled()) return;
 
     await (options.openBuildDisplay ?? openBuildDisplayIfTex)(
-      pathToLocation(tempPath),
+      tempPathToLocation(tempPath),
       {
         preserveFocus: true,
       },
@@ -255,7 +280,7 @@ export async function runLatexdiff(
     if (entry.isSettled()) return;
 
     await (options?.openBuildDisplay ?? openBuildDisplayIfTex)(
-      pathToLocation(diffFilePath),
+      tempPathToLocation(diffFilePath),
       {
         preserveFocus: true,
       },
