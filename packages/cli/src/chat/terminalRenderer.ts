@@ -24,7 +24,7 @@ const ANSI_TONES: Record<TerminalTone, string> = {
 };
 
 function basename(path: string): string {
-  return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
+  return path.split(/[\\/]/).findLast(Boolean) ?? path;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

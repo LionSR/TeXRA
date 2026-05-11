@@ -6,9 +6,6 @@ import { nodeStorage } from '@platform/defaults/nodeStorage';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { initPlatform, tryPlatform } from '@platform/platform';
 
-// Local imports - logger
-import { setOutputChannelFactory } from '@logger/logUtils';
-
 // Local imports - agent index
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 
@@ -22,6 +19,9 @@ import type { AuthProvider } from '@auth/serverKeys';
 
 // Local imports - common state
 import { GlobalStateKey } from '@common/state/stateKeys';
+
+// Local imports - logger
+import { setOutputChannelFactory } from '@logger/logUtils';
 
 // Local imports - CLI runtime
 import { writeTextStderr } from './logSinks';

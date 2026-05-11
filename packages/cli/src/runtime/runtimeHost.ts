@@ -4,9 +4,9 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local imports - CLI runtime
 import { handleCliApprovalEvent } from './approvalAdapter';
-import type { CliContext } from './cliContext';
 import { writeNdjsonStdout } from './logSinks';
 import { createCliLogger } from './logger';
+import type { CliContext } from './cliContext';
 
 export type CliRuntimeHost = AgentRuntimeHost & {
   close(): Promise<void>;

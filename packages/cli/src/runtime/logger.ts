@@ -6,8 +6,8 @@ import {
 } from '@logger/structuredLogger';
 
 // Local imports - CLI runtime
-import type { CliContext } from './cliContext';
 import { NdjsonStdoutSink, StderrTextSink } from './logSinks';
+import type { CliContext } from './cliContext';
 
 interface CliLoggerHandle {
   readonly logger: Logger;
