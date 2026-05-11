@@ -68,11 +68,11 @@ function splitRunArgs(args: readonly string[]): {
     if (!RUN_FLAGS_WITH_VALUE.has(flagName)) {
       return { agent: undefined, optionArgs, unknownFlag: arg };
     }
-    if (RUN_FLAGS_WITH_VALUE.has(flagName) && arg.includes('=')) {
+    if (arg.includes('=')) {
       index += 1;
       continue;
     }
-    if (RUN_FLAGS_WITH_VALUE.has(flagName) && value != null) {
+    if (value != null) {
       optionArgs.push(value);
       index += 2;
       continue;
