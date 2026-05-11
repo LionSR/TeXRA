@@ -91,6 +91,29 @@ describe('structuredLogger', () => {
     );
   });
 
+  it('isolates async group scopes across logger instances', async () => {
+    const firstSink = new MemorySink();
+    const secondSink = new MemorySink();
+    const first = createStructuredLogger(firstSink);
+    const second = createStructuredLogger(secondSink);
+
+    await first.withGroup('first', async () => {
+      first.info('first message');
+      second.info('second message');
+      assert.equal(first.activeGroupId(), 'first');
+      assert.equal(second.activeGroupId(), undefined);
+    });
+
+    assert.deepEqual(
+      firstSink.records.map((record) => record.groups),
+      [['first']],
+    );
+    assert.deepEqual(
+      secondSink.records.map((record) => record.groups),
+      [[]],
+    );
+  });
+
   it('flushes and closes the old sink when swapping sinks', async () => {
     const first = new FlushCountingSink();
     const second = new FlushCountingSink();
