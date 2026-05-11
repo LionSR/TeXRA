@@ -64,8 +64,12 @@ export class NdjsonStdoutSink implements LogSink {
       }
     }
 
-    this.queue.length = 0;
+    if (this.head > 0) this.queue.splice(0, this.head);
     this.head = 0;
+    if (this.queue.length > 0) {
+      this.drain();
+      return;
+    }
     this.draining = false;
     const resolve = this.resolveIdle;
     this.resolveIdle = null;

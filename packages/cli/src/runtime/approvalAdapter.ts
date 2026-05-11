@@ -97,7 +97,7 @@ export function handleCliApprovalEvent<K extends keyof ProgressEventPayloads>(
       const data = payload as ProgressEventPayloads['showExternalInquiry'];
       void handleExternalInquiryAction({
         requestId: data.requestId,
-        action: context.approvalPolicy === 'yolo' ? 'reject' : 'skip',
+        action: 'skip',
         feedback: externalInquiryMessage(context.approvalPolicy),
       });
       return true;
