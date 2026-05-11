@@ -1,5 +1,4 @@
 import { delay } from '@utils/core';
-import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 export type NonIterableObject = Partial<Record<string, unknown>> & {
   [Symbol.iterator]?: never;
@@ -7,6 +6,8 @@ export type NonIterableObject = Partial<Record<string, unknown>> & {
 
 /** Flow transition action - typically 'default' or a custom action name */
 export type Action = string;
+
+const TERMINAL_ACTIONS = new Set<Action>(['complete']);
 
 /**
  * Base node class for PocketFlow.
@@ -83,7 +84,7 @@ class BaseNode<
   }
   getNextNode(action: Action = 'default'): BaseNode | undefined {
     const next = this._successors.get(action);
-    if (!next && action === FlowTransition.COMPLETE) return undefined;
+    if (!next && TERMINAL_ACTIONS.has(action)) return undefined;
     if (!next && this._successors.size > 0) {
       console.warn(
         `Flow ends: '${action}' not found in [${[...this._successors.keys()]}]`,
