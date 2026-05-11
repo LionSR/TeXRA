@@ -201,7 +201,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     })
       .then((result) => {
         session.runExitCode =
-          result.status === 'error' && hasCliApprovalDenied(chatContext)
+          result.status === 'error' && hasCliApprovalDenied(sessionContext)
             ? CliExitCode.ApprovalDenied
             : result.status === 'error'
               ? CliExitCode.AgentError
