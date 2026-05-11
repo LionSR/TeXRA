@@ -29,6 +29,8 @@ function run(command, args, options = {}) {
     status: result.status ?? 1,
     stdout: result.stdout ?? '',
     stderr: result.stderr ?? '',
+    error: result.error?.message ?? '',
+    signal: result.signal ?? '',
   };
 }
 
@@ -39,7 +41,7 @@ function assert(condition, message) {
 function assertSuccess(result, label) {
   assert(
     result.status === 0,
-    `${label} failed with exit ${result.status}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+    `${label} failed with exit ${result.status}${result.signal ? ` signal ${result.signal}` : ''}${result.error ? ` error ${result.error}` : ''}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
   );
 }
 
@@ -94,7 +96,6 @@ function validateRunCommand() {
   const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-run-'));
   try {
     const inputPath = path.join(cwd, 'paper.tex');
-    const outputPath = path.join(cwd, 'paper.polished.tex');
     writeFileSync(inputPath, '\\section{Input}\nOriginal text.\n');
 
     const baseArgs = [
@@ -113,34 +114,46 @@ function validateRunCommand() {
     ];
 
     const text = run(process.execPath, baseArgs, {
-      cwd,
+      cwd: repoRoot,
       validationModel: true,
     });
     assertSuccess(text, 'texra run text');
     assert(
-      text.stdout.trim() === 'paper.polished.tex',
-      'text run output should print the final output path',
-    );
-    assert(
-      readFileSync(outputPath, 'utf8').includes('Validated CLI Runtime'),
-      'texra run should write the validation output through the real workflow path',
+      text.stdout.trim() === 'r0/paper.polished.tex',
+      'text run output should print the run-storage output path',
     );
 
     const json = run(
       process.execPath,
       [...baseArgs, '--output-format', 'json'],
-      { cwd, validationModel: true },
+      { cwd: repoRoot, validationModel: true },
     );
     assertSuccess(json, 'texra run JSON');
+    const jsonResult = JSON.parse(json.stdout);
     assert(
-      JSON.parse(json.stdout).category === 'workflow',
+      jsonResult.category === 'workflow',
       'JSON run output should serialize the workflow result',
+    );
+    const finalOutput = jsonResult.outputs.at(-1);
+    assert(
+      finalOutput?.relativePath === 'r0/paper.polished.tex',
+      'JSON run output should report the run-storage output path',
+    );
+    assert(
+      finalOutput.location === 'runStorage',
+      'JSON run output should identify extracted output as run storage',
+    );
+    assert(
+      readFileSync(finalOutput.absolutePath, 'utf8').includes(
+        'Validated CLI Runtime',
+      ),
+      'texra run should write the validation output through the real workflow path',
     );
 
     const ndjson = run(
       process.execPath,
       [...baseArgs, '--output-format', 'ndjson'],
-      { cwd, validationModel: true },
+      { cwd: repoRoot, validationModel: true },
     );
     assertSuccess(ndjson, 'texra run NDJSON');
     assert(
