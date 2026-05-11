@@ -39,6 +39,7 @@ const processOutputPatterns = [
 
 const processTerminalInputPatterns = [
   { name: 'process.stdout.isTTY', pattern: /\bprocess\.stdout\.isTTY\b/g },
+  { name: 'process.stderr.isTTY', pattern: /\bprocess\.stderr\.isTTY\b/g },
 ];
 
 function* walk(dir) {
