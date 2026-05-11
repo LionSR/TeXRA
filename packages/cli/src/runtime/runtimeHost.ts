@@ -22,10 +22,6 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
     emit(event, payload) {
       if (handleCliApprovalEvent(event, payload, context)) return;
 
-      if (quietLogs && event !== 'requestShowError') {
-        return;
-      }
-
       if (context.outputFormat === 'ndjson') {
         const record = {
           kind: 'progress',
@@ -39,6 +35,10 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
           payload: ProgressEventPayloads[keyof ProgressEventPayloads];
         };
         writeNdjsonStdout(record);
+        return;
+      }
+
+      if (quietLogs && event !== 'requestShowError') {
         return;
       }
 
