@@ -218,7 +218,16 @@ async function runWorkflowAgent(
     return { exitCode: CliExitCode.Usage };
   }
 
-  const runContext = applyCliGlobalArgs(context, args);
+  const modelFlag = flagValue(args, '--model', '-m');
+  const model =
+    modelFlag && modelFlag.trim().length > 0
+      ? modelFlag.trim()
+      : DEFAULT_AGENT_MODEL;
+  const runContext = {
+    ...applyCliGlobalArgs(context, args),
+    helperModel: model,
+    quietLogs: true,
+  };
   await initCliPlatform(runContext);
   installCliApprovalHandlers(runContext);
   await loadAgents();
@@ -228,10 +237,9 @@ async function runWorkflowAgent(
     outputFile && path.isAbsolute(outputFile)
       ? path.basename(outputFile)
       : outputFile;
-  const model = flagValue(args, '--model', '-m');
   const config: AgentConfigPayload = {
     agent,
-    model: model && model.trim().length > 0 ? model : DEFAULT_AGENT_MODEL,
+    model,
     inputFile,
     outputFiles: modelOutputFile ? [modelOutputFile] : [],
     instruction: flagValue(args, '--instruction') ?? '',
