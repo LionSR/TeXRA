@@ -14,7 +14,6 @@ import type { StreamTabId } from '@shared/schemas';
 // Local imports - CLI runtime
 import {
   applyCliGlobalArgs,
-  createCliLineReader,
   flagValue,
   type CliContext,
 } from '../runtime/cliContext';
@@ -25,7 +24,11 @@ import {
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { createCliRuntimeHost } from '../runtime/runtimeHost';
-import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
+import {
+  createCliLineReader,
+  writeTextStderr,
+  writeTextStdout,
+} from '../runtime/logSinks';
 
 export interface ChatResult {
   exitCode: number;
