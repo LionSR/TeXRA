@@ -29,6 +29,7 @@ import {
 } from '../runtime/approvalAdapter';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '../runtime/initPlatform';
+import { getCliModelAccess } from '../runtime/modelAccess';
 import { createCliRuntimeHost } from '../runtime/runtimeHost';
 import {
   createCliLineReader,
@@ -73,6 +74,23 @@ function printClearScreen(): void {
 function parseCommand(line: string): { command: string; rest: string } {
   const [command = '', ...rest] = line.slice(1).trim().split(/\s+/);
   return { command: command.toLowerCase(), rest: rest.join(' ') };
+}
+
+async function modelAvailable(model: string): Promise<boolean> {
+  const access = await getCliModelAccess(model);
+  if (!access) {
+    writeTextStderr(
+      `Unknown model: ${model}. Use texra models list to see available models.`,
+    );
+    return false;
+  }
+  if (!access.available) {
+    writeTextStderr(
+      `Model ${model} is unavailable: ${access.status}. Use /model <name> before sending a message.`,
+    );
+    return false;
+  }
+  return true;
 }
 
 function installChatResponsePrinter(session: ChatSessionState): {
@@ -324,10 +342,12 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
           if (session.runPromise) {
             writeTextStderr('The active session already owns its model.');
           } else if (rest) {
-            model = rest;
-            sessionContext.helperModel = model;
-            await setCliHelperModel(model);
-            writeTextStderr(`Model set to ${model}.`);
+            if (await modelAvailable(rest)) {
+              model = rest;
+              sessionContext.helperModel = model;
+              await setCliHelperModel(model);
+              writeTextStderr(`Model set to ${model}.`);
+            }
           } else {
             writeTextStderr('Usage: /model <name>');
           }
@@ -343,6 +363,10 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       }
 
       if (!session.runPromise) {
+        if (!(await modelAvailable(model))) {
+          reader.prompt();
+          continue;
+        }
         startSession(line);
         continue;
       }
