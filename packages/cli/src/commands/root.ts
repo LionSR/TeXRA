@@ -1,3 +1,7 @@
+// Standard library imports
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+
 // Local imports - agent and model surfaces
 import {
   DEFAULT_AGENT_MODEL,
@@ -174,6 +178,28 @@ function formatModelAccessStatus(model: ModelOptionData): string {
   return `missing ${provider}key`;
 }
 
+async function copyWorkflowOutputToRequestedPath(
+  outputFile: string | undefined,
+  result: Awaited<ReturnType<typeof executeAgent>>,
+  context: CliContext,
+): Promise<string | undefined> {
+  if (!outputFile || result.category !== 'workflow') return undefined;
+
+  const finalOutput = result.outputs.at(-1);
+  if (!finalOutput) return undefined;
+
+  const targetPath = path.isAbsolute(outputFile)
+    ? outputFile
+    : path.join(context.cwd, outputFile);
+  if (path.resolve(finalOutput.absolutePath) === path.resolve(targetPath)) {
+    return targetPath;
+  }
+
+  await fs.mkdir(path.dirname(targetPath), { recursive: true });
+  await fs.copyFile(finalOutput.absolutePath, targetPath);
+  return targetPath;
+}
+
 async function runWorkflowAgent(
   agent: string | undefined,
   args: readonly string[],
@@ -198,12 +224,16 @@ async function runWorkflowAgent(
   await loadAgents();
 
   const outputFile = flagValue(args, '--output');
+  const modelOutputFile =
+    outputFile && path.isAbsolute(outputFile)
+      ? path.basename(outputFile)
+      : outputFile;
   const model = flagValue(args, '--model', '-m');
   const config: AgentConfigPayload = {
     agent,
     model: model && model.trim().length > 0 ? model : DEFAULT_AGENT_MODEL,
     inputFile,
-    outputFiles: outputFile ? [outputFile] : [],
+    outputFiles: modelOutputFile ? [modelOutputFile] : [],
     instruction: flagValue(args, '--instruction') ?? '',
     workingDirectory: runContext.cwd,
   };
@@ -221,9 +251,17 @@ async function runWorkflowAgent(
   } else if (runContext.outputFormat === 'ndjson') {
     writeNdjsonStdout({ kind: 'result', ts: new Date().toISOString(), result });
   } else if (result.category === 'workflow') {
+    const copiedOutput = await copyWorkflowOutputToRequestedPath(
+      outputFile,
+      result,
+      runContext,
+    );
     const finalOutput = result.outputs.at(-1);
     writeTextStdout(
-      finalOutput?.relativePath ?? finalOutput?.absolutePath ?? result.status,
+      copiedOutput ??
+        finalOutput?.relativePath ??
+        finalOutput?.absolutePath ??
+        result.status,
     );
   } else {
     writeTextStdout(result.status);

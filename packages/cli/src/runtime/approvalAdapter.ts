@@ -18,7 +18,7 @@ import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool'
 
 // Local imports - CLI runtime
 import { type CliContext } from './cliContext';
-import { askCliQuestion } from './logSinks';
+import { askCliQuestion, writeTextStderr } from './logSinks';
 
 function denyMessage(policy: CliContext['approvalPolicy']): string {
   return policy === 'ask'
@@ -177,6 +177,14 @@ async function handleCliApprovalEventAsync<
     }
     case 'showRetryRequest': {
       const data = payload as ProgressEventPayloads['showRetryRequest'];
+      if (!approvalPromptAllowed(context)) {
+        writeTextStderr(
+          `Retry requested for ${data.operation}: ${data.errorMessage ?? 'unknown error'}`,
+        );
+        cancelRetry(data.streamId);
+        markApprovalDenied(context);
+        return;
+      }
       const decision = await askApproval(
         context,
         `Retry requested for ${data.operation}: ${data.errorMessage ?? 'unknown error'}`,

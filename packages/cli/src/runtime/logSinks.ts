@@ -51,6 +51,17 @@ export function writeTextStdout(text: string): void {
   );
 }
 
+export function writeRawStdout(text: string): void {
+  if (stdoutClosed || process.stdout.destroyed) return;
+  try {
+    process.stdout.write(text, (error) => {
+      if (error) stdoutClosed = true;
+    });
+  } catch {
+    stdoutClosed = true;
+  }
+}
+
 export function writeTextStderr(text: string): void {
   writeLine(
     process.stderr,

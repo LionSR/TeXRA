@@ -82,6 +82,7 @@ class BaseNode<
   }
   getNextNode(action: Action = 'default'): BaseNode | undefined {
     const next = this._successors.get(action);
+    if (!next && action === 'complete') return undefined;
     if (!next && this._successors.size > 0) {
       console.warn(
         `Flow ends: '${action}' not found in [${[...this._successors.keys()]}]`,
