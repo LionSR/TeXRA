@@ -36,7 +36,10 @@ import {
   writeRawStdout,
   writeTextStdout,
 } from '../runtime/logSinks';
-import { ChatTerminalRenderer } from './terminalRenderer';
+import {
+  ChatTerminalRenderer,
+  type ChatToolDisplayMode,
+} from './terminalRenderer';
 
 export interface ChatResult {
   exitCode: number;
@@ -59,6 +62,16 @@ interface ChatSessionState {
 function parseCommand(line: string): { command: string; rest: string } {
   const [command = '', ...rest] = line.slice(1).trim().split(/\s+/);
   return { command: command.toLowerCase(), rest: rest.join(' ') };
+}
+
+function parseToolDisplayMode(
+  value: string | undefined,
+): ChatToolDisplayMode | undefined {
+  if (value == null) return 'minimal';
+  if (value === 'grouped' || value === 'minimal' || value === 'hidden') {
+    return value;
+  }
+  return undefined;
 }
 
 async function modelAvailable(
@@ -114,6 +127,14 @@ function installChatResponsePrinter(session: ChatSessionState): {
 export async function runChat(context: CliContext): Promise<ChatResult> {
   const args = context.argv.slice(1);
   const chatContext = applyCliGlobalArgs(context, args);
+  let toolDisplay = parseToolDisplayMode(flagValue(args, '--tool-display'));
+  if (toolDisplay == null) {
+    const renderer = new ChatTerminalRenderer(chatContext.colorEnabled);
+    renderer.error(
+      'Unsupported --tool-display. Expected grouped, minimal, or hidden.',
+    );
+    return { exitCode: CliExitCode.Usage };
+  }
   if (chatContext.mode === 'headless') {
     const renderer = new ChatTerminalRenderer(chatContext.colorEnabled);
     renderer.error(
@@ -131,6 +152,12 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
 
   let agent = flagValue(args, '--agent') ?? DEFAULT_CHAT_AGENT;
   let model = flagValue(args, '--model', '-m') ?? DEFAULT_AGENT_MODEL;
+  const currentMetadata = () => ({
+    agent,
+    model,
+    cwd: chatContext.cwd,
+    toolDisplay,
+  });
   const currentSessionContext = (): CliContext => ({
     ...chatContext,
     helperModel: model,
@@ -141,7 +168,10 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
   installCliApprovalHandlers(currentSessionContext());
   await loadAgents();
 
-  const renderer = new ChatTerminalRenderer(chatContext.colorEnabled);
+  const renderer = new ChatTerminalRenderer(
+    chatContext.colorEnabled,
+    toolDisplay,
+  );
   const reader = createCliLineReader(renderer.prompt);
   const session: ChatSessionState = {
     readerClosed: false,
@@ -250,7 +280,13 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     const runContext = currentSessionContext();
     const runtimeHost = createCliRuntimeHost(runContext);
     session.runPromise = executeAgent(config, undefined, {
-      runtimeHost,
+      runtimeHost: {
+        ...runtimeHost,
+        emit(event, payload) {
+          renderer.renderProgressEvent(event, payload);
+          runtimeHost.emit(event, payload);
+        },
+      },
       enforceCategory: true,
       onStreamResolved: (resolvedStreamId) => {
         session.streamId = resolvedStreamId;
@@ -299,7 +335,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
   };
 
   try {
-    renderer.printBanner({ agent, model, cwd: chatContext.cwd });
+    renderer.printBanner(currentMetadata());
     reader.prompt();
 
     for await (const rawLine of reader) {
@@ -340,6 +376,16 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
           } else {
             renderer.warn('Usage: /model <name>');
           }
+        } else if (command === 'tools') {
+          const mode = parseToolDisplayMode(rest);
+          if (mode == null) {
+            renderer.warn('Usage: /tools <grouped|minimal|hidden>');
+          } else {
+            toolDisplay = mode;
+            renderer.setToolDisplay(toolDisplay);
+          }
+        } else if (command === 'status') {
+          renderer.printStatus(currentMetadata(), session.streamId);
         } else if (command === 'yolo') {
           renderer.info(
             'Use --approval-policy yolo when starting texra chat to auto-approve approval gates. External inquiry prompts still require a human answer.',
