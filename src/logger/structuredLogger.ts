@@ -126,7 +126,7 @@ class StructuredLogger implements Logger {
     return new StructuredLogger(
       this.sinkRef,
       mergeFields(this.fields, fields),
-      [...this.groupStack],
+      this.groupStack,
       this.groupQueue,
     );
   }
