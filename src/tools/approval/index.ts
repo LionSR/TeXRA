@@ -8,12 +8,8 @@
  */
 
 import {
-  clearAllProposals,
-  clearAllPlanApprovals,
-  clearAllRetryRequests,
-  clearPlanApprovalForStream,
-  clearProposalForStream,
-  clearRetryRequest,
+  cleanupAllCoordinatorRequests,
+  cleanupCoordinatorRequestsForStream,
 } from '@agent/runtime/runCoordinators';
 import type { StreamTabId } from '@shared/schemas';
 import {
@@ -41,9 +37,7 @@ export function cleanupApprovalsForStream(streamId: StreamTabId): void {
   _rejectPendingInquiriesForStream(streamId);
   toolEditApprovalController.clearBypassForStream(streamId);
   _clearProposalBypassForStream(streamId);
-  clearPlanApprovalForStream(streamId);
-  clearProposalForStream(streamId);
-  clearRetryRequest(streamId);
+  cleanupCoordinatorRequestsForStream(streamId);
 }
 
 /** Clean up approval state only for the listed deleted streams. */
@@ -65,9 +59,7 @@ export function cleanupAllApprovals(): void {
   _rejectAllPendingInquiries();
   toolEditApprovalController.clearAllBypass();
   _clearAllProposalBypass();
-  clearAllPlanApprovals();
-  clearAllProposals();
-  clearAllRetryRequests();
+  cleanupAllCoordinatorRequests();
 }
 
 export { enableYoloOnChildStream };
