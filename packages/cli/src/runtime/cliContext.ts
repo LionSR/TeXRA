@@ -22,6 +22,7 @@ export interface CliContext {
   readonly approvalPolicy: CliApprovalPolicy;
   readonly helperModel?: string;
   readonly quietLogs?: boolean;
+  readonly colorEnabled: boolean;
   readonly version: string;
   readonly resourcesPath: string;
 }
@@ -68,14 +69,20 @@ interface CliAmbientState {
   readonly stdinIsTty: boolean;
   readonly stdoutIsTty: boolean;
   readonly stderrIsTty: boolean;
+  readonly colorEnabled: boolean;
 }
 
 function readCliAmbientState(): CliAmbientState {
+  const stderrIsTty = process.stderr.isTTY === true;
   return {
     isCi: Boolean(process.env.CI),
     stdinIsTty: process.stdin.isTTY === true,
     stdoutIsTty: process.stdout.isTTY === true,
-    stderrIsTty: process.stderr.isTTY === true,
+    stderrIsTty,
+    colorEnabled:
+      stderrIsTty &&
+      process.env.NO_COLOR == null &&
+      process.env.TERM !== 'dumb',
   };
 }
 
@@ -296,6 +303,7 @@ export async function resolveCliContext(
     mode: cliMode(globalArgs, ambient),
     outputFormat: outputFormat(globalArgs),
     approvalPolicy: approvalPolicy(globalArgs),
+    colorEnabled: ambient.colorEnabled,
     version: await readCliVersion(),
     resourcesPath: resolveResourcesPath(),
   };
