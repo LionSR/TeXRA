@@ -67,8 +67,12 @@ export function withToolFileInteractionContext<T>(
   context: ToolFileInteractionContext,
   run: () => Promise<T> | T,
 ): Promise<T> {
-  const parentStack = contextStackScope.getStore() ?? [];
-  return Promise.resolve(contextStackScope.run([...parentStack, context], run));
+  try {
+    const parentStack = contextStackScope.getStore() ?? [];
+    return contextStackScope.run([...parentStack, context], async () => run());
+  } catch (error) {
+    return Promise.reject(error);
+  }
 }
 
 export function getCurrentToolFileInteractionContext():
