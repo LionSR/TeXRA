@@ -10,6 +10,8 @@ const cliRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const repoRoot = path.dirname(path.dirname(cliRoot));
 const binaryPath = path.join(cliRoot, 'dist/bin/texra.js');
 const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER';
+const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG';
+const validationFlagContent = 'texra-cli-run-validation\n';
 
 function run(command, args, options = {}) {
   const env = {
@@ -17,7 +19,11 @@ function run(command, args, options = {}) {
     CI: '1',
   };
   if (options.validationModel) {
+    if (!options.validationFlagPath) {
+      throw new Error('validationModel requires validationFlagPath');
+    }
     env[validationEnv] = '1';
+    env[validationFlagEnv] = options.validationFlagPath;
   }
 
   const result = spawnSync(command, args, {
@@ -96,7 +102,12 @@ function validateRunCommand() {
   const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-run-'));
   try {
     const inputPath = path.join(cwd, 'paper.tex');
+    const validationFlagPath = path.join(
+      cwd,
+      '.texra-internal-validation-model-handler',
+    );
     writeFileSync(inputPath, '\\section{Input}\nOriginal text.\n');
+    writeFileSync(validationFlagPath, validationFlagContent);
 
     const baseArgs = [
       binaryPath,
@@ -116,6 +127,7 @@ function validateRunCommand() {
     const text = run(process.execPath, baseArgs, {
       cwd: repoRoot,
       validationModel: true,
+      validationFlagPath,
     });
     assertSuccess(text, 'texra run text');
     assert(
@@ -126,7 +138,7 @@ function validateRunCommand() {
     const json = run(
       process.execPath,
       [...baseArgs, '--output-format', 'json'],
-      { cwd: repoRoot, validationModel: true },
+      { cwd: repoRoot, validationModel: true, validationFlagPath },
     );
     assertSuccess(json, 'texra run JSON');
     const jsonResult = JSON.parse(json.stdout);
@@ -153,7 +165,7 @@ function validateRunCommand() {
     const ndjson = run(
       process.execPath,
       [...baseArgs, '--output-format', 'ndjson'],
-      { cwd: repoRoot, validationModel: true },
+      { cwd: repoRoot, validationModel: true, validationFlagPath },
     );
     assertSuccess(ndjson, 'texra run NDJSON');
     assert(
