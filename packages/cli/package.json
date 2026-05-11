@@ -14,7 +14,8 @@
     "check:architecture": "node scripts/check-host-imports.mjs",
     "bundle": "esbuild src/bin/texra.ts --bundle --platform=node --format=esm --target=node20 --external:fsevents --outfile=dist/bin/texra.js --banner:js='#!/usr/bin/env node'",
     "copy:resources": "node scripts/copy-resources.mjs",
-    "build": "pnpm run typecheck && pnpm run check:architecture && pnpm run bundle && pnpm run copy:resources"
+    "build": "pnpm run typecheck && pnpm run check:architecture && pnpm run bundle && pnpm run copy:resources",
+    "validate:run": "node scripts/validate-run.mjs"
   },
   "dependencies": {
     "@texra/core": "workspace:*"
