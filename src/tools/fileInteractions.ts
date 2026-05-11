@@ -1,11 +1,11 @@
 // Local imports - agent
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { getCurrentToolCallContext } from '@agent/toolUse/ToolFileInteractionContext';
 
 // Local imports - tools
 import { type ToolResult } from '@tools/result';
 
 export function recordToolFileRead(path: string): void {
-  const context = getCurrentToolFileInteractionContext();
+  const context = getCurrentToolCallContext();
   if (!context) return;
   context.tracker.recordRead(path);
 }
@@ -15,7 +15,7 @@ export function requireFileReadForEdit(
   exists: boolean,
   errorMessage?: string,
 ): ToolResult | null {
-  const context = getCurrentToolFileInteractionContext();
+  const context = getCurrentToolCallContext();
   if (!context || !exists || context.tracker.hasRead(path)) {
     return null;
   }
