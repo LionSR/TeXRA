@@ -30,6 +30,7 @@ export interface Logger {
   info(message: string, fields?: LogFields): void;
   warn(message: string, fields?: LogFields): void;
   error(message: string, fields?: LogFields): void;
+  activeGroupId(): string | undefined;
   group(label: string): () => void;
   withGroup<T>(label: string, fn: () => Promise<T> | T): Promise<T>;
   child(fields: LogFields): Logger;
@@ -80,6 +81,10 @@ class StructuredLogger implements Logger {
 
   error(message: string, fields?: LogFields): void {
     this.write('error', message, fields);
+  }
+
+  activeGroupId(): string | undefined {
+    return this.groupStack.at(-1);
   }
 
   group(label: string): () => void {
