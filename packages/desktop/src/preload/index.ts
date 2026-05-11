@@ -18,6 +18,21 @@ function getRendererTargetOrigin(): string {
   return origin && origin !== 'null' ? origin : '*';
 }
 
+function getWorkspacePath(): string | undefined {
+  const argv = process.argv;
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--texra-workspace-path') {
+      const value = argv[i + 1];
+      return value && !value.startsWith('--') ? value : undefined;
+    }
+    if (arg?.startsWith('--texra-workspace-path=')) {
+      return arg.slice('--texra-workspace-path='.length) || undefined;
+    }
+  }
+  return undefined;
+}
+
 installElectronHostBridge({
   exposeInMainWorld: (name, api) => contextBridge.exposeInMainWorld(name, api),
   onHostMessage: (channel, listener) => {
@@ -38,4 +53,5 @@ installElectronHostBridge({
 contextBridge.exposeInMainWorld('texraDesktop', {
   electronVersion: process.versions.electron,
   hasWorkspace: hasResolvedWorkspacePath(),
+  workspacePath: getWorkspacePath(),
 });
