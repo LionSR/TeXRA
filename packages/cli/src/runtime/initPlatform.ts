@@ -6,6 +6,9 @@ import { nodeStorage } from '@platform/defaults/nodeStorage';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { initPlatform, tryPlatform } from '@platform/platform';
 
+// Local imports - logger
+import { setOutputChannelFactory } from '@logger/logUtils';
+
 // Local imports - agent index
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 
@@ -79,6 +82,9 @@ export async function initCliPlatform(
   cliWorkspaceCwd = context.cwd;
   quietPlatformLogs =
     context.quietLogs === true && context.outputFormat === 'text';
+  setOutputChannelFactory(
+    quietPlatformLogs ? () => ({ appendLine: () => undefined }) : null,
+  );
 
   if (!tryPlatform()) {
     const globalState = createMemoryStore();
