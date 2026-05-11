@@ -177,21 +177,16 @@ async function handleCliApprovalEventAsync<
     }
     case 'showRetryRequest': {
       const data = payload as ProgressEventPayloads['showRetryRequest'];
-      if (!approvalPromptAllowed(context)) {
-        writeTextStderr(
-          `Retry requested for ${data.operation}: ${data.errorMessage ?? 'unknown error'}`,
-        );
-        cancelRetry(data.streamId);
-        markApprovalDenied(context);
-        return;
-      }
-      const decision = await askApproval(
-        context,
-        `Retry requested for ${data.operation}: ${data.errorMessage ?? 'unknown error'}`,
-      );
+      const summary = `Retry requested for ${data.operation}: ${data.errorMessage ?? 'unknown error'}`;
+      const decision = await askApproval(context, summary);
       if (decision.accepted) {
         triggerRetry(data.streamId);
       } else {
+        writeTextStderr(
+          decision.userMessage
+            ? `${summary}\n${decision.userMessage}`
+            : summary,
+        );
         cancelRetry(data.streamId);
       }
       return;

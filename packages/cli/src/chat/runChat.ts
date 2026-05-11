@@ -32,6 +32,7 @@ import { initCliPlatform, setCliHelperModel } from '../runtime/initPlatform';
 import { createCliRuntimeHost } from '../runtime/runtimeHost';
 import {
   createCliLineReader,
+  writeRawStderr,
   writeRawStdout,
   writeTextStderr,
   writeTextStdout,
@@ -66,7 +67,7 @@ function printChatHelp(): void {
 }
 
 function printClearScreen(): void {
-  writeTextStderr('\u001B[2J\u001B[H');
+  writeRawStderr('\u001B[2J\u001B[H');
 }
 
 function parseCommand(line: string): { command: string; rest: string } {
