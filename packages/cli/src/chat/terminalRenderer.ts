@@ -195,12 +195,46 @@ Keys:
       this.muted(`${label} updated`);
       return;
     }
-    const items =
-      (isRecord(payload) && Array.isArray(payload.items) && payload.items) ||
-      (isRecord(payload) && Array.isArray(payload.todos) && payload.todos) ||
-      (isRecord(payload) && Array.isArray(payload.plan) && payload.plan) ||
-      [];
-    this.muted(`${label} updated: ${items.length} item(s)`);
+    const items = this.collectPlanOrTodoItems(payload);
+    if (items.length === 0) {
+      this.muted(`${label} updated`);
+      return;
+    }
+    this.renderCard(
+      `${label} updated`,
+      items
+        .slice(0, 8)
+        .map((item, index) => `${index + 1}. ${this.formatListItem(item)}`),
+    );
+  }
+
+  private collectPlanOrTodoItems(payload: unknown): unknown[] {
+    const directItems = arrayField(payload, 'items');
+    if (directItems.length > 0) return directItems;
+
+    const todos = arrayField(payload, 'todos');
+    if (todos.length > 0) return todos;
+
+    const planValue = isRecord(payload) ? payload.plan : undefined;
+    if (Array.isArray(planValue)) return planValue;
+    const planSteps = arrayField(planValue, 'steps');
+    if (planSteps.length > 0) return planSteps;
+
+    return [];
+  }
+
+  private formatListItem(item: unknown): string {
+    if (!isRecord(item)) return truncateText(String(item), 140);
+
+    const status = stringField(item, 'status');
+    const title =
+      stringField(item, 'title') ??
+      stringField(item, 'content') ??
+      stringField(item, 'text') ??
+      stringField(item, 'description') ??
+      'untitled';
+    const prefix = status ? `[${status}] ` : '';
+    return truncateText(`${prefix}${title}`, 140);
   }
 
   private renderActiveChildren(label: string, payload: unknown): void {
