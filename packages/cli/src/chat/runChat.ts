@@ -87,6 +87,8 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
   let runExitCode: CliExitCode = CliExitCode.Success;
   let runPromise: Promise<void> | undefined;
   let stopRequested = false;
+  const pendingFollowUps: string[] = [];
+  let followUpFlush = Promise.resolve();
 
   const interruptActiveSession = (): void => {
     if (!streamId) return;
@@ -105,6 +107,38 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     closeReader();
   };
 
+  const flushPendingFollowUps = (): void => {
+    if (!streamId || stopRequested || pendingFollowUps.length === 0) return;
+
+    const lines = pendingFollowUps.splice(0);
+    followUpFlush = followUpFlush
+      .then(async () => {
+        for (const line of lines) {
+          if (!streamId || stopRequested || runCompleted) return;
+          const result = await sendFollowUp(streamId, line);
+          if (result.status === 'no_session') {
+            writeTextStderr('The chat session is no longer active.');
+            closeReader();
+            return;
+          }
+          if (result.status === 'queued') {
+            writeTextStderr(
+              `Follow-up queued while session is ${result.reason}.`,
+            );
+          }
+        }
+      })
+      .catch((error) => {
+        writeTextStderr(error instanceof Error ? error.message : String(error));
+        closeReader();
+      });
+  };
+
+  const queueFollowUp = (line: string): void => {
+    pendingFollowUps.push(line);
+    flushPendingFollowUps();
+  };
+
   const startSession = (instruction: string): void => {
     const config: AgentConfigPayload = {
       agent,
@@ -121,6 +155,8 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
         streamId = resolvedStreamId;
         if (stopRequested) {
           interruptActiveSession();
+        } else {
+          flushPendingFollowUps();
         }
       },
     })
@@ -204,25 +240,19 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       }
 
       if (!streamId) {
+        queueFollowUp(line);
         writeTextStderr(
-          'The chat session is still starting. Try again shortly.',
+          'The chat session is still starting. Follow-up queued.',
         );
         reader.prompt();
         continue;
       }
 
-      const result = await sendFollowUp(streamId, line);
-      if (result.status === 'no_session') {
-        writeTextStderr('The chat session is no longer active.');
-        closeReader();
-        break;
-      }
-      if (result.status === 'queued') {
-        writeTextStderr(`Follow-up queued while session is ${result.reason}.`);
-      }
+      queueFollowUp(line);
       if (!runCompleted) reader.prompt();
     }
 
+    await followUpFlush;
     await runPromise;
     return { exitCode: runExitCode };
   } finally {
