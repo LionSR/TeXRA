@@ -114,6 +114,24 @@ describe('structuredLogger', () => {
     );
   });
 
+  it('nests manual groups inside async group scopes', async () => {
+    const sink = new MemorySink();
+    const logger = createStructuredLogger(sink);
+
+    await logger.withGroup('async', async () => {
+      const leaveManual = logger.group('manual');
+      logger.info('inside manual group');
+      leaveManual();
+      logger.info('after manual group');
+    });
+    logger.info('after async group');
+
+    assert.deepEqual(
+      sink.records.map((record) => record.groups),
+      [['async', 'manual'], ['async'], []],
+    );
+  });
+
   it('flushes and closes the old sink when swapping sinks', async () => {
     const first = new FlushCountingSink();
     const second = new FlushCountingSink();
