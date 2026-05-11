@@ -119,7 +119,6 @@ function logWithGroup(
   const legacyLogger = ensureLegacyLogger(channel, isAgent);
   const activeGroupId = legacyLogger.activeGroupId();
   legacyLogger[level](message, {
-    ...options,
     groupId: options.groupId ?? activeGroupId,
     data: resolvedData,
   });
