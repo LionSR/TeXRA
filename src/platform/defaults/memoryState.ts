@@ -1,8 +1,12 @@
 // Local imports - platform
 import type { StateStore } from '../interfaces/state';
 
-class MemoryStateStore implements StateStore {
+export class MemoryStateStore implements StateStore {
   private readonly values = new Map<string, unknown>();
+
+  has(key: string): boolean {
+    return this.values.has(key);
+  }
 
   get<T>(key: string, defaultValue?: T): T {
     return this.values.has(key)
