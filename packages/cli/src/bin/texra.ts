@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 // Local imports - CLI commands
 import { runCli } from '../commands/root';
 import { CliExitCode } from '../runtime/exitCodes';
