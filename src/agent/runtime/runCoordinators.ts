@@ -33,6 +33,7 @@ const planStreams = new Map<string, RunCoordinators>();
 const proposals = new Map<string, RunCoordinators>();
 const proposalStreams = new Map<string, string>();
 const retries = new Map<string, RunCoordinators>();
+const retryCoordinators = new Set<RunCoordinators>();
 
 function clearPlanBridgeForStream(streamId: string): void {
   planStreams.delete(streamId);
@@ -141,6 +142,7 @@ export async function waitForRetry(
   options: RetryRequestOptions,
 ): Promise<RetryResult> {
   const coordinators = getRunCoordinators();
+  retryCoordinators.add(coordinators);
   retries.set(streamId, coordinators);
   try {
     return await coordinators.retry.waitForRetry(streamId, options);
@@ -162,17 +164,25 @@ export function cancelRetry(streamId: string): boolean {
 }
 
 export function clearRetryRequest(streamId: string): void {
-  (retries.get(streamId)?.retry ?? legacyCoordinators.retry).clearRequest(
-    streamId,
-  );
+  const coordinators = new Set(retryCoordinators);
+  const mappedCoordinators = retries.get(streamId);
+  if (mappedCoordinators) coordinators.add(mappedCoordinators);
+  coordinators.add(legacyCoordinators);
+  for (const coordinator of coordinators) {
+    coordinator.retry.clearRequest(streamId);
+  }
   retries.delete(streamId);
 }
 
 export function clearAllRetryRequests(): void {
-  const coordinators = new Set(retries.values());
+  const coordinators = new Set(retryCoordinators);
+  for (const retryCoordinator of retries.values()) {
+    coordinators.add(retryCoordinator);
+  }
   coordinators.add(legacyCoordinators);
   for (const coordinator of coordinators) {
     coordinator.retry.clearAll();
   }
+  retryCoordinators.clear();
   retries.clear();
 }
