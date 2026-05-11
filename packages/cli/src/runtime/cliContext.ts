@@ -14,6 +14,12 @@ import {
 export type CliMode = 'headless' | 'interactive';
 export type CliOutputFormat = 'text' | 'json' | 'ndjson';
 
+export interface CliPromptRequest {
+  readonly kind: 'approval' | 'externalInquiry';
+  readonly summary: string;
+  readonly prompt: string;
+}
+
 export interface CliContext {
   readonly argv: readonly string[];
   readonly cwd: string;
@@ -25,6 +31,7 @@ export interface CliContext {
   readonly colorEnabled: boolean;
   readonly version: string;
   readonly resourcesPath: string;
+  readonly approvalPrompt?: (request: CliPromptRequest) => Promise<string>;
 }
 
 export class CliUsageError extends Error {
