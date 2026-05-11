@@ -47,6 +47,7 @@ function mergeFields(left: LogFields, right: LogFields | undefined): LogFields {
 
 class StructuredLogger implements Logger {
   private readonly groupStack: string[];
+  private groupTail: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly sinkRef: SinkRef,
@@ -77,11 +78,22 @@ class StructuredLogger implements Logger {
   }
 
   async withGroup<T>(label: string, fn: () => Promise<T> | T): Promise<T> {
+    const previousGroup = this.groupTail.catch(() => undefined);
+    let releaseGroup: () => void = () => undefined;
+    this.groupTail = previousGroup.then(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseGroup = resolve;
+        }),
+    );
+    await previousGroup;
+
     const pop = this.enterGroup(label, false);
     try {
       return await fn();
     } finally {
       pop();
+      releaseGroup();
       await this.sinkRef.current.flush?.();
     }
   }
@@ -99,7 +111,10 @@ class StructuredLogger implements Logger {
         const currentIndex = this.groupStack.lastIndexOf(label);
         if (currentIndex >= 0) this.groupStack.splice(currentIndex, 1);
       }
-      if (flushOnPop) void this.sinkRef.current.flush?.();
+      if (flushOnPop) {
+        const flush = this.sinkRef.current.flush?.();
+        if (flush) void flush.catch(() => undefined);
+      }
     };
   }
 
