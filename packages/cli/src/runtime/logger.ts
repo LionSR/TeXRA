@@ -9,7 +9,7 @@ import {
 import type { CliContext } from './cliContext';
 import { NdjsonStdoutSink, StderrTextSink } from './logSinks';
 
-export interface CliLoggerHandle {
+interface CliLoggerHandle {
   readonly logger: Logger;
   close(): Promise<void>;
 }
