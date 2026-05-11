@@ -176,9 +176,10 @@ async function runWorkflowAgent(
   await loadAgents();
 
   const outputFile = flagValue(args, '--output');
+  const model = flagValue(args, '--model', '-m');
   const config: AgentConfigPayload = {
     agent,
-    model: flagValue(args, '--model', '-m') ?? DEFAULT_AGENT_MODEL,
+    model: model && model.trim().length > 0 ? model : DEFAULT_AGENT_MODEL,
     inputFile,
     outputFiles: outputFile ? [outputFile] : [],
     instruction: flagValue(args, '--instruction') ?? '',
