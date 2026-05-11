@@ -5,21 +5,25 @@
   "primaryPrd": "prds/prd-cli-runcontext-logger-orchestration.md",
   "currentAudit": {
     "date": "2026-05-11",
-    "pr": "https://github.com/LionSR/TeXRA/pull/3839",
-    "head": "PR #3839 current head; use GitHub checks as the head-specific source of truth",
+    "pr": "https://github.com/LionSR/TeXRA/pull/3839 and stacked PRs #3843-#3847",
+    "head": "Use each PR's GitHub checks and review-thread state as the head-specific source of truth",
     "verified": [
-      "PR #3839 format, macOS validation, Ubuntu validation, aggregate validation, and Bugbot completed without blocking failures on the latest audited head.",
-      "PR #3839 thread-aware review state still contains unresolved, non-outdated threads, but the live items are mapped in PR comments as already addressed or informational.",
-      "Repository-local manifest guard passes: corepack pnpm run check:cli-orchestration-manifest.",
-      "packages/cli exists with a texra bin and build script.",
-      "texra chat rejects headless mode instead of hanging."
+      "PR #3839 is clean against main with passing format, macOS validation, Ubuntu validation, aggregate validation, Claude review, and Bugbot on the latest audited head.",
+      "PR #3843 is clean against #3839 with passing format, validation, Claude review, and Bugbot; it validates the packaged texra run path.",
+      "PR #3844 is clean against #3843 with passing format, validation, Claude review, and Bugbot; it implements CLI ask approval prompts and matrix handling.",
+      "PR #3845 is clean against #3839 with passing format, validation, Claude review, and Bugbot; it routes legacy host logging through structured records and host sinks.",
+      "PR #3846 has passing format, label, macOS validation, Ubuntu validation, and aggregate validation; Claude review and Bugbot were still pending at the latest audit.",
+      "PR #3847 is clean against #3839 with passing format, validation, Claude review, and Bugbot; it scopes tool-call context with async storage and splits tool context reader paths.",
+      "Thread-aware review audit shows no unresolved, non-outdated review threads on PRs #3839, #3843, #3844, #3845, #3846, or #3847.",
+      "packages/cli exists with a texra bin, build script, packaged-runtime validation, run mode, model/agent listing, and a plain chat loop.",
+      "texra chat rejects headless mode instead of hanging, accepts follow-up turns in the same shared tool-use session, and renders answers from the shared stream log."
     ],
     "remainingGaps": [
-      "Claude review is head-specific GitHub state and must be re-checked before merge.",
-      "PR #3839 is ready for review as a scaffold PR, not as a feature-complete implementation.",
-      "Issues #3833, #3834, #3835, #3836, #3837, and #3838 are open.",
-      "texra chat interactive follow-up TUI is still a stub and does not satisfy issue #3836.",
-      "The manifest is intentionally still in_progress and not_validated until every issue acceptance gate is implemented or moved to an owned follow-up."
+      "The stack is not merged; issues #3833, #3834, #3835, #3836, #3837, and #3838 remain open until maintainers land or explicitly close the PR slices.",
+      "PR #3846 still needs its pending Claude review and Bugbot results checked before merge.",
+      "Full rich texra chat TUI work remains open in #3848: multiline input, inline approval cards with ask-mode input, fuller grouped tool bodies/results, and renderer distribution proof if OpenTUI is adopted.",
+      "The ToolFileInteractionContext compatibility getter remains until remaining non-tool installation/test surfaces are migrated or explicitly justified.",
+      "The manifest is intentionally still in_progress until every issue acceptance gate is implemented, validated, merged, or moved to an owned follow-up issue with acceptance criteria."
     ]
   },
   "globalInvariants": [
@@ -97,7 +101,7 @@
     }
   ],
   "completionRule": "Do not mark complete until every issue acceptance gate is implemented, validated, or moved to an owned follow-up issue with acceptance criteria.",
-  "validationStatus": "not_validated",
+  "validationStatus": "partially_validated",
   "recommendedOrder": [
     "stabilize source-of-truth guards",
     "finish texra run on shared executeAgent path",
@@ -154,6 +158,37 @@
         "Preserve nested grouped logging and sink flushing semantics.",
         "Keep progress event schema separate from LogRecord; bridge only at the host or rendering boundary if needed.",
         "Add focused validation for grouped logging and sink behavior."
+      ]
+    },
+    {
+      "id": 3848,
+      "title": "CLI follow-up: add richer texra chat terminal renderer",
+      "url": "https://github.com/LionSR/TeXRA/issues/3848",
+      "parentIssues": [3836, 3838],
+      "recommendedOrderItem": "implement texra chat TUI over existing session lifecycle",
+      "sourceOfTruth": "shared tool-use session lifecycle owns conversation semantics; ChatTerminalRenderer owns terminal presentation only",
+      "acceptance": [
+        "Keep the terminal renderer behind the chat-only lazy boundary.",
+        "Add multiline input without creating a second approval or follow-up lifecycle.",
+        "Render inline approval cards while settlement remains in the CLI approval adapter and shared coordinators.",
+        "Render richer grouped tool-call bodies and tool results from shared progress and stream-log data.",
+        "Prove Node 20+ npm distribution before adopting OpenTUI as a hard dependency; otherwise keep a Node-stable renderer behind the same boundary.",
+        "Preserve grouped, minimal, and hidden display modes."
+      ]
+    },
+    {
+      "id": 3849,
+      "title": "RunContext follow-up: split ToolFileInteractionContext access paths",
+      "url": "https://github.com/LionSR/TeXRA/issues/3849",
+      "parentIssues": [3837, 3838],
+      "recommendedOrderItem": "continue RunContext and ToolFileInteractionContext ownership cleanup",
+      "sourceOfTruth": "RunContext owns ToolRunContext; ToolCallContext owns per-tool-call mutable state; mixed readers use an explicit mixed accessor",
+      "acceptance": [
+        "Move tool-layer run-owned readers to getCurrentToolRunContext().",
+        "Move tool-layer call-owned readers to getCurrentToolCallContext().",
+        "Use getCurrentToolContexts() only for readers that genuinely need both views.",
+        "Keep runtime-host fallback lookup at the tool-use boundary, not inside ToolFileInteractionContext.",
+        "Retain the compatibility combined getter only for non-tool migration surfaces, with a clear retirement path."
       ]
     }
   ],
