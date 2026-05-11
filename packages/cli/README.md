@@ -56,8 +56,10 @@ The CLI package currently has structural gates:
 - `typecheck`
 - `check:architecture`
 - `build`
+- `validate:run`
 
-It does not yet have an honest provider-free runtime test for `texra run`.
-Validation for issue #3840 must enter the real shared `executeAgent()` path.
-Do not replace that requirement with a fake top-level `executeAgent` injection at
-the CLI command boundary.
+The `validate:run` script builds the package, executes the generated binary, and
+uses an internal validation model handler below `executeAgent()`. This is
+deliberately not a user-facing model or CLI flag: the CLI command still calls the
+real shared runtime, while the model layer supplies deterministic text so the
+test does not require provider credentials.
