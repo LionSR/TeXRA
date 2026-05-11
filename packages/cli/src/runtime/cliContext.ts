@@ -176,6 +176,7 @@ function resolveResourcesPath(): string {
   const currentFile = fileURLToPath(import.meta.url);
   const currentDir = path.dirname(currentFile);
   const candidates = [
+    path.resolve(currentDir, '../resources'),
     path.resolve(currentDir, '../../../extension/resources'),
     path.resolve(currentDir, '../../extension/resources'),
   ];
