@@ -176,9 +176,13 @@ async function runWorkflowAgent(
     workingDirectory: context.cwd,
   };
 
-  const result = await executeAgent(config, undefined, {
-    runtimeHost: createCliRuntimeHost(context),
-  });
+  const runtimeHost = createCliRuntimeHost(context);
+  let result: Awaited<ReturnType<typeof executeAgent>>;
+  try {
+    result = await executeAgent(config, undefined, { runtimeHost });
+  } finally {
+    await runtimeHost.close();
+  }
 
   if (context.outputFormat === 'json') {
     writeTextStdout(JSON.stringify(result, null, 2));
