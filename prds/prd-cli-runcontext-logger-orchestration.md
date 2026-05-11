@@ -576,6 +576,12 @@ Do not mark the orchestration complete until the remaining work in this ledger h
 
 The CLI package now has separate `typecheck`, `check:architecture`, `bundle`, and `build` scripts. `build` composes the first three and writes the manifest-declared binary at `dist/bin/texra.js`. `esbuild` is declared in `@texra/cli` dev dependencies because the package-local build invokes it directly. This closes the earlier mismatch where `bin.texra` pointed at `dist` but no package script produced that file.
 
+### Ledger update: PR #3839 review-clean scaffold state
+
+PR #3839 is review-clean on the latest audited head `85f130507b8ff9fcd5746d3e7489d4557a29b620`: format, validation, macOS validation, Ubuntu validation, and Claude review passed; Cursor Bugbot skipped; thread-aware review state showed zero unresolved, non-outdated review threads. The same status was posted to tracking issue #3838 and implementation issues #3833-#3837 so the next loop starts from current evidence rather than rediscovering completed scaffold work.
+
+This does not complete the orchestration. PR #3839 remains a draft scaffold PR, and issues #3833-#3838 remain open. Logger v2 host sinks, real `texra run` runtime validation, interactive approval prompts, `texra chat` follow-up TUI, and final `ToolFileInteractionContext` ownership cleanup still need implementation or owned follow-up issues with acceptance criteria.
+
 ## Machine-readable manifest
 
 A compact orchestration manifest lives at `prds/prd-cli-runcontext-logger-orchestration.manifest.json`. It maps each issue to its PRD, source of truth, and acceptance gates. Loop agents should use the manifest as an index, not as a replacement for the PRD text.
