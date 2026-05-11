@@ -23,7 +23,7 @@ export interface CliContext {
   readonly resourcesPath: string;
 }
 
-const GLOBAL_FLAGS_WITH_VALUE = new Set([
+export const GLOBAL_FLAGS_WITH_VALUE = new Set([
   '--approval-policy',
   '--cwd',
   '--output-format',
@@ -45,7 +45,10 @@ const FLAGS_WITH_VALUE = new Set([
 
 const GLOBAL_BOOLEAN_FLAGS = new Set(['--print', '-p']);
 const ROOT_BOOLEAN_FLAGS = new Set(['--help', '-h', '--version', '-v']);
-const BOOLEAN_FLAGS = new Set([...GLOBAL_BOOLEAN_FLAGS, ...ROOT_BOOLEAN_FLAGS]);
+export const CLI_BOOLEAN_FLAGS = new Set([
+  ...GLOBAL_BOOLEAN_FLAGS,
+  ...ROOT_BOOLEAN_FLAGS,
+]);
 
 interface CliAmbientState {
   readonly isCi: boolean;
@@ -92,7 +95,7 @@ export function flagValue(
       continue;
     }
 
-    if (BOOLEAN_FLAGS.has(flagName)) {
+    if (CLI_BOOLEAN_FLAGS.has(flagName)) {
       index += 1;
       continue;
     }
@@ -116,7 +119,7 @@ function hasBooleanFlag(args: readonly string[], ...names: string[]): boolean {
       continue;
     }
 
-    if (BOOLEAN_FLAGS.has(flagName)) {
+    if (CLI_BOOLEAN_FLAGS.has(flagName)) {
       index += 1;
       continue;
     }

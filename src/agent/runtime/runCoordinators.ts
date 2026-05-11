@@ -28,6 +28,7 @@ function getRunCoordinators(): RunCoordinators {
 }
 
 const bridgeState = {
+  runStreams: new Map<string, RunCoordinators>(),
   planApprovals: new Map<string, RunCoordinators>(),
   planApprovalStreams: new Map<string, string>(),
   planStreams: new Map<string, RunCoordinators>(),
@@ -36,6 +37,18 @@ const bridgeState = {
   retries: new Map<string, RunCoordinators>(),
   retryCoordinatorRefs: new Map<RunCoordinators, number>(),
 };
+
+export function retainRunCoordinatorsForStream(
+  streamId: string,
+  coordinators: RunCoordinators,
+): () => void {
+  bridgeState.runStreams.set(streamId, coordinators);
+  return () => {
+    if (bridgeState.runStreams.get(streamId) === coordinators) {
+      bridgeState.runStreams.delete(streamId);
+    }
+  };
+}
 
 function retainRetryCoordinator(coordinators: RunCoordinators): void {
   bridgeState.retryCoordinatorRefs.set(
@@ -97,6 +110,7 @@ export function clearPlanApprovalForStream(
 ): void {
   (
     bridgeState.planStreams.get(streamId)?.plan ??
+    bridgeState.runStreams.get(streamId)?.plan ??
     explicitCoordinators?.plan ??
     legacyCoordinators.plan
   ).clearForStream(streamId);
@@ -105,6 +119,9 @@ export function clearPlanApprovalForStream(
 
 export function clearAllPlanApprovals(): void {
   const coordinators = new Set(bridgeState.planStreams.values());
+  for (const runCoordinators of bridgeState.runStreams.values()) {
+    coordinators.add(runCoordinators);
+  }
   coordinators.add(legacyCoordinators);
   for (const coordinator of coordinators) {
     coordinator.plan.clearAll();
@@ -197,6 +214,8 @@ export function clearRetryRequest(
   const coordinators = new Set(bridgeState.retryCoordinatorRefs.keys());
   const mappedCoordinators = bridgeState.retries.get(streamId);
   if (mappedCoordinators) coordinators.add(mappedCoordinators);
+  const runCoordinators = bridgeState.runStreams.get(streamId);
+  if (runCoordinators) coordinators.add(runCoordinators);
   if (explicitCoordinators) coordinators.add(explicitCoordinators);
   coordinators.add(legacyCoordinators);
   for (const coordinator of coordinators) {
@@ -207,6 +226,9 @@ export function clearRetryRequest(
 
 export function clearAllRetryRequests(): void {
   const coordinators = new Set(bridgeState.retryCoordinatorRefs.keys());
+  for (const runCoordinators of bridgeState.runStreams.values()) {
+    coordinators.add(runCoordinators);
+  }
   for (const runCoordinators of bridgeState.retries.values()) {
     coordinators.add(runCoordinators);
   }
