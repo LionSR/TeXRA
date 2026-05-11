@@ -6,10 +6,10 @@
   "currentAudit": {
     "date": "2026-05-11",
     "pr": "https://github.com/LionSR/TeXRA/pull/3839",
-    "head": "cee81b531287632a882e356a9ab6ba0416cc0d0a",
+    "head": "85f130507b8ff9fcd5746d3e7489d4557a29b620",
     "verified": [
       "PR #3839 review threads were addressed or resolved as false positives.",
-      "PR #3839 format, macOS validation, Ubuntu validation, Bugbot, and Claude review completed without blocking failures on the audited head.",
+      "PR #3839 format, macOS validation, Ubuntu validation, Bugbot, and Claude review completed without blocking failures on the latest audited head.",
       "Repository-local manifest guard passes: corepack pnpm run check:cli-orchestration-manifest.",
       "packages/cli exists with a texra bin and build script.",
       "texra chat rejects headless mode instead of hanging."
