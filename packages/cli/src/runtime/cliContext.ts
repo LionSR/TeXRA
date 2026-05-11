@@ -73,6 +73,10 @@ function inlineFlagValue(arg: string, ...names: string[]): string | undefined {
   return undefined;
 }
 
+function nonEmptyFlagValue(value: string | undefined): string | undefined {
+  return value === '' ? undefined : value;
+}
+
 export function flagValue(
   args: readonly string[],
   ...names: string[]
@@ -83,10 +87,10 @@ export function flagValue(
     if (arg == null) break;
 
     const inlineValue = inlineFlagValue(arg, ...names);
-    if (inlineValue !== undefined) return inlineValue;
+    if (inlineValue !== undefined) return nonEmptyFlagValue(inlineValue);
 
     if (names.includes(arg)) {
-      return args[index + 1];
+      return nonEmptyFlagValue(args[index + 1]);
     }
 
     const flagName = cliFlagName(arg);
