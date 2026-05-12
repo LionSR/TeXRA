@@ -280,7 +280,7 @@ function shellTemplate(): TemplateResult {
       <nav class="desktop-nav" aria-label="Desktop chrome">
         <span class="desktop-brand">TeXRA</span>
         <wa-button
-          class="desktop-back-button"
+          class="desktop-icon-button"
           appearance="plain"
           size="small"
           ?hidden=${!showConversation}
@@ -288,7 +288,7 @@ function shellTemplate(): TemplateResult {
           aria-label="Back to launcher"
           @click=${returnToLauncher}
         >
-          ${waIcon('arrow-left', { slot: 'start' })} Launcher
+          ${waIcon('arrow-left', { label: 'Back to launcher' })}
         </wa-button>
         <wa-button
           class="desktop-command-button"
@@ -318,7 +318,7 @@ function shellTemplate(): TemplateResult {
               title=${spec.label}
               @click=${spec.onClick}
             >
-              ${waIcon(spec.icon)}
+              ${waIcon(spec.icon, { label: spec.label })}
             </wa-button>
           `,
         )}

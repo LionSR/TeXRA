@@ -49,15 +49,6 @@ wa-button[hidden] {
   display: none !important;
 }
 
-wa-button.desktop-back-button::part(base) {
-  height: 28px;
-  padding: 0 10px;
-  border-color: transparent;
-  border-radius: var(--wa-border-radius-m);
-  background: transparent;
-  color: var(--wa-color-text-normal);
-}
-
 wa-button.desktop-icon-button::part(base) {
   width: 28px;
   height: 28px;
