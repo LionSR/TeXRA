@@ -2,16 +2,19 @@ import { z } from 'zod';
 
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-import { DOCUMENT_FILE_TYPES, type DocumentFileType } from '@utils/config';
+import {
+  MULTIPLE_DOCUMENT_FILE_TYPES,
+  type MultipleDocumentFileType,
+} from '@shared/schemas/mainView';
 
 const ToolSessionStateSchema = z.object({
   lastFollowUpAt: z.number().optional(),
 });
 
 const ActiveFilesSchema = z.partialRecord(
-  z.enum(DOCUMENT_FILE_TYPES),
+  z.enum(MULTIPLE_DOCUMENT_FILE_TYPES),
   z.boolean(),
-) as z.ZodType<Record<DocumentFileType, boolean>>;
+) as z.ZodType<Record<MultipleDocumentFileType, boolean>>;
 
 const WorkflowTaskStateSchema = z.object({
   agentConfig: AgentConfigSchema.refine(
@@ -38,7 +41,7 @@ export type ToolSessionState = z.infer<typeof ToolSessionStateSchema>;
 
 export interface WorkflowTaskState {
   agentConfig: AgentConfig & { agentCategory: typeof AgentCategory.Workflow };
-  activeFiles: Record<DocumentFileType, boolean>;
+  activeFiles: Record<MultipleDocumentFileType, boolean>;
 }
 
 export interface ToolUseTaskState {
