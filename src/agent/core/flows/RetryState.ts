@@ -1,10 +1,8 @@
 /** Retry state management: Node retry config, error tracking, and retryable node base class. */
 
 import { Node, type NonIterableObject } from '@agent/node';
-import {
-  retryCoordinator,
-  type RetryResult,
-} from '@agent/runtime/RetryRequestCoordinator';
+import { type RetryResult } from '@agent/runtime/RetryRequestCoordinator';
+import { waitForRetry } from '@agent/runtime/runCoordinators';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { getConfig } from '@agent/core/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -267,7 +265,7 @@ export abstract class RetryableInvocationNode<
     );
 
     StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
-    const result: RetryResult = await retryCoordinator.waitForRetry(streamId, {
+    const result: RetryResult = await waitForRetry(streamId, {
       operation: operationName,
       errorMessage: formatted.message,
       logger,
