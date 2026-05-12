@@ -81,7 +81,7 @@ const ERROR_DETAIL_FIELDS = [
   'statusCode',
   'statusText',
   'isRelayError',
-  'retryable',
+  'userRetryable',
   'requestId',
   'rawMessage',
   'rawErrorBody',

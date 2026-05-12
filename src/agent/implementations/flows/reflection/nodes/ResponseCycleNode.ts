@@ -30,7 +30,7 @@ interface CyclePrepInput {
 type CycleOutcome =
   | { outcome: 'completed'; endTurn: boolean }
   | { outcome: 'cancelled' }
-  | { outcome: 'failed'; error: Error; retryable?: boolean };
+  | { outcome: 'failed'; error: Error; userRetryable?: boolean };
 
 export class ResponseCycleNode<C = unknown> extends Node<
   ReflectionFlowShared,
@@ -109,7 +109,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
         return {
           outcome: 'failed',
           error: new Error(cycleShared.lastError.message),
-          retryable: cycleShared.lastError.retryable,
+          userRetryable: cycleShared.lastError.userRetryable,
         };
       }
       if (cycleShared.shouldStop && !cycleShared.endTurn) {
@@ -123,7 +123,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
       return {
         outcome: 'failed',
         error: error instanceof Error ? error : new Error(String(error)),
-        retryable: formatted.retryable,
+        userRetryable: formatted.userRetryable,
       };
     }
   }
@@ -133,7 +133,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
     error: Error,
   ): Promise<CycleOutcome> {
     const formatted = formatProviderHttpError(error);
-    return { outcome: 'failed', error, retryable: formatted.retryable };
+    return { outcome: 'failed', error, userRetryable: formatted.userRetryable };
   }
 
   async post(
@@ -149,7 +149,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
       logger.error(`Response cycle failed: ${execRes.error.message}`);
       shared.lastError = {
         message: execRes.error.message,
-        retryable: execRes.retryable ?? false,
+        userRetryable: execRes.userRetryable ?? false,
       };
       shared.continueRounds = false;
       shared.endTurn = false;
