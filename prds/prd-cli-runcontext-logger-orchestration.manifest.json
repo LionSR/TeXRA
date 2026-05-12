@@ -112,6 +112,14 @@
     "implement texra chat TUI over existing session lifecycle",
     "complete publish-readiness and release gates"
   ],
+  "landingOrder": [
+    "Merge PR #3839 into main.",
+    "Retarget PR #3843 to main, recheck merge state and checks, then merge.",
+    "Retarget PR #3844 to main, recheck merge state and checks, then merge.",
+    "Retarget PR #3845 to main, recheck merge state and checks, then merge.",
+    "Retarget PR #3846 to main, recheck merge state and checks, then merge.",
+    "After the corresponding PRs land, close implemented follow-up issues #3840, #3841, #3842, and #3848 if maintainers accept the current evidence."
+  ],
   "focusedFollowUps": [
     {
       "id": 3840,
