@@ -45,12 +45,22 @@ export class MemoryItem extends LitElement {
 
       .memory-preview {
         font-size: var(--font-size-sm);
-        line-height: var(--line-height-normal);
-        padding: var(--wa-space-xs);
+        line-height: var(--line-height-tight, 1.3);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
         border-radius: var(--border-radius);
         margin: 0;
-        max-height: 200px;
+        max-height: 140px;
         overflow-y: auto;
+      }
+
+      .memory-preview .markdown-content > :first-child {
+        margin-top: 0;
+      }
+      .memory-preview .markdown-content > :last-child {
+        margin-bottom: 0;
+      }
+      .memory-preview .markdown-content p {
+        margin: var(--wa-space-3xs) 0;
       }
 
       .memory-item.pinned {

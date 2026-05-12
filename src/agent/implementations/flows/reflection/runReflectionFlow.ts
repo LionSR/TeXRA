@@ -65,7 +65,11 @@ export interface RunReflectionFlowInput<
   parentStage: AgentLogStage;
   getOutputFileLocation?: (round: number) => AgentFileLocation;
   usageMonitor?: UsageMonitor;
-  onRoundCompleted?: (roundIndex: number, totalRounds: number) => void;
+  onRoundCompleted?: (
+    roundIndex: number,
+    totalRounds: number,
+    outputPaths: readonly string[],
+  ) => void;
 }
 
 export interface RunReflectionFlowResult {
@@ -268,7 +272,13 @@ export async function runReflectionFlow<C = unknown>(
         },
         checkInterruption,
         onRoundCompleted: (roundIndex, s) => {
-          input.onRoundCompleted?.(roundIndex, s.totalRounds);
+          const outputs = outputState.rounds.get(roundIndex)?.outputs ?? [];
+          const outputPaths = outputs.map((o) =>
+            'relativePath' in o.location
+              ? o.location.relativePath
+              : o.location.absolutePath,
+          );
+          input.onRoundCompleted?.(roundIndex, s.totalRounds, outputPaths);
         },
       },
     });
