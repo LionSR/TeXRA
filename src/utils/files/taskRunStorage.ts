@@ -97,6 +97,26 @@ export function getRunDir(id: ExecutionId): string {
 }
 
 /**
+ * Absolute path of the immutable pre-run snapshot for a base file. The
+ * snapshot is captured by {@link TaskRunFileService.prepareRunWorkspace}
+ * before any agent modifications, so diffs against it remain accurate
+ * even for in-place workflows where the live workspace file has since
+ * been overwritten by the agent.
+ *
+ * Returns the candidate path unconditionally; callers should `stat` it
+ * before reading because `prepareRunWorkspace` skips files that were
+ * absent or non-regular at snapshot time.
+ */
+export function getOriginalSnapshotPath(
+  executionId: ExecutionId,
+  workspaceRelativePath: string,
+): string {
+  return StorageFS.fullPath(
+    path.join(TASK_RUNS_DIR, executionId, 'original', workspaceRelativePath),
+  );
+}
+
+/**
  * Resolve a storage-relative path, checking `executions/` first then
  * legacy `taskRuns/`. Returns the storage-relative path that exists,
  * or `undefined` if neither location has the target.

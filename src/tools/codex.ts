@@ -51,7 +51,7 @@ import type {
 import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
 import { parseWorkingDirectory } from '@tools/pathResolution';
-import { escapeAttr, escapeText } from '@tools/subagentResults';
+import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import {
   requestBashApproval,
   buildBashApprovalRejectedResult,

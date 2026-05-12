@@ -8,6 +8,7 @@
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -16,9 +17,11 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { CopyButtonController } from '@shared/controllers';
 import { compactIconActionButtonStyles } from '@shared/styles';
 import { designTokens } from '@shared/styles/litStyles';
+import { markdownStyles } from '@shared/styles/markdownStyles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - formatter helpers
+import { processMarkdownContent } from '../formatters/markdownRenderer';
 import { formatTimestamp } from '../formatters/timestampUtils';
 
 const STRUCTURED_DELIVERY_TAGS = [
@@ -70,6 +73,7 @@ export class UserMessage extends LitElement {
   static override styles = [
     designTokens,
     compactIconActionButtonStyles,
+    markdownStyles,
     css`
       :host {
         display: block;
@@ -137,15 +141,9 @@ export class UserMessage extends LitElement {
           var(--wa-color-surface-default)
         );
         border-radius: var(--border-radius-small);
-        font-family: var(
-          --wa-font-family-mono,
-          ui-monospace,
-          SFMono-Regular,
-          Consolas,
-          monospace
-        );
-        font-size: var(--wa-editor-font-size, var(--font-size-sm));
+        font-size: var(--font-size-sm);
         line-height: 1.35;
+        white-space: normal;
       }
 
       .user-message-timestamp {
@@ -211,6 +209,12 @@ export class UserMessage extends LitElement {
     const rawMessageCopyState = this.rawMessageCopyController.state;
     const { isStructuredDelivery, hasRawMessage, displayText } =
       this.getDisplayState();
+    // processMarkdownContent uses MarkdownIt with html:false and escapes
+    // restored LaTeX reference labels before the renderer output reaches
+    // unsafeHTML.
+    const structuredMarkdownHtml = isStructuredDelivery
+      ? processMarkdownContent(displayText)
+      : '';
 
     return html`
       <div class="user-message-container">
@@ -249,11 +253,18 @@ export class UserMessage extends LitElement {
                 })
               : nothing}
           </div>
-          <div
-            class="user-message-content"
-            data-log-id=${this.logId}
-            .textContent=${displayText}
-          ></div>
+          ${isStructuredDelivery
+            ? html`<div
+                class="user-message-content markdown-content"
+                data-log-id=${this.logId}
+              >
+                ${unsafeHTML(structuredMarkdownHtml)}
+              </div>`
+            : html`<div
+                class="user-message-content"
+                data-log-id=${this.logId}
+                .textContent=${displayText}
+              ></div>`}
         </div>
       </div>
     `;
