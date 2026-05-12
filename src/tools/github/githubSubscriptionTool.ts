@@ -344,6 +344,26 @@ async function getDefaultBranch(owner: string, repo: string): Promise<string> {
   return res.data.default_branch ?? 'main';
 }
 
+export function parseOriginHeadDefaultBranch(ref: string): string | undefined {
+  const branch = ref.trim().replace(/^refs\/remotes\//, '');
+  if (!branch.startsWith('origin/')) return undefined;
+  return branch.slice('origin/'.length) || undefined;
+}
+
+async function getLocalDefaultBranchHint(
+  cwd: string,
+): Promise<string | undefined> {
+  try {
+    const ref = await gitInDir(
+      ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
+      cwd,
+    );
+    return parseOriginHeadDefaultBranch(ref);
+  } catch {
+    return undefined;
+  }
+}
+
 async function listOpenPullSuggestions(
   owner: string,
   repo: string,
@@ -365,9 +385,10 @@ async function listOpenPullSuggestions(
 async function getFindCurrentFallbackInfo(
   owner: string,
   repo: string,
+  cwd: string,
 ): Promise<{ defaultBranch?: string; suggestions: string }> {
   const [defaultBranchResult, suggestionsResult] = await Promise.allSettled([
-    getDefaultBranch(owner, repo),
+    getDefaultBranch(owner, repo).catch(() => getLocalDefaultBranchHint(cwd)),
     listOpenPullSuggestions(owner, repo),
   ]);
   return {
@@ -422,6 +443,7 @@ async function execFindCurrent(
     const { defaultBranch, suggestions } = await getFindCurrentFallbackInfo(
       remote.owner,
       remote.repo,
+      cwd,
     );
     if (branch === defaultBranch) {
       throw new ToolError(
