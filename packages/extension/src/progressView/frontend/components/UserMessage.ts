@@ -209,6 +209,12 @@ export class UserMessage extends LitElement {
     const rawMessageCopyState = this.rawMessageCopyController.state;
     const { isStructuredDelivery, hasRawMessage, displayText } =
       this.getDisplayState();
+    // processMarkdownContent uses MarkdownIt with html:false and escapes
+    // restored LaTeX reference labels before the renderer output reaches
+    // unsafeHTML.
+    const structuredMarkdownHtml = isStructuredDelivery
+      ? processMarkdownContent(displayText)
+      : '';
 
     return html`
       <div class="user-message-container">
@@ -252,7 +258,7 @@ export class UserMessage extends LitElement {
                 class="user-message-content markdown-content"
                 data-log-id=${this.logId}
               >
-                ${unsafeHTML(processMarkdownContent(displayText))}
+                ${unsafeHTML(structuredMarkdownHtml)}
               </div>`
             : html`<div
                 class="user-message-content"
