@@ -8,6 +8,7 @@
 
 // Third-party imports
 import { randomUUID } from 'crypto';
+import { statSync } from 'fs';
 import { z } from 'zod';
 
 // Local imports - agent
@@ -143,6 +144,19 @@ const memoriesField = z
 const WORKTREE_DISABLED_MESSAGE =
   "git worktree support is disabled in this workspace. Omit working_directory, or enable 'Allow agents to work in git worktrees' on the Multi-Agent settings tab.";
 
+function ensureWorkingDirectoryExists(dir: string): void {
+  try {
+    const stat = statSync(dir);
+    if (stat.isDirectory()) return;
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `working_directory must be an existing directory: ${reason}`,
+    );
+  }
+  throw new Error(`working_directory must be a directory: ${dir}`);
+}
+
 /**
  * Shared Zod field for the `working_directory` parameter on delegation tools.
  * Validates and normalizes in one step so downstream code always receives the
@@ -171,6 +185,15 @@ const workingDirectoryField = z
       ctx.addIssue({
         code: 'custom',
         message: WORKTREE_DISABLED_MESSAGE,
+      });
+      return z.NEVER;
+    }
+    try {
+      ensureWorkingDirectoryExists(trimmed);
+    } catch (e) {
+      ctx.addIssue({
+        code: 'custom',
+        message: e instanceof Error ? e.message : String(e),
       });
       return z.NEVER;
     }

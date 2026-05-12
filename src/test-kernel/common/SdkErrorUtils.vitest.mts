@@ -31,6 +31,12 @@ import {
   sdkErrorKindFromStatusCode,
 } from '@common/errors/sdkErrorUtils';
 
+// Local imports - shared schemas
+import {
+  ErrorLogDataSchema,
+  RetryErrorInfoSchema,
+} from '@shared/schemas/errors';
+
 class APIError extends Error {}
 
 class BadRequestError extends APIError {}
@@ -288,6 +294,47 @@ describe('formatProviderHttpError', () => {
     expect(formatted.userRetryable).toBe(false);
   });
 
+  it('classifies OpenAI insufficient_quota bodies as credential exhaustion', () => {
+    const error = new Error('quota exhausted') as Error & { error: unknown };
+    error.error = {
+      message: 'You exceeded your current quota.',
+      type: 'insufficient_quota',
+      code: 'insufficient_quota',
+    };
+    attachSdkErrorMetadata(error, {
+      provider: 'openai',
+      kind: 'rate_limit',
+      statusCode: 429,
+    });
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.provider).toBe('openai');
+    expect(formatted.isCredentialExhausted).toBe(true);
+    expect(formatted.isUpstreamCreditDepleted).toBe(true);
+    expect(formatted.userRetryable).toBe(true);
+  });
+
+  it('classifies OpenAI quota messages without code as credential exhaustion', () => {
+    const error = new Error('quota exhausted') as Error & { error: unknown };
+    error.error = {
+      message:
+        'You exceeded your current quota, please check your plan and billing details.',
+    };
+    attachSdkErrorMetadata(error, {
+      provider: 'openai',
+      kind: 'rate_limit',
+      statusCode: 429,
+    });
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.provider).toBe('openai');
+    expect(formatted.isCredentialExhausted).toBe(true);
+    expect(formatted.isUpstreamCreditDepleted).toBe(true);
+    expect(formatted.userRetryable).toBe(true);
+  });
+
   it('formats tagged Anthropic user abort errors', () => {
     const error = new AnthropicAPIUserAbortError();
     tagAnthropicSdkError(error, 'anthropic');
@@ -327,5 +374,23 @@ describe('formatProviderHttpError', () => {
     expect(sdkErrorKindFromStatusCode(500)).toBe('internal_server');
     expect(sdkErrorKindFromStatusCode(418)).toBe('api_error');
     expect(sdkErrorKindFromStatusCode(undefined)).toBe('api_error');
+  });
+});
+
+describe('provider error schemas', () => {
+  it('normalizes legacy retryable fields from persisted error logs', () => {
+    const errorLog = ErrorLogDataSchema.parse({
+      message: 'old persisted error',
+      retryable: false,
+      isRelayError: false,
+    });
+    const retryInfo = RetryErrorInfoSchema.parse({
+      message: 'old retry state',
+      retryable: true,
+    });
+
+    expect(errorLog.userRetryable).toBe(false);
+    expect('retryable' in errorLog).toBe(false);
+    expect(retryInfo.userRetryable).toBe(true);
   });
 });

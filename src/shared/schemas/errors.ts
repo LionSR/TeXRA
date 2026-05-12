@@ -23,8 +23,22 @@ export const StreamDiagnosticsSchema = z.object({
 
 export type StreamDiagnostics = z.infer<typeof StreamDiagnosticsSchema>;
 
+function normalizeProviderErrorRetryFlag(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return value;
+  }
+  const data = value as Record<string, unknown>;
+  if ('userRetryable' in data || typeof data.retryable !== 'boolean') {
+    return value;
+  }
+  return {
+    ...data,
+    userRetryable: data.retryable,
+  };
+}
+
 /** Core error details from a provider/SDK */
-const ProviderErrorSchema = z.object({
+const ProviderErrorObjectSchema = z.object({
   message: z.string(),
   statusCode: z.int().optional(),
   statusText: z.string().optional(),
@@ -58,6 +72,10 @@ const ProviderErrorSchema = z.object({
    *  at runtime, so size enforcement is the producer's responsibility. */
   partialText: z.string().optional(),
 });
+const ProviderErrorSchema = z.preprocess(
+  normalizeProviderErrorRetryFlag,
+  ProviderErrorObjectSchema,
+);
 export type ProviderError = z.infer<typeof ProviderErrorSchema>;
 
 /** Context about where/when the error occurred */
@@ -68,20 +86,27 @@ export const ErrorContextSchema = z.object({
 export type ErrorContext = z.infer<typeof ErrorContextSchema>;
 
 /** Complete error log data - combines provider error with context */
-export const ErrorLogDataSchema = ProviderErrorSchema.extend(
-  ErrorContextSchema.shape,
-).extend({
-  rawMessage: z.string().optional(),
-});
+export const ErrorLogDataSchema = z.preprocess(
+  normalizeProviderErrorRetryFlag,
+  ProviderErrorObjectSchema.extend(ErrorContextSchema.shape).extend({
+    rawMessage: z.string().optional(),
+  }),
+);
 export type ErrorLogData = z.infer<typeof ErrorLogDataSchema>;
 
 /** Provider error with all fields optional for event transport */
-export const ProviderErrorPartialSchema = ProviderErrorSchema.partial();
+export const ProviderErrorPartialSchema = z.preprocess(
+  normalizeProviderErrorRetryFlag,
+  ProviderErrorObjectSchema.partial(),
+);
 export type ProviderErrorPartial = z.infer<typeof ProviderErrorPartialSchema>;
 
 /** Minimal error info for retry state tracking */
-export const RetryErrorInfoSchema = ProviderErrorSchema.pick({
-  message: true,
-  userRetryable: true,
-});
+export const RetryErrorInfoSchema = z.preprocess(
+  normalizeProviderErrorRetryFlag,
+  ProviderErrorObjectSchema.pick({
+    message: true,
+    userRetryable: true,
+  }),
+);
 export type RetryErrorInfo = z.infer<typeof RetryErrorInfoSchema>;

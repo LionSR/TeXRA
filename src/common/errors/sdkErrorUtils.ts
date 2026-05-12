@@ -610,16 +610,16 @@ function isRelayMonthlyLimitBody(rawErrorBody: unknown): boolean {
   );
 }
 
-/** True when the upstream provider (Anthropic today) returned a credit-
- *  balance-depleted 400. Match on the message prefix because Anthropic's
- *  type is generic `invalid_request_error` — the message is the reliable
- *  signal. Covers both the direct format and the enveloped format. */
 function pickStringField(v: unknown, key: string): string | undefined {
   if (!isObject(v)) return undefined;
   const value = (v as Record<string, unknown>)[key];
   return isString(value) ? value : undefined;
 }
 
+/** True when the upstream provider returned a credit/quota exhaustion body.
+ *  Anthropic uses a generic `invalid_request_error`, so its message remains
+ *  part of the signal; OpenAI may report `insufficient_quota` directly.
+ *  Covers both the direct format and the enveloped format. */
 function isUpstreamCreditDepletedBody(rawErrorBody: unknown): boolean {
   if (!isObject(rawErrorBody)) return false;
   const candidates = [
