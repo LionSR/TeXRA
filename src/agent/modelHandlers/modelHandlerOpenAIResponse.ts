@@ -36,7 +36,7 @@ import {
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
-import { delay } from '@utils/core';
+import { delay, isObject, isString } from '@utils/core';
 import { isNonEmptyString } from '@utils/core';
 import {
   getWebSocketEnabled,
@@ -48,6 +48,7 @@ import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 import { tagOpenAISdkError } from './support/sdkErrorAdapters';
+import { attachSdkErrorMetadata } from '@common/errors/sdkErrorUtils';
 
 // Local file imports
 import {
@@ -2453,6 +2454,24 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (current.error) {
       wrapped.error = current.error;
     }
+    // Tag with provider metadata so downstream UI (manual retry panel /
+    // "Use your own API key" picker) routes to the failing provider's key.
+    // The catch block's tagOpenAISdkError only matches OpenAI SDK error
+    // classes, which a plain Error wrapper does not satisfy. Cast through
+    // unknown because OpenAI's typed error.code enum doesn't include every
+    // value the API actually returns (e.g. insufficient_quota in 429s).
+    const errorRecord = current.error as unknown;
+    const code =
+      isObject(errorRecord) && isString(errorRecord.code)
+        ? errorRecord.code
+        : undefined;
+    const isQuotaLike =
+      code === 'insufficient_quota' || code === 'rate_limit_exceeded';
+    attachSdkErrorMetadata(wrapped, {
+      provider: this.config.provider,
+      kind: isQuotaLike ? 'rate_limit' : 'api_error',
+      ...(isQuotaLike && { statusCode: 429 }),
+    });
     throw wrapped;
   }
 
