@@ -8,9 +8,8 @@
  * canonical "before" content for accurate stats.
  */
 
-import { promises as fs } from 'fs';
-
 import type { ExecutionId, FileLocation } from '@shared/schemas';
+import { AbsoluteFS } from '@utils/files';
 import {
   createRunStorageLocation,
   getOriginalSnapshotPath,
@@ -30,12 +29,7 @@ export async function resolveBaseFilesForDiff(
         executionId,
         loc.relativePath,
       );
-      try {
-        const stats = await fs.stat(snapshotAbsolute);
-        if (!stats.isFile()) return loc;
-      } catch {
-        return loc;
-      }
+      if (!(await AbsoluteFS.isFile(snapshotAbsolute))) return loc;
       return createRunStorageLocation(
         snapshotAbsolute,
         loc.relativePath,

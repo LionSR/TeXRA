@@ -445,5 +445,3 @@ function lastNLines(text: string, n: number): string {
   const lines = text.split('\n');
   return lines.length <= n ? text : lines.slice(-n).join('\n');
 }
-
-export { escapeAttr, escapeText } from '@shared/utils/xmlEscape';

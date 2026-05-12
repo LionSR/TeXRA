@@ -79,12 +79,8 @@ export class OutputNode<C = unknown> extends Node<
       this.services;
     const { outputLocation, currentRound, endTurn } = prepRes;
 
-    // Substitute workspace base files with their pre-run snapshot when
-    // captured by prepareRunWorkspace. In-place workflows overwrite the
-    // live workspace file before output processing runs, so diffing
-    // against it would collapse to 0/0. This resolution is done once
-    // here so the mapping, latexdiff, and diff stats all see consistent
-    // base locations.
+    // Resolve to pre-run snapshots once so mapping, latexdiff, and diff
+    // stats all see the same base locations (see snapshotResolution).
     const diffBaseFiles = await resolveBaseFilesForDiff(
       baseFiles,
       this.services.executionId,
