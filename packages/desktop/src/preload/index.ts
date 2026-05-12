@@ -1,7 +1,10 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 
 import { installElectronHostBridge } from './hostBridge.js';
-import { hasResolvedWorkspacePath } from '../workspacePath.js';
+import {
+  hasResolvedWorkspacePath,
+  parseWorkspacePathFromArgv,
+} from '../workspacePath.js';
 
 const rendererWindow = globalThis as typeof globalThis & {
   addEventListener?: (
@@ -16,6 +19,10 @@ const rendererWindow = globalThis as typeof globalThis & {
 function getRendererTargetOrigin(): string {
   const origin = rendererWindow.location?.origin;
   return origin && origin !== 'null' ? origin : '*';
+}
+
+function getWorkspacePath(): string | undefined {
+  return parseWorkspacePathFromArgv(process.argv.slice(1));
 }
 
 installElectronHostBridge({
@@ -38,4 +45,5 @@ installElectronHostBridge({
 contextBridge.exposeInMainWorld('texraDesktop', {
   electronVersion: process.versions.electron,
   hasWorkspace: hasResolvedWorkspacePath(),
+  workspacePath: getWorkspacePath(),
 });

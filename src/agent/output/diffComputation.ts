@@ -7,6 +7,7 @@
 
 import { diff_match_patch } from 'diff-match-patch';
 
+import * as logger from '@agent/core/logger';
 import type { DiffStats } from '@agent/types/DiffTypes';
 import type { OutputFileInfo, FileLocation } from '@shared/schemas';
 import { flexibleFS, getComparablePath } from '@utils/files';
@@ -15,6 +16,9 @@ import { countLines } from '@utils/text/stringUtils';
 import { traceFileLineage } from './lineageMapping';
 import { ensureRound, type OutputState } from './outputState';
 import type { RoundFileMapping } from './types';
+
+const CHANNEL = 'OutputDiffStats';
+logger.initialize(CHANNEL);
 
 // ============================================================================
 // Helpers
@@ -50,8 +54,8 @@ async function computeDiffStats(
     }
     return { added, removed };
   } catch (err) {
-    // Log the failure for debugging - don't swallow silently
-    console.debug?.('Failed to compute diff stats:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    logger.debug(CHANNEL, `Failed to compute diff stats: ${message}`);
     return {};
   }
 }
