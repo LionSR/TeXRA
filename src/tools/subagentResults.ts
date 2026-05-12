@@ -21,6 +21,7 @@ import type {
 } from '@shared/schemas';
 import { TODO_STATUS } from '@shared/schemas/todo';
 import { countByStatus } from '@shared/schemas/todoDisplay';
+import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { formatDuration } from '@utils/core';
 import type { DiffFileInfo } from './subagentDiffs';
 
@@ -217,8 +218,16 @@ export function formatSubagentProgress(
       ].join('\n');
     }
 
-    case 'round':
-      return `<subagent-progress ${idAttr} ${agentAttr} type="round" current="${update.currentRound + 1}" total="${update.totalRounds}" />`;
+    case 'round': {
+      const head = `<subagent-progress ${idAttr} ${agentAttr} type="round" current="${update.currentRound + 1}" total="${update.totalRounds}"`;
+      if (update.outputPaths.length === 0) {
+        return `${head} />`;
+      }
+      const fileLines = update.outputPaths.map(
+        (p) => `<file path="${escapeAttr(p)}" />`,
+      );
+      return [`${head}>`, ...fileLines, '</subagent-progress>'].join('\n');
+    }
 
     case 'overview': {
       const fileList =
@@ -435,16 +444,4 @@ function formatPlanContext(plan: Plan): string[] {
 function lastNLines(text: string, n: number): string {
   const lines = text.split('\n');
   return lines.length <= n ? text : lines.slice(-n).join('\n');
-}
-
-export function escapeAttr(s: string): string {
-  return s
-    .replaceAll('&', '&amp;')
-    .replaceAll('"', '&quot;')
-    .replaceAll('<', '&lt;');
-}
-
-/** Escape XML text content (element bodies). */
-export function escapeText(s: string): string {
-  return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;');
 }

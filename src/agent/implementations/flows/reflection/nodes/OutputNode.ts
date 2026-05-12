@@ -10,6 +10,7 @@ import {
 import { runCompileCheck } from '@agent/output/compileCheck';
 import { extractFilesFromXml } from '@agent/output/xmlExtraction';
 import { traceFileLineage } from '@agent/output/lineageMapping';
+import { resolveBaseFilesForDiff } from '@agent/output/snapshotResolution';
 import { checkExpectedOutputs } from '@agent/output/outputValidation';
 import {
   summarizeRound,
@@ -78,6 +79,13 @@ export class OutputNode<C = unknown> extends Node<
       this.services;
     const { outputLocation, currentRound, endTurn } = prepRes;
 
+    // Resolve to pre-run snapshots once so mapping, latexdiff, and diff
+    // stats all see the same base locations (see snapshotResolution).
+    const diffBaseFiles = await resolveBaseFilesForDiff(
+      baseFiles,
+      this.services.executionId,
+    );
+
     let mapping: RoundFileMapping | undefined;
     let compileFailures: CompileFailure[] = [];
     let emitCompileFailures = false;
@@ -110,14 +118,14 @@ export class OutputNode<C = unknown> extends Node<
       );
 
       if (hasRoundOutputs(outputState, currentRound)) {
-        mapping = traceFileLineage(outputState, baseFiles, currentRound);
+        mapping = traceFileLineage(outputState, diffBaseFiles, currentRound);
 
         await tryOperation(
           'Latexdiff',
           () =>
             this.handleLatexdiff(
               currentRound,
-              baseFiles,
+              diffBaseFiles,
               mapping!,
               diffManager,
             ),
@@ -150,13 +158,18 @@ export class OutputNode<C = unknown> extends Node<
       this.services,
       outputLocation,
       currentRound,
-      { endTurn, mapping, isRewrite: setting.isRewrite },
+      {
+        endTurn,
+        mapping,
+        isRewrite: setting.isRewrite,
+        baseFiles: diffBaseFiles,
+      },
     );
 
     // Get round output — critical, throw if it fails
     const roundOutput = await getRoundOutput(
       outputState,
-      baseFiles,
+      diffBaseFiles,
       currentRound,
       { isRewrite: setting.isRewrite },
     );
