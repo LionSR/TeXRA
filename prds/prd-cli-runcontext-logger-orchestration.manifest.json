@@ -20,7 +20,7 @@
     ],
     "remainingGaps": [
       "The stack is not merged; issues #3833, #3834, #3835, #3836, and #3838 remain open until maintainers land or explicitly close the PR slices.",
-      "PRs #3843 and #3847 report UNKNOWN merge state in GitHub's PR view despite green historical checks; this should be rechecked before attempting stack landing.",
+      "Implemented follow-up issues #3840, #3841, #3842, and #3848 remain open because their PRs are still open; close them only after the corresponding PRs land or maintainers explicitly accept the evidence.",
       "The richer texra chat renderer follow-up #3848 remains open until PR #3846 lands or maintainers explicitly accept the dependency-free terminal renderer. The only remaining renderer decision is optional OpenTUI-style distribution proof if the project later adopts that dependency.",
       "The ToolFileInteractionContext compatibility getter remains until remaining non-tool installation/test surfaces are migrated or explicitly justified.",
       "The manifest is intentionally still in_progress until every issue acceptance gate is implemented, validated, merged, or moved to an owned follow-up issue with acceptance criteria."
