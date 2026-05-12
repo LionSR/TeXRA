@@ -27,6 +27,10 @@ import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { RoundPersistedFlow } from '@agent/node/roundPersistedFlow';
 import type { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import {
+  WORKFLOW_DOCUMENT_OUTPUT_EXT,
+  WORKFLOW_RAW_OUTPUT_EXT,
+} from '@agent/output/workflowOutputLayout';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import { LatexMediaManager } from '@latex';
 import type { AgentLogStage } from '@logger/AgentLogger';
@@ -164,7 +168,7 @@ export async function runReflectionFlow<C = unknown>(
         );
       }
       const canonical = fileService.createLocation(
-        getOutputFileName('xml', round),
+        getOutputFileName(WORKFLOW_RAW_OUTPUT_EXT, round),
       ) as AgentFileLocation;
       // Resume-from-pre-refactor compat: if a round was partially written on an
       // older build that used `.tex` for non-scratchpad agents, keep using that
@@ -172,7 +176,7 @@ export async function runReflectionFlow<C = unknown>(
       // instead of starting a fresh round at output.xml.
       if (!AbsoluteFS.existsSync(canonical.absolutePath)) {
         const legacy = fileService.createLocation(
-          getOutputFileName('tex', round),
+          getOutputFileName(WORKFLOW_DOCUMENT_OUTPUT_EXT, round),
         ) as AgentFileLocation;
         if (AbsoluteFS.existsSync(legacy.absolutePath)) {
           return legacy;

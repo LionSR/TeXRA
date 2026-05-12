@@ -16,7 +16,6 @@ settings:
   isRewrite: true # true = editing existing docs, false = creating new
   rounds: 2 # 1 or 2 (default 2)
   temperature: 0.1 # 0.1 for editing, 0.5-0.8 for creative tasks
-  outputExt: tex # MUST be "tex" — TeXRA is a LaTeX tool
   documentTag: documents
   endTag: '</documents>'
   prefills: # MUST have exactly `rounds` entries
@@ -45,7 +44,6 @@ prompts:
 
 ## Critical rules
 
-- `outputExt` MUST be `"tex"`. TeXRA is a LaTeX tool — nothing else is valid.
 - `prefills` and `userRequest` MUST both have the same number of entries as
   `rounds`. Round 1 → one entry each; round 2 → two entries each.
 - Always include `{{ INSTRUCTION }}` somewhere so user instructions pass
@@ -136,7 +134,6 @@ settings:
   agentCategory: workflow
   documentTag: documents
   endTag: '</documents>'
-  outputExt: tex
   prefills:
     - '<scratchpad>'
     - '<scratchpad>'

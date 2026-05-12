@@ -10,7 +10,6 @@ settings:
   isRewrite: true
   documentTag: documents
   endTag: </documents>
-  outputExt: tex
   # Optional: `prefills` can force the assistant turn to start with a specific
   # token (e.g., - "<documents>") for agents that should skip preamble
   # and jump straight to output. Most workflow agents do not need this --- modern
