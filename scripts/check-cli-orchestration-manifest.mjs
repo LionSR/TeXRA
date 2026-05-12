@@ -12,13 +12,25 @@ function expect(condition, message) {
 }
 
 expect(
-  manifest.status === 'in_progress',
-  'manifest status must remain in_progress until the tracking issue is complete',
+  manifest.status === 'in_progress' || manifest.status === 'complete',
+  'manifest status must be in_progress or complete',
 );
-expect(
-  manifest.validationStatus === 'not_validated',
-  'manifest validationStatus must remain not_validated until acceptance gates are verified',
-);
+if (manifest.status === 'complete') {
+  expect(
+    manifest.validationStatus === 'complete_landed',
+    'complete manifests must use validationStatus complete_landed',
+  );
+  expect(
+    Array.isArray(manifest.currentAudit?.remainingGaps) &&
+      manifest.currentAudit.remainingGaps.length === 0,
+    'complete manifests must not list remaining gaps',
+  );
+} else {
+  expect(
+    manifest.validationStatus === 'not_validated',
+    'in-progress manifests must remain not_validated until acceptance gates are verified',
+  );
+}
 expect(Boolean(manifest.completionRule), 'manifest must state completionRule');
 expect(existsSync(manifest.primaryPrd), `missing ${manifest.primaryPrd}`);
 expect(
@@ -42,6 +54,12 @@ for (const issue of manifest.issues ?? []) {
     Array.isArray(issue.acceptance) && issue.acceptance.length > 0,
     `issue ${issue.id} lacks acceptance gates`,
   );
+  if (manifest.status === 'complete') {
+    expect(
+      String(issue.status ?? '').includes('closed'),
+      `complete manifest issue ${issue.id} must record closed status`,
+    );
+  }
 }
 
 for (const id of expectedIds) {
@@ -69,6 +87,15 @@ expect(
     }),
   'manifest must mark the OpenRouter TUI reference as reference-only',
 );
+
+if (manifest.status === 'complete') {
+  for (const followUp of manifest.focusedFollowUps ?? []) {
+    expect(
+      String(followUp.status ?? '').includes('closed'),
+      `complete manifest follow-up ${followUp.id} must record closed status`,
+    );
+  }
+}
 
 if (errors.length > 0) {
   console.error('CLI orchestration manifest check failed:\n');
