@@ -13,17 +13,6 @@ export const SETTINGS_QUERY = {
   MODELS: '@ext:texra-ai.texra models',
 } as const;
 
-// Common document file type constants
-export const DOCUMENT_FILE_TYPES = [
-  'input',
-  'reference',
-  'auxiliary',
-  'media',
-  'output',
-] as const;
-
-export type DocumentFileType = (typeof DOCUMENT_FILE_TYPES)[number];
-
 // Time constants
 export const SHORT_SLEEP_MS = 50;
 export const REFRESH_THRESHOLD_MS = 200;
