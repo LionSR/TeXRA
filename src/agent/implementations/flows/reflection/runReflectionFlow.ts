@@ -14,8 +14,11 @@ import {
   type IInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
-import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
-import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import {
+  clearPlanApprovalForStream,
+  clearRetryRequest,
+} from '@agent/runtime/runCoordinators';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { createRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -174,11 +177,12 @@ export async function runReflectionFlow<C = unknown>(
       return canonical;
     });
 
+  const runCoordinators = tryUseRunContext()?.coordinators;
   const interruptible: IInterruptible = {
     interrupt(): void {
       input.onInterrupt?.();
-      retryCoordinator.clearRequest(streamId);
-      planApprovalCoordinator.clearForStream(streamId);
+      clearRetryRequest(streamId, runCoordinators);
+      clearPlanApprovalForStream(streamId, runCoordinators);
     },
   };
 
@@ -317,8 +321,8 @@ export async function runReflectionFlow<C = unknown>(
       }
     }
 
-    retryCoordinator.clearRequest(streamId);
-    planApprovalCoordinator.clearForStream(streamId);
+    clearRetryRequest(streamId);
+    clearPlanApprovalForStream(streamId);
 
     unregisterInterruptible(streamId);
   }

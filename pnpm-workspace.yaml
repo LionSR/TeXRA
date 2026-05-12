@@ -1,2 +1,10 @@
 packages:
   - packages/*
+allowBuilds:
+  '@google/genai': true
+  '@openrouter/sdk': true
+  '@vscode/vsce-sign': true
+  electron-winstaller: true
+  esbuild: true
+  keytar: true
+  protobufjs: true

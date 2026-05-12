@@ -1,3 +1,6 @@
+// Third-party imports
+import { AsyncLocalStorage } from 'async_hooks';
+
 // Type imports
 import type {
   FileInteractionState,
@@ -5,35 +8,15 @@ import type {
   TodoState,
 } from '@agent/core/AgentWorkspaceState';
 import {
-  getAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
+  tryUseRunContext,
+  type ToolRunContext,
+} from '@agent/runtime/RunContext';
 
-export interface ToolFileInteractionContext {
-  streamId?: StreamTabId;
-  executionId?: ExecutionId;
+export type { ToolRunContext } from '@agent/runtime/RunContext';
+
+/** Fields that belong to one concrete tool call or tool-cycle state snapshot. */
+export interface ToolCallContext {
   toolCallId?: string;
-  /** Model short name of the parent agent (e.g. "opus46T", "sonnet46T"). */
-  model?: string;
-  /** Agent name of the parent agent (e.g. "orchestrator", "search-agent"). */
-  agentName?: string;
-  /** Working directory override for tool calls (e.g. a git worktree path). */
-  workingDirectory?: string;
-  /** Runtime host inherited from the executing agent. */
-  runtimeHost?: AgentRuntimeHost;
-  /**
-   * Delegation depth of the agent executing this tool call. 0 for root (user-initiated),
-   * N for an agent N levels deep. Read by delegation tools to compute the child's depth.
-   */
-  delegationDepth?: number;
-  /**
-   * Delegation policy snapshot for the executing agent. Keeps delegation tool
-   * enforcement aligned with the tool list shown to the model without carrying
-   * a second depth value.
-   */
-  delegationConfig?: NestedDelegationConfig;
   tracker: FileInteractionState;
   /** Todo state for managing task lists. Optional for backward compatibility. */
   todoState?: TodoState;
@@ -45,38 +28,109 @@ export interface ToolFileInteractionContext {
   onToolOutput?: (chunk: string) => void;
 }
 
-const contextStack: ToolFileInteractionContext[] = [];
+export interface ToolFileInteractionContext
+  extends ToolRunContext, ToolCallContext {}
+
+interface ToolContextFrame {
+  full: ToolFileInteractionContext;
+  run: ToolRunContext;
+  call: ToolCallContext;
+}
+
+export interface CurrentToolContexts {
+  runContext: ToolRunContext;
+  callContext: ToolCallContext;
+}
+
+const contextStackScope = new AsyncLocalStorage<readonly ToolContextFrame[]>();
+
+type ContextKeyMap<T> = { [K in keyof T]-?: true };
+
+const TOOL_RUN_CONTEXT_KEYS = {
+  streamId: true,
+  executionId: true,
+  model: true,
+  agentName: true,
+  workingDirectory: true,
+  runtimeHost: true,
+  delegationDepth: true,
+  delegationConfig: true,
+} satisfies ContextKeyMap<ToolRunContext>;
+
+const TOOL_CALL_CONTEXT_KEYS = {
+  toolCallId: true,
+  tracker: true,
+  todoState: true,
+  planState: true,
+  onExecutionReady: true,
+  onToolOutput: true,
+} satisfies ContextKeyMap<ToolCallContext>;
+
+function pickContextFields<T extends object>(
+  context: T,
+  keyMap: ContextKeyMap<T>,
+): T {
+  const fields = {} as T;
+  for (const key of Object.keys(keyMap) as (keyof T)[]) {
+    fields[key] = context[key];
+  }
+  return fields;
+}
+
+function buildContextFrame(
+  context: ToolFileInteractionContext,
+): ToolContextFrame {
+  const fullContext = {
+    ...tryUseRunContext()?.toolRunContext,
+    ...context,
+  };
+  return {
+    full: fullContext,
+    run: pickContextFields<ToolRunContext>(fullContext, TOOL_RUN_CONTEXT_KEYS),
+    call: pickContextFields<ToolCallContext>(
+      fullContext,
+      TOOL_CALL_CONTEXT_KEYS,
+    ),
+  };
+}
 
 export function withToolFileInteractionContext<T>(
   context: ToolFileInteractionContext,
   run: () => Promise<T> | T,
 ): Promise<T> {
-  contextStack.push(context);
-
-  function cleanup(): void {
-    const index = contextStack.lastIndexOf(context);
-    if (index >= 0) {
-      contextStack.splice(index, 1);
-    }
-  }
-
   try {
-    const result = run();
-    return Promise.resolve(result).finally(cleanup);
+    const parentStack = contextStackScope.getStore() ?? [];
+    return contextStackScope.run(
+      [...parentStack, buildContextFrame(context)],
+      async () => run(),
+    );
   } catch (error) {
-    cleanup();
-    throw error;
+    return Promise.reject(error);
   }
 }
 
 export function getCurrentToolFileInteractionContext():
   | ToolFileInteractionContext
   | undefined {
-  return contextStack.at(-1);
+  return contextStackScope.getStore()?.at(-1)?.full;
 }
 
-export function getCurrentToolRuntimeHost(): AgentRuntimeHost {
-  return (
-    getCurrentToolFileInteractionContext()?.runtimeHost ?? getAgentRuntimeHost()
-  );
+export function getCurrentToolRunContext(): ToolRunContext | undefined {
+  return contextStackScope.getStore()?.at(-1)?.run;
+}
+
+export function getCurrentToolCallContext(): ToolCallContext | undefined {
+  return contextStackScope.getStore()?.at(-1)?.call;
+}
+
+export function getCurrentToolContexts(): CurrentToolContexts | undefined {
+  const frame = contextStackScope.getStore()?.at(-1);
+  if (!frame) {
+    return undefined;
+  }
+
+  return {
+    runContext: frame.run,
+    callContext: frame.call,
+  };
 }

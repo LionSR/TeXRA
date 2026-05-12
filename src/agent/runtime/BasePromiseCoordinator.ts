@@ -157,6 +157,15 @@ export abstract class BasePromiseCoordinator<
     this.cleanup(id, req.runtimeHost);
   }
 
+  /**
+   * Clear every pending request owned by this coordinator.
+   */
+  clearAll(): void {
+    for (const id of this.requests.keys()) {
+      this.clearRequest(id);
+    }
+  }
+
   // ==========================================================================
   // Protected helpers for subclasses
   // ==========================================================================

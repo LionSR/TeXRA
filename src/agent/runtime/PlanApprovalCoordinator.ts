@@ -94,6 +94,16 @@ export class PlanApprovalCoordinator extends BasePromiseCoordinator<
     return super.resolveRequest(id, result);
   }
 
+  /** Override to clean up stream mapping on external cancellation. */
+  override clearRequest(id: string): void {
+    const streamId = this.approvalStreamMap.get(id);
+    if (streamId) {
+      this.streamApprovalMap.delete(streamId);
+      this.approvalStreamMap.delete(id);
+    }
+    super.clearRequest(id);
+  }
+
   /**
    * Clear any pending plan approval for the given stream.
    * Used for cleanup when flows are interrupted or streams are deleted.
@@ -102,21 +112,7 @@ export class PlanApprovalCoordinator extends BasePromiseCoordinator<
     const approvalId = this.streamApprovalMap.get(streamId);
     if (approvalId) {
       this.clearRequest(approvalId);
-      this.streamApprovalMap.delete(streamId);
-      this.approvalStreamMap.delete(approvalId);
     }
-  }
-
-  /**
-   * Clear all pending plan approvals.
-   * Used for cleanup when all streams are deleted.
-   */
-  clearAll(): void {
-    for (const approvalId of this.streamApprovalMap.values()) {
-      this.clearRequest(approvalId);
-    }
-    this.streamApprovalMap.clear();
-    this.approvalStreamMap.clear();
   }
 }
 

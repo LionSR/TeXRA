@@ -56,7 +56,7 @@ interface RetryShowPayload extends Record<string, unknown> {
  * Manages pending retry requests.
  * Extends BasePromiseCoordinator with retry-specific behavior.
  */
-class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
+export class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
   RetryResult,
   RetryShowPayload
 > {
@@ -139,6 +139,11 @@ class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
   override clearRequest(streamId: string): void {
     this.loggers.delete(streamId);
     super.clearRequest(streamId);
+  }
+
+  override clearAll(): void {
+    this.loggers.clear();
+    super.clearAll();
   }
 }
 
