@@ -23,7 +23,7 @@
     "test:e2e": "playwright test"
   },
   "devDependencies": {
-    "@playwright/test": "^1.59.1",
+    "@playwright/test": "^1.60.0",
     "@texra/core": "workspace:*",
     "electron": "^42.0.1",
     "electron-builder": "^26.10.0",
