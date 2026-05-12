@@ -1537,7 +1537,7 @@
   },
   "homepage": "https://texra.ai",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.95.1",
+    "@anthropic-ai/sdk": "^0.95.2",
     "@awesome.me/webawesome": "^3.6.0",
     "@cantoo/pdf-lib": "^2.6.5",
     "@fortawesome/free-solid-svg-icons": "^7.2.0",
