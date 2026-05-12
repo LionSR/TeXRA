@@ -6,14 +6,14 @@ import {
   type WorkflowTaskState,
 } from '@logger/TaskState';
 import {
-  DOCUMENT_FILE_TYPES,
-  type DocumentFileType,
-} from '@utils/config/constants';
+  MULTIPLE_DOCUMENT_FILE_TYPES,
+  type MultipleDocumentFileType,
+} from '@shared/schemas/mainView';
 
 /** Check if a file type is active based on the config fields. */
 function isFileTypeActive(
   config: Record<string, unknown>,
-  type: DocumentFileType,
+  type: MultipleDocumentFileType,
 ): boolean {
   const filesField = `${type}Files`;
   const flagField = `${filesField}Active`;
@@ -36,9 +36,9 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
       };
     case AgentCategory.Workflow: {
       const configRecord = config as Record<string, unknown>;
-      const activeFiles = {} as Record<DocumentFileType, boolean>;
+      const activeFiles = {} as Record<MultipleDocumentFileType, boolean>;
 
-      for (const type of DOCUMENT_FILE_TYPES) {
+      for (const type of MULTIPLE_DOCUMENT_FILE_TYPES) {
         activeFiles[type] = isFileTypeActive(configRecord, type);
       }
 
