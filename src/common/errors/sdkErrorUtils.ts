@@ -614,54 +614,33 @@ function isRelayMonthlyLimitBody(rawErrorBody: unknown): boolean {
  *  balance-depleted 400. Match on the message prefix because Anthropic's
  *  type is generic `invalid_request_error` — the message is the reliable
  *  signal. Covers both the direct format and the enveloped format. */
+function pickStringField(v: unknown, key: string): string | undefined {
+  if (!isObject(v)) return undefined;
+  const value = (v as Record<string, unknown>)[key];
+  return isString(value) ? value : undefined;
+}
+
 function isUpstreamCreditDepletedBody(rawErrorBody: unknown): boolean {
   if (!isObject(rawErrorBody)) return false;
-  const body = rawErrorBody as {
-    type?: unknown;
-    code?: unknown;
-    message?: unknown;
-    error?: unknown;
-  };
-  const pick = (
-    v: unknown,
-  ): { type?: string; code?: string; message?: string } | undefined =>
-    isObject(v)
-      ? {
-          type: isString((v as { type?: unknown }).type)
-            ? (v as { type: string }).type
-            : undefined,
-          code: isString((v as { code?: unknown }).code)
-            ? (v as { code: string }).code
-            : undefined,
-          message: isString((v as { message?: unknown }).message)
-            ? (v as { message: string }).message
-            : undefined,
-        }
-      : undefined;
-  const candidates = [pick(body), pick(body.error)];
+  const candidates = [
+    rawErrorBody,
+    (rawErrorBody as { error?: unknown }).error,
+  ];
   return candidates.some((c) => {
-    if (!c) return false;
-    // Anthropic upstream: 400 invalid_request_error with credit-balance message.
-    if (
-      c.type === 'invalid_request_error' &&
-      typeof c.message === 'string' &&
-      c.message.toLowerCase().includes('credit balance is too low')
-    ) {
-      return true;
-    }
-    // OpenAI upstream: insufficient_quota (HTTP 429 or background response.error).
-    // Match by code/type to handle both shapes, plus a message fallback for
-    // background responses where the SDK only exposes { code, message }.
-    if (c.code === 'insufficient_quota' || c.type === 'insufficient_quota') {
+    if (!isObject(c)) return false;
+    const type = pickStringField(c, 'type');
+    const code = pickStringField(c, 'code');
+    const message = pickStringField(c, 'message')?.toLowerCase();
+    if (code === 'insufficient_quota' || type === 'insufficient_quota') {
       return true;
     }
     if (
-      typeof c.message === 'string' &&
-      c.message.toLowerCase().includes('exceeded your current quota')
+      type === 'invalid_request_error' &&
+      message?.includes('credit balance is too low')
     ) {
       return true;
     }
-    return false;
+    return message?.includes('exceeded your current quota') ?? false;
   });
 }
 

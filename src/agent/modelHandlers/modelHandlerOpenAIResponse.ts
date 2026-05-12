@@ -36,7 +36,7 @@ import {
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
-import { delay, isObject, isString } from '@utils/core';
+import { delay } from '@utils/core';
 import { isNonEmptyString } from '@utils/core';
 import {
   getWebSocketEnabled,
@@ -2446,31 +2446,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const wrapped = new Error(
       `Background response ${responseId} ended with status ${fallbackStatus}: ${errorDetail}. Retrieve the latest status with client.responses.retrieve("${responseId}").`,
     ) as Error & { error?: unknown };
-    // Attach the OpenAI error body so formatProviderHttpError can detect
-    // non-retryable conditions (e.g. insufficient_quota) via the
-    // credential-exhausted classifier. Without this, the polling failure
-    // surfaces as a plain Error and the retry layer would loop a fresh
-    // background request immediately.
+    // Attach the OpenAI error body and provider metadata. The body lets
+    // isUpstreamCreditDepletedBody recognize insufficient_quota and route
+    // through the credential-exhausted path (no auto-retry); the provider
+    // tag lets the manual-retry "Use your own API key" picker target the
+    // failing provider. tagOpenAISdkError only handles SDK error classes,
+    // so a plain Error wrapper bypasses it without this explicit tag.
     if (current.error) {
       wrapped.error = current.error;
     }
-    // Tag with provider metadata so downstream UI (manual retry panel /
-    // "Use your own API key" picker) routes to the failing provider's key.
-    // The catch block's tagOpenAISdkError only matches OpenAI SDK error
-    // classes, which a plain Error wrapper does not satisfy. Cast through
-    // unknown because OpenAI's typed error.code enum doesn't include every
-    // value the API actually returns (e.g. insufficient_quota in 429s).
-    const errorRecord = current.error as unknown;
-    const code =
-      isObject(errorRecord) && isString(errorRecord.code)
-        ? errorRecord.code
-        : undefined;
-    const isQuotaLike =
-      code === 'insufficient_quota' || code === 'rate_limit_exceeded';
     attachSdkErrorMetadata(wrapped, {
       provider: this.config.provider,
-      kind: isQuotaLike ? 'rate_limit' : 'api_error',
-      ...(isQuotaLike && { statusCode: 429 }),
+      kind: 'api_error',
     });
     throw wrapped;
   }
