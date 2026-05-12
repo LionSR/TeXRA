@@ -27,8 +27,8 @@ import {
   AgentExecutionHandle,
 } from '@agent/runtime/executionRegistry';
 import {
-  getCurrentToolFileInteractionContext,
-  type ToolFileInteractionContext,
+  getCurrentToolRunContext,
+  type ToolRunContext,
 } from '@agent/toolUse/ToolFileInteractionContext';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
@@ -177,16 +177,16 @@ const workingDirectoryField = z
   });
 
 /** Get required context fields, throwing if unavailable. */
-function getRequiredContext(): ToolFileInteractionContext & {
+function getRequiredContext(): ToolRunContext & {
   streamId: StreamTabId;
 } {
-  const ctx = getCurrentToolFileInteractionContext();
+  const ctx = getCurrentToolRunContext();
   if (!ctx?.streamId) {
     throw new Error(
       'Tool context unavailable. Cannot create proposal without active stream.',
     );
   }
-  return ctx as ToolFileInteractionContext & { streamId: StreamTabId };
+  return ctx as ToolRunContext & { streamId: StreamTabId };
 }
 
 /** Build config payload from a proposal. */
@@ -281,7 +281,7 @@ async function executeSubagent(
   orchestratorStreamId: StreamTabId,
   options?: { enableYoloOnChild?: boolean; approvalMeta?: ApprovalMeta },
 ): Promise<ToolResult> {
-  const parentContext = getCurrentToolFileInteractionContext();
+  const parentContext = getCurrentToolRunContext();
   const parentExecutionId = parentContext?.executionId;
   const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
   const runtimeHost = parentContext?.runtimeHost;
@@ -930,7 +930,7 @@ Git worktree support: ${
     executionId: string,
     instruction: string,
   ): Promise<ToolResult> {
-    const parentContext = getCurrentToolFileInteractionContext();
+    const parentContext = getCurrentToolRunContext();
     const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
     const gated = depthGateError(
       parentDelegationDepth,

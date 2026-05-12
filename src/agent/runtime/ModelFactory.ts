@@ -20,6 +20,10 @@ type ProviderHandlerLoader = () => Promise<ModelHandlerConstructor>;
 
 const INTERNAL_VALIDATION_MODEL_HANDLER_ENV =
   'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER';
+const INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV =
+  'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG';
+const INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT =
+  'texra-cli-run-validation';
 
 // Record (not Map) so TypeScript enforces exhaustiveness over ModelProvider.
 // A new enum value in llm-zoo without an entry here will fail typecheck.
@@ -122,6 +126,41 @@ function withShortModelName(config: ModelConfig): ModelConfig {
   return { ...config, fullName: short };
 }
 
+async function shouldUseInternalValidationModelHandler(): Promise<boolean> {
+  if (process.env[INTERNAL_VALIDATION_MODEL_HANDLER_ENV] !== '1') {
+    return false;
+  }
+
+  const flagPath = process.env[INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV];
+  const [{ readFileSync }, path] = await Promise.all([
+    import('node:fs'),
+    import('node:path'),
+  ]);
+  if (process.env.CI !== '1' || !flagPath || !path.isAbsolute(flagPath)) {
+    throw new Error(
+      `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 is restricted to package validation with CI=1 and an absolute ${INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV} path.`,
+    );
+  }
+
+  let flagContent: string;
+  try {
+    flagContent = readFileSync(flagPath, 'utf8').trim();
+  } catch (error) {
+    throw new Error(
+      `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 requires a readable validation flag file at ${flagPath}.`,
+      { cause: error },
+    );
+  }
+
+  if (flagContent !== INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT) {
+    throw new Error(
+      `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 received an invalid validation flag file.`,
+    );
+  }
+
+  return true;
+}
+
 /**
  * Creates a model handler instance based on provider and routing configuration.
  * Applies short model name preference and reasoning level overrides.
@@ -131,10 +170,14 @@ export async function createModelHandler(
 ): Promise<ModelHandler> {
   const config = withShortModelName(originalConfig);
 
-  if (process.env[INTERNAL_VALIDATION_MODEL_HANDLER_ENV] === '1') {
+  if (await shouldUseInternalValidationModelHandler()) {
     // Package validation still enters the real CLI and executeAgent path.
     // Only the provider boundary is deterministic, so this must not become
     // a user-facing model selector or an injected command-layer substitute.
+    logger.warn(
+      CHANNEL,
+      `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 is replacing provider handlers with the internal validation handler.`,
+    );
     const { ModelHandlerValidation } =
       await import('@agent/modelHandlers/modelHandlerValidation');
     return new ModelHandlerValidation(config);
