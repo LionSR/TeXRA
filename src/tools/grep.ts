@@ -2,9 +2,10 @@
 import { z } from 'zod';
 
 // Local imports - tools
+import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { ToolError, type ToolResult } from '@tools/result';
 import { getGitignoreMatcher } from '@tools/gitignore';
-import { resolveAndFormat } from '@tools/utils';
+import { resolveAndFormat, parseWorkingDirectory } from '@tools/pathResolution';
 import { executeCommand } from '@utils/system/execUtils';
 
 // Local file imports
@@ -110,7 +111,10 @@ export class GrepTool extends defineTool({
 }) {
   protected async execute(input: GrepInput): Promise<ToolResult> {
     const { output_mode: outputMode } = input;
-    const { path, display } = resolveAndFormat(input.path ?? undefined);
+    const root = parseWorkingDirectory(
+      getCurrentToolRunContext()?.workingDirectory,
+    );
+    const { path, display } = resolveAndFormat(input.path ?? undefined, root);
     const gitignore = await getGitignoreMatcher();
     const args = buildArguments(input, outputMode);
     const ignoreArgs = gitignore.ignoreFiles.flatMap((ignoreFile) => [
@@ -118,15 +122,10 @@ export class GrepTool extends defineTool({
       ignoreFile,
     ]);
 
-    const command = [
-      'rg',
-      ...args,
-      ...ignoreArgs,
-      input.pattern,
-      path.relative,
-    ];
+    const command = ['rg', ...args, ...ignoreArgs, input.pattern, path.fsPath];
 
     const result = await executeCommand(command, {
+      cwd: root,
       channel: CHANNEL,
       truncate: false,
     });

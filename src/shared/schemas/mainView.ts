@@ -27,24 +27,28 @@ import { ToolConfigFieldsSchema } from './toolConfig';
 export const SessionTypeSchema = z.enum(['toolUse', 'workflow']);
 export type SessionType = z.infer<typeof SessionTypeSchema>;
 
-export const FileTypeSchema = z.enum([
+export const DocumentFileTypeSchema = z.enum([
   'input',
   'reference',
   'auxiliary',
   'media',
 ]);
-export type FileType = z.infer<typeof FileTypeSchema>;
+export type DocumentFileType = z.infer<typeof DocumentFileTypeSchema>;
 
-export const MultipleFileTypeSchema = z.enum([
+export const MultipleDocumentFileTypeSchema = z.enum([
   'input',
   'reference',
   'auxiliary',
   'media',
   'output',
 ]);
-export type MultipleFileType = z.infer<typeof MultipleFileTypeSchema>;
+export type MultipleDocumentFileType = z.infer<
+  typeof MultipleDocumentFileTypeSchema
+>;
+export const MULTIPLE_DOCUMENT_FILE_TYPES =
+  MultipleDocumentFileTypeSchema.options;
 
-export const ExtendedFileTypeSchema = z.enum([
+export const ExtendedDocumentFileTypeSchema = z.enum([
   'input',
   'reference',
   'auxiliary',
@@ -52,15 +56,28 @@ export const ExtendedFileTypeSchema = z.enum([
   'edited',
   'output',
 ]);
-export type ExtendedFileType = z.infer<typeof ExtendedFileTypeSchema>;
+export type ExtendedDocumentFileType = z.infer<
+  typeof ExtendedDocumentFileTypeSchema
+>;
 
 // ============================================================
 // Option Data Schemas
 // ============================================================
 
-export const ModelOptionDataSchema = z.object({
+/**
+ * Shared base for picker option rows (`<wa-select>`-style entries). Both the
+ * model and agent picker shapes carry an opaque `value` (the id sent back to
+ * the host) and a user-facing `label`. Consolidating this base via `.extend()`
+ * keeps the two field names in lockstep — historically a typo in either schema
+ * would have silently broken option matching in only one picker.
+ */
+export const PickerOptionBaseSchema = z.object({
   value: z.string(),
   label: z.string(),
+});
+export type PickerOptionBase = z.infer<typeof PickerOptionBaseSchema>;
+
+export const ModelOptionDataSchema = PickerOptionBaseSchema.extend({
   provider: z.string().optional(),
   context: z.string().optional(),
   cost: z.string().optional(),
@@ -70,11 +87,9 @@ export const ModelOptionDataSchema = z.object({
 });
 export type ModelOptionData = z.infer<typeof ModelOptionDataSchema>;
 
-export const AgentOptionDataSchema = z.object({
-  value: z.string(),
-  label: z.string(),
-  isMultiple: z.boolean().optional(),
+export const AgentOptionDataSchema = PickerOptionBaseSchema.extend({
   isToolUse: z.boolean().optional(),
+  isOrchestrator: z.boolean().optional(),
   isRemote: z.boolean().optional(),
   isCustom: z.boolean().optional(),
   description: z.string().optional(),
@@ -91,10 +106,12 @@ export const MainViewPersistedStateSchema = UIFileFieldsSchema.merge(
 ).extend({
   sessionType: SessionTypeSchema.prefault('toolUse'),
   workflowAgent: z.string().prefault('correct'),
-  toolUseAgent: z.string().prefault('chat'),
+  toolUseAgent: z.string().prefault('orchestrator'),
   model: z.string().prefault('gemini31p'),
   commit: z.string().prefault('HEAD'),
   instruction: z.string().prefault(''),
+  workflowInstruction: z.string().prefault(''),
+  toolUseInstruction: z.string().prefault(''),
   baseFile: z.string().prefault(''),
   inputFilesVisible: z.boolean().prefault(false),
   referenceFilesVisible: z.boolean().prefault(false),
@@ -142,7 +159,7 @@ export type DependencyBannerState = z.infer<typeof DependencyBannerStateSchema>;
 // ============================================================
 
 export const FileSelectConfigSchema = z.object({
-  type: FileTypeSchema,
+  type: DocumentFileTypeSchema,
   label: z.string(),
   icon: z.string(),
   refreshTitle: z.string(),
@@ -153,6 +170,7 @@ export const FileSelectConfigSchema = z.object({
   emptyListLabel: z.string(),
   selectListLabel: z.string(),
   tooltip: z.string(),
+  description: z.string().nullish(),
   toolConfig: z.enum(['tool', 'autoExtract']).nullish(),
   focusInstruction: z
     .object({
@@ -238,7 +256,7 @@ export type SessionContextValue = z.infer<typeof SessionContextSchema>;
 // ============================================================
 
 export const FileSelectChangeDetailSchema = z.object({
-  type: FileTypeSchema,
+  type: DocumentFileTypeSchema,
   value: z.string(),
 });
 export type FileSelectChangeDetail = z.infer<
@@ -257,7 +275,7 @@ export type InstructionChangeDetail = StringValueDetail;
 export type CommitChangeDetail = StringValueDetail;
 
 export const FileActionDetailSchema = z.object({
-  type: z.union([FileTypeSchema, z.enum(['base', 'edited'])]),
+  type: z.union([DocumentFileTypeSchema, z.enum(['base', 'edited'])]),
 });
 export type FileActionDetail = z.infer<typeof FileActionDetailSchema>;
 
@@ -269,7 +287,7 @@ export type MultipleFilesActionDetail = z.infer<
 >;
 
 export const MultipleFilesTypeActionDetailSchema = z.object({
-  type: MultipleFileTypeSchema,
+  type: MultipleDocumentFileTypeSchema,
 });
 export type MultipleFilesTypeActionDetail = z.infer<
   typeof MultipleFilesTypeActionDetailSchema
@@ -552,6 +570,14 @@ export const HideGettingStartedBannerMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER),
 });
 
+export const ShowOrchestratorBannerMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER),
+});
+
+export const HideOrchestratorBannerMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER),
+});
+
 export const ShowLoginBannerMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER),
 });
@@ -647,6 +673,8 @@ export const MainViewMessageSchema = z.discriminatedUnion('command', [
   HideDependencyBannerMessageSchema,
   ShowGettingStartedBannerMessageSchema,
   HideGettingStartedBannerMessageSchema,
+  ShowOrchestratorBannerMessageSchema,
+  HideOrchestratorBannerMessageSchema,
   ShowLoginBannerMessageSchema,
   HideLoginBannerMessageSchema,
   SetSelectedAgentMessageSchema,
@@ -696,19 +724,24 @@ const CommonMessages = [
   }),
 ] as const;
 
+export const OpenAgentSettingsMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS),
+  sessionType: SessionTypeSchema.optional(),
+});
+
+export const OpenAgentDirectoryMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY),
+  customDirSet: z.boolean().optional(),
+});
+
 const SettingsMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.SETTINGS_OPEN),
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS),
+  commandOnly(MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS),
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS),
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS),
-  z.object({
-    command: z.literal(MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS),
-    sessionType: SessionTypeSchema.optional(),
-  }),
-  z.object({
-    command: z.literal(MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY),
-    customDirSet: z.boolean().optional(),
-  }),
+  OpenAgentSettingsMessageSchema,
+  OpenAgentDirectoryMessageSchema,
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.MODEL_SELECTED),
     model: z.string().min(1),
@@ -730,7 +763,7 @@ const FileSelectionMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES),
-    fileType: ExtendedFileTypeSchema,
+    fileType: ExtendedDocumentFileTypeSchema,
     currentFile: z.string().optional(),
   }),
 ] as const;
@@ -780,7 +813,7 @@ const FileOperationMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.ADD_OPENED_FILES),
-    fileType: ExtendedFileTypeSchema,
+    fileType: ExtendedDocumentFileTypeSchema,
   }),
   // Note: Use withFilesArray (required files) directly instead of
   // withOptionalFiles + .extend() override pattern
@@ -860,13 +893,11 @@ const BannerMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER),
   commandOnly(MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER),
   commandOnly(MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER),
+  commandOnly(MAIN_VIEW_COMMANDS.DISMISS_GETTING_STARTED_BANNER),
+  commandOnly(MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER),
     missingTools: z.array(z.string()).optional(),
-  }),
-  z.object({
-    command: z.literal(MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING),
-    value: z.boolean(),
   }),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE),

@@ -8,62 +8,49 @@ export const statusIndicatorStyles: CSSResult = css`
     border-radius: 50%;
     display: inline-block;
     flex-shrink: 0;
-    background-color: var(--vscode-descriptionForeground);
+    background-color: var(--wa-color-text-quiet);
     opacity: var(--opacity-subtle, 0.7);
-    transition:
-      background-color var(--transition-slow),
-      box-shadow var(--transition-slow),
-      opacity var(--transition-slow);
   }
 
   .status-indicator.is-running,
   .tab-status.is-running {
     background-color: var(--color-success, #4caf50);
-    box-shadow: 0 0 4px var(--color-success, #4caf50);
     opacity: var(--opacity-full);
-    animation: pulse-scale 2s infinite;
   }
 
   .status-indicator.is-stopped,
   .tab-status.is-stopped {
-    background-color: var(--vscode-descriptionForeground);
+    background-color: var(--wa-color-text-quiet);
     opacity: var(--opacity-subtle, 0.7);
   }
 
   .status-indicator.is-error,
   .tab-status.is-error {
     background-color: var(--color-error, #f44336);
-    box-shadow: 0 0 4px var(--color-error, #f44336);
     opacity: var(--opacity-full);
   }
 
   .status-indicator.is-waiting,
   .tab-status.is-waiting {
-    background-color: var(--vscode-textLink-foreground);
-    box-shadow: 0 0 4px var(--vscode-textLink-foreground);
+    background-color: var(--wa-color-text-link);
     opacity: var(--opacity-full);
-    animation: pulse-scale 3s infinite;
   }
 
   .status-indicator.is-resuming,
   .tab-status.is-resuming {
-    background-color: var(--vscode-textLink-foreground);
-    box-shadow: 0 0 4px var(--vscode-textLink-foreground);
+    background-color: var(--wa-color-text-link);
     opacity: var(--opacity-full);
-    animation: pulse-scale 1.5s infinite;
   }
 
   .status-indicator.is-initializing,
   .tab-status.is-initializing {
-    background-color: var(--vscode-descriptionForeground);
-    box-shadow: 0 0 4px var(--vscode-descriptionForeground);
+    background-color: var(--wa-color-text-quiet);
     opacity: var(--opacity-full);
-    animation: pulse-scale 2.5s infinite;
   }
 
   .status-indicator.is-ready,
   .tab-status.is-ready {
-    background-color: var(--vscode-descriptionForeground);
+    background-color: var(--wa-color-text-quiet);
     opacity: var(--opacity-disabled, 0.5);
   }
 
@@ -77,7 +64,7 @@ export const statusIndicatorStyles: CSSResult = css`
   }
 
   .status-text.is-stopped {
-    color: var(--color-text-secondary, var(--vscode-descriptionForeground));
+    color: var(--color-text-secondary, var(--wa-color-text-quiet));
   }
 
   .status-text.is-error {
@@ -87,6 +74,6 @@ export const statusIndicatorStyles: CSSResult = css`
   .status-text.is-waiting,
   .status-text.is-resuming,
   .status-text.is-initializing {
-    color: var(--vscode-textLink-foreground);
+    color: var(--wa-color-text-link);
   }
 `;

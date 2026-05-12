@@ -1,191 +1,217 @@
 /**
- * Provider-specific streaming and endpoint configuration.
+ * Provider-specific streaming, endpoint, and region configuration.
  *
- * Co-locates all provider runtime config (streaming toggles, custom endpoints)
- * in one place. Static provider constants (display names, URLs, etc.) live
- * in @shared/constants/providers.
+ * Each entry in PROVIDERS bundles a provider's globalSM keys and any
+ * region-toggle metadata that drives display name / key URL overrides.
+ * Static provider constants (default URLs, descriptions, etc.) live in
+ * @shared/constants/providers.
  */
 
-import { globalSM, GlobalStateKey } from '@common/state/stateManager';
+import { tryGlobalState } from '@platform/platform';
+import { GlobalStateKey } from '@common/state/stateKeys';
+import { getConfig } from '@utils/config';
 
-/** Map from provider string to GlobalStateKey for per-provider streaming. */
-const STREAMING_KEY: Record<string, GlobalStateKey> = {
-  openai: GlobalStateKey.STREAMING_OPENAI,
-  anthropic: GlobalStateKey.STREAMING_ANTHROPIC,
-  openrouter: GlobalStateKey.STREAMING_OPENROUTER,
-  google: GlobalStateKey.STREAMING_GOOGLE,
-  xai: GlobalStateKey.STREAMING_XAI,
-  deepseek: GlobalStateKey.STREAMING_DEEPSEEK,
-  moonshot: GlobalStateKey.STREAMING_MOONSHOT,
-  dashscope: GlobalStateKey.STREAMING_DASHSCOPE,
-  minimax: GlobalStateKey.STREAMING_MINIMAX,
-  glm: GlobalStateKey.STREAMING_GLM,
+/**
+ * When `key` is set in globalSM (treated as boolean), the provider is in its
+ * alternate region. `displayName` overrides the default name; `keyUrlWhenSet`
+ * and `keyUrlWhenUnset` override the default key URL passed to
+ * `getProviderKeyUrl`. Each is optional — only the dimensions that actually
+ * differ across regions are populated.
+ */
+type RegionOverride = {
+  key: GlobalStateKey;
+  default: boolean;
+  displayName?: string;
+  keyUrlWhenSet?: string;
+  keyUrlWhenUnset?: string;
 };
 
-/** Map from provider string to GlobalStateKey for per-provider endpoint. */
-const ENDPOINT_KEY: Record<string, GlobalStateKey> = {
-  openai: GlobalStateKey.ENDPOINT_OPENAI,
-  anthropic: GlobalStateKey.ENDPOINT_ANTHROPIC,
-  google: GlobalStateKey.ENDPOINT_GOOGLE,
-  deepseek: GlobalStateKey.ENDPOINT_DEEPSEEK,
-  xai: GlobalStateKey.ENDPOINT_XAI,
-  moonshot: GlobalStateKey.ENDPOINT_MOONSHOT,
-  dashscope: GlobalStateKey.ENDPOINT_DASHSCOPE,
-  minimax: GlobalStateKey.ENDPOINT_MINIMAX,
-  glm: GlobalStateKey.ENDPOINT_GLM,
+type ProviderEntry = {
+  streaming?: GlobalStateKey;
+  endpoint?: GlobalStateKey;
+  region?: RegionOverride;
 };
 
-/** Read the global streaming default. */
+const PROVIDERS: Record<string, ProviderEntry> = {
+  openai: {
+    streaming: GlobalStateKey.STREAMING_OPENAI,
+    endpoint: GlobalStateKey.ENDPOINT_OPENAI,
+  },
+  anthropic: {
+    streaming: GlobalStateKey.STREAMING_ANTHROPIC,
+    endpoint: GlobalStateKey.ENDPOINT_ANTHROPIC,
+  },
+  openrouter: { streaming: GlobalStateKey.STREAMING_OPENROUTER },
+  google: {
+    streaming: GlobalStateKey.STREAMING_GOOGLE,
+    endpoint: GlobalStateKey.ENDPOINT_GOOGLE,
+  },
+  xai: {
+    streaming: GlobalStateKey.STREAMING_XAI,
+    endpoint: GlobalStateKey.ENDPOINT_XAI,
+  },
+  deepseek: {
+    streaming: GlobalStateKey.STREAMING_DEEPSEEK,
+    endpoint: GlobalStateKey.ENDPOINT_DEEPSEEK,
+  },
+  moonshot: {
+    streaming: GlobalStateKey.STREAMING_MOONSHOT,
+    endpoint: GlobalStateKey.ENDPOINT_MOONSHOT,
+  },
+  dashscope: {
+    streaming: GlobalStateKey.STREAMING_DASHSCOPE,
+    endpoint: GlobalStateKey.ENDPOINT_DASHSCOPE,
+    region: {
+      key: GlobalStateKey.DASHSCOPE_USE_CHINA,
+      default: false,
+      displayName: 'Bailian',
+      keyUrlWhenSet: 'https://bailian.console.aliyun.com/',
+    },
+  },
+  minimax: {
+    streaming: GlobalStateKey.STREAMING_MINIMAX,
+    endpoint: GlobalStateKey.ENDPOINT_MINIMAX,
+    region: {
+      key: GlobalStateKey.MINIMAX_USE_CHINA,
+      default: false,
+      keyUrlWhenSet: 'https://platform.minimaxi.com/',
+    },
+  },
+  glm: {
+    streaming: GlobalStateKey.STREAMING_GLM,
+    endpoint: GlobalStateKey.ENDPOINT_GLM,
+    // China=true is the default since bigmodel.cn is the primary platform;
+    // when toggled off (international), the key URL is z.ai.
+    region: {
+      key: GlobalStateKey.GLM_USE_CHINA,
+      default: true,
+      keyUrlWhenUnset: 'https://z.ai/',
+    },
+  },
+};
+
+function entry(provider: string): ProviderEntry | undefined {
+  return PROVIDERS[provider.toLowerCase()];
+}
+
+function read<T>(key: GlobalStateKey, defaultValue: T): T {
+  return tryGlobalState()?.get(key, defaultValue) ?? defaultValue;
+}
+
+function regionSet(provider: string): boolean | undefined {
+  const region = entry(provider)?.region;
+  return region ? read(region.key, region.default) : undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Streaming
+// ---------------------------------------------------------------------------
+
 export function getGlobalStreaming(): boolean {
-  return globalSM?.get<boolean>(GlobalStateKey.STREAMING_GLOBAL, true) ?? true;
+  return read(GlobalStateKey.STREAMING_GLOBAL, true);
 }
 
-/** Set the global streaming default. */
 export async function setGlobalStreaming(enabled: boolean): Promise<void> {
-  await globalSM?.update(GlobalStateKey.STREAMING_GLOBAL, enabled);
+  await tryGlobalState()?.update(GlobalStateKey.STREAMING_GLOBAL, enabled);
 }
 
-/** Read per-provider streaming setting, falling back to global default. */
 export function getProviderStreaming(provider: string): boolean {
-  const key = STREAMING_KEY[provider.toLowerCase()];
-  if (!key) return getGlobalStreaming();
-  const global = getGlobalStreaming();
-  return globalSM?.get<boolean>(key, global) ?? global;
+  const fallback = getGlobalStreaming();
+  const key = entry(provider)?.streaming;
+  return key ? read(key, fallback) : fallback;
 }
 
-/** Set per-provider streaming setting. */
 export async function setProviderStreaming(
   provider: string,
   enabled: boolean,
 ): Promise<void> {
-  const key = STREAMING_KEY[provider.toLowerCase()];
-  if (key) {
-    await globalSM?.update(key, enabled);
-  }
+  const key = entry(provider)?.streaming;
+  if (key) await tryGlobalState()?.update(key, enabled);
 }
 
-/** Read per-provider custom endpoint. Returns empty string when unset. */
+// ---------------------------------------------------------------------------
+// Endpoint
+// ---------------------------------------------------------------------------
+
 export function getProviderEndpoint(provider: string): string {
-  const key = ENDPOINT_KEY[provider.toLowerCase()];
-  if (!key) return '';
-  return globalSM?.get<string>(key, '') ?? '';
+  const key = entry(provider)?.endpoint;
+  return key ? read(key, '') : '';
 }
 
-/** Set per-provider custom endpoint. */
 export async function setProviderEndpoint(
   provider: string,
   endpoint: string,
 ): Promise<void> {
-  const key = ENDPOINT_KEY[provider.toLowerCase()];
-  if (key) {
-    await globalSM?.update(key, endpoint);
-  }
+  const key = entry(provider)?.endpoint;
+  if (key) await tryGlobalState()?.update(key, endpoint);
 }
 
-/** Whether the given provider has a configurable custom endpoint. */
 export function supportsCustomEndpoint(provider: string): boolean {
-  return provider.toLowerCase() in ENDPOINT_KEY;
-}
-
-/**
- * Whether Anthropic web_search/web_fetch should use dynamic filtering.
- * When true, Claude can write code to filter fetched content before it
- * enters context (requires code execution container support).
- * Defaults to false — tools use allowed_callers: ['direct'] to bypass
- * code execution and avoid the container_id requirement.
- */
-export function getAnthropicDynamicFiltering(): boolean {
-  return (
-    globalSM?.get<boolean>(GlobalStateKey.ANTHROPIC_DYNAMIC_FILTERING, false) ??
-    false
-  );
-}
-
-/** Set Anthropic dynamic filtering preference. */
-export async function setAnthropicDynamicFiltering(
-  enabled: boolean,
-): Promise<void> {
-  await globalSM?.update(GlobalStateKey.ANTHROPIC_DYNAMIC_FILTERING, enabled);
+  return entry(provider)?.endpoint !== undefined;
 }
 
 // ---------------------------------------------------------------------------
-// DashScope region setting (globalSM-backed)
+// Region (display name + key URL)
 // ---------------------------------------------------------------------------
 
-/** Whether DashScope is set to use the China (Bailian) region. */
-export function getDashScopeUseChina(): boolean {
-  return (
-    globalSM?.get<boolean>(GlobalStateKey.DASHSCOPE_USE_CHINA, false) ?? false
-  );
-}
-
-const BAILIAN_DISPLAY_NAME = 'Bailian';
-const BAILIAN_KEY_URL = 'https://bailian.console.aliyun.com/';
-
-/** Resolve display name for a provider, accounting for DashScope China region. */
 export function getProviderDisplayName(
   provider: string,
   defaultName: string,
 ): string {
-  if (provider === 'dashscope' && getDashScopeUseChina()) {
-    return BAILIAN_DISPLAY_NAME;
-  }
-  return defaultName;
+  const region = entry(provider)?.region;
+  if (!region?.displayName) return defaultName;
+  return regionSet(provider) ? region.displayName : defaultName;
 }
 
-/** Resolve key URL for a provider, accounting for region toggles. */
 export function getProviderKeyUrl(
   provider: string,
   defaultUrl: string,
 ): string {
-  if (provider === 'dashscope' && getDashScopeUseChina()) {
-    return BAILIAN_KEY_URL;
-  }
-  if (provider === 'minimax' && getMiniMaxUseChina()) {
-    return 'https://platform.minimaxi.com/';
-  }
-  if (provider === 'glm' && !getGLMUseChina()) {
-    return 'https://z.ai/';
-  }
+  const region = entry(provider)?.region;
+  if (!region) return defaultUrl;
+  const isSet = regionSet(provider);
+  if (isSet === true && region.keyUrlWhenSet) return region.keyUrlWhenSet;
+  if (isSet === false && region.keyUrlWhenUnset) return region.keyUrlWhenUnset;
   return defaultUrl;
 }
 
-// ---------------------------------------------------------------------------
-// MiniMax region setting (globalSM-backed)
-// ---------------------------------------------------------------------------
+// Named region accessors retained for direct callers in other files.
+export function getDashScopeUseChina(): boolean {
+  return regionSet('dashscope') ?? false;
+}
 
-/** Whether MiniMax is set to use the China region (minimaxi.com). */
 export function getMiniMaxUseChina(): boolean {
-  return (
-    globalSM?.get<boolean>(GlobalStateKey.MINIMAX_USE_CHINA, false) ?? false
-  );
+  return regionSet('minimax') ?? false;
 }
 
-// ---------------------------------------------------------------------------
-// GLM region setting (globalSM-backed)
-// ---------------------------------------------------------------------------
-
-/** Whether GLM is set to use the China region (bigmodel.cn). Defaults to true since bigmodel.cn is the primary platform. */
 export function getGLMUseChina(): boolean {
-  return globalSM?.get<boolean>(GlobalStateKey.GLM_USE_CHINA, true) ?? true;
+  return regionSet('glm') ?? true;
 }
 
 // ---------------------------------------------------------------------------
-// Coding plan settings (globalSM-backed)
+// Standalone toggles
 // ---------------------------------------------------------------------------
 
-/** Whether GLM is set to use Coding Plan (subscription-based API access). */
+export function getAnthropicDynamicFiltering(): boolean {
+  return read(GlobalStateKey.ANTHROPIC_DYNAMIC_FILTERING, false);
+}
+
 export function getGLMCodingPlan(): boolean {
-  return globalSM?.get<boolean>(GlobalStateKey.GLM_CODING_PLAN, false) ?? false;
+  return read(GlobalStateKey.GLM_CODING_PLAN, false);
 }
 
-// ---------------------------------------------------------------------------
-// WebSocket transport setting (globalSM-backed)
-// ---------------------------------------------------------------------------
-
-/** Read the WebSocket transport setting for OpenAI. */
 export function getWebSocketEnabled(): boolean {
+  return read(GlobalStateKey.WEBSOCKET_OPENAI, false);
+}
+
+/**
+ * Whether to route all API calls through OpenRouter.
+ * Falls back to the legacy VS Code config key for users upgrading from
+ * before the globalSM migration.
+ */
+export function getUseOpenRouter(): boolean {
   return (
-    globalSM?.get<boolean>(GlobalStateKey.WEBSOCKET_OPENAI, false) ?? false
+    tryGlobalState()?.get(GlobalStateKey.USE_OPENROUTER, false) ??
+    getConfig<boolean>('texra.model.useOpenRouter', false)
   );
 }

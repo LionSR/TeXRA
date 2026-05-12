@@ -1,10 +1,11 @@
 // Standard library imports
 import { Buffer } from 'node:buffer';
-import { basename } from 'node:path';
+import { basename, dirname } from 'node:path';
 
 // Third-party imports
 import {
   Anthropic,
+  APIError as AnthropicAPIError,
   APIUserAbortError as AnthropicUserAbortError,
   toFile,
 } from '@anthropic-ai/sdk';
@@ -12,11 +13,7 @@ import { PDFDocument } from '@cantoo/pdf-lib';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import {
-  type AgentSetting,
-  hasEndTag,
-  requireWorkflowSetting,
-} from '@agent/core/AgentDataclass';
+import { type AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import {
   AnthropicAPIResponseUsage,
   AnthropicUsage,
@@ -31,10 +28,15 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 
 // Local imports - common
+import { getConfig } from '@agent/core/config';
 import {
   getSdkErrorMessage,
   isContextWindowError,
   attachStreamDiagnostics,
+  attachPartialText,
+  takeTail,
+  isUserAbort,
+  PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 
 // Local imports - replacement
@@ -44,8 +46,7 @@ import replacementEngine from '@replacement/engine';
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
-import { getConfig } from '@utils/config';
-import { flexibleFS, type FileLocation } from '@utils/files';
+import { AbsoluteFS, flexibleFS, type FileLocation } from '@utils/files';
 import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';
 import { objectToLogString } from '@utils/text/stringUtils';
 
@@ -76,6 +77,7 @@ import {
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { computeCachePercentage } from './utils/usageNormalization';
+import { tagAnthropicSdkError } from './support/sdkErrorAdapters';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -141,6 +143,30 @@ interface UploadedAnthropicAttachment {
   mediaType?: string;
 }
 
+type ErrorWithRequestId = Error & { request_id?: string };
+
+/**
+ * Extracts the tail of text content from a (possibly partial) BetaMessage.
+ * The SDK's stream.currentMessage accumulates all content blocks as they
+ * arrive, so on a stream failure this already holds whatever text was
+ * generated — no custom buffering required. Returns the suffix because
+ * continuation prompts only reference the last few hundred chars.
+ */
+function extractPartialTextTail(
+  message: BetaMessage | undefined,
+  maxChars: number,
+): string {
+  if (!message?.content) return '';
+  const text = message.content
+    .filter(
+      (block): block is Extract<BetaContentBlock, { type: 'text' }> =>
+        block.type === 'text',
+    )
+    .map((block) => block.text)
+    .join('');
+  return takeTail(text, maxChars);
+}
+
 /** Type guard for any thinking-related content block param */
 const isAnyThinkingBlockParam = (
   block: ContentBlockParam,
@@ -163,13 +189,14 @@ const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
 const COMPACTION_BETA: AnthropicBeta = 'compact-2026-01-12';
 
 const OPUS_46_FULLNAME = 'claude-opus-4-6';
+const OPUS_47_FULLNAME = 'claude-opus-4-7';
 const SONNET_46_FULLNAME = 'claude-sonnet-4-6';
 
 /** Compaction must be triggered at or above this minimum input token threshold. */
 const MIN_COMPACTION_TRIGGER_TOKENS = 50_000;
 
 /**
- * 1M context window is available natively for Opus 4.6 and Sonnet 4.6
+ * 1M context window is available natively for Opus 4.6, Opus 4.7, and Sonnet 4.6
  * at standard pricing (no beta header needed). Context window sizes
  * are provided directly by llm-zoo. Other Claude models use 200K.
  */
@@ -269,6 +296,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return this.config.fullName.startsWith(OPUS_46_FULLNAME);
   }
 
+  private isClaudeOpus47(): boolean {
+    return this.config.fullName.startsWith(OPUS_47_FULLNAME);
+  }
+
   private isClaudeSonnet46(): boolean {
     return this.config.fullName.startsWith(SONNET_46_FULLNAME);
   }
@@ -280,17 +311,20 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   /**
    * Whether this model supports adaptive thinking with the effort parameter.
-   * Per Anthropic docs, only Opus 4.6 and Sonnet 4.6 support adaptive thinking.
+   * Per Anthropic docs, Opus 4.6, Opus 4.7, and Sonnet 4.6 support adaptive thinking.
+   * Opus 4.7 only accepts adaptive thinking — manual budget_tokens returns 400.
    */
   private supportsAdaptiveThinking(): boolean {
-    return this.isClaudeOpus46() || this.isClaudeSonnet46();
+    return (
+      this.isClaudeOpus46() || this.isClaudeOpus47() || this.isClaudeSonnet46()
+    );
   }
 
   /**
    * Returns the Anthropic effort level for the current model.
    * Maps the llm-zoo ReasoningEffort enum to Anthropic's effort levels.
    * Falls back to 'high' (the API default) when no specific effort is configured.
-   * 'max' is only valid for Opus 4.6.
+   * 'max' is only valid for Opus-tier models (Opus 4.6 and Opus 4.7).
    */
   private getAnthropicEffort(): BetaOutputConfig['effort'] {
     const reasoningEffort = this.getEffectiveReasoningEffort();
@@ -300,8 +334,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     switch (reasoningEffort) {
       case 'xhigh':
-        // 'max' is only supported on Opus 4.6
-        return this.isClaudeOpus46() ? 'max' : 'high';
+        // 'max' is supported on Opus 4.6 and Opus 4.7
+        return this.isClaudeOpus46() || this.isClaudeOpus47() ? 'max' : 'high';
       case 'high':
         return 'high';
       case 'medium':
@@ -317,7 +351,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   /** Whether this model supports Anthropic's native server-side context compaction. */
   private isCompactionEligibleModel(): boolean {
-    return this.isClaudeOpus46() || this.isClaudeSonnet46();
+    return (
+      this.isClaudeOpus46() || this.isClaudeOpus47() || this.isClaudeSonnet46()
+    );
   }
 
   override get supportsManualCompaction(): boolean {
@@ -507,6 +543,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
   async createResponse(
     requestOptions: CreateResponseOptions<MessageParam, Anthropic>,
   ): Promise<CreateResponseResult<BetaMessage, MessageParam>> {
+    try {
+      return await this.createResponseImpl(requestOptions);
+    } catch (err) {
+      tagAnthropicSdkError(err, this.config.provider);
+      throw err;
+    }
+  }
+
+  /** Creates an Anthropic response after SDK-boundary error tagging is installed. */
+  private async createResponseImpl(
+    requestOptions: CreateResponseOptions<MessageParam, Anthropic>,
+  ): Promise<CreateResponseResult<BetaMessage, MessageParam>> {
     const {
       client,
       messages,
@@ -599,12 +647,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.logger.debug('Enabling thinking for model with reasoning support');
 
       if (this.supportsAdaptiveThinking()) {
-        // Opus 4.6 and Sonnet 4.6: use adaptive thinking with effort parameter.
+        // Opus 4.6, Opus 4.7, and Sonnet 4.6: use adaptive thinking with effort parameter.
         // Adaptive thinking lets the model decide when and how much to think,
         // and automatically enables interleaved thinking between tool calls.
         // budget_tokens is deprecated on these models.
         const effort = this.getAnthropicEffort();
-        options.thinking = { type: 'adaptive' };
+        // Opus 4.7 defaults display to 'omitted', which suppresses reasoning
+        // output. Request 'summarized' so thinking tokens still stream to the
+        // user — older adaptive-thinking models already emit reasoning by
+        // default and are unaffected.
+        options.thinking = this.isClaudeOpus47()
+          ? { type: 'adaptive', display: 'summarized' }
+          : { type: 'adaptive' };
         options.output_config = {
           ...options.output_config,
           effort,
@@ -728,6 +782,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
             }
           }
         } catch (err) {
+          tagAnthropicSdkError(err, this.config.provider);
           // Re-throw context window violations - these are intentional validation errors
           // that should fail fast, not be swallowed by soft failure
           if (isContextWindowError(err)) {
@@ -805,66 +860,79 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // returning truncated output.
         const diagnostics = streamHandler.getDiagnostics();
         if (!diagnostics.messageStopReceived) {
-          const truncatedError = new Error(
+          // The catch block below will read current diagnostics, attach them
+          // to the enriched error, and log at warn — no inner attach/log
+          // here, otherwise one truncation event produces two warns and
+          // two diagnostics snapshots (with drifting elapsedSecs).
+          throw new Error(
             `Stream ended without message_stop after ${diagnostics.elapsedSecs}s ` +
               `(${diagnostics.eventsProcessed} events, ` +
               `${diagnostics.thinkingChars} thinking chars, ` +
               `${diagnostics.textChars} text chars). ` +
               `Stream truncated, likely proxy idle timeout during extended thinking.`,
           );
-          attachStreamDiagnostics(truncatedError, diagnostics);
-          this.logger.warn(
-            'Stream truncated: response received without message_stop',
-            {
-              data: {
-                model: this.config.fullName,
-                streamDiagnostics: diagnostics,
-              },
-            },
-          );
-          throw truncatedError;
         }
 
         // Store thinking blocks for API conversation continuation
         this.processThinkingBlock(response);
       } catch (streamError) {
-        // Log enhanced diagnostics for stream failures, especially useful for relay debugging
-        const baseUrl = this.getBaseUrl();
-        const isUsingRelay = this.shouldUseServerSideKeys();
-        const diagnostics = streamHandler.getDiagnostics();
+        tagAnthropicSdkError(streamError, this.config.provider);
 
-        // Enrich error with request ID from stream response headers so
-        // detectRequestId() (in sdkErrorUtils) picks it up via the existing
-        // ProviderError.requestId path — no duplicate field needed.
-        try {
-          const httpResponse = await (
-            stream as unknown as { response: Promise<Response> }
-          ).response;
-          const reqId =
-            httpResponse?.headers?.get?.('request-id') ??
-            httpResponse?.headers?.get?.('x-request-id');
-          if (reqId && streamError instanceof Error) {
-            (streamError as Error & { request_id?: string }).request_id = reqId;
-          }
-        } catch {
-          // Response may not be available (e.g. network error before HTTP response)
+        const diagnostics = streamHandler.getDiagnostics();
+        const partialText = extractPartialTextTail(
+          stream.currentMessage,
+          PARTIAL_TEXT_TAIL_MAX,
+        );
+        const requestId = stream.request_id;
+
+        // Wrap only non-APIError, non-abort stream failures. APIError
+        // subclasses carry status/headers/requestID/type needed for retry
+        // classification; AnthropicUserAbortError is a sibling of
+        // AnthropicAPIError, so wrapping it would break downstream
+        // `instanceof AnthropicUserAbortError` checks.
+        const isAbort = isUserAbort(streamError);
+        let enrichedError: unknown = streamError;
+        if (
+          !stream.currentMessage &&
+          streamError instanceof Error &&
+          !(streamError instanceof AnthropicAPIError) &&
+          !isAbort
+        ) {
+          enrichedError = new Error(
+            `Stream closed before message_start after ${diagnostics.elapsedSecs}s ` +
+              `(${diagnostics.eventsProcessed} events). ` +
+              `Likely connection dropped before the API responded.`,
+            { cause: streamError },
+          );
         }
 
-        this.logger.debug(
-          `Stream failed: ${streamError instanceof Error ? streamError.message : String(streamError)}`,
-          {
-            data: {
-              isUsingRelay,
-              baseUrl: baseUrl ?? 'default',
-              model: this.config.fullName,
-              streamDiagnostics: diagnostics,
-            },
-          },
-        );
+        // detectRequestId() reads .request_id off the thrown error, so set it
+        // on whichever object we're throwing (the wrapper or the original).
+        if (requestId && enrichedError instanceof Error) {
+          (enrichedError as ErrorWithRequestId).request_id = requestId;
+        }
 
-        // Attach diagnostics to error for retry UI display
-        attachStreamDiagnostics(streamError, diagnostics);
-        throw streamError;
+        const logMessage = `Stream ${isAbort ? 'aborted' : 'failed'}: ${enrichedError instanceof Error ? enrichedError.message : String(enrichedError)}`;
+        const logData = {
+          data: {
+            isUsingRelay: this.shouldUseServerSideKeys(),
+            baseUrl: this.getBaseUrl() ?? 'default',
+            model: this.config.fullName,
+            streamDiagnostics: diagnostics,
+            partialTextLength: partialText.length,
+          },
+        };
+        // Aborts are control flow, not failures. Everything else is a warn
+        // so silent proxy drops surface without debug logging enabled.
+        if (isAbort) {
+          this.logger.debug(logMessage, logData);
+        } else {
+          this.logger.warn(logMessage, logData);
+        }
+
+        attachStreamDiagnostics(enrichedError, diagnostics);
+        attachPartialText(enrichedError, partialText);
+        throw enrichedError;
       } finally {
         // Always finalize stream handler to prevent memory leaks on error
         streamHandler.finalize();
@@ -1580,37 +1648,50 @@ export class ModelHandlerAnthropic extends ModelHandler<
     outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, MessageParam[]]> {
-    const workflowSetting = requireWorkflowSetting(agentSetting);
-
     if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
       if (this.capabilities.supportsAssistantPrefill) {
-        this.logger.debug(`Adding prefill message:\n${prefill}`);
-        if (
-          workspaceState.assembly.accumulatedOutput.includes('<scratchpad>') &&
-          prefill === '<scratchpad>' // this is not so neat
-        ) {
-          await flexibleFS.write(outputLocation, prefill);
-        } else if (workflowSetting.outputExt === 'xml') {
-          await flexibleFS.write(outputLocation, prefill + '\n');
+        if (prefill.length === 0) {
+          // Anthropic rejects assistant messages with empty text content blocks.
+          // When an agent declares no prefill, skip pushing the assistant turn
+          // entirely so the model produces its response from a clean slate.
+          this.logger.debug(
+            'No prefill provided; skipping assistant prefill message',
+          );
+          return [false, messages];
         }
+        this.logger.debug(`Adding prefill message:\n${prefill}`);
+        workspaceState.assembly.accumulatedOutput = `${prefill}\n`;
+        await AbsoluteFS.ensureDir(dirname(outputLocation.absolutePath));
+        await flexibleFS.write(
+          outputLocation,
+          workspaceState.assembly.accumulatedOutput,
+        );
         messages.push({
           role: 'assistant',
           content: [{ type: 'text', text: prefill }],
         });
       } else {
-        // For thinking-enabled models that don't support assistant prefill,
-        // add prefill as part of the user message like OpenAI handler
-        const pseudoPrefillText = `Start your response with:\n${prefill}`;
-        const lastMsg = messages.at(-1);
-        if (lastMsg && Array.isArray(lastMsg.content)) {
-          lastMsg.content.push({
-            type: 'text',
-            text: pseudoPrefillText,
-          } as ContentBlockParam);
+        if (prefill.length === 0) {
+          // No prefill declared --- skip the pseudo-prefill instruction so the
+          // model isn't told `Start your response with:\n` (an empty directive).
+          this.logger.debug(
+            'No prefill provided; skipping pseudo-prefill instruction',
+          );
+        } else {
+          // For thinking-enabled models that don't support assistant prefill,
+          // add prefill as part of the user message like OpenAI handler
+          const pseudoPrefillText = `Start your response with:\n${prefill}`;
+          const lastMsg = messages.at(-1);
+          if (lastMsg && Array.isArray(lastMsg.content)) {
+            lastMsg.content.push({
+              type: 'text',
+              text: pseudoPrefillText,
+            } as ContentBlockParam);
+          }
+          this.logger.debug(
+            `Added pseudo prefill message to messages:\n${pseudoPrefillText}`,
+          );
         }
-        this.logger.debug(
-          `Added pseudo prefill message to messages:\n${pseudoPrefillText}`,
-        );
       }
       return [false, messages];
     }
@@ -1637,7 +1718,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return [true, messages];
     }
 
-    this.logger.warn(
+    this.logger.debug(
       'Output file exists but no end tag found - continuing from file',
     );
 
@@ -1809,6 +1890,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
           } as ContentBlockParam,
         ];
       }
+    } else if (lastMessage?.role === 'user') {
+      // No prefill was pushed (agent declared empty prefill). Add the model's
+      // response as a new assistant message so multi-round conversation history
+      // is preserved.
+      messages.push({
+        role: 'assistant',
+        content: [
+          {
+            type: 'text',
+            text: bestConnector + newResponse,
+          } as ContentBlockParam,
+        ],
+      });
     }
   }
 

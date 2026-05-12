@@ -7,37 +7,37 @@ This guide walks you through creating your own agent definition files (`.yaml`) 
 ::: info Agent Fundamentals
 Before creating a custom agent, it's highly recommended to understand the underlying concepts:
 
-- **Agent Architecture & Execution Flow**: Learn about the `.yaml` structure, settings, prompts, and how agents run. See the [Agent Architecture & Execution Flow](./agent-architecture.md) guide.
-- **Built-in Agents**: Review the standard agents provided by TeXRA for examples and potential inheritance parents. See the [Built-in Agent Reference](./built-in-agents.md).
-- **Agents Tab**: Browse and manage agent files from the **Agents** tab in the TeXRA Dashboard.
+- <wa-icon library="texra" name="symbol-structure"></wa-icon> **Agent Architecture & Execution Flow**: Learn about the `.yaml` structure, settings, prompts, and how agents run. See the [Agent Architecture & Execution Flow](./agent-architecture.md) guide.
+- <wa-icon library="texra" name="sparkle"></wa-icon> **Built-in Agents**: Review the standard agents provided by TeXRA for examples and potential inheritance parents. See the [Built-in Agent Reference](./built-in-agents.md).
+- <wa-icon library="texra" name="dashboard"></wa-icon> **Agents Tab**: Browse and manage agent files from the **Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>) in the TeXRA Dashboard.
   :::
 
-## Reference Agents
+## <wa-icon library="texra" name="library"></wa-icon> Reference Agents
 
 TeXRA includes ready-made reference agents you can use as starting points. Think of them as recipes: copy one into your custom agents directory, tweak it, and you have a new agent in minutes. Examples range from content-enhancement workflows to notation standardizers and multi-agent orchestrators. Each also has a `_multiple` variant for multi-file output.
 
-## Creating a Custom Agent File
+## <wa-icon library="texra" name="new-file"></wa-icon> Creating a Custom Agent File
 
-Follow these steps to create a new custom agent:
+Follow these steps to create a new custom agent.
 
-### Step 1: Locate or Configure the Custom Agents Directory
+### <wa-icon library="texra" name="folder-opened"></wa-icon> Step 1 — Locate or Configure the Custom Agents Directory
 
-Custom agents reside in a dedicated directory that TeXRA prepares for you.
+Custom agents live in a dedicated directory that TeXRA prepares for you.
 
-1.  **Find the Default Folder**: TeXRA automatically seeds a `custom_agents` directory inside its global storage. Open the **Agents** tab in the TeXRA Dashboard to see this location.
-2.  **Override (Optional)**: If you prefer to manage agents elsewhere, open the **Agents** tab in the TeXRA Dashboard and click **Change** in the directory info bar to select a new folder. TeXRA will ensure that directory exists and use it instead of the default.
+1. **Find the Default Folder**: TeXRA automatically seeds a `custom_agents` directory inside its global storage. Open the **Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>) in the TeXRA Dashboard to see its location.
+2. **Override (Optional)**: If you prefer to manage agents elsewhere, open the **Agents** tab and click **Change** (<wa-icon library="texra" name="edit"></wa-icon>) in the directory info bar to pick a new folder. TeXRA will ensure that directory exists and use it instead of the default.
 
-### Automatic Creation
+### <wa-icon library="texra" name="wand"></wa-icon> Automatic Creation
 
-If you'd like TeXRA to draft an agent for you, use the **New Agent** button in the **Agents** tab of the TeXRA Dashboard. The wizard only asks for a short description and the default output filenames. TeXRA sends this information to a Claude model, which replies with the YAML enclosed in `<yaml>...</yaml>` tags. The extension extracts the content between those tags and saves it as a basic CoT template (single or multiple files) in your Custom Agents folder.
+If you'd like TeXRA to draft an agent for you, click **New Agent** (<wa-icon library="texra" name="add"></wa-icon>) in the **Agents** tab. The wizard only asks for a short description and the default output filenames. TeXRA sends that info to a Claude model, which returns the YAML enclosed in `<yaml>...</yaml>` tags. The extension extracts the content between those tags and saves it as a basic CoT template (single or multiple files) in your Custom Agents folder.
 
-### Step 2: Create a New YAML File
+### <wa-icon library="texra" name="file-add"></wa-icon> Step 2 — Create a New YAML File
 
-1.  In the **Agents** tab of the TeXRA Dashboard, click **From Template** to create a new agent YAML file in your custom agents directory.
-2.  Alternatively, click **Open Folder** to open the directory and create a `.yaml` file manually.
-3.  Choose a descriptive name using underscores and ending with `.yaml` (e.g., `literature_review_generator.yaml`).
+1. In the **Agents** tab, click **From Template** (<wa-icon library="texra" name="file-code"></wa-icon>) to create a new agent YAML file in your custom agents directory.
+2. Alternatively, click **Open Folder** (<wa-icon library="texra" name="folder-opened"></wa-icon>) to open the directory and create a `.yaml` file manually.
+3. Choose a descriptive name using underscores and ending with `.yaml` (e.g. `literature_review_generator.yaml`).
 
-### Step 3: Define the Agent
+### <wa-icon library="texra" name="edit"></wa-icon> Step 3 — Define the Agent
 
 Open the newly created `.yaml` file and you'll find a starter template already inserted. Customize it to define your agent's structure. Here are the key fields:
 
@@ -108,7 +108,7 @@ prompts:
 > prompts. If a run requests more reflections than the list provides, the first
 > reflection template is reused.
 
-#### Using Variables in Prompts (Jinja2 Templating)
+#### <wa-icon library="texra" name="symbol-variable"></wa-icon> Using Variables in Prompts (Jinja2 Templating)
 
 Prompts are processed using the Jinja2 templating engine, allowing you to insert dynamic information using `{{ variable_name }}` syntax. TeXRA provides several built-in variables based on the files and instructions you select in the UI:
 
@@ -125,8 +125,8 @@ This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the ext
 - &#123;&#123; AUXILIARY_CONTENT &#125;&#125;: Content of the primary auxiliary file.
 - &#123;&#123; EDITED_FILE &#125;&#125;: Path of the edited file (used in `merge`).
 - &#123;&#123; EDITED_CONTENT &#125;&#125;: Content of the edited file.
-- &#123;&#123; MEDIA*FILE &#125;&#125;: Path of the primary media file.
-  \_Note: Media content itself isn't directly inserted as text; it's handled separately for multimodal models. See [Working with Figures](./working-with-figures.md).*
+- &#123;&#123; MEDIA_FILE &#125;&#125;: Path of the primary media file.
+  \_Note: Media content itself isn't directly inserted as text; it's handled separately for multimodal models. See [Working with Figures](./working-with-figures.md).\*
 
 **Multiple File Variables:**
 
@@ -165,37 +165,37 @@ userPrefix: |
 
 **Key Considerations:**
 
-- **Architecture Overview:** For a high-level understanding of the execution flow and how prompts/settings interact, see the [Agent Architecture & Execution Flow](./agent-architecture.md) guide.
-- **Inheritance:** Inheriting from a relevant built-in agent (like `correct` or `polish`) can save significant effort. Only define the settings and prompts you need to change.
-- **Multiple Outputs:** If your agent needs to generate multiple distinct files, ensure your prompts generate the required XML structure. See the [Handling Multiple Files](./multiple-output.md) guide.
-- **Start Simple:** Begin with basic settings/prompts and add complexity incrementally.
-- **Test Iteratively:** Test frequently and review logs in the ProgressBoard.
+- <wa-icon library="texra" name="symbol-structure"></wa-icon> **Architecture Overview:** For a high-level understanding of the execution flow and how prompts/settings interact, see the [Agent Architecture & Execution Flow](./agent-architecture.md) guide.
+- <wa-icon library="texra" name="type-hierarchy"></wa-icon> **Inheritance:** Inheriting from a relevant built-in agent (like `correct` or `polish`) can save significant effort. Only define the settings and prompts you need to change.
+- <wa-icon library="texra" name="files"></wa-icon> **Multiple Outputs:** If your agent needs to generate multiple distinct files, ensure your prompts generate the required XML structure. See the [Handling Multiple Files](./multiple-output.md) guide.
+- <wa-icon library="texra" name="rocket"></wa-icon> **Start Simple:** Begin with basic settings/prompts and add complexity incrementally.
+- <wa-icon library="texra" name="debug-alt"></wa-icon> **Test Iteratively:** Test frequently and review logs in the ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>).
 
-### Chaining Agents Together
+### <wa-icon library="texra" name="link"></wa-icon> Chaining Agents Together
 
 After a workflow agent finishes, TeXRA captures the output so follow-up steps can reuse it without another trip through the file picker. This is how multi-stage pipelines work—for example, an orchestrator agent can run a `polish` step, then automatically hand the result to a `correct` step, all in a single session.
 
 You don't need to configure this yourself; it happens automatically when an agent definition includes orchestration prompts. See the reference agents for working examples.
 
-### Tool-Use Agents
+### <wa-icon library="texra" name="tools"></wa-icon> Tool-Use Agents
 
-Tool-use agents are interactive: instead of producing a single polished file, they hold a conversation and take actions on your behalf—reading and editing files, searching the web, looking up papers, and more.
+Tool-use agents are interactive: instead of producing a single polished file, they hold a conversation and take actions on your behalf — reading and editing files, searching the web, looking up papers, and more.
 
-**Typical user story:** You're writing up results for a conference submission and realize you need three new BibTeX entries, a TikZ architecture diagram, and a consistency pass across four `.tex` files. Rather than switching between browser tabs and terminal windows, you open a `chat` agent and describe what you need. The agent reads your project, searches arXiv for the missing references, drafts the TikZ code, and edits the files—all in one session.
+**Typical user story:** You're writing up results for a conference submission and realise you need three new BibTeX entries, a TikZ architecture diagram, and a consistency pass across four `.tex` files. Rather than juggling browser tabs and terminal windows, you open a `research` agent (<wa-icon library="texra" name="sparkle"></wa-icon>) and describe what you need. The agent reads your project, searches arXiv for the missing references, drafts the TikZ code, and edits the files — all in one session.
 
-To create your own tool-use agent, set `agentCategory: toolUse` and list the tools you want to grant. TeXRA provides tools in several categories:
+To create your own tool-use agent, set `agentCategory: toolUse` and list the tools you want to grant. TeXRA groups tools by category (matching **Dashboard → Tools** <wa-icon library="texra" name="tools"></wa-icon>):
 
-| Category           | What it lets the agent do                                   |
-| ------------------ | ----------------------------------------------------------- |
-| **File workspace** | Read, write, edit, search, and list files in your project   |
-| **Shell**          | Run commands (compilation, scripts, etc.)                   |
-| **Web & search**   | Fetch web pages and search the internet                     |
-| **Literature**     | Search arXiv, Crossref, and manage your Zotero library      |
-| **Math**           | Run Wolfram Language computations                           |
-| **Figures**        | Extract and compile figures and TikZ diagrams               |
-| **Memory & tasks** | Remember context across sessions; track multi-step progress |
+| Category                                                                        | What it lets the agent do                                           | Example tool names                                                                                       |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| <wa-icon library="texra" name="files"></wa-icon> **File & Shell**               | Read, write, edit, search, list, and run commands in your project   | `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `ls`, `bash`                                     |
+| <wa-icon library="texra" name="file-code"></wa-icon> **LaTeX**                  | Extract figures, TikZ, and bibliography; report compile diagnostics | `extract_figures`, `extract_tikz_figures`, `extract_bib_entries`, `diagnostics`, `texcount`              |
+| <wa-icon library="texra" name="mortar-board"></wa-icon> **Academic Research**   | Search arXiv and Crossref, resolve DOIs, manage Zotero              | `arxiv_search`, `arxiv_metadata`, `download_arxiv_source`, `crossref_doi`, `crossref_search`, `zotero_*` |
+| <wa-icon library="texra" name="globe"></wa-icon> **Web**                        | Fetch pages and search the internet                                 | `web_search`, `web_fetch`                                                                                |
+| <wa-icon library="texra" name="symbol-operator"></wa-icon> **Computation**      | Run Wolfram Language, delegate to Codex, consult another chat model | `wolfram`, `codex`, `external_inquiry`                                                                   |
+| <wa-icon library="texra" name="beaker"></wa-icon> **Lean 4**                    | Check Lean proofs and search Mathlib                                | `lean_diagnostics`, `lean_inspect`, `lean_loogle`, `lean_file`, `lean_project`                           |
+| <wa-icon library="texra" name="type-hierarchy"></wa-icon> **Memory & Workflow** | Persistent memory, to-do lists, sub-agent delegation                | `memory`, `todo_write`, `plan`, `delegate_workflow`, `delegate_agent`, `executions`, `accept_run_files`  |
 
-For the exact tool names to list in your YAML, browse any of the built-in tool-use agents (like `chat`, `search`, or `ask`) in the **Agents** tab—their `tools:` array shows exactly which tools are available.
+For the exact tool names to list in your YAML, browse any of the built-in tool-use agents (like `research`, `search`, `ask`, or `code`) in the **Agents** tab — their `tools:` array shows exactly which tools are wired up.
 
 Example skeleton:
 
@@ -211,9 +211,9 @@ settings:
     - web_search
 ```
 
-The ProgressBoard logs every tool call and its result, so you can always see what the agent is doing.
+The ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) logs every tool call and its result, so you can always see what the agent is doing.
 
-### Example: Multiple Output Agent
+### <wa-icon library="texra" name="files"></wa-icon> Example: Multiple Output Agent
 
 If your workflow requires several output files, your agent must structure its
 response using the `OUTPUT_FILES_ORDER` variable. Below is a simplified template
@@ -253,14 +253,14 @@ This structure lets TeXRA save each `<document>` block to the corresponding
 filename from the UI list. See [Handling Multiple Files](./multiple-output.md)
 for more details.
 
-### Step 4: Save and Reload
+### <wa-icon library="texra" name="save"></wa-icon> Step 4 — Save and Reload
 
-1.  Save your `.yaml` file.
-2.  Reload the VS Code window (Command Palette > `Developer: Reload Window`).
-3.  Your new custom agent should now appear in the "Agent" dropdown menu in the TeXRA UI.
+1. Save your `.yaml` file.
+2. Reload the VS Code window (Command Palette → `Developer: Reload Window`).
+3. Your new custom agent should now appear in the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>) of the TeXRA UI.
 
-### Strict XML Extraction
+### <wa-icon library="texra" name="shield"></wa-icon> Strict XML Extraction
 
-TeXRA expects the model's output to use properly closed XML tags. For agents producing multiple files, each `<document>` block must include a `name` attribute matching one of the filenames from the UI. If tags are mismatched or a filename doesn't match, extraction fails and no files are saved—check the ProgressBoard logs for details.
+TeXRA expects the model's output to use properly closed XML tags. For agents producing multiple files, each `<document>` block must include a `name` attribute matching one of the filenames from the UI. If tags are mismatched or a filename doesn't match, extraction fails and no files are saved — check the ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) logs for details.
 
-For more examples and advanced options, browse the built-in agent definitions through the **Agents** tab in the TeXRA Dashboard.
+For more examples and advanced options, browse the built-in agent definitions through the **Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>) in the TeXRA Dashboard.

@@ -1,14 +1,11 @@
 import * as vscode from 'vscode';
 import { showSettingsView } from '@commands/settings';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import { getConfig } from '@utils/config';
 import { SupabaseClient } from './SupabaseClient';
 import { SupabaseAuthProvider } from './SupabaseAuthProvider';
 import { type OAuthProvider, getExternalAuthCallbackUri } from './config';
 import { AUTH_PROVIDER_ID, AUTH_COMMANDS } from './constants';
-
-// Re-export for backwards compatibility
-export { AUTH_COMMANDS } from './constants';
 
 type AuthMethod = OAuthProvider | 'github-browser' | 'email';
 
@@ -20,9 +17,15 @@ function isVSCodeGitHubEnabled(): boolean {
 
 async function getExistingSession(): Promise<
   vscode.AuthenticationSession | undefined
-> {
+>;
+async function getExistingSession(
+  authReady: boolean,
+): Promise<vscode.AuthenticationSession | undefined>;
+async function getExistingSession(
+  authReady?: boolean,
+): Promise<vscode.AuthenticationSession | undefined> {
   // Skip VS Code auth API if auth system not ready to avoid timeout
-  if (!SupabaseClient.isReady()) {
+  if (!(authReady ?? (await SupabaseClient.isReady()))) {
     return undefined;
   }
   return vscode.authentication.getSession(AUTH_PROVIDER_ID, [], {
@@ -68,38 +71,47 @@ function getSignInOptions(): SignInOption[] {
   });
 }
 
-export async function signIn(): Promise<void> {
+/**
+ * Run the interactive sign-in flow.
+ *
+ * Returns `true` when the user is authenticated by the time this resolves
+ * (already signed in, or completed an OAuth flow). Returns `false` when
+ * the user cancelled, hit an error, or chose email sign-in (which
+ * completes asynchronously after the user clicks the OTP link).
+ */
+export async function signIn(): Promise<boolean> {
   try {
     // Check if auth system is ready - if not, provide clear error with reason
-    if (!SupabaseClient.isReady()) {
+    const authReady = await SupabaseClient.isReady();
+    if (!authReady) {
       const initError = SupabaseClient.getInitError();
       const reason = initError
         ? initError.message
         : 'Authentication service not initialized';
       void vscode.window.showErrorMessage(
-        `Sign in failed: ${reason}. Please reload VS Code and try again. If the issue persists, check the TeXRA output channel for errors.`,
+        `Sign in failed: ${reason}. Try reloading VS Code (Ctrl+Shift+P → "Reload Window"). If the problem continues, open Help → Toggle Developer Tools → Console for details.`,
       );
-      return;
+      return false;
     }
 
-    const existing = await getExistingSession();
+    const existing = await getExistingSession(authReady);
     if (existing) {
       const user = await SupabaseClient.getUser();
       void vscode.window.showInformationMessage(
         `Already signed in as ${user?.email || 'unknown user'}`,
       );
-      return;
+      return true;
     }
 
     const selected = await vscode.window.showQuickPick(getSignInOptions(), {
       placeHolder: 'Choose a sign-in method',
       title: 'TeXRA Sign In',
     });
-    if (!selected) return;
+    if (!selected) return false;
 
     if (selected.method === 'email') {
       await signInWithEmail();
-      return;
+      return false;
     }
 
     const session = await vscode.authentication.getSession(
@@ -114,11 +126,14 @@ export async function signIn(): Promise<void> {
       void vscode.window.showInformationMessage(
         `Signed in as ${user?.email || 'unknown user'} (${tier} tier)`,
       );
+      return true;
     }
+    return false;
   } catch (error) {
     void vscode.window.showErrorMessage(
       `Sign in failed: ${toErrorMessage(error)}`,
     );
+    return false;
   }
 }
 

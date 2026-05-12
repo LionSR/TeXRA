@@ -1,17 +1,21 @@
 /**
  * XML file extraction for output processing.
  *
- * Extracts output files from XML responses, handling both single
- * and multiple output scenarios.
+ * Extracts output files from XML responses.
+ * Agents using the unified protocol (documentTag === 'documents') always produce
+ * <documents><document name="..."> containers and are extracted via the
+ * multi-document path regardless of output file count.
+ * Legacy agents with a custom documentTag use single-document extraction.
  */
 
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import {
   MESSAGE_TYPES,
   type FileLocation,
   type StorageKey,
 } from '@shared/schemas';
+import { AbsoluteFS } from '@utils/files';
 
 import {
   OutputFileProcessor,
@@ -25,6 +29,36 @@ import {
   type OutputDependencies,
 } from './outputState';
 import type { XmlOutputManager } from './XmlOutputManager';
+
+const NAMED_DOCUMENT_TAG_PATTERN = /<document\b[^>]*\bname\s*=/;
+
+async function shouldUseMultiDocumentPath(
+  outputLocation: FileLocation,
+  documentTag: string,
+  deps: OutputDependencies,
+): Promise<boolean> {
+  if (documentTag === 'documents') return true;
+
+  // Legacy agents that explicitly set a custom documentTag are deprecated.
+  // New agents should use documentTag: documents (the default). The single-document
+  // extraction path will be removed in a future release.
+  deps.logger.warn(
+    `Agent uses deprecated documentTag "${documentTag}". ` +
+      `Update the agent YAML to use documentTag: documents. ` +
+      `Single-document extraction will be removed in a future release.`,
+  );
+
+  try {
+    const outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
+    return NAMED_DOCUMENT_TAG_PATTERN.test(outputContent);
+  } catch (error) {
+    deps.logger.debug(
+      `Unable to inspect XML output shape: ${toErrorMessage(error)}`,
+      { messageType: MESSAGE_TYPES.INTERNAL },
+    );
+    return false;
+  }
+}
 
 // ============================================================================
 // Helpers
@@ -77,6 +111,7 @@ export async function extractFilesFromXml(
         agentSetting: deps.setting,
         baseFiles: deps.baseFiles,
         streamId: deps.streamId,
+        runtimeHost: deps.runtimeHost,
         logger: deps.logger,
         xmlManager,
         setRoundOutputs: (round: number, outputs) => {
@@ -87,12 +122,18 @@ export async function extractFilesFromXml(
       };
 
       const fileProcessor = new OutputFileProcessor(processingContext);
-      const storageKey: StorageKey = getStorageKey(state);
 
-      const hasMultipleOutputs =
-        deps.config.useMultipleOutputs && deps.config.outputFiles?.length > 0;
+      // Unified protocol emits <documents><document name="..."> containers
+      // (N >= 1). Legacy plural wrappers can also contain named <document>
+      // children, so route by the actual payload shape instead of the wrapper
+      // tag alone.
+      const useMultiDocumentPath = await shouldUseMultiDocumentPath(
+        outputLocation,
+        deps.setting.documentTag,
+        deps,
+      );
 
-      if (hasMultipleOutputs) {
+      if (useMultiDocumentPath) {
         await fileProcessor.processMultipleOutputs(
           outputLocation,
           currRound,
@@ -105,7 +146,6 @@ export async function extractFilesFromXml(
         outputLocation,
         currRound,
         rawLocation,
-        storageKey,
       );
     },
   );

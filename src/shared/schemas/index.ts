@@ -7,6 +7,7 @@ export * from './agent';
 export * from './fileFields';
 export * from './proposalFields';
 export * from './toolConfig';
+export * from './settingsConfiguration';
 export * from './errors';
 export * from './usage';
 export * from './contextManagement';
@@ -42,3 +43,4 @@ export * from './settingsViewMessages';
 
 // Layer 7: Composite schemas (depend on multiple layers)
 export * from './streamState';
+export * from './streamRestoration';

@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { promises as fs } from 'fs';
 
 import pMap from 'p-map';
 
@@ -16,9 +17,23 @@ import {
 import { hasExtension } from '@utils/core/pathCore';
 
 // Local file imports
+import { extractLatexFileDependencies } from './extractFileDependencies';
 import { extractFigurePathsFromLatex } from './extractFigure';
+import { resolveLatexDir } from './latexParsingUtils';
 import { tikzPictureManager } from './TikzPictureManager';
+import { stripLatexComments } from './latexParsingUtils';
 import { compileLatex2Pdf } from './texTools';
+
+/** LaTeX project siblings that should always ride alongside the main file. */
+const PROJECT_SIBLING_EXTENSIONS = new Set(['.cls', '.sty', '.bst', '.cfg']);
+const PROJECT_SIBLING_NAMES = new Set([
+  'latexmkrc',
+  '.latexmkrc',
+  '.latexindentrc',
+]);
+
+const USEPACKAGE_PATTERN =
+  /\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
 
 /** Maximum concurrent LaTeX compilation operations */
 const LATEX_CONCURRENCY = 4;
@@ -38,6 +53,19 @@ export class LatexMediaManager {
     private readonly fileService?: TaskRunFileService,
   ) {}
 
+  /**
+   * Resolve a figure path (relative to the LaTeX directory) to an absolute,
+   * normalized path. Mirrors the resolution used inside
+   * `extractFigurePathsFromLatex` so figure paths returned from a symlinked
+   * run-storage `.tex` map back to their real workspace location.
+   */
+  private resolveFigureAbsolutePath(
+    baseDir: string,
+    relativePath: string,
+  ): string {
+    return path.normalize(path.join(baseDir, relativePath));
+  }
+
   private async mirrorFigureDependencies(
     latexFile: FileLocation,
     figures: string[],
@@ -46,28 +74,32 @@ export class LatexMediaManager {
       return;
     }
 
-    const baseDir = path.dirname(latexFile.absolutePath);
-    const targetLocations = new Set<FileLocation>();
+    // Resolve against the workspace directory so figure paths from a
+    // run-storage symlink map back to real workspace files (otherwise
+    // mirrorWorkspaceFile would classify them as external and skip).
+    const baseDir = await resolveLatexDir(latexFile.absolutePath);
+    const absolutePaths = new Set<string>();
     for (const relative of figures) {
       const trimmed = relative?.trim();
       if (!trimmed) {
         continue;
       }
-      const absolutePath = path.normalize(path.join(baseDir, trimmed));
-      targetLocations.add(pathToLocation(absolutePath));
+      absolutePaths.add(this.resolveFigureAbsolutePath(baseDir, trimmed));
     }
 
-    if (targetLocations.size === 0) {
+    if (absolutePaths.size === 0) {
       return;
     }
 
-    const tasks = [...targetLocations].map(async (targetLocation) => {
+    const tasks = [...absolutePaths].map(async (absolutePath) => {
       try {
-        await this.fileService!.mirrorWorkspaceFile(targetLocation);
+        await this.fileService!.mirrorWorkspaceFile(
+          pathToLocation(absolutePath),
+        );
       } catch (error) {
         const message = toErrorMessage(error);
         this.logger.debug(
-          `Unable to mirror figure dependency ${targetLocation.absolutePath}: ${message}`,
+          `Unable to mirror figure dependency ${absolutePath}: ${message}`,
         );
       }
     });
@@ -139,6 +171,209 @@ export class LatexMediaManager {
     }
   }
 
+  /**
+   * Mirror \input, \include, \bibliography, \usepackage targets, and common
+   * project-sibling files (.cls/.sty/.bst/latexmkrc/.latexindentrc) into run
+   * storage so output files can be compiled outside the workspace.
+   *
+   * Dep discovery is recursive: each newly mirrored .tex is re-parsed so
+   * that transitive includes (e.g. main.tex → chapters/ch1.tex →
+   * chapters/figures/fig1.tex) are all brought along.
+   */
+  private async mirrorLatexFileDependencies(
+    files: FileLocation[],
+  ): Promise<void> {
+    if (!this.fileService?.hasRunDirectory() || files.length === 0) {
+      return;
+    }
+
+    const texFiles = files.filter((file) =>
+      hasExtension(file.absolutePath, '.tex'),
+    );
+    if (texFiles.length === 0) return;
+
+    const visited = new Set<string>();
+    const worklist: FileLocation[] = [...texFiles];
+
+    // Sweep siblings of every root input file up front. Resolve the real
+    // path first so a mirrored symlink inside run storage points back to
+    // the original workspace tree — otherwise project-local .cls/.sty/.bst/
+    // latexmkrc files that live beside the real source are invisible.
+    await Promise.all(
+      texFiles.map(async (file) => {
+        let siblingDir = path.dirname(file.absolutePath);
+        try {
+          siblingDir = path.dirname(await fs.realpath(file.absolutePath));
+        } catch (error) {
+          this.logger.debug(
+            `Unable to resolve real path for ${file.absolutePath}: ${toErrorMessage(error)}`,
+          );
+        }
+        await this.mirrorProjectSiblings(siblingDir);
+      }),
+    );
+
+    while (worklist.length > 0) {
+      const file = worklist.shift()!;
+      if (visited.has(file.absolutePath)) continue;
+      visited.add(file.absolutePath);
+
+      const deps = await this.collectDependencies(file);
+      if (deps.length === 0) continue;
+
+      await Promise.all(
+        deps.map(async (absolutePath) => {
+          const depLocation = pathToLocation(absolutePath);
+          try {
+            await this.fileService!.mirrorWorkspaceFile(depLocation);
+            if (hasExtension(absolutePath, '.tex')) {
+              worklist.push(depLocation);
+            }
+          } catch (error) {
+            this.logger.debug(
+              `Unable to mirror LaTeX dependency ${absolutePath}: ${toErrorMessage(error)}`,
+            );
+          }
+        }),
+      );
+      this.logger.debug(
+        `Mirrored ${deps.length} LaTeX dependencies from ${file.absolutePath}`,
+      );
+    }
+  }
+
+  /**
+   * Extract direct \input / \include / \bibliography targets plus any local
+   * \usepackage{name} whose `name.sty` sits beside the current file or its
+   * project root.
+   */
+  private async collectDependencies(
+    latexFile: FileLocation,
+  ): Promise<string[]> {
+    const found = new Set<string>();
+
+    try {
+      const direct = await extractLatexFileDependencies(latexFile);
+      for (const abs of direct) {
+        found.add(abs);
+      }
+    } catch (error) {
+      this.logger.debug(
+        `Unable to extract LaTeX dependencies from ${latexFile.absolutePath}: ${toErrorMessage(error)}`,
+      );
+    }
+
+    try {
+      const realPath = await fs.realpath(latexFile.absolutePath);
+      const content = await flexibleFS.read(latexFile);
+      const uncommented = stripLatexComments(content);
+      const baseDir = path.dirname(realPath);
+
+      for (const match of uncommented.matchAll(USEPACKAGE_PATTERN)) {
+        for (const entry of match[1].split(',')) {
+          const name = entry.trim();
+          if (!name) continue;
+          const candidate = path.join(baseDir, `${name}.sty`);
+          if (
+            await flexibleFS.exists({
+              kind: 'external',
+              absolutePath: candidate,
+            })
+          ) {
+            found.add(candidate);
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.debug(
+        `Unable to probe \\usepackage targets in ${latexFile.absolutePath}: ${toErrorMessage(error)}`,
+      );
+    }
+
+    return [...found];
+  }
+
+  /**
+   * Shallow scan of a LaTeX project directory for common sibling files
+   * (*.cls, *.sty, *.bst, latexmkrc, .latexindentrc) and mirror them into
+   * run storage so the compiled document can find its project-local style.
+   */
+  private async mirrorProjectSiblings(projectDir: string): Promise<void> {
+    if (!this.fileService) return;
+
+    let entries: string[];
+    try {
+      entries = await fs.readdir(projectDir);
+    } catch (error) {
+      this.logger.debug(
+        `Unable to scan project siblings in ${projectDir}: ${toErrorMessage(error)}`,
+      );
+      return;
+    }
+
+    const candidates: string[] = [];
+    for (const name of entries) {
+      const ext = path.extname(name).toLowerCase();
+      if (
+        PROJECT_SIBLING_EXTENSIONS.has(ext) ||
+        PROJECT_SIBLING_NAMES.has(name)
+      ) {
+        candidates.push(path.join(projectDir, name));
+      }
+    }
+
+    if (candidates.length === 0) return;
+
+    await Promise.all(
+      candidates.map(async (absolutePath) => {
+        try {
+          const stats = await fs.stat(absolutePath);
+          if (!stats.isFile()) return;
+          await this.fileService!.mirrorWorkspaceFile(
+            pathToLocation(absolutePath),
+          );
+        } catch (error) {
+          this.logger.debug(
+            `Unable to mirror project sibling ${absolutePath}: ${toErrorMessage(error)}`,
+          );
+        }
+      }),
+    );
+  }
+
+  /**
+   * Mirror figure dependencies from LaTeX files into run storage without
+   * adding figures to the model's vision context. Used for output files
+   * (round 1+) so newly-referenced figures are available for PDF compilation
+   * but not re-sent to the model on every round.
+   */
+  private async mirrorFiguresForFiles(files: FileLocation[]): Promise<void> {
+    if (!this.fileService?.hasRunDirectory() || files.length === 0) {
+      return;
+    }
+
+    const texFiles = files.filter((file) =>
+      hasExtension(file.absolutePath, '.tex'),
+    );
+    if (texFiles.length === 0) return;
+
+    await pMap(
+      texFiles,
+      async (file) => {
+        try {
+          const figures = await extractFigurePathsFromLatex(file);
+          if (figures.length === 0) return;
+          await this.mirrorFigureDependencies(file, figures);
+        } catch (error) {
+          this.logger.debug(
+            `Unable to mirror figures from ${file.absolutePath}: ${toErrorMessage(error)}`,
+          );
+        }
+      },
+      { concurrency: LATEX_CONCURRENCY, stopOnError: false },
+    );
+  }
+
   private async extractFiguresFromFiles(
     files: FileLocation[],
     workspaceState: AgentWorkspaceState,
@@ -167,11 +402,13 @@ export class LatexMediaManager {
         `Extracted ${figures.length} figures from ${file.absolutePath}`,
       );
 
-      const baseDir = path.dirname(file.absolutePath);
-      const fileLocations = figures.map((relativePath) => {
-        const absolutePath = path.normalize(path.join(baseDir, relativePath));
-        return pathToLocation(absolutePath);
-      });
+      // Match the resolution in extractFigurePathsFromLatex so the returned
+      // figure paths (relative to the real latexDir) map back to workspace
+      // files when the .tex is symlinked into run storage.
+      const baseDir = await resolveLatexDir(file.absolutePath);
+      const fileLocations = figures.map((relativePath) =>
+        pathToLocation(this.resolveFigureAbsolutePath(baseDir, relativePath)),
+      );
 
       const existenceChecks = await Promise.all(
         fileLocations.map(async (loc) => ({
@@ -232,13 +469,22 @@ export class LatexMediaManager {
     cfg: ToolConfig,
     supportsVision: boolean,
     {
-      includeFigureExtraction,
+      figureMode,
+      mirrorFileDependencies,
       includeTikzCompilation,
       includePdfCompilation,
       extraMediaFiles = [],
       logTikzSummary = false,
     }: {
-      includeFigureExtraction: boolean;
+      /**
+       * How to handle \includegraphics figures:
+       *  - 'extract': discover + add to vision context + mirror into run storage
+       *  - 'mirror':  discover + mirror only (no vision)
+       *  - 'none':    skip
+       * All modes are additionally gated by `cfg.autoExtractFigure`.
+       */
+      figureMode: 'extract' | 'mirror' | 'none';
+      mirrorFileDependencies: boolean;
       includeTikzCompilation: boolean;
       includePdfCompilation: boolean;
       extraMediaFiles?: PathInput[];
@@ -270,8 +516,16 @@ export class LatexMediaManager {
       workspaceState.media.addMediaFiles(fileLocations);
     }
 
-    if (includeFigureExtraction && cfg.autoExtractFigure) {
-      await this.extractFiguresFromFiles(existingFiles, workspaceState);
+    if (cfg.autoExtractFigure) {
+      if (figureMode === 'extract') {
+        await this.extractFiguresFromFiles(existingFiles, workspaceState);
+      } else if (figureMode === 'mirror') {
+        await this.mirrorFiguresForFiles(existingFiles);
+      }
+    }
+
+    if (mirrorFileDependencies) {
+      await this.mirrorLatexFileDependencies(existingFiles);
     }
 
     if (includeTikzCompilation && cfg.autoExtractTikzFigure) {
@@ -303,7 +557,8 @@ export class LatexMediaManager {
     extraMediaFiles: PathInput[] = [],
   ): Promise<void> {
     await this.processFiles(inputFiles, workspaceState, cfg, supportsVision, {
-      includeFigureExtraction: true,
+      figureMode: 'extract',
+      mirrorFileDependencies: true,
       includeTikzCompilation: true,
       includePdfCompilation: true,
       extraMediaFiles,
@@ -312,7 +567,11 @@ export class LatexMediaManager {
   }
 
   /**
-   * Process output files to compile TikZ pictures and PDFs, attach texcount.
+   * Process output files to compile TikZ pictures and PDFs.
+   *
+   * Mirrors newly-referenced figure and \input dependencies into run storage
+   * so agent-introduced references compile outside the workspace. Figures are
+   * mirrored only (not added to vision context) — they were sent on round 0.
    */
   async processOutputFiles(
     outputFiles: FileLocation[],
@@ -321,7 +580,8 @@ export class LatexMediaManager {
     supportsVision: boolean,
   ): Promise<void> {
     await this.processFiles(outputFiles, workspaceState, cfg, supportsVision, {
-      includeFigureExtraction: false,
+      figureMode: 'mirror',
+      mirrorFileDependencies: true,
       includeTikzCompilation: true,
       includePdfCompilation: true,
     });

@@ -1,0 +1,792 @@
+:root {
+  --desktop-nav-height: 40px;
+  --desktop-rail-width: 260px;
+  --desktop-right-width: 0px; /* reserved; collapsed today (PRD § 6) */
+  font-family: var(--wa-font-family-body);
+  background: var(--wa-color-surface-default);
+  color: var(--wa-color-text-normal);
+}
+
+body {
+  margin: 0;
+  font-size: var(--wa-font-size-m);
+}
+
+.desktop-shell {
+  /* Use an explicit viewport-locked height so percentage heights resolve all
+     the way down to the pane containers. */
+  height: 100vh;
+  display: grid;
+  grid-template-rows: var(--desktop-nav-height) minmax(0, 1fr);
+  background: var(--wa-color-surface-default);
+  color: var(--wa-color-text-normal);
+}
+
+.desktop-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--wa-space-2xs);
+  height: var(--desktop-nav-height);
+  padding: 0 var(--wa-space-xs);
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--wa-color-surface-border);
+  background: var(--wa-color-surface-lowered);
+}
+
+.desktop-brand {
+  margin-right: 12px;
+  color: var(--wa-color-text-normal);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Custom elements need an explicit `[hidden]` rule — the user-agent
+   stylesheet's `[hidden] { display: none }` doesn't reach into wa-button's
+   shadow DOM consistently. */
+wa-button[hidden] {
+  display: none !important;
+}
+
+wa-button.desktop-back-button::part(base) {
+  height: 28px;
+  padding: 0 10px;
+  border-color: transparent;
+  border-radius: var(--wa-border-radius-m);
+  background: transparent;
+  color: var(--wa-color-text-normal);
+}
+
+wa-button.desktop-icon-button::part(base) {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-color: transparent;
+  border-radius: var(--wa-border-radius-m);
+  background: transparent;
+  color: var(--wa-color-text-normal);
+}
+
+wa-button.desktop-icon-button[aria-pressed='true']::part(base) {
+  border-color: var(--wa-color-brand-border-quiet);
+  background: var(--wa-color-brand-fill-quiet);
+  color: var(--wa-color-brand-on-quiet);
+}
+
+wa-button.desktop-command-button::part(base),
+wa-button.desktop-folder-button::part(base) {
+  height: 28px;
+  padding: 0 var(--wa-space-s);
+  border-radius: var(--wa-border-radius-m, 3px);
+  color: var(--wa-color-text-normal);
+  border-color: var(--wa-color-surface-border);
+  background: var(--wa-color-neutral-fill-quiet);
+}
+
+wa-button.desktop-command-button {
+  margin-left: auto;
+}
+
+/* =====================================================================
+   Three-pane layout (PRD § 6 + § 7.D)
+   ----------------------------------------------------------------------
+   left rail | center | right (reserved)
+   --------------------------------------------------------------------- */
+
+.desktop-three-pane {
+  display: grid;
+  grid-template-columns: var(--desktop-rail-width) minmax(0, 1fr) var(
+      --desktop-right-width
+    );
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.desktop-rail {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--wa-color-surface-border);
+  background: var(--wa-color-surface-lowered);
+  color: var(--wa-color-text-normal);
+}
+
+.desktop-rail-header {
+  display: flex;
+  align-items: center;
+  gap: var(--wa-space-xs);
+  min-height: 34px;
+  padding: 0 var(--wa-space-xs) 0 var(--wa-space-s);
+  border-bottom: 1px solid var(--wa-color-surface-border);
+  box-sizing: border-box;
+}
+
+.desktop-rail-header-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 2px;
+}
+
+.desktop-workspace-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--wa-color-text-quiet);
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.desktop-rail-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--wa-color-text-normal);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+wa-button.desktop-rail-new::part(base) {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--wa-border-radius-m, 3px);
+  background: transparent;
+  color: var(--wa-color-text-normal);
+}
+
+.desktop-rail-tabs {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.desktop-rail-tabs > stream-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.desktop-rail-footer {
+  display: flex;
+  align-items: center;
+  padding: var(--wa-space-2xs) var(--wa-space-xs);
+  border-top: 1px solid var(--wa-color-surface-border);
+}
+
+wa-button.desktop-rail-settings {
+  width: 100%;
+}
+
+wa-button.desktop-rail-settings::part(base) {
+  justify-content: flex-start;
+  padding: 0 var(--wa-space-s);
+  border-color: transparent;
+  background: transparent;
+  color: var(--wa-color-text-normal);
+}
+
+.desktop-center {
+  /* Stack both panes (launcher + conversation) in a single grid cell so
+     `[hidden]` collapses the inactive one without touching layout. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.desktop-pane {
+  display: grid;
+  grid-area: 1 / 1;
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.desktop-pane[hidden] {
+  display: none;
+}
+
+.desktop-pane > * {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.desktop-right {
+  /* Reserved column. Hidden today; will host the diff/approve UX later. */
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .desktop-three-pane {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(160px, 32vh) minmax(0, 1fr);
+  }
+
+  .desktop-rail {
+    border-right: 0;
+    border-bottom: 1px solid var(--wa-color-surface-border);
+  }
+}
+
+/* =====================================================================
+   Settings overlay (wa-dialog)
+   --------------------------------------------------------------------- */
+
+wa-dialog.desktop-settings-overlay {
+  --width: 100vw;
+  --height: 100vh;
+}
+
+wa-dialog.desktop-settings-overlay::part(dialog) {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  margin: 0;
+  border-radius: 0;
+}
+
+wa-dialog.desktop-settings-overlay::part(body) {
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+wa-dialog.desktop-settings-overlay settings-app {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+wa-button.desktop-settings-close {
+  position: absolute;
+  top: var(--wa-space-s);
+  right: var(--wa-space-s);
+  z-index: 10;
+}
+
+wa-button.desktop-settings-close::part(base) {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--wa-border-radius-m, 3px);
+  background: transparent;
+  color: var(--wa-color-text-normal);
+}
+
+/* =====================================================================
+   Diff overlay (wa-dialog) — audit item C, trajectory #18
+   --------------------------------------------------------------------- */
+
+wa-dialog.desktop-diff-overlay {
+  --width: 100vw;
+  --height: 100vh;
+}
+
+wa-dialog.desktop-diff-overlay::part(dialog) {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  margin: 0;
+  border-radius: 0;
+}
+
+wa-dialog.desktop-diff-overlay::part(body) {
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+wa-dialog.desktop-diff-overlay .desktop-diff-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--wa-color-surface-default);
+}
+
+wa-dialog.desktop-diff-overlay .desktop-diff-header {
+  padding: var(--wa-space-m) var(--wa-space-l);
+  border-bottom: var(--wa-border-style-default, solid)
+    var(--wa-border-width-default, 1px) var(--wa-color-neutral-fill-quiet);
+  background: var(--wa-color-surface-raised);
+}
+
+wa-dialog.desktop-diff-overlay .desktop-diff-title {
+  margin: 0;
+  font-size: var(--wa-font-size-l);
+  font-weight: var(--wa-font-weight-semibold);
+  color: var(--wa-color-text-normal);
+}
+
+wa-dialog.desktop-diff-overlay .desktop-diff-subtitle {
+  margin: var(--wa-space-2xs) 0 0;
+  font-size: var(--wa-font-size-s);
+  color: var(--wa-color-text-quiet);
+  font-family: var(--wa-font-family-code, monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+wa-dialog.desktop-diff-overlay .desktop-diff-view {
+  flex: 1;
+  min-height: 0;
+  display: block;
+  width: 100%;
+}
+
+wa-button.desktop-diff-close {
+  position: absolute;
+  top: var(--wa-space-s);
+  right: var(--wa-space-s);
+  z-index: 10;
+}
+
+wa-button.desktop-diff-close::part(base) {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--wa-border-radius-m, 3px);
+  background: transparent;
+  color: var(--wa-color-text-normal);
+}
+
+/* =====================================================================
+   PDF preview overlay (wa-dialog) — audit item B, trajectory #17
+   --------------------------------------------------------------------- */
+
+wa-dialog.desktop-pdf-overlay {
+  --width: 100vw;
+  --height: 100vh;
+}
+
+wa-dialog.desktop-pdf-overlay::part(dialog) {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  margin: 0;
+  border-radius: 0;
+}
+
+wa-dialog.desktop-pdf-overlay::part(body) {
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+wa-dialog.desktop-pdf-overlay .desktop-pdf-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--wa-color-surface-default);
+}
+
+wa-dialog.desktop-pdf-overlay .desktop-pdf-header {
+  padding: var(--wa-space-m) var(--wa-space-l);
+  border-bottom: var(--wa-border-style-default, solid)
+    var(--wa-border-width-default, 1px) var(--wa-color-neutral-fill-quiet);
+  background: var(--wa-color-surface-raised);
+}
+
+wa-dialog.desktop-pdf-overlay .desktop-pdf-title {
+  margin: 0;
+  font-size: var(--wa-font-size-l);
+  font-weight: var(--wa-font-weight-semibold);
+  color: var(--wa-color-text-normal);
+}
+
+wa-dialog.desktop-pdf-overlay .desktop-pdf-subtitle {
+  margin: var(--wa-space-2xs) 0 0;
+  font-size: var(--wa-font-size-s);
+  color: var(--wa-color-text-quiet);
+  font-family: var(--wa-font-family-code, monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+wa-dialog.desktop-pdf-overlay .desktop-pdf-frame {
+  flex: 1;
+  min-height: 0;
+  display: block;
+  width: 100%;
+  border: 0;
+  background: var(--wa-color-surface-default);
+}
+
+wa-button.desktop-pdf-close {
+  position: absolute;
+  top: var(--wa-space-s);
+  right: var(--wa-space-s);
+  z-index: 10;
+}
+
+wa-button.desktop-pdf-close::part(base) {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--wa-border-radius-m, 3px);
+  background: transparent;
+  color: var(--wa-color-text-normal);
+}
+
+/* =====================================================================
+   Logs drawer (wa-drawer)
+   --------------------------------------------------------------------- */
+
+wa-drawer.desktop-logs-drawer {
+  --size: 40vh;
+}
+
+wa-drawer.desktop-logs-drawer::part(body) {
+  padding: 0;
+}
+
+.desktop-log-host {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+/* =====================================================================
+   Command palette (preserved)
+   --------------------------------------------------------------------- */
+
+wa-dialog.desktop-command-palette {
+  --width: min(560px, calc(100vw - var(--wa-space-m) * 2));
+}
+
+wa-dialog.desktop-command-palette::part(dialog) {
+  margin-block-start: 12vh;
+  align-self: flex-start;
+}
+
+wa-dialog.desktop-command-palette::part(body) {
+  padding: 0;
+}
+
+wa-input.desktop-command-palette-input {
+  width: 100%;
+}
+
+wa-input.desktop-command-palette-input::part(base) {
+  border: 0;
+  border-bottom: 1px solid var(--wa-color-surface-border);
+  border-radius: 0;
+}
+
+.desktop-command-palette-list {
+  max-height: min(420px, 58vh);
+  overflow: auto;
+  padding: var(--wa-space-2xs);
+}
+
+.desktop-command-palette-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--wa-space-s);
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 var(--wa-space-xs);
+  border: 0;
+  border-radius: var(--wa-border-radius-m, 3px);
+  background: transparent;
+  color: var(--wa-color-text-normal);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.desktop-command-palette-item[aria-selected='true'] {
+  background: var(--wa-color-brand-fill-quiet);
+  color: var(--wa-color-brand-on-quiet);
+}
+
+.desktop-command-palette-label,
+.desktop-command-palette-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-command-palette-meta {
+  color: var(--wa-color-text-quiet);
+  font-size: 12px;
+}
+
+/* =====================================================================
+   Empty workspace + bootstrap fallback (preserved, lighter footprint)
+   --------------------------------------------------------------------- */
+
+.desktop-empty-workspace {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  padding: var(--wa-space-3xl) var(--wa-space-l);
+}
+
+.desktop-empty-workspace-panel {
+  max-width: 560px;
+  text-align: center;
+}
+
+.desktop-empty-workspace-panel h1 {
+  margin: 0 0 var(--wa-space-s);
+  color: var(--wa-color-text-normal);
+  font-size: var(--font-size-h1);
+  font-weight: 600;
+}
+
+.desktop-empty-workspace-panel p {
+  margin: 0 0 var(--wa-space-l);
+  color: var(--wa-color-text-quiet);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.desktop-empty-workspace-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--wa-space-s);
+}
+
+.desktop-bootstrap-fallback {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: var(--wa-space-3xl) var(--wa-space-l);
+  background: var(--wa-color-surface-default);
+}
+
+.desktop-bootstrap-fallback-panel {
+  max-width: 560px;
+  text-align: center;
+  color: var(--wa-color-text-normal);
+}
+
+.desktop-bootstrap-fallback-panel h1 {
+  margin: 0 0 var(--wa-space-m);
+  font-size: var(--font-size-h1);
+  font-weight: 600;
+}
+
+.desktop-bootstrap-fallback-panel p {
+  margin: 0 0 var(--wa-space-s);
+  color: var(--wa-color-text-quiet);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.desktop-bootstrap-fallback-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--wa-space-s);
+  margin-top: var(--wa-space-l);
+}
+
+/* =====================================================================
+   Log viewer body (rendered inside the wa-drawer now)
+   --------------------------------------------------------------------- */
+
+.desktop-log-viewer {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 100%;
+  padding: var(--wa-space-m);
+  box-sizing: border-box;
+  gap: var(--wa-space-s);
+}
+
+.desktop-log-viewer-header {
+  display: flex;
+  gap: var(--wa-space-s);
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-bottom: var(--wa-space-s);
+  border-bottom: 1px solid var(--wa-color-surface-border);
+}
+
+.desktop-log-viewer-header h2 {
+  margin: 0 0 var(--wa-space-2xs);
+  color: var(--wa-color-text-normal);
+  font-size: var(--font-size-h2);
+  font-weight: 600;
+}
+
+.desktop-log-viewer-header p {
+  margin: 0;
+  color: var(--wa-color-text-quiet);
+  font-size: 12px;
+}
+
+.desktop-log-viewer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--wa-space-xs);
+}
+
+.desktop-log-viewer-output {
+  min-height: 0;
+  margin: 0;
+  padding: var(--wa-space-s);
+  overflow: auto;
+  background: var(--wa-color-surface-default);
+  color: var(--wa-color-text-normal);
+  font-family: var(--wa-font-family-body-monospace);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+wa-button.desktop-primary-button::part(base),
+wa-button.desktop-secondary-button::part(base) {
+  min-height: 30px;
+  padding: 0 var(--wa-space-m);
+  border-radius: var(--wa-border-radius-l, 4px);
+}
+
+wa-button.desktop-primary-button::part(base) {
+  border: 1px solid var(--wa-color-brand-fill-loud);
+  background: var(--wa-color-brand-fill-loud);
+  color: var(--wa-color-brand-on-loud);
+}
+
+wa-button.desktop-secondary-button::part(base) {
+  border: 1px solid var(--wa-color-brand-border-loud);
+  background: var(--wa-color-neutral-fill-quiet);
+  color: var(--wa-color-neutral-on-quiet);
+}
+
+/* =====================================================================
+   Onboarding dialog (preserved)
+   --------------------------------------------------------------------- */
+
+wa-dialog.desktop-onboarding {
+  --width: min(640px, calc(100vw - var(--wa-space-xl)));
+}
+
+.desktop-onboarding-header {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: var(--wa-space-s);
+  padding-bottom: var(--wa-space-m);
+  margin-bottom: var(--wa-space-m);
+  border-bottom: 1px solid var(--wa-color-surface-border);
+}
+
+.desktop-onboarding-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--wa-border-radius-l, 4px);
+  background: var(--wa-color-neutral-fill-quiet);
+  color: var(--wa-color-brand-fill-loud);
+  font-size: 20px;
+}
+
+.desktop-onboarding h1 {
+  margin: 0;
+  color: var(--wa-color-text-normal);
+  font-size: var(--font-size-h1);
+  font-weight: 600;
+}
+
+.desktop-onboarding p {
+  margin: var(--wa-space-xs) 0 0;
+  color: var(--wa-color-text-quiet);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.desktop-onboarding-steps {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.desktop-onboarding-steps li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: var(--wa-space-s);
+  padding: var(--wa-space-s) 0;
+  border-bottom: 1px solid var(--wa-color-surface-border);
+}
+
+.desktop-onboarding-steps li:last-child {
+  border-bottom: 0;
+}
+
+.desktop-onboarding-step-index {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--wa-color-surface-border);
+  border-radius: 50%;
+  color: var(--wa-color-text-normal);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.desktop-onboarding-steps strong,
+.desktop-onboarding-steps span {
+  display: block;
+  min-width: 0;
+}
+
+.desktop-onboarding-steps strong {
+  color: var(--wa-color-text-normal);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.desktop-onboarding-steps span {
+  margin-top: var(--wa-space-2xs);
+  color: var(--wa-color-text-quiet);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.desktop-onboarding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--wa-space-xs);
+}
+
+@media (max-width: 560px) {
+  .desktop-onboarding-actions {
+    justify-content: stretch;
+  }
+
+  .desktop-onboarding-actions wa-button {
+    flex: 1 1 150px;
+  }
+}

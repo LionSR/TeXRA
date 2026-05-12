@@ -140,10 +140,10 @@ const LegacyLogMessageSchema = z
   .object({
     id: z.string().min(1),
     text: z.string(),
-    level: LogLevelSchema.optional().default(LOG_LEVELS.INFO),
+    level: LogLevelSchema.prefault(LOG_LEVELS.INFO),
     timestamp: z.number(),
     groupId: z.string().optional(),
-    messageType: MessageTypeSchema.optional().default(MESSAGE_TYPES.DEFAULT),
+    messageType: MessageTypeSchema.prefault(MESSAGE_TYPES.DEFAULT),
     verbose: z.boolean().optional(),
     data: z.unknown().optional(),
   })

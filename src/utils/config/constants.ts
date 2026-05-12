@@ -1,11 +1,11 @@
-// Local imports - common (direct import to avoid circular dependency via barrel)
-import { globalSM, GlobalStateKey } from '@common/state/stateManager';
+// Local imports - platform
+import { tryGlobalState } from '@platform/platform';
+
+// Local imports - common
+import { GlobalStateKey } from '@common/state/stateKeys';
 
 // Local imports - config utils
-import * as logger from '@logger/logUtils';
 import { getConfig } from './configUtils';
-
-const CHANNEL = 'config';
 
 // Settings query constants for VS Code settings UI
 export const SETTINGS_QUERY = {
@@ -13,82 +13,48 @@ export const SETTINGS_QUERY = {
   MODELS: '@ext:texra-ai.texra models',
 } as const;
 
-// Common file type constants
-export const FILE_TYPES = [
-  'input',
-  'reference',
-  'auxiliary',
-  'media',
-  'output',
-] as const;
-
-export type FileType = (typeof FILE_TYPES)[number];
-
-// Length for preview slices of tool output and responses
-export const K_SLICE = 200;
-
-// Generic preview lengths for logging and repetition checks
-export const MESSAGE_PREVIEW_LENGTH = 50;
-export const REPETITION_PREVIEW_LENGTH = 400;
-export const REPETITION_DETECTION_THRESHOLD = 1000;
-
 // Time constants
 export const SHORT_SLEEP_MS = 50;
 export const REFRESH_THRESHOLD_MS = 200;
 export const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 
 // Debounce delay constants for UI responsiveness
-export const DEBOUNCE_WATCHER_MS = 200; // File system watchers (fast response)
 export const DEBOUNCE_OPTIONS_MS = 300; // Dropdown options refresh
-export const DEBOUNCE_STATE_SAVE_MS = 500; // State persistence (slower, batched)
 
-// Tool-use persistence defaults (internal)
-const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 336; // 2 weeks
-const DEFAULT_TOOL_USE_MEMORY_ENABLED = true;
+// Tool groups marked `toggleable: true` in EXTERNAL_TOOL_DEFS are treated
+// as opt-in: they're disabled for new users on first install, and the Tools
+// dashboard shows a toggle so the user can turn them on. Seeding happens in
+// `initializeToolDefaults()`; existing profiles are never re-seeded.
 
 /** Determine whether tool-use session persistence is enabled. */
 export function getToolUsePersistenceEnabled(): boolean {
   return getConfig<boolean>('texra.toolUse.persistence.enabled', true);
 }
 
-/** Resolve the configured TTL (in hours) for persisted tool-use sessions. */
-export function getToolUsePersistenceTtlHours(): number {
-  const value = getConfig<number>(
-    'texra.toolUse.persistence.ttlHours',
-    DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS,
-  );
-  const hours = Number(value);
-  if (!Number.isFinite(hours) || hours < 1) {
-    logger.warn(
-      CHANNEL,
-      `Invalid tool-use persistence TTL value: ${value}. Using default of ${DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS} hours.`,
-    );
-    return DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS;
-  }
-  return hours;
-}
-
-/** Determine whether the memory tool is enabled for tool-use sessions. */
-export function getToolUseMemoryEnabled(): boolean {
-  return (
-    globalSM?.get<boolean>(
-      GlobalStateKey.MEMORY_ENABLED,
-      DEFAULT_TOOL_USE_MEMORY_ENABLED,
-    ) ?? DEFAULT_TOOL_USE_MEMORY_ENABLED
-  );
-}
-
 /** Set whether the memory tool is enabled for tool-use sessions. */
 export async function setToolUseMemoryEnabled(enabled: boolean): Promise<void> {
-  await globalSM?.update(GlobalStateKey.MEMORY_ENABLED, enabled);
+  await tryGlobalState()?.update(GlobalStateKey.MEMORY_ENABLED, enabled);
 }
 
-/** Get the maximum number of automatic retry attempts for model calls. */
-export function getModelRetryMaxAttempts(): number {
-  return getConfig<number>('texra.model.retry.maxAttempts', 1);
+/** Get the set of tool group IDs disabled by the user. */
+export function getDisabledToolIds(): ReadonlySet<string> {
+  const raw =
+    tryGlobalState()?.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []) ?? [];
+  return new Set(raw);
 }
 
-/** Get the backoff delay in milliseconds between retry attempts. */
-export function getModelRetryBackoffMs(): number {
-  return getConfig<number>('texra.model.retry.backoffMs', 1000);
+/** Toggle a tool group's enabled/disabled state. */
+export async function setToolEnabled(
+  toolId: string,
+  enabled: boolean,
+): Promise<void> {
+  const current =
+    tryGlobalState()?.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []) ?? [];
+  const set = new Set(current);
+  if (enabled) {
+    set.delete(toolId);
+  } else {
+    set.add(toolId);
+  }
+  await tryGlobalState()?.update(GlobalStateKey.DISABLED_TOOLS, [...set]);
 }

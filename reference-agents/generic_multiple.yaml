@@ -1,4 +1,5 @@
-iname: generic_multiple
+name: generic_multiple
+description: General-purpose LaTeX document editor for multiple documents. Flexibly processes research papers following academic standards while maintaining consistency across document collections.
 inherits: generic
 settings:
   agentCategory: workflow
@@ -6,9 +7,6 @@ settings:
   documentTag: latex_documents
   endTag: </latex_documents>
   outputExt: tex
-  prefills:
-    - <scratchpad>
-    - <scratchpad>
 
 prompts:
   systemPrompt: |
@@ -63,91 +61,27 @@ prompts:
 
   userRequest:
     - |
-      {% if INSTRUCTION %}
-      In the scratchpad below, develop a detailed plan for working on these documents according to the instruction provided. Be specific about what sections in which documents need attention and what changes should be made. Think through the task systematically as a scientist would approach revising their own work.
-      {% else %}
-      In the scratchpad below, develop a detailed plan for working on these documents. Analyze the content and structure of each, identify areas that could benefit from attention, and formulate a systematic approach. Think through the task as a scientist would approach revising their own work.
-      {% endif %}
-
-      <scratchpad>
-
-      1. [First consideration]
-          - Affected documents: [List of documents]
-          - Analysis: [detailed analysis]
-          - Approach: [concrete steps]
-      2. [Second consideration]
-          - Affected documents: [List of documents]
-          - Analysis: [detailed analysis]
-          - Approach: [concrete steps]
-      3. [Third consideration]
-          - Affected documents: [List of documents]
-          - Analysis: [detailed analysis]
-          - Approach: [concrete steps]
-      ...
-
-      </scratchpad>
-
-      Then, following your plan in the scratchpad, please work on all \LaTeX documents. Maintain professional academic standards and adhere to all \LaTeX formatting rules. Use the following format:
+      Work on all \LaTeX documents. Maintain professional academic standards and adhere to all \LaTeX formatting rules. Maintain consistency across documents (notation, definitions, results). Use the following format:
 
       <latex_documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      <document name="{OUTPUT_FILES_ORDER[0]}">
       % 1ST_UPDATED_LATEX_DOCUMENT_1 HERE
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+      <document name="{OUTPUT_FILES_ORDER[1]}">
       % 1ST_UPDATED_LATEX_DOCUMENT_2 HERE
       </document>
       ... (repeat for all output files)
       </latex_documents>
     - |
-      Now, critically reflect on the work you've just completed on all documents. As a scientist reviewing their own work, be thorough and honest in your assessment.
-
-      In the scratchpad below, analyze your revisions and consider additional refinements. Be specific and point to concrete locations in your reflection.
-
-      <scratchpad>
-      <reflection>
-      % Summary of Changes
-      \begin{enumerate}
-          \item [Summary of major changes made to each document]
-          \item [Evaluation of the effectiveness of these changes]
-          \item [Identification of any areas that may need further improvement]
-      \end{enumerate}
-      </reflection>
-      <refinements>
-      % Additional Improvements
-      \begin{enumerate}
-          \item [Refinement 1]
-              \begin{itemize}
-                  \item Affected documents: [List of documents]
-                  \item Rationale: [brief explanation]
-                  \item Implementation: [concrete steps]
-              \end{itemize}
-          \item [Refinement 2]
-              \begin{itemize}
-                  \item Affected documents: [List of documents]
-                  \item Rationale: [brief explanation]
-                  \item Implementation: [concrete steps]
-              \end{itemize}
-          \item [Refinement 3]
-              \begin{itemize}
-                  \item Affected documents: [List of documents]
-                  \item Rationale: [brief explanation]
-                  \item Implementation: [concrete steps]
-              \end{itemize}
-          \item[\ldots]
-      \end{enumerate}
-      </refinements>
-      </scratchpad>
-
-      Based on this reflection, output further refined and complete versions of all \LaTeX documents, incorporating the improvements discussed in the scratchpad. Include all the work from the previous step plus the new refinements.
+      Now critically reflect on the work you've just completed across all documents and output further refined and complete versions. Check for accuracy, notation consistency within and across documents, structural coherence, formatting issues, and clarity. Include all the work from the previous step plus the new refinements.
 
       Ensure that the output documents are in the following order: OUTPUT_FILES_ORDER={{ OUTPUT_FILES_ORDER }}
 
-      Use the following format:
       <latex_documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      <document name="{OUTPUT_FILES_ORDER[0]}">
       % 2ND_UPDATED_LATEX_DOCUMENT_1 HERE
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+      <document name="{OUTPUT_FILES_ORDER[1]}">
       % 2ND_UPDATED_LATEX_DOCUMENT_2 HERE
       </document>
       ... (repeat for all output files)

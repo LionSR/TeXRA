@@ -42,22 +42,6 @@ Rewrite ProgressView in Lit + TypeScript with type-safe IPC via relocated Zod sc
 
 ---
 
-## Build Requirements
-
-> **Important:** Due to growing codebase size and Lit component compilation, increased memory allocation is required.
-
-```bash
-# Required for compilation (prevents heap out of memory errors)
-NODE_OPTIONS=--max-old-space-size=8192 npm run compile
-
-# Or set in package.json scripts (recommended)
-"compile": "NODE_OPTIONS=--max-old-space-size=8192 webpack --mode production"
-```
-
-**Why:** Lit + TypeScript + Zod schema compilation creates significant memory pressure during webpack bundling, especially with 5 webview entry points.
-
----
-
 ## Goals & Phases
 
 | Phase       | Scope                                        | Status         | Doc                                                        |

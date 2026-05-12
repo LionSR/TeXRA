@@ -6,8 +6,10 @@ import type {
   ActiveChildInfo,
   AgentProposalPermission,
   BashPermission,
+  CompileFailure,
   ConversationProgress,
   ExecutionId,
+  ExternalInquiryPermission,
   FileLocation,
   OutputFileInfo,
   PlanApprovalPermission,
@@ -21,8 +23,14 @@ import type {
   UpdateTodosPayload,
 } from '@shared/schemas';
 
-/** Payload for events scoped to a specific run (stream + storage key). */
-interface RunScopedPayload {
+/** Payload for stream-scoped output events (one run per workflow tab). */
+interface StreamScopedPayload {
+  streamId: StreamTabId;
+  executionId?: ExecutionId;
+}
+
+/** Payload for usage events. Tool-use can resume → multiple runs per tab. */
+interface UsageScopedPayload {
   streamId: StreamTabId;
   storageKey: StorageKey;
   executionId?: ExecutionId;
@@ -33,17 +41,18 @@ interface SetActiveStreamPayload {
   agentCategory?: AgentCategory;
   /** Hint whether this is a remote agent (for UI display before TaskState is set) */
   isRemote?: boolean;
-  /** Hint whether this agent uses multiple outputs (for UI display before TaskState is set) */
-  hasMultipleOutputs?: boolean;
+  /**
+   * When true, register the stream (state, logs, hints) but do NOT switch the
+   * active tab to it. Used by background child streams (bash, codex) so the
+   * stream tab appears without yanking the user away from their current view.
+   */
+  suppressViewSwitch?: boolean;
 }
 
 interface SetTaskStatePayload {
   streamId: StreamTabId;
   executionId?: ExecutionId;
   taskState: TaskState;
-  /** Storage key for this run (root group ID). Sets activeRunId so instruction
-   *  persistence works immediately, not after the first usage event. */
-  storageKey: StorageKey;
 }
 
 const MAX_BUFFER_SIZE = 1000;
@@ -56,15 +65,34 @@ export interface ProgressEventPayloads {
     /** Previous status before this update, for detecting transitions */
     previousStatus: StreamStatus;
   };
-  addOutputFiles: RunScopedPayload & {
+  addOutputFiles: StreamScopedPayload & {
     filesByRound: { [key: number]: OutputFileInfo[] };
   };
-  updateMissingOutputs: RunScopedPayload & {
+  updateMissingOutputs: StreamScopedPayload & {
     filesByRound: { [key: number]: string[] };
   };
-  clearMissingOutputs: { streamId: StreamTabId };
+  updateCompileFailures: StreamScopedPayload & {
+    filesByRound: { [key: number]: CompileFailure[] };
+  };
+  /**
+   * Clear the "missing outputs" marker. Either target a specific tab via
+   * `streamId`, or clear every workflow tab whose taskState matches the
+   * given `streamConfig` (for command-palette pack/clean which has no
+   * stream context).
+   */
+  clearMissingOutputs:
+    | { streamId: StreamTabId; streamConfig?: undefined }
+    | {
+        streamId?: undefined;
+        streamConfig: {
+          agent: string;
+          model: string;
+          inputFile: string;
+          outputFiles?: readonly string[];
+        };
+      };
   setTaskState: SetTaskStatePayload;
-  updateStreamUsage: RunScopedPayload & {
+  updateStreamUsage: UsageScopedPayload & {
     usage: TokenUsageStats;
   };
   showRetryRequest: RetryPermission;
@@ -78,7 +106,6 @@ export interface ProgressEventPayloads {
   updateSuperYoloBypassState: {
     streamId: StreamTabId;
     bypassActive: boolean;
-    featureEnabled: boolean;
   };
   showBashPermission: BashPermission;
   resolveBashPermission: { requestId: string };
@@ -86,6 +113,8 @@ export interface ProgressEventPayloads {
   resolveAgentProposal: { proposalId: string };
   showPlanApproval: PlanApprovalPermission;
   resolvePlanApproval: { approvalId: string };
+  showExternalInquiry: ExternalInquiryPermission;
+  resolveExternalInquiry: { requestId: string };
   updateTodos: UpdateTodosPayload;
   updatePlan: UpdatePlanPayload;
   updateConversationProgress: {
@@ -115,7 +144,47 @@ export interface ProgressEventPayloads {
     childStreamId: StreamTabId;
     parentStreamId: StreamTabId;
   };
+  /** A follow-up message was sent to an active tool-use session.
+   *  Listened by blocking tools (e.g. ExecutionsTool wait) to abort early. */
+  followUpSent: { streamId: StreamTabId };
+
+  /** Request the progress view to remove a stream tab (used by short-lived
+   *  child streams that should auto-close once their work is done). */
+  removeStream: { streamId: StreamTabId };
+
   extensionDeactivating: undefined;
+
+  /**
+   * Emitted when PR-activity polling is rejected by GitHub (401/403 auth).
+   * The frontend shows a toast prompting the user to replace the token.
+   */
+  githubTokenInvalid: { message: string };
+
+  /** Active PR-activity subscription keys changed; frontends refresh their list. */
+  prSubscriptionsChanged: { keys: readonly string[] };
+  /** Active PR-activity owners changed; frontends refresh owner metadata. */
+  prSubscriptionBindingsChanged: undefined;
+  /** Active repo-activity subscription keys changed. */
+  repoSubscriptionsChanged: { keys: readonly string[] };
+  /** Active repo-activity owners changed. */
+  repoSubscriptionBindingsChanged: undefined;
+  /** Active issue-activity subscription keys changed. */
+  issueSubscriptionsChanged: { keys: readonly string[] };
+  /** Active issue-activity owners changed. */
+  issueSubscriptionBindingsChanged: undefined;
+
+  /**
+   * External tool availability was re-probed. Frontends (Tools tab) refresh
+   * their dashboard from the updated cache. Emitted by
+   * {@link refreshToolAvailability}.
+   */
+  toolAvailabilityChanged: undefined;
+
+  /**
+   * One or more files were written directly to the workspace (e.g. via
+   * accept_run_files). Listened by fileDecorations to badge the files.
+   */
+  workspaceFilesWritten: { absolutePaths: string[] };
 
   // ── Frontend-bound events ──
   // Emitted by agent core/runtime; consumed by frontend listeners.

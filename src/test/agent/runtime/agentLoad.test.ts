@@ -43,85 +43,69 @@ describe('loadAgentSettingAndPrompts', () => {
     absoluteFsAny.read = originalRead;
   });
 
-  it('uses the _multiple definition when available', async () => {
+  it('loads settings and prompts from the given definition path', async () => {
     const agentPath = path.join('/', 'tmp', 'agents');
-    const baseDefinitionPath = path.join(agentPath, 'polish.yaml');
-    const multipleDefinitionPath = path.join(agentPath, 'polish_multiple.yaml');
-    const multipleResolution: ResolvedAgent = {
+    const definitionPath = path.join(agentPath, 'polish.yaml');
+    const resolution: ResolvedAgent = {
       entry: {
         source: 'custom',
         name: 'polish',
-        path: baseDefinitionPath,
-        multiplePath: multipleDefinitionPath,
+        path: definitionPath,
         category: AgentCategory.Workflow,
       },
-      definitionPath: multipleDefinitionPath,
-      resolvedName: 'polish_multiple',
-      usedFallback: false,
+      definitionPath,
+      resolvedName: 'polish',
     };
 
     fileContents.set(
-      normalize(multipleDefinitionPath),
-      [
-        'name: polish_multiple',
-        'settings:',
-        '  rounds: 1',
-        'prompts:',
-        '  userRequest: multiple variant',
-        '',
-      ].join('\n'),
-    );
-
-    fileContents.set(
-      normalize(baseDefinitionPath),
+      normalize(definitionPath),
       [
         'name: polish',
         'settings:',
         '  rounds: 1',
         'prompts:',
-        '  userRequest: base variant',
+        '  userRequest: unified variant',
         '',
       ].join('\n'),
     );
 
-    const [, prompts] = await loadAgentSettingAndPrompts(multipleResolution, {
-      preferMultiple: true,
-    });
+    const [, prompts] = await loadAgentSettingAndPrompts(resolution);
 
-    assert.strictEqual(prompts.userRequest, 'multiple variant');
+    assert.strictEqual(prompts.userRequest, 'unified variant');
   });
 
-  it('falls back to the base definition when _multiple is missing', async () => {
+  it('accepts the internal registry-metadata field in agent settings', async () => {
     const agentPath = path.join('/', 'tmp', 'agents');
-    const baseDefinitionPath = path.join(agentPath, 'summarize.yaml');
-    const fallbackResolution: ResolvedAgent = {
+    const definitionPath = path.join(agentPath, 'latexFixer.yaml');
+    const resolution: ResolvedAgent = {
       entry: {
         source: 'custom',
-        name: 'summarize',
-        path: baseDefinitionPath,
-        category: AgentCategory.Workflow,
+        name: 'latexFixer',
+        path: definitionPath,
+        category: AgentCategory.ToolUse,
       },
-      definitionPath: baseDefinitionPath,
-      resolvedName: 'summarize',
-      usedFallback: true,
+      definitionPath,
+      resolvedName: 'latexFixer',
     };
 
     fileContents.set(
-      normalize(baseDefinitionPath),
+      normalize(definitionPath),
       [
-        'name: summarize',
+        'name: latexFixer',
         'settings:',
-        '  rounds: 1',
+        '  agentCategory: toolUse',
+        '  internal: true',
         'prompts:',
-        '  userRequest: base only',
+        '  userRequest: fix it',
         '',
       ].join('\n'),
     );
 
-    const [, prompts] = await loadAgentSettingAndPrompts(fallbackResolution, {
-      preferMultiple: true,
-    });
-
-    assert.strictEqual(prompts.userRequest, 'base only');
+    const [settings] = await loadAgentSettingAndPrompts(resolution);
+    assert.strictEqual(
+      settings.internal,
+      true,
+      'internal: true should round-trip through AgentSettingSchema',
+    );
   });
 });

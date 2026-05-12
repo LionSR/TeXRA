@@ -4,20 +4,16 @@
  * This is a standalone data structure with no dependencies on other
  * toolUse modules, allowing it to be imported without circular dependency issues.
  */
+
 export class FollowUpQueue {
   private readonly queued: string[] = [];
   private resolver: ((value: string | null) => void) | null = null;
 
-  /** Resolves pending wait with value and clears resolver */
-  private resolveWait(value: string | null): void {
-    const resolver = this.resolver;
-    this.resolver = null;
-    resolver?.(value);
-  }
-
   enqueue(value: string): void {
     if (this.resolver) {
-      this.resolveWait(value);
+      const resolve = this.resolver;
+      this.resolver = null;
+      resolve(value);
     } else {
       this.queued.push(value);
     }
@@ -32,7 +28,7 @@ export class FollowUpQueue {
   }
 
   waitForNext(checkInterruption: () => boolean): Promise<string | null> {
-    if (!this.isEmpty()) {
+    if (this.queued.length > 0) {
       return Promise.resolve(this.queued.shift()!);
     }
     if (checkInterruption()) {
@@ -44,41 +40,29 @@ export class FollowUpQueue {
   }
 
   /**
-   * Wait for at least one message, then drain and combine all available.
-   * Returns all queued messages joined with double newlines.
+   * Wait for at least one item, then drain all available.
+   * Returns null if interrupted.
    */
   async waitAndDrainAll(
     checkInterruption: () => boolean,
-  ): Promise<string | null> {
+  ): Promise<string[] | null> {
     const first = await this.waitForNext(checkInterruption);
-    if (first === null) {
-      return null;
-    }
-    // Drain any additional messages that arrived while waiting
-    const rest = this.drain();
-    if (rest.length === 0) {
-      return first;
-    }
-    return [first, ...rest].join('\n\n');
+    if (first === null) return null;
+    return [first, ...this.drain()];
   }
 
   cancelWait(): void {
-    this.resolveWait(null);
-  }
-
-  clear(): void {
-    this.queued.length = 0;
+    const resolve = this.resolver;
+    this.resolver = null;
+    resolve?.(null);
   }
 
   dispose(): void {
     this.cancelWait();
-    this.clear();
+    this.queued.length = 0;
   }
 
-  /**
-   * Get a copy of all queued messages for display purposes.
-   * This doesn't modify the queue.
-   */
+  /** Get a copy of all queued items for display purposes. */
   getAll(): string[] {
     return [...this.queued];
   }

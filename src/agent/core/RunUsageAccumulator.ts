@@ -20,6 +20,7 @@ export const DEFAULT_TOTALS = {
   totalOutputTokens: 0,
   totalCost: 0,
   totalCacheReadInputTokens: 0,
+  totalCacheMissInputTokens: 0,
   totalCacheCreationInputTokens: 0,
   totalReasoningTokens: 0,
   totalToolUsePromptTokens: 0,
@@ -33,6 +34,7 @@ const RunUsageTotalsSchema = z.object({
   totalOutputTokens: z.number().prefault(0),
   totalCost: z.number().prefault(0),
   totalCacheReadInputTokens: z.number().prefault(0),
+  totalCacheMissInputTokens: z.number().prefault(0),
   totalCacheCreationInputTokens: z.number().prefault(0),
   totalReasoningTokens: z.number().prefault(0),
   totalToolUsePromptTokens: z.number().prefault(0),
@@ -67,11 +69,6 @@ export type RunUsageAccumulatorJSON = z.output<
 // Standalone functions operating on RunUsageAccumulatorJSON
 // ============================================================================
 
-/** Create a fresh accumulator (all zeros). */
-export function createUsageAccumulator(): RunUsageAccumulatorJSON {
-  return { totals: { ...DEFAULT_TOTALS }, normalizedSnapshots: [] };
-}
-
 /** Record a normalized usage entry. Mutates acc in place. */
 export function recordNormalizedUsage(
   acc: RunUsageAccumulatorJSON,
@@ -86,33 +83,11 @@ export function recordNormalizedUsage(
   acc.totals.totalOutputTokens += usage.outputTokens;
   acc.totals.totalCost += usage.cost;
   acc.totals.totalCacheReadInputTokens += usage.cachedInputTokens ?? 0;
+  acc.totals.totalCacheMissInputTokens += usage.cacheMissInputTokens ?? 0;
   acc.totals.totalCacheCreationInputTokens += usage.cacheCreationTokens ?? 0;
   acc.totals.totalReasoningTokens += usage.reasoningTokens ?? 0;
   acc.totals.totalToolUsePromptTokens += usage.toolUsePromptTokens ?? 0;
   acc.totals.totalServerToolRequests += usage.serverToolRequests ?? 0;
 
   acc.normalizedSnapshots.push({ round, usage });
-}
-
-/** Merge another accumulator's data into this one. Mutates target in place. */
-export function mergeAccumulators(
-  target: RunUsageAccumulatorJSON,
-  source: RunUsageAccumulatorJSON,
-): void {
-  const src = source.totals;
-  if (target.totals.firstInputTokens === 0) {
-    target.totals.firstInputTokens = src.firstInputTokens;
-  }
-
-  target.totals.totalInputTokens += src.totalInputTokens;
-  target.totals.totalOutputTokens += src.totalOutputTokens;
-  target.totals.totalCost += src.totalCost;
-  target.totals.totalCacheReadInputTokens += src.totalCacheReadInputTokens;
-  target.totals.totalCacheCreationInputTokens +=
-    src.totalCacheCreationInputTokens;
-  target.totals.totalReasoningTokens += src.totalReasoningTokens;
-  target.totals.totalToolUsePromptTokens += src.totalToolUsePromptTokens;
-  target.totals.totalServerToolRequests += src.totalServerToolRequests;
-
-  target.normalizedSnapshots.push(...source.normalizedSnapshots);
 }

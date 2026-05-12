@@ -7,8 +7,11 @@
  */
 
 import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
+import {
+  getAgentRuntimeHost,
+  type AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { bus } from '@eventBus/ProgressEventBus';
 import {
   STREAM_STATUS,
   type ActiveChildInfo,
@@ -51,6 +54,7 @@ export interface ExecutionHandle {
   readonly category: 'workflow' | 'toolUse' | 'process';
   readonly agentName: string;
   readonly startedAt: number;
+  readonly runtimeHost?: AgentRuntimeHost;
 
   /** Get current status without probing multiple registries. */
   getStatus(): ExecutionStatusInfo;
@@ -79,14 +83,30 @@ export interface ExecutionHandle {
 export class AgentExecutionHandle implements ExecutionHandle {
   readonly startedAt = Date.now();
   private progress: { currentRound?: number; totalRounds?: number } = {};
+  private _parentStreamId: StreamTabId;
+
+  /** Stable tool name for UI identification (e.g. "bash", "codex"). */
+  toolName?: string;
 
   constructor(
     readonly executionId: string,
-    readonly parentStreamId: StreamTabId,
+    parentStreamId: StreamTabId,
     readonly childStreamId: StreamTabId,
     readonly agentName: string,
     readonly category: 'workflow' | 'toolUse',
-  ) {}
+    readonly runtimeHost: AgentRuntimeHost = getAgentRuntimeHost(),
+  ) {
+    this._parentStreamId = parentStreamId;
+  }
+
+  get parentStreamId(): StreamTabId {
+    return this._parentStreamId;
+  }
+
+  /** Promote this subagent to a top-level execution (detach from parent). */
+  detach(): void {
+    this._parentStreamId = this.childStreamId;
+  }
 
   getStatus(): ExecutionStatusInfo {
     const status =
@@ -104,7 +124,9 @@ export class AgentExecutionHandle implements ExecutionHandle {
     const interruptible = getInterruptible(this.childStreamId);
     if (!interruptible) return false;
     interruptible.interrupt();
-    StreamStatusService.set(this.childStreamId, STREAM_STATUS.STOPPED);
+    StreamStatusService.set(this.childStreamId, STREAM_STATUS.STOPPED, {
+      runtimeHost: this.runtimeHost,
+    });
     return true;
   }
 
@@ -135,11 +157,15 @@ export class ProcessExecutionHandle implements ExecutionHandle {
   /** Ephemeral temp file paths for live output (set after construction, cleared on completion). */
   outputPaths?: { readonly stdout: string; readonly stderr: string };
 
+  /** Stable tool name for UI identification (e.g. "bash", "codex"). */
+  toolName?: string;
+
   constructor(
     readonly executionId: string,
     readonly parentStreamId: StreamTabId,
     readonly agentName: string,
     private readonly killFn: () => boolean,
+    readonly runtimeHost: AgentRuntimeHost = getAgentRuntimeHost(),
   ) {}
 
   getStatus(): ExecutionStatusInfo {
@@ -167,6 +193,20 @@ export class ProcessExecutionHandle implements ExecutionHandle {
 // Subagent lineage helpers
 // ============================================================================
 
+/** True when the handle is a child of parentStreamId (not the parent itself). */
+function isChildOf(
+  handle: ExecutionHandle,
+  parentStreamId: StreamTabId,
+): boolean {
+  if (handle.parentStreamId !== parentStreamId) return false;
+  // AgentExecutionHandles where childStreamId === parentStreamId represent
+  // the parent itself, not a child.
+  if (handle instanceof AgentExecutionHandle) {
+    return handle.childStreamId !== parentStreamId;
+  }
+  return true;
+}
+
 /**
  * Interrupt all active subagents of a parent stream.
  * Called before interrupting the parent so subagents stop
@@ -177,15 +217,9 @@ export function interruptActiveChildren(
   handles: Iterable<ExecutionHandle>,
 ): void {
   for (const handle of handles) {
-    if (handle.parentStreamId !== parentStreamId) continue;
-    // Skip the parent itself — only terminate its children
-    if (
-      handle instanceof AgentExecutionHandle &&
-      handle.childStreamId === parentStreamId
-    ) {
-      continue;
+    if (isChildOf(handle, parentStreamId)) {
+      handle.terminate();
     }
-    handle.terminate();
   }
 }
 
@@ -193,57 +227,27 @@ export function interruptActiveChildren(
 export function collectChildSummary(
   parentStreamId: StreamTabId,
   handles: Iterable<ExecutionHandle>,
-  ctor: new (...args: any[]) => ExecutionHandle,
+  ctor: typeof AgentExecutionHandle | typeof ProcessExecutionHandle,
 ): ActiveChildInfo[] {
   const result: ActiveChildInfo[] = [];
   for (const handle of handles) {
-    if (handle.parentStreamId !== parentStreamId || !(handle instanceof ctor)) {
+    if (!(handle instanceof ctor) || !isChildOf(handle, parentStreamId)) {
       continue;
     }
-    // Exclude the parent itself (parentStreamId === childStreamId)
-    if (
-      handle instanceof AgentExecutionHandle &&
-      handle.childStreamId === parentStreamId
-    ) {
-      continue;
-    }
-    const statusInfo = handle.getStatus();
+    const { status, elapsed } = handle.getStatus();
     const info: ActiveChildInfo = {
       executionId: handle.executionId,
       agentName: handle.agentName,
-      status: statusInfo.status,
-      elapsed: statusInfo.elapsed ?? null,
+      status,
+      elapsed: elapsed ?? null,
     };
     if (handle instanceof AgentExecutionHandle) {
       info.childStreamId = handle.childStreamId;
+      if (handle.toolName) info.toolName = handle.toolName;
+    } else if (handle instanceof ProcessExecutionHandle && handle.toolName) {
+      info.toolName = handle.toolName;
     }
     result.push(info);
   }
   return result;
-}
-
-/** Emit the current active subagent list for a parent to the progress UI. */
-export function emitActiveSubagentsUpdate(
-  parentStreamId: StreamTabId,
-  handles: Iterable<ExecutionHandle>,
-): void {
-  const children = collectChildSummary(
-    parentStreamId,
-    handles,
-    AgentExecutionHandle,
-  );
-  bus.emit('updateActiveSubagents', { parentStreamId, children });
-}
-
-/** Emit the current active processes list for a parent to the progress UI. */
-export function emitActiveProcessesUpdate(
-  parentStreamId: StreamTabId,
-  handles: Iterable<ExecutionHandle>,
-): void {
-  const processes = collectChildSummary(
-    parentStreamId,
-    handles,
-    ProcessExecutionHandle,
-  );
-  bus.emit('updateActiveProcesses', { parentStreamId, processes });
 }

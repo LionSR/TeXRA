@@ -1,5 +1,4 @@
 // Local file imports
-import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 
@@ -20,11 +19,7 @@ import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils'
  * @see https://open.bigmodel.cn/dev/api
  */
 export class ModelHandlerGLM extends ModelHandlerOpenAI {
-  protected override createStreamingAggregator(): BaseReasoningStreamAggregator | null {
-    return this.capabilities.supportsReasoning
-      ? new BaseReasoningStreamAggregator()
-      : null;
-  }
+  protected override useReasoningStreamAggregator = true;
 
   /**
    * GLM models require explicit `thinking` parameter to control reasoning.

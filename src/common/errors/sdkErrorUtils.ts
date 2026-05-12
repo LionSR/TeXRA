@@ -1,35 +1,5 @@
 import { getReasonPhrase, StatusCodes } from 'http-status-codes';
 import {
-  APIConnectionError as AnthropicConnectionError,
-  APIConnectionTimeoutError as AnthropicConnectionTimeoutError,
-  APIError as AnthropicAPIError,
-  APIUserAbortError as AnthropicUserAbortError,
-  AuthenticationError as AnthropicAuthenticationError,
-  BadRequestError as AnthropicBadRequestError,
-  ConflictError as AnthropicConflictError,
-  InternalServerError as AnthropicInternalServerError,
-  NotFoundError as AnthropicNotFoundError,
-  PermissionDeniedError as AnthropicPermissionDeniedError,
-  RateLimitError as AnthropicRateLimitError,
-  UnprocessableEntityError as AnthropicUnprocessableEntityError,
-} from '@anthropic-ai/sdk';
-import { ApiError as GoogleGenAIApiError } from '@google/genai';
-import {
-  APIConnectionError as OpenAIConnectionError,
-  APIConnectionTimeoutError as OpenAIConnectionTimeoutError,
-  APIError as OpenAIAPIError,
-  APIUserAbortError as OpenAIUserAbortError,
-  AuthenticationError as OpenAIAuthenticationError,
-  BadRequestError as OpenAIBadRequestError,
-  ConflictError as OpenAIConflictError,
-  InternalServerError as OpenAIInternalServerError,
-  NotFoundError as OpenAINotFoundError,
-  PermissionDeniedError as OpenAIPermissionDeniedError,
-  RateLimitError as OpenAIRateLimitError,
-  UnprocessableEntityError as OpenAIUnprocessableEntityError,
-} from 'openai';
-
-import {
   type ErrorContext,
   type ErrorLogData,
   type ProviderError,
@@ -37,7 +7,8 @@ import {
 } from '@shared/schemas';
 import { extractErrorMessage, isObject, isString } from '@utils/core';
 
-import { toErrorMessage } from './errorHandlingUtils';
+import { toErrorMessage } from './errorMessage';
+import { isDiskFullError } from './errorPredicates';
 
 /** Get reason phrase, returning undefined for unknown codes (getReasonPhrase throws). */
 function safeGetReasonPhrase(statusCode: number): string | undefined {
@@ -48,83 +19,196 @@ function safeGetReasonPhrase(statusCode: number): string | undefined {
   }
 }
 
-type ErrorConstructor<T extends Error = Error> = abstract new (
-  ...args: never[]
-) => T;
+/** Factory for symbol-keyed error metadata. Creates matched attach/detect
+ *  accessors that share a single Symbol.for key. The optional typeGuard
+ *  validates the value on retrieval; without it, raw retrieval is returned. */
+function createErrorMetadata<T>(
+  name: string,
+  typeGuard?: (v: unknown) => v is T,
+): {
+  attach: (err: unknown, value: T) => void;
+  detect: (err: unknown) => T | undefined;
+} {
+  const key = Symbol.for(`texra.${name}`);
+  return {
+    attach: (err, value) => {
+      if (isObject(err)) {
+        (err as Record<symbol, unknown>)[key] = value;
+      }
+    },
+    detect: (err) => {
+      if (!isObject(err)) return undefined;
+      const value = (err as Record<symbol, unknown>)[key];
+      if (typeGuard) {
+        return typeGuard(value) ? value : undefined;
+      }
+      return value as T | undefined;
+    },
+  };
+}
 
-/** SDK error mapping entry. Provider detected from class name. */
+export type SdkErrorKind =
+  | 'connection_timeout'
+  | 'connection'
+  | 'user_abort'
+  | 'bad_request'
+  | 'authentication'
+  | 'permission_denied'
+  | 'not_found'
+  | 'conflict'
+  | 'unprocessable_entity'
+  | 'rate_limit'
+  | 'internal_server'
+  | 'api_error';
+
+export interface SdkErrorMetadata {
+  provider: string;
+  kind: SdkErrorKind;
+  statusCode?: number;
+}
+
+const SDK_ERROR_KINDS: ReadonlySet<SdkErrorKind> = new Set([
+  'connection_timeout',
+  'connection',
+  'user_abort',
+  'bad_request',
+  'authentication',
+  'permission_denied',
+  'not_found',
+  'conflict',
+  'unprocessable_entity',
+  'rate_limit',
+  'internal_server',
+  'api_error',
+]);
+
+function isSdkErrorMetadata(value: unknown): value is SdkErrorMetadata {
+  if (!isObject(value)) return false;
+  const candidate = value as {
+    provider?: unknown;
+    kind?: unknown;
+    statusCode?: unknown;
+  };
+  return (
+    isString(candidate.provider) &&
+    SDK_ERROR_KINDS.has(candidate.kind as SdkErrorKind) &&
+    (candidate.statusCode === undefined ||
+      pickStatus(candidate.statusCode) !== undefined)
+  );
+}
+
+const sdkErrorMetadata = createErrorMetadata<SdkErrorMetadata>(
+  'sdkError',
+  isSdkErrorMetadata,
+);
+
+/** Tags SDK errors at provider boundaries so common error formatting does not
+ *  need to import SDK classes or inspect SDK-specific prototypes. */
+export const attachSdkErrorMetadata = sdkErrorMetadata.attach;
+
+const detectSdkErrorMetadata = sdkErrorMetadata.detect;
+
+/** SDK error mapping entry. */
 interface SdkErrorEntry {
-  ctor: ErrorConstructor;
+  kind: SdkErrorKind;
+  classNames: readonly string[];
   message?: string;
   fallbackStatusCode?: number;
   retryable?: boolean;
 }
 
-function createErrorPair(
-  openAiCtor: ErrorConstructor,
-  anthropicCtor: ErrorConstructor,
-  config: Omit<SdkErrorEntry, 'ctor'>,
-): SdkErrorEntry[] {
-  return [
-    { ctor: openAiCtor, ...config },
-    { ctor: anthropicCtor, ...config },
-  ];
-}
-
 const SDK_ERRORS: SdkErrorEntry[] = [
   // Connection errors (retryable)
-  ...createErrorPair(
-    OpenAIConnectionTimeoutError,
-    AnthropicConnectionTimeoutError,
-    { message: 'Connection timed out', retryable: true },
-  ),
-  ...createErrorPair(OpenAIConnectionError, AnthropicConnectionError, {
+  {
+    kind: 'connection_timeout',
+    classNames: ['APIConnectionTimeoutError'],
+    message: 'Connection timed out',
+    retryable: true,
+  },
+  {
+    kind: 'connection',
+    classNames: ['APIConnectionError'],
     message: 'Connection error',
     retryable: true,
-  }),
+  },
   // Abort errors (not retryable)
-  ...createErrorPair(OpenAIUserAbortError, AnthropicUserAbortError, {
+  {
+    kind: 'user_abort',
+    classNames: ['APIUserAbortError'],
     message: 'Request aborted',
     retryable: false,
-  }),
+  },
   // HTTP errors (retryable derived from status code)
-  ...createErrorPair(OpenAIBadRequestError, AnthropicBadRequestError, {
+  {
+    kind: 'bad_request',
+    classNames: ['BadRequestError'],
     fallbackStatusCode: StatusCodes.BAD_REQUEST,
-  }),
-  ...createErrorPair(OpenAIAuthenticationError, AnthropicAuthenticationError, {
+  },
+  {
+    kind: 'authentication',
+    classNames: ['AuthenticationError'],
     fallbackStatusCode: StatusCodes.UNAUTHORIZED,
-  }),
-  ...createErrorPair(
-    OpenAIPermissionDeniedError,
-    AnthropicPermissionDeniedError,
-    { fallbackStatusCode: StatusCodes.FORBIDDEN },
-  ),
-  ...createErrorPair(OpenAINotFoundError, AnthropicNotFoundError, {
+  },
+  {
+    kind: 'permission_denied',
+    classNames: ['PermissionDeniedError'],
+    fallbackStatusCode: StatusCodes.FORBIDDEN,
+  },
+  {
+    kind: 'not_found',
+    classNames: ['NotFoundError'],
     fallbackStatusCode: StatusCodes.NOT_FOUND,
-  }),
-  ...createErrorPair(OpenAIConflictError, AnthropicConflictError, {
+  },
+  {
+    kind: 'conflict',
+    classNames: ['ConflictError'],
     fallbackStatusCode: StatusCodes.CONFLICT,
-  }),
-  ...createErrorPair(
-    OpenAIUnprocessableEntityError,
-    AnthropicUnprocessableEntityError,
-    { fallbackStatusCode: StatusCodes.UNPROCESSABLE_ENTITY },
-  ),
-  ...createErrorPair(OpenAIRateLimitError, AnthropicRateLimitError, {
+  },
+  {
+    kind: 'unprocessable_entity',
+    classNames: ['UnprocessableEntityError'],
+    fallbackStatusCode: StatusCodes.UNPROCESSABLE_ENTITY,
+  },
+  {
+    kind: 'rate_limit',
+    classNames: ['RateLimitError'],
     fallbackStatusCode: StatusCodes.TOO_MANY_REQUESTS,
-  }),
-  ...createErrorPair(OpenAIInternalServerError, AnthropicInternalServerError, {
+  },
+  {
+    kind: 'internal_server',
+    classNames: ['InternalServerError'],
     fallbackStatusCode: StatusCodes.INTERNAL_SERVER_ERROR,
-  }),
+  },
   // Generic API errors (no fallback)
-  { ctor: OpenAIAPIError },
-  { ctor: AnthropicAPIError },
-  { ctor: GoogleGenAIApiError },
+  { kind: 'api_error', classNames: ['APIError', 'ApiError'] },
 ];
+
+const SDK_ERRORS_BY_KIND = new Map(
+  SDK_ERRORS.map((entry) => [entry.kind, entry] as const),
+);
+
+const SDK_ERROR_KIND_BY_FALLBACK_STATUS = new Map(
+  SDK_ERRORS.flatMap((entry) =>
+    entry.fallbackStatusCode === undefined
+      ? []
+      : [[entry.fallbackStatusCode, entry.kind] as const],
+  ),
+);
+
+/** Maps known provider HTTP status codes to the shared SDK error kind table. */
+export function sdkErrorKindFromStatusCode(
+  statusCode: number | undefined,
+): SdkErrorKind {
+  return (
+    (statusCode === undefined
+      ? undefined
+      : SDK_ERROR_KIND_BY_FALLBACK_STATUS.get(statusCode)) ?? 'api_error'
+  );
+}
 
 /** Server errors (5xx), rate limits (429), and request timeouts (408) are retryable
  *  — these are transient. Other client errors (4xx) are deterministic. */
-function isRetryableStatusCode(statusCode?: number): boolean {
+export function isRetryableStatusCode(statusCode?: number): boolean {
   if (statusCode === undefined) return false;
   if (statusCode >= 500) return true;
   return (
@@ -141,12 +225,15 @@ function matchSdkError(
   err: unknown,
   rawErrorBody: unknown,
 ): SdkMatchResult | undefined {
-  const entry = SDK_ERRORS.find(({ ctor }) => err instanceof ctor);
+  const metadata = detectSdkErrorMetadata(err);
+  const entry =
+    (metadata ? SDK_ERRORS_BY_KIND.get(metadata.kind) : undefined) ??
+    matchLegacySdkError(err);
   if (!entry) {
     return undefined;
   }
 
-  const provider = detectProvider(err);
+  const provider = metadata?.provider ?? detectProvider(err);
   const requestId = detectRequestId(err);
 
   // Message-only errors (connection, abort) - use the entry's message
@@ -163,7 +250,7 @@ function matchSdkError(
   // If detectStatusCode returns a non-error code (< 400), it's likely misleading
   // (e.g., SSE connection status 200 while the actual error is in the body),
   // so prefer the body-inferred status code in that case.
-  const rawStatusCode = detectStatusCode(err);
+  const rawStatusCode = metadata?.statusCode ?? detectStatusCode(err);
   const statusCode =
     (rawStatusCode !== undefined && rawStatusCode >= 400
       ? rawStatusCode
@@ -199,6 +286,28 @@ function matchSdkError(
     retryable: isRetryableStatusCode(statusCode),
     requestId,
   };
+}
+
+function matchLegacySdkError(err: unknown): SdkErrorEntry | undefined {
+  const errorClassNames = getErrorClassNames(err);
+  return SDK_ERRORS.find(({ classNames }) =>
+    classNames.some((className) => errorClassNames.includes(className)),
+  );
+}
+
+function getErrorClassNames(err: unknown): string[] {
+  if (!isObject(err)) return [];
+
+  const classNames = new Set<string>();
+  let prototype = Object.getPrototypeOf(err);
+  while (prototype && prototype !== Object.prototype) {
+    const className = prototype.constructor?.name;
+    if (isString(className) && className.length > 0) {
+      classNames.add(className);
+    }
+    prototype = Object.getPrototypeOf(prototype);
+  }
+  return [...classNames];
 }
 
 type StatusCarrier = {
@@ -254,20 +363,79 @@ function detectProvider(err: unknown): string | undefined {
     return undefined;
   }
 
-  const candidate = err as { provider?: string } & {
-    constructor?: { name?: string };
+  const candidate = err as { provider?: string; headers?: HeaderBag } & {
+    stack?: string;
   };
 
   if (isString(candidate.provider)) {
     return candidate.provider;
   }
 
-  const lowered = candidate.constructor?.name?.toLowerCase();
-  if (!lowered) return undefined;
-
-  return (['openai', 'anthropic', 'google', 'kimi'] as const).find((p) =>
-    lowered.includes(p),
+  const classNameProvider = detectProviderFromClassNames(
+    getErrorClassNames(err),
   );
+  if (classNameProvider) return classNameProvider;
+
+  const providerFromStack = detectProviderFromText(candidate.stack ?? '');
+  if (providerFromStack) {
+    return providerFromStack;
+  }
+
+  return detectProviderFromHeaders(candidate.headers);
+}
+
+function detectProviderFromClassNames(
+  classNames: readonly (string | undefined)[],
+): string | undefined {
+  // Match SDK class-name fragments, then normalize aliases to the canonical
+  // API-provider names used by SecretManager / model handlers. This also covers
+  // no-response connection errors whose provider only appears on a base SDK
+  // class such as OpenAIError or AnthropicError.
+  const names = classNames
+    .filter((name): name is string => isString(name) && name.length > 0)
+    .map((name) => name.toLowerCase());
+  const match = (['openai', 'anthropic', 'google', 'kimi'] as const).find(
+    (provider) => names.some((name) => name.includes(provider)),
+  );
+  if (match === 'kimi') return 'moonshot';
+  return match;
+}
+
+type HeaderBag =
+  | {
+      get?: (key: string) => string | null;
+    }
+  | Record<string, unknown>;
+type HeaderDetectedProvider = 'anthropic';
+
+function getHeaderValue(
+  headers: HeaderBag | undefined,
+  name: string,
+): string | undefined {
+  const maybeGet = isObject(headers) ? headers.get : undefined;
+  const direct =
+    typeof maybeGet === 'function' ? maybeGet.call(headers, name) : undefined;
+  if (isString(direct) && direct) return direct;
+
+  const indexed = (headers as Record<string, unknown> | undefined)?.[name];
+  return isString(indexed) && indexed ? indexed : undefined;
+}
+
+function detectProviderFromHeaders(
+  headers: HeaderBag | undefined,
+): HeaderDetectedProvider | undefined {
+  if (getHeaderValue(headers, 'request-id')) return 'anthropic';
+  return undefined;
+}
+
+function detectProviderFromText(text: string): string | undefined {
+  const lowered = text.toLowerCase().replaceAll('\\', '/');
+  if (lowered.includes(`@anthropic-${'ai'}/sdk`)) return 'anthropic';
+  if (lowered.includes('node_modules/openai')) return 'openai';
+  // Keep the Google package marker split so the desktop startup bundle
+  // verifier does not mistake this stack-text detector for an eager SDK import.
+  if (lowered.includes(`@google/${'genai'}`)) return 'google';
+  return undefined;
 }
 
 /** Extract request ID from SDK errors (property or headers). */
@@ -277,10 +445,12 @@ function detectRequestId(err: unknown): string | undefined {
   const candidate = err as {
     request_id?: string;
     requestId?: string;
-    headers?: { get?: (key: string) => string | null };
+    requestID?: string;
+    headers?: HeaderBag;
   };
 
-  const directId = candidate.request_id ?? candidate.requestId;
+  const directId =
+    candidate.request_id ?? candidate.requestId ?? candidate.requestID;
   if (isString(directId) && directId) {
     return directId;
   }
@@ -288,8 +458,8 @@ function detectRequestId(err: unknown): string | undefined {
   // Try headers (Anthropic SDK uses 'request-id'; relay may use 'x-request-id')
   // ?? undefined converts null from headers.get() to undefined
   return (
-    candidate.headers?.get?.('request-id') ??
-    candidate.headers?.get?.('x-request-id') ??
+    getHeaderValue(candidate.headers, 'request-id') ??
+    getHeaderValue(candidate.headers, 'x-request-id') ??
     undefined
   );
 }
@@ -329,29 +499,46 @@ function detectRawErrorBody(err: unknown): unknown {
   return undefined;
 }
 
-const STREAM_DIAGNOSTICS_KEY = Symbol.for('texra.streamDiagnostics');
+/** Max tail size (chars) for partial text attached to streaming errors.
+ *  4KB is enough for a "continue from [tail]" prompt and UI display,
+ *  while staying well under webview message-size limits. */
+export const PARTIAL_TEXT_TAIL_MAX = 4096;
+
+/** Returns the last `maxChars` of `text`. If `text` is shorter, returns it
+ *  as-is. Used by streaming handlers to cap partial output on error. */
+export function takeTail(text: string, maxChars: number): string {
+  return text.length <= maxChars ? text : text.slice(text.length - maxChars);
+}
+
+/** True if `err` is an SDK or AbortController user-abort error. */
+export function isUserAbort(err: unknown): boolean {
+  if (detectSdkErrorMetadata(err)?.kind === 'user_abort') return true;
+  if (getErrorClassNames(err).includes('APIUserAbortError')) return true;
+  return isObject(err) && (err as { name?: unknown }).name === 'AbortError';
+}
+
+const streamDiagnosticsMetadata = createErrorMetadata<StreamDiagnostics>(
+  'streamDiagnostics',
+  (v): v is StreamDiagnostics => isObject(v) && 'eventsProcessed' in v,
+);
 
 /** Attaches stream diagnostics to an error before rethrowing. */
-export function attachStreamDiagnostics(
-  err: unknown,
-  diagnostics: StreamDiagnostics,
-): void {
-  if (isObject(err)) {
-    (err as Record<symbol, unknown>)[STREAM_DIAGNOSTICS_KEY] = diagnostics;
-  }
+export const attachStreamDiagnostics = streamDiagnosticsMetadata.attach;
+const detectStreamDiagnostics = streamDiagnosticsMetadata.detect;
+
+const partialTextMetadata = createErrorMetadata<string>(
+  'partialText',
+  (v): v is string => isString(v) && v.length > 0,
+);
+
+/** Attaches partial text (generated before a stream failure) to an error.
+ *  Lets the caller surface the partial content to the user or use it as the
+ *  basis for a continuation prompt on retry. No-op if the text is empty. */
+export function attachPartialText(err: unknown, text: string): void {
+  if (text) partialTextMetadata.attach(err, text);
 }
 
-function detectStreamDiagnostics(err: unknown): StreamDiagnostics | undefined {
-  if (!isObject(err)) {
-    return undefined;
-  }
-  const diagnostics = (err as Record<symbol, unknown>)[STREAM_DIAGNOSTICS_KEY];
-  // Basic type check - diagnostics should be an object with expected fields
-  if (isObject(diagnostics) && 'eventsProcessed' in diagnostics) {
-    return diagnostics as StreamDiagnostics;
-  }
-  return undefined;
-}
+const detectPartialText = partialTextMetadata.detect;
 
 /**
  * Maps Anthropic error type strings to their corresponding HTTP status codes.
@@ -408,10 +595,63 @@ function isRelayError(rawErrorBody: unknown): boolean {
   return isObject(nested) && '_relay' in nested;
 }
 
+/** True when the relay rejected the request due to the user's monthly
+ *  spending limit being reached (supabase/functions/relay marks this with
+ *  `limitReached: true` in the error body). */
+function isRelayMonthlyLimitBody(rawErrorBody: unknown): boolean {
+  if (!isObject(rawErrorBody)) return false;
+  if ((rawErrorBody as { limitReached?: unknown }).limitReached === true) {
+    return true;
+  }
+  const nested = (rawErrorBody as { error?: unknown }).error;
+  return (
+    isObject(nested) &&
+    (nested as { limitReached?: unknown }).limitReached === true
+  );
+}
+
+/** True when the upstream provider (Anthropic today) returned a credit-
+ *  balance-depleted 400. Match on the message prefix because Anthropic's
+ *  type is generic `invalid_request_error` — the message is the reliable
+ *  signal. Covers both the direct format and the enveloped format. */
+function isUpstreamCreditDepletedBody(rawErrorBody: unknown): boolean {
+  if (!isObject(rawErrorBody)) return false;
+  const body = rawErrorBody as {
+    type?: unknown;
+    message?: unknown;
+    error?: unknown;
+  };
+  const pick = (v: unknown): { type?: string; message?: string } | undefined =>
+    isObject(v)
+      ? {
+          type: isString((v as { type?: unknown }).type)
+            ? (v as { type: string }).type
+            : undefined,
+          message: isString((v as { message?: unknown }).message)
+            ? (v as { message: string }).message
+            : undefined,
+        }
+      : undefined;
+  const candidates = [pick(body), pick(body.error)];
+  return candidates.some(
+    (c) =>
+      c?.type === 'invalid_request_error' &&
+      typeof c.message === 'string' &&
+      c.message.toLowerCase().includes('credit balance is too low'),
+  );
+}
+
 export function formatProviderHttpError(err: unknown): ProviderError {
   const rawErrorBody = detectRawErrorBody(err);
   const streamDiagnostics = detectStreamDiagnostics(err);
+  const partialText = detectPartialText(err);
   const isRelay = isRelayError(rawErrorBody);
+  // Credit exhaustion matches regardless of relay status: a direct
+  // Anthropic 400 "credit balance is too low" still wants the "Use your
+  // own API key" affordance so the user can switch credentials.
+  const isUpstreamCreditDepleted = isUpstreamCreditDepletedBody(rawErrorBody);
+  const isCredentialExhausted =
+    isRelayMonthlyLimitBody(rawErrorBody) || isUpstreamCreditDepleted;
 
   // Handle DOMException AbortError (from AbortController.abort())
   if (err instanceof DOMException && err.name === 'AbortError') {
@@ -421,6 +661,19 @@ export function formatProviderHttpError(err: unknown): ProviderError {
       isRelayError: false,
       rawErrorBody,
       streamDiagnostics,
+      partialText,
+    };
+  }
+
+  // Disk full — local I/O error, never retryable
+  if (isDiskFullError(err)) {
+    return {
+      message: 'No space left on device. Free up disk space and try again.',
+      retryable: false,
+      isRelayError: false,
+      rawErrorBody,
+      streamDiagnostics,
+      partialText,
     };
   }
 
@@ -429,10 +682,17 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   if (sdkMatch) {
     return {
       ...sdkMatch,
-      retryable: isRelay || sdkMatch.retryable,
+      // Credential-exhausted errors are not auto-retried (see
+      // RetryableInvocationNode.shouldAutoRetry) but the retry panel
+      // still surfaces with the "Use your own API key" button, so the
+      // `retryable` flag stays true here.
+      retryable: isRelay || sdkMatch.retryable || isCredentialExhausted,
       isRelayError: isRelay,
+      isCredentialExhausted: isCredentialExhausted || undefined,
+      isUpstreamCreditDepleted: isUpstreamCreditDepleted || undefined,
       rawErrorBody,
       streamDiagnostics,
+      partialText,
     };
   }
 
@@ -450,7 +710,9 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   // No status code on an unrecognized error likely means a network-level failure
   // (DNS, proxy, TLS, etc.) — treat as retryable for safety.
   const retryable =
-    isRelay || (statusCode ? isRetryableStatusCode(statusCode) : true);
+    isRelay ||
+    isCredentialExhausted ||
+    (statusCode ? isRetryableStatusCode(statusCode) : true);
 
   let message = finalMessage;
   if (statusCode) {
@@ -467,9 +729,12 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     provider,
     retryable,
     isRelayError: isRelay,
+    isCredentialExhausted: isCredentialExhausted || undefined,
+    isUpstreamCreditDepleted: isUpstreamCreditDepleted || undefined,
     requestId,
     rawErrorBody,
     streamDiagnostics,
+    partialText,
   };
 }
 
@@ -504,9 +769,23 @@ export function isMissingFinishReasonError(err: unknown): boolean {
   return err.message.includes('missing finish_reason');
 }
 
-/** Checks if an error indicates the previous_response_id is invalid (OpenAI Responses API). */
+/**
+ * Checks if an error indicates the previous_response_id is invalid or expired
+ * (OpenAI Responses API).
+ *
+ * OpenAI surfaces this in two shapes depending on how the SDK serializes the
+ * error body:
+ *   1. `... param: 'previous_response_id' ...` (parameter name in message)
+ *   2. `Previous response with id 'resp_...' not found.` (user-facing message)
+ * Both forms indicate the stored id is unusable and the chain must be rebuilt.
+ */
 export function isPreviousResponseIdError(err: unknown): boolean {
-  return err instanceof Error && err.message.includes('previous_response_id');
+  if (!(err instanceof Error)) return false;
+  const m = err.message.toLowerCase();
+  return (
+    m.includes('previous_response_id') ||
+    (m.includes('previous response') && m.includes('not found'))
+  );
 }
 
 /** Builds consistent error data for logging with MESSAGE_TYPES.ERROR. */

@@ -90,47 +90,13 @@ prompts:
 
   userRequest:
     - |
-      Apply all changes suggested in the inline annotations across all documents.
-
-      <scratchpad>
-      <cross_document_analysis>
-      - Documents present: [list]
-      - Cross-document dependencies: [what results/definitions are shared]
-      - Consistency issues to watch: [notation, definitions that must align]
-      </cross_document_analysis>
-
-      <annotation_analysis>
-      For each annotation across all documents:
-      \begin{enumerate}
-          \item Document: [name], Annotation: [text]
-              \begin{itemize}
-                  \item Location: [reference]
-                  \item Issue: [what is wrong or needed]
-                  \item Analysis: [work through if needed]
-                  \item Fix: [what change to make]
-                  \item Cross-document impact: [affects other documents?]
-              \end{itemize}
-      \end{enumerate}
-      </annotation_analysis>
-
-      <implementation_plan>
-      All changes by document:
-      \begin{enumerate}
-          \item Document: [name]
-              \begin{itemize}
-                  \item [Location]: [Change]
-              \end{itemize}
-      \end{enumerate}
-      </implementation_plan>
-      </scratchpad>
-
-      Apply all changes and remove the original annotations:
+      Apply all changes suggested in the inline annotations across all documents and remove the original annotations. Watch for cross-document dependencies (shared results/definitions, consistent notation).
 
       <latex_documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      <document name="{OUTPUT_FILES_ORDER[0]}">
       % DOCUMENT_1 WITH CHANGES APPLIED
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+      <document name="{OUTPUT_FILES_ORDER[1]}">
       % DOCUMENT_2 WITH CHANGES APPLIED
       </document>
       ... (repeat for all output files)
@@ -139,7 +105,7 @@ prompts:
     - |
       SECOND PHASE: Revise, condense, and finalize.
 
-      If extensive derivations were added in the first phase, revise them to match document level or +1 (unless instruction requests more detail).
+      If extensive derivations were added in the first phase, revise them to match each document's maturity level or +1 (unless the instruction requests more detail).
 
       Document Maturity Levels:
       \begin{itemize}
@@ -150,61 +116,15 @@ prompts:
           \item Level 5 - Publication Ready: Polished, journal-ready
       \end{itemize}
 
-      <scratchpad>
-      <document_assessment>
-      For each document:
-      \begin{enumerate}
-          \item Document: [name]
-              \begin{itemize}
-                  \item Current level: [1-5]
-                  \item Target level: [current or +1]
-              \end{itemize}
-      \end{enumerate}
-      - Instruction requests more detail: [Yes / No]
-      </document_assessment>
-
-      <revision_plan>
-      \begin{enumerate}
-          \item Condensation targets by document:
-              \begin{itemize}
-                  \item [Document]: [Location]: [Full] $\rightarrow$ [Level-appropriate]
-              \end{itemize}
-          \item Cross-document consistency check:
-              \begin{itemize}
-                  \item Notation aligned: [Yes / Issues]
-                  \item Definitions consistent: [Yes / Issues]
-                  \item Results match: [Yes / Issues]
-              \end{itemize}
-      \end{enumerate}
-      </revision_plan>
-
-      <verification>
-      \begin{itemize}
-          \item All fixes correct: [Yes / Issues]
-          \item Logical flow preserved: [Yes / Issues]
-          \item All documents complete: [Yes / Issues]
-          \item Cross-document consistency: [Yes / Issues]
-      \end{itemize}
-      </verification>
-
-      <change_summary>
-      Summary of changes by document:
-      \begin{enumerate}
-          \item Document: [name]
-              \begin{itemize}
-                  \item [Location]: [What was changed and why]
-              \end{itemize}
-      \end{enumerate}
-      </change_summary>
-      </scratchpad>
+      Verify before output: all fixes are correct, logical flow is preserved (no notation used before defined), each document is complete, and cross-document consistency holds (aligned notation, consistent definitions, matching results).
 
       Output the final revised documents at appropriate levels:
 
       <latex_documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      <document name="{OUTPUT_FILES_ORDER[0]}">
       % FINAL_DOCUMENT_1
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+      <document name="{OUTPUT_FILES_ORDER[1]}">
       % FINAL_DOCUMENT_2
       </document>
       ... (repeat for all output files)

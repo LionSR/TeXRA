@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Inline Paper Critic'
+  short_description: 'Annotate math papers with technical critique'
+  default_prompt: 'Use $inline-paper-critic to leave compile-safe inline comments on the technical problems and verified results in this manuscript.'

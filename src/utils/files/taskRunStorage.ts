@@ -2,6 +2,7 @@
 import * as path from 'path';
 import { promises as fs } from 'fs';
 
+import { WORKFLOW_OUTPUT_BASENAME } from '@agent/output/workflowOutputLayout';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import {
@@ -17,7 +18,6 @@ import {
   type RunStorageFileLocation,
   type WorkspaceFileLocation,
 } from '@shared/schemas';
-import { getConfig } from '@utils/config';
 import { getPathSegments } from '@utils/core/pathCore';
 import { StorageFS } from './storageFS';
 import { WorkspaceFS } from './workspaceFS';
@@ -192,59 +192,30 @@ function shouldSkipRelocation(relativePath: string): boolean {
 }
 
 export class TaskRunFileService {
-  private useRunStorage: boolean;
   public metadata: {
-    mode: 'workspace' | 'taskRunStorage';
     executionId: ExecutionId | undefined;
     runDirectory: string | undefined;
   };
   private hasPreparedSnapshot = false;
   private readonly mirroredDependencies = new Set<string>();
 
-  /**
-   * When true, the service always uses task-run storage regardless of user
-   * config. Set for subagent workflows so their outputs don't overcrowd the
-   * workspace.
-   */
-  private readonly forceRunStorage: boolean;
-
-  constructor(
-    executionId?: ExecutionId,
-    options?: { forceRunStorage?: boolean },
-  ) {
+  constructor(executionId?: ExecutionId) {
     this.metadata = {
-      mode: 'workspace',
       executionId: undefined,
       runDirectory: undefined,
     };
-    this.useRunStorage = false;
-    this.forceRunStorage = options?.forceRunStorage ?? false;
     this.updateRunContext(executionId);
   }
 
   public updateRunContext(executionId?: ExecutionId | null): void {
-    const storageMode = getConfig<'workspace' | 'taskRunStorage'>(
-      'texra.agentOutputs.storageMode',
-      'workspace',
-    );
-    const shouldUseRunStorage =
-      (storageMode === 'taskRunStorage' || this.forceRunStorage) &&
-      Boolean(executionId);
-
-    const nextMode = shouldUseRunStorage ? 'taskRunStorage' : 'workspace';
-    const nextRunDirectory = shouldUseRunStorage
-      ? getRunDir(executionId!)
-      : undefined;
+    const nextRunDirectory = executionId ? getRunDir(executionId) : undefined;
 
     const contextChanged =
-      this.metadata.mode !== nextMode ||
       this.metadata.executionId !== executionId ||
       this.metadata.runDirectory !== nextRunDirectory;
 
-    this.metadata.mode = nextMode;
     this.metadata.executionId = executionId ?? undefined;
     this.metadata.runDirectory = nextRunDirectory;
-    this.useRunStorage = shouldUseRunStorage;
 
     if (contextChanged) {
       this.hasPreparedSnapshot = false;
@@ -285,7 +256,7 @@ export class TaskRunFileService {
     } = {},
   ): Promise<void> {
     const executionId = this.metadata.executionId;
-    if (!executionId || !this.useRunStorage || this.hasPreparedSnapshot) {
+    if (!executionId || this.hasPreparedSnapshot) {
       return;
     }
 
@@ -369,58 +340,18 @@ export class TaskRunFileService {
   }
 
   /**
-   * Create a FileLocation for raw/intermediate output files (e.g., XML scratchpad).
-   * ALWAYS routes to run storage when executionId is available, regardless of
-   * the user's storageMode setting. This keeps intermediate artifacts isolated
-   * from the user's workspace.
+   * Create a FileLocation for a workflow output file. Routes to run storage
+   * when an executionId is available (the normal case); falls back to the
+   * workspace only when no execution context exists (e.g., ad-hoc utility
+   * calls made before any run is registered).
    *
-   * Falls back to workspace location only when no executionId is available.
-   *
-   * Accepts both absolute and workspace-relative paths for robustness.
-   *
-   * @param inputPath - Absolute or workspace-relative path (e.g., "paper__agent__r0_model.xml")
-   * @returns FileLocation (runStorage if executionId available, workspace otherwise)
-   */
-  public createRawOutputLocation(inputPath: string): FileLocation {
-    const resolved = WorkspaceFS.locatePath(inputPath);
-
-    if (resolved.kind === 'external') {
-      return createExternalLocation(resolved.absolutePath);
-    }
-
-    // Always route to run storage when executionId is available
-    const executionId = this.metadata.executionId;
-    if (executionId) {
-      const runDir = getRunDir(executionId);
-      const runAbsolute = path.join(runDir, resolved.relativePath);
-      return createRunStorageLocation(
-        runAbsolute,
-        resolved.relativePath,
-        executionId,
-      );
-    }
-
-    // Fallback to workspace when no execution context
-    return createWorkspaceLocation(
-      resolved.absolutePath,
-      resolved.relativePath,
-    );
-  }
-
-  /**
-   * Create a FileLocation from a path, with run-storage awareness.
-   * This is the preferred method for creating output file locations.
-   *
-   * Accepts both absolute and workspace-relative paths. Absolute paths within
-   * the workspace are automatically converted to relative paths internally.
-   * Paths outside the workspace are returned as external locations.
-   *
-   * Path normalization is handled internally - you can pass paths with either
-   * forward slashes or backslashes, and the function will normalize them for
-   * the current platform. It's safe to pass already-normalized paths.
+   * Accepts both absolute and workspace-relative paths. Absolute paths
+   * within the workspace are converted to relative paths internally. Paths
+   * outside the workspace are returned as external locations. Path
+   * normalization is handled internally.
    *
    * @param inputPath - Absolute or workspace-relative path
-   * @returns FileLocation (workspace, runStorage, or external based on path and mode)
+   * @returns FileLocation (runStorage, workspace, or external)
    */
   public createLocation(inputPath: string): FileLocation {
     const resolved = WorkspaceFS.locatePath(inputPath);
@@ -429,9 +360,8 @@ export class TaskRunFileService {
       return createExternalLocation(resolved.absolutePath);
     }
 
-    // Route to run storage when enabled
     const executionId = this.metadata.executionId;
-    if (executionId && this.useRunStorage) {
+    if (executionId) {
       const runAbsolute = path.join(
         getRunDir(executionId),
         resolved.relativePath,
@@ -443,7 +373,6 @@ export class TaskRunFileService {
       );
     }
 
-    // Default to workspace location
     return createWorkspaceLocation(
       resolved.absolutePath,
       resolved.relativePath,
@@ -482,6 +411,95 @@ export class TaskRunFileService {
       runPaths.absolute,
       runPaths.runRelative,
       executionId,
+    );
+  }
+
+  /**
+   * For every mirrored top-level dependency, ensure a symlink also exists at
+   * `<runDir>/r{round}/<relativePath>`. This lets `latexmk`, `pdflatex`, and
+   * `latexdiff` run with `cwd = runDir/r{round}` and resolve `\input{foo}`
+   * against sibling symlinks. Idempotent; safe to call every round.
+   *
+   * Collisions with primary workflow artifacts are skipped:
+   *   - `output.{ext}` at runDir root (the fixed round-output basename from
+   *     `WORKFLOW_OUTPUT_BASENAME`).
+   *   - Any existing real file at the destination — e.g. an extracted
+   *     multi-document output written to `r{round}/<source>.tex` by the
+   *     XML output manager when the same path is also an `\input`
+   *     dependency. Replacing that real file with a symlink to the
+   *     original workspace source would silently destroy the round's
+   *     revised content.
+   */
+  public async ensureMirroredInRoundDir(round: number): Promise<void> {
+    const executionId = this.metadata.executionId;
+    if (!executionId || this.mirroredDependencies.size === 0) {
+      return;
+    }
+
+    const roundSegment = `r${round}`;
+    const runDir = getRunDir(executionId);
+
+    await Promise.all(
+      [...this.mirroredDependencies].map(async (relativePath) => {
+        // A dep whose path ends at `output.{ext}` (no subdirectory within the
+        // round) would symlink over the primary revised output that lives at
+        // `r{round}/output.{ext}`. `createSymlink` replaces any existing
+        // entry on EEXIST, so an unguarded mirror would silently destroy the
+        // round's result. Skip these — the dependency is still reachable at
+        // `r{round}/../<relativePath>`, i.e. `<runDir>/<relativePath>`.
+        const { dir: depDir, name: depName } = path.parse(relativePath);
+        if (depDir === '' && depName === WORKFLOW_OUTPUT_BASENAME) {
+          logger.debug(
+            CHANNEL,
+            `Skipping round-dir mirror of ${relativePath}: would clobber primary output in ${roundSegment}`,
+          );
+          return;
+        }
+
+        const sourceAbsolute = path.join(runDir, relativePath);
+        const destinationAbsolute = path.join(
+          runDir,
+          roundSegment,
+          relativePath,
+        );
+
+        // Guard against clobbering a real file already written to the round
+        // dir — e.g. a multi-document extracted output at
+        // `r{round}/chapters/ch1.tex` when `chapters/ch1.tex` is also an
+        // `\input` dependency. A stale symlink from a previous call is
+        // safe to replace (idempotent); anything else must be preserved.
+        try {
+          const stat = await fs.lstat(destinationAbsolute);
+          if (!stat.isSymbolicLink()) {
+            logger.debug(
+              CHANNEL,
+              `Skipping round-dir mirror of ${relativePath}: destination in ${roundSegment} is an existing real file (likely an extracted output)`,
+            );
+            return;
+          }
+        } catch (error) {
+          const err = error as NodeJS.ErrnoException;
+          if (err?.code !== 'ENOENT') {
+            logger.debug(
+              CHANNEL,
+              `Unable to stat ${destinationAbsolute}: ${toErrorMessage(err)}`,
+            );
+          }
+          // ENOENT is the common case — no collision, proceed with the link.
+        }
+
+        try {
+          await createSymlink(
+            createRunStorageLocation(sourceAbsolute, relativePath, executionId),
+            destinationAbsolute,
+          );
+        } catch (error) {
+          logger.debug(
+            CHANNEL,
+            `Unable to mirror ${relativePath} into ${roundSegment}: ${toErrorMessage(error)}`,
+          );
+        }
+      }),
     );
   }
 }

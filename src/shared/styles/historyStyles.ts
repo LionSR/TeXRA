@@ -11,28 +11,22 @@ export const searchStyles: CSSResult = css`
   .search-container {
     display: flex;
     align-items: center;
-    margin-bottom: var(--spacing-xlarge);
-    gap: var(--spacing-medium);
+    margin-bottom: var(--wa-space-l);
+    gap: var(--wa-space-xs);
     width: 100%;
   }
 
   .search-input {
     flex: 1;
-    padding: var(--spacing-medium);
+    padding: var(--wa-space-xs);
     font-size: var(--font-size);
   }
 
   .search-controls {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
-  }
-
-  .search-nav-btn {
-    min-width: var(--height-button);
-    height: var(--height-button);
-    padding: 0;
-    font-size: var(--font-size);
+    gap: var(--wa-space-2xs);
+    margin-left: auto;
   }
 
   .match-count {
@@ -40,6 +34,19 @@ export const searchStyles: CSSResult = css`
     color: var(--color-text-secondary);
     min-width: calc(var(--height-button) * 2);
     text-align: center;
+  }
+
+  .action-icon-button[data-action='clear-history'] {
+    color: var(--color-text-secondary);
+    margin-left: var(--wa-space-2xs);
+  }
+
+  .action-icon-button[data-action='clear-history']::part(base) {
+    border-radius: var(--border-radius-medium);
+  }
+
+  .action-icon-button[data-action='clear-history']:hover {
+    color: var(--color-removed);
   }
 `;
 
@@ -50,88 +57,75 @@ export const historyListStyles: CSSResult = css`
   .history-container {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-medium);
-  }
-
-  .clear-container {
-    margin-bottom: var(--spacing-xlarge);
-  }
-
-  .button-clear {
-    padding: var(--spacing-medium) var(--spacing-large);
+    gap: var(--wa-space-xs);
   }
 
   .history-details {
     display: grid;
     grid-template-columns: 100px 1fr;
-    gap: var(--spacing-small);
-    margin-top: var(--spacing-medium);
+    gap: var(--wa-space-2xs);
+    margin-top: var(--wa-space-xs);
   }
 
   .history-label {
     font-weight: var(--font-weight-bold);
-    color: var(--vscode-editor-foreground);
+    color: var(--wa-color-text-normal);
   }
 
   .history-value {
-    color: var(--vscode-editor-foreground);
-    padding: var(--spacing-small) 0;
+    color: var(--wa-color-text-normal);
+    padding: var(--wa-space-2xs) 0;
     word-break: break-word;
   }
 
-  .history-item.selected {
-    background-color: var(--vscode-list-activeSelectionBackground);
-    color: var(--vscode-list-activeSelectionForeground);
-  }
-
   .history-item {
-    margin-bottom: var(--spacing-medium);
+    margin-bottom: var(--wa-space-xs);
   }
 
   .history-actions {
     display: flex;
-    gap: var(--spacing-small);
+    gap: var(--wa-space-2xs);
   }
 
   .history-timestamp {
     font-size: var(--font-size-sm);
-    margin-bottom: var(--spacing-small);
+    margin-bottom: var(--wa-space-2xs);
   }
 
   .history-description {
     font-size: var(--font-size-sm);
-    color: var(--vscode-descriptionForeground);
+    color: var(--wa-color-text-quiet);
     font-style: italic;
-    margin-top: var(--spacing-small);
+    margin-top: var(--wa-space-2xs);
     line-height: var(--line-height-normal);
   }
 
   .config-section {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-small);
-    background-color: var(--vscode-editor-inactiveSelectionBackground);
-    padding: var(--spacing-medium);
+    gap: var(--wa-space-2xs);
+    background-color: var(--wa-color-neutral-fill-quiet);
+    padding: var(--wa-space-xs);
     border-radius: var(--border-radius);
-    margin: var(--spacing-medium) 0;
+    margin: var(--wa-space-xs) 0;
   }
 
   .config-item {
     display: flex;
-    gap: var(--spacing-medium);
+    gap: var(--wa-space-xs);
     align-items: baseline;
   }
 
   .config-key {
     font-weight: var(--font-weight-medium);
-    color: var(--vscode-editorInfo-foreground);
+    color: var(--wa-color-brand-on-quiet);
     min-width: calc(
-      var(--width-button-min) + var(--spacing-xlarge) + var(--spacing-xlarge)
+      var(--width-button-min) + var(--wa-space-l) + var(--wa-space-l)
     );
   }
 
   .config-value {
-    color: var(--vscode-descriptionForeground);
+    color: var(--wa-color-text-quiet);
     word-break: break-word;
   }
 `;

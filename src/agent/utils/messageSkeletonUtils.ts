@@ -1,19 +1,11 @@
-/**
- * Utility functions for working with message objects in agent conversations.
- */
-import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
+import { MESSAGE_PREVIEW_LENGTH } from '@agent/core/constants';
 
-/**
- * Truncate a string if it exceeds maxLength, appending char count.
- */
 function truncateString(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return `${text.substring(0, maxLength)}... (${text.length} chars)`;
 }
 
-/**
- * Create skeleton for a content array item (common in Anthropic responses).
- */
+/** Create skeleton for a content array item (common in Anthropic responses). */
 function contentItemToSkeleton(item: unknown, maxLength: number): unknown {
   if (typeof item !== 'object' || item === null) {
     return typeof item;
@@ -54,11 +46,8 @@ function contentItemToSkeleton(item: unknown, maxLength: number): unknown {
 }
 
 /**
- * Creates a skeleton representation of a message object for debugging.
- * Preserves structure while truncating content to avoid cluttering logs.
- * @param message The message object to create a skeleton for
- * @param maxContentLength Maximum length of content strings before truncation
- * @returns A simplified message object with truncated content
+ * Creates a skeleton representation of a message object for debugging —
+ * preserves structure while truncating content to avoid cluttering logs.
  */
 export function messageToSkeleton(
   message: unknown,

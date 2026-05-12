@@ -7,7 +7,7 @@
  * - POST /get-agent-config - Fetch agent YAML config by name
  */
 
-import { createClient } from 'jsr:@supabase/supabase-js@2.89.0';
+import { createClient } from 'jsr:@supabase/supabase-js@2.104.1';
 import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 
 // =============================================================================

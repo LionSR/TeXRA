@@ -1,6 +1,8 @@
+// Third-party imports
+import { ReasoningEffort } from 'llm-zoo';
+
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 
 // Type imports
@@ -18,7 +20,8 @@ import type { DeepSeekToolCall } from './types/IModelHandler';
  *
  * Reasoning content lifecycle:
  * - Captured in processThinkingBlock() on each model response
- * - Consumed (and cleared) when creating tool-use follow-up messages
+ * - Copied into tool-use assistant messages, which remain in conversation history
+ * - Cleared from transient workspace state after the follow-up message is built
  * - Overwritten on next model response if not consumed (no leak between turns)
  *
  * Note: Handler instances are created per-agent-run, not shared across requests.
@@ -27,6 +30,8 @@ import type { DeepSeekToolCall } from './types/IModelHandler';
  */
 export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
   // toolCallProvider and usageProvider inherit from base class via config.provider
+
+  protected override useReasoningStreamAggregator = true;
 
   /**
    * DeepSeek models don't support vision/attachments in tool results.
@@ -49,10 +54,38 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     return this.capabilities.supportsReasoning;
   }
 
-  protected override createStreamingAggregator(): BaseReasoningStreamAggregator | null {
-    return this.capabilities.supportsReasoning
-      ? new BaseReasoningStreamAggregator()
-      : null;
+  /**
+   * DeepSeek also requires reasoning_content on final assistant messages after
+   * a tool-use turn; otherwise the next queued follow-up can be rejected.
+   */
+  protected override shouldIncludeReasoningInAssistantMessages(): boolean {
+    return this.capabilities.supportsReasoning;
+  }
+
+  /**
+   * DeepSeek's examples pass back `content` beside `reasoning_content` and
+   * `tool_calls`, even when content is the empty string.
+   */
+  protected override shouldIncludeEmptyAssistantToolContent(): boolean {
+    return true;
+  }
+
+  /**
+   * DeepSeek V4 thinking supports effort control. llm-zoo 1.4.2 does not mark
+   * these models as configurable yet, so treat DeepSeek thinking models as
+   * effort-capable here.
+   */
+  protected override getEffectiveReasoningEffort(): ReasoningEffort | null {
+    if (!this.capabilities.supportsReasoning) return null;
+    return this.capabilities.reasoningEffort ?? ReasoningEffort.HIGH;
+  }
+
+  /**
+   * DeepSeek's OpenAI-format API accepts only high/max. Its compatibility layer
+   * maps low/medium to high and xhigh to max, so do that explicitly.
+   */
+  protected override validateReasoningEffort(effort: string): string {
+    return effort === ReasoningEffort.XHIGH ? 'max' : 'high';
   }
 
   /**
@@ -66,25 +99,16 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
   }
 
   /**
-   * DeepSeek supports thinking mode via:
-   * - model="deepseek-reasoner" (thinking enabled by default)
-   * - model="deepseek-chat" with thinking: {"type": "enabled"}
+   * DeepSeek's `thinking` param is only sent when the desired mode differs
+   * from the model's API default. `deepseek-chat` defaults OFF; everything
+   * else (`deepseek-reasoner`, V4 series) defaults ON.
    */
   protected override getThinkingParameter():
     | { type: 'enabled' | 'disabled' }
     | undefined {
-    const { fullName } = this.config;
-    // deepseek-chat has thinking OFF by default, enable if supportsReasoning
-    if (fullName === 'deepseek-chat' && this.capabilities.supportsReasoning) {
-      return { type: 'enabled' };
-    }
-    // deepseek-reasoner has thinking ON by default, disable if !supportsReasoning
-    if (
-      fullName === 'deepseek-reasoner' &&
-      !this.capabilities.supportsReasoning
-    ) {
-      return { type: 'disabled' };
-    }
-    return undefined;
+    const wantsThinking = this.capabilities.supportsReasoning;
+    const defaultsOn = this.config.fullName !== 'deepseek-chat';
+    if (defaultsOn === wantsThinking) return undefined;
+    return { type: wantsThinking ? 'enabled' : 'disabled' };
   }
 }

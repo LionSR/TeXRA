@@ -1,5 +1,21 @@
-// Third-party imports
-import * as vscode from 'vscode';
+// Local imports
+import { tryPlatform } from '@platform/platform';
+import type { ConfigTarget } from '@platform/interfaces/config';
+import type { Disposable } from '@platform/interfaces/disposable';
+
+interface ConfigSubscriptionContext {
+  subscriptions: Disposable[];
+}
+
+interface UpdateConfigOptions {
+  target?: ConfigTarget;
+  prefix?: boolean;
+  ifUnset?: boolean;
+}
+
+function configProvider() {
+  return tryPlatform()?.config;
+}
 
 /**
  * Gets a configuration value from VS Code settings.
@@ -16,21 +32,8 @@ import * as vscode from 'vscode';
  * @returns The configuration value or default value
  */
 export function getConfig<T>(path: string, defaultValue?: T): T {
-  const parts = path.split('.');
-
-  // Try multiple namespaces in order of priority (using === undefined to preserve null values)
-  let result: unknown = vscode.workspace
-    .getConfiguration(parts[0])
-    .get(parts.slice(1).join('.'));
-
-  if (result === undefined) {
-    result = vscode.workspace.getConfiguration('texra').get(path);
-  }
-  if (result === undefined) {
-    result = vscode.workspace.getConfiguration().get(`texra.${path}`);
-  }
-
-  return result !== undefined ? (result as T) : (defaultValue as T);
+  const provider = configProvider();
+  return provider ? provider.get(path, defaultValue) : (defaultValue as T);
 }
 
 /**
@@ -49,32 +52,27 @@ export function getConfig<T>(path: string, defaultValue?: T): T {
 export async function updateConfig<T>(
   path: string,
   value: T,
-  options: {
-    target?: vscode.ConfigurationTarget;
-    prefix?: boolean;
-    ifUnset?: boolean;
-  } = {},
+  options: UpdateConfigOptions = {},
 ): Promise<void> {
-  const {
-    target = vscode.ConfigurationTarget.Workspace,
-    prefix = true,
-    ifUnset = false,
-  } = options;
+  const { target = 'workspace', prefix = true, ifUnset = false } = options;
 
   const key = prefix && !path.startsWith('texra.') ? `texra.${path}` : path;
+  const provider = configProvider();
+  if (!provider) return;
 
-  if (ifUnset) {
-    const setting = vscode.workspace.getConfiguration().inspect(key);
-    if (
-      setting?.globalValue !== undefined ||
-      setting?.workspaceValue !== undefined ||
-      setting?.workspaceFolderValue !== undefined
-    ) {
-      return; // Setting already exists, don't update
-    }
+  if (ifUnset && provider.isExplicitlySet(key)) {
+    return; // Setting already exists, don't update
   }
 
-  await vscode.workspace.getConfiguration().update(key, value, target);
+  await provider.update(key, value, target);
+}
+
+/**
+ * Inspect a configuration key to retrieve its raw global/workspace/folder values
+ * (without VS Code defaults). Returns `undefined` if the key is not registered.
+ */
+export function inspectConfig<T = unknown>(key: string) {
+  return configProvider()?.inspect<T>(key);
 }
 
 /**
@@ -82,13 +80,7 @@ export async function updateConfig<T>(
  * (global, workspace, or workspace folder), rather than using defaults.
  */
 export function isConfigExplicitlySet(key: string): boolean {
-  const inspection = vscode.workspace.getConfiguration().inspect(key);
-  if (!inspection) return false;
-  return (
-    inspection.globalValue !== undefined ||
-    inspection.workspaceValue !== undefined ||
-    inspection.workspaceFolderValue !== undefined
-  );
+  return configProvider()?.isExplicitlySet(key) ?? false;
 }
 
 /**
@@ -100,17 +92,15 @@ export function isConfigExplicitlySet(key: string): boolean {
  * @returns Disposable for the registered listener
  */
 export function watchConfig(
-  context: vscode.ExtensionContext,
+  context: ConfigSubscriptionContext,
   keys: string | string[],
   callback: () => void,
-): vscode.Disposable {
+): Disposable {
   const keyArray = Array.isArray(keys) ? keys : [keys];
-
-  const disposable = vscode.workspace.onDidChangeConfiguration((e) => {
-    if (keyArray.some((key) => e.affectsConfiguration(key))) {
-      callback();
-    }
-  });
+  const provider = configProvider();
+  const disposable = provider?.watch(keyArray, callback) ?? {
+    dispose: () => {},
+  };
 
   context.subscriptions.push(disposable);
   return disposable;

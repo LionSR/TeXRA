@@ -3,11 +3,10 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
   createToolUseCycleFlow,
-  createToolUseCycleShared,
+  type ToolUseCycleShared,
 } from '@agent/core/flows/ToolUseCycleFlow';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { formatProviderHttpError } from '@common/errors';
-import { bus } from '@eventBus/ProgressEventBus';
 
 import {
   type ToolUseRunShared,
@@ -42,29 +41,34 @@ export class ToolUseCycleNode<C> extends Node<
   }
 
   async exec(prepRes: CyclePrepResult): Promise<ToolUseCycleOutcome> {
-    const { streamId, setting, resolvedTools, modelHandler, config } =
-      this.services;
+    const {
+      streamId,
+      setting,
+      resolvedTools,
+      modelHandler,
+      config,
+      runtimeHost,
+    } = this.services;
 
     if (prepRes.shouldSkip) {
-      if (prepRes.workspaceState.todos.todos.length) {
-        bus.emit('updateTodos', {
-          streamId,
-          todos: prepRes.workspaceState.todos.todos,
-        });
+      const { todos } = prepRes.workspaceState.todos;
+      const { plan } = prepRes.workspaceState.plan;
+      if (todos.length) {
+        runtimeHost.emit('updateTodos', { streamId, todos });
       }
-      if (prepRes.workspaceState.plan.plan) {
-        bus.emit('updatePlan', {
-          streamId,
-          plan: prepRes.workspaceState.plan.plan,
-        });
+      if (plan) {
+        runtimeHost.emit('updatePlan', { streamId, plan });
       }
       return { outcome: 'skipped' };
     }
 
-    const cycleShared = createToolUseCycleShared(
-      prepRes.messages,
-      prepRes.runState.totalRounds,
-    );
+    const cycleShared: ToolUseCycleShared = {
+      messages: prepRes.messages,
+      shouldStop: false,
+      endTurn: false,
+      cycleIndex: prepRes.runState.totalRounds,
+      cycleResponseTimeMs: 0,
+    };
 
     const flow = createToolUseCycleFlow<C>();
     let client = await modelHandler.getClient();
@@ -84,13 +88,9 @@ export class ToolUseCycleNode<C> extends Node<
     });
 
     const { onProgress, persistTodos } = this.services;
-    // Serialize writes so rapid updates don't persist out of order
     let todoPersistChain = Promise.resolve();
     prepRes.workspaceState.todos.setOnUpdate((todos) => {
-      bus.emit('updateTodos', {
-        streamId,
-        todos,
-      });
+      runtimeHost.emit('updateTodos', { streamId, todos });
       if (persistTodos) {
         todoPersistChain = todoPersistChain
           .then(() => persistTodos(todos))
@@ -99,10 +99,7 @@ export class ToolUseCycleNode<C> extends Node<
       onProgress?.({ kind: 'todos', todos });
     });
     prepRes.workspaceState.plan.setOnUpdate((plan) => {
-      bus.emit('updatePlan', {
-        streamId,
-        plan,
-      });
+      runtimeHost.emit('updatePlan', { streamId, plan });
       onProgress?.({ kind: 'plan', plan });
     });
 
@@ -170,24 +167,26 @@ export class ToolUseCycleNode<C> extends Node<
       });
     }
 
+    // All outcomes continue to WaitNode (FlowTransition.DEFAULT).
+    // Tool-use agents are conversational — the user can send a
+    // follow-up to retry after a failure, unlike workflows.
     switch (execRes.outcome) {
       case 'completed':
         shared.messages = execRes.messages;
-        return FlowTransition.DEFAULT;
-
+        break;
       case 'skipped':
-        return FlowTransition.DEFAULT;
-
+        break;
       case 'failed':
         shared.lastError = {
           message: execRes.message,
           retryable: execRes.retryable ?? false,
         };
-        return FlowTransition.FINALIZE;
-
+        break;
       case 'cancelled':
         shared.userCancelledRetry = true;
-        return FlowTransition.FINALIZE;
+        break;
     }
+
+    return FlowTransition.DEFAULT;
   }
 }

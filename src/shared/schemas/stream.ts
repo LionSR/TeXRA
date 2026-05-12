@@ -50,9 +50,9 @@ export const StreamTabInfoSchema = z.object({
   name: z.string(),
   label: z.string(),
   model: z.string().optional(),
+  modelLabel: z.string().optional(),
   agent: z.string().optional(),
   agentCategory: AgentCategorySchema,
-  hasMultipleOutputs: z.boolean().optional(),
   isRemote: z.boolean().optional(),
   inputFile: z.string().optional(),
   creationTimestamp: z.number(),
@@ -60,17 +60,8 @@ export const StreamTabInfoSchema = z.object({
   parentStreamId: StreamTabIdSchema.optional(),
   /** AI-generated summary of what this session aims to accomplish. */
   description: z.string().optional(),
+  /** Full, untruncated command that spawned a process-agent stream (e.g. bash).
+   * Set only for process streams; used by the process stream view. */
+  command: z.string().optional(),
 });
 export type StreamTabInfo = z.infer<typeof StreamTabInfoSchema>;
-
-const InstructionMetadataSchema = z.object({
-  showToggle: z.boolean().optional(),
-});
-type InstructionMetadata = z.infer<typeof InstructionMetadataSchema>;
-
-export const InstructionUpdateSchema = z.object({
-  text: z.string(),
-  metadata: InstructionMetadataSchema.optional(),
-  timestamp: z.number().optional(),
-});
-export type InstructionUpdate = z.infer<typeof InstructionUpdateSchema>;

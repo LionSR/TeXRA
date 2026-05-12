@@ -1,10 +1,11 @@
 import * as path from 'path';
 
-import * as vscode from 'vscode';
-
-import { showLoggedErrorMessage } from '@common/errors';
+import { toErrorMessage } from '@common/errors';
+import { workspaceSM, WorkspaceStateKey } from '@common/state';
+import { isDirectory, isFile, isSymlink } from '@common/files/fsEntryType';
 import { runLatexFormatter } from '@latex/texFormatter';
 import * as logger from '@logger/logUtils';
+import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { hasExtension } from '@utils/core/pathCore';
@@ -13,37 +14,52 @@ import { EXCLUDED_DIRS } from './constants';
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
 
-/** Backup file extensions to clean up after formatting */
-const BACKUP_EXTENSIONS = ['.bak', '.bak0', '.bak1'] as const;
-const INDENT_LOG_FILE = 'indent.log';
-
-/** Check if a file is a backup file that should be cleaned up */
-function isBackupFile(name: string): boolean {
-  return (
-    BACKUP_EXTENSIONS.some((ext) => name.endsWith(ext)) ||
-    name === INDENT_LOG_FILE
-  );
-}
+export type IndentLatexResult =
+  | {
+      status: 'formatted';
+      directory: string;
+      count: number;
+    }
+  | {
+      status: 'disabled';
+      directory: string;
+      count: 0;
+    }
+  | {
+      status: 'missing-config';
+      directory: string;
+      count: 0;
+      configPath: string;
+    }
+  | {
+      status: 'error';
+      directory: string;
+      count: 0;
+      error: unknown;
+    };
 
 /**
  * Formats LaTeX files in a specific directory and its subdirectories
  * @param directory The directory to process (relative to workspace). If not provided, uses the root.
  * @param progressCallback Optional callback for progress updates
- * @returns Promise<number> The number of files formatted
+ * @returns Promise<IndentLatexResult> The formatting outcome
  */
 export async function indentLatexFilesInDirectory(
   directory: string = '.',
   progressCallback?: (message: string, increment?: number) => void,
-): Promise<number> {
+): Promise<IndentLatexResult> {
   logger.debug(
     CHANNEL,
     `Starting LaTeX indentation process for directory: ${directory}`,
   );
 
-  const formatter = getConfig<string>('texra.latex.formatter', 'latexindent');
+  const formatter = workspaceSM.get<string>(
+    WorkspaceStateKey.LATEX_FORMATTER,
+    LATEX_CONFIG_DEFAULTS.latexFormatter,
+  );
   if (formatter === 'none') {
     logger.debug(CHANNEL, 'LaTeX formatter disabled; skipping indentation');
-    return 0;
+    return { status: 'disabled', directory, count: 0 };
   }
   const configKey =
     formatter === 'tex-fmt'
@@ -53,14 +69,13 @@ export async function indentLatexFilesInDirectory(
   logger.debug(CHANNEL, `Formatter: ${formatter}, Config: ${config}`);
 
   if (config && !(await AbsoluteFS.exists(config))) {
-    logger.error(
-      CHANNEL,
-      `Error: Formatter config file not found at ${config}`,
-    );
-    vscode.window.showErrorMessage(
-      `Formatter config file not found at ${config}`,
-    );
-    return 0;
+    logger.error(CHANNEL, `Formatter config file not found at ${config}`);
+    return {
+      status: 'missing-config',
+      directory,
+      count: 0,
+      configPath: config,
+    };
   }
 
   let indentedCount = 0;
@@ -75,30 +90,30 @@ export async function indentLatexFilesInDirectory(
         continue;
       }
 
+      // Skip symlinks to avoid cycles; we have no realpath/visited guard.
+      if (isSymlink(type)) {
+        continue;
+      }
+
       const fullPath = path.join(dirPath, name);
 
-      if (type === vscode.FileType.Directory) {
+      if (isDirectory(type)) {
         await walkDirectory(fullPath, onFile);
-      } else if (type === vscode.FileType.File) {
+      } else if (isFile(type)) {
         await onFile(fullPath, name);
       }
     }
   }
 
   try {
-    // Pass 1: Format .tex files
     await walkDirectory(directory, async (fullPath, name) => {
-      if (!hasExtension(name, '.tex')) {
-        return;
-      }
-      if (progressCallback) {
-        progressCallback(`Indenting ${path.basename(fullPath)}...`, 0);
-      }
+      if (!hasExtension(name, '.tex')) return;
 
+      progressCallback?.(`Indenting ${path.basename(fullPath)}...`, 0);
       logger.debug(CHANNEL, `Processing file: ${fullPath}`);
+
       try {
-        const success = await runLatexFormatter(fullPath);
-        if (success) {
+        if (await runLatexFormatter(fullPath)) {
           logger.info(CHANNEL, `Successfully formatted: ${fullPath}`);
           indentedCount++;
         } else {
@@ -109,32 +124,16 @@ export async function indentLatexFilesInDirectory(
       }
     });
 
-    // Pass 2: Clean up backup files created during formatting
-    await walkDirectory(directory, async (fullPath, name) => {
-      if (isBackupFile(name)) {
-        logger.debug(CHANNEL, `Found cleanup file: ${fullPath}`);
-        await WorkspaceFS.delete(fullPath);
-      }
-    });
-
     logger.info(
       CHANNEL,
       `${indentedCount} .tex files have been formatted in ${directory}`,
     );
-    return indentedCount;
+    return { status: 'formatted', directory, count: indentedCount };
   } catch (err) {
-    await showLoggedErrorMessage(
+    logger.error(
       CHANNEL,
-      'Error during indentation process',
-      err,
+      `Error during indentation process: ${toErrorMessage(err)}`,
     );
-    return 0;
+    return { status: 'error', directory, count: 0, error: err };
   }
-}
-
-/**
- * Indents all LaTeX files in the workspace
- */
-export async function runIndentTeX(): Promise<void> {
-  await indentLatexFilesInDirectory('.');
 }

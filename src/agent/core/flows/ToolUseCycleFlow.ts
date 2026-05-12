@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Local imports - core flow primitives
 import { isRemoteAgent } from '@agent/index';
-import { BaseNode, BatchNode, Flow } from '@agent/node';
+import { BaseNode, Flow, Node } from '@agent/node';
 import { recordCycleMetrics } from '@agent/core/AgentState';
 import {
   BaseCycleFieldsSchema,
@@ -12,7 +12,6 @@ import {
   getDebugContext,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import {
@@ -35,6 +34,7 @@ import type {
   TodoState,
 } from '@agent/core/AgentWorkspaceState';
 import type { ToolResult } from '@agent/core/ToolTypes';
+import { getActiveChildren } from '@agent/runtime/executionRegistry';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - logging
@@ -45,13 +45,12 @@ import {
   formatZodIssuesForDiagnostics,
   type ValidationErrorDiagnostics,
 } from '@tools/result';
+import { formatPostCompactionContext } from '@tools/subagentResults';
 import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { formatContent } from '@utils/text/xmlUtils';
 
 // Local file imports
-import { getActiveChildren } from '@agent/runtime/executionRegistry';
-import { formatPostCompactionContext } from '@tools/subagentResults';
 import { FlowTransition } from './FlowTransitions';
 import { ModelInvocationNode } from './ModelInvocationNode';
 import type { CycleParams, ToolUseCycleServices } from './CycleServices';
@@ -94,7 +93,9 @@ function parseToolInput(
   logger: AgentLogger,
 ): unknown {
   if (raw == null) {
-    logger.warn(`Tool call ${callId}: Received null input, using empty object`);
+    logger.debug(
+      `Tool call ${callId}: Received null input, using empty object`,
+    );
     return {};
   }
 
@@ -105,7 +106,7 @@ function parseToolInput(
   try {
     return JSON.parse(raw);
   } catch {
-    logger.warn(
+    logger.debug(
       `Tool call ${callId}: Failed to parse input as JSON, using raw string`,
     );
     return raw;
@@ -200,33 +201,6 @@ export interface ToolUseCycleShared extends ToolUseCycleFields {
 }
 
 /**
- * Create a fresh ToolUseCycleShared with all fields initialized.
- *
- * Same pattern as ResponseCycleFlow's initializeCycleFields():
- * typed literal ensures compile-time checking — missing fields, typos,
- * and wrong types are all caught.
- */
-export function createToolUseCycleShared(
-  messages: ProviderMessage[],
-  cycleIndex: number,
-): ToolUseCycleShared {
-  return {
-    messages,
-    shouldStop: false,
-    endTurn: false,
-    responseTimeMs: undefined,
-    stopReason: undefined,
-    lastError: undefined,
-    response: undefined,
-    toolCalls: undefined,
-    text: undefined,
-    cycleIndex,
-    cycleResponseTimeMs: 0,
-    cycleNormalizedUsage: undefined,
-  };
-}
-
-/**
  * Prepares a tool-use cycle by checking interruptions and injecting queued follow-ups.
  *
  * If there are queued user messages (typed during previous tool execution),
@@ -243,14 +217,13 @@ class ToolUsePrepNode<C> extends BaseNode<
   ): Promise<{ interrupted: boolean; queuedFollowUp: string | null }> {
     const interrupted = this.services.checkInterruption();
 
-    // Check for queued follow-ups to inject before the model call
-    let queuedFollowUp: string | null = null;
-    if (this.services.session?.hasQueuedFollowUp()) {
-      // Drain without waiting (we know there's something)
-      queuedFollowUp = await this.services.session.waitForFollowUp(() => false);
+    if (!this.services.session?.hasQueuedFollowUp()) {
+      return { interrupted, queuedFollowUp: null };
     }
 
-    return { interrupted, queuedFollowUp };
+    // Drain without waiting (we know there's something queued)
+    const items = await this.services.session.waitForFollowUp(() => false);
+    return { interrupted, queuedFollowUp: items?.join('\n\n') ?? null };
   }
 
   async post(
@@ -424,7 +397,7 @@ class ToolUseProcessNode<C> extends BaseNode<
 
   async post(
     shared: ToolUseCycleShared,
-    _prepRes: ToolUseProcessPrepResult,
+    prepRes: ToolUseProcessPrepResult,
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
     const { run, workspace, onRoundFinalized, modelHandler } = this.services;
@@ -461,7 +434,12 @@ class ToolUseProcessNode<C> extends BaseNode<
       shared.shouldStop = true;
       shared.endTurn = true;
       if (execRes.text) {
-        shared.messages.push(modelHandler.createAssistantMessage(execRes.text));
+        shared.messages.push(
+          modelHandler.createAssistantMessageFromResponse(
+            prepRes.response,
+            execRes.text,
+          ),
+        );
         workspace.assembly.lastResponse = execRes.text;
       }
       workspace.resetServerToolContent();
@@ -491,7 +469,10 @@ const SLOW_TOOLS = new Set([
 const DEFERRED_LOG_TOOLS = new Set(['bash', 'codex']);
 
 /** Tools that support streaming partial output to the UI. */
-const STREAMABLE_TOOLS = new Set(['bash', 'codex']);
+const STREAMABLE_TOOLS = new Set(['bash']);
+
+/** External inquiry calls can run concurrently when they start distinct threads. */
+const CONCURRENT_EXTERNAL_INQUIRY_TOOL = 'external_inquiry';
 
 /** Maximum size of the streaming output buffer sent to the UI (bytes). */
 const STREAM_BUFFER_MAX = 50_000;
@@ -517,20 +498,23 @@ interface ToolExecutionResult {
 }
 
 /**
- * Dispatches tool calls and processes their results using BatchNode pattern.
+ * Dispatches tool calls with hybrid sequential/parallel execution.
  *
- * Uses BatchNode for sequential execution of tool calls. This preserves ordering
- * guarantees when tools may have dependencies (e.g., read file then edit file).
- *
- * To enable parallel execution, change to extend ParallelBatchNode instead.
+ * Sequential by default to preserve ordering guarantees when tools have
+ * dependencies (e.g., read file then edit file). Consecutive independent
+ * external_inquiry calls run in parallel so the user can work through
+ * multiple outside-model prompts at once.
  *
  * Batches follow-up messages for Google/DeepSeek handlers to preserve thought signatures.
  */
-class ToolUseDispatchNode<C> extends BatchNode<
+class ToolUseDispatchNode<C> extends Node<
   ToolUseCycleShared,
   CycleParams,
   ToolUseCycleServices<C>
 > {
+  /** Call IDs that are safe to dispatch concurrently in this batch. */
+  private _concurrentCallIds = new Set<string>();
+
   /**
    * Call IDs of duplicate parallel calls detected during prep().
    * These are skipped during exec() and receive a synthetic error result
@@ -538,9 +522,141 @@ class ToolUseDispatchNode<C> extends BatchNode<
    */
   private _duplicateCallIds = new Set<string>();
 
+  /** Extract a normalized thread key for external_inquiry follow-up calls. */
+  private getExternalInquiryFollowupThreadKey(
+    call: SdkToolCall,
+  ): string | null {
+    if (call.name !== CONCURRENT_EXTERNAL_INQUIRY_TOOL) return null;
+    const input = parseToolInput(call.input, call.callId, this.services.logger);
+    if (typeof input !== 'object' || input == null) return null;
+    const threadId = (input as Record<string, unknown>).thread_id;
+    if (typeof threadId !== 'string' || threadId.trim().length === 0) {
+      return null;
+    }
+    return threadId.toLowerCase();
+  }
+
+  /**
+   * Compute which calls are safe to run concurrently.
+   *
+   * external_inquiry calls are parallel-safe only when independent:
+   * - calls without thread_id start new threads and are always independent
+   * - calls with thread_id are follow-ups and are parallel-safe only when the
+   *   thread_id is unique in the current batch
+   */
+  private buildConcurrentCallIds(toolCalls: SdkToolCall[]): Set<string> {
+    const concurrent = new Set<string>();
+    const followupCounts = new Map<string, number>();
+
+    for (const call of toolCalls) {
+      if (call.name !== CONCURRENT_EXTERNAL_INQUIRY_TOOL) continue;
+      const threadKey = this.getExternalInquiryFollowupThreadKey(call);
+      if (!threadKey) continue;
+      followupCounts.set(threadKey, (followupCounts.get(threadKey) ?? 0) + 1);
+    }
+
+    for (const call of toolCalls) {
+      if (call.name !== CONCURRENT_EXTERNAL_INQUIRY_TOOL) continue;
+      const threadKey = this.getExternalInquiryFollowupThreadKey(call);
+      if (!threadKey) {
+        // thread_id omitted: starts a new thread, so it remains parallel-safe.
+        concurrent.add(call.callId);
+        continue;
+      }
+      if ((followupCounts.get(threadKey) ?? 0) === 1) {
+        concurrent.add(call.callId);
+      }
+    }
+
+    return concurrent;
+  }
+
+  private isConcurrentExternalInquiryCall(call: SdkToolCall): boolean {
+    return this._concurrentCallIds.has(call.callId);
+  }
+
+  private buildConcurrentFailureResult(
+    call: SdkToolCall,
+    error: unknown,
+  ): ToolExecutionResult {
+    const parsedInput = parseToolInput(
+      call.input,
+      call.callId,
+      this.services.logger,
+    );
+    const { message, diagnostics } = normalizeToolCallError(call.name, error);
+
+    return {
+      call,
+      result: {
+        error: message,
+        isError: true,
+        ...(diagnostics ? { diagnostics } : {}),
+      },
+      parsedInput,
+      extracted: {
+        sanitizedResult: { error: message },
+        attachments: [],
+      },
+      editedFiles: [],
+      logRef: {
+        logId: undefined,
+        groupId: this.services.logger.resolveActiveGroupId(),
+      },
+    };
+  }
+
+  private async executeConcurrentGroup(
+    group: SdkToolCall[],
+  ): Promise<(ToolExecutionResult | null)[]> {
+    const settled = await Promise.allSettled(
+      group.map((call) => super._exec(call)),
+    );
+    return settled.map((result, index) =>
+      result.status === 'fulfilled'
+        ? (result.value as ToolExecutionResult | null)
+        : this.buildConcurrentFailureResult(group[index], result.reason),
+    );
+  }
+
+  override async _exec(
+    items: unknown[],
+  ): Promise<(ToolExecutionResult | null)[]> {
+    if (!Array.isArray(items)) return [];
+
+    const toolCalls = items as SdkToolCall[];
+    const results: (ToolExecutionResult | null)[] = [];
+    let index = 0;
+
+    while (index < toolCalls.length) {
+      if (this.signal?.aborted || this.services.checkInterruption()) break;
+
+      const currentCall = toolCalls[index];
+      if (this.isConcurrentExternalInquiryCall(currentCall)) {
+        const group: SdkToolCall[] = [];
+        while (
+          index < toolCalls.length &&
+          this.isConcurrentExternalInquiryCall(toolCalls[index])
+        ) {
+          group.push(toolCalls[index++]);
+        }
+        results.push(...(await this.executeConcurrentGroup(group)));
+        continue;
+      }
+
+      results.push(
+        (await super._exec(currentCall)) as ToolExecutionResult | null,
+      );
+      index++;
+    }
+
+    return results;
+  }
+
   /** Returns tool calls to execute, or empty array if skipped/interrupted. */
   async prep(shared: ToolUseCycleShared): Promise<SdkToolCall[]> {
     this._duplicateCallIds.clear();
+    this._concurrentCallIds.clear();
     const toolCalls = shared.toolCalls ?? [];
 
     if (shared.shouldStop || toolCalls.length === 0) {
@@ -551,6 +667,8 @@ class ToolUseDispatchNode<C> extends BatchNode<
       shared.shouldStop = true;
       return [];
     }
+
+    this._concurrentCallIds = this.buildConcurrentCallIds(toolCalls);
 
     // Deduplicate parallel calls: when multiple calls have the same tool name
     // and identical arguments, only execute the first one. Later duplicates
@@ -616,6 +734,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
   clone(): this {
     const cloned = super.clone();
     cloned._duplicateCallIds = new Set();
+    cloned._concurrentCallIds = new Set();
     return cloned;
   }
 
@@ -641,11 +760,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
           tracker,
           todoState,
           planState,
-          streamId: options.logger.streamId,
-          executionId: options.executionId,
           toolCallId: call.callId,
-          model: options.modelName ?? options.config.model,
-          agentName: options.agentName,
           onExecutionReady,
           onToolOutput,
         },
@@ -750,24 +865,23 @@ class ToolUseDispatchNode<C> extends BatchNode<
 
   private async logAndProcessMediaFiles(
     execResult: ToolExecutionResult,
-    options: ToolUseCycleServices<C>,
-    workspace: ToolUseCycleServices<C>['workspace'],
   ): Promise<void> {
     const { call, result, parsedInput, extracted, editedFiles, logRef } =
       execResult;
+    const options = this.services;
+    const { workspace } = options;
 
     // Spread sanitizedResult so editedFiles in the log don't leak into
     // extracted.sanitizedResult (which is reused for model messages in post).
-    const logOutput =
-      editedFiles.length > 0
-        ? { ...extracted.sanitizedResult, editedFiles }
-        : extracted.sanitizedResult;
+    const logOutput = editedFiles.length
+      ? { ...extracted.sanitizedResult, editedFiles }
+      : extracted.sanitizedResult;
 
     const toolUseLog = {
       toolName: call.name,
       input: parsedInput ?? call.raw,
       output: logOutput,
-      ...(editedFiles.length > 0 && { files: editedFiles }),
+      ...(editedFiles.length && { files: editedFiles }),
       isError: Boolean(result.isError),
     };
 
@@ -800,7 +914,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
           );
         }
       }
-      if (validLocations.length > 0) {
+      if (validLocations.length) {
         workspace.media.addMediaFiles(validLocations);
       }
     }
@@ -812,8 +926,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     _toolCalls: SdkToolCall[],
     execResults: (ToolExecutionResult | null)[],
   ): Promise<string | undefined> {
-    const services = this.services;
-    const { workspace } = services;
+    const { workspace } = this.services;
 
     const completedResults = execResults.filter(
       (r): r is ToolExecutionResult => r !== null,
@@ -822,16 +935,14 @@ class ToolUseDispatchNode<C> extends BatchNode<
     if (completedResults.length < execResults.length) {
       shared.shouldStop = true;
     }
-
-    if (completedResults.length === 0) {
+    if (!completedResults.length) {
       return FlowTransition.COMPLETE;
     }
 
     const assistantText = shared.text ?? '';
 
-    // Log and process media files for each result
     for (const execResult of completedResults) {
-      await this.logAndProcessMediaFiles(execResult, services, workspace);
+      await this.logAndProcessMediaFiles(execResult);
     }
 
     const extracted = completedResults.map((er) => er.extracted);
@@ -839,35 +950,36 @@ class ToolUseDispatchNode<C> extends BatchNode<
 
     // For Google/DeepSeek/Kimi handlers with multiple parallel calls, batch all tool calls
     // into a single message to preserve thought signatures / reasoning_content.
+    const { modelHandler } = this.services;
     const shouldBatch =
       calls.length > 1 &&
-      (services.modelHandler.isGoogle ||
-        services.modelHandler.isDeepSeek ||
-        services.modelHandler.isKimi) &&
-      !!services.modelHandler.createBatchedToolUseFollowUpMessages;
+      (modelHandler.isGoogle ||
+        modelHandler.isDeepSeek ||
+        modelHandler.isKimi ||
+        modelHandler.isMiniMax) &&
+      !!modelHandler.createBatchedToolUseFollowUpMessages;
 
     if (shouldBatch) {
-      const followUpMsgs = await services.modelHandler
-        .createBatchedToolUseFollowUpMessages!(
-        calls,
-        extracted.map((e) => e.sanitizedResult),
-        extracted.map((e) => e.attachments),
-        workspace,
-        assistantText || undefined,
-      );
+      const followUpMsgs =
+        await modelHandler.createBatchedToolUseFollowUpMessages!(
+          calls,
+          extracted.map((e) => e.sanitizedResult),
+          extracted.map((e) => e.attachments),
+          workspace,
+          assistantText || undefined,
+        );
       shared.messages.push(...followUpMsgs);
     } else {
       for (const [index, execResult] of completedResults.entries()) {
         const { sanitizedResult, attachments } = extracted[index];
-        const followUpMsgs =
-          await services.modelHandler.createToolUseFollowUpMessages(
-            services.client,
-            execResult.call,
-            sanitizedResult,
-            attachments,
-            workspace,
-            index === 0 ? assistantText || undefined : undefined,
-          );
+        const followUpMsgs = await modelHandler.createToolUseFollowUpMessages(
+          this.services.client,
+          execResult.call,
+          sanitizedResult,
+          attachments,
+          workspace,
+          index === 0 ? assistantText || undefined : undefined,
+        );
         shared.messages.push(...followUpMsgs);
       }
     }

@@ -1,11 +1,15 @@
 import { z } from 'zod';
 
+import { ToolConfigSchema } from './toolConfig';
+
 export const BaseProposalFieldsSchema = z.object({
   agent: z.string(),
   model: z.string(),
   instruction: z.string(),
   /** Memory file paths (display paths like /memories/foo.md) attached to this delegation. */
   memories: z.array(z.string()).prefault([]),
+  /** Working directory override (e.g. a git worktree path). */
+  workingDirectory: z.string().nullish(),
 });
 
 const FileFieldsSchema = z.object({
@@ -21,7 +25,7 @@ const FileFieldsSchema = z.object({
 });
 
 export const WorkflowSpecificFieldsSchema = FileFieldsSchema.extend({
-  useMultipleOutputs: z.boolean(),
+  toolConfig: ToolConfigSchema,
 });
 
 /** File fields shape used by all three rendering sites (toolFormatters, RequestPanels, PermissionCard). */

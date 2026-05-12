@@ -1,11 +1,9 @@
 /**
  * Decouples agent runtime from ProgressView UI layer.
  */
-import type { StreamTabId, StorageKey } from '@shared/schemas';
 
 /** Interface for run state access - implemented by ProgressViewProvider */
 export interface IRunStorageService {
-  getActiveRunId(stream: StreamTabId): StorageKey | null;
   isViewVisible(): boolean;
 }
 
@@ -13,7 +11,6 @@ let service: IRunStorageService | null = null;
 
 /** Default no-op service when ProgressView is not registered */
 const DEFAULT_SERVICE: IRunStorageService = {
-  getActiveRunId: () => null,
   isViewVisible: () => false,
 };
 

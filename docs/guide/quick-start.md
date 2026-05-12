@@ -110,7 +110,7 @@ Enable the `texra.debug.saveInputPrompt` setting if you want TeXRA to store the 
 
 ### Step 6: Execute the Agent
 
-1. Click the "Execute" button (<i class="codicon codicon-play"></i>)
+1. Click the "Execute" button (<wa-icon library="texra" name="play"></wa-icon>)
 2. The ProgressBoard panel (typically at the bottom) will show the progress. See the [ProgressBoard guide](./progress-board.md) for more details on interpreting the logs.
 3. Wait for the process to complete - this may take a few moments depending on the document size and model choice
 
@@ -118,14 +118,14 @@ Enable the `texra.debug.saveInputPrompt` setting if you want TeXRA to store the 
 
 ### Step 7: Review Results
 
-1. When the agent completes, VS Code will open the generated output file (e.g., `yourfile_polish_r0_model.tex`).
+1. When the agent completes, VS Code will open the generated output file from the run's task storage folder (e.g., `r0/output.tex`).
 2. Review the changes made by the AI. Remember, it's smart, but hasn't passed its quals yet!
 3. You can compare the original and modified versions using:
-   - **VS Code's Diff View**: Right-click on the original and output files in the Explorer and select "Compare Selected" for a side-by-side source code comparison.
+   - **ProgressBoard Diff**: Click the <wa-icon library="texra" name="diff-multiple"></wa-icon> Diff button on the completed stream to compare the original file against the generated task-storage output.
 
      ![VS Code Compare View](/images/vscode-compare.png)
 
-     You can accept individual changes by clicking the arrow icons that appear between the two panels. The left arrow (<i class="codicon codicon-arrow-left"></i>) restores the original text, while the right arrow (<i class="codicon codicon-arrow-right"></i>) accepts the AI's changes. This makes it easy to cherry-pick which modifications you want to keep.
+     You can accept reviewed outputs from the ProgressBoard after comparing the changes.
 
    - **TeXRA's LaTeXdiff feature**: Use the LaTeXdiffs section in the TeXRA panel for a compiled, visual comparison. This creates a PDF with additions highlighted in blue and deletions in red.
 
@@ -239,13 +239,13 @@ Here are some common tasks you can try with TeXRA:
 ### Fixing Grammar and Typos
 
 - **Agent**: `correct`
-- **Model**: `gemini3f`, `gemini31p`, `gpt41`, or `sonnet46`
+- **Model**: `qwenturbo`, `deepseek`, `gemini31p`, or `sonnet46`
 - **Instruction**: "Fix grammatical errors and typos without changing the content or technical terminology."
 
 ### Converting a Paper to Slides
 
 - **Agent**: `paper2slide`
-- **Model**: `sonnet46T`, `opus46`, or `gpt54`
+- **Model**: `sonnet46T`, `opus47`, or `gpt54`
 - **Instruction**: "Convert this paper into presentation slides using the beamer template. Create approximately 12-15 slides highlighting the key points, methodology, and results."
 
 ### Improving Writing Style
@@ -262,11 +262,11 @@ When TeXRA completes a task, it produces:
 2. **Log Files**: Detailed information about the process
 3. **Diff Files**: Visual comparison between original and modified versions (if applicable)
 
-Output files are saved in the same directory as your input file with a naming pattern:
-`original_filename_agent_r0_model.extension`
+Output files are saved in the run's task storage folder with a naming pattern:
+`r{round}/output.extension`
 
-For example, if your input file is `paper.tex` and you used the `polish` agent with `sonnet46` model, the output file would be named:
-`paper_polish_r0_sonnet46.tex`
+For example, if your input file is `paper.tex` and the first round produces TeX, the output path inside task storage is:
+`r0/output.tex`
 
 ## Next Steps
 

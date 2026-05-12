@@ -14,8 +14,8 @@
  * - JWTs signed with Supabase's JWT secret
  */
 
-import { Hono } from 'jsr:@hono/hono@4';
-import { createClient } from 'jsr:@supabase/supabase-js@2.89.0';
+import { Hono } from 'jsr:@hono/hono@4.12.15';
+import { createClient } from 'jsr:@supabase/supabase-js@2.104.1';
 import { create, getNumericDate } from 'https://deno.land/x/djwt@v3.0.2/mod.ts';
 import { handleCors } from '../_shared/cors.ts';
 

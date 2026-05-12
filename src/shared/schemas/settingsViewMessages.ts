@@ -11,6 +11,15 @@ import {
   SETTINGS_VIEW_COMMANDS,
 } from '@common/webview/commands';
 import {
+  LATEX_CONFIG_FIELDS,
+  LATEX_CONFIG_RANGES,
+  LATEX_FORMATTER_VALUES,
+  LATEXDIFF_MATH_MARKUP_VALUES,
+} from '@shared/constants/latex';
+// Re-export the canonical type so existing consumers that import
+// `LatexConfigField` from this module continue to compile.
+export type { LatexConfigField } from '@shared/constants/latex';
+import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
@@ -23,6 +32,7 @@ import {
   AgentSourceSchema,
 } from './agent';
 import { AgentModePresetSchema } from './agentPresets';
+import { NESTED_DELEGATION_DEPTH_RANGE } from '../constants/delegationPolicy';
 import {
   DeleteMemoryMessageSchema,
   GetMemoryDataMessageSchema,
@@ -42,6 +52,7 @@ import {
   RerunAgentMessageSchema,
   RestoreAgentMessageSchema,
 } from './historyViewMessages';
+import { WebviewReadyMessageSchema } from './commonViewMessages';
 import { commandOnly } from './messageFactories';
 import {
   GetProfileDataMessageSchema,
@@ -51,6 +62,7 @@ import {
   SignInMessageSchema,
   SignOutMessageSchema,
 } from './profileViewMessages';
+import { StreamTabIdSchema } from './identifiers';
 export { SETTINGS_VIEW_CMD };
 
 /** Tab name order - single source of truth for tab indices */
@@ -61,6 +73,7 @@ export const SETTINGS_TAB_ORDER = [
   'AGENTS',
   'MULTI_AGENT',
   'TOOLS',
+  'GIT',
   'LATEX',
 ] as const;
 
@@ -135,8 +148,6 @@ export const AgentSelectionItemSchema = AgentMetadataBaseSchema.extend({
   hasPath: z.boolean(),
   filePath: z.string().optional(),
   tools: z.array(z.string()).optional(),
-  hasMultiple: z.boolean(), // supports multiple outputs (informational)
-  hasMultiplePath: z.boolean(), // has openable _multiple YAML file
   enabled: z.boolean(),
 });
 export type AgentSelectionItem = z.infer<typeof AgentSelectionItemSchema>;
@@ -161,6 +172,7 @@ export type ReasoningLevel = z.infer<typeof ReasoningLevelSchema>;
 
 export const ModelSelectionItemSchema = z.object({
   name: z.string(),
+  label: z.string(),
   provider: z.string(),
   enabled: z.boolean(),
   deprecated: z.boolean(),
@@ -172,6 +184,10 @@ export const ModelSelectionItemSchema = z.object({
   defaultReasoningLevel: ReasoningLevelSchema.optional(),
   /** The user's chosen reasoning level override (undefined = use default). */
   reasoningLevel: ReasoningLevelSchema.optional(),
+  /** Included access relay cap applied to the default xhigh effort, if any. */
+  includedAccessReasoningCap: ReasoningLevelSchema.optional(),
+  /** Whether this model qualifies as a "fast first response" pick (price-based). */
+  isFast: z.boolean().optional(),
 });
 export type ModelSelectionItem = z.infer<typeof ModelSelectionItemSchema>;
 
@@ -211,16 +227,22 @@ export const UpdateSuperYoloEnabledMessageSchema = z.object({
   enabled: z.boolean(),
   reliabilitySettings: z.array(NumberVscodeSettingSchema).prefault([]),
   allowOrchestratorKill: z.boolean().prefault(true),
+  detachSubagentsOnStop: z.boolean().prefault(false),
+  nestedDelegationMaxDepth: z
+    .int()
+    .min(NESTED_DELEGATION_DEPTH_RANGE.min)
+    .max(NESTED_DELEGATION_DEPTH_RANGE.max)
+    .prefault(NESTED_DELEGATION_DEPTH_RANGE.default),
 });
 export type UpdateSuperYoloEnabledMessage = z.infer<
   typeof UpdateSuperYoloEnabledMessageSchema
 >;
 
 // ============================================================
-// Agent mode presets data schema
+// Agent team data schema
 // ============================================================
 
-/** Outbound: backend → frontend agent mode presets (built-in + custom) */
+/** Outbound: backend → frontend agent teams (built-in + custom) */
 export const UpdateAgentModePresetsMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS),
   customPresets: z.array(AgentModePresetSchema),
@@ -266,11 +288,17 @@ export const ToolDashboardItemSchema = z.object({
   tools: z.array(ToolInfoSchema),
   status: ToolStatusSchema,
   requiresSetup: z.boolean(),
+  statusLabel: z.string().optional(),
   installGuide: z.string().optional(),
   installUrl: z.string().optional(),
   installExtensionId: z.string().optional(),
+  installCommand: z.string().optional(),
+  authCommand: z.string().optional(),
   configNotes: z.string().optional(),
   statusDetail: z.string().optional(),
+  authNote: z.string().optional(),
+  toggleable: z.boolean().optional(),
+  enabled: z.boolean().optional(),
 });
 export type ToolDashboardItem = z.infer<typeof ToolDashboardItemSchema>;
 
@@ -281,6 +309,105 @@ export const UpdateToolDashboardMessageSchema = z.object({
 });
 export type UpdateToolDashboardMessage = z.infer<
   typeof UpdateToolDashboardMessageSchema
+>;
+
+// ============================================================
+// Approval settings data schema
+// ============================================================
+
+/** Valid Codex sandbox modes (mirrors CODEX_SANDBOX_MODES in codexConfig.ts). */
+export const CodexSandboxModeSchema = z.enum([
+  'read-only',
+  'workspace-write',
+  'danger-full-access',
+]);
+export type CodexSandboxMode = z.infer<typeof CodexSandboxModeSchema>;
+
+/** Valid Codex reasoning effort levels (mirrors CODEX_REASONING_EFFORTS in codexConfig.ts). */
+export const CodexReasoningEffortSchema = z.enum([
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+]);
+export type CodexReasoningEffort = z.infer<typeof CodexReasoningEffortSchema>;
+
+/** Valid Codex approval policies (mirrors CODEX_APPROVAL_POLICIES in codexConfig.ts). */
+export const CodexApprovalPolicySchema = z.enum([
+  'never',
+  'on-request',
+  'on-failure',
+  'untrusted',
+]);
+export type CodexApprovalPolicy = z.infer<typeof CodexApprovalPolicySchema>;
+
+/** Outbound: backend → frontend approval settings */
+export const UpdateApprovalSettingsMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS),
+  bashApprovalEnabled: z.boolean(),
+  codexSandboxMode: CodexSandboxModeSchema,
+  codexReasoningEffort: CodexReasoningEffortSchema,
+  codexApprovalPolicy: CodexApprovalPolicySchema,
+});
+export type UpdateApprovalSettingsMessage = z.infer<
+  typeof UpdateApprovalSettingsMessageSchema
+>;
+
+// ============================================================
+// Git author settings data schema
+// ============================================================
+
+/** Outbound: backend → frontend git author settings */
+export const UpdateGitAuthorSettingsMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS),
+  markCommits: z.boolean(),
+  authorName: z.string(),
+  authorEmail: z.string(),
+  worktreeSupport: z.boolean(),
+});
+export type UpdateGitAuthorSettingsMessage = z.infer<
+  typeof UpdateGitAuthorSettingsMessageSchema
+>;
+
+/** Outbound: backend → frontend GitHub token status. */
+export const UpdateGitHubTokenStatusMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS),
+  /** 'secret' = stored in SecretStorage; 'env' = GITHUB_TOKEN env var; 'none' = missing. */
+  status: z.enum(['secret', 'env', 'none']),
+});
+export type UpdateGitHubTokenStatusMessage = z.infer<
+  typeof UpdateGitHubTokenStatusMessageSchema
+>;
+
+/** Outbound: backend → frontend desktop crash reporting status. */
+export const UpdateDesktopCrashReportingMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING),
+  enabled: z.boolean(),
+  configured: z.boolean(),
+});
+export type UpdateDesktopCrashReportingMessage = z.infer<
+  typeof UpdateDesktopCrashReportingMessageSchema
+>;
+
+export const PRSubscriptionOwnerSchema = z.object({
+  streamId: StreamTabIdSchema,
+  label: z.string(),
+});
+export type PRSubscriptionOwner = z.infer<typeof PRSubscriptionOwnerSchema>;
+
+export const PRSubscriptionEntrySchema = z.object({
+  key: z.string().min(1),
+  owners: z.array(PRSubscriptionOwnerSchema),
+});
+export type PRSubscriptionEntry = z.infer<typeof PRSubscriptionEntrySchema>;
+
+/** Outbound: backend → frontend active PR subscriptions. */
+export const UpdatePRSubscriptionsMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS),
+  subscriptions: z.array(PRSubscriptionEntrySchema),
+});
+export type UpdatePRSubscriptionsMessage = z.infer<
+  typeof UpdatePRSubscriptionsMessageSchema
 >;
 
 // ============================================================
@@ -340,6 +467,57 @@ export type UpdateLatexSettingsStatusMessage = z.infer<
   typeof UpdateLatexSettingsStatusMessageSchema
 >;
 
+/**
+ * LaTeX/compile/diff configuration values, persisted in workspace storage.
+ * Migrated from VS Code `texra.*` configuration. The frontend tab edits these
+ * directly; the backend persists them via `workspaceSM`.
+ *
+ * Each property is optional so the UI can render either the user-set value
+ * (when defined) or the documented default (when undefined). Numeric ranges
+ * and enum values come from `@shared/constants/latex` so this schema, the UI,
+ * and the runtime readers all stay in lockstep.
+ */
+export const LatexFormatterSchema = z.enum(LATEX_FORMATTER_VALUES);
+export type LatexFormatter = z.infer<typeof LatexFormatterSchema>;
+
+export const LatexdiffMathMarkupSchema = z.enum(LATEXDIFF_MATH_MARKUP_VALUES);
+export type LatexdiffMathMarkup = z.infer<typeof LatexdiffMathMarkupSchema>;
+
+export const LatexConfigValuesSchema = z.object({
+  workflowAutoCompile: z.boolean().optional(),
+  workflowAutoCompileTimeoutMs: z
+    .int()
+    .min(LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min)
+    .optional(),
+  latexdiffBetweenRounds: z.boolean().optional(),
+  latexdiffTimeoutMs: z
+    .int()
+    .min(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min)
+    .max(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max!)
+    .optional(),
+  latexdiffMathMarkup: LatexdiffMathMarkupSchema.optional(),
+  latexFormatter: LatexFormatterSchema.optional(),
+});
+export type LatexConfigValues = z.infer<typeof LatexConfigValuesSchema>;
+
+/** Outbound: backend → frontend current LaTeX/compile/diff config values. */
+export const UpdateLatexConfigValuesMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES),
+  values: LatexConfigValuesSchema,
+});
+export type UpdateLatexConfigValuesMessage = z.infer<
+  typeof UpdateLatexConfigValuesMessageSchema
+>;
+
+/** Outbound: backend → frontend inline criticism toggle state */
+export const UpdateInlineCriticismEnabledMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED),
+  enabled: z.boolean(),
+});
+export type UpdateInlineCriticismEnabledMessage = z.infer<
+  typeof UpdateInlineCriticismEnabledMessageSchema
+>;
+
 // ============================================================
 // Inbound message schemas (frontend → backend)
 // ============================================================
@@ -349,9 +527,19 @@ export type UpdateLatexSettingsStatusMessage = z.infer<
 // to avoid duplicating definitions. The command literal strings are identical.
 
 // Provider key inbound messages (settings-only)
+// Keep the outer optional: callers may omit apiKey so the host can prompt.
+const SubmittedApiKeySchema = z
+  .preprocess(
+    (value) =>
+      typeof value === 'string' && value.trim() === '' ? undefined : value,
+    z.string().trim().min(1).optional(),
+  )
+  .optional();
+
 const SetProviderKeyMessageSchema = z.object({
   command: z.literal(CMD.SET_PROVIDER_KEY),
   provider: z.string().min(1),
+  apiKey: SubmittedApiKeySchema,
 });
 
 const RemoveProviderKeyMessageSchema = z.object({
@@ -425,7 +613,6 @@ const OpenAgentYamlMessageSchema = z.object({
   command: z.literal(CMD.OPEN_AGENT_YAML),
   agentName: z.string().min(1),
   agentSource: AgentSourceSchema,
-  variant: z.enum(['base', 'multiple']),
 });
 
 const SetAgentEnabledMessageSchema = z.object({
@@ -471,6 +658,11 @@ const RevealAgentFileMessageSchema = z.object({
   agentSource: AgentSourceSchema,
 });
 
+const ViewRemoteAgentPromptMessageSchema = z.object({
+  command: z.literal(CMD.VIEW_REMOTE_AGENT_PROMPT),
+  agentName: z.string().min(1),
+});
+
 // Custom agent directory inbound messages
 const GetCustomAgentDirMessageSchema = commandOnly(CMD.GET_CUSTOM_AGENT_DIR);
 const SetCustomAgentDirMessageSchema = commandOnly(CMD.SET_CUSTOM_AGENT_DIR);
@@ -494,7 +686,20 @@ const SetAllowOrchestratorKillMessageSchema = z.object({
   enabled: z.boolean(),
 });
 
-// Agent mode preset inbound messages
+const SetDetachSubagentsOnStopMessageSchema = z.object({
+  command: z.literal(CMD.SET_DETACH_SUBAGENTS_ON_STOP),
+  enabled: z.boolean(),
+});
+
+const SetNestedDelegationMaxDepthMessageSchema = z.object({
+  command: z.literal(CMD.SET_NESTED_DELEGATION_MAX_DEPTH),
+  value: z
+    .int()
+    .min(NESTED_DELEGATION_DEPTH_RANGE.min)
+    .max(NESTED_DELEGATION_DEPTH_RANGE.max),
+});
+
+// Agent team inbound messages
 const GetAgentModePresetsMessageSchema = commandOnly(
   CMD.GET_AGENT_MODE_PRESETS,
 );
@@ -530,6 +735,80 @@ const InstallToolExtensionMessageSchema = z.object({
 
 const RecheckToolStatusMessageSchema = commandOnly(CMD.RECHECK_TOOL_STATUS);
 
+const ToggleToolMessageSchema = z.object({
+  command: z.literal(CMD.TOGGLE_TOOL),
+  toolId: z.string().min(1),
+  enabled: z.boolean(),
+});
+
+const RunToolCommandMessageSchema = z.object({
+  command: z.literal(CMD.RUN_TOOL_COMMAND),
+  toolId: z.string().min(1),
+  kind: z.enum(['install', 'auth']),
+});
+export type ToolCommandKind = z.infer<
+  typeof RunToolCommandMessageSchema
+>['kind'];
+
+// Git author settings inbound messages
+const GetGitAuthorSettingsMessageSchema = commandOnly(
+  CMD.GET_GIT_AUTHOR_SETTINGS,
+);
+
+const SetGitMarkCommitsMessageSchema = z.object({
+  command: z.literal(CMD.SET_GIT_MARK_COMMITS),
+  enabled: z.boolean(),
+});
+
+const SetGitAuthorNameMessageSchema = z.object({
+  command: z.literal(CMD.SET_GIT_AUTHOR_NAME),
+  name: z.string(),
+});
+
+const SetGitAuthorEmailMessageSchema = z.object({
+  command: z.literal(CMD.SET_GIT_AUTHOR_EMAIL),
+  email: z.string(),
+});
+
+const SetGitWorktreeSupportMessageSchema = z.object({
+  command: z.literal(CMD.SET_GIT_WORKTREE_SUPPORT),
+  enabled: z.boolean(),
+});
+
+// GitHub token messages (for PR subscription tool)
+const GetGitHubTokenStatusMessageSchema = commandOnly(
+  CMD.GET_GITHUB_TOKEN_STATUS,
+);
+
+const SetGitHubTokenMessageSchema = commandOnly(CMD.SET_GITHUB_TOKEN);
+
+const RemoveGitHubTokenMessageSchema = commandOnly(CMD.REMOVE_GITHUB_TOKEN);
+
+const OpenGitHubTokenUrlMessageSchema = commandOnly(CMD.OPEN_GITHUB_TOKEN_URL);
+
+const GetDesktopCrashReportingMessageSchema = commandOnly(
+  CMD.GET_DESKTOP_CRASH_REPORTING,
+);
+const SetDesktopCrashReportingEnabledMessageSchema = z.object({
+  command: z.literal(CMD.SET_DESKTOP_CRASH_REPORTING_ENABLED),
+  enabled: z.boolean(),
+});
+const SetDesktopCrashReportingDsnMessageSchema = commandOnly(
+  CMD.SET_DESKTOP_CRASH_REPORTING_DSN,
+);
+
+const GetPRSubscriptionsMessageSchema = commandOnly(CMD.GET_PR_SUBSCRIPTIONS);
+
+const UnsubscribePRMessageSchema = z.object({
+  command: z.literal(CMD.UNSUBSCRIBE_PR),
+  key: z.string().min(1),
+});
+
+const OpenPRSubscriptionStreamMessageSchema = z.object({
+  command: z.literal(CMD.OPEN_PR_SUBSCRIPTION_STREAM),
+  streamId: StreamTabIdSchema,
+});
+
 // LaTeX settings inbound messages
 const GetLatexSettingsStatusMessageSchema = commandOnly(
   CMD.GET_LATEX_SETTINGS_STATUS,
@@ -547,6 +826,67 @@ const RunInstallCommandMessageSchema = z.object({
   installCommand: z.string().min(1),
 });
 
+// LaTeX/compile/diff config (storage-backed)
+const GetLatexConfigValuesMessageSchema = commandOnly(
+  CMD.GET_LATEX_CONFIG_VALUES,
+);
+/**
+ * Single-property write — frontend sends one value at a time. Surface a flat
+ * shape (single outer branch keyed on `command`) so it composes into the
+ * outer `SettingsViewInboundMessageSchema` discriminatedUnion('command', ...)
+ * without producing duplicate command discriminators (which would crash the
+ * whole inbound dispatcher at parse time, taking down every Settings view
+ * interaction). Per-field value validation happens in the backend handler
+ * using `LatexConfigValuesSchema.shape[field]`.
+ */
+// Use the canonical field list from latex.ts as the schema source so it can
+// never drift from `LATEX_FIELD_TO_KEY`. The runtime tuple cast preserves the
+// literal types so `LatexConfigField` (re-exported above) stays as the same
+// union of string literals consumers already rely on.
+const LatexConfigFieldSchema = z.enum(
+  LATEX_CONFIG_FIELDS as readonly [
+    (typeof LATEX_CONFIG_FIELDS)[number],
+    ...(typeof LATEX_CONFIG_FIELDS)[number][],
+  ],
+);
+
+const SetLatexConfigValueMessageSchema = z.object({
+  command: z.literal(CMD.SET_LATEX_CONFIG_VALUE),
+  field: LatexConfigFieldSchema,
+  // Loose at the schema level — the handler validates per-field via
+  // LatexConfigValuesSchema.shape[field] before writing to workspace state.
+  // `undefined` clears the key (returns to documented default).
+  value: z.union([z.boolean(), z.number(), z.string(), z.null()]).optional(),
+});
+
+// Experimental settings inbound messages
+const GetInlineCriticismEnabledMessageSchema = commandOnly(
+  CMD.GET_INLINE_CRITICISM_ENABLED,
+);
+const SetInlineCriticismEnabledMessageSchema = z.object({
+  command: z.literal(CMD.SET_INLINE_CRITICISM_ENABLED),
+  enabled: z.boolean(),
+});
+
+// Approval settings inbound messages
+const GetApprovalSettingsMessageSchema = commandOnly(CMD.GET_APPROVAL_SETTINGS);
+const SetBashApprovalEnabledMessageSchema = z.object({
+  command: z.literal(CMD.SET_BASH_APPROVAL_ENABLED),
+  enabled: z.boolean(),
+});
+const SetCodexSandboxModeMessageSchema = z.object({
+  command: z.literal(CMD.SET_CODEX_SANDBOX_MODE),
+  mode: CodexSandboxModeSchema,
+});
+const SetCodexReasoningEffortMessageSchema = z.object({
+  command: z.literal(CMD.SET_CODEX_REASONING_EFFORT),
+  effort: CodexReasoningEffortSchema,
+});
+const SetCodexApprovalPolicyMessageSchema = z.object({
+  command: z.literal(CMD.SET_CODEX_APPROVAL_POLICY),
+  policy: CodexApprovalPolicySchema,
+});
+
 // Navigation inbound messages
 const OpenVscodeSettingsMessageSchema = commandOnly(CMD.OPEN_VSCODE_SETTINGS);
 
@@ -557,6 +897,8 @@ const OpenVscodeSettingsMessageSchema = commandOnly(CMD.OPEN_VSCODE_SETTINGS);
 export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
   'command',
   [
+    // Lifecycle
+    WebviewReadyMessageSchema,
     // Navigation messages
     OpenVscodeSettingsMessageSchema,
     // Tool dashboard messages
@@ -564,11 +906,17 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     OpenToolInstallUrlMessageSchema,
     InstallToolExtensionMessageSchema,
     RecheckToolStatusMessageSchema,
+    ToggleToolMessageSchema,
+    RunToolCommandMessageSchema,
     // LaTeX settings messages
     GetLatexSettingsStatusMessageSchema,
     ApplyLatexSettingsMessageSchema,
     InstallLatexWorkshopMessageSchema,
     RunInstallCommandMessageSchema,
+    GetLatexConfigValuesMessageSchema,
+    SetLatexConfigValueMessageSchema,
+    GetInlineCriticismEnabledMessageSchema,
+    SetInlineCriticismEnabledMessageSchema,
     // Memory messages
     GetMemoryDataMessageSchema,
     OpenMemoryFileMessageSchema,
@@ -616,6 +964,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     CustomizeAgentMessageSchema,
     DeleteCustomAgentMessageSchema,
     RevealAgentFileMessageSchema,
+    ViewRemoteAgentPromptMessageSchema,
     // Custom agent directory messages
     GetCustomAgentDirMessageSchema,
     SetCustomAgentDirMessageSchema,
@@ -624,7 +973,32 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     GetSuperYoloEnabledMessageSchema,
     SetSuperYoloEnabledMessageSchema,
     SetAllowOrchestratorKillMessageSchema,
-    // Agent mode preset messages
+    SetDetachSubagentsOnStopMessageSchema,
+    SetNestedDelegationMaxDepthMessageSchema,
+    // Git author settings messages
+    GetGitAuthorSettingsMessageSchema,
+    SetGitMarkCommitsMessageSchema,
+    SetGitAuthorNameMessageSchema,
+    SetGitAuthorEmailMessageSchema,
+    SetGitWorktreeSupportMessageSchema,
+    // GitHub token messages
+    GetGitHubTokenStatusMessageSchema,
+    SetGitHubTokenMessageSchema,
+    RemoveGitHubTokenMessageSchema,
+    OpenGitHubTokenUrlMessageSchema,
+    GetDesktopCrashReportingMessageSchema,
+    SetDesktopCrashReportingEnabledMessageSchema,
+    SetDesktopCrashReportingDsnMessageSchema,
+    GetPRSubscriptionsMessageSchema,
+    UnsubscribePRMessageSchema,
+    OpenPRSubscriptionStreamMessageSchema,
+    // Approval settings messages
+    GetApprovalSettingsMessageSchema,
+    SetBashApprovalEnabledMessageSchema,
+    SetCodexSandboxModeMessageSchema,
+    SetCodexReasoningEffortMessageSchema,
+    SetCodexApprovalPolicyMessageSchema,
+    // Agent team messages
     GetAgentModePresetsMessageSchema,
     ApplyAgentModePresetMessageSchema,
     SaveAgentModePresetMessageSchema,

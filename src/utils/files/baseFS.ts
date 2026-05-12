@@ -2,8 +2,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Third-party imports
-import * as vscode from 'vscode';
+// Platform imports
+import { FileType, type FileStat } from '@platform/interfaces/filesystem';
+import { getFileSystem } from '@agent/core/filesystem';
+import { isFile, isDirectory } from '@common/files/fsEntryType';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 /** Convert content to Buffer for writing. */
 function toBuffer(content: string | Uint8Array): Uint8Array {
@@ -11,7 +14,10 @@ function toBuffer(content: string | Uint8Array): Uint8Array {
 }
 
 /**
- * Shared filesystem helpers backed by VS Code's workspace API.
+ * Shared filesystem helpers backed by a platform-agnostic FileSystemProvider.
+ *
+ * By default uses Node.js fs/promises. In VS Code, the provider is replaced
+ * with one backed by vscode.workspace.fs at activation via initPlatform().
  *
  * Subclasses customize how incoming paths are resolved and validated by
  * overriding {@link resolvePath} and {@link validateResolvedPath}.
@@ -30,14 +36,10 @@ export abstract class BaseFS {
     // Default implementation performs no validation.
   }
 
-  private static preparePath(this: typeof BaseFS, target: string): string {
+  protected static preparePath(this: typeof BaseFS, target: string): string {
     const resolved = this.resolvePath(target);
     this.validateResolvedPath(resolved, target);
     return resolved;
-  }
-
-  protected static toUri(this: typeof BaseFS, target: string): vscode.Uri {
-    return vscode.Uri.file(this.preparePath(target));
   }
 
   // ===== Async Methods =====
@@ -47,7 +49,7 @@ export abstract class BaseFS {
     target: string,
   ): Promise<boolean> {
     try {
-      await vscode.workspace.fs.stat(this.toUri(target));
+      await getFileSystem().stat(this.preparePath(target));
       return true;
     } catch (_err) {
       return false;
@@ -58,15 +60,15 @@ export abstract class BaseFS {
     this: typeof BaseFS,
     target: string,
   ): Promise<string> {
-    const content = await vscode.workspace.fs.readFile(this.toUri(target));
-    return Buffer.from(content).toString('utf-8').replaceAll('\r\n', '\n');
+    const content = await getFileSystem().readFile(this.preparePath(target));
+    return normalizeLineEndings(Buffer.from(content).toString('utf-8'));
   }
 
   public static async readBytes(
     this: typeof BaseFS,
     target: string,
   ): Promise<Buffer> {
-    const content = await vscode.workspace.fs.readFile(this.toUri(target));
+    const content = await getFileSystem().readFile(this.preparePath(target));
     return Buffer.from(content);
   }
 
@@ -75,7 +77,10 @@ export abstract class BaseFS {
     target: string,
     content: string | Uint8Array,
   ): Promise<void> {
-    await vscode.workspace.fs.writeFile(this.toUri(target), toBuffer(content));
+    await getFileSystem().writeFile(
+      this.preparePath(target),
+      toBuffer(content),
+    );
   }
 
   public static async appendFile(
@@ -91,14 +96,14 @@ export abstract class BaseFS {
     target: string,
     options?: { recursive?: boolean; useTrash?: boolean },
   ): Promise<void> {
-    await vscode.workspace.fs.delete(this.toUri(target), options);
+    await getFileSystem().delete(this.preparePath(target), options);
   }
 
   public static async createDir(
     this: typeof BaseFS,
     target: string,
   ): Promise<void> {
-    await vscode.workspace.fs.createDirectory(this.toUri(target));
+    await getFileSystem().createDirectory(this.preparePath(target));
   }
 
   public static async ensureDir(
@@ -108,7 +113,10 @@ export abstract class BaseFS {
     try {
       await this.createDir(target);
     } catch (err) {
-      if (err instanceof vscode.FileSystemError && err.code === 'FileExists') {
+      // Directory already exists — silently succeed.
+      // Check for both EEXIST (Node.js default) and FileExists (VS Code adapter).
+      const code = (err as { code?: string }).code;
+      if (code === 'EEXIST' || code === 'FileExists') {
         return;
       }
       throw err;
@@ -118,15 +126,15 @@ export abstract class BaseFS {
   public static async readDir(
     this: typeof BaseFS,
     target: string,
-  ): Promise<[string, vscode.FileType][]> {
-    return vscode.workspace.fs.readDirectory(this.toUri(target));
+  ): Promise<[string, number][]> {
+    return getFileSystem().readDirectory(this.preparePath(target));
   }
 
   public static async stat(
     this: typeof BaseFS,
     target: string,
-  ): Promise<vscode.FileStat> {
-    return vscode.workspace.fs.stat(this.toUri(target));
+  ): Promise<FileStat> {
+    return getFileSystem().stat(this.preparePath(target));
   }
 
   public static async copy(
@@ -135,9 +143,9 @@ export abstract class BaseFS {
     destination: string,
     options?: { overwrite?: boolean },
   ): Promise<void> {
-    await vscode.workspace.fs.copy(
-      this.toUri(source),
-      this.toUri(destination),
+    await getFileSystem().copy(
+      this.preparePath(source),
+      this.preparePath(destination),
       options,
     );
   }
@@ -148,9 +156,9 @@ export abstract class BaseFS {
     destination: string,
     options?: { overwrite?: boolean },
   ): Promise<void> {
-    await vscode.workspace.fs.rename(
-      this.toUri(source),
-      this.toUri(destination),
+    await getFileSystem().rename(
+      this.preparePath(source),
+      this.preparePath(destination),
       options,
     );
   }
@@ -161,7 +169,7 @@ export abstract class BaseFS {
   ): Promise<boolean> {
     try {
       const stats = await this.stat(target);
-      return stats.type === vscode.FileType.Directory;
+      return isDirectory(stats.type);
     } catch (_err) {
       return false;
     }
@@ -173,7 +181,7 @@ export abstract class BaseFS {
   ): Promise<boolean> {
     try {
       const stats = await this.stat(target);
-      return stats.type === vscode.FileType.File;
+      return isFile(stats.type);
     } catch (_err) {
       return false;
     }
@@ -185,10 +193,7 @@ export abstract class BaseFS {
   ): Promise<boolean> {
     try {
       const stats = await this.stat(target);
-      return (
-        (stats.type & vscode.FileType.SymbolicLink) ===
-        vscode.FileType.SymbolicLink
-      );
+      return (stats.type & FileType.SymbolicLink) === FileType.SymbolicLink;
     } catch (_err) {
       return false;
     }
@@ -201,9 +206,9 @@ export abstract class BaseFS {
   }
 
   public static readSync(this: typeof BaseFS, target: string): string {
-    return fs
-      .readFileSync(this.preparePath(target), 'utf-8')
-      .replaceAll('\r\n', '\n');
+    return normalizeLineEndings(
+      fs.readFileSync(this.preparePath(target), 'utf-8'),
+    );
   }
 
   public static readBytesSync(this: typeof BaseFS, target: string): Buffer {

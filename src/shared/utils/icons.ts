@@ -1,5 +1,3 @@
-export const CHEVRON_RIGHT_CLASS = 'codicon codicon-chevron-right';
-
 /**
  * Model provider decorator configuration - single source of truth for provider indicators.
  * Used in model dropdowns to visually distinguish different AI providers.
@@ -84,12 +82,6 @@ export const AGENT_DECORATORS = {
       unicode: '★',
       label: 'Custom',
       hint: 'Custom agent: User-defined in your agents directory',
-    },
-    multipleOutputs: {
-      icon: 'files',
-      unicode: '⧉',
-      label: 'Multiple outputs',
-      hint: 'Has _multiple variant that supports multiple output files',
     },
   },
   agentCategories: {

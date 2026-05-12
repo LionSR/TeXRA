@@ -1,8 +1,6 @@
 import * as path from 'path';
 
-import * as vscode from 'vscode';
-
-import { showLoggedMessage, toErrorMessage } from '@common/errors';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
@@ -12,11 +10,38 @@ import { TEMP_EXTENSIONS } from './constants';
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
 
+export type LatexdiffPackResult =
+  | {
+      status: 'no-files';
+      inputFile: string;
+    }
+  | {
+      status: 'cleaned';
+      inputFile: string;
+    }
+  | {
+      status: 'packed';
+      inputFile: string;
+      outputFolder: string;
+    }
+  | {
+      status: 'processed';
+      inputFile: string;
+    }
+  | {
+      status: 'missing-inputs';
+    }
+  | {
+      status: 'error';
+      inputFile: string;
+      error: unknown;
+    };
+
 export async function runPackLatexdiffvc(
   inputFile: string,
   commitHash: string,
   clean: boolean = false,
-): Promise<void> {
+): Promise<LatexdiffPackResult> {
   const baseName = path.parse(inputFile).name;
   const inputDir = path.dirname(inputFile);
   const filePatterns = [`${baseName}-diff${commitHash}`];
@@ -32,11 +57,8 @@ export async function runPackLatexdiffvc(
   );
 
   if (mainFiles.length === 0 && tempFiles.length === 0) {
-    logger.warn(CHANNEL, 'No files found to process.');
-    vscode.window.showInformationMessage(
-      'No LaTeX diff files found to process',
-    );
-    return;
+    logger.warn(CHANNEL, 'No LaTeX diff files found to process');
+    return { status: 'no-files', inputFile };
   }
 
   if (clean) {
@@ -44,8 +66,7 @@ export async function runPackLatexdiffvc(
       await WorkspaceFS.delete(file);
     }
     logger.info(CHANNEL, 'Cleanup complete.');
-    vscode.window.showInformationMessage('LaTeXdiff files cleaned');
-    return;
+    return { status: 'cleaned', inputFile };
   }
 
   const now = new Date().toISOString().replaceAll(/[-:]/g, '').split('.')[0];
@@ -55,61 +76,68 @@ export async function runPackLatexdiffvc(
     `${now}_${baseName}_${commitHash}`,
   );
 
-  try {
-    let dirCreated = false;
-    for (const file of mainFiles) {
-      if (!dirCreated) {
-        await WorkspaceFS.createDir(outputFolder);
-        dirCreated = true;
-      }
-      await WorkspaceFS.rename(
-        file,
-        path.join(outputFolder, path.basename(file)),
-      );
+  let dirCreated = false;
+  for (const file of mainFiles) {
+    if (!dirCreated) {
+      await WorkspaceFS.createDir(outputFolder);
+      dirCreated = true;
     }
-
-    for (const file of tempFiles) {
-      await WorkspaceFS.delete(file);
-    }
-
-    if (dirCreated) {
-      logger.info(CHANNEL, `Files packed into ${outputFolder}`);
-      vscode.window.showInformationMessage(`Files packed into ${outputFolder}`);
-    }
-  } catch (err) {
-    logger.error(CHANNEL, `Error during packing: ${toErrorMessage(err)}`);
-    vscode.window.showErrorMessage(`Error during packing: ${err}`);
+    await WorkspaceFS.rename(
+      file,
+      path.join(outputFolder, path.basename(file)),
+    );
   }
+
+  for (const file of tempFiles) {
+    await WorkspaceFS.delete(file);
+  }
+
+  if (dirCreated) {
+    logger.info(CHANNEL, `Files packed into ${outputFolder}`);
+    return { status: 'packed', inputFile, outputFolder };
+  }
+
+  return { status: 'processed', inputFile };
 }
 
 export async function runPackLatexdiffvcMultiple(
   inputFiles: string[],
   commitHash: string,
   clean: boolean = false,
-): Promise<void> {
+): Promise<LatexdiffPackResult[]> {
   if (!inputFiles || inputFiles.length === 0) {
-    await showLoggedMessage(
+    logger.error(
       CHANNEL,
       'No input files provided for multiple LaTeX diff packing',
     );
-    return;
+    return [{ status: 'missing-inputs' }];
   }
 
+  const results: LatexdiffPackResult[] = [];
   for (const inputFile of inputFiles) {
-    await runPackLatexdiffvc(inputFile, commitHash, clean);
+    try {
+      results.push(await runPackLatexdiffvc(inputFile, commitHash, clean));
+    } catch (err) {
+      logger.error(
+        CHANNEL,
+        `Error during packing ${inputFile}: ${toErrorMessage(err)}`,
+      );
+      results.push({ status: 'error', inputFile, error: err });
+    }
   }
+  return results;
 }
 
 export async function runCleanLatexdiffvc(
   inputFile: string,
   commitHash: string,
-): Promise<void> {
-  await runPackLatexdiffvc(inputFile, commitHash, true);
+): Promise<LatexdiffPackResult> {
+  return runPackLatexdiffvc(inputFile, commitHash, true);
 }
 
 export async function runCleanLatexdiffvcMultiple(
   inputFiles: string[],
   commitHash: string,
-): Promise<void> {
-  await runPackLatexdiffvcMultiple(inputFiles, commitHash, true);
+): Promise<LatexdiffPackResult[]> {
+  return runPackLatexdiffvcMultiple(inputFiles, commitHash, true);
 }

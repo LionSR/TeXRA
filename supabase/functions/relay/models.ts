@@ -8,7 +8,7 @@
  * - Ultra: All models including premium ($3+/M input)
  */
 
-import { MODEL_CONFIGS, type ModelConfig } from 'npm:llm-zoo@^1.2.0';
+import { MODEL_CONFIGS, type ModelConfig } from 'npm:llm-zoo@^1.6.1';
 
 // =============================================================================
 // Types
@@ -52,8 +52,7 @@ interface RelayModel {
 
 /** Derive tier from model pricing */
 function getTierFromPrice(inputPrice: number): MinTier {
-  if (inputPrice < 1) return 'free';
-  if (inputPrice <= 3) return 'Max';
+  if (inputPrice <= 3) return 'free';
   return 'Ultra';
 }
 
@@ -71,33 +70,22 @@ function toRelayModel(config: ModelConfig): RelayModel {
 // Model Definitions (derived from llm-zoo)
 // =============================================================================
 
-/** All models from llm-zoo, converted to relay format */
+/** All relay-compatible models from llm-zoo, converted to relay format. */
 const RELAY_MODELS: RelayModel[] = Object.values(MODEL_CONFIGS)
-  .filter((m) => !m.openRouterOnly) // Exclude OpenRouter-only models
+  .filter((m) => !m.openRouterOnly)
   .map(toRelayModel);
 
 // =============================================================================
 // Derived Arrays
 // =============================================================================
 
-/** Get models available for a specific tier (cumulative access) */
-function getModelsForTier(tier: MinTier): RelayModel[] {
-  if (tier === 'Ultra') return RELAY_MODELS;
-  if (tier === 'Max')
-    return RELAY_MODELS.filter(
-      (m) => m.minTier === 'free' || m.minTier === 'Max',
-    );
-  return RELAY_MODELS.filter((m) => m.minTier === 'free');
-}
-
-const FREE_TIER_MODELS = getModelsForTier('free');
-const MAX_TIER_MODELS = getModelsForTier('Max');
+const FREE_TIER_MODELS = RELAY_MODELS.filter((m) => m.minTier === 'free');
+const MAX_TIER_MODELS = RELAY_MODELS.filter(
+  (m) => m.minTier === 'free' || m.minTier === 'Max',
+);
 
 const FREE_TIER_SHORT_NAMES = FREE_TIER_MODELS.map((m) => m.shortName);
 const MAX_TIER_SHORT_NAMES = MAX_TIER_MODELS.map((m) => m.shortName);
-
-const FREE_TIER_API_PATTERNS = FREE_TIER_MODELS.flatMap((m) => m.apiPatterns);
-const MAX_TIER_API_PATTERNS = MAX_TIER_MODELS.flatMap((m) => m.apiPatterns);
 
 // All supported providers
 const ALL_PROVIDERS = [
@@ -129,12 +117,13 @@ export const TIER_CONFIG: TierModelConfig = {
  * Monthly spending limits by tier (in USD).
  *
  * These limits apply to relay usage only. Users can always use their own
- * API keys without any limits. Adjust these values based on fair use policy.
+ * API keys without any limits. Current values reflect the sponsor-credit
+ * promotion: free and Max tiers are bumped while the donated credits last.
  */
 export const TIER_SPENDING_LIMITS: TierSpendingLimits = {
-  free: 10, // $10/month - trial/evaluation access (temporarily increased)
-  Max: 50, // $50/month - researcher access
-  Ultra: 1500, // $1500/month - sponsor access
+  free: 20, // $20/month - promo (bumped from $10)
+  Max: 100, // $100/month - promo (bumped from $50)
+  Ultra: 300, // $300/month - sponsor access
 };
 
 // =============================================================================
@@ -160,10 +149,74 @@ export function getSpendingLimit(tier: string): number {
 // Validation Functions
 // =============================================================================
 
+/** Word-boundary separators that may follow a model-name prefix in API names. */
+const BOUNDARY_RE = /^[-/:@.]/;
+
+/**
+ * Collect all RelayModel entries whose apiPatterns match the given API model
+ * name. Exact matches take precedence over boundary-prefix matches.
+ *
+ * Strips an optional "provider/" prefix so "openai/gpt-4o-mini" and
+ * "gpt-4o-mini" resolve identically.
+ *
+ * For boundary matches, only the longest-matching pattern length is kept
+ * (prevents a short free-tier "glm-5" from co-matching with "glm-5-turbo").
+ *
+ * Returns all matching entries rather than a single winner because the same
+ * API model name can map to multiple llm-zoo entries (e.g. multiple pricing
+ * tiers for the same model). The caller decides how to interpret the set.
+ */
+function resolveAllModelsByApiName(modelName: string): RelayModel[] {
+  const name = modelName.toLowerCase().trim();
+  const modelPart = name.includes('/')
+    ? name.slice(name.indexOf('/') + 1)
+    : name;
+
+  const exactMatches: RelayModel[] = [];
+  let bestBoundaryLen = -1;
+  const boundaryMatches: RelayModel[] = [];
+
+  for (const model of RELAY_MODELS) {
+    let isExact = false;
+    for (const pattern of model.apiPatterns) {
+      if (modelPart === pattern || name === pattern) {
+        isExact = true;
+        break;
+      }
+    }
+    if (isExact) {
+      exactMatches.push(model);
+      continue;
+    }
+
+    for (const pattern of model.apiPatterns) {
+      const isBoundary =
+        (modelPart.startsWith(pattern) &&
+          BOUNDARY_RE.test(modelPart.slice(pattern.length))) ||
+        (name.startsWith(pattern) &&
+          BOUNDARY_RE.test(name.slice(pattern.length)));
+      if (isBoundary) {
+        if (pattern.length > bestBoundaryLen) {
+          boundaryMatches.length = 0;
+          bestBoundaryLen = pattern.length;
+        }
+        if (pattern.length === bestBoundaryLen) boundaryMatches.push(model);
+        break;
+      }
+    }
+  }
+
+  return exactMatches.length > 0 ? exactMatches : boundaryMatches;
+}
+
 /**
  * Check if a model is allowed for a given tier.
- * Uses PREFIX pattern matching to handle version suffixes.
- * E.g., "gpt-4.1-mini-2025-04-14" matches pattern "gpt-4.1-mini"
+ * Free/Max tier: all models up to $3/M input (currently identical access).
+ * Ultra tier: all models.
+ *
+ * When multiple llm-zoo entries share the same API model name, a `some()`
+ * check is used: access is granted if at least one interpretation falls
+ * within the user's tier. Unknown model names are denied for non-Ultra tiers.
  */
 export function isModelAllowedForTier(
   tier: string,
@@ -172,42 +225,13 @@ export function isModelAllowedForTier(
   if (tier === ULTRA_TIER) return true;
   if (!modelName) return false;
 
-  const normalizedModel = modelName.toLowerCase();
-  const patterns =
-    tier === MAX_TIER
-      ? MAX_TIER_API_PATTERNS
-      : tier === FREE_TIER
-        ? FREE_TIER_API_PATTERNS
-        : [];
+  const models = resolveAllModelsByApiName(modelName);
+  if (models.length === 0) return false;
 
-  return patterns.some((pattern) => normalizedModel.startsWith(pattern));
-}
-
-// =============================================================================
-// Debug/Info Exports
-// =============================================================================
-
-/** Get pricing breakdown by tier (useful for debugging) */
-export function getTierBreakdown(): Record<
-  MinTier,
-  { count: number; models: string[] }
-> {
-  return {
-    free: {
-      count: FREE_TIER_MODELS.length,
-      models: FREE_TIER_MODELS.map((m) => `${m.shortName} ($${m.inputPrice})`),
-    },
-    Max: {
-      count: MAX_TIER_MODELS.length - FREE_TIER_MODELS.length,
-      models: MAX_TIER_MODELS.filter((m) => m.minTier === 'Max').map(
-        (m) => `${m.shortName} ($${m.inputPrice})`,
-      ),
-    },
-    Ultra: {
-      count: RELAY_MODELS.length - MAX_TIER_MODELS.length,
-      models: RELAY_MODELS.filter((m) => m.minTier === 'Ultra').map(
-        (m) => `${m.shortName} ($${m.inputPrice})`,
-      ),
-    },
-  };
+  if (tier === MAX_TIER) {
+    return models.some(
+      (m) => m.minTier === FREE_TIER || m.minTier === MAX_TIER,
+    );
+  }
+  return models.some((m) => m.minTier === FREE_TIER);
 }

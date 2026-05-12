@@ -4,40 +4,27 @@ import { NullableFileFieldsSchema } from '@shared/schemas/fileFields';
 import { ToolConfigSchema } from '@shared/schemas/toolConfig';
 import { AgentCategory } from './AgentDataclass';
 
+export const DEFAULT_AGENT_NAME = 'correct';
+export const DEFAULT_AGENT_MODEL = 'gemini31p';
+export const DEFAULT_AGENT_INSTRUCTION = '';
+
 /** Pure object schema without refinements for use with .partial(). */
 const AgentConfigFieldsSchema = NullableFileFieldsSchema.extend({
-  agent: z.string().prefault('correct'),
-  model: z.string().prefault('gemini31p'),
-  instruction: z.string().prefault(''),
-  useMultipleOutputs: z.boolean().prefault(false),
+  agent: z.string().prefault(DEFAULT_AGENT_NAME),
+  model: z.string().prefault(DEFAULT_AGENT_MODEL),
+  instruction: z.string().prefault(DEFAULT_AGENT_INSTRUCTION),
   agentCategory: z.enum(AgentCategory).prefault(AgentCategory.Workflow),
   editedFiles: z.array(z.string()).prefault([]),
   toolConfig: ToolConfigSchema,
   /** Memory display paths attached to this delegation (e.g. /memories/conventions.md). */
   memories: z.array(z.string()).prefault([]),
+  /** Working directory override for subagent tool calls (e.g. a git worktree). */
+  workingDirectory: z.string().nullish(),
 });
 
-/** Lift legacy session.agentCategory to top level for backward compatibility. */
-export function liftLegacyAgentCategory(input: unknown): unknown {
-  if (typeof input !== 'object' || input === null) return input;
-  const obj = input as Record<string, unknown>;
-
-  if ('agentCategory' in obj && obj.agentCategory !== undefined) {
-    return input;
-  }
-
-  const session = obj.session as Record<string, unknown> | undefined;
-  if (session && 'agentCategory' in session) {
-    return { ...obj, agentCategory: session.agentCategory };
-  }
-
-  return input;
-}
-
 /** Agent configuration schema with output file count validation. */
-export const AgentConfigSchema = z.preprocess(
-  liftLegacyAgentCategory,
-  AgentConfigFieldsSchema.superRefine((config, ctx) => {
+export const AgentConfigSchema = AgentConfigFieldsSchema.superRefine(
+  (config, ctx) => {
     // Validate that output files count doesn't exceed input files count
     if (config.outputFiles.length > 0) {
       const inputCount = 1 + config.inputFiles.length; // inputFile + inputFiles
@@ -50,18 +37,16 @@ export const AgentConfigSchema = z.preprocess(
         });
       }
     }
-  }),
+  },
 );
 
 export type AgentConfig = z.output<typeof AgentConfigSchema>;
 export type AgentConfigInput = z.input<typeof AgentConfigFieldsSchema>;
 
 /** Agent configuration payload with required agent and model fields. */
-export const AgentConfigPayloadSchema = AgentConfigFieldsSchema.partial()
-  .required({
-    agent: true,
-    model: true,
-  })
-  .describe('Agent configuration payload with required agent and model fields');
+const AgentConfigPayloadSchema = AgentConfigFieldsSchema.partial().required({
+  agent: true,
+  model: true,
+});
 
 export type AgentConfigPayload = z.infer<typeof AgentConfigPayloadSchema>;

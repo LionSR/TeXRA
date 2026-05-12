@@ -3,34 +3,34 @@ import { css, type CSSResult } from 'lit';
 export const designTokens: CSSResult = css`
   :host {
     /* Text colors */
-    --color-text-secondary: var(--vscode-descriptionForeground);
-    --color-text-link: var(--vscode-textLink-foreground);
-    --color-text-link-active: var(--vscode-textLink-activeForeground);
+    --color-text-secondary: var(--wa-color-text-quiet);
+    --color-text-link: var(--wa-color-text-link);
+    --color-text-link-active: var(--wa-color-text-link-active);
 
     /* Background colors */
-    --color-bg-secondary: var(--vscode-sideBar-background);
+    --color-bg-secondary: var(--wa-color-surface-lowered);
 
     /* Border colors */
-    --color-border: var(--vscode-panel-border);
+    --color-border: var(--wa-color-surface-border);
 
     /* Status colors */
-    --color-success: var(--vscode-testing-iconPassed, #2ea043);
-    --color-error: var(--vscode-editorError-foreground, #f14c4c);
-    --color-warning: var(--vscode-editorWarning-foreground, #cca700);
-    --color-info: var(--vscode-charts-blue, #3794ff);
-    --color-added: var(--vscode-charts-green, #4caf50);
-    --color-removed: var(--vscode-charts-red, #f44336);
+    --color-success: var(--wa-color-success-on-quiet, #2ea043);
+    --color-error: var(--wa-color-danger-on-quiet, #f14c4c);
+    --color-warning: var(--wa-color-warning-on-quiet, #cca700);
+    --color-info: var(--wa-color-chart-blue, #3794ff);
+    --color-added: var(--wa-color-chart-green, #4caf50);
+    --color-removed: var(--wa-color-chart-red, #f44336);
 
     /* Component aliases */
     --background-color: var(--color-bg-secondary);
-    --text-color: var(--vscode-sideBar-foreground);
-    --button-hover-background: var(--vscode-button-hoverBackground);
-    --dropdown-border: var(--vscode-dropdown-border);
+    --text-color: var(--wa-color-text-normal);
+    --button-hover-background: var(--wa-color-button-hover);
+    --dropdown-border: var(--wa-form-control-border-color);
 
     /* Typography */
-    --font-size: var(--vscode-font-size);
-    --font-family: var(--vscode-font-family);
-    --font-weight: var(--vscode-font-weight);
+    --font-size: var(--wa-font-size-m);
+    --font-family: var(--wa-font-family-body);
+    --font-weight: var(--wa-font-weight-normal);
     --font-weight-medium: 500;
     --font-weight-semibold: 600;
     --font-weight-bold: 700;
@@ -39,17 +39,17 @@ export const designTokens: CSSResult = css`
     --font-size-xs: calc(var(--font-size) * 0.8);
     --font-size-icon: var(--font-size-lg);
     --font-size-icon-sm: var(--font-size);
+
+    /* Heading scale shared with desktop themeTokens.css. Use these tokens
+       instead of hardcoded heading sizes so extension and desktop hosts
+       render headings at the same visual scale. */
+    --font-size-h1: 1.5em;
+    --font-size-h2: 1.25em;
+    --font-size-h3: 1em;
     --line-height-tight: 1;
     --line-height-heading: 1.25;
     --line-height-normal: 1.4;
     --line-height-relaxed: 1.5;
-
-    /* Spacing */
-    --spacing-tiny: 2px;
-    --spacing-small: 4px;
-    --spacing-medium: 8px;
-    --spacing-large: 12px;
-    --spacing-xlarge: 20px;
 
     /* Border radius */
     --border-radius-small: 2px;
@@ -92,18 +92,6 @@ export const designTokens: CSSResult = css`
 `;
 
 export const animationStyles: CSSResult = css`
-  @keyframes pulse-scale {
-    0%,
-    100% {
-      transform: scale(1);
-      opacity: 1;
-    }
-    50% {
-      transform: scale(1.15);
-      opacity: 0.8;
-    }
-  }
-
   @keyframes spin {
     from {
       transform: rotate(0deg);

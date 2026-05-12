@@ -1,0 +1,268 @@
+// Third-party imports
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
+import { styleMap } from 'lit/directives/style-map.js';
+import { when } from 'lit/directives/when.js';
+
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
+// Local imports - shared styles
+import { designTokens } from '@shared/styles';
+import type { TokenUsageStats } from '@shared/schemas';
+
+// Local imports - progress view
+import { formatTokens } from '../formatters/timestampUtils';
+import { ELEMENT_IDS } from '../constants';
+import type { ContextStateData } from '../store';
+
+/**
+ * Default compaction threshold (%) — must match
+ * DEFAULT_COMPACTION_THRESHOLD_PERCENT in contextManagementConstants.ts.
+ */
+const COMPACTION_THRESHOLD = 75;
+
+/** Solid fill color based on context utilization. */
+function fillColor(percent: number): string {
+  if (percent <= 65) return 'var(--wa-color-success-on-quiet, #73c991)';
+  if (percent <= 80) return 'var(--wa-color-warning-on-quiet, #cca700)';
+  return 'var(--wa-color-testing-failed, #f48771)';
+}
+
+@customElement('usage-panel')
+export class UsagePanel extends LitElement {
+  static override styles = [
+    designTokens,
+    css`
+      :host {
+        display: block;
+      }
+
+      :host([hidden]) {
+        display: none;
+      }
+
+      .usage-summary-footer {
+        border-top: var(--border-thin) solid var(--color-border);
+        background-color: var(--wa-color-surface-lowered);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: var(--font-size-sm);
+        color: var(--color-text-secondary);
+      }
+
+      :is(.run-summary, .context-state) {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--wa-space-3xs);
+        color: var(--color-text-secondary);
+        font-size: var(--font-size-sm);
+        opacity: var(--opacity-normal);
+      }
+
+      :is(.run-summary, .context-state) wa-icon {
+        font-size: var(--font-size-icon-sm);
+        opacity: var(--opacity-subtle);
+      }
+
+      /* Context gauge bar */
+      .context-gauge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--wa-space-2xs);
+      }
+
+      .context-gauge__track {
+        position: relative;
+        width: 80px;
+        height: 6px;
+        background: var(--wa-color-surface-border, rgba(128, 128, 128, 0.3));
+        border-radius: var(--border-radius);
+        overflow: hidden;
+      }
+
+      .context-gauge__fill {
+        display: block;
+        height: 100%;
+        border-radius: var(--border-radius);
+        transition: width var(--transition-slow);
+      }
+
+      /* Compaction threshold tick mark */
+      .context-gauge__tick {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: var(--border-thin);
+        background: var(--wa-color-text-normal);
+        opacity: var(--opacity-separator);
+      }
+
+      .run-summary {
+        margin-left: auto;
+      }
+
+      .run-summary__label {
+        font-weight: var(--font-weight-medium);
+        color: var(--color-text-secondary);
+      }
+
+      :is(.run-summary__value, .context-state__value) {
+        color: var(--wa-color-text-normal);
+      }
+    `,
+  ];
+
+  @property({ attribute: false }) usage: TokenUsageStats | null = null;
+  @property({ attribute: false }) contextState: ContextStateData | null = null;
+
+  /** Whether the usage stats have any non-zero values worth displaying. */
+  private get hasUsage(): boolean {
+    const u = this.usage;
+    if (!u) return false;
+    return (
+      u.inputTokens > 0 ||
+      u.outputTokens > 0 ||
+      u.cost > 0 ||
+      (u.cacheReadInputTokens ?? 0) > 0 ||
+      (u.cacheCreationInputTokens ?? 0) > 0
+    );
+  }
+
+  private get hasContext(): boolean {
+    return (
+      (this.contextState?.contextWindow ?? 0) > 0 &&
+      this.contextState?.utilizationPercent !== undefined
+    );
+  }
+
+  override render(): TemplateResult | typeof nothing {
+    if (!this.hasUsage && !this.hasContext) {
+      return nothing;
+    }
+
+    return html`
+      <div class="usage-summary-footer">
+        <span
+          id=${ELEMENT_IDS.CONTEXT_STATE}
+          class="context-state"
+          ?hidden=${!this.hasContext}
+        >
+          ${this.renderContext()}
+        </span>
+        <span
+          id=${ELEMENT_IDS.RUN_SUMMARY}
+          class="run-summary"
+          aria-label=${this.buildUsageLabel()}
+        >
+          ${this.renderUsage()}
+        </span>
+      </div>
+    `;
+  }
+
+  private renderUsage(): TemplateResult | typeof nothing {
+    if (!this.usage) return nothing;
+
+    const { inputTokens, outputTokens, cost } = this.usage;
+    const cacheRead = this.usage.cacheReadInputTokens ?? 0;
+    const cacheMiss = this.usage.cacheMissInputTokens ?? 0;
+    const cacheWrite = this.usage.cacheCreationInputTokens ?? 0;
+
+    return html`
+      <wa-icon library="texra" name="pie-chart" aria-hidden="true"></wa-icon>
+      <span class="run-summary__label">Total usage:</span>
+      <span class="run-summary__value">
+        <wa-icon
+          library="texra"
+          name="arrow-up"
+          title="Input tokens"
+          aria-hidden="true"
+        ></wa-icon
+        >${formatTokens(inputTokens)}
+        ${when(
+          cacheRead > 0,
+          () =>
+            html` ·
+              <wa-icon
+                library="texra"
+                name="cloud-download"
+                title="Cache read tokens (discounted)"
+                aria-hidden="true"
+              ></wa-icon>
+              ${formatTokens(cacheRead)}`,
+        )}
+        ${when(
+          cacheMiss > 0,
+          () =>
+            html` ·
+              <wa-icon
+                library="texra"
+                name="cloud-upload"
+                title="Cache miss tokens (full price)"
+                aria-hidden="true"
+              ></wa-icon>
+              ${formatTokens(cacheMiss)}`,
+        )}
+        ${when(
+          cacheWrite > 0,
+          () =>
+            html` ·
+              <wa-icon
+                library="texra"
+                name="database"
+                title="Cache creation tokens (1.25x cost)"
+                aria-hidden="true"
+              ></wa-icon>
+              ${formatTokens(cacheWrite)}`,
+        )}
+        ·
+        <wa-icon
+          library="texra"
+          name="arrow-down"
+          title="Output tokens"
+          aria-hidden="true"
+        ></wa-icon
+        >${formatTokens(outputTokens)} · $${cost.toFixed(3)}
+      </span>
+    `;
+  }
+
+  private renderContext(): TemplateResult | typeof nothing {
+    if (!this.contextState) return nothing;
+    const { inputTokens, contextWindow, utilizationPercent } =
+      this.contextState;
+    const clamped = Math.min(100, Math.max(0, utilizationPercent));
+
+    return html`
+      <span class="context-gauge" title="${clamped.toFixed(0)}% context used">
+        <wa-icon library="texra" name="window" aria-hidden="true"></wa-icon>
+        <span class="context-gauge__track">
+          <span
+            class="context-gauge__fill"
+            style=${styleMap({
+              width: `${clamped}%`,
+              backgroundColor: fillColor(clamped),
+            })}
+          ></span>
+          <span
+            class="context-gauge__tick"
+            style=${styleMap({ left: `${COMPACTION_THRESHOLD}%` })}
+            title="Compaction at ${COMPACTION_THRESHOLD}%"
+          ></span>
+        </span>
+        <span class="context-state__value">
+          ${formatTokens(inputTokens)} / ${formatTokens(contextWindow)}
+        </span>
+      </span>
+    `;
+  }
+
+  private buildUsageLabel(): string {
+    if (!this.usage) return '';
+    const { inputTokens, outputTokens, cost } = this.usage;
+    return `Total usage: ${formatTokens(inputTokens)} input tokens, ${formatTokens(outputTokens)} output tokens, $${cost.toFixed(3)}`;
+  }
+}

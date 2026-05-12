@@ -1,0 +1,127 @@
+# Tool Catalog for Tool-Use Agents
+
+Every tool available to tool-use agents, organised by group. When designing a
+new agent, pick the smallest set of tools that covers its purpose — the
+recommended groups at the bottom are a good starting point.
+
+## File operations
+
+- `bash` — execute shell commands in the workspace directory. Use for
+  scripts, compilation, git, and anything else that needs a shell.
+- `read_file` — read workspace files. Supports text files (with optional
+  line ranges), PDFs, and images (as attachments for vision-capable models).
+- `write_file` — overwrite or create a workspace file. Writes under the
+  allowlisted agent directories go through the normal approval diff; writes
+  under read-only directories fail cleanly.
+- `edit_file` — exact string replacement in a file. More surgical than
+  `write_file` for targeted changes.
+- `ls` — list files and directories with optional glob filtering.
+- `glob` — find files matching glob patterns (e.g. `**/*.tex`). Returns
+  paths sorted by modification time.
+- `grep` — search file contents with regex. Supports content,
+  files-with-matches, and count output modes.
+
+## Web & search
+
+- `web_search` — search the web and return top results.
+- `web_fetch` — fetch a URL, convert HTML to Markdown, return cleaned text.
+
+## Academic research
+
+- `arxiv_search` — search arXiv. Supports `field="author"` for author
+  searches.
+- `arxiv_metadata` — fetch bibliographic metadata for an arXiv paper by ID.
+- `download_arxiv_source` — download an arXiv paper's source archive into
+  the workspace.
+- `crossref_search` — search Crossref works and return top matches.
+- `crossref_doi` — look up detailed metadata for a DOI.
+
+## LaTeX processing
+
+- `extract_figures` — list and resolve figure assets referenced in a LaTeX
+  document.
+- `extract_bib_entries` — collect BibTeX records for citations.
+- `extract_tikz_figures` — discover TikZ figures and optionally compile them
+  to PDF.
+- `texcount` — count words in LaTeX files.
+
+## Citation management
+
+- `zotero_search`, `zotero_add`, `zotero_export`, `zotero_collections` —
+  manage references with Zotero (requires Better BibTeX).
+
+## Computation
+
+- `wolfram` — execute Wolfram Language code. Sessions do NOT persist
+  between calls.
+
+## Agent delegation
+
+- `delegate_workflow` — delegate to a workflow agent for whole-document
+  operations. Pass `agent`, `model`, `instruction`, `inputFile`. Returns
+  asynchronously via the follow-up queue.
+- `delegate_agent` — delegate to another tool-use agent. Pass `agent`,
+  `model`, and `instruction` for a fresh run, or `execution_id` +
+  `instruction` to resume a WAITING subagent.
+- `executions` — view execution history and manage running executions.
+- `accept_run_files` — accept output files from a completed execution.
+
+## Lean 4
+
+- `lean_diagnostics`, `lean_file`, `lean_project`, `lean_inspect`,
+  `lean_loogle` — Lean 4 proof assistant integration.
+
+## Utility
+
+- `memory` — manage persistent memory files for cross-session knowledge.
+- `todo_write` — track progress on complex tasks with structured checklists.
+- `plan` — record structured plans.
+- `diagnostics` — retrieve linter diagnostics for source files.
+
+## Recommended tool groups by use case
+
+Most agents should include the file-operations set as a baseline.
+
+**Research agent:**
+`bash, read_file, write_file, glob, grep, ls, web_search, web_fetch,
+arxiv_search, arxiv_metadata, download_arxiv_source, crossref_search,
+crossref_doi`
+
+**Code/editing agent:**
+`bash, read_file, write_file, edit_file, glob, grep, ls, diagnostics`
+
+**LaTeX analysis agent:**
+`bash, read_file, write_file, glob, grep, ls, extract_figures,
+extract_bib_entries, extract_tikz_figures, texcount`
+
+**Literature review agent:**
+`bash, read_file, write_file, glob, grep, ls, arxiv_search, arxiv_metadata,
+crossref_search, crossref_doi, web_search, zotero_search, zotero_add,
+zotero_export`
+
+**Orchestrator agent:**
+`bash, read_file, write_file, glob, grep, ls, delegate_workflow,
+delegate_agent, executions, accept_run_files, todo_write`
+
+**Computation agent:**
+`bash, read_file, write_file, glob, grep, ls, wolfram`
+
+**Lean 4 agent:**
+`bash, read_file, write_file, edit_file, glob, grep, ls, lean_diagnostics,
+lean_file, lean_project, lean_inspect, lean_loogle`
+
+**Minimal chat agent:**
+`bash, read_file, write_file, glob, grep, ls`
+
+## System prompt best practices
+
+- Start with a clear role: "You are a [role]. Your task is to [objective]."
+- Give tool usage guidance tailored to the agent's purpose.
+- Structure complex workflows as numbered steps.
+- Mention tool limitations (e.g. wolfram sessions don't persist; bash cwd is
+  the workspace).
+- For agents with many tools, organise guidance by phase (discovery →
+  analysis → output).
+- Keep prompts focused — describe only what this specific agent needs.
+- Use `todo_write` for agents with multi-step verification or audit
+  workflows.

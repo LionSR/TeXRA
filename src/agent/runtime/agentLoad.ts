@@ -8,7 +8,6 @@ import * as yaml from 'yaml';
 // Local imports - agent components
 import {
   resolveAgent,
-  getBaseName,
   type AgentSource,
   type ResolvedAgent,
 } from '@agent/index';
@@ -21,8 +20,8 @@ import {
   type AgentPrompt,
 } from '@agent/core/AgentDataclass';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
+import { toErrorMessage } from '@common/errors';
 import { resolveToolDefinitions } from '@tools/registry';
 
 // Internal imports
@@ -38,6 +37,10 @@ export interface ValidAgentDefinition {
 
 export interface AgentYamlValidationResult extends ValidAgentDefinition {
   prompts: AgentPrompt;
+}
+
+export interface AgentLoadOptions {
+  outputFiles?: readonly string[];
 }
 
 /**
@@ -76,21 +79,6 @@ export async function loadYaml(absolutePath: string): Promise<object> {
   return yaml.parse(yamlContent);
 }
 
-/**
- * Options for loading agent definitions.
- *
- * The {@link AgentLoadOptions.preferMultiple} flag only affects the initial
- * agent being resolved. Parent definitions always load their base variant so
- * that inherited prompts remain consistent with the author's expectations.
- *
- * This is the unified options type for agent loading/resolution operations,
- * replacing the duplicate AgentResolveOptions.
- */
-export interface AgentLoadOptions {
-  /** When true, prefer _multiple agent variant for multiple outputs support */
-  preferMultiple?: boolean;
-}
-
 export function ensureAgentCategoryForSource<
   T extends { agentCategory?: AgentCategory },
 >(settings: T, source: AgentSource): T {
@@ -102,23 +90,16 @@ export function ensureAgentCategoryForSource<
 
 export async function loadAgentSettingAndPrompts(
   resolution: ResolvedAgent,
-  options?: AgentLoadOptions,
+  options: AgentLoadOptions = {},
 ): Promise<[AgentSetting, AgentPrompt]> {
   try {
-    if (options?.preferMultiple && resolution.usedFallback) {
-      logger.warn(
-        CHANNEL,
-        `Requested multiple outputs for agent "${getBaseName(resolution.resolvedName)}" but no _multiple definition was found. Falling back to base definition.`,
-      );
-    }
-
     const { entry } = resolution;
 
     // Handle remote agents
     if (entry.source === 'remote') {
       const remoteConfig = await RemoteAgentLoader.loadRemoteAgent(
         resolution.resolvedName,
-        { preferMultiple: options?.preferMultiple },
+        { preferMultiOutput: (options.outputFiles?.length ?? 0) > 1 },
       );
 
       // Remote agents are already fully processed (tools resolved, validated)

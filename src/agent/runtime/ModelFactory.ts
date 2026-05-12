@@ -1,53 +1,62 @@
-import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
+import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
-import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
-import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
-import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
-import { ModelHandlerXAI } from '@agent/modelHandlers/modelHandlerXAI';
-import { ModelHandlerKimi } from '@agent/modelHandlers/modelHandlerKimi';
-import { ModelHandlerDashScope } from '@agent/modelHandlers/modelHandlerDashScope';
-import { ModelHandlerMiniMax } from '@agent/modelHandlers/modelHandlerMiniMax';
-import { ModelHandlerGLM } from '@agent/modelHandlers/modelHandlerGLM';
-import {
-  ModelHandlerOpenRouter,
-  ModelHandlerAnthropicViaOpenRouter,
-} from '@agent/modelHandlers/modelHandlerOpenRouter';
-import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
-import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
 
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import { GlobalStateKey, globalSM } from '@common/state';
-import * as logger from '@logger/logUtils';
-import { getConfig } from '@utils/config';
+import * as logger from '@agent/core/logger';
+import { getGlobalState } from '@agent/core/stateStore';
+import { getConfig } from '@agent/core/config';
+import { GlobalStateKey } from '@common/state/stateKeys';
+import { getUseOpenRouter } from '@utils/config/providerConfig';
+import { LEVEL_TO_EFFORT } from './reasoningEffort';
 
 const CHANNEL = 'ModelFactory';
 logger.initialize(CHANNEL);
 
-const PROVIDER_HANDLERS = new Map<
-  ModelProvider,
-  new (config: ModelConfig) => ModelHandler<ProviderMessage>
->([
-  [ModelProvider.ANTHROPIC, ModelHandlerAnthropic],
-  [ModelProvider.OPENAI, ModelHandlerOpenAI],
-  [ModelProvider.GOOGLE, ModelHandlerGoogleGenAI],
-  [ModelProvider.DEEPSEEK, ModelHandlerDeepSeek],
-  [ModelProvider.XAI, ModelHandlerXAI],
-  [ModelProvider.MOONSHOT, ModelHandlerKimi],
-  [ModelProvider.DASHSCOPE, ModelHandlerDashScope],
-  [ModelProvider.MINIMAX, ModelHandlerMiniMax],
-  [ModelProvider.GLM, ModelHandlerGLM],
-  [ModelProvider.OTHERS, ModelHandlerOpenRouter],
-]);
+type ModelHandlerConstructor = new (
+  config: ModelConfig,
+) => ModelHandler<ProviderMessage>;
 
-/**
- * Single source of truth: user-facing reasoning level strings → ReasoningEffort enum.
- * The reverse mapping (for the settings UI) is derived from this in SettingsViewMessageHandler.
- */
-export const LEVEL_TO_EFFORT: Readonly<Record<string, ReasoningEffort>> = {
-  none: ReasoningEffort.NONE,
-  low: ReasoningEffort.LOW,
-  medium: ReasoningEffort.MEDIUM,
-  high: ReasoningEffort.HIGH,
+type ProviderHandlerLoader = () => Promise<ModelHandlerConstructor>;
+
+const INTERNAL_VALIDATION_MODEL_HANDLER_ENV =
+  'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER';
+const INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV =
+  'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG';
+const INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT =
+  'texra-cli-run-validation';
+
+// Record (not Map) so TypeScript enforces exhaustiveness over ModelProvider.
+// A new enum value in llm-zoo without an entry here will fail typecheck.
+// `null` marks providers that have no direct handler (routed elsewhere or unsupported).
+const PROVIDER_HANDLERS: Record<ModelProvider, ProviderHandlerLoader | null> = {
+  [ModelProvider.ANTHROPIC]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerAnthropic'))
+      .ModelHandlerAnthropic,
+  [ModelProvider.OPENAI]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerOpenAI'))
+      .ModelHandlerOpenAI,
+  [ModelProvider.GOOGLE]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerGoogleGenAI'))
+      .ModelHandlerGoogleGenAI,
+  [ModelProvider.DEEPSEEK]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerDeepSeek'))
+      .ModelHandlerDeepSeek,
+  [ModelProvider.XAI]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerXAI')).ModelHandlerXAI,
+  [ModelProvider.MOONSHOT]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerKimi')).ModelHandlerKimi,
+  [ModelProvider.DASHSCOPE]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerDashScope'))
+      .ModelHandlerDashScope,
+  [ModelProvider.MINIMAX]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerMiniMax'))
+      .ModelHandlerMiniMax,
+  [ModelProvider.GLM]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerGLM')).ModelHandlerGLM,
+  [ModelProvider.OTHERS]: async () =>
+    (await import('@agent/modelHandlers/modelHandlerOpenRouterNative'))
+      .ModelHandlerOpenRouterNative,
+  [ModelProvider.COPILOT]: null,
 };
 
 /**
@@ -56,16 +65,16 @@ export const LEVEL_TO_EFFORT: Readonly<Record<string, ReasoningEffort>> = {
  * user has set an override.
  */
 function withReasoningOverride<T extends ModelHandler>(handler: T): T {
-  if (!handler.capabilities.supportsReasoningEffort) return handler;
+  const supportsReasoningOverride =
+    handler.capabilities.supportsReasoningEffort ||
+    (handler.isDeepSeek && handler.capabilities.supportsReasoning);
+  if (!supportsReasoningOverride) return handler;
 
-  const overrides = globalSM.get<Record<string, string>>(
+  const level = getGlobalState().get<Record<string, string>>(
     GlobalStateKey.REASONING_LEVELS,
     {},
-  );
-  const level = overrides[handler.config.name];
-  if (!level) return handler;
-
-  const effort = LEVEL_TO_EFFORT[level];
+  )[handler.config.name];
+  const effort = level ? LEVEL_TO_EFFORT[level] : undefined;
   if (effort === undefined) return handler;
 
   logger.debug(
@@ -84,26 +93,27 @@ function shouldUseResponsesAPI(
   if (config.provider !== ModelProvider.OPENAI || config.openRouterOnly) {
     return false;
   }
-  if (config.requiresResponsesAPI) {
-    return true;
-  }
-  if (useOpenRouter) {
-    return false;
-  }
   return (
-    getConfig<boolean>('texra.model.useOpenAIResponsesAPI', false) ||
-    config.fullName.startsWith('gpt-oss')
+    config.requiresResponsesAPI ||
+    (!useOpenRouter &&
+      (getConfig<boolean>('texra.model.useOpenAIResponsesAPI', false) ||
+        config.fullName.startsWith('gpt-oss')))
   );
 }
 
 /**
  * Apply the user's "prefer short model names" setting.
- * When enabled, uses the model's shortName (e.g. "gpt-5.4") instead of the
- * date-pinned fullName (e.g. "gpt-5.4-2026-03-05"). Useful for proxies/gateways
+ * When enabled, uses the model's shortName (e.g. "gpt-5.5") instead of the
+ * date-pinned fullName (e.g. "gpt-5.5-2026-04-15"). Useful for proxies/gateways
  * that only accept unpinned model identifiers.
  */
 function withShortModelName(config: ModelConfig): ModelConfig {
-  if (!globalSM.get<boolean>(GlobalStateKey.PREFER_SHORT_MODEL_NAMES, false)) {
+  if (
+    !getGlobalState().get<boolean>(
+      GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+      false,
+    )
+  ) {
     return config;
   }
   const short = config.shortName;
@@ -116,17 +126,70 @@ function withShortModelName(config: ModelConfig): ModelConfig {
   return { ...config, fullName: short };
 }
 
+async function shouldUseInternalValidationModelHandler(): Promise<boolean> {
+  if (process.env[INTERNAL_VALIDATION_MODEL_HANDLER_ENV] !== '1') {
+    return false;
+  }
+
+  const flagPath = process.env[INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV];
+  const [{ readFileSync }, path] = await Promise.all([
+    import('node:fs'),
+    import('node:path'),
+  ]);
+  if (process.env.CI !== '1' || !flagPath || !path.isAbsolute(flagPath)) {
+    throw new Error(
+      `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 is restricted to package validation with CI=1 and an absolute ${INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV} path.`,
+    );
+  }
+
+  let flagContent: string;
+  try {
+    flagContent = readFileSync(flagPath, 'utf8').trim();
+  } catch (error) {
+    throw new Error(
+      `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 requires a readable validation flag file at ${flagPath}.`,
+      { cause: error },
+    );
+  }
+
+  if (flagContent !== INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT) {
+    throw new Error(
+      `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 received an invalid validation flag file.`,
+    );
+  }
+
+  return true;
+}
+
 /**
  * Creates a model handler instance based on provider and routing configuration.
  * Applies short model name preference and reasoning level overrides.
  */
-export function createModelHandler(originalConfig: ModelConfig): ModelHandler {
+export async function createModelHandler(
+  originalConfig: ModelConfig,
+): Promise<ModelHandler> {
   const config = withShortModelName(originalConfig);
-  const useOpenRouter = getConfig<boolean>('texra.model.useOpenRouter', false);
+
+  if (await shouldUseInternalValidationModelHandler()) {
+    // Package validation still enters the real CLI and executeAgent path.
+    // Only the provider boundary is deterministic, so this must not become
+    // a user-facing model selector or an injected command-layer substitute.
+    logger.warn(
+      CHANNEL,
+      `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 is replacing provider handlers with the internal validation handler.`,
+    );
+    const { ModelHandlerValidation } =
+      await import('@agent/modelHandlers/modelHandlerValidation');
+    return new ModelHandlerValidation(config);
+  }
+
+  const useOpenRouter = getUseOpenRouter();
 
   // OpenAI Responses API (required or optional)
   if (shouldUseResponsesAPI(config, useOpenRouter)) {
     logger.debug(CHANNEL, 'Using OpenAI Responses API Handler');
+    const { ModelHandlerOpenAIResponse } =
+      await import('@agent/modelHandlers/modelHandlerOpenAIResponse');
     return withReasoningOverride(new ModelHandlerOpenAIResponse(config));
   }
 
@@ -134,24 +197,19 @@ export function createModelHandler(originalConfig: ModelConfig): ModelHandler {
   if (config.openRouterOnly || useOpenRouter) {
     const openrouterFullName =
       config.openrouterFullName ?? `${config.provider}/${config.fullName}`;
-    if (config.provider === ModelProvider.ANTHROPIC) {
-      return withReasoningOverride(
-        new ModelHandlerAnthropicViaOpenRouter({
-          ...config,
-          openrouterFullName,
-        }),
-      );
-    }
+    const { ModelHandlerOpenRouterNative } =
+      await import('@agent/modelHandlers/modelHandlerOpenRouterNative');
     return withReasoningOverride(
-      new ModelHandlerOpenRouter({ ...config, openrouterFullName }),
+      new ModelHandlerOpenRouterNative({ ...config, openrouterFullName }),
     );
   }
 
   // Direct provider handler
-  const HandlerClass = PROVIDER_HANDLERS.get(config.provider);
-  if (!HandlerClass) {
+  const loadHandler = PROVIDER_HANDLERS[config.provider];
+  if (!loadHandler) {
     throw new Error(`Unsupported model provider: ${config.provider}`);
   }
+  const HandlerClass = await loadHandler();
   logger.debug(CHANNEL, `Using Handler: ${HandlerClass.name}`);
   return withReasoningOverride(new HandlerClass(config));
 }

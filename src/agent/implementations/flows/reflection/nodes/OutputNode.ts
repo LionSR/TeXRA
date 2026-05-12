@@ -1,7 +1,13 @@
 import { Node } from '@agent/node';
 import type { RoundFileMapping } from '@agent/output/types';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
-import { hasRoundOutputs, getStorageKey } from '@agent/output/outputState';
+import {
+  hasCompileFailures,
+  hasRoundOutputs,
+  getStorageKey,
+  setCompileFailures,
+} from '@agent/output/outputState';
+import { runCompileCheck } from '@agent/output/compileCheck';
 import { extractFilesFromXml } from '@agent/output/xmlExtraction';
 import { traceFileLineage } from '@agent/output/lineageMapping';
 import { checkExpectedOutputs } from '@agent/output/outputValidation';
@@ -12,8 +18,7 @@ import {
 } from '@agent/output/roundSummary';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { toErrorMessage } from '@common/errors';
-import { bus } from '@eventBus/ProgressEventBus';
-import type { RoundOutput } from '@shared/schemas';
+import type { CompileFailure, RoundOutput } from '@shared/schemas';
 import type { AgentFileLocation, FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
 
@@ -32,6 +37,8 @@ interface OutputPrepInput {
 interface OutputExecResult {
   roundOutput: RoundOutput;
   summary: RoundSummary;
+  compileFailures: CompileFailure[];
+  emitCompileFailures: boolean;
 }
 
 /** Execute an operation that can fail gracefully (logs warnings, doesn't throw). */
@@ -67,34 +74,27 @@ export class OutputNode<C = unknown> extends Node<
   }
 
   async exec(prepRes: OutputPrepInput): Promise<OutputExecResult> {
-    const {
-      outputState,
-      xmlManager,
-      diffManager,
-      setting,
-      logger,
-      baseFiles,
-      shouldEnsureXmlStructure: shouldEnsureXml,
-    } = this.services;
+    const { outputState, xmlManager, diffManager, setting, logger, baseFiles } =
+      this.services;
     const { outputLocation, currentRound, endTurn } = prepRes;
 
     let mapping: RoundFileMapping | undefined;
+    let compileFailures: CompileFailure[] = [];
+    let emitCompileFailures = false;
 
     // Only process if turn ended (model completed response)
     if (endTurn) {
       logger.debug(`Processing output for round ${currentRound}`);
 
-      if (shouldEnsureXml) {
-        await tryOperation(
-          'XML structure',
-          () =>
-            xmlManager.ensureCorrectXmlStructure(
-              outputLocation,
-              setting.documentTag,
-            ),
-          logger,
-        );
-      }
+      await tryOperation(
+        'XML structure',
+        () =>
+          xmlManager.ensureCorrectXmlStructure(
+            outputLocation,
+            setting.documentTag,
+          ),
+        logger,
+      );
 
       await tryOperation(
         'Output processing',
@@ -123,6 +123,24 @@ export class OutputNode<C = unknown> extends Node<
             ),
           logger,
         );
+
+        await tryOperation(
+          'Compile check',
+          async () => {
+            const hadCompileFailures = hasCompileFailures(
+              outputState,
+              currentRound,
+            );
+            compileFailures = await runCompileCheck(
+              this.services,
+              currentRound,
+            );
+            setCompileFailures(outputState, currentRound, compileFailures);
+            emitCompileFailures =
+              compileFailures.length > 0 || hadCompileFailures;
+          },
+          logger,
+        );
       }
     }
 
@@ -143,7 +161,7 @@ export class OutputNode<C = unknown> extends Node<
       { isRewrite: setting.isRewrite },
     );
 
-    return { roundOutput, summary };
+    return { roundOutput, summary, compileFailures, emitCompileFailures };
   }
 
   async execFallback(
@@ -180,6 +198,7 @@ export class OutputNode<C = unknown> extends Node<
         round: currentRound,
         rawOutput: null,
         outputs: [],
+        compileFailures: [],
         xmlSummary: {
           tagContents: {},
           documents: [],
@@ -188,6 +207,8 @@ export class OutputNode<C = unknown> extends Node<
         },
       },
       summary,
+      compileFailures: [],
+      emitCompileFailures: false,
     };
   }
 
@@ -196,20 +217,26 @@ export class OutputNode<C = unknown> extends Node<
     prepRes: OutputPrepInput,
     execRes: OutputExecResult,
   ): Promise<string | undefined> {
-    const { streamId, logger, outputState } = this.services;
+    const { streamId, logger, outputState, runtimeHost } = this.services;
     const { outputLocation, currentRound, endTurn } = prepRes;
     const { summary, roundOutput } = execRes;
 
     // Emit output files event
-    bus.emit('addOutputFiles', {
+    runtimeHost.emit('addOutputFiles', {
       streamId,
-      storageKey: summary.storageKey,
       filesByRound: { [currentRound]: summary.fileInfos },
     });
 
+    if (execRes.emitCompileFailures) {
+      runtimeHost.emit('updateCompileFailures', {
+        streamId,
+        filesByRound: { [currentRound]: execRes.compileFailures },
+      });
+    }
+
     // Open files that haven't been opened yet
     for (const location of summary.filesToOpen) {
-      bus.emit('requestOpenFile', { location, preserveFocus: true });
+      runtimeHost.emit('requestOpenFile', { location, preserveFocus: true });
     }
 
     // Validate expected outputs if turn ended
@@ -225,14 +252,13 @@ export class OutputNode<C = unknown> extends Node<
             summary.stage,
           );
 
-          bus.emit('updateMissingOutputs', {
+          runtimeHost.emit('updateMissingOutputs', {
             streamId,
-            storageKey: validationResult.storageKey,
             filesByRound: { [currentRound]: validationResult.missing },
           });
 
           if (validationResult.missing.length > 0) {
-            bus.emit('requestShowInstruction', {
+            runtimeHost.emit('requestShowInstruction', {
               key: 'missingOutputsInfo',
               message: 'Missing output files detected',
             });

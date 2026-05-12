@@ -5,7 +5,7 @@ import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { isDirectory } from '@common/files/fsEntryType';
 import { formatRelativeTime } from '@shared/utils/string';
 import { StorageFS } from '@utils/files';
@@ -19,11 +19,12 @@ import {
   requireFileReadForEdit,
 } from '../fileInteractions';
 import {
-  countOccurrences,
   formatFileView,
   formatLinesWithNumbers,
-  requireField,
-} from '../utils';
+  formatPaginationHint,
+  paginateToolListing,
+} from '../formatting';
+import { countOccurrences, requireField } from '../utils';
 
 // Local imports - shared memory constants and utilities
 import {
@@ -70,6 +71,25 @@ const MemoryToolInputSchema = z.strictObject({
   insert_text: z.string().nullish(),
   old_path: z.string().nullish(),
   new_path: z.string().nullish(),
+
+  /** Zero-based offset for paginating directory listings (command="view" on a directory). */
+  offset: z
+    .int()
+    .min(0)
+    .nullish()
+    .describe(
+      'Zero-based offset into the directory listing. Use with limit for pagination. Default: 0.',
+    ),
+
+  /** Maximum entries to return from a directory listing (command="view" on a directory). */
+  limit: z
+    .int()
+    .min(1)
+    .max(200)
+    .nullish()
+    .describe(
+      'Max entries to return from directory listing. Default: 100, max: 200.',
+    ),
 });
 
 /** Derived from MemoryToolInputSchema - single source of truth */
@@ -83,6 +103,7 @@ export class MemoryTool extends defineTool({
   description: `Manage persistent memory files under /memories (view, create, str_replace, insert, delete, rename, pin, unpin).
 
 Paths must start with /memories. Use /memories to list files, /memories/file.md for specific files. "/" alone is invalid.
+Directory listings are paginated — use offset/limit to page through results (default: offset 0, limit 100).
 
 Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies, pitfalls, best practices). Pinned memories are always loaded at session start. Use \`unpin\` to remove the pinned status. Maximum ${MAX_PINNED_MEMORIES} pinned memories allowed.`,
   schema: MemoryToolInputSchema,
@@ -103,6 +124,8 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
           this.canonicalize(requireField(input.path, 'path', input.command)),
           // Schema enforces length 2; cast since Zod infers number[]
           input.view_range as [number, number] | undefined,
+          input.offset ?? 0,
+          input.limit ?? 100,
         );
       case 'create':
         return this.create(
@@ -162,7 +185,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     content: string,
     existingMeta?: MemoryFileMeta | null,
   ): Promise<void> {
-    const ctx = getCurrentToolFileInteractionContext();
+    const ctx = getCurrentToolRunContext();
     const meta = createMeta(ctx?.agentName, ctx?.executionId, existingMeta);
     await StorageFS.write(resolvedPath, buildFile(content, meta));
   }
@@ -180,7 +203,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   /** Return early result if the file hasn't been viewed yet. */
   private requireViewBeforeModify(
     inputPath: string,
-    operation: string = 'editing',
+    operation = 'editing',
   ): ToolResult | undefined {
     return (
       requireFileReadForEdit(
@@ -195,24 +218,23 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     resolvedPath: string,
     inputPath: string,
   ): Promise<void> {
+    const errorMsg = `The path ${inputPath} does not exist or is a directory.`;
+    let stats;
     try {
-      const stats = await StorageFS.stat(resolvedPath);
-      if (isDirectory(stats.type)) {
-        throw new ToolError(
-          `The path ${inputPath} does not exist or is a directory.`,
-        );
-      }
-    } catch (err) {
-      if (err instanceof ToolError) throw err;
-      throw new ToolError(
-        `The path ${inputPath} does not exist or is a directory.`,
-      );
+      stats = await StorageFS.stat(resolvedPath);
+    } catch {
+      throw new ToolError(errorMsg);
+    }
+    if (isDirectory(stats.type)) {
+      throw new ToolError(errorMsg);
     }
   }
 
   private async view(
     inputPath: string,
     viewRange?: [number, number],
+    offset = 0,
+    limit = 100,
   ): Promise<ToolResult> {
     const resolvedPath = this.resolveMemoryPath(inputPath);
     const exists = await StorageFS.exists(resolvedPath);
@@ -233,15 +255,19 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
 
     const stats = await StorageFS.stat(resolvedPath);
     if (isDirectory(stats.type)) {
-      const listing = await this.buildDirectoryListing(resolvedPath);
+      const allEntries = await this.buildDirectoryListing(resolvedPath);
       recordToolFileRead(inputPath);
+
+      const { page, start, end, total } = paginateToolListing(
+        allEntries,
+        offset,
+        limit,
+      );
+
+      const header = `Contents of ${inputPath} (showing ${start}\u2013${end} of ${total}, up to 2 levels deep):`;
       return {
-        summary: `Listed directory: ${inputPath}`,
-        output: [
-          `Contents of ${inputPath} (up to 2 levels deep):`,
-          `SIZE\tMODIFIED\tBY\tPATH`,
-          ...listing,
-        ].join('\n'),
+        summary: `Listed directory: ${inputPath} (${start}\u2013${end} of ${total})`,
+        output: `${header}\nSIZE\tMODIFIED\tBY\tPATH\n${page.join('\n')}${formatPaginationHint(end, total)}`,
       };
     }
 

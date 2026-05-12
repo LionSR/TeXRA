@@ -2,7 +2,9 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 
 import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { getWorkspaceState } from '@agent/core/stateStore';
+import { toErrorMessage } from '@common/errors';
+import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
@@ -11,17 +13,20 @@ import {
   MESSAGE_TYPES,
   type OutputFileInfo,
 } from '@shared/schemas';
-import { getConfig } from '@utils/config';
 import {
+  LATEX_CONFIG_DEFAULTS,
+  LATEX_CONFIG_RANGES,
+} from '@shared/constants/latex';
+import {
+  createExternalLocation,
+  createRunStorageLocation,
+  createWorkspaceLocation,
   flexibleFS,
   TaskRunFileService,
   type FileLocation,
 } from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
-import {
-  getComparablePath,
-  getFileDirectory,
-} from '@utils/files/taskRunStorage';
+import { getComparablePath } from '@utils/files/taskRunStorage';
 
 import type { RoundFileMapping } from './types';
 
@@ -127,6 +132,10 @@ export class LatexDiffManager {
       return;
     }
 
+    // Ensure round-dir has symlinks to all mirrored deps so latexdiff's
+    // relative \input{} resolution works when its cwd is runDir/r{round}.
+    await this.fileService.ensureMirroredInRoundDir(currRound);
+
     const outputByPath = new Map(
       outputFiles.map((f) => [getComparablePath(f.location), f]),
     );
@@ -165,9 +174,9 @@ export class LatexDiffManager {
       }
     }
 
-    const generateBetweenRoundDiffs = getConfig<boolean>(
-      'texra.latexdiff.generateBetweenRoundDiffs',
-      false,
+    const generateBetweenRoundDiffs = getWorkspaceState().get<boolean>(
+      WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+      LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
     );
 
     if (generateBetweenRoundDiffs && currRound > 0) {
@@ -299,19 +308,68 @@ export class LatexDiffManager {
       return null;
     }
 
-    const refRelDir = getFileDirectory(referenceLocation);
-    const diffRelativePath = path.join(refRelDir, result.diffFileName);
-    const diffLocation = this.fileService.createLocation(diffRelativePath);
+    // LaTeXdiffService writes the diff next to the reference's absolutePath.
+    // We must therefore describe the diff with a FileLocation of the same
+    // kind as `referenceLocation`, otherwise rewrite runs (base = workspace
+    // original) would try to compile a diff that lives in run storage — a
+    // file that was never written there.
+    const diffLocation = this.buildSiblingDiffLocation(
+      referenceLocation,
+      result.diffFileName,
+    );
 
     const buildDir = path.join(
       path.dirname(diffLocation.absolutePath),
       'build',
     );
+    // Reuse the workflow compile-check timeout so a hanging diff build
+    // gets killed by execa instead of orphaning latexmk/pdflatex.
+    const timeoutMs = Math.max(
+      LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min,
+      getWorkspaceState().get<number>(
+        WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+        LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
+      ),
+    );
     await compileLatex2Pdf(diffLocation, {
       channel: this.streamId,
       outputDirectory: buildDir,
+      timeout: timeoutMs,
     });
 
     return diffLocation;
+  }
+
+  /**
+   * Describe the diff file that LaTeXdiffService wrote next to
+   * `reference.absolutePath`. The returned FileLocation must share the
+   * reference's kind — otherwise rewrite runs (base = workspace original)
+   * would try to compile a diff that lives in run storage while the file
+   * was actually written into the workspace.
+   */
+  private buildSiblingDiffLocation(
+    reference: FileLocation,
+    diffFileName: string,
+  ): FileLocation {
+    const siblingAbsolute = path.join(
+      path.dirname(reference.absolutePath),
+      diffFileName,
+    );
+    if (reference.kind === 'workspace') {
+      const relativeDir = path.dirname(reference.relativePath);
+      return createWorkspaceLocation(
+        siblingAbsolute,
+        path.join(relativeDir, diffFileName),
+      );
+    }
+    if (reference.kind === 'runStorage') {
+      const relativeDir = path.dirname(reference.relativePath);
+      return createRunStorageLocation(
+        siblingAbsolute,
+        path.join(relativeDir, diffFileName),
+        reference.executionId,
+      );
+    }
+    return createExternalLocation(siblingAbsolute);
   }
 }

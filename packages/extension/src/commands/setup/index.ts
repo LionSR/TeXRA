@@ -1,0 +1,1 @@
+export { runSetupAssistant } from './setupAssistantCommand';

@@ -4,14 +4,16 @@ import { XMLParser } from 'fast-xml-parser';
 
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting } from '@agent/core/AgentDataclass';
-import { getOutputFileName } from '@agent/utils/outputFileUtils';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
+import { WORKFLOW_OUTPUT_BASENAME } from '@agent/output/workflowOutputLayout';
+import { toErrorMessage } from '@common/errors';
 import { AgentLogger } from '@logger/AgentLogger';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import type { OutputFileInfo } from '@shared/schemas';
 import {
   AbsoluteFS,
+  createExternalLocation,
   getFileDirectory,
   TaskRunFileService,
   type FileLocation,
@@ -88,17 +90,38 @@ export class XmlOutputManager {
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<{ location: FileLocation; sourceName: string }> {
-    const { name } = path.parse(outputLocation.absolutePath);
+    const { name: rawStem } = path.parse(outputLocation.absolutePath);
     const outputDir = getFileDirectory(outputLocation);
-    const texRelativePath = outputDir
-      ? path.join(outputDir, `${name}.tex`)
-      : `${name}.tex`;
 
-    const texLocation = this.fileService.createLocation(texRelativePath);
-
+    // Read content first so we can derive the destination name from the
+    // XML document-name attribute before creating the output location.
     let outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
     const sourceName =
       outputContent.match(DOCUMENT_NAME_REGEX)?.[1]?.trim() ?? '';
+
+    // Name the extracted .tex after: input file stem → first XML document name
+    // → raw output stem.  Input file takes priority because extractDocument()
+    // also uses agentConfig.inputFile as its matching hint, so the destination
+    // name and the extracted content are always in sync.  For agents without an
+    // inputFile, the XML document name gives a human-readable fallback.
+    const inputFileStem = path.parse(this.agentConfig.inputFile).name;
+    // sourceName comes from model XML and may carry path components or a .tex
+    // extension — strip both.  inputFileStem and rawStem are already clean stems.
+    const safeSourceName = sourceName
+      ? path.parse(path.basename(sourceName)).name
+      : '';
+    const stemCandidate = inputFileStem || safeSourceName || rawStem;
+    // Guard: don't write the extracted .tex to the same path as the raw output.
+    const texStem =
+      stemCandidate === WORKFLOW_OUTPUT_BASENAME
+        ? `${WORKFLOW_OUTPUT_BASENAME}_extracted`
+        : stemCandidate;
+    const texRelativePath = outputDir
+      ? path.join(outputDir, `${texStem}.tex`)
+      : `${texStem}.tex`;
+
+    const texLocation = this.fileService.createLocation(texRelativePath);
+
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = addCdataToTags(outputContent, tagsToWrap);
 
@@ -210,9 +233,13 @@ export class XmlOutputManager {
     round: number,
   ): Promise<OutputFileInfo[]> {
     const outputFiles: OutputFileInfo[] = [];
-    const outputParts = path.basename(outputLocation.absolutePath).split('_');
-    const agent = outputParts.at(-3) ?? '';
-    const model = outputParts.at(-1)?.split('.')[0] ?? '';
+    // For workspace/runStorage outputs use the workspace-relative round dir
+    // so fileService.createLocation can route through its storage layer.
+    // For external outputs, work in absolute paths directly — an absolute
+    // path passed through createLocation would be re-classified as external
+    // anyway, so skip the round-trip and build the location explicitly.
+    const isExternal = outputLocation.kind === 'external';
+    const roundDir = getFileDirectory(outputLocation);
 
     for (const doc of latexDocuments) {
       if (!doc.name || doc.name === 'unknown' || !doc.content) {
@@ -228,10 +255,10 @@ export class XmlOutputManager {
         continue;
       }
 
-      const { ext } = path.parse(source);
-      const extension = ext.replace('.', '') || 'tex';
-      const texFile = getOutputFileName(source, agent, model, extension, round);
-      const texLocation = this.fileService.createLocation(texFile);
+      const texFile = getExtractedDocOutputFileName(source, roundDir);
+      const texLocation = isExternal
+        ? createExternalLocation(texFile)
+        : this.fileService.createLocation(texFile);
       const cleanedContent = this.removeTrailingEndDocument(
         doc.content.trim(),
         texFile,

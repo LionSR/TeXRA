@@ -9,6 +9,10 @@ export interface NormalizeOpenAIMessageContentOptions {
 type MessageLike = {
   role?: string;
   content?: unknown;
+  tool_calls?: unknown;
+  tool_call_id?: unknown;
+  /** Tracked so merging assistant messages preserves DeepSeek-style reasoning that must round-trip to the API. */
+  reasoning_content?: unknown;
 };
 
 type ContentArray = Array<Record<string, unknown>>;
@@ -25,10 +29,32 @@ function isTextContentItem(
   );
 }
 
+function mergeReasoningContent(
+  previous: MessageLike,
+  current: MessageLike,
+): void {
+  const prevReasoning = previous.reasoning_content;
+  const currReasoning = current.reasoning_content;
+  if (currReasoning == null) return;
+  if (prevReasoning == null) {
+    previous.reasoning_content = currReasoning;
+    return;
+  }
+  if (typeof prevReasoning === 'string' && typeof currReasoning === 'string') {
+    if (prevReasoning === '' || currReasoning === '') {
+      previous.reasoning_content = prevReasoning || currReasoning;
+    } else {
+      previous.reasoning_content = `${prevReasoning}\n${currReasoning}`;
+    }
+  }
+}
+
 function mergeMessageContent(
   previous: MessageLike,
   current: MessageLike,
 ): void {
+  mergeReasoningContent(previous, current);
+
   const prevContent = previous.content;
   const currContent = current.content;
 
@@ -78,6 +104,21 @@ function mergeMessageContent(
   }
 }
 
+function canMergeMessages(
+  previous: MessageLike,
+  current: MessageLike,
+): boolean {
+  if (previous.role !== current.role) return false;
+
+  return (
+    previous.role !== 'tool' &&
+    previous.tool_calls == null &&
+    current.tool_calls == null &&
+    previous.tool_call_id == null &&
+    current.tool_call_id == null
+  );
+}
+
 /**
  * Normalize OpenAI chat messages according to provided options.
  *
@@ -105,7 +146,7 @@ export function normalizeOpenAIMessageContent<T extends MessageLike>(
 
     for (const message of working) {
       const previous = merged.at(-1);
-      if (!previous || previous.role !== message.role) {
+      if (!previous || !canMergeMessages(previous, message)) {
         merged.push(message);
         continue;
       }

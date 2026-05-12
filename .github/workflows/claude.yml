@@ -1,3 +1,5 @@
+# ci-sync-version: claude-provider-deepseek-v1
+# ci-sync-source: shared bot automation, prompts externalized under .github/prompts
 name: Claude Code
 
 on:
@@ -10,41 +12,119 @@ on:
   pull_request_review:
     types: [submitted]
 
+concurrency:
+  group: bot-respond-${{ github.event.issue.number || github.event.pull_request.number || github.event.comment.id }}
+  cancel-in-progress: false
+
+env:
+  BOT_PAT: ${{ secrets.BOT_PAT }}
+  GH_TOKEN: ${{ secrets.BOT_PAT || secrets.GITHUB_TOKEN }}
+
 jobs:
   claude:
+    # Repository variable kill switch:
+    #   CLAUDE_CODE_ENABLED=false disables mention-driven Claude runs.
+    #   unset or any other value preserves the default enabled behavior.
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      vars.CLAUDE_CODE_ENABLED != 'false' &&
+      github.event.sender.type != 'Bot' &&
+      (
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+        (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+        (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)) ||
+        (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
+      )
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CLAUDE_CODE_PROVIDER: ${{ vars.CLAUDE_CODE_PROVIDER || 'anthropic' }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      ANTHROPIC_BASE_URL: ${{ vars.ANTHROPIC_BASE_URL }}
+      CLAUDE_OPUS_MODEL: ${{ vars.CLAUDE_OPUS_MODEL }}
+      CLAUDE_SONNET_MODEL: ${{ vars.CLAUDE_SONNET_MODEL }}
+
     permissions:
-      contents: read
-      pull-requests: read
-      issues: read
+      contents: write
+      pull-requests: write
+      issues: write
       id-token: write
-      actions: read # Required for Claude to read CI results on PRs
+      actions: read
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 1
+          token: ${{ env.GH_TOKEN }}
+
+      - name: Checkout trusted automation
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          path: .trusted-actions
+          fetch-depth: 1
+
+      - name: Check trusted provider wrapper
+        id: trusted-provider-wrapper
+        run: |
+          if [ -f .trusted-actions/.github/actions/claude-code-with-provider/action.yml ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping Claude Code: trusted base branch does not yet contain claude-code-with-provider."
+          fi
 
       - name: Run Claude Code
         id: claude
-        uses: anthropics/claude-code-action@v1
+        if: steps.trusted-provider-wrapper.outputs.available == 'true'
+        continue-on-error: true
+        uses: ./.trusted-actions/.github/actions/claude-code-with-provider
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-
-          # This is an optional setting that allows Claude to read CI results on PRs
-          additional_permissions: |
+          provider: ${{ env.CLAUDE_CODE_PROVIDER }}
+          model-tier: opus
+          allowed-bots: 'claude[bot],cursor[bot],cursor,copilot-pull-request-reviewer[bot]'
+          branch-name-template: '{{prefix}}{{entityType}}-{{entityNumber}}-{{description}}'
+          allowed-tools-preset: claude-interactive
+          additional-permissions: |
             actions: read
+          system-prompt-file: .trusted-actions/.github/prompts/claude-code-system-prompt.md
 
-          # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
-          # prompt: 'Update the pull request description to include a summary of changes.'
+      - name: Check for Claude quota errors and post comment
+        if: |
+          steps.trusted-provider-wrapper.outputs.available == 'true' &&
+          steps.claude.outcome != 'success' &&
+          (github.event_name == 'issues' ||
+           (github.event_name == 'issue_comment' && !github.event.issue.pull_request) ||
+           github.event_name == 'pull_request_review_comment' ||
+           github.event_name == 'pull_request_review')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue_number = context.issue.number;
+            if (!issue_number) {
+              console.log('No issue/PR number found, skipping comment');
+              return;
+            }
+            await github.rest.issues.createComment({
+              issue_number: issue_number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '⏳ Claude ran into a quota or rate limit. Will retry on the next interaction.\n\n(See [action logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details)'
+            });
 
-          # Optional: Add claude_args to customize behavior and configuration
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
-          # claude_args: '--allowed-tools Bash(gh pr:*)'
-          claude_args: '--model claude-opus-4-6 --allowed-tools Bash(gh pr:*)'
+
+      - name: Auto-create PR for completed issue work
+        if: |
+          !cancelled() &&
+          steps.claude.outcome == 'success' &&
+          env.BOT_PAT != '' &&
+          (github.event_name == 'issues' ||
+           (github.event_name == 'issue_comment' && !github.event.issue.pull_request))
+        uses: ./.github/actions/auto-create-issue-pr
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          repo: ${{ github.repository }}
+          branch-prefix: 'claude/issue-'
+          creator-name: 'Claude Code action'
+          gh-token: ${{ env.BOT_PAT }}

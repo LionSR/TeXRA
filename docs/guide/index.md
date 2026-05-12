@@ -46,9 +46,9 @@ graph TB
 1. Analyze your input files and instructions
 2. Plan and execute changes via LLM calls
 3. Optionally reflect on their output and iterate
-4. Produce versioned output files (`*_r0_*`, `*_r1_*`) with diffs
+4. Produce task-scoped output files (`r0/output.*`, `r1/output.*`) with diffs
 
-**Interactive agents** (`chat`, `ask`, `research`, `review`, `lean`, `presenter`) operate conversationally with tool access:
+**Interactive agents** include `ask`, `research`, `review`, `lean`, and `presenter`, which operate conversationally with tool access:
 
 - Read and edit files across your entire workspace
 - Search arXiv, Crossref, and Zotero for references with verified BibTeX
@@ -97,6 +97,8 @@ API keys are stored in VS Code's built-in Secret Storage.
 ## Next steps
 
 - [Installation](/guide/installation) — set up TeXRA and its dependencies
+- [Desktop App](/guide/desktop) — install and configure the standalone desktop beta
+- [Desktop Migration](/guide/desktop-migration) — move from the VS Code extension to the desktop app
 - [Quick Start](/guide/quick-start) — your first agent run in under five minutes
 - [Built-in Agents](/guide/built-in-agents) — the full catalog of available agents
 - [Agent Architecture](/guide/agent-architecture) — how the multi-agent system works under the hood

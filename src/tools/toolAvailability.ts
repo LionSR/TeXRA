@@ -1,8 +1,10 @@
 /**
  * External tool availability checks with caching.
  *
- * Pure service — runs checks, manages cache, returns results.
- * Tool definitions (what to check + UI metadata) live in
+ * Runs `check` (main probe) and `detailCheck` (human-readable detail) in
+ * parallel, caches the results, and broadcasts `toolAvailabilityChanged`
+ * when inputs change so subscribed UIs refresh without re-probing. Tool
+ * definitions (what to check + UI metadata) live in
  * {@link @tools/externalToolDefs}.
  *
  * Used by:
@@ -11,8 +13,10 @@
  */
 
 // Local imports
+import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { RegisteredToolName } from '@tools/registry';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
+import { getDisabledToolIds } from '@utils/config/constants';
 
 // ============================================================
 // Result type
@@ -24,6 +28,10 @@ export interface ExternalToolCheckResult {
   readonly tools: readonly RegisteredToolName[];
   readonly name: string;
   readonly status: 'available' | 'not-found' | 'unknown';
+  /** Short status label for the dashboard badge, when the default is too generic. */
+  readonly statusLabel?: string;
+  /** Human-readable status detail from the group's `detailCheck`, if any. */
+  readonly statusDetail?: string;
 }
 
 // ============================================================
@@ -33,54 +41,195 @@ export interface ExternalToolCheckResult {
 /** Cached set of unavailable tool names. */
 let cached: ReadonlySet<string> | null = null;
 
+/** Last check results — kept for rebuilding the cache without re-probing. */
+let lastResults: ExternalToolCheckResult[] | null = null;
+
+/** Current disabled tool names derived from persisted Settings state. */
+function buildDisabledToolNameSet(): ReadonlySet<string> {
+  const disabledIds = getDisabledToolIds();
+  const disabled = new Set<string>();
+
+  for (const def of EXTERNAL_TOOL_DEFS) {
+    if (!disabledIds.has(def.id)) continue;
+    for (const toolName of def.tools) disabled.add(toolName);
+  }
+
+  return disabled;
+}
+
+/** Read the current set of disabled tool names from persisted Settings state. */
+export function getDisabledToolNames(): ReadonlySet<string> {
+  return buildDisabledToolNameSet();
+}
+
 /**
  * Run all external tool checks in parallel.
- * Always performs fresh checks and updates the availability cache.
+ * Always returns fresh `check` + `detailCheck` probes and updates the
+ * availability cache.
  *
- * Called by the tool dashboard (needs per-group results).
- * Also populates the cache read by `getUnavailableToolNamesCached()`.
+ * Concurrent calls are coalesced: while a probe is in flight, additional
+ * callers share the same Promise and receive its results. If any caller
+ * arrives AFTER the active probe started reading inputs, a follow-up probe
+ * is scheduled so the cache ultimately reflects the most recent state and
+ * a stale probe can't overwrite a fresh one by finishing last.
  *
- * @returns Per-group results with `available` / `not-found` / `unknown` status.
+ * Called by the tool dashboard (needs per-group results) and
+ * {@link refreshToolAvailability}. Also populates the cache read by
+ * `getUnavailableToolNamesCached()`.
+ *
+ * @returns Per-group results with `available` / `not-found` / `unknown`
+ *   status and an optional human-readable `statusDetail`.
  */
-export async function runExternalToolChecks(): Promise<
-  ExternalToolCheckResult[]
-> {
-  const results = await Promise.all(
+let inflightProbe: Promise<ExternalToolCheckResult[]> | null = null;
+let pendingRerun = false;
+export function runExternalToolChecks(): Promise<ExternalToolCheckResult[]> {
+  if (inflightProbe) {
+    pendingRerun = true;
+    return inflightProbe;
+  }
+  inflightProbe = (async () => {
+    let results: ExternalToolCheckResult[] = [];
+    try {
+      do {
+        pendingRerun = false;
+        results = await runProbes();
+        cached = buildUnavailableSet(results);
+        lastResults = results;
+      } while (pendingRerun);
+    } finally {
+      inflightProbe = null;
+    }
+    return results;
+  })();
+  return inflightProbe;
+}
+
+async function runProbes(): Promise<ExternalToolCheckResult[]> {
+  return Promise.all(
     EXTERNAL_TOOL_DEFS.map(
-      async ({ id, tools, name, check }): Promise<ExternalToolCheckResult> => {
+      async ({
+        id,
+        tools,
+        name,
+        probe,
+        check,
+        statusLabel: getStatusLabel,
+        detailCheck,
+      }): Promise<ExternalToolCheckResult> => {
+        // Run check/status/detail from one shared probe result. Some groups
+        // (Codex, Zotero, GitHub PR) touch async local state, so running the
+        // callbacks independently can duplicate the same probe work.
+        let probeResult: unknown;
+        let available: boolean;
         try {
-          const available = await check();
+          probeResult = await probe?.();
+          available = await check(probeResult);
+        } catch {
+          const statusDetail = await resolveOptionalStatus(
+            detailCheck,
+            probeResult,
+          );
+          const statusLabel = await resolveOptionalStatus(
+            getStatusLabel,
+            probeResult,
+          );
           return {
             id,
             tools,
             name,
-            status: available ? 'available' : 'not-found',
+            status: 'unknown',
+            statusLabel,
+            statusDetail,
           };
-        } catch {
-          return { id, tools, name, status: 'unknown' };
         }
+        const statusDetail = await resolveOptionalStatus(
+          detailCheck,
+          probeResult,
+        );
+        const statusLabel = await resolveOptionalStatus(
+          getStatusLabel,
+          probeResult,
+        );
+        return {
+          id,
+          tools,
+          name,
+          status: available ? 'available' : 'not-found',
+          statusLabel,
+          statusDetail,
+        };
       },
     ),
   );
+}
 
-  // Update cache — only exclude tools whose check definitively failed.
-  // 'unknown' (check threw) is not treated as missing: the tool may still
-  // work fine and will produce a clear error at call time if it doesn't.
+async function resolveOptionalStatus(
+  getStatus:
+    | ((probeResult?: unknown) => Promise<string | undefined>)
+    | undefined,
+  probeResult: unknown,
+): Promise<string | undefined> {
+  if (!getStatus) return undefined;
+  return getStatus(probeResult).catch(() => undefined);
+}
+
+/** Build the set of unavailable tool names from external check results only. */
+function buildUnavailableSet(
+  results: ExternalToolCheckResult[],
+): ReadonlySet<string> {
   const unavailable = new Set<string>();
-  for (const r of results) {
-    if (r.status === 'not-found') {
-      for (const t of r.tools) unavailable.add(t);
+  for (const { tools, status } of results) {
+    if (status === 'not-found') {
+      for (const t of tools) unavailable.add(t);
     }
   }
-  cached = unavailable;
+  return unavailable;
+}
 
-  return results;
+/**
+ * Return the last check results without re-probing. Returns null if
+ * checks haven't been run yet.
+ */
+export function getLastCheckResults(): ExternalToolCheckResult[] | null {
+  return lastResults;
+}
+
+/**
+ * Re-probe external tools and broadcast `toolAvailabilityChanged` so any
+ * subscribed UI (Tools tab) and runtime caches refresh. Call this whenever
+ * an input to the availability checks changes (GitHub token, workspace
+ * git-repo status, extension install state) — mutators don't have to know
+ * which UIs depend on the result.
+ *
+ * Coalescing and follow-up-probe scheduling happen inside
+ * `runExternalToolChecks`, so the dashboard-load probe and a refresh-triggered
+ * probe can't race.
+ */
+export async function refreshToolAvailability(): Promise<void> {
+  await runExternalToolChecks();
+  getAgentRuntimeHost().emit('toolAvailabilityChanged', undefined);
+}
+
+/**
+ * Rebuild the availability cache from the last check results without
+ * re-probing external tools. Called after toggling a tool on/off.
+ */
+export function refreshDisabledToolCache(): void {
+  if (!lastResults) {
+    cached = null;
+    return;
+  }
+  cached = buildUnavailableSet(lastResults);
 }
 
 /**
  * Non-blocking cache read — returns cached unavailable tool names if
  * checks have already completed, or an empty set if the cache isn't
  * populated yet. Never triggers I/O.
+ *
+ * Only includes tools whose external dependency is missing (not-found).
+ * Disabled tools are NOT included — the caller handles those separately
+ * via {@link getDisabledToolNames}.
  *
  * Used by the agent tool resolver to avoid blocking the first tool-use
  * flow on network probes. External tools that are actually missing will
@@ -94,6 +243,15 @@ export function getUnavailableToolNamesCached(): ReadonlySet<string> {
 export interface UnavailableGroupInfo {
   readonly name: string;
   readonly hideFromDashboard: boolean;
+  /**
+   * Command to execute when the user clicks the "fix this" button in the
+   * notification. Overrides the default Tools-Dashboard action so groups
+   * whose real configuration lives elsewhere (e.g. GitHub token in the Git
+   * tab) can point the user to the right place.
+   */
+  readonly installActionCommand?: string;
+  /** Label for the custom action button (falls back to a sensible default). */
+  readonly installActionLabel?: string;
 }
 
 /**
@@ -114,6 +272,8 @@ export function mapToolNamesToGroups(
       groups.push({
         name: def.name,
         hideFromDashboard: def.hideFromDashboard ?? false,
+        installActionCommand: def.installActionCommand,
+        installActionLabel: def.installActionLabel,
       });
     }
   }

@@ -5,7 +5,13 @@ import { strict as assert } from 'assert';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { createRunState } from '@agent/core/AgentState';
+import {
+  AgentExecutionHandle,
+  trackExecution,
+  untrackExecution,
+} from '@agent/runtime/executionRegistry';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 // Type imports
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import * as AgentRegistry from '@agent/toolUse/ToolUseAgentRegistry';
@@ -55,8 +61,76 @@ describe('ToolUseFollowUp', () => {
 
     const result = await sendFollowUp(streamId, 'hello');
 
-    assert.deepEqual(calls, ['hello']);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0], 'hello');
     assert.deepEqual(result, { status: 'sent' });
+  });
+
+  it('queues follow-ups when children are still running', async () => {
+    (AgentRegistry as any).getToolUseFlowContext = () => undefined;
+
+    const parentStreamId = 'parent-stream-children' as StreamTabId;
+    const childStreamId = 'child-stream-children' as StreamTabId;
+    const executionId = 'exec-children-running';
+
+    const handle = new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      childStreamId,
+      'test-subagent',
+      'toolUse',
+    );
+    trackExecution(handle);
+
+    try {
+      const result = await sendFollowUp(parentStreamId, 'hello while running');
+
+      assert.deepEqual(result, {
+        status: 'queued',
+        reason: 'children_running',
+      });
+      assert.deepEqual(ToolUseFollowUpQueue.getAll(parentStreamId), [
+        'hello while running',
+      ]);
+    } finally {
+      untrackExecution(executionId);
+      ToolUseFollowUpQueue.release(parentStreamId);
+    }
+  });
+
+  it('survives prior queue release when children are running', async () => {
+    // Regression: without force:true, enqueue() silently drops messages
+    // on streams previously released by sessionLifecycle.dispose().
+    (AgentRegistry as any).getToolUseFlowContext = () => undefined;
+
+    const parentStreamId = 'parent-stream-released' as StreamTabId;
+    const childStreamId = 'child-stream-released' as StreamTabId;
+    const executionId = 'exec-released';
+
+    const handle = new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      childStreamId,
+      'test-subagent',
+      'toolUse',
+    );
+    trackExecution(handle);
+    ToolUseFollowUpQueue.release(parentStreamId);
+
+    try {
+      const result = await sendFollowUp(parentStreamId, 'after release');
+
+      assert.deepEqual(result, {
+        status: 'queued',
+        reason: 'children_running',
+      });
+      assert.deepEqual(ToolUseFollowUpQueue.getAll(parentStreamId), [
+        'after release',
+      ]);
+    } finally {
+      untrackExecution(executionId);
+      ToolUseFollowUpQueue.release(parentStreamId);
+    }
   });
 
   it('creates valid snapshot structure', () => {

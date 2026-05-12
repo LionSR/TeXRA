@@ -5,8 +5,8 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
+import * as logger from '@agent/core/logger';
 import { getSdkErrorMessage } from '@common/errors';
-import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -23,6 +23,12 @@ const CASE_CONNECTORS: Record<string, string> = {
 };
 
 const DEFAULT_RESULT: ConnectionResult = { connector: ' ', choice: 'B' };
+
+function isMissingApiKeyMessage(message: string): boolean {
+  return (
+    message.includes('Missing API key') || message.includes('No API key found')
+  );
+}
 
 function buildPrompt(str1: string, str2: string): string {
   return (
@@ -91,10 +97,9 @@ export async function bestConnectionMethod(
     );
     return getMajorityChoice(choices);
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error in bestConnectionMethod: ${getSdkErrorMessage(err)}`,
-    );
+    const message = getSdkErrorMessage(err);
+    const log = isMissingApiKeyMessage(message) ? logger.debug : logger.error;
+    log(CHANNEL, `Error in bestConnectionMethod: ${message}`);
     return DEFAULT_RESULT;
   }
 }
@@ -125,18 +130,19 @@ export async function bestConnectionMethodAnthropic(
             messages: [{ role: 'user', content: prompt }],
           })
           .then((response) => {
-            const content = response.content[0];
-            return 'text' in content ? content.text.trim() : 'B';
+            const textBlock = response.content.find(
+              (block) => block.type === 'text',
+            );
+            return textBlock?.text.trim() || 'B';
           }),
       ),
     );
 
     return getMajorityChoice(choices);
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error in bestConnectionMethodAnthropic: ${getSdkErrorMessage(err)}`,
-    );
+    const message = getSdkErrorMessage(err);
+    const log = isMissingApiKeyMessage(message) ? logger.debug : logger.error;
+    log(CHANNEL, `Error in bestConnectionMethodAnthropic: ${message}`);
     return DEFAULT_RESULT;
   }
 }

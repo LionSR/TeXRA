@@ -18,17 +18,26 @@ export const OutputFileSummarySchema = z.object({
 
 export type OutputFileSummary = z.infer<typeof OutputFileSummarySchema>;
 
+export const CompileFailureSummarySchema = z.object({
+  round: z.number(),
+  displayName: z.string(),
+  outputPath: z.string(),
+  logPath: z.string(),
+  logAbsolutePath: z.string(),
+});
+
+export type CompileFailureSummary = z.infer<typeof CompileFailureSummarySchema>;
+
 const AgentFlowMetaSchema = z.object({
   executionId: ExecutionIdSchema,
   streamId: StreamTabIdSchema,
 });
 
-export type AgentFlowMeta = z.infer<typeof AgentFlowMetaSchema>;
-
 export const WorkflowFlowResultSchema = AgentFlowMetaSchema.extend({
   category: z.literal('workflow'),
   status: EndGroupStatusSchema,
   outputs: z.array(OutputFileSummarySchema),
+  compileFailures: z.array(CompileFailureSummarySchema).prefault(() => []),
 });
 
 export type WorkflowFlowResult = z.infer<typeof WorkflowFlowResultSchema>;
@@ -37,6 +46,8 @@ export const ToolUseFlowResultSchema = AgentFlowMetaSchema.extend({
   category: z.literal('toolUse'),
   status: EndGroupStatusSchema,
   lastResponse: z.string().optional(),
+  /** Workspace-relative paths of files edited by tool calls during this session. */
+  touchedFiles: z.array(z.string()).optional(),
 });
 
 export type ToolUseFlowResult = z.infer<typeof ToolUseFlowResultSchema>;

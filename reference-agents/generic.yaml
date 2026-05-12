@@ -6,9 +6,6 @@ settings:
   documentTag: latex_document
   endTag: </latex_document>
   outputExt: tex
-  prefills:
-    - <scratchpad>
-    - <scratchpad>
 
 prompts:
   systemPrompt: |
@@ -65,79 +62,13 @@ prompts:
 
   userRequest:
     - |
-      {% if INSTRUCTION %}
-      In the scratchpad below, develop a detailed plan for working on this document according to the instruction provided. Be specific about what sections need attention and what changes should be made. Think through the task systematically as a scientist would approach revising their own work.
-      {% else %}
-      In the scratchpad below, develop a detailed plan for working on this document. Analyze the content and structure, identify areas that could benefit from attention, and formulate a systematic approach. Think through the task as a scientist would approach revising their own work.
-      {% endif %}
-
-      <scratchpad>
-      \begin{enumerate}
-          \item [First consideration]
-              \begin{itemize}
-                  \item Analysis: [detailed analysis]
-                  \item Approach: [concrete steps]
-              \end{itemize}
-          \item [Second consideration]
-              \begin{itemize}
-                  \item Analysis: [detailed analysis]
-                  \item Approach: [concrete steps]
-              \end{itemize}
-          \item [Third consideration]
-              \begin{itemize}
-                  \item Analysis: [detailed analysis]
-                  \item Approach: [concrete steps]
-              \end{itemize}
-          \item[\ldots]
-      \end{enumerate}
-      </scratchpad>
-
-      Then, following your plan in the scratchpad, please work on the \LaTeX document. Maintain professional academic standards and adhere to all \LaTeX formatting rules. Use the following format:
+      Work on the \LaTeX document. Maintain professional academic standards and adhere to all \LaTeX formatting rules. Use the following format:
       <latex_document>
       % 1ST_UPDATED_LATEX_DOCUMENT HERE
       </latex_document>
     - |
-      Now, critically reflect on the work you've just completed. As a scientist reviewing their own work, be thorough and honest in your assessment.
+      Now critically reflect on the work you've just completed and output a further refined version. Check for accuracy, notation consistency, structural coherence, formatting issues, and clarity. Include all the work from the previous step plus the new refinements.
 
-      In the scratchpad below, analyze your revisions and consider additional refinements. Be specific and point to concrete locations in your reflection.
-
-      <scratchpad>
-      <reflection>
-      \begin{enumerate}
-          \item How well does the revised document meet the requirements? Are there aspects that could be improved?
-          \item Is the mathematical content accurate and properly formatted according to \LaTeX best practices?
-          \item Are notations and terminology used consistently throughout?
-          \item Is the document structure logical and coherent? Do all parts flow naturally?
-          \item Are there any formatting issues that need attention (references, equations, figures, etc.)?
-          \item Have all custom math commands been used appropriately?
-          \item Are there any statements that could be more precise or clearer?
-      \end{enumerate}
-      </reflection>
-      <refinements>
-      \begin{enumerate}
-          \item [Refinement 1]
-              \begin{itemize}
-                  \item Rationale: [brief explanation]
-                  \item Implementation: [concrete steps]
-              \end{itemize}
-          \item [Refinement 2]
-              \begin{itemize}
-                  \item Rationale: [brief explanation]
-                  \item Implementation: [concrete steps]
-              \end{itemize}
-          \item [Refinement 3]
-              \begin{itemize}
-                  \item Rationale: [brief explanation]
-                  \item Implementation: [concrete steps]
-              \end{itemize}
-          \item[\ldots]
-      \end{enumerate}
-      </refinements>
-      </scratchpad>
-
-      Based on this reflection, output a further refined version of the \LaTeX document, incorporating the improvements discussed in the scratchpad. Include all the work from the previous step plus the new refinements.
-
-      Use the following format:
       <latex_document>
       % 2ND_UPDATED_LATEX_DOCUMENT HERE
       </latex_document>

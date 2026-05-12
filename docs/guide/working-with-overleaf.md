@@ -15,7 +15,10 @@ This guide outlines a workflow to clone your Overleaf project, leverage TeXRA lo
 
 - Overleaf account with Git access enabled for your project (check Overleaf plans).
 - An **Overleaf Git authentication token** (starts with `olp_`). Generate one from [Account Settings → Git Integration](https://www.overleaf.com/user/settings). See [Overleaf's token documentation](https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration/git-integration-authentication-tokens) for step-by-step instructions.
-- Git installed locally ([git-scm.com](https://git-scm.com/downloads)).
+- Git installed locally. Install it using your platform's package manager:
+  - **macOS:** `brew install git` (via [Homebrew](./installation.md#homebrew)), or run `xcode-select --install` to get git as part of the Xcode Command Line Tools.
+  - **Windows:** Download the installer from [git-scm.com](https://git-scm.com/downloads), or install via `winget install --id Git.Git -e`.
+  - **Linux (Ubuntu/Debian):** `sudo apt-get install git`.
 - TeXRA installed in VS Code ([Installation Guide](./installation.md)).
 
 ## Workflow Steps
@@ -47,15 +50,15 @@ This guide outlines a workflow to clone your Overleaf project, leverage TeXRA lo
 2.  Use TeXRA as usual:
     - Select files, agent, model.
     - Write instructions.
-    - Execute (<i class="codicon codicon-play"></i>).
-    - Review outputs (`*_r0_*.tex`, etc.).
-    - Use `latexdiff` (<i class="codicon codicon-diff-single"></i>) or merge (<i class="codicon codicon-merge"></i>).
-    - Leverage features like auto-extract (<i class="codicon codicon-wand"></i>) and tool options (<i class="codicon codicon-tools"></i>).
+    - Execute (<wa-icon library="texra" name="play"></wa-icon>).
+    - Review outputs (`r0/output.tex`, etc.) from task storage.
+    - Use `latexdiff` (<wa-icon library="texra" name="diff-single"></wa-icon>) or merge (<wa-icon library="texra" name="merge"></wa-icon>).
+    - Leverage features like auto-extract (<wa-icon library="texra" name="wand"></wa-icon>) and tool options (<wa-icon library="texra" name="tools"></wa-icon>).
     - Optionally use LaTeX Workshop for local previews ([Setup](./latex-compilation.md)).
 
 ### 3. Commit Local Changes
 
-As you work, commit changes frequently using VS Code\'s Source Control (<i class="codicon codicon-source-control"></i>) or the terminal:
+As you work, commit changes frequently using VS Code\'s Source Control (<wa-icon library="texra" name="source-control"></wa-icon>) or the terminal:
 
 ```bash
 # Stage changes (e.g., all modified files)

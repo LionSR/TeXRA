@@ -2,6 +2,7 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentRunStateSnapshot } from '@agent/core/AgentState';
 import type { RunUsageTotals } from '@agent/core/RunUsageAccumulator';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
+import { shouldUseOpenRouter } from '@agent/modelHandlers/support/ProxyConfigResolver';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   UsageLogService,
@@ -24,8 +25,6 @@ export interface UsageMonitorMetadata {
   agentName?: string;
   /** Agent category: workflow or toolUse */
   agentCategory?: AgentCategory;
-  /** Whether this is a multiple-output workflow agent */
-  isMultipleOutput?: boolean;
 }
 
 /**
@@ -43,7 +42,15 @@ export interface UsageMonitorModelInfo {
     | 'supportsReasoning'
     | 'cacheDiscountFactor'
   >;
-  config: Pick<ModelConfig, 'provider' | 'name' | 'fullName' | 'inputPrice'>;
+  config: Pick<
+    ModelConfig,
+    | 'provider'
+    | 'name'
+    | 'fullName'
+    | 'inputPrice'
+    | 'openRouterOnly'
+    | 'requiresResponsesAPI'
+  >;
 }
 
 /**
@@ -111,6 +118,8 @@ export class UsageMonitor {
       const roundInputTokens = latestUsage?.inputTokens ?? 0;
       const roundOutputTokens = latestUsage?.outputTokens ?? 0;
       const roundCacheReadTokens = latestUsage?.cachedInputTokens ?? 0;
+      const roundCacheMissTokens = latestUsage?.cacheMissInputTokens;
+      const roundCacheMissTokensForDisplay = roundCacheMissTokens ?? 0;
       const roundCacheCreationTokens = latestUsage?.cacheCreationTokens ?? 0;
       const roundReasoningTokens = latestUsage?.reasoningTokens ?? 0;
       const roundCost = latestUsage?.cost ?? 0;
@@ -138,6 +147,9 @@ export class UsageMonitor {
         ...(roundCacheReadTokens > 0 && {
           cacheReadInputTokens: roundCacheReadTokens,
         }),
+        ...(roundCacheMissTokensForDisplay > 0 && {
+          cacheMissInputTokens: roundCacheMissTokensForDisplay,
+        }),
         ...(roundCacheCreationTokens > 0 && {
           cacheCreationInputTokens: roundCacheCreationTokens,
         }),
@@ -161,6 +173,9 @@ export class UsageMonitor {
         inputTokens: roundInputTokens,
         outputTokens: roundOutputTokens,
         cachedInputTokens: roundCacheReadTokens,
+        ...(roundCacheMissTokens != null && {
+          cacheMissInputTokens: roundCacheMissTokens,
+        }),
         cacheCreationInputTokens: roundCacheCreationTokens,
         reasoningTokens: roundReasoningTokens,
         cost: roundCost,
@@ -198,6 +213,7 @@ export class UsageMonitor {
       inputTokens: number;
       outputTokens: number;
       cachedInputTokens?: number;
+      cacheMissInputTokens?: number;
       cacheCreationInputTokens?: number;
       reasoningTokens?: number;
       cost: number;
@@ -209,24 +225,31 @@ export class UsageMonitor {
         config.provider.toLowerCase(),
       );
       const cachedInputTokens = usage.cachedInputTokens ?? 0;
+      const cacheMissInputTokens =
+        usage.cacheMissInputTokens ??
+        Math.max(0, usage.inputTokens - cachedInputTokens);
 
       UsageLogService.log({
         model: config.fullName,
         provider,
         agentName: this.metadata?.agentName,
         agentCategory: this.metadata?.agentCategory,
-        isMultipleOutput: this.metadata?.isMultipleOutput,
-        inputTokens: Math.max(0, usage.inputTokens - cachedInputTokens),
+        inputTokens: cacheMissInputTokens,
         outputTokens: usage.outputTokens,
         cost: Number(usage.cost.toFixed(6)),
         responseTimeMs: Math.round(totalResponseTimeMs),
         cachedInputTokens,
+        ...(usage.cacheMissInputTokens != null && {
+          cacheMissInputTokens: usage.cacheMissInputTokens,
+        }),
         cacheCreationInputTokens: usage.cacheCreationInputTokens ?? 0,
         reasoningTokens: usage.reasoningTokens ?? 0,
-        usedRelay: getServerSideKeyService().shouldUseServerSideKeysSync(
-          config.provider,
-          config.name,
-        ),
+        usedRelay:
+          !shouldUseOpenRouter(config) &&
+          getServerSideKeyService().shouldUseServerSideKeysSync(
+            config.provider,
+            config.name,
+          ),
         streamId: this.context.streamId,
       });
     } catch (error) {

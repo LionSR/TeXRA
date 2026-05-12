@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Math OCR'
+  short_description: 'Transcribe handwritten math to LaTeX'
+  default_prompt: 'Use $math-ocr to convert this handwritten mathematics into notation-consistent LaTeX.'

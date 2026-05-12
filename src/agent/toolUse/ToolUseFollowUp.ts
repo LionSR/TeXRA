@@ -10,6 +10,7 @@
  * showing appropriate UI notifications based on the returned result.
  */
 
+import { getActiveChildren } from '@agent/runtime/executionRegistry';
 import { getToolUseFlowContext } from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -21,8 +22,10 @@ import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
  */
 export type SendFollowUpResult =
   | { status: 'sent' }
-  | { status: 'queued'; reason: 'resuming' | 'waiting' }
-  | { status: 'error'; message: string }
+  | {
+      status: 'queued';
+      reason: 'resuming' | 'waiting' | 'children_running';
+    }
   | { status: 'no_session'; streamStatus: string | undefined };
 
 const logger = new AgentLogger('ToolUseFollowUp');
@@ -30,16 +33,12 @@ const logger = new AgentLogger('ToolUseFollowUp');
 /**
  * Send a follow-up message to a tool-use session.
  *
- * Routes the message based on session state:
- * 1. Active agent: direct append → returns { status: 'sent' }
- * 2. Resuming/Waiting session: queue for later → returns { status: 'queued' }
- * 3. Error during send → returns { status: 'error' }
- * 4. No session found → returns { status: 'no_session' }
+ * Routes based on session state:
+ * 1. Active agent: direct append → { status: 'sent' }
+ * 2. Resuming/Waiting session: queue for later → { status: 'queued' }
+ * 3. No session found → { status: 'no_session' }
  *
- * Note: Messages queued for WAITING sessions are picked up when user resumes.
- * PersistedFlow handles state persistence.
- *
- * @returns Result indicating what happened - callers handle UI notifications
+ * Items queued for WAITING sessions are picked up when user resumes.
  */
 export async function sendFollowUp(
   streamId: StreamTabId,
@@ -48,15 +47,10 @@ export async function sendFollowUp(
   // Try active flow context first
   const flowContext = getToolUseFlowContext(streamId);
   if (flowContext) {
-    try {
-      flowContext.session.appendFollowUp(text);
-      return { status: 'sent' };
-    } catch (error) {
-      logger.error('Failed to send follow-up to active session.', {
-        data: error,
-      });
-      return { status: 'error', message: (error as Error).message };
-    }
+    flowContext.session.appendFollowUp(text);
+    // Notify blocking tools (e.g. ExecutionsTool wait) so they can abort early
+    flowContext.runtimeHost.emit('followUpSent', { streamId });
+    return { status: 'sent' };
   }
 
   // Queue if session is resuming
@@ -70,6 +64,15 @@ export async function sendFollowUp(
   if (status === STREAM_STATUS.WAITING) {
     ToolUseFollowUpQueue.enqueue(streamId, text);
     return { status: 'queued', reason: 'waiting' };
+  }
+
+  const { subagents, processes } = getActiveChildren(streamId);
+  if (subagents.length > 0 || processes.length > 0) {
+    // force:true reopens a queue sealed by sessionLifecycle disposal — the
+    // caller must auto-resume the parent or re-release, or late child
+    // deliveries will leak into the next run on this stream.
+    ToolUseFollowUpQueue.enqueue(streamId, text, { force: true });
+    return { status: 'queued', reason: 'children_running' };
   }
 
   // No active/waiting session found - caller should handle UI notification

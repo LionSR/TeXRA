@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Lean Simplifier'
+  short_description: 'Refactor Lean code toward Mathlib style'
+  default_prompt: 'Use $lean-simplifier to clean up this Lean file without changing what its declarations mean.'

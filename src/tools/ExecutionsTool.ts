@@ -15,16 +15,12 @@ import { z } from 'zod';
 // Local imports - agent
 import {
   getExecutionStore,
-  type ExecutionListingEntry,
   type ChildRecord,
-  type TodoEntry,
   listExecutions,
 } from '@agent/storage';
 import { flowKey } from '@agent/node/persistedFlow';
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
 import {
-  type ExecutionHandle,
-  type ExecutionStatusInfo,
   ACTIVE_STATUSES,
   AgentExecutionHandle,
   ProcessExecutionHandle,
@@ -34,13 +30,18 @@ import {
   waitForAnyExecutionChange,
   killExecution,
 } from '@agent/runtime/executionRegistry';
+import {
+  bindExecutionSubscription,
+  unbindExecutionSubscription,
+} from '@agent/runtime/ExecutionSubscriptionBinder';
+import { getWorkspaceState } from '@agent/core/stateStore';
 
 // Local imports - utils
-import { WorkspaceStateKey, workspaceSM } from '@common/state';
+import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { isDirectory } from '@common/files/fsEntryType';
+import { bus } from '@eventBus/ProgressEventBus';
 import {
   STREAM_STATUS,
-  EXECUTION_STATUS,
   ExecutionIdSchema,
   type ExecutionId,
 } from '@shared/schemas';
@@ -48,9 +49,22 @@ import { StorageFS } from '@utils/files';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 import { splitContentLines } from '@utils/text/stringUtils';
+import {
+  formatListingLine,
+  formatProgressLine,
+  formatStatusInfo,
+  formatTodoHeader,
+  formatTodoSection,
+  getAvailablePaths,
+  getExecutionStatusInfo,
+} from './executionFormatters';
 import { ToolError, type ToolResult } from './result';
 import { defineTool } from './core/define';
-import { formatFileView } from './utils';
+import {
+  formatFileView,
+  paginateToolListing,
+  formatPaginationHint,
+} from './formatting';
 
 // ============================================================================
 // Category-aware field filtering
@@ -69,26 +83,36 @@ const WORKFLOW_ONLY_FIELDS = new Set([
   'outputFiles',
   'editedFile',
   'editedFiles',
-  'useMultipleOutputs',
 ]);
 
 /** Config fields only relevant to toolUse agents — hidden for workflow. */
 const TOOL_USE_ONLY_FIELDS = new Set(['toolConfig']);
 
-/** Return paths available for a given agent category. */
-function getAvailablePaths(category?: string, hasChildren?: boolean): string[] {
-  const common = ['config', 'report'];
-  if (hasChildren) common.push('children');
-  switch (category) {
-    case 'toolUse':
-      return [...common, 'conversation', 'todos'];
-    case 'workflow':
-      return [...common, 'files'];
-    case 'process':
-      return [...common, 'output'];
-    default:
-      return [...common, 'conversation', 'todos', 'files', 'output'];
-  }
+/**
+ * Listen for follow-up messages on the current stream and abort the given
+ * AbortController when one arrives. This lets users break out of a blocking
+ * `executions wait` by sending a follow-up message.
+ *
+ * Returns a cleanup function that removes the listener.
+ */
+function listenForFollowUp(ac: AbortController): () => void {
+  const ctx = getCurrentToolRunContext();
+  if (!ctx?.streamId) return () => {};
+
+  const streamId = ctx.streamId;
+  // `ready` gate: bus.on() replays buffered events synchronously during
+  // registration. Setting `ready` after the call ensures stale replayed
+  // events are ignored — only events emitted after subscription trigger abort.
+  let ready = false;
+  const cleanup = bus.on(
+    'followUpSent',
+    (payload) => {
+      if (ready && payload.streamId === streamId) ac.abort();
+    },
+    { signal: ac.signal },
+  );
+  ready = true;
+  return cleanup;
 }
 
 // ============================================================================
@@ -101,12 +125,14 @@ const ExecutionsToolInputSchema = z.strictObject({
 
   /** Action to perform. */
   action: z
-    .enum(['view', 'wait', 'kill'])
+    .enum(['view', 'wait', 'kill', 'subscribe', 'unsubscribe'])
     .prefault('view')
     .describe(
       'view: read execution data (returns immediately). ' +
         'wait: wait for a status change on /executions or /executions/{id}, then return the same data as view (avoids sleep-poll loops). ' +
-        'kill: terminate a running execution by ID (use on /executions/{id}).',
+        'kill: terminate a running execution by ID (use on /executions/{id}). ' +
+        'subscribe: receive future status/progress changes for /executions/{id} as <execution-activity> follow-ups; auto-disposes when the execution finishes or this stream is released. ' +
+        'unsubscribe: stop receiving <execution-activity> follow-ups for /executions/{id}.',
     ),
 
   /** Optional line range [start, end] for large outputs (action="view" only). */
@@ -121,6 +147,18 @@ const ExecutionsToolInputSchema = z.strictObject({
       'Line range [start, end] for paginating large outputs (action="view" only).',
     ),
 
+  /** Execution IDs to wait on (action="wait" with /executions only). */
+  ids: z
+    .array(ExecutionIdSchema)
+    .min(1)
+    .max(50)
+    .nullish()
+    .describe(
+      'List of execution IDs to wait on (action="wait" with /executions only). ' +
+        'Waits for any of the listed executions to change status. ' +
+        'If omitted, waits for any active execution.',
+    ),
+
   /** Max seconds to wait (action="wait" only). Default: 300. */
   timeout: z
     .number()
@@ -130,6 +168,25 @@ const ExecutionsToolInputSchema = z.strictObject({
     .describe(
       'Max seconds to wait for a status change (action="wait" only). Default: 300, max: 1800.',
     ),
+
+  /** Zero-based offset for paginating the /executions listing (action="view" only). */
+  offset: z
+    .int()
+    .min(0)
+    .nullish()
+    .describe(
+      'Zero-based offset into the executions list. Use with limit for pagination on /executions. Default: 0.',
+    ),
+
+  /** Maximum number of entries to return from the /executions listing (action="view" only). */
+  limit: z
+    .int()
+    .min(1)
+    .max(200)
+    .nullish()
+    .describe(
+      'Max entries to return from /executions listing. Default: 100, max: 200.',
+    ),
 });
 
 export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
@@ -137,26 +194,6 @@ export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
 // ============================================================================
 // Helpers
 // ============================================================================
-
-/** Format status info as a display string. */
-function formatStatusInfo(info: ExecutionStatusInfo): string {
-  return info.elapsed
-    ? `${info.status} (${info.elapsed} elapsed)`
-    : info.status;
-}
-
-/** Resolve the runtime status for an execution ID, using persisted terminal status as fallback. */
-function getExecutionStatusInfo(
-  executionId: string,
-  terminalStatus?: string,
-): ExecutionStatusInfo {
-  const handle = getHandle(executionId);
-  if (handle) return handle.getStatus();
-  return {
-    status: terminalStatus ?? EXECUTION_STATUS.COMPLETED,
-    elapsed: null,
-  };
-}
 
 /**
  * Single-pass check: should the wait endpoint skip blocking on this execution?
@@ -194,58 +231,12 @@ function shouldSkipWait(executionId: string): boolean {
   return false;
 }
 
-/** Format round progress as a display line, or empty string if unavailable. */
-function formatProgressLine(handle: ExecutionHandle | undefined): string {
-  const progress = handle?.getProgress();
-  if (
-    progress?.currentRound === undefined ||
-    progress.totalRounds === undefined
-  ) {
-    return '';
-  }
-  return `Progress: round ${progress.currentRound + 1}/${progress.totalRounds}`;
-}
-
-/** Format a listing entry as a single summary line. */
-function formatListingLine(entry: ExecutionListingEntry): string {
-  const ts = entry.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
-  const info = getExecutionStatusInfo(entry.id, entry.terminalStatus);
-  const categoryTag = entry.category ? `  ${entry.category}` : '';
-  const parentSuffix = entry.parentExecutionId
-    ? `  parent=${entry.parentExecutionId}`
-    : '';
-  const descSuffix = entry.description ? `  — ${entry.description}` : '';
-  return `${entry.id}  ${ts}  ${entry.agent}${categoryTag}  ${entry.model}  [${formatStatusInfo(info)}]${parentSuffix}${descSuffix}`;
-}
-
-const TODO_ICON: Record<string, string> = {
-  completed: '[x]',
-  in_progress: '[>]',
-  pending: '[ ]',
-};
-
-/** Format todo items as a checklist. */
-function formatTodoSection(todos: TodoEntry[]): string[] {
-  return todos.map((t) => {
-    const icon = TODO_ICON[t.status ?? ''] ?? '[ ]';
-    return `${icon} ${t.content ?? '(no description)'}`;
-  });
-}
-
-/** Format a todo header with counts. */
-function formatTodoHeader(executionId: string, todos: TodoEntry[]): string {
-  const completed = todos.filter((t) => t.status === 'completed').length;
-  const inProgress = todos.filter((t) => t.status === 'in_progress').length;
-  const pending = todos.length - completed - inProgress;
-  return `Tasks for ${executionId} (${completed} done, ${inProgress} active, ${pending} pending):`;
-}
-
 export class ExecutionsTool extends defineTool({
   name: 'executions',
   description: `View execution history and manage running executions.
 
 Paths:
-- /executions - List all executions (with status and elapsed time)
+- /executions - List executions (paginated; use offset/limit for pages)
 - /executions/{id} - Execution summary (agent, model, timestamp, status, progress, children, todos)
 - /executions/{id}/config - Agent configuration JSON
 - /executions/{id}/conversation - Full message history (subagents)
@@ -257,9 +248,12 @@ Paths:
 - /executions/{id}/files/{path} - Read specific generated file (workflows only)
 
 Use "current" as {id} to access the active execution.
+Use offset/limit to paginate the /executions listing (default: offset 0, limit 100).
 Use view_range: [start, end] to paginate conversation, output, and file content.
 Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
-Use action: "kill" on /executions/{id} to terminate a running execution.`,
+Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed executions to change.
+Use action: "kill" on /executions/{id} to terminate a running execution.
+Use action: "subscribe" on /executions/{id} to receive future status, progress, and termination events as <execution-activity> follow-ups (auto-disposes when the execution finishes or this stream is released). Use action: "unsubscribe" on /executions/{id} to stop them.`,
   schema: ExecutionsToolInputSchema,
 }) {
   protected async execute(input: ExecutionsToolInput): Promise<ToolResult> {
@@ -274,9 +268,14 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
 
     // /executions - list all executions
     if (!id) {
+      if (input.action === 'subscribe' || input.action === 'unsubscribe') {
+        throw new ToolError(
+          `action='${input.action}' requires a specific execution: use /executions/{id}.`,
+        );
+      }
       if (input.action === 'wait')
-        await this.waitForAnyChange(input.timeout ?? 300);
-      return this.listExecutions();
+        await this.waitForAnyChange(input.timeout ?? 300, input.ids);
+      return this.listExecutions(input.offset ?? 0, input.limit ?? 100);
     }
 
     const executionId = this.resolveExecutionId(id);
@@ -287,52 +286,46 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
       if (input.action === 'kill') {
         return this.handleKill(executionId);
       }
+      if (input.action === 'subscribe') {
+        return this.handleSubscribe(executionId);
+      }
+      if (input.action === 'unsubscribe') {
+        return this.handleUnsubscribe(executionId);
+      }
       if (input.action === 'wait')
         await this.waitForChange(executionId, input.timeout ?? 300);
       return this.showSummary(executionId);
     }
 
-    // /executions/{id}/config - agent configuration
-    if (resource === 'config') {
-      return this.showConfig(executionId);
-    }
-
-    // /executions/{id}/conversation - message history
-    if (resource === 'conversation') {
-      return this.showConversation(executionId, input.view_range ?? undefined);
-    }
-
-    // /executions/{id}/todos - subagent task list
-    if (resource === 'todos') {
-      return this.showTodos(executionId);
-    }
-
-    // /executions/{id}/report - persisted result report
-    if (resource === 'report') {
-      return this.showReport(executionId);
-    }
-
-    // /executions/{id}/children - child executions
-    if (resource === 'children') {
-      return this.showChildren(executionId);
-    }
-
-    // /executions/{id}/output - background process output
-    if (resource === 'output') {
-      return this.readProcessOutput(executionId, input.view_range ?? undefined);
-    }
-
-    // /executions/{id}/files or /executions/{id}/files/{path}
-    if (resource === 'files') {
-      if (rest.length === 0) {
-        return this.listFiles(executionId);
-      }
-      return this.readFile(
-        executionId,
-        rest.join('/'),
-        // Schema enforces length 2; cast since Zod infers number[]
-        input.view_range as [number, number] | undefined,
-      );
+    switch (resource) {
+      case 'config':
+        return this.showConfig(executionId);
+      case 'conversation':
+        return this.showConversation(
+          executionId,
+          input.view_range ?? undefined,
+        );
+      case 'todos':
+        return this.showTodos(executionId);
+      case 'report':
+        return this.showReport(executionId);
+      case 'children':
+        return this.showChildren(executionId);
+      case 'output':
+        return this.readProcessOutput(
+          executionId,
+          input.view_range ?? undefined,
+        );
+      case 'files':
+        if (rest.length === 0) {
+          return this.listFiles(executionId);
+        }
+        return this.readFile(
+          executionId,
+          rest.join('/'),
+          // Schema enforces length 2; cast since Zod infers number[]
+          input.view_range as [number, number] | undefined,
+        );
     }
 
     throw new ToolError(
@@ -351,7 +344,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
 
   private resolveExecutionId(id: string): ExecutionId {
     if (id === 'current') {
-      const ctx = getCurrentToolFileInteractionContext();
+      const ctx = getCurrentToolRunContext();
       if (!ctx?.executionId) {
         throw new ToolError(
           'No active execution. Use a specific execution ID instead of "current".',
@@ -368,24 +361,32 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     return result.data;
   }
 
-  /** Wait for any active execution to change status, with timeout. */
-  private async waitForAnyChange(timeout: number): Promise<void> {
-    const activeIds = getActiveExecutionIds();
-    if (activeIds.length === 0) return;
+  /** Wait for executions to change status, with timeout. */
+  private async waitForAnyChange(
+    timeout: number,
+    ids?: readonly string[] | null,
+  ): Promise<void> {
+    const candidateIds = ids?.length
+      ? [...new Set(ids)]
+      : getActiveExecutionIds();
+    if (candidateIds.length === 0) return;
 
     // Exclude executions that are already effectively done
     // (completed, inactive, or tool-use subagent WAITING with result delivered).
-    const pendingIds = activeIds.filter((id) => !shouldSkipWait(id));
+    const pendingIds = candidateIds.filter((id) => !shouldSkipWait(id));
     if (pendingIds.length === 0) return;
 
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeout * 1000);
+    // Abort early if a follow-up is sent to this stream (user wants to break the wait)
+    const cleanupFollowUp = listenForFollowUp(ac);
     // Register callback before re-checking to close the race window
     const waitPromise = waitForAnyExecutionChange(pendingIds, ac.signal);
     // Re-check after registration: if all resolved in the gap, abort.
     if (pendingIds.every(shouldSkipWait)) ac.abort();
     await waitPromise;
     clearTimeout(timer);
+    cleanupFollowUp();
   }
 
   /** Wait for a specific execution to change status, with timeout. */
@@ -397,35 +398,47 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
 
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeout * 1000);
+    // Abort early if a follow-up is sent to this stream (user wants to break the wait)
+    const cleanupFollowUp = listenForFollowUp(ac);
     // Register callback before re-checking to close the race window
     const waitPromise = waitForExecutionChange(executionId, ac.signal);
     // Re-check after registration: if state changed in the gap, abort.
     if (shouldSkipWait(executionId)) ac.abort();
     await waitPromise;
     clearTimeout(timer);
+    cleanupFollowUp();
   }
 
-  private async listExecutions(): Promise<ToolResult> {
+  private async listExecutions(
+    offset: number,
+    limit: number,
+  ): Promise<ToolResult> {
     const entries = await listExecutions();
 
     if (entries.length === 0) {
       return { output: 'No execution history found.' };
     }
 
-    const lines = entries.map(formatListingLine);
+    const { page, start, end, total } = paginateToolListing(
+      entries,
+      offset,
+      limit,
+    );
+    const lines = page.map(formatListingLine);
 
     // Count active background processes for the header
     const activeIds = getActiveExecutionIds();
     const bgCount = activeIds.filter(
       (id) => getHandle(id)?.category === 'process',
     ).length;
-    const header =
+    const bgSuffix =
       bgCount > 0
-        ? `Executions (${entries.length} total, ${bgCount} background process${bgCount > 1 ? 'es' : ''} running):`
-        : `Executions (${entries.length}, most recent first):`;
+        ? `, ${bgCount} background process${bgCount > 1 ? 'es' : ''} running`
+        : '';
 
+    const header = `Executions (showing ${start}\u2013${end} of ${total}${bgSuffix}, most recent first):`;
     return {
-      output: `${header}\n\n${lines.join('\n')}`,
+      output: `${header}\n\n${lines.join('\n')}${formatPaginationHint(end, total)}`,
     };
   }
 
@@ -436,7 +449,8 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     if (handle) {
       // Running execution: agent/status from handle, only fetch live data from KV
       const store = getExecutionStore(executionId);
-      const [children, todos, report] = await Promise.all([
+      const [meta, children, todos, report] = await Promise.all([
+        store.readMeta(),
         store.readChildren(),
         store.readTodos(),
         store.readReport(),
@@ -453,6 +467,10 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
 
       const progressLine = formatProgressLine(handle);
       if (progressLine) lines.push(progressLine);
+
+      if (meta?.parentExecutionId) {
+        lines.push(`Parent: ${meta.parentExecutionId}`);
+      }
 
       await this.appendChildren(lines, children);
 
@@ -560,7 +578,7 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
   }
 
   private handleKill(executionId: ExecutionId): ToolResult {
-    const ctx = getCurrentToolFileInteractionContext();
+    const ctx = getCurrentToolRunContext();
     const callerStreamId = ctx?.streamId;
 
     if (ctx?.executionId === executionId) {
@@ -589,7 +607,10 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     // Only block subagent kills when the toggle is disabled; process kills are always allowed.
     if (
       target instanceof AgentExecutionHandle &&
-      !workspaceSM.get<boolean>(WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL, true)
+      !getWorkspaceState().get<boolean>(
+        WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
+        true,
+      )
     ) {
       return {
         output:
@@ -605,6 +626,48 @@ Use action: "kill" on /executions/{id} to terminate a running execution.`,
     return {
       output: `Execution ${executionId} could not be terminated.`,
       isError: true,
+    };
+  }
+
+  private handleSubscribe(executionId: ExecutionId): ToolResult {
+    const ctx = getCurrentToolRunContext();
+    const streamId = ctx?.streamId;
+    if (!streamId) {
+      throw new ToolError(
+        'subscribe must be called from within an agent stream.',
+      );
+    }
+    // Subscribing to your own execution would feed every status transition
+    // back into the same session, creating a self-sustaining loop of
+    // <execution-activity> follow-ups.
+    if (ctx?.executionId === executionId) {
+      throw new ToolError(
+        `Cannot subscribe to your own execution (${executionId}).`,
+      );
+    }
+    try {
+      bindExecutionSubscription(streamId, executionId);
+    } catch (err) {
+      throw new ToolError(err instanceof Error ? err.message : String(err));
+    }
+    return {
+      summary: `Subscribed to ${executionId}`,
+      output: `Subscribed to ${executionId}. Status, round, and termination events will arrive as follow-ups wrapped in <execution-activity>. Auto-disposes when the execution finishes or this stream is released. Call again with action='unsubscribe' to stop sooner.`,
+    };
+  }
+
+  private handleUnsubscribe(executionId: ExecutionId): ToolResult {
+    const streamId = getCurrentToolRunContext()?.streamId;
+    if (!streamId) {
+      throw new ToolError(
+        'unsubscribe must be called from within an agent stream.',
+      );
+    }
+    const removed = unbindExecutionSubscription(streamId, executionId);
+    return {
+      output: removed
+        ? `Unsubscribed from ${executionId}.`
+        : `No active subscription to ${executionId} on this stream.`,
     };
   }
 

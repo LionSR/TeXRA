@@ -57,7 +57,7 @@ Note: Pasted images are stored in workspace storage and automatically cleaned up
 
 ## File Selection Interface
 
-The TeXRA interface provides a streamlined way to select and manage files using distinct sections for each file category (Input <i class="codicon codicon-file-code"></i>, Reference <i class="codicon codicon-book"></i>, Auxiliary <i class="codicon codicon-file-add"></i>, Media <i class="codicon codicon-file-media"></i>):
+The TeXRA interface provides a streamlined way to select and manage files using distinct sections for each file category (Input <wa-icon library="texra" name="file-code"></wa-icon>, Reference <wa-icon library="texra" name="book"></wa-icon>, Auxiliary <wa-icon library="texra" name="file-add"></wa-icon>, Media <wa-icon library="texra" name="file-media"></wa-icon>):
 
 ![File Selection Interface](/images/file-selection.png)
 
@@ -65,10 +65,10 @@ The TeXRA interface provides a streamlined way to select and manage files using 
 
 For each file category, you can select a single file using the dropdown menu. The interface provides several helpful options:
 
-- **Current Button** (<i class="codicon codicon-file-code"></i>): Select the currently open file in VS Code
-- **Empty Button** (<i class="codicon codicon-close"></i>): Clear the current selection
+- **Current Button** (<wa-icon library="texra" name="file-code"></wa-icon>): Select the currently open file in VS Code
+- **Empty Button** (<wa-icon library="texra" name="close"></wa-icon>): Clear the current selection
 - **Multiple Toggle** (▼): Switch to multiple file selection mode
-- **Refresh Button** (<i class="codicon codicon-refresh"></i> icon next to label): Update the file list
+- **Refresh Button** (<wa-icon library="texra" name="refresh"></wa-icon> icon next to label): Update the file list
 
 ### Multiple File Selection
 
@@ -76,10 +76,10 @@ For projects requiring multiple files, enable the multiple file selection mode:
 
 1. Click the "▼" toggle next to the file category
 2. The multiple selection panel will expand
-3. Use the "Add" button (<i class="codicon codicon-add"></i>) to add files via a file picker
+3. Use the "Add" button (<wa-icon library="texra" name="add"></wa-icon>) to add files via a file picker
 4. Remove files with the "-" button next to each file
 5. Reorder files by dragging and dropping
-6. Clear the entire list using the "Empty List" button (<i class="codicon codicon-trash"></i>)
+6. Clear the entire list using the "Empty List" button (<wa-icon library="texra" name="trash"></wa-icon>)
 
 Multiple file selection is particularly useful for:
 
@@ -90,14 +90,14 @@ Multiple file selection is particularly useful for:
 
 ### Adding Opened Files
 
-The "Add Opened Files" button (<i class="codicon codicon-folder-opened"></i>) available for Input, Reference, and Auxiliary files allows you to quickly add all currently open files in your VS Code editor (that match the allowed file types) to the respective multiple file list. This is useful when you have already opened the relevant files for your project.
+The "Add Opened Files" button (<wa-icon library="texra" name="folder-opened"></wa-icon>) available for Input, Reference, and Auxiliary files allows you to quickly add all currently open files in your VS Code editor (that match the allowed file types) to the respective multiple file list. This is useful when you have already opened the relevant files for your project.
 
 ### Output Files
 
 When using multiple input files, you may need to specify multiple output files:
 
 1. Enable the "Multiple Outputs" section by clicking the toggle (▼)
-2. Add output files corresponding to your input files using the "Add" button (<i class="codicon codicon-add"></i>)
+2. Add output files corresponding to your input files using the "Add" button (<wa-icon library="texra" name="add"></wa-icon>)
 3. Optionally set a custom output filename
 
 ## File Path Handling
@@ -108,7 +108,8 @@ TeXRA intelligently handles file paths to ensure proper document processing:
 
 - **Display**: Files are displayed with paths relative to the workspace root
 - **Processing**: TeXRA resolves paths to their absolute form when needed
-- **Output**: Output files are typically saved in the same directory as their corresponding input files
+- **Output**: Workflow outputs are saved in task storage. Use **Accept** or
+  **Pack** when you want to copy reviewed outputs back into the workspace.
 
 ### File Path Configuration
 
@@ -123,10 +124,11 @@ minimal example configuration might look like this:
 
 ## Output File Naming
 
-TeXRA uses a structured naming convention for output files:
+TeXRA stores workflow outputs in the run's task storage folder. Within that
+folder, round outputs use a simple path:
 
 ```
-original_filename_agent_r0_model.extension
+r{round}/output.extension
 ```
 
 For example:
@@ -134,11 +136,11 @@ For example:
 - Input: `paper.tex`
 - Agent: `polish`
 - Model: `sonnet46`
-- Output: `paper_polish_r0_sonnet46.tex`
+- Output: `r0/output.tex`
 
 When the agent definition includes reflection rounds, you may also see:
 
-- Round 1: `paper_polish_r1_sonnet46.tex`
+- Round 1: `r1/output.tex`
 
 ## File Management Commands
 
@@ -146,44 +148,50 @@ TeXRA provides several commands for managing generated files, accessible from th
 
 ### Pack
 
-The "Pack" button (<i class="codicon codicon-archive"></i>) organizes output files into a structured history folder:
+The "Pack" button (<wa-icon library="texra" name="archive"></wa-icon>) snapshots the run's task storage folder into a structured history folder:
 
 1. Creates a timestamped directory in the "History" folder
-2. Moves all relevant output files and logs
+2. Copies all relevant output files, logs, and mirrored dependencies
 3. Preserves the relationship between input and output files
 
 This is useful for maintaining a clean workspace while preserving previous outputs.
 
 ### Clean
 
-The "Clean" button (<i class="codicon codicon-trash"></i>) removes output files for the selected agent and model:
+The "Clean" button (<wa-icon library="texra" name="trash"></wa-icon>) removes output files for the selected run:
 
-1. Identifies all outputs for the current configuration
-2. Safely removes them from the workspace
+1. Identifies the task storage folder for the current run
+2. Safely removes generated artifacts from task storage
 3. Leaves original input files untouched
 
-Use this to clean up your workspace after reviewing the results.
+Use this to remove generated artifacts from task-run storage after reviewing the results.
 
 ### Opening Generated Files
 
-Click the file names listed in the ProgressBoard to view the outputs. Files now
-open using VS Code's default viewer, so PDFs and images display correctly while
-`.tex` documents open in the editor. Absolute paths are also handled
-properly.
+Workflow outputs are listed in the ProgressBoard under **Generated Files**.
+Click a file name to preview it in VS Code. Files open using VS Code's default
+viewer, so PDFs and images display correctly while `.tex` documents open in the
+editor.
+
+To browse the whole run folder, use the
+<wa-icon library="texra" name="folder-opened"></wa-icon> **Open in task storage** toolbar
+button. This reveals the task-run storage folder with generated files, compile
+logs, mirrored LaTeX dependencies, and intermediate artifacts.
 
 ### Task Run Storage
 
-Every time you run an agent, TeXRA creates a folder under its workspace storage
-directory:
+Every workflow run gets an isolated task-run storage folder under TeXRA's
+workspace storage directory:
 
 ```text
-.vscode/texra/taskRuns/<executionId>/
+executions/<executionId>/
 ```
 
-This folder stores intermediate artifacts such as the optional debug JSON
-files written when the `texra.debug.saveDebugObjects` setting is enabled
-(saves both message and response objects for debugging). These directories
-are safe to delete if you need to reclaim space.
+Workflow outputs are written there first, not directly over your workspace
+files. Use **Accept** to copy reviewed outputs back into the workspace, **Pack**
+to archive the whole run, and **Clean** to remove the run folder when you no
+longer need it. The folder also stores intermediate artifacts such as optional
+debug JSON files written when `texra.debug.saveDebugObjects` is enabled.
 
 ## Working with LaTeX Projects
 

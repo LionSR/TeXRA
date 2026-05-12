@@ -14,8 +14,11 @@ import {
   type IInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
-import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
-import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import {
+  clearPlanApprovalForStream,
+  clearRetryRequest,
+} from '@agent/runtime/runCoordinators';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { createRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -23,6 +26,7 @@ import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { RoundPersistedFlow } from '@agent/node/roundPersistedFlow';
 import type { UsageMonitor } from '@agent/utils/UsageMonitor';
+import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import { LatexMediaManager } from '@latex';
 import type { AgentLogStage } from '@logger/AgentLogger';
@@ -33,6 +37,7 @@ import {
   type StorageKey,
 } from '@shared/schemas';
 import {
+  AbsoluteFS,
   TaskRunFileService,
   WorkspaceFS,
   createWorkspaceLocation,
@@ -61,8 +66,6 @@ export interface RunReflectionFlowInput<
   getOutputFileLocation?: (round: number) => AgentFileLocation;
   usageMonitor?: UsageMonitor;
   onRoundCompleted?: (roundIndex: number, totalRounds: number) => void;
-  /** When true, outputs are routed to task-run storage by default. */
-  isSubagent?: boolean;
 }
 
 export interface RunReflectionFlowResult {
@@ -74,30 +77,8 @@ function deriveConfig(
   setting: AgentWorkflowSetting,
   prompt: RunReflectionFlowInput['prompt'],
 ): {
-  useScratchpad: boolean;
-  shouldEnsureXmlStructure: boolean;
   totalRounds: number;
-  outputExt: string;
 } {
-  const useScratchpad = setting.prefills.includes('<scratchpad>');
-
-  let shouldEnsureXmlStructure: boolean;
-  switch (setting.xmlStructureMode) {
-    case 'always':
-      shouldEnsureXmlStructure = true;
-      break;
-    case 'never':
-      shouldEnsureXmlStructure = false;
-      break;
-    case 'scratchpadOnly':
-      shouldEnsureXmlStructure = useScratchpad;
-      break;
-    default: {
-      const _exhaustive: never = setting.xmlStructureMode;
-      throw new Error(`Unknown xmlStructureMode: ${_exhaustive}`);
-    }
-  }
-
   const { userRequest } = prompt;
   let requestCount: number;
   if (Array.isArray(userRequest)) {
@@ -107,12 +88,7 @@ function deriveConfig(
   }
   const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
 
-  return {
-    useScratchpad,
-    shouldEnsureXmlStructure,
-    totalRounds,
-    outputExt: useScratchpad ? 'xml' : setting.outputExt,
-  };
+  return { totalRounds };
 }
 
 export async function runReflectionFlow<C = unknown>(
@@ -133,14 +109,13 @@ export async function runReflectionFlow<C = unknown>(
     onRoundFinalized = async () => {},
     usageMonitor,
   } = input;
+  const runtimeHost = input.runtimeHost ?? getAgentRuntimeHost();
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
   let shared: ReflectionFlowShared | undefined;
   let services: ReflectionServices<C> | undefined;
 
-  const fileService = new TaskRunFileService(executionId, {
-    forceRunStorage: input.isSubagent,
-  });
+  const fileService = new TaskRunFileService(executionId);
 
   const baseFiles: WorkspaceFileLocation[] = (
     config.outputFiles.length > 0 ? config.outputFiles : [config.inputFile]
@@ -170,40 +145,59 @@ export async function runReflectionFlow<C = unknown>(
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
-  const { useScratchpad, shouldEnsureXmlStructure, totalRounds, outputExt } =
-    deriveConfig(setting, prompt);
+  const { totalRounds } = deriveConfig(setting, prompt);
 
-  const modelName = modelHandler.config.name;
   const getOutputFileLocation =
     input.getOutputFileLocation ??
     ((round: number): AgentFileLocation => {
-      const fileName = getOutputFileName(
-        config.inputFile,
-        config.agent,
-        modelName,
-        outputExt,
-        round,
-        config.editedFile || undefined,
-      );
-      if (useScratchpad) {
-        return fileService.createRawOutputLocation(
-          fileName,
-        ) as AgentFileLocation;
+      // The default `r{round}/output.xml` filename is only collision-safe
+      // when resolved through a run-storage-bound fileService. Enforce the
+      // invariant so a misconfigured TaskRunFileService can't silently
+      // route outputs to a shared `<workspace>/r{round}/output.xml` path.
+      if (!fileService.hasRunDirectory()) {
+        throw new Error(
+          'runReflectionFlow requires a TaskRunFileService bound to an executionId for default output-path resolution.',
+        );
       }
-      return fileService.createLocation(fileName) as AgentFileLocation;
+      const canonical = fileService.createLocation(
+        getOutputFileName('xml', round),
+      ) as AgentFileLocation;
+      // Resume-from-pre-refactor compat: if a round was partially written on an
+      // older build that used `.tex` for non-scratchpad agents, keep using that
+      // file on resume so initializeOutputAndPrefill sees the existing content
+      // instead of starting a fresh round at output.xml.
+      if (!AbsoluteFS.existsSync(canonical.absolutePath)) {
+        const legacy = fileService.createLocation(
+          getOutputFileName('tex', round),
+        ) as AgentFileLocation;
+        if (AbsoluteFS.existsSync(legacy.absolutePath)) {
+          return legacy;
+        }
+      }
+      return canonical;
     });
 
+  const runCoordinators = tryUseRunContext()?.coordinators;
   const interruptible: IInterruptible = {
     interrupt(): void {
       input.onInterrupt?.();
-      retryCoordinator.clearRequest(streamId);
-      planApprovalCoordinator.clearForStream(streamId);
+      clearRetryRequest(streamId, runCoordinators);
+      clearPlanApprovalForStream(streamId, runCoordinators);
     },
   };
 
   setActiveRun(
     outputState,
-    { setting, config, baseFiles, logger, fileService, executionId, streamId },
+    {
+      setting,
+      config,
+      baseFiles,
+      logger,
+      fileService,
+      executionId,
+      streamId,
+      runtimeHost,
+    },
     storageKey,
   );
 
@@ -281,6 +275,7 @@ export async function runReflectionFlow<C = unknown>(
 
     services = {
       ...input,
+      runtimeHost,
       onRoundFinalized,
       outputState,
       xmlManager,
@@ -289,7 +284,6 @@ export async function runReflectionFlow<C = unknown>(
       promptBuilder,
       fileService,
       getOutputFileLocation,
-      shouldEnsureXmlStructure,
       baseFiles,
     };
     pf.setServices(services);
@@ -327,8 +321,8 @@ export async function runReflectionFlow<C = unknown>(
       }
     }
 
-    retryCoordinator.clearRequest(streamId);
-    planApprovalCoordinator.clearForStream(streamId);
+    clearRetryRequest(streamId);
+    clearPlanApprovalForStream(streamId);
 
     unregisterInterruptible(streamId);
   }

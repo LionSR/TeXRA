@@ -45,7 +45,7 @@ export const markdownStyles = css`
   }
 
   .markdown-content :is(h1, h2, h3, h4) {
-    color: var(--vscode-textLink-foreground, #3794ff);
+    color: var(--wa-color-text-link, #3794ff);
     font-size: var(--font-size-lg);
     font-weight: var(--font-weight-semibold);
     line-height: var(--line-height-heading);
@@ -54,18 +54,14 @@ export const markdownStyles = css`
 
   .markdown-content h1 {
     border-bottom: var(--border-thin) solid var(--color-border);
-    padding-bottom: var(--spacing-small);
+    padding-bottom: var(--wa-space-2xs);
   }
 
   .markdown-content h2 {
-    padding-left: var(--spacing-medium);
-    margin-top: var(--spacing-large);
-    margin-bottom: var(--spacing-small);
-    border-left: var(--border-thick) solid
-      var(--vscode-activityBarBadge-background);
+    margin-top: var(--wa-space-s);
+    margin-bottom: var(--wa-space-2xs);
     border-bottom: var(--border-thin) solid var(--color-border);
-    padding-bottom: var(--spacing-tiny);
-    border-radius: var(--border-radius) 0 0 var(--border-radius);
+    padding-bottom: var(--wa-space-3xs);
     color: var(--color-text-link);
   }
 
@@ -92,20 +88,18 @@ export const markdownStyles = css`
   }
 
   .markdown-content code {
-    background-color: var(--vscode-textCodeBlock-background);
-    padding: var(--spacing-tiny) var(--spacing-small);
+    background-color: var(--wa-color-surface-lowered);
+    padding: var(--wa-space-3xs) var(--wa-space-2xs);
     border-radius: var(--border-radius);
     font-family: var(--font-family);
     font-size: var(--font-size-sm);
   }
 
   .markdown-content pre {
-    padding: var(--spacing-medium) var(--spacing-large);
+    padding: var(--wa-space-xs) var(--wa-space-s);
     margin: 0.5em 0;
     border-radius: var(--border-radius);
-    background-color: var(--vscode-textCodeBlock-background);
-    border-left: var(--spacing-tiny) solid
-      var(--vscode-activityBarBadge-background);
+    background-color: var(--wa-color-surface-lowered);
     overflow-x: auto;
   }
 
@@ -118,7 +112,7 @@ export const markdownStyles = css`
 
   .markdown-content .latex-ref {
     font-family: var(--font-family);
-    color: var(--vscode-symbolIcon-keywordForeground);
+    color: var(--wa-color-symbol-keyword);
   }
 
   .markdown-content a {
@@ -131,10 +125,9 @@ export const markdownStyles = css`
   }
 
   .markdown-content blockquote {
-    border-left: var(--border-thick) solid
-      var(--vscode-activityBarBadge-background);
-    margin: var(--spacing-medium) 0;
-    padding-left: var(--spacing-xlarge);
+    border-left: var(--border-medium) solid var(--wa-color-activity-badge-bg);
+    margin: var(--wa-space-xs) 0;
+    padding-left: var(--wa-space-l);
     color: var(--color-text-secondary);
     font-style: italic;
   }
@@ -142,15 +135,15 @@ export const markdownStyles = css`
   .markdown-content table {
     border-collapse: collapse;
     width: 100%;
-    margin: var(--spacing-xlarge) 0;
+    margin: var(--wa-space-l) 0;
 
     :is(th, td) {
       border: var(--border-thin) solid var(--color-border);
-      padding: var(--spacing-small) var(--spacing-large);
+      padding: var(--wa-space-2xs) var(--wa-space-s);
     }
 
     th {
-      background-color: var(--vscode-editor-lineHighlightBackground);
+      background-color: var(--wa-color-editor-line-highlight);
       text-align: left;
     }
   }
@@ -160,7 +153,7 @@ export const markdownStyles = css`
   }
 
   .markdown-content strong {
-    color: var(--vscode-editor-foreground);
+    color: var(--wa-color-text-normal);
     font-weight: var(--font-weight-semibold);
   }
 
@@ -171,19 +164,13 @@ export const markdownStyles = css`
   .markdown-content hr {
     margin: 0.7em 0;
     height: var(--border-thin);
-    background-color: var(--vscode-editorWidget-border);
+    background-color: var(--wa-color-surface-border);
     border: none;
   }
 
   .markdown-content em strong,
   .markdown-content strong em {
-    color: var(--vscode-editorInfo-foreground);
-  }
-
-  .banner-content--scratchpad p:has(strong:first-child) {
-    border-left: calc(var(--spacing-small) - 1px) solid
-      var(--vscode-notificationsInfoIcon-foreground);
-    padding-left: var(--spacing-medium);
+    color: var(--wa-color-brand-on-quiet);
   }
 
   .markdown-content :is(h2 + p, p + p, h1 + h1, h2 + h2, h3 + h3, h4 + h4) {

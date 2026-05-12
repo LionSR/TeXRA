@@ -3,11 +3,13 @@ import * as path from 'path';
 import { z } from 'zod';
 
 import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
+import * as logger from '@agent/core/logger';
+import { tryGetWorkspaceState } from '@agent/core/stateStore';
 import { formatError, toErrorMessage } from '@common/errors';
-import * as logger from '@logger/logUtils';
+import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { MESSAGE_TYPES } from '@shared/schemas';
+import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { flexibleFS, pathToLocation, type FileLocation } from '@utils/files';
-import { getConfig } from '@utils/config';
 import { executeCommand } from '@utils/system';
 import { runLatexFormatter } from './texFormatter';
 import { generateDiffFileName } from './latexdiff/diffFileNameManager';
@@ -41,7 +43,7 @@ export type LaTeXdiffMultipleResult = z.infer<
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
-const DEFAULT_LATEXDIFF_TIMEOUT_MS = 10000;
+const DEFAULT_LATEXDIFF_TIMEOUT_MS = LATEX_CONFIG_DEFAULTS.latexdiffTimeoutMs;
 
 export class LaTeXdiffService {
   private readonly fileProcessor: DiffFileProcessor;
@@ -49,16 +51,31 @@ export class LaTeXdiffService {
 
   constructor(private readonly channel: string = CHANNEL) {
     this.fileProcessor = new DiffFileProcessor(channel);
-    this.commandExecutor = new DiffCommandExecutor(
-      channel,
+    // Pass a thunk so DiffCommandExecutor reads the current workspace value
+    // each time it runs a diff. Module-scope instances (in latexdiffCommands.ts
+    // and latexPreview.ts) construct before `initPlatform()` runs, so a value
+    // captured here would be permanently frozen at the default — defeating
+    // user changes to LATEXDIFF_TIMEOUT_MS.
+    this.commandExecutor = new DiffCommandExecutor(channel, () =>
       this.getLatexdiffTimeout(),
     );
   }
 
+  /**
+   * Resolve the latexdiff timeout from workspace state. Tolerant of
+   * pre-initialization: `LaTeXdiffService` is instantiated at module scope in
+   * `commands/latex/latexdiffCommands.ts` and `tools/approval/latexPreview.ts`,
+   * which evaluate before `initPlatform()` runs in `activate()`. A throwing
+   * `getWorkspaceState()` would prevent the extension from activating; falling
+   * back to the documented default keeps construction safe. Called per-diff
+   * so user updates take effect on the next invocation without any rebuild.
+   */
   private getLatexdiffTimeout(): number {
-    return getConfig<number>(
-      'texra.latexdiff.timeoutMs',
-      DEFAULT_LATEXDIFF_TIMEOUT_MS,
+    return (
+      tryGetWorkspaceState()?.get<number>(
+        WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
+        DEFAULT_LATEXDIFF_TIMEOUT_MS,
+      ) ?? DEFAULT_LATEXDIFF_TIMEOUT_MS
     );
   }
 

@@ -6,9 +6,6 @@ import { COMMON_COMMANDS } from './commonCommands';
 // Main view specific commands
 export const MAIN_VIEW_COMMANDS = {
   ...COMMON_COMMANDS,
-  // File operations
-  FILE_SELECT: 'selectFile',
-  FILE_SELECTED: 'fileSelected',
 
   // Execution
   EXECUTE: 'execute',
@@ -64,6 +61,7 @@ export const MAIN_VIEW_COMMANDS = {
   SHOW_AGENT_HISTORY: 'showAgentHistory',
   OPEN_AGENT_SETTINGS: 'openAgentSettings',
   OPEN_MODEL_SETTINGS: 'openModelSettings',
+  OPEN_MULTI_AGENT_SETTINGS: 'openMultiAgentSettings',
   CLIPBOARD_IMAGE: 'clipboardImage',
   OPEN_SET_API_KEY: 'openSetApiKey',
   OPEN_SET_PROVIDER_API_KEY: 'openSetProviderApiKey',
@@ -80,13 +78,16 @@ export const MAIN_VIEW_COMMANDS = {
   HIDE_AGENT_CONFIG_BANNER: 'hideAgentConfigBanner',
   SHOW_DEPENDENCY_BANNER: 'showDependencyBanner',
   HIDE_DEPENDENCY_BANNER: 'hideDependencyBanner',
-  UPDATE_DEPENDENCY_REMINDER_SETTING: 'updateDependencyReminderSetting',
   SHOW_GETTING_STARTED_BANNER: 'showGettingStartedBanner',
   HIDE_GETTING_STARTED_BANNER: 'hideGettingStartedBanner',
   SHOW_LOGIN_BANNER: 'showLoginBanner',
   HIDE_LOGIN_BANNER: 'hideLoginBanner',
   SIGN_IN_FROM_BANNER: 'signInFromBanner',
   DISMISS_LOGIN_BANNER: 'dismissLoginBanner',
+  DISMISS_GETTING_STARTED_BANNER: 'dismissGettingStartedBanner',
+  DISMISS_ORCHESTRATOR_BANNER: 'dismissOrchestratorBanner',
+  SHOW_ORCHESTRATOR_BANNER: 'showOrchestratorBanner',
+  HIDE_ORCHESTRATOR_BANNER: 'hideOrchestratorBanner',
 
   // Extension response events
   INSTRUCTION_TEXT_POLISHED: 'instructionTextPolished',
@@ -139,7 +140,4 @@ export const MAIN_VIEW_COMMANDS = {
 
   // Other operations
   ACCEPT_EDITED: 'acceptEdited',
-
-  // Followup task (receives from progress view)
-  SETUP_FOLLOWUP_TASK: 'setupFollowupTask',
 } as const;

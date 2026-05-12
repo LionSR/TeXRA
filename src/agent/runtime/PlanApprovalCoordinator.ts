@@ -7,9 +7,6 @@
  * 3. On resolution → emits 'resolvePlanApproval' to dismiss UI
  */
 
-// Local imports
-import { bus } from '@eventBus/ProgressEventBus';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type { Plan } from '@shared/schemas';
 import {
   BasePromiseCoordinator,
@@ -45,7 +42,7 @@ interface PlanApprovalShowPayload extends Record<string, unknown> {
 // ============================================================================
 
 /** Manages pending plan approval requests. */
-class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
+export class PlanApprovalCoordinator extends BasePromiseCoordinator<
   PlanApprovalResult,
   PlanApprovalShowPayload
 > {
@@ -74,11 +71,11 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
     this.streamApprovalMap.set(streamId, approvalId);
     this.approvalStreamMap.set(approvalId, streamId);
 
-    // Show progress view to ensure user sees the approval prompt
-    void safeExecuteCommand('texra.showProgressView');
+    // Request host to show progress view so user sees the approval prompt
+    this.runtimeHost.emit('requestEnsureProgressView', {});
 
     // Activate the stream that needs approval so user sees the prompt immediately
-    bus.emit('setActiveStream', { streamId });
+    this.runtimeHost.emit('setActiveStream', { streamId });
 
     return this.waitForUserAction(
       approvalId,
@@ -97,6 +94,16 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
     return super.resolveRequest(id, result);
   }
 
+  /** Override to clean up stream mapping on external cancellation. */
+  override clearRequest(id: string): void {
+    const streamId = this.approvalStreamMap.get(id);
+    if (streamId) {
+      this.streamApprovalMap.delete(streamId);
+      this.approvalStreamMap.delete(id);
+    }
+    super.clearRequest(id);
+  }
+
   /**
    * Clear any pending plan approval for the given stream.
    * Used for cleanup when flows are interrupted or streams are deleted.
@@ -105,21 +112,7 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
     const approvalId = this.streamApprovalMap.get(streamId);
     if (approvalId) {
       this.clearRequest(approvalId);
-      this.streamApprovalMap.delete(streamId);
-      this.approvalStreamMap.delete(approvalId);
     }
-  }
-
-  /**
-   * Clear all pending plan approvals.
-   * Used for cleanup when all streams are deleted.
-   */
-  clearAll(): void {
-    for (const approvalId of this.streamApprovalMap.values()) {
-      this.clearRequest(approvalId);
-    }
-    this.streamApprovalMap.clear();
-    this.approvalStreamMap.clear();
   }
 }
 
@@ -128,4 +121,4 @@ class PlanApprovalCoordinatorImpl extends BasePromiseCoordinator<
 // ============================================================================
 
 /** Singleton coordinator instance. */
-export const planApprovalCoordinator = new PlanApprovalCoordinatorImpl();
+export const planApprovalCoordinator = new PlanApprovalCoordinator();

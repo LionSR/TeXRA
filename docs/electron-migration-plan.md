@@ -253,15 +253,15 @@ Migrate imports file-by-file, prioritizing the most-used modules first.
 
 #### 3.1 High Priority: Foundation Layer
 
-| Current                                   | Change to                                  |
-| ----------------------------------------- | ------------------------------------------ |
-| `src/utils/config/configUtils.ts`         | Use `platform().config`                    |
-| `src/utils/files/baseFS.ts`               | Use `platform().fs`                        |
-| `src/utils/files/storageFS.ts`            | Use `platform().fs` + `platform().context` |
-| `src/utils/files/workspaceFS.ts`          | Use `platform().fs` + `platform().context` |
-| `src/frontend/secretManager.ts`           | Use `platform().secrets`                   |
-| `src/common/state/stateManager.ts`        | Use `platform().context.getState/setState` |
-| `src/common/errors/errorHandlingUtils.ts` | Use `platform().ui` for error dialogs      |
+| Current                                                    | Change to                                  |
+| ---------------------------------------------------------- | ------------------------------------------ |
+| `src/utils/config/configUtils.ts`                          | Use `platform().config`                    |
+| `src/utils/files/baseFS.ts`                                | Use `platform().fs`                        |
+| `src/utils/files/storageFS.ts`                             | Use `platform().fs` + `platform().context` |
+| `src/utils/files/workspaceFS.ts`                           | Use `platform().fs` + `platform().context` |
+| `packages/extension/src/frontend/secretManager.ts`         | Use `platform().secrets`                   |
+| `src/common/state/stateManager.ts`                         | Use `platform().context.getState/setState` |
+| `packages/extension/src/frontend/ui/errorHandlingUtils.ts` | Use `platform().ui` for error dialogs      |
 
 This alone removes ~30 transitive `vscode` dependencies.
 
@@ -376,6 +376,98 @@ Shared config:
   }
 }
 ```
+
+### Local macOS Desktop Package
+
+The monorepo now has a local unsigned package rehearsal for the Electron desktop app. It produces a
+macOS `.app` bundle from the built desktop main, preload, and renderer artifacts, then verifies the
+packaged `app.asar` contains the expected runtime files. The package verifier also reads the
+desktop main esbuild metafile and checks that the startup import graph does not eagerly pull in
+provider SDKs that should remain behind lazy agent-execution imports.
+
+From the repository root:
+
+```bash
+corepack pnpm install --frozen-lockfile
+npm run desktop:package:local
+npm run check:desktop-package
+npm run desktop:package:smoke
+```
+
+On Apple Silicon macOS, the local app bundle is written to:
+
+```text
+packages/desktop/dist-packaged/mac-arm64/TeXRA.app
+```
+
+Open it directly from Finder or from the terminal:
+
+```bash
+open packages/desktop/dist-packaged/mac-arm64/TeXRA.app
+```
+
+This build is intentionally unsigned and not notarized. macOS may block the first launch; right-click
+the app and choose Open from Finder, or remove the quarantine attribute for a local development build:
+
+```bash
+xattr -dr com.apple.quarantine packages/desktop/dist-packaged/mac-arm64/TeXRA.app
+```
+
+Use the full initial-build check when validating both shipped targets together:
+
+```bash
+npm run build:initial
+```
+
+That command builds the Electron desktop app and the VS Code extension package, then checks that the
+desktop build artifacts and `.vsix` are present.
+
+`npm run desktop:package:smoke` launches the packaged app briefly from the command line using an
+isolated temporary user profile. It fails on early exits, desktop startup failures, unsupported
+dynamic `require()` calls, or runtime VS Code import errors. Set `TEXRA_DESKTOP_LAUNCH_SMOKE_MS` to
+change the default 8 second launch window.
+
+### Local macOS Desktop Installer
+
+To produce an installable macOS artifact, run the distributable package command from the repository
+root:
+
+```bash
+npm run desktop:package:dist
+npm run check:desktop-installers
+```
+
+The release package path is:
+
+```text
+packages/desktop/dist-packaged/
+```
+
+For macOS, the distributable targets are a DMG and ZIP. Windows release builds use NSIS, and Linux
+release builds use AppImage and deb. CI release installer jobs can sign and notarize macOS artifacts
+and sign Windows artifacts when the repository secrets in `docs/desktop-signing-ci.md` are
+configured. Local smoke tests should continue using `npm run desktop:package:local` because the
+unpacked directory target launches faster and keeps startup regression coverage separate from
+installer generation.
+
+### Desktop Update Artifact Publishing
+
+Electron Builder is configured to generate public GitHub update metadata for
+`texra-ai/texra-desktop-releases`. Local distributable builds still pass `--publish never`, so
+running `npm run desktop:package:dist` produces unsigned local artifacts without uploading them.
+
+On pushes to `main`, CI collects the per-OS installer outputs and update metadata:
+
+- macOS: DMG, ZIP, ZIP blockmap, and `latest-mac.yml`
+- Windows: NSIS executable, blockmap, and `latest.yml`
+- Linux: AppImage, deb, blockmap, and `latest-linux.yml`
+
+The `publish desktop release artifacts` job downloads those workflow artifacts, verifies that the
+Electron Builder publish target is still the public `texra-ai/texra-desktop-releases` repository,
+checks that update metadata exists and points at a generated update-capable installer, and then
+uploads the files to the matching public GitHub release. The GitHub credential is confined to CI via
+the `DESKTOP_RELEASES_TOKEN` secret; installed desktop clients should read the public update metadata
+and artifacts without a client-side `GH_TOKEN`.
 
 ---
 

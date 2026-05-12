@@ -1,0 +1,27 @@
+{
+  "name": "@texra/cli",
+  "version": "0.37.8",
+  "private": true,
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "bin": {
+    "texra": "./dist/bin/texra.js"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "check:architecture": "node scripts/check-host-imports.mjs",
+    "bundle": "node scripts/build-bundle.mjs",
+    "copy:resources": "node scripts/copy-resources.mjs",
+    "build": "pnpm run typecheck && pnpm run check:architecture && pnpm run bundle && pnpm run copy:resources",
+    "validate:run": "node scripts/validate-run.mjs"
+  },
+  "dependencies": {
+    "@texra/core": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "typescript": "^6.0.3"
+  }
+}

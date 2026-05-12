@@ -1,10 +1,10 @@
 import { css, type CSSResult } from 'lit';
 
-export const baseBadgeStyles: CSSResult = css`
+const baseBadgeStyles: CSSResult = css`
   .badge {
     display: inline-block;
-    padding: var(--spacing-small) var(--spacing-medium);
-    border-radius: var(--border-radius-medium, 4px);
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
+    border-radius: var(--border-radius-medium);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium, 500);
   }
@@ -14,66 +14,63 @@ export const baseBadgeStyles: CSSResult = css`
   }
 `;
 
-export const categoryBadgeStyles: CSSResult = css`
+const categoryBadgeStyles: CSSResult = css`
   .category-badge,
   .agent-category-badge {
     display: inline-flex;
     align-items: center;
-    gap: var(--spacing-small);
-    background: var(--vscode-badge-background);
-    color: var(--vscode-badge-foreground);
+    gap: var(--wa-space-2xs);
+    background: var(--wa-color-neutral-fill-quiet);
+    color: var(--wa-color-neutral-on-quiet);
   }
 
-  .category-badge .codicon,
-  .agent-category-badge .codicon {
+  .category-badge wa-icon,
+  .agent-category-badge wa-icon {
     font-size: var(--font-size-sm);
   }
 
   .category-workflow,
   .category-badge.workflow {
     background-color: var(
-      --vscode-editorInfo-background,
+      --texra-editorInfo-background,
       rgba(0, 127, 212, 0.15)
     );
-    color: var(--vscode-editorInfo-foreground, #3794ff);
+    color: var(--wa-color-brand-on-quiet, #3794ff);
   }
 
   .category-tool-use,
   .category-badge.tooluse,
   .category-badge.tool-use {
     background-color: var(
-      --vscode-editorWarning-background,
+      --wa-color-warning-fill-quiet,
       rgba(255, 204, 0, 0.15)
     );
-    color: var(--vscode-editorWarning-foreground, #cca700);
+    color: var(--wa-color-warning-on-quiet, #cca700);
   }
 `;
 
-export const searchHighlightStyles: CSSResult = css`
+const searchHighlightStyles: CSSResult = css`
   mark {
-    background-color: var(
-      --vscode-editor-findMatchHighlightBackground,
-      #ffef0b80
-    );
-    color: var(--vscode-editor-findMatchHighlightForeground, inherit);
+    background-color: var(--wa-color-editor-find-match-highlight, #ffef0b80);
+    color: var(--wa-color-editor-find-match-highlight-fg, inherit);
     padding: 0;
     border-radius: var(--border-radius-small);
   }
 
   mark[data-current='true'] {
-    background-color: var(--vscode-editor-findMatchBackground, #ff8b0088);
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    background-color: var(--wa-color-editor-find-match, #ff8b0088);
+    outline: var(--border-thin) solid var(--wa-color-focus);
   }
 `;
 
-export const emptyStateStyles: CSSResult = css`
+const emptyStateStyles: CSSResult = css`
   .no-data,
   .no-agents,
   .history-none {
     color: var(--color-text-secondary);
     font-style: italic;
     text-align: center;
-    padding: var(--spacing-xlarge);
+    padding: var(--wa-space-l);
   }
 
   .loading {
@@ -96,8 +93,8 @@ export const tintedBadgeStyles: CSSResult = css`
   .tinted-badge {
     display: inline-flex;
     align-items: center;
-    gap: var(--spacing-tiny);
-    padding: 1px var(--spacing-small);
+    gap: var(--wa-space-3xs);
+    padding: var(--border-thin) var(--wa-space-2xs);
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-semibold);
     color: var(--_tint, var(--color-text-secondary));
@@ -110,7 +107,7 @@ export const tintedBadgeStyles: CSSResult = css`
     white-space: nowrap;
   }
 
-  .tinted-badge .codicon {
+  .tinted-badge wa-icon {
     font-size: var(--font-size-xs);
   }
 `;

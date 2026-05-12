@@ -9,13 +9,6 @@ const baseConfig = {
   head: [
     ['link', { rel: 'icon', href: '/logo-128x128.svg' }],
     [
-      'link',
-      {
-        rel: 'stylesheet',
-        href: '/assets/fonts/codicon/codicon.css',
-      },
-    ],
-    [
       'script',
       {},
       `
@@ -123,6 +116,11 @@ const baseConfig = {
           items: [
             { text: 'Introduction', link: '/guide/' },
             { text: 'Installation', link: '/guide/installation' },
+            { text: 'Desktop App', link: '/guide/desktop' },
+            {
+              text: 'Desktop Migration',
+              link: '/guide/desktop-migration',
+            },
             { text: 'Quick Start', link: '/guide/quick-start' },
           ],
         },
@@ -161,6 +159,7 @@ const baseConfig = {
               text: 'Working with Overleaf',
               link: '/guide/working-with-overleaf',
             },
+            { text: 'Codex CLI', link: '/guide/codex-cli' },
             { text: 'File Management', link: '/guide/file-management' },
             { text: 'ProgressBoard', link: '/guide/progress-board' },
           ],
@@ -189,6 +188,15 @@ const baseConfig = {
     },
   },
   ignoreDeadLinks: true,
+  vite: {
+    vue: {
+      template: {
+        compilerOptions: {
+          isCustomElement: (tag) => tag.startsWith('wa-'),
+        },
+      },
+    },
+  },
 };
 
 // Export the config wrapped with withMermaid, including optional configs

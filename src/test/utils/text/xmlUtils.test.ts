@@ -2,7 +2,13 @@
 import { strict as assert } from 'assert';
 
 // Local imports - utils
-import { extractScratchpad, formatContent } from '@utils/text/xmlUtils';
+import {
+  addCdataToTags,
+  addCdataToTagsMultiple,
+  extractScratchpad,
+  formatContent,
+  removeCDATA,
+} from '@utils/text/xmlUtils';
 
 describe('xmlUtils.formatContent', () => {
   it('converts HTML scratchpad content to markdown bullets', async () => {
@@ -53,5 +59,57 @@ describe('xmlUtils.extractScratchpad', () => {
     const result = await extractScratchpad(response);
 
     assert.equal(result, '## Plan\n\n- Step 1\n- Step 2');
+  });
+});
+
+describe('xmlUtils CDATA handling', () => {
+  it('does not double-wrap content that is already CDATA-wrapped', () => {
+    const input =
+      '<latex_document><![CDATA[Text with <xml-like> LaTeX & comments]]></latex_document>';
+
+    const result = addCdataToTags(input, ['latex_document']);
+
+    assert.equal(result, input);
+  });
+
+  it('does not double-wrap attributed tags that are already CDATA-wrapped', () => {
+    const input =
+      '<document name="main.tex"><![CDATA[Text with <xml-like> LaTeX & comments]]></document>';
+
+    const result = addCdataToTagsMultiple(input, ['document']);
+
+    assert.equal(result, input);
+  });
+
+  it('wraps malformed CDATA starts instead of treating them as complete', () => {
+    const input =
+      '<latex_document><![CDATA[Text with <xml-like> LaTeX</latex_document>';
+
+    const result = addCdataToTags(input, ['latex_document']);
+
+    assert.equal(
+      result,
+      '<latex_document><![CDATA[<![CDATA[Text with <xml-like> LaTeX]]></latex_document>',
+    );
+  });
+
+  it('wraps malformed CDATA starts in attributed tags', () => {
+    const input =
+      '<document name="main.tex"><![CDATA[Text with <xml-like> LaTeX</document>';
+
+    const result = addCdataToTagsMultiple(input, ['document']);
+
+    assert.equal(
+      result,
+      '<document name="main.tex"><![CDATA[<![CDATA[Text with <xml-like> LaTeX]]></document>',
+    );
+  });
+
+  it('removes nested CDATA wrappers left by legacy double-wrapping', () => {
+    const input = '<![CDATA[<![CDATA[Text with <xml-like> LaTeX]]>]]>';
+
+    const result = removeCDATA(input);
+
+    assert.equal(result, 'Text with <xml-like> LaTeX');
   });
 });

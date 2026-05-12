@@ -2,6 +2,10 @@
 
 Guidance for Claude Code when working with this repository. For detailed coding conventions and patterns, see [AGENTS.md](./AGENTS.md).
 
+## Code review
+
+For `/review` or any code review on this repo, load [.claude/skills/code-review/SKILL.md](./.claude/skills/code-review/SKILL.md) first — generic passes miss the repo-specific rules below. Always include a `Verified` section listing what you opened.
+
 ## Project Overview
 
 TeXRA is a VS Code extension that serves as an AI-powered LaTeX research assistant. It uses Large Language Models to help academics with writing, research, and document processing.
@@ -10,7 +14,7 @@ TeXRA is a VS Code extension that serves as an AI-powered LaTeX research assista
 
 ```bash
 # Install dependencies
-npm install
+corepack pnpm install
 
 # Development build (recommended - uses esbuild + Vite, much faster)
 npm run compile:fast
@@ -24,6 +28,9 @@ npm run package:fast
 # Build VSIX extension file (recommended)
 npm run build:fast
 # Creates: releases/texra-{version}.vsix
+
+# Build both the desktop app and VSIX, then verify release artifacts
+npm run build:initial
 
 # Run linting only
 npm run lint
@@ -42,6 +49,7 @@ The project supports fast builds using esbuild (for the extension host) and Vite
 - `npm run watch:fast` - Watch mode for development
 - `npm run package:fast` - Production build
 - `npm run build:fast` - Build VSIX extension file
+- `npm run build:initial` - Build desktop plus VSIX artifacts and verify both
 
 These commands are significantly faster and do not require increased memory allocation.
 
@@ -55,61 +63,74 @@ Alternatively, use `npm run compile:safe` which runs type checking before buildi
 
 ### Legacy Webpack Builds
 
-The original webpack-based commands are still available but require increased memory:
+The original webpack-based commands are still available:
 
 ```bash
-# Set for webpack builds
-export NODE_OPTIONS=--max-old-space-size=8192
-
-# Or prefix individual commands
-NODE_OPTIONS=--max-old-space-size=8192 npm run compile
-NODE_OPTIONS=--max-old-space-size=8192 npm run package
+npm run compile
+npm run package
 ```
-
-Without this, webpack may fail with "JavaScript heap out of memory" errors during production builds.
 
 ## Architecture Overview
 
 ### Agent System
 
-The core of TeXRA is its agent architecture in `src/agent/`:
+The core of TeXRA is its agent architecture in repo-root `src/agent/`:
 
 - **Core interfaces** define agent behavior and state management
 - **Implementations** provide reasoning strategies (Direct, Chain-of-Thought, Merge, Workflow)
 - **Model handlers** abstract AI provider APIs (Anthropic, OpenAI, Google, etc.)
-- Agents are configured via YAML files in `resources/agents/`
+- Agents are configured via YAML files in `packages/extension/resources/agents/`
 
 `_multiple` YAML files provide alternate prompts for agents supporting multiple outputs. This preference only applies to the initial agent; parent definitions via `inherits` use base files.
+
+### Workspace Layout
+
+This repository is a pnpm workspace:
+
+- Repo-root `src/` holds host-agnostic core logic, platform interfaces, shared schemas, and test harness code.
+- `packages/extension/` holds the VS Code extension entrypoint, commands, webviews, and packaged resources.
+- `packages/desktop/` holds the Electron desktop shell and adapters around the shared core.
+- `packages/core/` exposes the shared core package surface for workspace consumers.
+- `src/hosts/` defines host capability ports used by both VS Code and Electron integrations.
+- `src/test-kernel/` contains Vitest suites for host-neutral and Electron-facing behavior.
 
 ### Source Organization
 
 Key directories in `src/`:
 
-- `agent/` - Agent core, implementations, model handlers, runtime, tool-use
-  - `implementations/flows/` - PocketFlow-based flow implementations (reflection, tool-use)
-- `commands/` - Commands organized by domain (see below)
+- `agent/` - Agent core, implementations, model handlers, runtime, toolUse, output, storage, remote, node
+  - `implementations/flows/` - PocketFlow-based flow implementations (reflection, tooluse)
+- `platform/` - Platform abstraction layer (composition root). Hosts (VS Code, future CLI/Electron) call `initPlatform()` once at startup; core code accesses host services via `platform()` from `@platform`. See `src/platform/platform.ts`.
 - `common/` - Backend-only helpers (errors, state, files, webview base classes)
-- `frontend/` - Extension-host utilities for shared UI flows
 - `utils/` - Utilities shared between extension host and webviews
 - `tools/` - Tool implementations for tool-use agents
 - `model/` - Model configuration, registry, and providers
 - `latex/` - LaTeX processing (formatting, diff, TikZ, PDF)
-- `webview/` - Main agent interaction interface
-- `progressView/` - Task tracking board
-- `settingsView/` - Unified settings webview (History, Memory, Models, Agents, Multi-Agent, LaTeX, Tools tabs)
 - `shared/` - Shared schemas and message handlers across webviews
 - `auth/` - Authentication logic
 - `housekeeping/` - Cleanup and packing operations
-- `types/` - Shared type definitions
+- `hosts/` - Host capability interfaces for clipboard, prompts, terminals, diff views, and openers
 - `logger/` - Logging infrastructure
 - `eventBus/` - Progress event system
 - `replacement/` - Text cleanup rules
+- `test/` - Mocha test suites (do NOT run via `npm test`; see Development Commands)
+- `test-kernel/` - Vitest suites for host-neutral and Electron-facing logic
+
+Key directories in `packages/extension/`:
+
+- `packages/extension/src/extension.ts` - VS Code extension entry point
+- `packages/extension/src/commands/` - VS Code commands organized by domain (see below)
+- `packages/extension/src/frontend/` - Extension-host utilities for shared UI flows
+- `packages/extension/src/webview/` - Main agent interaction interface
+- `packages/extension/src/progressView/` - Task tracking board
+- `packages/extension/src/settingsView/` - Unified settings webview (History, Memory, Models, Agents, Multi-Agent, LaTeX, Tools tabs)
+- `packages/extension/resources/` - Packaged agents, tool-use agents, docs, templates, examples, and extension assets
 
 Key documentation in `docs/`:
 
 - `pocketflow/` - PocketFlow framework documentation (core abstractions, design patterns, utility functions)
 
-### Commands (`src/commands/`)
+### Commands (`packages/extension/src/commands/`)
 
 - `agent/` - Running and managing agents, merge operations
 - `api/` - API key management
@@ -261,25 +282,28 @@ For good separation of concerns, testability, and platform independence, core bu
 - `src/model/` (model registry, capabilities, pricing)
 - `src/latex/` (LaTeX processing, formatting, diff)
 - `src/tools/` (tool implementations — use `@common/files/fsEntryType` instead of `vscode.FileType`)
+- `src/controllers/` (host-neutral orchestration behind injected ports)
 - `src/shared/` (IPC schemas, message types)
 - `src/replacement/` (text cleanup rules)
 - `src/eventBus/` (progress event system)
-- Webview frontends (`src/webview/frontend/`, `src/progressView/frontend/`, `src/settingsView/frontend/`)
+- Webview frontends (`packages/extension/src/webview/frontend/`, `packages/extension/src/progressView/frontend/`, `packages/extension/src/settingsView/frontend/`)
 
 **VS Code-allowed zones** — platform-specific wiring belongs here:
 
-- `src/extension.ts` (entry point)
-- `src/commands/` (VS Code command handlers)
-- `src/frontend/` (VS Code UI utilities)
+- `packages/extension/src/extension.ts` (entry point — calls `initPlatform()` exactly once with the VS Code-backed services)
+- `src/platform/` interfaces themselves (interface definitions; concrete VS Code implementations are wired from `extension.ts`)
+- `packages/extension/src/commands/` (VS Code command handlers)
+- `packages/extension/src/frontend/` (VS Code UI utilities)
 - `src/common/webview/` (webview base classes)
 - `src/common/state/` (state managers backed by VS Code Memento)
 - `src/utils/config/` (wraps `vscode.workspace.getConfiguration`)
 - `src/utils/files/workspaceFS.ts`, `storageFS.ts` (wraps `vscode.workspace.fs`)
 - `src/auth/` (authentication providers)
-- `src/logger/LogChannelRegistry.ts` (creates `vscode.OutputChannel`)
+- VS Code logging output-channel creation belongs in the extension-host wiring, not in repo-root logger modules.
 
 **Patterns for keeping code platform-agnostic:**
 
+- Reach host services through `platform()` from `@platform` (config, state, log, fs, workspace, storage, secrets) — never import `vscode` in agnostic zones.
 - Use `isFile()` / `isDirectory()` from `@common/files/fsEntryType` instead of `vscode.FileType`
 - Use `isFileNotFoundError()` from `@common/errors` instead of `instanceof vscode.FileSystemError`
 - Return error results instead of calling `vscode.window.show*Message()` from business logic — let the caller (command layer) handle UI
@@ -293,18 +317,19 @@ Common aliases (full list in `tsconfig.json`):
 - `@model/*`, `@latex/*`, `@logger/*`, `@tools/*`, `@webview/*`
 - `@progressView/*`, `@settingsView/*`, `@shared/*`, `@eventBus/*`
 - `@replacement/*`, `@housekeeping/*`, `@auth/*`, `@types/*`
+- `@platform`, `@platform/*` (platform abstraction layer)
 
 ## Adding New Components
 
 ### New Command
 
-1. Create file in appropriate `src/commands/` subdirectory
+1. Create file in appropriate `packages/extension/src/commands/` subdirectory
 2. Export command function following existing patterns
-3. Register in `src/commands.ts`
+3. Register in `packages/extension/src/commands.ts`
 
 ### New Agent
 
-1. Create YAML definition in `resources/agents/`
+1. Create YAML definition in `packages/extension/resources/agents/`
 2. If needed, implement new agent type in `src/agent/implementations/`
 
 ### New Model Provider

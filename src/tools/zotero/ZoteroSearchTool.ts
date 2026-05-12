@@ -99,12 +99,8 @@ function formatSearchResult(item: BbtSearchResultItem): string {
     .join('; ');
 
   // Handle date from CSL JSON or Zotero format
-  let year = '';
-  if (item.issued?.['date-parts']?.[0]?.[0]) {
-    year = String(item.issued['date-parts'][0][0]);
-  } else if (item.date) {
-    year = item.date;
-  }
+  const datePart = item.issued?.['date-parts']?.[0]?.[0];
+  const year = datePart ? String(datePart) : (item.date ?? '');
 
   const type = item.type || item.itemType || 'item';
 
@@ -120,7 +116,7 @@ function formatSearchResult(item: BbtSearchResultItem): string {
 function collectionPath(chain: BbtCollectionChain): string {
   const parts: string[] = [];
   let current: BbtCollectionChain | false | undefined = chain;
-  while (current && current !== false) {
+  while (current) {
     parts.unshift(current.name);
     current = current.parentCollection;
   }

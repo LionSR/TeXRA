@@ -1,11 +1,12 @@
--- Migration: Move lean agents to tool-use-lean/ bucket and add leanBlueprint + lean.
+-- Migration: Move lean agents to tool-use-lean/ bucket, add leanBlueprint,
+-- and rename lean → leanOrchestrator.
 --
 -- Prerequisites:
 -- 1. Upload YAMLs to Supabase Storage under agent-configs/tool-use-lean/:
---    - leanSearch.yaml   (from reference-agents/leanSearch.yaml)
---    - leanSimplifier.yaml (from reference-agents/leanSimplifier.yaml)
---    - leanBlueprint.yaml  (from reference-agents/leanBlueprint.yaml)
---    - lean.yaml           (moved from tool-use/lean.yaml)
+--    - leanSearch.yaml       (from reference-agents/Lean4/leanSearch.yaml)
+--    - leanSimplifier.yaml   (from reference-agents/Lean4/leanSimplifier.yaml)
+--    - leanBlueprint.yaml    (from reference-agents/Lean4/leanBlueprint.yaml)
+--    - leanOrchestrator.yaml (from reference-agents/Lean4/leanOrchestrator.yaml)
 --
 -- Then run this SQL in Supabase SQL Editor.
 
@@ -22,17 +23,23 @@ SET storage_path = 'tool-use-lean/leanSimplifier.yaml'
 WHERE name = 'leanSimplifier';
 
 -- =============================================================================
--- STEP 2: Add new agents
+-- STEP 2: Remove old lean agent (replaced by leanOrchestrator)
+-- =============================================================================
+
+DELETE FROM remote_agents WHERE name = 'lean';
+
+-- =============================================================================
+-- STEP 3: Add new agents
 -- =============================================================================
 
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
-  'lean',
-  'Lean 4 proof assistant with VS Code integration and CLI fallback.',
-  'tool-use-lean/lean.yaml',
+  'leanOrchestrator',
+  'Lean 4 project orchestrator — coordinates formalization, delegates to specialized Lean agents, and manages proof development workflow.',
+  'tool-use-lean/leanOrchestrator.yaml',
   ARRAY['researcher', 'lean'],
   'toolUse',
-  ARRAY['todo_write', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'ls', 'memory']
+  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'ls', 'codex', 'lean_diagnostics', 'lean_inspect', 'lean_loogle', 'lean_file', 'lean_project']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
@@ -63,5 +70,5 @@ ON CONFLICT (name) DO UPDATE SET
 
 SELECT name, description, storage_path, agent_category, tools
 FROM remote_agents
-WHERE name IN ('lean', 'leanSearch', 'leanSimplifier', 'leanBlueprint')
+WHERE name IN ('leanOrchestrator', 'leanSearch', 'leanSimplifier', 'leanBlueprint')
 ORDER BY name;

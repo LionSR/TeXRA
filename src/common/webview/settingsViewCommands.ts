@@ -59,6 +59,7 @@ export const SETTINGS_VIEW_CMD = {
   CUSTOMIZE_AGENT: 'customizeAgent',
   DELETE_CUSTOM_AGENT: 'deleteCustomAgent',
   REVEAL_AGENT_FILE: 'revealAgentFile',
+  VIEW_REMOTE_AGENT_PROMPT: 'viewRemoteAgentPrompt',
   // Custom agent directory commands
   GET_CUSTOM_AGENT_DIR: 'getCustomAgentDir',
   SET_CUSTOM_AGENT_DIR: 'setCustomAgentDir',
@@ -67,20 +68,56 @@ export const SETTINGS_VIEW_CMD = {
   GET_SUPER_YOLO_ENABLED: 'getSuperYoloEnabled',
   SET_SUPER_YOLO_ENABLED: 'setSuperYoloEnabled',
   SET_ALLOW_ORCHESTRATOR_KILL: 'setAllowOrchestratorKill',
+  SET_DETACH_SUBAGENTS_ON_STOP: 'setDetachSubagentsOnStop',
+  SET_NESTED_DELEGATION_MAX_DEPTH: 'setNestedDelegationMaxDepth',
   APPLY_AGENT_MODE_PRESET: 'applyAgentModePreset',
   SAVE_AGENT_MODE_PRESET: 'saveAgentModePreset',
   DELETE_AGENT_MODE_PRESET: 'deleteAgentModePreset',
   GET_AGENT_MODE_PRESETS: 'getAgentModePresets',
+  // Approval settings commands
+  GET_APPROVAL_SETTINGS: 'getApprovalSettings',
+  SET_BASH_APPROVAL_ENABLED: 'setBashApprovalEnabled',
+  SET_CODEX_SANDBOX_MODE: 'setCodexSandboxMode',
+  SET_CODEX_REASONING_EFFORT: 'setCodexReasoningEffort',
+  SET_CODEX_APPROVAL_POLICY: 'setCodexApprovalPolicy',
   // Tool dashboard commands
   GET_TOOL_DASHBOARD_DATA: 'getToolDashboardData',
   OPEN_TOOL_INSTALL_URL: 'openToolInstallUrl',
   INSTALL_TOOL_EXTENSION: 'installToolExtension',
   RECHECK_TOOL_STATUS: 'recheckToolStatus',
+  TOGGLE_TOOL: 'toggleTool',
+  RUN_TOOL_COMMAND: 'runToolCommand',
+  // Git settings commands
+  GET_GIT_AUTHOR_SETTINGS: 'getGitAuthorSettings',
+  SET_GIT_MARK_COMMITS: 'setGitMarkCommits',
+  SET_GIT_AUTHOR_NAME: 'setGitAuthorName',
+  SET_GIT_AUTHOR_EMAIL: 'setGitAuthorEmail',
+  SET_GIT_WORKTREE_SUPPORT: 'setGitWorktreeSupport',
+  // GitHub token commands (for PR subscription tool)
+  GET_GITHUB_TOKEN_STATUS: 'getGitHubTokenStatus',
+  UPDATE_GITHUB_TOKEN_STATUS: 'updateGitHubTokenStatus',
+  SET_GITHUB_TOKEN: 'setGitHubToken',
+  REMOVE_GITHUB_TOKEN: 'removeGitHubToken',
+  OPEN_GITHUB_TOKEN_URL: 'openGitHubTokenUrl',
+  GET_DESKTOP_CRASH_REPORTING: 'getDesktopCrashReporting',
+  UPDATE_DESKTOP_CRASH_REPORTING: 'updateDesktopCrashReporting',
+  SET_DESKTOP_CRASH_REPORTING_ENABLED: 'setDesktopCrashReportingEnabled',
+  SET_DESKTOP_CRASH_REPORTING_DSN: 'setDesktopCrashReportingDsn',
+  GET_PR_SUBSCRIPTIONS: 'getPRSubscriptions',
+  UPDATE_PR_SUBSCRIPTIONS: 'updatePRSubscriptions',
+  UNSUBSCRIBE_PR: 'unsubscribePR',
+  OPEN_PR_SUBSCRIPTION_STREAM: 'openPRSubscriptionStream',
   // LaTeX settings commands
   GET_LATEX_SETTINGS_STATUS: 'getLatexSettingsStatus',
   APPLY_LATEX_SETTINGS: 'applyLatexSettings',
   INSTALL_LATEX_WORKSHOP: 'installLatexWorkshop',
   RUN_INSTALL_COMMAND: 'runInstallCommand',
+  // LaTeX/compile/diff config (storage-backed, migrated from VS Code config)
+  GET_LATEX_CONFIG_VALUES: 'getLatexConfigValues',
+  SET_LATEX_CONFIG_VALUE: 'setLatexConfigValue',
+  // Experimental settings
+  GET_INLINE_CRITICISM_ENABLED: 'getInlineCriticismEnabled',
+  SET_INLINE_CRITICISM_ENABLED: 'setInlineCriticismEnabled',
 } as const;
 
 // Settings view specific commands (combines Memory, History, and Profile views)
@@ -99,6 +136,10 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_CUSTOM_AGENT_DIR: 'updateCustomAgentDir',
   UPDATE_SUPER_YOLO_ENABLED: 'updateSuperYoloEnabled',
   UPDATE_AGENT_MODE_PRESETS: 'updateAgentModePresets',
+  UPDATE_APPROVAL_SETTINGS: 'updateApprovalSettings',
   UPDATE_TOOL_DASHBOARD: 'updateToolDashboard',
+  UPDATE_GIT_AUTHOR_SETTINGS: 'updateGitAuthorSettings',
   UPDATE_LATEX_SETTINGS_STATUS: 'updateLatexSettingsStatus',
+  UPDATE_LATEX_CONFIG_VALUES: 'updateLatexConfigValues',
+  UPDATE_INLINE_CRITICISM_ENABLED: 'updateInlineCriticismEnabled',
 } as const;

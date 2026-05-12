@@ -3,21 +3,15 @@ import {
   SupabaseClient as Client,
   User,
 } from '@supabase/supabase-js';
-import * as vscode from 'vscode';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
+import { toErrorMessage } from '@common/errors/errorMessage';
 import {
   type UserAuthContext,
   type UserTier,
   UserAuthContextSchema,
-  SUPABASE_SESSION_KEY,
   TOKEN_REFRESH_THRESHOLD_MS,
 } from './config';
-
-/** Interface for auth provider to avoid circular imports. */
-interface AuthTokenProvider {
-  ensureFreshToken(forceRefresh?: boolean): Promise<string | null>;
-}
+import type { AuthTokenProvider, SessionTokens } from './TokenProvider';
 
 /**
  * Singleton Supabase client with authentication helpers.
@@ -26,20 +20,14 @@ interface AuthTokenProvider {
 export class SupabaseClient {
   private static instance: Client | null = null;
   private static config: { url: string; publicKey: string } | null = null;
-  private static context: vscode.ExtensionContext | null = null;
   private static authProvider: AuthTokenProvider | null = null;
-
-  /**
-   * Whether VS Code's auth provider registration succeeded.
-   * This is separate from authProvider being set (which happens in constructor).
-   */
-  private static vscodeProviderRegistered = false;
 
   /**
    * Error that occurred during initialization, if any.
    * Used to provide meaningful error messages to users.
    */
   private static initError: Error | null = null;
+  private static readinessError: Error | null = null;
 
   /**
    * Cached token expiry time (ms since epoch).
@@ -56,12 +44,14 @@ export class SupabaseClient {
     this.authProvider = provider;
   }
 
-  /**
-   * Mark VS Code auth provider as successfully registered.
-   * Called after vscode.authentication.registerAuthenticationProvider() succeeds.
-   */
-  static setVSCodeProviderRegistered(): void {
-    this.vscodeProviderRegistered = true;
+  /** Reset singleton state between unit tests. */
+  static resetForTests(): void {
+    this.instance = null;
+    this.config = null;
+    this.authProvider = null;
+    this.initError = null;
+    this.readinessError = null;
+    this.tokenExpiresAt = null;
   }
 
   /**
@@ -76,7 +66,7 @@ export class SupabaseClient {
    * Get initialization error if any occurred.
    */
   static getInitError(): Error | null {
-    return this.initError;
+    return this.initError ?? this.readinessError;
   }
 
   /**
@@ -102,32 +92,39 @@ export class SupabaseClient {
   /**
    * Check if auth system is fully initialized and ready for use.
    */
-  static isReady(): boolean {
-    return (
-      this.instance !== null &&
-      this.authProvider !== null &&
-      this.vscodeProviderRegistered &&
-      this.initError === null
-    );
+  static async isReady(): Promise<boolean> {
+    if (this.instance === null || this.authProvider === null) {
+      return false;
+    }
+    if (this.initError !== null) {
+      return false;
+    }
+
+    try {
+      await this.authProvider.whenReady();
+      this.readinessError = null;
+      return true;
+    } catch (error) {
+      this.readinessError =
+        error instanceof Error ? error : new Error(toErrorMessage(error));
+      logger.error(
+        'SupabaseClient',
+        `Auth provider not ready: ${toErrorMessage(error)}`,
+      );
+      return false;
+    }
   }
 
   /**
    * Initialize the Supabase client with project credentials.
    */
-  static initialize(
-    url: string,
-    publicKey: string,
-    context?: vscode.ExtensionContext,
-  ): void {
+  static initialize(url: string, publicKey: string, _context?: unknown): void {
     if (!url || !publicKey) {
       throw new Error(
         'Supabase credentials missing. Check extension configuration.',
       );
     }
     this.config = { url, publicKey };
-    if (context) {
-      this.context = context;
-    }
     this.instance = createClient(url, publicKey, {
       auth: {
         persistSession: false, // VS Code manages session storage
@@ -174,35 +171,13 @@ export class SupabaseClient {
    * Get access and refresh tokens from secure storage.
    * Ensures tokens are fresh before returning.
    */
-  static async getSessionTokens(): Promise<{
-    accessToken: string;
-    refreshToken: string;
-  } | null> {
-    // Ensure token is fresh before reading from storage
-    if (this.authProvider) {
-      await this.authProvider.ensureFreshToken();
-    }
-
-    if (!this.context) {
-      logger.warn('SupabaseClient', 'Extension context not set');
-      const accessToken = await this.getAccessToken();
-      if (!accessToken) {
-        return null;
-      }
-      return { accessToken, refreshToken: '' };
+  static async getSessionTokens(): Promise<SessionTokens | null> {
+    if (!this.authProvider) {
+      return null;
     }
 
     try {
-      const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
-      if (!sessionData) {
-        return null;
-      }
-
-      const { accessToken, refreshToken } = JSON.parse(sessionData) as {
-        accessToken: string;
-        refreshToken: string;
-      };
-      return { accessToken, refreshToken };
+      return await this.authProvider.getSessionTokens();
     } catch (error) {
       logger.error(
         'SupabaseClient',

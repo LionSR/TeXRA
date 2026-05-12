@@ -11,7 +11,7 @@ import * as path from 'path';
 import { z } from 'zod';
 
 import { type AgentConfig, AgentConfigSchema } from '@agent/core/AgentConfig';
-import { KVStore } from '@common/storage';
+import { KVStore } from '@common/storage/KVStore';
 import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
 
 // ============================================================================
@@ -42,6 +42,13 @@ export const ExecutionMetaSchema = z.object({
   category: z.string().optional(),
   /** AI-generated summary of what the session aimed to accomplish. */
   description: z.string().optional(),
+  /**
+   * Delegation depth at launch time: 0 for user-initiated, N for an agent
+   * N levels deep. Optional so pre-feature snapshots don't fail validation.
+   * Read on resume to enforce the nested-delegation cap without having to
+   * walk a potentially broken parent chain.
+   */
+  delegationDepth: z.int().nonnegative().optional(),
 });
 export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;
 
@@ -92,8 +99,8 @@ export type ResultMeta = z.infer<typeof ResultMetaSchema>;
  * All keys are automatically namespaced to the execution context.
  * Values are JSON-serialized transparently.
  *
- * Typed accessors provide domain-specific reads with schema validation
- * and backward-compatibility fallbacks where needed.
+ * Typed accessors provide domain-specific reads with schema validation;
+ * malformed or missing entries resolve to null.
  */
 export interface ExecutionKVStore {
   // -- Generic KV -----------------------------------------------------------

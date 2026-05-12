@@ -2,9 +2,12 @@
 import type { ExecResult } from '@agent/types/ResultTypes';
 
 // Internal imports
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
+import { getConfig } from '@agent/core/config';
+import { getWorkspaceState } from '@agent/core/stateStore';
+import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { executeCommand } from '@utils/system';
-import { getConfig } from '@utils/config';
 
 // Local file imports
 import { DEFAULT_MATH_MARKUP, type MathMarkupOption } from './mathMarkup';
@@ -41,9 +44,16 @@ interface DiffExecutionOptions {
 }
 
 export class DiffCommandExecutor {
+  /**
+   * `getTimeoutMs` is read fresh on every diff invocation so user updates to
+   * `LATEXDIFF_TIMEOUT_MS` propagate to the next diff without rebuilding the
+   * service. Captured as a thunk because `LaTeXdiffService` is constructed at
+   * module scope (before `initPlatform()` runs); a captured number would
+   * permanently freeze at whatever the default was at activation-zero.
+   */
   constructor(
     private readonly channel: string,
-    private readonly timeoutMs: number,
+    private readonly getTimeoutMs: () => number,
   ) {}
 
   async executeDiff(
@@ -139,7 +149,11 @@ export class DiffCommandExecutor {
     commandType: string,
     cwd?: string,
   ): Promise<ExecResult> {
-    const execOptions = { channel: this.channel, timeout: this.timeoutMs, cwd };
+    // Snapshot the timeout once per invocation so the value stays consistent
+    // across the --flatten attempt and any retry, while still picking up any
+    // updates the user has made between successive diff runs.
+    const timeoutMs = this.getTimeoutMs();
+    const execOptions = { channel: this.channel, timeout: timeoutMs, cwd };
 
     logger.debug(this.channel, `Attempting ${commandType} with --flatten flag`);
     const result = await executeCommand(commandBuilder(true), execOptions);
@@ -153,20 +167,26 @@ export class DiffCommandExecutor {
     }
 
     if (result.timedOut) {
-      throw new Error(ERROR_MESSAGES.TIMEOUT(commandType, this.timeoutMs));
+      throw new Error(ERROR_MESSAGES.TIMEOUT(commandType, timeoutMs));
     }
 
     if (!this.isBibliographyError(result.stderr ?? '')) {
       throw new Error(ERROR_MESSAGES.FAILED_GENERAL(commandType));
     }
 
-    return this.retryWithoutFlatten(commandBuilder, commandType, execOptions);
+    return this.retryWithoutFlatten(
+      commandBuilder,
+      commandType,
+      execOptions,
+      timeoutMs,
+    );
   }
 
   private async retryWithoutFlatten(
     commandBuilder: (useFlatten: boolean) => string[],
     commandType: string,
     execOptions: { channel: string; timeout: number; cwd?: string },
+    timeoutMs: number,
   ): Promise<ExecResult> {
     logger.warn(
       this.channel,
@@ -180,9 +200,7 @@ export class DiffCommandExecutor {
     const result = await executeCommand(commandBuilder(false), execOptions);
 
     if (result.timedOut) {
-      throw new Error(
-        ERROR_MESSAGES.TIMEOUT_RETRY(commandType, this.timeoutMs),
-      );
+      throw new Error(ERROR_MESSAGES.TIMEOUT_RETRY(commandType, timeoutMs));
     }
 
     if (!result.success) {
@@ -210,9 +228,9 @@ export class DiffCommandExecutor {
     return {
       mathMarkup:
         options?.mathMarkup ??
-        getConfig<MathMarkupOption>(
-          'texra.latexdiff.mathMarkup',
-          DEFAULT_MATH_MARKUP,
+        getWorkspaceState().get<MathMarkupOption>(
+          WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+          LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup as MathMarkupOption,
         ),
       pictureEnvs: getConfig<string>(
         'texra.latexdiff.pictureEnvironments',

@@ -14,6 +14,7 @@ The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open i
 - **Agents** - Turn agents on or off for the current workspace. Agents that support multiple output files are marked with a badge.
 - **Multi-Agent** - Configure multi-agent orchestration and presets.
 - **Tools** - Manage tool-use agent capabilities and approval settings.
+- **Git** - Set a GitHub personal access token (required for the `github_subscription` tool) and optionally attribute TeXRA commits to a custom author.
 - **LaTeX** - Configure LaTeX formatting, diff, and TikZ settings.
 
 ::: tip
@@ -54,21 +55,18 @@ See the [Models Guide](./models.md) for the full list of supported models.
 Configure how TeXRA connects to AI model providers:
 
 ```json
-"texra.model.useOpenRouter": false,
 "texra.model.useImprovedConnection": false,
 "texra.model.improvedConnectionDomain": "",
 "texra.model.useOpenAIResponsesAPI": true,
-"texra.model.gpt5ReasoningSummary": false,
-"texra.model.useCopilot": false
+"texra.model.gpt5ReasoningSummary": false
 ```
 
-- `useOpenRouter`: Access models through OpenRouter instead of direct APIs
+- **OpenRouter**: To route all API calls through OpenRouter, expand the OpenRouter row in the Dashboard → Models tab → API Configuration and enable **"Use OpenRouter for All Models"**
 - `useImprovedConnection`: Route all API requests through a proxy server
 - `improvedConnectionDomain`: Custom proxy domain when `useImprovedConnection` is enabled. Defaults to the built-in proxy when unset.
   - ⚠️ **Security Warning:** When using a proxy, ensure you trust the proxy server as it will receive your API keys. Only use proxies from trusted sources.
 - `useOpenAIResponsesAPI`: Use OpenAI's Responses API instead of Chat Completions when available
 - `gpt5ReasoningSummary`: Request reasoning summaries from the GPT-5 family, including GPT-5.4 and GPT-5.4 Pro (requires verified account and user tier)
-- `useCopilot`: Use the Copilot language model through VS Code's Language Model API for instruction polishing and text connection
 
 | Provider         | Proxy path                  | Supported |
 | ---------------- | --------------------------- | --------- |
@@ -87,7 +85,9 @@ Configure how TeXRA connects to AI model providers:
 
 ### Anthropic 1M Context Window
 
-Claude Opus 4.6 and Sonnet 4.6 include the full 1M context window at standard pricing. No opt-in setting or beta header is required — 1M context is enabled automatically. Up to 600 PDF pages per request are supported (100 for models with a 200K context window). Other Claude models use a 200K context window.
+Claude Opus 4.7, Opus 4.6, and Sonnet 4.6 include the full 1M context window at standard pricing. No opt-in setting or beta header is required — 1M context is enabled automatically. Up to 600 PDF pages per request are supported (100 for models with a 200K context window). Other Claude models use a 200K context window.
+
+Opus 4.7 uses adaptive thinking only — manual thinking budgets are not supported. TeXRA selects the appropriate thinking mode automatically based on the reasoning-effort level you pick in the Models tab (Low / Medium / High / Extra High). Extra High maps to Anthropic's `max` effort on Opus-tier models.
 
 ### Bibliography Settings
 
@@ -101,14 +101,30 @@ When set, bibliography tools will use this path when no explicit file is provide
 
 ### Agent Output Storage
 
-Control where agent-generated files are saved:
+Workflow outputs always land inside task-run storage — each run gets its
+own folder under `executions/{id}/`, with the primary revised file at
+`r{round}/output.{ext}` and the merge output at `_full.{ext}`. Per-run
+isolation keeps parallel runs from colliding, and the whole folder is
+reachable from the progress-view toolbar:
+
+- **Accept** — copy the revised file into your workspace (via the
+  normal approval flow).
+- **Pack** — snapshot the whole run (including mirrored `.bib`, `.cls`,
+  `.sty`, and figure dependencies) into `workspace/History/`.
+- **Clean** — discard the run's folder entirely.
+- **Open in task storage** — reveal the folder so you can browse
+  artifacts manually.
+
+When a workflow completes, the final revised file auto-opens in a new
+editor tab as a read-only preview so you don't feel the output
+"vanished." Disable the preview with:
 
 ```json
-"texra.agentOutputs.storageMode": "workspace"
+"texra.agentOutputs.autoOpenFinal": false
 ```
 
-- `workspace`: Write output files beside the source files (default)
-- `taskRunStorage`: Isolate artifacts inside the extension storage
+The legacy `texra.agentOutputs.storageMode` setting is deprecated and
+ignored — every workflow output now goes to task-run storage.
 
 ### Audio Settings
 
@@ -205,7 +221,7 @@ Configure LaTeX formatting behavior:
 ```
 
 - `formatter`: Choose between `latexindent`, `tex-fmt`, or `none` to disable formatting.
-- `showLatexindentWarning`: Set to `false` to suppress missing `latexindent` warnings.
+- `showLatexindentWarning`: Disabled by default. Set to `true` to show a popup when `latexindent` is missing.
 - `latexindentConfig`: Path to a `latexindent` configuration file.
 - `texfmtConfig`: Path to a `tex-fmt` configuration file.
 
@@ -225,13 +241,37 @@ Configure how TikZ figures are extracted and compiled:
 
 ## Git Integration
 
-Configure Git integration features:
+The **Git tab** in the TeXRA Dashboard (`TeXRA: Show Dashboard` → **Git**) covers two independent features: a GitHub token used by the PR-subscription tool, and optional TeXRA-branded commit authorship for agent-made commits.
+
+### GitHub personal access token
+
+Several tool-use agents can call `github_subscription` to watch a repo, pull request, or issue and inject new comments, reviews, line comments, failed CI runs, and merge-conflict events into the current agent stream as follow-up messages — the same mechanism that handles user-typed follow-ups. The tool polls GitHub's REST API every 30 seconds and needs an authenticated token.
+
+Setup:
+
+1. In the Git tab, click **Create on GitHub…**. This opens the GitHub token-creation page with the TeXRA description and `repo` scope pre-filled.
+2. Choose scopes:
+   - `repo` if you want to watch private repositories.
+   - `public_repo` if you only need public repositories.
+   - No write scopes are required — the poller is read-only.
+3. Pick an expiration (90 days is a common choice) and generate the token. GitHub shows it only once.
+4. Back in TeXRA's Git tab, click **Set token** and paste it in.
+
+The token is stored in VS Code's encrypted **Secret Storage** — never written to `settings.json`. Alternatively, export `GITHUB_TOKEN` in the shell VS Code is launched from and the tool will pick it up automatically (the Git tab will show **Env** as the status).
+
+Once a token is configured, an agent can run `github_subscription command=subscribe path=owner/repo/pulls/N` (or `path=owner/repo` for the whole repo, `path=owner/repo/issues/N` for a single issue) and every new event arrives wrapped in a `<github-webhook-activity>` tag in the follow-up queue. Use `command=unsubscribe` with the same path to stop, `command=list` to see active subscriptions, and `command=find_current` to resolve the current branch's PR. Subscriptions auto-terminate when the PR closes or merges, and up to 25 PRs can be watched concurrently.
+
+### TeXRA commit author
+
+Enable **Mark commits with TeXRA author info** to attribute commits created by TeXRA agents to a distinct identity (useful when sharing a repo with collaborators so you can tell which commits were machine-made). When enabled, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, and `GIT_COMMITTER_EMAIL` are set for every git command an agent runs.
+
+### LaTeX diff commit history
+
+The unrelated setting controlling how many recent commits appear in the LaTeX-diff commit picker is:
 
 ```json
 "texra.git.numberOfCommitsToShow": 20
 ```
-
-This setting controls how many recent commits are shown in the commit selection dropdown for LaTeX diff operations.
 
 ## Custom Agents Directory
 
@@ -375,10 +415,10 @@ These settings, accessible directly in the main TeXRA webview, control how agent
 
 ![Agent Execution Settings](/images/agent-execution-settings.png)
 
-**Tool Configuration Dropdown** (<i class="codicon codicon-tools"></i> ○<i class="codicon codicon-chevron-down"></i> next to Instruction label):
+**Tool Configuration Dropdown** (<wa-icon library="texra" name="tools"></wa-icon> ○<wa-icon library="texra" name="chevron-down"></wa-icon> next to Instruction label):
 
-- **Attach TeX Count** (<i class="codicon codicon-symbol-numeric"></i>): Includes `texcount` output (word/header/math stats) in the agent's context. Requires `texcount` installed.
-- **Attach Diagnostics** (<i class="codicon codicon-tools"></i>): Appends LaTeX compilation logs and other diagnostics to the agent prompt.
+- **Attach TeX Count** (<wa-icon library="texra" name="symbol-numeric"></wa-icon>): Includes `texcount` output (word/header/math stats) in the agent's context. Requires `texcount` installed.
+- **Attach Diagnostics** (<wa-icon library="texra" name="tools"></wa-icon>): Appends LaTeX compilation logs and other diagnostics to the agent prompt.
 
 Reflection rounds are now controlled entirely by the agent definition. Choose agents whose `userRequest` prompt list includes follow-up entries (or create custom ones) when you need an automatic follow-up critique.
 
@@ -386,14 +426,14 @@ To capture the full prompt sent to the model, enable the `Save Input Prompt` deb
 
 **Model/Agent Selection:**
 
-- **Agent** (<i class="codicon codicon-sparkle"></i>): Select the agent (see [Built-in](./built-in-agents.md) / [Custom](./custom-agents.md)).
-- **Model** (<i class="codicon codicon-robot"></i>): Select the language model (see [Models](./models.md)).
+- **Agent** (<wa-icon library="texra" name="sparkle"></wa-icon>): Select the agent (see [Built-in](./built-in-agents.md) / [Custom](./custom-agents.md)).
+- **Model** (<wa-icon library="texra" name="robot"></wa-icon>): Select the language model (see [Models](./models.md)).
 
 **Instruction Header Actions:**
 
-- **Settings** (<i class="codicon codicon-gear"></i>): Open TeXRA extension settings.
-- **History** (<i class="codicon codicon-history"></i>): Open Agent Execution History panel.
-- **Pack** (<i class="codicon codicon-archive"></i>): Archive current Agent/Model/Input outputs to `History` folder.
-- **Clean** (<i class="codicon codicon-trash"></i>): Delete current Agent/Model/Input outputs.
-- **Magic Polish** (<i class="codicon codicon-sparkle"></i>): Use selected model to polish the instruction text.
-- **Erase Instruction** (<i class="codicon codicon-clear-all"></i>): Clear the instruction box.
+- **Settings** (<wa-icon library="texra" name="gear"></wa-icon>): Open TeXRA extension settings.
+- **History** (<wa-icon library="texra" name="history"></wa-icon>): Open Agent Execution History panel.
+- **Pack** (<wa-icon library="texra" name="archive"></wa-icon>): Archive the current run's task storage folder to `History`.
+- **Clean** (<wa-icon library="texra" name="trash"></wa-icon>): Delete the current run's task storage folder.
+- **Magic Polish** (<wa-icon library="texra" name="sparkle"></wa-icon>): Use selected model to polish the instruction text.
+- **Erase Instruction** (<wa-icon library="texra" name="clear-all"></wa-icon>): Clear the instruction box.

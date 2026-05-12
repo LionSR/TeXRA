@@ -7,6 +7,8 @@ export type NonIterableObject = Partial<Record<string, unknown>> & {
 /** Flow transition action - typically 'default' or a custom action name */
 export type Action = string;
 
+const TERMINAL_ACTIONS = new Set<Action>(['complete']);
+
 /**
  * Base node class for PocketFlow.
  *
@@ -82,6 +84,7 @@ class BaseNode<
   }
   getNextNode(action: Action = 'default'): BaseNode | undefined {
     const next = this._successors.get(action);
+    if (!next && TERMINAL_ACTIONS.has(action)) return undefined;
     if (!next && this._successors.size > 0) {
       console.warn(
         `Flow ends: '${action}' not found in [${[...this._successors.keys()]}]`,
@@ -106,7 +109,6 @@ class Node<
 > extends BaseNode<S, P, Svc> {
   maxRetries: number;
   wait: number;
-  currentRetry: number = 0;
   /**
    * Optional abort signal for cancellation support.
    * When set and aborted, the retry loop will skip remaining retries
@@ -119,6 +121,7 @@ class Node<
     this.maxRetries = maxRetries;
     this.wait = wait;
   }
+
   async execFallback(prepRes: unknown, error: Error): Promise<unknown> {
     throw error;
   }
@@ -169,7 +172,6 @@ class Node<
   clone(): this {
     const cloned = super.clone();
     cloned.signal = undefined;
-    cloned.currentRetry = 0;
     return cloned;
   }
   async _exec(prepRes: unknown): Promise<unknown> {
@@ -188,9 +190,9 @@ class Node<
     // Outer loop for manual retry (restarts auto-retry cycle)
     while (manualRetryCount < MAX_MANUAL_RETRIES) {
       for (
-        this.currentRetry = 0;
-        this.currentRetry < effectiveMaxRetries;
-        this.currentRetry++
+        let currentRetry = 0;
+        currentRetry < effectiveMaxRetries;
+        currentRetry++
       ) {
         // Check abort at start of each retry for responsive cancellation
         // This ensures we don't attempt exec when the user has already cancelled
@@ -204,7 +206,7 @@ class Node<
           // If abort signal is set and aborted, skip retries and go to fallback
           // This prevents unnecessary retries when the user intentionally cancelled
           const isAborted = this.signal?.aborted;
-          const isLastAutoRetry = this.currentRetry === effectiveMaxRetries - 1;
+          const isLastAutoRetry = currentRetry === effectiveMaxRetries - 1;
           const skipAutoRetry = !this.shouldAutoRetry(e as Error);
 
           if (isLastAutoRetry || isAborted || skipAutoRetry) {

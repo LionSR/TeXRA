@@ -24,6 +24,7 @@ import type {
 import type { ResponseFunctionToolCallItem } from 'openai/resources/responses/responses';
 import type { FunctionCall } from '@google/genai';
 import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/messages';
+import type { ChatToolCall as ORChatToolCall } from '@openrouter/sdk/models';
 import type { ServerToolExtractionResult } from './ServerToolTypes';
 
 /**
@@ -160,12 +161,21 @@ export type AnthropicToolCall = {
   raw: ToolUseBlock;
 };
 
+export type OpenRouterToolCall = {
+  provider: 'openrouter';
+  callId: string;
+  name: string;
+  input: unknown;
+  raw: ORChatToolCall;
+};
+
 export type SdkToolCall =
   | OpenAIToolCall
   | DeepSeekToolCall
   | OpenAIResponseToolCall
   | GoogleToolCall
-  | AnthropicToolCall;
+  | AnthropicToolCall
+  | OpenRouterToolCall;
 
 // Note: SdkToolCall is a discriminated union on 'provider'.
 // Use `call.provider === 'openai'` directly for type narrowing instead of
@@ -215,6 +225,7 @@ export interface IModelHandler<
   readonly isGoogle: boolean;
   readonly isDeepSeek: boolean;
   readonly isKimi: boolean;
+  readonly isMiniMax: boolean;
 
   /** Whether the handler supports processing attachments in tool results. */
   readonly canProcessToolResultAttachments: boolean;
@@ -382,6 +393,11 @@ export interface IModelHandler<
    * Build a simple assistant message from plain text.
    */
   createAssistantMessage(text: string): M;
+
+  /**
+   * Build an assistant message from a provider response.
+   */
+  createAssistantMessageFromResponse(responseObject: Resp, text: string): M;
 
   /**
    * Determine if the stop reason represents an end-turn marker.

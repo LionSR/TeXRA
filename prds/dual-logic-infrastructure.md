@@ -40,7 +40,7 @@ Leverage these existing base classes rather than duplicating:
 - **`BaseViewContentProvider`** (`src/common/webview/BaseViewContentProvider.ts`): Provides private
   `buildUri` and `buildUriRecord` methods for webview URIs, plus `getHtmlContent` for HTML assembly.
 - **`BaseViewMessageHandler`** (`src/common/webview/BaseViewMessageHandler.ts`): Provides
-  `handleMessage` dispatch, `getActiveView()` for tracked active webview, and `withValidatedMessage`.
+  `handleMessage` dispatch, `getActiveView()` for tracked active webview references, and shared error logging.
 - **`configUtils`** (`src/utils/config/configUtils.ts`): Wraps `vscode.workspace.getConfiguration`.
 
 ---

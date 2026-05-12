@@ -71,8 +71,12 @@ export {
 // Shared: Base webview app
 export { BaseWebviewApp } from '@shared/BaseWebviewApp';
 
-// Shared: VS Code API
-export { vscode, postMessage, type VSCodeApi } from '@shared/vscode';
+// Shared: host bridge API
+export {
+  hostBridge,
+  postMessage,
+  type HostBridgeApi,
+} from '@shared/hostBridge';
 
 // Shared: Schemas (re-export everything)
 export * from '@shared/schemas';
@@ -106,10 +110,6 @@ export * from '@shared/utils/dom';
 export * from '@shared/utils/icons';
 export * from '@shared/utils/selectTemplates';
 export * from '@shared/utils/textarea';
-
-// Shared: Streams
-export * from '@shared/streams/streamSort';
-export * from '@shared/streams/runSelection';
 
 // Shared: Files
 export * from '@shared/files/pastedImageConstants';

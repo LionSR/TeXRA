@@ -5,28 +5,13 @@ import {
   AgentCategorySchema,
   type AgentCategory,
 } from './agent';
-import { OutputFileInfoSchema } from './output';
-import { InstructionUpdateSchema, StreamStatusSchema } from './stream';
+import { CompileFailureSchema, OutputFileInfoSchema } from './output';
+import { StreamStatusSchema } from './stream';
 import { TaskGroupSchema } from './taskGroup';
 import { PlanSchema } from './plan';
 import { TodoItemSchema } from './todo';
-import { ContextStateSchema, TokenUsageStatsSchema } from './usage';
-
-// Followup Mode
-
-export const FOLLOWUP_MODE = {
-  CHAT: 'chat',
-  WORKFLOW: 'workflow',
-  MERGE: 'merge',
-} as const;
-
-export const FollowupModeSchema = z.enum([
-  FOLLOWUP_MODE.CHAT,
-  FOLLOWUP_MODE.WORKFLOW,
-  FOLLOWUP_MODE.MERGE,
-]);
-
-export type FollowupMode = z.infer<typeof FollowupModeSchema>;
+import { ContextStateDataSchema } from './contextManagement';
+import { TokenUsageStatsSchema } from './usage';
 
 // Active Child Info (shared shape for subagent and process badges)
 
@@ -39,6 +24,8 @@ export const ActiveChildInfoSchema = z.object({
   status: z.string().optional(),
   /** Formatted elapsed time (e.g. "1m 23s"). */
   elapsed: z.string().nullable().optional(),
+  /** Tool name that spawned this process (e.g. "bash", "codex"). Absent for subagents. */
+  toolName: z.string().optional(),
 });
 
 export type ActiveChildInfo = z.infer<typeof ActiveChildInfoSchema>;
@@ -78,7 +65,7 @@ export type StreamMetadata = z.infer<typeof StreamMetadataSchema>;
 const BaseStreamStateSchema = BackendOwnedFieldsSchema.extend({
   // Frontend-owned fields — set by frontend handlers, preserved during backend merges.
   taskGroups: z.array(TaskGroupSchema).prefault([]),
-  contextState: ContextStateSchema.optional(),
+  contextState: ContextStateDataSchema.optional(),
 });
 
 // Tool-Use UI State (frontend-only, preserved during backend updates)
@@ -119,33 +106,23 @@ export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
 
 export type ToolUseStreamState = z.infer<typeof ToolUseStreamStateSchema>;
 
-// Workflow UI State (frontend-only, preserved during backend updates)
-
-export const WorkflowUIStateSchema = z.object({
-  selectedRunId: z.string().nullable().prefault(null),
-});
-
-export type WorkflowUIState = z.infer<typeof WorkflowUIStateSchema>;
-
 // Workflow Stream State
+// One run per tab — all run-scoped data is flat, not keyed by runId.
 
-function RoundScopedRecord<T extends z.ZodType>(valueSchema: T) {
-  return z
-    .record(z.string(), z.record(z.string(), z.array(valueSchema)))
-    .prefault({});
+function RoundIndexedRecord<T extends z.ZodType>(valueSchema: T) {
+  return z.record(z.string(), z.array(valueSchema)).prefault({});
 }
 
 export const WorkflowStreamStateSchema = BaseStreamStateSchema.extend({
   kind: z.literal(AGENT_CATEGORY.WORKFLOW),
-  // Frontend-owned fields updated by targeted progress-view messages
-  runInstructions: RunScopedRecord(InstructionUpdateSchema),
+  // Frontend-owned fields updated by targeted progress-view messages.
+  // Per-run usage mirrors tool-use so resume correctly accumulates across
+  // the original and resumed runs; sessionUsage is derived as their sum.
   runUsage: RunScopedRecord(TokenUsageStatsSchema),
-  runFiles: RoundScopedRecord(OutputFileInfoSchema),
-  runMissingOutputs: RoundScopedRecord(z.string()),
-  activeRunId: z.string().nullable().prefault(null),
-  followupMode: FollowupModeSchema.prefault(FOLLOWUP_MODE.CHAT),
-  // Frontend-owned (nested under ui)
-  ui: WorkflowUIStateSchema.prefault({}),
+  sessionUsage: TokenUsageStatsSchema.nullable().prefault(null),
+  files: RoundIndexedRecord(OutputFileInfoSchema),
+  missingOutputs: RoundIndexedRecord(z.string()),
+  compileFailures: RoundIndexedRecord(CompileFailureSchema),
 });
 
 export type WorkflowStreamState = z.infer<typeof WorkflowStreamStateSchema>;

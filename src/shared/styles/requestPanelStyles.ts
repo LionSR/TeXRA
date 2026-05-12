@@ -13,6 +13,7 @@ const CONTAINER_NAMES = [
   'retry-requests',
   'workflow-proposals',
   'plan-approval-requests',
+  'external-inquiry-requests',
 ] as const;
 
 /** Item class names (singular, used for individual cards and BEM children). */
@@ -22,6 +23,7 @@ const ITEM_NAMES = [
   'retry-request',
   'workflow-proposal',
   'plan-approval-request',
+  'external-inquiry-request',
 ] as const;
 
 /** Build a :is()-ready selector group from class names with an optional BEM suffix. */
@@ -38,6 +40,24 @@ const LISTS = selectorGroup(CONTAINER_NAMES, '__list');
 const ITEMS = selectorGroup(ITEM_NAMES);
 const DETAILS = selectorGroup(ITEM_NAMES, '__details');
 const ACTIONS = selectorGroup(ITEM_NAMES, '__actions');
+const FEEDBACKS = selectorGroup(ITEM_NAMES, '__feedback');
+const FEEDBACK_INPUTS = selectorGroup(ITEM_NAMES, '__feedback-input');
+const FEEDBACK_ACTIVE = selectorGroup(ITEM_NAMES, '--feedback-active');
+const BADGES = unsafeCSS(
+  '.workflow-proposal__category-badge, .external-inquiry-request__mode-badge',
+);
+const SCROLLABLE_DETAILS = selectorGroup(
+  ITEM_NAMES.filter((n) => n !== 'workflow-proposal'),
+  '__details',
+);
+
+const sp = {
+  tiny: unsafeCSS('var(--wa-space-3xs)'),
+  small: unsafeCSS('var(--wa-space-2xs)'),
+  medium: unsafeCSS('var(--wa-space-xs)'),
+  large: unsafeCSS('var(--wa-space-s)'),
+  xlarge: unsafeCSS('var(--wa-space-l)'),
+} as const;
 
 export const requestPanelStyles: CSSResult = css`
   /* ================================================================
@@ -45,55 +65,54 @@ export const requestPanelStyles: CSSResult = css`
    * ================================================================ */
 
   :is(${CONTAINERS}) {
-    margin: var(--spacing-large) 0;
-    padding: var(--spacing-large);
+    margin: ${sp.medium} 0;
+    padding: ${sp.medium};
+    border: var(--border-thin) solid var(--wa-form-control-border-color);
     border-radius: var(--border-radius-large);
-    box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.12));
+    background: var(--wa-color-surface-default);
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-large);
+    gap: ${sp.medium};
   }
 
   :is(${HEADERS}) {
     display: flex;
     align-items: center;
-    gap: var(--spacing-medium);
+    gap: ${sp.medium};
     font-weight: var(--font-weight-semibold);
-    color: var(--vscode-editor-foreground);
+    color: var(--wa-color-text-normal);
   }
 
   :is(${LISTS}) {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-large);
+    gap: ${sp.medium};
   }
 
   :is(${ITEMS}) {
     display: flex;
     flex-direction: column;
     border-radius: var(--border-radius);
-    border: var(--border-thin) solid var(--vscode-editorHoverWidget-border);
-    background: var(--vscode-editorHoverWidget-background);
-    padding: var(--spacing-large);
-    gap: var(--spacing-medium);
+    border: var(--border-thin) solid var(--wa-color-surface-border);
+    background: var(--wa-color-surface-raised);
+    padding: ${sp.medium};
+    gap: ${sp.medium};
     position: relative;
   }
 
   :is(${DETAILS}) {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
   }
 
   /* Scroll constraint for panels with potentially long content.
      Excluded: workflow-proposal__details (has an absolutely-positioned
      dropdown that would be clipped by overflow-y: auto). */
-  .approval-request__details,
-  .bash-approval-request__details,
-  .retry-request__details,
-  .plan-approval-request__details {
-    max-height: 50vh;
+  :is(${SCROLLABLE_DETAILS}) {
+    max-height: min(34vh, 26rem);
     overflow-y: auto;
+    scrollbar-gutter: stable;
   }
 
   .approval-request__meta,
@@ -102,20 +121,20 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--color-text-secondary);
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
     flex-wrap: wrap;
   }
 
   :is(${ACTIONS}) {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
   }
 
   :is(${ACTIONS})::part(container) {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
   }
 
   :is(${ACTIONS}) vscode-toolbar-button {
@@ -124,16 +143,54 @@ export const requestPanelStyles: CSSResult = css`
 
   :is(${ACTIONS}) vscode-toolbar-button::part(control) {
     justify-content: flex-start;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
   }
 
-  /* Shared container chrome — approval, bash, retry, and plan use the same border/bg */
-  .approval-requests,
-  .bash-approval-requests,
-  .retry-requests,
-  .plan-approval-requests {
-    border: var(--border-thin) solid var(--vscode-input-border);
-    background: var(--vscode-editor-background);
+  /* Shared action button colors */
+  :is(${ACTIONS}) vscode-toolbar-button[data-action='approve']::part(control),
+  :is(${ACTIONS}) vscode-toolbar-button[data-action='submit']::part(control) {
+    color: var(--wa-color-success-fill-loud);
+  }
+
+  :is(${ACTIONS}) vscode-toolbar-button[data-action='setup']::part(control) {
+    color: var(--wa-color-text-link);
+  }
+
+  :is(${FEEDBACK_ACTIVE})
+    :is(${ACTIONS})
+    vscode-toolbar-button[data-action='reject']::part(control) {
+    color: var(--wa-color-warning-border-quiet);
+  }
+
+  /* Shared badge base */
+  :is(${BADGES}) {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: ${sp.tiny} var(--border-radius-large);
+    border-radius: var(--border-radius);
+    white-space: nowrap;
+  }
+
+  /* Type-specific item accent */
+  .approval-request {
+    border-left: var(--border-medium) solid var(--wa-color-text-normal);
+  }
+  .bash-approval-request {
+    border-left: var(--border-medium) solid var(--wa-color-terminal-ansi-yellow);
+  }
+  .retry-request {
+    border-left: var(--border-medium) solid var(--color-warning);
+  }
+  .workflow-proposal {
+    border-left: var(--border-medium) solid var(--wa-color-text-link);
+  }
+  .plan-approval-request {
+    border-left: var(--border-medium) solid var(--wa-color-text-link);
+  }
+  .external-inquiry-request {
+    border-left: var(--border-medium) solid var(--wa-color-focus);
   }
 
   /* Shared action button width — approval and bash use the same flex-basis */
@@ -146,12 +203,12 @@ export const requestPanelStyles: CSSResult = css`
    * Approval requests (tool edits)
    * ================================================================ */
 
-  .approval-requests__header .codicon {
-    color: var(--vscode-editor-foreground);
+  .approval-requests__header wa-icon {
+    color: var(--wa-color-text-normal);
   }
 
   .approval-request__path {
-    font-family: var(--vscode-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-sm);
     color: var(--color-text-link);
     word-break: break-word;
@@ -160,7 +217,7 @@ export const requestPanelStyles: CSSResult = css`
   .approval-request__diff {
     display: inline-flex;
     align-items: baseline;
-    gap: var(--spacing-small);
+    gap: ${sp.small};
   }
 
   .approval-request__diff-added,
@@ -203,25 +260,21 @@ export const requestPanelStyles: CSSResult = css`
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
     border-left: var(--border-thin) solid
-      var(--vscode-button-separator, var(--vscode-input-border));
+      var(--wa-color-button-separator, var(--wa-form-control-border-color));
   }
 
+  /* wa-dropdown handles its own popup positioning, but we still want
+     the trigger button to lay out alongside the main diff button. */
   .approval-request__actions .diff-dropdown .diff-dropdown-menu {
-    position: absolute;
-    top: calc(100% + var(--spacing-tiny));
-    left: 0;
-    z-index: 100;
-    min-width: 150px;
-    display: block;
-  }
-
-  .approval-request__actions .diff-dropdown .diff-dropdown-menu:not([show]) {
-    display: none;
+    flex: 0 0 auto;
+    display: inline-flex;
   }
 
   .approval-request__actions
-    .diff-dropdown-trigger[aria-expanded='true']
-    .codicon-chevron-down {
+    .diff-dropdown
+    wa-dropdown[open]
+    .diff-dropdown-trigger
+    wa-icon {
     transform: rotate(180deg);
   }
 
@@ -229,17 +282,17 @@ export const requestPanelStyles: CSSResult = css`
    * Bash approval requests
    * ================================================================ */
 
-  .bash-approval-requests__header .codicon {
-    color: var(--vscode-terminal-ansiYellow);
+  .bash-approval-requests__header wa-icon {
+    color: var(--wa-color-terminal-ansi-yellow);
   }
 
   .bash-approval-request__command {
-    font-family: var(--vscode-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-sm);
   }
 
   .bash-approval-request__command .code-block {
-    border-left: var(--border-thick) solid var(--vscode-terminal-ansiYellow);
+    border-left: var(--border-medium) solid var(--wa-color-terminal-ansi-yellow);
   }
 
   .bash-approval-request__command .code-block pre {
@@ -251,7 +304,7 @@ export const requestPanelStyles: CSSResult = css`
    * Retry requests
    * ================================================================ */
 
-  .retry-requests__header .codicon {
+  .retry-requests__header wa-icon {
     color: var(--color-warning);
   }
 
@@ -260,9 +313,9 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .retry-request__operation {
-    font-family: var(--vscode-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-sm);
-    color: var(--vscode-editor-foreground);
+    color: var(--wa-color-text-normal);
     font-weight: var(--font-weight-medium);
   }
 
@@ -276,31 +329,31 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .retry-request__error-details {
-    margin-top: var(--spacing-tiny);
+    margin-top: ${sp.tiny};
     font-size: var(--font-size-xs);
   }
 
   .retry-request__error-summary {
     cursor: pointer;
-    color: var(--vscode-descriptionForeground);
+    color: var(--wa-color-text-quiet);
     display: flex;
     align-items: center;
-    gap: var(--spacing-tiny);
+    gap: ${sp.tiny};
     user-select: none;
   }
 
   .retry-request__error-summary:hover {
-    color: var(--vscode-foreground);
+    color: var(--wa-color-text-normal);
   }
 
   /* Note: .toggle-icon rotation handled by commonViewStyles */
 
   .retry-request__error-body {
-    margin-top: var(--spacing-tiny);
-    padding: var(--spacing-small);
-    background: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.1));
+    margin-top: ${sp.tiny};
+    padding: ${sp.small};
+    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.1));
     border-radius: var(--border-radius-small);
-    font-family: var(--vscode-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-xs);
     white-space: pre-wrap;
     word-break: break-word;
@@ -309,72 +362,43 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .retry-request--relay .retry-request__operation {
-    color: var(--vscode-editorWarning-foreground, #ff8c00);
-  }
-
-  .retry-request--relay::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    inset-block: 0;
-    width: var(--border-thick);
-    background: var(--vscode-editorWarning-foreground, #ff8c00);
-    border-radius: var(--border-radius-small) 0 0 var(--border-radius-small);
+    color: var(--wa-color-warning-on-quiet, #ff8c00);
   }
 
   /* ================================================================
    * Workflow proposals
    * ================================================================ */
 
-  .workflow-proposals {
-    border: var(--border-thin) solid var(--vscode-inputValidation-infoBorder);
-    background: var(--vscode-inputValidation-infoBackground);
-  }
-
-  .workflow-proposals__header .codicon {
-    color: var(--vscode-textLink-foreground);
+  .workflow-proposals__header wa-icon {
+    color: var(--wa-color-text-link);
   }
 
   .workflow-proposal__actions vscode-toolbar-button {
     flex: 1 1 6rem;
   }
 
-  .workflow-proposal {
-    position: relative;
-  }
-
   .workflow-proposal__header-row {
     display: flex;
     align-items: baseline;
-    gap: var(--spacing-medium);
+    gap: ${sp.medium};
     flex-wrap: wrap;
   }
 
-  .workflow-proposal__category-badge {
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: var(--spacing-tiny) var(--border-radius-large);
-    border-radius: var(--border-radius);
-    white-space: nowrap;
-  }
-
   .workflow-proposal__category-badge--workflow {
-    background: var(--vscode-badge-background);
-    color: var(--vscode-badge-foreground);
+    background: var(--wa-color-neutral-fill-quiet);
+    color: var(--wa-color-neutral-on-quiet);
   }
 
   .workflow-proposal__category-badge--tool-use {
-    background: var(--vscode-textLink-foreground);
-    color: var(--vscode-editor-background);
+    background: var(--wa-color-text-link);
+    color: var(--wa-color-surface-default);
   }
 
   .workflow-proposal__agent {
-    font-family: var(--vscode-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     font-size: var(--font-size);
     font-weight: var(--font-weight-semibold);
-    color: var(--vscode-textLink-foreground);
+    color: var(--wa-color-text-link);
   }
 
   .workflow-proposal__model {
@@ -384,48 +408,74 @@ export const requestPanelStyles: CSSResult = css`
 
   .workflow-proposal__model::before {
     content: '\u2022';
-    margin-right: var(--spacing-small);
+    margin-right: ${sp.small};
   }
 
+  .workflow-proposal__agent-select,
   .workflow-proposal__model-select {
     display: flex;
     align-items: center;
-    gap: var(--spacing-small);
-    margin-left: auto;
+    gap: ${sp.small};
   }
 
-  .workflow-proposal__model-select .codicon {
-    color: var(--vscode-descriptionForeground);
+  .workflow-proposal__agent-select wa-icon,
+  .workflow-proposal__model-select wa-icon {
+    color: var(--wa-color-text-quiet);
     flex-shrink: 0;
   }
 
+  /* Model dropdown floats to the right edge of the header row. */
+  .workflow-proposal__model-select {
+    margin-left: auto;
+  }
+
   .proposal-model-dropdown {
-    min-width: 8rem;
-    max-width: 12rem;
+    min-width: 6rem;
+    max-width: 9rem;
+  }
+
+  .proposal-agent-dropdown {
+    min-width: 5rem;
+    max-width: 8rem;
   }
 
   .workflow-proposal__instruction {
     font-size: var(--font-size-sm);
-    color: var(--vscode-editor-foreground);
+    color: var(--wa-color-text-normal);
     word-break: break-word;
     white-space: pre-wrap;
     max-height: 12em;
     overflow-y: auto;
     line-height: var(--line-height-normal);
-    padding: var(--spacing-small) 0;
-    border-bottom: var(--border-thin) solid var(--vscode-editorWidget-border);
+    padding: ${sp.small} 0;
+    border-bottom: var(--border-thin) solid var(--wa-color-surface-border);
+  }
+
+  .workflow-proposal__extract-flags {
+    display: flex;
+    gap: ${sp.small};
+    flex-wrap: wrap;
+    margin-top: ${sp.small};
+  }
+
+  .workflow-proposal__extract-flag {
+    display: inline-flex;
+    align-items: center;
+    gap: ${sp.tiny};
+    text-transform: none;
+    letter-spacing: normal;
   }
 
   .workflow-proposal__files {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-small);
-    margin-top: var(--spacing-small);
+    gap: ${sp.small};
+    margin-top: ${sp.small};
   }
 
   .workflow-proposal__files > div {
     font-size: var(--font-size-sm);
-    color: var(--vscode-editor-foreground);
+    color: var(--wa-color-text-normal);
     line-height: var(--line-height-normal);
   }
 
@@ -435,17 +485,14 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .workflow-proposal__file-name {
-    font-family: var(--vscode-editor-font-family);
-    color: var(--vscode-textLink-foreground);
+    font-family: var(--wa-font-family-mono);
+    color: var(--wa-color-text-link);
     cursor: pointer;
   }
 
   .workflow-proposal__file-name:hover {
     text-decoration: underline;
-    color: var(
-      --vscode-textLink-activeForeground,
-      var(--vscode-textLink-foreground)
-    );
+    color: var(--wa-color-text-link-active, var(--wa-color-text-link));
   }
 
   .workflow-proposal__file-name--readonly {
@@ -458,49 +505,38 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--color-text-secondary);
   }
 
+  .workflow-proposal__file-name--wrap {
+    word-break: break-word;
+  }
+
   .workflow-proposal__input-files .workflow-proposal__file-label {
-    color: var(--vscode-editor-foreground);
+    color: var(--wa-color-text-normal);
   }
 
   .workflow-proposal__output-files .workflow-proposal__file-label {
-    color: var(--vscode-textLink-foreground);
-  }
-
-  .workflow-proposal__actions
-    vscode-toolbar-button[data-action='approve']::part(control) {
-    color: var(--vscode-testing-iconPassed);
-  }
-
-  .workflow-proposal__actions
-    vscode-toolbar-button[data-action='reject']::part(control) {
-    color: var(--vscode-testing-iconFailed);
-  }
-
-  .workflow-proposal__actions
-    vscode-toolbar-button[data-action='setup']::part(control) {
-    color: var(--vscode-textLink-foreground);
+    color: var(--wa-color-text-link);
   }
 
   /* ================================================================
    * Plan approval requests
    * ================================================================ */
 
-  .plan-approval-requests__header .codicon {
-    color: var(--vscode-textLink-foreground);
+  .plan-approval-requests__header wa-icon {
+    color: var(--wa-color-text-link);
   }
 
   .plan-approval-request__summary {
     font-weight: var(--font-weight-semibold);
-    color: var(--vscode-editor-foreground);
+    color: var(--wa-color-text-normal);
   }
 
   .plan-approval-request__steps {
-    margin: var(--spacing-small) 0;
-    padding-left: var(--spacing-xlarge);
+    margin: ${sp.small} 0;
+    padding-left: ${sp.xlarge};
   }
 
   .plan-approval-request__steps li {
-    margin-bottom: var(--spacing-small);
+    margin-bottom: ${sp.small};
   }
 
   .plan-approval-request__step-desc {
@@ -509,14 +545,14 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .plan-approval-request__step-files {
-    font-family: var(--vscode-editor-font-family);
+    font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-xs);
     color: var(--color-text-secondary);
-    margin-top: var(--spacing-tiny);
+    margin-top: ${sp.tiny};
   }
 
   .plan-approval-request__file {
-    color: var(--vscode-textLink-foreground);
+    color: var(--wa-color-text-link);
   }
 
   .plan-approval-request__actions vscode-toolbar-button {
@@ -527,32 +563,263 @@ export const requestPanelStyles: CSSResult = css`
    * Rejection feedback (shared across panels with feedback support)
    * ================================================================ */
 
-  .approval-request__feedback,
-  .bash-approval-request__feedback,
-  .workflow-proposal__feedback,
-  .plan-approval-request__feedback {
-    margin-top: var(--spacing-small);
+  :is(${FEEDBACKS}) {
+    margin-top: ${sp.small};
   }
 
-  .approval-request__feedback-input,
-  .bash-approval-request__feedback-input,
-  .workflow-proposal__feedback-input,
-  .plan-approval-request__feedback-input {
+  :is(${FEEDBACK_INPUTS}) {
     width: 100%;
   }
 
-  .approval-request--feedback-active
-    .approval-request__actions
-    vscode-toolbar-button[data-action='reject']::part(control),
-  .bash-approval-request--feedback-active
-    .bash-approval-request__actions
-    vscode-toolbar-button[data-action='reject']::part(control),
-  .workflow-proposal--feedback-active
-    .workflow-proposal__actions
-    vscode-toolbar-button[data-action='reject']::part(control),
-  .plan-approval-request--feedback-active
-    .plan-approval-request__actions
-    vscode-toolbar-button[data-action='reject']::part(control) {
-    color: var(--vscode-inputValidation-warningBorder);
+  /* ================================================================
+   * External inquiry requests
+   * ================================================================ */
+
+  .external-inquiry-requests__header wa-icon {
+    color: var(--wa-color-focus);
+  }
+
+  /* Carousel navigation for multiple external inquiries */
+  .external-inquiry-requests__nav {
+    display: flex;
+    align-items: center;
+    gap: ${sp.small};
+    margin-left: auto;
+  }
+
+  .external-inquiry-requests__counter {
+    font-size: var(--font-size-sm);
+    color: var(--wa-color-text-quiet);
+    font-variant-numeric: tabular-nums;
+    min-width: 3ch;
+    text-align: center;
+  }
+
+  .external-inquiry-request__mode-badge {
+    background: var(--wa-color-neutral-fill-quiet);
+    color: var(--wa-color-neutral-on-quiet);
+  }
+
+  .external-inquiry-request__context {
+    font-size: var(--font-size-sm);
+    color: var(--wa-color-text-quiet);
+    padding: ${sp.small} ${sp.medium};
+    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.1));
+    border-radius: var(--border-radius-small);
+    line-height: var(--line-height-normal);
+  }
+
+  .external-inquiry-request__question {
+    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.05));
+    border: var(--border-thin) solid var(--wa-color-surface-border);
+    border-radius: var(--border-radius);
+    padding: ${sp.medium};
+    position: relative;
+  }
+
+  .external-inquiry-request__question-text {
+    font-size: var(--font-size);
+    line-height: var(--line-height-relaxed, 1.6);
+    color: var(--wa-color-text-normal);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: min(22vh, 14rem);
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+
+  .external-inquiry-request__question-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: ${sp.small};
+    padding-top: ${sp.small};
+    border-top: var(--border-thin) solid var(--wa-color-surface-border);
+  }
+
+  .external-inquiry-request__search-hint {
+    display: flex;
+    align-items: center;
+    gap: ${sp.small};
+    font-size: var(--font-size-sm);
+    color: var(--wa-color-brand-on-quiet, var(--wa-color-focus));
+    padding: ${sp.small} 0;
+  }
+
+  .external-inquiry-request__attach-files {
+    display: flex;
+    flex-direction: column;
+    gap: ${sp.small};
+  }
+
+  .external-inquiry-request__attach-label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--wa-color-text-quiet);
+    display: flex;
+    align-items: center;
+    gap: ${sp.small};
+  }
+
+  .external-inquiry-request__file-list {
+    display: flex;
+    flex-direction: column;
+    gap: ${sp.tiny};
+    padding: ${sp.small};
+    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.1));
+    border-radius: var(--border-radius-small);
+  }
+
+  .external-inquiry-request__file-item {
+    display: flex;
+    align-items: center;
+    gap: ${sp.small};
+    font-size: var(--font-size-sm);
+    font-family: var(--wa-font-family-mono);
+    color: var(--wa-color-text-link);
+  }
+
+  .external-inquiry-request__answer-area {
+    display: flex;
+    flex-direction: column;
+    gap: ${sp.small};
+  }
+
+  .external-inquiry-request__session-links {
+    display: flex;
+    flex-direction: column;
+    gap: ${sp.small};
+  }
+
+  .external-inquiry-request__session-links-known,
+  .external-inquiry-request__session-links-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: ${sp.small};
+  }
+
+  .external-inquiry-request__session-links-label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--wa-color-text-normal);
+  }
+
+  .external-inquiry-request__session-links-list {
+    display: flex;
+    flex-direction: column;
+    gap: ${sp.tiny};
+    padding: ${sp.small};
+    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.1));
+    border-radius: var(--border-radius-small);
+  }
+
+  .external-inquiry-request__session-link-item {
+    font-size: var(--font-size-sm);
+    font-family: var(--wa-font-family-mono);
+    color: var(--wa-color-text-link);
+    word-break: break-word;
+  }
+
+  .external-inquiry-request__session-links-input {
+    width: 100%;
+    min-height: 72px;
+    max-height: min(18vh, 8rem);
+    resize: vertical;
+    font-family: var(--wa-font-family-mono);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+    padding: ${sp.medium};
+    background: var(--wa-form-control-background-color);
+    color: var(--wa-form-control-text-color);
+    border: var(--border-thin) solid var(--wa-form-control-border-color);
+    border-radius: var(--border-radius);
+    outline: none;
+    transition: border-color var(--transition-fast);
+  }
+
+  .external-inquiry-request__session-links-input:focus {
+    border-color: var(--wa-color-focus);
+  }
+
+  .external-inquiry-request__session-links-input::placeholder {
+    color: var(--wa-color-text-placeholder);
+  }
+
+  .external-inquiry-request__session-links-hint {
+    font-size: var(--font-size-sm);
+    color: var(--wa-color-text-quiet);
+  }
+
+  .external-inquiry-request__chat-links {
+    font-size: var(--font-size-sm);
+    color: var(--wa-color-text-quiet);
+  }
+
+  .external-inquiry-request__chat-links a {
+    color: var(--wa-color-text-link);
+    text-decoration: none;
+  }
+
+  .external-inquiry-request__chat-links a:hover {
+    text-decoration: underline;
+  }
+
+  .external-inquiry-request__answer-label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--wa-color-text-normal);
+  }
+
+  .external-inquiry-request__answer-input {
+    width: 100%;
+    min-height: 96px;
+    max-height: min(24vh, 12rem);
+    resize: vertical;
+    font-family: var(--wa-font-family-mono);
+    font-size: var(--font-size);
+    line-height: var(--line-height-normal);
+    padding: ${sp.medium};
+    background: var(--wa-form-control-background-color);
+    color: var(--wa-form-control-text-color);
+    border: var(--border-thin) solid var(--wa-form-control-border-color);
+    border-radius: var(--border-radius);
+    outline: none;
+    transition: border-color var(--transition-fast);
+  }
+
+  .external-inquiry-request__answer-input:focus {
+    border-color: var(--wa-color-focus);
+  }
+
+  .external-inquiry-request__answer-input::placeholder {
+    color: var(--wa-color-text-placeholder);
+  }
+
+  .external-inquiry-request__answer-hint {
+    font-size: var(--font-size-sm);
+    color: var(--wa-color-text-quiet);
+  }
+
+  @media (max-height: 900px) {
+    :is(${SCROLLABLE_DETAILS}) {
+      max-height: min(28vh, 20rem);
+    }
+
+    .external-inquiry-request__question-text {
+      max-height: min(18vh, 10rem);
+    }
+
+    .external-inquiry-request__answer-input {
+      min-height: 80px;
+      max-height: min(20vh, 10rem);
+    }
+
+    .external-inquiry-request__session-links-input {
+      min-height: 64px;
+      max-height: min(16vh, 7rem);
+    }
+  }
+
+  .external-inquiry-request__actions vscode-toolbar-button {
+    flex: 1 1 8rem;
   }
 `;

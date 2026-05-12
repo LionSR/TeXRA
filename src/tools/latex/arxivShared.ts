@@ -75,7 +75,7 @@ export function normaliseArxivIdentifier(value: string): string {
   return extracted[0] || value;
 }
 
-export function extractEntryIdentifier(rawId: unknown): string | null {
+function extractEntryIdentifier(rawId: unknown): string | null {
   if (typeof rawId !== 'string') {
     return null;
   }
@@ -84,7 +84,7 @@ export function extractEntryIdentifier(rawId: unknown): string | null {
 }
 
 /** Extract author names, optionally limiting to maxAuthors */
-export function getAuthorNames(
+function getAuthorNames(
   authors: ArxivEntry['authors'],
   maxAuthors?: number,
 ): string[] {
@@ -93,7 +93,7 @@ export function getAuthorNames(
 }
 
 /** Normalize entry title by trimming whitespace */
-export function normalizeEntryTitle(title: string): string {
+function normalizeEntryTitle(title: string): string {
   return title.trim();
 }
 

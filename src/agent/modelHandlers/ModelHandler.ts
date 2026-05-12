@@ -8,6 +8,7 @@ import {
   type ModelCapabilities,
   ReasoningEffort,
 } from 'llm-zoo';
+import { platform } from '@platform/platform';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory, type AgentSetting } from '@agent/core/AgentDataclass';
 import type {
@@ -17,22 +18,24 @@ import type {
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import { K_SLICE } from '@agent/core/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import { MAX_TIER } from '@auth/config';
+import { MAX_TIER, FREE_TIER } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 
-// Local imports - frontend
-import { SecretManager, ApiProvider } from '@frontend/secretManager';
+// Local imports - platform
+
+// Local imports - model
+import { AgentLogger } from '@logger/AgentLogger';
+import { getApiKey, type ApiProvider } from '@model/apiProviders';
 
 // Local imports - logger
-import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@shared/schemas';
 
 // Local imports - tools
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
-import { K_SLICE } from '@utils/config';
 import type { FileLocation } from '@utils/files';
 import {
   getProviderStreaming,
@@ -140,24 +143,15 @@ export abstract class ModelHandler<
     });
   }
 
-  /**
-   * Updates the logger instance.
-   */
   public setLogger(logger: AgentLogger): void {
     this.logger = logger;
     this.mediaProcessor.setLogger(logger);
   }
 
-  /**
-   * Records the active agent category so provider handlers can adjust behaviour per session.
-   */
   public setAgentCategory(agentCategory?: AgentCategory | null): void {
     this.agentCategory = agentCategory ?? undefined;
   }
 
-  /**
-   * Returns the agent category that is currently driving the handler, if any.
-   */
   public getAgentCategory(): AgentCategory | undefined {
     return this.agentCategory;
   }
@@ -191,23 +185,15 @@ export abstract class ModelHandler<
    * Tool-use agents use a reduced value to leave headroom for context growth.
    */
   protected getEffectiveMaxOutputTokens(): number {
-    const base = this.config.maxOutputTokens;
-    if (!this.isToolUseMode()) {
-      return base;
-    }
-    return Math.floor(base * TOOL_USE_MAX_OUTPUT_FACTOR);
+    return this.isToolUseMode()
+      ? Math.floor(this.config.maxOutputTokens * TOOL_USE_MAX_OUTPUT_FACTOR)
+      : this.config.maxOutputTokens;
   }
 
-  /**
-   * Enables or disables streaming of model output text.
-   */
   public setOutputStreaming(enabled: boolean): void {
     this.outputStreaming = enabled;
   }
 
-  /**
-   * Indicates whether model output streaming is enabled.
-   */
   public isOutputStreamingEnabled(): boolean {
     return this.outputStreaming;
   }
@@ -221,9 +207,6 @@ export abstract class ModelHandler<
     return false;
   }
 
-  /**
-   * Enables or disables Progress view updates.
-   */
   public setProgressViewEnabled(enabled: boolean): void {
     this.progressViewEnabled = enabled;
   }
@@ -274,8 +257,10 @@ export abstract class ModelHandler<
    * Centralizes the decision to avoid duplication between getApiKey() and getBaseUrl().
    * Both methods call this to ensure consistent routing decisions.
    *
-   * Returns true only if:
-   * 1. Model is not openRouterOnly (those always use OpenRouter)
+   * Returns true only if ALL of the following hold:
+   * 1. Model is NOT routing through OpenRouter (neither openRouterOnly nor global toggle).
+   *    OpenRouter always requires an OpenRouter API key; the server-side relay is a
+   *    direct-provider path that must not interfere.
    * 2. shouldUseServerSideKeysSync confirms access:
    *    - Setting enabled
    *    - Provider supported
@@ -287,9 +272,10 @@ export abstract class ModelHandler<
    * - Both are defined in RELAY_MODELS, ensuring UI filtering matches API validation
    */
   protected shouldUseServerSideKeys(): boolean {
-    // Skip openRouterOnly models - these should always route through OpenRouter
-    // since their model IDs don't exist on provider APIs.
-    if (this.config.openRouterOnly) {
+    // Models routing through OpenRouter (openRouterOnly or global toggle) always use the
+    // OpenRouter API — the server-side relay is a direct-provider path, not an OpenRouter
+    // path, so it must never take precedence here.
+    if (shouldUseOpenRouter(this.config)) {
       return false;
     }
     // Pass short name (this.config.name) for client-side tier validation.
@@ -300,13 +286,28 @@ export abstract class ModelHandler<
     );
   }
 
+  /** Fetch an API key for the given provider, throwing `errorMessage` on failure. */
+  private async fetchApiKeyOrThrow(
+    provider: ApiProvider,
+    errorMessage: string,
+  ): Promise<string> {
+    try {
+      return await getApiKey(platform().secrets, provider);
+    } catch {
+      throw new Error(errorMessage);
+    }
+  }
+
   /**
    * Retrieves API key from environment variables based on provider and OpenRouter configuration.
    * When server-side keys are enabled (experimental), returns the user's JWT token instead,
    * which the relay Edge Function will use for authentication.
    *
-   * When "Use Included Access" is enabled, only server-side keys are used - no fallback
+   * When "Use Included Access" is enabled, only server-side keys are used — no fallback
    * to personal API keys. This ensures runtime behavior matches dropdown availability.
+   * Exception: models routed through OpenRouter (openRouterOnly or global toggle) always
+   * use the OpenRouter API key regardless of included-access settings, because the
+   * server-side relay is a direct-provider path that does not apply to OpenRouter routing.
    *
    * @throws Error if required API key is missing from environment
    */
@@ -337,16 +338,13 @@ export abstract class ModelHandler<
       );
     }
 
-    // openRouterOnly models can NEVER use server-side relay - they always need OpenRouter key.
-    // Allow these even in "Use Included Access" mode since included access is never possible.
-    if (this.config.openRouterOnly) {
-      try {
-        return await SecretManager.getApiKey('openRouter');
-      } catch (err) {
-        throw new Error(
-          `Model "${this.config.name}" requires an OpenRouter API key. Please set it using the "Set API Key" command.`,
-        );
-      }
+    // Models routing through OpenRouter always need the OpenRouter key — included access
+    // is a direct-provider relay path and does not apply here.
+    if (shouldUseOpenRouter(this.config)) {
+      return this.fetchApiKeyOrThrow(
+        'openRouter',
+        'Missing API key for OpenRouter. Please set it using the "Set API Key" command.',
+      );
     }
 
     if (useIncludedAccess && hasServerAccess) {
@@ -363,24 +361,10 @@ export abstract class ModelHandler<
       );
     }
 
-    if (shouldUseOpenRouter(this.config)) {
-      try {
-        return await SecretManager.getApiKey('openRouter');
-      } catch (err) {
-        throw new Error(
-          'Missing API key for OpenRouter. Please set it using the "Set API Key" command.',
-        );
-      }
-    }
-
-    const provider = this.config.provider.toLowerCase() as ApiProvider;
-    try {
-      return await SecretManager.getApiKey(provider);
-    } catch (err) {
-      throw new Error(
-        `Missing API key for ${this.config.provider}. Please set it using the "Set API Key" command.`,
-      );
-    }
+    return this.fetchApiKeyOrThrow(
+      this.config.provider.toLowerCase() as ApiProvider,
+      `Missing API key for ${this.config.provider}. Please set it using the "Set API Key" command.`,
+    );
   }
 
   /**
@@ -425,6 +409,11 @@ export abstract class ModelHandler<
     return this.config.provider === ModelProvider.MOONSHOT;
   }
 
+  /** Checks if the model is from MiniMax provider. */
+  get isMiniMax(): boolean {
+    return this.config.provider === ModelProvider.MINIMAX;
+  }
+
   /** Whether this handler supports manual context compaction. Override in subclasses. */
   get supportsManualCompaction(): boolean {
     return false;
@@ -437,18 +426,12 @@ export abstract class ModelHandler<
 
   /**
    * Gets streaming configuration for the current model provider.
-   * @returns Boolean indicating if streaming should be enabled
    */
   public getStreamingConfig(): boolean {
-    if (shouldUseOpenRouter(this.config)) {
+    if (shouldUseOpenRouter(this.config))
       return getProviderStreaming('openrouter');
-    }
-
-    // ModelProvider.OTHERS has no provider-specific streaming config
-    if (this.config.provider === ModelProvider.OTHERS) {
+    if (this.config.provider === ModelProvider.OTHERS)
       return getGlobalStreaming();
-    }
-
     return getProviderStreaming(this.config.provider);
   }
 
@@ -483,8 +466,8 @@ export abstract class ModelHandler<
 
   /**
    * Returns the effective reasoning effort for the current user and model.
-   * Max tier users should not receive xhigh reasoning on GPT-5 models when
-   * using included (server-side) access.
+   * On GPT-5 models accessed via included (server-side) keys, xhigh reasoning
+   * is capped: Max tier → high, free tier → medium.
    */
   protected getEffectiveReasoningEffort(): ReasoningEffort | null {
     const { supportsReasoningEffort, reasoningEffort } = this.capabilities;
@@ -505,6 +488,9 @@ export abstract class ModelHandler<
       const userTier = getServerSideKeyService().getUserTier();
       if (userTier === MAX_TIER) {
         return ReasoningEffort.HIGH;
+      }
+      if (userTier === FREE_TIER) {
+        return ReasoningEffort.MEDIUM;
       }
     }
 
@@ -585,10 +571,9 @@ export abstract class ModelHandler<
   public containCutOffMessage(
     content: Array<{ type: string; text?: string }> | string,
   ): boolean {
-    if (typeof content === 'string') {
-      return content.includes('Your response got cut off');
-    }
-    return content.some((c) => c.text?.includes('Your response got cut off'));
+    const marker = 'Your response got cut off';
+    if (typeof content === 'string') return content.includes(marker);
+    return content.some((c) => c.text?.includes(marker));
   }
 
   /**
@@ -794,6 +779,16 @@ export abstract class ModelHandler<
 
   /** Build a simple assistant message from text. */
   abstract createAssistantMessage(text: string): M;
+
+  /**
+   * Build an assistant message from a provider response.
+   *
+   * Providers that need to preserve response metadata in conversation history
+   * can override this while keeping createAssistantMessage() plain.
+   */
+  createAssistantMessageFromResponse(_responseObject: Resp, text: string): M {
+    return this.createAssistantMessage(text);
+  }
 
   /**
    * Extract all server tool data in a single pass.

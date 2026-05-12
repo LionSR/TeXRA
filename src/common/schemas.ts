@@ -32,6 +32,8 @@ export const LaTeXCompileOptionsSchema = z.object({
   channel: z.string().optional(),
   outputDirectory: z.string().optional(),
   compiler: z.enum(['pdflatex', 'latexmk']).prefault('latexmk'),
+  /** Millisecond timeout per compiler invocation. Kills the child on expiry. */
+  timeout: z.int().positive().optional(),
 });
 
 /** Input type - compiler optional with default applied by schema.parse() */

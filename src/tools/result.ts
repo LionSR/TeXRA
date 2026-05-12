@@ -40,7 +40,7 @@ export const ToolFileAttachmentSchema = FileReferenceSchema.extend({
   /** Base64 encoded payload when inline transport is supported */
   base64Data: z.string().optional(),
   /** Raw bytes for providers that require binary uploads */
-  bytes: z.custom<Uint8Array>((val) => val instanceof Uint8Array).optional(),
+  bytes: z.instanceof(Uint8Array).optional(),
 });
 export type ToolFileAttachment = z.infer<typeof ToolFileAttachmentSchema>;
 
@@ -103,19 +103,13 @@ export interface ValidationErrorDiagnostics {
 
 /**
  * Format Zod issues into structured diagnostics for model consumption.
- * Single source of truth for Zod validation error formatting.
- *
- * Note: `expected` and `received` are only present on certain ZodIssue subtypes
- * (e.g., invalid_type, invalid_literal), so we access them via casting.
- *
- * @param issues - Raw Zod issues array
- * @returns Formatted issues with path, message, expected, received, code
+ * `expected`/`received` only exist on certain ZodIssue subtypes (e.g.
+ * invalid_type), so we cast to access them.
  */
 export function formatZodIssuesForDiagnostics(
   issues: ZodIssue[],
 ): FormattedZodIssue[] {
   return issues.map((issue) => {
-    // Cast to access subtype-specific fields (expected/received)
     const extendedIssue = issue as ZodIssue & {
       expected?: unknown;
       received?: unknown;
@@ -130,13 +124,7 @@ export function formatZodIssuesForDiagnostics(
   });
 }
 
-/**
- * Format Zod issues as a simple error message string.
- * Used for the error field in ToolResult.
- *
- * @param issues - Raw Zod issues array
- * @returns Human-readable error message
- */
+/** Format Zod issues as a human-readable error message for ToolResult.error. */
 export function formatZodIssuesAsMessage(issues: ZodIssue[]): string {
   const lines = issues.map((i) =>
     i.path.length ? `- ${i.path.join('.')}: ${i.message}` : `- ${i.message}`,

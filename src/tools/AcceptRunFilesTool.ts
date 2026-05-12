@@ -1,11 +1,9 @@
 /**
  * Tool for accepting output files from a completed run into the workspace.
  *
- * After a workflow agent completes, its output files may live in run storage
- * (executions/{executionId}/) or directly in the workspace, depending on the
- * agent's storage mode. This tool locates files in either location and copies
- * them into the workspace — the programmatic equivalent of the "Accept" button
- * in the progress view.
+ * After a workflow agent completes, its output files live in task-run storage
+ * (executions/{executionId}/). This tool copies those files into the workspace
+ * — the programmatic equivalent of the "Accept" button in the progress view.
  *
  * Each file goes through the standard tool edit approval flow (same diff
  * panel as write_file), so the user can review, edit, or reject each file.
@@ -17,15 +15,20 @@ import * as path from 'path';
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - shared
+// Local imports - agent
 import { getExecutionStore } from '@agent/storage';
+
+// Local imports - shared
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
+import { stripCriticizeAnnotations } from '@replacement/advanced';
 import { ExecutionIdSchema } from '@shared/schemas';
 
 // Local imports - tools
 import type { ExecutionId, FileLocation } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
+import { formatResultCount, pluralize } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
+import { getCurrentToolRuntimeHost } from '@tools/toolRuntimeHost';
 import {
   buildApprovalRejectedResult,
   requestToolEditApproval,
@@ -77,6 +80,13 @@ const AcceptRunFilesInputSchema = z.strictObject({
     .array(FileMapping)
     .min(1)
     .describe('Files to copy from run storage to workspace'),
+  /** If true, strip `\criticize{...}{...}{...}` annotations before approval. */
+  strip_criticize: z
+    .boolean()
+    .nullish()
+    .describe(
+      'If true, remove all \\criticize{...}{...}{...} LaTeX annotations from each file before approval. Use when accepting output from critique-style agents that embed review markers.',
+    ),
 });
 
 export type AcceptRunFilesInput = z.infer<typeof AcceptRunFilesInputSchema>;
@@ -93,9 +103,8 @@ Use this tool ONLY for workflow subagent results (category="workflow").
 Do NOT use it for tool-use subagent results — those produce text responses,
 not output files.
 
-Locates output files in run storage or the workspace (depending on storage
-mode) and writes them to the workspace. Each file goes through an approval
-step before writing and may be rejected.
+Locates output files in task-run storage and writes them to the workspace.
+Each file goes through an approval step before writing and may be rejected.
 
 Parameters map directly to subagent-result delivery attributes:
   execution_id ← <subagent-result id="...">
@@ -109,11 +118,14 @@ Example — given delivery:
 
 Call:
   execution_id: "a1b2c3d4"
-  files: [{path: "paper__correct__r0_gemini.tex", original: "paper.tex"}]`,
+  files: [{path: "paper__correct__r0_gemini.tex", original: "paper.tex"}]
+
+Optional:
+  strip_criticize  when true, remove all \\criticize{...}{...}{...} annotations from accepted files before the approval diff`,
   schema: AcceptRunFilesInputSchema,
 }) {
   protected async execute(input: AcceptRunFilesInput): Promise<ToolResult> {
-    const { execution_id: executionId, files } = input;
+    const { execution_id: executionId, files, strip_criticize } = input;
     const runDir = await resolveStoragePath(executionId);
     const runDirExists = runDir !== undefined;
 
@@ -150,7 +162,11 @@ Call:
           );
         }
 
-        const proposedContent = await flexibleFS.read(sourceLocation);
+        const rawContent = await flexibleFS.read(sourceLocation);
+        const { content: proposedContent, count: strippedCount } =
+          strip_criticize
+            ? stripCriticizeAnnotations(rawContent)
+            : { content: rawContent, count: 0 };
         const destExists = await WorkspaceFS.exists(dest.relativePath);
 
         // Determine original content for diff display
@@ -159,7 +175,7 @@ Call:
           sourceAbsolute === dest.absolutePath;
         let originalContent: string;
         if (isSameFile) {
-          originalContent = proposedContent;
+          originalContent = rawContent;
         } else if (destExists) {
           originalContent = await WorkspaceFS.read(dest.relativePath);
         } else {
@@ -169,9 +185,11 @@ Call:
         return {
           path: mapping.path,
           original: dest.relativePath,
+          destAbsolutePath: dest.absolutePath,
           proposedContent,
           originalContent,
           destExists,
+          strippedCount,
         };
       }),
     );
@@ -179,9 +197,15 @@ Call:
     // Phase 2: Request approval and write each file
     const results: string[] = [];
     const edits: ToolResult['edits'] = [];
-    const acceptedEntries: { outputPath: string; originalPath: string }[] = [];
+    const acceptedEntries: {
+      outputPath: string;
+      originalPath: string;
+      destAbsolutePath: string;
+    }[] = [];
     let rejected = 0;
     const rejectionMessages: string[] = [];
+
+    let totalStripped = 0;
 
     for (const entry of prepared) {
       const mappingNote =
@@ -209,7 +233,12 @@ Call:
       );
 
       const action = entry.destExists ? 'replaced' : 'created';
-      results.push(`${action}: ${entry.original}${mappingNote}`);
+      const strippedNote =
+        entry.strippedCount > 0
+          ? ` (stripped ${entry.strippedCount} \\criticize)`
+          : '';
+      totalStripped += entry.strippedCount;
+      results.push(`${action}: ${entry.original}${mappingNote}${strippedNote}`);
       edits.push({
         path: entry.original,
         lineChanges: approval.lineChanges,
@@ -218,6 +247,15 @@ Call:
       acceptedEntries.push({
         outputPath: entry.path,
         originalPath: entry.original,
+        destAbsolutePath: entry.destAbsolutePath,
+      });
+    }
+
+    // Badge all accepted workspace files
+    if (acceptedEntries.length > 0) {
+      const runtimeHost = getCurrentToolRuntimeHost();
+      runtimeHost.emit('workspaceFilesWritten', {
+        absolutePaths: acceptedEntries.map((e) => e.destAbsolutePath),
       });
     }
 
@@ -237,7 +275,11 @@ Call:
     }
 
     const accepted = files.length - rejected;
-    const summary = `Accepted ${accepted}/${files.length} file${files.length > 1 ? 's' : ''} from run ${executionId}`;
+    const strippedSuffix =
+      totalStripped > 0
+        ? ` (stripped ${formatResultCount(totalStripped, '\\criticize annotation')})`
+        : '';
+    const summary = `Accepted ${accepted}/${files.length} ${pluralize(files.length, 'file')} from run ${executionId}${strippedSuffix}`;
     return {
       summary,
       output: `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`,

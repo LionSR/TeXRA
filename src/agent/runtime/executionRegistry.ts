@@ -7,16 +7,18 @@
 
 import * as fs from 'fs';
 
-import { bus } from '@eventBus/ProgressEventBus';
+import {
+  getAgentRuntimeHost,
+  type AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 import {
   type ExecutionHandle,
   AgentExecutionHandle,
   ProcessExecutionHandle,
   collectChildSummary,
-  emitActiveSubagentsUpdate,
-  emitActiveProcessesUpdate,
-  interruptActiveChildren as interruptActiveChildrenImpl,
+  interruptActiveChildren as interruptChildren,
 } from './ExecutionHandle';
 
 export type { ExecutionHandle } from './ExecutionHandle';
@@ -29,21 +31,28 @@ export {
 
 const registry = new Map<string, ExecutionHandle>();
 const changeCallbacks = new Map<string, Array<() => void>>();
+// Persistent listeners — stay attached across notifications (unlike one-shot
+// waiters in `changeCallbacks`). Used by the executions subscribe action.
+const persistentListeners = new Map<
+  string,
+  Set<(handle: ExecutionHandle | undefined) => void>
+>();
 
 // Notify waiters and refresh UI badges when stream status changes (e.g. RUNNING → WAITING).
 // Without this, waitForExecutionChange only resolves on progress/kill/untrack,
 // and the background tasks panel would show stale running/waiting badges.
-bus.on('updateStreamStatus', ({ streamId }) => {
+StreamStatusService.onDidChange(({ streamId }) => {
   for (const [executionId, handle] of registry) {
     if (
       handle instanceof AgentExecutionHandle &&
       handle.childStreamId === streamId
     ) {
+      const runtimeHost = runtimeHostFor(handle);
       notifyWaiters(executionId);
       // Re-emit badge update so the parent's background tasks panel
       // reflects the new status (e.g. running → waiting).
       if (handle.parentStreamId !== handle.childStreamId) {
-        emitActiveSubagentsUpdate(handle.parentStreamId, registry.values());
+        emitActiveSubagentsUpdate(handle.parentStreamId, runtimeHost);
       }
       break;
     }
@@ -57,13 +66,14 @@ bus.on('updateStreamStatus', ({ streamId }) => {
 /** Register an execution handle. */
 export function trackExecution(handle: ExecutionHandle): void {
   registry.set(handle.executionId, handle);
+  const runtimeHost = runtimeHostFor(handle);
 
   // Emit subagent UI update and parent linkage only for actual subagents
   // (where parentStreamId differs from childStreamId)
   if (handle instanceof AgentExecutionHandle) {
     if (handle.parentStreamId !== handle.childStreamId) {
-      emitActiveSubagentsUpdate(handle.parentStreamId, registry.values());
-      bus.emit('setParentStream', {
+      emitActiveSubagentsUpdate(handle.parentStreamId, runtimeHost);
+      runtimeHost.emit('setParentStream', {
         childStreamId: handle.childStreamId,
         parentStreamId: handle.parentStreamId,
       });
@@ -72,7 +82,7 @@ export function trackExecution(handle: ExecutionHandle): void {
 
   // Emit process badge update for background bash processes
   if (handle instanceof ProcessExecutionHandle) {
-    emitActiveProcessesUpdate(handle.parentStreamId, registry.values());
+    emitActiveProcessesUpdate(handle.parentStreamId, runtimeHost);
     reconcileOutputPoller();
   }
 }
@@ -82,13 +92,14 @@ export function untrackExecution(executionId: string): void {
   const handle = registry.get(executionId);
   registry.delete(executionId);
   notifyWaiters(executionId);
+  const runtimeHost = runtimeHostFor(handle);
 
   // Emit subagent UI update on removal (only for actual subagents)
   if (
     handle instanceof AgentExecutionHandle &&
     handle.parentStreamId !== handle.childStreamId
   ) {
-    emitActiveSubagentsUpdate(handle.parentStreamId, registry.values());
+    emitActiveSubagentsUpdate(handle.parentStreamId, runtimeHost);
   }
 
   // Emit process badge update on removal and flush final output.
@@ -97,7 +108,7 @@ export function untrackExecution(executionId: string): void {
   if (handle instanceof ProcessExecutionHandle) {
     const finalize = (): void => {
       outputOffsets.delete(executionId);
-      emitActiveProcessesUpdate(handle.parentStreamId, registry.values());
+      emitActiveProcessesUpdate(handle.parentStreamId, runtimeHost);
       reconcileOutputPoller();
     };
     if (handle.outputPaths) {
@@ -106,6 +117,7 @@ export function untrackExecution(executionId: string): void {
         handle.parentStreamId,
         handle.outputPaths.stdout,
         handle.outputPaths.stderr,
+        runtimeHost,
       ).finally(finalize);
     } else {
       finalize();
@@ -132,6 +144,19 @@ export function killExecution(executionId: string): boolean {
 /** All currently tracked (active) execution IDs. */
 export function getActiveExecutionIds(): string[] {
   return [...registry.keys()];
+}
+
+/**
+ * Kill only background OS processes (bash, codex) without touching agent stream status.
+ * Agent executions are left in RUNNING so the restart recovery logic can restore
+ * them to WAITING (resumable) if a flow record exists.
+ */
+export function killBackgroundProcesses(): void {
+  for (const [executionId, handle] of registry) {
+    if (handle instanceof ProcessExecutionHandle) {
+      killExecution(executionId);
+    }
+  }
 }
 
 /** Delegate progress update to the handle. */
@@ -223,7 +248,27 @@ export function waitForAnyExecutionChange(
  * promptly instead of running to completion.
  */
 export function interruptActiveChildren(parentStreamId: StreamTabId): void {
-  interruptActiveChildrenImpl(parentStreamId, registry.values());
+  interruptChildren(parentStreamId, registry.values());
+}
+
+/**
+ * Detach all active subagents from a parent, promoting them to top-level.
+ * Subagents continue running independently and deliver results via the
+ * follow-up queue. Called when stopping an orchestrator without killing children.
+ */
+export function detachActiveChildren(parentStreamId: StreamTabId): void {
+  for (const handle of registry.values()) {
+    if (handle.parentStreamId !== parentStreamId) continue;
+    if (
+      handle instanceof AgentExecutionHandle &&
+      handle.childStreamId !== parentStreamId
+    ) {
+      handle.detach();
+    } else if (handle instanceof ProcessExecutionHandle) {
+      handle.terminate();
+    }
+  }
+  emitActiveSubagentsUpdate(parentStreamId);
 }
 
 /** Get active subagent and process children for a parent stream. */
@@ -243,6 +288,38 @@ export function getActiveChildren(parentStreamId: StreamTabId): {
       ProcessExecutionHandle,
     ),
   };
+}
+
+/** Emit the current active subagent list for a parent to the progress UI. */
+function emitActiveSubagentsUpdate(
+  parentStreamId: StreamTabId,
+  runtimeHost: AgentRuntimeHost = runtimeHostForParent(parentStreamId),
+): void {
+  const children = collectChildSummary(
+    parentStreamId,
+    registry.values(),
+    AgentExecutionHandle,
+  );
+  runtimeHost.emit('updateActiveSubagents', {
+    parentStreamId,
+    children,
+  });
+}
+
+/** Emit the current active processes list for a parent to the progress UI. */
+function emitActiveProcessesUpdate(
+  parentStreamId: StreamTabId,
+  runtimeHost: AgentRuntimeHost = runtimeHostForParent(parentStreamId),
+): void {
+  const processes = collectChildSummary(
+    parentStreamId,
+    registry.values(),
+    ProcessExecutionHandle,
+  );
+  runtimeHost.emit('updateActiveProcesses', {
+    parentStreamId,
+    processes,
+  });
 }
 
 // ============================================================================
@@ -309,6 +386,7 @@ async function pollProcessOutputs(): Promise<void> {
         handle.parentStreamId,
         handle.outputPaths.stdout,
         handle.outputPaths.stderr,
+        runtimeHostFor(handle),
       ),
     );
   }
@@ -380,6 +458,7 @@ async function readIncremental(
   parentStreamId: StreamTabId,
   stdoutPath: string,
   stderrPath: string,
+  runtimeHost: AgentRuntimeHost,
 ): Promise<void> {
   // If another read is in flight, wait for it then read again —
   // the final flush must not be skipped or it loses tail output.
@@ -408,7 +487,7 @@ async function readIncremental(
         stderr: err.newOffset,
       });
 
-      bus.emit('updateProcessOutput', {
+      runtimeHost.emit('updateProcessOutput', {
         parentStreamId,
         executionId,
         stdout: out.text,
@@ -434,6 +513,25 @@ async function readIncremental(
 // Internal helpers
 // ============================================================================
 
+function runtimeHostFor(handle: ExecutionHandle | undefined): AgentRuntimeHost {
+  return handle?.runtimeHost ?? getAgentRuntimeHost();
+}
+
+function runtimeHostForParent(parentStreamId: StreamTabId): AgentRuntimeHost {
+  for (const handle of registry.values()) {
+    if (handle.parentStreamId === parentStreamId) {
+      return runtimeHostFor(handle);
+    }
+    if (
+      handle instanceof AgentExecutionHandle &&
+      handle.childStreamId === parentStreamId
+    ) {
+      return runtimeHostFor(handle);
+    }
+  }
+  return getAgentRuntimeHost();
+}
+
 function addChangeCallback(executionId: string, cb: () => void): void {
   let callbacks = changeCallbacks.get(executionId);
   if (!callbacks) {
@@ -452,8 +550,54 @@ function removeChangeCallback(executionId: string, cb: () => void): void {
 }
 
 function notifyWaiters(executionId: string): void {
+  const listeners = persistentListeners.get(executionId);
   const callbacks = changeCallbacks.get(executionId);
-  if (!callbacks) return;
-  changeCallbacks.delete(executionId);
-  for (const cb of callbacks) cb();
+  if (!listeners && !callbacks) return;
+
+  // Persistent listeners fire first and stay attached so subscribers keep
+  // receiving every transition (status, progress, untrack) until they
+  // dispose themselves.
+  if (listeners) {
+    const handle = registry.get(executionId);
+    // Iterate a snapshot so a listener disposing itself mid-fire is safe.
+    for (const cb of [...listeners]) cb(handle);
+  }
+
+  if (callbacks) {
+    changeCallbacks.delete(executionId);
+    for (const cb of callbacks) cb();
+  }
+
+  // Backstop against listener leaks: if the execution is no longer tracked,
+  // any still-registered persistent listener is firing into the void. The
+  // binder's listener self-disposes on untrack, but a third-party caller
+  // that forgets the disposer would otherwise leak indefinitely.
+  if (!registry.has(executionId)) {
+    persistentListeners.delete(executionId);
+  }
+}
+
+/**
+ * Add a persistent listener invoked on every change to `executionId`
+ * (status transition, progress update, kill, untrack). Returns a disposer.
+ *
+ * The callback receives the current `ExecutionHandle`, or `undefined` once
+ * the execution has been untracked (terminal event).
+ */
+export function addExecutionListener(
+  executionId: string,
+  cb: (handle: ExecutionHandle | undefined) => void,
+): () => void {
+  let set = persistentListeners.get(executionId);
+  if (!set) {
+    set = new Set();
+    persistentListeners.set(executionId, set);
+  }
+  set.add(cb);
+  return () => {
+    const s = persistentListeners.get(executionId);
+    if (!s) return;
+    s.delete(cb);
+    if (s.size === 0) persistentListeners.delete(executionId);
+  };
 }

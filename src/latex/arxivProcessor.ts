@@ -7,9 +7,9 @@ import { StatusCodes } from 'http-status-codes';
 import * as arxivIdentifiers from 'identifiers-arxiv';
 import * as tar from 'tar';
 
+import * as logger from '@agent/core/logger';
 import { toErrorMessage } from '@common/errors';
 import { indentLatexFilesInDirectory } from '@housekeeping/indent';
-import * as logger from '@logger/logUtils';
 import { normaliseArxivIdentifier } from '@tools/latex/arxivShared';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
@@ -21,6 +21,14 @@ export interface ExtractResult {
 export interface ExtractOptions {
   timeout?: number;
   channel?: string;
+}
+
+export type ArxivDownloadDestination = 'root' | 'references';
+
+export interface DownloadSourceOptions {
+  progressCallback?: (msg: string, increment?: number) => void;
+  autoIndent?: boolean;
+  destination?: ArxivDownloadDestination;
 }
 
 const INVALID_ARXIV_INPUT_ERROR =
@@ -75,21 +83,16 @@ export class ArxivSourceProcessor {
     return this.isValidId(normalized) ? normalized : null;
   }
 
-  /**
-   * Validate input that may be a URL or plain arXiv ID.
-   * @returns Error message if invalid, null if valid
-   */
+  /** @returns Error message if invalid, null if valid */
   public validateId(input: string): string | null {
-    if (!input) {
-      return 'arXiv ID or URL is required';
-    }
+    if (!input) return 'arXiv ID or URL is required';
+    return this.normalizeInput(input) ? null : INVALID_ARXIV_INPUT_ERROR;
+  }
 
-    const normalized = this.normalizeInput(input);
-    if (!normalized) {
-      return INVALID_ARXIV_INPUT_ERROR;
-    }
-
-    return null;
+  /** Sanitized directory name for a paper (e.g. `2404.12175` or `cs_0501072`). */
+  public getPaperDirName(input: string): string {
+    const id = this.normalizeInput(input);
+    return id ? id.replaceAll('/', '_') : input;
   }
 
   public async downloadFile(
@@ -126,7 +129,9 @@ export class ArxivSourceProcessor {
           );
         }
       } else {
-        const contentType = response.headers['content-type'] ?? '';
+        const rawContentType = response.headers['content-type'];
+        const contentType =
+          typeof rawContentType === 'string' ? rawContentType : '';
         const extension = this.getExtensionFromContentType(contentType);
         destPath = destBasePath + extension;
       }
@@ -177,9 +182,14 @@ export class ArxivSourceProcessor {
 
   public async downloadSource(
     input: string,
-    progressCallback?: (msg: string, increment?: number) => void,
-    autoIndent = true,
+    options: DownloadSourceOptions = {},
   ): Promise<{ path: string; alreadyExisted: boolean }> {
+    const {
+      progressCallback,
+      autoIndent = true,
+      destination = 'references',
+    } = options;
+
     // Normalize input (URL or ID) to plain arXiv ID
     const id = this.normalizeInput(input);
     if (!id) {
@@ -193,16 +203,18 @@ export class ArxivSourceProcessor {
       throw new Error('No workspace folder is open');
     }
 
-    // Create project directory for the arXiv paper inside References/ (sanitize ID to avoid path issues)
+    const isRoot = destination === 'root';
     // Use forward slashes to match WorkspaceFS.relativePath() convention (not path.join which uses backslashes on Windows)
-    const paperDirRelative = `References/${id.replaceAll('/', '_')}`;
+    const paperDirRelative = isRoot
+      ? '.'
+      : `References/${id.replaceAll('/', '_')}`;
     const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
 
     // Check if source was already downloaded successfully.
-    // A .tex file in the paper directory is a reliable signal that extraction completed,
-    // regardless of whether the staging 'download' dir was cleaned up afterwards.
+    // Skip for root destination — the workspace root likely already contains .tex files
+    // that would produce a false positive.
     let needsDownload = true;
-    if (await WorkspaceFS.exists(paperDirRelative)) {
+    if (!isRoot && (await WorkspaceFS.exists(paperDirRelative))) {
       const entries = await WorkspaceFS.readDir(paperDirRelative);
       const hasTexFiles = entries.some(([name]) => name.endsWith('.tex'));
       if (hasTexFiles) {
@@ -217,11 +229,12 @@ export class ArxivSourceProcessor {
     if (needsDownload) {
       await WorkspaceFS.ensureDir(paperDirRelative);
 
-      // Create temporary download subdirectory for staging the archive
-      const downloadDirRelative = path.join(paperDirRelative, 'download');
+      // Use a unique staging directory name to avoid clobbering an existing 'download/' folder at root
+      const stagingDirName = `.arxiv-download-${id.replaceAll('/', '_')}`;
+      const downloadDirRelative = path.join(paperDirRelative, stagingDirName);
       await WorkspaceFS.ensureDir(downloadDirRelative);
 
-      const downloadDirFull = path.join(paperDirFull, 'download');
+      const downloadDirFull = path.join(paperDirFull, stagingDirName);
       const downloadBasePath = path.join(downloadDirFull, 'source');
 
       progressCallback?.(`Downloading arXiv source for ${id}...`, 20);
@@ -238,9 +251,12 @@ export class ArxivSourceProcessor {
         await AbsoluteFS.delete(downloadDirFull, { recursive: true }).catch(
           () => undefined,
         );
-        await AbsoluteFS.delete(paperDirFull, { recursive: true }).catch(
-          () => undefined,
-        );
+        // Only clean up the paper directory when it was created for this download
+        if (!isRoot) {
+          await AbsoluteFS.delete(paperDirFull, { recursive: true }).catch(
+            () => undefined,
+          );
+        }
         throw new Error(
           'This arXiv paper only has a PDF submission — no LaTeX source is available for download',
         );
@@ -250,8 +266,6 @@ export class ArxivSourceProcessor {
         downloadedPath.endsWith('.tar') ||
         downloadedPath.endsWith('.tar.gz') ||
         downloadedPath.endsWith('.tgz');
-
-      // Detect gzip-compressed single files (.gz but not .tar.gz/.tgz)
       const isGzipOnly = !isArchive && downloadedPath.endsWith('.gz');
 
       if (isArchive) {
@@ -303,15 +317,16 @@ export class ArxivSourceProcessor {
       );
     }
 
-    if (autoIndent) {
+    // Skip auto-indent for root destination to avoid reformatting existing workspace files
+    if (autoIndent && !isRoot) {
       progressCallback?.('Formatting LaTeX files...', 85);
 
-      const indentedCount = await indentLatexFilesInDirectory(
+      const indentResult = await indentLatexFilesInDirectory(
         paperDirRelative,
         progressCallback,
       );
 
-      progressCallback?.(`Formatted ${indentedCount} LaTeX files`, 95);
+      progressCallback?.(`Formatted ${indentResult.count} LaTeX files`, 95);
     }
 
     progressCallback?.('arXiv source downloaded successfully!', 100);

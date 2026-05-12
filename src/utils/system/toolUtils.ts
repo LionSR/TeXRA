@@ -4,7 +4,6 @@ import * as path from 'path';
 // Third-party imports
 import { execa, execaSync } from 'execa';
 import { parse as shellParse } from 'shell-quote';
-import * as vscode from 'vscode';
 
 // Local imports
 import type { ExecResult } from '@agent/types/ResultTypes';
@@ -27,11 +26,8 @@ import {
 } from '@shared/constants/latex';
 
 // Local file imports
-import {
-  IS_WINDOWS,
-  extendEnvPath,
-  findToolInCommonPaths,
-} from './platformPaths';
+import { IS_WINDOWS, extendEnvPath } from './platformPaths';
+import { BinaryResolver } from './binaryResolver';
 import { executeCommand } from './execUtils';
 
 const CHANNEL = 'toolUtils';
@@ -42,6 +38,39 @@ interface ToolConfig {
   command?: string | string[]; // Optional - defaults to "${toolName} --version"
   errorMessage: string;
   openDocsCommand?: string; // Optional command to open documentation
+}
+
+/**
+ * Pluggable handler for surfacing tool-missing errors to the user.
+ * Set by the extension host at activation; defaults to a no-op so this
+ * module remains free of platform-specific (vscode) dependencies.
+ */
+export type ToolMissingHandler = (
+  message: string,
+  openDocsCommand?: string,
+) => void | Promise<void>;
+
+let toolMissingHandler: ToolMissingHandler = () => {
+  // No-op by default; the extension host registers a real handler.
+};
+
+/** Register a platform-specific handler for displaying tool-missing errors. */
+export function setToolMissingHandler(handler: ToolMissingHandler): void {
+  toolMissingHandler = handler;
+}
+
+async function reportMissingTool(
+  message: string,
+  openDocsCommand?: string,
+): Promise<void> {
+  try {
+    await toolMissingHandler(message, openDocsCommand);
+  } catch (err) {
+    logger.error(
+      CHANNEL,
+      `Failed to report missing tool: ${toErrorMessage(err)}`,
+    );
+  }
 }
 
 // Platform-specific install instructions resolved at module load.
@@ -174,7 +203,7 @@ export async function checkToolInstalled(
 
   if (!config) {
     if (showError) {
-      vscode.window.showErrorMessage(`Unknown tool: ${toolOrConfig}`);
+      await reportMissingTool(`Unknown tool: ${toolOrConfig}`);
     }
     return false;
   }
@@ -242,28 +271,23 @@ export async function checkToolInstalled(
         return true;
       }
 
-      const fallback = findToolInCommonPaths(cmd);
+      const fallback = BinaryResolver.resolveOptionalCommand(cmd, args);
       logger.debug(
         CHANNEL,
-        `Fallback search for '${cmd}': ${fallback || 'not found'}`,
+        `Fallback search for '${cmd}': ${fallback?.resolvedPath ?? 'not found'}`,
       );
 
       if (fallback) {
-        const needsPerl =
-          fallback.toLowerCase().endsWith('.pl') ||
-          (IS_WINDOWS && path.extname(fallback) === '');
         logger.debug(
           CHANNEL,
-          `Running fallback '${fallback}' (needsPerl=${needsPerl})`,
+          `Running fallback '${fallback.command}' with args [${fallback.args.join(', ')}]`,
         );
         try {
-          result = needsPerl
-            ? await execa('perl', [fallback, ...args], execOptions)
-            : await execa(fallback, args, execOptions);
+          result = await execa(fallback.command, fallback.args, execOptions);
         } catch (fallbackErr) {
           logger.info(
             CHANNEL,
-            `Exception executing fallback '${fallback}': ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
+            `Exception executing fallback '${fallback.command}': ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
           );
           return false;
         }
@@ -318,17 +342,7 @@ export async function checkToolInstalled(
     }
 
     if (!isInstalled && showError) {
-      const actions = config.openDocsCommand ? ['View Installation Guide'] : [];
-      const choice = await vscode.window.showErrorMessage(
-        config.errorMessage,
-        ...actions,
-      );
-
-      if (choice === 'View Installation Guide' && config.openDocsCommand) {
-        // Handle commands with additional arguments separated by comma
-        const [command, ...args] = config.openDocsCommand.split(',');
-        void vscode.commands.executeCommand(command, ...args);
-      }
+      await reportMissingTool(config.errorMessage, config.openDocsCommand);
     }
 
     return isInstalled;
@@ -336,7 +350,7 @@ export async function checkToolInstalled(
     if (showError) {
       const errorMessage =
         config.errorMessage || `Failed to check tool installation: ${err}`;
-      vscode.window.showErrorMessage(errorMessage);
+      await reportMissingTool(errorMessage);
     }
     return false;
   }

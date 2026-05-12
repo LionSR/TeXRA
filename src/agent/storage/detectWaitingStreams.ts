@@ -48,13 +48,9 @@ export async function hasPersistedFlowRecord(
 export async function detectWaitingStreams(
   executionIdMap: ReadonlyMap<StreamTabId, ExecutionId>,
 ): Promise<Set<StreamTabId>> {
-  const waitingStreams = new Set<StreamTabId>();
-
-  for (const [streamId, executionId] of executionIdMap) {
-    if (await hasPersistedFlowRecord(executionId)) {
-      waitingStreams.add(streamId);
-    }
-  }
-
-  return waitingStreams;
+  const checks = Array.from(executionIdMap, async ([streamId, executionId]) =>
+    (await hasPersistedFlowRecord(executionId)) ? streamId : null,
+  );
+  const results = await Promise.all(checks);
+  return new Set(results.filter((id): id is StreamTabId => id !== null));
 }

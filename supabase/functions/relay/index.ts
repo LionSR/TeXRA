@@ -53,15 +53,15 @@
  *
  * Example: /relay/openai/v1/chat/completions
  *
- * Supported providers: openai, anthropic, google, xai, deepseek, moonshot, dashscope
+ * Supported providers: openai, anthropic, google, xai, deepseek, moonshot, dashscope, minimax, glm
  *
  * IMPORTANT: Deploy with --no-verify-jwt flag since we validate JWTs manually
  * (SDKs send JWT in provider-specific headers, not the standard Authorization header).
  */
 
-import { Hono } from 'jsr:@hono/hono@4.11.1';
-import { cors } from 'jsr:@hono/hono@4.11.1/cors';
-import { createClient } from 'jsr:@supabase/supabase-js@2.89.0';
+import { Hono } from 'jsr:@hono/hono@4.12.15';
+import { cors } from 'jsr:@hono/hono@4.12.15/cors';
+import { createClient } from 'jsr:@supabase/supabase-js@2.104.1';
 import {
   TIER_CONFIG,
   TIER_SPENDING_LIMITS,
@@ -75,7 +75,7 @@ import {
 // Constants
 // =============================================================================
 
-const RELAY_VERSION = '1.8.2';
+const RELAY_VERSION = '1.9.0';
 
 // Tier constants imported from models.ts (single source of truth)
 // CROSS-REFERENCE: Keep models.ts in sync with:
@@ -104,7 +104,9 @@ type ProviderKey =
   | 'xai'
   | 'deepseek'
   | 'moonshot'
-  | 'dashscope';
+  | 'dashscope'
+  | 'minimax'
+  | 'glm';
 
 // =============================================================================
 // Provider Configuration
@@ -144,6 +146,16 @@ const PROVIDER_CONFIGS: Record<ProviderKey, ProviderConfig> = {
   dashscope: {
     baseUrl: 'https://dashscope-intl.aliyuncs.com',
     envKey: 'DASHSCOPE_API_KEY',
+    authType: 'bearer',
+  },
+  minimax: {
+    baseUrl: 'https://api.minimax.io',
+    envKey: 'MINIMAX_API_KEY',
+    authType: 'bearer',
+  },
+  glm: {
+    baseUrl: 'https://api.z.ai',
+    envKey: 'GLM_API_KEY',
     authType: 'bearer',
   },
 };
@@ -576,10 +588,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 
     if (!isModelAllowedForTier(userTier, modelName)) {
       const tierName = userTier === FREE_TIER ? 'free' : userTier;
-      const upgradeHint =
-        userTier === FREE_TIER
-          ? 'Upgrade to Max for more models.'
-          : 'Upgrade to Ultra for access.';
+      const upgradeHint = 'Upgrade to Ultra for access.';
 
       return jsonError(
         modelName

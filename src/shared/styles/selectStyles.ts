@@ -1,51 +1,100 @@
 import { css, type CSSResult } from 'lit';
 
+/**
+ * Compact wa-input / wa-select sizing — stricter IDE-density form controls.
+ * WA defaults to ~38px tall; reduce to ~22px to match minimal VS Code chrome.
+ *
+ * Exported as a focused subset so file-select / main-view components can pull
+ * just the form-control rules without inheriting the full select sheet.
+ * `selectStyles` below interpolates this block to keep a single source of
+ * truth for the selectors.
+ */
+export const compactFormControlStyles: CSSResult = css`
+  wa-select {
+    font-size: var(--font-size-sm);
+  }
+
+  wa-select::part(combobox) {
+    min-height: 22px;
+    min-width: 0;
+    padding-block: 0;
+    padding-inline: 6px;
+    border: var(--border-thin) solid
+      var(--wa-color-surface-border, var(--color-border));
+  }
+
+  wa-select::part(display-input) {
+    padding-block: 1px;
+    padding-inline: 6px;
+    font-size: var(--font-size-sm);
+  }
+
+  wa-select::part(expand-icon) {
+    margin-inline-start: var(--wa-space-3xs);
+  }
+
+  wa-input {
+    font-size: var(--font-size-sm);
+  }
+
+  wa-input::part(base) {
+    min-height: 22px;
+    padding-block: 0;
+    border: var(--border-thin) solid
+      var(--wa-color-surface-border, var(--color-border));
+  }
+
+  wa-input::part(input) {
+    padding-block: 1px;
+    padding-inline: 6px;
+    font-size: var(--font-size-sm);
+  }
+`;
+
 export const selectStyles: CSSResult = css`
   .select-group {
     display: flex;
     align-items: center;
-    gap: var(--spacing-tiny);
+    gap: var(--wa-space-3xs);
   }
 
-  .select-group .codicon {
-    margin-right: var(--spacing-small);
-    color: var(--text-color, var(--vscode-foreground));
+  .select-group wa-icon {
+    margin-right: var(--wa-space-2xs);
+    color: var(--text-color, var(--wa-color-text-normal));
     vertical-align: text-bottom;
   }
 
-  .select-group vscode-single-select {
+  .select-group wa-select {
     flex: 1;
     min-width: 6rem;
     max-width: 10rem;
   }
 
   .agent-select-controls {
-    flex: 1;
-    min-width: 10rem;
-    max-width: 14rem;
+    flex: 0 1 auto;
+    min-width: 7rem;
+    max-width: 10rem;
   }
 
   .agent-select-dropdowns {
     position: relative;
     width: 100%;
-    min-width: 10rem;
-    max-width: 14rem;
+    min-width: 7rem;
+    max-width: 10rem;
   }
 
-  vscode-option {
-    font-family: var(--vscode-font-family);
+  wa-option {
+    font-family: var(--wa-font-family-body);
   }
 
-  vscode-option.disabled-option,
-  vscode-option.disabled-model,
-  vscode-option.disabled-agent,
-  vscode-option[data-requires-key='true'] {
-    color: var(--color-text-secondary, var(--vscode-descriptionForeground));
+  wa-option[disabled],
+  wa-option[data-requires-key='true'] {
+    color: var(--color-text-secondary, var(--wa-color-text-quiet));
     opacity: var(--opacity-subtle, 0.7);
     font-style: italic;
   }
 
-  vscode-option[data-tool-use='true'] {
+  wa-option[data-tool-use='true'] {
     font-style: italic;
   }
 
@@ -55,27 +104,31 @@ export const selectStyles: CSSResult = css`
   }
 
   .clickable:hover {
-    color: var(--vscode-foreground);
+    color: var(--wa-color-text-normal);
   }
 
   .clickable:focus-visible {
-    outline: var(--border-thin) solid var(--vscode-focusBorder);
+    outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
   }
 
-  .codicon.clickable:hover {
-    color: var(--button-hover-background, var(--vscode-button-hoverBackground));
+  wa-icon.clickable:hover {
+    color: var(--button-hover-background, var(--wa-color-button-hover));
   }
 
-  vscode-single-select::part(listbox) {
+  wa-select::part(listbox) {
     max-height: var(--height-large, 300px);
   }
 
+  /* Compact form controls — stricter IDE-density inputs/selects.
+   * Border uses subtle surface-border, not heavier panel border. */
+  ${compactFormControlStyles}
+
   .api-key-missing {
-    color: var(--vscode-errorForeground);
+    color: var(--wa-color-danger-on-quiet);
     opacity: var(--opacity-full);
     font-style: normal;
-    margin-left: var(--spacing-tiny);
+    margin-left: var(--wa-space-3xs);
   }
 `;

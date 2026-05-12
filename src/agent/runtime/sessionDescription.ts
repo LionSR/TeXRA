@@ -10,15 +10,34 @@
 import { getAgent } from '@agent/index';
 import { writeSessionDescription } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createHelperModelKit } from '@agent/runtime/helperModel';
-import { bus } from '@eventBus/ProgressEventBus';
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 const CHANNEL = 'SessionDescription';
+const MAX_DESCRIPTION_LENGTH = 80;
 
-const SYSTEM_PROMPT = `You generate concise session descriptions for a LaTeX research assistant tool. Given an agent name, its description, and the user's instruction, write 1-2 sentences summarizing what this session aims to accomplish. Be specific and informative. Do not include meta-commentary — just the summary. Write in present tense (e.g. "Reviews the introduction for...").`;
+/**
+ * Normalize a model-generated session description: collapse newlines,
+ * strip surrounding quotes/backticks, drop trailing sentence punctuation,
+ * and truncate to a UI-friendly length. Returns an empty string when the
+ * cleaned result has no meaningful content.
+ */
+export function cleanSessionDescription(text: string): string {
+  const cleaned = text
+    .trim()
+    .replaceAll(/\s*\n\s*/g, ' ')
+    .replaceAll(/^["'`]+|["'`]+$/g, '')
+    .replaceAll(/[.!?…]+$/g, '')
+    .trim();
+  if (!cleaned) return '';
+  return truncateWithEllipsis(cleaned, MAX_DESCRIPTION_LENGTH);
+}
+
+const SYSTEM_PROMPT = `You generate very short session labels for a LaTeX research assistant tool. Given an agent name, its description, and the user's instruction, write a single short phrase (max ~10 words, no trailing period) that captures what the session aims to accomplish. Be specific but terse — no full sentences, no meta-commentary, no quotes. Use present-tense verb phrases (e.g. "Reviewing introduction for clarity", "Fixing TikZ arrow alignment").`;
 
 /**
  * Build a user prompt for session description generation.
@@ -48,6 +67,7 @@ export async function generateSessionDescription(
   executionId: ExecutionId,
   streamId: StreamTabId,
   config: AgentConfig,
+  runtimeHost: AgentRuntimeHost,
 ): Promise<void> {
   try {
     const instruction = config.instruction?.trim();
@@ -56,16 +76,13 @@ export async function generateSessionDescription(
     const agentEntry = getAgent(config.agent, true);
     const agentDescription = agentEntry?.description;
 
-    const kit = await createHelperModelKit();
-    if (!kit) {
-      logger.warn(
-        CHANNEL,
-        'Helper model not available for session description',
-      );
+    const helperResult = await createHelperModelKit();
+    if (!helperResult.kit) {
+      logger.warn(CHANNEL, helperResult.reason);
       return;
     }
 
-    const { handler, client } = kit;
+    const { handler, client } = helperResult.kit;
     const userPrompt = buildUserPrompt(
       config.agent,
       agentDescription,
@@ -86,10 +103,13 @@ export async function generateSessionDescription(
     const { text } = handler.extractResponse(result.response, '');
 
     if (isNonEmptyString(text)) {
-      // Collapse newlines to prevent corrupting line-based tool output.
-      const description = text.trim().replaceAll(/\s*\n\s*/g, ' ');
+      const description = cleanSessionDescription(text);
+      if (!description) return;
       await writeSessionDescription(executionId, description);
-      bus.emit('updateStreamDescription', { streamId, description });
+      runtimeHost.emit('updateStreamDescription', {
+        streamId,
+        description,
+      });
       logger.info(CHANNEL, `Generated session description for ${executionId}`);
     }
   } catch (err) {

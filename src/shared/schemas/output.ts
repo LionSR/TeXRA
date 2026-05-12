@@ -61,9 +61,18 @@ export const OutputFileInfoSchema = OutputFileSchema.extend({
 
 export const OutputFileInfoListSchema = OutputFileInfoSchema.array();
 
+export const CompileFailureSchema = z.strictObject({
+  round: z.number(),
+  displayName: z.string(),
+  output: FileLocationSchema,
+  log: FileLocationSchema,
+  logRelativePath: z.string(),
+});
+
 export type OutputFile = z.infer<typeof OutputFileSchema>;
 export type FileLineage = z.infer<typeof FileLineageSchema>;
 export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
+export type CompileFailure = z.infer<typeof CompileFailureSchema>;
 
 export const OutputXmlSummarySchema = z.strictObject({
   tagContents: z
@@ -79,6 +88,7 @@ export const RoundOutputSchema = z.strictObject({
   round: z.number(),
   rawOutput: FileLocationSchema.nullable(),
   outputs: OutputFileInfoSchema.array(),
+  compileFailures: CompileFailureSchema.array().prefault(() => []),
   xmlSummary: OutputXmlSummarySchema,
 });
 export type RoundOutput = z.infer<typeof RoundOutputSchema>;

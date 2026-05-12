@@ -1,12 +1,13 @@
 // Internal imports
-import { getConfig } from '@utils/config';
+import { DEFAULT_TEXRA_SETTINGS } from '@shared/schemas/settingsConfiguration';
+import { getConfig } from '@utils/config/configUtils';
 import { hasExtension } from '@utils/core/pathCore';
 
 /**
  * File categories for extension configuration lookups.
  * These map to VS Code settings keys for allowed file extensions.
  *
- * Note: This is distinct from FileType in utils/config/constants.ts
+ * Note: This is distinct from DocumentFileType in utils/config/constants.ts
  * which defines UI file input field types.
  */
 export type ExtensionCategory =
@@ -27,28 +28,41 @@ const INCLUDED_EXTENSION_KEYS: Record<ExtensionCategory, string> = {
 };
 
 /**
+ * Return the built-in extension defaults for a file category.
+ */
+function getDefaultIncludedExtensions(category: ExtensionCategory): string[] {
+  const { included } = DEFAULT_TEXRA_SETTINGS.files;
+  switch (category) {
+    case 'input':
+      return included.inputExtensions;
+    case 'reference':
+      return included.referenceExtensions;
+    case 'auxiliary':
+      return included.auxiliaryExtensions;
+    case 'media':
+      return included.mediaExtensions;
+    case 'edited':
+      return included.editedExtensions;
+    case 'audio':
+      return [];
+  }
+}
+
+/**
  * Retrieve included extensions for the given extension category.
  */
-export function getIncludedExtensions(
-  category: ExtensionCategory,
-  defaultExtensions: string[] = [],
-): string[] {
+export function getIncludedExtensions(category: ExtensionCategory): string[] {
   return getConfig<string[]>(
     INCLUDED_EXTENSION_KEYS[category],
-    defaultExtensions,
+    getDefaultIncludedExtensions(category),
   );
 }
 
 /**
  * Retrieve included extensions without the leading dot (for VS Code file filters).
  */
-export function getFilterExtensions(
-  category: ExtensionCategory,
-  defaultExtensions: string[] = [],
-): string[] {
-  return getIncludedExtensions(category, defaultExtensions).map((ext) =>
-    ext.replace('.', ''),
-  );
+export function getFilterExtensions(category: ExtensionCategory): string[] {
+  return getIncludedExtensions(category).map((ext) => ext.replace(/^\./, ''));
 }
 
 /**

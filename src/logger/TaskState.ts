@@ -1,25 +1,20 @@
 import { z } from 'zod';
 
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import {
-  liftLegacyAgentCategory,
-  type AgentConfig,
-} from '@agent/core/AgentConfig';
-import { FILE_TYPES, type FileType } from '@utils/config';
+  MULTIPLE_DOCUMENT_FILE_TYPES,
+  type MultipleDocumentFileType,
+} from '@shared/schemas/mainView';
 
 const ToolSessionStateSchema = z.object({
   lastFollowUpAt: z.number().optional(),
 });
 
 const ActiveFilesSchema = z.partialRecord(
-  z.enum(FILE_TYPES),
+  z.enum(MULTIPLE_DOCUMENT_FILE_TYPES),
   z.boolean(),
-) as z.ZodType<Record<FileType, boolean>>;
-
-const AgentConfigSchema = z.preprocess(
-  liftLegacyAgentCategory,
-  z.looseObject({ agentCategory: z.enum(AgentCategory) }),
-);
+) as z.ZodType<Record<MultipleDocumentFileType, boolean>>;
 
 const WorkflowTaskStateSchema = z.object({
   agentConfig: AgentConfigSchema.refine(
@@ -45,12 +40,12 @@ export const TaskStateSchema = z.union([
 export type ToolSessionState = z.infer<typeof ToolSessionStateSchema>;
 
 export interface WorkflowTaskState {
-  agentConfig: AgentConfig & { agentCategory: AgentCategory.Workflow };
-  activeFiles: Record<FileType, boolean>;
+  agentConfig: AgentConfig & { agentCategory: typeof AgentCategory.Workflow };
+  activeFiles: Record<MultipleDocumentFileType, boolean>;
 }
 
 export interface ToolUseTaskState {
-  agentConfig: AgentConfig & { agentCategory: AgentCategory.ToolUse };
+  agentConfig: AgentConfig & { agentCategory: typeof AgentCategory.ToolUse };
   toolSessionState?: ToolSessionState;
 }
 

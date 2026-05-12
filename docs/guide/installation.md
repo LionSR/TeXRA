@@ -35,6 +35,20 @@ You can also install TeXRA directly in your preferred editor using protocol-base
 - [Open in Cursor](cursor:extension/texra-ai.texra)
 - [Open in Windsurf](windsurf:extension/texra-ai.texra)
 
+### Desktop App Beta
+
+The standalone desktop app is in beta development. Public signed installers and
+automatic updates are not enabled until the desktop release pipeline is
+complete. See [Desktop App](./desktop.md) for supported platforms, current beta
+installation expectations, logs, and update behavior.
+
+::: tip Desktop app migration
+If you are moving from the VS Code extension to the desktop app, treat the first
+desktop launch as a fresh setup. Open the same project folder, then
+re-authenticate and reconfigure local provider, agent, Git, and LaTeX settings.
+See [Migrating to the Desktop App](./desktop-migration.md).
+:::
+
 ### From VSIX File
 
 1. Open VS Code
@@ -96,10 +110,16 @@ pdflatex --version
 
 #### macOS
 
-Install **MacTeX**, which is the standard LaTeX distribution for macOS:
+Install **TeX Live** via [Homebrew](#homebrew) — this is the recommended option for most TeXRA users because it is smaller, stays current with `brew upgrade`, and skips the Mac-specific GUI apps that VS Code users don't need:
 
-- **Via [Homebrew](#homebrew)**: `brew install --cask mactex`
-- **Direct download** (no Homebrew needed): Go to [tug.org/mactex](https://www.tug.org/mactex/mactex-download.html), download the `.pkg` file (~4 GB), and double-click to run the installer
+```bash
+brew install texlive
+```
+
+Alternative distributions:
+
+- **MacTeX with GUI apps** (includes TeXShop, BibDesk, etc., ~4 GB): `brew install --cask mactex`, or download the `.pkg` from [tug.org/mactex](https://www.tug.org/mactex/mactex-download.html)
+- **MacTeX without GUI apps** (smaller MacTeX variant): `brew install --cask mactex-no-gui`
 
 After installing, **restart VS Code** so TeXRA can detect the new programs. You can verify by opening Terminal and running:
 

@@ -4,13 +4,37 @@ import { strict as assert } from 'assert';
 // Local imports - test
 import {
   toGoogleTools,
+  toOpenAITools,
   toOpenAIResponseTools,
 } from '@agent/modelHandlers/toolConversion';
 
 // Type imports
 import type { ToolDefinition } from '@model';
-import type { Tool as GeminiTool } from '@google/genai/dist/genai';
+import type { Tool as GeminiTool } from '@google/genai';
 import type { FunctionTool } from 'openai/resources/responses/responses';
+
+describe('toOpenAITools', () => {
+  it('leaves Chat Completions function tools non-strict', () => {
+    const defs: ToolDefinition[] = [
+      {
+        name: 'delegate_workflow',
+        description: 'Delegate workflow',
+        parameters: {
+          type: 'object',
+          properties: { instruction: { type: 'string' } },
+          required: ['instruction'],
+          additionalProperties: false,
+        },
+      },
+    ];
+
+    const tools = toOpenAITools(defs);
+    assert.equal(tools.length, 1);
+    assert.equal(tools[0].type, 'function');
+    assert.equal(tools[0].function.name, 'delegate_workflow');
+    assert.equal(tools[0].function.strict, undefined);
+  });
+});
 
 describe('toOpenAIResponseTools', () => {
   it('converts tool definitions to Response API format', () => {

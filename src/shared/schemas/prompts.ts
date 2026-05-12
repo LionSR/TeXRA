@@ -30,6 +30,8 @@ export const ToolEditPermissionSchema = PermissionBaseSchema.extend({
   addedLines: z.int().nonnegative(),
   removedLines: z.int().nonnegative(),
   isLatex: z.boolean(),
+  originalContent: z.string().optional(),
+  proposedContent: z.string().optional(),
 });
 export type ToolEditPermission = z.infer<typeof ToolEditPermissionSchema>;
 
@@ -102,6 +104,37 @@ export const AgentProposalPermissionSchema = z.discriminatedUnion(
 );
 export type AgentProposalPermission = z.infer<
   typeof AgentProposalPermissionSchema
+>;
+
+// ============================================================================
+// External Inquiry
+// ============================================================================
+
+export const EXTERNAL_INQUIRY_ACTIONS = ['submit', 'reject'] as const;
+export type ExternalInquiryAction = (typeof EXTERNAL_INQUIRY_ACTIONS)[number];
+const ExternalInquirySessionLinkSchema = z.string().trim().min(1);
+export const ExternalInquirySessionLinksSchema = z.array(
+  ExternalInquirySessionLinkSchema,
+);
+
+export const ExternalInquiryThreadIdSchema = z
+  .string()
+  .regex(/^ei_[0-9a-f]{12}$/i, 'Invalid external inquiry thread ID')
+  .transform((value) => value.toLowerCase());
+export type ExternalInquiryThreadId = z.infer<
+  typeof ExternalInquiryThreadIdSchema
+>;
+
+export const ExternalInquiryPermissionSchema = PermissionBaseSchema.extend({
+  question: z.string(),
+  threadId: ExternalInquiryThreadIdSchema.nullish(),
+  context: z.string().nullish(),
+  suggestSearch: z.boolean().nullish(),
+  attachFiles: z.array(z.string()).nullish(),
+  sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
+});
+export type ExternalInquiryPermission = z.infer<
+  typeof ExternalInquiryPermissionSchema
 >;
 
 // ============================================================================

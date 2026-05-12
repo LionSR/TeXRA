@@ -114,6 +114,7 @@ export async function getRoundOutput(
     round,
     rawOutput: data.rawOutput,
     outputs: data.outputs,
+    compileFailures: data.compileFailures,
     xmlSummary: data.xmlSummary,
   };
 }

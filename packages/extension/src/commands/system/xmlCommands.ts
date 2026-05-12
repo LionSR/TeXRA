@@ -1,0 +1,60 @@
+// Third-party imports
+import * as vscode from 'vscode';
+import { XMLParser } from 'fast-xml-parser';
+
+// Local imports - core
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import {
+  getActiveEditorWithGuards,
+  logGuardFailure,
+} from '@frontend/editor/activeFileGuards';
+import * as logger from '@logger/logUtils';
+
+const CHANNEL = 'XmlCommands';
+logger.initialize(CHANNEL);
+
+export const xmlCommands = {
+  parseXml: 'texra.parseXml',
+};
+
+export async function handleParseXml(): Promise<void> {
+  try {
+    const guardResult = await getActiveEditorWithGuards({
+      allowedExtensions: ['.xml'],
+      resourceName: 'XML',
+    });
+
+    if (guardResult.status !== 'ok') {
+      logGuardFailure(CHANNEL, 'parse XML', guardResult.status, 'XML');
+      return;
+    }
+
+    const { editor } = guardResult;
+    const content = editor.document.getText();
+    logger.debug(
+      CHANNEL,
+      `Parsing XML content from: ${editor.document.fileName}`,
+    );
+
+    const parser = new XMLParser({
+      ignoreAttributes: false,
+      parseTagValue: true,
+      textNodeName: 'content',
+      attributeNamePrefix: '',
+    });
+
+    const parsedXml = parser.parse(content);
+    logger.debug(CHANNEL, `Parsed XML:\n${JSON.stringify(parsedXml, null, 2)}`);
+  } catch (err) {
+    await showLoggedErrorMessage(CHANNEL, 'Error parsing XML', err);
+  }
+}
+
+/**
+ * `texra.parseXml` is now registered through the shared command registry
+ * in `extensionCommandSurface.ts` (see #3775). This stub is kept for the
+ * existing `registerXmlCommands(context)` call site.
+ */
+export function registerXmlCommands(_context: vscode.ExtensionContext): void {
+  /* registration handled by extensionCommandSurface */
+}

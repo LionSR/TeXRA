@@ -1,11 +1,43 @@
 // Third-party imports
 import mime from 'mime-types';
 
+const AUDIO_MIME_TYPE_OVERRIDES: Readonly<Record<string, string>> = {
+  // mime-types does not expose every audio subtype accepted by current model SDKs.
+  '.alaw': 'audio/alaw',
+  '.l16': 'audio/l16',
+  '.mulaw': 'audio/mulaw',
+  '.opus': 'audio/opus',
+};
+
+function getExtension(pathOrExtension: string): string {
+  const hasPathSeparator = /[\\/]/.test(pathOrExtension);
+  const fileName = pathOrExtension.split(/[\\/]/).at(-1) ?? pathOrExtension;
+  if (fileName.startsWith('.') && !fileName.slice(1).includes('.')) {
+    return fileName.toLowerCase();
+  }
+
+  const dotIndex = fileName.lastIndexOf('.');
+  if (dotIndex >= 0) {
+    return fileName.slice(dotIndex).toLowerCase();
+  }
+
+  if (hasPathSeparator) {
+    return '';
+  }
+
+  return `.${fileName.toLowerCase()}`;
+}
+
 /**
  * Determine the MIME type for a file path or extension.
  * Returns null when the type cannot be resolved.
  */
 export function getMimeType(filePath: string): string | null {
+  const extension = getExtension(filePath);
+  if (extension && Object.hasOwn(AUDIO_MIME_TYPE_OVERRIDES, extension)) {
+    return AUDIO_MIME_TYPE_OVERRIDES[extension];
+  }
+
   return mime.lookup(filePath) || null;
 }
 

@@ -2,12 +2,19 @@
 import { z } from 'zod';
 
 // Local imports - tools
+import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { ToolError, ToolResult } from '@tools/result';
 import {
   recordToolFileRead,
   requireFileReadForEdit,
 } from '@tools/fileInteractions';
-import { countOccurrences, pluralize } from '@tools/utils';
+import { pluralize } from '@tools/formatting';
+import {
+  assertWritable,
+  resolveAndFormat,
+  parseWorkingDirectory,
+} from '@tools/pathResolution';
+import { countOccurrences } from '@tools/utils';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -36,11 +43,20 @@ export class EditFileTool extends defineTool({
   schema: EditInputSchema,
 }) {
   protected async execute(input: EditInput): Promise<ToolResult> {
-    const { path: targetPath, old_str, new_str, replace_all } = input;
+    const { old_str, new_str, replace_all } = input;
+    const root = parseWorkingDirectory(
+      getCurrentToolRunContext()?.workingDirectory,
+    );
+    const { path: resolved, display: displayPath } = resolveAndFormat(
+      input.path,
+      root,
+    );
+    assertWritable(resolved, displayPath);
+    const targetPath = resolved.fsPath;
 
     if (old_str.length === 0) {
       throw new ToolError(
-        `old_str must not be empty for ${targetPath}. ` +
+        `old_str must not be empty for ${displayPath}. ` +
           `Provide the exact text to replace, copied from read_file output (excluding the line-number prefix).`,
       );
     }
@@ -56,7 +72,7 @@ export class EditFileTool extends defineTool({
 
     if (occurrences === 0) {
       throw new ToolError(
-        `old_str not found in ${targetPath}.\n` +
+        `old_str not found in ${displayPath}.\n` +
           `To fix:\n` +
           `- Re-read the file — content may have changed since last read\n` +
           `- Copy text exactly from read_file output, excluding the line-number prefix (e.g. "  42\t"); whitespace must match`,
@@ -65,7 +81,7 @@ export class EditFileTool extends defineTool({
 
     if (!replace_all && occurrences > 1) {
       throw new ToolError(
-        `old_str matches ${occurrences} locations in ${targetPath}.\n` +
+        `old_str matches ${occurrences} locations in ${displayPath}.\n` +
           `To fix, either:\n` +
           `- Include more surrounding context to make old_str unique\n` +
           `- Set replace_all to true to replace every occurrence: { "replace_all": true }`,
@@ -94,7 +110,7 @@ export class EditFileTool extends defineTool({
 
     if (!approval.accepted) {
       return buildApprovalRejectedResult(
-        targetPath,
+        displayPath,
         'edit_file',
         approval.userMessage,
       );
@@ -111,10 +127,10 @@ export class EditFileTool extends defineTool({
 
     const count = replace_all ? occurrences : 1;
     const replacementSummary = `Replaced ${count} ${pluralize(count, 'occurrence')}.`;
-    const summary = `Edited ${targetPath}: replaced ${count} ${pluralize(count, 'occurrence')}`;
+    const summary = `Edited ${displayPath}: replaced ${count} ${pluralize(count, 'occurrence')}`;
 
     const userDiffNote = formatUnifiedApprovalUserDiff(
-      targetPath,
+      displayPath,
       updatedContent,
       appliedContent,
     );
@@ -128,7 +144,7 @@ export class EditFileTool extends defineTool({
       userPatch: approval.userPatch,
       edits: [
         {
-          path: targetPath,
+          path: displayPath,
           lineChanges: approval.lineChanges,
           startLine: approval.startLine,
         },

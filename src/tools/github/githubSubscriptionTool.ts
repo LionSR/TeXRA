@@ -1,0 +1,474 @@
+/**
+ * Unified agent-facing tool for managing GitHub activity subscriptions.
+ *
+ * Surface mirrors the memory tool: a single tool with a `command`
+ * discriminator and a `path` that addresses the subscription target.
+ * Path form mirrors GitHub's REST URL shape.
+ *
+ *   command='subscribe',     path='owner/repo'              → repo-wide
+ *   command='subscribe',     path='owner/repo/pulls/42'     → per-PR
+ *   command='subscribe',     path='owner/repo/issues/42'    → per-issue
+ *   command='unsubscribe',   path=…                         → mirror
+ *   command='list'                                          → active subs
+ *   command='find_current'                                  → branch → path
+ *
+ * The hierarchy is encoded in the path:
+ * - `owner/repo` is coarse (orchestrator-friendly).
+ * - `owner/repo/pulls/N` and `owner/repo/issues/N` are nuanced (worker-friendly).
+ */
+
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+import { z } from 'zod';
+
+import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { toErrorMessage } from '@common/errors';
+import { ToolError, type ToolResult } from '@tools/result';
+import { parseWorkingDirectory } from '@tools/pathResolution';
+
+import { defineTool } from '../core/define';
+import { getGitHubToken } from './githubAuth';
+import { ghGet } from './githubClient';
+import {
+  bindIssueSubscription,
+  listIssueSubscriptionBindings,
+  unbindIssueSubscription,
+} from './IssueSubscriptionBinder';
+import { issuePollingSource } from './IssuePollingSource';
+import {
+  bindPRSubscription,
+  listPRSubscriptionBindings,
+  unbindPRSubscription,
+} from './PRSubscriptionBinder';
+import { prPollingSource } from './PRPollingSource';
+import {
+  bindRepoSubscription,
+  listRepoSubscriptionBindings,
+  unbindRepoSubscription,
+} from './RepoSubscriptionBinder';
+import { repoPollingSource } from './RepoPollingSource';
+import type { GhIssue, GhPullRequest } from './prTypes';
+
+const execFileAsync = promisify(execFile);
+
+const GitHubSubscriptionInputSchema = z.strictObject({
+  command: z.enum(['subscribe', 'unsubscribe', 'list', 'find_current']),
+  /**
+   * Subscription target — mirrors GitHub's REST URL shape. Required for
+   * `subscribe`/`unsubscribe`; ignored for `list`/`find_current`.
+   *
+   * - `owner/repo`               — repo-wide coarse subscription.
+   * - `owner/repo/pulls/N`       — per-PR nuanced subscription.
+   * - `owner/repo/issues/N`      — per-issue subscription.
+   */
+  path: z.string().nullish(),
+  /**
+   * Working directory for `find_current` to resolve the current branch's PR.
+   * Defaults to the agent's working directory.
+   */
+  working_directory: z.string().nullish(),
+});
+
+type GitHubSubscriptionInput = z.infer<typeof GitHubSubscriptionInputSchema>;
+
+interface ParsedRepoPath {
+  kind: 'repo';
+  owner: string;
+  repo: string;
+}
+interface ParsedPRPath {
+  kind: 'pr';
+  owner: string;
+  repo: string;
+  pullNumber: number;
+}
+interface ParsedIssuePath {
+  kind: 'issue';
+  owner: string;
+  repo: string;
+  issueNumber: number;
+}
+type ParsedPath = ParsedRepoPath | ParsedPRPath | ParsedIssuePath;
+
+const REPO_PATH_RE = /^([^/\s]+)\/([^/\s]+)$/;
+const SUB_PATH_RE = /^([^/\s]+)\/([^/\s]+)\/(pulls|issues)\/(\d+)$/;
+
+function parsePath(raw: string): ParsedPath {
+  const trimmed = raw.trim();
+  const sub = SUB_PATH_RE.exec(trimmed);
+  if (sub) {
+    const [, owner, repo, kind, numStr] = sub;
+    const n = Number(numStr);
+    if (!Number.isFinite(n) || n <= 0) {
+      throw new ToolError(`Invalid number in path "${raw}".`);
+    }
+    return kind === 'pulls'
+      ? { kind: 'pr', owner, repo, pullNumber: n }
+      : { kind: 'issue', owner, repo, issueNumber: n };
+  }
+  const repoMatch = REPO_PATH_RE.exec(trimmed);
+  if (repoMatch) {
+    const [, owner, repo] = repoMatch;
+    return { kind: 'repo', owner, repo };
+  }
+  throw new ToolError(
+    `Invalid path "${raw}". Expected "owner/repo", "owner/repo/pulls/N", or "owner/repo/issues/N".`,
+  );
+}
+
+function requireToken(): void {
+  if (!getGitHubToken()) {
+    throw new ToolError(
+      'No GitHub token configured. Open TeXRA settings → Git tab → "Set token" (or export GITHUB_TOKEN). Needs `repo` scope for private repos, `public_repo` for public.',
+    );
+  }
+}
+
+function requireStreamId(): string {
+  const streamId = getCurrentToolRunContext()?.streamId;
+  if (!streamId) {
+    throw new ToolError(
+      'github_subscription must be called from within an agent stream.',
+    );
+  }
+  return streamId;
+}
+
+function requirePath(input: GitHubSubscriptionInput): ParsedPath {
+  if (!input.path) {
+    throw new ToolError(
+      `command="${input.command}" requires a path ("owner/repo", "owner/repo/pulls/N", or "owner/repo/issues/N").`,
+    );
+  }
+  return parsePath(input.path);
+}
+
+async function execSubscribe(
+  input: GitHubSubscriptionInput,
+): Promise<ToolResult> {
+  requireToken();
+  const streamId = requireStreamId();
+  const target = requirePath(input);
+  if (target.kind === 'repo') {
+    const created = bindRepoSubscription(streamId, target);
+    const slug = `${target.owner}/${target.repo}`;
+    return {
+      summary: created
+        ? `Subscribed to repo ${slug}`
+        : `Already subscribed to repo ${slug}`,
+      output: created
+        ? `Subscribed to repo ${slug}. PR opens/closes/merges, conversation comments on PRs and issues, inline review comments, and newly-detected merge conflicts on open PRs arrive as <github-webhook-activity> follow-ups. Each event uses GitHub's URL form (${slug}/pulls/N or ${slug}/issues/N) — pass that path back to command="subscribe" to delegate a worker.`
+        : `Already subscribed to repo ${slug}. Activity continues until command="unsubscribe".`,
+    };
+  }
+  if (target.kind === 'pr') {
+    const created = bindPRSubscription(streamId, target);
+    const slug = `${target.owner}/${target.repo}/pulls/${target.pullNumber}`;
+    return {
+      summary: created
+        ? `Subscribed to ${slug}`
+        : `Already subscribed to ${slug}`,
+      output: created
+        ? `Subscribed to ${slug}. New comments, reviews, line comments, failed CI checks, inline check annotations (notices / warnings / failures pinned to file:line), and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups. Auto-unsubscribes on PR close/merge.`
+        : `Already subscribed to ${slug}. Activity continues until command="unsubscribe" or the PR closes.`,
+    };
+  }
+  // The path "owner/repo/issues/N" is ambiguous: the /issues/comments
+  // endpoint surfaces both PR conversation comments and plain issue
+  // comments, and the repo poller emits /issues/N for the unified case.
+  // A worker following that literal path would land on IssuePollingSource
+  // even when N is actually a PR — losing reviews, line comments, CI.
+  // If either source already knows the entity's type (because some other
+  // stream is already subscribed), skip the disambiguation GET and bind
+  // directly. The bind itself MUST still run — it's per-stream and the
+  // binder dedupes the (streamId, key) pair correctly. Mirrors GitHub's
+  // own /issues/N → /pull/N redirect behavior on github.com.
+  const issueSlug = `${target.owner}/${target.repo}/issues/${target.issueNumber}`;
+  const prSlug = `${target.owner}/${target.repo}/pulls/${target.issueNumber}`;
+  const knownPR = prPollingSource.has(prSlug);
+  const knownIssue = !knownPR && issuePollingSource.has(issueSlug);
+  const isPR =
+    knownPR ||
+    (!knownIssue &&
+      (await resolveIssueIsPR(target.owner, target.repo, target.issueNumber)));
+
+  if (isPR) {
+    const created = bindPRSubscription(streamId, {
+      owner: target.owner,
+      repo: target.repo,
+      pullNumber: target.issueNumber,
+    });
+    const wasIssuePath = !knownPR;
+    return {
+      summary: created
+        ? wasIssuePath
+          ? `Subscribed to ${prSlug} (was /issues/${target.issueNumber}; resolved to PR)`
+          : `Subscribed to ${prSlug}`
+        : `Already subscribed to ${prSlug}`,
+      output: created
+        ? `${prSlug} is a PR. New comments, reviews, line comments, failed CI checks, inline check annotations (notices / warnings / failures pinned to file:line), and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups. Auto-unsubscribes on close/merge.`
+        : `Already subscribed to ${prSlug}.`,
+    };
+  }
+  const created = bindIssueSubscription(streamId, target);
+  return {
+    summary: created
+      ? `Subscribed to ${issueSlug}`
+      : `Already subscribed to ${issueSlug}`,
+    output: created
+      ? `Subscribed to ${issueSlug}. New comments and state transitions (closed / reopened) arrive as <github-webhook-activity> follow-ups. The subscription stays active across close so reopens are caught — call command="unsubscribe" to release the slot.`
+      : `Already subscribed to ${issueSlug}. Activity continues until command="unsubscribe".`,
+  };
+}
+
+/**
+ * Returns true iff the given issue/PR number resolves to a PR. One GET to
+ * `/repos/{o}/{r}/issues/{n}`; the response object has a `pull_request`
+ * field iff this is actually a PR. Throws on non-200.
+ */
+async function resolveIssueIsPR(
+  owner: string,
+  repo: string,
+  number: number,
+): Promise<boolean> {
+  const res = await ghGet<GhIssue>(`/repos/${owner}/${repo}/issues/${number}`);
+  if (res.status !== 200) {
+    throw new ToolError(
+      `Failed to resolve ${owner}/${repo}/issues/${number}: GitHub returned status ${res.status}. ` +
+        `Verify the number exists and the repo is accessible.`,
+    );
+  }
+  return res.data.pull_request != null;
+}
+
+function execUnsubscribe(input: GitHubSubscriptionInput): ToolResult {
+  const streamId = requireStreamId();
+  const target = requirePath(input);
+  if (target.kind === 'repo') {
+    const removed = unbindRepoSubscription(streamId, target);
+    const slug = `${target.owner}/${target.repo}`;
+    return {
+      summary: removed
+        ? `Unsubscribed from repo ${slug}`
+        : `Was not subscribed to repo ${slug}`,
+    };
+  }
+  if (target.kind === 'pr') {
+    const removed = unbindPRSubscription(streamId, target);
+    const slug = `${target.owner}/${target.repo}/pulls/${target.pullNumber}`;
+    return {
+      summary: removed
+        ? `Unsubscribed from ${slug}`
+        : `Was not subscribed to ${slug}`,
+    };
+  }
+  // Symmetric to subscribe: a /issues/N path may have been re-routed to a
+  // PR subscription. Try both — whichever owns it wins.
+  const issueRemoved = unbindIssueSubscription(streamId, target);
+  const prRemoved = unbindPRSubscription(streamId, {
+    owner: target.owner,
+    repo: target.repo,
+    pullNumber: target.issueNumber,
+  });
+  const slug = `${target.owner}/${target.repo}/issues/${target.issueNumber}`;
+  return {
+    summary:
+      issueRemoved || prRemoved
+        ? `Unsubscribed from ${slug}`
+        : `Was not subscribed to ${slug}`,
+  };
+}
+
+function execList(): ToolResult {
+  const streamId = requireStreamId();
+  const prKeys = listPRSubscriptionBindings(prPollingSource.activeKeys())
+    .filter((b) => b.streamIds.includes(streamId))
+    .map((b) => b.key);
+  const repoKeys = listRepoSubscriptionBindings(repoPollingSource.activeKeys())
+    .filter((b) => b.streamIds.includes(streamId))
+    .map((b) => b.key);
+  const issueKeys = listIssueSubscriptionBindings(
+    issuePollingSource.activeKeys(),
+  )
+    .filter((b) => b.streamIds.includes(streamId))
+    .map((b) => b.key);
+  const all = [...repoKeys, ...prKeys, ...issueKeys];
+  if (all.length === 0) {
+    return {
+      summary: 'No active subscriptions on this stream.',
+      output: 'No active subscriptions on this stream.',
+    };
+  }
+  return {
+    summary: `${all.length} active subscription(s).`,
+    output: all.map((k) => `- ${k}`).join('\n'),
+  };
+}
+
+// GitHub SSH/HTTPS URL → { owner, repo }. Handles `.git` suffix, and repo
+// names that themselves contain dots (e.g. `org.github.io`, `my.config`).
+const GITHUB_URL_RE =
+  /^(?:git@github\.com:|https:\/\/github\.com\/)([^/]+)\/(.+?)(?:\.git)?\/?$/;
+
+function parseGitHubRemote(
+  remoteUrl: string,
+): { owner: string; repo: string } | undefined {
+  const m = remoteUrl.trim().match(GITHUB_URL_RE);
+  if (!m) return undefined;
+  return { owner: m[1], repo: m[2] };
+}
+
+async function gitInDir(args: string[], cwd: string): Promise<string> {
+  const { stdout } = await execFileAsync('git', args, {
+    cwd,
+    timeout: 10_000,
+    maxBuffer: 1024 * 1024,
+  });
+  return stdout.trim();
+}
+
+interface OpenPullSummary {
+  number: number;
+  title?: string;
+  head?: { ref?: string };
+}
+
+async function getDefaultBranch(owner: string, repo: string): Promise<string> {
+  const res = await ghGet<{ default_branch?: string }>(
+    `/repos/${owner}/${repo}`,
+  );
+  if (res.status !== 200) {
+    throw new ToolError(`Unexpected GitHub response status: ${res.status}`);
+  }
+  return res.data.default_branch ?? 'main';
+}
+
+async function listOpenPullSuggestions(
+  owner: string,
+  repo: string,
+): Promise<string> {
+  const res = await ghGet<OpenPullSummary[]>(
+    `/repos/${owner}/${repo}/pulls?state=open&per_page=5`,
+  );
+  if (res.status !== 200 || res.data.length === 0) {
+    return '';
+  }
+  const lines = res.data.map((pr) => {
+    const title = pr.title ? ` - ${pr.title}` : '';
+    const head = pr.head?.ref ? ` (${pr.head.ref})` : '';
+    return `- ${owner}/${repo}/pulls/${pr.number}${head}${title}`;
+  });
+  return `\n\nOpen PRs you can subscribe to directly:\n${lines.join('\n')}`;
+}
+
+async function getFindCurrentFallbackInfo(
+  owner: string,
+  repo: string,
+): Promise<{ defaultBranch?: string; suggestions: string }> {
+  const [defaultBranchResult, suggestionsResult] = await Promise.allSettled([
+    getDefaultBranch(owner, repo),
+    listOpenPullSuggestions(owner, repo),
+  ]);
+  return {
+    defaultBranch:
+      defaultBranchResult.status === 'fulfilled'
+        ? defaultBranchResult.value
+        : undefined,
+    suggestions:
+      suggestionsResult.status === 'fulfilled' ? suggestionsResult.value : '',
+  };
+}
+
+async function execFindCurrent(
+  input: GitHubSubscriptionInput,
+): Promise<ToolResult> {
+  requireToken();
+  const cwd =
+    parseWorkingDirectory(input.working_directory) ??
+    getCurrentToolRunContext()?.workingDirectory;
+  if (!cwd) {
+    throw new ToolError(
+      'No working_directory available. Provide one explicitly.',
+    );
+  }
+  let remoteUrl: string;
+  let branch: string;
+  try {
+    remoteUrl = await gitInDir(['remote', 'get-url', 'origin'], cwd);
+    branch = await gitInDir(['rev-parse', '--abbrev-ref', 'HEAD'], cwd);
+  } catch (err) {
+    throw new ToolError(
+      `git invocation failed in ${cwd}: ${toErrorMessage(err)}`,
+    );
+  }
+  const remote = parseGitHubRemote(remoteUrl);
+  if (!remote) {
+    throw new ToolError(`origin remote is not a github.com URL: ${remoteUrl}`);
+  }
+  if (branch === 'HEAD') {
+    throw new ToolError('HEAD is detached — cannot infer a PR branch.');
+  }
+  const apiPath = `/repos/${remote.owner}/${remote.repo}/pulls?state=open&head=${remote.owner}:${encodeURIComponent(branch)}&per_page=1`;
+  const res =
+    await ghGet<
+      Array<{ number: number; html_url: string } & Partial<GhPullRequest>>
+    >(apiPath);
+  if (res.status !== 200) {
+    throw new ToolError(`Unexpected GitHub response status: ${res.status}`);
+  }
+  const pr = res.data[0];
+  if (!pr) {
+    const { defaultBranch, suggestions } = await getFindCurrentFallbackInfo(
+      remote.owner,
+      remote.repo,
+    );
+    if (branch === defaultBranch) {
+      throw new ToolError(
+        `Current branch is the default branch "${branch}", and no open PR uses it as the head branch. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
+      );
+    }
+    if (!defaultBranch && branch === 'main') {
+      throw new ToolError(
+        `Current branch is "main", no open PR uses it as the head branch, and the default branch could not be confirmed. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
+      );
+    }
+    throw new ToolError(
+      `No open PR found for ${remote.owner}/${remote.repo} head ${branch}. Push this branch and open a PR, or pass command="subscribe" with an explicit path for an existing PR.${suggestions}`,
+    );
+  }
+  const path = `${remote.owner}/${remote.repo}/pulls/${pr.number}`;
+  return {
+    summary: path,
+    output: `path: ${path}\nurl: ${pr.html_url}\n\nPass this path to command="subscribe" to start watching the PR.`,
+  };
+}
+
+export class GitHubSubscriptionTool extends defineTool({
+  name: 'github_subscription',
+  description: [
+    'Manage GitHub activity subscriptions for the current agent stream.',
+    'Path mirrors GitHub\'s REST URL shape and encodes the hierarchy: "owner/repo" addresses the whole repo (coarse, orchestrator-friendly); "owner/repo/pulls/N" addresses a specific pull request and "owner/repo/issues/N" addresses a specific issue (nuanced, worker-friendly).',
+    'Commands:',
+    '- subscribe: start watching the path. For repos: PR opens/closes/merges, conversation comments on PRs and issues, inline review comments, plus a holistic merge-conflict probe that flags open PRs whose mergeable_state newly flipped to "dirty" (one event per PR, or a coalesced summary when many PRs flip at once — typical after a base-branch update). For PRs: comments, reviews, line comments, failed CI checks, inline check annotations (notices / warnings / failures pinned to file:line), plus mergeable_state transitions (dirty / resolved). Auto-unsubscribes on close/merge. For issues: comments, closed (with state_reason), reopened — the subscription stays active across close so reopens are caught; call command="unsubscribe" to release the slot.',
+    '- unsubscribe: stop watching the path.',
+    '- list: list active subscriptions on this stream.',
+    '- find_current: resolve the current git branch to its PR path (returns "owner/repo/pulls/N").',
+    'Bot-authored events are dropped end-to-end by policy.',
+    'Caps: 10 concurrent PR subscriptions, 10 concurrent issue subscriptions, 3 concurrent repo subscriptions per process. Poll interval ≈ 30s. Requires a GitHub token — set it in TeXRA settings → Git tab, or via GITHUB_TOKEN.',
+  ].join(' '),
+  schema: GitHubSubscriptionInputSchema,
+}) {
+  protected async execute(input: GitHubSubscriptionInput): Promise<ToolResult> {
+    switch (input.command) {
+      case 'subscribe':
+        return execSubscribe(input);
+      case 'unsubscribe':
+        return execUnsubscribe(input);
+      case 'list':
+        return execList();
+      case 'find_current':
+        return execFindCurrent(input);
+    }
+  }
+}

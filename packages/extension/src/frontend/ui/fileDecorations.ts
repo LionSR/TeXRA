@@ -1,0 +1,93 @@
+import * as vscode from 'vscode';
+
+import { bus } from '@eventBus/ProgressEventBus';
+import type { OutputFileInfo } from '@shared/schemas/output';
+
+// Session-scoped: the touched set is not persisted across window reloads so
+// the badges clear on restart and track only the current session's activity.
+class TeXRAFileDecorationProvider implements vscode.FileDecorationProvider {
+  private readonly touched = new Set<string>();
+  private readonly _onDidChange = new vscode.EventEmitter<
+    vscode.Uri | vscode.Uri[]
+  >();
+  readonly onDidChangeFileDecorations = this._onDidChange.event;
+
+  markTouched(absolutePaths: Iterable<string>): void {
+    const newly: vscode.Uri[] = [];
+    for (const p of absolutePaths) {
+      // Round-trip through Uri.file so storage and lookup use the same
+      // canonical form (Windows drive letters are normalized differently
+      // by Uri.file vs. raw fs paths).
+      const uri = vscode.Uri.file(p);
+      if (!this.touched.has(uri.fsPath)) {
+        this.touched.add(uri.fsPath);
+        newly.push(uri);
+      }
+    }
+    if (newly.length > 0) {
+      this._onDidChange.fire(newly);
+    }
+  }
+
+  provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
+    if (uri.scheme !== 'file' || !this.touched.has(uri.fsPath)) {
+      return undefined;
+    }
+    return {
+      badge: 'T',
+      tooltip: 'Modified by TeXRA',
+      color: new vscode.ThemeColor('textLink.foreground'),
+    };
+  }
+
+  dispose(): void {
+    this._onDidChange.dispose();
+  }
+}
+
+// Only mark the primary output location. Lineage entries (original, diffBase,
+// diffFile) are reference points — marking them would badge the source file as
+// "Modified by TeXRA" before the user has actually accepted the workflow output.
+function collectWorkspacePaths(
+  target: Set<string>,
+  info: OutputFileInfo,
+): void {
+  if (info.location.kind === 'workspace') {
+    target.add(info.location.absolutePath);
+  }
+}
+
+export function registerFileDecorations(
+  context: vscode.ExtensionContext,
+): void {
+  const provider = new TeXRAFileDecorationProvider();
+
+  const unsubscribeOutputFiles = bus.on(
+    'addOutputFiles',
+    ({ filesByRound }) => {
+      const paths = new Set<string>();
+      for (const roundFiles of Object.values(filesByRound)) {
+        for (const info of roundFiles) {
+          collectWorkspacePaths(paths, info);
+        }
+      }
+      if (paths.size > 0) {
+        provider.markTouched(paths);
+      }
+    },
+  );
+
+  const unsubscribeWritten = bus.on(
+    'workspaceFilesWritten',
+    ({ absolutePaths }) => {
+      provider.markTouched(absolutePaths);
+    },
+  );
+
+  context.subscriptions.push(
+    vscode.window.registerFileDecorationProvider(provider),
+    provider,
+    { dispose: unsubscribeOutputFiles },
+    { dispose: unsubscribeWritten },
+  );
+}

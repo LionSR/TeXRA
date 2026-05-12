@@ -5,19 +5,24 @@ import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports - tools
-import type { ToolResult } from '@tools/result';
+import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { ToolError, type ToolResult } from '@tools/result';
+import { isOversizedImage, MANY_IMAGE_MAX_DIMENSION } from '@tools/imageUtils';
+import { buildFileAttachment } from '@tools/attachments';
+import { formatFileView, READ_FILE_MAX_LINES } from '@tools/formatting';
 import {
-  buildFileAttachment,
-  formatFileView,
-  READ_FILE_MAX_LINES,
-} from '@tools/utils';
+  resolveAndFormat,
+  parseWorkingDirectory,
+  type WorkspacePathResolution,
+} from '@tools/pathResolution';
 import { recordToolFileRead } from '@tools/fileInteractions';
+import { parseEml } from '@tools/emlParser';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import {
-  WorkspaceFS,
   getMimeType,
   OFFICE_EXTENSIONS,
   OFFICE_MIME_TYPES,
-} from '@utils/files';
+} from '@utils/files/mimeUtils';
 import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -62,15 +67,47 @@ export class ReadFileTool extends defineTool({
   schema: ReadInputSchema,
 }) {
   protected async execute(input: ReadInput): Promise<ToolResult> {
-    const attachmentConfig = this.getAttachmentConfig(input.path);
+    const root = parseWorkingDirectory(
+      getCurrentToolRunContext()?.workingDirectory,
+    );
+    const { path: resolved, display: displayPath } = resolveAndFormat(
+      input.path,
+      root,
+    );
+    const filePath = resolved.fsPath;
+
+    const attachmentConfig = this.getAttachmentConfig(resolved.absolute);
     if (attachmentConfig) {
-      const result = await this.returnBinaryAttachment(input, attachmentConfig);
-      recordToolFileRead(input.path);
+      const result = await this.returnBinaryAttachment(
+        input,
+        attachmentConfig,
+        resolved,
+      );
+      recordToolFileRead(filePath);
       return result;
     }
 
-    const lines = splitContentLines(await WorkspaceFS.read(input.path));
-    recordToolFileRead(input.path);
+    // EML files use complex MIME encoding (multipart, base64, quoted-printable).
+    // Parse into readable text and extract image attachments for vision models.
+    let emlImages: Awaited<ReturnType<typeof parseEml>>['images'] = [];
+    let lines: string[];
+
+    if (path.extname(input.path).toLowerCase() === '.eml') {
+      const stats = await WorkspaceFS.stat(filePath);
+      if (stats.size > MAX_EML_BYTES) {
+        throw new ToolError(
+          `EML file exceeds maximum size of ${MAX_EML_BYTES / (1024 * 1024)} MiB.`,
+        );
+      }
+      const raw = await WorkspaceFS.read(filePath);
+      const { text, images } = await parseEml(raw);
+      lines = splitContentLines(text);
+      emlImages = images;
+    } else {
+      lines = splitContentLines(await WorkspaceFS.read(filePath));
+    }
+
+    recordToolFileRead(filePath);
 
     const totalLines = lines.length;
     const requestedStartLine = input.range?.start ?? 1;
@@ -95,12 +132,32 @@ export class ReadFileTool extends defineTool({
       ? ` (requested end ${requestedEndLine} exceeds file length ${totalLines})`
       : '';
 
-    return formatFileView({
-      path: input.path,
+    const result = formatFileView({
+      path: displayPath,
       lines,
       viewRange: input.range ? [startLine, endLine] : null,
       summarySuffix: suffix,
     });
+
+    if (emlImages.length > 0) {
+      result.files = emlImages.map((img) => {
+        if (isOversizedImage(img.bytes)) {
+          return {
+            path: img.filename,
+            mimeType: img.mimeType,
+            description: `Image attachment from email: ${img.filename} — Image exceeds ${MANY_IMAGE_MAX_DIMENSION}px dimension limit; binary data stripped`,
+          };
+        }
+        return {
+          path: img.filename,
+          mimeType: img.mimeType,
+          bytes: img.bytes,
+          description: `Image attachment from email: ${img.filename}`,
+        };
+      });
+    }
+
+    return result;
   }
 
   private computeRequestedEndLine(
@@ -108,13 +165,9 @@ export class ReadFileTool extends defineTool({
     requestedStartLine: number,
     totalLines: number,
   ): number {
-    if (range?.end != null) {
-      return range.end;
-    }
-
-    if (range?.start != null) {
+    if (range?.end != null) return range.end;
+    if (range?.start != null)
       return Math.min(requestedStartLine + READ_FILE_MAX_LINES - 1, totalLines);
-    }
     return totalLines;
   }
 
@@ -152,11 +205,13 @@ export class ReadFileTool extends defineTool({
   private async returnBinaryAttachment(
     input: ReadInput,
     config: { kind: 'pdf' | 'image' | 'document'; label: string },
+    resolved: WorkspacePathResolution,
   ): Promise<ToolResult> {
     const copy = ATTACHMENT_COPY[config.kind];
     const attachment = await buildFileAttachment({
-      filePath: input.path,
+      filePath: resolved.fsPath,
       description: `${config.label} returned by read_file tool.`,
+      resolved,
     });
 
     const baseSummary = `Attached ${config.label} ${attachment.path}.`;
@@ -170,6 +225,9 @@ export class ReadFileTool extends defineTool({
     return { summary, output, files: [attachment] };
   }
 }
+
+/** Guard against very large EML files exhausting memory during parsing. */
+const MAX_EML_BYTES = 15 * 1024 * 1024; // 15 MiB — matches DEFAULT_ATTACHMENT_MAX_BYTES
 
 const IMAGE_EXTENSIONS = new Set([
   '.png',

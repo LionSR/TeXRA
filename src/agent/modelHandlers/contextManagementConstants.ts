@@ -7,9 +7,6 @@ export const MIN_COMPLETION_TOKENS = 100;
 /** Safety buffer for exact token counting (Anthropic, Google). */
 export const TOKEN_SAFETY_BUFFER = 10;
 
-/** Safety buffer for heuristic token counting (OpenAI). */
-export const HEURISTIC_TOKEN_BUFFER = 5000;
-
 /** Max output factor for tool-use agents (reserves headroom for context growth). */
 export const TOOL_USE_MAX_OUTPUT_FACTOR = 0.7;
 
@@ -36,13 +33,26 @@ export function getAnthropicMaxPdfPages(contextWindow: number): number {
     : ANTHROPIC_MAX_PDF_PAGES_200K;
 }
 
+/** Max tokens for the compaction summary response (client-side compaction for OpenAI-compatible models). */
+export const CLIENT_COMPACTION_SUMMARY_MAX_TOKENS = 2000;
+
+/** System prompt used for client-side conversation compaction. */
+export const COMPACTION_SYSTEM_PROMPT = `You are a conversation summarizer. Create a concise but complete summary of the conversation below. Preserve:
+- The original user request and goals
+- All key decisions made
+- File paths and code changes discussed or made
+- Tool call results and their outcomes
+- Current state of the task (what is done, what is pending)
+- Any errors encountered and how they were resolved
+
+Format the summary as a structured narrative that allows the conversation to continue seamlessly. Do NOT add any preamble or explanation — output only the summary.`;
+
 /** Compute reduced max tokens under context pressure (minimum 1). */
 export function computeReducedMaxTokens(
   availableTokens: number,
   tokenBuffer: number = TOKEN_SAFETY_BUFFER,
 ): number {
   if (availableTokens <= 0) return 1;
-
   const buffered = availableTokens - tokenBuffer;
-  return buffered < MIN_COMPLETION_TOKENS ? availableTokens : buffered;
+  return buffered >= MIN_COMPLETION_TOKENS ? buffered : availableTokens;
 }

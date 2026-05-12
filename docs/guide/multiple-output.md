@@ -20,8 +20,8 @@ The TeXRA UI provides dedicated sections for managing multiple files:
 - **Input Files**: Use the "▼" toggle to add multiple source files. These are typically concatenated and provided as context to the selected agent.
   - **Multiple Outputs**:
     - Use the "▼" toggle to activate multiple output mode.
-    - Use the "+" button (<i class="codicon codicon-add"></i>) to list the _exact filenames_ you expect the agent to generate. **Order matters** if the agent references them by position.
-    - The list can be cleared (<i class="codicon codicon-trash"></i>).
+    - Use the "+" button (<wa-icon library="texra" name="add"></wa-icon>) to list the _exact filenames_ you expect the agent to generate. **Order matters** if the agent references them by position.
+    - The list can be cleared (<wa-icon library="texra" name="trash"></wa-icon>).
     - If this section is _not_ toggled/activated, TeXRA expects the agent to produce only a single output file, named based on the primary input file.
 
 _(See [File Management](./file-management.md) for general UI controls.)_
@@ -34,15 +34,15 @@ When you provide multiple input files, TeXRA typically combines their content (o
 
 This is the crucial part for generating multiple distinct files:
 
-1. **User Specifies Outputs:** You list the desired output filenames in the "Multiple Outputs" UI section (e.g., `chapter2_polish_r0_model.tex`, `appendixA_polish_r0_model.tex`).
+1. **User Specifies Outputs:** You list the desired output filenames in the "Multiple Outputs" UI section (e.g., `chapter2.tex`, `appendixA.tex`).
 2. **Agent Generates Structured XML:** The selected agent must be designed (through its `prompts`) to produce a _single XML response_ containing separate blocks for each intended output file, using a structure like this:
 
    ```xml
    <latex_documents>  <!-- Or agent's specific documentTag -->
-     <document name="chapter2_polish_r0_model.tex">
+     <document name="chapter2.tex">
        % ... content for the first output file ...
      </document>
-     <document name="appendixA_polish_r0_model.tex">
+     <document name="appendixA.tex">
        % ... content for the second output file ...
      </document>
      ...
@@ -122,9 +122,9 @@ To enable multiple output files, simply click the toggle icon (▼) next to the 
 
 Once expanded, you can manage the output files:
 
-1.  **Add Files**: Use the "Add" button (<i class="codicon codicon-add"></i>) to specify output filenames. You typically need one output file for each corresponding input file.
+1.  **Add Files**: Use the "Add" button (<wa-icon library="texra" name="add"></wa-icon>) to specify output filenames. You typically need one output file for each corresponding input file.
 2.  **Remove Files**: Click the "-" button next to a file to remove it.
 3.  **Reorder Files**: Drag and drop files to ensure the order matches the input file order.
-4.  **Clear List**: Use the "Empty List" button (<i class="codicon codicon-trash"></i>) to remove all specified output files.
+4.  **Clear List**: Use the "Empty List" button (<wa-icon library="texra" name="trash"></wa-icon>) to remove all specified output files.
 
 ## Output Naming

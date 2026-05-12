@@ -2,6 +2,12 @@
 
 Every time you click "Execute" in TeXRA, an **agent** takes your files and instructions, asks an AI model to do the work, and delivers the result. This page explains what happens under the hood—enough to understand the system, customize it, and troubleshoot when things go sideways.
 
+::: tip When to use workflow mode
+Workflow agents are built for **deep, single-shot thinking**—things like rewriting a whole section, deriving or checking equations step-by-step, converting a paper to slides, or merging edits. They plan in a `<scratchpad>`, produce a full XML-wrapped output, and optionally reflect on it for another round, so runs with frontier reasoning models can take **10–30 minutes** to finish.
+
+If you want a snappier turnaround (e.g. quick polishes, small corrections), pick a **smaller or faster model** in the model dropdown—output quality drops somewhat, but wall-clock time drops a lot. For short, conversational edits or read-only questions, use a **tool-use agent** (`chat`, `ask`, `research`) instead: those stream back in seconds and don't go through the full workflow pipeline.
+:::
+
 ## Agent Definition Files (`.yaml`)
 
 Each agent is defined in a simple `.yaml` file that tells TeXRA what to say to the AI model and how to handle the response. You can browse and manage these files from the **Agents** tab in the TeXRA Dashboard, or create your own (see [Custom Agents](./custom-agents.md)).
@@ -44,7 +50,7 @@ sequenceDiagram
     Agent Backend->>LLM API: Create Response (Round 0 Prompt)
     Note over LLM API: Processes request based on prompts
     LLM API-->>Agent Backend: Response (Text + Usage + StopReason)
-    Agent Backend->>Agent Backend: Process Response (Save *_r0_* output, check for continuation)
+    Agent Backend->>Agent Backend: Process Response (Save r0/output.* output, check for continuation)
     Agent Backend-->>TeXRA UI: Update ProgressBoard / Signal Completion
 ```
 
@@ -53,7 +59,7 @@ sequenceDiagram
 1.  **Initialization:** TeXRA loads the agent definition and reads the files you selected.
 2.  **Prompt Construction:** It combines the agent's `systemPrompt`, `userPrefix` (filled with your files and instruction), and `userRequest` templates into a full prompt for the LLM.
 3.  **LLM Interaction (Round 0):** TeXRA sends the prompt to the selected LLM API. The LLM generates a response, typically including reasoning (`<scratchpad>`) and the final answer wrapped in XML tags (e.g., `<document>...</document>`).
-4.  **Processing:** TeXRA saves the raw LLM response (often as an `.xml` file internally). It then parses this file, extracts the content from the primary XML tag (defined by `settings.documentTag`), and saves _that extracted content_ to the final output file (e.g., `filename_agent_r0_model.tex`). You can monitor this in the [ProgressBoard](./progress-board.md). For LaTeX files, TeXRA can also automatically generate a `latexdiff` file comparing the output to the input, enhancing observability. See the [LaTeX Diff guide](./latex-diff.md) for details.
+4.  **Processing:** TeXRA saves the raw LLM response (often as an `.xml` file internally). It then parses this file, extracts the content from the primary XML tag (defined by `settings.documentTag`), and saves _that extracted content_ to the final output file in task storage (e.g., `r0/output.tex`). You can monitor this in the [ProgressBoard](./progress-board.md). For LaTeX files, TeXRA can also automatically generate a `latexdiff` file comparing the output to the input, enhancing observability. See the [LaTeX Diff guide](./latex-diff.md) for details.
 
 **Continuation Handling:** If the LLM response gets cut off due to output token limits before generating the required `endTag`, TeXRA automatically sends a continuation prompt. This prompt asks the model to resume generating exactly where it left off, ensuring complete outputs even for very long tasks. This happens seamlessly within a processing round.
 
@@ -67,14 +73,14 @@ When an agent definition includes multiple `userRequest` entries (or increases `
 
 1.  **Reflection Prompt:** It renders the appropriate reflection template from subsequent `userRequest` entries to ask the LLM to critique and improve its own Round 0 output (which is included in the conversation history).
 2.  **LLM Interaction (Round 1):** The LLM generates a revised response.
-3.  **Processing:** TeXRA saves this refined output to a separate file (e.g., `filename_agent_r1_model.ext`).
+3.  **Processing:** TeXRA saves this refined output to a separate round path (e.g., `r1/output.ext`).
 
 You can control how many rounds execute by editing the agent YAML—either adjust `settings.rounds` for the maximum number of passes or add more entries to `userRequest`. The run stops early whenever the model signals it is finished or when no reflection prompt content is supplied.
 
 This basic flow, potentially with the reflection rounds, allows TeXRA agents to perform targeted tasks based on their specific definitions and your instructions. For concrete examples of built-in agents, see the [Built-in Agent Reference](./built-in-agents.md).
 
 ::: warning Potential XML Issues
-Occasionally, LLMs might generate slightly malformed XML (e.g., missing closing tags), especially with very long or complex outputs. If TeXRA fails to extract content from an agent's output (`_r0_*.xml` or `_r1_*.xml` file), you might need to manually inspect the `.xml` file and correct any structural errors (like adding a missing `</document>` tag) before TeXRA can process it correctly. See the [Troubleshooting guide](./troubleshooting.md#output-file-corruption) for more details.
+Occasionally, LLMs might generate slightly malformed XML (e.g., missing closing tags), especially with very long or complex outputs. If TeXRA fails to extract content from an agent's raw XML output (`r0/output.xml` or `r1/output.xml`), you might need to manually inspect the `.xml` file and correct any structural errors (like adding a missing `</document>` tag) before TeXRA can process it correctly. See the [Troubleshooting guide](./troubleshooting.md#output-file-corruption) for more details.
 :::
 
 ### Reflection

@@ -15,6 +15,16 @@ export interface StateSlicesSnapshot {
   userChannels: UserVariableChannels;
 }
 
+/** Extract edited file paths from a workspace state snapshot. */
+export function extractTouchedFiles(
+  stateSlices: StateSlicesSnapshot | null,
+): string[] {
+  return (
+    stateSlices?.workspaceSnapshot?.interactions?.edits?.map((e) => e.path) ??
+    []
+  );
+}
+
 export interface ToolUseRunShared {
   messages: ProviderMessage[];
   shouldSkipCycle: boolean;
@@ -24,13 +34,10 @@ export interface ToolUseRunShared {
   lastError?: RetryErrorInfo;
 }
 
-interface NodeResultStateBase {
+export interface PrepareResult {
   runState: AgentRunStateSnapshot;
   workspaceState: AgentWorkspaceState;
   userChannels: UserVariableChannels;
-}
-
-export interface PrepareResult extends NodeResultStateBase {
   messages: ProviderMessage[];
   shouldSkipCycle: boolean;
 }
@@ -39,7 +46,10 @@ export type WaitExecResult =
   | { kind: 'continue'; followUp: string }
   | { kind: 'stop' };
 
-export interface CyclePrepResult extends NodeResultStateBase {
+export interface CyclePrepResult {
+  runState: AgentRunStateSnapshot;
+  workspaceState: AgentWorkspaceState;
+  userChannels: UserVariableChannels;
   messages: ProviderMessage[];
   shouldSkip: boolean;
 }
@@ -77,7 +87,6 @@ function tryAsRunShared(
   obj: unknown,
 ): { data: ToolUseRunShared; migrated: boolean } | null {
   if (!obj || typeof obj !== 'object') return null;
-
   if (MessagesSchema.safeParse(obj).success) {
     return { data: obj as ToolUseRunShared, migrated: false };
   }
@@ -101,14 +110,10 @@ export function migrateSharedState(
 ): { data: ToolUseRunShared; migrated: boolean } | null {
   if (!shared || typeof shared !== 'object') return null;
 
-  // Try flat format first (reject nested `{ state: {...} }` wrapper)
-  if (!('state' in shared)) {
-    return tryAsRunShared(shared);
-  }
+  // Flat format (no nested `{ state: {...} }` wrapper)
+  if (!('state' in shared)) return tryAsRunShared(shared);
 
   // Nested format: unwrap and parse inner object
   const inner = tryAsRunShared((shared as Record<string, unknown>).state);
-  if (inner) return { data: inner.data, migrated: true };
-
-  return null;
+  return inner ? { data: inner.data, migrated: true } : null;
 }

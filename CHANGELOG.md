@@ -2,6 +2,262 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.37.8] - 2026-05-01
+
+### Breaking Changes
+
+- **Legacy session and config migration shims removed** — TeXRA no longer rewrites legacy fields (`agentType`, `maxRounds`, `xmlStructureMode`, `isMultipleOutput`, `session.agentCategory`, and similar) when loading saved sessions or agent settings. Sessions and configurations created by very old versions of the extension may no longer load and must be recreated.
+
+### Improvements
+
+- **Progress view first-run state** — when there are no runs yet, the progress view now shows direct actions to open the Launcher or Dashboard instead of an empty board.
+- **Internal rename pass to remove same-name collisions** — renamed several internal types/constants that previously shared a name with an unrelated concept (OS platform string vs. host platform interface; document file categories vs. the VS Code-style file-type bitmask; the LitElement history-item component vs. the schema-derived history entry; the debug saver's `FileOptions` vs. the agent file-options schema; per-item web-search result vs. the wrapper response), and consolidated duplicate definitions of `AgentCategory`, `Disposable`, `LatexConfigField`, and the API provider list down to single sources of truth. No user-visible behavior change.
+
+### Bug Fixes
+
+- **Current DeepSeek V4 pricing** — DeepSeek V4 Flash and Pro now use DeepSeek's current cache-hit pricing, and V4 Pro reflects the active discounted input and output rates.
+- **Codicon font packaging** — installed VSIX builds now include the webview icon font assets, so toolbar and settings icons render as icons instead of fallback squares.
+
+## [0.37.7] - 2026-05-01
+
+### Features
+
+- **GitHub subscription for repos and issues** — ask an agent to watch a repository or issue and it will receive activity (comments, state changes, CI results) as follow-ups while it works. Use `owner/repo` to monitor a whole repo, or `owner/repo/issues/N` for a specific issue — the same way PR subscriptions already work. Open Settings → Git to see what's being watched and stop any subscription.
+- **Compile & Diff settings in the UI** — LaTeX compile and diff options (auto-compile after each round, timeouts, latexdiff math-markup mode, formatter choice) can now be configured in Settings → LaTeX under **Compile & Diff** without touching `settings.json`. Settings are per-workspace and take effect immediately.
+- **Working directory shown on delegation proposals** — when a delegated agent will run in a specific directory, that path now appears on the proposal and permission cards before you approve, so you can confirm it's correct.
+- **Send follow-ups freely during delegation** — you can now queue multiple messages while a delegated agent is working; they are delivered in order once it's ready, instead of later messages being silently dropped.
+
+### Bug Fixes
+
+- **Workflow outputs stay out of your workspace until accepted** — generated files remain in run storage and your source files are not marked as modified until you explicitly accept the output.
+- **Disk-full errors show an actionable message** — a full disk now produces a clear "free up disk space" notification instead of a raw error, and no retry is attempted.
+- **Various smaller fixes** — stable toggle icons; reliable DeepSeek reasoning output; LaTeX fixer button always enabled when appropriate; AI responses no longer silently drop tool calls; no extra approval prompt between orchestrator and delegated subtask; follow-up input wraps long URLs, paths, and pasted log output instead of overflowing the panel; progress board recovers from corrupted or outdated saved state instead of crashing on startup.
+
+## [0.37.6] - 2026-04-27
+
+### Features
+
+- **GPT-5.5 Pro** — OpenAI's GPT-5.5 Pro (`gpt55pro`) is now available in the model catalog as an opt-in choice for the hardest planning, long-horizon, and large-codebase tasks. It extends GPT-5.5 with a 1.05M-token context window and `xhigh` default reasoning effort. Premium pricing ($30/M input, $180/M output) and Ultra-tier only on the relay — enable it from Settings → Models when GPT-5.5 isn't enough.
+- **Computer Scientist (ML) multi-agent preset** — a new built-in team preset tuned for empirical ML and CS work pairs a numerics agent for code-driven experiments with a search agent for literature and a review/criticize agent for methodology and baseline scrutiny.
+- **Setup assistant can run terminal commands** — the setup wizard can now hand off sudo prompts and interactive installers to your VS Code terminal instead of stalling on them.
+
+### Improvements
+
+- **Premium-pricing advisory for GPT Pro models** — `gpt5pro`, `gpt52pro`, and `gpt55pro` now show a warning in the model dropdown tooltip and the Settings → Models tab pointing users to the External Inquiry tool, which lets agents ask you to paste an answer from your own ChatGPT subscription instead of paying per-token API rates for these flagship Pro models.
+- **Friendlier first-run experience** — the status bar now shows a "Get Started" button that opens the setup assistant for both sign-in and API-key flows; if agents fail to load you get a dismissible notification with Retry and View Logs actions; and the welcome view lists numbered next steps instead of a generic message.
+- **Model labels in selection lists** — model labels (e.g. "Fastest", "Balanced") now appear alongside model names in the Settings → Models selection list so you can tell at a glance what each choice is optimised for.
+- **Recent runs shown first** — the progress board now lists your most recent runs at the top.
+- **Scrollable command output** — long command output in the progress board scrolls independently, and you can copy it in formatted or plain-text form.
+- **More reliable follow-ups during delegation** — messages sent while a delegated agent is still working are queued and delivered once it's ready, instead of being dropped.
+- **Settings UI polish** — model and agent dropdowns are wider; model labels appear in run tab headers; the GitHub tools section shows prerequisite hints; and the Multi-Agent tab layout is more compact and consistent.
+- **API setup guidance in Models tab** — a hint banner appears in Settings → Models when no API key is detected, giving users a direct path to configuration.
+- **External Inquiry quick-links** — the External Inquiry panel now includes direct links to documentation so users know when and how to use it.
+
+### Bug Fixes
+
+- **Progress board fails to open after a crash** — TeXRA now recovers cleanly if its saved state was corrupted by an unexpected shutdown, so the progress board always opens on startup.
+- **Agent panels stuck open after delegation** — panels from completed delegated work now close properly and can no longer get stuck mid-initialisation.
+- **GitHub status stale in Settings** — the GitHub connection status now refreshes each time you open Settings instead of showing outdated information.
+
+## [0.37.5] - 2026-04-24
+
+### Breaking Changes
+
+- **Workflow outputs stay in task storage** — generated workflow files no
+  longer appear directly beside your source files. Review them from the
+  progress view, open the run's task storage folder, accept selected outputs,
+  or pack the run into `History/`.
+
+### Features
+
+- **GPT-5.5** — OpenAI's GPT-5.5 (`gpt55`) is now the flagship OpenAI model in the default lineup. It reaches strong results with fewer reasoning tokens, follows instructions more literally, is more precise on large tool surfaces, and produces more polished and concise answers by default. The default reasoning effort is **medium** — raise to `high`/`xhigh` only when it makes a measurable difference. Image inputs preserve more visual detail by default, improving figure and screenshot understanding. The [Codex CLI](docs/guide/codex-cli.md) integration uses `gpt-5.5` for delegated Codex turns. GPT-5.4 (`gpt54`, `gpt54-`, `gpt54--`) remains available as a lower-cost option.
+- **Terminal-quality command output** — command-heavy runs are much easier to read, especially during builds, installs, and diagnostics.
+- **Clearer pull-request awareness** — GitHub-related work is easier to monitor and return to from the settings and progress views.
+- **DeepSeek V4 models** — DeepSeek V4 Flash and DeepSeek V4 Pro are now available in the model catalog.
+
+### Improvements
+
+- **More guided first run** — the welcome banner now surfaces the setup walkthrough so new users can step through environment, tools, and model access without hunting for it.
+- **More dependable long-running work** — extended agent sessions recover more smoothly from interruptions and ambiguous turns.
+- **Sharper model defaults** — new and upgrading users get a cleaner default model lineup while advanced options remain available.
+- **Sharper literature workflows** — agents are better at turning full-paper context into focused, usable research guidance.
+- **More helpful guidance** — setup, orchestration, Git, LaTeX, and Lean workflows now present clearer next steps.
+- **More polished progress UI** — streams, controls, and dropdowns are more compact, consistent, and easier to scan, and session hints dismiss with a subtler control.
+- **Quieter diagnostics** — routine messages stay out of the way, and user-facing errors focus on recovery.
+
+### Bug Fixes
+
+- **More reliable workflow history** — older workflow tabs recover their context more consistently.
+- **Settings refresh fixes** — API key, agent, model, and GitHub changes now update related UI state more reliably.
+- **More robust PR workflows** — temporary GitHub failures are handled more gracefully.
+- **Restored output and diff displays** — generated outputs and diff views display correctly again.
+- **Cleaner command-stream labels** — background command streams no longer show irrelevant labels.
+- **More complete chat exports** — exported conversations preserve more of the visible interaction.
+- **DeepSeek cache reporting** — DeepSeek V4 Flash and DeepSeek V4 Pro usage now distinguishes prompt-cache hits and misses more clearly.
+- **Fuller Anthropic responses** — prefilled content now reaches the final output instead of being dropped.
+- **Crisper terminal-style logs** — command output is easier to scan and no longer runs together.
+- **Smarter delegation choices** — the orchestrator reaches for a real agent when one fits the task.
+
+## [0.37.4] - 2026-04-21
+
+### Breaking Changes
+
+- **Workflow outputs now live in run history** — workflow results are kept with the run that produced them, giving you a cleaner workspace and a clearer review path through the progress view.
+
+### Features
+
+- **Guided first-run setup** — TeXRA can now walk users through environment checks, missing tools, and model access with a more guided setup experience.
+- **Higher-confidence workflow review** — generated LaTeX opens naturally, is easier to inspect, and is checked more consistently before acceptance.
+- **A more capable team experience** — multi-agent workflows now feel more like coordinated teams, with clearer proposals and better handoffs.
+- **Richer project awareness** — TeXRA surfaces more useful context across the sidebar, Explorer, and progress view while agents work.
+- **Pull-request collaboration support** — agents can help keep PR work moving with less manual monitoring.
+- **Claude Opus 4.7 support** — the latest Opus 4.7 models are available for demanding research and engineering tasks.
+- **Better isolation for advanced delegation** — larger multi-agent runs can keep parallel work better separated when configured.
+
+### Improvements
+
+- **Smoother Codex orchestration** — Codex-backed work fits more naturally into long multi-agent sessions.
+- **Safer workspace activation** — TeXRA now waits for trusted workspaces before enabling agent features.
+- **Cleaner first-run defaults** — optional integrations that need extra setup are quieter for new users.
+- **More durable long workflows** — long-running model work is handled more robustly.
+- **More readable progress surfaces** — workflow instructions, selected tabs, history, and webview styling are easier to scan.
+
+### Bug Fixes
+
+- **More reliable workflow builds** — assets and related files are handled better during workflow review.
+- **Better compact layouts** — child streams collapse and reopen more predictably.
+- **Persistent sidebar placement** — VS Code restores the TeXRA sidebar location more reliably.
+- **Cleaner command palette behavior** — TeXRA commands no longer appear before the extension is ready.
+- **More reliable GitHub updates** — CI and review activity are tracked more consistently.
+- **Clearer cancellation behavior** — cancelled requests no longer become generic provider errors.
+- **More reliable relay routing** — provider-prefixed model IDs route correctly through relay.
+- **Proposal and toolbar polish** — stream toolbar state and proposal-card layout behave more consistently.
+- **More reliable follow-ups** — messages sent during delegated work are handled more gracefully.
+- **Thinking-model display fixes** — reasoning summaries are visible again for supported thinking models.
+- **More robust Codex effort handling** — higher effort settings no longer break Codex sessions.
+- **Helper-agent loading fixes** — built-in helper agents validate and load properly again.
+
+## [0.37.3] - 2026-04-15
+
+### Features
+
+- **Better multi-file paper support** — workflow agents handle papers with shared files and bibliographies more reliably.
+- **More flexible arXiv downloads** — downloaded papers can be saved where they fit your project organization.
+- **Remote-agent transparency** — Ultra users can inspect the prompt sent to a remote agent.
+- **Settings import** — settings can now be loaded from a saved file.
+
+### Improvements
+
+- **Long-paper handling is more reliable** — large documents are processed more smoothly.
+- **More careful orchestration** — the orchestrator asks for clarification more often when a request is ambiguous.
+- **Dismissed banners stay dismissed** — onboarding and info banners respect your choices across sessions.
+
+### Bug Fixes
+
+- Fixed stale run state sometimes affecting new agent runs.
+
+## [0.37.2] - 2026-04-09
+
+### Features
+
+- **Orchestrator-first onboarding** — new users are guided toward the orchestrator as the default starting point.
+- **Codex effort setting** — Codex runs can now use configurable reasoning effort.
+- **More responsive follow-ups** — follow-up messages interrupt waiting agents more reliably.
+- **New Codex skill presets** — additional ready-made Codex workflows are available for research and Lean work.
+
+### Improvements
+
+- **Clearer labels and terminology** — agent modes, approvals, settings, and warnings are easier to understand.
+- **Improved orchestrator UX** — orchestrator guidance and mode-specific instructions are more consistent.
+- **Richer Codex display** — Codex activity is easier to inspect in the progress view.
+- **Better error messages** — common setup and agent errors now include clearer next steps.
+- **Tighter stream tabs** — progress tabs use space more efficiently.
+
+### Bug Fixes
+
+- Fixed an activation issue that could prevent TeXRA from starting correctly.
+
+## [0.37.0] - 2026-04-04
+
+### Features
+
+- **External AI consultations** — agents can help coordinate questions to external AI services from within a TeXRA session.
+- **Redesigned Codex experience** — Codex work is easier to follow, continue, and review inside TeXRA.
+- **Expanded model routing** — OpenRouter support is now more deeply integrated.
+
+### Improvements
+
+- **Better organization for concurrent work** — related background activity and delegated work are easier to follow in the progress view.
+- **More responsive long-running output** — background command output appears more naturally while work is still running.
+- **Improved performance with many streams** — the sidebar stays responsive with large active sessions.
+- **Tool toggles** — individual tools can now be enabled or disabled from the Tools settings tab.
+- **More self-contained document outputs** — generated documents are easier to understand without reading the full conversation.
+
+### Bug Fixes
+
+- Fixed Codex sessions occasionally hanging or duplicating work.
+- Stopping background work is more reliable.
+- Resolving one external consultation no longer changes the active response unexpectedly.
+
+## [0.36.10] - 2026-03-28
+
+### Features
+
+- **OpenRouter provider** — new toggle in model settings to route all API calls through OpenRouter, letting you use a single API key for any supported model.
+
+### Improvements
+
+- Updated dependencies (KaTeX, Codex SDK, OpenRouter SDK).
+
+## [0.36.9] - 2026-03-26
+
+### Features
+
+- **Context compactization for OpenAI-compatible models** — DeepSeek, Kimi, GLM, and MiniMax models now support automatic context compactization, preventing long tool-use sessions from hitting context window limits. The model summarizes older messages when token usage exceeds 75% of the context window.
+- **Wait for specific background executions** — the `executions` tool's wait action now accepts an optional `ids` parameter to monitor specific background tasks instead of waiting for any active execution.
+- **MiniMax reasoning split** — MiniMax thinking models now return structured reasoning content instead of embedded `<think>` tags, improving display and downstream processing.
+
+### Bug Fixes
+
+- Fixed Codex CLI not being detected for WSL users.
+- Fixed tool-use agent errors ending the conversation instead of allowing follow-up messages to retry.
+- Fixed workflow delegation losing extract-figure flags when the LLM omitted them, now inheriting from the parent agent.
+
+### Improvements
+
+- **Extract figure badges in delegation UI** — workflow proposals now show labeled badges for auto-extract figure and TikZ flags in the approval panel and log entries.
+- **Better Codex tool display** — Codex processes show a robot icon in the background tasks panel and display structured prompt details in the progress view.
+- Updated VS Code engine requirement to 1.105.0.
+- Updated dependencies (Supabase, Hono, MCP SDK, fast-xml-parser, KaTeX, OpenAI, Vite, and others).
+
+## [0.36.8] - 2026-03-23
+
+### Features
+
+- **MiniMax and GLM model providers** — added MiniMax and Zhipu AI (GLM) as model providers, with region toggles for China and international endpoints.
+- **Zotero collections browser** — agents can now browse your Zotero collection folders to discover and organize references before adding papers.
+- **Email file support** — attach or read `.eml` email files directly; TeXRA extracts headers, body text, and image attachments into readable content.
+- **Git author attribution** — new option in the Git settings tab to mark commits made by TeXRA with a custom author name and email, so agent-authored changes are easy to identify.
+- **LaTeX asset extraction in workflows** — workflow agents can automatically extract referenced figures and TikZ diagrams when delegating tasks, with toggles in the delegation UI.
+- **Paginated listings** — history, memory, and tool execution lists now paginate instead of loading everything at once, keeping the interface responsive with large collections.
+
+### Bug Fixes
+
+- Fixed git settings checkbox staying disabled after reopening the settings panel.
+- Fixed rare crash during agent conversations.
+- Fixed agents occasionally launching in the wrong execution mode.
+- Fixed background agents continuing to run after closing their stream tabs.
+
+### Improvements
+
+- **Helper model validation** — TeXRA now checks credentials before starting a task, showing clear messages like "API key missing" instead of failing mid-run.
+- **File tracking in multi-agent workflows** — the orchestrator now reports which files each sub-task edited, so you can review changes at a glance.
+- **arXiv paper organization** — downloaded arXiv papers are saved into a `References/` subdirectory instead of the workspace root.
+- **Cleaner stream switching** — plan and todo sections collapse when switching between stream tabs to reduce clutter.
+- **Execution timing** — terminal and sub-task results now show how long they took to run.
+- **Better resource cleanup** — closing the extension properly stops background processes to prevent memory leaks.
+- Updated dependencies.
+
 ## [0.36.7] - 2026-03-17
 
 ### Features

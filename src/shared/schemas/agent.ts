@@ -1,16 +1,31 @@
 import { z } from 'zod';
 
+/**
+ * Workflow: fixed-round document processing. ToolUse: interactive tool-calling.
+ *
+ * Exported as a const object (not a TS enum) so it can be imported from
+ * `@shared/*` zones (which forbid `vscode`-flavored TS-only constructs) and
+ * still supports enum-style member access (`AgentCategory.Workflow`).
+ */
+export const AgentCategory = {
+  Workflow: 'workflow',
+  ToolUse: 'toolUse',
+} as const;
+export type AgentCategory = (typeof AgentCategory)[keyof typeof AgentCategory];
+
+/**
+ * Legacy alias preserving UPPER_SNAKE keys for call sites that already use it
+ * (e.g. `AGENT_CATEGORY.WORKFLOW`). Prefer `AgentCategory.Workflow` in new code.
+ */
 export const AGENT_CATEGORY = {
-  WORKFLOW: 'workflow',
-  TOOL_USE: 'toolUse',
+  WORKFLOW: AgentCategory.Workflow,
+  TOOL_USE: AgentCategory.ToolUse,
 } as const;
 
 export const AgentCategorySchema = z.enum([
-  AGENT_CATEGORY.WORKFLOW,
-  AGENT_CATEGORY.TOOL_USE,
+  AgentCategory.Workflow,
+  AgentCategory.ToolUse,
 ]);
-
-export type AgentCategory = z.infer<typeof AgentCategorySchema>;
 
 export const AGENT_SOURCE = {
   CUSTOM: 'custom',
@@ -19,10 +34,7 @@ export const AGENT_SOURCE = {
   REMOTE: 'remote',
 } as const;
 
-/**
- * Single source of truth for agent source identifiers.
- * Backend re-exports this from @agent/core/AgentDataclass as `AgentSource`.
- */
+/** Single source of truth for agent source identifiers. */
 export const AgentSourceSchema = z.enum([
   AGENT_SOURCE.CUSTOM,
   AGENT_SOURCE.BUILT_IN_WORKFLOW,
@@ -53,4 +65,10 @@ export type AgentMetadataBase = z.infer<typeof AgentMetadataBaseSchema>;
 /** Canonical key format: disambiguates agents with same name across sources. */
 export function agentKey(source: string, name: string): string {
   return `${source}:${name}`;
+}
+
+/** Extract the plain agent name from a possibly source-qualified key ("source:name" → "name"). */
+export function agentName(key: string): string {
+  const idx = key.indexOf(':');
+  return idx >= 0 ? key.slice(idx + 1) : key;
 }

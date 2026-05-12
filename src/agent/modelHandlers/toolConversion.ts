@@ -6,12 +6,8 @@ import type { ToolDefinition } from '@model';
 import type {
   Tool as AnthropicTool,
   ToolUnion,
-} from '@anthropic-ai/sdk/resources/messages/messages';
-import type {
-  Tool as GeminiTool,
-  FunctionDeclaration,
-  Schema,
-} from '@google/genai/dist/genai';
+} from '@anthropic-ai/sdk/resources/messages';
+import type { Tool as GeminiTool, FunctionDeclaration } from '@google/genai';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import type {
   FunctionTool,
@@ -36,6 +32,20 @@ function convertToolSchema(
     }) as Record<string, unknown>;
   }
   return (def.parameters ?? null) as Record<string, unknown> | null;
+}
+
+/**
+ * OpenAI tool payloads should always carry an explicit schema object when a
+ * tool has no declared parameters to avoid null/omitted ambiguity.
+ */
+const EMPTY_TOOL_PARAMETERS_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {},
+  additionalProperties: false,
+};
+
+function toOpenAISchemaObject(def: ToolDefinition): Record<string, unknown> {
+  return convertToolSchema(def) ?? EMPTY_TOOL_PARAMETERS_SCHEMA;
 }
 
 // Map local tool names to Anthropic remote tool types.
@@ -64,14 +74,17 @@ const DYNAMIC_FILTERING_TOOLS = new Set(['web_search', 'web_fetch']);
  * the unrepresentable option, causing failures with tool schemas that use .transform().
  */
 export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
-  return defs.map((d) => ({
-    type: 'function',
-    function: {
-      name: d.name,
-      description: d.description,
-      parameters: convertToolSchema(d),
-    },
-  })) as ChatCompletionTool[];
+  return defs.map((d): ChatCompletionTool => {
+    const parameters = toOpenAISchemaObject(d);
+    return {
+      type: 'function',
+      function: {
+        name: d.name,
+        description: d.description,
+        parameters,
+      },
+    };
+  });
 }
 
 /**
@@ -102,7 +115,8 @@ export function toOpenAIResponseTools(
   for (const d of defs) {
     // Handle native web search tool (only if model supports it)
     if (d.name === 'web_search' && supportsNativeWebSearch) {
-      tools.push({ type: 'web_search' } as WebSearchTool);
+      const webSearchTool: WebSearchTool = { type: 'web_search' };
+      tools.push(webSearchTool);
       continue;
     }
 
@@ -112,13 +126,14 @@ export function toOpenAIResponseTools(
       continue;
     }
 
-    tools.push({
+    const functionTool: FunctionTool = {
       type: 'function',
       name: d.name,
       description: d.description,
-      parameters: convertToolSchema(d),
+      parameters: toOpenAISchemaObject(d),
       strict: false,
-    } as FunctionTool);
+    };
+    tools.push(functionTool);
   }
 
   return tools;
@@ -210,7 +225,7 @@ export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
   const declarations: FunctionDeclaration[] = defs.map((d) => ({
     name: d.name,
     description: d.description,
-    parameters: convertToolSchema(d) as Schema | undefined,
+    parametersJsonSchema: convertToolSchema(d) ?? undefined,
   }));
 
   return [{ functionDeclarations: declarations }];

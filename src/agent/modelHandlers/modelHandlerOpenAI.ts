@@ -8,14 +8,15 @@ import {
   ChatCompletionContentPart,
   ChatCompletionContentPartInputAudio,
   ChatCompletionAssistantMessageParam,
+  ChatCompletionCreateParamsNonStreaming,
   ChatCompletionCreateParamsStreaming,
-  ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageParam,
   ChatCompletionMessageToolCall,
   ChatCompletionToolMessageParam,
   ChatCompletionStreamParams,
 } from 'openai/resources/chat/completions';
 import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
+import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -28,10 +29,16 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
+import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@agent/core/constants';
+import { getConfig } from '@agent/core/config';
 import {
   getSdkErrorMessage,
   isContextWindowError,
   isMissingFinishReasonError,
+  attachPartialText,
+  takeTail,
+  isUserAbort,
+  PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 
 // Local imports - tools and utils
@@ -39,11 +46,11 @@ import type { ToolDefinition } from '@model';
 import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
-import { K_SLICE, MESSAGE_PREVIEW_LENGTH, getConfig } from '@utils/config';
 import { flexibleFS } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
+import { tagOpenAISdkError } from './support/sdkErrorAdapters';
 
 // Local file imports
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
@@ -57,8 +64,18 @@ import {
   formatToolResultAsText,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
+import { parseToolArguments } from './utils/parseArguments';
 import { ModelHandler } from './ModelHandler';
-import { TOOL_USE_SAFETY_BUFFER } from './contextManagementConstants';
+import {
+  BaseReasoningStreamAggregator,
+  type StreamingAggregator,
+} from './BaseReasoningStreamAggregator';
+import {
+  CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+  COMPACTION_SYSTEM_PROMPT,
+  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+  TOOL_USE_SAFETY_BUFFER,
+} from './contextManagementConstants';
 import type {
   CreateResponseOptions,
   CreateResponseResult,
@@ -73,6 +90,12 @@ type ChatCompletionRequestBase = Omit<
   ChatCompletionCreateParamsStreaming,
   'stream' | 'stream_options'
 >;
+type ChatCompletionRequestWithThinking = ChatCompletionRequestBase & {
+  thinking?: { type: 'enabled' | 'disabled' };
+};
+type ChatCompletionSummaryParams = ChatCompletionCreateParamsNonStreaming & {
+  thinking?: { type: 'disabled' };
+};
 
 // Reasoning content type for DeepSeek, o1 models (not in SDK)
 type ReasoningContent = string | Array<{ type: string; text?: string }>;
@@ -85,19 +108,30 @@ function extractReasoningText(content: ReasoningContent | undefined): string {
 
 const DEEPSEEK_OFFICIAL_API_MAX_TOKENS = 8192;
 
-export interface StreamingAggregator {
-  appendContent(delta: string): void;
-  appendReasoning(delta: string): void;
-  consumeChunk(chunk: ChatCompletionChunk): void;
-  finalize(fallback?: ChatCompletion): ChatCompletion;
-}
+// COMPACTION_SYSTEM_PROMPT imported from contextManagementConstants
 
-export function extractReasoningDelta(chunk: ChatCompletionChunk): string {
+/** Extracts `reasoning_content` from a streaming chunk delta. */
+function extractReasoningDelta(chunk: ChatCompletionChunk): string {
   const delta = chunk.choices[0]?.delta as
     | { reasoning_content?: ReasoningContent }
     | undefined;
   if (!delta || !('reasoning_content' in delta)) return '';
   return extractReasoningText(delta.reasoning_content);
+}
+
+/**
+ * Extracts a capped tail of the assistant content accumulated by the SDK's
+ * ChatCompletionStream in its currentChatCompletionSnapshot. Returns the
+ * suffix because continuation prompts reference the tail of the response.
+ */
+function extractOpenAIPartialTail(
+  snapshot:
+    | { choices?: Array<{ message?: { content?: string | null } }> }
+    | undefined,
+  maxChars: number,
+): string {
+  const content = snapshot?.choices?.[0]?.message?.content ?? '';
+  return takeTail(content, maxChars);
 }
 
 /**
@@ -113,6 +147,181 @@ export class ModelHandlerOpenAI<
   OpenAI,
   ChatCompletion
 > {
+  // ── Client-side compaction state ──────────────────────────────────────
+  /** Tracks prompt_tokens from the last API response for compaction threshold checks. */
+  private lastKnownInputTokens = 0;
+
+  /** Flag to force compaction on the next API call, set by requestCompaction(). */
+  private compactionRequested = false;
+
+  protected useReasoningStreamAggregator: boolean = false;
+
+  // ── Compaction interface overrides ────────────────────────────────────
+
+  /** Client-side compaction is available for tool-use sessions. */
+  override get supportsManualCompaction(): boolean {
+    return this.isToolUseMode();
+  }
+
+  override requestCompaction(): void {
+    this.compactionRequested = true;
+  }
+
+  // ── Compaction internals ──────────────────────────────────────────────
+
+  /**
+   * Get the configured compaction threshold percentage.
+   * Returns 0 if compaction is disabled.
+   */
+  private getCompactionThresholdPercent(): number {
+    return getConfig<number>(
+      'texra.model.compactionThresholdPercent',
+      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+    );
+  }
+
+  /**
+   * Check if the conversation should be compacted based on token usage.
+   * Compaction is only triggered when:
+   * - In tool-use mode (only mode with multi-turn message accumulation)
+   * - Manual request via requestCompaction(), OR
+   * - Last known input tokens exceed the configured threshold
+   */
+  private shouldCompact(): boolean {
+    if (!this.isToolUseMode()) return false;
+
+    if (this.compactionRequested) {
+      return true;
+    }
+
+    const thresholdPercent = this.getCompactionThresholdPercent();
+    if (thresholdPercent <= 0) return false;
+
+    const threshold = Math.floor(
+      (thresholdPercent / 100) * this.config.contextWindow,
+    );
+    return this.lastKnownInputTokens > threshold;
+  }
+
+  /**
+   * Compact the conversation using client-side summarization via system-prompt-swap.
+   * Sends conversation messages as-is to the model with a summarization system prompt,
+   * then replaces all messages with the summary.
+   *
+   * @returns The compacted messages array, or original messages if compaction fails
+   */
+  private async compactConversation(
+    client: OpenAI,
+    messages: ChatCompletionMessageParam[],
+    signal?: AbortSignal,
+  ): Promise<{
+    compactedMessages: ChatCompletionMessageParam[];
+    didCompact: boolean;
+  }> {
+    const tokensBefore = this.lastKnownInputTokens;
+    const contextWindow = this.config.contextWindow;
+    const utilizationBefore = (tokensBefore / contextWindow) * 100;
+
+    this.logger.debug(
+      `Compacting conversation with ${tokensBefore} input tokens (${utilizationBefore.toFixed(1)}% of ${contextWindow} context window)`,
+    );
+
+    // Separate system/developer messages from conversation messages
+    const systemMessages: ChatCompletionMessageParam[] = [];
+    const conversationMessages: ChatCompletionMessageParam[] = [];
+    for (const msg of messages) {
+      if (msg.role === 'system' || (msg.role as string) === 'developer') {
+        if (conversationMessages.length === 0) {
+          systemMessages.push(msg);
+        } else {
+          conversationMessages.push(msg);
+        }
+      } else {
+        conversationMessages.push(msg);
+      }
+    }
+
+    // Nothing to summarize if conversation is too short
+    if (conversationMessages.length <= 2) {
+      this.logger.debug('Conversation too short for compaction, skipping');
+      return { compactedMessages: messages, didCompact: false };
+    }
+
+    // System-prompt-swap: replace the agent's system prompt with summarization
+    // instructions and send conversation messages as-is. The model reads the
+    // actual structured messages (roles, tool calls, tool results) natively.
+    // Apply provider-specific normalization (e.g., DeepSeek's convertContentToString,
+    // mergeConsecutiveRoles) so the compaction call doesn't get rejected.
+    const normOptions = this.getMessageNormalizationOptions();
+    const normalizedConversation = normOptions
+      ? this.prepareNormalizedMessages(conversationMessages, normOptions)
+      : conversationMessages;
+
+    try {
+      const summaryParams: ChatCompletionSummaryParams = {
+        model: this.config.fullName,
+        messages: [
+          { role: 'system', content: COMPACTION_SYSTEM_PROMPT },
+          ...normalizedConversation,
+        ],
+        max_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+        temperature: 0,
+        stream: false,
+      };
+      // Disable thinking for the summary call — reasoning models
+      // (DeepSeek, Kimi K2.5, GLM) don't need to think for summarization.
+      if (this.getThinkingParameter() || this.capabilities.supportsReasoning) {
+        summaryParams.thinking = { type: 'disabled' };
+      }
+      const summaryResponse = await client.chat.completions.create(
+        summaryParams,
+        { signal },
+      );
+
+      const summaryText = summaryResponse.choices[0]?.message?.content?.trim();
+      if (!summaryText) {
+        this.logger.warn('Compaction returned empty summary, skipping');
+        return { compactedMessages: messages, didCompact: false };
+      }
+
+      // Replace ALL messages with system prompt + summary
+      const compactedMessages: ChatCompletionMessageParam[] = [
+        ...systemMessages,
+        {
+          role: 'user',
+          content: `[Previous conversation summary]\n\n${summaryText}`,
+        },
+      ];
+
+      const summaryOutputTokens = summaryResponse.usage?.completion_tokens ?? 0;
+      const estimatedTokensAfter = Math.max(1, summaryOutputTokens);
+      const utilizationAfter = (estimatedTokensAfter / contextWindow) * 100;
+      const reduction = tokensBefore - estimatedTokensAfter;
+      const reductionPercent =
+        tokensBefore > 0 ? ((reduction / tokensBefore) * 100).toFixed(1) : '0';
+
+      this.logger.logContextManagement(
+        `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${estimatedTokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
+        {
+          action: 'compaction',
+          tokensBefore,
+          tokensAfter: estimatedTokensAfter,
+          contextWindow,
+          utilizationBefore: Number(utilizationBefore.toFixed(1)),
+          utilizationAfter: Number(utilizationAfter.toFixed(1)),
+          details: `Client-side compaction: ${conversationMessages.length} messages summarized`,
+        },
+      );
+
+      return { compactedMessages, didCompact: true };
+    } catch (err) {
+      this.logger.warn(
+        `Compaction failed, continuing with original messages: ${getSdkErrorMessage(err)}`,
+      );
+      return { compactedMessages: messages, didCompact: false };
+    }
+  }
+
   /**
    * Creates a new OpenAI client using the stored credentials.
    * Handles API key retrieval, base URL resolution, and logging.
@@ -137,7 +346,21 @@ export class ModelHandlerOpenAI<
    * Allows subclasses to provide a streaming aggregator implementation.
    */
   protected createStreamingAggregator(): StreamingAggregator | null {
+    if (
+      this.useReasoningStreamAggregator &&
+      this.capabilities.supportsReasoning
+    ) {
+      return new BaseReasoningStreamAggregator();
+    }
     return null;
+  }
+
+  /**
+   * Extracts reasoning text from a streaming chunk delta.
+   * Override in subclasses to handle provider-specific reasoning fields.
+   */
+  protected extractReasoningDelta(chunk: ChatCompletionChunk): string {
+    return extractReasoningDelta(chunk);
   }
 
   /**
@@ -159,10 +382,10 @@ export class ModelHandlerOpenAI<
     systemPrompt?: string,
     endTag?: string,
     tools?: ToolDefinition[],
-  ): ChatCompletionRequestBase {
+  ): ChatCompletionRequestWithThinking {
     const effectiveMaxTokens = this.getEffectiveMaxOutputTokens();
 
-    const baseParams: ChatCompletionRequestBase = {
+    const baseParams: ChatCompletionRequestWithThinking = {
       model: this.config.fullName,
       messages,
       ...(this.isOReasoningModel
@@ -189,7 +412,7 @@ export class ModelHandlerOpenAI<
     // Add thinking parameter if specified by subclass (Kimi K2.5, DeepSeek)
     const thinking = this.getThinkingParameter();
     if (thinking) {
-      (baseParams as Record<string, unknown>).thinking = thinking;
+      baseParams.thinking = thinking;
     }
 
     if (tools?.length) {
@@ -200,7 +423,11 @@ export class ModelHandlerOpenAI<
       if (!parallelToolCalls) {
         baseParams.parallel_tool_calls = false;
       }
-      baseParams.tools = toOpenAITools(tools);
+      // These tools are parsed by TeXRA after the response. The SDK's
+      // auto-parse validator requires strict schemas, but several TeXRA tools
+      // intentionally expose nullable or optional fields.
+      const convertedTools = toOpenAITools(tools);
+      baseParams.tools = convertedTools;
       baseParams.tool_choice = 'auto';
     }
 
@@ -259,7 +486,7 @@ export class ModelHandlerOpenAI<
 
     const onChunk = (chunk: ChatCompletionChunk): void => {
       streamingAggregator?.consumeChunk(chunk);
-      const reasoningDelta = extractReasoningDelta(chunk);
+      const reasoningDelta = this.extractReasoningDelta(chunk);
       if (reasoningDelta) {
         thinking.append(reasoningDelta);
         streamingAggregator?.appendReasoning(reasoningDelta);
@@ -292,6 +519,30 @@ export class ModelHandlerOpenAI<
 
       this.finalizeStreams(thinking, output, finalResponse);
       return finalResponse;
+    } catch (streamError) {
+      // On mid-stream failure, lift the partial content the SDK already
+      // accumulated (currentChatCompletionSnapshot) onto the error so the
+      // retry UI can show it and future continuation logic can reference
+      // the tail. Aborts are control flow; log at debug, skip warn.
+      const partialText = extractOpenAIPartialTail(
+        stream.currentChatCompletionSnapshot,
+        PARTIAL_TEXT_TAIL_MAX,
+      );
+      if (partialText) {
+        attachPartialText(streamError, partialText);
+      }
+      if (!isUserAbort(streamError)) {
+        this.logger.warn(
+          `Stream failed: ${streamError instanceof Error ? streamError.message : String(streamError)}`,
+          {
+            data: {
+              model: this.config.fullName,
+              partialTextLength: partialText.length,
+            },
+          },
+        );
+      }
+      throw streamError;
     } finally {
       cleanup();
     }
@@ -365,6 +616,18 @@ export class ModelHandlerOpenAI<
   async createResponse(
     options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
   ): Promise<CreateResponseResult<ChatCompletion, ChatCompletionMessageParam>> {
+    try {
+      return await this.createResponseImpl(options);
+    } catch (err) {
+      tagOpenAISdkError(err, this.config.provider);
+      throw err;
+    }
+  }
+
+  /** Creates a chat completion after SDK-boundary error tagging is installed. */
+  private async createResponseImpl(
+    options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
+  ): Promise<CreateResponseResult<ChatCompletion, ChatCompletionMessageParam>> {
     const {
       client,
       messages: rawMessages,
@@ -375,11 +638,43 @@ export class ModelHandlerOpenAI<
       tools,
     } = options;
 
+    // Phase 0: COMPACT - Check if conversation should be compacted
+    let updatedMessages: ChatCompletionMessageParam[] | undefined;
+    let messagesToUse = rawMessages;
+
+    if (this.shouldCompact()) {
+      const isManual = this.compactionRequested;
+      // Clear manual flag immediately when attempted — matches Anthropic and
+      // OpenAI Responses handlers. Prevents infinite retry on graceful failure.
+      this.compactionRequested = false;
+
+      const threshold = this.getCompactionThresholdPercent();
+      if (isManual) {
+        this.logger.debug(
+          `Compacting conversation (manually requested, ${this.lastKnownInputTokens} input tokens)`,
+        );
+      } else {
+        this.logger.debug(
+          `Compacting conversation (${this.lastKnownInputTokens} tokens exceed ${threshold}% threshold of ${Math.floor((threshold / 100) * this.config.contextWindow)} tokens)`,
+        );
+      }
+
+      const { compactedMessages, didCompact } = await this.compactConversation(
+        client,
+        rawMessages,
+        signal,
+      );
+      if (didCompact) {
+        messagesToUse = compactedMessages;
+        updatedMessages = compactedMessages;
+      }
+    }
+
     // Apply message normalization if subclass specifies options
     const normOptions = this.getMessageNormalizationOptions();
     const messages = normOptions
-      ? this.prepareNormalizedMessages(rawMessages, normOptions)
-      : rawMessages;
+      ? this.prepareNormalizedMessages(messagesToUse, normOptions)
+      : messagesToUse;
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const useStreaming = this.getStreamingConfig();
@@ -406,9 +701,10 @@ export class ModelHandlerOpenAI<
         const maxTokensKey = this.isOReasoningModel
           ? 'max_completion_tokens'
           : 'max_tokens';
-        const currentMaxTokens = (baseParams as Record<string, unknown>)[
-          maxTokensKey
-        ] as number;
+        const currentMaxTokens = this.isOReasoningModel
+          ? (baseParams.max_completion_tokens ??
+            this.getEffectiveMaxOutputTokens())
+          : (baseParams.max_tokens ?? this.getEffectiveMaxOutputTokens());
         const tokenBuffer = this.isToolUseMode()
           ? TOOL_USE_SAFETY_BUFFER
           : undefined;
@@ -434,10 +730,14 @@ export class ModelHandlerOpenAI<
               details: `OpenAI: ${maxTokensKey} reduced to fit context window`,
             },
           );
-          (baseParams as Record<string, unknown>)[maxTokensKey] =
-            validation.adjustedMaxTokens;
+          if (this.isOReasoningModel) {
+            baseParams.max_completion_tokens = validation.adjustedMaxTokens;
+          } else {
+            baseParams.max_tokens = validation.adjustedMaxTokens;
+          }
         }
       } catch (err) {
+        tagOpenAISdkError(err, this.config.provider);
         if (isContextWindowError(err)) throw err;
         this.logger.debug(
           `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
@@ -449,7 +749,13 @@ export class ModelHandlerOpenAI<
     const response = useStreaming
       ? await this.executeStreamingChat(client, baseParams, signal)
       : await this.executeNonStreamingChat(client, baseParams, signal);
-    return { response };
+
+    // Phase 5: TRACK - Record prompt_tokens for compaction threshold checks
+    if (response.usage?.prompt_tokens) {
+      this.lastKnownInputTokens = response.usage.prompt_tokens;
+    }
+
+    return { response, updatedMessages };
   }
 
   /**
@@ -468,18 +774,10 @@ export class ModelHandlerOpenAI<
       : messages;
 
     if (normalizedMessages.length !== messages.length) {
-      this.logger.info(
+      this.logger.debug(
         `Preprocessed message array from ${messages.length} to ${normalizedMessages.length} messages for ${providerLabel} model compatibility`,
       );
     }
-
-    normalizedMessages.forEach((msg, index) => {
-      const contentPreview =
-        typeof msg.content === 'string'
-          ? msg.content.substring(0, MESSAGE_PREVIEW_LENGTH)
-          : 'non-string content';
-      this.logger.debug(`Message ${index} (${msg.role}): ${contentPreview}...`);
-    });
 
     return normalizedMessages;
   }
@@ -598,7 +896,25 @@ export class ModelHandlerOpenAI<
   }
 
   createAssistantMessage(text: string): ChatCompletionMessageParam {
-    return { role: 'assistant', content: [{ type: 'text', text }] };
+    return { role: 'assistant', content: this.formatAssistantContent(text) };
+  }
+
+  override createAssistantMessageFromResponse(
+    responseObject: ChatCompletion,
+    text: string,
+  ): ChatCompletionMessageParam {
+    const message = this.createAssistantMessage(
+      text,
+    ) as ChatCompletionAssistantMessageParam & { reasoning_content?: string };
+
+    // Always include reasoning_content (even empty string) when the provider
+    // requires it, so all assistant messages stay consistent in thinking mode.
+    if (this.shouldIncludeReasoningInAssistantMessages()) {
+      message.reasoning_content =
+        this.extractReasoningFromResponse(responseObject) ?? '';
+    }
+
+    return message;
   }
 
   override extractAssistantText(
@@ -666,29 +982,15 @@ export class ModelHandlerOpenAI<
             format: typedAudioFormat,
           },
         };
-        // actually, currently only mp3 and wav are supported
-        // openai.BadRequestError: Error code: 400 - [{'error': {'code': 400, 'message': 'Invalid audio format "m4a" for audio generation. Valid formats are: [wav, mp3]', 'status': 'INVALID_ARGUMENT'}}]
-
-        // For the size:
-        // You can use the File API to upload an audio file of any size.
-        // Always use the File API when the total request size (including the files, text prompt, system instructions, etc.) is larger than 20 MB.
-        // The maximum request size is 20 MB, which includes text prompts, system instructions, and files provided inline. If your file's size will make the total request size exceed 20 MB, then use the File API to upload files for use in requests.
-        // If you're using an audio sample multiple times, it is more efficient to use the File API.
-        // https://ai.google.dev/gemini-api/docs/audio?hl=en&lang=python
-
-        // The structure below might need adjustment based on exact API requirements
-        // Using a structure closer to the message format from documentation
-        // It seems this needs to be part of the user message content directly.
-        // Let's adapt this to return the structured object expected within the message content array.
         return [
-          { type: 'text', text: `Audio: ${media.file_name}` }, // Text description goes separately
+          { type: 'text', text: `Audio: ${media.file_name}` },
           audioContent,
         ];
       } else if (media.media_category === 'audio') {
         this.logger.warn(
           `Audio input received (${media.file_name}) but native audio is not supported by this specific model/provider (${this.config.provider}). Skipping.`,
         );
-        return []; // Return empty array if audio not supported
+        return [];
       } else {
         this.logger.warn(`Unknown media category: ${media.media_category}`);
         return [];
@@ -713,7 +1015,6 @@ export class ModelHandlerOpenAI<
         const stopReason =
           responseObject.choices?.[0]?.finish_reason ?? OPENAI_CHAT_FINISH.STOP;
 
-        // For usage, we'll use empty values since they're not provided; TODO needs to test at some points
         const usage = responseObject.usage ?? {
           prompt_tokens: 0,
           completion_tokens: 0,
@@ -817,7 +1118,7 @@ export class ModelHandlerOpenAI<
 
   /** Initializes output file and handles prefill content. */
   async initializeOutputAndPrefill(
-    agentConfig: AgentConfig,
+    _agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: any[],
     workspaceState: AgentWorkspaceState,
@@ -891,7 +1192,13 @@ export class ModelHandlerOpenAI<
   computePrice(responseUsage: ExtendedCompletionUsage | null): number {
     if (!responseUsage) return 0;
 
-    const promptTokens = responseUsage.prompt_tokens ?? 0;
+    const cachedTokens =
+      responseUsage.prompt_tokens_details?.cached_tokens ??
+      responseUsage.prompt_cache_hit_tokens ??
+      0;
+    const promptTokens =
+      responseUsage.prompt_tokens ??
+      cachedTokens + (responseUsage.prompt_cache_miss_tokens ?? 0);
     const completionTokens = responseUsage.completion_tokens ?? 0;
     // Note: OpenAI doesn't provide tool_use_tokens in their API response
 
@@ -905,11 +1212,6 @@ export class ModelHandlerOpenAI<
     // Retrieve nested token details if present
     const reasoningTokens =
       responseUsage.completion_tokens_details?.reasoning_tokens ?? 0;
-    const cachedTokens =
-      responseUsage.prompt_tokens_details?.cached_tokens ??
-      responseUsage.prompt_cache_hit_tokens ?? // deepseek
-      0;
-
     if (reasoningTokens) {
       basePrice += (reasoningTokens * this.config.outputPrice) / 1e6;
     }
@@ -948,14 +1250,21 @@ export class ModelHandlerOpenAI<
       };
     }
 
-    // OpenAI's prompt_tokens is the TOTAL (includes cached tokens).
-    // Cached tokens are a subset, unlike Anthropic where input_tokens excludes cached.
-    const inputTokens = rawUsage.prompt_tokens ?? 0;
     // OpenAI: prompt_tokens_details.cached_tokens; DeepSeek: prompt_cache_hit_tokens
     const cachedTokens =
       rawUsage.prompt_tokens_details?.cached_tokens ??
       rawUsage.prompt_cache_hit_tokens ??
       0;
+    const cacheMissTokens = rawUsage.prompt_cache_miss_tokens ?? 0;
+
+    // OpenAI's prompt_tokens is the TOTAL (includes cached tokens). DeepSeek also
+    // exposes cache hit/miss fields; use their sum as a fallback if prompt_tokens
+    // is absent from an OpenAI-compatible response.
+    const inputTokens =
+      rawUsage.prompt_tokens ??
+      (cachedTokens > 0 || cacheMissTokens > 0
+        ? cachedTokens + cacheMissTokens
+        : 0);
 
     return {
       inputTokens,
@@ -964,6 +1273,7 @@ export class ModelHandlerOpenAI<
       responseTimeMs,
       provider: this.usageProvider,
       cachedInputTokens: cachedTokens || undefined,
+      cacheMissInputTokens: cacheMissTokens || undefined,
       percentageCached: computeCachePercentage(cachedTokens, inputTokens),
       reasoningTokens:
         rawUsage.completion_tokens_details?.reasoning_tokens || undefined,
@@ -1103,6 +1413,12 @@ export class ModelHandlerOpenAI<
     return isNonEmptyString(reasoning) ? reasoning : null;
   }
 
+  protected extractReasoningFromResponse(responseObject: any): string | null {
+    return this.extractReasoningFromMessage(
+      responseObject?.choices?.[0]?.message,
+    );
+  }
+
   /**
    * Processes thinking blocks from API response.
    * @param responseObject The response object from the API
@@ -1113,8 +1429,7 @@ export class ModelHandlerOpenAI<
     responseObject: any,
     workspaceState?: AgentWorkspaceState,
   ): string | null {
-    const message = responseObject?.choices?.[0]?.message;
-    const reasoning = this.extractReasoningFromMessage(message);
+    const reasoning = this.extractReasoningFromResponse(responseObject);
     if (!reasoning) {
       return null;
     }
@@ -1182,46 +1497,31 @@ export class ModelHandlerOpenAI<
   }
 
   protected parseArguments(raw: unknown): unknown {
-    if (typeof raw !== 'string') {
-      return raw;
-    }
-
-    try {
-      return JSON.parse(raw);
-    } catch (error) {
-      this.logger.warn(
-        'Tool call arguments could not be parsed as JSON; using raw string.',
-        { data: error },
-      );
-      return raw;
-    }
+    return parseToolArguments(raw, this.logger);
   }
 
   extractToolUse(responseObject: ChatCompletion): TCall[] {
     const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
-    if (Array.isArray(toolCalls) && toolCalls.length > 0) {
-      return toolCalls
-        .filter(
-          (
-            call,
-          ): call is ChatCompletionMessageFunctionToolCall & { id: string } =>
-            Boolean(
-              call &&
-              typeof call === 'object' &&
-              (call as ChatCompletionMessageFunctionToolCall).function?.name &&
-              call.id,
-            ),
-        )
-        .map((call) => ({
-          provider: this.toolCallProvider,
-          callId: call.id,
-          name: call.function!.name,
-          input: this.parseArguments(call.function!.arguments),
-          raw: call,
-        })) as TCall[];
+    if (!Array.isArray(toolCalls) || toolCalls.length === 0) {
+      return [];
     }
 
-    return [];
+    try {
+      assertToolCallsAreChatCompletionFunctionToolCalls(toolCalls);
+    } catch {
+      this.logger.warn(
+        'Skipping malformed OpenAI tool_calls payload while extracting tool use.',
+      );
+      return [];
+    }
+
+    return toolCalls.map((call) => ({
+      provider: this.toolCallProvider,
+      callId: call.id,
+      name: call.function.name,
+      input: this.parseArguments(call.function.arguments),
+      raw: call,
+    })) as TCall[];
   }
 
   /**
@@ -1242,6 +1542,22 @@ export class ModelHandlerOpenAI<
    * will be included in the assistant message and cleared after use.
    */
   protected shouldIncludeReasoningInToolCalls(): boolean {
+    return false;
+  }
+
+  /**
+   * Whether final assistant messages should also replay reasoning_content.
+   * DeepSeek requires this for subsequent user turns after a thinking+tool cycle.
+   */
+  protected shouldIncludeReasoningInAssistantMessages(): boolean {
+    return false;
+  }
+
+  /**
+   * Some providers require assistant tool-call messages to include a content
+   * field even when the model emitted an empty string.
+   */
+  protected shouldIncludeEmptyAssistantToolContent(): boolean {
     return false;
   }
 
@@ -1269,19 +1585,19 @@ export class ModelHandlerOpenAI<
       tool_calls: toolCalls,
     };
 
-    // Include reasoning_content if this provider requires it for tool-use cycles
+    // Include reasoning_content if this provider requires it for tool-use cycles.
+    // Always include (even as empty string) to ensure consistency: once
+    // reasoning_content appears in the conversation history, DeepSeek's API
+    // requires it on every subsequent assistant message in thinking mode.
     if (this.shouldIncludeReasoningInToolCalls() && workspaceState) {
-      const reasoningContent =
-        workspaceState.reasoning.thinkingBlocks[0]?.thinking;
-      if (reasoningContent) {
-        callMsg.reasoning_content = reasoningContent;
-        // Clear after use to prevent stale reasoning in subsequent calls
-        workspaceState.resetReasoning();
-      }
+      callMsg.reasoning_content =
+        workspaceState.reasoning.thinkingBlocks[0]?.thinking ?? '';
+      // Clear after use to prevent stale reasoning in subsequent calls
+      workspaceState.resetReasoning();
     }
 
-    if (text) {
-      callMsg.content = this.formatAssistantContent(text);
+    if (text !== undefined || this.shouldIncludeEmptyAssistantToolContent()) {
+      callMsg.content = this.formatAssistantContent(text ?? '');
     }
 
     return callMsg;

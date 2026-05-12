@@ -3,12 +3,15 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS } from '@shared/schemas';
 
-import { findLastAssistantText } from './types';
+import { findLastAssistantText, extractTouchedFiles } from './types';
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
 import type { ToolUseRunShared, WaitExecResult } from './types';
 
 interface WaitPrepResult {
   lastResponse: string | undefined;
+  touchedFiles: string[];
+  /** True when entering after a failed/cancelled cycle. */
+  afterError: boolean;
 }
 
 export class ToolUseWaitNode<C> extends Node<
@@ -18,14 +21,18 @@ export class ToolUseWaitNode<C> extends Node<
 > {
   async prep(shared: ToolUseRunShared): Promise<WaitPrepResult> {
     const { modelHandler, onBeforeWaiting } = this.services;
+    const afterError = !!(shared.lastError || shared.userCancelledRetry);
 
-    // Only extract last response when the callback is wired (subagent mode)
-    if (!onBeforeWaiting) return { lastResponse: undefined };
+    // Only extract when the callback is wired (subagent mode)
+    if (!onBeforeWaiting)
+      return { lastResponse: undefined, touchedFiles: [], afterError };
 
     return {
+      touchedFiles: extractTouchedFiles(shared.stateSlices),
       lastResponse: findLastAssistantText(shared.messages, (m) =>
         modelHandler.extractAssistantText(m),
       ),
+      afterError,
     };
   }
 
@@ -37,26 +44,34 @@ export class ToolUseWaitNode<C> extends Node<
       return { kind: 'stop' };
     }
 
-    await onBeforeWaiting?.(prepRes.lastResponse);
+    // After a failed/cancelled cycle, skip notifying the orchestrator —
+    // it must not see a failure as a successful completion.
+    // In subagent mode, stop immediately: the orchestrator was never
+    // notified, so waiting for a follow-up would hang forever.
+    if (prepRes.afterError && this.services.isSubagent) {
+      return { kind: 'stop' };
+    }
+    if (!prepRes.afterError) {
+      await onBeforeWaiting?.(prepRes.lastResponse, prepRes.touchedFiles);
+    }
 
     if (!session.hasQueuedFollowUp()) {
       StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
     }
 
-    const followUp = await session.waitForFollowUp(checkInterruption);
-    if (!followUp || checkInterruption()) {
+    const items = await session.waitForFollowUp(checkInterruption);
+    if (!items || checkInterruption()) {
       return { kind: 'stop' };
     }
 
-    return { kind: 'continue', followUp };
+    return { kind: 'continue', followUp: items.join('\n\n') };
   }
 
   async execFallback(
     _prepRes: WaitPrepResult,
     error: Error,
   ): Promise<WaitExecResult> {
-    const { logger } = this.services;
-    logger.error(`ToolUseWaitNode error: ${error.message}`);
+    this.services.logger.error(`ToolUseWaitNode error: ${error.message}`);
     return { kind: 'stop' };
   }
 
@@ -69,8 +84,14 @@ export class ToolUseWaitNode<C> extends Node<
       this.services;
 
     if (execRes.kind === 'stop') {
-      return FlowTransition.DEFAULT;
+      return FlowTransition.COMPLETE;
     }
+
+    // User sent a follow-up — clear any prior error/cancellation state
+    // so the next cycle starts fresh and runToolUseFlow won't treat
+    // a previously-recovered error as a terminal failure.
+    shared.lastError = undefined;
+    shared.userCancelledRetry = undefined;
 
     onFollowUpConsumed?.();
     StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);

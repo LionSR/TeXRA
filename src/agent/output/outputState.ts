@@ -9,12 +9,15 @@ import { z } from 'zod';
 
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { normalizeRunId } from '@common/constants/runIds';
 import type { AgentLogger, AgentLogStage } from '@logger/AgentLogger';
 import {
+  CompileFailureSchema,
   FileLocationSchema,
   OutputFileInfoSchema,
   OutputXmlSummarySchema,
+  type CompileFailure,
   type OutputFileInfo,
   type StorageKey,
 } from '@shared/schemas';
@@ -27,6 +30,7 @@ import {
 
 const RoundDataSchema = z.object({
   outputs: OutputFileInfoSchema.array().prefault(() => []),
+  compileFailures: CompileFailureSchema.array().prefault(() => []),
   rawOutput: FileLocationSchema.nullable().prefault(null),
   xmlSummary: OutputXmlSummarySchema.prefault(() => ({})),
 });
@@ -48,6 +52,7 @@ export interface OutputDependencies {
   fileService: TaskRunFileService;
   executionId: string;
   streamId: string;
+  runtimeHost: AgentRuntimeHost;
 }
 
 export function createOutputState(): OutputState {
@@ -89,6 +94,10 @@ export function hasRoundOutputs(state: OutputState, round: number): boolean {
   return (state.rounds.get(round)?.outputs.length ?? 0) > 0;
 }
 
+export function hasCompileFailures(state: OutputState, round: number): boolean {
+  return (state.rounds.get(round)?.compileFailures.length ?? 0) > 0;
+}
+
 export function ensureRound(
   state: OutputState,
   round: number,
@@ -102,6 +111,14 @@ export function getOutputFilesByRound(state: OutputState): {
   return Object.fromEntries(
     [...state.rounds].map(([round, data]) => [round, data.outputs]),
   );
+}
+
+export function setCompileFailures(
+  state: OutputState,
+  round: number,
+  failures: CompileFailure[],
+): void {
+  ensureRoundData(state, round).compileFailures = failures;
 }
 
 function collectRunSupportFiles(agentConfig: AgentConfig): FileLocation[] {

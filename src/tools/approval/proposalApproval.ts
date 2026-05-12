@@ -1,25 +1,13 @@
-/**
- * Per-stream bypass state for agent delegation proposals (Super YOLO mode).
- *
- * When both the workspace setting (SUPER_YOLO_ENABLED) and the per-stream
- * toggle are active, agent proposals are auto-approved without user interaction.
- */
-import { WorkspaceStateKey, workspaceSM } from '@common/state';
-import { bus } from '@eventBus/ProgressEventBus';
+/** Per-stream bypass state for agent delegation proposals. */
+import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
-
-/** Check if the workspace-level Super YOLO feature is enabled. */
-export function isSuperYoloFeatureEnabled(): boolean {
-  return workspaceSM.get<boolean>(WorkspaceStateKey.SUPER_YOLO_ENABLED, false);
-}
 
 const bypassedByStream = new Map<StreamTabId, boolean>();
 
 function notifyBypassState(streamId: StreamTabId): void {
-  bus.emit('updateSuperYoloBypassState', {
+  getAgentRuntimeHost().emit('updateSuperYoloBypassState', {
     streamId,
     bypassActive: bypassedByStream.get(streamId) ?? false,
-    featureEnabled: isSuperYoloFeatureEnabled(),
   });
 }
 
@@ -44,21 +32,4 @@ export function _clearProposalBypassForStream(streamId: StreamTabId): void {
 /** @internal Called by unified cleanup in index.ts */
 export function _clearAllProposalBypass(): void {
   bypassedByStream.clear();
-}
-
-/**
- * Clear all per-stream proposal bypasses and notify each stream.
- * Returns the list of streams that were previously bypassed.
- * @internal Called when the workspace feature is disabled.
- */
-export function _disableAllProposalBypasses(): StreamTabId[] {
-  const affected: StreamTabId[] = [];
-  for (const [id, active] of bypassedByStream) {
-    if (active) affected.push(id);
-  }
-  bypassedByStream.clear();
-  for (const streamId of affected) {
-    notifyBypassState(streamId);
-  }
-  return affected;
 }

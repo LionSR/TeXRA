@@ -11,17 +11,22 @@
  *   - {@link @settingsView/utils/toolDashboardData} — reads everything for the UI
  */
 
-// Third-party imports
-import axios from 'axios';
-
 // Local imports
 import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
 import type { RegisteredToolName } from '@tools/registry';
-import { getZoteroPort } from '@tools/zotero/bbtClient';
-import { checkToolInstalled } from '@utils/system/toolUtils';
 import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
+import { getGitHubToken } from '@tools/github/githubAuth';
+import {
+  MAX_CONCURRENT_PR_SUBSCRIPTIONS,
+  PR_POLL_INTERVAL_MS,
+} from '@tools/github/prSubscriptionConstants';
+import { getZoteroPort } from '@tools/zotero/bbtClient';
+import { isGitRepository } from '@utils/system/isGitRepository';
+import { checkToolInstalled } from '@utils/system/toolUtils';
+import { isWSL } from '@utils/system/wslDetect';
 
 const LEAN4_EXT_ID = 'leanprover.lean4';
+const ZOTERO_PROBE_TIMEOUT_MS = 2000;
 
 /**
  * Pluggable check for VS Code extension availability.
@@ -46,10 +51,14 @@ export interface ExternalToolDef {
   readonly id: string;
   /** Tool names belonging to this group — must match registry keys. */
   readonly tools: readonly RegisteredToolName[];
+  /** Optional shared probe result passed to check/status/detail callbacks. */
+  readonly probe?: () => Promise<unknown>;
   /** Returns true if the external dependency is available. */
-  readonly check: () => Promise<boolean>;
+  readonly check: (probeResult?: unknown) => Promise<boolean>;
   /** Optional detailed status string resolved at check time (shown below description). */
-  readonly detailCheck?: () => Promise<string | undefined>;
+  readonly detailCheck?: (probeResult?: unknown) => Promise<string | undefined>;
+  /** Optional short status label for the dashboard badge. */
+  readonly statusLabel?: (probeResult?: unknown) => Promise<string | undefined>;
   // Dashboard UI metadata
   readonly name: string;
   readonly category: ToolCategory;
@@ -58,25 +67,53 @@ export interface ExternalToolDef {
   readonly installUrl?: string;
   /** VS Code extension ID — when present, the dashboard offers a direct "Install" button. */
   readonly installExtensionId?: string;
+  /** Shell command the dashboard can run in an integrated terminal to install the tool. */
+  readonly installCommand?: string;
+  /** Shell command the dashboard can run to sign the user in (e.g. `codex login`). */
+  readonly authCommand?: string;
   readonly configNotes?: string;
   /** When true, the tool is checked for availability but not shown in the Tools tab dashboard. */
   readonly hideFromDashboard?: boolean;
+  /** Short auth/billing note shown as a badge (e.g. "Uses ChatGPT subscription"). */
+  readonly authNote?: string;
+  /** When true, the dashboard shows an enable/disable toggle for this tool group. */
+  readonly toggleable?: boolean;
+  /**
+   * VS Code command ID invoked by the "fix this" action button in the
+   * "tools were excluded" notification. Overrides the default Tools tab
+   * link — use this when real setup lives elsewhere (e.g. Git tab for a
+   * GitHub token). The label for that button is `installActionLabel`.
+   */
+  readonly installActionCommand?: string;
+  readonly installActionLabel?: string;
 }
 
 // ============================================================
 // Zotero probe helpers
 // ============================================================
 
+async function fetchLocalhost(
+  url: string,
+  timeoutMs = ZOTERO_PROBE_TIMEOUT_MS,
+): Promise<Pick<Response, 'ok' | 'status'>> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let response: Response | undefined;
+  try {
+    response = await fetch(url, { signal: controller.signal });
+    return { ok: response.ok, status: response.status };
+  } finally {
+    clearTimeout(timeout);
+    await response?.body?.cancel().catch(() => undefined);
+  }
+}
+
 /** Probe the Zotero connector endpoint (responds if Zotero is running). */
 async function probeZoteroConnector(port: number): Promise<boolean> {
   try {
-    await axios.get(`http://127.0.0.1:${port}/connector/ping`, {
-      timeout: 2000,
-    });
+    await fetchLocalhost(`http://127.0.0.1:${port}/connector/ping`);
     return true;
-  } catch (error: unknown) {
-    // Any HTTP response means Zotero is running
-    if (axios.isAxiosError(error) && error.response) return true;
+  } catch {
     return false;
   }
 }
@@ -84,17 +121,34 @@ async function probeZoteroConnector(port: number): Promise<boolean> {
 /** Probe the Better BibTeX JSON-RPC endpoint. */
 async function probeZoteroBbt(port: number): Promise<boolean> {
   try {
-    await axios.get(`http://127.0.0.1:${port}/better-bibtex/json-rpc`, {
-      timeout: 2000,
-    });
-    return true;
-  } catch (error: unknown) {
-    // 405 = server running but expects POST — BBT is available
-    if (axios.isAxiosError(error) && error.response?.status === 405) {
-      return true;
-    }
+    const response = await fetchLocalhost(
+      `http://127.0.0.1:${port}/better-bibtex/json-rpc`,
+    );
+    return response.ok || response.status === 405;
+  } catch {
     return false;
   }
+}
+
+async function getGitHubPRPrerequisites(): Promise<{
+  tokenPresent: boolean;
+  inGitRepo: boolean;
+}> {
+  const tokenPresent = getGitHubToken() !== undefined;
+  const inGitRepo = await isGitRepository();
+  return { tokenPresent, inGitRepo };
+}
+
+type GitHubPRPrerequisites = Awaited<
+  ReturnType<typeof getGitHubPRPrerequisites>
+>;
+
+async function resolveGitHubPRPrerequisites(
+  probeResult: unknown,
+): Promise<GitHubPRPrerequisites> {
+  return probeResult === undefined
+    ? getGitHubPRPrerequisites()
+    : (probeResult as GitHubPRPrerequisites);
 }
 
 // ============================================================
@@ -165,6 +219,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     installUrl: 'https://retorque.re/zotero-better-bibtex/installation/',
     configNotes:
       'Zotero must be running with Better BibTeX installed. Port configurable via texra.bib.zoteroPort.',
+    toggleable: true,
     check: async () => probeZoteroBbt(getZoteroPort()),
     detailCheck: async () => {
       const port = getZoteroPort();
@@ -206,6 +261,73 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     configNotes: 'Lean 4 VS Code extension must be installed and active.',
     check: async () => extensionChecker(LEAN4_EXT_ID),
   },
+  {
+    // ID kept as `github-pr-subscription` for back-compat with persisted
+    // disabled-tool preferences. The user-facing name has expanded to
+    // cover repos and issues but the persistence key is stable.
+    id: 'github-pr-subscription',
+    tools: ['github_subscription'],
+    name: 'GitHub Activity Subscription',
+    category: 'workflow',
+    description:
+      'Poll GitHub for pull request, issue, and repository activity. Path mirrors GitHub URL shape: "owner/repo" for coarse repo-wide events, "owner/repo/pulls/N" for per-PR comments/reviews/CI, "owner/repo/issues/N" for issue comments and lifecycle.',
+    installGuide:
+      'Requires a git-tracked workspace and a GitHub personal access token:\n\n' +
+      '  1. Open the folder as a git repo (or `git init` + set a github.com remote).\n' +
+      '  2. In TeXRA settings → Git tab, click "Create on GitHub…"\n' +
+      '     (opens the token page with the right scopes pre-filled).\n' +
+      '  3. Scopes: "repo" for private repositories, "public_repo" for public only.\n' +
+      '  4. Copy the token back into TeXRA via "Set token".\n\n' +
+      'Alternatively, export GITHUB_TOKEN in the environment VS Code is launched from.',
+    installUrl: 'https://github.com/settings/tokens',
+    configNotes: `Token stored in VS Code SecretStorage (managed from Git tab). Requires a git repository in the workspace. Polls every ${PR_POLL_INTERVAL_MS / 1000}s; cap: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PRs and 3 concurrent repos. Bot-authored events are dropped end-to-end by policy.`,
+    authNote: 'Uses personal access token',
+    toggleable: true,
+    installActionCommand: 'texra.showGitSettings',
+    installActionLabel: 'Open Git settings',
+    probe: getGitHubPRPrerequisites,
+    check: async (probeResult) => {
+      const { tokenPresent, inGitRepo } =
+        await resolveGitHubPRPrerequisites(probeResult);
+      return tokenPresent && inGitRepo;
+    },
+    statusLabel: async (probeResult) => {
+      const { tokenPresent, inGitRepo } =
+        await resolveGitHubPRPrerequisites(probeResult);
+      if (tokenPresent && inGitRepo) return undefined;
+      if (tokenPresent && !inGitRepo) return 'Needs git repo';
+      if (!tokenPresent && inGitRepo) return 'Needs token';
+      return 'Needs setup';
+    },
+    detailCheck: async (probeResult) => {
+      const { tokenPresent, inGitRepo } =
+        await resolveGitHubPRPrerequisites(probeResult);
+      if (tokenPresent && inGitRepo) {
+        return 'GitHub token detected and workspace is a git repo. Ready to subscribe to PR activity.';
+      }
+      if (!tokenPresent && !inGitRepo) {
+        return 'Open a git-tracked folder, or run git init and add a github.com remote. Then set a token in the Git tab.';
+      }
+      if (!tokenPresent) {
+        return 'This workspace is a git repo. Set a GitHub personal access token in the Git tab to enable PR activity subscriptions.';
+      }
+      return 'GitHub token is set. Open a git-tracked folder, or run git init and add a github.com remote, to use PR activity subscriptions.';
+    },
+  },
+
+  {
+    id: 'external-inquiry',
+    tools: ['external_inquiry'],
+    name: 'External Inquiry',
+    category: 'workflow',
+    description:
+      'Lets agents ask you to query an external chat model such as ChatGPT, Claude, or Gemini and paste the answer back into the run.',
+    configNotes:
+      'No local install required. Uses your own external chat subscription and a human-in-the-loop copy/paste flow.',
+    authNote: 'Uses external chat subscription',
+    toggleable: true,
+    check: async () => true,
+  },
 
   {
     id: 'codex',
@@ -219,14 +341,19 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       '  npm install -g @openai/codex\n' +
       '  brew install codex          (macOS)\n\n' +
       'On Windows, use WSL or the Codex app.\n' +
+      'In WSL, install inside the WSL environment (not on the Windows side).\n' +
       'See: https://developers.openai.com/codex/cli\n\n' +
       'Authentication (choose one):\n' +
       '  • codex login        — sign in with ChatGPT account (recommended)\n' +
       '  • OPENAI_API_KEY     — environment variable with API key',
     installUrl: 'https://github.com/openai/codex',
+    installCommand: 'npm install -g @openai/codex',
+    authCommand: 'codex login',
     configNotes:
       'Requires @openai/codex npm package with platform binaries. Used by @openai/codex-sdk. ' +
       'Supports OAuth via `codex login` or OPENAI_API_KEY env var.',
+    authNote: 'Uses ChatGPT subscription (free with Plus/Pro)',
+    toggleable: true,
     check: async () => {
       try {
         await importCodexClass();
@@ -257,7 +384,11 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       // Step 2: Can we find the native binary?
       const codexPath = findCodexBinaryPath();
       if (!codexPath) {
-        return 'Codex SDK loaded but native binary not found. Install with: npm install -g @openai/codex';
+        return (
+          'Codex SDK loaded but native binary not found. ' +
+          'Install with: npm install -g @openai/codex' +
+          (isWSL() ? ' (run this inside WSL, not on the Windows side)' : '')
+        );
       }
 
       return `Codex CLI ready. Binary: ${codexPath}`;
@@ -267,3 +398,8 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
   // System dependencies (latexindent, image processing) have moved to the
   // LaTeX settings tab — see LaTeXTab.ts and SettingsViewMessageHandler.ts.
 ];
+
+/** Look up a tool definition by id. */
+export function findExternalToolDef(id: string): ExternalToolDef | undefined {
+  return EXTERNAL_TOOL_DEFS.find((d) => d.id === id);
+}

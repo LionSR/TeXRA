@@ -1,0 +1,105 @@
+/** Collapsible token-usage stats panel. */
+
+// Third-party imports
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
+import { repeat } from 'lit/directives/repeat.js';
+import { ifDefined } from 'lit/directives/if-defined.js';
+
+// Side-effect imports - register WA components
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
+// Local imports - shared styles
+import { designTokens, commonViewStyles } from '@shared/styles';
+
+// Local imports - progress view helpers
+import { buildDetailsSummary } from '../formatters/htmlBuilders';
+
+/** Stat item to display */
+export interface StatItem {
+  icon: string;
+  label: string;
+  value: string;
+}
+
+@customElement('statistics-panel')
+export class StatisticsPanel extends LitElement {
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    css`
+      :host {
+        display: block;
+      }
+
+      details {
+        margin: var(--wa-space-2xs) 0;
+        content-visibility: auto;
+        contain-intrinsic-size: auto 40px;
+      }
+
+      .statistics-content {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--wa-space-2xs) var(--wa-space-s);
+        padding: var(--wa-space-3xs) 0 var(--wa-space-2xs) var(--wa-space-s);
+      }
+
+      .stat-item {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--wa-space-2xs);
+        font-variant-numeric: tabular-nums;
+        color: var(--wa-color-text-normal);
+      }
+
+      .stat-item wa-icon {
+        color: var(--wa-color-text-quiet);
+        font-size: var(--font-size-sm);
+      }
+    `,
+  ];
+
+  /** Log ID for tracking */
+  @property({ attribute: false }) logId = '';
+
+  /** Statistics items to display */
+  @property({ attribute: false }) items: StatItem[] = [];
+
+  override render(): TemplateResult | typeof nothing {
+    if (this.items.length === 0) {
+      return nothing;
+    }
+
+    return html`
+      <details
+        class="banner-details"
+        data-log-id=${ifDefined(this.logId || undefined)}
+      >
+        ${buildDetailsSummary({ iconName: 'graph', label: 'Statistics' })}
+        <div class="statistics-content">
+          ${repeat(
+            this.items,
+            (item) => item.label,
+            (item) => html`
+              <span class="stat-item" title=${item.label}>
+                <wa-icon
+                  library="texra"
+                  name=${item.icon}
+                  aria-hidden="true"
+                ></wa-icon>
+                ${item.value}
+              </span>
+            `,
+          )}
+        </div>
+      </details>
+    `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'statistics-panel': StatisticsPanel;
+  }
+}

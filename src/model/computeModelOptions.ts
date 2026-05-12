@@ -1,84 +1,27 @@
 // Third-party imports
-import { MODEL_CONFIGS, hint, type ModelConfig } from 'llm-zoo';
+import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
+
+// Local imports - platform
+import { platform } from '@platform/platform';
 
 // Local imports - auth
 import { getServerSideKeyService } from '@auth/serverKeys';
 
-// Local imports - frontend
-import { GlobalStateKey, globalSM } from '@common/state';
-import { ApiProvider, SecretManager } from '@frontend/secretManager';
-
+// Local imports - state
 // Local imports - shared schemas
 import type { ModelOptionData } from '@shared/schemas';
 
-/**
- * Default models that should be present in every user's model list.
- * Update this list and increment MODEL_LIST_VERSION below when adding new models.
- */
-export const DEFAULT_MODELS = [
-  'gemini31p',
-  'gemini3f',
-  'sonnet46T',
-  'opus46T',
-  'gpt54',
-  'gpt54pro',
-  'gpt53codex',
-  'gpt41',
-  'deepseekT',
-  'kimi25T',
-  'grok4',
-  'minimaxM27',
-  'glm47',
-];
+// Local imports - shared constants
+import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 
-/**
- * Version number for the default model list.
- * Increment this when adding or removing models to force existing users
- * to get the updated defaults. A simple integer avoids hash-collision risks
- * and doesn't trigger on harmless reordering.
- */
-export const MODEL_LIST_VERSION = 8;
-
-/**
- * Get the list of visible models from extension global state.
- * This should be used to validate model selections in proposals.
- */
-export function getVisibleModels(): string[] {
-  return globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS, DEFAULT_MODELS);
-}
-
-/**
- * Resolve a model to a valid visible model.
- * Returns the model as-is if visible, falls back to the first visible model,
- * or allows any model when none are configured (consistent with agent filterVisible).
- */
-export function resolveVisibleModel(model: string): string {
-  const visibleModels = getVisibleModels();
-  if (visibleModels.length === 0) return model;
-  if (visibleModels.includes(model)) return model;
-  return visibleModels[0];
-}
-
-/** Context window formatting thresholds */
-const MILLION = 1_000_000;
-const THOUSAND = 1_000;
-
-/** Format context window number for display. */
-export function formatContext(context: number | undefined): string | undefined {
-  if (context === undefined) return undefined;
-  if (context >= MILLION) return `${(context / MILLION).toFixed(1)}M`;
-  if (context >= THOUSAND) return `${Math.round(context / THOUSAND)}K`;
-  return context.toString();
-}
-
-/** Format cost values for display. */
-export function formatCost(
-  inputPrice: number | undefined,
-  outputPrice: number | undefined,
-): string | undefined {
-  if (inputPrice === undefined || outputPrice === undefined) return undefined;
-  return `$${inputPrice.toFixed(3)}/$${outputPrice.toFixed(3)}`;
-}
+// Local imports - sibling
+import { API_PROVIDERS, apiKeyExists, type ApiProvider } from './apiProviders';
+import {
+  buildModelHint,
+  formatContext,
+  formatCost,
+  getVisibleModels,
+} from './modelOptionsBasic';
 
 /** Check if a model is available via personal API keys. */
 async function hasPersonalKeyForModel(
@@ -86,14 +29,14 @@ async function hasPersonalKeyForModel(
   hasOpenRouter: boolean,
 ): Promise<boolean> {
   if (config.openRouterOnly) return hasOpenRouter;
-  if (!SecretManager.API_PROVIDERS.includes(config.provider as ApiProvider)) {
-    return true;
-  }
+
+  const provider = config.provider as ApiProvider;
+  if (!(API_PROVIDERS as readonly string[]).includes(provider)) return true;
 
   try {
     return (
-      (await SecretManager.apiKeyExists(config.provider as ApiProvider)) ||
-      Boolean(config.openrouterFullName && hasOpenRouter)
+      (await apiKeyExists(platform().secrets, provider)) ||
+      !!(config.openrouterFullName && hasOpenRouter)
     );
   } catch {
     return false;
@@ -136,6 +79,47 @@ async function isModelAvailable(
   return false;
 }
 
+async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
+  const serverSideKeyService = getServerSideKeyService();
+  const [hasOpenRouter, hasServerAccess] = await Promise.all([
+    apiKeyExists(platform().secrets, 'openRouter'),
+    serverSideKeyService.canUseServerSideKeys(),
+  ]);
+  return {
+    hasOpenRouter,
+    hasServerAccess,
+    useIncludedAccess: serverSideKeyService.getUseIncludedModelAccess(),
+    serverSideKeyService,
+  };
+}
+
+/** Returns a human-readable reason why a model is unavailable, or `null` if available. */
+export async function getModelUnavailableReason(
+  model: string,
+): Promise<string | null> {
+  const config = MODEL_CONFIGS[model];
+  if (!config) return `Model "${model}" is not recognized.`;
+
+  const ctx = await buildAvailabilityContext();
+  const available = await isModelAvailable(model, config, ctx);
+  if (available) return null;
+
+  // Determine the specific reason
+  if (config.openRouterOnly) {
+    return `Model "${model}" requires an OpenRouter API key. Set your OpenRouter key in the extension settings.`;
+  }
+
+  if (ctx.useIncludedAccess && ctx.hasServerAccess) {
+    // User has server access but model isn't available on their tier
+    return `Model "${model}" is not available with your current subscription tier. Upgrade your plan or switch to a different model.`;
+  }
+
+  // Personal key mode or unauthenticated — missing provider key
+  const providerName =
+    PROVIDER_DISPLAY_NAMES[config.provider] ?? config.provider;
+  return `Model "${model}" requires your ${providerName} API key. Set it in the extension settings or enable included access.`;
+}
+
 /** Build typed model option data for a single model. */
 async function buildModelOptionData(
   model: string,
@@ -149,34 +133,14 @@ async function buildModelOptionData(
   const available = await isModelAvailable(model, config, ctx);
   return {
     value: model,
-    label: model,
+    label: config.label,
     provider: config.provider,
     context: formatContext(config.contextWindow),
     cost: formatCost(config.inputPrice, config.outputPrice),
-    hint: hint(config),
+    hint: buildModelHint(config),
     requiresKey: !available,
     disabled: !available,
   };
-}
-
-/**
- * Build basic model options from static config only (synchronous).
- * Includes provider, context, and cost metadata but skips async
- * availability checks. All models are shown as enabled.
- */
-export function buildBasicModelOptionsData(): ModelOptionData[] {
-  return getVisibleModels().map((model) => {
-    const config = MODEL_CONFIGS[model];
-    if (!config) return { value: model, label: model };
-    return {
-      value: model,
-      label: model,
-      provider: config.provider,
-      context: formatContext(config.contextWindow),
-      cost: formatCost(config.inputPrice, config.outputPrice),
-      hint: hint(config),
-    };
-  });
 }
 
 /**
@@ -197,52 +161,42 @@ export function invalidateModelOptionsCache(): void {
   _pending = null;
 }
 
-/** Compute typed model options data for Lit-native rendering. */
-export async function computeModelOptionsData(): Promise<ModelOptionData[]> {
-  // Return cached result if still valid.
-  if (_resolved && Date.now() < _resolved.expiry) {
-    return _resolved.data;
-  }
+/**
+ * Compute typed model options data for Lit-native rendering.
+ *
+ * When `models` is provided, the caller's view of the visible-models
+ * list is honored verbatim (skipping the cache). This avoids a desync
+ * when the caller is wired against an alternate `globalState` while
+ * the default `getVisibleModels()` reads from `platform().globalState`.
+ */
+export async function computeModelOptionsData(
+  models?: readonly string[],
+): Promise<ModelOptionData[]> {
+  if (models != null) return computeModelOptionsDataUncached(models);
 
-  // Dedup concurrent callers — share the same in-flight promise.
-  if (_pending) {
-    return _pending;
-  }
+  if (_resolved && Date.now() < _resolved.expiry) return _resolved.data;
+  if (_pending) return _pending;
 
-  const thisRequest = computeModelOptionsDataUncached();
-  _pending = thisRequest;
+  const request = computeModelOptionsDataUncached();
+  _pending = request;
 
   try {
-    const data = await thisRequest;
+    const data = await request;
     // Only populate cache if no invalidation occurred while we were awaiting.
-    // invalidateModelOptionsCache() sets _pending = null, so comparing against
-    // thisRequest detects concurrent invalidation.
-    if (_pending === thisRequest) {
+    if (_pending === request) {
       _resolved = { data, expiry: Date.now() + MODEL_OPTIONS_CACHE_TTL_MS };
     }
     return data;
   } finally {
-    if (_pending === thisRequest) {
-      _pending = null;
-    }
+    if (_pending === request) _pending = null;
   }
 }
 
-async function computeModelOptionsDataUncached(): Promise<ModelOptionData[]> {
-  const models = getVisibleModels();
-
-  const serverSideKeyService = getServerSideKeyService();
-  const [hasOpenRouter, hasServerAccess] = await Promise.all([
-    SecretManager.apiKeyExists('openRouter'),
-    serverSideKeyService.canUseServerSideKeys(),
-  ]);
-
-  const availabilityCtx: ModelAvailabilityContext = {
-    hasOpenRouter,
-    hasServerAccess,
-    useIncludedAccess: serverSideKeyService.getUseIncludedModelAccess(),
-    serverSideKeyService,
-  };
+async function computeModelOptionsDataUncached(
+  modelsOverride?: readonly string[],
+): Promise<ModelOptionData[]> {
+  const models = modelsOverride ?? getVisibleModels();
+  const availabilityCtx = await buildAvailabilityContext();
 
   return Promise.all(
     models.map((model) => buildModelOptionData(model, availabilityCtx)),

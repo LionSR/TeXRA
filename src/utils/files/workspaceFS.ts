@@ -1,32 +1,40 @@
 import * as path from 'path';
-import * as vscode from 'vscode';
+
+// Platform imports
+import { getWorkspaceProvider } from '@agent/core/workspace';
+
+// Local imports - filesystem
 import { RelativeFS } from './relativeFS';
-import { locatePathInRoot, type ResolvedPath } from './workspaceRoot';
+import {
+  annotateExternal,
+  locatePathInRoot,
+  type ResolvedPath,
+} from './workspaceRoot';
 
 /**
- * Static filesystem rooted at the VS Code workspace folder.
- * File I/O from {@link RelativeFS}; path resolution via VS Code + {@link locatePathInRoot}.
+ * Static filesystem rooted at the workspace folder.
+ * File I/O from {@link RelativeFS}; path resolution via WorkspaceProvider + {@link locatePathInRoot}.
  */
 export class WorkspaceFS extends RelativeFS {
   protected static override getBasePath(): string {
-    const folder = vscode.workspace.workspaceFolders?.[0];
-    if (!folder) {
+    const wsPath = getWorkspaceProvider().getWorkspacePath();
+    if (!wsPath) {
       throw new Error('Workspace path is not available.');
     }
-    return folder.uri.fsPath;
+    return wsPath;
   }
 
   public static getPath(): string | undefined {
-    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    return getWorkspaceProvider().getWorkspacePath();
   }
 
-  /** Workspace-relative path via VS Code's symlink-aware asRelativePath. */
+  /** Workspace-relative path via the platform's symlink-aware asRelativePath. */
   public static relativePath(filePath: string): string {
     if (!this.getPath()) {
       return filePath;
     }
-    return vscode.workspace
-      .asRelativePath(filePath, false)
+    return getWorkspaceProvider()
+      .asRelativePath(filePath)
       .replaceAll('\\', '/');
   }
 
@@ -44,10 +52,13 @@ export class WorkspaceFS extends RelativeFS {
 
     if (!root) {
       if (!inputPath) return { kind: 'external', absolutePath: '' };
-      return { kind: 'external', absolutePath: path.resolve(inputPath) };
+      return annotateExternal({
+        kind: 'external',
+        absolutePath: path.resolve(inputPath),
+      });
     }
 
-    // Absolute paths: VS Code's asRelativePath for symlink handling
+    // Absolute paths: platform's asRelativePath for symlink handling
     if (path.isAbsolute(inputPath)) {
       const relative = this.relativePath(inputPath);
       if (!path.isAbsolute(relative) && !relative.startsWith('..')) {
@@ -57,7 +68,7 @@ export class WorkspaceFS extends RelativeFS {
           relativePath: relative,
         };
       }
-      return { kind: 'external', absolutePath: inputPath };
+      return annotateExternal({ kind: 'external', absolutePath: inputPath });
     }
 
     // Empty + relative paths: pure path logic

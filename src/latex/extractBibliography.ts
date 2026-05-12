@@ -6,7 +6,12 @@ import { BibEntry, parseBibFile } from 'bibtex';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
-import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
+
+// Local file imports
+import {
+  collectBibliographyPaths,
+  stripLatexComments,
+} from './latexParsingUtils';
 
 const CITE_COMMANDS = [
   'cite',
@@ -26,17 +31,10 @@ const CITE_COMMANDS = [
 ];
 
 // Compiled regex patterns (matchAll clones the regex, so module-level is safe)
-const DIRECTIVE_PATTERN = new RegExp(
-  '(?:bibliography|addbibresource)(?:\\s*\\[[^\\]]*\\])?\\s*\\{([^}]*)\\}',
-  'g',
-);
-
 const CITATION_PATTERN = new RegExp(
   `\\\\(?:${CITE_COMMANDS.join('|')})\\*?(?:\\[[^\\]]*\\])*\\{([^}]*)\\}`,
   'g',
 );
-
-const COMMENT_PATTERN = /(^|[^\\])%.*$/gm;
 
 export interface BibliographyReferenceResult {
   /** Paths to bibliography files that exist, relative to the workspace. */
@@ -52,34 +50,6 @@ export interface BibliographyEntriesResult {
   entries: Map<string, string>;
   /** Citation keys without matching entries across the loaded files. */
   missingKeys: string[];
-}
-
-function stripComments(content: string): string {
-  return content.replaceAll(COMMENT_PATTERN, '$1');
-}
-
-function normalizeBibPath(baseDir: string, target: string): string {
-  const trimmed = target.trim();
-  if (!trimmed) {
-    return '';
-  }
-  return joinLatexPath(baseDir, ensureExtension(trimmed, '.bib'));
-}
-
-function collectBibliographyPaths(baseDir: string, content: string): string[] {
-  const paths = new Set<string>();
-
-  for (const match of content.matchAll(DIRECTIVE_PATTERN)) {
-    const block = match[1];
-    for (const raw of block.split(',')) {
-      const normalized = normalizeBibPath(baseDir, raw);
-      if (normalized) {
-        paths.add(normalized);
-      }
-    }
-  }
-
-  return [...paths];
 }
 
 function collectCitationKeys(content: string): string[] {
@@ -103,7 +73,7 @@ export async function extractBibliographyContext(
 ): Promise<BibliographyReferenceResult> {
   const texDir = path.dirname(texPath);
   const content = await WorkspaceFS.read(texPath);
-  const uncommented = stripComments(content);
+  const uncommented = stripLatexComments(content);
 
   const referencedPaths = collectBibliographyPaths(texDir, uncommented);
   const existing: string[] = [];

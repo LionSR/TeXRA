@@ -1,5 +1,4 @@
 // Standard library imports
-import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
@@ -8,13 +7,13 @@ import { execa } from 'execa';
 
 // Local imports
 import { WorkspaceFS } from '@utils/files';
+import { listExternalRoots } from '@utils/files/externalRoots';
+import { isWSL } from './wslDetect';
 
 /** Timeout for git commands in milliseconds. */
 const GIT_TIMEOUT_MS = 3000;
 
-/**
- * Gathered workspace environment information for system prompt injection.
- */
+/** Gathered workspace environment information for system prompt injection. */
 interface WorkspaceInfo {
   workspacePath: string | undefined;
   platform: string;
@@ -29,55 +28,21 @@ interface GitInfo {
   dirty: boolean;
 }
 
-/**
- * Detect the user's default shell from environment.
- * Returns the shell basename (e.g., "bash", "zsh", "fish") or undefined.
- */
+/** Detect the user's default shell basename (e.g., "bash", "zsh", "PowerShell"). */
 function detectShell(): string | undefined {
   if (process.platform === 'win32') {
-    // On Windows, check for common shells
     const comspec = process.env.ComSpec;
-    if (comspec) {
-      const name = path.basename(comspec).toLowerCase();
-      if (name === 'powershell.exe' || name === 'pwsh.exe') return 'PowerShell';
-      if (name === 'cmd.exe') return 'cmd';
-      return name.replace(/\.exe$/, '');
-    }
-    return undefined;
+    if (!comspec) return undefined;
+    const name = path.basename(comspec).toLowerCase();
+    if (name === 'powershell.exe' || name === 'pwsh.exe') return 'PowerShell';
+    if (name === 'cmd.exe') return 'cmd';
+    return name.replace(/\.exe$/, '');
   }
-
-  // Unix: SHELL env var is the login shell
   const shell = process.env.SHELL;
-  if (!shell) return undefined;
-  return path.basename(shell); // "bash", "zsh", "fish", etc.
+  return shell ? path.basename(shell) : undefined;
 }
 
-/** Cached WSL detection result (null = not yet checked). */
-let wslDetected: boolean | null = null;
-
-/**
- * Detect whether we are running inside Windows Subsystem for Linux (WSL).
- * Checks /proc/version for the "microsoft" or "WSL" marker strings that
- * Microsoft's WSL kernel injects.  Result is cached after the first call.
- */
-export function isWSL(): boolean {
-  if (wslDetected !== null) return wslDetected;
-  if (process.platform !== 'linux') {
-    wslDetected = false;
-    return false;
-  }
-  try {
-    const version = fs.readFileSync('/proc/version', 'utf-8');
-    wslDetected = /microsoft|wsl/i.test(version);
-  } catch {
-    wslDetected = false;
-  }
-  return wslDetected;
-}
-
-/**
- * Get a human-readable platform name.
- */
+/** Get a human-readable platform name. */
 function getPlatformLabel(): string {
   switch (process.platform) {
     case 'darwin':
@@ -118,8 +83,7 @@ async function getGitInfo(workspacePath: string): Promise<GitInfo | null> {
     ]);
 
     const branch =
-      branchResult.exitCode === 0 ? branchResult.stdout.trim() : null; // detached HEAD
-
+      branchResult.exitCode === 0 ? branchResult.stdout.trim() : null;
     const dirty =
       statusResult.exitCode === 0 && statusResult.stdout.trim().length > 0;
 
@@ -188,16 +152,26 @@ export async function buildWorkspaceInfoBlock(
   lines.push(`Date: ${info.date}`);
 
   if (info.git) {
-    const parts = ['Git: yes'];
-    if (info.git.branch) {
-      parts.push(`branch=${escapeXml(info.git.branch)}`);
-    } else {
-      parts.push('detached HEAD');
-    }
-    if (info.git.dirty) {
-      parts.push('uncommitted changes');
-    }
+    const branchPart = info.git.branch
+      ? `branch=${escapeXml(info.git.branch)}`
+      : 'detached HEAD';
+    const parts = ['Git: yes', branchPart];
+    if (info.git.dirty) parts.push('uncommitted changes');
     lines.push(parts.join(', '));
+  }
+
+  const externalRoots = listExternalRoots();
+  if (externalRoots.length > 0) {
+    lines.push('');
+    lines.push(
+      'Accessible external directories (absolute paths — use read_file, write_file, ls, grep, glob, edit_file):',
+    );
+    for (const root of externalRoots) {
+      const rw = root.writable ? 'writable' : 'read-only';
+      lines.push(
+        `  ${escapeXml(root.absolutePath)} — ${escapeXml(root.label)} (${rw})`,
+      );
+    }
   }
 
   return `\n<workspace_info>\n${lines.join('\n')}\n</workspace_info>`;

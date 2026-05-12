@@ -41,9 +41,13 @@ import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
+import { K_SLICE } from '@agent/core/constants';
 import {
   getSdkErrorMessage,
   isContextWindowError,
+  attachPartialText,
+  takeTail,
+  PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 
@@ -55,10 +59,10 @@ import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 
 // Local imports - utils
-import { K_SLICE } from '@utils/config';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
+import { tagGoogleSdkError } from './support/sdkErrorAdapters';
 import { TOOL_USE_SAFETY_BUFFER } from './contextManagementConstants';
 
 // Local file imports
@@ -417,11 +421,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       contents: countContents,
       config: {
         abortSignal: options?.signal,
-        // Cast needed: toGoogleTools returns Tool[] but generationConfig.tools
-        // is typed as ToolListUnion (includes CallableTool). We know our tools
-        // are always Tool[] since toGoogleTools creates FunctionDeclaration tools.
         ...(options?.googleTools?.length && {
-          tools: options.googleTools as GeminiTool[],
+          tools: options.googleTools,
         }),
       },
     });
@@ -434,6 +435,18 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   /** Creates a chat completion response using Google's GenAI API with specified parameters and optional system prompt. */
   async createResponse(
+    options: CreateResponseOptions<Content, GoogleGenAI>,
+  ): Promise<CreateResponseResult<GenerateContentResponse, Content>> {
+    try {
+      return await this.createResponseImpl(options);
+    } catch (err) {
+      tagGoogleSdkError(err, this.config.provider);
+      throw err;
+    }
+  }
+
+  /** Creates a Google response after SDK-boundary error tagging is installed. */
+  private async createResponseImpl(
     options: CreateResponseOptions<Content, GoogleGenAI>,
   ): Promise<CreateResponseResult<GenerateContentResponse, Content>> {
     const {
@@ -481,8 +494,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       };
     }
 
-    if (tools?.length) {
-      generationConfig.tools = toGoogleTools(tools);
+    const googleTools = tools?.length ? toGoogleTools(tools) : undefined;
+    if (googleTools?.length) {
+      generationConfig.tools = googleTools;
     }
 
     const chatParams: CreateChatParameters = {
@@ -497,13 +511,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (this.supportsTokenCounting) {
       try {
         // Reuse built params for token counting (build once principle)
-        // Cast: toGoogleTools always returns Tool[], but generationConfig.tools
-        // is typed as ToolListUnion (which includes CallableTool union member)
         const totalTokens = await this.estimateTokenCount(history, {
           client,
           systemPrompt,
           lastMessageParts,
-          googleTools: generationConfig.tools as GeminiTool[] | undefined,
+          googleTools,
           signal,
         });
 
@@ -538,6 +550,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           generationConfig.maxOutputTokens = validation.adjustedMaxTokens;
         }
       } catch (err) {
+        tagGoogleSdkError(err, this.config.provider);
         // Re-throw context window violations - these are intentional validation errors
         // that should fail fast, not be swallowed by soft failure
         if (isContextWindowError(err)) {
@@ -552,6 +565,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     // Phase 4: EXECUTE - Make the API call
     const useStreaming = this.getStreamingConfig();
+    // Hoisted so the outer catch can attach any text produced before a
+    // mid-stream failure (Google's SDK has no currentMessage accessor, so
+    // we accumulate manually as we iterate).
+    let aggregatedText = '';
 
     try {
       this.logger.debug(
@@ -580,7 +597,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           | NonNullable<GenerateContentResponse['candidates']>[number]
           | undefined;
         const aggregatedParts: Part[] = [];
-        let aggregatedText = '';
         let usageFromChunks: GenerateContentResponseUsageMetadata | undefined;
 
         for await (const chunk of stream) {
@@ -706,6 +722,16 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         };
         this.logger.warn(
           `Content blocked by safety filter: ${JSON.stringify(errorWithResponse.response?.promptFeedback)}`,
+        );
+      }
+      // If the stream produced any text before failing, attach a tail to the
+      // error so the retry UI can show progress and future continuation logic
+      // can reference it. Google's SDK has no currentMessage accessor, so we
+      // rely on the manually accumulated buffer above.
+      if (aggregatedText) {
+        attachPartialText(
+          error,
+          takeTail(aggregatedText, PARTIAL_TEXT_TAIL_MAX),
         );
       }
       throw error;

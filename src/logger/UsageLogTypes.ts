@@ -8,7 +8,6 @@ export const UsageLogMetadataSchema = z.object({
   provider: UsageProviderSchema,
   agentName: z.string().optional(),
   agentCategory: z.enum(AgentCategory).optional(),
-  isMultipleOutput: z.boolean().optional(),
   usedRelay: z.boolean().optional(),
   streamId: z.string().optional(),
 });
@@ -21,6 +20,7 @@ export const UsageLogStatsSchema = z.object({
   cost: z.number().nonnegative(),
   responseTimeMs: z.number().nonnegative().optional(),
   cachedInputTokens: z.int().nonnegative().optional(),
+  cacheMissInputTokens: z.int().nonnegative().optional(),
   cacheCreationInputTokens: z.int().nonnegative().optional(),
   reasoningTokens: z.int().nonnegative().optional(),
 });

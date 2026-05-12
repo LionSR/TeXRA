@@ -9,6 +9,7 @@ import {
 } from '@model/ToolDefinition';
 
 // Local imports - tools
+import { AddCriticismTool } from './AddCriticismTool';
 import { BashTool } from './bash';
 import { DiagnosticsTool } from './DiagnosticsTool';
 import { ApplyPathTool } from './applyPath';
@@ -27,12 +28,12 @@ import { TextEditorTool } from './TextEditorTool';
 import { WriteFileTool } from './WriteTool';
 import { WebFetchTool } from './web/WebFetchTool';
 import { WebSearchTool } from './web/WebSearchTool';
-import { WolframTool } from './wolfram';
-import { TexcountTool } from './texcount';
+import { WolframTool } from './wolfram/WolframTool';
+import { TexcountTool } from './texcount/TexcountTool';
 import { CrossrefDoiTool, CrossrefSearchTool } from './citation';
-import { PlanTool } from './plan';
-import { TodoWriteTool } from './todo';
-import { MemoryTool } from './memory';
+import { PlanTool } from './plan/PlanTool';
+import { TodoWriteTool } from './todo/TodoTool';
+import { MemoryTool } from './memory/MemoryTool';
 import {
   ZoteroAddTool,
   ZoteroCollectionsTool,
@@ -47,13 +48,22 @@ import {
   LeanInspectTool,
   LeanLoogleTool,
 } from './lean';
-import {
-  WorkflowAgentTool,
-  DelegateAgentTool,
-  ResumeAgentTool,
-} from './DelegationTools';
+import { WorkflowAgentTool, DelegateAgentTool } from './DelegationTools';
 import { ExecutionsTool } from './ExecutionsTool';
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
+import { ExternalInquiryTool } from './inquiry';
+import { GitHubSubscriptionTool } from './github';
+import {
+  ProbeEnvironmentTool,
+  VerifySetupTool,
+  SetApiKeyTool,
+  UnsetApiKeyTool,
+  InvokeCommandTool,
+  InstallVscodeExtensionTool,
+  ReadConfigTool,
+  UpdateConfigTool,
+  SendToTerminalTool,
+} from './setup';
 
 /** Singleton IToolRegistry instance for the default tools. */
 let defaultRegistryInstance: IToolRegistry | null = null;
@@ -66,13 +76,13 @@ let defaultRegistryInstance: IToolRegistry | null = null;
  *
  * Defined as a function (not a module-scope const) so tool constructors
  * run lazily on first `getDefaultToolRegistry()` call rather than eagerly
- * on import. This keeps imports side-effect-free and ensures
- * `resetDefaultToolRegistry()` creates genuinely fresh instances.
+ * on import. This keeps imports side-effect-free.
  */
 function createDefaultTools() {
   return {
     str_replace_editor: new TextEditorTool(),
     diagnostics: new DiagnosticsTool(),
+    add_criticism: new AddCriticismTool(),
     bash: new BashTool(),
     read_file: new ReadFileTool(),
     write_file: new WriteFileTool(),
@@ -108,36 +118,31 @@ function createDefaultTools() {
     codex: new CodexTool(),
     delegate_workflow: new WorkflowAgentTool(),
     delegate_agent: new DelegateAgentTool(),
-    resume_agent: new ResumeAgentTool(),
     executions: new ExecutionsTool(),
     accept_run_files: new AcceptRunFilesTool(),
-    // Legacy aliases — old agent configs may reference these names
-    propose_workflow: new WorkflowAgentTool(),
-    propose_agent: new DelegateAgentTool(),
-    runs: new ExecutionsTool(),
+    external_inquiry: new ExternalInquiryTool(),
+    github_subscription: new GitHubSubscriptionTool(),
+    probe_environment: new ProbeEnvironmentTool(),
+    verify_setup: new VerifySetupTool(),
+    set_api_key: new SetApiKeyTool(),
+    unset_api_key: new UnsetApiKeyTool(),
+    invoke_command: new InvokeCommandTool(),
+    install_vscode_extension: new InstallVscodeExtensionTool(),
+    read_config: new ReadConfigTool(),
+    update_config: new UpdateConfigTool(),
+    send_to_terminal: new SendToTerminalTool(),
   } satisfies Record<string, ITool>;
 }
 
 /** Union of all tool names registered in the default registry. */
 export type RegisteredToolName = keyof ReturnType<typeof createDefaultTools>;
 
-/**
- * Get the default tool registry as an IToolRegistry.
- * Uses lazy initialization and singleton pattern.
- */
+/** Lazy singleton accessor for the default tool registry. */
 export function getDefaultToolRegistry(): IToolRegistry {
   if (!defaultRegistryInstance) {
     defaultRegistryInstance = new MapToolRegistry(createDefaultTools());
   }
   return defaultRegistryInstance;
-}
-
-/**
- * Reset the default tool registry singleton.
- * @internal For testing only - creates fresh tool instances on next access.
- */
-export function resetDefaultToolRegistry(): void {
-  defaultRegistryInstance = null;
 }
 
 /** Valid tool name pattern: starts with letter/underscore, followed by alphanumeric/underscores. */

@@ -4,37 +4,45 @@ import {
   DIFF_EQUAL,
   DIFF_INSERT,
 } from 'diff-match-patch';
+import { z } from 'zod';
 
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
-import { bus } from '@eventBus/ProgressEventBus';
-import type { StreamTabId } from '@shared/schemas';
-import { type LineChanges, type ToolResult } from '@tools/result';
-import { getConfig } from '@utils/config';
+import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { getConfig } from '@agent/core/config';
+import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
+import {
+  LineChangesSchema,
+  type LineChanges,
+  type ToolResult,
+} from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
 import { countLines } from '@utils/text/stringUtils';
 
-import {
-  type RejectablePendingEntry,
-  rejectPendingEntries,
-} from './bashApproval';
+import { createStreamApprovalController } from './streamApprovalQueue';
 
-export interface ToolEditApprovalRequest {
-  path: string;
-  originalContent: string;
-  proposedContent: string;
-  sourceTool: string;
-  streamId?: StreamTabId;
-}
+export const ToolEditApprovalRequestSchema = z.object({
+  path: z.string(),
+  originalContent: z.string(),
+  proposedContent: z.string(),
+  sourceTool: z.string(),
+  streamId: StreamTabIdSchema.optional(),
+});
+export type ToolEditApprovalRequest = z.infer<
+  typeof ToolEditApprovalRequestSchema
+>;
 
-export interface ToolEditApprovalResult {
-  accepted: boolean;
-  userMessage?: string;
-  appliedContent?: string;
-  userPatch?: string;
-  lineChanges?: LineChanges;
+export const ToolEditApprovalResultSchema = z.object({
+  accepted: z.boolean(),
+  userMessage: z.string().optional(),
+  appliedContent: z.string().optional(),
+  userPatch: z.string().optional(),
+  lineChanges: LineChangesSchema.optional(),
   /** 1-based line number where the first change occurs (for navigation) */
-  startLine?: number;
-}
+  startLine: z.number().optional(),
+});
+export type ToolEditApprovalResult = z.infer<
+  typeof ToolEditApprovalResultSchema
+>;
 
 export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
   'texra.toolUse.requireEditApproval';
@@ -52,89 +60,54 @@ export const TOOL_EDIT_APPROVAL_ACTIONS = [
 export type ToolEditApprovalAction =
   (typeof TOOL_EDIT_APPROVAL_ACTIONS)[number];
 
-let queue: Promise<void> = Promise.resolve();
+export const toolEditApprovalController =
+  createStreamApprovalController<ToolEditApprovalResult>({
+    rejectionResult: () => ({ accepted: false }),
+    notifyBypassChange: (streamId, bypassActive) => {
+      getAgentRuntimeHost().emit('updateToolEditApprovalBypassState', {
+        streamId,
+        bypassActive,
+      });
+    },
+  });
+
 let customHandler:
   | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
   | undefined;
-const bypassedByStream = new Map<StreamTabId, boolean>();
-
-/**
- * Abstract pending approval registry for rejection tracking.
- * The native handler (in @frontend/approval) registers entries here
- * so that stream cleanup can reject them without vscode dependencies.
- */
-const pendingApprovals = new Map<string, RejectablePendingEntry>();
 
 /** Register a pending approval entry for rejection tracking. */
 export function registerPendingApproval(
   id: string,
-  entry: RejectablePendingEntry,
+  entry: {
+    streamId?: StreamTabId;
+    isSettled: () => boolean;
+    settle: (result: ToolEditApprovalResult) => void;
+  },
 ): void {
-  pendingApprovals.set(id, entry);
+  toolEditApprovalController.registerPending(id, entry);
 }
 
 /** Unregister a pending approval entry after it has been resolved. */
 export function unregisterPendingApproval(id: string): void {
-  pendingApprovals.delete(id);
+  toolEditApprovalController.unregisterPending(id);
 }
 
-function notifyBypassState(streamId: StreamTabId): void {
-  bus.emit('updateToolEditApprovalBypassState', {
-    streamId,
-    bypassActive: bypassedByStream.get(streamId) ?? false,
-  });
-}
-
-/**
- * Set YOLO bypass state for a stream.
- * @param silent - Skip UI notification. Use when the bypass is set before
- *   the stream is activated (the subsequent SYNC_STREAM_CONTENT will carry
- *   the correct state from isApprovalBypassedForStream).
- */
 export function setToolEditApprovalSessionBypass(
   streamId: StreamTabId,
   enabled: boolean,
   options?: { silent?: boolean },
 ): void {
-  bypassedByStream.set(streamId, enabled);
-  if (!options?.silent) {
-    notifyBypassState(streamId);
-  }
+  toolEditApprovalController.setBypass(streamId, enabled, options);
 }
 
 export function toggleToolEditApprovalSessionBypass(
   streamId: StreamTabId,
 ): boolean {
-  const newState = !(bypassedByStream.get(streamId) ?? false);
-  bypassedByStream.set(streamId, newState);
-  notifyBypassState(streamId);
-  return newState;
+  return toolEditApprovalController.toggleBypass(streamId);
 }
 
 export function isApprovalBypassedForStream(streamId: StreamTabId): boolean {
-  return bypassedByStream.get(streamId) ?? false;
-}
-
-/** @internal Called by unified cleanup in index.ts */
-export function _rejectPendingToolEditApprovalsForStream(
-  streamId: StreamTabId,
-): void {
-  rejectPendingEntries(pendingApprovals.values(), streamId);
-}
-
-/** @internal Called by unified cleanup in index.ts */
-export function _rejectAllPendingToolEditApprovals(): void {
-  rejectPendingEntries(pendingApprovals.values());
-}
-
-/** @internal Called by unified cleanup in index.ts */
-export function _clearApprovalBypassForStream(streamId: StreamTabId): void {
-  bypassedByStream.delete(streamId);
-}
-
-/** @internal Called by unified cleanup in index.ts */
-export function _clearAllApprovalBypass(): void {
-  bypassedByStream.clear();
+  return toolEditApprovalController.isBypassed(streamId);
 }
 
 export function setToolEditApprovalHandler(
@@ -238,22 +211,14 @@ export function computeUserPatch(
 async function enqueueApproval(
   request: ToolEditApprovalRequest,
 ): Promise<ToolEditApprovalResult> {
-  // Note: YOLO bypass is checked in requestToolEditApproval before enqueueing
-  const run = async () => {
+  return toolEditApprovalController.enqueue(async () => {
     if (!customHandler) {
       throw new Error(
         'No approval handler registered. Call initializeNativeToolEditApproval first.',
       );
     }
     return customHandler(request);
-  };
-
-  const operation = queue.then(run);
-  queue = operation.then(
-    () => {},
-    () => {},
-  );
-  return operation;
+  });
 }
 
 export async function requestToolEditApproval(
@@ -264,15 +229,15 @@ export async function requestToolEditApproval(
     true,
   );
 
-  const context = getCurrentToolFileInteractionContext();
+  const context = getCurrentToolRunContext();
   const preparedRequest =
     request.streamId || !context?.streamId
       ? request
       : { ...request, streamId: context.streamId };
 
-  // Check global config and per-stream YOLO mode
   const streamId = preparedRequest.streamId;
-  const isStreamBypassed = streamId && isApprovalBypassedForStream(streamId);
+  const isStreamBypassed =
+    streamId && toolEditApprovalController.isBypassed(streamId);
   if (!approvalsEnabled || isStreamBypassed) {
     return finalizeApprovalResult({ accepted: true }, preparedRequest);
   }
@@ -393,4 +358,15 @@ export function buildApprovalRejectedResult(
     result.userInstruction = feedback;
   }
   return result;
+}
+
+/**
+ * Enable tool-edit YOLO on a freshly resolved child subagent stream.
+ *
+ * Used by DelegationTools when launching a subagent that should inherit the
+ * parent's auto-approval. Silent because it fires before the child stream is
+ * activated; the subsequent SYNC_STREAM_CONTENT carries the bypass state.
+ */
+export function enableYoloOnChildStream(childStreamId: StreamTabId): void {
+  toolEditApprovalController.setBypass(childStreamId, true, { silent: true });
 }

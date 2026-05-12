@@ -7,11 +7,33 @@ import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
+import { sync as globSync } from 'glob';
+
+import { getConfig } from '@agent/core/config';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
-import { getConfig } from '@utils/config';
-import { WorkspaceFS, pathToLocation } from '@utils/files';
+import {
+  createExternalLocation,
+  createWorkspaceLocation,
+  WorkspaceFS,
+  type FileLocation,
+} from '@utils/files';
+
+type BuildDisplayFn = (
+  location: FileLocation,
+  options?: { preserveFocus?: boolean },
+) => Promise<void>;
+export type { BuildDisplayFn };
+
+interface LatexPreviewDisplayOptions {
+  openBuildDisplay?: BuildDisplayFn;
+}
+
+let openBuildDisplayIfTex: BuildDisplayFn = async () => {};
+/** Inject the VS Code LaTeX build+display function. Default: no-op. */
+export function setOpenBuildDisplay(fn: BuildDisplayFn): void {
+  openBuildDisplayIfTex = fn;
+}
 
 /** Interface for entries that support LaTeX preview operations */
 export interface LatexPreviewEntry {
@@ -45,9 +67,12 @@ async function silentUnlink(filePath: string): Promise<void> {
 async function cleanupLatexAuxFiles(filePath: string): Promise<void> {
   const ext = path.extname(filePath);
   const basePathNoExt = filePath.slice(0, -ext.length);
-  for (const tempExt of TEMP_EXTENSIONS) {
-    await silentUnlink(basePathNoExt + tempExt);
-  }
+  const unlinkTargets = TEMP_EXTENSIONS.flatMap((tempExt) =>
+    tempExt.includes('*')
+      ? globSync(`${basePathNoExt}${tempExt}`, { nodir: true })
+      : [basePathNoExt + tempExt],
+  );
+  await Promise.all(unlinkTargets.map(silentUnlink));
 }
 
 /** Register cleanup function with entry, or run immediately if already settled */
@@ -140,9 +165,32 @@ async function createTempFileWithCleanup(
   return tempPath;
 }
 
+function tempPathToLocation(tempPath: string): FileLocation {
+  const workspacePath = WorkspaceFS.getPath();
+  if (workspacePath == null) return createExternalLocation(tempPath);
+
+  const normalizedWorkspacePath = path.normalize(workspacePath);
+  const normalizedTempPath = path.normalize(tempPath);
+  const relativePath = path.relative(
+    normalizedWorkspacePath,
+    normalizedTempPath,
+  );
+
+  if (
+    relativePath &&
+    !relativePath.startsWith('..') &&
+    !path.isAbsolute(relativePath)
+  ) {
+    return createWorkspaceLocation(tempPath, relativePath);
+  }
+
+  return createExternalLocation(tempPath);
+}
+
 /** Preview the proposed LaTeX document by creating a temp file and building it */
 export async function previewProposedLatex(
   entry: LatexPreviewEntry,
+  options: LatexPreviewDisplayOptions = {},
 ): Promise<void> {
   await withLatexOperation(entry, 'Preview', async () => {
     const content = await readFileWithFallback(
@@ -157,10 +205,17 @@ export async function previewProposedLatex(
 
     if (entry.isSettled()) return;
 
-    await openBuildDisplayIfTex(pathToLocation(tempPath), {
-      preserveFocus: true,
-    });
+    await (options.openBuildDisplay ?? openBuildDisplayIfTex)(
+      tempPathToLocation(tempPath),
+      {
+        preserveFocus: true,
+      },
+    );
   });
+}
+
+interface LatexdiffOptions extends LatexPreviewDisplayOptions {
+  subtype?: string;
 }
 
 /**
@@ -169,7 +224,7 @@ export async function previewProposedLatex(
  */
 export async function runLatexdiff(
   entry: LatexPreviewEntry,
-  options?: { subtype?: string },
+  options?: LatexdiffOptions,
 ): Promise<void> {
   await withLatexOperation(entry, 'LaTeXdiff', async () => {
     const [originalContent, proposedContent] = await Promise.all([
@@ -189,8 +244,8 @@ export async function runLatexdiff(
     );
 
     const result = await latexdiffService.runDiff(
-      pathToLocation(originalPath),
-      pathToLocation(proposedPath),
+      tempPathToLocation(originalPath),
+      tempPathToLocation(proposedPath),
       '_diff',
       false,
       'coarse',
@@ -226,8 +281,11 @@ export async function runLatexdiff(
 
     if (entry.isSettled()) return;
 
-    await openBuildDisplayIfTex(pathToLocation(diffFilePath), {
-      preserveFocus: true,
-    });
+    await (options?.openBuildDisplay ?? openBuildDisplayIfTex)(
+      tempPathToLocation(diffFilePath),
+      {
+        preserveFocus: true,
+      },
+    );
   });
 }

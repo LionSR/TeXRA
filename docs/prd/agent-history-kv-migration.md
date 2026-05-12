@@ -105,13 +105,13 @@ A typical `AgentConfig` is 500-2000 bytes (instruction text, file paths, tool li
 
 ### Files Modified
 
-| File                                             | Change                                                                      |
-| ------------------------------------------------ | --------------------------------------------------------------------------- |
-| `src/common/history/AgentHistoryManager.ts`      | Slim `AgentHistoryItem`, update `addToHistory` and `sanitizeHistoryEntries` |
-| `src/tools/ExecutionsTool.ts`                    | Update `formatHistoryLine` to use `item.agent`                              |
-| `src/settingsView/SettingsViewMessageHandler.ts` | Lazy-load full config via `readConfig()`                                    |
-| `src/settingsView/` webview components           | Request config on demand instead of receiving it upfront                    |
-| `src/tools/AcceptRunFilesTool.ts`                | Use KV existence check                                                      |
+| File                                                                | Change                                                                      |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `src/common/history/AgentHistoryManager.ts`                         | Slim `AgentHistoryItem`, update `addToHistory` and `sanitizeHistoryEntries` |
+| `src/tools/ExecutionsTool.ts`                                       | Update `formatHistoryLine` to use `item.agent`                              |
+| `packages/extension/src/settingsView/SettingsViewMessageHandler.ts` | Lazy-load full config via `readConfig()`                                    |
+| `packages/extension/src/settingsView/` webview components           | Request config on demand instead of receiving it upfront                    |
+| `src/tools/AcceptRunFilesTool.ts`                                   | Use KV existence check                                                      |
 
 ## Phase 3: Remove History Fallbacks from Readers (Future)
 

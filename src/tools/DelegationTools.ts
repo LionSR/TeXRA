@@ -1,9 +1,7 @@
 /**
  * Tools for delegating agent executions from tool-use agents.
- * Three separate tools for clean separation of concerns:
  * - delegate_workflow: For workflow agents (structured file I/O, fixed-round full-document rewrite)
- * - delegate_agent: For tool-use agents (interactive, versatile — edits, creation, research)
- * - resume_agent: Resume a WAITING tool-use subagent with follow-up instructions
+ * - delegate_agent: For tool-use agents (new delegation or resume via execution_id)
  *
  * All subagents execute asynchronously — result delivered via follow-up queue.
  */
@@ -14,35 +12,38 @@ import { z } from 'zod';
 
 // Local imports - agent
 import { getExecutionStore, registerExecution } from '@agent/storage';
-import { getAgent, getVisibleAgents } from '@agent/index/agentRegistry';
+import { getVisibleAgents } from '@agent/index/agentRegistry';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { proposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
+import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
+import { waitForProposal } from '@agent/runtime/runCoordinators';
+import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
 import {
   getHandle,
   AgentExecutionHandle,
 } from '@agent/runtime/executionRegistry';
 import {
-  getCurrentToolFileInteractionContext,
-  type ToolFileInteractionContext,
+  getCurrentToolRunContext,
+  type ToolRunContext,
 } from '@agent/toolUse/ToolFileInteractionContext';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
 // Local imports - logger
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
 
 // Local imports - model
 import {
   getVisibleModels,
   resolveVisibleModel,
-} from '@model/computeModelOptions';
+} from '@model/modelOptionsBasic';
 import {
   AGENT_CATEGORY,
+  DEFAULT_TOOL_CONFIG,
   WorkflowAgentProposalSchema,
   ToolUseAgentProposalSchema,
   type WorkflowAgentProposal,
@@ -50,26 +51,34 @@ import {
   type StreamTabId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
+import {
+  evaluateDelegationGate,
+  type NestedDelegationConfig,
+} from '@shared/constants/delegationPolicy';
+import { formatBytes } from '@shared/utils/string';
 
 // Local imports - tools
 import type { ToolResult } from '@tools/result';
 import {
-  isSuperYoloFeatureEnabled,
   isProposalBypassedForStream,
   isApprovalBypassedForStream,
-  setToolEditApprovalSessionBypass,
+  enableYoloOnChildStream,
 } from '@tools/approval';
+import { computeAndWriteWorkflowDiffs } from '@tools/subagentDiffs';
 import {
-  computeAndWriteWorkflowDiffs,
   formatSubagentDelivery,
   formatSubagentError,
   formatSubagentProgress,
   formatFollowUpInstruction,
 } from '@tools/subagentResults';
+import { isWorktreeSupportEnabled } from '@tools/worktreeConfig';
+import { parseWorkingDirectory } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - memory
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
+
+// Local imports - worktree config
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
@@ -82,6 +91,8 @@ import { generateExecutionId } from '@utils/core/executionId';
 const LOG_CHANNEL = 'DelegationTools';
 logger.initialize(LOG_CHANNEL);
 
+const LARGE_BIB_LIMIT_BYTES = 100 * 1024;
+
 // ============================================================================
 // Subagent delivery state tracking
 // ============================================================================
@@ -90,9 +101,9 @@ logger.initialize(LOG_CHANNEL);
  * Per-execution delivery gate for subagent result routing.
  *
  * `hasDelivered` prevents duplicate delivery of the same result via both
- * `onBeforeWaiting` and `onCompleted`. When `resume_agent` confirms a
- * follow-up was accepted, it resets `hasDelivered` so the next cycle's
- * `onBeforeWaiting` delivers the new result back to the orchestrator.
+ * `onBeforeWaiting` and `onCompleted`. Accepted follow-ups mark delivery
+ * pending immediately so interrupts before consumption still report back;
+ * consuming a follow-up keeps the next cycle pending for `onBeforeWaiting`.
  */
 interface SubagentDeliveryState {
   hasDelivered: boolean;
@@ -118,7 +129,7 @@ const memoriesField = z
         displayToStoragePath(memories[i]);
       } catch (e) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           path: [i],
           message:
             e instanceof Error
@@ -129,17 +140,53 @@ const memoriesField = z
     }
   });
 
+const WORKTREE_DISABLED_MESSAGE =
+  "git worktree support is disabled in this workspace. Omit working_directory, or enable 'Allow agents to work in git worktrees' on the Multi-Agent settings tab.";
+
+/**
+ * Shared Zod field for the `working_directory` parameter on delegation tools.
+ * Validates and normalizes in one step so downstream code always receives the
+ * canonical `string | undefined` value — no trimming or absolute-path checks
+ * needed at the call site.
+ */
+const workingDirectoryField = z
+  .string()
+  .nullish()
+  .describe(
+    'Absolute path for the subagent to operate in (e.g. a git worktree). All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root. Only accepted when git worktree support is enabled on the Multi-Agent settings tab.',
+  )
+  .transform((value, ctx): string | undefined => {
+    let trimmed: string | undefined;
+    try {
+      trimmed = parseWorkingDirectory(value);
+    } catch (e) {
+      ctx.addIssue({
+        code: 'custom',
+        message: e instanceof Error ? e.message : String(e),
+      });
+      return z.NEVER;
+    }
+    if (trimmed && !isWorktreeSupportEnabled()) {
+      ctx.addIssue({
+        code: 'custom',
+        message: WORKTREE_DISABLED_MESSAGE,
+      });
+      return z.NEVER;
+    }
+    return trimmed;
+  });
+
 /** Get required context fields, throwing if unavailable. */
-function getRequiredContext(): ToolFileInteractionContext & {
+function getRequiredContext(): ToolRunContext & {
   streamId: StreamTabId;
 } {
-  const ctx = getCurrentToolFileInteractionContext();
+  const ctx = getCurrentToolRunContext();
   if (!ctx?.streamId) {
     throw new Error(
       'Tool context unavailable. Cannot create proposal without active stream.',
     );
   }
-  return ctx as ToolFileInteractionContext & { streamId: StreamTabId };
+  return ctx as ToolRunContext & { streamId: StreamTabId };
 }
 
 /** Build config payload from a proposal. */
@@ -160,6 +207,62 @@ interface ApprovalMeta {
   autoApproved: boolean;
   modelOverride?: string;
   requestedModel?: string;
+  agentOverride?: string;
+  requestedAgent?: string;
+}
+
+/**
+ * Runtime depth gate shared by fresh delegations and resumes.
+ * Tool-use flows pass the same max-depth snapshot used for tool resolution so
+ * prompt pruning and runtime enforcement derive from one policy snapshot.
+ * Direct tool calls fall back to the current workspace policy.
+ */
+function depthGateError(
+  parentDelegationDepth: number,
+  configSnapshot?: NestedDelegationConfig,
+): ToolResult | null {
+  const gate = evaluateDelegationGate(
+    parentDelegationDepth,
+    configSnapshot ?? readNestedDelegationConfig(),
+  );
+  if (gate.allowed) return null;
+
+  const unknownDepth = gate.blockReason === 'unknown_depth';
+  const reason = unknownDepth
+    ? [
+        'The current session was resumed from saved state,',
+        'but its delegation lineage could not be verified.',
+      ].join(' ')
+    : [
+        `This agent is already at delegation depth ${gate.depth},`,
+        'and agents may delegate only when their current depth is less than',
+        'the configured max depth.',
+      ].join(' ');
+  const remediation = unknownDepth
+    ? [
+        'Resume or restart from a valid parent session,',
+        'or complete this task directly without delegating.',
+      ].join(' ')
+    : [
+        'Raise Settings → Multi-Agent → Max delegation depth,',
+        'or complete this task directly without delegating.',
+      ].join(' ');
+  return {
+    error: [
+      `Delegation depth cap reached (current depth ${gate.depth},`,
+      `max depth ${gate.maxDepth}).`,
+      reason,
+      remediation,
+    ].join(' '),
+    isError: true,
+    diagnostics: {
+      type: 'delegation_depth_cap',
+      currentDepth: gate.depth,
+      currentDepthKnown: !unknownDepth,
+      maxDepth: gate.maxDepth,
+      blockReason: gate.blockReason,
+    },
+  };
 }
 
 /**
@@ -178,22 +281,35 @@ async function executeSubagent(
   orchestratorStreamId: StreamTabId,
   options?: { enableYoloOnChild?: boolean; approvalMeta?: ApprovalMeta },
 ): Promise<ToolResult> {
+  const parentContext = getCurrentToolRunContext();
+  const parentExecutionId = parentContext?.executionId;
+  const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
+  const runtimeHost = parentContext?.runtimeHost;
+
+  const gated = depthGateError(
+    parentDelegationDepth,
+    parentContext?.delegationConfig,
+  );
+  if (gated) return gated;
+
   const executionId = generateExecutionId();
   const startedAt = Date.now();
 
-  const parentExecutionId = getCurrentToolFileInteractionContext()?.executionId;
   const syntheticConfig = AgentConfigSchema.parse(configPayload);
   await registerExecution(
     executionId,
     syntheticConfig,
     agentName,
     parentExecutionId,
+    undefined,
+    parentDelegationDepth + 1,
   );
 
-  // Track delivery state in the module-level map so resume_agent can reset it.
+  // Track delivery state in the module-level map so delegate_agent (resume)
+  // can find live subagents and enqueue follow-up instructions.
   // The flag prevents duplicate delivery of the same result via both
-  // onBeforeWaiting and onCompleted. When resume_agent resets the flag,
-  // the next onBeforeWaiting will deliver the resumed cycle's result.
+  // onBeforeWaiting and onCompleted. When a follow-up is consumed, the next
+  // onBeforeWaiting will deliver the resumed cycle's result.
   const deliveryState: SubagentDeliveryState = { hasDelivered: false };
   activeSubagentDelivery.set(executionId, deliveryState);
   let childStreamId: StreamTabId | undefined;
@@ -205,21 +321,22 @@ async function executeSubagent(
   }
 
   const promise = executeAgent(configPayload, executionId, {
+    runtimeHost,
     isSubagent: true,
     enforceCategory: true,
     parentStreamId: orchestratorStreamId,
+    delegationDepth: parentDelegationDepth + 1,
     onStreamResolved: (resolvedStreamId) => {
       childStreamId = resolvedStreamId;
       if (options?.enableYoloOnChild) {
-        // Silent: fires before stream activation so the UI notification would
-        // be dropped. The subsequent SYNC_STREAM_CONTENT reads from the map.
-        setToolEditApprovalSessionBypass(resolvedStreamId, true, {
-          silent: true,
-        });
+        enableYoloOnChildStream(resolvedStreamId);
       }
     },
     onProgress,
-    onBeforeWaiting: async (lastResponse) => {
+    onFollowUpConsumed: () => {
+      deliveryState.hasDelivered = false;
+    },
+    onBeforeWaiting: async (lastResponse, touchedFiles) => {
       if (deliveryState.hasDelivered || !childStreamId) return;
       const wallTimeMs = Date.now() - startedAt;
       const msg = formatSubagentDelivery(
@@ -228,10 +345,14 @@ async function executeSubagent(
           category: 'toolUse' as const,
           status: 'stopped' as const,
           lastResponse,
+          touchedFiles,
           executionId,
           streamId: childStreamId,
         },
-        { wallTimeMs },
+        {
+          wallTimeMs,
+          workingDirectory: configPayload.workingDirectory ?? undefined,
+        },
       );
       // Best-effort persist — must never block delivery or abort the subagent.
       try {
@@ -269,6 +390,7 @@ async function executeSubagent(
       const msg = formatSubagentDelivery(agentName, result, {
         diffInfos,
         wallTimeMs,
+        workingDirectory: configPayload.workingDirectory ?? undefined,
       });
       void getExecutionStore(executionId).writeReport(msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
@@ -279,6 +401,7 @@ async function executeSubagent(
       const wallTimeMs = Date.now() - startedAt;
       const msg = formatSubagentError(executionId, agentName, err, {
         wallTimeMs,
+        workingDirectory: configPayload.workingDirectory ?? undefined,
       });
       void getExecutionStore(executionId).writeReport(msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
@@ -293,8 +416,11 @@ async function executeSubagent(
     const modelInfo = meta.modelOverride
       ? `Model: ${meta.modelOverride} (overridden from ${meta.requestedModel ?? 'default'})`
       : `Model: ${configPayload.model}`;
+    const agentInfo = meta.agentOverride
+      ? ` Agent: ${meta.agentOverride} (overridden from ${meta.requestedAgent ?? 'default'}).`
+      : '';
     metaLines.push(
-      `Approval: ${meta.autoApproved ? 'auto-approved' : 'user-approved'}. ${modelInfo}.`,
+      `Approval: ${meta.autoApproved ? 'auto-approved' : 'user-approved'}. ${modelInfo}.${agentInfo}`,
     );
   }
   return {
@@ -306,7 +432,7 @@ async function executeSubagent(
       `To check intermediate progress: executions tool with path=/executions/${executionId} and action=wait (waits for next status change).`,
       ...(isToolUse
         ? [
-            `To send follow-up instructions after delivery: use resume_agent with this execution ID.`,
+            `To send follow-up instructions after delivery: use delegate_agent with execution_id set to this ID.`,
           ]
         : []),
     ].join('\n'),
@@ -319,13 +445,29 @@ function formatAgentList(
 ): string {
   return agents
     .map((agent) => {
-      const desc = agent.description || 'No description';
+      const desc =
+        agent.name === 'chat'
+          ? `${agent.description || 'No description'} Fallback-only: use this only after ruling out every specialized tool-use agent.`
+          : agent.description || 'No description';
       const toolsSuffix = agent.tools?.length
         ? `\n  Tools: ${agent.tools.join(', ')}`
         : '';
       return `- ${agent.name}: ${desc}${toolsSuffix}`;
     })
     .join('\n');
+}
+
+/** Find a visible agent by name or throw with available agents listed. */
+function resolveVisibleAgent(category: 'workflow' | 'toolUse', name: string) {
+  const visible = getVisibleAgents(category);
+  const entry = visible.find((a) => a.name === name);
+  if (!entry) {
+    const available = visible.map((a) => a.name).join(', ');
+    throw new Error(
+      `Unknown ${category} agent '${name}'. Available: ${available}`,
+    );
+  }
+  return entry;
 }
 
 /** Build a concise summary of proposal parameters for rejection echo. */
@@ -349,7 +491,7 @@ function summarizeProposal(
 
 /** Convert proposal result to ToolResult. Returns null if approved. */
 function proposalResultToToolResult(
-  result: Awaited<ReturnType<typeof proposalCoordinator.waitForProposal>>,
+  result: ProposalResult,
   agentName: string,
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
 ): ToolResult | null {
@@ -386,7 +528,7 @@ function proposalResultToToolResult(
 /**
  * Shared proposal-or-bypass flow used by both delegate_workflow and delegate_agent.
  *
- * If Super YOLO is active for this stream, skips the proposal and launches immediately.
+ * If proposal bypass is active for this stream, skips the proposal and launches immediately.
  * Otherwise, waits for user approval via the proposal coordinator.
  */
 async function proposeAndExecute(
@@ -394,7 +536,7 @@ async function proposeAndExecute(
   agentName: string,
   streamId: StreamTabId,
 ): Promise<ToolResult> {
-  if (isSuperYoloFeatureEnabled() && isProposalBypassedForStream(streamId)) {
+  if (isProposalBypassedForStream(streamId)) {
     return executeSubagent(toConfigPayload(proposal), agentName, streamId, {
       enableYoloOnChild: true,
       approvalMeta: { autoApproved: true },
@@ -403,7 +545,7 @@ async function proposeAndExecute(
 
   const proposalId = randomUUID();
 
-  const result = await proposalCoordinator.waitForProposal(streamId, {
+  const result = await waitForProposal(streamId, {
     proposalId,
     proposal,
   });
@@ -416,22 +558,54 @@ async function proposeAndExecute(
   if (nonApproveResult) return nonApproveResult;
 
   // At this point result.action === 'approve' (all other cases returned above)
-  const modelOverridden =
-    result.action === 'approve' && result.model ? result.model : undefined;
-  const effective = modelOverridden
-    ? { ...proposal, model: modelOverridden }
-    : proposal;
-  const approvalMeta: ApprovalMeta = {
-    autoApproved: false,
-    ...(modelOverridden && {
-      modelOverride: modelOverridden,
-      requestedModel: proposal.model,
-    }),
+  const modelOverride = result.action === 'approve' ? result.model : undefined;
+  const agentOverride =
+    result.action === 'approve' &&
+    result.agent &&
+    result.agent !== proposal.agent
+      ? result.agent
+      : undefined;
+
+  // Re-validate against the current registry — between proposal display and
+  // approval the agent may have been removed/renamed, or the approval could
+  // carry a malformed value. Fail fast so the orchestrator sees the problem
+  // synchronously instead of after an async launch.
+  if (agentOverride) {
+    const visible = getVisibleAgents(proposal.agentCategory);
+    if (!visible.some((a) => a.name === agentOverride)) {
+      return {
+        summary: `Approved agent override '${agentOverride}' is not available`,
+        output: `Cannot launch '${agentOverride}': it is not currently a visible ${proposal.agentCategory} agent (removed, renamed, or disabled since the proposal was shown). Re-propose the delegation.`,
+        isError: true,
+      };
+    }
+  }
+
+  const effective = {
+    ...proposal,
+    ...(modelOverride && { model: modelOverride }),
+    ...(agentOverride && { agent: agentOverride }),
   };
-  return executeSubagent(toConfigPayload(effective), agentName, streamId, {
-    enableYoloOnChild: isApprovalBypassedForStream(streamId),
-    approvalMeta,
-  });
+  const effectiveAgentName = agentOverride ?? agentName;
+  return executeSubagent(
+    toConfigPayload(effective),
+    effectiveAgentName,
+    streamId,
+    {
+      enableYoloOnChild: isApprovalBypassedForStream(streamId),
+      approvalMeta: {
+        autoApproved: false,
+        ...(modelOverride && {
+          modelOverride,
+          requestedModel: proposal.model,
+        }),
+        ...(agentOverride && {
+          agentOverride,
+          requestedAgent: proposal.agent,
+        }),
+      },
+    },
+  );
 }
 
 // ============================================================================
@@ -445,7 +619,7 @@ const WorkflowAgentInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Model short name (e.g., opus46T, sonnet46T, gpt54, gemini31p). Defaults to the current model if omitted.',
+      'Model short name (e.g., opus47T, sonnet46T, gpt55, gemini31p). Defaults to the current model if omitted.',
     ),
   instruction: z.string().describe('Plain prose instruction for the agent'),
   inputFile: z.string().describe('Primary input file to process (required)'),
@@ -484,22 +658,72 @@ const WorkflowAgentInputSchema = z.object({
     .array(z.string())
     .prefault([])
     .describe('Additional media files'),
+  extractFigures: z
+    .boolean()
+    .nullish()
+    .describe(
+      'When true, automatically extracts figures referenced by the input LaTeX file(s) (via \\includegraphics, \\begin{overpic}) and attaches them as media files. Merges with any explicitly provided mediaFile/mediaFiles.',
+    ),
+  extractTikz: z
+    .boolean()
+    .nullish()
+    .describe(
+      'When true, extracts TikZ figures from the input LaTeX file(s), compiles them into standalone PDFs, and attaches them as media files.',
+    ),
   outputFiles: z
     .array(z.string())
     .prefault([])
     .describe(
       'Output file paths. Must be a subset of input files—never create new files or change format. Leave empty for default suffix-based outputs.',
     ),
-  useMultipleOutputs: z
-    .boolean()
-    .prefault(false)
-    .describe(
-      'Set true when outputFiles has multiple entries. Enables multi-file extraction from agent response.',
-    ),
   memories: memoriesField,
 });
 
 export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
+
+function isBibFile(filePath: string): boolean {
+  const basename = filePath.replaceAll('\\', '/').split('/').at(-1);
+  return basename?.toLowerCase().endsWith('.bib') ?? false;
+}
+
+function getReferenceAndAuxiliaryFiles(input: WorkflowAgentInput): string[] {
+  return [
+    input.referenceFile,
+    ...input.referenceFiles,
+    input.auxiliaryFile,
+    ...input.auxiliaryFiles,
+  ].filter(
+    (path): path is string => typeof path === 'string' && path.length > 0,
+  );
+}
+
+/** Reject workflow proposals that attach oversized bibliography files. */
+export async function rejectOversizedBibAttachments(
+  input: WorkflowAgentInput,
+): Promise<ToolResult | null> {
+  const bibFiles = getReferenceAndAuxiliaryFiles(input).filter(isBibFile);
+
+  for (const bibFile of bibFiles) {
+    const stats = await WorkspaceFS.stat(bibFile);
+    if (stats.size <= LARGE_BIB_LIMIT_BYTES) continue;
+
+    const message = `${bibFile} is ${stats.size} bytes (${formatBytes(stats.size)}), over the ${LARGE_BIB_LIMIT_BYTES} byte (${formatBytes(LARGE_BIB_LIMIT_BYTES)}) limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.`;
+    return {
+      summary: `Rejected oversized BibTeX attachment`,
+      error: message,
+      output: message,
+      isError: true,
+      diagnostics: {
+        type: 'oversized_bib_attachment',
+        path: bibFile,
+        sizeBytes: stats.size,
+        limitBytes: LARGE_BIB_LIMIT_BYTES,
+      },
+    };
+  }
+
+  return null;
+}
 
 /** Tool for delegating tasks to workflow agents (document processing). */
 export class WorkflowAgentTool extends defineTool({
@@ -510,30 +734,21 @@ export class WorkflowAgentTool extends defineTool({
 Available agents:
 ${formatAgentList(getVisibleAgents('workflow'))}
 
+Agent selection: match the task to the most specific agent. Read each agent's description carefully. Do NOT default to correct for everything—correct is strictly for proofreading (typos, grammar, LaTeX formatting). For applying review suggestions use apply; for adding derivations use devise; for instruction-driven rewriting use polish; for critical review use criticize. Use the agent whose description best matches the task.
+
 Available models: ${getVisibleModels().join(', ')}
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
 
-Example: agent=correct, inputFile=paper.tex, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
+Extraction attachments — automatically discover and attach assets from input LaTeX file(s):
+- extractFigures=true: Extract \\includegraphics/\\begin{overpic} figures and attach as media files.
+- extractTikz=true: Compile TikZ figures into standalone PDFs and attach as media files.
+All extraction options merge with explicitly provided files and are non-fatal on failure.
+
+Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
-    // Validate agent exists and is a workflow agent
-    const agentEntry = getAgent(input.agent);
-    if (!agentEntry) {
-      const available = getVisibleAgents('workflow')
-        .map((a) => a.name)
-        .join(', ');
-      throw new Error(
-        `Unknown workflow agent '${input.agent}'. Available: ${available}`,
-      );
-    }
-
-    if (agentEntry.category !== AgentCategory.Workflow) {
-      throw new Error(
-        `'${input.agent}' is not a workflow agent. Use delegate_agent for tool-use agents.`,
-      );
-    }
-
+    const agentEntry = resolveVisibleAgent('workflow', input.agent);
     const ctx = getRequiredContext();
 
     // Resolve model: explicit input → parent model → first visible model
@@ -582,8 +797,11 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       throw new Error(`${missing.label} not found: ${missing.path}`);
     }
 
-    // Construct workflow proposal
-    // Memory paths are already validated by memoriesField's .superRefine() at schema parse time.
+    const oversizedBibRejection = await rejectOversizedBibAttachments(input);
+    if (oversizedBibRejection) return oversizedBibRejection;
+
+    // Extraction flags map to toolConfig, flowing through the proposal UI and
+    // into MediaExtractionNode → LatexMediaManager at runtime.
     const proposal = WorkflowAgentProposalSchema.parse({
       agentCategory: AgentCategory.Workflow,
       agent: input.agent,
@@ -598,7 +816,11 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
       mediaFile: input.mediaFile,
       mediaFiles: input.mediaFiles,
       outputFiles: input.outputFiles,
-      useMultipleOutputs: input.useMultipleOutputs,
+      toolConfig: {
+        ...DEFAULT_TOOL_CONFIG,
+        autoExtractFigure: input.extractFigures ?? false,
+        autoExtractTikzFigure: input.extractTikz ?? false,
+      },
       memories: input.memories,
     } satisfies WorkflowAgentProposal);
 
@@ -612,17 +834,31 @@ Example: agent=correct, inputFile=paper.tex, instruction="This research paper pr
 
 /** Schema for delegate_agent tool (tool-use agents). */
 const DelegateAgentInputSchema = z.object({
-  agent: z.string().describe('Name of the tool-use agent to delegate to'),
+  agent: z
+    .string()
+    .optional()
+    .describe(
+      'Name of the tool-use agent to delegate to. Required for new delegations, ignored when resuming via execution_id.',
+    ),
   model: z
     .string()
     .optional()
     .describe(
-      'Model short name (e.g., opus46T, sonnet46T, gpt54, gemini31p). Defaults to the current model if omitted.',
+      'Model short name (e.g., opus47T, sonnet46T, gpt55, gemini31p). Defaults to the current model if omitted.',
     ),
   instruction: z
     .string()
-    .describe('Plain prose instruction with file paths included naturally'),
+    .describe(
+      'Plain prose instruction for the agent. For new delegations, include file paths naturally. For resumes, reference previous work freely — the subagent retains its full history.',
+    ),
   memories: memoriesField,
+  working_directory: workingDirectoryField,
+  execution_id: z
+    .string()
+    .optional()
+    .describe(
+      'If set, sends follow-up instructions to a tool-use subagent instead of starting a new one. Busy subagents queue the follow-up for their next turn. Use the execution ID from the original delegation result or /executions.',
+    ),
 });
 
 export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
@@ -631,34 +867,45 @@ export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
 export class DelegateAgentTool extends defineTool({
   name: 'delegate_agent',
   description:
-    () => `Delegate a task to a tool-use agent. The agent has its own tools (file reading, editing, search, bash) and works interactively. Tool-use agents are versatile—they can create entire documents (e.g., presentations, posters), make targeted edits, perform research, explore codebases, or run multi-step investigations. Choose the agent whose specialization matches the task.
+    () => `Delegate a task to a tool-use agent, or queue follow-up instructions for a tool-use subagent.
+
+**New delegation** (no execution_id): Launches a new tool-use agent with its own tools (file reading, editing, search, bash). Tool-use agents are versatile—they can create entire documents, make targeted edits, perform research, or run multi-step investigations.
+
+**Resume** (with execution_id): Sends follow-up instructions to a WAITING or still-running subagent. If the subagent is busy, the instruction is queued for its next turn. The subagent keeps its full history. Result arrives asynchronously like the original delegation.
 
 Available agents:
 ${formatAgentList(getVisibleAgents('toolUse'))}
 
+Agent selection: choose the most specific agent whose description matches the task. Specialized agents have domain-specific tools and focused prompts that produce better results for matching tasks. Do not choose chat just because the task is a targeted edit, file operation, or mixed research/editing request; choose chat only when no listed specialized agent covers the work, and state that reason in the instruction.
+
 Available models: ${getVisibleModels().join(', ')}
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
 
-Example: agent=chat, instruction="The presentation at slides/talk.tex has incorrect citations on slides 3 and 7. Please read the file, fix the \\cite commands to reference the correct BibTeX keys from refs.bib, and ensure the bibliography slide is consistent."`,
+Example (new, specialized): agent=research, instruction="Derive the asymptotic expansion of the partition function in appendix_A.tex using saddle-point methods. Verify with Wolfram."
+Example (new, targeted LaTeX repair): agent=latexFixer, instruction="Fix the unresolved citation commands on slides 3 and 7 in slides/talk.tex using refs.bib."
+Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliography slide formatting."
+
+Git worktree support: ${
+      isWorktreeSupportEnabled()
+        ? 'ENABLED. Pass `working_directory` (absolute path) to run a subagent rooted in a git worktree; every tool call in the subagent resolves paths against that directory. The subagent reports its working directory back in its delivery result.'
+        : 'DISABLED in this workspace. Do not pass `working_directory` — it will be rejected at schema validation. Ask the user to enable "Allow agents to work in git worktrees" on the Multi-Agent settings tab if worktree operation is needed.'
+    }`,
   schema: DelegateAgentInputSchema,
 }) {
   protected async execute(input: DelegateAgentInput): Promise<ToolResult> {
-    // Validate agent exists and is a tool-use agent
-    const agentEntry = getAgent(input.agent);
-    if (!agentEntry) {
-      const available = getVisibleAgents('toolUse')
-        .map((a) => a.name)
-        .join(', ');
+    // Resume path: execution_id is set
+    if (input.execution_id) {
+      return this.resumeAgent(input.execution_id, input.instruction);
+    }
+
+    // Delegate path: agent is required
+    if (!input.agent) {
       throw new Error(
-        `Unknown tool-use agent '${input.agent}'. Available: ${available}`,
+        `'agent' is required when starting a new delegation. Provide an agent name, or set 'execution_id' to resume an existing subagent.`,
       );
     }
 
-    if (agentEntry.category !== AgentCategory.ToolUse) {
-      throw new Error(
-        `'${input.agent}' is not a tool-use agent. Use delegate_workflow for document processing.`,
-      );
-    }
+    const agentEntry = resolveVisibleAgent('toolUse', input.agent);
 
     const ctx = getRequiredContext();
 
@@ -666,115 +913,74 @@ Example: agent=chat, instruction="The presentation at slides/talk.tex has incorr
     const model = resolveVisibleModel(input.model ?? ctx.model ?? '');
 
     // Construct tool-use proposal (no file fields)
-    // Memory paths are already validated by memoriesField's .superRefine() at schema parse time.
     const proposal = ToolUseAgentProposalSchema.parse({
       agentCategory: AgentCategory.ToolUse,
       agent: input.agent,
       model,
       instruction: input.instruction,
       memories: input.memories,
+      workingDirectory: input.working_directory,
     } satisfies ToolUseAgentProposal);
 
     return proposeAndExecute(proposal, input.agent, ctx.streamId);
   }
-}
 
-// ============================================================================
-// resume_agent tool - send follow-up instructions to a WAITING subagent
-// ============================================================================
+  /** Queue follow-up instructions for a tool-use subagent. */
+  private async resumeAgent(
+    executionId: string,
+    instruction: string,
+  ): Promise<ToolResult> {
+    const parentContext = getCurrentToolRunContext();
+    const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
+    const gated = depthGateError(
+      parentDelegationDepth,
+      parentContext?.delegationConfig,
+    );
+    if (gated) return gated;
 
-/** Schema for resume_agent tool. */
-const ResumeAgentInputSchema = z.object({
-  execution_id: z
-    .string()
-    .describe(
-      'Execution ID of the tool-use subagent to resume (from the original delegate_agent result or /executions)',
-    ),
-  instruction: z
-    .string()
-    .describe(
-      'Follow-up instruction for the subagent. Must be self-contained — the subagent retains its full conversation history, so you can reference its previous work.',
-    ),
-});
-
-export type ResumeAgentInput = z.infer<typeof ResumeAgentInputSchema>;
-
-/** Tool for resuming a WAITING tool-use subagent with follow-up instructions. */
-export class ResumeAgentTool extends defineTool({
-  name: 'resume_agent',
-  description:
-    'Send follow-up instructions to a WAITING tool-use subagent. The subagent keeps its full history, so reference previous work freely. Result arrives asynchronously like the original delegation.',
-  schema: ResumeAgentInputSchema,
-}) {
-  protected async execute(input: ResumeAgentInput): Promise<ToolResult> {
-    const handle = getHandle(input.execution_id);
+    const handle = getHandle(executionId);
     if (!(handle instanceof AgentExecutionHandle)) {
       throw new Error(
-        `Execution '${input.execution_id}' not found or not an agent execution. Use the executions tool to check status.`,
+        `Execution '${executionId}' not found or not an agent execution. Use the executions tool to check status.`,
       );
     }
 
     if (handle.category !== 'toolUse') {
       throw new Error(
-        `Execution '${input.execution_id}' is a workflow agent. Only tool-use subagents can be resumed.`,
+        `Execution '${executionId}' is a workflow agent. Only tool-use subagents can be resumed.`,
       );
     }
 
-    const deliveryState = activeSubagentDelivery.get(input.execution_id);
+    const deliveryState = activeSubagentDelivery.get(executionId);
     if (!deliveryState) {
       throw new Error(
-        `Execution '${input.execution_id}' is no longer tracked for delivery. It may have already completed.`,
+        `Execution '${executionId}' is no longer tracked for delivery. It may have already completed.`,
       );
     }
 
-    // Only allow resume after the subagent has delivered its result and is
-    // in WAITING state.  Resuming mid-cycle would race: the current cycle's
-    // onBeforeWaiting could consume the gate reset and swallow the resumed
-    // cycle's result.  Resetting the gate *before* sendFollowUp also
-    // prevents concurrent resume calls from both passing the check — the
-    // second caller sees hasDelivered === false and is rejected.
-    if (!deliveryState.hasDelivered) {
-      throw new Error(
-        `'${handle.agentName}' is still processing. Wait for its result before sending a follow-up.`,
-      );
-    }
-    deliveryState.hasDelivered = false;
-
-    const framedInstruction = formatFollowUpInstruction(input.instruction);
-    let result: Awaited<ReturnType<typeof sendFollowUp>>;
-    try {
-      result = await sendFollowUp(handle.childStreamId, framedInstruction);
-    } catch (err) {
-      // Restore the gate so the subagent's current result can still be
-      // delivered if a transient error prevented sending.
-      deliveryState.hasDelivered = true;
-      throw err;
-    }
+    const framedInstruction = formatFollowUpInstruction(instruction);
+    const result = await sendFollowUp(handle.childStreamId, framedInstruction);
 
     switch (result.status) {
       case 'sent':
-      case 'queued':
-        // Both are success paths.  'sent' is the normal case — the subagent
-        // is blocked in WaitNode with an active flow context, so
-        // appendFollowUp delivers directly.  'queued' is a fallback when
-        // the context has been cleaned up but the stream status is still
-        // WAITING.  Gate was already reset above.
+        deliveryState.hasDelivered = false;
         return {
           summary: `Follow-up sent to '${handle.agentName}'`,
           output: [
             `Follow-up instruction sent to '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
-            `Execution ID: ${input.execution_id}`,
+            `Execution ID: ${executionId}`,
           ].join('\n'),
         };
-      case 'error':
-        // Restore the gate — the follow-up was not accepted.
-        deliveryState.hasDelivered = true;
-        throw new Error(
-          `Failed to send follow-up to '${handle.agentName}': ${result.message}`,
-        );
+      case 'queued':
+        deliveryState.hasDelivered = false;
+        return {
+          summary: `Follow-up queued for '${handle.agentName}'`,
+          output: [
+            `Follow-up instruction queued for '${handle.agentName}' (${result.reason}). The subagent will process it and deliver a new result automatically.`,
+            `Execution ID: ${executionId}`,
+          ].join('\n'),
+        };
       case 'no_session':
-        // Restore the gate — the follow-up was not accepted.
-        deliveryState.hasDelivered = true;
         throw new Error(
           `No active session for '${handle.agentName}' (stream status: ${result.streamStatus ?? 'unknown'}). The subagent may have stopped or its session expired.`,
         );

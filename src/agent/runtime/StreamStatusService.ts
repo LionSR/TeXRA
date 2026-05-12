@@ -1,5 +1,11 @@
-import { isActiveStatus } from '@common/constants/streamStatus';
-import { bus } from '@eventBus/ProgressEventBus';
+import {
+  getAgentRuntimeHost,
+  type AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
+import {
+  isActiveStatus,
+  isInFlightStatus,
+} from '@common/constants/streamStatus';
 import {
   STREAM_STATUS,
   type StreamTabId,
@@ -7,17 +13,17 @@ import {
 } from '@shared/schemas';
 
 const statusMemory = new Map<StreamTabId, StreamStatus>();
+const statusListeners = new Set<(change: StreamStatusChange) => void>();
 
-/** Statuses that prevent acquiring a new stream lock. */
-const BLOCKED_STATUSES = new Set<StreamStatus>([
-  STREAM_STATUS.RUNNING,
-  STREAM_STATUS.RESUMING,
-  STREAM_STATUS.INITIALIZING,
-  STREAM_STATUS.WAITING,
-]);
+export interface StreamStatusChange {
+  streamId: StreamTabId;
+  status: StreamStatus;
+  previousStatus: StreamStatus;
+}
 
 interface SetOptions {
   emit?: boolean;
+  runtimeHost?: AgentRuntimeHost;
 }
 
 export const StreamStatusService = {
@@ -25,18 +31,17 @@ export const StreamStatusService = {
     return statusMemory.get(stream);
   },
 
-  tryAcquire(stream: StreamTabId): boolean {
-    const current = statusMemory.get(stream);
-    if (current && BLOCKED_STATUSES.has(current)) {
+  tryAcquire(stream: StreamTabId, options: SetOptions = {}): boolean {
+    if (isInFlightStatus(statusMemory.get(stream))) {
       return false;
     }
-    this.set(stream, STREAM_STATUS.INITIALIZING);
+    this.set(stream, STREAM_STATUS.INITIALIZING, options);
     return true;
   },
 
-  releaseIfInitializing(stream: StreamTabId): void {
+  releaseIfInitializing(stream: StreamTabId, options: SetOptions = {}): void {
     if (statusMemory.get(stream) === STREAM_STATUS.INITIALIZING) {
-      this.clear(stream);
+      this.clear(stream, options);
     }
   },
 
@@ -56,16 +61,30 @@ export const StreamStatusService = {
     }
 
     if (emit) {
-      bus.emit('updateStreamStatus', {
+      const change: StreamStatusChange = {
         streamId: stream,
         status,
         previousStatus,
-      });
+      };
+      (options.runtimeHost ?? getAgentRuntimeHost()).emit(
+        'updateStreamStatus',
+        change,
+      );
+      for (const listener of statusListeners) {
+        listener(change);
+      }
     }
   },
 
-  clear(stream: StreamTabId): void {
-    this.set(stream, STREAM_STATUS.READY);
+  clear(stream: StreamTabId, options: SetOptions = {}): void {
+    this.set(stream, STREAM_STATUS.READY, options);
+  },
+
+  /** Reset every stream to READY. Used by ProgressViewState.clearAll(). */
+  clearAll(): void {
+    for (const stream of [...statusMemory.keys()]) {
+      this.clear(stream);
+    }
   },
 
   entries(): IterableIterator<[StreamTabId, StreamStatus]> {
@@ -87,5 +106,12 @@ export const StreamStatusService = {
   shouldPreserveOnCompletion(stream: StreamTabId): boolean {
     const status = statusMemory.get(stream);
     return status === STREAM_STATUS.WAITING || status === STREAM_STATUS.STOPPED;
+  },
+
+  onDidChange(listener: (change: StreamStatusChange) => void): () => void {
+    statusListeners.add(listener);
+    return () => {
+      statusListeners.delete(listener);
+    };
   },
 };

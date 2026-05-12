@@ -3,7 +3,11 @@ import { Buffer } from 'node:buffer';
 import * as path from 'path';
 
 // Third-party imports
-import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
+import OpenAI, {
+  APIConnectionTimeoutError,
+  APIError as OpenAIAPIError,
+  toFile,
+} from 'openai';
 import { ResponsesWS } from 'openai/resources/responses/ws';
 import { WebSocketError } from 'openai/resources/responses/internal-base';
 
@@ -15,25 +19,35 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
+import { K_SLICE } from '@agent/core/constants';
+import { getConfig } from '@agent/core/config';
 import {
   formatProviderHttpError,
   getSdkErrorMessage,
   isContextWindowError,
   isPreviousResponseIdError,
+  isRetryableStatusCode,
+  attachPartialText,
+  takeTail,
+  PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 
 // Type imports
 import type { ToolFileAttachment } from '@tools/result';
-import type { FileLocation } from '@utils/files';
 
 // Local imports - utils
-import { K_SLICE, getConfig } from '@utils/config';
-import { getWebSocketEnabled } from '@utils/config/providerConfig';
 import { delay } from '@utils/core';
-import { flexibleFS, OFFICE_MIME_TYPES } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
+import {
+  getWebSocketEnabled,
+  getUseOpenRouter,
+} from '@utils/config/providerConfig';
+import { flexibleFS } from '@utils/files/flexibleFS';
+import type { FileLocation } from '@utils/files/taskRunStorage';
+import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
+import { tagOpenAISdkError } from './support/sdkErrorAdapters';
 
 // Local file imports
 import {
@@ -42,6 +56,7 @@ import {
   loadAttachmentBuffer,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
+import { parseToolArguments } from './utils/parseArguments';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
@@ -61,7 +76,6 @@ import {
   isOpenAIWebSearchCall,
   type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
-import type { ModelConfig } from 'llm-zoo';
 import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type {
@@ -134,6 +148,16 @@ interface WebSocketExecutionResult {
   state: StreamingEventState;
 }
 
+interface RequestIdTaggedError extends Error {
+  request_id?: string;
+}
+
+function isResponseFunctionToolCallItem(
+  item: ResponseOutputItem | undefined,
+): item is ResponseFunctionToolCallItem {
+  return item?.type === 'function_call';
+}
+
 /**
  * MIME types that the OpenAI Responses API accepts as `input_file` content.
  * Composed from the shared OFFICE_MIME_TYPES plus PDF.
@@ -167,10 +191,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   private compactionRequested = false;
 
   private isOpenRouterRoutingEnabled(): boolean {
-    return (
-      this.config.openRouterOnly ||
-      getConfig<boolean>('texra.model.useOpenRouter', false)
-    );
+    return this.config.openRouterOnly || getUseOpenRouter();
+  }
+
+  private getEventResponseId(event: ResponseStreamEvent): string | undefined {
+    return 'response_id' in event && typeof event.response_id === 'string'
+      ? event.response_id
+      : undefined;
   }
 
   /**
@@ -190,15 +217,26 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /**
    * Check if background mode is active for this handler.
-   * Background mode is enabled when the config toggle is on AND
-   * this model/agent is eligible for background execution.
+   * Background mode is enabled when this handler supports it, the config
+   * toggle is on, and this model/agent is eligible for background execution.
    */
   public override isBackgroundModeActive(): boolean {
-    const useBackgroundResponses = getConfig<boolean>(
-      'texra.model.useBackgroundResponses',
-      false,
+    return this.shouldUseBackgroundResponses();
+  }
+
+  private isBackgroundModeToggleEnabled(): boolean {
+    return getConfig<boolean>('texra.model.useBackgroundResponses', true);
+  }
+
+  private shouldUseBackgroundResponses(
+    backgroundToggleEnabled = this.isBackgroundModeToggleEnabled(),
+    backgroundModeEligible = this.isBackgroundModeEligible(),
+  ): boolean {
+    return (
+      this.backgroundModeSupported &&
+      backgroundToggleEnabled &&
+      backgroundModeEligible
     );
-    return useBackgroundResponses && this.isBackgroundModeEligible();
   }
 
   protected override backgroundModeSupported = true;
@@ -213,12 +251,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /**
    * Determines if background mode should be enabled for this request.
-   * Background mode is only supported for GPT 5 series models when running
-   * workflow agents (CoT or Direct), not tool-use agents.
+   * Enabled for GPT-family models (gpt4*, gpt5*, etc.) when running a
+   * workflow agent (CoT or Direct) — not for tool-use agents, which rely
+   * on per-step streaming.
    */
   private isBackgroundModeEligible(): boolean {
-    const isGpt5 = this.config.name.toLowerCase().startsWith('gpt5');
-    return isGpt5 && this.isWorkflowMode();
+    const isGpt = this.config.name.toLowerCase().startsWith('gpt');
+    return isGpt && this.isWorkflowMode();
   }
 
   private static readonly BACKGROUND_POLL_INTERVAL_MS = 15000;
@@ -237,6 +276,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Do not share a handler instance across concurrent agent invocations.
    */
   private pendingBackgroundResponseId: string | null = null;
+
+  /**
+   * Guards against concurrent createResponse() calls on the same handler.
+   * The handler's mutable conversation state (previousResponseId, sentMessages,
+   * etc.) assumes a single in-flight turn; concurrent calls would race on
+   * previousResponseId and corrupt the chain. See the class doc ("THREAD SAFETY")
+   * for the contract.
+   */
+  private inFlight = false;
 
   /** DIAGNOSTIC: Pre-flight token estimate for comparison with actual usage */
   private _diagPreFlightTokens: number | null = null;
@@ -321,8 +369,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       const cleanup = (): void => {
-        ws.socket.removeListener('open', onOpen);
-        ws.socket.removeListener('error', onError);
+        ws.socket.off('open', onOpen);
+        ws.socket.off('error', onError);
         signal?.removeEventListener('abort', onAbort);
       };
       const onOpen = (): void => {
@@ -456,6 +504,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     const state = this.createStreamingEventState();
+    // Accumulate text deltas so we can attach a tail to the error on reject,
+    // mirroring the HTTP streaming path. Without this, a WebSocket failure
+    // mid-response would lose any text that had already been generated.
+    let streamedText = '';
 
     return new Promise<WebSocketExecutionResult>((resolve, reject) => {
       let settled = false;
@@ -480,7 +532,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // events (including response.created) from the prior response, causing
         // the new request to resolve with the wrong response.
         this.closeWebSocket();
-        reject(new DOMException('The operation was aborted', 'AbortError'));
+        rejectWithPartial(
+          new DOMException('The operation was aborted', 'AbortError'),
+        );
       };
       signal?.addEventListener('abort', onAbort, { once: true });
 
@@ -500,15 +554,23 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         if (!currentResponseId) return;
 
         // Filter events by response ID: skip events from stale responses
-        if (
-          'response_id' in e &&
-          typeof (e as Record<string, unknown>).response_id === 'string' &&
-          (e as Record<string, unknown>).response_id !== currentResponseId
-        ) {
+        const eventResponseId = this.getEventResponseId(e);
+        if (eventResponseId && eventResponseId !== currentResponseId) {
           return;
         }
 
         this.processStreamingEvent(e, state);
+        if (this.isTextDeltaEvent(e)) {
+          streamedText += e.delta;
+        }
+      };
+
+      /** Attach partial-text tail to an error before rejecting with it. */
+      const rejectWithPartial = (err: unknown): void => {
+        if (streamedText) {
+          attachPartialText(err, takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX));
+        }
+        reject(err);
       };
 
       const finalizeSuccess = (response: Response): void => {
@@ -531,7 +593,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         cleanup();
         const errorMsg =
           event.response.error?.message ?? 'Response failed without details';
-        reject(new Error(`OpenAI WebSocket response failed: ${errorMsg}`));
+        rejectWithPartial(
+          new Error(`OpenAI WebSocket response failed: ${errorMsg}`),
+        );
       };
 
       // Incomplete responses are resolved (not rejected) to match the HTTP
@@ -549,7 +613,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // The server may close the socket after sending the error, but the close event
         // fires after this handler and would be a no-op (settled=true).
         this.closeWebSocket();
-        reject(error);
+        rejectWithPartial(error);
       };
 
       // Handle unexpected socket close during a request
@@ -558,7 +622,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         settled = true;
         cleanup();
         this.closeWebSocket();
-        reject(
+        rejectWithPartial(
           new Error(
             `WebSocket closed unexpectedly (code: ${code}, reason: ${reason.toString()})`,
           ),
@@ -632,7 +696,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.wsKeepaliveInterval = setInterval(() => {
       try {
         if (ws.socket.readyState === ModelHandlerOpenAIResponse.WS_OPEN) {
-          ws.socket.ping();
+          ws.socket.platformSocket.ping();
         }
       } catch {
         // Ignore ping errors
@@ -663,7 +727,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return null;
     }
 
-    this.logger.info(
+    this.logger.debug(
       `Resuming polling for pending background response ${pendingId}`,
     );
 
@@ -675,17 +739,33 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         signal ? { signal } : undefined,
       );
     } catch (err) {
-      // User cancellation - clear pending ID and propagate
       if (err instanceof DOMException && err.name === 'AbortError') {
         this.clearPendingBackgroundResponse();
         throw err;
       }
-      // Failed to retrieve - could be network error or 404 (expired/deleted)
-      // Clear and signal that a new request is needed
+      tagOpenAISdkError(err, this.config.provider);
+      // Transient failures (no status / 5xx / 429 / 408) — the background
+      // response is likely still alive server-side, so retain the ID and
+      // rethrow so the outer retry resumes the same ID. Definitive failures
+      // (4xx, notably 404 expired) — clear the ID and create a new request.
+      //
+      // Check statusCode directly rather than formatted.retryable: the latter
+      // is force-true for relay errors, which would incorrectly retain the ID
+      // on a relay-wrapped 404 and loop until retries are exhausted.
+      const formatted = formatProviderHttpError(err);
+      const code = formatted.statusCode;
+      if (code === undefined || isRetryableStatusCode(code)) {
+        throw err;
+      }
       this.logger.warn(
-        `Failed to retrieve pending background response ${pendingId}: ${getSdkErrorMessage(err)}. ` +
-          'Will create new request.',
-        { data: { responseId: pendingId, error: getSdkErrorMessage(err) } },
+        `Couldn't resume the pending OpenAI response; will start a new request. (${formatted.message})`,
+        {
+          data: {
+            responseId: pendingId,
+            error: formatted.message,
+            statusCode: code,
+          },
+        },
       );
       this.clearPendingBackgroundResponse();
       return null;
@@ -708,7 +788,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     if (pendingResponse.status === 'completed') {
       // Already completed while we were disconnected
-      this.logger.info(
+      this.logger.debug(
         `Pending background response ${pendingId} already completed`,
       );
       // Note: clearPendingBackgroundResponse() called by finalizeResponse() in caller
@@ -721,8 +801,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       pendingResponse.incomplete_details?.reason ??
       'no additional details';
     this.logger.warn(
-      `Pending background response ${pendingId} failed remotely ` +
-        `(status: ${pendingResponse.status}, reason: ${errorDetail}). Will create new request.`,
+      `OpenAI background response ended remotely (${pendingResponse.status}: ${errorDetail}); starting a new request.`,
       {
         data: {
           responseId: pendingId,
@@ -761,6 +840,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     };
   }
 
+  /** Drop server-side chain state while preserving local token history. */
+  private invalidateResponseChain(): void {
+    this.previousResponseId = null;
+    this.conversationState.sentMessages = 0;
+    this.conversationState.isCompacted = false;
+  }
+
   /**
    * Finalize response state after a successful API call.
    * Updates previousResponseId, conversation state, and token counts.
@@ -775,31 +861,49 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.applyCompactionState();
     }
 
-    // Only chain from completed responses - failed/incomplete can't be used
-    if (response.status === 'completed') {
+    // Only chain from completed responses with usage data. Missing usage
+    // signals streaming instability (see the [TOKEN_DIAG] branch below);
+    // chaining from such responses has produced stale-id and token-count
+    // drift in practice, so treat it the same as a non-completed status.
+    // Use a typeof check rather than truthiness so a legitimate 0 wouldn't
+    // be misclassified.
+    const hasInputTokens = typeof response.usage?.input_tokens === 'number';
+    const safeToChain = response.status === 'completed' && hasInputTokens;
+    if (safeToChain) {
       this.previousResponseId = response.id;
+      this.conversationState.sentMessages = effectiveMessagesCount;
     } else {
       const errorDetail =
         response.error?.message ?? response.incomplete_details?.reason;
-      this.logger.warn(
-        `Response ${response.id} has status "${response.status}" - not safe for chaining`,
+      this.logger.debug(
+        `Response ${response.id} not safe for chaining (status="${response.status}", hasInputTokens=${hasInputTokens})`,
         {
           data: {
             responseId: response.id,
             status: response.status,
             hasUsage: !!response.usage,
+            hasInputTokens,
             errorDetail,
           },
         },
       );
-      this.previousResponseId = null;
+      // Rejecting the chain anchor invalidates the client-side bookkeeping:
+      // sentMessages counts against server-side history that we're now
+      // refusing to reference, so slicing from it on the next turn would
+      // drop context. Reset sentMessages so the next turn sends full
+      // history via `input`, and clear isCompacted so the send-all branch
+      // isn't wrongly re-entered. Preserve cumulativeInputTokens so
+      // shouldCompact() can still trigger proactively — otherwise a
+      // large conversation that hits a transient missing-usage response
+      // would lose its compaction baseline and fail hard on the next
+      // turn, bypassing the context-window recovery below (which also
+      // requires previousResponseId to be set).
+      this.invalidateResponseChain();
     }
 
     // Clear any pending background response ID - a successful finalization means
     // any previous pending ID is stale and should not be resumed
     this.clearPendingBackgroundResponse();
-
-    this.conversationState.sentMessages = effectiveMessagesCount;
 
     // Set cumulative input tokens from actual usage (not additive - this IS the total).
     // The response's input_tokens reflects the full context including server-side history.
@@ -848,7 +952,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
     } else {
       // DIAGNOSTIC: Log when usage data is missing (streaming instability?)
-      this.logger.warn(
+      this.logger.debug(
         `[TOKEN_DIAG] response.usage.input_tokens MISSING - cannot track context usage`,
         {
           data: {
@@ -1174,13 +1278,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     if (systemPrompt) {
       const role = this.capabilities.supportsSystemPrompt ? 'system' : 'user';
-      messages.push({
+      const systemMessage: ResponseInputItem.Message = {
         type: 'message',
         role,
-        content: [
-          this.createInputText(systemPrompt),
-        ] as ResponseInputMessageContentList,
-      } as ResponseInputItem);
+        content: [this.createInputText(systemPrompt)],
+      };
+      messages.push(systemMessage);
     }
 
     const supportsMedia =
@@ -1204,11 +1307,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
     }
 
-    messages.push({
+    const initialUserMessage: ResponseInputItem.Message = {
       type: 'message',
       role: 'user',
       content: userContent,
-    } as ResponseInputItem);
+    };
+    messages.push(initialUserMessage);
 
     const requestRole = this.capabilities.supportsIntermDevMsgs
       ? 'system'
@@ -1217,13 +1321,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (requestRole === 'user' && messages.length > 0) {
       this.appendInputText(messages.at(-1)!, userRequest);
     } else {
-      messages.push({
+      const requestMessage: ResponseInputItem.Message = {
         type: 'message',
         role: requestRole,
-        content: [
-          this.createInputText(userRequest),
-        ] as ResponseInputMessageContentList,
-      } as ResponseInputItem);
+        content: [this.createInputText(userRequest)],
+      };
+      messages.push(requestMessage);
     }
 
     return messages;
@@ -1258,11 +1361,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     roundContent.push(this.createInputText(userMessage));
 
-    messages.push({
+    const roundUserMessage: ResponseInputItem.Message = {
       type: 'message',
       role: 'user',
       content: roundContent,
-    } as ResponseInputItem);
+    };
+    messages.push(roundUserMessage);
 
     return messages;
   }
@@ -1336,11 +1440,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         continue;
       }
 
-      const contentList = (
-        item as ResponseInputItem & {
-          content?: ResponseInputMessageContentList;
-        }
-      ).content;
+      const contentList = item.content;
 
       if (!Array.isArray(contentList)) {
         continue;
@@ -1397,12 +1497,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         delete content.filename;
       }
     } catch (err) {
-      const errorMessage = getSdkErrorMessage(err);
-
-      if (
+      // Two native SDK timeout signals: APIConnectionTimeoutError (client-side
+      // SDK timeout) and APIError with status 408 (server-side Request Timeout).
+      // Status 408 is NOT mapped to APIConnectionTimeoutError by the SDK —
+      // it falls through to a bare APIError — so both must be checked.
+      const isTimeout =
         err instanceof APIConnectionTimeoutError ||
-        errorMessage.includes('Request timed out')
-      ) {
+        (err instanceof OpenAIAPIError && err.status === 408);
+      if (isTimeout) {
         this.logger.warn(
           `Timed out uploading file ${filename}. Falling back to inline payload.`,
         );
@@ -1410,7 +1512,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       this.logger.logError(
-        `Failed to upload file ${filename}: ${errorMessage}`,
+        `Failed to upload file ${filename}: ${getSdkErrorMessage(err)}`,
         err,
         { operation: 'upload file' },
       );
@@ -1488,30 +1590,54 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   async createResponse(
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
   ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
+    // Single-turn contract: concurrent callers would race on previousResponseId
+    // and conversationState. Fail loudly so the caller bug surfaces instead of
+    // corrupting the conversation silently.
+    if (this.inFlight) {
+      throw new Error(
+        'modelHandlerOpenAIResponse.createResponse invoked while a prior ' +
+          'call is still in flight; this handler is single-turn per instance.',
+      );
+    }
+    this.inFlight = true;
+    try {
+      return await this.createResponseImpl(options);
+    } catch (err) {
+      tagOpenAISdkError(err, this.config.provider);
+      throw err;
+    } finally {
+      this.inFlight = false;
+    }
+  }
+
+  private async createResponseImpl(
+    options: CreateResponseOptions<ResponseInputItem, OpenAI>,
+  ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
     // Clear any stale compaction result from previous attempts (ensures clean state on retries)
     this.compactionResult = undefined;
 
     const { client, messages, temperature, systemPrompt, signal, tools } =
       options;
-    const streamingToggleEnabled = this.getStreamingConfig();
-    const backgroundToggleEnabled = getConfig<boolean>(
-      'texra.model.useBackgroundResponses',
-      false,
+    const backgroundToggleEnabled = this.isBackgroundModeToggleEnabled();
+    const backgroundModeEligible = this.isBackgroundModeEligible();
+    const useBackgroundResponses = this.shouldUseBackgroundResponses(
+      backgroundToggleEnabled,
+      backgroundModeEligible,
     );
-    const useBackgroundResponses =
-      this.backgroundModeSupported &&
-      backgroundToggleEnabled &&
-      this.isBackgroundModeEligible();
+    const streamingToggleEnabled = useBackgroundResponses
+      ? super.getStreamingConfig()
+      : this.getStreamingConfig();
     const useStreaming = streamingToggleEnabled && !useBackgroundResponses;
     const useWebSocket =
       this.isWebSocketModeEnabled() && !useBackgroundResponses;
 
-    if (backgroundToggleEnabled && !useBackgroundResponses) {
-      const reason = !this.backgroundModeSupported
-        ? 'this handler does not support background execution'
-        : 'not eligible for this model/agent type (requires GPT 5 series with workflow agents)';
+    if (
+      backgroundToggleEnabled &&
+      backgroundModeEligible &&
+      !useBackgroundResponses
+    ) {
       this.logger.debug(
-        `Background mode toggle is enabled but ${reason}. Falling back to synchronous requests.`,
+        'Background mode toggle is enabled but this handler does not support background execution. Proceeding without background mode.',
       );
     } else if (streamingToggleEnabled && useBackgroundResponses) {
       this.logger.debug(
@@ -1673,6 +1799,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           maxOutputTokens = validation.adjustedMaxTokens;
         }
       } catch (err) {
+        tagOpenAISdkError(err, this.config.provider);
         if (isContextWindowError(err)) throw err;
         this.logger.debug(
           `Token counting failed: ${getSdkErrorMessage(err)}. Applying fallback cap.`,
@@ -1750,6 +1877,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Wrap execution in try-catch to handle previousResponseId errors
     // When an error indicates the response ID is invalid, we clear it so
     // the retry logic can recover by starting a fresh conversation.
+    //
+    // Text accumulated from `response.output_text.delta` events during
+    // streaming. Hoisted here so the catch block can surface it as
+    // partial text on mid-stream failures. ResponseStream has no native
+    // currentMessage accessor (unlike ChatCompletionStream), so we
+    // accumulate manually from the events we already iterate.
+    let streamedText = '';
     try {
       // Try to resume a pending background response (for retry after connection error)
       if (useBackgroundResponses && this.pendingBackgroundResponseId) {
@@ -1780,7 +1914,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
         // Safety net: handle unexpected pending status (shouldn't happen without background mode)
         if (this.isBackgroundPending(response)) {
-          this.logger.warn(
+          this.logger.debug(
             `WebSocket response ${response.id} ended with pending status "${response.status}" — polling for completion`,
           );
           response = await this.waitForBackgroundCompletion(
@@ -1816,6 +1950,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
         for await (const event of stream) {
           this.processStreamingEvent(event, state);
+          if (event.type === 'response.output_text.delta') {
+            streamedText += event.delta;
+          }
         }
 
         let response = await stream.finalResponse();
@@ -1824,7 +1961,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // during slow GPT-5 requests), poll until it finishes instead of silently
         // returning an incomplete response.
         if (this.isBackgroundPending(response)) {
-          this.logger.warn(
+          this.logger.debug(
             `Streaming response ${response.id} ended with pending status "${response.status}" - polling for completion`,
           );
           response = await this.waitForBackgroundCompletion(
@@ -1865,7 +2002,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       if (this.isBackgroundPending(response)) {
         if (useBackgroundResponses) {
           this.logger.logProgress(
-            `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
+            'Running OpenAI in background mode; polling for completion (this may take longer than usual).',
           );
         } else {
           this.logger.debug(
@@ -1896,6 +2033,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         updatedMessages: compactedMessages,
       };
     } catch (error) {
+      tagOpenAISdkError(error, this.config.provider);
+
       // Extract error details for diagnostics (useful for relay errors)
       const { rawErrorBody } = formatProviderHttpError(error);
       if (rawErrorBody) {
@@ -1907,12 +2046,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // OpenAI: If the error indicates the response ID is invalid, clear it
       // This allows retry logic to recover by starting a fresh conversation
       if (isPreviousResponseIdError(error)) {
-        this.logger.info(
+        this.logger.debug(
           `Clearing previousResponseId=${this.previousResponseId} due to invalid/expired response - ` +
             'next retry will rebuild conversation from local history',
         );
-        this.previousResponseId = null;
-        this.resetConversationState();
+        this.invalidateResponseChain();
         // Also clear pending background response if present
         this.clearPendingBackgroundResponse();
       } else if (
@@ -1929,9 +2067,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // hidden reasoning tokens) and compact client-side messages, then retry.
         // The guard !compactedThisCall prevents infinite recursion.
         this.logger.logProgress(
-          'Context window exceeded despite pre-flight check — ' +
-            'accumulated server-side reasoning tokens likely exceeded limit. ' +
-            'Clearing chained state and compacting for retry.',
+          'Context window exceeded — compacting conversation and retrying.',
         );
         this.previousResponseId = null;
         // Don't call resetConversationState() — it zeroes cumulativeInputTokens
@@ -1941,7 +2077,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this._diagPreFlightTokens = null;
         // Retry internally: the recursive call will compact (shouldCompact()=true)
         // and send all messages without server-side state.
-        return this.createResponse({
+        // Call the impl directly — we're still inside the outer createResponse's
+        // inFlight guard, and the public entry would trip the assertion.
+        return this.createResponseImpl({
           client,
           messages,
           temperature,
@@ -1957,11 +2095,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
       }
 
-      // Log info about pending background response for retry logic
-      // Note: We intentionally keep pendingBackgroundResponseId for connection errors
-      // so that retry logic can resume polling the same response
+      // Retention of pendingBackgroundResponseId is decided at the point of
+      // failure (tryResumeBackgroundResponse and waitForBackgroundCompletion).
+      // If it survived to here, the next retry will try to resume the same ID.
       if (this.pendingBackgroundResponseId) {
-        this.logger.info(
+        this.logger.debug(
           `Retaining pendingBackgroundResponseId=${this.pendingBackgroundResponseId} for retry - ` +
             'next attempt will try to resume polling instead of creating new request',
         );
@@ -1969,6 +2107,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       // Clear diagnostic state to avoid stale comparison on retry
       this._diagPreFlightTokens = null;
+
+      // Attach a capped tail of any streamed text to the error so the retry
+      // UI can surface progress. No-op when nothing was streamed.
+      if (streamedText) {
+        attachPartialText(error, takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX));
+      }
 
       throw error;
     }
@@ -1995,7 +2139,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       output_tokens_details: { reasoning_tokens: 0 },
     };
     if (!responseObject.usage) {
-      this.logger.warn(
+      this.logger.debug(
         'Response missing usage information - token counts will show as 0',
         {
           data: {
@@ -2167,7 +2311,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         await delay(pollInterval, { signal });
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
-          this.logger.warn(
+          this.logger.debug(
             `Background polling aborted for response ${responseId} while waiting to poll.`,
             {
               data: {
@@ -2217,17 +2361,21 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           this.clearPendingBackgroundResponse();
           throw err;
         }
-        // Only wrap 404 "response not found" errors. These are retryable because
-        // the response existed but disappeared during polling, and a retry will
-        // create a new request. Wrapping strips the 404 status code so
-        // formatProviderHttpError classifies it as a network-like error (retryable).
+        // 404 "response not found" during polling means the response is truly
+        // gone server-side. Clear the pending ID so the next retry creates a
+        // fresh background request instead of routing through
+        // tryResumeBackgroundResponse to rediscover the 404. The wrapping
+        // below strips the 404 status so formatProviderHttpError classifies
+        // the error as retryable (network-like), which keeps the retry loop
+        // engaged rather than bailing out on a non-retryable 4xx.
         //
         // All other errors (401, 403, 5xx, network, etc.) propagate unchanged
         // so downstream handlers (relay 401 token refresh, retryability checks,
         // non-retryable classification) work correctly with full HTTP metadata.
         const statusCode = (err as { status?: number }).status;
         if (statusCode === 404) {
-          const pollingError = new Error(
+          this.clearPendingBackgroundResponse();
+          const pollingError: RequestIdTaggedError = new Error(
             `Background response polling failed for ${responseId}: ${getSdkErrorMessage(err)}`,
             { cause: err },
           );
@@ -2235,8 +2383,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           // logging diagnostics (detectRequestId doesn't follow the cause chain)
           const origRequestId = (err as { request_id?: string }).request_id;
           if (origRequestId) {
-            (pollingError as unknown as Record<string, unknown>).request_id =
-              origRequestId;
+            pollingError.request_id = origRequestId;
           }
           throw pollingError;
         }
@@ -2312,13 +2459,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     );
 
     const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
-    messages.push({
+    const continuationMessage: ResponseInputItem.Message = {
       type: 'message',
       role,
-      content: [
-        this.createInputText(userMessageContinuation),
-      ] as ResponseInputMessageContentList,
-    } as ResponseInputItem);
+      content: [this.createInputText(userMessageContinuation)],
+    };
+    messages.push(continuationMessage);
   }
 
   /** Initializes output file and handles prefill content. */
@@ -2338,13 +2484,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       if (lastMessage) {
         this.appendInputText(lastMessage, pseudoPrefill);
       } else {
-        messages.push({
+        const pseudoPrefillMessage: ResponseInputItem.Message = {
           type: 'message',
           role: 'user',
-          content: [
-            this.createInputText(pseudoPrefill),
-          ] as ResponseInputMessageContentList,
-        } as ResponseInputItem);
+          content: [this.createInputText(pseudoPrefill)],
+        };
+        messages.push(pseudoPrefillMessage);
       }
       this.logger.debug(
         `Added pseudo prefill message to messages:\n${pseudoPrefill}`,
@@ -2367,7 +2512,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return [endTurn, messages];
     }
 
-    this.logger.warn(
+    this.logger.debug(
       'Output file exists but no end tag found - continuing from file',
     );
     // Only need to handle case where prefill needs to be prepended
@@ -2537,42 +2682,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return thoughtContent || null;
   }
 
-  private parseArguments(raw: unknown): unknown {
-    if (typeof raw !== 'string') {
-      return raw;
-    }
-
-    try {
-      return JSON.parse(raw);
-    } catch (error) {
-      this.logger.warn(
-        'OpenAI Responses tool call arguments could not be parsed as JSON; using raw string.',
-        { data: error },
-      );
-      return raw;
-    }
-  }
-
   extractToolUse(response: Response): OpenAIResponseToolCall[] {
     const items = response?.output;
     if (!Array.isArray(items)) return [];
 
-    const calls = items.filter(
-      (it): it is ResponseFunctionToolCallItem => it?.type === 'function_call',
-    );
+    const calls = items.filter(isResponseFunctionToolCallItem);
     if (calls.length === 0) {
       return [];
     }
 
-    return calls
-      .filter((call) => Boolean(call.call_id && call.name))
-      .map((call) => ({
-        provider: 'openai-response',
-        callId: call.call_id!,
-        name: call.name!,
-        input: this.parseArguments(call.arguments),
-        raw: call,
-      }));
+    return calls.map((call) => ({
+      provider: 'openai-response',
+      callId: call.call_id,
+      name: call.name,
+      input: parseToolArguments(call.arguments, this.logger),
+      raw: call,
+    }));
   }
 
   /**
@@ -2646,9 +2771,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Always clear after processing to prevent accumulation across cycles.
     if (workspaceState?.serverToolContent.contentBlocks.length) {
       if (!isResponseChaining) {
-        const openaiBlocks = workspaceState.serverToolContent.contentBlocks
-          .filter(isOpenAIServerToolContent)
-          .map((block) => block as ResponseInputItem);
+        const openaiBlocks: ResponseInputItem[] =
+          workspaceState.serverToolContent.contentBlocks.filter(
+            isOpenAIServerToolContent,
+          );
         messages.push(...openaiBlocks);
       }
       workspaceState.resetServerToolContent();
@@ -2961,21 +3087,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   private isMessageItem(
     item?: ResponseInputItem,
   ): item is EasyInputMessage | ResponseInputItem.Message {
-    if (!item || typeof item !== 'object') {
+    if (!item || typeof item !== 'object') return false;
+    if (!('role' in item) || typeof item.role !== 'string') return false;
+    if (
+      'type' in item &&
+      typeof item.type === 'string' &&
+      item.type !== 'message'
+    ) {
       return false;
     }
-
-    const role = (item as { role?: unknown }).role;
-    if (typeof role !== 'string') {
-      return false;
-    }
-
-    const type = (item as { type?: unknown }).type;
-    if (typeof type === 'string' && type !== 'message') {
-      return false;
-    }
-
-    const content = (item as { content?: unknown }).content;
+    if (!('content' in item)) return false;
+    const { content } = item;
     return typeof content === 'string' || Array.isArray(content);
   }
 

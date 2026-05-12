@@ -1,5 +1,11 @@
 // Standard library imports
 import { strict as assert } from 'assert';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+
+// Third-party imports
+import { APIUserAbortError as AnthropicUserAbortError } from '@anthropic-ai/sdk';
 
 // Local imports - agent
 import {
@@ -7,8 +13,11 @@ import {
   type ModelCapabilities,
   type ModelConfig,
   ModelProvider,
+  ReasoningEffort,
 } from 'llm-zoo';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentCategory, AgentSettingSchema } from '@agent/core/AgentDataclass';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
 
 // Type imports
@@ -920,6 +929,126 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
+  it('adds native compaction context edit for Claude Opus 4.7 tool-use runs', async () => {
+    const handler = createAnthropicHandler({
+      supportsTokenCounting: false,
+      supportsReasoning: false,
+    });
+    handler.config.fullName = 'claude-opus-4-7';
+    handler.setAgentCategory(AgentCategory.ToolUse);
+
+    stubHandlerForTest(handler, { logContextManagement: () => {} });
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'hello', citations: null }],
+      },
+    ];
+    const messageOptions: any[] = [];
+    const client = {
+      beta: {
+        messages: {
+          create: async (opts: any) => {
+            messageOptions.push(opts);
+            return {
+              id: 'msg',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-opus-4-7',
+              content: [{ type: 'text', text: 'ok' }],
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 1, output_tokens: 1 },
+            } as any;
+          },
+        },
+      },
+    } as any;
+
+    const originalGetConfig = configModule.getConfig;
+    try {
+      (configModule as any).getConfig = (
+        path: string,
+        defaultValue?: unknown,
+      ) => {
+        if (path === 'texra.model.compactionThresholdPercent') return 75;
+        return defaultValue as unknown;
+      };
+
+      await handler.createResponse({ client, messages, temperature: 0 });
+    } finally {
+      (configModule as any).getConfig = originalGetConfig;
+    }
+
+    const options = messageOptions[0] ?? {};
+    const betas: string[] = options.betas ?? [];
+    assert.ok(
+      betas.includes('compact-2026-01-12'),
+      'should include compaction beta header',
+    );
+
+    const edits = options.context_management?.edits ?? [];
+    const compactionEdit = edits.find(
+      (edit: { type: string }) => edit.type === 'compact_20260112',
+    );
+    assert.ok(compactionEdit, 'should configure compact_20260112 context edit');
+    assert.equal(compactionEdit.pause_after_compaction, false);
+    assert.equal(compactionEdit.trigger?.type, 'input_tokens');
+    assert.equal(compactionEdit.trigger?.value, 150000);
+    assert.equal(compactionEdit.instructions, undefined);
+  });
+
+  it('uses adaptive thinking with max effort for Opus 4.7 xhigh reasoning', async () => {
+    const handler = createAnthropicHandler({
+      supportsReasoning: true,
+      supportsReasoningEffort: true,
+      reasoningEffort: ReasoningEffort.XHIGH,
+    });
+    handler.config.fullName = 'claude-opus-4-7';
+
+    stubHandlerForTest(handler, { logContextManagement: () => {} });
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'hello', citations: null }],
+      },
+    ];
+    const messageOptions: any[] = [];
+    const client = {
+      beta: {
+        messages: {
+          create: async (opts: any) => {
+            messageOptions.push(opts);
+            return {
+              id: 'msg',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-opus-4-7',
+              content: [{ type: 'text', text: 'ok' }],
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 1, output_tokens: 1 },
+            } as any;
+          },
+        },
+      },
+    } as any;
+
+    await handler.createResponse({ client, messages, temperature: 0 });
+
+    const options = messageOptions[0] ?? {};
+    assert.deepEqual(
+      options.thinking,
+      { type: 'adaptive', display: 'summarized' },
+      'Opus 4.7 should request adaptive thinking with display: summarized so reasoning still streams',
+    );
+    assert.equal(
+      options.output_config?.effort,
+      'max',
+      'xhigh reasoning effort should map to max on Opus 4.7',
+    );
+  });
+
   it('uses the Anthropic minimum trigger for manual compaction requests', async () => {
     const handler = createAnthropicHandler({
       supportsTokenCounting: false,
@@ -1175,5 +1304,277 @@ describe('ModelHandlerAnthropic message guards', () => {
     assert.equal(eventData.tokensBefore, 185000);
     assert.equal(eventData.tokensAfter, 25600);
     assert.equal(eventData.summary, '<summary>state</summary>');
+  });
+});
+
+describe('ModelHandlerAnthropic output prefill initialization', () => {
+  it('writes assistant prefills for non-XML workflow outputs', async () => {
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'anthropic-prefill-'),
+    );
+    const outputPath = path.join(tempDir, 'r0', 'output.xml');
+
+    try {
+      const handler = createAnthropicHandler({
+        supportsAssistantPrefill: true,
+      });
+      stubHandlerForTest(handler);
+
+      const agentSetting = AgentSettingSchema.parse({
+        agentCategory: AgentCategory.Workflow,
+        documentTag: 'latex_document',
+        endTag: '</latex_document>',
+        outputExt: 'tex',
+      });
+      const messages: MessageParam[] = [
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'revise the document' }],
+        },
+      ];
+      const prefill = '<latex_document>';
+      const workspaceState = AgentWorkspaceState.create();
+
+      const [isComplete, updatedMessages] =
+        await handler.initializeOutputAndPrefill(
+          {} as AgentConfig,
+          agentSetting,
+          messages,
+          workspaceState,
+          pathToLocation(outputPath),
+          prefill,
+        );
+
+      assert.equal(isComplete, false);
+      assert.equal(fs.readFileSync(outputPath, 'utf8'), `${prefill}\n`);
+      assert.equal(workspaceState.assembly.accumulatedOutput, `${prefill}\n`);
+      assert.equal(updatedMessages.at(-1)?.role, 'assistant');
+      assert.deepEqual(updatedMessages.at(-1)?.content, [
+        { type: 'text', text: prefill },
+      ]);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('skips assistant prefill message when prefill is empty', async () => {
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'anthropic-prefill-empty-'),
+    );
+    const outputPath = path.join(tempDir, 'r0', 'output.xml');
+
+    try {
+      const handler = createAnthropicHandler({
+        supportsAssistantPrefill: true,
+      });
+      stubHandlerForTest(handler);
+
+      const agentSetting = AgentSettingSchema.parse({
+        agentCategory: AgentCategory.Workflow,
+        documentTag: 'latex_document',
+        endTag: '</latex_document>',
+        outputExt: 'tex',
+      });
+      const userMessage: MessageParam = {
+        role: 'user',
+        content: [{ type: 'text', text: 'revise the document' }],
+      };
+      const messages: MessageParam[] = [userMessage];
+      const workspaceState = AgentWorkspaceState.create();
+
+      const [isComplete, updatedMessages] =
+        await handler.initializeOutputAndPrefill(
+          {} as AgentConfig,
+          agentSetting,
+          messages,
+          workspaceState,
+          pathToLocation(outputPath),
+          '',
+        );
+
+      assert.equal(isComplete, false);
+      assert.equal(fs.existsSync(outputPath), false);
+      assert.equal(workspaceState.assembly.accumulatedOutput, '');
+      assert.equal(updatedMessages.length, 1);
+      assert.equal(updatedMessages.at(-1)?.role, 'user');
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('skips pseudo-prefill instruction when prefill is empty (thinking-only models)', async () => {
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'anthropic-pseudo-empty-'),
+    );
+    const outputPath = path.join(tempDir, 'r0', 'output.xml');
+
+    try {
+      const handler = createAnthropicHandler({
+        supportsAssistantPrefill: false,
+      });
+      stubHandlerForTest(handler);
+
+      const agentSetting = AgentSettingSchema.parse({
+        agentCategory: AgentCategory.Workflow,
+        documentTag: 'latex_document',
+        endTag: '</latex_document>',
+        outputExt: 'tex',
+      });
+      const userText = 'revise the document';
+      const messages: MessageParam[] = [
+        {
+          role: 'user',
+          content: [{ type: 'text', text: userText }],
+        },
+      ];
+      const workspaceState = AgentWorkspaceState.create();
+
+      const [, updatedMessages] = await handler.initializeOutputAndPrefill(
+        {} as AgentConfig,
+        agentSetting,
+        messages,
+        workspaceState,
+        pathToLocation(outputPath),
+        '',
+      );
+
+      assert.equal(updatedMessages.length, 1);
+      const last = updatedMessages.at(-1);
+      assert.equal(last?.role, 'user');
+      assert.deepEqual(last?.content, [{ type: 'text', text: userText }]);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('ModelHandlerAnthropic updateMessageContentWithPrefill', () => {
+  it('creates a new assistant message when no prefill assistant turn exists', () => {
+    const handler = createAnthropicHandler({ supportsAssistantPrefill: true });
+    stubHandlerForTest(handler);
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'revise the document' }],
+      },
+    ];
+    const workspaceState = AgentWorkspaceState.create();
+
+    handler.updateMessageContentWithPrefill(
+      messages,
+      '',
+      '<latex_document>...</latex_document>',
+      workspaceState,
+    );
+
+    assert.equal(messages.length, 2);
+    assert.equal(messages.at(-1)?.role, 'assistant');
+    assert.deepEqual(messages.at(-1)?.content, [
+      { type: 'text', text: '<latex_document>...</latex_document>' },
+    ]);
+  });
+
+  it('appends to existing assistant prefill message', () => {
+    const handler = createAnthropicHandler({ supportsAssistantPrefill: true });
+    stubHandlerForTest(handler);
+
+    const messages: MessageParam[] = [
+      { role: 'user', content: [{ type: 'text', text: 'revise' }] },
+      {
+        role: 'assistant',
+        content: [{ type: 'text', text: '<latex_document>' }],
+      },
+    ];
+    const workspaceState = AgentWorkspaceState.create();
+
+    handler.updateMessageContentWithPrefill(
+      messages,
+      '',
+      'body</latex_document>',
+      workspaceState,
+    );
+
+    assert.equal(messages.length, 2);
+    const assistantContent = messages.at(-1)?.content;
+    assert.equal(Array.isArray(assistantContent), true);
+    assert.equal((assistantContent as MessageParam['content'])!.length, 2);
+  });
+});
+
+describe('ModelHandlerAnthropic pre-message_start error handling', () => {
+  /**
+   * Builds a minimal stream stub that mimics the surface of the Anthropic
+   * SDK's MessageStream used by ModelHandlerAnthropic.createResponse:
+   *   - `.on()` for event listener registration (no-op)
+   *   - `.controller.abort()` (no-op)
+   *   - `.finalMessage()` returning a promise that rejects with `error`
+   *   - `.currentMessage` undefined (simulates no message_start received)
+   *   - `.request_id` undefined
+   */
+  function buildStreamStub(error: unknown): unknown {
+    return {
+      on: () => {},
+      controller: { abort: () => {} },
+      finalMessage: async () => {
+        throw error;
+      },
+      currentMessage: undefined,
+      request_id: undefined,
+    };
+  }
+
+  it('preserves AnthropicUserAbortError thrown before message_start (does not wrap it)', async () => {
+    const handler = createAnthropicHandler({
+      supportsTokenCounting: false,
+      supportsReasoning: false,
+    });
+    handler.setLogger(createLoggerStub() as unknown as AgentLogger);
+    // Force streaming path so we exercise the pre-message_start catch block.
+    (handler as any).getStreamingConfig = () => true;
+
+    const abortError = new AnthropicUserAbortError();
+    const streamStub = buildStreamStub(abortError);
+
+    const client = {
+      beta: {
+        messages: {
+          stream: () => streamStub,
+        },
+      },
+    } as any;
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'hello', citations: null }],
+      },
+    ];
+
+    await assert.rejects(
+      handler.createResponse({ client, messages, temperature: 0 }),
+      (err: unknown) => {
+        // The fix under test: aborts thrown before message_start must NOT be
+        // wrapped in a generic Error, otherwise downstream
+        // `instanceof AnthropicUserAbortError` checks (e.g. retry classifiers)
+        // would silently misclassify user aborts as generic stream failures.
+        assert.ok(
+          err instanceof AnthropicUserAbortError,
+          `expected AnthropicUserAbortError, got ${
+            err instanceof Error
+              ? `${err.constructor.name}: ${err.message}`
+              : String(err)
+          }`,
+        );
+        // And the wrap-guard message must not appear for the abort path.
+        assert.ok(
+          !/Stream closed before message_start/.test(
+            err instanceof Error ? err.message : '',
+          ),
+          'abort error must not be wrapped with the pre-message_start sentinel message',
+        );
+        return true;
+      },
+    );
   });
 });

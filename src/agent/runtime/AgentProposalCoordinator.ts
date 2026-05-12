@@ -11,9 +11,6 @@
  * 3. On resolution → emits 'resolveAgentProposal' to dismiss UI
  */
 
-// Local imports
-import { bus } from '@eventBus/ProgressEventBus';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type { AgentProposal } from '@shared/schemas';
 import {
   BasePromiseCoordinator,
@@ -26,7 +23,7 @@ import {
 
 /** Result of an agent proposal (workflow or tool-use). */
 export type ProposalResult =
-  | { action: 'approve'; model?: string }
+  | { action: 'approve'; model?: string; agent?: string }
   | { action: 'reject'; feedback?: string }
   | { action: 'setup' }
   | { action: 'timeout' };
@@ -49,7 +46,7 @@ interface ProposalShowPayload extends Record<string, unknown> {
 // ============================================================================
 
 /** Manages pending agent proposals (workflow and tool-use). */
-class AgentProposalCoordinatorImpl extends BasePromiseCoordinator<
+export class AgentProposalCoordinator extends BasePromiseCoordinator<
   ProposalResult,
   ProposalShowPayload
 > {
@@ -70,11 +67,11 @@ class AgentProposalCoordinatorImpl extends BasePromiseCoordinator<
   ): Promise<ProposalResult> {
     const { proposalId, proposal, timeoutMs } = options;
 
-    // Show progress view to ensure user sees the proposal
-    void safeExecuteCommand('texra.showProgressView');
+    // Request host to show progress view so user sees the proposal
+    this.runtimeHost.emit('requestEnsureProgressView', {});
 
     // Activate the stream that needs approval so user sees the prompt immediately
-    bus.emit('setActiveStream', { streamId });
+    this.runtimeHost.emit('setActiveStream', { streamId });
 
     return this.waitForUserAction(
       proposalId,
@@ -89,4 +86,4 @@ class AgentProposalCoordinatorImpl extends BasePromiseCoordinator<
 // ============================================================================
 
 /** Singleton coordinator instance. */
-export const proposalCoordinator = new AgentProposalCoordinatorImpl();
+export const proposalCoordinator = new AgentProposalCoordinator();

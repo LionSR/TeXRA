@@ -1,14 +1,14 @@
 /** Extension ID for the LaTeX Workshop VS Code extension. */
 export const LATEX_WORKSHOP_EXT_ID = 'James-Yu.latex-workshop';
 
-/** Supported platform keys for install guides. */
-export type Platform = 'darwin' | 'win32' | 'linux';
+/** Supported OS platform keys for install guides. */
+export type OSPlatform = 'darwin' | 'win32' | 'linux';
 
 // ============================================================
 // Install guide builders
 // ============================================================
 
-type Guide = Record<Platform, string>;
+type Guide = Record<OSPlatform, string>;
 
 /** Tool installable via brew, apt, and a download URL. */
 function brewAptUrl(
@@ -57,7 +57,7 @@ function texLiveGuide(
 function combineGuides(
   ...sections: Array<[label: string, guide: Guide]>
 ): Guide {
-  const platforms: Platform[] = ['darwin', 'linux', 'win32'];
+  const platforms: OSPlatform[] = ['darwin', 'linux', 'win32'];
   return Object.fromEntries(
     platforms.map((p) => {
       // Extract just the install command (first paragraph) from each guide
@@ -90,10 +90,15 @@ function combineGuides(
 
 export const PDFLATEX_INSTALL_GUIDE: Guide = {
   darwin:
-    'Install MacTeX (recommended):\n' +
-    '  brew install --cask mactex\n\n' +
+    'Install TeX Live (recommended):\n' +
+    '  brew install texlive\n\n' +
     '"brew" requires Homebrew (https://brew.sh), a free\n' +
-    'macOS package manager. Or download MacTeX directly from:\n' +
+    'macOS package manager. This is the lean TeX Live\n' +
+    "distribution without MacTeX's GUI apps.\n\n" +
+    'Alternatives:\n' +
+    '  brew install --cask mactex-no-gui   (MacTeX without GUI apps)\n' +
+    '  brew install --cask mactex          (full MacTeX, ~4 GB)\n' +
+    'Or download MacTeX directly from:\n' +
     '  https://www.tug.org/mactex/mactex-download.html\n\n' +
     'After installing, restart VS Code and verify by running\n' +
     '"pdflatex --version" in Terminal.',
@@ -280,12 +285,12 @@ export const SCOOP_INSTALL_COMMAND =
  */
 export const DEPENDENCY_INSTALL_COMMANDS: Record<
   string,
-  Record<Platform, readonly InstallCommand[]>
+  Record<OSPlatform, readonly InstallCommand[]>
 > = {
   texDistributionInstalled: {
     darwin: [
       {
-        command: 'brew install --cask mactex',
+        command: 'brew install texlive',
         packageManager: 'brew',
       },
     ],
@@ -390,7 +395,7 @@ export const LATEX_VIEWER_REFRESH_DELAY_MS = 5000;
  * Normalize a raw platform string to one of the three supported values.
  * Falls back to 'linux' for unrecognized platforms (e.g. 'freebsd').
  */
-export function normalizePlatform(raw: string): Platform {
+export function normalizePlatform(raw: string): OSPlatform {
   return raw === 'darwin' || raw === 'win32' ? raw : 'linux';
 }
 
@@ -401,3 +406,84 @@ export function normalizePlatform(raw: string): Platform {
 export function getInstallGuide(guide: Guide, platform: string): string {
   return guide[normalizePlatform(platform)] ?? guide.linux;
 }
+
+// ============================================================
+// LaTeX/compile/diff config — single source of truth
+// ============================================================
+//
+// These constants are imported by:
+//   - readers in src/agent/, src/latex/, src/housekeeping/, src/commands/
+//   - the inbound/outbound message schemas in src/shared/schemas/
+//   - the LaTeX tab UI in src/settingsView/frontend/
+//   - the activation-time migration helper in src/frontend/setup.ts
+// so changing a default or range here propagates everywhere with no rot.
+//
+// Importing WorkspaceStateKey from @common/state/stateKeys keeps this module
+// vscode-free (the keys file has no vscode import).
+
+import { WorkspaceStateKey } from '@common/state/stateKeys';
+
+/** Numeric range for a setting (used by Zod schemas and UI inputs). */
+export interface NumericRange {
+  readonly min: number;
+  readonly max?: number;
+}
+
+/** Allowed values for the `latexdiff` math-markup mode. */
+export const LATEXDIFF_MATH_MARKUP_VALUES = [
+  'off',
+  'whole',
+  'coarse',
+  'fine',
+] as const;
+export type LatexdiffMathMarkupValue =
+  (typeof LATEXDIFF_MATH_MARKUP_VALUES)[number];
+
+/** Allowed values for the LaTeX formatter selector. */
+export const LATEX_FORMATTER_VALUES = [
+  'latexindent',
+  'tex-fmt',
+  'none',
+] as const;
+export type LatexFormatterValue = (typeof LATEX_FORMATTER_VALUES)[number];
+
+/** Documented defaults — match the values that used to live in package.json. */
+export const LATEX_CONFIG_DEFAULTS = {
+  workflowAutoCompile: true,
+  workflowAutoCompileTimeoutMs: 120000,
+  latexdiffBetweenRounds: false,
+  latexdiffTimeoutMs: 10000,
+  latexdiffMathMarkup: 'coarse' as LatexdiffMathMarkupValue,
+  latexFormatter: 'latexindent' as LatexFormatterValue,
+} as const;
+
+/** Numeric ranges (used by Zod schemas and UI inputs). */
+export const LATEX_CONFIG_RANGES = {
+  workflowAutoCompileTimeoutMs: { min: 10000 } satisfies NumericRange,
+  latexdiffTimeoutMs: { min: 1000, max: 80000 } satisfies NumericRange,
+} as const;
+
+/**
+ * Webview-facing field name → WorkspaceStateKey. Single source of truth for
+ * both read and write paths, replacing per-handler maps that previously
+ * duplicated this list.
+ */
+export const LATEX_FIELD_TO_KEY = {
+  workflowAutoCompile: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
+  workflowAutoCompileTimeoutMs:
+    WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+  latexdiffBetweenRounds: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+  latexdiffTimeoutMs: WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
+  latexdiffMathMarkup: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+  latexFormatter: WorkspaceStateKey.LATEX_FORMATTER,
+} as const;
+export type LatexConfigField = keyof typeof LATEX_FIELD_TO_KEY;
+
+/**
+ * Ordered list of LaTeX config field names — derived from
+ * `LATEX_FIELD_TO_KEY` so the Zod enum schema and any UI iteration can never
+ * drift from the canonical field→state-key map.
+ */
+export const LATEX_CONFIG_FIELDS = Object.keys(
+  LATEX_FIELD_TO_KEY,
+) as ReadonlyArray<LatexConfigField>;

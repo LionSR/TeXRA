@@ -3,7 +3,8 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
-import { formatToolOutput, resolveAndFormat } from '@tools/utils';
+import { formatToolOutput } from '@tools/formatting';
+import { resolveAndFormat } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { pathToLocation } from '@utils/files';
 import {

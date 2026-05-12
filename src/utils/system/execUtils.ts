@@ -1,4 +1,6 @@
 // Third-party imports
+import * as path from 'path';
+
 import { execa, type Options, type ResultPromise, ExecaError } from 'execa';
 import { quote as shellQuote } from 'shell-quote';
 
@@ -6,18 +8,6 @@ import { quote as shellQuote } from 'shell-quote';
  * Encoding options compatible with execa v9.
  * execa uses a stricter encoding type than Node's BufferEncoding.
  */
-type ExecaEncodingOption =
-  | 'utf8'
-  | 'utf16le'
-  | 'buffer'
-  | 'hex'
-  | 'base64'
-  | 'base64url'
-  | 'latin1'
-  | 'ascii';
-
-import * as path from 'path';
-
 // Local imports - log
 import type { ExecResult } from '@agent/types/ResultTypes';
 
@@ -27,10 +17,21 @@ import { toErrorMessage } from '@common/errors';
 // Internal imports
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
+import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'execUtils';
 logger.initialize(CHANNEL);
+
+type ExecaEncodingOption =
+  | 'utf8'
+  | 'utf16le'
+  | 'buffer'
+  | 'hex'
+  | 'base64'
+  | 'base64url'
+  | 'latin1'
+  | 'ascii';
 
 const MAX_OUTPUT_LENGTH = 150;
 const FORCE_KILL_DELAY_MS = 5_000;
@@ -104,7 +105,7 @@ export async function executeCommand(
       throw new Error('No workspace path found');
     }
 
-    const env = { ...process.env, ...options.env };
+    const env = { ...process.env, ...getGitAuthorEnv(), ...options.env };
     env.PATH = extendEnvPath(env.PATH);
 
     // Export project context so AI agents can orient themselves immediately.
@@ -235,16 +236,9 @@ export async function executeCommand(
       `Error executing command: ${toErrorMessage(err)}`,
     );
 
-    // Handle stderr from ExecaError
-    let stderr = null;
-    if (err instanceof ExecaError) {
-      stderr = err.stderr ? `${err.stderr}`.trim() : null;
-    }
-
-    // With reject: false, this catch block only handles actual execution errors
-    // (e.g., command not found), not timeouts or non-zero exit codes
-    const fallbackOutput = stderr || toErrorMessage(err);
-    const normalizedError = normalizeOutput(fallbackOutput);
+    const stderr =
+      err instanceof ExecaError && err.stderr ? `${err.stderr}`.trim() : null;
+    const normalizedError = normalizeOutput(stderr || toErrorMessage(err));
     return {
       success: false,
       stdout: null,

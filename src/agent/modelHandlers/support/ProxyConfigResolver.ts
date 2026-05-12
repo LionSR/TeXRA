@@ -1,12 +1,13 @@
 import { ModelProvider } from 'llm-zoo';
+import { getConfig } from '@agent/core/config';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import { getConfig } from '@utils/config';
 import {
   getProviderEndpoint,
   getDashScopeUseChina,
   getMiniMaxUseChina,
   getGLMUseChina,
   getGLMCodingPlan,
+  getUseOpenRouter,
 } from '@utils/config/providerConfig';
 
 // NOTE: getProviderEndpoint reads from globalSM (VS Code global state), which is
@@ -15,20 +16,15 @@ import {
 
 const DEFAULT_PROXY_DOMAIN = 'proxy.texra.ai';
 
-/**
- * Normalize a URL-like string by removing any protocol prefix and trailing slashes.
- * Preserves any path component provided.
- */
+/** Normalize a URL-like string to `host/path` form (no protocol, no trailing slashes). */
 function normalizeUrl(input: string): string {
   if (!input) return '';
 
-  // Ensure protocol for URL parsing
   const withProtocol = input.includes('://') ? input : `https://${input}`;
   try {
-    const url = new URL(withProtocol);
-    return `${url.host}${url.pathname}`.replace(/\/+$/, '');
+    const { host, pathname } = new URL(withProtocol);
+    return `${host}${pathname}`.replace(/\/+$/, '');
   } catch {
-    // For malformed URLs, strip protocol and trailing slashes from original input
     return input.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   }
 }
@@ -74,10 +70,7 @@ export function shouldUseOpenRouter(config: {
   // Models requiring direct API access bypass OpenRouter
   if (config.requiresResponsesAPI) return false;
 
-  return (
-    config.openRouterOnly ||
-    getConfig<boolean>('texra.model.useOpenRouter', false)
-  );
+  return config.openRouterOnly || getUseOpenRouter();
 }
 
 /**
@@ -162,30 +155,28 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
     return `https://${normalizeUrl(customUrl)}`;
   }
 
-  // DashScope base URL depends on the China/international region toggle
-  if (config.provider === ModelProvider.DASHSCOPE) {
-    const domain = getDashScopeUseChina()
-      ? 'dashscope.aliyuncs.com'
-      : 'dashscope-intl.aliyuncs.com';
-    return `https://${domain}/compatible-mode/v1`;
+  // Providers with dynamic region-based URLs
+  switch (config.provider) {
+    case ModelProvider.DASHSCOPE: {
+      const domain = getDashScopeUseChina()
+        ? 'dashscope.aliyuncs.com'
+        : 'dashscope-intl.aliyuncs.com';
+      return `https://${domain}/compatible-mode/v1`;
+    }
+    case ModelProvider.MINIMAX: {
+      // China: api.minimaxi.com (note the extra 'i'), International: api.minimax.io
+      const domain = getMiniMaxUseChina()
+        ? 'api.minimaxi.com'
+        : 'api.minimax.io';
+      return `https://${domain}/v1`;
+    }
+    case ModelProvider.GLM: {
+      // China: open.bigmodel.cn, International: api.z.ai
+      const domain = getGLMUseChina() ? 'open.bigmodel.cn' : 'api.z.ai';
+      const path = getGLMCodingPlan() ? '/api/coding/paas/v4' : '/api/paas/v4';
+      return `https://${domain}${path}`;
+    }
+    default:
+      return BASE_URLS[config.provider];
   }
-
-  // MiniMax base URL depends on the China/international region toggle
-  // China: api.minimaxi.com (note the extra 'i'), International: api.minimax.io
-  // Note: Coding Plan uses the same endpoint but requires a separate API key
-  if (config.provider === ModelProvider.MINIMAX) {
-    const domain = getMiniMaxUseChina() ? 'api.minimaxi.com' : 'api.minimax.io';
-    return `https://${domain}/v1`;
-  }
-
-  // GLM base URL depends on the China/international region toggle
-  // China: open.bigmodel.cn, International: api.z.ai
-  // Coding Plan uses /api/coding/paas/v4 path instead of /api/paas/v4
-  if (config.provider === ModelProvider.GLM) {
-    const domain = getGLMUseChina() ? 'open.bigmodel.cn' : 'api.z.ai';
-    const path = getGLMCodingPlan() ? '/api/coding/paas/v4' : '/api/paas/v4';
-    return `https://${domain}${path}`;
-  }
-
-  return BASE_URLS[config.provider];
 }

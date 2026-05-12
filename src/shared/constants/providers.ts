@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { ModelProvider } from 'llm-zoo';
 
-import { GlobalStateKey } from '@common/state/stateManager';
+import { GlobalStateKey } from '@common/state/stateKeys';
 
 // ============================================================================
 // Provider Registry — single source of truth for all provider metadata
@@ -124,7 +124,7 @@ export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
 /** URLs for obtaining API keys from each provider. */
 export const PROVIDER_URLS: Record<string, string> = {
   ...Object.fromEntries(
-    PROVIDER_REGISTRY.filter((p) => p.keyUrl).map((p) => [p.id, p.keyUrl!]),
+    PROVIDER_REGISTRY.flatMap((p) => (p.keyUrl ? [[p.id, p.keyUrl]] : [])),
   ),
   openRouter: 'https://openrouter.ai/keys',
 };
@@ -239,6 +239,15 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
       warningUrl: 'https://z.ai/subscribe',
       warningUrlLabel: 'Subscribe',
       globalStateKey: GlobalStateKey.GLM_CODING_PLAN,
+    },
+  ],
+  openrouter: [
+    {
+      key: GlobalStateKey.USE_OPENROUTER,
+      label: 'Use OpenRouter for All Models',
+      description:
+        'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key. Note: OpenRouter bypasses Included Access — your OpenRouter key is always used directly.',
+      globalStateKey: GlobalStateKey.USE_OPENROUTER,
     },
   ],
 };

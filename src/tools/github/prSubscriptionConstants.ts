@@ -1,0 +1,2 @@
+export const PR_POLL_INTERVAL_MS = 30_000;
+export const MAX_CONCURRENT_PR_SUBSCRIPTIONS = 25;

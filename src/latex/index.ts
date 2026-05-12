@@ -11,6 +11,12 @@ export { TikzPictureManager, tikzPictureManager } from './TikzPictureManager';
 export { extractFigurePathsFromLatex } from './extractFigure';
 
 // -----------------------------------------------------------------------------
+// File Dependency Extraction
+// -----------------------------------------------------------------------------
+
+export { extractLatexFileDependencies } from './extractFileDependencies';
+
+// -----------------------------------------------------------------------------
 // Bibliography Utilities
 // -----------------------------------------------------------------------------
 
@@ -47,6 +53,15 @@ export {
 
 export { LatexMediaManager } from './LatexMediaManager';
 export { ArxivSourceProcessor, arxivProcessor } from './arxivProcessor';
+
+// -----------------------------------------------------------------------------
+// Criticism Annotations
+// -----------------------------------------------------------------------------
+
+export {
+  parseCriticismAnnotations,
+  type CriticismAnnotation,
+} from './criticismParser';
 
 // -----------------------------------------------------------------------------
 // Core Utilities

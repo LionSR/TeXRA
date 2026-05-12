@@ -10,38 +10,40 @@ TeXRA supports models from multiple providers. Select models from the dropdown i
 
 ## Anthropic Models
 
-| Model ID    | Use Case                     | Cost | Speed  |
-| :---------- | :--------------------------- | :--- | :----- |
-| `opus46T`   | Complex tasks with reasoning | $$$$ | Slow   |
-| `opus46`    | High quality, complex tasks  | $$$$ | Slow   |
-| `sonnet46T` | All-rounder with reasoning   | $$$  | Medium |
-| `sonnet46`  | Strong all-rounder           | $$$  | Medium |
-| `haiku45T`  | Fast with reasoning          | $$   | Fast   |
-| `haiku45`   | Fast responses               | $$   | Fast   |
+| Model ID    | Use Case                              | Cost | Speed  |
+| :---------- | :------------------------------------ | :--- | :----- |
+| `opus47T`   | Top-tier reasoning, long-horizon work | $$$$ | Slow   |
+| `opus47`    | Most capable for agentic coding       | $$$$ | Slow   |
+| `opus46T`   | Complex tasks with reasoning          | $$$$ | Slow   |
+| `opus46`    | High quality, complex tasks           | $$$$ | Slow   |
+| `sonnet46T` | All-rounder with reasoning            | $$$  | Medium |
+| `sonnet46`  | Strong all-rounder                    | $$$  | Medium |
+| `haiku45T`  | Fast with reasoning                   | $$   | Fast   |
+| `haiku45`   | Fast responses                        | $$   | Fast   |
 
-Opus 4.6 and Sonnet 4.6 include the full 1M context window at standard pricing — no opt-in or beta header required. Other Claude models use a 200K context window.
+Opus 4.7, Opus 4.6, and Sonnet 4.6 include the full 1M context window at standard pricing — no opt-in or beta header required. Other Claude models use a 200K context window.
+
+Claude Opus 4.7 uses adaptive thinking only (extended thinking with a manual `budget_tokens` is no longer accepted). TeXRA's reasoning-effort selector maps to Anthropic's effort levels automatically — pick `opus47T` with Extra High effort for the strongest agentic coding and long-horizon tasks. Opus 4.7 also supports high-resolution images (up to 2576px / 3.75MP) for better figure, chart, and screenshot understanding; note that TeXRA downscales images above `texra.maxImageDimension` (default 2000px) before sending, so raise that setting if you want to take full advantage of Opus 4.7's higher limit.
 
 ## OpenAI Models
 
-| Model ID     | Use Case                  | Cost | Speed  |
-| :----------- | :------------------------ | :--- | :----- |
-| `gpt54pro`   | Premium reasoning         | $$$$ | Slow   |
-| `gpt54`      | Flagship reasoning        | $$$  | Medium |
-| `gpt53codex` | Coding specialist         | $$$  | Medium |
-| `gpt41`      | Long context (1M), vision | $$$  | Medium |
-| `gpt5-`      | Fast flagship             | $$   | Fast   |
+| Model ID   | Use Case                       | Cost  | Speed  |
+| :--------- | :----------------------------- | :---- | :----- |
+| `gpt55pro` | Top-tier reasoning, 1M context | $$$$$ | Slow   |
+| `gpt55`    | Flagship reasoning             | $$$$  | Medium |
+| `gpt54`    | Mid-tier reasoning             | $$$   | Medium |
+| `gpt54-`   | Lower-cost reasoning           | $$    | Fast   |
+| `gpt54--`  | Budget reasoning               | $     | Fast   |
+
+GPT-5.5 is OpenAI's latest flagship and the model TeXRA pins the [Codex CLI](./codex-cli.md) to. GPT-5.5 Pro (`gpt55pro`) extends GPT-5.5 with a 1.05M context window and `xhigh` default reasoning for the hardest planning and long-horizon tasks, at premium pricing — it is hidden by default; enable it from Settings → Models when you need it. The GPT Pro variants (`gpt5pro`, `gpt52pro`, `gpt55pro`) charge $15-$30 per 1M input and $120-$180 per 1M output, so for one-off hard questions consider enabling the External Inquiry tool and pasting the answer from your own ChatGPT subscription instead of running a full agent turn against the API. `gpt54` and its mini/nano variants remain the lower-cost option for most workloads. See the [API reference](https://developers.openai.com/api/docs) for full capabilities.
 
 GPT-5 reasoning summaries require account verification. Enable with `texra.model.gpt5ReasoningSummary`.
 
 ## Google Models
 
-| Model ID     | Use Case                             | Cost | Speed  |
-| :----------- | :----------------------------------- | :--- | :----- |
-| `gemini31p`  | Pro with reasoning, 1M context       | $$$  | Medium |
-| `gemini3f`   | Flash with reasoning, 1M context     | $$   | Fast   |
-| `gemini25p`  | Strong reasoning, vision, 1M context | $$$  | Medium |
-| `gemini25f`  | Fast reasoning, 1M context           | $$   | Fast   |
-| `gemini25f-` | Budget flash, 64k context            | $    | Fast   |
+| Model ID    | Use Case                       | Cost | Speed  |
+| :---------- | :----------------------------- | :--- | :----- |
+| `gemini31p` | Pro with reasoning, 1M context | $$$  | Medium |
 
 ## DeepSeek Models
 
@@ -55,16 +57,15 @@ GPT-5 reasoning summaries require account verification. Enable with `texra.model
 
 | Model ID  | Use Case                | Cost | Speed  |
 | :-------- | :---------------------- | :--- | :----- |
-| `kimi25T` | K2.5 with thinking mode | $$$  | Medium |
-| `kimi25`  | K2.5, agent tasks       | $$$  | Medium |
+| `kimi26T` | K2.6 with thinking mode | $$$  | Medium |
+| `kimi26`  | K2.6, agent tasks       | $$$  | Medium |
 
 ## DashScope Qwen Models
 
-| Model ID    | Use Case                      | Cost | Speed  |
-| :---------- | :---------------------------- | :--- | :----- |
-| `qwen3max`  | Flagship coding, 262k context | $$$  | Medium |
-| `qwenplus`  | Hybrid thinking, 1M context   | $$   | Medium |
-| `qwenturbo` | Fast with optional thinking   | $    | Fast   |
+| Model ID    | Use Case                    | Cost | Speed  |
+| :---------- | :-------------------------- | :--- | :----- |
+| `qwenplus`  | Hybrid thinking, 1M context | $$   | Medium |
+| `qwenturbo` | Fast with optional thinking | $    | Fast   |
 
 ## MiniMax Models
 
@@ -105,11 +106,11 @@ GLM models support thinking mode (reasoning is shown inline). The API uses a non
 
 ## Choosing a Model
 
-- **Simple tasks**: Fast, cheap models (`gemini3f`, `gpt5-`, `haiku45`)
-- **Complex tasks**: Powerful models (`opus46`, `gpt54pro`)
-- **Code-heavy / LaTeX editing**: Coding models (`gpt53codex`)
-- **Reasoning-heavy**: Thinking models (`sonnet46T`, `opus46T`, `deepseekT`)
-- **Large documents**: High-context models (`gemini*`, `gpt41`)
+- **Simple tasks**: Fast, cheap models (`qwenturbo`, `deepseek`, `haiku45`)
+- **Complex tasks**: Powerful models (`opus47`, `gpt55`, `gemini31p`)
+- **Code-heavy / LaTeX editing**: Strong editing models (`opus47T`, `sonnet46T`, `qwenplus`)
+- **Reasoning-heavy**: Thinking models (`opus47T`, `sonnet46T`, `deepseekT`, `kimi26T`)
+- **Large documents**: High-context models (`gemini31p`, `sonnet46`, `opus47`)
 
 ## Configuration
 
@@ -119,8 +120,8 @@ Customize available models in VS Code Settings under `texra.models`:
 "texra.models": [
   "gemini31p",
   "sonnet46T",
-  "opus46T",
-  "gpt54",
+  "opus47T",
+  "gpt55",
   "deepseekT"
 ]
 ```
@@ -131,7 +132,7 @@ To access additional models or alternative pricing:
 
 1. Get an [OpenRouter](https://openrouter.ai/) API key
 2. Add via `TeXRA: Set API Key` command
-3. Enable `texra.model.useOpenRouter` in settings
+3. In the Dashboard → Models tab → API Configuration, expand the OpenRouter row and enable **"Use OpenRouter for All Models"**
 
 ## Streaming
 

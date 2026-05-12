@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Manuscript Review'
+  short_description: 'Audit manuscripts for technical issues'
+  default_prompt: 'Use $manuscript-review to review this paper and report the highest-priority technical findings first.'

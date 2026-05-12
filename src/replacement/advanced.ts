@@ -3,7 +3,7 @@
  */
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
 
 const CHANNEL = 'ReplacementEngine';
 logger.initialize(CHANNEL);
@@ -357,6 +357,38 @@ export function fixLatexQuoteIssues(text: string): string {
   text = text.replaceAll(/(`[a-zA-Z\s]{3,16})([.,;:])(')/g, "$1'$2");
 
   return text;
+}
+
+const CRITICIZE_ARG = String.raw`(?:[^{}]|\{[^{}]*\})*`;
+const CRITICIZE_INLINE_RE = new RegExp(
+  String.raw`\\criticize\{${CRITICIZE_ARG}\}\{${CRITICIZE_ARG}\}\{${CRITICIZE_ARG}\}`,
+  'g',
+);
+// Whole-line form runs first so a macro occupying its own line is removed
+// without leaving a trailing blank line.
+const CRITICIZE_WHOLE_LINE_RE = new RegExp(
+  String.raw`^[ \t]*\\criticize\{${CRITICIZE_ARG}\}\{${CRITICIZE_ARG}\}\{${CRITICIZE_ARG}\}[ \t]*$\r?\n?`,
+  'gm',
+);
+
+/**
+ * Strip all `\criticize{comment}{severity}{confidence}` LaTeX annotations
+ * (inserted by critique-style agents) from LaTeX content.
+ */
+export function stripCriticizeAnnotations(content: string): {
+  content: string;
+  count: number;
+} {
+  if (!content.includes('\\criticize')) return { content, count: 0 };
+  let count = 0;
+  const tally = () => {
+    count++;
+    return '';
+  };
+  const out = content
+    .replaceAll(CRITICIZE_WHOLE_LINE_RE, tally)
+    .replaceAll(CRITICIZE_INLINE_RE, tally);
+  return { content: out, count };
 }
 
 /**

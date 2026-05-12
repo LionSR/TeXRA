@@ -1,9 +1,9 @@
 import { ToolError, type ToolFileAttachment } from '@tools/result';
+import { buildFileAttachment } from '@tools/attachments';
 import {
-  buildFileAttachment,
   resolveAndFormat,
   type WorkspacePathResolution,
-} from '@tools/utils';
+} from '@tools/pathResolution';
 import { WorkspaceFS } from '@utils/files';
 
 // ============================================================================

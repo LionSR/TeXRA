@@ -60,12 +60,14 @@ export async function registerExecution(
   agentName: string,
   parentExecutionId?: ExecutionId,
   category?: string,
+  delegationDepth?: number,
 ): Promise<void> {
   const timestamp = new Date().toISOString();
   const store = getExecutionStore(executionId);
 
   const meta: ExecutionMeta = { timestamp, parentExecutionId };
   if (category) meta.category = category;
+  if (delegationDepth !== undefined) meta.delegationDepth = delegationDepth;
 
   const writes: Promise<void>[] = [
     store.writeConfig(config),

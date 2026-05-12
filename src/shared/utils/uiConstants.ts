@@ -1,5 +1,6 @@
 /** VS Code command URIs for use in anchor href attributes. */
 export const COMMAND_LINKS = {
+  RUN_SETUP_ASSISTANT: 'command:texra.runSetupAssistant',
   GETTING_STARTED: 'command:texra.openGettingStarted',
   CREATE_SAMPLE_PROJECT: 'command:texra.createSampleProject',
   CLONE_OVERLEAF: 'command:texra.cloneOverleafProject',
@@ -12,6 +13,7 @@ export const PERMISSION_KIND = {
   RETRY: 'retry',
   PROPOSAL: 'proposal',
   PLAN_APPROVAL: 'planApproval',
+  EXTERNAL_INQUIRY: 'externalInquiry',
 } as const;
 
 export type PermissionKind =
@@ -23,12 +25,14 @@ export const FEEDBACK_ELIGIBLE_KINDS = new Set<PermissionKind>([
   PERMISSION_KIND.BASH,
   PERMISSION_KIND.PROPOSAL,
   PERMISSION_KIND.PLAN_APPROVAL,
+  PERMISSION_KIND.EXTERNAL_INQUIRY,
 ]);
 
 /** Generates the getting started banner HTML with command links. */
 export function getGettingStartedHtml(prefix = ''): string {
   return (
     prefix +
+    `<a href="${COMMAND_LINKS.RUN_SETUP_ASSISTANT}">run the setup assistant agent</a>, ` +
     `<a href="${COMMAND_LINKS.GETTING_STARTED}">open the getting started walkthrough</a>, ` +
     `<a href="${COMMAND_LINKS.CREATE_SAMPLE_PROJECT}">create a sample project</a>, ` +
     `<a href="${COMMAND_LINKS.CLONE_OVERLEAF}">clone an Overleaf project</a>, or ` +

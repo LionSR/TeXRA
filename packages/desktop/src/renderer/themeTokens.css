@@ -1,0 +1,366 @@
+/**
+ * Document-level theme tokens for the TeXRA desktop (Electron) renderer.
+ *
+ * Single token system: --wa-* tokens are the ONLY tokens consumer code
+ * references. They are sourced directly from the desktop's native
+ * --desktop-color-* palette below. There is no --texra-* shim layer and
+ * consumers never reference --vscode-* directly.
+ *
+ * Niche palette tokens with no clean WA semantic equivalent (terminal ansi,
+ * symbol icons, charts, git decoration, debug tokens, diff editor, etc.) are
+ * promoted into the --wa-color-* namespace so the consumer surface stays
+ * uniform across both hosts.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Heading scale shared with extension litStyles.ts. Use these tokens
+     instead of hardcoded heading sizes so extension and desktop hosts
+     render headings at the same visual scale. */
+  --font-size-h1: 1.5em;
+  --font-size-h2: 1.25em;
+  --font-size-h3: 1em;
+
+  --desktop-color-background: light-dark(#ffffff, #1e1e1e);
+  --desktop-color-foreground: light-dark(#1f2328, #d4d4d4);
+  --desktop-color-muted: light-dark(#57606a, #a6a6a6);
+  --desktop-color-sidebar: light-dark(#f6f8fa, #181818);
+  --desktop-color-sidebar-header: light-dark(#eaeef2, #222222);
+  --desktop-color-border: light-dark(#d0d7de, #2b2b2b);
+  --desktop-color-widget-border: light-dark(#d0d7de, #454545);
+  --desktop-color-input-background: light-dark(#ffffff, #313131);
+  --desktop-color-input-border: light-dark(#d0d7de, #3c3c3c);
+  --desktop-color-input-foreground: light-dark(#1f2328, #cccccc);
+  --desktop-color-placeholder: light-dark(#6e7781, #a6a6a6);
+  --desktop-color-accent: light-dark(#0969da, #0e639c);
+  --desktop-color-accent-hover: light-dark(#0757b7, #1177bb);
+  --desktop-color-accent-subtle: light-dark(#ddf4ff, #04395e);
+  --desktop-color-button-secondary: light-dark(#f6f8fa, #313131);
+  --desktop-color-button-secondary-hover: light-dark(#eaeef2, #3c3c3c);
+  --desktop-color-toolbar-active: light-dark(#dbeafe, #37373d);
+  --desktop-color-toolbar-hover: light-dark(#eaeef2, #2a2d2e);
+  --desktop-color-list-hover: light-dark(#eef2f6, #2a2d2e);
+  --desktop-color-menu-background: light-dark(#ffffff, #252526);
+  --desktop-color-menu-border: light-dark(#d0d7de, #454545);
+  --desktop-color-shadow: light-dark(rgb(31 35 40 / 15%), rgb(0 0 0 / 36%));
+  --desktop-color-error: light-dark(#cf222e, #f48771);
+  --desktop-color-warning: light-dark(#9a6700, #cca700);
+  --desktop-color-warning-background: light-dark(#fff8c5, #332a00);
+  --desktop-color-info: light-dark(#0969da, #75beff);
+  --desktop-color-info-background: light-dark(#ddf4ff, #063b49);
+  --desktop-color-success: light-dark(#1a7f37, #73c991);
+  --desktop-color-success-background: light-dark(#d2f5dc, #1a4a25);
+  --desktop-color-error-background: light-dark(#ffebe9, #5a1d1d);
+  --desktop-color-orange: light-dark(#bc4c00, #d18616);
+  --desktop-color-yellow: light-dark(#bf8700, #cca700);
+  --desktop-color-purple: light-dark(#8250df, #c586c0);
+  --desktop-color-terminal-selection: light-dark(#ddf4ff, #264f78);
+}
+
+/*
+ * Web Awesome design-token bridge — single source of truth.
+ * Sourced directly from the native --desktop-color-* palette above.
+ */
+:root,
+.wa-light,
+.wa-dark .wa-invert {
+  /* Typography — `--desktop-font-family` is intentionally undefined.
+     Lead with `ui-sans-serif` / `system-ui` so the OS picks its native UI
+     font on every platform (San Francisco on macOS, Segoe UI on Windows,
+     etc.), with explicit named fallbacks for older browsers. */
+  --wa-font-family-body:
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    sans-serif;
+  --wa-font-family-heading: var(--wa-font-family-body);
+  --wa-font-family-mono:
+    ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --wa-font-size-m: var(--desktop-font-size);
+  --wa-font-weight-normal: var(--desktop-font-weight);
+  --wa-editor-font-size: var(--desktop-font-size);
+
+  /* Surface / text. */
+  --wa-color-text-normal: var(--desktop-color-foreground);
+  --wa-color-text-quiet: var(--desktop-color-muted);
+  --wa-color-text-link: var(--desktop-color-accent);
+  --wa-color-text-link-active: var(--desktop-color-accent-hover);
+  --wa-color-text-preformat: var(--desktop-color-input-foreground);
+  --wa-color-text-placeholder: var(--desktop-color-placeholder);
+  --wa-color-surface-default: var(--desktop-color-background);
+  /* Mirror the extension bridge in common.css: `surface-lowered` is the
+     sidebar surface (consumers like .desktop-nav and .desktop-explorer rely
+     on this), `surface-raised` is the slightly darker elevated/hover band. */
+  --wa-color-surface-raised: var(--desktop-color-sidebar-header);
+  --wa-color-surface-lowered: var(--desktop-color-sidebar);
+  --wa-color-surface-border: var(--desktop-color-border);
+  --wa-color-surface-shadow: var(--desktop-color-shadow);
+
+  --wa-color-focus: light-dark(#0969da, #0e639c);
+
+  /* WA form-control tokens. */
+  --wa-form-control-background-color: light-dark(#ffffff, #313131);
+  --wa-form-control-text-color: light-dark(#1f2328, #cccccc);
+  --wa-form-control-border-color: light-dark(#d0d7de, #3c3c3c);
+
+  /* Brand variant — primary buttons, links, focus accents. */
+  --wa-color-brand-fill-loud: light-dark(#0969da, #0e639c);
+  --wa-color-brand-on-loud: #ffffff;
+  --wa-color-brand-border-loud: transparent;
+  --wa-color-brand-fill-quiet: light-dark(#ddf4ff, #063b49);
+  --wa-color-brand-border-quiet: light-dark(#0969da, #75beff);
+  --wa-color-brand-on-quiet: light-dark(#0969da, #75beff);
+
+  /* Warning variant. */
+  --wa-color-warning-fill-loud: light-dark(#9a6700, #cca700);
+  --wa-color-warning-on-loud: #ffffff;
+  --wa-color-warning-border-loud: transparent;
+  --wa-color-warning-fill-quiet: light-dark(#fff8c5, #332a00);
+  --wa-color-warning-border-quiet: light-dark(#9a6700, #cca700);
+  --wa-color-warning-on-quiet: light-dark(#9a6700, #cca700);
+
+  /* Danger variant. */
+  --wa-color-danger-fill-loud: light-dark(#cf222e, #f48771);
+  --wa-color-danger-on-loud: #ffffff;
+  --wa-color-danger-border-loud: transparent;
+  --wa-color-danger-fill-quiet: light-dark(#ffebe9, #5a1d1d);
+  --wa-color-danger-border-quiet: light-dark(#cf222e, #f48771);
+  --wa-color-danger-on-quiet: light-dark(#cf222e, #f48771);
+
+  /* Success variant. */
+  --wa-color-success-fill-loud: light-dark(#1a7f37, #73c991);
+  --wa-color-success-on-loud: #ffffff;
+  --wa-color-success-border-loud: transparent;
+  --wa-color-success-fill-quiet: light-dark(#d2f5dc, #1a4a25);
+  --wa-color-success-border-quiet: light-dark(#1a7f37, #73c991);
+  --wa-color-success-on-quiet: light-dark(#1a7f37, #73c991);
+
+  /* Neutral variant — mirrors the extension bridge in common.css where
+     `neutral-fill-quiet` maps to `--vscode-button-secondaryBackground`.
+     Source from `--desktop-color-button-secondary` so secondary buttons
+     and quiet surfaces (e.g. .desktop-command-button, .desktop-folder-button)
+     match the prior --texra-button-secondaryBackground value. */
+  --wa-color-neutral-fill-quiet: var(--desktop-color-button-secondary);
+  --wa-color-neutral-border-quiet: light-dark(#d0d7de, #2b2b2b);
+  --wa-color-neutral-on-quiet: light-dark(#1f2328, #d4d4d4);
+  --wa-color-neutral-fill-loud: var(--desktop-color-button-secondary-hover);
+  --wa-color-neutral-border-loud: light-dark(#d0d7de, #2b2b2b);
+  --wa-color-neutral-on-loud: light-dark(#1f2328, #d4d4d4);
+
+  /* Data palette — chart/identity colors with no semantic WA equivalent. */
+  --wa-color-data-orange: light-dark(#bc4c00, #d18616);
+  --wa-color-data-yellow: light-dark(#bf8700, #cca700);
+
+  /* Border-radius — VS Code-square overrides. WA default theme ships
+     s≈3px / m≈6px / l≈12px which feels too rounded against VS Code's
+     near-flat form-control aesthetic. Pin to the in-house --border-radius
+     scale (litStyles.ts) so wa-button, wa-input, wa-callout, wa-dialog,
+     wa-card all read as native VS Code controls. */
+  --wa-border-radius-s: 2px;
+  --wa-border-radius-m: 3px;
+  --wa-border-radius-l: 4px;
+  --wa-border-radius-xl: 6px;
+  --wa-border-radius-pill: 9999px;
+  --wa-border-radius-circle: 50%;
+  --wa-border-radius-square: 0px;
+
+  /* Buttons — niche tokens consumers still need. */
+  --wa-color-button-hover: var(--desktop-color-accent-hover);
+  --wa-color-button-border: transparent;
+  --wa-color-button-separator: rgb(255 255 255 / 40%);
+
+  /* Lists — no native WA equivalent yet (#3690). */
+  --wa-color-list-active-bg: var(--desktop-color-accent);
+  --wa-color-list-active-fg: #ffffff;
+  --wa-color-list-hover-bg: var(--desktop-color-list-hover);
+  --wa-color-list-warning-fg: var(--desktop-color-warning);
+
+  /* Menus. */
+  --wa-color-menu-background: var(--desktop-color-menu-background);
+  --wa-color-menu-border: var(--desktop-color-menu-border);
+  --wa-color-menu-foreground: var(--desktop-color-input-foreground);
+
+  /* Toolbar. */
+  --wa-color-toolbar-active: var(--desktop-color-toolbar-active);
+  --wa-color-toolbar-hover: var(--desktop-color-toolbar-hover);
+
+  /* Charts. */
+  --wa-color-chart-blue: var(--desktop-color-accent);
+  --wa-color-chart-green: var(--desktop-color-success);
+  --wa-color-chart-orange: var(--desktop-color-orange);
+  --wa-color-chart-red: var(--desktop-color-error);
+  --wa-color-chart-yellow: var(--desktop-color-yellow);
+  --wa-color-chart-purple: var(--desktop-color-purple);
+
+  /* Diff editor. */
+  --wa-color-diff-inserted: light-dark(
+    rgb(46 160 67 / 15%),
+    rgb(46 160 67 / 30%)
+  );
+  --wa-color-diff-removed: light-dark(
+    rgb(248 81 73 / 15%),
+    rgb(248 81 73 / 30%)
+  );
+
+  /* Git decoration. */
+  --wa-color-git-added: var(--desktop-color-success);
+  --wa-color-git-deleted: var(--desktop-color-error);
+  --wa-color-git-modified: var(--desktop-color-orange);
+
+  /* Debug token expressions. */
+  --wa-color-debug-name: var(--desktop-color-accent);
+  --wa-color-debug-number: var(--desktop-color-orange);
+  --wa-color-debug-string: var(--desktop-color-success);
+
+  /* Symbol icons. */
+  --wa-color-symbol-class: var(--desktop-color-orange);
+  --wa-color-symbol-constant: var(--desktop-color-accent);
+  --wa-color-symbol-function: var(--desktop-color-yellow);
+  --wa-color-symbol-keyword: var(--desktop-color-purple);
+  --wa-color-symbol-property: var(--desktop-color-accent);
+  --wa-color-symbol-variable: var(--desktop-color-input-foreground);
+
+  /* Editor surface details. */
+  --wa-color-editor-selection: var(--desktop-color-accent-subtle);
+  --wa-color-editor-inactive-selection: var(--desktop-color-accent-subtle);
+  --wa-color-editor-line-highlight: light-dark(
+    rgb(31 35 40 / 6%),
+    rgb(255 255 255 / 4%)
+  );
+  --wa-color-editor-find-match: light-dark(#fff8c5, #623315);
+  --wa-color-editor-find-match-highlight: light-dark(#ffe09c, #4a3219);
+  --wa-color-editor-find-match-highlight-fg: var(--desktop-color-foreground);
+
+  /* Tabs. */
+  --wa-color-tabs-background: var(--desktop-color-sidebar-header);
+  --wa-color-tabs-border: var(--desktop-color-border);
+
+  /* Block quote. */
+  --wa-color-blockquote-border: var(--desktop-color-accent);
+
+  /* Misc indicators. */
+  --wa-color-progress-bg: var(--desktop-color-accent);
+  --wa-color-status-warning-bg: var(--desktop-color-warning);
+  --wa-color-icon-info: var(--desktop-color-info);
+  --wa-color-activity-badge-bg: var(--desktop-color-accent);
+  --wa-color-badge-bg: var(--desktop-color-accent);
+
+  /* Testing icons. */
+  --wa-color-testing-passed: var(--desktop-color-success);
+  --wa-color-testing-failed: var(--desktop-color-error);
+
+  /* Terminal — full palette, no WA equivalent. */
+  --wa-color-terminal-background: var(--desktop-color-background);
+  --wa-color-terminal-foreground: var(--desktop-color-input-foreground);
+  --wa-color-terminal-selection-bg: var(--desktop-color-terminal-selection);
+  --wa-color-terminal-cursor: var(--desktop-color-input-foreground);
+  --wa-color-terminal-ansi-black: light-dark(#24292f, #000000);
+  --wa-color-terminal-ansi-blue: var(--desktop-color-accent);
+  --wa-color-terminal-ansi-cyan: light-dark(#1b7c83, #4ec9b0);
+  --wa-color-terminal-ansi-green: var(--desktop-color-success);
+  --wa-color-terminal-ansi-magenta: light-dark(#8250df, #c586c0);
+  --wa-color-terminal-ansi-red: var(--desktop-color-error);
+  --wa-color-terminal-ansi-white: light-dark(#6e7781, #cccccc);
+  --wa-color-terminal-ansi-yellow: var(--desktop-color-yellow);
+  --wa-color-terminal-ansi-bright-black: light-dark(#6e7781, #666666);
+  --wa-color-terminal-ansi-bright-blue: light-dark(#0550ae, #3794ff);
+  --wa-color-terminal-ansi-bright-cyan: light-dark(#1b7c83, #39cccc);
+  --wa-color-terminal-ansi-bright-green: var(--desktop-color-success);
+  --wa-color-terminal-ansi-bright-magenta: light-dark(#8250df, #d670d6);
+  --wa-color-terminal-ansi-bright-red: var(--desktop-color-error);
+  --wa-color-terminal-ansi-bright-white: light-dark(#ffffff, #ffffff);
+  --wa-color-terminal-ansi-bright-yellow: var(--desktop-color-yellow);
+
+  /* Web Awesome canonical space scale — kept in sync with WA default theme. */
+  --wa-space-scale: 1;
+  --wa-space-3xs: calc(var(--wa-space-scale) * 0.125rem);
+  --wa-space-2xs: calc(var(--wa-space-scale) * 0.25rem);
+  --wa-space-xs: calc(var(--wa-space-scale) * 0.5rem);
+  --wa-space-s: calc(var(--wa-space-scale) * 0.75rem);
+  --wa-space-m: calc(var(--wa-space-scale) * 1rem);
+  --wa-space-l: calc(var(--wa-space-scale) * 1.5rem);
+  --wa-space-xl: calc(var(--wa-space-scale) * 2rem);
+  --wa-space-2xl: calc(var(--wa-space-scale) * 2.5rem);
+  --wa-space-3xl: calc(var(--wa-space-scale) * 3rem);
+  --wa-space-4xl: calc(var(--wa-space-scale) * 4rem);
+  --wa-space-5xl: calc(var(--wa-space-scale) * 5rem);
+}
+
+body.vscode-light,
+body.texra-light {
+  color-scheme: light;
+}
+
+body.vscode-dark,
+body.texra-dark {
+  color-scheme: dark;
+}
+
+body.vscode-high-contrast,
+body.vscode-high-contrast-light,
+body.texra-high-contrast {
+  color-scheme: light dark;
+  --desktop-color-background: Canvas;
+  --desktop-color-foreground: CanvasText;
+  --desktop-color-muted: GrayText;
+  --desktop-color-sidebar: Canvas;
+  --desktop-color-sidebar-header: Canvas;
+  --desktop-color-border: CanvasText;
+  --desktop-color-widget-border: CanvasText;
+  --desktop-color-input-background: Field;
+  --desktop-color-input-border: CanvasText;
+  --desktop-color-input-foreground: FieldText;
+  --desktop-color-placeholder: GrayText;
+  --desktop-color-accent: Highlight;
+  --desktop-color-accent-hover: Highlight;
+  --desktop-color-accent-subtle: Canvas;
+  --desktop-color-button-secondary: ButtonFace;
+  --desktop-color-button-secondary-hover: ButtonFace;
+  --desktop-color-toolbar-active: Highlight;
+  --desktop-color-toolbar-hover: ButtonFace;
+  --desktop-color-list-hover: ButtonFace;
+  --desktop-color-menu-background: Canvas;
+  --desktop-color-menu-border: CanvasText;
+  --desktop-color-error: Mark;
+  --desktop-color-warning: Mark;
+  --desktop-color-info: Highlight;
+  --desktop-color-success: Highlight;
+  --wa-color-list-active-fg: HighlightText;
+  --wa-color-brand-on-loud: HighlightText;
+  --wa-color-brand-border-loud: CanvasText;
+
+  /* Quiet variants for HC modes — without these, components fall back to
+     dark/light surface colors (low contrast against system Canvas).
+     Per the WCAG 1.4.11 + W3C high-contrast guidance, use the system
+     color keywords (Canvas/CanvasText/Highlight/Mark/ButtonFace) so the
+     OS palette dictates contrast. */
+  --wa-color-text-quiet: GrayText;
+
+  --wa-color-brand-fill-quiet: Canvas;
+  --wa-color-brand-border-quiet: Highlight;
+  --wa-color-brand-on-quiet: Highlight;
+
+  --wa-color-neutral-fill-quiet: ButtonFace;
+  --wa-color-neutral-border-quiet: CanvasText;
+  --wa-color-neutral-on-quiet: ButtonText;
+
+  --wa-color-warning-fill-quiet: Canvas;
+  --wa-color-warning-border-quiet: Mark;
+  --wa-color-warning-on-quiet: Mark;
+
+  --wa-color-danger-fill-quiet: Canvas;
+  --wa-color-danger-border-quiet: Mark;
+  --wa-color-danger-on-quiet: Mark;
+
+  --wa-color-success-fill-quiet: Canvas;
+  --wa-color-success-border-quiet: Highlight;
+  --wa-color-success-on-quiet: Highlight;
+}
+
+/* VS Code-compact dropdown items. WA defaults to ~0.5em padding which makes
+   each option ~32px tall; VS Code menus run ~22-24px. */
+wa-option::part(base),
+wa-dropdown-item::part(base) {
+  padding: var(--wa-space-3xs) var(--wa-space-xs);
+  min-height: 0;
+  line-height: var(--wa-line-height-condensed);
+}

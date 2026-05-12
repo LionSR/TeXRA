@@ -2,6 +2,7 @@
 import * as path from 'path';
 
 // Local imports - result types
+import { getCleanAgentName } from '@agent/index';
 import type { FileOpResult } from '@agent/types/ResultTypes';
 
 // Local imports - log
@@ -17,7 +18,9 @@ import {
   HISTORY_DIR,
   DEFAULT_MAX_ROUNDS,
 } from './constants';
+import { parseWorkflowOutputRoundDir } from '@agent/output/workflowOutputLayout';
 import {
+  generateTimestamp,
   getAgentFirstNameChunk,
   getFilePatterns,
   findFilesFromPatterns,
@@ -25,10 +28,6 @@ import {
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
-
-function generateTimestamp(): string {
-  return new Date().toISOString().replaceAll(/[-:]/g, '').split('.')[0];
-}
 
 export async function runPackSingle(
   model: string,
@@ -56,10 +55,11 @@ export async function runPackSingle(
     `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`,
   );
 
-  const agentFirstNameChunk = getAgentFirstNameChunk(agent);
   const maxRounds = getConfig<number>('texra.agent.rounds', DEFAULT_MAX_ROUNDS);
+  // Pass the raw agent; getFilePatterns derives both the legacy chunk and
+  // the new clean-agent forms internally so both disk layouts are matched.
   const filePatterns = [
-    ...getFilePatterns(baseName, model, agentFirstNameChunk, maxRounds),
+    ...getFilePatterns(baseName, model, agent, maxRounds),
     baseName,
   ];
   logger.debug(CHANNEL, `Generated patterns: ${filePatterns}`);
@@ -211,6 +211,24 @@ function buildFileListLog(movedFiles: string[], copiedFiles: string[]): string {
   return parts.join('\n');
 }
 
+/**
+ * Compute a destination basename that preserves round identity.
+ *
+ * Files matched from the new round-subfolder layout (`<dir>/r{round}/<base>.<ext>`)
+ * would otherwise collapse to `<base>.<ext>` and overwrite each other when
+ * multiple rounds exist. Detect an `r{N}/` ancestor in the source path and
+ * prefix the basename with `r{N}_` so each round packs to a distinct entry.
+ */
+function packDestinationName(file: string): string {
+  const base = path.basename(file);
+  const segments = path.dirname(file).split(/[\\/]+/);
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const round = parseWorkflowOutputRoundDir(segments[i]);
+    if (round !== null) return `r${round}_${base}`;
+  }
+  return base;
+}
+
 async function moveAndCopyFiles(
   movedFiles: string[],
   copiedFiles: string[],
@@ -219,13 +237,13 @@ async function moveAndCopyFiles(
   const operations: string[] = [];
 
   for (const file of movedFiles) {
-    const destination = path.join(outputFolder, path.basename(file));
+    const destination = path.join(outputFolder, packDestinationName(file));
     operations.push(`Moving: ${file} -> ${destination}`);
     await WorkspaceFS.rename(file, destination);
   }
 
   for (const file of copiedFiles) {
-    const destination = path.join(outputFolder, path.basename(file));
+    const destination = path.join(outputFolder, packDestinationName(file));
     operations.push(`Copying: ${file} -> ${destination}`);
     await WorkspaceFS.copy(file, destination);
   }
@@ -262,22 +280,45 @@ async function packAdditionalXmlFiles(
   outputFolderExists: boolean,
 ): Promise<boolean> {
   const agentFirstNameChunk = getAgentFirstNameChunk(agent);
+  const cleanAgent = getCleanAgentName(agent);
   const maxRounds = getConfig<number>('texra.agent.rounds', DEFAULT_MAX_ROUNDS);
 
   let anyPacked = false;
   for (let i = 0; i < maxRounds; i++) {
-    const pattern = `${baseName}_${agentFirstNameChunk}_r${i}_${model}.xml`;
-    const filePath = path.join(outputDir, pattern);
+    // Both layouts: legacy flat `<base>_<chunk>_r{round}_<model>.xml` and
+    // new round-subfolder `r{round}/<base>_<cleanAgent>_<model>.xml`.
+    const candidates = [
+      {
+        rel: `${baseName}_${agentFirstNameChunk}_r${i}_${model}.xml`,
+        dest: `${baseName}_${agentFirstNameChunk}_r${i}_${model}.xml`,
+      },
+      {
+        rel: path.join(`r${i}`, `${baseName}_${cleanAgent}_${model}.xml`),
+        dest: `${baseName}_${cleanAgent}_r${i}_${model}.xml`,
+      },
+    ];
 
-    if (await WorkspaceFS.exists(filePath)) {
+    for (const { rel, dest } of candidates) {
+      const filePath = path.join(outputDir, rel);
+      if (!(await WorkspaceFS.exists(filePath))) continue;
+
+      const destPath = path.join(commonOutputFolder, dest);
+      if (await WorkspaceFS.exists(destPath)) {
+        // Legacy and new layouts can yield identical destination names
+        // (when `agentFirstNameChunk === cleanAgent`). Skip the second
+        // candidate rather than failing the rename onto an existing file.
+        logger.debug(
+          CHANNEL,
+          `Skipping ${filePath}: destination ${destPath} already exists`,
+        );
+        continue;
+      }
+
       if (!outputFolderExists && !anyPacked) {
         await WorkspaceFS.createDir(commonOutputFolder);
       }
       logger.debug(CHANNEL, `Found additional XML file: ${filePath}`);
-      await WorkspaceFS.rename(
-        filePath,
-        path.join(commonOutputFolder, pattern),
-      );
+      await WorkspaceFS.rename(filePath, destPath);
       anyPacked = true;
     }
   }

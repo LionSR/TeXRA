@@ -7,6 +7,7 @@
 
 import { diff_match_patch } from 'diff-match-patch';
 
+import * as logger from '@agent/core/logger';
 import type { DiffStats } from '@agent/types/DiffTypes';
 import type { OutputFileInfo, FileLocation } from '@shared/schemas';
 import { flexibleFS, getComparablePath } from '@utils/files';
@@ -15,6 +16,9 @@ import { countLines } from '@utils/text/stringUtils';
 import { traceFileLineage } from './lineageMapping';
 import { ensureRound, type OutputState } from './outputState';
 import type { RoundFileMapping } from './types';
+
+const CHANNEL = 'OutputDiffStats';
+logger.initialize(CHANNEL);
 
 // ============================================================================
 // Helpers
@@ -50,8 +54,8 @@ async function computeDiffStats(
     }
     return { added, removed };
   } catch (err) {
-    // Log the failure for debugging - don't swallow silently
-    console.debug?.('Failed to compute diff stats:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    logger.debug(CHANNEL, `Failed to compute diff stats: ${message}`);
     return {};
   }
 }
@@ -83,12 +87,24 @@ export async function computeOutputDiffStats(
 
       // Use original as diff base when there's no direct base mapping
       // and the original is a different file (not self-referencing)
-      const diffBaseLocation =
+      let diffBaseLocation =
         baseLocation ??
         (originalLocation &&
         getComparablePath(originalLocation) !== locationPath
           ? originalLocation
           : null);
+
+      // Fallback for single-input multi-output: when an agent extracts N
+      // documents from one base file, the extracted doc names (e.g. "chapter1",
+      // "methods") don't match the base filename via basename strategies.
+      // If no diff base was found but there is exactly one base file, use it
+      // so the diff stats reflect real changes against the original.
+      if (!diffBaseLocation && !originalLocation && baseFiles.length === 1) {
+        const candidate = baseFiles[0];
+        if (getComparablePath(candidate) !== locationPath) {
+          diffBaseLocation = candidate;
+        }
+      }
 
       const effectiveOriginal = suppressLineage ? null : originalLocation;
       const effectiveDiffBase = suppressLineage ? null : diffBaseLocation;

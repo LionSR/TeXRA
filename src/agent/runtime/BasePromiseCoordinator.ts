@@ -17,8 +17,11 @@
  * 3. On resolution → emits resolve event to dismiss UI, defers cleanup
  */
 
-// Local imports
-import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import {
+  getAgentRuntimeHost,
+  type AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // ============================================================================
 // Types
@@ -35,6 +38,7 @@ type RequestState<TResult> =
   | {
       status: 'pending';
       resolve: (result: TResult) => void;
+      runtimeHost: AgentRuntimeHost;
       timeoutId?: NodeJS.Timeout;
     }
   | { status: 'resolved' };
@@ -61,6 +65,12 @@ export abstract class BasePromiseCoordinator<
   TResult extends BaseResult,
   TShowPayload extends Record<string, unknown>,
 > {
+  constructor(private readonly configuredRuntimeHost?: AgentRuntimeHost) {}
+
+  protected get runtimeHost(): AgentRuntimeHost {
+    return this.configuredRuntimeHost ?? getAgentRuntimeHost();
+  }
+
   /** Single source of truth for all pending requests */
   protected readonly requests = new Map<string, RequestState<TResult>>();
 
@@ -86,11 +96,14 @@ export abstract class BasePromiseCoordinator<
     payload: TShowPayload,
     options?: { timeoutMs?: number; onTimeout?: () => TResult },
   ): Promise<TResult> {
+    const runtimeHost = this.runtimeHost;
+
     // Cancel any existing pending request for this ID
     const existing = this.requests.get(id);
     if (existing?.status === 'pending') {
       clearTimeout(existing.timeoutId);
       existing.resolve(this.getDefaultCancelResult());
+      this.cleanup(id, existing.runtimeHost);
     }
 
     return new Promise<TResult>((resolve) => {
@@ -108,11 +121,12 @@ export abstract class BasePromiseCoordinator<
       this.requests.set(id, {
         status: 'pending',
         resolve,
+        runtimeHost,
         timeoutId,
       });
 
       // Emit show event (cast needed for generic base class)
-      bus.emit(this.config.showEventName, payload as any);
+      runtimeHost.emit(this.config.showEventName, payload as any);
     });
   }
 
@@ -140,7 +154,16 @@ export abstract class BasePromiseCoordinator<
 
     clearTimeout(req.timeoutId);
     req.resolve(this.getDefaultCancelResult());
-    this.cleanup(id);
+    this.cleanup(id, req.runtimeHost);
+  }
+
+  /**
+   * Clear every pending request owned by this coordinator.
+   */
+  clearAll(): void {
+    for (const id of this.requests.keys()) {
+      this.clearRequest(id);
+    }
   }
 
   // ==========================================================================
@@ -166,18 +189,18 @@ export abstract class BasePromiseCoordinator<
 
     clearTimeout(req.timeoutId);
     req.resolve(result);
-    this.cleanup(id);
+    this.cleanup(id, req.runtimeHost);
     return true;
   }
 
   /**
    * Clean up state and emit resolution event.
    */
-  private cleanup(id: string): void {
+  private cleanup(id: string, runtimeHost: AgentRuntimeHost): void {
     this.requests.set(id, { status: 'resolved' });
 
     // Emit resolve event (cast needed for generic base class)
-    bus.emit(this.config.resolveEventName, {
+    runtimeHost.emit(this.config.resolveEventName, {
       [this.config.idFieldName]: id,
     } as any);
 

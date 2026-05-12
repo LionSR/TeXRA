@@ -3,8 +3,11 @@ import {
   registerInterruptible,
   unregisterInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
-import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
-import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import {
+  clearPlanApprovalForStream,
+  clearRetryRequest,
+} from '@agent/runtime/runCoordinators';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import {
   PersistedFlow,
   flowKey,
@@ -14,6 +17,10 @@ import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { getGlobalState } from '@agent/core/stateStore';
+import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
+import { GlobalStateKey } from '@common/state/stateKeys';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { ToolDefinition } from '@model';
 import {
@@ -23,16 +30,20 @@ import {
 } from '@shared/schemas';
 import type { SubagentProgressUpdate } from '@shared/schemas';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { evaluateDelegationGate } from '@shared/constants/delegationPolicy';
 
 import { getDefaultToolRegistry } from '@tools/registry';
-import { getUnavailableToolNamesCached } from '@tools/toolAvailability';
+import {
+  getDisabledToolNames,
+  getUnavailableToolNamesCached,
+} from '@tools/toolAvailability';
 import { notifyUnavailableTools } from '@tools/toolUnavailableNotification';
-import { getToolUseMemoryEnabled } from '@utils/config';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
 import {
   findLastAssistantText,
+  extractTouchedFiles,
   migrateSharedState,
   type ToolUseRunShared,
 } from './nodes/types';
@@ -49,7 +60,10 @@ export interface RunToolUseFlowInput<
   /** When true, delegation tools are filtered out to prevent nesting. */
   isSubagent?: boolean;
   /** Fires before the subagent enters WAITING, delivering the last response to the orchestrator. */
-  onBeforeWaiting?: (lastResponse: string | undefined) => void | Promise<void>;
+  onBeforeWaiting?: (
+    lastResponse: string | undefined,
+    touchedFiles: string[],
+  ) => void | Promise<void>;
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
 }
@@ -57,11 +71,14 @@ export interface RunToolUseFlowInput<
 export interface RunToolUseFlowResult {
   status: EndGroupStatus;
   lastResponse?: string;
+  /** Workspace-relative paths of files edited by tool calls during this session. */
+  touchedFiles?: string[];
 }
 
 export interface ToolUseFlowContext {
   readonly session: ToolUseSessionLifecycle;
   readonly modelHandler: ToolUseServices['modelHandler'];
+  readonly runtimeHost: ToolUseServices['runtimeHost'];
   interrupt(): void;
 }
 
@@ -71,33 +88,42 @@ function resolveTools(
   tools: AgentToolUseSetting['tools'],
   registry: IToolRegistry,
   logger: { warn: (msg: string) => void },
-  options?: { isSubagent?: boolean },
-): ToolDefinition[] {
+  delegationBlocked: boolean,
+): { tools: ToolDefinition[]; delegationTrimmed: boolean } {
+  const disabled = getDisabledToolNames();
   const unavailable = getUnavailableToolNamesCached();
-  const excluded: string[] = [];
+  const missingDependency: string[] = [];
 
+  // Don't warn on routine filtering outcomes (user-disabled, unavailable,
+  // not in registry): they fire on every tool-use cycle and drown out real
+  // issues. Agent YAML typos are surfaced once at load time by
+  // `resolveToolDefinitions`; missing external deps are surfaced via
+  // `notifyUnavailableTools` below.
   const toolConfigs = Array.isArray(tools) ? tools : [];
+  let delegationTrimmed = false;
   const resolved = toolConfigs
     .map((config) => (typeof config === 'string' ? { name: config } : config))
     .filter((def) => {
-      if (options?.isSubagent && DELEGATION_TOOLS.has(def.name)) return false;
+      if (DELEGATION_TOOLS.has(def.name) && delegationBlocked) {
+        delegationTrimmed = true;
+        return false;
+      }
+      if (disabled.has(def.name)) return false;
       if (unavailable.has(def.name)) {
-        logger.warn(
-          `Tool "${def.name}" excluded: external dependency not installed`,
-        );
-        excluded.push(def.name);
+        missingDependency.push(def.name);
         return false;
       }
-      if (!registry.has(def.name)) {
-        logger.warn(`Tool "${def.name}" not found in registry`);
-        return false;
-      }
+      if (!registry.has(def.name)) return false;
       return true;
     });
 
   // Inject memory tool into all tool-use agents (including subagents)
   // so they share the same /memories directory.
-  if (getToolUseMemoryEnabled() && !resolved.some((d) => d.name === 'memory')) {
+  const memoryEnabled = getGlobalState().get<boolean>(
+    GlobalStateKey.MEMORY_ENABLED,
+    true,
+  );
+  if (memoryEnabled && !resolved.some((d) => d.name === 'memory')) {
     const memoryTool = registry.get('memory');
     if (memoryTool) {
       resolved.push(memoryTool.definition);
@@ -106,11 +132,11 @@ function resolveTools(
     }
   }
 
-  if (excluded.length) {
-    notifyUnavailableTools(excluded);
+  if (missingDependency.length) {
+    notifyUnavailableTools(missingDependency);
   }
 
-  return resolved;
+  return { tools: resolved, delegationTrimmed };
 }
 
 export async function runToolUseFlow<C = unknown>(
@@ -119,31 +145,47 @@ export async function runToolUseFlow<C = unknown>(
   onSetup?: ToolUseFlowSetupCallback,
 ): Promise<RunToolUseFlowResult> {
   const { logger, streamId, executionId, setting, onInterrupt } = input;
+  const runtimeHost = input.runtimeHost ?? getAgentRuntimeHost();
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
   const registry = toolRegistry ?? getDefaultToolRegistry();
-  const resolvedTools = resolveTools(setting.tools, registry, logger, {
-    isSubagent: input.isSubagent,
-  });
+  const delegationDepth = input.delegationDepth ?? 0;
+  const delegationConfig = readNestedDelegationConfig();
+  const delegationGate = evaluateDelegationGate(
+    delegationDepth,
+    delegationConfig,
+  );
+  const { tools: resolvedTools, delegationTrimmed } = resolveTools(
+    setting.tools,
+    registry,
+    logger,
+    !delegationGate.allowed,
+  );
 
   const kv = getExecutionStore(executionId);
+  const runCoordinators = tryUseRunContext()?.coordinators;
 
   const services: ToolUseServices<C> = {
     ...input,
+    runtimeHost,
     session: sessionLifecycle,
     resolvedTools,
     toolRegistry: registry,
     snapshot: input.resumeSnapshot ?? null,
     onRoundFinalized: input.onRoundFinalized ?? (async () => {}),
     persistTodos: (todos) => kv.writeTodos(todos),
+    delegationDepth,
+    delegationConfig,
+    delegationTrimmed,
   };
 
   const flowContext: ToolUseFlowContext = {
     session: sessionLifecycle,
     modelHandler: input.modelHandler,
+    runtimeHost,
     interrupt(): void {
       onInterrupt?.();
-      retryCoordinator.clearRequest(streamId);
-      planApprovalCoordinator.clearForStream(streamId);
+      clearRetryRequest(streamId, runCoordinators);
+      clearPlanApprovalForStream(streamId, runCoordinators);
       sessionLifecycle.interrupt();
     },
   };
@@ -229,13 +271,18 @@ export async function runToolUseFlow<C = unknown>(
     }
 
     sessionLifecycle.dispose();
-    planApprovalCoordinator.clearForStream(streamId);
+    clearPlanApprovalForStream(streamId);
     unregisterInterruptible(streamId);
   }
 
   const lastResponse = findLastAssistantText(shared.messages, (m) =>
     input.modelHandler.extractAssistantText(m),
   );
+  const touchedFiles = extractTouchedFiles(shared.stateSlices);
 
-  return { status, lastResponse };
+  return {
+    status,
+    lastResponse,
+    touchedFiles: touchedFiles.length ? touchedFiles : undefined,
+  };
 }

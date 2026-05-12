@@ -2,10 +2,12 @@
 import * as path from 'path';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
+import * as logger from '@agent/core/logger';
 import { flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { joinLatexPath } from '@utils/core/pathCore';
+
+import { resolveLatexDir } from './latexParsingUtils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -83,8 +85,7 @@ export async function extractFigurePathsFromLatex(
 ): Promise<string[]> {
   const figurePaths: string[] = [];
 
-  const latexFile = latexFileLocation.absolutePath;
-  const latexDir = path.dirname(latexFile);
+  const latexDir = await resolveLatexDir(latexFileLocation.absolutePath);
   const graphicspaths = [latexDir]; // Start with the directory of the LaTeX file
 
   // Regular expressions to match figure inclusion commands

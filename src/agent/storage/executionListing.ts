@@ -10,10 +10,10 @@
  */
 
 import { type AgentConfig, AgentConfigSchema } from '@agent/core/AgentConfig';
+import * as logger from '@agent/core/logger';
+import { getWorkspaceState } from '@agent/core/stateStore';
 import { isFileNotFoundError } from '@common/errors';
 import { isDirectory } from '@common/files/fsEntryType';
-import { workspaceSM } from '@common/state/stateManager';
-import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS, WorkspaceFS } from '@utils/files';
 
@@ -60,13 +60,6 @@ function getWorkspacePath(): string | undefined {
 
 export function invalidateListingCache(): void {
   cache = null;
-}
-
-/** Reset all module state (cache + migration flag). Called on workspace change. */
-export function resetListingState(): void {
-  cache = null;
-  migrated = false;
-  cachedWorkspacePath = undefined;
 }
 
 // ============================================================================
@@ -229,13 +222,13 @@ async function migrateIndexJson(): Promise<void> {
 /** Migrate entries from workspace state into per-execution KV. */
 async function migrateWorkspaceState(): Promise<void> {
   const storageKey = getWorkspaceStorageKey();
-  const legacy = workspaceSM.get<unknown[]>(storageKey, []);
+  const legacy = getWorkspaceState().get<unknown[]>(storageKey, []);
   if (!Array.isArray(legacy) || legacy.length === 0) return;
 
   await backfillEntries(legacy);
 
   try {
-    await workspaceSM.update(storageKey, []);
+    await getWorkspaceState().update(storageKey, []);
   } catch (error) {
     logger.warn(CHANNEL, `Failed to clear workspace state key`, {
       data: error,

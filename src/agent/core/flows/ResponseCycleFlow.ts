@@ -22,12 +22,12 @@ import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
 import { getActiveChildren } from '@agent/runtime/executionRegistry';
-import { formatPostCompactionContext } from '@tools/subagentResults';
+import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@agent/core/constants';
 import { bestConnectionMethod } from '@latex';
 import replacementEngine from '@replacement/engine';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
+import { formatPostCompactionContext } from '@tools/subagentResults';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
-import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { getSystemPromptWithRules } from '@utils/prompt';
 import { extractScratchpad } from '@utils/text/xmlUtils';
 
@@ -422,10 +422,6 @@ class ResponseProcessNode<C> extends BaseNode<
       .join(', ');
     logger.debug(`Usage summary: ${usageSummary}`);
 
-    logger.info(`Stop reason: ${result.stopReason}`, {
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-    });
-
     logger.debug(`Normalized usage: ${JSON.stringify(result.normalizedUsage)}`);
 
     logger.debug('Response preview:');
@@ -506,7 +502,7 @@ class ResponseContinuationNode<C> extends BaseNode<
     return {
       shouldSkip,
       interrupted,
-      stopReason: shared.stopReason,
+      stopReason: shared.stopReason ?? undefined,
       processedResponse: shared.processedResponse,
       messages: shared.messages,
     };
@@ -587,10 +583,6 @@ class ResponseContinuationNode<C> extends BaseNode<
         messageType: MESSAGE_TYPES.PROGRESS_STATUS,
       });
     }
-
-    logger.info('🧵 Added continuation prompt from partial XML output', {
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-    });
 
     if (modelHandler.capabilities.supportsAssistantPrefill) {
       modelHandler.addContinueMessageWithPrefill(

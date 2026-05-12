@@ -1,16 +1,17 @@
 // Third-party imports
-import { postMessage } from '@shared/vscode';
+import { postMessage } from '@shared/hostBridge';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
 // Local imports
+import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 export interface RecordingButtonConfig {
   startCommand: string;
   stopCommand: string;
   startTitle?: string;
   stopTitle?: string;
-  startIcon?: string;
-  stopIcon?: string;
+  startIcon?: TeXRAIconName;
+  stopIcon?: TeXRAIconName;
   recordingClass?: string;
 }
 
@@ -19,7 +20,7 @@ export interface RecordingButtonConfig {
  */
 export interface RecordingButtonState {
   /** Current icon name (without codicon- prefix) */
-  icon: string;
+  icon: TeXRAIconName;
   /** Current title/tooltip text */
   title: string;
   /** Whether currently recording */

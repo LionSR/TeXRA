@@ -1,8 +1,6 @@
-import * as path from 'path';
-
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import { bus } from '@eventBus/ProgressEventBus';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { toErrorMessage } from '@common/errors';
 import type { AgentLogger } from '@logger/AgentLogger';
 import {
   MESSAGE_TYPES,
@@ -17,19 +15,14 @@ import {
   extractTextFromTag,
 } from '@utils/text/xmlUtils';
 
-import {
-  cleanupLatexBackups,
-  indentLatexFile,
-  indentLatexFiles,
-} from './LatexOutputUtils';
+import { indentLatexFile, indentLatexFiles } from './LatexOutputUtils';
 import type { XmlOutputManager } from './XmlOutputManager';
-
-const SCRATCHPAD_TAG_PATTERN = /<scratchpad\s*>/i;
 
 export interface ProcessingContext {
   agentSetting: AgentWorkflowSetting;
   baseFiles: FileLocation[];
   streamId: string;
+  runtimeHost: AgentRuntimeHost;
   logger: AgentLogger;
   xmlManager: XmlOutputManager;
   setRoundOutputs: (round: number, outputs: OutputFileInfo[]) => void;
@@ -86,46 +79,34 @@ export class OutputFileProcessor {
     }
   }
 
-  private async handleEmptyOutput(
+  private handleEmptyOutput(
     round: number,
     rawLocation: FileLocation,
   ): Promise<void> {
     this.ctx.setRoundOutputs(round, []);
-    await cleanupLatexBackups(rawLocation, this.ctx.logger);
-    await this.captureXmlSummary(round, rawLocation, []);
+    return this.captureXmlSummary(round, rawLocation, []);
   }
 
   async processSingleOutput(
     outputLocation: FileLocation,
     currRound: number,
     rawLocation: FileLocation,
-    storageKey: StorageKey,
   ): Promise<void> {
     const { agentSetting, logger } = this.ctx;
 
     logger.debug(`Processing single output for ${outputLocation.absolutePath}`);
 
     try {
-      const shouldProcessXml = this.shouldProcessXml(agentSetting);
-      const processed = shouldProcessXml
-        ? await this.ctx.xmlManager.processSingleXmlOutput(
-            outputLocation,
-            currRound,
-          )
-        : {
-            source: path.basename(outputLocation.absolutePath),
-            round: currRound,
-            location: rawLocation ?? outputLocation,
-            lineage: null,
-            diff: null,
-          };
+      const processed = await this.ctx.xmlManager.processSingleXmlOutput(
+        outputLocation,
+        currRound,
+      );
 
       if (!processed.location.absolutePath) {
         logger.debug(
           `No processed file was generated from ${outputLocation.absolutePath}`,
         );
-        this.ctx.setRoundOutputs(currRound, []);
-        await this.captureXmlSummary(currRound, rawLocation, []);
+        await this.handleEmptyOutput(currRound, rawLocation);
         return;
       }
 
@@ -154,13 +135,11 @@ export class OutputFileProcessor {
         documentTag: agentSetting.documentTag,
       };
       logger.missingOutputs(missingOutputsData);
-      bus.emit('updateMissingOutputs', {
+      this.ctx.runtimeHost.emit('updateMissingOutputs', {
         streamId: this.ctx.streamId,
-        storageKey,
         filesByRound: { [currRound]: [] },
       });
-      this.ctx.setRoundOutputs(currRound, []);
-      await this.captureXmlSummary(currRound, rawLocation, []);
+      await this.handleEmptyOutput(currRound, rawLocation);
     }
   }
 
@@ -173,15 +152,15 @@ export class OutputFileProcessor {
     const singleFile =
       processed.length === 1 ? processed[0].location.absolutePath : null;
 
-    const createEmptySummary = () => ({
+    const emptySummary = {
       tagContents: {},
       documents: [] as string[],
       singleOutputFile: singleFile,
       sourceLocation: rawOutput,
-    });
+    };
 
     if (!rawOutput?.absolutePath) {
-      data.xmlSummary = createEmptySummary();
+      data.xmlSummary = emptySummary;
       return;
     }
 
@@ -239,24 +218,7 @@ export class OutputFileProcessor {
         `Failed to collect XML summary for round ${round}: ${toErrorMessage(error)}`,
         { messageType: MESSAGE_TYPES.INTERNAL },
       );
-      data.xmlSummary = createEmptySummary();
-    }
-  }
-
-  private shouldProcessXml(agentSetting: AgentWorkflowSetting): boolean {
-    const xmlMode = agentSetting.xmlStructureMode ?? 'scratchpadOnly';
-
-    switch (xmlMode) {
-      case 'always':
-        return true;
-      case 'scratchpadOnly':
-        return (
-          Boolean(agentSetting.documentTag) ||
-          (agentSetting.prefills?.some((p) => SCRATCHPAD_TAG_PATTERN.test(p)) ??
-            false)
-        );
-      default:
-        return false;
+      data.xmlSummary = { ...emptySummary };
     }
   }
 }
