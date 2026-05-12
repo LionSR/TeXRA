@@ -70,6 +70,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
   }));
   vi.doMock('@agent/toolUse/ToolFileInteractionContext', () => ({
     getCurrentToolFileInteractionContext: vi.fn(() => undefined),
+    getCurrentToolRunContext: vi.fn(() => undefined),
   }));
   vi.doMock('@utils/files', async () => {
     const actual =

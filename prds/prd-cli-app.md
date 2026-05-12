@@ -21,6 +21,18 @@ The agent core ships with Node-friendly platform defaults already explicitly tag
 
 (Throughout this PRD, `@texra/core` references the kernel package created by the Electron PRD's Phase 0 monorepo split — the kernel currently lives in `src/`. CLI Phase 0 inherits the split or ships against `src/` aliases unchanged; the import surface is identical.)
 
+### 1.1 Implementation note, 2026-05-11
+
+The first CLI/run-context/logger stack implements the conservative part of this PRD without claiming the full v1 surface:
+
+- `texra run` is wired through the shared `executeAgent()` path and has packaged binary validation in PR #3843.
+- CLI approval policy handling and serialized terminal prompts are implemented in PR #3844.
+- `texra chat` has a plain terminal loop in PR #3846. This is the fallback input mode described below, not the final rich renderer.
+- Rich chat rendering, inline approval cards, grouped tool-display modes, and session metadata remain follow-up work tracked by #3848.
+- Tool-context reader separation for `src/tools` is implemented in PR #3847: the active context is async-scoped, narrow run/call views are stored separately, and tool readers now use run-owned, call-owned, or explicit mixed access paths instead of the combined compatibility getter. The remaining architectural question is whether `ToolRunContext` becomes part of `RunContext`, remains an ALS-backed shim, or is passed explicitly at the tool execution boundary.
+
+This note is here to keep the PRD readable for third-party reviewers: the PRD describes the intended v1 shape, while the current stack lands the smallest coherent subset and records the rest as owned follow-up issues.
+
 ## 2. Goals
 
 - Run **workflow agents** (correct, polish, elevate, devise, criticize, merge, OCR, transcribe, …) fully headless from a terminal or GitHub container. `input.tex → output.tex` in one command, exit code reflects success.
