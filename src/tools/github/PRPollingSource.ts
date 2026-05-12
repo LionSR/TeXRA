@@ -33,9 +33,8 @@ import {
   ghGet,
   GitHubAuthError,
   GitHubPermanentError,
+  GitHubRateLimitError,
 } from './githubClient';
-import type { Disposable } from '@platform/interfaces/disposable';
-
 import {
   PollingSourceBase,
   type BasePollSubscriptionState,
@@ -54,6 +53,7 @@ import {
   type GhReviewComment,
 } from './prTypes';
 import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
+import type { Disposable } from '@platform/interfaces/disposable';
 
 function createInitialState(pr: PRKey): SubscriptionState {
   return {
@@ -863,9 +863,11 @@ export class PRPollingSource extends PollingSourceBase<
    *   scoped token (the main poll's other ghGet calls succeeded, else we
    *   wouldn't be here). If the token is genuinely bad, the main poll path
    *   will detach the subscription via its own ghGet failure.
-   * - Anything else (network, timeout, rate-limit): rotate to the BACK of
-   *   the queue. Without rotation, a persistently-failing head entry would
-   *   starve every other queued run forever.
+   * - `GitHubRateLimitError`: propagate to `PollingSourceBase` so the same
+   *   subscription-level rate-limit backoff governs every GitHub endpoint.
+   * - Anything else (network, timeout): rotate to the BACK of the queue.
+   *   Without rotation, a persistently-failing head entry would starve every
+   *   other queued run forever.
    */
   private async drainAnnotationQueue(state: SubscriptionState): Promise<void> {
     if (state.pendingAnnotationRuns.length === 0) return;
@@ -885,6 +887,13 @@ export class PRPollingSource extends PollingSourceBase<
     // PollingSourceBase.tickInFlight).
     const dropIds = new Set<number>();
     const rotateIds = new Set<number>();
+    const rateLimit = settled.find(
+      (result): result is PromiseRejectedResult =>
+        result.status === 'rejected' &&
+        result.reason instanceof GitHubRateLimitError,
+    );
+    if (rateLimit) throw rateLimit.reason;
+
     for (let i = 0; i < settled.length; i += 1) {
       const run = candidates[i];
       const result = settled[i];
