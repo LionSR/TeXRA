@@ -7,7 +7,10 @@ import {
   registerExecution,
   writeTerminalStatus,
 } from '@agent/storage';
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import {
+  getCurrentToolContexts,
+  type ToolCallContext,
+} from '@agent/toolUse/ToolFileInteractionContext';
 import {
   registerInterruptible,
   unregisterInterruptible,
@@ -109,30 +112,32 @@ export class BashTool extends defineTool({
     }
 
     // Signal execution starting (triggers in-progress log after approval)
-    const ctx = getCurrentToolFileInteractionContext();
-    ctx?.onExecutionReady?.();
+    const contexts = getCurrentToolContexts();
+    const callContext = contexts?.callContext;
+    const runContext = contexts?.runContext;
+    callContext?.onExecutionReady?.();
 
     const timeoutMs = input.timeout ?? BASH_TIMEOUT_MS;
 
-    const cwd = parseWorkingDirectory(ctx?.workingDirectory);
+    const cwd = parseWorkingDirectory(runContext?.workingDirectory);
 
     if (input.run_in_background) {
       return this.executeBackground(
         input.command,
         timeoutMs,
-        ctx?.streamId,
-        ctx?.executionId,
+        runContext?.streamId,
+        runContext?.executionId,
         cwd,
       );
     }
 
-    return this.executeForeground(input.command, timeoutMs, ctx, cwd);
+    return this.executeForeground(input.command, timeoutMs, callContext, cwd);
   }
 
   private async executeForeground(
     command: string,
     timeoutMs: number,
-    ctx: ReturnType<typeof getCurrentToolFileInteractionContext>,
+    ctx: ToolCallContext | undefined,
     cwd?: string,
   ): Promise<ToolResult> {
     const startedAt = Date.now();

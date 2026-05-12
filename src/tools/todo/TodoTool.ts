@@ -10,7 +10,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { getCurrentToolCallContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   TODO_STATUS,
@@ -79,7 +79,7 @@ Best practices:
   schema: TodoWriteInputSchema,
 }) {
   protected async execute(input: TodoWriteInput): Promise<ToolResult> {
-    const context = getCurrentToolFileInteractionContext();
+    const context = getCurrentToolCallContext();
 
     if (!context?.todoState) {
       // No context available - log warning and still format output
