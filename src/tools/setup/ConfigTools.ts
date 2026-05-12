@@ -34,7 +34,6 @@ const UPDATABLE_KEYS = {
   },
   'texra.bib.zoteroPort': {
     schema: z
-      .number()
       .int()
       .min(1)
       .max(65535)
@@ -56,7 +55,6 @@ const UPDATABLE_KEYS = {
   },
   'texra.git.numberOfCommitsToShow': {
     schema: z
-      .number()
       .int()
       .min(1)
       .max(1000)
@@ -66,7 +64,6 @@ const UPDATABLE_KEYS = {
   },
   'texra.maxImageDimension': {
     schema: z
-      .number()
       .int()
       .min(64)
       .max(8192)

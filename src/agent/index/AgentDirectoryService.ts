@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Local imports
-import type { AgentSource } from '@agent/core/AgentDataclass';
+import type { AgentSource } from '@shared/schemas/agent';
 
 export const DEFAULT_CUSTOM_AGENTS_DIR_NAME = 'custom_agents';
 

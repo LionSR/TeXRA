@@ -6,9 +6,9 @@ import * as yaml from 'yaml';
 
 import {
   AgentCategory,
-  AgentSource,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
+import { AgentSource } from '@shared/schemas/agent';
 import * as logger from '@agent/core/logger';
 import { getGlobalState, getWorkspaceState } from '@agent/core/stateStore';
 import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
@@ -393,13 +393,9 @@ async function scanYaml(
     const tools = extractToolNames(rawSettings.tools as unknown[] | undefined);
 
     // Determine category from source or explicit setting
-    // Backward compatibility: check both agentCategory and legacy agentType
     const rawCategory = rawSettings.agentCategory as string | undefined;
-    const rawAgentType = rawSettings.agentType as string | undefined;
     const category =
-      source === 'builtInToolUse' ||
-      rawCategory === AgentCategory.ToolUse ||
-      rawAgentType === AgentCategory.ToolUse
+      source === 'builtInToolUse' || rawCategory === AgentCategory.ToolUse
         ? AgentCategory.ToolUse
         : AgentCategory.Workflow;
 
