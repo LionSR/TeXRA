@@ -7,6 +7,8 @@ export type NonIterableObject = Partial<Record<string, unknown>> & {
 /** Flow transition action - typically 'default' or a custom action name */
 export type Action = string;
 
+const TERMINAL_ACTIONS = new Set<Action>(['complete']);
+
 /**
  * Base node class for PocketFlow.
  *
@@ -82,6 +84,7 @@ class BaseNode<
   }
   getNextNode(action: Action = 'default'): BaseNode | undefined {
     const next = this._successors.get(action);
+    if (!next && TERMINAL_ACTIONS.has(action)) return undefined;
     if (!next && this._successors.size > 0) {
       console.warn(
         `Flow ends: '${action}' not found in [${[...this._successors.keys()]}]`,

@@ -141,6 +141,7 @@ describe('desktop workspace path', () => {
           '--flag',
           'texra://texra-ai.texra/auth-callback?state=old',
           '--texra-workspace=/tmp/other-workspace',
+          '--texra-workspace-path=/tmp/stale-workspace',
         ],
         '/Users/ray/paper',
       ),
@@ -148,8 +149,7 @@ describe('desktop workspace path', () => {
         '/Applications/TeXRA.app',
         '--inspect',
         '--flag',
-        '--texra-workspace',
-        '/Users/ray/paper',
+        '--texra-workspace-path=/Users/ray/paper',
       ],
     );
   });

@@ -24,6 +24,12 @@ const CASE_CONNECTORS: Record<string, string> = {
 
 const DEFAULT_RESULT: ConnectionResult = { connector: ' ', choice: 'B' };
 
+function isMissingApiKeyMessage(message: string): boolean {
+  return (
+    message.includes('Missing API key') || message.includes('No API key found')
+  );
+}
+
 function buildPrompt(str1: string, str2: string): string {
   return (
     `Given three strings from a LaTeX document:\n` +
@@ -91,10 +97,9 @@ export async function bestConnectionMethod(
     );
     return getMajorityChoice(choices);
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error in bestConnectionMethod: ${getSdkErrorMessage(err)}`,
-    );
+    const message = getSdkErrorMessage(err);
+    const log = isMissingApiKeyMessage(message) ? logger.debug : logger.error;
+    log(CHANNEL, `Error in bestConnectionMethod: ${message}`);
     return DEFAULT_RESULT;
   }
 }
@@ -135,10 +140,9 @@ export async function bestConnectionMethodAnthropic(
 
     return getMajorityChoice(choices);
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error in bestConnectionMethodAnthropic: ${getSdkErrorMessage(err)}`,
-    );
+    const message = getSdkErrorMessage(err);
+    const log = isMissingApiKeyMessage(message) ? logger.debug : logger.error;
+    log(CHANNEL, `Error in bestConnectionMethodAnthropic: ${message}`);
     return DEFAULT_RESULT;
   }
 }
