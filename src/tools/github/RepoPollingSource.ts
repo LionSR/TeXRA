@@ -45,11 +45,12 @@ import {
   formatRepoSubscriptionError,
 } from './formatRepoEvent';
 import { getNewestTimestamp, setRecent, trimMap, trimSet } from './formatUtils';
+import type { Disposable } from '@platform/interfaces/disposable';
+
 import { ghGet } from './githubClient';
 import {
   PollingSourceBase,
   type BasePollSubscriptionState,
-  type Disposable,
 } from './PollingSourceBase';
 import {
   isDefiniteMergeableState,

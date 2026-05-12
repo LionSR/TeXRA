@@ -48,7 +48,7 @@ export const ExecutionMetaSchema = z.object({
    * Read on resume to enforce the nested-delegation cap without having to
    * walk a potentially broken parent chain.
    */
-  delegationDepth: z.number().int().nonnegative().optional(),
+  delegationDepth: z.int().nonnegative().optional(),
 });
 export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;
 
@@ -99,8 +99,8 @@ export type ResultMeta = z.infer<typeof ResultMetaSchema>;
  * All keys are automatically namespaced to the execution context.
  * Values are JSON-serialized transparently.
  *
- * Typed accessors provide domain-specific reads with schema validation
- * and backward-compatibility fallbacks where needed.
+ * Typed accessors provide domain-specific reads with schema validation;
+ * malformed or missing entries resolve to null.
  */
 export interface ExecutionKVStore {
   // -- Generic KV -----------------------------------------------------------

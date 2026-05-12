@@ -5,7 +5,7 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_STATUS,
-  type ContextState,
+  type ContextStateData,
   type LogMessageData,
   type StreamLogEntry,
 } from '@shared/schemas';
@@ -28,9 +28,9 @@ function isTaskGroupStatus(
   );
 }
 
-function asContextState(data: unknown): ContextState | undefined {
+function asContextStateData(data: unknown): ContextStateData | undefined {
   if (typeof data !== 'object' || data === null) return undefined;
-  const value = data as Partial<ContextState>;
+  const value = data as Partial<ContextStateData>;
   if (
     typeof value.inputTokens === 'number' &&
     typeof value.contextWindow === 'number' &&
@@ -127,7 +127,7 @@ function applyEntry(
   let stateChanged = updateTaskGroups(streamState, entry);
 
   if (entry.messageType === MESSAGE_TYPES.CONTEXT_STATE) {
-    const contextState = asContextState(entry.data);
+    const contextState = asContextStateData(entry.data);
     if (contextState) {
       streamState.contextState = contextState;
       stateChanged = true;
