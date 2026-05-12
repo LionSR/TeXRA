@@ -188,6 +188,7 @@ export class MultiAgentTab extends LitElement {
         border-radius: var(--border-radius);
         cursor: pointer;
         font-size: var(--font-size-sm);
+        z-index: 10;
       }
 
       .preset-delete-btn:hover {
