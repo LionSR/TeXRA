@@ -14,7 +14,7 @@ import {
   getAgentRuntimeHost,
   type AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { ExternalInquiryAction, StreamTabId } from '@shared/schemas';
 import {
@@ -247,7 +247,7 @@ When you have multiple independent questions for external models, you can call e
   schema: ExternalInquiryInputSchema,
 }) {
   protected async execute(input: ExternalInquiryInput): Promise<ToolResult> {
-    const context = getCurrentToolFileInteractionContext();
+    const context = getCurrentToolRunContext();
     const streamId = context?.streamId;
     const executionId = context?.executionId;
     const runtimeHost = context?.runtimeHost ?? getAgentRuntimeHost();

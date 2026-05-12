@@ -7,7 +7,10 @@
  * Import cleanup helpers from here, not from individual modules.
  */
 
-import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
+import {
+  cleanupAllCoordinatorRequests,
+  cleanupCoordinatorRequestsForStream,
+} from '@agent/runtime/runCoordinators';
 import type { StreamTabId } from '@shared/schemas';
 import {
   _rejectAllPendingInquiries,
@@ -34,7 +37,16 @@ export function cleanupApprovalsForStream(streamId: StreamTabId): void {
   _rejectPendingInquiriesForStream(streamId);
   toolEditApprovalController.clearBypassForStream(streamId);
   _clearProposalBypassForStream(streamId);
-  planApprovalCoordinator.clearForStream(streamId);
+  cleanupCoordinatorRequestsForStream(streamId);
+}
+
+/** Clean up approval state only for the listed deleted streams. */
+export function cleanupApprovalsForStreams(
+  streamIds: readonly StreamTabId[],
+): void {
+  for (const streamId of streamIds) {
+    cleanupApprovalsForStream(streamId);
+  }
 }
 
 /**
@@ -47,7 +59,7 @@ export function cleanupAllApprovals(): void {
   _rejectAllPendingInquiries();
   toolEditApprovalController.clearAllBypass();
   _clearAllProposalBypass();
-  planApprovalCoordinator.clearAll();
+  cleanupAllCoordinatorRequests();
 }
 
 export { enableYoloOnChildStream };

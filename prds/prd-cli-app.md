@@ -21,6 +21,18 @@ The agent core ships with Node-friendly platform defaults already explicitly tag
 
 (Throughout this PRD, `@texra/core` references the kernel package created by the Electron PRD's Phase 0 monorepo split — the kernel currently lives in `src/`. CLI Phase 0 inherits the split or ships against `src/` aliases unchanged; the import surface is identical.)
 
+### 1.1 Implementation note, 2026-05-11
+
+The first CLI/run-context/logger stack implements the conservative part of this PRD without claiming the full v1 surface:
+
+- `texra run` is wired through the shared `executeAgent()` path and has packaged binary validation in PR #3843.
+- CLI approval policy handling and serialized terminal prompts are implemented in PR #3844.
+- `texra chat` has a plain terminal loop in PR #3846. This is the fallback input mode described below, not the final rich renderer.
+- Rich chat rendering, inline approval cards, grouped tool-display modes, and session metadata remain follow-up work tracked by #3848.
+- Tool-context reader separation for `src/tools` is implemented in PR #3847: the active context is async-scoped, narrow run/call views are stored separately, and tool readers now use run-owned, call-owned, or explicit mixed access paths instead of the combined compatibility getter. The remaining architectural question is whether `ToolRunContext` becomes part of `RunContext`, remains an ALS-backed shim, or is passed explicitly at the tool execution boundary.
+
+This note is here to keep the PRD readable for third-party reviewers: the PRD describes the intended v1 shape, while the current stack lands the smallest coherent subset and records the rest as owned follow-up issues.
+
 ## 2. Goals
 
 - Run **workflow agents** (correct, polish, elevate, devise, criticize, merge, OCR, transcribe, …) fully headless from a terminal or GitHub container. `input.tex → output.tex` in one command, exit code reflects success.
@@ -134,7 +146,7 @@ texra chat --agent devise # pick a different tool-use agent
 **Properties:**
 
 - TTY-only. Running this in a pipe is a usage error with a friendly hint ("did you mean `texra run …`?"); we do _not_ hang the way Claude Code hangs without `-p` (issue claude-code#9026).
-- Ink-based TUI. Top pane: live agent stream (assistant text, tool calls, tool results), with the same in-place updates the desktop progress view shows. Middle pane: the active todo list, plan, or pending approval card. Bottom pane: input prompt with multi-line editor (Ctrl-J for newline, Enter to submit, Ctrl-C to interrupt the active run, Ctrl-D to exit).
+- OpenTUI-based TUI when the Node/npm distribution proof is satisfied; otherwise a Node-stable renderer behind the same chat boundary. Top pane: live agent stream (assistant text, tool calls, tool results), with the same in-place updates the desktop progress view shows. Middle pane: the active todo list, plan, or pending approval card. Bottom pane: input prompt with multi-line editor (Ctrl-J for newline, Enter to submit, Ctrl-C to interrupt the active run, Ctrl-D to exit).
 - Approvals render inline as modal cards (`@clack/prompts`-style for one-shot prompts, Ink-driven for streaming approval review).
 - Resume support: pick up the last tool-use session for `cwd` via `texra chat --resume` (implemented through the existing `resumeToolUseFromSnapshot()` entry point and `ToolUseSessionLifecycle` snapshots).
 - Slash commands inside the REPL: `/agent <name>`, `/model <name>`, `/yolo`, `/plan`, `/clear`, `/exit`, mirroring Claude Code conventions where they make sense.
@@ -180,7 +192,7 @@ Each pick is grounded in the May 2026 ecosystem survey + the existing TeXRA code
 | #   | Concern                | Pick                                                                                                                                                 | Why in one line                                                                                                                                              |
 | --- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1   | Argument parser        | **`commander`** (option to migrate to `citty` if command count grows past ~30)                                                                       | 500M weekly downloads, zero deps, ~20ms cold start; biggest ecosystem. `citty` is the modern second-place if we want lazy subcommand loading + plugin hooks. |
-| 2   | Interactive TUI        | **Ink** (React-for-CLI)                                                                                                                              | What Claude Code, Codex, Gemini CLI use; flexbox layout; live in-place updates fit the progress-view pattern naturally.                                      |
+| 2   | Interactive TUI        | **OpenTUI preferred; Node-stable fallback if distribution proof fails**                                                                              | OpenTUI fits agent chat layout and code/diff rendering, but it must prove Node 20+ npm installation before becoming a hard dependency.                       |
 | 3   | Non-interactive output | **`picocolors` + `log-update` + `ora` + `cli-progress`**                                                                                             | Tiny, fast, no React in the headless bundle. Lazy-loaded only when `selectMode() === 'headless'`.                                                            |
 | 4   | Inline prompts         | **`@clack/prompts`**                                                                                                                                 | ~4 KB gzipped, opinionated styling, modern default for new CLIs. Used for one-shot approvals in non-Ink contexts.                                            |
 | 5   | Config storage         | **`conf` + Zod schemas** (same pick as Electron PRD §6.1)                                                                                            | Single canonical implementation across CLI + Electron; Zod validates at read/write; layered file > env > flag resolution.                                    |
@@ -1968,3 +1980,75 @@ The intended shape stays coherent across hosts:
 - **MCP** is a future interoperability surface layered on top whenever it lands; it is not what defines the CLI and is not on the v1.x roadmap.
 
 The v1.x sequencing: **interactive + workflow** (v1.0, ~5 weeks) → **auth, config, secrets, sessions, `auto-edits`/`auto` policies** (v1.1, ~3 weeks) → polish + `texra doctor` + GitHub Action (v1.2, ~1.5 weeks) → MCP and other interop surfaces if and when there is demand (post-v1.x).
+
+## 20. Single source of truth and abstraction budget
+
+The CLI is a small host, but it must not become a shallow host. Its size is acceptable only when the shared kernel remains the owner of agent semantics and the CLI owns terminal-specific effects. The CLI must not copy extension or desktop logic merely to avoid importing the correct shared module.
+
+### 20.1 Process data has one reader
+
+`packages/cli/src/runtime/cliContext.ts` is the only CLI module that may read process input such as `process.argv`, `process.cwd()`, environment-derived defaults, package metadata, output-format defaults, approval-policy defaults, and resource-root selection. Command modules receive a resolved `CliContext`. They may interpret command intent, but they must not independently query process state.
+
+This mirrors the design discipline used by Codex-like terminal agents: command parsing is separated from the resolved run context, and the rest of the program consumes the context rather than repeatedly consulting ambient process state.
+
+### 20.2 Shared core versus host effects
+
+The shared core owns agent execution semantics, run context, logger records, model selection, agent directory discovery, and approval request identities. The extension owns VS Code commands, webviews, notifications, and editor integration. The desktop app owns Electron windows, IPC, and desktop presentation. The CLI owns terminal output, exit codes, non-interactive approval policy, and future interactive terminal chat.
+
+A new abstraction is acceptable only if it removes duplication across hosts or makes an invariant harder to violate. A module that only forwards data without owning a decision is not part of the design; it should be deleted and its callers should use the source of truth directly.
+
+### 20.3 PR evidence
+
+Every CLI PR must show its work. The PR description must name the single source of truth affected by the change, describe duplication removed or avoided, justify any new abstraction by the invariant it owns, and state the host impact for extension, desktop, and CLI. This requirement is part of the design: without it, the project will slowly accumulate parallel host implementations that are harder to maintain than the original VS Code-only code.
+
+## 21. Interactive TUI renderer decision: OpenTUI preferred, guarded by distribution proof
+
+OpenTUI is the preferred candidate for `texra chat` if its Node/npm distribution path is stable enough for TeXRA's installation model. Its terminal renderer, layout primitives, input handling, code/diff-oriented components, and production use in OpenCode fit the shape of a terminal agent interface better than a minimal prompt library.
+
+This preference does not change the v1 boundary. `texra run`, JSON/NDJSON output, approval policy, logger records, and agent execution must remain independent of OpenTUI. The OpenTUI dependency, if adopted, must be lazy-loaded from the chat implementation only. The shared core must not import OpenTUI, React/Solid bindings, or terminal-renderer types.
+
+Adoption is blocked until the implementation PR proves the following:
+
+- Node 20+ execution works from the published npm package without requiring Bun at runtime.
+- Installation works on Linux, macOS, Windows, and GitHub Actions without requiring users to install Zig manually.
+- The package can be isolated to interactive chat so headless `texra run` and `texra-action` do not pay its install or startup cost.
+- The CLI keeps one small terminal boundary, for example `runInteractiveChat(context)`, rather than introducing a broad TUI abstraction.
+
+If those conditions are not met, keep OpenTUI as the target renderer and ship the first interactive loop with a smaller Node-stable terminal stack. The renderer is a host presentation choice, not an agent-runtime decision.
+
+## 22. Chat mode must be a follow-up conversation surface
+
+`texra chat` is not a read-only progress viewer. It must provide a terminal input surface that lets the user continue the same agent session with follow-up messages. The TUI owns input editing, submission, interruption, and local rendering; the shared tool-use runtime owns session state, model routing, tool-call state, approvals, and persistence.
+
+Minimum interactive requirements:
+
+- A persistent input box or prompt for user messages.
+- Submission of follow-up turns into the active tool-use session without creating a parallel session model in the CLI package.
+- Visible assistant output, tool calls, tool results, plans, todos, and pending approvals in the same terminal surface.
+- Clear interruption behavior: `Ctrl-C` interrupts the active run; a second `Ctrl-C` or explicit `/exit` exits the chat.
+- Slash commands are local terminal commands only when they affect presentation or host policy, for example `/exit`, `/clear`, `/yolo`, `/model`, or `/agent`. They must not fork core session semantics.
+- Headless mode must reject chat rather than hanging for input.
+
+OpenTUI remains the preferred renderer if distribution proof succeeds because this requirement needs a real terminal UI, not just a sequence of one-shot prompts.
+
+## 23. Agent TUI outer-shell requirements
+
+The OpenRouter `create-agent-tui` reference is useful for the terminal shell requirements. TeXRA should not copy its generated harness, because TeXRA already owns the agent loop, tools, approvals, logger, and session lifecycle. The lesson is the boundary: the TUI is the outer shell around an existing agent runtime.
+
+`texra chat` should therefore include, in priority order:
+
+- A real input component for follow-up turns.
+- Streaming assistant text and tool-call display in the same surface.
+- Grouped, minimal, and hidden tool-display modes.
+- A plain readline-compatible fallback input mode for terminals where rich rendering is unsafe.
+- Session metadata display: active agent, active model, working directory, usage/cost when available, and resume identity.
+- Permission prompts integrated with the CLI approval adapter.
+- Future `@file` and `!command` shortcuts only if they feed the existing tool-use runtime and do not create parallel file or shell subsystems.
+
+This strengthens the OpenTUI decision: a full TUI is justified because chat must support follow-up input, streaming output, approvals, and session state in one terminal surface. Renderer choice remains host-local and lazy-loaded.
+
+## 24. Local TUI styling reference
+
+A local reference clone of the OpenRouter skills repository is available at `references/openrouter-skills`. The relevant material is `references/openrouter-skills/skills/create-agent-tui/`.
+
+Use it as a visual and interaction reference for `texra chat`, especially input styles, tool-call display styles, loader behavior, and session metadata. Do not vendor or copy its generated harness into TeXRA. TeXRA's runtime, tool registry, approval lifecycle, logger, and session state already have owners in this repository.

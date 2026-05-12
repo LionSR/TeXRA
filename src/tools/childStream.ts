@@ -8,7 +8,6 @@ import {
   trackExecution,
   untrackExecution,
 } from '@agent/runtime/executionRegistry';
-import { getCurrentToolRuntimeHost } from '@agent/toolUse/ToolFileInteractionContext';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 // Local imports - errors
@@ -24,6 +23,9 @@ import { STREAM_STATUS } from '@shared/schemas';
 // Local imports - utils
 import { formatDuration } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
+
+// Local imports - tools
+import { getCurrentToolRuntimeHost } from './toolRuntimeHost';
 
 interface CreateChildStreamOptions {
   streamPrefix: string;
