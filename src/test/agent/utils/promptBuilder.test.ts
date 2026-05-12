@@ -19,7 +19,6 @@ describe('PromptBuilder', () => {
     isRewrite: true,
     rounds: 2,
     prefills: [],
-    outputExt: 'tex',
     defaultOutputFiles: [],
     requiredFiles: {},
     requiredFilesInternal: {},
