@@ -124,6 +124,24 @@ wa-button.desktop-command-button {
   box-sizing: border-box;
 }
 
+.desktop-rail-header-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 2px;
+}
+
+.desktop-workspace-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--wa-color-text-quiet);
+  font-size: 10px;
+  opacity: 0.8;
+}
+
 .desktop-rail-title {
   flex: 1 1 auto;
   min-width: 0;

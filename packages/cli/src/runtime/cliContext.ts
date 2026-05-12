@@ -2,7 +2,6 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 
 // Local imports - CLI runtime
@@ -15,14 +14,24 @@ import {
 export type CliMode = 'headless' | 'interactive';
 export type CliOutputFormat = 'text' | 'json' | 'ndjson';
 
+export interface CliPromptRequest {
+  readonly kind: 'approval' | 'externalInquiry';
+  readonly summary: string;
+  readonly prompt: string;
+}
+
 export interface CliContext {
   readonly argv: readonly string[];
   readonly cwd: string;
   readonly mode: CliMode;
   readonly outputFormat: CliOutputFormat;
   readonly approvalPolicy: CliApprovalPolicy;
+  readonly helperModel?: string;
+  readonly quietLogs?: boolean;
+  readonly colorEnabled: boolean;
   readonly version: string;
   readonly resourcesPath: string;
+  readonly approvalPrompt?: (request: CliPromptRequest) => Promise<string>;
 }
 
 export class CliUsageError extends Error {
@@ -47,9 +56,17 @@ export const RUN_FLAGS_WITH_VALUE = new Set([
   '--instruction',
 ]);
 
+const CHAT_FLAGS_WITH_VALUE = new Set([
+  '--agent',
+  '--model',
+  '-m',
+  '--tool-display',
+]);
+
 const FLAGS_WITH_VALUE = new Set([
   ...GLOBAL_FLAGS_WITH_VALUE,
   ...RUN_FLAGS_WITH_VALUE,
+  ...CHAT_FLAGS_WITH_VALUE,
 ]);
 
 const GLOBAL_BOOLEAN_FLAGS = new Set(['--print', '-p']);
@@ -64,27 +81,21 @@ interface CliAmbientState {
   readonly stdinIsTty: boolean;
   readonly stdoutIsTty: boolean;
   readonly stderrIsTty: boolean;
+  readonly colorEnabled: boolean;
 }
 
 function readCliAmbientState(): CliAmbientState {
+  const stderrIsTty = process.stderr.isTTY === true;
   return {
     isCi: Boolean(process.env.CI),
     stdinIsTty: process.stdin.isTTY === true,
     stdoutIsTty: process.stdout.isTTY === true,
-    stderrIsTty: process.stderr.isTTY === true,
+    stderrIsTty,
+    colorEnabled:
+      stderrIsTty &&
+      process.env.NO_COLOR == null &&
+      process.env.TERM !== 'dumb',
   };
-}
-
-export async function askCliQuestion(question: string): Promise<string> {
-  const prompt = createInterface({
-    input: process.stdin,
-    output: process.stderr,
-  });
-  try {
-    return await prompt.question(question);
-  } finally {
-    prompt.close();
-  }
 }
 
 export function cliFlagName(arg: string): string {
@@ -304,6 +315,7 @@ export async function resolveCliContext(
     mode: cliMode(globalArgs, ambient),
     outputFormat: outputFormat(globalArgs),
     approvalPolicy: approvalPolicy(globalArgs),
+    colorEnabled: ambient.colorEnabled,
     version: await readCliVersion(),
     resourcesPath: resolveResourcesPath(),
   };

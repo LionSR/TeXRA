@@ -96,6 +96,12 @@ async function loadApprovalModules(workspacePath = '/workspace') {
     };
   });
 
+  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
+    import('@platform/platform'),
+    import('@test/support/FakePlatform'),
+  ]);
+  initPlatform(createFakePlatform({ workspacePath }));
+
   const [
     { bus },
     { requestToolEditApproval },
