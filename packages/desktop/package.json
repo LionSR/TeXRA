@@ -26,7 +26,7 @@
     "@playwright/test": "^1.59.1",
     "@texra/core": "workspace:*",
     "electron": "^42.0.0",
-    "electron-builder": "^26.8.1",
+    "electron-builder": "^26.10.0",
     "esbuild": "^0.28.0",
     "playwright": "^1.59.1",
     "typescript": "^6.0.3",
