@@ -129,7 +129,7 @@ const memoriesField = z
         displayToStoragePath(memories[i]);
       } catch (e) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           path: [i],
           message:
             e instanceof Error
@@ -161,14 +161,14 @@ const workingDirectoryField = z
       trimmed = parseWorkingDirectory(value);
     } catch (e) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         message: e instanceof Error ? e.message : String(e),
       });
       return z.NEVER;
     }
     if (trimmed && !isWorktreeSupportEnabled()) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         message: WORKTREE_DISABLED_MESSAGE,
       });
       return z.NEVER;

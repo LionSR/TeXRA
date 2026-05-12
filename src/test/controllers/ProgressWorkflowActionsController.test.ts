@@ -48,7 +48,7 @@ describe('ProgressWorkflowActionsController', () => {
       agentConfig: createAgentConfig({
         agentCategory: AgentCategory.ToolUse,
         outputFiles: [],
-      }) as AgentConfig & { agentCategory: AgentCategory.ToolUse },
+      }) as AgentConfig & { agentCategory: typeof AgentCategory.ToolUse },
     };
     const { controller, diffs, fileOperations } =
       createProgressWorkflowActionsHarness({

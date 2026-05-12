@@ -3,7 +3,7 @@ import {
   DEPENDENCY_INSTALL_COMMANDS,
   HOMEBREW_INSTALL_COMMAND,
   SCOOP_INSTALL_COMMAND,
-  type Platform,
+  type OSPlatform,
 } from '@shared/constants/latex';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
@@ -35,7 +35,7 @@ export interface LatexToolingControllerDeps {
   checkToolInstalled(tool: LatexProbeTool): Promise<boolean>;
   findPath(tool: LatexPathTool): string | null;
   detectPackageManager(): LatexSettingsStatus['packageManager'];
-  getPlatform(): Platform;
+  getPlatform(): OSPlatform;
   isLatexWorkshopInstalled(): boolean;
   getRecommendedStatus(): LatexRecommendedStatus;
   onDetectionError?: (error: unknown) => void;

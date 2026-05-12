@@ -14,7 +14,7 @@ export interface DebugContext {
   isRemote?: boolean;
 }
 
-export interface FileOptions {
+export interface DebugSaveOptions {
   outputFile?: string;
   /** Base name for the file (e.g. 'messages', 'response'). */
   baseName?: string;
@@ -27,7 +27,7 @@ export interface SaveDebugParams {
   object: unknown;
   objectType: DebugObjectType;
   context: DebugContext;
-  fileOptions?: FileOptions;
+  fileOptions?: DebugSaveOptions;
 }
 
 /**

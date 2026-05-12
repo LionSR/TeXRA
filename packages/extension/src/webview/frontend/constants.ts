@@ -1,10 +1,10 @@
 // Local imports - shared schemas
 import {
-  FileTypeSchema,
-  MultipleFileTypeSchema,
+  DocumentFileTypeSchema,
+  MultipleDocumentFileTypeSchema,
   SessionTypeSchema,
-  type FileType,
-  type MultipleFileType,
+  type DocumentFileType,
+  type MultipleDocumentFileType,
   type SessionType,
 } from '@shared/schemas';
 
@@ -16,10 +16,11 @@ export const SESSION_TYPES = {
   WORKFLOW: workflowSessionType,
 } as const;
 
-export type { SessionType, FileType, MultipleFileType };
+export type { SessionType, DocumentFileType, MultipleDocumentFileType };
 
-export const FILE_TYPES = FileTypeSchema.options;
-export const MULTIPLE_FILE_TYPES = MultipleFileTypeSchema.options;
+export const DOCUMENT_FILE_TYPES = DocumentFileTypeSchema.options;
+export const MULTIPLE_DOCUMENT_FILE_TYPES =
+  MultipleDocumentFileTypeSchema.options;
 
 export const ELEMENT_IDS = {
   INSTRUCTION: 'instruction',
