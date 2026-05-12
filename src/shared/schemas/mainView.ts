@@ -45,6 +45,8 @@ export const MultipleDocumentFileTypeSchema = z.enum([
 export type MultipleDocumentFileType = z.infer<
   typeof MultipleDocumentFileTypeSchema
 >;
+export const MULTIPLE_DOCUMENT_FILE_TYPES =
+  MultipleDocumentFileTypeSchema.options;
 
 export const ExtendedDocumentFileTypeSchema = z.enum([
   'input',

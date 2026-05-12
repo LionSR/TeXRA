@@ -1641,7 +1641,7 @@
     "webpack-cli": "^7.0.2",
     "zod-v3-to-v4": "^1.21.1"
   },
-  "packageManager": "pnpm@10.33.2",
+  "packageManager": "pnpm@11.1.1",
   "private": false,
   "scripts": {
     "vscode:prepublish": "[ \"$SKIP_VSCE_PREPUBLISH\" = \"1\" ] || corepack pnpm run package",
