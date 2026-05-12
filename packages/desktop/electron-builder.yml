@@ -37,10 +37,10 @@ mac:
   target:
     - target: dmg
       arch:
-        - arm64
+        - universal
     - target: zip
       arch:
-        - arm64
+        - universal
 win:
   icon: build/icon.ico
   target:
