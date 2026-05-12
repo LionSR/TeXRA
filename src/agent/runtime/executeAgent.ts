@@ -544,9 +544,6 @@ async function runFlowWithLifecycle(
       return buildStoppedFlowResult(category, ctx.executionId, streamId);
     }
 
-    // Preserve typed agent errors so upstream catchers can still match on them;
-    // otherwise wrap with the contextualized message produced above.
-    if (err instanceof AgentError) throw err;
     throw new AgentError(errorMsg, { cause: err });
   } finally {
     // Release long-lived resources (e.g., WebSocket connections, keepalive intervals)
