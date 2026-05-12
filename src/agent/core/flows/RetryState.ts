@@ -39,7 +39,7 @@ interface ManualRetryPromptResult {
 /** success: model response | failed: retries exhausted | cancelled: user cancelled | skipped: shouldStop was true */
 export type InvocationResult<TSuccess> =
   | ({ kind: 'success' } & TSuccess)
-  | { kind: 'failed'; message: string; retryable?: boolean }
+  | { kind: 'failed'; message: string; userRetryable?: boolean }
   | { kind: 'cancelled' }
   | { kind: 'skipped' };
 
@@ -195,12 +195,13 @@ export abstract class RetryableInvocationNode<
   }
 
   /** Auth/permission errors (401, 403) and credential-exhausted errors
-   *  (relay monthly limit, upstream credit depletion) skip auto-retries —
-   *  they need human attention (switching keys, topping up). */
+   *  (relay monthly limit, upstream credit/quota depletion) skip auto-retries —
+   *  they need human attention (switching keys, topping up). `userRetryable`
+   *  only gates the manual retry UI; auto-retry is a stricter subset. */
   shouldAutoRetry(error: Error): boolean {
     const formatted = formatProviderHttpError(error);
     if (formatted.isCredentialExhausted) return false;
-    if (!formatted.retryable) return false;
+    if (!formatted.userRetryable) return false;
     const code = formatted.statusCode;
     return code !== 401 && code !== 403;
   }
@@ -255,7 +256,7 @@ export abstract class RetryableInvocationNode<
     const operationName = this.getOperationName();
     const formatted = formatProviderHttpError(error);
 
-    if (!formatted.retryable) {
+    if (!formatted.userRetryable) {
       return { shouldRetry: false, userCancelled: false };
     }
 
@@ -291,22 +292,22 @@ export abstract class RetryableInvocationNode<
     error: Error,
   ):
     | { kind: 'cancelled' }
-    | { kind: 'failed'; message: string; retryable?: boolean } {
+    | { kind: 'failed'; message: string; userRetryable?: boolean } {
     if (this._userCancelled) {
       return { kind: 'cancelled' };
     }
 
     const formatted = formatProviderHttpError(error);
-    if (!formatted.retryable) {
+    if (!formatted.userRetryable) {
       this.services.logger.logErrorData(
-        `${this.getOperationName()} failed (not retryable): ${formatted.message}`,
+        `${this.getOperationName()} failed (no retry available): ${formatted.message}`,
         formatted,
       );
     }
     return {
       kind: 'failed',
       message: formatted.message,
-      retryable: formatted.retryable,
+      userRetryable: formatted.userRetryable,
     };
   }
 }
@@ -343,7 +344,7 @@ export function handleInvocationResult<T extends { response: unknown }>(
   if (result.kind === 'failed') {
     retryState.lastError = {
       message: result.message,
-      retryable: result.retryable ?? false,
+      userRetryable: result.userRetryable ?? false,
     };
     state.shouldStop = true;
     state.endTurn = false;
@@ -354,7 +355,7 @@ export function handleInvocationResult<T extends { response: unknown }>(
     logger.warn(EMPTY_RESPONSE_ERROR_MESSAGE);
     retryState.lastError = {
       message: EMPTY_RESPONSE_ERROR_MESSAGE,
-      retryable: false,
+      userRetryable: false,
     };
     state.shouldStop = true;
     state.endTurn = false;
