@@ -1,6 +1,7 @@
 import * as path from 'path';
 
 import {
+  WORKFLOW_DOCUMENT_OUTPUT_EXT,
   WORKFLOW_OUTPUT_BASENAME,
   workflowMergeOutputPath,
   workflowOutputPath,
@@ -21,8 +22,8 @@ import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
  * would route every round to the same `<workspace>/r{round}/output.{ext}`
  * and clobber outputs across runs.
  */
-export function getOutputFileName(outputExt: string, round: number): string {
-  return workflowOutputPath({ ext: outputExt, round });
+export function getOutputFileName(extension: string, round: number): string {
+  return workflowOutputPath({ ext: extension, round });
 }
 
 /**
@@ -70,27 +71,27 @@ export function getExtractedDocOutputFileName(
  *
  * Merge is a single-output workflow: the round number is not reflected in
  * the filename and the same location is returned for every round. The
- * merge output lives at the runDir root as `_full.{ext}`; per-execution
+ * merge output lives at the runDir root as `_full.tex`; per-execution
  * isolation keeps it from colliding with other runs.
  *
- * The fileService MUST carry an executionId; the fixed `_full.{ext}` path
+ * The fileService MUST carry an executionId; the fixed `_full.tex` path
  * relies on run-storage isolation for uniqueness. Without it, every merge
  * in the workspace would clobber the same file.
  *
- * @param outputExt Extension for the merge output (usually `setting.outputExt`,
- *   which is `tex` for the default merge agent but may differ for a custom
- *   merge agent configured with a non-TeX output format).
+ * Merge is always a LaTeX workflow, so the output extension is fixed rather
+ * than configurable through agent YAML.
  */
 export function createMergeOutputFileLocationGetter(
   fileService: TaskRunFileService,
-  outputExt: string,
 ): (round: number) => AgentFileLocation {
   if (!fileService.hasRunDirectory()) {
     throw new Error(
-      'createMergeOutputFileLocationGetter requires a TaskRunFileService bound to an executionId; the `_full.{ext}` path is only collision-safe inside per-execution run storage.',
+      'createMergeOutputFileLocationGetter requires a TaskRunFileService bound to an executionId; the `_full.tex` path is only collision-safe inside per-execution run storage.',
     );
   }
-  const outputPath = workflowMergeOutputPath({ ext: outputExt });
+  const outputPath = workflowMergeOutputPath({
+    ext: WORKFLOW_DOCUMENT_OUTPUT_EXT,
+  });
   const location = fileService.createLocation(outputPath) as AgentFileLocation;
   return (_round: number): AgentFileLocation => location;
 }

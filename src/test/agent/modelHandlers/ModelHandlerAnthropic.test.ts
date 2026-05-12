@@ -1324,7 +1324,6 @@ describe('ModelHandlerAnthropic output prefill initialization', () => {
         agentCategory: AgentCategory.Workflow,
         documentTag: 'latex_document',
         endTag: '</latex_document>',
-        outputExt: 'tex',
       });
       const messages: MessageParam[] = [
         {
@@ -1373,7 +1372,6 @@ describe('ModelHandlerAnthropic output prefill initialization', () => {
         agentCategory: AgentCategory.Workflow,
         documentTag: 'latex_document',
         endTag: '</latex_document>',
-        outputExt: 'tex',
       });
       const userMessage: MessageParam = {
         role: 'user',
@@ -1418,7 +1416,6 @@ describe('ModelHandlerAnthropic output prefill initialization', () => {
         agentCategory: AgentCategory.Workflow,
         documentTag: 'latex_document',
         endTag: '</latex_document>',
-        outputExt: 'tex',
       });
       const userText = 'revise the document';
       const messages: MessageParam[] = [

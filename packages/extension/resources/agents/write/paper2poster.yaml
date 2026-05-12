@@ -3,7 +3,6 @@ settings:
   agentCategory: workflow
   documentTag: documents
   endTag: </documents>
-  outputExt: tex
   isRewrite: False
   prefills:
     - 'Here is the Beamer poster. <documents>'

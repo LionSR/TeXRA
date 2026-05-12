@@ -24,6 +24,12 @@ import { escapeRegExp } from '@utils/core/stringCore';
 /** The fixed basename of every workflow output file (no extension). */
 export const WORKFLOW_OUTPUT_BASENAME = 'output';
 
+/** The fixed extension for TeXRA-named LaTeX workflow outputs. */
+export const WORKFLOW_DOCUMENT_OUTPUT_EXT = 'tex';
+
+/** The fixed extension for raw workflow round output. */
+export const WORKFLOW_RAW_OUTPUT_EXT = 'xml';
+
 /** Parse a directory name of the form `r{round}` into its round index. */
 export function parseWorkflowOutputRoundDir(dirName: string): number | null {
   const match = /^r(\d+)$/.exec(dirName);
