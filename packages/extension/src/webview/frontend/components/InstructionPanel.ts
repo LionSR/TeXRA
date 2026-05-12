@@ -276,7 +276,7 @@ export class InstructionPanel extends LitElement {
 
       .model-selection-footer .agent-select-group wa-select {
         position: absolute;
-        left: var(--height-control);
+        left: calc(var(--height-control) + var(--wa-space-2xs));
         top: 0;
       }
 
