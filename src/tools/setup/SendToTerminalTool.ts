@@ -36,7 +36,7 @@ const SendToTerminalInputSchema = z.strictObject({
   command: z
     .string()
     .refine((s) => !/[\r\n]/.test(s), {
-      message: 'command must not contain newline / carriage-return characters.',
+      error: 'command must not contain newline / carriage-return characters.',
     })
     .describe(
       'The command to run inside the integrated terminal. One line; no embedded newlines.',

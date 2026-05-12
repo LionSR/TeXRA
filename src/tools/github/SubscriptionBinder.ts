@@ -18,8 +18,9 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { StreamTabId } from '@shared/schemas';
 
+import type { Disposable } from '@platform/interfaces/disposable';
+
 import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
-import type { Disposable } from './PollingSourceBase';
 
 export interface SubscriptionBinding<K extends string> {
   key: K;

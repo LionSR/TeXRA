@@ -7,7 +7,7 @@ import { hasExtension } from '@utils/core/pathCore';
  * File categories for extension configuration lookups.
  * These map to VS Code settings keys for allowed file extensions.
  *
- * Note: This is distinct from FileType in utils/config/constants.ts
+ * Note: This is distinct from DocumentFileType in utils/config/constants.ts
  * which defines UI file input field types.
  */
 export type ExtensionCategory =
