@@ -138,7 +138,11 @@ This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the ext
 
 **Multiple Output Variable:**
 
-- &#123;&#123; OUTPUT_FILES_ORDER &#125;&#125;: Comma-separated string listing the output filenames specified in the UI. Crucial for agents generating multiple files. See [Handling Multiple Files](./multiple-output.md).
+- &#123;&#123; OUTPUT_FILES_ORDER &#125;&#125;: Array of output filenames specified in
+  the UI or in `defaultOutputFiles`. Use
+  `{{ OUTPUT_FILES_ORDER[0] }}` for a specific filename and
+  `{{ OUTPUT_FILES_ORDER | join(", ") }}` for a human-readable list. See
+  [Handling Multiple Files](./multiple-output.md).
 
 **Custom Variables (from `settings`):**
 
@@ -216,12 +220,12 @@ The ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) lo
 
 If your workflow requires several output files, your agent must structure its
 response using the `OUTPUT_FILES_ORDER` variable. Below is a simplified template
-similar to the built-in `polish_multiple.yaml`:
+for a workflow agent that writes two output files:
 
 ```yaml
 inherits: polish
 settings:
-  agentType: CoT
+  agentCategory: workflow
   documentTag: latex_documents
   endTag: </latex_documents>
   defaultOutputFiles:
@@ -231,7 +235,7 @@ settings:
 prompts:
   userRequest: |
     {% if OUTPUT_FILES_ORDER %}
-    The output files should be in this order: {{ OUTPUT_FILES_ORDER }}.
+    The output files should be in this order: {{ OUTPUT_FILES_ORDER | join(", ") }}.
     {% endif %}
 
     <scratchpad>
