@@ -72,7 +72,10 @@ import {
   formatFollowUpInstruction,
 } from '@tools/subagentResults';
 import { isWorktreeSupportEnabled } from '@tools/worktreeConfig';
-import { parseWorkingDirectory } from '@tools/pathResolution';
+import {
+  ensureDirectoryExists,
+  parseWorkingDirectory,
+} from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - memory
@@ -166,10 +169,20 @@ const workingDirectoryField = z
       });
       return z.NEVER;
     }
-    if (trimmed && !isWorktreeSupportEnabled()) {
+    if (!trimmed) return trimmed;
+    if (!isWorktreeSupportEnabled()) {
       ctx.addIssue({
         code: 'custom',
         message: WORKTREE_DISABLED_MESSAGE,
+      });
+      return z.NEVER;
+    }
+    try {
+      ensureDirectoryExists(trimmed);
+    } catch (e) {
+      ctx.addIssue({
+        code: 'custom',
+        message: e instanceof Error ? e.message : String(e),
       });
       return z.NEVER;
     }

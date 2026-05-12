@@ -48,7 +48,7 @@ describe('formatProviderHttpError', () => {
     );
 
     expect(formatted.message).toBe('new provider error shape');
-    expect(formatted.retryable).toBe(false);
+    expect(formatted.userRetryable).toBe(false);
   });
 
   it('detects OpenAI provider errors without importing SDK classes at runtime', () => {
@@ -58,7 +58,7 @@ describe('formatProviderHttpError', () => {
 
     expect(formatted.provider).toBe('openai');
     expect(formatted.statusCode).toBe(429);
-    expect(formatted.retryable).toBe(true);
+    expect(formatted.userRetryable).toBe(true);
   });
 
   it('detects Anthropic provider errors without importing SDK classes at runtime', () => {
@@ -68,7 +68,7 @@ describe('formatProviderHttpError', () => {
 
     expect(formatted.provider).toBe('anthropic');
     expect(formatted.statusCode).toBe(401);
-    expect(formatted.retryable).toBe(false);
+    expect(formatted.userRetryable).toBe(false);
   });
 
   it('matches SDK abort errors through the prototype chain', () => {
@@ -111,9 +111,9 @@ describe('formatProviderHttpError', () => {
     );
 
     expect(connectionError.provider).toBe('openai');
-    expect(connectionError.retryable).toBe(true);
+    expect(connectionError.userRetryable).toBe(true);
     expect(timeoutError.provider).toBe('openai');
-    expect(timeoutError.retryable).toBe(true);
+    expect(timeoutError.userRetryable).toBe(true);
   });
 
   it('preserves provider context for native Anthropic HTTP errors', () => {
@@ -146,9 +146,9 @@ describe('formatProviderHttpError', () => {
     );
 
     expect(connectionError.provider).toBe('anthropic');
-    expect(connectionError.retryable).toBe(true);
+    expect(connectionError.userRetryable).toBe(true);
     expect(timeoutError.provider).toBe('anthropic');
-    expect(timeoutError.retryable).toBe(true);
+    expect(timeoutError.userRetryable).toBe(true);
   });
 
   it('prefers Anthropic request-id when response headers include both request id styles', () => {
@@ -201,7 +201,7 @@ describe('formatProviderHttpError', () => {
 
     expect(formatted.provider).toBe('openai');
     expect(formatted.statusCode).toBe(400);
-    expect(formatted.retryable).toBe(false);
+    expect(formatted.userRetryable).toBe(false);
   });
 
   it('detects Anthropic provider from Windows pnpm stack paths', () => {
@@ -212,7 +212,7 @@ describe('formatProviderHttpError', () => {
     const formatted = formatProviderHttpError(err);
 
     expect(formatted.provider).toBe('anthropic');
-    expect(formatted.retryable).toBe(false);
+    expect(formatted.userRetryable).toBe(false);
   });
 
   it('detects Google provider from Windows pnpm stack paths', () => {
@@ -223,7 +223,7 @@ describe('formatProviderHttpError', () => {
     const formatted = formatProviderHttpError(err);
 
     expect(formatted.provider).toBe('google');
-    expect(formatted.retryable).toBe(false);
+    expect(formatted.userRetryable).toBe(false);
   });
 
   it('keeps SDK user aborts non-retryable while preserving provider attribution', () => {
@@ -235,7 +235,7 @@ describe('formatProviderHttpError', () => {
 
     expect(formatted.message).toBe('Request aborted');
     expect(formatted.provider).toBe('openai');
-    expect(formatted.retryable).toBe(false);
+    expect(formatted.userRetryable).toBe(false);
   });
 
   it('formats symbol-tagged SDK errors without SDK prototype matching', () => {
@@ -253,7 +253,7 @@ describe('formatProviderHttpError', () => {
     expect(formatted.message).toBe(
       'HTTP 429 Too Many Requests – provider quota',
     );
-    expect(formatted.retryable).toBe(true);
+    expect(formatted.userRetryable).toBe(true);
   });
 
   it('formats tagged OpenAI connection errors with existing retry behavior', () => {
@@ -265,7 +265,7 @@ describe('formatProviderHttpError', () => {
     expect(formatted.provider).toBe('openai');
     expect(formatted.statusCode).toBeUndefined();
     expect(formatted.message).toBe('Connection timed out');
-    expect(formatted.retryable).toBe(true);
+    expect(formatted.userRetryable).toBe(true);
   });
 
   it('formats tagged OpenAI HTTP errors with status metadata', () => {
@@ -285,7 +285,7 @@ describe('formatProviderHttpError', () => {
     expect(formatted.message).toContain('HTTP 400 Bad Request');
     expect(formatted.message).toContain('bad payload');
     expect(formatted.requestId).toBe('req_123');
-    expect(formatted.retryable).toBe(false);
+    expect(formatted.userRetryable).toBe(false);
   });
 
   it('formats tagged Anthropic user abort errors', () => {
@@ -296,7 +296,7 @@ describe('formatProviderHttpError', () => {
 
     expect(formatted.provider).toBe('anthropic');
     expect(formatted.message).toBe('Request aborted');
-    expect(formatted.retryable).toBe(false);
+    expect(formatted.userRetryable).toBe(false);
   });
 
   it('formats tagged Google API errors with inferred kind from status', () => {
@@ -313,7 +313,7 @@ describe('formatProviderHttpError', () => {
     expect(formatted.message).toBe(
       'HTTP 429 Too Many Requests – quota exceeded',
     );
-    expect(formatted.retryable).toBe(true);
+    expect(formatted.userRetryable).toBe(true);
   });
 
   it('derives SDK error kinds from the shared status mapping', () => {

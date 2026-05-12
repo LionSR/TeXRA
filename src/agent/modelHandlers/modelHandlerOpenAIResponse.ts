@@ -749,7 +749,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // rethrow so the outer retry resumes the same ID. Definitive failures
       // (4xx, notably 404 expired) — clear the ID and create a new request.
       //
-      // Check statusCode directly rather than formatted.retryable: the latter
+      // Check statusCode directly rather than formatted.userRetryable: the latter
       // is force-true for relay errors, which would incorrectly retain the ID
       // on a relay-wrapped 404 and loop until retries are exhausted.
       const formatted = formatProviderHttpError(err);
@@ -2442,9 +2442,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         },
       },
     );
-    throw new Error(
+    const wrapped = new Error(
       `Background response ${responseId} ended with status ${fallbackStatus}: ${errorDetail}. Retrieve the latest status with client.responses.retrieve("${responseId}").`,
-    );
+    ) as Error & { error?: unknown };
+    // Attach the OpenAI error body so formatProviderHttpError can detect
+    // non-retryable conditions (e.g. insufficient_quota) via the
+    // credential-exhausted classifier. Without this, the polling failure
+    // surfaces as a plain Error and the retry layer would loop a fresh
+    // background request immediately.
+    if (current.error) {
+      wrapped.error = current.error;
+    }
+    throw wrapped;
   }
 
   /** Adds continuation instructions for models without prefill support. */

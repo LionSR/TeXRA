@@ -114,29 +114,29 @@ interface SdkErrorEntry {
   classNames: readonly string[];
   message?: string;
   fallbackStatusCode?: number;
-  retryable?: boolean;
+  userRetryable?: boolean;
 }
 
 const SDK_ERRORS: SdkErrorEntry[] = [
-  // Connection errors (retryable)
+  // Connection errors (transient — show retry button)
   {
     kind: 'connection_timeout',
     classNames: ['APIConnectionTimeoutError'],
     message: 'Connection timed out',
-    retryable: true,
+    userRetryable: true,
   },
   {
     kind: 'connection',
     classNames: ['APIConnectionError'],
     message: 'Connection error',
-    retryable: true,
+    userRetryable: true,
   },
-  // Abort errors (not retryable)
+  // Abort errors (user cancelled — no retry button)
   {
     kind: 'user_abort',
     classNames: ['APIUserAbortError'],
     message: 'Request aborted',
-    retryable: false,
+    userRetryable: false,
   },
   // HTTP errors (retryable derived from status code)
   {
@@ -241,7 +241,7 @@ function matchSdkError(
     return {
       message: entry.message,
       provider,
-      retryable: entry.retryable ?? false,
+      userRetryable: entry.userRetryable ?? false,
       requestId,
     };
   }
@@ -266,11 +266,11 @@ function matchSdkError(
     extractErrorMessage(err) ?? fallbackMessage ?? 'Provider request failed';
 
   if (!statusCode) {
-    // SDK errors without status codes are unusual - be conservative and don't retry
+    // SDK errors without status codes are unusual - be conservative and don't offer retry
     return {
       message: finalMessage,
       provider,
-      retryable: false,
+      userRetryable: false,
       requestId,
     };
   }
@@ -283,7 +283,7 @@ function matchSdkError(
     statusCode,
     statusText,
     provider,
-    retryable: isRetryableStatusCode(statusCode),
+    userRetryable: isRetryableStatusCode(statusCode),
     requestId,
   };
 }
@@ -618,14 +618,20 @@ function isUpstreamCreditDepletedBody(rawErrorBody: unknown): boolean {
   if (!isObject(rawErrorBody)) return false;
   const body = rawErrorBody as {
     type?: unknown;
+    code?: unknown;
     message?: unknown;
     error?: unknown;
   };
-  const pick = (v: unknown): { type?: string; message?: string } | undefined =>
+  const pick = (
+    v: unknown,
+  ): { type?: string; code?: string; message?: string } | undefined =>
     isObject(v)
       ? {
           type: isString((v as { type?: unknown }).type)
             ? (v as { type: string }).type
+            : undefined,
+          code: isString((v as { code?: unknown }).code)
+            ? (v as { code: string }).code
             : undefined,
           message: isString((v as { message?: unknown }).message)
             ? (v as { message: string }).message
@@ -633,12 +639,30 @@ function isUpstreamCreditDepletedBody(rawErrorBody: unknown): boolean {
         }
       : undefined;
   const candidates = [pick(body), pick(body.error)];
-  return candidates.some(
-    (c) =>
-      c?.type === 'invalid_request_error' &&
+  return candidates.some((c) => {
+    if (!c) return false;
+    // Anthropic upstream: 400 invalid_request_error with credit-balance message.
+    if (
+      c.type === 'invalid_request_error' &&
       typeof c.message === 'string' &&
-      c.message.toLowerCase().includes('credit balance is too low'),
-  );
+      c.message.toLowerCase().includes('credit balance is too low')
+    ) {
+      return true;
+    }
+    // OpenAI upstream: insufficient_quota (HTTP 429 or background response.error).
+    // Match by code/type to handle both shapes, plus a message fallback for
+    // background responses where the SDK only exposes { code, message }.
+    if (c.code === 'insufficient_quota' || c.type === 'insufficient_quota') {
+      return true;
+    }
+    if (
+      typeof c.message === 'string' &&
+      c.message.toLowerCase().includes('exceeded your current quota')
+    ) {
+      return true;
+    }
+    return false;
+  });
 }
 
 export function formatProviderHttpError(err: unknown): ProviderError {
@@ -657,7 +681,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   if (err instanceof DOMException && err.name === 'AbortError') {
     return {
       message: 'Request aborted',
-      retryable: false,
+      userRetryable: false,
       isRelayError: false,
       rawErrorBody,
       streamDiagnostics,
@@ -665,11 +689,11 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     };
   }
 
-  // Disk full — local I/O error, never retryable
+  // Disk full — local I/O error, no retry will help
   if (isDiskFullError(err)) {
     return {
       message: 'No space left on device. Free up disk space and try again.',
-      retryable: false,
+      userRetryable: false,
       isRelayError: false,
       rawErrorBody,
       streamDiagnostics,
@@ -682,11 +706,11 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   if (sdkMatch) {
     return {
       ...sdkMatch,
-      // Credential-exhausted errors are not auto-retried (see
-      // RetryableInvocationNode.shouldAutoRetry) but the retry panel
-      // still surfaces with the "Use your own API key" button, so the
-      // `retryable` flag stays true here.
-      retryable: isRelay || sdkMatch.retryable || isCredentialExhausted,
+      // Credential-exhausted errors keep userRetryable=true so the retry
+      // panel surfaces with the "Use your own API key" affordance, but
+      // shouldAutoRetry separately suppresses auto-retry for them — a
+      // fresh attempt with the same depleted credential would just fail.
+      userRetryable: isRelay || sdkMatch.userRetryable || isCredentialExhausted,
       isRelayError: isRelay,
       isCredentialExhausted: isCredentialExhausted || undefined,
       isUpstreamCreditDepleted: isUpstreamCreditDepleted || undefined,
@@ -708,8 +732,8 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   const finalMessage =
     extractErrorMessage(err) ?? fallbackMessage ?? 'Provider request failed';
   // No status code on an unrecognized error likely means a network-level failure
-  // (DNS, proxy, TLS, etc.) — treat as retryable for safety.
-  const retryable =
+  // (DNS, proxy, TLS, etc.) — show retry button for safety.
+  const userRetryable =
     isRelay ||
     isCredentialExhausted ||
     (statusCode ? isRetryableStatusCode(statusCode) : true);
@@ -727,7 +751,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     statusCode,
     statusText,
     provider,
-    retryable,
+    userRetryable,
     isRelayError: isRelay,
     isCredentialExhausted: isCredentialExhausted || undefined,
     isUpstreamCreditDepleted: isUpstreamCreditDepleted || undefined,

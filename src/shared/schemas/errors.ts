@@ -29,7 +29,13 @@ const ProviderErrorSchema = z.object({
   statusCode: z.int().optional(),
   statusText: z.string().optional(),
   provider: z.string().optional(),
-  retryable: z.boolean(),
+  /** True when the user should be offered a retry button. This gates the
+   *  manual retry UI — it does NOT mean the retry loop will auto-retry. The
+   *  auto-retry decision is made separately by `shouldAutoRetry`, which
+   *  excludes credentialExhausted/auth errors even when `userRetryable` is
+   *  true (because they need user action — a key swap or new API key —
+   *  before any retry makes sense). */
+  userRetryable: z.boolean(),
   isRelayError: z.boolean(),
   /** True when the credential (relay monthly limit OR upstream provider
    *  account) has been exhausted. Auto-retry is skipped for these errors
@@ -76,6 +82,6 @@ export type ProviderErrorPartial = z.infer<typeof ProviderErrorPartialSchema>;
 /** Minimal error info for retry state tracking */
 export const RetryErrorInfoSchema = ProviderErrorSchema.pick({
   message: true,
-  retryable: true,
+  userRetryable: true,
 });
 export type RetryErrorInfo = z.infer<typeof RetryErrorInfoSchema>;

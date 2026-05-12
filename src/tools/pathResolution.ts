@@ -1,4 +1,5 @@
 // Standard library imports
+import { statSync } from 'fs';
 import * as path from 'path';
 
 // Local imports - tools
@@ -38,6 +39,36 @@ export function parseWorkingDirectory(
     );
   }
   return trimmed;
+}
+
+/**
+ * Verify `dir` exists on disk and is a directory. Throws ToolError otherwise.
+ * Called at delegation dispatch time so subagents never start with a bogus cwd
+ * that would silently break every downstream filesystem tool.
+ */
+export function ensureDirectoryExists(dir: string): void {
+  let stat;
+  try {
+    stat = statSync(dir);
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException | undefined)?.code;
+    if (code === 'ENOENT') {
+      throw new ToolError(`working_directory does not exist: ${dir}`);
+    }
+    if (code === 'EACCES' || code === 'EPERM') {
+      throw new ToolError(`working_directory is not accessible: ${dir}`);
+    }
+    throw new ToolError(
+      `working_directory could not be opened: ${dir} (${
+        e instanceof Error ? e.message : String(e)
+      })`,
+    );
+  }
+  if (!stat.isDirectory()) {
+    throw new ToolError(
+      `working_directory exists but is not a directory: ${dir}`,
+    );
+  }
 }
 
 /**
