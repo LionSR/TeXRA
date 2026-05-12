@@ -28,7 +28,7 @@ import { HistoryViewEvents } from './events';
 type ConfigValue = string | number | boolean | string[] | null | undefined;
 
 @customElement('history-item')
-export class HistoryItem extends LitElement {
+export class HistoryItemElement extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -386,6 +386,6 @@ export class HistoryItem extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'history-item': HistoryItem;
+    'history-item': HistoryItemElement;
   }
 }
