@@ -81,6 +81,16 @@ import {
 } from './executionRegistry';
 import { generateSessionDescription } from './sessionDescription';
 import { getRunStorageService } from './RunStorageService';
+import {
+  createRunContext,
+  withRunContext,
+  type RunContext,
+  type RunCoordinators,
+} from './RunContext';
+import { retainRunCoordinatorsForStream } from './runCoordinators';
+import { AgentProposalCoordinator } from './AgentProposalCoordinator';
+import { PlanApprovalCoordinator } from './PlanApprovalCoordinator';
+import { RetryRequestCoordinatorImpl } from './RetryRequestCoordinator';
 import type {
   AgentFlowResult,
   CompileFailureSummary,
@@ -95,6 +105,43 @@ interface AgentLaunchContext extends AgentCore {
   usageMonitor: UsageMonitor;
   storageKey: StorageKey;
   parentStage: AgentLogStage;
+  coordinators: RunCoordinators;
+}
+
+function createExecutionRunContext(ctx: AgentLaunchContext): RunContext {
+  return createRunContext({
+    runtimeHost: ctx.runtimeHost,
+    streamId: ctx.streamId,
+    executionId: ctx.executionId,
+    logger: ctx.logger,
+    approvals: {},
+    coordinators: ctx.coordinators,
+    toolRunContext: {
+      streamId: ctx.streamId,
+      executionId: ctx.executionId,
+      model: ctx.config.model,
+      agentName: ctx.config.agent,
+      workingDirectory: ctx.workingDirectory,
+      runtimeHost: ctx.runtimeHost,
+      delegationDepth: ctx.delegationDepth,
+      delegationConfig: ctx.delegationConfig,
+    },
+  });
+}
+
+async function withExecutionRunContext<T>(
+  ctx: AgentLaunchContext,
+  fn: () => T | Promise<T>,
+): Promise<T> {
+  const release = retainRunCoordinatorsForStream(
+    ctx.streamId,
+    ctx.coordinators,
+  );
+  try {
+    return await withRunContext(createExecutionRunContext(ctx), fn);
+  } finally {
+    release();
+  }
 }
 
 export async function getAgentPath(
@@ -304,6 +351,11 @@ async function assembleAgentLaunchContext(
     usageMonitor,
     runtimeHost,
     workingDirectory: configPayload.workingDirectory?.trim() || undefined,
+    coordinators: {
+      plan: new PlanApprovalCoordinator(),
+      proposal: new AgentProposalCoordinator(),
+      retry: new RetryRequestCoordinatorImpl(),
+    },
   };
 }
 
@@ -701,131 +753,133 @@ export async function executeAgent(
       suppressErrorNotification: options?.isSubagent,
     });
     ctx.delegationDepth = options?.delegationDepth ?? 0;
-    const { setting, streamId, config } = ctx;
-    const { agent: agentName } = config;
-    const { isSubagent } = options ?? {};
+    return withExecutionRunContext(ctx, async () => {
+      const { setting, streamId, config } = ctx;
+      const { agent: agentName } = config;
+      const { isSubagent } = options ?? {};
 
-    // Fire-and-forget: generate AI session description from the user's instruction.
-    // Triggered at the start so cancelled/errored sessions still get descriptions.
-    // Applies to all agents including subagents so their progress tabs show
-    // meaningful descriptions in multi-agent pipelines.
-    generateSessionDescription(
-      ctx.executionId,
-      streamId,
-      config,
-      ctx.runtimeHost,
-    ).catch(() => {});
-    return runFlowWithLifecycle(
-      ctx,
-      streamId,
-      agentName,
-      async () => {
-        // Pre-execution UI setup
-        if (executionId) await ensureRunDir(executionId);
-        StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
-          runtimeHost: ctx.runtimeHost,
-        });
-        logger.info(`Starting task execution (streamId: ${streamId})`);
-        logger.info(`Input file: ${config.inputFile}`);
-        logger.debug(
-          `Stream ID: ${streamId}, Agent: ${config.agent}, Model: ${config.model}`,
-        );
-        logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
-        // Subagents don't need to force-open the progress board or show notifications —
-        // the orchestrator's stream is already visible.
-        if (!isSubagent && !getRunStorageService().isViewVisible()) {
-          ctx.runtimeHost.emit('requestEnsureProgressView', {
-            fallbackNotification: buildFallbackNotification(config),
+      // Fire-and-forget: generate AI session description from the user's instruction.
+      // Triggered at the start so cancelled/errored sessions still get descriptions.
+      // Applies to all agents including subagents so their progress tabs show
+      // meaningful descriptions in multi-agent pipelines.
+      generateSessionDescription(
+        ctx.executionId,
+        streamId,
+        config,
+        ctx.runtimeHost,
+      ).catch(() => {});
+      return runFlowWithLifecycle(
+        ctx,
+        streamId,
+        agentName,
+        async () => {
+          // Pre-execution UI setup
+          if (executionId) await ensureRunDir(executionId);
+          StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
+            runtimeHost: ctx.runtimeHost,
           });
-        }
-        ctx.runtimeHost.emit('setTaskState', {
-          streamId,
-          executionId,
-          taskState: agentConfigToTaskState(config),
-        });
+          logger.info(`Starting task execution (streamId: ${streamId})`);
+          logger.info(`Input file: ${config.inputFile}`);
+          logger.debug(
+            `Stream ID: ${streamId}, Agent: ${config.agent}, Model: ${config.model}`,
+          );
+          logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
+          // Subagents don't need to force-open the progress board or show notifications —
+          // the orchestrator's stream is already visible.
+          if (!isSubagent && !getRunStorageService().isViewVisible()) {
+            ctx.runtimeHost.emit('requestEnsureProgressView', {
+              fallbackNotification: buildFallbackNotification(config),
+            });
+          }
+          ctx.runtimeHost.emit('setTaskState', {
+            streamId,
+            executionId,
+            taskState: agentConfigToTaskState(config),
+          });
 
-        const taskStage = await logger.stage(
-          `Task: ${agentName}@${config.model}`,
-        );
-        return taskStage.run(async () => {
-          logger.info(`Executing ${agentName} with model ${config.model}`);
-          const interrupts = createInterruptCallbacks();
+          const taskStage = await logger.stage(
+            `Task: ${agentName}@${config.model}`,
+          );
+          return taskStage.run(async () => {
+            logger.info(`Executing ${agentName} with model ${config.model}`);
+            const interrupts = createInterruptCallbacks();
 
-          if (setting.agentCategory === AgentCategory.ToolUse) {
-            let toolUseTurns = 0;
-            const result = await runToolUseFlow({
+            if (setting.agentCategory === AgentCategory.ToolUse) {
+              let toolUseTurns = 0;
+              const result = await runToolUseFlow({
+                ...ctx,
+                ...interrupts,
+                onRoundFinalized: (run) =>
+                  ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
+                setting: ctx.setting as AgentToolUseSetting,
+                isSubagent,
+                onBeforeWaiting: options?.onBeforeWaiting,
+                onProgress: (update) => {
+                  if (update.kind === 'overview') {
+                    toolUseTurns++;
+                    ctx.runtimeHost.emit('updateConversationProgress', {
+                      streamId,
+                      progress: {
+                        conversationTurns: toolUseTurns,
+                        toolCallCount: update.toolCallCount,
+                      },
+                    });
+                  }
+                  options?.onProgress?.(update);
+                },
+                onFollowUpConsumed: () => {
+                  ctx.runtimeHost.emit('updateQueuedFollowUps', {
+                    streamId: ctx.streamId,
+                  });
+                  options?.onFollowUpConsumed?.();
+                },
+              });
+              return {
+                category: 'toolUse' as const,
+                status: result.status,
+                lastResponse: result.lastResponse,
+                touchedFiles: result.touchedFiles,
+                executionId: ctx.executionId,
+                streamId,
+              };
+            }
+
+            const onRoundCompleted = createRoundProgressCallback(
+              ctx.executionId,
+              streamId,
+              ctx.runtimeHost,
+              options?.onProgress,
+            );
+            const result = await runReflectionFlow({
               ...ctx,
               ...interrupts,
               onRoundFinalized: (run) =>
-                ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
-              setting: ctx.setting as AgentToolUseSetting,
-              isSubagent,
-              onBeforeWaiting: options?.onBeforeWaiting,
-              onProgress: (update) => {
-                if (update.kind === 'overview') {
-                  toolUseTurns++;
-                  ctx.runtimeHost.emit('updateConversationProgress', {
-                    streamId,
-                    progress: {
-                      conversationTurns: toolUseTurns,
-                      toolCallCount: update.toolCallCount,
-                    },
-                  });
-                }
-                options?.onProgress?.(update);
-              },
-              onFollowUpConsumed: () => {
-                ctx.runtimeHost.emit('updateQueuedFollowUps', {
-                  streamId: ctx.streamId,
-                });
-                options?.onFollowUpConsumed?.();
-              },
+                ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
+              setting: ctx.setting as AgentWorkflowSetting,
+              parentStage: ctx.parentStage,
+              onRoundCompleted,
             });
             return {
-              category: 'toolUse' as const,
+              category: 'workflow' as const,
               status: result.status,
-              lastResponse: result.lastResponse,
-              touchedFiles: result.touchedFiles,
+              outputs: toOutputSummaries(result.roundOutputs),
+              compileFailures: toCompileFailureSummaries(result.roundOutputs),
               executionId: ctx.executionId,
               streamId,
             };
-          }
-
-          const onRoundCompleted = createRoundProgressCallback(
-            ctx.executionId,
-            streamId,
-            ctx.runtimeHost,
-            options?.onProgress,
-          );
-          const result = await runReflectionFlow({
-            ...ctx,
-            ...interrupts,
-            onRoundFinalized: (run) =>
-              ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
-            setting: ctx.setting as AgentWorkflowSetting,
-            parentStage: ctx.parentStage,
-            onRoundCompleted,
           });
-          return {
-            category: 'workflow' as const,
-            status: result.status,
-            outputs: toOutputSummaries(result.roundOutputs),
-            compileFailures: toCompileFailureSummaries(result.roundOutputs),
-            executionId: ctx.executionId,
-            streamId,
-          };
-        });
-      },
-      {
-        isSubagent,
-        category:
-          setting.agentCategory === AgentCategory.ToolUse
-            ? 'toolUse'
-            : 'workflow',
-        parentStreamId: options?.parentStreamId,
-        onCompleted: options?.onCompleted,
-      },
-    );
+        },
+        {
+          isSubagent,
+          category:
+            setting.agentCategory === AgentCategory.ToolUse
+              ? 'toolUse'
+              : 'workflow',
+          parentStreamId: options?.parentStreamId,
+          onCompleted: options?.onCompleted,
+        },
+      );
+    });
   });
 }
 
@@ -849,44 +903,46 @@ export async function executeMergeAgent(
     });
     const { streamId, executionId } = ctx;
 
-    await runFlowWithLifecycle(ctx, streamId, 'merge', async () => {
-      StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
-        runtimeHost: ctx.runtimeHost,
-      });
-
-      const taskStage = await logger.stage(`Task: merge@${model}`);
-      return taskStage.run(async () => {
-        logger.info(`Executing merge with model ${model}`);
-
-        const fileService = new TaskRunFileService(executionId);
-        const mergeSetting = ctx.setting as AgentWorkflowSetting;
-        const result = await runReflectionFlow({
-          ...ctx,
-          ...createInterruptCallbacks(),
-          onRoundFinalized: (run) =>
-            ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
-          setting: mergeSetting,
-          getOutputFileLocation: createMergeOutputFileLocationGetter(
-            fileService,
-            mergeSetting.outputExt,
-          ),
-          parentStage: ctx.parentStage,
-          onRoundCompleted: createRoundProgressCallback(
-            ctx.executionId,
-            streamId,
-            ctx.runtimeHost,
-          ),
+    await withExecutionRunContext(ctx, () =>
+      runFlowWithLifecycle(ctx, streamId, 'merge', async () => {
+        StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
+          runtimeHost: ctx.runtimeHost,
         });
-        return {
-          category: 'workflow' as const,
-          status: result.status,
-          outputs: toOutputSummaries(result.roundOutputs),
-          compileFailures: toCompileFailureSummaries(result.roundOutputs),
-          executionId: ctx.executionId,
-          streamId,
-        };
-      });
-    });
+
+        const taskStage = await logger.stage(`Task: merge@${model}`);
+        return taskStage.run(async () => {
+          logger.info(`Executing merge with model ${model}`);
+
+          const fileService = new TaskRunFileService(executionId);
+          const mergeSetting = ctx.setting as AgentWorkflowSetting;
+          const result = await runReflectionFlow({
+            ...ctx,
+            ...createInterruptCallbacks(),
+            onRoundFinalized: (run) =>
+              ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
+            setting: mergeSetting,
+            getOutputFileLocation: createMergeOutputFileLocationGetter(
+              fileService,
+              mergeSetting.outputExt,
+            ),
+            parentStage: ctx.parentStage,
+            onRoundCompleted: createRoundProgressCallback(
+              ctx.executionId,
+              streamId,
+              ctx.runtimeHost,
+            ),
+          });
+          return {
+            category: 'workflow' as const,
+            status: result.status,
+            outputs: toOutputSummaries(result.roundOutputs),
+            compileFailures: toCompileFailureSummaries(result.roundOutputs),
+            executionId: ctx.executionId,
+            streamId,
+          };
+        });
+      }),
+    );
   });
 }
 
@@ -913,52 +969,56 @@ export async function resumeToolUseFromSnapshot(
     );
     const { setting, streamId } = ctx;
 
-    if (setting.agentCategory !== AgentCategory.ToolUse) {
-      throw new Error(
-        'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
-      );
-    }
-
-    await runFlowWithLifecycle(
-      ctx,
-      streamId,
-      snapshot.agentConfig.agent,
-      async () => {
-        StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
-          runtimeHost: ctx.runtimeHost,
-        });
-
-        const result = await runToolUseFlow(
-          {
-            ...ctx,
-            ...createInterruptCallbacks(),
-            onRoundFinalized: (run) =>
-              ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
-            setting: setting as AgentToolUseSetting,
-            resumeSnapshot: snapshot,
-            // Derive from the recovered parent chain: any execution with a
-            // parent is a subagent. Without this, the rebuilt system prompt
-            // would drop subagent-specific instructions (e.g. the shared
-            // /memories protocol) that the fresh run had included.
-            isSubagent: (ctx.delegationDepth ?? 0) > 0,
-            onFollowUpConsumed: () =>
-              ctx.runtimeHost.emit('updateQueuedFollowUps', {
-                streamId: ctx.streamId,
-              }),
-          },
-          undefined,
-          setupSession ? (context) => setupSession(context.session) : undefined,
+    await withExecutionRunContext(ctx, async () => {
+      if (setting.agentCategory !== AgentCategory.ToolUse) {
+        throw new Error(
+          'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
         );
-        return {
-          category: 'toolUse' as const,
-          status: result.status,
-          lastResponse: result.lastResponse,
-          touchedFiles: result.touchedFiles,
-          executionId: ctx.executionId,
-          streamId,
-        };
-      },
-      { category: 'toolUse' },
-    );
+      }
+
+      await runFlowWithLifecycle(
+        ctx,
+        streamId,
+        snapshot.agentConfig.agent,
+        async () => {
+          StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
+            runtimeHost: ctx.runtimeHost,
+          });
+
+          const result = await runToolUseFlow(
+            {
+              ...ctx,
+              ...createInterruptCallbacks(),
+              onRoundFinalized: (run) =>
+                ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
+              setting: setting as AgentToolUseSetting,
+              resumeSnapshot: snapshot,
+              // Derive from the recovered parent chain: any execution with a
+              // parent is a subagent. Without this, the rebuilt system prompt
+              // would drop subagent-specific instructions (e.g. the shared
+              // /memories protocol) that the fresh run had included.
+              isSubagent: (ctx.delegationDepth ?? 0) > 0,
+              onFollowUpConsumed: () =>
+                ctx.runtimeHost.emit('updateQueuedFollowUps', {
+                  streamId: ctx.streamId,
+                }),
+            },
+            undefined,
+            setupSession
+              ? (context) => setupSession(context.session)
+              : undefined,
+          );
+          return {
+            category: 'toolUse' as const,
+            status: result.status,
+            lastResponse: result.lastResponse,
+            touchedFiles: result.touchedFiles,
+            executionId: ctx.executionId,
+            streamId,
+          };
+        },
+        { category: 'toolUse' },
+      );
+    });
   });
 }

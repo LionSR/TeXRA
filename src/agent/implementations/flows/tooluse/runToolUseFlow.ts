@@ -3,8 +3,11 @@ import {
   registerInterruptible,
   unregisterInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
-import { planApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
-import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import {
+  clearPlanApprovalForStream,
+  clearRetryRequest,
+} from '@agent/runtime/runCoordinators';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import {
   PersistedFlow,
   flowKey,
@@ -159,6 +162,7 @@ export async function runToolUseFlow<C = unknown>(
   );
 
   const kv = getExecutionStore(executionId);
+  const runCoordinators = tryUseRunContext()?.coordinators;
 
   const services: ToolUseServices<C> = {
     ...input,
@@ -180,8 +184,8 @@ export async function runToolUseFlow<C = unknown>(
     runtimeHost,
     interrupt(): void {
       onInterrupt?.();
-      retryCoordinator.clearRequest(streamId);
-      planApprovalCoordinator.clearForStream(streamId);
+      clearRetryRequest(streamId, runCoordinators);
+      clearPlanApprovalForStream(streamId, runCoordinators);
       sessionLifecycle.interrupt();
     },
   };
@@ -267,7 +271,7 @@ export async function runToolUseFlow<C = unknown>(
     }
 
     sessionLifecycle.dispose();
-    planApprovalCoordinator.clearForStream(streamId);
+    clearPlanApprovalForStream(streamId);
     unregisterInterruptible(streamId);
   }
 
