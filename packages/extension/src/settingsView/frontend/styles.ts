@@ -54,6 +54,7 @@ const settingsHeaderStyles: CSSResult = css`
     display: flex;
     align-items: center;
     gap: var(--wa-space-2xs);
+    margin-right: calc(var(--wa-space-s) + var(--height-control));
   }
 
   .settings-header-auth-button {
