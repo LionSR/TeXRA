@@ -16,11 +16,9 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { PlanState } from '@agent/core/AgentWorkspaceState';
-import {
-  planApprovalCoordinator,
-  type PlanApprovalResult,
-} from '@agent/runtime/PlanApprovalCoordinator';
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
+import { waitForPlanApproval } from '@agent/runtime/runCoordinators';
+import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   TODO_STATUS,
@@ -100,9 +98,11 @@ Best practices:
   schema: PlanToolInputSchema,
 }) {
   protected async execute(input: PlanToolInput): Promise<ToolResult> {
-    const context = getCurrentToolFileInteractionContext();
+    const contexts = getCurrentToolContexts();
+    const callContext = contexts?.callContext;
+    const runContext = contexts?.runContext;
 
-    if (!context?.planState) {
+    if (!callContext?.planState) {
       logger.warn(
         'plan called without planState in context — plan will not persist or display in UI',
       );
@@ -121,21 +121,21 @@ Best practices:
     );
 
     // Show the plan in the UI immediately
-    context.planState.updatePlan(input.plan);
+    callContext.planState.updatePlan(input.plan);
 
     if (isNewPlan) {
-      if (!context.streamId) {
+      if (!runContext?.streamId) {
         logger.warn(
           'New plan created without streamId — skipping approval gate',
         );
-      } else if (isProposalBypassedForStream(context.streamId)) {
+      } else if (isProposalBypassedForStream(runContext.streamId)) {
         logger.info('Plan auto-approved via delegated-task auto-approval');
         return this.buildApprovedResult({ autoApproved: true });
       } else {
         return this.requestApproval(
           input.plan,
-          context.streamId,
-          context.planState,
+          runContext.streamId,
+          callContext.planState,
         );
       }
     }
@@ -155,11 +155,10 @@ Best practices:
 
     logger.info(`Requesting approval for plan: ${plan.summary}`);
 
-    const result: PlanApprovalResult =
-      await planApprovalCoordinator.waitForApproval(streamId, {
-        approvalId,
-        plan,
-      });
+    const result: PlanApprovalResult = await waitForPlanApproval(streamId, {
+      approvalId,
+      plan,
+    });
 
     if (result.action === 'approve') {
       logger.info('Plan approved by user');
