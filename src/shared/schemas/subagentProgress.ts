@@ -21,6 +21,11 @@ export interface RoundProgressUpdate {
   readonly kind: 'round';
   readonly currentRound: number;
   readonly totalRounds: number;
+  /** Workspace-relative (or external absolute) paths of files produced by
+   *  this round. Empty when the round produced no output files. The
+   *  orchestrator can read these on demand without waiting for the final
+   *  delivery. */
+  readonly outputPaths: readonly string[];
 }
 
 /** Periodic overview of tool-use subagent activity. */

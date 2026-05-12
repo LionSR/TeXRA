@@ -217,8 +217,16 @@ export function formatSubagentProgress(
       ].join('\n');
     }
 
-    case 'round':
-      return `<subagent-progress ${idAttr} ${agentAttr} type="round" current="${update.currentRound + 1}" total="${update.totalRounds}" />`;
+    case 'round': {
+      const head = `<subagent-progress ${idAttr} ${agentAttr} type="round" current="${update.currentRound + 1}" total="${update.totalRounds}"`;
+      if (update.outputPaths.length === 0) {
+        return `${head} />`;
+      }
+      const fileLines = update.outputPaths.map(
+        (p) => `<file path="${escapeAttr(p)}" />`,
+      );
+      return [`${head}>`, ...fileLines, '</subagent-progress>'].join('\n');
+    }
 
     case 'overview': {
       const fileList =

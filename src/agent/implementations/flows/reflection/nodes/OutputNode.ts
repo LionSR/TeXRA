@@ -158,7 +158,7 @@ export class OutputNode<C = unknown> extends Node<
       outputState,
       baseFiles,
       currentRound,
-      { isRewrite: setting.isRewrite },
+      { isRewrite: setting.isRewrite, executionId: this.services.executionId },
     );
 
     return { roundOutput, summary, compileFailures, emitCompileFailures };

@@ -9,10 +9,15 @@ import { diff_match_patch } from 'diff-match-patch';
 
 import * as logger from '@agent/core/logger';
 import type { DiffStats } from '@agent/types/DiffTypes';
-import type { OutputFileInfo, FileLocation } from '@shared/schemas';
+import type {
+  ExecutionId,
+  OutputFileInfo,
+  FileLocation,
+} from '@shared/schemas';
 import { flexibleFS, getComparablePath } from '@utils/files';
 import { countLines } from '@utils/text/stringUtils';
 
+import { resolveBaseFilesForDiff } from './snapshotResolution';
 import { traceFileLineage } from './lineageMapping';
 import { ensureRound, type OutputState } from './outputState';
 import type { RoundFileMapping } from './types';
@@ -70,11 +75,18 @@ export async function computeOutputDiffStats(
   baseFiles: FileLocation[],
   currRound: number,
   precomputedMapping?: RoundFileMapping,
-  options?: { isRewrite?: boolean },
+  options?: { isRewrite?: boolean; executionId?: ExecutionId },
 ): Promise<OutputFileInfo[]> {
   const roundOutputs = ensureRound(state, currRound);
+  // Substitute workspace base files with their pre-run snapshot when one
+  // exists. In-place workflows overwrite the live workspace file before
+  // we get here; reading it as the diff base would collapse to 0/0.
+  const diffBaseFiles = await resolveBaseFilesForDiff(
+    baseFiles,
+    options?.executionId,
+  );
   const mapping =
-    precomputedMapping ?? traceFileLineage(state, baseFiles, currRound);
+    precomputedMapping ?? traceFileLineage(state, diffBaseFiles, currRound);
   const suppressLineage = options?.isRewrite === false;
 
   return Promise.all(
@@ -99,8 +111,12 @@ export async function computeOutputDiffStats(
       // "methods") don't match the base filename via basename strategies.
       // If no diff base was found but there is exactly one base file, use it
       // so the diff stats reflect real changes against the original.
-      if (!diffBaseLocation && !originalLocation && baseFiles.length === 1) {
-        const candidate = baseFiles[0];
+      if (
+        !diffBaseLocation &&
+        !originalLocation &&
+        diffBaseFiles.length === 1
+      ) {
+        const candidate = diffBaseFiles[0];
         if (getComparablePath(candidate) !== locationPath) {
           diffBaseLocation = candidate;
         }

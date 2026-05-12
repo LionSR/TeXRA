@@ -59,7 +59,7 @@ export async function summarizeRound(
         deps.baseFiles,
         currRound,
         options.mapping,
-        { isRewrite: options.isRewrite },
+        { isRewrite: options.isRewrite, executionId: deps.executionId },
       );
       data.outputs = fileInfos;
       const storageKey = getStorageKey(state);
@@ -96,7 +96,7 @@ export async function getRoundOutput(
   state: OutputState,
   baseFiles: FileLocation[],
   round: number,
-  options?: { isRewrite?: boolean },
+  options?: { isRewrite?: boolean; executionId?: string },
 ): Promise<RoundOutput> {
   const data = ensureRoundData(state, round);
 
