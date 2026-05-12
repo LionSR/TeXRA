@@ -8,7 +8,7 @@ import '@awesome.me/webawesome/dist/components/drawer/drawer.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import type WaDrawer from '@awesome.me/webawesome/dist/components/drawer/drawer.js';
-import { html, render, type TemplateResult } from 'lit';
+import { html, nothing, render, type TemplateResult } from 'lit';
 import { Signal } from '@shared/signals';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import {
@@ -129,6 +129,10 @@ const appRoot = root;
 
 let currentRoute: DesktopRoute = 'main';
 const hasWorkspace = window.texraDesktop?.hasWorkspace ?? true;
+const workspacePath = window.texraDesktop?.workspacePath;
+const workspaceFolderName = workspacePath
+  ? workspacePath.split(/[\\/]/).pop() || workspacePath
+  : undefined;
 
 // `<settings-app>` lives inside the wa-dialog overlay below; `<main-app>` and
 // `<stream-conversation>` mount directly in the center pane. These are
@@ -322,7 +326,17 @@ function shellTemplate(): TemplateResult {
       <div class="desktop-three-pane">
         <aside class="desktop-rail" aria-label="Sessions">
           <header class="desktop-rail-header">
-            <span class="desktop-rail-title">Sessions</span>
+            <div class="desktop-rail-header-content">
+              ${workspaceFolderName
+                ? html`<div
+                    class="desktop-workspace-name"
+                    title=${workspacePath}
+                  >
+                    ${workspaceFolderName}
+                  </div>`
+                : nothing}
+              <span class="desktop-rail-title">Sessions</span>
+            </div>
             <wa-button
               class="desktop-rail-new"
               appearance="outlined"

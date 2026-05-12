@@ -1,3 +1,6 @@
+// Standard library imports
+import { createInterface } from 'node:readline/promises';
+
 // Local imports - logger
 import type { LogRecord, LogSink } from '@logger/structuredLogger';
 
@@ -48,6 +51,28 @@ export function writeTextStdout(text: string): void {
   );
 }
 
+export function writeRawStdout(text: string): void {
+  if (stdoutClosed || process.stdout.destroyed) return;
+  try {
+    process.stdout.write(text, (error) => {
+      if (error) stdoutClosed = true;
+    });
+  } catch {
+    stdoutClosed = true;
+  }
+}
+
+export function writeRawStderr(text: string): void {
+  if (stderrClosed || process.stderr.destroyed) return;
+  try {
+    process.stderr.write(text, (error) => {
+      if (error) stderrClosed = true;
+    });
+  } catch {
+    stderrClosed = true;
+  }
+}
+
 export function writeTextStderr(text: string): void {
   writeLine(
     process.stderr,
@@ -57,6 +82,28 @@ export function writeTextStderr(text: string): void {
       stderrClosed = true;
     },
   );
+}
+
+export async function askCliQuestion(question: string): Promise<string> {
+  const prompt = createInterface({
+    input: process.stdin,
+    output: process.stderr,
+  });
+  try {
+    return await prompt.question(question);
+  } finally {
+    prompt.close();
+  }
+}
+
+export function createCliLineReader(
+  prompt: string,
+): ReturnType<typeof createInterface> {
+  return createInterface({
+    input: process.stdin,
+    output: process.stderr,
+    prompt,
+  });
 }
 
 export class StderrTextSink implements LogSink {
