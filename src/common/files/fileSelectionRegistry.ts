@@ -91,7 +91,7 @@ export type MultiFileCategory =
 
 /**
  * Commands for multi-file selection operations.
- * Note: 'edited' is in ExtendedFileType but not here (no multi-select for edited).
+ * Note: 'edited' is in ExtendedDocumentFileType but not here (no multi-select for edited).
  */
 export const MULTIPLE_FILE_COMMANDS: ReadonlyMap<
   MultiFileCategory,

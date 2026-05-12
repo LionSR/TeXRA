@@ -2,8 +2,7 @@
  * Agent index module - public API for the agent registry.
  */
 
-// AgentSource: canonical definition in @shared/schemas/agent, re-exported via AgentDataclass
-export { AgentSource } from '@agent/core/AgentDataclass';
+export { AgentSource } from '@shared/schemas/agent';
 
 export {
   DEFAULT_CUSTOM_AGENTS_DIR_NAME,
