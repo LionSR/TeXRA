@@ -57,14 +57,9 @@ export const AddCriticismInputSchema = z.strictObject({
     .describe(
       'Absolute or workspace-relative path to the file the criticism applies to.',
     ),
-  line: z
-    .number()
-    .int()
-    .min(1)
-    .describe('1-based line number where the issue occurs.'),
+  line: z.int().min(1).describe('1-based line number where the issue occurs.'),
   message: z.string().min(1).describe('Description of the issue.'),
   severity: z
-    .number()
     .int()
     .min(0)
     .max(5)
@@ -72,7 +67,6 @@ export const AddCriticismInputSchema = z.strictObject({
       'Severity 0–5: 5=desk-rejection risk, 4=significantly weakens, 3=worth addressing, 2=minor polish, 1=cosmetic, 0=verified/correct.',
     ),
   confidence: z
-    .number()
     .int()
     .min(1)
     .max(5)

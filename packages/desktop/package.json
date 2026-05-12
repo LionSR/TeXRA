@@ -25,16 +25,16 @@
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "@texra/core": "workspace:*",
-    "electron": "^42.0.0",
-    "electron-builder": "^26.8.1",
+    "electron": "^42.0.1",
+    "electron-builder": "^26.10.0",
     "esbuild": "^0.28.0",
     "playwright": "^1.59.1",
     "typescript": "^6.0.3",
-    "vite": "^8.0.11"
+    "vite": "^8.0.12"
   },
   "dependencies": {
     "@fortawesome/free-solid-svg-icons": "^7.2.0",
-    "@openai/codex-sdk": "^0.129.0",
+    "@openai/codex-sdk": "^0.130.0",
     "@sentry/electron": "^7.13.0",
     "fix-path": "^5.0.0"
   }

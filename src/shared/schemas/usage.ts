@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-import { ContextStateDataSchema } from './contextManagement';
-
 export const TokenUsageStatsSchema = z.strictObject({
   inputTokens: z.number(),
   outputTokens: z.number(),
@@ -59,12 +57,3 @@ export const ExtendedTokenUsageStatsSchema = TokenUsageStatsSchema.extend({
 export type ExtendedTokenUsageStats = z.infer<
   typeof ExtendedTokenUsageStatsSchema
 >;
-
-/**
- * Context state for tracking context utilization.
- * Re-exported from contextManagement.ts for backward compatibility.
- * Uses ContextStateDataSchema as the single source of truth.
- */
-export const ContextStateSchema = ContextStateDataSchema;
-
-export type ContextState = z.infer<typeof ContextStateSchema>;

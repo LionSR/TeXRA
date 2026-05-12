@@ -10,7 +10,8 @@ import { StreamStatusSchema } from './stream';
 import { TaskGroupSchema } from './taskGroup';
 import { PlanSchema } from './plan';
 import { TodoItemSchema } from './todo';
-import { ContextStateSchema, TokenUsageStatsSchema } from './usage';
+import { ContextStateDataSchema } from './contextManagement';
+import { TokenUsageStatsSchema } from './usage';
 
 // Active Child Info (shared shape for subagent and process badges)
 
@@ -64,7 +65,7 @@ export type StreamMetadata = z.infer<typeof StreamMetadataSchema>;
 const BaseStreamStateSchema = BackendOwnedFieldsSchema.extend({
   // Frontend-owned fields — set by frontend handlers, preserved during backend merges.
   taskGroups: z.array(TaskGroupSchema).prefault([]),
-  contextState: ContextStateSchema.optional(),
+  contextState: ContextStateDataSchema.optional(),
 });
 
 // Tool-Use UI State (frontend-only, preserved during backend updates)
