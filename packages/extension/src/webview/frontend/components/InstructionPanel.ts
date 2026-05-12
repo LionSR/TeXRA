@@ -246,8 +246,7 @@ export class InstructionPanel extends LitElement {
         min-width: 0;
       }
 
-      .model-selection-footer .select-group,
-      .model-selection-footer .agent-select-group {
+      .model-selection-footer .select-group {
         display: flex;
         align-items: center;
         gap: var(--wa-space-2xs);
@@ -255,15 +254,30 @@ export class InstructionPanel extends LitElement {
         min-width: 0;
       }
 
-      .model-selection-footer .agent-model-select-group {
-        flex: 0 1 auto;
-      }
-
       .model-selection-footer .agent-select-group {
+        position: relative;
+        flex: 0 0
+          calc(
+            var(--agent-select-max-width) + var(--height-control) +
+              var(--wa-space-2xs)
+          );
+        min-width: 0;
         max-width: calc(
           var(--agent-select-max-width) + var(--height-control) +
             var(--wa-space-2xs)
         );
+      }
+
+      .model-selection-footer .agent-model-select-group {
+        display: flex;
+        align-items: center;
+        gap: var(--wa-space-2xs);
+      }
+
+      .model-selection-footer .agent-select-group wa-select {
+        position: absolute;
+        left: calc(var(--height-control) + var(--wa-space-2xs));
+        top: 0;
       }
 
       .model-selection-footer .model-select-group {
