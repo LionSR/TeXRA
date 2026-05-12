@@ -19,7 +19,7 @@ type ToolUseCycleOutcome =
   | { outcome: 'completed'; messages: ProviderMessage[] }
   | { outcome: 'skipped' }
   | { outcome: 'cancelled' }
-  | { outcome: 'failed'; message: string; retryable?: boolean };
+  | { outcome: 'failed'; message: string; userRetryable?: boolean };
 
 export class ToolUseCycleNode<C> extends Node<
   ToolUseRunShared,
@@ -110,7 +110,7 @@ export class ToolUseCycleNode<C> extends Node<
         return {
           outcome: 'failed',
           message: cycleShared.lastError.message,
-          retryable: cycleShared.lastError.retryable,
+          userRetryable: cycleShared.lastError.userRetryable,
         };
       }
       if (cycleShared.shouldStop && !cycleShared.endTurn) {
@@ -134,7 +134,7 @@ export class ToolUseCycleNode<C> extends Node<
     return {
       outcome: 'failed',
       message: error.message,
-      retryable: formatted.retryable,
+      userRetryable: formatted.userRetryable,
     };
   }
 
@@ -179,7 +179,7 @@ export class ToolUseCycleNode<C> extends Node<
       case 'failed':
         shared.lastError = {
           message: execRes.message,
-          retryable: execRes.retryable ?? false,
+          userRetryable: execRes.userRetryable ?? false,
         };
         break;
       case 'cancelled':

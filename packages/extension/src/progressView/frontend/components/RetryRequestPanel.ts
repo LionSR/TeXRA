@@ -53,11 +53,11 @@ export class RetryRequestPanel extends BaseRequestPanel {
     const isRelay = data.errorDetails?.isRelayError === true;
     const isCredentialExhausted =
       data.errorDetails?.isCredentialExhausted === true;
-    const retryable = data.errorDetails?.retryable !== false;
+    const userRetryable = data.errorDetails?.userRetryable !== false;
     const metaParts = [
       data.model ? `Model: ${data.model}` : null,
       isRelay ? 'Source: Relay' : null,
-      `Retryable: ${retryable ? 'Yes' : 'No'}`,
+      `Can retry: ${userRetryable ? 'Yes' : 'No'}`,
     ].filter(Boolean);
 
     const detailsText = this.formatRetryDetails(data.errorDetails);
