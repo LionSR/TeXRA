@@ -21,6 +21,7 @@ import type {
 } from '@shared/schemas';
 import { TODO_STATUS } from '@shared/schemas/todo';
 import { countByStatus } from '@shared/schemas/todoDisplay';
+import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { formatDuration } from '@utils/core';
 import type { DiffFileInfo } from './subagentDiffs';
 
@@ -445,14 +446,4 @@ function lastNLines(text: string, n: number): string {
   return lines.length <= n ? text : lines.slice(-n).join('\n');
 }
 
-export function escapeAttr(s: string): string {
-  return s
-    .replaceAll('&', '&amp;')
-    .replaceAll('"', '&quot;')
-    .replaceAll('<', '&lt;');
-}
-
-/** Escape XML text content (element bodies). */
-export function escapeText(s: string): string {
-  return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;');
-}
+export { escapeAttr, escapeText } from '@shared/utils/xmlEscape';

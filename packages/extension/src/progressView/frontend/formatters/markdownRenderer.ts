@@ -9,6 +9,7 @@ import katex from 'katex';
 
 // Local imports - shared highlighting
 import { highlightCode } from '@shared/highlighting/highlightCode';
+import { escapeAttr } from '@shared/utils/xmlEscape';
 
 // Local imports - progress view helpers
 import { katexMacros } from '../katexMacros';
@@ -55,9 +56,12 @@ export const getMarkdownRenderer = (): MarkdownIt => {
   return markdownRenderer;
 };
 
-/** Create LaTeX reference HTML element. */
+/** Create LaTeX reference HTML element. Labels arrive from model output and
+ *  may carry crafted characters; escape via the shared util so a label
+ *  cannot break out of the `data-label` attribute or the inner text. */
 const createLatexReferenceHtml = (refType: string, label: string): string => {
-  return `<span class="latex-ref clickable-link" data-label="${label}">\\${refType}{${label}}</span>`;
+  const safeLabel = escapeAttr(label);
+  return `<span class="latex-ref clickable-link" data-label="${safeLabel}">\\${refType}{${safeLabel}}</span>`;
 };
 
 /** Protect LaTeX references from markdown parsing. */

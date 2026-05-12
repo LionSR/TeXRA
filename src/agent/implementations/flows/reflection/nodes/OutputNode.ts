@@ -10,6 +10,7 @@ import {
 import { runCompileCheck } from '@agent/output/compileCheck';
 import { extractFilesFromXml } from '@agent/output/xmlExtraction';
 import { traceFileLineage } from '@agent/output/lineageMapping';
+import { resolveBaseFilesForDiff } from '@agent/output/snapshotResolution';
 import { checkExpectedOutputs } from '@agent/output/outputValidation';
 import {
   summarizeRound,
@@ -78,6 +79,17 @@ export class OutputNode<C = unknown> extends Node<
       this.services;
     const { outputLocation, currentRound, endTurn } = prepRes;
 
+    // Substitute workspace base files with their pre-run snapshot when
+    // captured by prepareRunWorkspace. In-place workflows overwrite the
+    // live workspace file before output processing runs, so diffing
+    // against it would collapse to 0/0. This resolution is done once
+    // here so the mapping, latexdiff, and diff stats all see consistent
+    // base locations.
+    const diffBaseFiles = await resolveBaseFilesForDiff(
+      baseFiles,
+      this.services.executionId,
+    );
+
     let mapping: RoundFileMapping | undefined;
     let compileFailures: CompileFailure[] = [];
     let emitCompileFailures = false;
@@ -110,14 +122,14 @@ export class OutputNode<C = unknown> extends Node<
       );
 
       if (hasRoundOutputs(outputState, currentRound)) {
-        mapping = traceFileLineage(outputState, baseFiles, currentRound);
+        mapping = traceFileLineage(outputState, diffBaseFiles, currentRound);
 
         await tryOperation(
           'Latexdiff',
           () =>
             this.handleLatexdiff(
               currentRound,
-              baseFiles,
+              diffBaseFiles,
               mapping!,
               diffManager,
             ),
@@ -150,15 +162,20 @@ export class OutputNode<C = unknown> extends Node<
       this.services,
       outputLocation,
       currentRound,
-      { endTurn, mapping, isRewrite: setting.isRewrite },
+      {
+        endTurn,
+        mapping,
+        isRewrite: setting.isRewrite,
+        baseFiles: diffBaseFiles,
+      },
     );
 
     // Get round output — critical, throw if it fails
     const roundOutput = await getRoundOutput(
       outputState,
-      baseFiles,
+      diffBaseFiles,
       currentRound,
-      { isRewrite: setting.isRewrite, executionId: this.services.executionId },
+      { isRewrite: setting.isRewrite },
     );
 
     return { roundOutput, summary, compileFailures, emitCompileFailures };
