@@ -2,6 +2,7 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 
 // Local imports - CLI runtime
@@ -60,14 +61,30 @@ export const CLI_BOOLEAN_FLAGS = new Set([
 
 interface CliAmbientState {
   readonly isCi: boolean;
+  readonly stdinIsTty: boolean;
   readonly stdoutIsTty: boolean;
+  readonly stderrIsTty: boolean;
 }
 
 function readCliAmbientState(): CliAmbientState {
   return {
     isCi: Boolean(process.env.CI),
+    stdinIsTty: process.stdin.isTTY === true,
     stdoutIsTty: process.stdout.isTTY === true,
+    stderrIsTty: process.stderr.isTTY === true,
   };
+}
+
+export async function askCliQuestion(question: string): Promise<string> {
+  const prompt = createInterface({
+    input: process.stdin,
+    output: process.stderr,
+  });
+  try {
+    return await prompt.question(question);
+  } finally {
+    prompt.close();
+  }
 }
 
 export function cliFlagName(arg: string): string {
@@ -190,7 +207,9 @@ export function applyCliGlobalArgs(
 function cliMode(args: readonly string[], ambient: CliAmbientState): CliMode {
   if (hasBooleanFlag(args, '--print', '-p')) return 'headless';
   if (ambient.isCi) return 'headless';
+  if (!ambient.stdinIsTty) return 'headless';
   if (!ambient.stdoutIsTty) return 'headless';
+  if (!ambient.stderrIsTty) return 'headless';
   return 'interactive';
 }
 
