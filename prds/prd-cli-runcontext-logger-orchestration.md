@@ -37,6 +37,23 @@ The result should make the CLI another host over the same agent runtime, not a p
 - Do not rewrite agent flows, model handlers, or tools except where a small context parameter or host hook is required.
 - Do not replace all ambient state in one PR. Retire it in dependency order.
 
+## 3.1 Implementation audit, 2026-05-11
+
+The current implementation is split across a base PR and five focused follow-ups:
+
+| PR    | Scope                                                                       | Issue coverage | Current state                                                                        |
+| ----- | --------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------ |
+| #3839 | Scaffold CLI, RunContext, logger, and orchestration base                    | #3833-#3838    | Open, non-draft, mergeable, GitHub checks passing, no unresolved live review threads |
+| #3843 | Packaged `texra run` validation                                             | #3834, #3840   | Open, non-draft, mergeable, GitHub checks passing                                    |
+| #3844 | CLI `ask` approval prompts                                                  | #3835, #3841   | Open, non-draft, GitHub checks passing; stacked mergeability depends on #3843        |
+| #3845 | Legacy host logs through structured logger sinks                            | #3833, #3842   | Open, non-draft, mergeable, GitHub checks passing, no unresolved live review threads |
+| #3846 | Plain `texra chat` loop                                                     | #3836, #3848   | Open, non-draft, mergeable, GitHub checks passing                                    |
+| #3847 | `ToolFileInteractionContext` async storage and split run/call context views | #3837, #3849   | Open, non-draft, mergeable, GitHub checks passing                                    |
+
+The stack now provides a working scaffold, packaged `texra run` validation, CLI approval prompts, a structured-logger host-sink migration slice, a plain terminal chat loop, async-scoped tool-call context storage, and the `src/tools` split between run-owned and call-owned tool-context views. PR #3847 stores separate run/call views in the async context frame, guards their fields with exhaustive key maps, and migrates tool readers to run-owned, call-owned, or explicit mixed access paths. A search after the migration shows no remaining `getCurrentToolFileInteractionContext()` imports under `src/tools`. It does not claim to finish every future v1 item in this PRD. In particular, the richer `texra chat` renderer remains tracked by #3848, and the final architectural decision about whether `ToolRunContext` becomes part of `RunContext` remains tracked by #3837.
+
+The parent issues #3833-#3837 remain open until maintainers merge the stack or decide that the linked follow-up issues own the remaining acceptance criteria.
+
 ## 4. Actual repository state
 
 ### 4.1 Package layout
@@ -102,7 +119,7 @@ The following ambient state is still active:
 - `src/tools/approval/bashApproval.ts`: module-level bash approval controller.
 - `src/tools/approval/toolEditApproval.ts`: module-level edit approval handler and stream approval controller.
 - `src/tools/inquiry/ExternalInquiryTool.ts`: module-level pending inquiry map.
-- `src/agent/toolUse/ToolFileInteractionContext.ts`: module-level tool-call context stack.
+- `src/agent/toolUse/ToolFileInteractionContext.ts`: async-scoped tool-call context frame with compatibility access to the combined context and split run/call views.
 - `src/agent/index/agentDirectoriesRegistry.ts`: module-level agent directory provider.
 
 The CLI v1.0 does not need all of these retired, but it does need a clear ownership model.

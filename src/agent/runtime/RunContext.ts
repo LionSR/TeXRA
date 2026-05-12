@@ -9,6 +9,7 @@ import type { RetryRequestCoordinatorImpl } from './RetryRequestCoordinator';
 
 // Local imports - shared schemas
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 
 export type RunLogData = Record<string, unknown>;
 
@@ -36,6 +37,38 @@ export interface RunCoordinators {
   readonly retry: RetryRequestCoordinatorImpl;
 }
 
+/**
+ * Run-owned facts needed while executing tool calls.
+ *
+ * The active tool-call frame may still carry these fields during migration, but
+ * RunContext is the durable owner. Per-call mutable state such as tracker,
+ * todo, plan, and streaming callbacks belongs to ToolCallContext.
+ */
+export interface ToolRunContext {
+  streamId?: StreamTabId;
+  executionId?: ExecutionId;
+  /** Model short name of the parent agent (e.g. "opus46T", "sonnet46T"). */
+  model?: string;
+  /** Agent name of the parent agent (e.g. "orchestrator", "search-agent"). */
+  agentName?: string;
+  /** Working directory override for tool calls (e.g. a git worktree path). */
+  workingDirectory?: string;
+  /** Runtime host inherited from the executing agent. */
+  runtimeHost?: AgentRuntimeHost;
+  /**
+   * Delegation depth of the agent executing this tool call. 0 for root
+   * (user-initiated), N for an agent N levels deep. Read by delegation tools
+   * to compute the child's depth.
+   */
+  delegationDepth?: number;
+  /**
+   * Delegation policy snapshot for the executing agent. Keeps delegation tool
+   * enforcement aligned with the tool list shown to the model without carrying
+   * a second depth value.
+   */
+  delegationConfig?: NestedDelegationConfig;
+}
+
 export interface RunContext {
   readonly runtimeHost: AgentRuntimeHost;
   readonly streamId?: StreamTabId;
@@ -43,6 +76,7 @@ export interface RunContext {
   readonly logger: RunLogger;
   readonly approvals: ApprovalHandlers;
   readonly coordinators?: RunCoordinators;
+  readonly toolRunContext?: ToolRunContext;
 }
 
 export interface CreateRunContextOptions {
@@ -52,6 +86,7 @@ export interface CreateRunContextOptions {
   logger?: Partial<RunLogger>;
   approvals?: ApprovalHandlers;
   coordinators?: RunCoordinators;
+  toolRunContext?: ToolRunContext;
 }
 
 const noopLog = (): void => undefined;
@@ -76,6 +111,9 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     }),
     approvals: Object.freeze({ ...approvals }),
     coordinators: options.coordinators,
+    toolRunContext: options.toolRunContext
+      ? Object.freeze({ ...options.toolRunContext })
+      : undefined,
   });
 }
 
