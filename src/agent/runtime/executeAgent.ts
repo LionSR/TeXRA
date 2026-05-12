@@ -428,8 +428,12 @@ function createRoundProgressCallback(
   streamId: StreamTabId,
   runtimeHost: AgentRuntimeHost,
   onProgress?: (update: SubagentProgressUpdate) => void,
-): (roundIndex: number, totalRounds: number) => void {
-  return (roundIndex, totalRounds) => {
+): (
+  roundIndex: number,
+  totalRounds: number,
+  outputPaths?: readonly string[],
+) => void {
+  return (roundIndex, totalRounds, outputPaths) => {
     updateExecutionProgress(executionId, {
       currentRound: roundIndex,
       totalRounds,
@@ -438,6 +442,7 @@ function createRoundProgressCallback(
       kind: 'round',
       currentRound: roundIndex,
       totalRounds,
+      outputPaths: outputPaths ?? [],
     });
     runtimeHost.emit('updateConversationProgress', {
       streamId,

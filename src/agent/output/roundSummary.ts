@@ -44,6 +44,11 @@ export async function summarizeRound(
     stage?: AgentLogStage;
     mapping?: RoundFileMapping;
     isRewrite?: boolean;
+    /** Snapshot-resolved base files. Required for in-place workflows so
+     *  diff stats are computed against the pre-run snapshot rather than
+     *  the overwritten workspace file. When omitted, falls back to
+     *  deps.baseFiles (live workspace paths). */
+    baseFiles?: FileLocation[];
   },
 ): Promise<RoundSummary> {
   return withOutputStage(
@@ -56,7 +61,7 @@ export async function summarizeRound(
 
       const fileInfos = await computeOutputDiffStats(
         state,
-        deps.baseFiles,
+        options.baseFiles ?? deps.baseFiles,
         currRound,
         options.mapping,
         { isRewrite: options.isRewrite },

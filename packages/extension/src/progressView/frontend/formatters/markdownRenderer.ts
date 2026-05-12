@@ -9,6 +9,7 @@ import katex from 'katex';
 
 // Local imports - shared highlighting
 import { highlightCode } from '@shared/highlighting/highlightCode';
+import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 
 // Local imports - progress view helpers
 import { katexMacros } from '../katexMacros';
@@ -55,31 +56,45 @@ export const getMarkdownRenderer = (): MarkdownIt => {
   return markdownRenderer;
 };
 
-/** Create LaTeX reference HTML element. */
+/** Create LaTeX reference HTML element. Labels arrive from model output and
+ *  may carry crafted characters; escape via the shared util so a label
+ *  cannot break out of the `data-label` attribute or the inner text. */
 const createLatexReferenceHtml = (refType: string, label: string): string => {
-  return `<span class="latex-ref clickable-link" data-label="${label}">\\${refType}{${label}}</span>`;
+  const safeAttrLabel = escapeAttr(label);
+  const safeTextLabel = escapeText(label);
+  return `<span class="latex-ref clickable-link" data-label="${safeAttrLabel}">\\${refType}{${safeTextLabel}}</span>`;
 };
 
+interface ProtectedLatexReference {
+  refType: string;
+  label: string;
+}
+
 /** Protect LaTeX references from markdown parsing. */
-const protectLatexReferences = (content: string): string => {
-  content = content.replaceAll(/\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
-  content = content.replaceAll(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
-  content = content.replaceAll(/\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
-  return content;
+const protectLatexReferences = (
+  content: string,
+): { content: string; refs: ProtectedLatexReference[] } => {
+  const refs: ProtectedLatexReference[] = [];
+  const protectedContent = content.replaceAll(
+    /\\(ref|cref|eqref)\{([^}]+)\}/g,
+    (_match, refType: string, label: string) => {
+      const index = refs.push({ refType, label }) - 1;
+      return `@@LATEX-REF-${index}@@`;
+    },
+  );
+  return { content: protectedContent, refs };
 };
 
 /** Restore LaTeX references from placeholders to clickable elements. */
-const restoreLatexReferences = (content: string): string => {
-  return content
-    .replaceAll(/@@LATEX-REF:([^@]+)@@/g, (_, label) =>
-      createLatexReferenceHtml('ref', label),
-    )
-    .replaceAll(/@@LATEX-CREF:([^@]+)@@/g, (_, label) =>
-      createLatexReferenceHtml('cref', label),
-    )
-    .replaceAll(/@@LATEX-EQREF:([^@]+)@@/g, (_, label) =>
-      createLatexReferenceHtml('eqref', label),
-    );
+const restoreLatexReferences = (
+  content: string,
+  refs: ProtectedLatexReference[],
+): string => {
+  return content.replaceAll(/@@LATEX-REF-(\d+)@@/g, (match, rawIndex) => {
+    const index = Number(rawIndex);
+    const ref = refs[index];
+    return ref ? createLatexReferenceHtml(ref.refType, ref.label) : match;
+  });
 };
 
 /** Simple hash function for cache keys (FNV-1a variant). */
@@ -114,7 +129,7 @@ export const processMarkdownContent = (
 
   // Pre-process LaTeX references to protect them from markdown parsing
   // Note: Pandoc reference formats are normalized to LaTeX at the source (xmlUtils.ts)
-  const protectedContent = protectLatexReferences(content);
+  const { content: protectedContent, refs } = protectLatexReferences(content);
 
   // Add line break before bold text starting a new sentence (capital letter after period)
   // This fixes OpenAI reasoning summary output which omits line breaks before bold headers
@@ -129,7 +144,7 @@ export const processMarkdownContent = (
   const parsedMarkdown = md.render(formattedContent);
 
   // Post-process to restore and style LaTeX references
-  const result = restoreLatexReferences(parsedMarkdown);
+  const result = restoreLatexReferences(parsedMarkdown, refs);
 
   // Store in cache with LRU eviction
   if (useCache && cacheKey) {
