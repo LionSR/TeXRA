@@ -11,10 +11,14 @@ import {
   SETTINGS_VIEW_COMMANDS,
 } from '@common/webview/commands';
 import {
+  LATEX_CONFIG_FIELDS,
   LATEX_CONFIG_RANGES,
   LATEX_FORMATTER_VALUES,
   LATEXDIFF_MATH_MARKUP_VALUES,
 } from '@shared/constants/latex';
+// Re-export the canonical type so existing consumers that import
+// `LatexConfigField` from this module continue to compile.
+export type { LatexConfigField } from '@shared/constants/latex';
 import {
   createDispatcher,
   type HandlerRegistry,
@@ -225,7 +229,6 @@ export const UpdateSuperYoloEnabledMessageSchema = z.object({
   allowOrchestratorKill: z.boolean().prefault(true),
   detachSubagentsOnStop: z.boolean().prefault(false),
   nestedDelegationMaxDepth: z
-    .number()
     .int()
     .min(NESTED_DELEGATION_DEPTH_RANGE.min)
     .max(NESTED_DELEGATION_DEPTH_RANGE.max)
@@ -483,13 +486,11 @@ export type LatexdiffMathMarkup = z.infer<typeof LatexdiffMathMarkupSchema>;
 export const LatexConfigValuesSchema = z.object({
   workflowAutoCompile: z.boolean().optional(),
   workflowAutoCompileTimeoutMs: z
-    .number()
     .int()
     .min(LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min)
     .optional(),
   latexdiffBetweenRounds: z.boolean().optional(),
   latexdiffTimeoutMs: z
-    .number()
     .int()
     .min(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min)
     .max(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max!)
@@ -693,7 +694,6 @@ const SetDetachSubagentsOnStopMessageSchema = z.object({
 const SetNestedDelegationMaxDepthMessageSchema = z.object({
   command: z.literal(CMD.SET_NESTED_DELEGATION_MAX_DEPTH),
   value: z
-    .number()
     .int()
     .min(NESTED_DELEGATION_DEPTH_RANGE.min)
     .max(NESTED_DELEGATION_DEPTH_RANGE.max),
@@ -839,15 +839,16 @@ const GetLatexConfigValuesMessageSchema = commandOnly(
  * interaction). Per-field value validation happens in the backend handler
  * using `LatexConfigValuesSchema.shape[field]`.
  */
-const LatexConfigFieldSchema = z.enum([
-  'workflowAutoCompile',
-  'workflowAutoCompileTimeoutMs',
-  'latexdiffBetweenRounds',
-  'latexdiffTimeoutMs',
-  'latexdiffMathMarkup',
-  'latexFormatter',
-]);
-export type LatexConfigField = z.infer<typeof LatexConfigFieldSchema>;
+// Use the canonical field list from latex.ts as the schema source so it can
+// never drift from `LATEX_FIELD_TO_KEY`. The runtime tuple cast preserves the
+// literal types so `LatexConfigField` (re-exported above) stays as the same
+// union of string literals consumers already rely on.
+const LatexConfigFieldSchema = z.enum(
+  LATEX_CONFIG_FIELDS as readonly [
+    (typeof LATEX_CONFIG_FIELDS)[number],
+    ...(typeof LATEX_CONFIG_FIELDS)[number][],
+  ],
+);
 
 const SetLatexConfigValueMessageSchema = z.object({
   command: z.literal(CMD.SET_LATEX_CONFIG_VALUE),

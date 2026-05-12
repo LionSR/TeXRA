@@ -22,27 +22,9 @@ const AgentConfigFieldsSchema = NullableFileFieldsSchema.extend({
   workingDirectory: z.string().nullish(),
 });
 
-/** Lift legacy session.agentCategory to top level for backward compatibility. */
-function liftLegacyAgentCategory(input: unknown): unknown {
-  if (typeof input !== 'object' || input === null) return input;
-  const obj = input as Record<string, unknown>;
-
-  if ('agentCategory' in obj && obj.agentCategory !== undefined) {
-    return input;
-  }
-
-  const session = obj.session as Record<string, unknown> | undefined;
-  if (session && 'agentCategory' in session) {
-    return { ...obj, agentCategory: session.agentCategory };
-  }
-
-  return input;
-}
-
 /** Agent configuration schema with output file count validation. */
-export const AgentConfigSchema = z.preprocess(
-  liftLegacyAgentCategory,
-  AgentConfigFieldsSchema.superRefine((config, ctx) => {
+export const AgentConfigSchema = AgentConfigFieldsSchema.superRefine(
+  (config, ctx) => {
     // Validate that output files count doesn't exceed input files count
     if (config.outputFiles.length > 0) {
       const inputCount = 1 + config.inputFiles.length; // inputFile + inputFiles
@@ -55,7 +37,7 @@ export const AgentConfigSchema = z.preprocess(
         });
       }
     }
-  }),
+  },
 );
 
 export type AgentConfig = z.output<typeof AgentConfigSchema>;
