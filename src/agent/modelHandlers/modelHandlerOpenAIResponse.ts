@@ -48,6 +48,7 @@ import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 import { tagOpenAISdkError } from './support/sdkErrorAdapters';
+import { attachSdkErrorMetadata } from '@common/errors/sdkErrorUtils';
 
 // Local file imports
 import {
@@ -749,7 +750,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // rethrow so the outer retry resumes the same ID. Definitive failures
       // (4xx, notably 404 expired) — clear the ID and create a new request.
       //
-      // Check statusCode directly rather than formatted.retryable: the latter
+      // Check statusCode directly rather than formatted.userRetryable: the latter
       // is force-true for relay errors, which would incorrectly retain the ID
       // on a relay-wrapped 404 and loop until retries are exhausted.
       const formatted = formatProviderHttpError(err);
@@ -2442,9 +2443,23 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         },
       },
     );
-    throw new Error(
+    const wrapped = new Error(
       `Background response ${responseId} ended with status ${fallbackStatus}: ${errorDetail}. Retrieve the latest status with client.responses.retrieve("${responseId}").`,
-    );
+    ) as Error & { error?: unknown };
+    // Attach the OpenAI error body and provider metadata. The body lets
+    // isUpstreamCreditDepletedBody recognize insufficient_quota and route
+    // through the credential-exhausted path (no auto-retry); the provider
+    // tag lets the manual-retry "Use your own API key" picker target the
+    // failing provider. tagOpenAISdkError only handles SDK error classes,
+    // so a plain Error wrapper bypasses it without this explicit tag.
+    if (current.error) {
+      wrapped.error = current.error;
+    }
+    attachSdkErrorMetadata(wrapped, {
+      provider: this.config.provider,
+      kind: 'api_error',
+    });
+    throw wrapped;
   }
 
   /** Adds continuation instructions for models without prefill support. */
