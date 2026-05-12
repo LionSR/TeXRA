@@ -373,10 +373,11 @@ interface WaIconOptions {
   readonly slot?: 'start' | 'end' | 'icon';
   readonly className?: string;
   readonly variant?: 'solid' | 'regular';
+  readonly label?: string;
 }
 
-// Lit template for <wa-icon>. Centralizes library + variant + aria-hidden so
-// callers don't repeat them.
+// Lit template for <wa-icon>. Decorative icons stay hidden from assistive
+// technology; icon-only controls pass a label as required by Web Awesome.
 export function waIcon(
   name: TeXRAIconName,
   options: WaIconOptions = {},
@@ -387,6 +388,7 @@ export function waIcon(
     variant=${options.variant ?? 'solid'}
     slot=${ifDefined(options.slot)}
     class=${ifDefined(options.className)}
-    aria-hidden="true"
+    label=${ifDefined(options.label)}
+    aria-hidden=${ifDefined(options.label == null ? 'true' : undefined)}
   ></wa-icon>`;
 }
