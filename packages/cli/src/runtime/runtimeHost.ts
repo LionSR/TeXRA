@@ -4,9 +4,9 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local imports - CLI runtime
 import { handleCliApprovalEvent } from './approvalAdapter';
-import type { CliContext } from './cliContext';
 import { writeNdjsonStdout } from './logSinks';
 import { createCliLogger } from './logger';
+import type { CliContext } from './cliContext';
 
 export type CliRuntimeHost = AgentRuntimeHost & {
   close(): Promise<void>;
@@ -16,6 +16,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   let logger: ReturnType<typeof createCliLogger> | undefined;
   const cliLogger = (): ReturnType<typeof createCliLogger> =>
     (logger ??= createCliLogger(context));
+  const quietLogs = context.quietLogs === true;
 
   return {
     emit(event, payload) {
@@ -34,6 +35,10 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
           payload: ProgressEventPayloads[keyof ProgressEventPayloads];
         };
         writeNdjsonStdout(record);
+        return;
+      }
+
+      if (quietLogs && event !== 'requestShowError') {
         return;
       }
 

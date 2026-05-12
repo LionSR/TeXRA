@@ -17,7 +17,8 @@ import {
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 
 // Local imports - CLI runtime
-import { askCliQuestion, type CliContext } from './cliContext';
+import { type CliContext, type CliPromptRequest } from './cliContext';
+import { askCliQuestion, writeTextStderr } from './logSinks';
 
 function denyMessage(policy: CliContext['approvalPolicy']): string {
   return policy === 'ask'
@@ -84,7 +85,11 @@ async function askApproval(
   let answer: string;
   try {
     answer = await enqueueCliPrompt(context, () =>
-      askCliQuestion(`${summary}\nApprove? [y/N] `),
+      askCliApprovalQuestion(context, {
+        kind: 'approval',
+        summary,
+        prompt: 'Approve? [y/N] ',
+      }),
     );
   } catch {
     markApprovalDenied(context);
@@ -119,9 +124,11 @@ async function askExternalInquiry(
   let answer: string;
   try {
     answer = await enqueueCliPrompt(context, () =>
-      askCliQuestion(
-        `External inquiry requested:\n${question}\nAnswer (blank to skip): `,
-      ),
+      askCliApprovalQuestion(context, {
+        kind: 'externalInquiry',
+        summary: `External inquiry requested:\n${question}`,
+        prompt: 'Answer (blank to skip): ',
+      }),
     );
   } catch {
     markApprovalDenied(context);
@@ -135,6 +142,16 @@ async function askExternalInquiry(
     return { submitted: false, feedback: 'External inquiry skipped by user.' };
   }
   return { submitted: true, answer };
+}
+
+async function askCliApprovalQuestion(
+  context: CliContext,
+  request: CliPromptRequest,
+): Promise<string> {
+  if (context.approvalPrompt) {
+    return context.approvalPrompt(request);
+  }
+  return askCliQuestion(`${request.summary}\n${request.prompt}`);
 }
 
 async function decideToolEdit(
@@ -201,13 +218,16 @@ async function handleCliApprovalEventAsync<
     }
     case 'showRetryRequest': {
       const data = payload as ProgressEventPayloads['showRetryRequest'];
-      const decision = await askApproval(
-        context,
-        `Retry requested for ${data.operation}: ${data.errorMessage ?? 'unknown error'}`,
-      );
+      const summary = `Retry requested for ${data.operation}: ${data.errorMessage ?? 'unknown error'}`;
+      const decision = await askApproval(context, summary);
       if (decision.accepted) {
         triggerRetry(data.streamId);
       } else {
+        writeTextStderr(
+          decision.userMessage
+            ? `${summary}\n${decision.userMessage}`
+            : summary,
+        );
         cancelRetry(data.streamId);
       }
       return;
