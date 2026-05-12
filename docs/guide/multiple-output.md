@@ -52,48 +52,59 @@ This is the crucial part for generating multiple distinct files:
 3. **TeXRA Extracts:** The TeXRA backend (`OutputHandler.ts`) parses this XML response. It looks for `<document>` tags with a `name` attribute that **exactly matches** one of the filenames you listed in the UI.
 4. **Files Saved:** For each matching tag found, TeXRA extracts the content within that tag and saves it to the corresponding filename. If the agent's response doesn't include a `<document>` tag with a name matching one you specified, that file will not be created or updated.
 
-**Key Point:** The agent doesn't magically know how to split output (it hasn't mastered telepathy... yet). It must be explicitly instructed via its prompts (like in `polish_multiple.yaml`) to generate the `<document name=\"...\">` structure matching the list you provide in the UI.
+**Key Point:** The agent must be explicitly instructed via its prompts to
+generate the `<document name=\"...\">` structure matching the output filenames
+provided through `OUTPUT_FILES_ORDER`.
 
 ## Tracking Multi-Output Runs
 
-TeXRA records whether a run expects multiple files through the `isMultipleOutput` flag stored in each agent configuration. The UI toggles this flag whenever you expand the "Multiple Outputs" section, and the backend propagates it through task history, housekeeping commands, and progress logs. Stream identifiers still append `_multiple` for readability, but that suffix is now derived from the flag rather than being hard-coded into agent names.
+TeXRA determines whether an agent advertises multiple-output support from its
+`defaultOutputFiles` setting. During a run, the selected filenames are carried
+as `outputFiles` and exposed to prompts through `OUTPUT_FILES_ORDER`. Stream
+identifiers may still append `_multiple` for readability, but prompt rendering
+and output extraction depend on the filename list, not on a separate YAML flag.
 
 ### Declaring multi-output agents in YAML
 
-Custom agents can advertise that they always expect multiple outputs by setting
-`settings.isMultipleOutput: true` in their YAML definition. This flag is
-workflow-specific—it is ignored for tool-use agents—and it enables frontend
-affordances like the "∶∶" dropdown badge even when a sibling `_multiple.yaml`
-file is not present.
+Custom workflow agents can advertise that they expect multiple outputs by
+setting `settings.defaultOutputFiles` to the expected filenames. This enables
+frontend affordances like the "∶∶" dropdown badge and gives prompts a default
+`OUTPUT_FILES_ORDER` when the user has not supplied filenames.
 
 ```yaml
 name: my_agent_multiple
 settings:
-  isMultipleOutput: true
+  agentCategory: workflow
   defaultOutputFiles:
     - paper_section.tex
     - appendix.tex
 ```
 
-Agents that inherit from a single-output variant should also set this field so
-the registry watcher can skip duplicate prompts when the base agent is already
-configured. The legacy `useMultipleOutputs` field is no longer supported—update
-existing YAML files to declare `isMultipleOutput` explicitly to opt into the
-multiple-output affordances.
+The legacy `useMultipleOutputs` and `isMultipleOutput` YAML fields are no longer
+part of the current agent settings schema. Update existing YAML files to declare
+`defaultOutputFiles` instead.
 
-## Example: `polish_multiple` Agent Prompts
+## Example: Multiple-Output Agent Prompts
 
-The built-in `polish_multiple.yaml` agent (which inherits from `polish`) demonstrates how prompts need to be structured to request and format multiple outputs within the `<latex_documents>` tag. Its `userRequest` prompt explicitly asks the model to structure its response like this, referencing the `{{ OUTPUT_FILES_ORDER }}` variable which contains the comma-separated list of filenames from the UI:
+Workflow prompts can branch on `OUTPUT_FILES_ORDER` to request and format
+multiple outputs within the `<latex_documents>` tag. `OUTPUT_FILES_ORDER` is an
+array of filenames, so templates can use `{{ OUTPUT_FILES_ORDER[0] }}` for a
+specific filename and `{{ OUTPUT_FILES_ORDER | join(", ") }}` when the prompt
+needs a readable list.
 
 ```yaml
-# (Inside polish_multiple.yaml userRequest prompt)
+# Inside a workflow agent's userRequest prompt:
 # ... instructions ...
+{% if OUTPUT_FILES_ORDER %}
+The output files should be in this order: {{ OUTPUT_FILES_ORDER | join(", ") }}.
+{% endif %}
+
 # Use the following format:
 <latex_documents>
-<document name="{OUTPUT_FILES_ORDER[0]}">
+<document name="{{ OUTPUT_FILES_ORDER[0] }}">
 % 1ST_UPDATED_LATEX_DOCUMENT_1 HERE
 </document>
-<document name="{OUTPUT_FILES_ORDER[1]}">
+<document name="{{ OUTPUT_FILES_ORDER[1] }}">
 % 1ST_UPDATED_LATEX_DOCUMENT_2 HERE
 </document>
 ... (repeat for all output files)
