@@ -19,7 +19,6 @@ prompts:
 
     CRITICAL RULES:
     - agentCategory MUST be "workflow" (not "toolUse"). Workflow agents do NOT call tools.
-    - outputExt MUST be "tex" (not "md", "txt", or anything else). TeXRA is a LaTeX tool.
     - documentTag SHOULD be "documents" for new workflow agents.
     - endTag MUST match documentTag as a closing XML tag (e.g. "</documents>").
     - Infer appropriate settings from the agent's description:
@@ -30,8 +29,7 @@ prompts:
     - prefills is OPTIONAL. Omit it unless the agent should skip preamble and force
       the response to start with a specific token (e.g., - "<documents>").
       If you do include prefills, the array length MUST equal the number of rounds.
-    - All fields with defaults can be omitted if the default value is acceptable,
-      BUT outputExt defaults to "txt" so it must always be set explicitly to "tex".
+    - Fields with defaults can be omitted if the default value is acceptable.
     Respond only with the YAML wrapped in <yaml> tags.
 
     TEMPLATE VARIABLES available in prompts (Nunjucks double-brace syntax):
@@ -62,7 +60,6 @@ prompts:
       agentCategory: workflow
       documentTag: documents
       endTag: </documents>
-      outputExt: tex
       isRewrite: <true if editing existing docs, false if creating new>
       temperature: <0.1 for precise editing, 0.5-0.8 for creative>
     prompts:
@@ -91,7 +88,6 @@ prompts:
       agentCategory: workflow
       documentTag: documents
       endTag: </documents>
-      outputExt: tex
     prompts:
       systemPrompt: |
         You are a professional scientist. Your task is to improve a LaTeX research paper
@@ -129,7 +125,6 @@ prompts:
           Output the further enhanced content as <documents><document name="{{ INPUT_FILE }}">...</document></documents>.
 
     IMPORTANT REMINDERS:
-    - outputExt MUST be "tex", never "md" or "txt".
     - The documentTag in prompts must match the settings.documentTag.
     - userRequest must be an array with exactly as many entries as rounds (1 or 2).
     - Omit prefills by default; only add it (with one entry per round) when the agent should

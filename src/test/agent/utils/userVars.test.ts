@@ -17,7 +17,6 @@ const baseSetting: AgentSetting = {
   isRewrite: true,
   rounds: 1,
   prefills: [],
-  outputExt: 'tex',
   endTag: '</documents>',
   requiredFiles: {},
   requiredFilesInternal: {},

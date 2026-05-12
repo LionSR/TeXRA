@@ -13,8 +13,8 @@ flow shapes:
 
 - **Workflow flow** for `agentCategory: workflow`. Fixed rounds, each round
   consumes paired `prefills[i]` / `userRequest[i]`. Operates on a single
-  `inputFile` (or the active editor selection). Emits output files per
-  `outputExt` / `documentTag` / `defaultOutputFiles`.
+  `inputFile` (or the active editor selection). Emits LaTeX output files per
+  `documentTag` / `defaultOutputFiles`.
 - **Tool-use flow** for `agentCategory: toolUse`. Multi-step loop invoking
   declared tools. May WAIT for interim follow-ups, spawn subagents via
   `delegate_workflow` / `delegate_agent`, and resume.
@@ -45,8 +45,8 @@ Use the `delegate_*` tools in the `tools:` list of `creator.yaml`.
    ```
 3. When the follow-up arrives:
    - Inspect the output file(s) the subagent produced.
-   - Confirm the agent honoured `outputExt: tex`, wrapped output correctly,
-     and produced non-empty content.
+   - Confirm the agent wrapped output correctly and produced non-empty LaTeX
+     content.
    - Report pass/fail to the user.
 
 ### Testing a tool-use agent
