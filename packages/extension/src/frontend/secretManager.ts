@@ -3,8 +3,9 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { getServerSideKeyService } from '@auth/serverKeys';
+import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 
-export type ApiProvider = (typeof SecretManager.API_PROVIDERS)[number];
+export type { ApiProvider };
 
 export interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
   provider: ApiProvider;
@@ -36,18 +37,12 @@ export class SecretManager {
     await this.storage.delete(key);
   }
 
-  public static readonly API_PROVIDERS = [
-    'openai',
-    'anthropic',
-    'openRouter',
-    'google',
-    'xai',
-    'deepseek',
-    'moonshot',
-    'dashscope',
-    'minimax',
-    'glm',
-  ] as const;
+  /**
+   * Backed by the canonical `API_PROVIDERS` constant in `@model/apiProviders`
+   * (which is itself the typed alias for `@shared/constants/apiKeyProviders`).
+   * Kept here for callers that already use `SecretManager.API_PROVIDERS`.
+   */
+  public static readonly API_PROVIDERS = API_PROVIDERS;
 
   public static readonly GITHUB_TOKEN_KEY = 'github.token';
 
