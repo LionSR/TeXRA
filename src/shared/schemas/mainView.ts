@@ -27,24 +27,28 @@ import { ToolConfigFieldsSchema } from './toolConfig';
 export const SessionTypeSchema = z.enum(['toolUse', 'workflow']);
 export type SessionType = z.infer<typeof SessionTypeSchema>;
 
-export const FileTypeSchema = z.enum([
+export const DocumentFileTypeSchema = z.enum([
   'input',
   'reference',
   'auxiliary',
   'media',
 ]);
-export type FileType = z.infer<typeof FileTypeSchema>;
+export type DocumentFileType = z.infer<typeof DocumentFileTypeSchema>;
 
-export const MultipleFileTypeSchema = z.enum([
+export const MultipleDocumentFileTypeSchema = z.enum([
   'input',
   'reference',
   'auxiliary',
   'media',
   'output',
 ]);
-export type MultipleFileType = z.infer<typeof MultipleFileTypeSchema>;
+export type MultipleDocumentFileType = z.infer<
+  typeof MultipleDocumentFileTypeSchema
+>;
+export const MULTIPLE_DOCUMENT_FILE_TYPES =
+  MultipleDocumentFileTypeSchema.options;
 
-export const ExtendedFileTypeSchema = z.enum([
+export const ExtendedDocumentFileTypeSchema = z.enum([
   'input',
   'reference',
   'auxiliary',
@@ -52,7 +56,9 @@ export const ExtendedFileTypeSchema = z.enum([
   'edited',
   'output',
 ]);
-export type ExtendedFileType = z.infer<typeof ExtendedFileTypeSchema>;
+export type ExtendedDocumentFileType = z.infer<
+  typeof ExtendedDocumentFileTypeSchema
+>;
 
 // ============================================================
 // Option Data Schemas
@@ -153,7 +159,7 @@ export type DependencyBannerState = z.infer<typeof DependencyBannerStateSchema>;
 // ============================================================
 
 export const FileSelectConfigSchema = z.object({
-  type: FileTypeSchema,
+  type: DocumentFileTypeSchema,
   label: z.string(),
   icon: z.string(),
   refreshTitle: z.string(),
@@ -250,7 +256,7 @@ export type SessionContextValue = z.infer<typeof SessionContextSchema>;
 // ============================================================
 
 export const FileSelectChangeDetailSchema = z.object({
-  type: FileTypeSchema,
+  type: DocumentFileTypeSchema,
   value: z.string(),
 });
 export type FileSelectChangeDetail = z.infer<
@@ -269,7 +275,7 @@ export type InstructionChangeDetail = StringValueDetail;
 export type CommitChangeDetail = StringValueDetail;
 
 export const FileActionDetailSchema = z.object({
-  type: z.union([FileTypeSchema, z.enum(['base', 'edited'])]),
+  type: z.union([DocumentFileTypeSchema, z.enum(['base', 'edited'])]),
 });
 export type FileActionDetail = z.infer<typeof FileActionDetailSchema>;
 
@@ -281,7 +287,7 @@ export type MultipleFilesActionDetail = z.infer<
 >;
 
 export const MultipleFilesTypeActionDetailSchema = z.object({
-  type: MultipleFileTypeSchema,
+  type: MultipleDocumentFileTypeSchema,
 });
 export type MultipleFilesTypeActionDetail = z.infer<
   typeof MultipleFilesTypeActionDetailSchema
@@ -757,7 +763,7 @@ const FileSelectionMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES),
-    fileType: ExtendedFileTypeSchema,
+    fileType: ExtendedDocumentFileTypeSchema,
     currentFile: z.string().optional(),
   }),
 ] as const;
@@ -807,7 +813,7 @@ const FileOperationMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.ADD_OPENED_FILES),
-    fileType: ExtendedFileTypeSchema,
+    fileType: ExtendedDocumentFileTypeSchema,
   }),
   // Note: Use withFilesArray (required files) directly instead of
   // withOptionalFiles + .extend() override pattern

@@ -18,9 +18,9 @@ export type { ToolRunContext } from '@agent/runtime/RunContext';
 export interface ToolCallContext {
   toolCallId?: string;
   tracker: FileInteractionState;
-  /** Todo state for managing task lists. Optional for backward compatibility. */
+  /** Todo state for managing task lists. Absent in contexts without todo support. */
   todoState?: TodoState;
-  /** Plan state for managing implementation plans. Optional for backward compatibility. */
+  /** Plan state for managing implementation plans. Absent in contexts without plan support. */
   planState?: PlanState;
   /** Called by tools with approval flows to trigger in-progress log after approval. */
   onExecutionReady?: () => void;

@@ -28,7 +28,7 @@ const HISTORY_PAGE_SIZE = 25;
 
 // Local imports - history view
 import { HistoryViewEvents } from './events';
-import './HistoryItem';
+import './HistoryItemElement';
 import { historyStyles } from '@shared/styles/historyStyles';
 import type { HistoryViewState } from './state';
 

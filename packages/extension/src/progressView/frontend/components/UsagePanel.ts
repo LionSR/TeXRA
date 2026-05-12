@@ -14,7 +14,7 @@ import type { TokenUsageStats } from '@shared/schemas';
 // Local imports - progress view
 import { formatTokens } from '../formatters/timestampUtils';
 import { ELEMENT_IDS } from '../constants';
-import type { ContextState } from '../store';
+import type { ContextStateData } from '../store';
 
 /**
  * Default compaction threshold (%) — must match
@@ -116,7 +116,7 @@ export class UsagePanel extends LitElement {
   ];
 
   @property({ attribute: false }) usage: TokenUsageStats | null = null;
-  @property({ attribute: false }) contextState: ContextState | null = null;
+  @property({ attribute: false }) contextState: ContextStateData | null = null;
 
   /** Whether the usage stats have any non-zero values worth displaying. */
   private get hasUsage(): boolean {

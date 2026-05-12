@@ -65,11 +65,11 @@ import './components/InstructionPanel';
 import './components/OutputFilesSection';
 import {
   ELEMENT_IDS,
-  FILE_TYPES,
-  MULTIPLE_FILE_TYPES,
+  DOCUMENT_FILE_TYPES,
+  MULTIPLE_DOCUMENT_FILE_TYPES,
   SESSION_TYPES,
-  type FileType,
-  type MultipleFileType,
+  type DocumentFileType,
+  type MultipleDocumentFileType,
   type SessionType,
   parseSessionType,
 } from './constants';
@@ -533,7 +533,7 @@ export class MainApp extends MainAppBase {
     this.multiFiles.set({ ...this.multiFiles.get(), [listId]: files });
     this.saveState();
 
-    const fileType = listId.replace('Files', '') as MultipleFileType;
+    const fileType = listId.replace('Files', '') as MultipleDocumentFileType;
     const command = FILE_UPDATE_COMMANDS[fileType];
     if (command) {
       postMessage(command, { fileType, files });
@@ -790,8 +790,8 @@ export class MainApp extends MainAppBase {
       });
       return;
     }
-    if (FILE_TYPES.includes(fileType as FileType)) {
-      this.handleSingleFileChange(fileType as FileType, filePath);
+    if (DOCUMENT_FILE_TYPES.includes(fileType as DocumentFileType)) {
+      this.handleSingleFileChange(fileType as DocumentFileType, filePath);
       return;
     }
 
@@ -991,7 +991,7 @@ export class MainApp extends MainAppBase {
   private restoreFileArrays(state: MainViewPersistedState): void {
     this.multiFiles.set(
       Object.fromEntries(
-        MULTIPLE_FILE_TYPES.map((type) => {
+        MULTIPLE_DOCUMENT_FILE_TYPES.map((type) => {
           const key = `${type}Files` as keyof MultiFiles;
           const files = state[key as keyof MainViewPersistedState];
           return [key, Array.isArray(files) ? files : []];
@@ -1001,7 +1001,7 @@ export class MainApp extends MainAppBase {
 
     this.multiFilesVisible.set(
       Object.fromEntries(
-        MULTIPLE_FILE_TYPES.map((type) => {
+        MULTIPLE_DOCUMENT_FILE_TYPES.map((type) => {
           const key = `${type}Files` as keyof MultiFilesVisible;
           const visible =
             state[`${key}Visible` as keyof MainViewPersistedState];
@@ -1134,11 +1134,13 @@ export class MainApp extends MainAppBase {
     });
   }
 
-  private handleAddOpenedFiles(type: FileType): void {
+  private handleAddOpenedFiles(type: DocumentFileType): void {
     postMessage(MAIN_VIEW_COMMANDS.ADD_OPENED_FILES, { fileType: type });
   }
 
-  private handleGetCurrentFile(type: FileType | 'base' | 'edited'): void {
+  private handleGetCurrentFile(
+    type: DocumentFileType | 'base' | 'edited',
+  ): void {
     const payload: Record<string, unknown> = { fileType: type };
     const sf = this.singleFiles.get();
     if ((type === 'base' || type === 'edited') && sf.baseFile) {
@@ -1147,7 +1149,7 @@ export class MainApp extends MainAppBase {
     postMessage(MAIN_VIEW_COMMANDS.GET_CURRENT_FILE, payload);
   }
 
-  private handleEmptyFile(type: FileType | 'base' | 'edited'): void {
+  private handleEmptyFile(type: DocumentFileType | 'base' | 'edited'): void {
     const key = `${type}File` as keyof SingleFiles;
     const sf = this.singleFiles.get();
     if (key in sf) {
@@ -1168,7 +1170,7 @@ export class MainApp extends MainAppBase {
     });
   }
 
-  private handleEmptyFiles(type: MultipleFileType): void {
+  private handleEmptyFiles(type: MultipleDocumentFileType): void {
     const listId = `${type}Files`;
     this.multiFilesVisible.set({
       ...this.multiFilesVisible.get(),
@@ -1180,12 +1182,12 @@ export class MainApp extends MainAppBase {
     this.updateMultiFiles(listId as keyof MultiFiles, []);
   }
 
-  private handleRefreshFiles(type: FileType): void {
+  private handleRefreshFiles(type: DocumentFileType): void {
     const command = FILE_REFRESH_COMMANDS[type];
     if (command) postMessage(command);
   }
 
-  private handleSingleFileChange(type: FileType, value: string): void {
+  private handleSingleFileChange(type: DocumentFileType, value: string): void {
     const key = `${type}File` as keyof SingleFiles;
     this.singleFiles.set({ ...this.singleFiles.get(), [key]: value });
     this.saveState();
@@ -1397,7 +1399,7 @@ export class MainApp extends MainAppBase {
     const mf = this.multiFiles.get();
     const mv = this.multiFilesVisible.get();
     const multipleFileSelections: Record<string, string[] | boolean> = {};
-    MULTIPLE_FILE_TYPES.forEach((type) => {
+    MULTIPLE_DOCUMENT_FILE_TYPES.forEach((type) => {
       const listId = `${type}Files` as keyof MultiFiles;
       const isActive = mv[listId];
       const files = isActive ? (mf[listId] ?? []) : [];
@@ -1633,14 +1635,14 @@ export class MainApp extends MainAppBase {
     e: CustomEvent<MultipleFilesTypeActionDetail>,
   ): void {
     if (e.detail.type !== 'output') {
-      this.handleAddOpenedFiles(e.detail.type as FileType);
+      this.handleAddOpenedFiles(e.detail.type as DocumentFileType);
     }
   }
 
   private handleComponentEmptyFiles(
     e: CustomEvent<MultipleFilesTypeActionDetail>,
   ): void {
-    this.handleEmptyFiles(e.detail.type as MultipleFileType);
+    this.handleEmptyFiles(e.detail.type as MultipleDocumentFileType);
   }
 
   private handleComponentSelectMultipleFiles(

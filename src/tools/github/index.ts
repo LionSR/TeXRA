@@ -16,4 +16,4 @@ export {
   listIssueSubscriptionBindings,
   unbindAllForIssue,
 } from './IssueSubscriptionBinder';
-export type { Disposable } from './PollingSourceBase';
+export type { Disposable } from '@platform/interfaces/disposable';

@@ -1,14 +1,14 @@
 /** Extension ID for the LaTeX Workshop VS Code extension. */
 export const LATEX_WORKSHOP_EXT_ID = 'James-Yu.latex-workshop';
 
-/** Supported platform keys for install guides. */
-export type Platform = 'darwin' | 'win32' | 'linux';
+/** Supported OS platform keys for install guides. */
+export type OSPlatform = 'darwin' | 'win32' | 'linux';
 
 // ============================================================
 // Install guide builders
 // ============================================================
 
-type Guide = Record<Platform, string>;
+type Guide = Record<OSPlatform, string>;
 
 /** Tool installable via brew, apt, and a download URL. */
 function brewAptUrl(
@@ -57,7 +57,7 @@ function texLiveGuide(
 function combineGuides(
   ...sections: Array<[label: string, guide: Guide]>
 ): Guide {
-  const platforms: Platform[] = ['darwin', 'linux', 'win32'];
+  const platforms: OSPlatform[] = ['darwin', 'linux', 'win32'];
   return Object.fromEntries(
     platforms.map((p) => {
       // Extract just the install command (first paragraph) from each guide
@@ -285,7 +285,7 @@ export const SCOOP_INSTALL_COMMAND =
  */
 export const DEPENDENCY_INSTALL_COMMANDS: Record<
   string,
-  Record<Platform, readonly InstallCommand[]>
+  Record<OSPlatform, readonly InstallCommand[]>
 > = {
   texDistributionInstalled: {
     darwin: [
@@ -395,7 +395,7 @@ export const LATEX_VIEWER_REFRESH_DELAY_MS = 5000;
  * Normalize a raw platform string to one of the three supported values.
  * Falls back to 'linux' for unrecognized platforms (e.g. 'freebsd').
  */
-export function normalizePlatform(raw: string): Platform {
+export function normalizePlatform(raw: string): OSPlatform {
   return raw === 'darwin' || raw === 'win32' ? raw : 'linux';
 }
 
@@ -478,3 +478,12 @@ export const LATEX_FIELD_TO_KEY = {
   latexFormatter: WorkspaceStateKey.LATEX_FORMATTER,
 } as const;
 export type LatexConfigField = keyof typeof LATEX_FIELD_TO_KEY;
+
+/**
+ * Ordered list of LaTeX config field names — derived from
+ * `LATEX_FIELD_TO_KEY` so the Zod enum schema and any UI iteration can never
+ * drift from the canonical field→state-key map.
+ */
+export const LATEX_CONFIG_FIELDS = Object.keys(
+  LATEX_FIELD_TO_KEY,
+) as ReadonlyArray<LatexConfigField>;

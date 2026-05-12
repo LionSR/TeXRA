@@ -4,7 +4,7 @@ import {
   createStreamState,
   type AgentCategory,
   type AgentCategoryFilter,
-  type ContextState,
+  type ContextStateData,
   type LogMessageData,
   type StreamState,
   type StreamTabInfo,
@@ -24,7 +24,7 @@ export {
 } from '@shared/schemas';
 
 export type StreamFilter = AgentCategoryFilter;
-export type { ContextState };
+export type { ContextStateData };
 
 /** Followup options derived from schema (minus command/stream fields) */
 export type FollowupOptionsState = Omit<
