@@ -108,4 +108,36 @@ describe('loadAgentSettingAndPrompts', () => {
       'internal: true should round-trip through AgentSettingSchema',
     );
   });
+
+  it('loads legacy workflow settings that still declare outputExt', async () => {
+    const agentPath = path.join('/', 'tmp', 'agents');
+    const definitionPath = path.join(agentPath, 'legacy.yaml');
+    const resolution: ResolvedAgent = {
+      entry: {
+        source: 'custom',
+        name: 'legacy',
+        path: definitionPath,
+        category: AgentCategory.Workflow,
+      },
+      definitionPath,
+      resolvedName: 'legacy',
+    };
+
+    fileContents.set(
+      normalize(definitionPath),
+      [
+        'name: legacy',
+        'settings:',
+        '  agentCategory: workflow',
+        '  outputExt: tex',
+        'prompts:',
+        '  userRequest: fix it',
+        '',
+      ].join('\n'),
+    );
+
+    const [settings] = await loadAgentSettingAndPrompts(resolution);
+    assert.strictEqual(settings.agentCategory, AgentCategory.Workflow);
+    assert.strictEqual(Object.hasOwn(settings, 'outputExt'), false);
+  });
 });

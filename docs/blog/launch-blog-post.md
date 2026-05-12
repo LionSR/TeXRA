@@ -257,7 +257,6 @@ All agents are defined in YAML. Want a custom agent for your subfield? Create `m
 name: quantum_polish
 settings:
   agentCategory: workflow
-  outputExt: tex
 prompts:
   systemPrompt: |
     You are a quantum information theorist. Ensure all notation
