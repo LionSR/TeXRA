@@ -113,7 +113,7 @@ export class ProgressFollowUpController {
       outputFiles: [],
       editedFile: null,
       editedFiles: [],
-    }) as AgentConfig & { agentCategory: AgentCategory.ToolUse };
+    }) as AgentConfig & { agentCategory: typeof AgentCategory.ToolUse };
 
     return {
       kind: 'restoreState',

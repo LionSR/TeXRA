@@ -3,7 +3,6 @@ export { stopAgent, compactResponse } from './agentCommands';
 export {
   agentCreatorCommands,
   handleCreateAgentWithAI,
-  registerAgentCreatorCommands,
 } from './agentCreatorCommands';
 export { runExecuteCommand, registerExecuteCommand } from './executeCommand';
 export { registerFollowUpCommand } from './followUpCommand';

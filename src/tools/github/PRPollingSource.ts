@@ -34,10 +34,11 @@ import {
   GitHubAuthError,
   GitHubPermanentError,
 } from './githubClient';
+import type { Disposable } from '@platform/interfaces/disposable';
+
 import {
   PollingSourceBase,
   type BasePollSubscriptionState,
-  type Disposable,
 } from './PollingSourceBase';
 import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,

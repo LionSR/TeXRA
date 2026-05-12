@@ -22,11 +22,12 @@ import {
   formatIssueSubscriptionError,
 } from './formatIssueEvent';
 import { getNewestTimestamp, trimSet } from './formatUtils';
+import type { Disposable } from '@platform/interfaces/disposable';
+
 import { ghGet } from './githubClient';
 import {
   PollingSourceBase,
   type BasePollSubscriptionState,
-  type Disposable,
 } from './PollingSourceBase';
 import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 import type { GhIssue, GhIssueComment } from './prTypes';

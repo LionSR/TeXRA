@@ -1,16 +1,9 @@
 import { z } from 'zod';
 
 import { ToolDefinitionSchema } from '@model';
+import { AgentCategory } from '@shared/schemas/agent';
 
-// AgentSource: single source of truth is @shared/schemas/agent.
-// Re-exported here for backward compatibility with backend consumers.
-export { AgentSource } from '@shared/schemas/agent';
-
-/** Workflow: fixed-round document processing. ToolUse: interactive tool-calling. */
-export enum AgentCategory {
-  Workflow = 'workflow',
-  ToolUse = 'toolUse',
-}
+export { AgentCategory };
 
 export const AgentSettingBaseSchema = z.strictObject({
   documentTag: z
@@ -52,46 +45,20 @@ export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
     .prefault(AgentCategory.ToolUse),
 });
 
-/** Normalize input to ensure agentCategory discriminator is present (migrates legacy fields). */
-function normalizeAgentSettingInput(input: unknown): unknown {
-  if (typeof input !== 'object' || input === null) {
-    return input;
-  }
-  const {
-    agentType,
-    maxRounds,
-    xmlStructureMode: _xmlStructureMode,
-    isMultipleOutput: _isMultipleOutput,
-    ...rest
-  } = input as Record<string, unknown>;
-
-  // Migrate legacy maxRounds → rounds
-  if (maxRounds !== undefined && rest.rounds === undefined) {
-    rest.rounds = maxRounds;
-  }
-
-  // Derive endTag from documentTag when endTag is not explicitly set.
-  if (rest.endTag === undefined) {
-    const docTag =
-      typeof rest.documentTag === 'string' && rest.documentTag.length > 0
-        ? rest.documentTag
-        : 'documents';
-    rest.endTag = `</${docTag}>`;
-  }
-
-  // Already has agentCategory - just strip legacy agentType if present
-  if (rest.agentCategory !== undefined) {
-    return rest;
-  }
-
-  // Migrate legacy agentType → agentCategory
-  const category =
-    agentType === 'toolUse' ? AgentCategory.ToolUse : AgentCategory.Workflow;
-  return { ...rest, agentCategory: category };
+/** Derive endTag from documentTag when endTag is not explicitly set. */
+function deriveEndTag(input: unknown): unknown {
+  if (typeof input !== 'object' || input === null) return input;
+  const obj = input as Record<string, unknown>;
+  if (obj.endTag !== undefined) return obj;
+  const docTag =
+    typeof obj.documentTag === 'string' && obj.documentTag.length > 0
+      ? obj.documentTag
+      : 'documents';
+  return { ...obj, endTag: `</${docTag}>` };
 }
 
 export const AgentSettingSchema = z.preprocess(
-  normalizeAgentSettingInput,
+  deriveEndTag,
   z.discriminatedUnion('agentCategory', [
     AgentWorkflowSettingSchema,
     AgentToolUseSettingSchema,
@@ -101,11 +68,11 @@ export const AgentSettingSchema = z.preprocess(
 export type AgentSetting = z.infer<typeof AgentSettingSchema>;
 export type AgentWorkflowSetting = Extract<
   AgentSetting,
-  { agentCategory: AgentCategory.Workflow }
+  { agentCategory: typeof AgentCategory.Workflow }
 >;
 export type AgentToolUseSetting = Extract<
   AgentSetting,
-  { agentCategory: AgentCategory.ToolUse }
+  { agentCategory: typeof AgentCategory.ToolUse }
 >;
 
 export function isWorkflowSetting(
@@ -126,7 +93,6 @@ export const AgentPromptSchema = z.strictObject({
   systemPrompt: z.string().prefault(''),
   userPrefix: z.string().prefault(''),
   userRequest: z.union([z.string(), z.array(z.string())]).prefault(''),
-  userReflect: z.string().optional(),
 });
 
 export type AgentPrompt = z.infer<typeof AgentPromptSchema>;

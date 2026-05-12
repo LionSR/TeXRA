@@ -14,15 +14,13 @@
 import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { AgentLogger } from '@logger/AgentLogger';
 
+import type { Disposable } from '@platform/interfaces/disposable';
+
 import {
   GitHubAuthError,
   GitHubPermanentError,
   GitHubRateLimitError,
 } from './githubClient';
-
-export interface Disposable {
-  dispose(): void;
-}
 
 export interface BasePollSubscriptionState {
   listeners: Set<(text: string) => void>;

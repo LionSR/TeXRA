@@ -9,8 +9,7 @@ import { ExecutionIdSchema, StreamTabIdSchema } from '@shared/schemas';
 
 export const TOOL_USE_SNAPSHOT_VERSION = 2;
 
-/** z.object (not strictObject) for backward compatibility with legacy snapshots. */
-export const ToolUseSessionSnapshotSchema = z.object({
+export const ToolUseSessionSnapshotSchema = z.strictObject({
   version: z.literal(TOOL_USE_SNAPSHOT_VERSION),
   executionId: ExecutionIdSchema,
   streamId: StreamTabIdSchema,
