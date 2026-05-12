@@ -41,6 +41,7 @@ import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import {
+  AgentError,
   classifyAgentError,
   getSdkErrorMessage,
   toErrorMessage,
@@ -155,7 +156,7 @@ export async function getAgentPath(
     'showAgentConfigBanner',
     { agentName: agentIdentifier },
   );
-  throw new Error(`Could not find agent: ${agentIdentifier}`);
+  throw new AgentError(`Could not find agent: ${agentIdentifier}`);
 }
 
 async function validateModelExists(
@@ -176,7 +177,7 @@ async function validateModelExists(
     ],
     showSuppress: false,
   });
-  throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
+  throw new AgentError(`Model ${modelName} not found in MODEL_CONFIGS`);
 }
 
 /**
@@ -247,7 +248,7 @@ async function assembleAgentLaunchContext(
       setting.agentCategory === AgentCategory.ToolUse
         ? 'delegate_agent'
         : 'delegate_workflow';
-    throw new Error(
+    throw new AgentError(
       `Agent '${fullConfig.agent}' is a ${setting.agentCategory} agent but was launched as ${configPayload.agentCategory}. Use ${suggestion} instead.`,
     );
   }
@@ -381,7 +382,7 @@ function acquireStreamOrThrow(
 
   const status = StreamStatusService.get(streamId) ?? '';
   const statusMsg = STATUS_MESSAGES[status] || 'already running';
-  throw new Error(
+  throw new AgentError(
     `${taskType} "${streamId}" is ${statusMsg}. Please wait for it to complete or stop it first.`,
   );
 }
@@ -543,7 +544,10 @@ async function runFlowWithLifecycle(
       return buildStoppedFlowResult(category, ctx.executionId, streamId);
     }
 
-    throw new Error(errorMsg, { cause: err });
+    // Preserve typed agent errors so upstream catchers can still match on them;
+    // otherwise wrap with the contextualized message produced above.
+    if (err instanceof AgentError) throw err;
+    throw new AgentError(errorMsg, { cause: err });
   } finally {
     // Release long-lived resources (e.g., WebSocket connections, keepalive intervals)
     // to prevent leaks when handler instances are discarded after execution.
@@ -661,7 +665,7 @@ async function buildAgentLaunchContext(
     !input.streamTabIdOverride &&
     (!configPayload.agent || !configPayload.model)
   ) {
-    throw new Error('Missing required fields: model and/or agent');
+    throw new AgentError('Missing required fields: model and/or agent');
   }
 
   const reservedStreamId = input.streamTabIdOverride
@@ -971,7 +975,7 @@ export async function resumeToolUseFromSnapshot(
 
     await withExecutionRunContext(ctx, async () => {
       if (setting.agentCategory !== AgentCategory.ToolUse) {
-        throw new Error(
+        throw new AgentError(
           'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
         );
       }
