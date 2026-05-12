@@ -256,7 +256,6 @@ export class InstructionPanel extends LitElement {
 
       .model-selection-footer .agent-select-group {
         position: relative;
-        display: block;
         flex: 0 0
           calc(
             var(--agent-select-max-width) + var(--height-control) +
