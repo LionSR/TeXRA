@@ -4,7 +4,7 @@ import {
   getAgentRuntimeHost,
   type AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { getConfig } from '@agent/core/config';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import type { ToolResult } from '@tools/result';
@@ -43,7 +43,7 @@ export async function requestBashApproval(
 ): Promise<BashApprovalResult> {
   const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY, true);
 
-  const context = getCurrentToolFileInteractionContext();
+  const context = getCurrentToolRunContext();
   const streamId = request.streamId ?? context?.streamId;
   const runtimeHost = context?.runtimeHost ?? getAgentRuntimeHost();
 

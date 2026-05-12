@@ -59,6 +59,7 @@ const __dirname = path.dirname(__filename);
 const COMPOSITION_ROOT_FILES = new Set([
   path.join(__dirname, 'packages/extension/src/extension.ts'),
   path.join(__dirname, 'packages/desktop/src/main/platform/index.ts'),
+  path.join(__dirname, 'packages/cli/src/runtime/initPlatform.ts'),
 ]);
 
 const extensionPackageDir = path.join(__dirname, 'packages', 'extension');
@@ -362,6 +363,7 @@ export default tseslint.config(
       'src/**/*.mts',
       'packages/extension/src/**/*.ts',
       'packages/desktop/src/**/*.ts',
+      'packages/cli/src/**/*.ts',
     ],
     extends: [...tseslint.configs.recommended],
     languageOptions: {
@@ -372,6 +374,7 @@ export default tseslint.config(
           './packages/desktop/tsconfig.main.json',
           './packages/desktop/tsconfig.preload.json',
           './packages/desktop/tsconfig.renderer.json',
+          './packages/cli/tsconfig.json',
         ],
         tsconfigRootDir: __dirname,
       },
