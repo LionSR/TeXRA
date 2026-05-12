@@ -36,7 +36,6 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   isRewrite: z.boolean().prefault(true),
   rounds: z.number().prefault(2),
   prefills: z.array(z.string()).prefault([]),
-  outputExt: z.string().prefault('txt'),
 });
 
 export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
@@ -44,6 +43,15 @@ export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
     .literal(AgentCategory.ToolUse)
     .prefault(AgentCategory.ToolUse),
 });
+
+/** Drop obsolete settings accepted only for legacy YAML and persisted state. */
+function stripLegacySettingFields(input: unknown): unknown {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+    return input;
+  }
+  const { outputExt: _outputExt, ...rest } = input as Record<string, unknown>;
+  return rest;
+}
 
 /** Derive endTag from documentTag when endTag is not explicitly set. */
 function deriveEndTag(input: unknown): unknown {
@@ -58,7 +66,7 @@ function deriveEndTag(input: unknown): unknown {
 }
 
 export const AgentSettingSchema = z.preprocess(
-  deriveEndTag,
+  (input) => deriveEndTag(stripLegacySettingFields(input)),
   z.discriminatedUnion('agentCategory', [
     AgentWorkflowSettingSchema,
     AgentToolUseSettingSchema,

@@ -59,7 +59,6 @@ settings:
   # Output Handling
   documentTag: document # The main XML tag wrapping the agent's final output (required for CoT).
   endTag: '</document>' # The closing tag that signals the agent has finished its main output.
-  outputExt: tex # Default file extension for the output file (e.g., tex, md, txt).
   prefills:
     - "<document>\n" # List of strings the AI should start its response(s) with.
       # Item [0] is for Round 0, Item [1] is for Round 1 (reflection).

@@ -128,7 +128,6 @@ prompts:
     - Agent names: lowercase, underscores or dashes only.
     - Keep prompts focused. Write precisely what the agent needs for its
       specific purpose — do not pad with boilerplate.
-    - For workflow agents, `outputExt` must be `tex`. Always.
     - For workflow agents, `prefills` and `userRequest` must have the same
       number of entries as `rounds`.
     - For tool-use agents, `userRequest` must be a single string that
