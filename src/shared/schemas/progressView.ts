@@ -37,7 +37,8 @@ import {
 } from './streamState';
 import { PlanSchema } from './plan';
 import { TodoItemSchema } from './todo';
-import { ContextStateSchema, TokenUsageStatsSchema } from './usage';
+import { ContextStateDataSchema } from './contextManagement';
+import { TokenUsageStatsSchema } from './usage';
 
 // ============================================================
 // Shared Field Schemas
@@ -91,16 +92,16 @@ const NormalizedToolUseSchema = z.object({
 });
 export type NormalizedToolUse = z.infer<typeof NormalizedToolUseSchema>;
 
-export const WebSearchResultSchema = z.object({
+export const WebSearchResultItemSchema = z.object({
   url: z.string().optional(),
   title: z.string().optional(),
   domain: z.string().optional(),
 });
-export type WebSearchResult = z.infer<typeof WebSearchResultSchema>;
+export type WebSearchResultItem = z.infer<typeof WebSearchResultItemSchema>;
 
 export const WebSearchPayloadSchema = z.object({
   query: z.string().optional(),
-  results: z.array(WebSearchResultSchema).optional(),
+  results: z.array(WebSearchResultItemSchema).optional(),
   provider: z.string().optional(),
   status: z.string().optional(),
 });
@@ -338,7 +339,7 @@ export const SyncStreamContentMessageSchema = z.object({
   // Per-run usage map — used by both workflow and tool-use so resume
   // correctly accumulates. Frontend derives sessionUsage as the sum.
   runUsage: z.record(z.string(), TokenUsageStatsSchema).optional(),
-  contextState: ContextStateSchema.optional(),
+  contextState: ContextStateDataSchema.optional(),
   todos: z.array(TodoItemSchema).optional(),
   plan: PlanSchema.nullable().optional(),
   queuedFollowUps: z.array(z.string()).optional(),

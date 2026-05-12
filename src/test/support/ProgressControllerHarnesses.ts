@@ -142,7 +142,7 @@ export function createWorkflowTaskState(
     agentConfig: createAgentConfig({
       ...overrides,
       agentCategory: AgentCategory.Workflow,
-    }) as AgentConfig & { agentCategory: AgentCategory.Workflow },
+    }) as AgentConfig & { agentCategory: typeof AgentCategory.Workflow },
     activeFiles: {
       input: true,
       reference: false,

@@ -20,7 +20,7 @@ import {
 import {
   SESSION_TYPES,
   type SessionType,
-  type MultipleFileType,
+  type MultipleDocumentFileType,
 } from './constants';
 
 // =========================================================================
@@ -84,7 +84,7 @@ export const DEFAULT_CHECKBOX_VALUES: CheckboxValues = {
 // =========================================================================
 
 /** Maps file types to their update commands */
-export const FILE_UPDATE_COMMANDS: Record<MultipleFileType, string> = {
+export const FILE_UPDATE_COMMANDS: Record<MultipleDocumentFileType, string> = {
   input: MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES,
   reference: MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES,
   auxiliary: MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES,
