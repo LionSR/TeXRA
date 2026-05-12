@@ -4,9 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [0.37.8] - 2026-05-01
 
+### Breaking Changes
+
+- **Legacy session and config migration shims removed** — TeXRA no longer rewrites legacy fields (`agentType`, `maxRounds`, `xmlStructureMode`, `isMultipleOutput`, `session.agentCategory`, and similar) when loading saved sessions or agent settings. Sessions and configurations created by very old versions of the extension may no longer load and must be recreated.
+
 ### Improvements
 
 - **Progress view first-run state** — when there are no runs yet, the progress view now shows direct actions to open the Launcher or Dashboard instead of an empty board.
+- **Internal rename pass to remove same-name collisions** — renamed several internal types/constants that previously shared a name with an unrelated concept (OS platform string vs. host platform interface; document file categories vs. the VS Code-style file-type bitmask; the LitElement history-item component vs. the schema-derived history entry; the debug saver's `FileOptions` vs. the agent file-options schema; per-item web-search result vs. the wrapper response), and consolidated duplicate definitions of `AgentCategory`, `Disposable`, `LatexConfigField`, and the API provider list down to single sources of truth. No user-visible behavior change.
 
 ### Bug Fixes
 

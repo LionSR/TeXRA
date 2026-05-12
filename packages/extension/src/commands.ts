@@ -21,7 +21,6 @@ import {
 import {
   registerMergeCommands,
   registerExecuteCommand,
-  registerAgentCreatorCommands,
   registerFollowUpCommand,
   registerResumeAgentCommand,
 } from '@commands/agent';
@@ -44,8 +43,6 @@ import {
 } from '@commands/extensionCommandSurface';
 import { registerApiKeyCommands } from '@commands/api/apiKeyCommands';
 import { registerGitCommands } from '@commands/git/gitCommands';
-import { registerProgressViewCommands } from '@commands/progress/progressViewCommands';
-
 // Local file imports
 import { MainViewProvider } from './MainViewProvider';
 
@@ -68,7 +65,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   registerFigureCommands(context);
   registerXmlCommands(context);
   registerYamlCommands(context);
-  registerAgentCreatorCommands(context);
   registerApiKeyCommands(context);
   registerAuthCommands(context);
   registerStateRestoreCommand(context);
@@ -76,7 +72,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   registerLinterCommands(context);
   registerSettingsViewCommands(context);
   registerCompareCommands(context);
-  registerProgressViewCommands(context);
   registerFollowUpCommand(context);
   registerResumeAgentCommand(context);
   registerOpenFileCommands(context);
