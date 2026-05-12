@@ -11,7 +11,7 @@ import { STREAM_STATUS } from '@shared/schemas';
 import type {
   AgentCategoryFilter,
   ConversationProgress,
-  ContextState,
+  ContextStateData,
   OutputFileInfo,
   CompileFailure,
   PermissionPayload,
@@ -45,7 +45,7 @@ export interface LogContentExtras {
   /** Per-run usage map (both workflow and tool-use; frontend derives sum) */
   runUsage?: Record<string, TokenUsageStats>;
   /** Context window utilization state */
-  contextState?: ContextState;
+  contextState?: ContextStateData;
 }
 
 /** Payload for batched stream content hydration (tab switch). */
@@ -56,7 +56,7 @@ export interface SyncStreamContentPayload {
   workflowMissingOutputs?: Record<string, string[]>;
   workflowCompileFailures?: Record<string, CompileFailure[]>;
   runUsage?: Record<string, TokenUsageStats>;
-  contextState?: ContextState;
+  contextState?: ContextStateData;
   todos: TodoItem[];
   plan: Plan | null;
   queuedFollowUps: string[];

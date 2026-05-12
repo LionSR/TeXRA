@@ -9,7 +9,7 @@ import {
 } from '@controllers/settingsView/LatexToolingController';
 import {
   HOMEBREW_INSTALL_COMMAND,
-  type Platform,
+  type OSPlatform,
 } from '@shared/constants/latex';
 
 // Local imports - shared schemas
@@ -33,7 +33,7 @@ function createController(
   options?: Partial<{
     installedTools: Partial<Record<keyof typeof INSTALLED_TOOLS, boolean>>;
     paths: Partial<Record<LatexPathTool, string | null>>;
-    platform: Platform;
+    platform: OSPlatform;
     packageManager: 'brew' | 'apt' | 'scoop' | null;
     extensionInstalled: boolean;
     outDir: boolean;
