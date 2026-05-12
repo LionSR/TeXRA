@@ -22,7 +22,7 @@ import { promisify } from 'node:util';
 
 import { z } from 'zod';
 
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { toErrorMessage } from '@common/errors';
 import { ToolError, type ToolResult } from '@tools/result';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -126,7 +126,7 @@ function requireToken(): void {
 }
 
 function requireStreamId(): string {
-  const streamId = getCurrentToolFileInteractionContext()?.streamId;
+  const streamId = getCurrentToolRunContext()?.streamId;
   if (!streamId) {
     throw new ToolError(
       'github_subscription must be called from within an agent stream.',
@@ -386,7 +386,7 @@ async function execFindCurrent(
   requireToken();
   const cwd =
     parseWorkingDirectory(input.working_directory) ??
-    getCurrentToolFileInteractionContext()?.workingDirectory;
+    getCurrentToolRunContext()?.workingDirectory;
   if (!cwd) {
     throw new ToolError(
       'No working_directory available. Provide one explicitly.',

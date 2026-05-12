@@ -30,10 +30,7 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { untrackExecution } from '@agent/runtime/executionRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import {
-  getCurrentToolFileInteractionContext,
-  getCurrentToolRuntimeHost,
-} from '@agent/toolUse/ToolFileInteractionContext';
+import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import {
   getInterruptible,
   registerInterruptible,
@@ -68,6 +65,7 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { defineTool } from './core/define';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { createChildStream } from './childStream';
+import { getCurrentToolRuntimeHost } from './toolRuntimeHost';
 import {
   buildCodexCommandToolLog,
   buildCodexFileChangeToolLog,
@@ -602,15 +600,26 @@ export class CodexTool extends defineTool({
       );
     }
 
-    const ctx = getCurrentToolFileInteractionContext();
-    ctx?.onExecutionReady?.();
+    const contexts = getCurrentToolContexts();
+    const callContext = contexts?.callContext;
+    const runContext = contexts?.runContext;
+    callContext?.onExecutionReady?.();
 
     if (input.thread_id && threadRegistry.has(input.thread_id)) {
-      return resumeCodexThread(input.thread_id, input.prompt, ctx?.streamId);
+      return resumeCodexThread(
+        input.thread_id,
+        input.prompt,
+        runContext?.streamId,
+      );
     }
     // Fall through when the thread's in-memory loop is gone (extension
     // reload, crash): createCodexThread resumes via the SDK from disk.
-    return launchCodexSession(input, ctx?.streamId, ctx?.executionId);
+    return launchCodexSession(
+      input,
+      runContext?.streamId,
+      runContext?.executionId,
+      runContext?.workingDirectory,
+    );
   }
 }
 
@@ -618,6 +627,7 @@ async function launchCodexSession(
   input: CodexInput,
   parentStreamId: StreamTabId | undefined,
   parentExecutionId: ExecutionId | undefined,
+  parentWorkingDirectory: string | undefined,
 ): Promise<ToolResult> {
   if (!parentStreamId) {
     throw new ToolError(
@@ -625,8 +635,7 @@ async function launchCodexSession(
     );
   }
 
-  const ctx = getCurrentToolFileInteractionContext();
-  const workingDir = parseWorkingDirectory(ctx?.workingDirectory);
+  const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   const thread = await createCodexThread(input, workingDir);
 
   const executionId = generateExecutionId();
