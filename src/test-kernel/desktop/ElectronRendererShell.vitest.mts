@@ -89,6 +89,25 @@ describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () 
     );
   });
 
+  it('renders the launcher back action as an icon-only chrome button', () => {
+    const rendererMain = readRendererMain();
+    const styles = readRendererStyles();
+
+    expect(rendererMain).toMatch(/class="[^"]*\bdesktop-icon-button\b[^"]*"/);
+    expect(rendererMain).toContain('title="Back to launcher"');
+    expect(rendererMain).toContain('aria-label="Back to launcher"');
+    expect(rendererMain).toMatch(
+      /waIcon\('arrow-left',\s*\{\s*label:\s*'Back to launcher'\s*\}\)/,
+    );
+    expect(rendererMain).toContain('waIcon(spec.icon, { label: spec.label })');
+    expect(rendererMain).not.toContain('TEXRA_ICON_LIBRARY');
+    expect(rendererMain).not.toContain('desktop-back-button');
+    expect(rendererMain).not.toContain(
+      "${waIcon('arrow-left', { slot: 'start' })} Launcher",
+    );
+    expect(styles).not.toContain('wa-button.desktop-back-button::part(base)');
+  });
+
   it('mounts settings as a wa-dialog overlay (not a route)', () => {
     const rendererMain = readRendererMain();
     const styles = readRendererStyles();
