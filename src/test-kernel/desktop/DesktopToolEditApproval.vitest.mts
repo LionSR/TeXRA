@@ -5,6 +5,12 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type {
+  DiffOptions,
+  DiffSession,
+  DiffSource,
+  DiffViewHost,
+} from '@hosts/diffViewHost';
 
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
@@ -15,6 +21,7 @@ interface DesktopToolEditApprovalModule {
       location: { absolutePath: string },
       options?: { preserveFocus?: boolean },
     ) => Promise<void>;
+    openDiff?: DiffViewHost['openDiff'];
     showErrorMessage?: (message: string) => Promise<void> | void;
     tempRoot?: string;
   }): {
@@ -241,6 +248,63 @@ describe('desktop tool edit approval', () => {
         await expect(pathExists(opened[0])).resolves.toBe(false);
         await expect(pathExists(opened[1])).resolves.toBe(false);
       });
+    } finally {
+      offShow();
+      controller.dispose();
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('routes diff actions through the injected desktop diff host when available', async () => {
+    const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+    const { bus, requestToolEditApproval, desktopModule } =
+      await loadApprovalModules();
+    const openPath = vi.fn(async (_filePath: string) => {});
+    const openDiff = vi.fn(
+      async (
+        original: DiffSource,
+        proposed: DiffSource,
+        title: string,
+        _options?: DiffOptions,
+      ): Promise<DiffSession> => ({ original, proposed, title }),
+    );
+    const controller = desktopModule.createDesktopToolEditApprovalController({
+      tempRoot,
+      openPath,
+      openDiff,
+    });
+    const shown: ProgressEventPayloads['showToolEditPermission'][] = [];
+    const offShow = bus.on('showToolEditPermission', (payload) =>
+      shown.push(payload),
+    );
+
+    try {
+      const resultPromise = requestToolEditApproval({
+        path: '/workspace/main.tex',
+        originalContent: 'old\n',
+        proposedContent: 'new\n',
+        sourceTool: 'write_file',
+      });
+      await vi.waitFor(() => expect(shown).toHaveLength(1));
+
+      controller.handleAction({
+        requestId: shown[0].requestId,
+        action: 'openDiff',
+      });
+
+      await vi.waitFor(() => expect(openDiff).toHaveBeenCalledOnce());
+      expect(openPath).not.toHaveBeenCalled();
+      const [original, proposed, title, options] = openDiff.mock.calls[0];
+      expect(title).toBe('Tool edit: main.tex');
+      expect(options).toEqual({ preserveFocus: true });
+      await expect(pathExists(original.filePath)).resolves.toBe(true);
+      await expect(pathExists(proposed.filePath)).resolves.toBe(true);
+
+      controller.handleAction({
+        requestId: shown[0].requestId,
+        action: 'reject',
+      });
+      await expect(resultPromise).resolves.toMatchObject({ accepted: false });
     } finally {
       offShow();
       controller.dispose();
