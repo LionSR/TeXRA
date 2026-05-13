@@ -9,7 +9,7 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - state
 // Local imports - shared schemas
-import type { ModelOptionData } from '@shared/schemas';
+import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 
 // Local imports - shared constants
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
@@ -23,24 +23,37 @@ import {
   getVisibleModels,
 } from './modelOptionsBasic';
 
-/** Check if a model is available via personal API keys. */
-async function hasPersonalKeyForModel(
+type PersonalModelAccessKind = 'provider-key' | 'openrouter-key';
+
+interface ModelAvailabilityStatus {
+  kind: ModelAvailabilityKind;
+  label: string;
+  available: boolean;
+  requiresKey: boolean;
+}
+
+/** Check whether a model is available through a personal provider or OpenRouter key. */
+async function getPersonalAccessKindForModel(
   config: ModelConfig,
   hasOpenRouter: boolean,
-): Promise<boolean> {
-  if (config.openRouterOnly) return hasOpenRouter;
+): Promise<PersonalModelAccessKind | null> {
+  if (config.openRouterOnly) return hasOpenRouter ? 'openrouter-key' : null;
 
   const provider = config.provider as ApiProvider;
-  if (!(API_PROVIDERS as readonly string[]).includes(provider)) return true;
+  if (!(API_PROVIDERS as readonly string[]).includes(provider)) {
+    return 'provider-key';
+  }
 
   try {
-    return (
-      (await apiKeyExists(platform().secrets, provider)) ||
-      !!(config.openrouterFullName && hasOpenRouter)
-    );
+    if (await apiKeyExists(platform().secrets, provider)) {
+      return 'provider-key';
+    }
   } catch {
-    return false;
+    // Treat unreadable provider keys as absent, but still allow OpenRouter
+    // fallback below when this model has an OpenRouter route.
   }
+
+  return config.openrouterFullName && hasOpenRouter ? 'openrouter-key' : null;
 }
 
 interface ModelAvailabilityContext {
@@ -50,22 +63,54 @@ interface ModelAvailabilityContext {
   serverSideKeyService: ReturnType<typeof getServerSideKeyService>;
 }
 
-/** Determine if a model is available based on access mode and keys. */
-async function isModelAvailable(
+function canUseIncludedAccessForModel(
   model: string,
   config: ModelConfig,
   ctx: ModelAvailabilityContext,
-): Promise<boolean> {
-  // openRouterOnly models always need OpenRouter key
-  if (config.openRouterOnly) return ctx.hasOpenRouter;
-
-  // Check server-side relay availability
-  if (
+) {
+  return (
     ctx.hasServerAccess &&
     ctx.serverSideKeyService.isProviderOnServer(config.provider) &&
     ctx.serverSideKeyService.canUseModelSync(model)
-  ) {
-    return true;
+  );
+}
+
+/** Determine how a model can be used in the current access mode. */
+async function resolveModelAvailability(
+  model: string,
+  config: ModelConfig,
+  ctx: ModelAvailabilityContext,
+): Promise<ModelAvailabilityStatus> {
+  // OpenRouter-only models are intentionally outside included access; a
+  // configured OpenRouter key is the only ready state for them.
+  if (config.openRouterOnly) {
+    const personalAccess = await getPersonalAccessKindForModel(
+      config,
+      ctx.hasOpenRouter,
+    );
+    if (personalAccess === 'openrouter-key') {
+      return {
+        kind: 'openrouter-key',
+        label: 'OpenRouter key',
+        available: true,
+        requiresKey: false,
+      };
+    }
+    return {
+      kind: 'missing-key',
+      label: 'Missing API key',
+      available: false,
+      requiresKey: true,
+    };
+  }
+
+  if (canUseIncludedAccessForModel(model, config, ctx)) {
+    return {
+      kind: 'included-access',
+      label: 'Included access',
+      available: true,
+      requiresKey: false,
+    };
   }
 
   // Fall back to personal API keys when:
@@ -73,10 +118,40 @@ async function isModelAvailable(
   // - User has default "Use Included Access" but isn't actually authenticated with server access
   //   (avoids showing all models as disabled for unauthenticated users)
   if (!ctx.useIncludedAccess || !ctx.hasServerAccess) {
-    return hasPersonalKeyForModel(config, ctx.hasOpenRouter);
+    const personalAccess = await getPersonalAccessKindForModel(
+      config,
+      ctx.hasOpenRouter,
+    );
+    if (personalAccess === 'provider-key') {
+      return {
+        kind: 'provider-key',
+        label: 'API key set',
+        available: true,
+        requiresKey: false,
+      };
+    }
+    if (personalAccess === 'openrouter-key') {
+      return {
+        kind: 'openrouter-key',
+        label: 'OpenRouter key',
+        available: true,
+        requiresKey: false,
+      };
+    }
+    return {
+      kind: 'missing-key',
+      label: 'Missing API key',
+      available: false,
+      requiresKey: true,
+    };
   }
 
-  return false;
+  return {
+    kind: 'not-included',
+    label: 'Not included',
+    available: false,
+    requiresKey: true,
+  };
 }
 
 async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
@@ -101,15 +176,15 @@ export async function getModelUnavailableReason(
   if (!config) return `Model "${model}" is not recognized.`;
 
   const ctx = await buildAvailabilityContext();
-  const available = await isModelAvailable(model, config, ctx);
-  if (available) return null;
+  const availability = await resolveModelAvailability(model, config, ctx);
+  if (availability.available) return null;
 
   // Determine the specific reason
   if (config.openRouterOnly) {
     return `Model "${model}" requires an OpenRouter API key. Set your OpenRouter key in the extension settings.`;
   }
 
-  if (ctx.useIncludedAccess && ctx.hasServerAccess) {
+  if (availability.kind === 'not-included') {
     // User has server access but model isn't available on their tier
     return `Model "${model}" is not available with your current subscription tier. Upgrade your plan or switch to a different model.`;
   }
@@ -130,7 +205,7 @@ async function buildModelOptionData(
     return { value: model, label: model };
   }
 
-  const available = await isModelAvailable(model, config, ctx);
+  const availability = await resolveModelAvailability(model, config, ctx);
   return {
     value: model,
     label: config.label,
@@ -138,8 +213,10 @@ async function buildModelOptionData(
     context: formatContext(config.contextWindow),
     cost: formatCost(config.inputPrice, config.outputPrice),
     hint: buildModelHint(config),
-    requiresKey: !available,
-    disabled: !available,
+    availability: availability.kind,
+    availabilityLabel: availability.label,
+    requiresKey: availability.requiresKey,
+    disabled: !availability.available,
   };
 }
 
