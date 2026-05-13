@@ -861,9 +861,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
         const diagnostics = streamHandler.getDiagnostics();
         if (!diagnostics.messageStopReceived) {
           // The catch block below will read current diagnostics, attach them
-          // to the enriched error, and log at warn — no inner attach/log
-          // here, otherwise one truncation event produces two warns and
-          // two diagnostics snapshots (with drifting elapsedSecs).
+          // to the enriched error, and keep one diagnostics snapshot. The
+          // retry node owns the visible failure row.
           throw new Error(
             `Stream ended without message_stop after ${diagnostics.elapsedSecs}s ` +
               `(${diagnostics.eventsProcessed} events, ` +
@@ -922,13 +921,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
             partialTextLength: partialText.length,
           },
         };
-        // Aborts are control flow, not failures. Everything else is a warn
-        // so silent proxy drops surface without debug logging enabled.
-        if (isAbort) {
-          this.logger.debug(logMessage, logData);
-        } else {
-          this.logger.warn(logMessage, logData);
-        }
+        // The retry node owns user-facing failure reporting. Keep stream
+        // diagnostics available without showing a second visible failure row.
+        this.logger.debug(logMessage, logData);
 
         attachStreamDiagnostics(enrichedError, diagnostics);
         attachPartialText(enrichedError, partialText);
