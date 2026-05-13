@@ -9,6 +9,7 @@
 import * as path from 'path';
 import { promises as fs } from 'fs';
 
+import { flexibleFS } from '@utils/files';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
 /** Strips everything after an unescaped % on each line. */
@@ -35,6 +36,45 @@ const BIB_DIRECTIVE_PATTERN = new RegExp(
 export async function resolveLatexDir(absolutePath: string): Promise<string> {
   const resolved = await fs.realpath(absolutePath).catch(() => absolutePath);
   return path.dirname(resolved);
+}
+
+/**
+ * Return `absolutePath` if it exists on disk, otherwise null. Centralizes
+ * the `flexibleFS.exists({ kind: 'external', ... })` boilerplate used by
+ * the various LaTeX dependency resolvers.
+ */
+export async function existingExternalPath(
+  absolutePath: string,
+): Promise<string | null> {
+  if (await flexibleFS.exists({ kind: 'external', absolutePath })) {
+    return absolutePath;
+  }
+  return null;
+}
+
+/**
+ * Search `searchPaths × extensions` for the first existing file and return
+ * its normalized absolute path, or null if nothing exists.
+ *
+ * - `relativePath` is joined against each entry in `searchPaths`.
+ * - Each `extensions` entry is appended to the joined path; pass `''` to test
+ *   the path as-is.
+ * - The search is ordered: outer loop over `searchPaths`, inner over
+ *   `extensions`. The first hit wins.
+ */
+export async function findExistingLatexPath(
+  relativePath: string,
+  searchPaths: string[],
+  extensions: string[],
+): Promise<string | null> {
+  for (const basePath of searchPaths) {
+    const joined = path.normalize(path.join(basePath, relativePath));
+    for (const ext of extensions) {
+      const hit = await existingExternalPath(ext ? `${joined}${ext}` : joined);
+      if (hit !== null) return hit;
+    }
+  }
+  return null;
 }
 
 /**
