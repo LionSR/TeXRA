@@ -65,6 +65,9 @@ const LogListStateSchema = z
 interface CachedStream {
   groups: TaskGroup[];
   messages: LogMessageData[];
+  updatedMessageIndices: readonly number[];
+  updatedMessageBaseGeneration: number;
+  messageGeneration: number;
   toggleStates: ToggleStateStore;
   ref: Ref<TaskGroupList>;
   status: string | null;
@@ -122,6 +125,10 @@ export class LogList extends LitElement {
       const entry = this.getOrCreateEntry(streamId);
       entry.groups = this.streamContext.taskGroups;
       entry.messages = this.streamContext.logs;
+      entry.updatedMessageIndices = this.streamContext.updatedMessageIndices;
+      entry.updatedMessageBaseGeneration =
+        this.streamContext.updatedMessageBaseGeneration;
+      entry.messageGeneration = this.streamContext.messageGeneration;
       entry.status = this.streamContext.streamStatus;
       entry.terminalMode = this.streamContext.terminalMode;
 
@@ -147,6 +154,9 @@ export class LogList extends LitElement {
           style=${id === this.activeStreamId ? '' : 'display:none'}
           .groups=${data.groups}
           .messages=${data.messages}
+          .updatedMessageIndices=${data.updatedMessageIndices}
+          .updatedMessageBaseGeneration=${data.updatedMessageBaseGeneration}
+          .messageGeneration=${data.messageGeneration}
           .hasStreams=${this.streamContext.hasStreams}
           .streamStatus=${data.status}
           .toggleStates=${data.toggleStates}
@@ -224,6 +234,9 @@ export class LogList extends LitElement {
     entry = {
       groups: [],
       messages: [],
+      updatedMessageIndices: [],
+      updatedMessageBaseGeneration: 0,
+      messageGeneration: 0,
       toggleStates,
       ref: createRef<TaskGroupList>(),
       status: null,

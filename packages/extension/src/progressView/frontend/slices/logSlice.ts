@@ -163,28 +163,42 @@ export const logHandlers: HandlerRegistry = {
         const streamLogs: StreamLogs = existingStreamLogs ?? {
           logs: [],
           logIndex: new Map<string, number>(),
+          updatedMessageIndices: [],
+          updatedMessageBaseGeneration: 0,
           generation: 0,
         };
 
         let logChanged = false;
         let stateChanged = false;
+        const updatedMessageIndices = new Set<number>();
+        const updatedMessageBaseGeneration = streamLogs.generation;
 
         for (const entry of entries) {
+          const existingIndex = streamLogs.logIndex.get(entry.id);
           const changed = applyEntry(entry, streamLogs, streamState);
           logChanged ||= changed.logChanged;
           stateChanged ||= changed.stateChanged;
+          if (changed.logChanged && existingIndex !== undefined) {
+            updatedMessageIndices.add(existingIndex);
+          }
         }
 
         for (const entry of updates) {
+          const existingIndex = streamLogs.logIndex.get(entry.id);
           const changed = applyEntry(entry, streamLogs, streamState);
           logChanged ||= changed.logChanged;
           stateChanged ||= changed.stateChanged;
+          if (changed.logChanged && existingIndex !== undefined) {
+            updatedMessageIndices.add(existingIndex);
+          }
         }
 
         if (logChanged) {
           draft.streamLogs.set(streamId, {
             logs: streamLogs.logs,
             logIndex: streamLogs.logIndex,
+            updatedMessageIndices: [...updatedMessageIndices],
+            updatedMessageBaseGeneration,
             generation: streamLogs.generation + 1,
           });
         }
