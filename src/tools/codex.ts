@@ -45,13 +45,14 @@ import type {
   StreamTabId,
   ExecutionId,
   StorageKey,
+  StreamStatus,
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
 import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
+import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { ToolError, type ToolResult } from '@tools/result';
 import { parseWorkingDirectory } from '@tools/pathResolution';
-import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import {
   requestBashApproval,
   buildBashApprovalRejectedResult,
@@ -217,6 +218,21 @@ function isCleanCodexInterruption(
   session: CodexFollowUpSession,
 ): boolean {
   return signal.aborted || session.isInterrupted() || isAbortError(err);
+}
+
+function isCodexLoopOwnedStatus(status: StreamStatus | undefined): boolean {
+  return status === STREAM_STATUS.WAITING || status === STREAM_STATUS.RUNNING;
+}
+
+/**
+ * Clear the transient status owned by a Codex loop after the loop exits.
+ * Explicit terminal statuses set by other runtime paths, such as STOPPED or
+ * ERROR, are left intact.
+ */
+export function finalizeCodexLoopStatus(childStreamId: StreamTabId): void {
+  if (isCodexLoopOwnedStatus(StreamStatusService.get(childStreamId))) {
+    StreamStatusService.set(childStreamId, STREAM_STATUS.READY);
+  }
 }
 
 // ============================================================================
@@ -533,9 +549,7 @@ function startCodexLoop(params: {
       await writeTerminalStatus(executionId, 'completed').catch(() => {});
       untrackExecution(executionId);
 
-      if (StreamStatusService.get(childStreamId) === STREAM_STATUS.WAITING) {
-        StreamStatusService.set(childStreamId, STREAM_STATUS.READY);
-      }
+      finalizeCodexLoopStatus(childStreamId);
     }
   })();
 }
