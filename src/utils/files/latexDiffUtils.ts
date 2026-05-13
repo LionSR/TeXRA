@@ -35,15 +35,10 @@ export function parseLatexDiffMetadata(
 ): LatexDiffMetadata | null {
   const { dir, name, ext } = path.parse(filePath);
   const match = name.match(LATEX_DIFF_BASENAME_PATTERN);
-  if (!match) {
-    return null;
-  }
+  if (!match) return null;
 
+  // Regex guarantees both groups are non-empty when match succeeds.
   const [, baseName, commitHash] = match;
-  if (!baseName || !commitHash) {
-    return null;
-  }
-
   return { dir, baseName, ext, commitHash };
 }
 

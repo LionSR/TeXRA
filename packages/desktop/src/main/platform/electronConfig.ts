@@ -55,8 +55,10 @@ function firstStoredValue<T>(
   store: JsonStore,
   keys: readonly string[],
 ): T | undefined {
-  const found = keys.find((candidate) => store.has(candidate));
-  return found === undefined ? undefined : store.get<T>(found);
+  for (const candidate of keys) {
+    if (store.has(candidate)) return store.get<T>(candidate);
+  }
+  return undefined;
 }
 
 export class ElectronConfigProvider implements ConfigProvider {

@@ -21,10 +21,6 @@ function getRendererTargetOrigin(): string {
   return origin && origin !== 'null' ? origin : '*';
 }
 
-function getWorkspacePath(): string | undefined {
-  return parseWorkspacePathFromArgv(process.argv.slice(1));
-}
-
 installElectronHostBridge({
   exposeInMainWorld: (name, api) => contextBridge.exposeInMainWorld(name, api),
   onHostMessage: (channel, listener) => {
@@ -45,5 +41,5 @@ installElectronHostBridge({
 contextBridge.exposeInMainWorld('texraDesktop', {
   electronVersion: process.versions.electron,
   hasWorkspace: hasResolvedWorkspacePath(),
-  workspacePath: getWorkspacePath(),
+  workspacePath: parseWorkspacePathFromArgv(process.argv.slice(1)),
 });

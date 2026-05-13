@@ -20,9 +20,10 @@ export function redactDesktopLog(
     .sort((a, b) => b.length - a.length);
 
   let redacted = text
-    .replaceAll(SECRET_ASSIGNMENT_PATTERN, (_match, name: string) => {
-      return `${name}=${REDACTED}`;
-    })
+    .replaceAll(
+      SECRET_ASSIGNMENT_PATTERN,
+      (_match, name: string) => `${name}=${REDACTED}`,
+    )
     .replaceAll(BEARER_PATTERN, `Bearer ${REDACTED}`)
     .replaceAll(PROVIDER_KEY_PATTERN, REDACTED);
 
