@@ -2,6 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
+import {
+  getDefaultAgentRuntimeHost,
+  setDefaultAgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
@@ -53,44 +57,71 @@ describe('accept_run_files progress events', () => {
   });
 
   it('publishes accepted workspace files through the tool runtime host', async () => {
-    const { events, host } = createRecordingHost();
+    const explicit = createRecordingHost();
+    const fallback = createRecordingHost();
+    const previousDefault = getDefaultAgentRuntimeHost();
     const tool = new AcceptRunFilesTool();
 
-    StorageFS.exists = async (target) =>
-      target === `executions/${executionId}` ||
-      target === `executions/${executionId}/output.tex`;
-    StorageFS.fullPath = (target) => `${storagePath}/${target}`;
-    WorkspaceFS.locatePath = (target) => ({
-      kind: 'workspace',
-      absolutePath: `${workspacePath}/${target}`,
-      relativePath: target,
+    try {
+      setDefaultAgentRuntimeHost(fallback.host);
+
+      StorageFS.exists = async (target) =>
+        target === `executions/${executionId}` ||
+        target === `executions/${executionId}/output.tex`;
+      StorageFS.fullPath = (target) => `${storagePath}/${target}`;
+      WorkspaceFS.locatePath = (target) => ({
+        kind: 'workspace',
+        absolutePath: `${workspacePath}/${target}`,
+        relativePath: target,
+      });
+      WorkspaceFS.exists = async () => false;
+      WorkspaceFS.read = async () => '';
+      WorkspaceFS.write = async () => undefined;
+      WorkspaceFS.delete = async () => undefined;
+      flexibleFS.read = async () => 'accepted content';
+
+      setToolEditApprovalHandler(async () => ({ accepted: true }));
+
+      const result = await withToolFileInteractionContext(
+        {
+          streamId,
+          executionId,
+          runtimeHost: explicit.host,
+          tracker: {} as never,
+        },
+        () =>
+          tool.call({
+            execution_id: executionId,
+            files: [{ path: 'output.tex', original: 'paper.tex' }],
+          }),
+      );
+
+      expect(result.isError).toBeUndefined();
+      expect(explicit.events).toContainEqual({
+        event: 'workspaceFilesWritten',
+        payload: { absolutePaths: [`${workspacePath}/paper.tex`] },
+      });
+      expect(fallback.events).toEqual([]);
+    } finally {
+      setDefaultAgentRuntimeHost(previousDefault);
+    }
+  });
+
+  it('fails before workspace writes when the tool runtime host is missing', async () => {
+    const tool = new AcceptRunFilesTool();
+    let writes = 0;
+
+    WorkspaceFS.write = async () => {
+      writes++;
+    };
+
+    const result = await tool.call({
+      execution_id: executionId,
+      files: [{ path: 'output.tex', original: 'paper.tex' }],
     });
-    WorkspaceFS.exists = async () => false;
-    WorkspaceFS.read = async () => '';
-    WorkspaceFS.write = async () => undefined;
-    WorkspaceFS.delete = async () => undefined;
-    flexibleFS.read = async () => 'accepted content';
 
-    setToolEditApprovalHandler(async () => ({ accepted: true }));
-
-    const result = await withToolFileInteractionContext(
-      {
-        streamId,
-        executionId,
-        runtimeHost: host,
-        tracker: {} as never,
-      },
-      () =>
-        tool.call({
-          execution_id: executionId,
-          files: [{ path: 'output.tex', original: 'paper.tex' }],
-        }),
-    );
-
-    expect(result.isError).toBeUndefined();
-    expect(events).toContainEqual({
-      event: 'workspaceFilesWritten',
-      payload: { absolutePaths: [`${workspacePath}/paper.tex`] },
-    });
+    expect(result.isError).toBe(true);
+    expect(result.error).toContain('requires a tool runtime host');
+    expect(writes).toBe(0);
   });
 });
