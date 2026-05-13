@@ -4,7 +4,12 @@ import {
   type ExecutionStatusInfo,
   getHandle,
 } from '@agent/runtime/executionRegistry';
-import { EXECUTION_STATUS } from '@shared/schemas';
+import {
+  EXECUTION_STATUS,
+  STATUS_DISPLAY,
+  TODO_STATUS,
+  type TodoStatus,
+} from '@shared/schemas';
 
 /** Return paths available for a given agent category. */
 export function getAvailablePaths(
@@ -71,16 +76,17 @@ export function formatListingLine(entry: ExecutionListingEntry): string {
   return `${entry.id}  ${ts}  ${entry.agent}${categoryTag}  ${entry.model}  [${formatStatusInfo(info)}]${parentSuffix}${descSuffix}`;
 }
 
-const TODO_ICON: Record<string, string> = {
-  completed: '[x]',
-  in_progress: '[>]',
-  pending: '[ ]',
-};
+function getTodoStatusIcon(status: string | undefined): string {
+  return (
+    STATUS_DISPLAY[status as TodoStatus]?.icon ??
+    STATUS_DISPLAY[TODO_STATUS.PENDING].icon
+  );
+}
 
 /** Format todo items as a checklist. */
 export function formatTodoSection(todos: TodoEntry[]): string[] {
   return todos.map((t) => {
-    const icon = TODO_ICON[t.status ?? ''] ?? '[ ]';
+    const icon = getTodoStatusIcon(t.status);
     return `${icon} ${t.content ?? '(no description)'}`;
   });
 }
