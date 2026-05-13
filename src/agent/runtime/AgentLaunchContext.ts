@@ -303,9 +303,9 @@ async function assembleAgentLaunchContext(
     runtimeHost,
     workingDirectory: configPayload.workingDirectory?.trim() || undefined,
     coordinators: {
-      plan: new PlanApprovalCoordinator(),
-      proposal: new AgentProposalCoordinator(),
-      retry: new RetryRequestCoordinatorImpl(),
+      plan: new PlanApprovalCoordinator(runtimeHost),
+      proposal: new AgentProposalCoordinator(runtimeHost),
+      retry: new RetryRequestCoordinatorImpl(runtimeHost),
     },
   };
 }

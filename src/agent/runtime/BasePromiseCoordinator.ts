@@ -18,7 +18,7 @@
  */
 
 import {
-  getAgentRuntimeHost,
+  getDefaultAgentRuntimeHost,
   type AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
@@ -65,10 +65,14 @@ export abstract class BasePromiseCoordinator<
   TResult extends BaseResult,
   TShowPayload extends Record<string, unknown>,
 > {
+  /**
+   * Run-owned coordinators pass a concrete host. The default host fallback is
+   * kept only for exported legacy singletons used at host-entry boundaries.
+   */
   constructor(private readonly configuredRuntimeHost?: AgentRuntimeHost) {}
 
   protected get runtimeHost(): AgentRuntimeHost {
-    return this.configuredRuntimeHost ?? getAgentRuntimeHost();
+    return this.configuredRuntimeHost ?? getDefaultAgentRuntimeHost();
   }
 
   /** Single source of truth for all pending requests */
