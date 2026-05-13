@@ -4,9 +4,9 @@ import { describe, expect, it } from 'vitest';
 // Local imports - agent
 import {
   getDefaultAgentRuntimeHost,
-  runWithAgentRuntimeHost,
   setDefaultAgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 
 // Local imports - event bus
 import { bus } from '@eventBus/ProgressEventBus';
@@ -29,7 +29,7 @@ describe('GitHub subscription progress events', () => {
     setDefaultAgentRuntimeHost(fallback.host);
 
     try {
-      runWithAgentRuntimeHost(active.host, () => {
+      withRunContext(createRunContext({ runtimeHost: active.host }), () => {
         emitGitHubSubscriptionChanged(
           'repoSubscriptionBindingsChanged',
           undefined,
