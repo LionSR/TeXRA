@@ -360,7 +360,7 @@ export class TextEditorTool extends defineTool({
         edits: [{ path: displayPath, lineChanges: approval.lineChanges }],
       };
     } catch (error) {
-      throw new ToolError(`Error creating file ${displayPath}: ${error}`);
+      rethrowWithContext(error, `Error creating file ${displayPath}`);
     }
   }
 

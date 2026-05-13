@@ -204,17 +204,13 @@ export class BashTool extends defineTool({
       agentCategory: AgentCategory.ToolUse,
     });
 
-    try {
-      await registerExecution(
-        executionId,
-        syntheticConfig,
-        'bash',
-        parentExecutionId,
-        'toolUse',
-      );
-    } catch {
-      throw new ToolError('Failed to register background execution.');
-    }
+    await registerExecution(
+      executionId,
+      syntheticConfig,
+      'bash',
+      parentExecutionId,
+      'toolUse',
+    );
 
     const { childStreamId, logger } = createChildStream(
       executionId,

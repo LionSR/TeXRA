@@ -42,7 +42,6 @@ import { RetryRequestCoordinatorImpl } from './RetryRequestCoordinator';
 import {
   createRunContext,
   withRunContext,
-  type RunContext,
   type RunCoordinators,
 } from './RunContext';
 import { retainRunCoordinatorsForStream } from './runCoordinators';
@@ -76,8 +75,15 @@ const STATUS_MESSAGES: Record<string, string> = {
   [STREAM_STATUS.WAITING]: 'waiting for retry',
 };
 
-function createExecutionRunContext(ctx: AgentLaunchContext): RunContext {
-  return createRunContext({
+export async function withExecutionRunContext<T>(
+  ctx: AgentLaunchContext,
+  fn: () => T | Promise<T>,
+): Promise<T> {
+  const release = retainRunCoordinatorsForStream(
+    ctx.streamId,
+    ctx.coordinators,
+  );
+  const runContext = createRunContext({
     runtimeHost: ctx.runtimeHost,
     streamId: ctx.streamId,
     executionId: ctx.executionId,
@@ -95,18 +101,8 @@ function createExecutionRunContext(ctx: AgentLaunchContext): RunContext {
       delegationConfig: ctx.delegationConfig,
     },
   });
-}
-
-export async function withExecutionRunContext<T>(
-  ctx: AgentLaunchContext,
-  fn: () => T | Promise<T>,
-): Promise<T> {
-  const release = retainRunCoordinatorsForStream(
-    ctx.streamId,
-    ctx.coordinators,
-  );
   try {
-    return await withRunContext(createExecutionRunContext(ctx), fn);
+    return await withRunContext(runContext, fn);
   } finally {
     release();
   }

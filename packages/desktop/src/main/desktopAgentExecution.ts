@@ -11,9 +11,8 @@ import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreCo
 import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { tryPlatform } from '@platform/platform';
+import { platform, tryPlatform } from '@platform/platform';
 import type { ValidatedExecutionRequest } from '@agent/core/executionRequests';
-import { getWorkspaceProvider } from '@agent/core/workspace';
 import {
   clearRetryRequest,
   resolvePlanApproval,
@@ -1237,7 +1236,7 @@ export class DesktopProgressBridge {
   }
 
   private async findAndOpenLabel(label: string): Promise<boolean> {
-    const workspacePath = getWorkspaceProvider().getWorkspacePath();
+    const workspacePath = platform().workspace.getWorkspacePath();
     if (!workspacePath) return false;
 
     const escape = label.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1276,7 +1275,7 @@ export class DesktopProgressBridge {
   private async listWorkspaceFiles(
     fileType: ListableFileType,
   ): Promise<string[]> {
-    const workspacePath = getWorkspaceProvider().getWorkspacePath();
+    const workspacePath = platform().workspace.getWorkspacePath();
     const config = getFileListConfig(fileType, loadFileListSettings(getConfig));
     if (!workspacePath || !config) return [];
     return listWorkspaceFiles({
