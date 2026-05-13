@@ -576,6 +576,13 @@
             "maximum": 100,
             "description": "Number of recent commits to show in the commit selection dropdown",
             "order": 1
+          },
+          "texra.git.emitPrCiStartedEvents": {
+            "type": "boolean",
+            "default": false,
+            "description": "Emit a PR subscription event when GitHub check runs first appear for a new head commit.",
+            "scope": "resource",
+            "order": 2
           }
         }
       },

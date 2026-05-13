@@ -863,6 +863,13 @@
         },
         {
           "properties": {
+            "texra.git.emitPrCiStartedEvents": {
+              "default": false,
+              "description": "Emit a PR subscription event when GitHub check runs first appear for a new head commit.",
+              "order": 2,
+              "scope": "resource",
+              "type": "boolean"
+            },
             "texra.git.numberOfCommitsToShow": {
               "default": 20,
               "description": "Number of recent commits to show in the commit selection dropdown",
