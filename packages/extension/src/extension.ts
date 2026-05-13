@@ -463,20 +463,20 @@ export async function activate(context: vscode.ExtensionContext) {
       // the runtime cache pick up the change automatically.
       void (async () => {
         await refreshGitHubToken();
-        await refreshToolAvailability();
+        await refreshToolAvailability(extensionAgentRuntimeHost);
       })().catch(logRefreshFailure('secret change'));
     }),
     // Lean/LaTeX extension installed or removed → re-probe so the Tools tab
     // reflects the new state without the user clicking Re-check.
     vscode.extensions.onDidChange(() => {
-      void refreshToolAvailability().catch(
+      void refreshToolAvailability(extensionAgentRuntimeHost).catch(
         logRefreshFailure('extension change'),
       );
     }),
     // Workspace folders opened/closed can flip `isGitRepository`, which
     // gates the GitHub PR subscription tool group.
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      void refreshToolAvailability().catch(
+      void refreshToolAvailability(extensionAgentRuntimeHost).catch(
         logRefreshFailure('workspace folder change'),
       );
     }),
