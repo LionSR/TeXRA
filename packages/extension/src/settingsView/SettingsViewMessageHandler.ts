@@ -595,7 +595,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION]: (data) =>
         this.handleInstallToolExtension(data),
       [SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS]: () =>
-        refreshToolAvailability(),
+        refreshToolAvailability(extensionAgentRuntimeHost),
       [SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL]: async (data) => {
         await setToolEnabled(data.toolId, data.enabled);
         refreshDisabledToolCache();
