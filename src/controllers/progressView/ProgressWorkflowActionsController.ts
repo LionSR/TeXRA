@@ -130,13 +130,12 @@ export class ProgressWorkflowActionsController {
     taskState: WorkflowTaskState,
   ): string[] {
     const generatedPaths = this.deps.state.getKnownWorkspaceOutputPaths(stream);
-    const outputFiles = [
+    return [
       ...new Set(
         [...taskState.agentConfig.outputFiles, ...generatedPaths].filter(
           Boolean,
         ),
       ),
     ];
-    return outputFiles;
   }
 }
