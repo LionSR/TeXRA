@@ -51,10 +51,9 @@ export class ExtractLatexFiguresTool extends defineTool({
         describe: () => `Figure referenced by ${display}`,
       });
 
-    const formattedList = limitedPaths.map((figurePath) => {
-      const { display } = resolveAndFormat(figurePath);
-      return `- ${display}`;
-    });
+    const formattedList = limitedPaths.map(
+      (figurePath) => `- ${resolveAndFormat(figurePath).display}`,
+    );
     const header = `Figures referenced in ${display}`;
     const output = formatToolOutput(header, formattedList);
     const summary = `Found ${limitedPaths.length} figure file${

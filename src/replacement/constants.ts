@@ -89,11 +89,6 @@ export const FENCED_LATEX_BLOCK_PATTERN_MULTILINE = String.raw`(^|${LINE_BREAK_P
 
 export const FENCED_LATEX_BLOCK_PATTERN_INLINE = String.raw`(^|${LINE_BREAK_PATTERN})([ \t]*):::\s*(${FENCED_LATEX_ENVIRONMENT_PATTERN})[^\S\r\n]*()([^\r\n]*)[ \t]*:::(?=${LINE_BREAK_PATTERN}|$)`;
 
-export const FENCED_LATEX_BLOCK_PATTERNS = [
-  FENCED_LATEX_BLOCK_PATTERN_MULTILINE,
-  FENCED_LATEX_BLOCK_PATTERN_INLINE,
-];
-
 // Union of common LaTeX environments used across rules
 // prettier-ignore
 const BASE_LATEX_ENVIRONMENTS = [
