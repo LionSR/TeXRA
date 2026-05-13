@@ -28,14 +28,18 @@ import { ToolError, type ToolResult } from '@tools/result';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 
 import { defineTool } from '../core/define';
+import {
+  DEFAULT_CHECK_ANNOTATION_LEVEL,
+  type GitHubCheckAnnotationLevel,
+} from './checkAnnotationLevels';
 import { getGitHubToken } from './githubAuth';
 import { ghGet } from './githubClient';
 import {
   bindIssueSubscription,
-  listIssueSubscriptionBindings,
   bindPRSubscription,
-  listPRSubscriptionBindings,
   bindRepoSubscription,
+  listIssueSubscriptionBindings,
+  listPRSubscriptionBindings,
   listRepoSubscriptionBindings,
   unbindIssueSubscription,
   unbindPRSubscription,
@@ -59,6 +63,12 @@ const GitHubSubscriptionInputSchema = z.strictObject({
    * - `owner/repo/issues/N`      — per-issue subscription.
    */
   path: z.string().nullish(),
+  /**
+   * Lowest inline check-annotation level to send for PR subscriptions.
+   * Defaults to failures only; use "warning" to include warnings, or
+   * "notice" to include every annotation GitHub reports.
+   */
+  min_annotation_level: z.enum(['failure', 'warning', 'notice']).nullish(),
   /**
    * Working directory for `find_current` to resolve the current branch's PR.
    * Defaults to the agent's working directory.
@@ -140,12 +150,30 @@ function requirePath(input: GitHubSubscriptionInput): ParsedPath {
   return parsePath(input.path);
 }
 
+function getMinAnnotationLevel(
+  input: GitHubSubscriptionInput,
+): GitHubCheckAnnotationLevel {
+  return input.min_annotation_level ?? DEFAULT_CHECK_ANNOTATION_LEVEL;
+}
+
+function describeAnnotationLevel(level: GitHubCheckAnnotationLevel): string {
+  switch (level) {
+    case 'failure':
+      return 'failures only';
+    case 'warning':
+      return 'warnings and failures';
+    case 'notice':
+      return 'notices, warnings, and failures';
+  }
+}
+
 async function execSubscribe(
   input: GitHubSubscriptionInput,
 ): Promise<ToolResult> {
   requireToken();
   const streamId = requireStreamId();
   const target = requirePath(input);
+  const minAnnotationLevel = getMinAnnotationLevel(input);
   if (target.kind === 'repo') {
     const created = bindRepoSubscription(streamId, target);
     const slug = `${target.owner}/${target.repo}`;
@@ -159,15 +187,20 @@ async function execSubscribe(
     };
   }
   if (target.kind === 'pr') {
-    const created = bindPRSubscription(streamId, target);
+    const created = bindPRSubscription(streamId, {
+      ...target,
+      minAnnotationLevel,
+    });
     const slug = `${target.owner}/${target.repo}/pulls/${target.pullNumber}`;
+    const annotationLevelDescription =
+      describeAnnotationLevel(minAnnotationLevel);
     return {
       summary: created
         ? `Subscribed to ${slug}`
         : `Already subscribed to ${slug}`,
       output: created
-        ? `Subscribed to ${slug}. New comments, reviews, line comments, failed CI checks, inline check annotations (notices / warnings / failures pinned to file:line), and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups. Auto-unsubscribes on PR close/merge.`
-        : `Already subscribed to ${slug}. Activity continues until command="unsubscribe" or the PR closes.`,
+        ? `Subscribed to ${slug}. New comments, reviews, line comments, failed CI checks, inline check annotations (${annotationLevelDescription} pinned to file:line), and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups. Auto-unsubscribes on PR close/merge.`
+        : `Already subscribed to ${slug}. Inline check annotation filter is now ${annotationLevelDescription}. Activity continues until command="unsubscribe" or the PR closes.`,
     };
   }
   // The path "owner/repo/issues/N" is ambiguous: the /issues/comments
@@ -194,8 +227,11 @@ async function execSubscribe(
       owner: target.owner,
       repo: target.repo,
       pullNumber: target.issueNumber,
+      minAnnotationLevel,
     });
     const wasIssuePath = !knownPR;
+    const annotationLevelDescription =
+      describeAnnotationLevel(minAnnotationLevel);
     return {
       summary: created
         ? wasIssuePath
@@ -203,8 +239,8 @@ async function execSubscribe(
           : `Subscribed to ${prSlug}`
         : `Already subscribed to ${prSlug}`,
       output: created
-        ? `${prSlug} is a PR. New comments, reviews, line comments, failed CI checks, inline check annotations (notices / warnings / failures pinned to file:line), and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups. Auto-unsubscribes on close/merge.`
-        : `Already subscribed to ${prSlug}.`,
+        ? `${prSlug} is a PR. New comments, reviews, line comments, failed CI checks, inline check annotations (${annotationLevelDescription} pinned to file:line), and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups. Auto-unsubscribes on close/merge.`
+        : `Already subscribed to ${prSlug}. Inline check annotation filter is now ${annotationLevelDescription}.`,
     };
   }
   const created = bindIssueSubscription(streamId, target);
@@ -469,6 +505,7 @@ export class GitHubSubscriptionTool extends defineTool({
     'Path mirrors GitHub\'s REST URL shape and encodes the hierarchy: "owner/repo" addresses the whole repo (coarse, orchestrator-friendly); "owner/repo/pulls/N" addresses a specific pull request and "owner/repo/issues/N" addresses a specific issue (nuanced, worker-friendly).',
     'Commands:',
     '- subscribe: start watching the path. For repos: PR opens/closes/merges, conversation comments on PRs and issues, inline review comments, plus a holistic merge-conflict probe that flags open PRs whose mergeable_state newly flipped to "dirty" (one event per PR, or a coalesced summary when many PRs flip at once — typical after a base-branch update). For PRs: comments, reviews, line comments, failed CI checks, inline check annotations (notices / warnings / failures pinned to file:line), plus mergeable_state transitions (dirty / resolved). Auto-unsubscribes on close/merge. For issues: comments, closed (with state_reason), reopened — the subscription stays active across close so reopens are caught; call command="unsubscribe" to release the slot.',
+    'For PR subscriptions, min_annotation_level controls inline check annotations: "failure" (default) sends failures only, "warning" includes warnings, and "notice" includes every annotation.',
     '- unsubscribe: stop watching the path.',
     '- list: list active subscriptions on this stream.',
     '- find_current: resolve the current git branch to its PR path (returns "owner/repo/pulls/N").',

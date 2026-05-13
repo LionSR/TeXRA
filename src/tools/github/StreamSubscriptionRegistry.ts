@@ -29,6 +29,7 @@ export interface SubscriptionBinding<K extends string> {
 interface PollingSourceLike<K extends string, Input> {
   has(key: K): boolean;
   subscribe(input: Input, onEvent: (text: string) => void): Disposable;
+  updateSubscription?(input: Input, onEvent: (text: string) => void): void;
   activeKeys(): readonly K[];
   onKeysChanged(listener: (keys: readonly K[]) => void): Disposable;
 }
@@ -47,9 +48,17 @@ export interface StreamSubscriptionRegistryOptions<K extends string, Input> {
     | 'issueSubscriptionBindingsChanged';
 }
 
+interface BoundSubscription {
+  disposable: Disposable;
+  onEvent: (text: string) => void;
+}
+
 export class StreamSubscriptionRegistry<K extends string, Input> {
   private readonly logger: AgentLogger;
-  private readonly perStream = new Map<StreamTabId, Map<K, Disposable>>();
+  private readonly perStream = new Map<
+    StreamTabId,
+    Map<K, BoundSubscription>
+  >();
   private hooksRegistered = false;
 
   constructor(
@@ -67,11 +76,22 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
       bound = new Map();
       this.perStream.set(streamId, bound);
     }
-    if (bound.has(key)) return false;
+    const existing = bound.get(key);
+    if (existing) {
+      this.opts.source.updateSubscription?.(input, existing.onEvent);
+      return false;
+    }
     // Set a sentinel before subscribe() so list() returns correct owner
     // data if the source's keys-changed hook fires synchronously inside
     // subscribe() before the real disposable is available.
-    const sentinel: Disposable = { dispose: () => {} };
+    const onEvent = (text: string) => {
+      void sendFollowUp(streamId, text).then((result) => {
+        if (result.status === 'sent' || result.status === 'queued') {
+          getAgentRuntimeHost().emit('updateQueuedFollowUps', { streamId });
+        }
+      });
+    };
+    const sentinel = { disposable: { dispose: () => {} }, onEvent };
     bound.set(key, sentinel);
     // The source's keys-changed event fires synchronously during subscribe()
     // for new keys (covering the UI refresh); only emit our registry event
@@ -79,18 +99,12 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     const keyIsNew = !this.opts.source.has(key);
     let disposable: Disposable;
     try {
-      disposable = this.opts.source.subscribe(input, (text) => {
-        void sendFollowUp(streamId, text).then((result) => {
-          if (result.status === 'sent' || result.status === 'queued') {
-            getAgentRuntimeHost().emit('updateQueuedFollowUps', { streamId });
-          }
-        });
-      });
+      disposable = this.opts.source.subscribe(input, onEvent);
     } catch (err) {
       this.removeBoundKey(streamId, bound, key);
       throw err;
     }
-    bound.set(key, disposable);
+    bound.set(key, { disposable, onEvent });
     this.logger.info(`Bound subscription ${key} → stream ${streamId}`);
     if (!keyIsNew) this.emitBindingsChanged();
     return true;
@@ -100,9 +114,9 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
   unbind(streamId: StreamTabId, input: Input): boolean {
     const key = this.opts.keyOf(input);
     const bound = this.perStream.get(streamId);
-    const d = bound?.get(key);
-    if (!bound || !d) return false;
-    this.disposeSafe(d, 'explicit unsubscribe');
+    const binding = bound?.get(key);
+    if (!bound || !binding) return false;
+    this.disposeSafe(binding.disposable, 'explicit unsubscribe');
     this.removeBoundKey(streamId, bound, key);
     this.emitBindingsChanged();
     return true;
@@ -116,9 +130,9 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
   unbindAll(key: string): number {
     let removed = 0;
     for (const [streamId, bound] of [...this.perStream]) {
-      const d = bound.get(key as K);
-      if (!d) continue;
-      this.disposeSafe(d, 'unbindAll');
+      const binding = bound.get(key as K);
+      if (!binding) continue;
+      this.disposeSafe(binding.disposable, 'unbindAll');
       this.removeBoundKey(streamId, bound, key as K);
       removed += 1;
     }
@@ -151,7 +165,9 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     ToolUseFollowUpQueue.onRelease((streamId) => {
       const bound = this.perStream.get(streamId);
       if (!bound) return;
-      for (const d of bound.values()) this.disposeSafe(d, 'release');
+      for (const binding of bound.values()) {
+        this.disposeSafe(binding.disposable, 'release');
+      }
       this.perStream.delete(streamId);
       this.emitBindingsChanged();
     });
@@ -176,7 +192,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
 
   private removeBoundKey(
     streamId: StreamTabId,
-    bound: Map<K, Disposable>,
+    bound: Map<K, BoundSubscription>,
     key: K,
   ): void {
     bound.delete(key);
