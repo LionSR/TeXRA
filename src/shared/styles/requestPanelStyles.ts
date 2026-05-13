@@ -243,11 +243,13 @@ export const requestPanelStyles: CSSResult = css`
     position: relative;
     display: inline-flex;
     align-items: center;
-    flex: 1 1 12rem;
+    flex: 0 1 auto;
+    max-width: 100%;
   }
 
   .approval-request__actions .diff-dropdown .diff-main-button {
-    flex: 1;
+    flex: 0 1 auto;
+    min-width: 0;
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
   }
