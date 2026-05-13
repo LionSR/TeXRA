@@ -17,6 +17,7 @@ import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { interruptAllCodexSessions } from '@tools/codex';
+import { refreshToolAvailability } from '@tools/toolAvailability';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
@@ -394,6 +395,8 @@ function createWindow(options: {
       });
       if (result.response === 0) clipboard.writeText(command);
     },
+    refreshToolAvailability: () =>
+      refreshToolAvailability(agentExecution.progress.runtimeHost),
     runInstallCommand: async (command) => {
       const result = await dialog.showMessageBox(window, {
         type: 'info',
