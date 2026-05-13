@@ -111,7 +111,9 @@ describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () 
     const styles = readRendererStyles();
 
     expect(rendererMain).toMatch(/class="[^"]*\bdesktop-icon-button\b[^"]*"/);
-    expect(rendererMain).toContain('title="Back to launcher"');
+    expect(rendererMain).toContain(
+      "title=${commandTitle('texra.showMainView', 'Back to launcher')}",
+    );
     expect(rendererMain).toContain('aria-label="Back to launcher"');
     expect(rendererMain).toMatch(
       /waIcon\('arrow-left',\s*\{\s*label:\s*'Back to launcher'\s*\}\)/,
@@ -181,6 +183,20 @@ describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () 
     expect(rendererMain).toContain('openCommandPalette');
     expect(rendererMain).toContain('buildDesktopSettingsTabMessage');
     expect(rendererMain).toContain('showSettings: openSettingsTab');
+  });
+
+  it('adds platform-formatted shortcut hints to desktop chrome tooltips', () => {
+    const rendererMain = readRendererMain();
+
+    expect(rendererMain).toContain('formatDesktopAccelerator');
+    expect(rendererMain).toContain('getDesktopCommandMenuEntries');
+    expect(rendererMain).toContain(
+      "shortcutTitle('Commands', 'CommandOrControl+K')",
+    );
+    expect(rendererMain).toContain(
+      'DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER',
+    );
+    expect(rendererMain).toContain("commandTitle('texra.openSettings'");
   });
 
   it('mounts desktop-only first-run onboarding controls', () => {

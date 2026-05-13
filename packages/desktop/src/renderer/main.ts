@@ -84,8 +84,11 @@ import {
   buildDesktopMainViewResetMessage,
   buildDesktopSettingsTabMessage,
   DESKTOP_LOCAL_COMMANDS,
+  formatDesktopAccelerator,
+  getDesktopCommandMenuEntries,
   SETTINGS_TAB,
   type DesktopCommandActions,
+  type DesktopCommandId,
 } from '../desktopCommandSurface';
 import {
   DESKTOP_ONBOARDING_COMMANDS,
@@ -137,6 +140,34 @@ const workspacePath = window.texraDesktop?.workspacePath;
 const workspaceFolderName = workspacePath
   ? workspacePath.split(/[\\/]/).pop() || workspacePath
   : undefined;
+const rendererPlatform = getRendererPlatform(document.defaultView);
+const desktopCommandEntriesById = new Map(
+  getDesktopCommandMenuEntries(undefined, rendererPlatform).map((entry) => [
+    entry.id,
+    entry,
+  ]),
+);
+
+function commandTitle(commandId: DesktopCommandId, label: string): string {
+  const entry = desktopCommandEntriesById.get(commandId);
+  const shortcut = formatDesktopAccelerator(
+    entry?.accelerator,
+    rendererPlatform,
+  );
+  return shortcut ? `${label} - ${shortcut}` : label;
+}
+
+function shortcutTitle(label: string, accelerator: string): string {
+  const shortcut = formatDesktopAccelerator(accelerator, rendererPlatform);
+  return shortcut ? `${label} - ${shortcut}` : label;
+}
+
+function getRendererPlatform(view: Window | null): NodeJS.Platform {
+  const platform = view?.navigator.platform.toLowerCase() ?? '';
+  if (platform.includes('mac')) return 'darwin';
+  if (platform.includes('win')) return 'win32';
+  return typeof process === 'undefined' ? 'linux' : process.platform;
+}
 
 // `<settings-app>` lives inside the wa-dialog overlay below; `<main-app>` and
 // `<stream-conversation>` mount directly in the center pane. These are
@@ -335,7 +366,7 @@ function shellTemplate(): TemplateResult {
           appearance="plain"
           size="small"
           ?hidden=${!showConversation}
-          title="Back to launcher"
+          title=${commandTitle('texra.showMainView', 'Back to launcher')}
           aria-label="Back to launcher"
           @click=${returnToLauncher}
         >
@@ -346,6 +377,7 @@ function shellTemplate(): TemplateResult {
           appearance="outlined"
           size="small"
           aria-haspopup="dialog"
+          title=${shortcutTitle('Commands', 'CommandOrControl+K')}
           @click=${openCommandPalette}
         >
           Commands
@@ -354,6 +386,10 @@ function shellTemplate(): TemplateResult {
           class="desktop-folder-button"
           appearance="outlined"
           size="small"
+          title=${commandTitle(
+            DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+            'Open Folder',
+          )}
           @click=${openWorkspaceFolder}
         >
           ${waIcon('folder-open', { slot: 'start' })} Open Folder
@@ -366,7 +402,12 @@ function shellTemplate(): TemplateResult {
               size="small"
               data-route-button=${spec.key}
               aria-label=${spec.label}
-              title=${spec.label}
+              title=${commandTitle(
+                spec.key === 'settings'
+                  ? 'texra.openSettings'
+                  : DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
+                spec.label,
+              )}
               @click=${spec.onClick}
             >
               ${waIcon(spec.icon, { label: spec.label })}
@@ -392,7 +433,7 @@ function shellTemplate(): TemplateResult {
               class="desktop-rail-new"
               appearance="outlined"
               size="small"
-              title="New run"
+              title=${commandTitle('texra.mainView.reset', 'New run')}
               aria-label="New run"
               @click=${returnToLauncher}
             >
@@ -405,6 +446,7 @@ function shellTemplate(): TemplateResult {
               class="desktop-rail-settings"
               appearance="plain"
               size="small"
+              title=${commandTitle('texra.openSettings', 'Settings')}
               @click=${openSettingsOverlay}
             >
               ${waIcon('gear', { slot: 'start' })} Settings
