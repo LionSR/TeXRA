@@ -12,6 +12,7 @@ import {
   interruptActiveChildren,
 } from '@agent/runtime/executionRegistry';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
+import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { STREAM_STATUS } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
 
@@ -24,7 +25,9 @@ export function stopAgent(streamId: StreamTabId): void {
     interruptActiveChildren(streamId);
   }
   getInterruptible(streamId)?.interrupt();
-  StreamStatusService.set(streamId, STREAM_STATUS.STOPPED);
+  StreamStatusService.set(streamId, STREAM_STATUS.STOPPED, {
+    runtimeHost: extensionAgentRuntimeHost,
+  });
 }
 
 export async function compactResponse(streamId: StreamTabId): Promise<void> {
