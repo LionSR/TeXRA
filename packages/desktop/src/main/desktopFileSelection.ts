@@ -136,10 +136,9 @@ export function createDesktopFileSelection(
     fileType: keyof typeof SET_COMMAND_BY_FILE_TYPE,
     listOptions: { preserveBaseFile?: boolean } = {},
   ) {
-    const files =
-      fileType === 'base'
-        ? await list('input')
-        : await list(fileType as ListableFileType);
+    const files = await list(
+      fileType === 'base' ? 'input' : (fileType as ListableFileType),
+    );
     postFileList(
       fileType,
       files,
