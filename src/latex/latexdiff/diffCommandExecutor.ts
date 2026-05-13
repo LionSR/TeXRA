@@ -32,6 +32,27 @@ const ERROR_MESSAGES = {
   FAILED_GENERAL: (commandType: string) => `Failed to run ${commandType}`,
 } as const;
 
+export const LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS = [
+  'cite\\*?',
+  'citep\\*?',
+  'citet\\*?',
+  'citealp\\*?',
+  'citealt\\*?',
+  'citeauthor\\*?',
+  'citeyear\\*?',
+  'citeyearpar\\*?',
+  'parencite\\*?',
+  'textcite\\*?',
+  'autocite\\*?',
+  'footcite\\*?',
+  'supercite\\*?',
+  'smartcite\\*?',
+] as const;
+
+export function buildLatexdiffTextCommandExclusionFlag(): string {
+  return `--exclude-textcmd=${LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS.join(',')}`;
+}
+
 /**
  * Options for diff execution.
  * @property mathMarkup - Math markup mode ('off' | 'whole' | 'coarse' | 'fine').
@@ -112,6 +133,7 @@ export class DiffCommandExecutor {
       '--encoding=utf8',
       '-c',
       `PICTUREENV=${pictureEnvs}`,
+      buildLatexdiffTextCommandExclusionFlag(),
       `--math-markup=${mathMarkup}`,
       ...(subtype ? [`--subtype=${subtype}`] : []),
       inputFile,
@@ -135,6 +157,7 @@ export class DiffCommandExecutor {
       `PICTUREENV=${pictureEnvs}`,
       '--force',
       '--git',
+      buildLatexdiffTextCommandExclusionFlag(),
       `--math-markup=${mathMarkup}`,
       ...(subtype ? [`--subtype=${subtype}`] : []),
       '-r',
