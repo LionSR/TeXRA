@@ -42,12 +42,21 @@ export interface StreamLogs {
   logs: LogMessageData[];
   /** O(1) lookup: log ID → array index. Maintained by mutation handlers. */
   logIndex: Map<string, number>;
+  /**
+   * Existing log-message indices updated by the most recent backend delta.
+   * Pure append batches leave this empty so renderers can skip whole-log scans.
+   */
+  updatedMessageIndices: number[];
+  /** Generation immediately before `updatedMessageIndices` was collected. */
+  updatedMessageBaseGeneration: number;
   generation: number;
 }
 
 export const EMPTY_STREAM_LOGS: StreamLogs = {
   logs: [],
   logIndex: new Map(),
+  updatedMessageIndices: [],
+  updatedMessageBaseGeneration: 0,
   generation: 0,
 };
 
