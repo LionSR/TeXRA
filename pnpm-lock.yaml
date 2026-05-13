@@ -81,8 +81,8 @@ importers:
         specifier: ^2.1.0
         version: 2.1.0
       fast-xml-parser:
-        specifier: ^5.7.3
-        version: 5.7.3
+        specifier: ^5.8.0
+        version: 5.8.0
       fs-extra:
         specifier: ^11.3.5
         version: 11.3.5
@@ -450,8 +450,8 @@ importers:
         specifier: ^2.1.0
         version: 2.1.0
       fast-xml-parser:
-        specifier: ^5.7.3
-        version: 5.7.3
+        specifier: ^5.8.0
+        version: 5.8.0
       fs-extra:
         specifier: ^11.3.5
         version: 11.3.5
@@ -3322,8 +3322,8 @@ packages:
     resolution: {integrity: sha512-Yd4vkROfJf8AuJrDIVMVmYfULKmIJszVsMv7Vo71aocsKgFxpdlpSHXSaInvyYfgw2PRuObQSW2GFpVMUjxu9A==}
     hasBin: true
 
-  fast-xml-parser@5.7.3:
-    resolution: {integrity: sha512-C0AaNuC+mscy6vrAQKAc/rMq+zAPHodfHGZu4sGVehvAQt/JLG1O5zEcYcXSY5zSqr4YVgxsB+pHXTq0i7eDlg==}
+  fast-xml-parser@5.8.0:
+    resolution: {integrity: sha512-6bIM7fsJxeo3uXv7OncQYsBAMPJ7V16Slahl/6M98C/i2q+vB1+4a0MtrvYwDFEUrwDSbAmeLDRXsOBwrL7yAg==}
     hasBin: true
 
   fastest-levenshtein@1.0.16:
@@ -4851,18 +4851,8 @@ packages:
     resolution: {integrity: sha512-HRDzbaKjC+AOWVXxAU/x54COGeIv9eb+6CkDSQoNTt4XyWoIJvuPsXizxu/Fr23EiekbtZwmh1IcIG/l/a10GQ==}
     engines: {node: '>=8'}
 
-  playwright-core@1.59.1:
-    resolution: {integrity: sha512-HBV/RJg81z5BiiZ9yPzIiClYV/QMsDCKUyogwH9p3MCP6IYjUFu/MActgYAvK0oWyV9NlwM3GLBjADyWgydVyg==}
-    engines: {node: '>=18'}
-    hasBin: true
-
   playwright-core@1.60.0:
     resolution: {integrity: sha512-9bW6zvX/m0lEbgTKJ6YppOKx8H3VOPBMOCFh2irXFOT4BbHgrx5hPjwJYLT40Lu+4qtD36qKc/Hn56StUW57IA==}
-    engines: {node: '>=18'}
-    hasBin: true
-
-  playwright@1.59.1:
-    resolution: {integrity: sha512-C8oWjPR3F81yljW9o5OxcWzfh6avkVwDD2VYdwIGqTkl+OGFISgypqzfu7dOe4QNLL2aqcWBmI3PMtLIK233lw==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -9364,12 +9354,13 @@ snapshots:
     dependencies:
       strnum: 1.1.2
 
-  fast-xml-parser@5.7.3:
+  fast-xml-parser@5.8.0:
     dependencies:
       '@nodable/entities': 2.1.0
       fast-xml-builder: 1.2.0
       path-expression-matcher: 1.5.0
       strnum: 2.3.0
+      xml-naming: 0.1.0
 
   fastest-levenshtein@1.0.16: {}
 
@@ -10903,15 +10894,7 @@ snapshots:
     dependencies:
       find-up: 4.1.0
 
-  playwright-core@1.59.1: {}
-
   playwright-core@1.60.0: {}
-
-  playwright@1.59.1:
-    dependencies:
-      playwright-core: 1.59.1
-    optionalDependencies:
-      fsevents: 2.3.2
 
   playwright@1.60.0:
     dependencies:
