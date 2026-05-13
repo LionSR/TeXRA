@@ -74,7 +74,7 @@ function renderModelOption(opt: ModelOptionData): TemplateResult {
     (opt.requiresKey ? 'missing-key' : opt.disabled ? 'not-included' : '');
   const availabilityLabel =
     opt.availabilityLabel ??
-    (opt.requiresKey ? 'Missing API key' : opt.disabled ? 'Unavailable' : '');
+    (opt.requiresKey ? 'Missing API key' : opt.disabled ? 'Not included' : '');
 
   const hints: string[] = [];
   if (decorator.label) hints.push(decorator.label);
