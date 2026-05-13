@@ -33,6 +33,7 @@
     "vite:webviews": "corepack pnpm --filter texra vite:webviews",
     "vite:webviews:dev": "corepack pnpm --filter texra vite:webviews:dev",
     "vite:webviews:watch": "corepack pnpm --filter texra vite:webviews:watch",
+    "capture:walkthrough-media": "node scripts/capture-walkthrough-media.mjs",
     "smoke:webviews": "corepack pnpm run vite:webviews && corepack pnpm run smoke:webviews:run",
     "smoke:webviews:run": "node scripts/smoke-webviews-electron.mjs",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test-kernel.json && corepack pnpm --filter texra typecheck && corepack pnpm --filter @texra/cli typecheck",
