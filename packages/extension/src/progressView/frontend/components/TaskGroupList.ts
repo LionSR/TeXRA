@@ -125,6 +125,21 @@ export class TaskGroupList extends LitElement {
   /** All log messages to render */
   @property({ attribute: false }) messages: LogMessageData[] = [];
 
+  /**
+   * Existing message indices updated by the most recent backend delta.
+   * Null means the producer did not provide delta metadata, so fall back
+   * to reference scans.
+   */
+  @property({ attribute: false }) updatedMessageIndices:
+    | readonly number[]
+    | null = null;
+
+  /** Generation immediately before updatedMessageIndices was collected. */
+  @property({ attribute: false }) updatedMessageBaseGeneration = 0;
+
+  /** Current generation for the messages array. */
+  @property({ attribute: false }) messageGeneration = 0;
+
   /** Whether there are any streams in the current filter (controls placeholder) */
   @property({ attribute: false }) hasStreams = false;
 
@@ -186,6 +201,9 @@ export class TaskGroupList extends LitElement {
 
   /** True after a terminal cache rebuild, when incremental append is invalid. */
   private terminalCommittedNeedsReset = true;
+
+  /** Message generation represented by the current cached tree/timeline. */
+  private processedMessageGeneration = 0;
 
   /** Handle native scroll events from the log container to track user intent */
   private handleScroll = (): void => {
@@ -267,10 +285,10 @@ export class TaskGroupList extends LitElement {
         // Append-only: classify only the new messages incrementally.
         this.appendNewMessages(prevCount);
         // A LOG_DELTA batch may also contain updates to existing entries
-        // (e.g. tool status → completed). Scan pre-append range for changes.
-        if (prevMessages) {
+        // (e.g. tool status → completed). Use explicit delta metadata when
+        // available so pure appends do not scan the old message array.
+        if (prevMessages)
           this.updateExistingMessageRefs(prevMessages, prevCount);
-        }
       } else {
         // Messages shrunk (e.g. clear) — full rebuild
         [this.cachedTree, this.cachedUngrouped] = this.buildGroupTree();
@@ -302,6 +320,8 @@ export class TaskGroupList extends LitElement {
   }
 
   override updated(): void {
+    this.processedMessageGeneration = this.messageGeneration;
+
     if (this.terminal) {
       this.syncTerminalCommittedText();
       return;
@@ -356,6 +376,11 @@ export class TaskGroupList extends LitElement {
    * Reference comparison is O(1) per element, making the full scan cheap.
    */
   private updateCachedMessageRefs(prevMessages: LogMessageData[]): void {
+    if (this.canUseUpdatedMessageIndices()) {
+      this.updateCachedMessageRefsByIndex(prevMessages);
+      return;
+    }
+
     for (let i = this.messages.length - 1; i >= 0; i--) {
       if (this.messages[i] !== prevMessages[i]) {
         this.replaceSingleMessage(this.messages[i]);
@@ -372,11 +397,36 @@ export class TaskGroupList extends LitElement {
     prevMessages: LogMessageData[],
     upTo: number,
   ): void {
+    if (this.canUseUpdatedMessageIndices()) {
+      this.updateCachedMessageRefsByIndex(prevMessages, upTo);
+      return;
+    }
+
     for (let i = upTo - 1; i >= 0; i--) {
       if (this.messages[i] !== prevMessages[i]) {
         this.replaceSingleMessage(this.messages[i]);
       }
     }
+  }
+
+  private updateCachedMessageRefsByIndex(
+    prevMessages: LogMessageData[],
+    upTo: number = this.messages.length,
+  ): void {
+    const indices = this.updatedMessageIndices ?? [];
+    for (const index of indices) {
+      if (index < 0 || index >= upTo || index >= this.messages.length) continue;
+      if (this.messages[index] !== prevMessages[index]) {
+        this.replaceSingleMessage(this.messages[index]);
+      }
+    }
+  }
+
+  private canUseUpdatedMessageIndices(): boolean {
+    return (
+      this.updatedMessageIndices !== null &&
+      this.updatedMessageBaseGeneration === this.processedMessageGeneration
+    );
   }
 
   /**
@@ -574,12 +624,32 @@ export class TaskGroupList extends LitElement {
    * Full scan — status updates can target any position, not just the tail.
    */
   private updateTimelineMessageRefs(): void {
+    if (this.canUseUpdatedMessageIndices()) {
+      this.updateTimelineMessageRefsByIndex();
+      return;
+    }
+
     for (let i = this.cachedTimeline.length - 1; i >= 0; i--) {
       const item = this.cachedTimeline[i];
       if (!('msg' in item)) continue;
       const fresh = this.findUngroupedReverse(item.key);
       if (fresh && fresh !== item.msg) {
         (item as { msg: LogMessageData }).msg = fresh;
+      }
+    }
+  }
+
+  private updateTimelineMessageRefsByIndex(): void {
+    const indices = this.updatedMessageIndices ?? [];
+    for (const index of indices) {
+      const msg = this.messages[index];
+      if (!msg) continue;
+      for (let i = this.cachedTimeline.length - 1; i >= 0; i--) {
+        const item = this.cachedTimeline[i];
+        if ('msg' in item && item.key === msg.id) {
+          (item as { msg: LogMessageData }).msg = msg;
+          break;
+        }
       }
     }
   }

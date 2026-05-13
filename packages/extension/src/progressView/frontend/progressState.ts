@@ -265,9 +265,13 @@ export const logContext$ = new Signal.Computed((): StreamLogContextValue => {
   const activeStreamInfo = activeStreamInfo$.get();
   const hasStreams = hasStreams$.get();
   if (!activeStreamInfo) return { ...EMPTY_LOG_CONTEXT, hasStreams };
+  const streamLogs = activeStreamLogs$.get();
 
   return {
-    logs: activeStreamLogs$.get().logs,
+    logs: streamLogs.logs,
+    updatedMessageIndices: streamLogs.updatedMessageIndices,
+    updatedMessageBaseGeneration: streamLogs.updatedMessageBaseGeneration,
+    messageGeneration: streamLogs.generation,
     taskGroups: activeTaskGroups$.get(),
     isToolUse: activeIsToolUse$.get(),
     hasStreams,
