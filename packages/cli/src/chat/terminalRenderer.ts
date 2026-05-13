@@ -276,12 +276,11 @@ Keys:
   }
 
   private renderActiveChildren(label: string, payload: unknown): void {
+    const childrenField = arrayField(payload, 'children');
     const children =
-      isRecord(payload) && Array.isArray(payload.children)
-        ? payload.children
-        : isRecord(payload) && Array.isArray(payload.processes)
-          ? payload.processes
-          : [];
+      childrenField.length > 0
+        ? childrenField
+        : arrayField(payload, 'processes');
     if (children.length === 0) return;
     this.muted(`${label}: ${children.length} active`);
   }
@@ -331,9 +330,9 @@ Keys:
       stringField(data, 'summary') ?? stringField(nestedOutput, 'summary');
     const error =
       stringField(data, 'error') ?? stringField(nestedOutput, 'error');
-    const output =
-      this.formatUnknownSnippet(this.extractToolOutputContent(outputValue)) ??
-      undefined;
+    const output = this.formatUnknownSnippet(
+      this.extractToolOutputContent(outputValue),
+    );
 
     return {
       toolName,
