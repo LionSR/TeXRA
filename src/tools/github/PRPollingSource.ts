@@ -11,6 +11,7 @@
  * layer above.
  */
 
+import { getConfig } from '@utils/config';
 import { shouldDropBotEvent } from './botFilter';
 import {
   formatCheckAnnotations,
@@ -55,6 +56,16 @@ import {
 } from './prTypes';
 import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 import type { Disposable } from '@platform/interfaces/disposable';
+
+export const GITHUB_PR_POLLING_EMIT_CI_STARTED_CONFIG_KEY =
+  'texra.git.emitPrCiStartedEvents';
+
+function shouldEmitCIStartedEvents(): boolean {
+  return getConfig<boolean>(
+    GITHUB_PR_POLLING_EMIT_CI_STARTED_CONFIG_KEY,
+    false,
+  );
+}
 
 function createInitialState(pr: PRKey): SubscriptionState {
   return {
@@ -537,16 +548,18 @@ export class PRPollingSource extends PollingSourceBase<
       const headSha = state.headSha;
       if (headSha && runs.length > 0 && state.ciStartedSha !== headSha) {
         state.ciStartedSha = headSha;
-        this.emit(
-          state,
-          formatCIStarted(
-            state.slug,
-            pr.pullNumber,
-            headSha,
-            runs,
-            checksRes.data.total_count,
-          ),
-        );
+        if (shouldEmitCIStartedEvents()) {
+          this.emit(
+            state,
+            formatCIStarted(
+              state.slug,
+              pr.pullNumber,
+              headSha,
+              runs,
+              checksRes.data.total_count,
+            ),
+          );
+        }
       }
 
       const newFailures: GhCheckRun[] = [];
