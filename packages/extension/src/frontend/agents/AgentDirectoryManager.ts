@@ -226,6 +226,9 @@ export class AgentDirectoryManager {
     directories: Array<{ directory: string; source: AgentSource }>,
   ): Promise<void> {
     // Dispose old watchers
+    const previousExternalWatcherDirectoryPaths = new Set(
+      this.externalWatcherDirectoryPaths,
+    );
     this.watcherDisposables.forEach((watcher) => watcher.dispose());
     this.watcherDisposables = [];
     this.externalWatcherDirectoryPaths.clear();
@@ -249,7 +252,11 @@ export class AgentDirectoryManager {
         continue;
       }
 
-      await this.watchExternalCustomDirectory(entry, directoryUri);
+      await this.watchExternalCustomDirectory(
+        entry,
+        directoryUri,
+        previousExternalWatcherDirectoryPaths,
+      );
       watchedDirectories.push(entry.directory);
     }
 
@@ -297,17 +304,26 @@ export class AgentDirectoryManager {
   private async watchExternalCustomDirectory(
     entry: { directory: string; source: AgentSource },
     directoryUri: vscode.Uri,
+    previousDirectoryPaths: ReadonlySet<string>,
   ): Promise<void> {
     const directories = await this.collectDirectoryUris(directoryUri);
+    const newlyWatchedDirectories: vscode.Uri[] = [];
 
     for (const dirUri of directories) {
-      this.externalWatcherDirectoryPaths.add(
-        this.normalizeFsPath(dirUri.fsPath),
-      );
+      const normalizedDirectoryPath = this.normalizeFsPath(dirUri.fsPath);
+      if (
+        previousDirectoryPaths.size > 0 &&
+        !previousDirectoryPaths.has(normalizedDirectoryPath)
+      ) {
+        newlyWatchedDirectories.push(dirUri);
+      }
+      this.externalWatcherDirectoryPaths.add(normalizedDirectoryPath);
       this.watchDirectoryTree(entry, dirUri, '*', (type, uri) =>
         this.handleExternalDirectoryTreeChange(type, uri),
       );
     }
+
+    await this.dispatchExistingYamlFiles(entry, newlyWatchedDirectories);
   }
 
   private async collectDirectoryUris(root: vscode.Uri): Promise<vscode.Uri[]> {
@@ -368,6 +384,34 @@ export class AgentDirectoryManager {
     this.watcherDirectories = null;
     this.watcherRebuildRequested = true;
     this.scheduleAgentWatcherSetup();
+  }
+
+  private async dispatchExistingYamlFiles(
+    entry: { directory: string; source: AgentSource },
+    directories: readonly vscode.Uri[],
+  ): Promise<void> {
+    for (const directory of directories) {
+      let files: [string, vscode.FileType][];
+      try {
+        files = await vscode.workspace.fs.readDirectory(directory);
+      } catch (error) {
+        logger.debug(
+          CHANNEL,
+          `Unable to scan new agent directory ${directory.fsPath}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        continue;
+      }
+
+      for (const [name, type] of files) {
+        if ((type & vscode.FileType.File) !== 0 && name.endsWith('.yaml')) {
+          this.dispatchAgentEvent(
+            entry,
+            'create',
+            vscode.Uri.joinPath(directory, name),
+          );
+        }
+      }
+    }
   }
 
   private scheduleAgentWatcherSetup(): void {
