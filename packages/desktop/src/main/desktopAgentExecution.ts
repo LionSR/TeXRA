@@ -1196,7 +1196,7 @@ export class DesktopProgressBridge {
 
     const editedContent = await readFile(editedLocation.absolutePath, 'utf8');
     await writeFile(targetLocation.absolutePath, editedContent, 'utf8');
-    emitAcceptedWorkspaceFile(targetLocation);
+    emitAcceptedWorkspaceFile(targetLocation, this.runtimeHost);
 
     const operation = isNewFile && !targetExists ? 'created' : 'replaced';
     await this.showInfoMessage(

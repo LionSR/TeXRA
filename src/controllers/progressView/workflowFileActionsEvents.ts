@@ -1,12 +1,18 @@
-// Local imports - event bus
-import { bus } from '@eventBus/ProgressEventBus';
+// Local imports - agent runtime
+import {
+  getAgentRuntimeHost,
+  type AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
 
 // Local imports - utilities
 import type { FileLocation } from '@utils/files';
 
-export function emitAcceptedWorkspaceFile(location: FileLocation): void {
+export function emitAcceptedWorkspaceFile(
+  location: FileLocation,
+  runtimeHost: AgentRuntimeHost = getAgentRuntimeHost(),
+): void {
   if (location.kind === 'workspace') {
-    bus.emit('workspaceFilesWritten', {
+    runtimeHost.emit('workspaceFilesWritten', {
       absolutePaths: [location.absolutePath],
     });
   }
