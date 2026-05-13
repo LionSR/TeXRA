@@ -17,7 +17,6 @@ import {
   loadAgentSettingAndPrompts,
 } from '@agent/runtime/agentLoad';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError, getSdkErrorMessage, toErrorMessage } from '@common/errors';
