@@ -14,6 +14,11 @@
 import { getConfig } from '@utils/config';
 import { shouldDropBotEvent } from './botFilter';
 import {
+  DEFAULT_CHECK_ANNOTATION_LEVEL,
+  includesCheckAnnotationLevel,
+  type GitHubCheckAnnotationLevel,
+} from './checkAnnotationLevels';
+import {
   formatCheckAnnotations,
   formatCheckFailure,
   formatCheckFailureSummary,
@@ -79,6 +84,7 @@ function createInitialState(pr: PRKey): SubscriptionState {
     lastFailedCheckKeys: new Set(),
     lastAnnotationKeys: new Set(),
     pendingAnnotationRuns: [],
+    annotationLevelByListener: new Map(),
     ciStartedSha: undefined,
     ciCompleteSha: undefined,
     ciPassedSha: undefined,
@@ -106,57 +112,67 @@ const CHECK_RUNS_PAGE_SIZE = 100;
 // Without a cap a malformed/runaway `total_count` could fan out into
 // hundreds of GETs per tick.
 const MAX_CHECK_RUNS_PAGES = 50;
-// Matches the formatter's per-run display cap so we don't pay for annotations
-// we'd only truncate; remaining count is sourced from `annotations_count`.
-const ANNOTATIONS_PAGE_SIZE = 20;
+// Use GitHub's maximum page size so filtering by level does not miss failures
+// that appear after a long run of warnings or notices.
+const ANNOTATIONS_PAGE_SIZE = 100;
+// Same order of magnitude as the check-runs page cap. This is a malformed
+// response guard, not a normal truncation policy.
+const MAX_ANNOTATION_PAGES_PER_RUN = 50;
 // Bound the per-subscription fan-out across runs (e.g. a matrix build
 // lighting up a fleet of checks). Excess candidates stay in
 // `pendingAnnotationRuns` and are drained on subsequent ticks.
-const MAX_ANNOTATION_FETCHES_PER_SUBSCRIPTION_TICK = 3;
+const MAX_ANNOTATION_RUNS_PER_SUBSCRIPTION_TICK = 3;
 // Bound annotation endpoint traffic across all PR subscriptions in this
-// process. This 30s budget window permits at most 1,800 annotation requests
-// per hour, leaving room for the rest of the PR polling endpoints under
-// GitHub's primary 5,000/hour limit. Keep it independent of the poll interval
-// so tuning PR_POLL_INTERVAL_MS does not silently raise the hourly ceiling.
-const MAX_PROCESS_ANNOTATION_FETCHES_PER_WINDOW = 15;
-const ANNOTATION_FETCH_BUDGET_WINDOW_MS = 30_000;
+// process. Pagination claims one unit per annotations page, so this 60s budget
+// window permits at most 3,000 annotation requests per hour, leaving room for
+// the rest of the PR polling endpoints under GitHub's primary 5,000/hour limit.
+// Keep it independent of the poll interval so tuning PR_POLL_INTERVAL_MS does
+// not silently raise the hourly ceiling.
+const MAX_PROCESS_ANNOTATION_REQUESTS_PER_WINDOW = 50;
+const ANNOTATION_FETCH_BUDGET_WINDOW_MS = 60_000;
+
+class AnnotationFetchBudgetExhaustedError extends Error {
+  constructor() {
+    super('Annotation fetch budget exhausted');
+  }
+}
 
 class AnnotationFetchBudget {
   private windowStartMs: number;
-  private remainingFetches: number;
+  private remainingRequests: number;
 
   constructor(
-    private readonly maxFetchesPerWindow: number,
+    private readonly maxRequestsPerWindow: number,
     private readonly windowMs: number,
   ) {
     this.windowStartMs = Date.now();
-    this.remainingFetches = maxFetchesPerWindow;
+    this.remainingRequests = maxRequestsPerWindow;
   }
 
   tryClaim(nowMs = Date.now()): boolean {
     if (nowMs - this.windowStartMs >= this.windowMs) {
       this.windowStartMs = nowMs;
-      this.remainingFetches = this.maxFetchesPerWindow;
+      this.remainingRequests = this.maxRequestsPerWindow;
     }
-    if (this.remainingFetches <= 0) return false;
-    this.remainingFetches -= 1;
+    if (this.remainingRequests <= 0) return false;
+    this.remainingRequests -= 1;
     return true;
   }
 
   resetForTests(
-    remainingFetches = this.maxFetchesPerWindow,
+    remainingRequests = this.maxRequestsPerWindow,
     nowMs = Date.now(),
   ): void {
     this.windowStartMs = nowMs;
-    this.remainingFetches = Math.max(
+    this.remainingRequests = Math.max(
       0,
-      Math.min(this.maxFetchesPerWindow, remainingFetches),
+      Math.min(this.maxRequestsPerWindow, remainingRequests),
     );
   }
 }
 
 const annotationFetchBudget = new AnnotationFetchBudget(
-  MAX_PROCESS_ANNOTATION_FETCHES_PER_WINDOW,
+  MAX_PROCESS_ANNOTATION_REQUESTS_PER_WINDOW,
   ANNOTATION_FETCH_BUDGET_WINDOW_MS,
 );
 
@@ -164,6 +180,10 @@ export interface PRKey {
   owner: string;
   repo: string;
   pullNumber: number;
+}
+
+export interface PRSubscribeInput extends PRKey {
+  minAnnotationLevel?: GitHubCheckAnnotationLevel;
 }
 
 export function prKeyToString(k: PRKey): string {
@@ -199,6 +219,10 @@ interface SubscriptionState extends BasePollSubscriptionState {
    * isn't stranded once the check-runs cache stabilizes.
    */
   pendingAnnotationRuns: GhCheckRun[];
+  annotationLevelByListener: Map<
+    (text: string) => void,
+    GitHubCheckAnnotationLevel
+  >;
   /** Head SHA for which the one-shot "CI triggered" event has been emitted. */
   ciStartedSha: string | undefined;
   /** Head SHA for which the one-shot "CI complete" event has been emitted. */
@@ -265,9 +289,43 @@ export class PRPollingSource extends PollingSourceBase<
     annotationFetchBudget.resetForTests(remainingFetches, nowMs);
   }
 
-  subscribe(pr: PRKey, onEvent: (text: string) => void): Disposable {
-    const key = prKeyToString(pr);
-    return this.register(key, () => createInitialState(pr), onEvent);
+  subscribe(
+    input: PRSubscribeInput,
+    onEvent: (text: string) => void,
+  ): Disposable {
+    const key = prKeyToString(input);
+    const minAnnotationLevel =
+      input.minAnnotationLevel ?? DEFAULT_CHECK_ANNOTATION_LEVEL;
+    const disposable = this.register(
+      key,
+      () => createInitialState(input),
+      onEvent,
+    );
+    this.getSubscriptionState(key)?.annotationLevelByListener.set(
+      onEvent,
+      minAnnotationLevel,
+    );
+    return {
+      dispose: () => {
+        this.getSubscriptionState(key)?.annotationLevelByListener.delete(
+          onEvent,
+        );
+        disposable.dispose();
+      },
+    };
+  }
+
+  updateSubscription(
+    input: PRSubscribeInput,
+    onEvent: (text: string) => void,
+  ): void {
+    const key = prKeyToString(input);
+    const minAnnotationLevel =
+      input.minAnnotationLevel ?? DEFAULT_CHECK_ANNOTATION_LEVEL;
+    this.getSubscriptionState(key)?.annotationLevelByListener.set(
+      onEvent,
+      minAnnotationLevel,
+    );
   }
 
   protected emitKeysChangedEvent(keys: readonly string[]): void {
@@ -959,13 +1017,13 @@ export class PRPollingSource extends PollingSourceBase<
         if (!this.has(key)) continue;
         if (state.pendingAnnotationRuns.length === 0) continue;
         const claims = claimsByKey.get(key) ?? 0;
-        if (claims >= MAX_ANNOTATION_FETCHES_PER_SUBSCRIPTION_TICK) continue;
-        if (!annotationFetchBudget.tryClaim(now)) {
-          this.nextAnnotationDrainKey = key;
-          return;
-        }
+        if (claims >= MAX_ANNOTATION_RUNS_PER_SUBSCRIPTION_TICK) continue;
         try {
-          await this.drainNextAnnotationRun(state);
+          const drained = await this.drainNextAnnotationRun(state, now);
+          if (!drained) {
+            this.nextAnnotationDrainKey = key;
+            return;
+          }
         } catch (err) {
           this.handleFailure(key, state, err);
           if (err instanceof GitHubRateLimitError) {
@@ -1026,44 +1084,46 @@ export class PRPollingSource extends PollingSourceBase<
    */
   private async drainNextAnnotationRun(
     state: SubscriptionState,
-  ): Promise<void> {
+    now: number,
+  ): Promise<boolean> {
     const run = state.pendingAnnotationRuns[0];
-    if (!run) return;
+    if (!run) return true;
     const { pr } = state;
     try {
       const annotations = await this.fetchAnnotations(
         pr.owner,
         pr.repo,
         run.id,
+        now,
       );
       this.removePendingAnnotationRun(state, run.id);
       if (annotations.length > 0) {
-        this.emit(
-          state,
-          formatCheckAnnotations(state.slug, pr.pullNumber, run, annotations),
-        );
+        this.emitCheckAnnotations(state, run, annotations);
       }
+      return true;
     } catch (err) {
+      if (err instanceof AnnotationFetchBudgetExhaustedError) return false;
       if (err instanceof GitHubRateLimitError) throw err;
       if (err instanceof GitHubPermanentError) {
         this.logger.warn(
           `Annotations for check ${run.id} unavailable (HTTP ${err.status}); dropping.`,
         );
         this.removePendingAnnotationRun(state, run.id);
-        return;
+        return true;
       }
       if (err instanceof GitHubAuthError) {
         this.logger.warn(
           `Annotations for check ${run.id} forbidden (${err.message}); dropping.`,
         );
         this.removePendingAnnotationRun(state, run.id);
-        return;
+        return true;
       }
       this.removePendingAnnotationRun(state, run.id);
       state.pendingAnnotationRuns.push(run);
       this.logger.warn(
         `Annotation fetch for check ${run.id} failed; rotating to back of queue: ${String(err)}`,
       );
+      return true;
     }
   }
 
@@ -1076,14 +1136,62 @@ export class PRPollingSource extends PollingSourceBase<
     );
   }
 
+  private emitCheckAnnotations(
+    state: SubscriptionState,
+    run: GhCheckRun,
+    annotations: readonly GhCheckAnnotation[],
+  ): void {
+    for (const listener of state.listeners) {
+      const minLevel =
+        state.annotationLevelByListener.get(listener) ??
+        DEFAULT_CHECK_ANNOTATION_LEVEL;
+      const visibleAnnotations = annotations.filter((annotation) =>
+        includesCheckAnnotationLevel(annotation.annotation_level, minLevel),
+      );
+      if (visibleAnnotations.length === 0) continue;
+      const visibleRun: GhCheckRun = {
+        ...run,
+        output: {
+          ...run.output,
+          annotations_count: visibleAnnotations.length,
+        },
+      };
+      try {
+        listener(
+          formatCheckAnnotations(
+            state.slug,
+            state.pr.pullNumber,
+            visibleRun,
+            visibleAnnotations,
+          ),
+        );
+      } catch (err) {
+        this.logger.warn(`Listener threw: ${String(err)}`);
+      }
+    }
+  }
+
   private async fetchAnnotations(
     owner: string,
     repo: string,
     checkRunId: number,
+    now = Date.now(),
   ): Promise<GhCheckAnnotation[]> {
-    const path = `/repos/${owner}/${repo}/check-runs/${checkRunId}/annotations?per_page=${ANNOTATIONS_PAGE_SIZE}`;
-    const res = await ghGet<GhCheckAnnotation[]>(path);
-    return res.status === 200 ? res.data : [];
+    const annotations: GhCheckAnnotation[] = [];
+    for (let page = 1; page <= MAX_ANNOTATION_PAGES_PER_RUN; page += 1) {
+      if (!annotationFetchBudget.tryClaim(now)) {
+        throw new AnnotationFetchBudgetExhaustedError();
+      }
+      const path = `/repos/${owner}/${repo}/check-runs/${checkRunId}/annotations?per_page=${ANNOTATIONS_PAGE_SIZE}&page=${page}`;
+      const res = await ghGet<GhCheckAnnotation[]>(path);
+      if (res.status !== 200) return annotations;
+      annotations.push(...res.data);
+      if (res.data.length < ANNOTATIONS_PAGE_SIZE) return annotations;
+    }
+    this.logger.warn(
+      `Reached annotation page cap (${MAX_ANNOTATION_PAGES_PER_RUN}) for check ${checkRunId}; emitting fetched annotations only.`,
+    );
+    return annotations;
   }
 }
 
