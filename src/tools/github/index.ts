@@ -5,15 +5,11 @@ export { repoPollingSource } from './RepoPollingSource';
 export { issuePollingSource } from './IssuePollingSource';
 export type { RepoKey } from './RepoPollingSource';
 export {
-  listPRSubscriptionBindings,
-  unbindAllForPR,
-} from './PRSubscriptionBinder';
-export {
-  listRepoSubscriptionBindings,
-  unbindAllForRepo,
-} from './RepoSubscriptionBinder';
-export {
   listIssueSubscriptionBindings,
+  listPRSubscriptionBindings,
+  listRepoSubscriptionBindings,
   unbindAllForIssue,
-} from './IssueSubscriptionBinder';
+  unbindAllForPR,
+  unbindAllForRepo,
+} from './subscriptionBindings';
 export type { Disposable } from '@platform/interfaces/disposable';

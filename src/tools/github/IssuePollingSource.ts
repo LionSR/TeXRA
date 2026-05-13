@@ -22,8 +22,6 @@ import {
   formatIssueSubscriptionError,
 } from './formatIssueEvent';
 import { getNewestTimestamp, trimSet } from './formatUtils';
-import type { Disposable } from '@platform/interfaces/disposable';
-
 import { ghGet } from './githubClient';
 import {
   PollingSourceBase,
@@ -31,6 +29,8 @@ import {
 } from './PollingSourceBase';
 import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 import type { GhIssue, GhIssueComment } from './prTypes';
+
+import type { Disposable } from '@platform/interfaces/disposable';
 
 const MAX_SEEN_IDS = 1000;
 
@@ -97,7 +97,7 @@ export class IssuePollingSource extends PollingSourceBase<
     return this.register(key, () => createInitialState(issue), onEvent);
   }
 
-  protected emitKeysChangedBusEvent(keys: readonly string[]): void {
+  protected emitKeysChangedEvent(keys: readonly string[]): void {
     emitGitHubSubscriptionChanged('issueSubscriptionsChanged', { keys });
   }
 
