@@ -6,7 +6,7 @@ import {
 } from 'diff-match-patch';
 import { z } from 'zod';
 
-import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { getConfig } from '@agent/core/config';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
@@ -63,12 +63,6 @@ export type ToolEditApprovalAction =
 export const toolEditApprovalController =
   createStreamApprovalController<ToolEditApprovalResult>({
     rejectionResult: () => ({ accepted: false }),
-    notifyBypassChange: (streamId, bypassActive) => {
-      getAgentRuntimeHost().emit('updateToolEditApprovalBypassState', {
-        streamId,
-        bypassActive,
-      });
-    },
   });
 
 let customHandler:
@@ -95,15 +89,25 @@ export function unregisterPendingApproval(id: string): void {
 export function setToolEditApprovalSessionBypass(
   streamId: StreamTabId,
   enabled: boolean,
+  runtimeHost: AgentRuntimeHost,
   options?: { silent?: boolean },
 ): void {
-  toolEditApprovalController.setBypass(streamId, enabled, options);
+  toolEditApprovalController.setBypass(streamId, enabled);
+  if (!options?.silent) {
+    runtimeHost.emit('updateToolEditApprovalBypassState', {
+      streamId,
+      bypassActive: enabled,
+    });
+  }
 }
 
 export function toggleToolEditApprovalSessionBypass(
   streamId: StreamTabId,
+  runtimeHost: AgentRuntimeHost,
 ): boolean {
-  return toolEditApprovalController.toggleBypass(streamId);
+  const next = !toolEditApprovalController.isBypassed(streamId);
+  setToolEditApprovalSessionBypass(streamId, next, runtimeHost);
+  return next;
 }
 
 export function isApprovalBypassedForStream(streamId: StreamTabId): boolean {
@@ -368,5 +372,5 @@ export function buildApprovalRejectedResult(
  * activated; the subsequent SYNC_STREAM_CONTENT carries the bypass state.
  */
 export function enableYoloOnChildStream(childStreamId: StreamTabId): void {
-  toolEditApprovalController.setBypass(childStreamId, true, { silent: true });
+  toolEditApprovalController.setBypass(childStreamId, true);
 }

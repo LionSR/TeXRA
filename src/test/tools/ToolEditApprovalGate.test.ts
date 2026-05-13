@@ -2,6 +2,7 @@
 import * as assert from 'assert';
 
 // Local imports - agent types
+import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 
 // Local imports - tools
 import type { StreamTabId } from '@shared/schemas';
@@ -150,7 +151,12 @@ describe('Tool edit approval gating', () => {
       return { accepted: true };
     });
 
-    setToolEditApprovalSessionBypass(TEST_STREAM_ID, true);
+    setToolEditApprovalSessionBypass(
+      TEST_STREAM_ID,
+      true,
+      noopAgentRuntimeHost,
+      { silent: true },
+    );
 
     // Note: bypass check requires streamId on the request, which isn't set in unit tests
     // This test verifies the bypass is set correctly; integration tests verify full flow
@@ -166,11 +172,17 @@ describe('Tool edit approval gating', () => {
     // Initially bypass is off (cleared in beforeEach)
 
     // Toggle on - should return true
-    const enabledState = toggleToolEditApprovalSessionBypass(TEST_STREAM_ID);
+    const enabledState = toggleToolEditApprovalSessionBypass(
+      TEST_STREAM_ID,
+      noopAgentRuntimeHost,
+    );
     assert.strictEqual(enabledState, true, 'Toggle returns true when enabling');
 
     // Toggle off - should return false
-    const disabledState = toggleToolEditApprovalSessionBypass(TEST_STREAM_ID);
+    const disabledState = toggleToolEditApprovalSessionBypass(
+      TEST_STREAM_ID,
+      noopAgentRuntimeHost,
+    );
     assert.strictEqual(
       disabledState,
       false,
@@ -178,7 +190,10 @@ describe('Tool edit approval gating', () => {
     );
 
     // Toggle on again
-    const reenabledState = toggleToolEditApprovalSessionBypass(TEST_STREAM_ID);
+    const reenabledState = toggleToolEditApprovalSessionBypass(
+      TEST_STREAM_ID,
+      noopAgentRuntimeHost,
+    );
     assert.strictEqual(
       reenabledState,
       true,
