@@ -69,7 +69,13 @@ import {
   getSpendingLimit,
   ULTRA_TIER,
   FREE_TIER,
+  MAX_TIER,
 } from './models.ts';
+import {
+  capOpenAIReasoningEffortForTier,
+  isJsonRecord,
+  type ReasoningEffortCap,
+} from './reasoning.ts';
 
 // =============================================================================
 // Constants
@@ -84,6 +90,11 @@ const RELAY_VERSION = '1.9.0';
 
 // Upstream request timeout (390s to fit within Supabase's 400s wall clock limit)
 const UPSTREAM_TIMEOUT_MS = 390000;
+
+const OPENAI_GPT5_REASONING_EFFORT_CAPS: Record<string, ReasoningEffortCap> = {
+  [FREE_TIER]: 'medium',
+  [MAX_TIER]: 'high',
+};
 
 // =============================================================================
 // Types
@@ -570,14 +581,19 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   );
 
   let requestBody: string | null = null;
+  let requestBodyJson: unknown = null;
   let modelName: string | null = null;
 
   if (userTier !== ULTRA_TIER && c.req.method !== 'GET' && !isModelFreePath) {
     requestBody = await c.req.text();
 
     try {
-      const bodyJson = JSON.parse(requestBody);
-      modelName = bodyJson.model || null;
+      requestBodyJson = JSON.parse(requestBody);
+      modelName =
+        isJsonRecord(requestBodyJson) &&
+        typeof requestBodyJson.model === 'string'
+          ? requestBodyJson.model
+          : null;
     } catch {
       // Not JSON, try extracting from path
     }
@@ -596,6 +612,16 @@ app.all('/:provider{[^/]+}/*', async (c) => {
           : `Could not determine model from request. ${tierName} tier requires explicit model specification.`,
         403,
       );
+    }
+
+    const cappedBody = capOpenAIReasoningEffortForTier(requestBodyJson, {
+      provider,
+      tier: userTier,
+      modelName,
+      tierCaps: OPENAI_GPT5_REASONING_EFFORT_CAPS,
+    });
+    if (cappedBody !== requestBodyJson) {
+      requestBody = JSON.stringify(cappedBody);
     }
   }
 
@@ -623,6 +649,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     'proxy-authorization',
     'proxy-connection',
     'authorization',
+    'content-length',
     'x-api-key',
     'x-goog-api-key',
     'x-texra-auth',
