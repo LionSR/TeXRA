@@ -125,7 +125,7 @@ export const selectStyles: CSSResult = css`
    * Border uses subtle surface-border, not heavier panel border. */
   ${compactFormControlStyles}
 
-  .api-key-missing {
+  .model-option-status {
     color: var(--wa-color-danger-on-quiet);
     opacity: var(--opacity-full);
     font-style: normal;
