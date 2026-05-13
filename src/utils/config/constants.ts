@@ -14,7 +14,6 @@ export const SETTINGS_QUERY = {
 } as const;
 
 // Time constants
-export const SHORT_SLEEP_MS = 50;
 export const REFRESH_THRESHOLD_MS = 200;
 export const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 
