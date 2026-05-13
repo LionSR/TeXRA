@@ -66,6 +66,14 @@ const __dirname = findDesktopMainDir(moduleDirname);
 let mainWindow: BrowserWindow | null = null;
 let reopenMainWindow: (() => void) | undefined;
 
+// Playwright relaunch tests need a deterministic Electron profile so
+// app-scoped stores survive across child processes. Normal desktop launches
+// keep Electron's default userData path.
+const e2eUserDataPath = process.env.TEXRA_DESKTOP_E2E_USER_DATA_PATH;
+if (e2eUserDataPath) {
+  app.setPath('userData', resolvePath(e2eUserDataPath));
+}
+
 function focusOrReopenMainWindow(): void {
   if (!mainWindow) {
     reopenMainWindow?.();
