@@ -33,20 +33,16 @@ import { ghGet } from './githubClient';
 import {
   bindIssueSubscription,
   listIssueSubscriptionBindings,
-  unbindIssueSubscription,
-} from './IssueSubscriptionBinder';
-import { issuePollingSource } from './IssuePollingSource';
-import {
   bindPRSubscription,
   listPRSubscriptionBindings,
-  unbindPRSubscription,
-} from './PRSubscriptionBinder';
-import { prPollingSource } from './PRPollingSource';
-import {
   bindRepoSubscription,
   listRepoSubscriptionBindings,
+  unbindIssueSubscription,
+  unbindPRSubscription,
   unbindRepoSubscription,
-} from './RepoSubscriptionBinder';
+} from './subscriptionBindings';
+import { issuePollingSource } from './IssuePollingSource';
+import { prPollingSource } from './PRPollingSource';
 import { repoPollingSource } from './RepoPollingSource';
 import type { GhIssue, GhPullRequest } from './prTypes';
 
