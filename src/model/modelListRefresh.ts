@@ -11,7 +11,7 @@ interface ModelListState {
   update(key: string, value: unknown): PromiseLike<void>;
 }
 
-export interface EnabledModelReconciliation {
+interface EnabledModelReconciliation {
   models: string[];
   added: string[];
   removed: string[];

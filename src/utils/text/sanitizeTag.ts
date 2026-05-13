@@ -12,17 +12,15 @@
  * structurally intact.
  */
 
-const VALID_TAG_NAME = /^[a-z][a-z0-9-]*$/i;
+import { escapeRegExp } from '@utils/core/stringCore';
 
-function escapeRegex(s: string): string {
-  return s.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+const VALID_TAG_NAME = /^[a-z][a-z0-9-]*$/i;
 
 export function sanitizeTag(tagName: string, body: string): string {
   if (!VALID_TAG_NAME.test(tagName)) {
     throw new Error(`Invalid tag name for sanitizer: ${tagName}`);
   }
-  const re = new RegExp(`<\\s*/?\\s*${escapeRegex(tagName)}\\s*>`, 'gi');
+  const re = new RegExp(`<\\s*/?\\s*${escapeRegExp(tagName)}\\s*>`, 'gi');
   const ZWSP = String.fromCharCode(0x200b);
   const broken = `${tagName[0]}${ZWSP}${tagName.slice(1)}`;
   return body.replaceAll(re, (match) =>
