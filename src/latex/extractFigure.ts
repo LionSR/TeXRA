@@ -7,7 +7,7 @@ import { flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { joinLatexPath } from '@utils/core/pathCore';
 
-import { resolveLatexDir } from './latexParsingUtils';
+import { findExistingLatexPath, resolveLatexDir } from './latexParsingUtils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -48,7 +48,8 @@ function parseGraphicspath(content: string): string[] {
 }
 
 /**
- * Resolve a figure path by searching through possible base paths and extensions
+ * Resolve a figure path by searching through possible base paths and
+ * extensions. Returns a path relative to `latexDir`, or null.
  */
 async function resolveFigurePath(
   figPath: string,
@@ -56,23 +57,12 @@ async function resolveFigurePath(
   latexDir: string,
 ): Promise<string | null> {
   const extensions = figPath.includes('.') ? [''] : FIGURE_EXTENSIONS;
-
-  for (const basePath of searchPaths) {
-    const normPath = path.normalize(path.join(basePath, figPath));
-
-    for (const ext of extensions) {
-      const pathToCheck = normPath + ext;
-      if (
-        await flexibleFS.exists({
-          kind: 'external',
-          absolutePath: pathToCheck,
-        })
-      ) {
-        return path.relative(latexDir, pathToCheck);
-      }
-    }
-  }
-  return null;
+  const absolute = await findExistingLatexPath(
+    figPath,
+    searchPaths,
+    extensions,
+  );
+  return absolute === null ? null : path.relative(latexDir, absolute);
 }
 
 /**

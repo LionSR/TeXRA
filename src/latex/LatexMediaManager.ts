@@ -127,37 +127,38 @@ export class LatexMediaManager {
           const compiled = await compileLatex2Pdf(file, {
             outputDirectory: buildDir,
           });
-          if (!compiled) {
-            return undefined;
-          }
+          if (!compiled) return undefined;
+
           const pdfFile = path.join(
             buildDir,
             path.basename(file.absolutePath).replace(/\.tex$/, '.pdf'),
           );
           const pdfLocation = pathToLocation(pdfFile);
-          if (!(await flexibleFS.exists(pdfLocation))) {
-            return undefined;
-          }
-          try {
-            const stats = await flexibleFS.stat(pdfLocation);
-            if (stats.size === 0) {
-              this.logger.warn(
-                `Compiled PDF is empty for ${file.absolutePath}: ${pdfLocation.absolutePath}`,
-              );
-              return undefined;
-            }
-          } catch (err) {
+          if (!(await flexibleFS.exists(pdfLocation))) return undefined;
+
+          // Stat failures are noisier than other compile failures because an
+          // existing-but-unreadable PDF likely indicates a permissions/IO bug.
+          const stats = await flexibleFS.stat(pdfLocation).catch((err) => {
             this.logger.error(
               `Failed to stat compiled PDF ${pdfLocation.absolutePath}: ${toErrorMessage(err)}`,
             );
             return undefined;
+          });
+          if (!stats) return undefined;
+          if (stats.size === 0) {
+            this.logger.warn(
+              `Compiled PDF is empty for ${file.absolutePath}: ${pdfLocation.absolutePath}`,
+            );
+            return undefined;
           }
+
           this.logger.info(
             `Compiled PDF for ${file.absolutePath}: ${pdfLocation.absolutePath}`,
           );
           return pdfLocation;
         } catch {
-          // pMap with stopOnError: false continues on individual failures
+          // Silent skip: pMap with stopOnError: false continues past
+          // individual compile failures (compileLatex2Pdf already logs).
           return undefined;
         }
       },
@@ -385,6 +386,9 @@ export class LatexMediaManager {
           const figures = await extractFigurePathsFromLatex(file);
           return { file, figures };
         } catch {
+          // Silent skip: malformed or unreadable .tex files should not abort
+          // the surrounding pMap. Existence/format errors here are common
+          // (e.g. file deleted mid-run) and not worth user-visible noise.
           return { file, figures: [] };
         }
       },
@@ -445,6 +449,9 @@ export class LatexMediaManager {
         try {
           return await tikzPictureManager.compile(file);
         } catch {
+          // Silent skip: TikZ compilation failures are reported by the
+          // tikzPictureManager itself; pMap with stopOnError: false must
+          // continue past individual failures.
           return [];
         }
       },

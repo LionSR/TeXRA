@@ -83,33 +83,20 @@ function extractEntryIdentifier(rawId: unknown): string | null {
   return id ? normaliseArxivIdentifier(id) : null;
 }
 
-/** Extract author names, optionally limiting to maxAuthors */
-function getAuthorNames(
-  authors: ArxivEntry['authors'],
-  maxAuthors?: number,
-): string[] {
-  const names = authors.map((author) => author.name);
-  return maxAuthors != null ? names.slice(0, maxAuthors) : names;
-}
-
-/** Normalize entry title by trimming whitespace */
-function normalizeEntryTitle(title: string): string {
-  return title.trim();
-}
-
 /** Extract base paper metadata from an arXiv entry */
 export function extractBasePaperMetadata(
   entry: ArxivEntry,
   maxAuthors?: number,
 ): ArxivPaperBase {
-  const identifier = extractEntryIdentifier(entry.id);
+  const authorNames = entry.authors.map((author) => author.name);
   return {
-    id: identifier,
+    id: extractEntryIdentifier(entry.id),
     doi: entry.doi?.id ?? null,
-    title: normalizeEntryTitle(entry.title),
+    title: entry.title.trim(),
     published: entry.published ?? null,
     updated: entry.updated ?? null,
-    authors: getAuthorNames(entry.authors, maxAuthors),
+    authors:
+      maxAuthors != null ? authorNames.slice(0, maxAuthors) : authorNames,
     primaryCategory: entry.primaryCategory ?? null,
   };
 }

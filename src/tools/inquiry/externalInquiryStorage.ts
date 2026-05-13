@@ -154,18 +154,6 @@ async function copyGlobalDirectoryToExecution(
   }
 }
 
-function buildExecutionThreadMirrorPaths(params: {
-  executionId: ExecutionId;
-  threadId: ExternalInquiryThreadId;
-}): ExternalInquiryThreadMirrorPaths {
-  const threadPath = `/executions/${params.executionId}/${EXEC_DIR}/${params.threadId}`;
-  return {
-    executionId: params.executionId,
-    threadPath,
-    manifestPath: `${threadPath}/manifest.json`,
-  };
-}
-
 export async function ensureExternalInquiryThreadMirror(params: {
   executionId: ExecutionId;
   threadId: ExternalInquiryThreadId;
@@ -175,7 +163,12 @@ export async function ensureExternalInquiryThreadMirror(params: {
     path.join('executions', params.executionId, EXEC_DIR, params.threadId),
   );
 
-  return buildExecutionThreadMirrorPaths(params);
+  const threadPath = `/executions/${params.executionId}/${EXEC_DIR}/${params.threadId}`;
+  return {
+    executionId: params.executionId,
+    threadPath,
+    manifestPath: `${threadPath}/manifest.json`,
+  };
 }
 
 async function mirrorThreadToExecution(params: {
@@ -201,22 +194,6 @@ async function mirrorThreadToExecution(params: {
   };
 }
 
-function buildNewThreadManifest(
-  threadId: ExternalInquiryThreadId,
-  timestamp: string,
-): ExternalInquiryThreadManifest {
-  return {
-    threadId,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    turns: [],
-  };
-}
-
-function createStoredThreadId(): ExternalInquiryThreadId {
-  return `ei_${randomBytes(6).toString('hex')}` as ExternalInquiryThreadId;
-}
-
 function normalizeSessionLinks(links?: string[]): string[] | undefined {
   if (!links?.length) return undefined;
 
@@ -237,7 +214,9 @@ export async function persistExternalInquiryTurn(params: {
   sessionLinks?: string[];
   executionId?: ExecutionId;
 }): Promise<PersistedExternalInquiryTurn> {
-  const threadId = params.threadId ?? createStoredThreadId();
+  const threadId =
+    params.threadId ??
+    (`ei_${randomBytes(6).toString('hex')}` as ExternalInquiryThreadId);
 
   return withThreadLock(threadId, async () => {
     const existingManifest = await readThreadManifest(threadId);
@@ -247,8 +226,12 @@ export async function persistExternalInquiryTurn(params: {
     }
 
     const timestamp = new Date().toISOString();
-    const manifest =
-      existingManifest ?? buildNewThreadManifest(threadId, timestamp);
+    const manifest: ExternalInquiryThreadManifest = existingManifest ?? {
+      threadId,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      turns: [],
+    };
     const turnIndex = manifest.turns.length + 1;
     const turnPath = threadTurnDir(threadId, turnIndex);
     const trimmedContext = params.context?.trim() || undefined;
