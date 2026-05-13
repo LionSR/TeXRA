@@ -80,24 +80,6 @@ export interface RunReflectionFlowResult {
   status: EndGroupStatus;
 }
 
-function deriveConfig(
-  setting: AgentWorkflowSetting,
-  prompt: RunReflectionFlowInput['prompt'],
-): {
-  totalRounds: number;
-} {
-  const { userRequest } = prompt;
-  let requestCount: number;
-  if (Array.isArray(userRequest)) {
-    requestCount = userRequest.length;
-  } else {
-    requestCount = userRequest ? 1 : 0;
-  }
-  const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
-
-  return { totalRounds };
-}
-
 export async function runReflectionFlow<C = unknown>(
   input: RunReflectionFlowInput<C>,
 ): Promise<RunReflectionFlowResult> {
@@ -152,7 +134,13 @@ export async function runReflectionFlow<C = unknown>(
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
-  const { totalRounds } = deriveConfig(setting, prompt);
+  let requestCount: number;
+  if (Array.isArray(prompt.userRequest)) {
+    requestCount = prompt.userRequest.length;
+  } else {
+    requestCount = prompt.userRequest ? 1 : 0;
+  }
+  const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
 
   const getOutputFileLocation =
     input.getOutputFileLocation ??

@@ -102,7 +102,7 @@ export function monacoLanguageForFilePath(
     filePath.lastIndexOf('/'),
     filePath.lastIndexOf('\\'),
   );
-  const basename = slashIndex >= 0 ? filePath.slice(slashIndex + 1) : filePath;
+  const basename = filePath.slice(slashIndex + 1);
   const dotIndex = basename.lastIndexOf('.');
   if (dotIndex < 0) return 'plaintext';
   const ext = basename.slice(dotIndex).toLowerCase();

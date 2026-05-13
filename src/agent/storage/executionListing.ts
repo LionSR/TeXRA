@@ -62,6 +62,19 @@ export function invalidateListingCache(): void {
   cache = null;
 }
 
+/**
+ * Read a storage directory, returning an empty array if it doesn't exist.
+ * Other I/O errors propagate.
+ */
+async function readDirOrEmpty(path: string): Promise<[string, number][]> {
+  try {
+    return await StorageFS.readDir(path);
+  } catch (error) {
+    if (isFileNotFoundError(error)) return [];
+    throw error;
+  }
+}
+
 // ============================================================================
 // Public API
 // ============================================================================
@@ -86,13 +99,7 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
     migrated = true;
   }
 
-  let entries: [string, number][];
-  try {
-    entries = await StorageFS.readDir(EXECUTIONS_DIR);
-  } catch (error) {
-    if (isFileNotFoundError(error)) return [];
-    throw error;
-  }
+  const entries = await readDirOrEmpty(EXECUTIONS_DIR);
 
   // Filter for directories matching execution ID pattern (hex UUID-like)
   const executionDirs = entries
@@ -166,13 +173,7 @@ export async function deleteExecution(
 export async function deleteAllExecutions(
   exclude?: ReadonlySet<string>,
 ): Promise<void> {
-  let entries: [string, number][];
-  try {
-    entries = await StorageFS.readDir(EXECUTIONS_DIR);
-  } catch (error) {
-    if (isFileNotFoundError(error)) return;
-    throw error;
-  }
+  const entries = await readDirOrEmpty(EXECUTIONS_DIR);
 
   const executionDirs = entries
     .filter(

@@ -357,14 +357,12 @@ export function formatDesktopAccelerator(
   platform: NodeJS.Platform = process.platform,
 ): string | undefined {
   if (!accelerator) return undefined;
-  const platformAccelerator =
-    platform === 'darwin'
-      ? accelerator.replaceAll('CommandOrControl', 'Command')
-      : accelerator.replaceAll('CommandOrControl', 'Control');
-  const parts = platformAccelerator
+  const isMac = platform === 'darwin';
+  const parts = accelerator
+    .replaceAll('CommandOrControl', isMac ? 'Command' : 'Control')
     .split('+')
     .map((part) => toDisplayAcceleratorPart(part, platform));
-  return platform === 'darwin' ? parts.join('') : parts.join('+');
+  return parts.join(isMac ? '' : '+');
 }
 
 export function buildDesktopSettingsTabMessage(

@@ -80,7 +80,7 @@ export function createDesktopPreviewHost(
     try {
       shellError = await options.shell.openPath(filePath);
     } catch (error) {
-      await fail(`Failed to open file ${filePath}: ${toErrorMessage(error)}`);
+      shellError = toErrorMessage(error);
     }
 
     if (shellError) {

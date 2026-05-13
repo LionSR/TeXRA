@@ -83,8 +83,15 @@ async function resolveApiKey(
 }
 
 /**
- * Look up an API key from secrets storage, falling back to env var.
- * Returns undefined if no key is found.
+ * API key lookup trio. All three share the same TTL-cached
+ * {@link resolveApiKey} pass over secret storage → env var:
+ *
+ * - {@link lookupApiKey} — value, or `undefined` if absent (most callers)
+ * - {@link lookupApiKeyOrigin} — origin tag for UI status reporting
+ * - {@link getApiKey} — value, or throws (call from code that requires a key)
+ *
+ * They are kept as distinct entry points so call sites read self-evidently
+ * (no `{ throwIfMissing: true }` flag at every model handler).
  */
 export async function lookupApiKey(
   secrets: PlatformSecrets,
@@ -93,11 +100,7 @@ export async function lookupApiKey(
   return (await resolveApiKey(secrets, provider)).value;
 }
 
-/**
- * Resolve where an API key for the given provider was loaded from
- * (`secret` storage, `env` var, or `none`). Shares the same TTL cache
- * as {@link lookupApiKey}.
- */
+/** Origin of the resolved key (`secret` / `env` / `none`). See trio doc above. */
 export async function lookupApiKeyOrigin(
   secrets: PlatformSecrets,
   provider: ApiProvider,
@@ -127,9 +130,7 @@ export async function loadApiKeyStatusMap<const Provider extends ApiProvider>(
   return Object.fromEntries(entries) as Record<Provider, ApiKeyStatus>;
 }
 
-/**
- * Get an API key, throwing if not found.
- */
+/** Get an API key, throwing if not found. See trio doc above. */
 export async function getApiKey(
   secrets: PlatformSecrets,
   provider: ApiProvider,
@@ -143,9 +144,7 @@ export async function getApiKey(
   return key;
 }
 
-/**
- * Check if an API key exists for a provider.
- */
+/** Check if an API key exists for a provider. */
 export async function apiKeyExists(
   secrets: PlatformSecrets,
   provider: ApiProvider,

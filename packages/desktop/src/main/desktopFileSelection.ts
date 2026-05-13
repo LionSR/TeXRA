@@ -1,8 +1,7 @@
 import { isAbsolute, relative, resolve } from 'node:path';
 
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { tryPlatform } from '@platform/platform';
-import { getWorkspaceProvider } from '@agent/core/workspace';
+import { platform, tryPlatform } from '@platform/platform';
 import { getFilterExtensions } from '@common/files/fileTypeUtils';
 import {
   getEditedFileListConfig,
@@ -101,8 +100,7 @@ export function createDesktopFileSelection(
   options: DesktopFileSelectionOptions,
 ): DesktopFileSelection {
   const getWorkspacePath =
-    options.getWorkspacePath ??
-    (() => getWorkspaceProvider().getWorkspacePath());
+    options.getWorkspacePath ?? (() => platform().workspace.getWorkspacePath());
   const onError =
     options.onError ??
     ((error) => {
@@ -136,10 +134,9 @@ export function createDesktopFileSelection(
     fileType: keyof typeof SET_COMMAND_BY_FILE_TYPE,
     listOptions: { preserveBaseFile?: boolean } = {},
   ) {
-    const files =
-      fileType === 'base'
-        ? await list('input')
-        : await list(fileType as ListableFileType);
+    const files = await list(
+      fileType === 'base' ? 'input' : (fileType as ListableFileType),
+    );
     postFileList(
       fileType,
       files,
