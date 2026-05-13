@@ -144,18 +144,15 @@ const WORKTREE_DISABLED_MESSAGE =
   "git worktree support is disabled in this workspace. Omit working_directory, or enable 'Allow agents to work in git worktrees' on the Multi-Agent settings tab.";
 
 function ensureWorkingDirectoryExists(dir: string): void {
-  let stat;
   try {
-    stat = AbsoluteFS.statSync(dir);
+    if (AbsoluteFS.statSync(dir).isDirectory()) return;
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
     throw new Error(
       `working_directory must be an existing directory: ${reason}`,
     );
   }
-  if (!stat.isDirectory()) {
-    throw new Error(`working_directory must be a directory: ${dir}`);
-  }
+  throw new Error(`working_directory must be a directory: ${dir}`);
 }
 
 /**
