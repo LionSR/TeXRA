@@ -936,24 +936,22 @@ function openPdfOverlay(payload: DesktopShowPdfMessage): void {
  */
 function pdfPathToFileUrl(absolutePath: string): string {
   const normalised = absolutePath.replace(/\\/g, '/');
+  const encodePath = (path: string): string =>
+    path.split('/').map(encodeURIComponent).join('/');
   // Windows UNC: //server/share/file → file://server/share/file
   if (normalised.startsWith('//')) {
-    const segments = normalised.slice(2).split('/').map(encodeURIComponent);
-    return `file://${segments.join('/')}`;
+    return `file://${encodePath(normalised.slice(2))}`;
   }
   // posix absolute: /abs/file → file:///abs/file
   if (normalised.startsWith('/')) {
-    const segments = normalised.slice(1).split('/').map(encodeURIComponent);
-    return `file:///${segments.join('/')}`;
+    return `file:///${encodePath(normalised.slice(1))}`;
   }
   // Windows drive: C:/path/file → file:///C:/path/file
   // Drive letter colon stays unescaped; only the rest of the segments are
   // percent-encoded.
   const driveMatch = normalised.match(/^([A-Za-z]):\/(.*)$/);
   if (driveMatch) {
-    const drive = driveMatch[1];
-    const rest = driveMatch[2].split('/').map(encodeURIComponent).join('/');
-    return `file:///${drive}:/${rest}`;
+    return `file:///${driveMatch[1]}:/${encodePath(driveMatch[2])}`;
   }
   // Defensive fallback — shouldn't happen because `isSafeAbsolutePdfPath`
   // already accepted only the three shapes above. Encode the whole string
@@ -1065,22 +1063,10 @@ function isThemeMessage(message: unknown): message is SetThemeMessage {
   return SetThemeMessageSchema.safeParse(message).success;
 }
 
-function isDesktopShowDiffMessage(
-  message: unknown,
-): message is DesktopShowDiffMessage {
-  return DesktopShowDiffMessageSchema.safeParse(message).success;
-}
-
 function isDesktopCloseDiffMessage(
   message: unknown,
 ): message is DesktopCloseDiffMessage {
   return DesktopCloseDiffMessageSchema.safeParse(message).success;
-}
-
-function isDesktopShowPdfMessage(
-  message: unknown,
-): message is DesktopShowPdfMessage {
-  return DesktopShowPdfMessageSchema.safeParse(message).success;
 }
 
 function isDesktopClosePdfMessage(
@@ -1138,21 +1124,18 @@ window.addEventListener('message', (event) => {
     renderLogSnapshot(event.data);
     return;
   }
-  if (isDesktopShowDiffMessage(event.data)) {
-    // Parse again to pick up the schema's `.default('plaintext')` for
-    // language — the type guard accepts it either way, but we want the
-    // runtime fallback so a missing language doesn't break Monaco.
-    const parsed = DesktopShowDiffMessageSchema.safeParse(event.data);
-    if (parsed.success) openDiffOverlay(parsed.data);
+  const diffParsed = DesktopShowDiffMessageSchema.safeParse(event.data);
+  if (diffParsed.success) {
+    openDiffOverlay(diffParsed.data);
     return;
   }
   if (isDesktopCloseDiffMessage(event.data)) {
     closeDiffOverlay();
     return;
   }
-  if (isDesktopShowPdfMessage(event.data)) {
-    const parsed = DesktopShowPdfMessageSchema.safeParse(event.data);
-    if (parsed.success) openPdfOverlay(parsed.data);
+  const pdfParsed = DesktopShowPdfMessageSchema.safeParse(event.data);
+  if (pdfParsed.success) {
+    openPdfOverlay(pdfParsed.data);
     return;
   }
   if (isDesktopClosePdfMessage(event.data)) {
@@ -1235,38 +1218,21 @@ function wireConversation(): void {
       // not a tool-use state; mirror that here. Importing the type guard
       // would create a circular dep, so use structural shape.
       if (!('ui' in prev)) return prev;
-      const next = mutate(prev, (draft) => {
-        if ('ui' in draft) {
-          (
-            draft as {
-              ui: {
-                shouldFocusFollowUp?: boolean;
-                polishedText?: string | null;
-                transcribedText?: string | null;
-              };
-            }
-          ).ui.shouldFocusFollowUp = false;
-          (
-            draft as {
-              ui: {
-                shouldFocusFollowUp?: boolean;
-                polishedText?: string | null;
-                transcribedText?: string | null;
-              };
-            }
-          ).ui.polishedText = null;
-          (
-            draft as {
-              ui: {
-                shouldFocusFollowUp?: boolean;
-                polishedText?: string | null;
-                transcribedText?: string | null;
-              };
-            }
-          ).ui.transcribedText = null;
-        }
+      return mutate(prev, (draft) => {
+        if (!('ui' in draft)) return;
+        const ui = (
+          draft as {
+            ui: {
+              shouldFocusFollowUp?: boolean;
+              polishedText?: string | null;
+              transcribedText?: string | null;
+            };
+          }
+        ).ui;
+        ui.shouldFocusFollowUp = false;
+        ui.polishedText = null;
+        ui.transcribedText = null;
       });
-      return next;
     });
   });
 }

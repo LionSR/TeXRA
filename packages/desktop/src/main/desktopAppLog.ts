@@ -12,7 +12,6 @@ import { format } from 'node:util';
 
 import {
   app,
-  type Event,
   type WebContents,
   type WebContentsConsoleMessageEventParams,
 } from 'electron';
@@ -24,10 +23,6 @@ import {
 import type { DesktopLogSnapshot } from '../desktopLogMessages.js';
 
 type ConsoleLevel = 'debug' | 'error' | 'info' | 'log' | 'warn';
-type RendererConsoleMessage = Pick<
-  WebContentsConsoleMessageEventParams,
-  'level' | 'lineNumber' | 'message' | 'sourceId'
->;
 
 const LOG_FILE_NAME = 'texra-desktop.log';
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
@@ -94,11 +89,9 @@ export function readDesktopLogSnapshot(options: {
 
 export function attachRendererConsoleLog(webContents: WebContents): void {
   webContents.on('console-message', (event) => {
-    const details = getConsoleMessageDetails(event);
-    const consoleLevel = toConsoleLevel(details.level);
     appendDesktopLogLine(
-      consoleLevel,
-      `[renderer] ${details.message} (${details.sourceId}:${details.lineNumber})`,
+      toConsoleLevel(event.level),
+      `[renderer] ${event.message} (${event.sourceId}:${event.lineNumber})`,
     );
   });
   webContents.on('render-process-gone', (_event, details) => {
@@ -176,18 +169,9 @@ function makeDesktopLogRedactionOptions(options: {
   };
 }
 
-function getConsoleMessageDetails(
-  event: Event<WebContentsConsoleMessageEventParams>,
-): RendererConsoleMessage {
-  return {
-    message: event.message,
-    level: event.level,
-    lineNumber: event.lineNumber,
-    sourceId: event.sourceId,
-  };
-}
-
-function toConsoleLevel(level: RendererConsoleMessage['level']): ConsoleLevel {
+function toConsoleLevel(
+  level: WebContentsConsoleMessageEventParams['level'],
+): ConsoleLevel {
   switch (level) {
     case 'debug':
       return 'debug';

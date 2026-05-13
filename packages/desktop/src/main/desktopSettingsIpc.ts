@@ -815,17 +815,17 @@ export function createDesktopSettingsIpc(
       return;
     }
     const displayName = PROVIDER_DISPLAY_NAMES[provider] ?? provider;
-    const trimmedSubmittedKey = submittedApiKey?.trim();
     const apiKey =
-      trimmedSubmittedKey ||
-      (await options.promptSecret?.({
-        title: `Set ${displayName} API key`,
-        prompt: `Enter ${displayName} API key`,
-      }));
-    const trimmed = apiKey?.trim();
-    if (!trimmed) return;
+      submittedApiKey?.trim() ||
+      (
+        await options.promptSecret?.({
+          title: `Set ${displayName} API key`,
+          prompt: `Enter ${displayName} API key`,
+        })
+      )?.trim();
+    if (!apiKey) return;
 
-    await secrets.set(apiKeySecretName(provider), trimmed);
+    await secrets.set(apiKeySecretName(provider), apiKey);
     await options.showInfoMessage?.(`${displayName} API key has been set`);
     await refreshAfterCredentialChange();
   }
@@ -872,11 +872,10 @@ export function createDesktopSettingsIpc(
     if (options.signIn) {
       await options.signIn();
       return;
-    } else {
-      await options.showInfoMessage?.(
-        'Researcher Access sign-in is not connected in this desktop build. Add a provider API key in Settings > Models to run agents with your own account.',
-      );
     }
+    await options.showInfoMessage?.(
+      'Researcher Access sign-in is not connected in this desktop build. Add a provider API key in Settings > Models to run agents with your own account.',
+    );
     await postProfileData();
   }
 

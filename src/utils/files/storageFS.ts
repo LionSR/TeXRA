@@ -1,5 +1,5 @@
 // Platform imports
-import { getStorageProvider } from '@agent/core/storage';
+import { platform } from '@platform/platform';
 
 // Local imports - fs
 import { RelativeFS } from './relativeFS';
@@ -16,14 +16,14 @@ export class StorageFS extends RelativeFS {
    * Return the workspace storage base path (per-workspace)
    */
   protected static override getBasePath(): string {
-    return getStorageProvider().getStoragePath();
+    return platform().storage.getStoragePath();
   }
 
   /**
    * Get the global storage base path (shared across workspaces)
    */
   public static getGlobalPath(): string {
-    return getStorageProvider().getGlobalStoragePath();
+    return platform().storage.getGlobalStoragePath();
   }
 
   // Inherit file operations from RelativeFS

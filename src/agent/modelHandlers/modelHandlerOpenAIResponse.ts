@@ -47,7 +47,7 @@ import type { FileLocation } from '@utils/files/taskRunStorage';
 import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
-import { tagOpenAISdkError } from './support/sdkErrorAdapters';
+import { tagOpenAISdkError, withSdkErrorTag } from './support/sdkErrorAdapters';
 
 // Local file imports
 import {
@@ -678,11 +678,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Close the WebSocket connection and clean up resources. */
   private closeWebSocket(): void {
     this.stopWsKeepalive();
-    if (this.wsConnection) {
+    const wsConnection = this.wsConnection;
+    if (wsConnection) {
       try {
-        this.wsConnection.close();
+        wsConnection.close();
       } catch {
-        // Ignore close errors
+        // Cleanup must not mask the original failure path.
       }
       this.wsConnection = null;
       this.wsConnectionCreatedAt = 0;
@@ -1601,10 +1602,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
     this.inFlight = true;
     try {
-      return await this.createResponseImpl(options);
-    } catch (err) {
-      tagOpenAISdkError(err, this.config.provider);
-      throw err;
+      return await withSdkErrorTag(
+        tagOpenAISdkError,
+        this.config.provider,
+        () => this.createResponseImpl(options),
+      );
     } finally {
       this.inFlight = false;
     }

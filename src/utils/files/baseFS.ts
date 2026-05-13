@@ -4,7 +4,7 @@ import * as path from 'path';
 
 // Platform imports
 import { FileType, type FileStat } from '@platform/interfaces/filesystem';
-import { getFileSystem } from '@agent/core/filesystem';
+import { platform } from '@platform/platform';
 import { isFile, isDirectory } from '@common/files/fsEntryType';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
@@ -49,7 +49,7 @@ export abstract class BaseFS {
     target: string,
   ): Promise<boolean> {
     try {
-      await getFileSystem().stat(this.preparePath(target));
+      await platform().fs.stat(this.preparePath(target));
       return true;
     } catch (_err) {
       return false;
@@ -60,7 +60,7 @@ export abstract class BaseFS {
     this: typeof BaseFS,
     target: string,
   ): Promise<string> {
-    const content = await getFileSystem().readFile(this.preparePath(target));
+    const content = await platform().fs.readFile(this.preparePath(target));
     return normalizeLineEndings(Buffer.from(content).toString('utf-8'));
   }
 
@@ -68,7 +68,7 @@ export abstract class BaseFS {
     this: typeof BaseFS,
     target: string,
   ): Promise<Buffer> {
-    const content = await getFileSystem().readFile(this.preparePath(target));
+    const content = await platform().fs.readFile(this.preparePath(target));
     return Buffer.from(content);
   }
 
@@ -77,10 +77,7 @@ export abstract class BaseFS {
     target: string,
     content: string | Uint8Array,
   ): Promise<void> {
-    await getFileSystem().writeFile(
-      this.preparePath(target),
-      toBuffer(content),
-    );
+    await platform().fs.writeFile(this.preparePath(target), toBuffer(content));
   }
 
   public static async appendFile(
@@ -96,14 +93,14 @@ export abstract class BaseFS {
     target: string,
     options?: { recursive?: boolean; useTrash?: boolean },
   ): Promise<void> {
-    await getFileSystem().delete(this.preparePath(target), options);
+    await platform().fs.delete(this.preparePath(target), options);
   }
 
   public static async createDir(
     this: typeof BaseFS,
     target: string,
   ): Promise<void> {
-    await getFileSystem().createDirectory(this.preparePath(target));
+    await platform().fs.createDirectory(this.preparePath(target));
   }
 
   public static async ensureDir(
@@ -127,14 +124,14 @@ export abstract class BaseFS {
     this: typeof BaseFS,
     target: string,
   ): Promise<[string, number][]> {
-    return getFileSystem().readDirectory(this.preparePath(target));
+    return platform().fs.readDirectory(this.preparePath(target));
   }
 
   public static async stat(
     this: typeof BaseFS,
     target: string,
   ): Promise<FileStat> {
-    return getFileSystem().stat(this.preparePath(target));
+    return platform().fs.stat(this.preparePath(target));
   }
 
   public static async copy(
@@ -143,7 +140,7 @@ export abstract class BaseFS {
     destination: string,
     options?: { overwrite?: boolean },
   ): Promise<void> {
-    await getFileSystem().copy(
+    await platform().fs.copy(
       this.preparePath(source),
       this.preparePath(destination),
       options,
@@ -156,7 +153,7 @@ export abstract class BaseFS {
     destination: string,
     options?: { overwrite?: boolean },
   ): Promise<void> {
-    await getFileSystem().rename(
+    await platform().fs.rename(
       this.preparePath(source),
       this.preparePath(destination),
       options,
