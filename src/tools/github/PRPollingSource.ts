@@ -270,7 +270,7 @@ export class PRPollingSource extends PollingSourceBase<
     return this.register(key, () => createInitialState(pr), onEvent);
   }
 
-  protected emitKeysChangedBusEvent(keys: readonly string[]): void {
+  protected emitKeysChangedEvent(keys: readonly string[]): void {
     emitGitHubSubscriptionChanged('prSubscriptionsChanged', { keys });
   }
 
