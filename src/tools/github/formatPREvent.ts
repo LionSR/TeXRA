@@ -28,6 +28,7 @@ import type {
 const MAX_BODY = 500;
 // A single linter run can emit hundreds; show the first N + overflow hint.
 const MAX_ANNOTATIONS_PER_RUN = 20;
+const MAX_CI_STARTED_CHECK_NAMES = 20;
 const MAX_ANNOTATION_MESSAGE = 300;
 
 const truncate = (s: string | null | undefined): string =>
@@ -196,6 +197,36 @@ export function formatCIPassed(
 ): string {
   return wrap(
     `All ${runs.length} CI checks passed on ${prRef(slug, prNumber)} (head ${sha.slice(0, 7)}).`,
+  );
+}
+
+export function formatCIStarted(
+  slug: string,
+  prNumber: number,
+  sha: string,
+  runs: GhCheckRun[],
+  totalCount: number,
+): string {
+  const uniqueNames = [...new Set(runs.map((r) => r.name))].sort();
+  const shownNames = uniqueNames.slice(0, MAX_CI_STARTED_CHECK_NAMES);
+  const remainingNames = uniqueNames.length - shownNames.length;
+  const totalCheckLabel = totalCount === 1 ? 'check' : 'checks';
+  const observedCheckLabel = runs.length === 1 ? 'check' : 'checks';
+  const nameLabel = uniqueNames.length === 1 ? 'check name' : 'check names';
+  const body = [
+    ...shownNames.map((name) => `- ${name}`),
+    ...(remainingNames > 0
+      ? [
+          `…and ${remainingNames} more check name${remainingNames === 1 ? '' : 's'}.`,
+        ]
+      : []),
+  ].join('\n');
+
+  return wrap(
+    sections(
+      `CI triggered on ${prRef(slug, prNumber)} (head ${sha.slice(0, 7)}): GitHub reports ${totalCount} ${totalCheckLabel} registered; this poll observed ${runs.length} ${observedCheckLabel} across ${uniqueNames.length} distinct ${nameLabel}.`,
+      body,
+    ),
   );
 }
 
