@@ -81,6 +81,10 @@ export abstract class PollingSourceBase<
     return [...this.subscriptions.keys()];
   }
 
+  protected getSubscriptionState(key: K): S | undefined {
+    return this.subscriptions.get(key);
+  }
+
   has(key: K): boolean {
     return this.subscriptions.has(key);
   }
