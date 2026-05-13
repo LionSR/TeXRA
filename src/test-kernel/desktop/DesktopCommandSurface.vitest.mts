@@ -48,6 +48,10 @@ interface DesktopCommandSurfaceModule {
     keybinding: { key: string; mac?: string },
     platform?: NodeJS.Platform,
   ): string;
+  formatDesktopAccelerator(
+    accelerator: string | undefined,
+    platform?: NodeJS.Platform,
+  ): string | undefined;
   buildDesktopSettingsTabMessage(
     tabIndex: number,
     agentSubTab?: string,
@@ -148,6 +152,20 @@ describe('desktop command surface', () => {
         'linux',
       ),
     ).toBe('Control+Alt+Shift+C');
+  });
+
+  it('formats accelerators for desktop tooltip display', async () => {
+    const { formatDesktopAccelerator } = await loadDesktopCommandSurface();
+
+    expect(formatDesktopAccelerator('Command+Option+M', 'darwin')).toBe('⌘⌥M');
+    expect(formatDesktopAccelerator('CommandOrControl+O', 'darwin')).toBe('⌘O');
+    expect(formatDesktopAccelerator('CommandOrControl+O', 'linux')).toBe(
+      'Ctrl+O',
+    );
+    expect(formatDesktopAccelerator('Control+Alt+Shift+C', 'linux')).toBe(
+      'Ctrl+Alt+Shift+C',
+    );
+    expect(formatDesktopAccelerator(undefined, 'darwin')).toBeUndefined();
   });
 
   it('dispatches supported commands through typed shell actions', async () => {

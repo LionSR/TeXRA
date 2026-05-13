@@ -352,6 +352,21 @@ function toPlatformAccelerator(
   return accelerator.replaceAll('CommandOrControl', 'Command');
 }
 
+export function formatDesktopAccelerator(
+  accelerator: string | undefined,
+  platform: NodeJS.Platform = process.platform,
+): string | undefined {
+  if (!accelerator) return undefined;
+  const platformAccelerator =
+    platform === 'darwin'
+      ? accelerator.replaceAll('CommandOrControl', 'Command')
+      : accelerator.replaceAll('CommandOrControl', 'Control');
+  const parts = platformAccelerator
+    .split('+')
+    .map((part) => toDisplayAcceleratorPart(part, platform));
+  return platform === 'darwin' ? parts.join('') : parts.join('+');
+}
+
 export function buildDesktopSettingsTabMessage(
   tabIndex: SettingsTab,
   agentSubTab?: AgentCategory,
@@ -447,5 +462,30 @@ function toElectronAcceleratorPart(part: string): string {
     default:
       if (/^f\d{1,2}$/.test(normalized)) return normalized.toUpperCase();
       return normalized.length === 1 ? normalized.toUpperCase() : normalized;
+  }
+}
+
+function toDisplayAcceleratorPart(
+  part: string,
+  platform: NodeJS.Platform,
+): string {
+  const normalized = part.trim().toLowerCase();
+  const isMac = platform === 'darwin';
+  switch (normalized) {
+    case 'cmd':
+    case 'command':
+      return isMac ? '⌘' : 'Cmd';
+    case 'ctrl':
+    case 'control':
+      return isMac ? '⌃' : 'Ctrl';
+    case 'alt':
+    case 'option':
+      return isMac ? '⌥' : 'Alt';
+    case 'shift':
+      return isMac ? '⇧' : 'Shift';
+    default: {
+      const trimmed = part.trim();
+      return trimmed.length === 1 ? trimmed.toUpperCase() : trimmed;
+    }
   }
 }
