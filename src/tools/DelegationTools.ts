@@ -144,16 +144,18 @@ const WORKTREE_DISABLED_MESSAGE =
   "git worktree support is disabled in this workspace. Omit working_directory, or enable 'Allow agents to work in git worktrees' on the Multi-Agent settings tab.";
 
 function ensureWorkingDirectoryExists(dir: string): void {
+  let stat;
   try {
-    const stat = AbsoluteFS.statSync(dir);
-    if (stat.isDirectory()) return;
+    stat = AbsoluteFS.statSync(dir);
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
     throw new Error(
       `working_directory must be an existing directory: ${reason}`,
     );
   }
-  throw new Error(`working_directory must be a directory: ${dir}`);
+  if (!stat.isDirectory()) {
+    throw new Error(`working_directory must be a directory: ${dir}`);
+  }
 }
 
 /**
@@ -480,17 +482,17 @@ function formatAgentList(
     .join('\n');
 }
 
-/** Find a visible agent by name or throw with available agents listed. */
-function resolveVisibleAgent(category: 'workflow' | 'toolUse', name: string) {
+/** Throw if no visible agent of the given category matches the name. */
+function assertVisibleAgent(
+  category: 'workflow' | 'toolUse',
+  name: string,
+): void {
   const visible = getVisibleAgents(category);
-  const entry = visible.find((a) => a.name === name);
-  if (!entry) {
-    const available = visible.map((a) => a.name).join(', ');
-    throw new Error(
-      `Unknown ${category} agent '${name}'. Available: ${available}`,
-    );
-  }
-  return entry;
+  if (visible.some((a) => a.name === name)) return;
+  const available = visible.map((a) => a.name).join(', ');
+  throw new Error(
+    `Unknown ${category} agent '${name}'. Available: ${available}`,
+  );
 }
 
 /** Build a concise summary of proposal parameters for rejection echo. */
@@ -771,7 +773,7 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
-    const agentEntry = resolveVisibleAgent('workflow', input.agent);
+    assertVisibleAgent('workflow', input.agent);
     const ctx = getRequiredContext();
 
     // Resolve model: explicit input → parent model → first visible model
@@ -928,7 +930,7 @@ Git worktree support: ${
       );
     }
 
-    const agentEntry = resolveVisibleAgent('toolUse', input.agent);
+    assertVisibleAgent('toolUse', input.agent);
 
     const ctx = getRequiredContext();
 

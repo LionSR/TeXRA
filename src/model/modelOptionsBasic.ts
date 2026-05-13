@@ -38,12 +38,27 @@ export function getVisibleModels(): string[] {
   );
 }
 
-/** Resolve a model to a valid visible model. */
-export function resolveVisibleModel(model: string): string {
+/**
+ * Resolve a model against the user's visible-models list.
+ *
+ * - `found: true` — `model` is in the list (or the list is empty, in which
+ *   case the input is returned unchanged because we have nothing to map to).
+ * - `found: false` — `model` was not visible; the first visible model is
+ *   substituted as a fallback.
+ */
+export function resolveVisibleModelResult(model: string): {
+  model: string;
+  found: boolean;
+} {
   const visibleModels = getVisibleModels();
-  if (visibleModels.length === 0) return model;
-  if (visibleModels.includes(model)) return model;
-  return visibleModels[0];
+  if (visibleModels.length === 0) return { model, found: true };
+  if (visibleModels.includes(model)) return { model, found: true };
+  return { model: visibleModels[0], found: false };
+}
+
+/** Resolve a model to a valid visible model (fallback to first visible). */
+export function resolveVisibleModel(model: string): string {
+  return resolveVisibleModelResult(model).model;
 }
 
 /** Return whether the registry marks a model as deprecated. */

@@ -47,7 +47,7 @@ import type { FileLocation } from '@utils/files/taskRunStorage';
 import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
-import { tagOpenAISdkError } from './support/sdkErrorAdapters';
+import { tagOpenAISdkError, withSdkErrorTag } from './support/sdkErrorAdapters';
 
 // Local file imports
 import {
@@ -675,15 +675,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.closeWebSocket();
   }
 
+  /** Close a WebSocket and swallow any close-time error. The SDK throws if the
+   *  socket is already closed or in an unexpected state; in cleanup paths we
+   *  never want that to mask the original failure or block teardown. */
+  private static safeCloseWs(ws: ResponsesWS): void {
+    try {
+      ws.close();
+    } catch {
+      // Ignore close errors
+    }
+  }
+
   /** Close the WebSocket connection and clean up resources. */
   private closeWebSocket(): void {
     this.stopWsKeepalive();
     if (this.wsConnection) {
-      try {
-        this.wsConnection.close();
-      } catch {
-        // Ignore close errors
-      }
+      ModelHandlerOpenAIResponse.safeCloseWs(this.wsConnection);
       this.wsConnection = null;
       this.wsConnectionCreatedAt = 0;
       this.logger.debug('WebSocket connection closed');
@@ -1601,10 +1608,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
     this.inFlight = true;
     try {
-      return await this.createResponseImpl(options);
-    } catch (err) {
-      tagOpenAISdkError(err, this.config.provider);
-      throw err;
+      return await withSdkErrorTag(
+        tagOpenAISdkError,
+        this.config.provider,
+        () => this.createResponseImpl(options),
+      );
     } finally {
       this.inFlight = false;
     }

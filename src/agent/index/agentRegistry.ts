@@ -213,13 +213,15 @@ async function doLoad(): Promise<void> {
 }
 
 /**
- * Get an agent by identifier.
- * Supports "source:name" format or just "name" (finds first match by priority).
+ * Canonical agent resolver: look up an agent by identifier.
  *
- * When preferToolUse is true, uses tool-use lookup priority:
- * custom → remote → builtInToolUse → builtInWorkflow
+ * Supports "source:name" format or just "name". Plain names are matched
+ * against {@link LOOKUP_PRIORITY} (or {@link TOOL_USE_LOOKUP_PRIORITY} when
+ * `preferToolUse` is true), returning the first hit. This handles name
+ * collisions where, e.g., a workflow agent shadows a tool-use agent.
  *
- * This handles name collisions where a workflow agent shadows a tool-use agent.
+ * All other lookups in this module (`resolveAgent`, `resolveAgentKey`,
+ * `isRemoteAgent`, `updateAgent*`) delegate here.
  */
 export function getAgent(
   identifier: string,
@@ -285,17 +287,17 @@ export function updateAgentDefaultOutputFiles(
 }
 
 /**
- * Resolve an agent to its definition path.
+ * Resolve an agent to a {@link ResolvedAgent} (entry + flattened metadata).
+ *
+ * Thin wrapper around {@link getAgent} for callers that want the canonical
+ * "resolution" shape (definition path + resolved name) without dereferencing
+ * the entry themselves. Returns `undefined` when the identifier doesn't
+ * match any cached agent.
  */
 export function resolveAgent(identifier: string): ResolvedAgent | undefined {
   const entry = getAgent(identifier);
   if (!entry) return undefined;
-
-  return {
-    entry,
-    definitionPath: entry.path,
-    resolvedName: entry.name,
-  };
+  return { entry, definitionPath: entry.path, resolvedName: entry.name };
 }
 
 function getAgentsByCategory(
