@@ -24,6 +24,9 @@ const payloadUrl = pathToFileURL(
 const pruneHookUrl = pathToFileURL(
   repoPath('scripts/prune-desktop-codex-payload.mjs'),
 ).href;
+const desktopPruneHookUrl = pathToFileURL(
+  repoPath('packages/desktop/scripts/prune-desktop-codex-payload.mjs'),
+).href;
 const extensionPackageUtilsUrl = pathToFileURL(
   repoPath('scripts/extension-package-utils.mjs'),
 ).href;
@@ -108,7 +111,11 @@ describe('desktop Codex package payload', () => {
 
   it('infers architecture from path tokens nearest the app bundle', async () => {
     const { inferCodexPlatformKeys } = (await import(payloadUrl)) as {
-      inferCodexPlatformKeys: (input: { appPath: string }) => string[];
+      inferCodexPlatformKeys: (input: {
+        appPath: string;
+        arch?: number;
+        platform?: string;
+      }) => string[];
     };
 
     expect(
@@ -121,6 +128,13 @@ describe('desktop Codex package payload', () => {
         appPath: '/tmp/universal-cache/dist/mac-arm64/TeXRA.app',
       }),
     ).toEqual(['darwin-arm64']);
+    expect(
+      inferCodexPlatformKeys({
+        platform: 'darwin',
+        arch: 1,
+        appPath: '/tmp/universal-cache/dist/TeXRA.app',
+      }),
+    ).toEqual(['darwin-x64']);
   });
 
   it('defaults Linux and Windows package paths without architecture tokens to x64', async () => {
@@ -159,6 +173,45 @@ describe('desktop Codex package payload', () => {
     );
 
     expect(universalBudget).toBeGreaterThan(singlePlatformBudget);
+  });
+
+  it('keeps both Darwin Codex packages during universal temp packaging', async () => {
+    const { inferCodexPlatformKeys } = (await import(payloadUrl)) as {
+      inferCodexPlatformKeys: (input: {
+        arch: number;
+        appPath: string;
+        platform: string;
+      }) => string[];
+    };
+
+    expect(
+      inferCodexPlatformKeys({
+        platform: 'darwin',
+        arch: 1,
+        appPath:
+          '/tmp/dist-packaged/mac-universal-x64-temp/TeXRA.app/Contents/Resources',
+      }),
+    ).toEqual(['darwin-x64', 'darwin-arm64']);
+  });
+
+  it('loads the desktop-local electron-builder pruning hook', async () => {
+    const rootHook = await import(pruneHookUrl);
+    const desktopHook = await import(desktopPruneHookUrl);
+
+    expect(desktopHook.default).toBe(rootHook.default);
+  });
+
+  it('keeps pnpm platform settings in the workspace manifest', () => {
+    const rootPackageJson = JSON.parse(
+      readFileSync(repoPath('package.json'), 'utf8'),
+    ) as { pnpm?: unknown };
+    const workspaceYaml = readFileSync(repoPath('pnpm-workspace.yaml'), 'utf8');
+
+    expect(rootPackageJson.pnpm).toBeUndefined();
+    expect(workspaceYaml).toContain('supportedArchitectures:');
+    expect(workspaceYaml).toContain('  cpu:');
+    expect(workspaceYaml).toContain('    - x64');
+    expect(workspaceYaml).toContain('    - arm64');
   });
 
   it('resolves relative metafile imports from the importing output directory', () => {

@@ -1,5 +1,14 @@
 packages:
   - packages/*
+supportedArchitectures:
+  os:
+    - current
+  cpu:
+    - current
+    - x64
+    - arm64
+  libc:
+    - current
 allowBuilds:
   '@google/genai': true
   '@openrouter/sdk': true
