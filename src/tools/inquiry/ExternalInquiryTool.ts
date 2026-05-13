@@ -53,7 +53,8 @@ const ExternalInquiryInputSchema = z.strictObject({
     ),
   thread_id: ExternalInquiryThreadIdSchema.nullish().describe(
     'Durable external inquiry thread ID from a previous external_inquiry result. ' +
-      'Omit to start a new external-inquiry thread. Pass it to continue an existing thread.',
+      'Omit to start a new external-inquiry thread. Pass it to continue an existing thread; ' +
+      'known external session links from that thread will be shown to the user.',
   ),
   context: z
     .string()
@@ -234,6 +235,8 @@ Tips for effective questions:
 - If continuing an existing external thread, summarize what was established before
 
 Every successful call returns a durable thread_id. Omit thread_id to start a new external-inquiry thread. Pass thread_id to continue the same thread in later calls, even from a future run.
+
+If a result lists external session links, keep using the returned thread_id for follow-up questions. The inquiry panel will show those links to the user so they can continue the same outside conversation.
 
 Set suggestSearch=true when the question could benefit from the external model using web search (e.g., looking up recent papers, checking specific results).
 

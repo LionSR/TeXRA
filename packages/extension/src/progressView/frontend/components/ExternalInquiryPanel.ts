@@ -265,17 +265,13 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
           ? html`
               <div class="external-inquiry-request__session-links-known">
                 <div class="external-inquiry-request__session-links-label">
-                  Known external session links for this thread:
+                  Known external sessions for follow-ups:
                 </div>
                 <div class="external-inquiry-request__session-links-list">
                   ${repeat(
                     sessionLinks,
                     (link) => link,
-                    (link) => html`
-                      <div class="external-inquiry-request__session-link-item">
-                        ${link}
-                      </div>
-                    `,
+                    (link) => this.renderKnownSessionLink(link),
                   )}
                 </div>
               </div>
@@ -283,7 +279,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
           : nothing}
         <div class="external-inquiry-request__session-links-input-group">
           <div class="external-inquiry-request__session-links-label">
-            External chat/thread links (optional):
+            Save external chat link for follow-ups:
           </div>
           <div class="external-inquiry-request__chat-links">
             Open:
@@ -303,17 +299,46 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
           </div>
           <textarea
             class="external-inquiry-request__session-links-input"
-            placeholder="Paste one ChatGPT/Claude/Gemini thread link per line..."
+            placeholder="Paste one external thread link per line..."
             .value=${live(this.sessionLinksText)}
             @input=${this.handleSessionLinksInput}
           ></textarea>
           <div class="external-inquiry-request__session-links-hint">
-            Paste back the external chat URLs you used so follow-up inquiries
-            can point you to the same conversations later.
+            Add the chat URL you used after pasting the answer.
           </div>
         </div>
       </div>
     `;
+  }
+
+  private renderKnownSessionLink(link: string): TemplateResult {
+    const href = ExternalInquiryPanel.safeHttpUrl(link);
+    if (!href) {
+      return html`
+        <div class="external-inquiry-request__session-link-item">${link}</div>
+      `;
+    }
+
+    return html`
+      <a
+        class="external-inquiry-request__session-link-item"
+        href=${href}
+        target="_blank"
+        rel="noopener noreferrer"
+        >${link}</a
+      >
+    `;
+  }
+
+  private static safeHttpUrl(link: string): string | undefined {
+    try {
+      const url = new URL(link);
+      return url.protocol === 'http:' || url.protocol === 'https:'
+        ? url.href
+        : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private renderActions(): TemplateResult {
