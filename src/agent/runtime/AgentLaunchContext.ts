@@ -36,7 +36,6 @@ import {
 import { generateExecutionId } from '@utils/core/executionId';
 
 import { AgentProposalCoordinator } from './AgentProposalCoordinator';
-import { getAgentRuntimeHost, type AgentRuntimeHost } from './AgentRuntimeHost';
 import { PlanApprovalCoordinator } from './PlanApprovalCoordinator';
 import { RetryRequestCoordinatorImpl } from './RetryRequestCoordinator';
 import {
@@ -47,6 +46,7 @@ import {
 } from './RunContext';
 import { retainRunCoordinatorsForStream } from './runCoordinators';
 import { StreamStatusService } from './StreamStatusService';
+import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 export interface AgentLaunchContext extends AgentCore {
   usageMonitor: UsageMonitor;
@@ -114,15 +114,12 @@ export async function withExecutionRunContext<T>(
 
 export async function getAgentPath(
   agentIdentifier: string,
-  options?: { runtimeHost?: AgentRuntimeHost },
+  runtimeHost: AgentRuntimeHost,
 ): Promise<ResolvedAgent> {
   const result = resolveAgent(agentIdentifier);
   if (result) return result;
 
-  (options?.runtimeHost ?? getAgentRuntimeHost()).emit(
-    'showAgentConfigBanner',
-    { agentName: agentIdentifier },
-  );
+  runtimeHost.emit('showAgentConfigBanner', { agentName: agentIdentifier });
   throw new AgentError(`Could not find agent: ${agentIdentifier}`);
 }
 
@@ -175,7 +172,7 @@ async function assembleAgentLaunchContext(
 ): Promise<AgentLaunchContext> {
   const { configPayload } = input;
   const fullConfig = AgentConfigSchema.parse(configPayload);
-  const resolution = await getAgentPath(fullConfig.agent, { runtimeHost });
+  const resolution = await getAgentPath(fullConfig.agent, runtimeHost);
   const [loadedSettings, prompt] = await loadAgentSettingAndPrompts(
     resolution,
     { outputFiles: fullConfig.outputFiles },
