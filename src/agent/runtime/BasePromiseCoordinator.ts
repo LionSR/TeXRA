@@ -17,10 +17,7 @@
  * 3. On resolution → emits resolve event to dismiss UI, defers cleanup
  */
 
-import {
-  getDefaultAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // ============================================================================
@@ -31,6 +28,16 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 interface BaseResult {
   action: string;
   feedback?: string;
+}
+
+type RuntimeHostProvider = () => AgentRuntimeHost;
+
+export type CoordinatorRuntimeHost = AgentRuntimeHost | RuntimeHostProvider;
+
+function toRuntimeHostProvider(
+  runtimeHost: CoordinatorRuntimeHost,
+): RuntimeHostProvider {
+  return typeof runtimeHost === 'function' ? runtimeHost : () => runtimeHost;
 }
 
 /** Internal state: pending (waiting for user) or resolved (done) */
@@ -65,14 +72,14 @@ export abstract class BasePromiseCoordinator<
   TResult extends BaseResult,
   TShowPayload extends Record<string, unknown>,
 > {
-  /**
-   * Run-owned coordinators pass a concrete host. The default host fallback is
-   * kept only for exported legacy singletons used at host-entry boundaries.
-   */
-  constructor(private readonly configuredRuntimeHost?: AgentRuntimeHost) {}
+  private readonly getRuntimeHost: RuntimeHostProvider;
+
+  constructor(runtimeHost: CoordinatorRuntimeHost) {
+    this.getRuntimeHost = toRuntimeHostProvider(runtimeHost);
+  }
 
   protected get runtimeHost(): AgentRuntimeHost {
-    return this.configuredRuntimeHost ?? getDefaultAgentRuntimeHost();
+    return this.getRuntimeHost();
   }
 
   /** Single source of truth for all pending requests */
