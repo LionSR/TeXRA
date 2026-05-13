@@ -1,6 +1,7 @@
 import { ModelProvider } from 'llm-zoo';
 import { getConfig } from '@agent/core/config';
 import { getServerSideKeyService } from '@auth/serverKeys';
+import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import {
   getProviderEndpoint,
   getDashScopeUseChina,
@@ -67,10 +68,7 @@ export function shouldUseOpenRouter(config: {
   requiresResponsesAPI?: boolean;
   openRouterOnly: boolean;
 }): boolean {
-  // Models requiring direct API access bypass OpenRouter
-  if (config.requiresResponsesAPI) return false;
-
-  return config.openRouterOnly || getUseOpenRouter();
+  return shouldRouteModelThroughOpenRouter(config, getUseOpenRouter());
 }
 
 /**
