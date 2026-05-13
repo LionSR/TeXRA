@@ -47,6 +47,7 @@ import {
   setStreamStateForId,
   streamFilter$,
   streamStates$,
+  streams$,
   tabStreams$,
 } from '@progressView/frontend/progressState';
 import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
@@ -67,6 +68,7 @@ import {
   sendFollowupCommand,
   type FrontendEventHandlerContext,
 } from '@progressView/frontend/eventHandlers';
+import type { StreamTabId } from '@shared/schemas';
 
 import {
   DesktopSetRouteMessageSchema,
@@ -881,6 +883,7 @@ const commandPalette = bootstrapFailed
             getWindowTargetOrigin(),
           );
         },
+        showStream: switchToStream,
         openDesktopDocs: () => {
           postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS);
         },
@@ -901,6 +904,7 @@ const commandPalette = bootstrapFailed
           );
         },
       },
+      getStreams: () => streams$.get(),
     });
 if (commandPalette) appRoot.append(commandPalette.element);
 
@@ -910,6 +914,17 @@ function openCommandPalette(): void {
 
 function openWorkspaceFolder(): void {
   postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER);
+}
+
+function switchToStream(streamId: StreamTabId): void {
+  if (!appState.get().streamById.has(streamId)) return;
+  appState.set(
+    mutate(appState.get(), (draft) => {
+      draft.activeStreamId = streamId;
+    }),
+  );
+  postMessage(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, { stream: streamId });
+  setRoute('progress');
 }
 
 // Clear the active stream so the center swaps back to <main-app>. PRD § 6:
