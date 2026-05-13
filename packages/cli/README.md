@@ -19,6 +19,30 @@ packages/cli/dist/bin/texra.js
 The `package.json` `bin` entry maps `texra` to that generated file. The package
 is still marked `private: true`, so publication is not ready yet.
 
+## Install locally
+
+The CLI is not published as an npm package yet. Install it from a repository
+checkout:
+
+```sh
+corepack pnpm install
+corepack pnpm --filter @texra/cli build
+corepack pnpm --dir packages/cli link --global
+texra --help
+```
+
+This creates a global `texra` command that points to
+`packages/cli/dist/bin/texra.js`. Rebuild after changing CLI or shared runtime
+code. If `pnpm link --global` reports that no global binary directory is
+configured, run `corepack pnpm setup`, restart the shell, and repeat the link
+step.
+
+To remove the linked command:
+
+```sh
+corepack pnpm --global remove @texra/cli
+```
+
 ## Run locally
 
 After building, execute the generated binary directly:
