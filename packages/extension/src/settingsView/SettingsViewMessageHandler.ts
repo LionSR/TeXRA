@@ -56,6 +56,7 @@ import {
 import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { selectAgentInMainView } from '@frontend/agents/remoteAgentUtils';
 import {
   applyGitAuthorConfig,
@@ -528,10 +529,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         //   owner/repo/issues/N      → issue
         const k = data.key;
         const removed = k.includes('/pulls/')
-          ? unbindAllForPR(k)
+          ? unbindAllForPR(k, extensionAgentRuntimeHost)
           : k.includes('/issues/')
-            ? unbindAllForIssue(k)
-            : unbindAllForRepo(k);
+            ? unbindAllForIssue(k, extensionAgentRuntimeHost)
+            : unbindAllForRepo(k, extensionAgentRuntimeHost);
         if (removed === 0) {
           void vscode.window.showInformationMessage(
             `No active subscription for ${k}.`,
