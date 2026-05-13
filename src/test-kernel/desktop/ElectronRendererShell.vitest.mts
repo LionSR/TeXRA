@@ -89,6 +89,23 @@ describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () 
     );
   });
 
+  it('renders concise empty-state guidance for first launch and no sessions', () => {
+    const rendererMain = readRendererMain();
+    const styles = readRendererStyles();
+
+    expect(rendererMain).toContain('desktop-empty-workspace-capabilities');
+    expect(rendererMain).toContain(
+      'Run workflow or tool-use agents with the chosen model.',
+    );
+    expect(rendererMain).toContain('desktop-empty-streams');
+    expect(rendererMain).toContain('Try: <q>polish the abstract</q>');
+    expect(rendererMain).toContain('SETTINGS_TAB.MODELS');
+    expect(rendererMain).toContain('SETTINGS_TAB.AGENTS');
+    expect(rendererMain).toContain('openCommandPalette');
+    expect(styles).toContain('.desktop-launcher-surface--empty');
+    expect(styles).toContain('.desktop-empty-streams-actions');
+  });
+
   it('renders the launcher back action as an icon-only chrome button', () => {
     const rendererMain = readRendererMain();
     const styles = readRendererStyles();
@@ -163,7 +180,7 @@ describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () 
     expect(rendererMain).toContain('createDesktopCommandPalette');
     expect(rendererMain).toContain('openCommandPalette');
     expect(rendererMain).toContain('buildDesktopSettingsTabMessage');
-    expect(rendererMain).toContain('showSettings: (tabIndex, agentSubTab)');
+    expect(rendererMain).toContain('showSettings: openSettingsTab');
   });
 
   it('mounts desktop-only first-run onboarding controls', () => {
