@@ -9,6 +9,7 @@
  * 5. On resolution → emits 'resolveRetryRequest' to dismiss UI
  */
 
+import { getDefaultAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { ProviderErrorPartial } from '@shared/schemas';
 import {
@@ -147,4 +148,6 @@ export class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
   }
 }
 
-export const retryCoordinator = new RetryRequestCoordinatorImpl();
+export const retryCoordinator = new RetryRequestCoordinatorImpl(
+  getDefaultAgentRuntimeHost,
+);

@@ -3,6 +3,7 @@ import { strict as assert } from 'assert';
 
 // Local imports
 import {
+  getDefaultAgentRuntimeHost,
   noopAgentRuntimeHost,
   setDefaultAgentRuntimeHost,
   type AgentRuntimeHost,
@@ -85,10 +86,11 @@ describe('promise coordinators', () => {
     ]);
   });
 
-  it('keeps unconfigured singleton coordinators on the default host boundary', async () => {
-    const coordinator = new PlanApprovalCoordinator();
+  it('keeps legacy singleton coordinators on the default host boundary', async () => {
+    const coordinator = new PlanApprovalCoordinator(getDefaultAgentRuntimeHost);
     const defaultHost = createRecordingHost();
     const ambientHost = createRecordingHost();
+    const replacementHost = createRecordingHost();
     const plan: Plan = {
       summary: 'Use the host boundary',
       steps: [],
@@ -104,10 +106,12 @@ describe('promise coordinators', () => {
         }),
     );
 
+    setDefaultAgentRuntimeHost(replacementHost.host);
     coordinator.resolveRequest('approval:default', { action: 'approve' });
 
     assert.deepEqual(await resultPromise, { action: 'approve' });
     assert.deepEqual(ambientHost.events, []);
+    assert.deepEqual(replacementHost.events, []);
     assert.deepEqual(
       defaultHost.events.map((entry) => entry.event),
       [
