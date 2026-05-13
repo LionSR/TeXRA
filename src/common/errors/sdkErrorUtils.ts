@@ -540,6 +540,23 @@ export function attachPartialText(err: unknown, text: string): void {
 
 const detectPartialText = partialTextMetadata.detect;
 
+const providerErrorMetadata =
+  createErrorMetadata<ProviderError>('providerError');
+
+/**
+ * Normalize an upstream or SDK error once and attach the structured result to
+ * the thrown value. Retry code should consume this helper so provider-boundary
+ * code can own classification while downstream layers only read the shape.
+ */
+export function normalizeProviderError(err: unknown): ProviderError {
+  const cached = providerErrorMetadata.detect(err);
+  if (cached) return cached;
+
+  const formatted = formatProviderHttpError(err);
+  providerErrorMetadata.attach(err, formatted);
+  return formatted;
+}
+
 /**
  * Maps Anthropic error type strings to their corresponding HTTP status codes.
  * Used to recover the status code when SDK error objects lose it
