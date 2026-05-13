@@ -28,10 +28,21 @@ async function withNotFoundFallback<T>(
   }
 }
 
+export interface KVStoreOptions {
+  /**
+   * Write JSON without indentation. Use this for high-churn machine-owned
+   * stores where repeated pretty-printing adds avoidable CPU and disk I/O.
+   */
+  compactJson?: boolean;
+}
+
 export class KVStore {
   private dirEnsured = false;
 
-  constructor(private readonly dir: string) {}
+  constructor(
+    private readonly dir: string,
+    private readonly options: KVStoreOptions = {},
+  ) {}
 
   private keyToPath(key: string): string {
     return path.join(this.dir, `${encodeURIComponent(key)}.json`);
@@ -53,7 +64,11 @@ export class KVStore {
       await StorageFS.ensureDir(this.dir);
       this.dirEnsured = true;
     }
-    await StorageFS.writeJson(this.keyToPath(key), value);
+    const indent = this.options.compactJson ? undefined : 2;
+    await StorageFS.write(
+      this.keyToPath(key),
+      JSON.stringify(value, null, indent),
+    );
   }
 
   async delete(key: string): Promise<void> {
