@@ -335,6 +335,46 @@ describe('formatProviderHttpError', () => {
     expect(formatted.userRetryable).toBe(true);
   });
 
+  it('classifies provider-attributed OpenAI quota bodies without SDK metadata', () => {
+    const error = new Error('background response failed') as Error & {
+      error: unknown;
+      provider: string;
+    };
+    error.provider = 'openai';
+    error.error = {
+      message: 'You exceeded your current quota.',
+      type: 'insufficient_quota',
+      code: 'insufficient_quota',
+    };
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.provider).toBe('openai');
+    expect(formatted.statusCode).toBeUndefined();
+    expect(formatted.isCredentialExhausted).toBe(true);
+    expect(formatted.isUpstreamCreditDepleted).toBe(true);
+    expect(formatted.userRetryable).toBe(true);
+  });
+
+  it('keeps provider-attributed background failures retryable without a status code', () => {
+    const error = new Error('background response failed') as Error & {
+      error: unknown;
+      provider: string;
+    };
+    error.provider = 'openai';
+    error.error = {
+      message: 'The background response ended before completion.',
+      type: 'server_error',
+    };
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.provider).toBe('openai');
+    expect(formatted.statusCode).toBeUndefined();
+    expect(formatted.isCredentialExhausted).toBeUndefined();
+    expect(formatted.userRetryable).toBe(true);
+  });
+
   it('formats tagged Anthropic user abort errors', () => {
     const error = new AnthropicAPIUserAbortError();
     tagAnthropicSdkError(error, 'anthropic');

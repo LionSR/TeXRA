@@ -48,7 +48,6 @@ import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 import { tagOpenAISdkError } from './support/sdkErrorAdapters';
-import { attachSdkErrorMetadata } from '@common/errors/sdkErrorUtils';
 
 // Local file imports
 import {
@@ -2445,20 +2444,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     );
     const wrapped = new Error(
       `Background response ${responseId} ended with status ${fallbackStatus}: ${errorDetail}. Retrieve the latest status with client.responses.retrieve("${responseId}").`,
-    ) as Error & { error?: unknown };
-    // Attach the OpenAI error body and provider metadata. The body lets
-    // isUpstreamCreditDepletedBody recognize insufficient_quota and route
-    // through the credential-exhausted path (no auto-retry); the provider
-    // tag lets the manual-retry "Use your own API key" picker target the
-    // failing provider. tagOpenAISdkError only handles SDK error classes,
-    // so a plain Error wrapper bypasses it without this explicit tag.
+    ) as Error & { error?: unknown; provider?: string };
+    // Keep the synthetic wrapper as a plain response-state error. It often has
+    // no HTTP status; tagging it as a generic SDK APIError would make the
+    // formatter treat unknown provider-side failures as non-retryable.
+    wrapped.provider = this.config.provider;
     if (current.error) {
       wrapped.error = current.error;
     }
-    attachSdkErrorMetadata(wrapped, {
-      provider: this.config.provider,
-      kind: 'api_error',
-    });
     throw wrapped;
   }
 
