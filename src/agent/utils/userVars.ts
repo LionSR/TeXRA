@@ -80,8 +80,8 @@ export async function buildUserVars(
     latexStyleRules,
     attachedMemories,
   ] = await Promise.all([
-    getRequiredFileVars(agentSetting, agentPath, logger),
-    getPatternBasedFileVars(agentConfig, agentSetting, logger),
+    getRequiredFileVars(agentSetting, agentPath),
+    getPatternBasedFileVars(agentConfig, agentSetting),
     // Load shared LaTeX style rules (best-effort; empty string if missing)
     AbsoluteFS.read(path.join(agentPath, SHARED_LATEX_RULES_REL)).catch(
       () => '',
@@ -316,7 +316,6 @@ async function logFileCategoriesWithExistence(
 
 async function processRequiredFileMap(
   fileMap: Record<string, string> | undefined,
-  logger: AgentLogger,
   source: string,
   basePath?: string,
 ): Promise<FileVarsResult> {
@@ -329,14 +328,7 @@ async function processRequiredFileMap(
     if (!filePath) continue;
 
     const fullPath = basePath ? path.join(basePath, filePath) : filePath;
-    const ok = await setVarFromFile(
-      fullPath,
-      varName,
-      vars,
-      logger,
-      source,
-      Boolean(basePath),
-    );
+    const ok = await setVarFromFile(fullPath, varName, vars, Boolean(basePath));
     files.push({
       path: fullPath,
       ok,
@@ -351,14 +343,12 @@ async function processRequiredFileMap(
 async function getRequiredFileVars(
   agentSetting: AgentSetting,
   agentPath: string,
-  logger: AgentLogger,
 ): Promise<FileVarsResult> {
   // Process file maps in parallel - each returns its own vars object to avoid shared mutation
   const [required, internal] = await Promise.all([
-    processRequiredFileMap(agentSetting.requiredFiles, logger, 'requiredFiles'),
+    processRequiredFileMap(agentSetting.requiredFiles, 'requiredFiles'),
     processRequiredFileMap(
       agentSetting.requiredFilesInternal,
-      logger,
       'requiredFilesInternal',
       agentPath,
     ),
@@ -374,7 +364,6 @@ async function getRequiredFileVars(
 async function getPatternBasedFileVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
-  logger: AgentLogger,
 ): Promise<FileVarsResult> {
   const userVars: UserVars = {};
   const files: LoadedFileEntry[] = [];
@@ -394,13 +383,7 @@ async function getPatternBasedFileVars(
     // Helper to try setting a var from a file that matches the pattern
     async function trySetVar(filePath: string): Promise<boolean> {
       if (!filePath.toLowerCase().includes(pattern)) return false;
-      const ok = await setVarFromFile(
-        filePath,
-        varName,
-        userVars,
-        logger,
-        source,
-      );
+      const ok = await setVarFromFile(filePath, varName, userVars);
       files.push({ path: filePath, ok, varName, source });
       return ok;
     }

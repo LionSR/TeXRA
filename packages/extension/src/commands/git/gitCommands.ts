@@ -302,11 +302,14 @@ async function promptGitMissing(): Promise<void> {
   const command =
     option && isToolAvailable(option.tool) ? option.command : null;
 
-  const message = command
-    ? `Git not found in PATH. Install it with:\n  ${command}`
-    : option
-      ? `Git not found in PATH. Install ${option.tool} and run "${option.command}", or download git from ${GIT_DOWNLOAD_URL}.`
-      : `Git not found in PATH. See ${GIT_DOWNLOAD_URL} to install it.`;
+  let message: string;
+  if (command) {
+    message = `Git not found in PATH. Install it with:\n  ${command}`;
+  } else if (option) {
+    message = `Git not found in PATH. Install ${option.tool} and run "${option.command}", or download git from ${GIT_DOWNLOAD_URL}.`;
+  } else {
+    message = `Git not found in PATH. See ${GIT_DOWNLOAD_URL} to install it.`;
+  }
 
   const actions = command
     ? (['Copy Command', 'Run in Terminal', 'Open git-scm.com'] as const)

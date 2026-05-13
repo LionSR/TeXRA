@@ -70,32 +70,25 @@ export async function runCleanSingle(
   const onlyInputFileFound =
     filesToDelete.length === 1 && filesToDelete[0] === inputFile;
 
-  let result: FileOpResult;
-
   if (onlyInputFileFound || filesToDelete.length === 0) {
     logger.warn(CHANNEL, `No matching files found to clean for ${inputFile}`);
-    result = { status: 'noFiles' };
-  } else {
-    try {
-      logger.debug(CHANNEL, `Files to delete:\n${filesToDelete.join('\n')}`);
-      for (const filePath of filesToDelete) {
-        await WorkspaceFS.delete(filePath);
-      }
-      logger.info(CHANNEL, `Cleanup complete for ${inputFile}`);
-      result = { status: 'success' };
-    } catch (err) {
-      logger.error(
-        CHANNEL,
-        `Error during cleanup of ${inputFile}: ${toErrorMessage(err)}`,
-      );
-      result = {
-        status: 'error',
-        error: toErrorMessage(err),
-      };
-    }
+    return { status: 'noFiles' };
   }
 
-  return result;
+  try {
+    logger.debug(CHANNEL, `Files to delete:\n${filesToDelete.join('\n')}`);
+    for (const filePath of filesToDelete) {
+      await WorkspaceFS.delete(filePath);
+    }
+    logger.info(CHANNEL, `Cleanup complete for ${inputFile}`);
+    return { status: 'success' };
+  } catch (err) {
+    logger.error(
+      CHANNEL,
+      `Error during cleanup of ${inputFile}: ${toErrorMessage(err)}`,
+    );
+    return { status: 'error', error: toErrorMessage(err) };
+  }
 }
 
 export async function runCleanMultiple(
