@@ -10,10 +10,7 @@
 
 import { z } from 'zod';
 
-import {
-  getAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { ExternalInquiryAction, StreamTabId } from '@shared/schemas';
@@ -251,9 +248,15 @@ When you have multiple independent questions for external models, you can call e
 }) {
   protected async execute(input: ExternalInquiryInput): Promise<ToolResult> {
     const context = getCurrentToolRunContext();
+    const runtimeHost = context?.runtimeHost;
+    if (!runtimeHost) {
+      throw new ToolError(
+        'external_inquiry requires a tool runtime host to show the user prompt.',
+      );
+    }
+
     const streamId = context?.streamId;
     const executionId = context?.executionId;
-    const runtimeHost = context?.runtimeHost ?? getAgentRuntimeHost();
 
     const requestId = `inquiry-${Date.now().toString(36)}-${++inquiryCounter}`;
     const threadLabel = input.thread_id ?? 'new';
