@@ -5,8 +5,6 @@
  * change notification, and subagent lineage tracking in a single module.
  */
 
-import * as fs from 'fs';
-
 import {
   getAgentRuntimeHost,
   type AgentRuntimeHost,
@@ -20,6 +18,11 @@ import {
   collectChildSummary,
   interruptActiveChildren as interruptChildren,
 } from './ExecutionHandle';
+import {
+  flushProcessOutput,
+  registerProcessOutput,
+  unregisterProcessOutput,
+} from './ProcessOutputPoller';
 
 export type { ExecutionHandle } from './ExecutionHandle';
 export {
@@ -82,8 +85,8 @@ export function trackExecution(handle: ExecutionHandle): void {
 
   // Emit process badge update for background bash processes
   if (handle instanceof ProcessExecutionHandle) {
+    registerProcessOutput(handle, runtimeHost);
     emitActiveProcessesUpdate(handle.parentStreamId, runtimeHost);
-    reconcileOutputPoller();
   }
 }
 
@@ -107,18 +110,11 @@ export function untrackExecution(executionId: string): void {
   // badge handler prunes output entries for processes no longer active.
   if (handle instanceof ProcessExecutionHandle) {
     const finalize = (): void => {
-      outputOffsets.delete(executionId);
+      unregisterProcessOutput(executionId);
       emitActiveProcessesUpdate(handle.parentStreamId, runtimeHost);
-      reconcileOutputPoller();
     };
     if (handle.outputPaths) {
-      void readIncremental(
-        executionId,
-        handle.parentStreamId,
-        handle.outputPaths.stdout,
-        handle.outputPaths.stderr,
-        runtimeHost,
-      ).finally(finalize);
+      void flushProcessOutput(handle, runtimeHost).finally(finalize);
     } else {
       finalize();
     }
@@ -320,193 +316,6 @@ function emitActiveProcessesUpdate(
     parentStreamId,
     processes,
   });
-}
-
-// ============================================================================
-// Process output polling
-// ============================================================================
-
-/** Interval at which temp files are read and pushed to the progress UI. */
-const OUTPUT_POLL_INTERVAL_MS = 500;
-
-/** Tracks byte offsets already sent per executionId per stream. */
-const outputOffsets = new Map<string, { stdout: number; stderr: number }>();
-
-let outputPollTimer: ReturnType<typeof setTimeout> | null = null;
-let pollInFlight = false;
-
-/** Check whether any tracked execution is a process handle. */
-function hasActiveProcesses(): boolean {
-  for (const h of registry.values()) {
-    if (h instanceof ProcessExecutionHandle) return true;
-  }
-  return false;
-}
-
-/** Start polling if there are active process handles; stop if none remain. */
-function reconcileOutputPoller(): void {
-  const active = hasActiveProcesses();
-  if (active && !outputPollTimer) {
-    schedulePoll();
-  } else if (!active && outputPollTimer) {
-    clearTimeout(outputPollTimer);
-    outputPollTimer = null;
-  }
-}
-
-/** Schedule the next poll cycle (serialized — next poll waits for current to finish). */
-function schedulePoll(): void {
-  outputPollTimer = setTimeout(async () => {
-    // Clear stale timer ID so reconcileOutputPoller sees !outputPollTimer
-    outputPollTimer = null;
-    if (pollInFlight) {
-      schedulePoll();
-      return;
-    }
-    pollInFlight = true;
-    try {
-      await pollProcessOutputs();
-    } finally {
-      pollInFlight = false;
-      reconcileOutputPoller();
-    }
-  }, OUTPUT_POLL_INTERVAL_MS);
-}
-
-/** Read incremental output from temp files and emit to progress UI. */
-async function pollProcessOutputs(): Promise<void> {
-  const reads: Promise<void>[] = [];
-  for (const handle of registry.values()) {
-    if (!(handle instanceof ProcessExecutionHandle)) continue;
-    if (!handle.outputPaths) continue;
-
-    reads.push(
-      readIncremental(
-        handle.executionId,
-        handle.parentStreamId,
-        handle.outputPaths.stdout,
-        handle.outputPaths.stderr,
-        runtimeHostFor(handle),
-      ),
-    );
-  }
-  await Promise.all(reads);
-}
-
-/** Max bytes to read per file per poll — prevents huge allocations from chatty processes. */
-const MAX_READ_PER_POLL = 128 * 1024;
-
-/**
- * Find the last byte index that ends a complete UTF-8 character.
- * If the buffer ends mid-character, those trailing bytes are excluded
- * so the next read starts at the right boundary.
- */
-function lastCompleteUtf8(buf: Buffer, bytesRead: number): number {
-  if (bytesRead === 0) return 0;
-  // Walk backward (max 3 bytes — longest UTF-8 lead) looking for
-  // a continuation byte (10xxxxxx). If we find a lead byte, check
-  // whether the sequence is complete.
-  for (let i = bytesRead - 1; i >= Math.max(0, bytesRead - 3); i--) {
-    const b = buf[i];
-    // ASCII or single-byte — always complete
-    if (b < 0x80) return bytesRead;
-    // Continuation byte (10xxxxxx) — keep scanning for the lead
-    if ((b & 0xc0) === 0x80) continue;
-    // Lead byte — determine expected sequence length
-    let seqLen: number;
-    if ((b & 0xe0) === 0xc0) seqLen = 2;
-    else if ((b & 0xf0) === 0xe0) seqLen = 3;
-    else if ((b & 0xf8) === 0xf0) seqLen = 4;
-    else return bytesRead; // Invalid lead — let toString handle it
-    // Complete if all bytes of the sequence were read
-    return i + seqLen <= bytesRead ? bytesRead : i;
-  }
-  return bytesRead;
-}
-
-/** Read only the new bytes from a file starting at byteOffset (capped per poll). */
-async function readTail(
-  path: string,
-  byteOffset: number,
-): Promise<{ text: string; newOffset: number }> {
-  const fh = await fs.promises.open(path, 'r');
-  try {
-    const { size } = await fh.stat();
-    if (size <= byteOffset) return { text: '', newOffset: byteOffset };
-    const toRead = Math.min(size - byteOffset, MAX_READ_PER_POLL);
-    const buf = Buffer.alloc(toRead);
-    const { bytesRead } = await fh.read(buf, 0, toRead, byteOffset);
-    // Avoid splitting multi-byte UTF-8 characters at the read boundary
-    const safeEnd = lastCompleteUtf8(buf, bytesRead);
-    return {
-      text: buf.toString('utf-8', 0, safeEnd),
-      newOffset: byteOffset + safeEnd,
-    };
-  } finally {
-    await fh.close();
-  }
-}
-
-/**
- * Tracks in-flight reads per executionId so concurrent calls can await
- * rather than silently skipping (which would lose tail output on final flush).
- */
-const readingInProgress = new Map<string, Promise<void>>();
-
-async function readIncremental(
-  executionId: string,
-  parentStreamId: StreamTabId,
-  stdoutPath: string,
-  stderrPath: string,
-  runtimeHost: AgentRuntimeHost,
-): Promise<void> {
-  // If another read is in flight, wait for it then read again —
-  // the final flush must not be skipped or it loses tail output.
-  const inflight = readingInProgress.get(executionId);
-  if (inflight) {
-    await inflight;
-  }
-
-  const work = (async () => {
-    try {
-      const prev = outputOffsets.get(executionId) ?? { stdout: 0, stderr: 0 };
-      const [out, err] = await Promise.all([
-        readTail(stdoutPath, prev.stdout).catch(() => ({
-          text: '',
-          newOffset: prev.stdout,
-        })),
-        readTail(stderrPath, prev.stderr).catch(() => ({
-          text: '',
-          newOffset: prev.stderr,
-        })),
-      ]);
-      if (!out.text && !err.text) return;
-
-      outputOffsets.set(executionId, {
-        stdout: out.newOffset,
-        stderr: err.newOffset,
-      });
-
-      runtimeHost.emit('updateProcessOutput', {
-        parentStreamId,
-        executionId,
-        stdout: out.text,
-        stderr: err.text,
-      });
-    } catch {
-      // File may have been deleted between check and read — ignore
-    }
-  })();
-
-  readingInProgress.set(executionId, work);
-  try {
-    await work;
-  } finally {
-    // Only clear if we're still the latest — another call may have replaced us
-    if (readingInProgress.get(executionId) === work) {
-      readingInProgress.delete(executionId);
-    }
-  }
 }
 
 // ============================================================================
