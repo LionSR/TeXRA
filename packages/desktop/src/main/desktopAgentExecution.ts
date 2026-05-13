@@ -10,7 +10,6 @@ import {
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
 import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
-import { emitAcceptedWorkspaceFile } from '@controllers/progressView/workflowFileActionsEvents';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { tryPlatform } from '@platform/platform';
 import type { ValidatedExecutionRequest } from '@agent/core/executionRequests';
@@ -1196,7 +1195,11 @@ export class DesktopProgressBridge {
 
     const editedContent = await readFile(editedLocation.absolutePath, 'utf8');
     await writeFile(targetLocation.absolutePath, editedContent, 'utf8');
-    emitAcceptedWorkspaceFile(targetLocation, this.runtimeHost);
+    if (targetLocation.kind === 'workspace') {
+      this.runtimeHost.emit('workspaceFilesWritten', {
+        absolutePaths: [targetLocation.absolutePath],
+      });
+    }
 
     const operation = isNewFile && !targetExists ? 'created' : 'replaced';
     await this.showInfoMessage(
