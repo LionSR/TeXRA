@@ -50,9 +50,10 @@ function appendSessionLinks(
 function appendContinuationGuidance(
   lines: string[],
   persisted: PersistedExternalInquiryTurn,
+  knownSessionLinks: string[] | undefined,
 ): void {
   const { threadId } = persisted;
-  const hasSessionLinks = (getKnownSessionLinks(persisted)?.length ?? 0) > 0;
+  const hasSessionLinks = (knownSessionLinks?.length ?? 0) > 0;
 
   lines.push(
     '',
@@ -122,8 +123,9 @@ function buildExternalInquiryOutput(
     answer,
   ];
 
-  appendContinuationGuidance(lines, persisted);
-  appendSessionLinks(lines, getKnownSessionLinks(persisted));
+  const knownSessionLinks = getKnownSessionLinks(persisted);
+  appendContinuationGuidance(lines, persisted, knownSessionLinks);
+  appendSessionLinks(lines, knownSessionLinks);
   appendManifestHint(lines, currentManifestPath(persisted));
 
   return lines.join('\n');
@@ -215,8 +217,9 @@ export function buildExternalInquiryResult(params: {
       'Use the executions tool with path=/executions/current/report to inspect it.',
     ];
 
-    appendContinuationGuidance(lines, params.persisted);
-    appendSessionLinks(lines, getKnownSessionLinks(params.persisted));
+    const knownSessionLinks = getKnownSessionLinks(params.persisted);
+    appendContinuationGuidance(lines, params.persisted, knownSessionLinks);
+    appendSessionLinks(lines, knownSessionLinks);
     appendManifestHint(lines, currentManifestPath(params.persisted));
 
     if (preview) {
