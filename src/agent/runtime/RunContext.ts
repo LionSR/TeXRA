@@ -130,12 +130,6 @@ export function withRunContext<T>(
   return runContextScope.run(context, fn);
 }
 
-export function resolveRunRuntimeHost(
-  explicitHost?: AgentRuntimeHost,
-): AgentRuntimeHost {
-  return explicitHost ?? useRunContext().runtimeHost;
-}
-
 /** Return the active run context, or throw if none is installed. */
 export function useRunContext(): RunContext {
   const context = runContextScope.getStore();
