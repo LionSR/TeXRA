@@ -7,10 +7,7 @@ import {
   clearPlanApprovalForStream,
   clearRetryRequest,
 } from '@agent/runtime/runCoordinators';
-import {
-  resolveRunRuntimeHost,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import {
   PersistedFlow,
   flowKey,
@@ -146,8 +143,8 @@ export async function runToolUseFlow<C = unknown>(
   toolRegistry?: IToolRegistry,
   onSetup?: ToolUseFlowSetupCallback,
 ): Promise<RunToolUseFlowResult> {
-  const { logger, streamId, executionId, setting, onInterrupt } = input;
-  const runtimeHost = resolveRunRuntimeHost(input.runtimeHost);
+  const { logger, runtimeHost, streamId, executionId, setting, onInterrupt } =
+    input;
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
   const registry = toolRegistry ?? getDefaultToolRegistry();
   const delegationDepth = input.delegationDepth ?? 0;

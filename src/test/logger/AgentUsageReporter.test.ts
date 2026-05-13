@@ -3,10 +3,7 @@ import { strict as assert } from 'assert';
 
 // Local imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import {
-  runWithAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { ExtendedTokenUsageStats, StorageKey } from '@shared/schemas';
 import { AgentUsageReporter } from '@/logger/AgentUsageReporter';
@@ -212,7 +209,7 @@ describe('AgentUsageReporter', () => {
     });
   });
 
-  it('uses the scoped runtime host when no host is passed', () => {
+  it('uses the runtime host passed by the owner', () => {
     const streamId = 'stream:test';
     const storageKey = 'task-group-scoped' as StorageKey;
     const { events, host } = createUsageHost();
@@ -223,21 +220,20 @@ describe('AgentUsageReporter', () => {
       },
     } as unknown as AgentLogger;
 
-    runWithAgentRuntimeHost(host, () => {
-      const reporter = new AgentUsageReporter(
-        loggerStub,
-        streamId,
-        AgentCategory.Workflow,
-      );
-      reporter.report(
-        {
-          inputTokens: 1,
-          outputTokens: 2,
-          cost: 0.03,
-        },
-        storageKey,
-      );
-    });
+    const reporter = new AgentUsageReporter(
+      loggerStub,
+      streamId,
+      AgentCategory.Workflow,
+      host,
+    );
+    reporter.report(
+      {
+        inputTokens: 1,
+        outputTokens: 2,
+        cost: 0.03,
+      },
+      storageKey,
+    );
 
     assert.deepEqual(events, [
       {
