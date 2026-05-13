@@ -7,10 +7,7 @@
  */
 
 import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
-import {
-  getAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   STREAM_STATUS,
@@ -54,7 +51,7 @@ export interface ExecutionHandle {
   readonly category: 'workflow' | 'toolUse' | 'process';
   readonly agentName: string;
   readonly startedAt: number;
-  readonly runtimeHost?: AgentRuntimeHost;
+  readonly runtimeHost: AgentRuntimeHost;
 
   /** Get current status without probing multiple registries. */
   getStatus(): ExecutionStatusInfo;
@@ -94,7 +91,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
     readonly childStreamId: StreamTabId,
     readonly agentName: string,
     readonly category: 'workflow' | 'toolUse',
-    readonly runtimeHost: AgentRuntimeHost = getAgentRuntimeHost(),
+    readonly runtimeHost: AgentRuntimeHost,
   ) {
     this._parentStreamId = parentStreamId;
   }
@@ -165,7 +162,7 @@ export class ProcessExecutionHandle implements ExecutionHandle {
     readonly parentStreamId: StreamTabId,
     readonly agentName: string,
     private readonly killFn: () => boolean,
-    readonly runtimeHost: AgentRuntimeHost = getAgentRuntimeHost(),
+    readonly runtimeHost: AgentRuntimeHost,
   ) {}
 
   getStatus(): ExecutionStatusInfo {

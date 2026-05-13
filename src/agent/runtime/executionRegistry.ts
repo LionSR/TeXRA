@@ -50,7 +50,7 @@ StreamStatusService.onDidChange(({ streamId }) => {
       handle instanceof AgentExecutionHandle &&
       handle.childStreamId === streamId
     ) {
-      const runtimeHost = runtimeHostFor(handle);
+      const runtimeHost = handle.runtimeHost;
       notifyWaiters(executionId);
       // Re-emit badge update so the parent's background tasks panel
       // reflects the new status (e.g. running → waiting).
@@ -69,7 +69,7 @@ StreamStatusService.onDidChange(({ streamId }) => {
 /** Register an execution handle. */
 export function trackExecution(handle: ExecutionHandle): void {
   registry.set(handle.executionId, handle);
-  const runtimeHost = runtimeHostFor(handle);
+  const runtimeHost = handle.runtimeHost;
 
   // Emit subagent UI update and parent linkage only for actual subagents
   // (where parentStreamId differs from childStreamId)
@@ -95,7 +95,7 @@ export function untrackExecution(executionId: string): void {
   const handle = registry.get(executionId);
   registry.delete(executionId);
   notifyWaiters(executionId);
-  const runtimeHost = runtimeHostFor(handle);
+  const runtimeHost = handle?.runtimeHost ?? getAgentRuntimeHost();
 
   // Emit subagent UI update on removal (only for actual subagents)
   if (
@@ -322,20 +322,16 @@ function emitActiveProcessesUpdate(
 // Internal helpers
 // ============================================================================
 
-function runtimeHostFor(handle: ExecutionHandle | undefined): AgentRuntimeHost {
-  return handle?.runtimeHost ?? getAgentRuntimeHost();
-}
-
 function runtimeHostForParent(parentStreamId: StreamTabId): AgentRuntimeHost {
   for (const handle of registry.values()) {
     if (handle.parentStreamId === parentStreamId) {
-      return runtimeHostFor(handle);
+      return handle.runtimeHost;
     }
     if (
       handle instanceof AgentExecutionHandle &&
       handle.childStreamId === parentStreamId
     ) {
-      return runtimeHostFor(handle);
+      return handle.runtimeHost;
     }
   }
   return getAgentRuntimeHost();
