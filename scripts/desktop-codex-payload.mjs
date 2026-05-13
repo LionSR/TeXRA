@@ -297,20 +297,31 @@ function hasSegmentToken(segment, ...tokens) {
 function archFromPathToken(normalizedPath) {
   const segments = normalizedPath.split('/').reverse();
   for (const segment of segments) {
-    if (hasSegmentToken(segment, 'universal')) return 'universal';
+    if (isUniversalDarwinSegment(segment)) return 'universal';
     if (hasSegmentToken(segment, 'arm64', 'aarch64')) return 'arm64';
     if (hasSegmentToken(segment, 'x64', 'x86_64', 'amd64')) return 'x64';
   }
   return null;
 }
 
+function isUniversalDarwinSegment(segment) {
+  return (
+    (segment === 'universal' || hasSegmentToken(segment, 'mac', 'darwin')) &&
+    hasSegmentToken(segment, 'universal')
+  );
+}
+
 function normalizeArch(arch, normalizedPath, normalizedPlatform) {
+  const pathArch = archFromPathToken(normalizedPath);
+  if (normalizedPlatform === 'darwin' && pathArch === 'universal') {
+    return 'universal';
+  }
+
   const archName = archNameByElectronBuilderArch[arch] ?? arch;
   if (archName === 'universal') return 'universal';
   if (archName === 'arm64') return 'arm64';
   if (archName === 'x64') return 'x64';
 
-  const pathArch = archFromPathToken(normalizedPath);
   if (pathArch != null) return pathArch;
 
   if (
