@@ -4,10 +4,10 @@ import { z } from 'zod';
 
 // Local imports - agent
 import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
-import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse';
+import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { STREAM_STATUS } from '@shared/schemas';
 import { getToolUsePersistenceEnabled } from '@utils/config';
@@ -41,7 +41,7 @@ async function resumeFromSnapshot(
   }
 
   ToolUseFollowUpQueue.acquire(streamId);
-  const runtimeHost = getAgentRuntimeHost();
+  const runtimeHost = extensionAgentRuntimeHost;
   StreamStatusService.set(streamId, STREAM_STATUS.RESUMING, {
     runtimeHost,
   });
