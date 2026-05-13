@@ -15,7 +15,7 @@ asar: true
 asarUnpack:
   - '**/node_modules/@openai/codex-*/**'
 npmRebuild: false
-afterPack: ../../scripts/prune-desktop-codex-payload.mjs
+afterPack: ./scripts/prune-desktop-codex-payload.mjs
 directories:
   output: dist-packaged
   buildResources: build
