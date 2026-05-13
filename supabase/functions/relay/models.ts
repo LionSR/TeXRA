@@ -9,6 +9,9 @@
  */
 
 import { MODEL_CONFIGS, type ModelConfig } from 'npm:llm-zoo@^1.6.1';
+import { FREE_TIER, MAX_TIER, ULTRA_TIER } from './tierConstants.ts';
+
+export { FREE_TIER, MAX_TIER, ULTRA_TIER };
 
 // =============================================================================
 // Types
@@ -129,11 +132,6 @@ export const TIER_SPENDING_LIMITS: TierSpendingLimits = {
 // =============================================================================
 // Tier Constants
 // =============================================================================
-
-/** Tier value constants - exported for use in relay index.ts */
-export const ULTRA_TIER = 'Ultra';
-export const MAX_TIER = 'Max';
-export const FREE_TIER = 'free';
 
 /**
  * Get the monthly spending limit for a tier.
