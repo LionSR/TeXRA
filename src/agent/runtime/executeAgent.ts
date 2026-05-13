@@ -465,9 +465,8 @@ export async function executeMergeAgent(
   model: string,
   inputFile: string,
   editedFile: string,
-  runtimeHost?: AgentRuntimeHost,
+  runtimeHost: AgentRuntimeHost,
 ): Promise<void> {
-  const host = runtimeHost ?? getAgentRuntimeHost();
   const configPayload: AgentConfigPayload = {
     agent: 'merge',
     model,
@@ -476,7 +475,7 @@ export async function executeMergeAgent(
   };
   const ctx = await buildAgentLaunchContext({
     configPayload,
-    runtimeHost: host,
+    runtimeHost,
     taskType: 'Merge task',
   });
   const { streamId, executionId } = ctx;
@@ -523,14 +522,13 @@ export async function executeMergeAgent(
 
 export async function resumeToolUseFromSnapshot(
   snapshot: ToolUseSessionSnapshot,
+  runtimeHost: AgentRuntimeHost,
   setupSession?: (session: IToolUseSession) => void,
-  runtimeHost?: AgentRuntimeHost,
 ): Promise<void> {
-  const host = runtimeHost ?? getAgentRuntimeHost();
   const ctx = await buildAgentLaunchContext({
     configPayload: snapshot.agentConfig,
     executionId: snapshot.executionId,
-    runtimeHost: host,
+    runtimeHost,
     streamTabIdOverride: snapshot.streamId,
     // resumeCommand surfaces its own warning toast on failure; skip the
     // bus-level error to avoid double-notifying.
