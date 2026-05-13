@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { executeMergeAgent } from '@agent/runtime/executeAgent';
 import { getHelperModelName } from '@agent/runtime/helperModel';
+import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 
 const CHANNEL = 'MergeCommands';
@@ -34,5 +35,6 @@ async function handleMerge(
     model ?? getHelperModelName(),
     baseFile ?? inputFile,
     editedFile,
+    extensionAgentRuntimeHost,
   );
 }
