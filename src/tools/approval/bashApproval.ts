@@ -1,13 +1,10 @@
 import { z } from 'zod';
 
-import {
-  getAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { getConfig } from '@agent/core/config';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
-import type { ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@tools/result';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import { createStreamApprovalController } from './streamApprovalQueue';
@@ -45,13 +42,19 @@ export async function requestBashApproval(
 
   const context = getCurrentToolRunContext();
   const streamId = request.streamId ?? context?.streamId;
-  const runtimeHost = context?.runtimeHost ?? getAgentRuntimeHost();
 
   if (
     !approvalsEnabled ||
     (streamId && isApprovalBypassedForStream(streamId))
   ) {
     return { accepted: true };
+  }
+
+  const runtimeHost = context?.runtimeHost;
+  if (!runtimeHost) {
+    throw new ToolError(
+      'Bash approval requires a tool runtime host when approvals are enabled.',
+    );
   }
 
   return bashApprovalController.enqueue(() =>
@@ -61,8 +64,8 @@ export async function requestBashApproval(
 
 async function showApprovalPrompt(
   request: BashApprovalRequest,
-  streamId?: StreamTabId,
-  runtimeHost: AgentRuntimeHost = getAgentRuntimeHost(),
+  streamId: StreamTabId | undefined,
+  runtimeHost: AgentRuntimeHost,
 ): Promise<BashApprovalResult> {
   if (streamId && isApprovalBypassedForStream(streamId)) {
     return { accepted: true };
