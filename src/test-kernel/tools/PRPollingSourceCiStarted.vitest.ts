@@ -48,6 +48,7 @@ interface CiStartedSource {
 
 const SHA = 'abcdef1234567890';
 const OLD_SHA = '1234567890abcdef';
+let emitCiStartedEvents = false;
 
 function createState(
   events: string[],
@@ -123,12 +124,22 @@ function checkRunsResponse(runs: GhCheckRun[]): {
   };
 }
 
-async function createHarness(): Promise<{
+async function createHarness(
+  options: {
+    emitCiStartedEvents?: boolean;
+  } = {},
+): Promise<{
   ghGet: Mock;
   source: CiStartedSource;
 }> {
   vi.resetModules();
+  emitCiStartedEvents = options.emitCiStartedEvents ?? false;
   const ghGet = vi.fn();
+  vi.doMock('@utils/config', () => ({
+    getConfig: vi.fn((_key: string, defaultValue: unknown) =>
+      emitCiStartedEvents ? true : defaultValue,
+    ),
+  }));
   vi.doMock('@tools/github/githubClient', () => {
     class GitHubAuthError extends Error {}
     class GitHubRateLimitError extends Error {
@@ -174,10 +185,25 @@ function queuePollResponses(
 describe('PRPollingSource CI-started events', () => {
   afterEach(() => {
     vi.doUnmock('@tools/github/githubClient');
+    vi.doUnmock('@utils/config');
+    emitCiStartedEvents = false;
     vi.resetModules();
   });
 
-  it('seeds existing check runs without replaying a CI-started event', async () => {
+  it('keeps CI-started events disabled by default while recording observed runs', async () => {
+    const { ghGet, source } = await createHarness();
+    const events: string[] = [];
+    const state = createState(events, { ciStartedSha: undefined });
+
+    queuePollResponses(ghGet, SHA, [checkRun(1, 'lint')]);
+
+    await source.pollOne('owner/repo/pulls/7', state);
+
+    expect(events).toEqual([]);
+    expect(state.ciStartedSha).toBe(SHA);
+  });
+
+  it('seeds existing check runs while disabled without emitting', async () => {
     const { ghGet, source } = await createHarness();
     const events: string[] = [];
     const state = createState(events, {
@@ -195,8 +221,30 @@ describe('PRPollingSource CI-started events', () => {
     expect(state.ciStartedSha).toBe(SHA);
   });
 
+  it('seeds existing check runs without replaying a CI-started event when enabled', async () => {
+    const { ghGet, source } = await createHarness({
+      emitCiStartedEvents: true,
+    });
+    const events: string[] = [];
+    const state = createState(events, {
+      initialized: false,
+      headSha: undefined,
+      state: undefined,
+      ciStartedSha: undefined,
+    });
+
+    queuePollResponses(ghGet, SHA, [checkRun(1, 'lint')]);
+
+    await source.pollOne('owner/repo/pulls/7', state);
+
+    expect(events).toEqual([]);
+    expect(state.ciStartedSha).toBe(SHA);
+  });
+
   it('emits a CI-started event once when check runs first appear', async () => {
-    const { ghGet, source } = await createHarness();
+    const { ghGet, source } = await createHarness({
+      emitCiStartedEvents: true,
+    });
     const events: string[] = [];
     const state = createState(events, { ciStartedSha: undefined });
 
@@ -218,7 +266,9 @@ describe('PRPollingSource CI-started events', () => {
   });
 
   it('resets CI-started state on a new head SHA', async () => {
-    const { ghGet, source } = await createHarness();
+    const { ghGet, source } = await createHarness({
+      emitCiStartedEvents: true,
+    });
     const events: string[] = [];
     const state = createState(events, {
       headSha: OLD_SHA,
