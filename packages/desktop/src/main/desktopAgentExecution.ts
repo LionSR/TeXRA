@@ -1177,11 +1177,10 @@ export class DesktopProgressBridge {
     );
     const targetExists =
       isNewFile && (await fileExists(targetLocation.absolutePath));
-    const action = targetExists
-      ? 'overwrite existing'
-      : isNewFile
-        ? 'create'
-        : 'overwrite';
+    let action: string;
+    if (targetExists) action = 'overwrite existing';
+    else if (isNewFile) action = 'create';
+    else action = 'overwrite';
     const extensionNote = isNewFile
       ? `Extensions differ (${path.extname(baseFile).toLowerCase()} vs ${path.extname(editedFile).toLowerCase()}). `
       : '';
