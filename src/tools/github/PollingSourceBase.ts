@@ -62,6 +62,12 @@ export abstract class PollingSourceBase<
   /** Subclass: poll the endpoints for one subscription and emit any new events. */
   protected abstract pollOne(key: K, state: S): Promise<void>;
 
+  /** Optional subclass hook that runs after all subscription polls settle. */
+  protected async afterTick(
+    _entries: ReadonlyArray<readonly [K, S]>,
+    _now: number,
+  ): Promise<void> {}
+
   /** Subclass: format a halted-subscription error event for the listener. */
   protected abstract formatErrorEvent(key: K, state: S, detail: string): string;
 
@@ -185,13 +191,18 @@ export abstract class PollingSourceBase<
           }
         }),
       );
+      try {
+        await this.afterTick(entries, now);
+      } catch (err) {
+        this.logger.warn(`Post-poll hook failed: ${String(err)}`);
+      }
       if (this.subscriptions.size === 0) this.stopTimer();
     } finally {
       this.tickInFlight = false;
     }
   }
 
-  private handleFailure(key: K, state: S, err: unknown): void {
+  protected handleFailure(key: K, state: S, err: unknown): void {
     const now = Date.now();
     if (err instanceof GitHubAuthError) {
       this.logger.warn(
