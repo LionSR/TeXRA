@@ -1,8 +1,5 @@
-import {
-  getAgentRuntimeHost,
-  getDefaultAgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
-import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 export type GitHubSubscriptionChangedEvent =
   | 'prSubscriptionsChanged'
@@ -15,10 +12,5 @@ export type GitHubSubscriptionChangedEvent =
 export function emitGitHubSubscriptionChanged<
   K extends GitHubSubscriptionChangedEvent,
 >(event: K, payload: ProgressEventPayloads[K]): void {
-  bus.emit(event, payload);
-
-  const runtimeHost = getAgentRuntimeHost();
-  if (runtimeHost !== getDefaultAgentRuntimeHost()) {
-    runtimeHost.emit(event, payload);
-  }
+  getAgentRuntimeHost().emit(event, payload);
 }
