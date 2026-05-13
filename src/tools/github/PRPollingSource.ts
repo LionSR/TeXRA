@@ -18,6 +18,7 @@ import {
   formatCheckFailureSummary,
   formatCIComplete,
   formatCIPassed,
+  formatCIStarted,
   formatIssueComment,
   formatMergeConflictDetected,
   formatMergeConflictResolved,
@@ -67,6 +68,7 @@ function createInitialState(pr: PRKey): SubscriptionState {
     lastFailedCheckKeys: new Set(),
     lastAnnotationKeys: new Set(),
     pendingAnnotationRuns: [],
+    ciStartedSha: undefined,
     ciCompleteSha: undefined,
     ciPassedSha: undefined,
     headSha: undefined,
@@ -186,6 +188,8 @@ interface SubscriptionState extends BasePollSubscriptionState {
    * isn't stranded once the check-runs cache stabilizes.
    */
   pendingAnnotationRuns: GhCheckRun[];
+  /** Head SHA for which the one-shot "CI triggered" event has been emitted. */
+  ciStartedSha: string | undefined;
   /** Head SHA for which the one-shot "CI complete" event has been emitted. */
   ciCompleteSha: string | undefined;
   /** Head SHA for which the one-shot "CI passed" event has been emitted. */
@@ -303,12 +307,13 @@ export class PRPollingSource extends PollingSourceBase<
       state.state = newState;
       state.merged = newMerged;
       // New push invalidates prior CI terminal state — the next completion
-      // on the new SHA should re-emit both terminal events. Also drop the
+      // on the new SHA should re-emit CI progress events. Also drop the
       // per-page check-runs cache: it's keyed only by page number, and the
       // ETags from the previous SHA can never match the new SHA's responses.
       // Letting it linger would cost one wasted If-None-Match per page on
       // the first post-push tick before the cache naturally refreshes.
       if (state.headSha !== newHead) {
+        state.ciStartedSha = undefined;
         state.ciCompleteSha = undefined;
         state.ciPassedSha = undefined;
         state.checkRunsCache = undefined;
@@ -442,6 +447,9 @@ export class PRPollingSource extends PollingSourceBase<
             state.lastAnnotationKeys.add(this.checkKey(r));
           }
         }
+        if (state.headSha && runs.length > 0) {
+          state.ciStartedSha = state.headSha;
+        }
         // Seed so pre-existing terminal CI doesn't fire on the next tick —
         // we only surface transitions that happen after subscribe. Gate on
         // runs.length > 0: an empty array is ambiguous (no CI configured vs.
@@ -525,6 +533,22 @@ export class PRPollingSource extends PollingSourceBase<
       // ETag/page caching is owned by `fetchAllCheckRuns` via
       // `state.checkRunsCache`; nothing to record on `state.etags` here.
       const runs = checksRes.data.check_runs;
+
+      const headSha = state.headSha;
+      if (headSha && runs.length > 0 && state.ciStartedSha !== headSha) {
+        state.ciStartedSha = headSha;
+        this.emit(
+          state,
+          formatCIStarted(
+            state.slug,
+            pr.pullNumber,
+            headSha,
+            runs,
+            checksRes.data.total_count,
+          ),
+        );
+      }
+
       const newFailures: GhCheckRun[] = [];
       const currentFailureKeys = new Set<string>();
       for (const r of runs) {
