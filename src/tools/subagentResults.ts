@@ -19,8 +19,7 @@ import type {
   TodoItem,
   Plan,
 } from '@shared/schemas';
-import { TODO_STATUS } from '@shared/schemas/todo';
-import { countByStatus } from '@shared/schemas/todoDisplay';
+import { countByStatus, STATUS_DISPLAY } from '@shared/schemas/todoDisplay';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { formatDuration } from '@utils/core';
 import type { DiffFileInfo } from './subagentDiffs';
@@ -201,13 +200,9 @@ export function formatSubagentProgress(
   switch (update.kind) {
     case 'todos': {
       const { completed, inProgress, pending } = countByStatus(update.todos);
-      const TODO_PROGRESS_ICON: Record<string, string> = {
-        [TODO_STATUS.COMPLETED]: '[x]',
-        [TODO_STATUS.IN_PROGRESS]: '[>]',
-      };
       const items = update.todos
         .map((t) => {
-          const icon = TODO_PROGRESS_ICON[t.status ?? ''] ?? '[ ]';
+          const icon = STATUS_DISPLAY[t.status].icon;
           return `  ${icon} ${escapeText(t.content)}`;
         })
         .join('\n');
