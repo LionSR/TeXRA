@@ -675,22 +675,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.closeWebSocket();
   }
 
-  /** Close a WebSocket and swallow any close-time error. The SDK throws if the
-   *  socket is already closed or in an unexpected state; in cleanup paths we
-   *  never want that to mask the original failure or block teardown. */
-  private static safeCloseWs(ws: ResponsesWS): void {
-    try {
-      ws.close();
-    } catch {
-      // Ignore close errors
-    }
-  }
-
   /** Close the WebSocket connection and clean up resources. */
   private closeWebSocket(): void {
     this.stopWsKeepalive();
-    if (this.wsConnection) {
-      ModelHandlerOpenAIResponse.safeCloseWs(this.wsConnection);
+    const wsConnection = this.wsConnection;
+    if (wsConnection) {
+      try {
+        wsConnection.close();
+      } catch {
+        // Cleanup must not mask the original failure path.
+      }
       this.wsConnection = null;
       this.wsConnectionCreatedAt = 0;
       this.logger.debug('WebSocket connection closed');
