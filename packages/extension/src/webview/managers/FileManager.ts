@@ -272,7 +272,7 @@ export class FileManager extends BaseWebviewManager {
       mediaFiles,
     });
 
-    await this.updateBaseFileSelect();
+    this.postBaseFileSelect(inputFiles);
     this.postGettingStartedBanner(inputFiles.length === 0);
   }
 
@@ -483,8 +483,7 @@ export class FileManager extends BaseWebviewManager {
     });
   }
 
-  private async updateBaseFileSelect(): Promise<void> {
-    const baseFiles = await getFileLister().list('input');
+  private postBaseFileSelect(baseFiles: string[]): void {
     this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
       files: baseFiles,
