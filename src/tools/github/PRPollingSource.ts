@@ -96,12 +96,56 @@ const MAX_CHECK_RUNS_PAGES = 50;
 // Matches the formatter's per-run display cap so we don't pay for annotations
 // we'd only truncate; remaining count is sourced from `annotations_count`.
 const ANNOTATIONS_PAGE_SIZE = 20;
-// Bound the per-tick fan-out across runs (e.g. a matrix build lighting up a
-// fleet of checks). Excess candidates land in `pendingAnnotationRuns` and are
-// drained on subsequent ticks (including 304 ticks where check-runs haven't
-// changed). The cap is per-PR; the PollingSourceBase rate-limit handler is
-// the process-wide safety net via GitHubRateLimitError + skipPollUntilMs.
-const MAX_ANNOTATION_FETCHES_PER_TICK = 3;
+// Bound the per-subscription fan-out across runs (e.g. a matrix build
+// lighting up a fleet of checks). Excess candidates stay in
+// `pendingAnnotationRuns` and are drained on subsequent ticks.
+const MAX_ANNOTATION_FETCHES_PER_SUBSCRIPTION_TICK = 3;
+// Bound annotation endpoint traffic across all PR subscriptions in this
+// process. This 30s budget window permits at most 1,800 annotation requests
+// per hour, leaving room for the rest of the PR polling endpoints under
+// GitHub's primary 5,000/hour limit. Keep it independent of the poll interval
+// so tuning PR_POLL_INTERVAL_MS does not silently raise the hourly ceiling.
+const MAX_PROCESS_ANNOTATION_FETCHES_PER_WINDOW = 15;
+const ANNOTATION_FETCH_BUDGET_WINDOW_MS = 30_000;
+
+class AnnotationFetchBudget {
+  private windowStartMs: number;
+  private remainingFetches: number;
+
+  constructor(
+    private readonly maxFetchesPerWindow: number,
+    private readonly windowMs: number,
+  ) {
+    this.windowStartMs = Date.now();
+    this.remainingFetches = maxFetchesPerWindow;
+  }
+
+  tryClaim(nowMs = Date.now()): boolean {
+    if (nowMs - this.windowStartMs >= this.windowMs) {
+      this.windowStartMs = nowMs;
+      this.remainingFetches = this.maxFetchesPerWindow;
+    }
+    if (this.remainingFetches <= 0) return false;
+    this.remainingFetches -= 1;
+    return true;
+  }
+
+  resetForTests(
+    remainingFetches = this.maxFetchesPerWindow,
+    nowMs = Date.now(),
+  ): void {
+    this.windowStartMs = nowMs;
+    this.remainingFetches = Math.max(
+      0,
+      Math.min(this.maxFetchesPerWindow, remainingFetches),
+    );
+  }
+}
+
+const annotationFetchBudget = new AnnotationFetchBudget(
+  MAX_PROCESS_ANNOTATION_FETCHES_PER_WINDOW,
+  ANNOTATION_FETCH_BUDGET_WINDOW_MS,
+);
 
 export interface PRKey {
   owner: string;
@@ -138,8 +182,8 @@ interface SubscriptionState extends BasePollSubscriptionState {
   /**
    * Annotated runs awaiting an annotations-endpoint fetch. Populated by the
    * 200 branch (newly-seen keys), drained on every tick (200 OR 304) so a
-   * burst that overflows `MAX_ANNOTATION_FETCHES_PER_TICK` isn't stranded
-   * once the check-runs cache stabilizes.
+   * burst that overflows the per-subscription or process-wide fetch budget
+   * isn't stranded once the check-runs cache stabilizes.
    */
   pendingAnnotationRuns: GhCheckRun[];
   /** Head SHA for which the one-shot "CI complete" event has been emitted. */
@@ -185,6 +229,8 @@ export class PRPollingSource extends PollingSourceBase<
   string,
   SubscriptionState
 > {
+  private nextAnnotationDrainKey: string | undefined;
+
   constructor() {
     super({
       name: 'PRPollingSource',
@@ -194,6 +240,14 @@ export class PRPollingSource extends PollingSourceBase<
       backoffMaxMs: 3_600_000,
       maxFailureDurationMs: 24 * 3_600_000,
     });
+  }
+
+  /** Reset the process-wide annotation budget between unit tests. */
+  static resetAnnotationFetchBudgetForTests(
+    remainingFetches?: number,
+    nowMs?: number,
+  ): void {
+    annotationFetchBudget.resetForTests(remainingFetches, nowMs);
   }
 
   subscribe(pr: PRKey, onEvent: (text: string) => void): Disposable {
@@ -211,6 +265,13 @@ export class PRPollingSource extends PollingSourceBase<
     detail: string,
   ): string {
     return formatSubscriptionError(state.slug, state.pr.pullNumber, detail);
+  }
+
+  protected override async afterTick(
+    entries: ReadonlyArray<readonly [string, SubscriptionState]>,
+    now: number,
+  ): Promise<void> {
+    await this.drainAnnotationQueues(entries, now);
   }
 
   protected async pollOne(
@@ -532,11 +593,6 @@ export class PRPollingSource extends PollingSourceBase<
       this.enqueueAnnotationCandidates(state, runs);
     }
 
-    // Always drain pending annotation fetches, even on a 304 check-runs tick.
-    // The 200 branch enqueues; this is what unblocks the queue when the
-    // check-runs response stops changing but candidates remain unfetched.
-    await this.drainAnnotationQueue(state);
-
     // Commit the deferred check-runs cache only after successfully consuming
     // the response (including the diff branch above). See `fetchAllCheckRuns`
     // for why we defer: this prevents a sibling rejection in the `Promise.all`
@@ -850,96 +906,137 @@ export class PRPollingSource extends PollingSourceBase<
     state.lastAnnotationKeys = currentKeys;
   }
 
+  private async drainAnnotationQueues(
+    entries: ReadonlyArray<readonly [string, SubscriptionState]>,
+    now = Date.now(),
+  ): Promise<void> {
+    const pendingEntries = this.orderAnnotationDrainEntries(entries, now);
+    if (pendingEntries.length === 0) return;
+
+    const claimsByKey = new Map<string, number>();
+    let madeProgress = true;
+    while (madeProgress) {
+      madeProgress = false;
+      for (let i = 0; i < pendingEntries.length; i += 1) {
+        const [key, state] = pendingEntries[i];
+        if (!this.has(key)) continue;
+        if (state.pendingAnnotationRuns.length === 0) continue;
+        const claims = claimsByKey.get(key) ?? 0;
+        if (claims >= MAX_ANNOTATION_FETCHES_PER_SUBSCRIPTION_TICK) continue;
+        if (!annotationFetchBudget.tryClaim(now)) {
+          this.nextAnnotationDrainKey = key;
+          return;
+        }
+        try {
+          await this.drainNextAnnotationRun(state);
+        } catch (err) {
+          this.handleFailure(key, state, err);
+          if (err instanceof GitHubRateLimitError) {
+            this.nextAnnotationDrainKey = key;
+            return;
+          }
+        }
+        claimsByKey.set(key, claims + 1);
+        madeProgress = true;
+      }
+    }
+    this.advanceAnnotationDrainStart(pendingEntries);
+  }
+
+  private orderAnnotationDrainEntries(
+    entries: ReadonlyArray<readonly [string, SubscriptionState]>,
+    now: number,
+  ): Array<readonly [string, SubscriptionState]> {
+    const pendingEntries = entries.filter(
+      ([key, state]) =>
+        this.has(key) &&
+        state.skipPollUntilMs <= now &&
+        state.pendingAnnotationRuns.length > 0,
+    );
+    if (pendingEntries.length === 0) return [];
+    const startIndex = this.nextAnnotationDrainKey
+      ? pendingEntries.findIndex(([key]) => key === this.nextAnnotationDrainKey)
+      : -1;
+    if (startIndex <= 0) return pendingEntries;
+    return [
+      ...pendingEntries.slice(startIndex),
+      ...pendingEntries.slice(0, startIndex),
+    ];
+  }
+
+  private advanceAnnotationDrainStart(
+    entries: ReadonlyArray<readonly [string, SubscriptionState]>,
+  ): void {
+    if (entries.length === 0) {
+      this.nextAnnotationDrainKey = undefined;
+      return;
+    }
+    this.nextAnnotationDrainKey = entries[1]?.[0] ?? entries[0][0];
+  }
+
   /**
-   * Drain up to `MAX_ANNOTATION_FETCHES_PER_TICK` queued runs by hitting the
-   * annotations endpoint. Errors are isolated per-fetch — annotations are
-   * best-effort, so a single bad check (e.g. 404 on a deleted run, or a
-   * permission-scoped token) must not propagate to `handleFailure` and
-   * detach the whole PR subscription.
+   * Drain one queued run by hitting the annotations endpoint. Errors are
+   * isolated per-fetch: annotations are best-effort, so a single bad check
+   * must not detach the whole PR subscription.
    *
    * - Success: emit, remove from queue.
    * - `GitHubPermanentError` (404/410/422): log + drop. Retrying won't help.
    * - `GitHubAuthError` (401/403): log + drop. Almost always a permission-
-   *   scoped token (the main poll's other ghGet calls succeeded, else we
-   *   wouldn't be here). If the token is genuinely bad, the main poll path
-   *   will detach the subscription via its own ghGet failure.
-   * - `GitHubRateLimitError`: propagate to `PollingSourceBase` so the same
-   *   subscription-level rate-limit backoff governs every GitHub endpoint.
-   * - Anything else (network, timeout): rotate to the BACK of the queue.
-   *   Without rotation, a persistently-failing head entry would starve every
-   *   other queued run forever.
+   *   scoped token; the main poll path handles genuinely bad tokens.
+   * - `GitHubRateLimitError`: propagate so the subscription-level backoff
+   *   governs every GitHub endpoint.
+   * - Anything else (network, timeout): rotate to the back of the queue.
    */
-  private async drainAnnotationQueue(state: SubscriptionState): Promise<void> {
-    if (state.pendingAnnotationRuns.length === 0) return;
-    const candidates = state.pendingAnnotationRuns.slice(
-      0,
-      MAX_ANNOTATION_FETCHES_PER_TICK,
-    );
+  private async drainNextAnnotationRun(
+    state: SubscriptionState,
+  ): Promise<void> {
+    const run = state.pendingAnnotationRuns[0];
+    if (!run) return;
     const { pr } = state;
-    const settled = await Promise.allSettled(
-      candidates.map((run) => this.fetchAnnotations(pr.owner, pr.repo, run.id)),
-    );
-
-    // Dedupe by `id` here: enqueue enforces at most one queue entry per
-    // check id (replacing on rerun), so id is sufficient to identify the
-    // entry to drop or rotate. A rerun arriving DURING this drain wouldn't
-    // observe the queue mid-mutation (ticks don't overlap, see
-    // PollingSourceBase.tickInFlight).
-    const dropIds = new Set<number>();
-    const rotateIds = new Set<number>();
-    const rateLimit = settled.find(
-      (result): result is PromiseRejectedResult =>
-        result.status === 'rejected' &&
-        result.reason instanceof GitHubRateLimitError,
-    );
-    if (rateLimit) throw rateLimit.reason;
-
-    for (let i = 0; i < settled.length; i += 1) {
-      const run = candidates[i];
-      const result = settled[i];
-      if (result.status === 'fulfilled') {
-        dropIds.add(run.id);
-        if (result.value.length > 0) {
-          this.emit(
-            state,
-            formatCheckAnnotations(
-              state.slug,
-              pr.pullNumber,
-              run,
-              result.value,
-            ),
-          );
-        }
-        continue;
+    try {
+      const annotations = await this.fetchAnnotations(
+        pr.owner,
+        pr.repo,
+        run.id,
+      );
+      this.removePendingAnnotationRun(state, run.id);
+      if (annotations.length > 0) {
+        this.emit(
+          state,
+          formatCheckAnnotations(state.slug, pr.pullNumber, run, annotations),
+        );
       }
-      const err = result.reason;
+    } catch (err) {
+      if (err instanceof GitHubRateLimitError) throw err;
       if (err instanceof GitHubPermanentError) {
         this.logger.warn(
           `Annotations for check ${run.id} unavailable (HTTP ${err.status}); dropping.`,
         );
-        dropIds.add(run.id);
-        continue;
+        this.removePendingAnnotationRun(state, run.id);
+        return;
       }
       if (err instanceof GitHubAuthError) {
         this.logger.warn(
           `Annotations for check ${run.id} forbidden (${err.message}); dropping.`,
         );
-        dropIds.add(run.id);
-        continue;
+        this.removePendingAnnotationRun(state, run.id);
+        return;
       }
-      rotateIds.add(run.id);
+      this.removePendingAnnotationRun(state, run.id);
+      state.pendingAnnotationRuns.push(run);
       this.logger.warn(
         `Annotation fetch for check ${run.id} failed; rotating to back of queue: ${String(err)}`,
       );
     }
+  }
 
-    const rotated = state.pendingAnnotationRuns.filter((p) =>
-      rotateIds.has(p.id),
-    );
+  private removePendingAnnotationRun(
+    state: SubscriptionState,
+    runId: number,
+  ): void {
     state.pendingAnnotationRuns = state.pendingAnnotationRuns.filter(
-      (p) => !dropIds.has(p.id) && !rotateIds.has(p.id),
+      (p) => p.id !== runId,
     );
-    state.pendingAnnotationRuns.push(...rotated);
   }
 
   private async fetchAnnotations(
