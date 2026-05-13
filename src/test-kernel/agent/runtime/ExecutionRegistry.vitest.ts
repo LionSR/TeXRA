@@ -8,6 +8,7 @@ import {
 } from '@agent/runtime/AgentRuntimeHost';
 import {
   AgentExecutionHandle,
+  detachActiveChildren,
   trackExecution,
   untrackExecution,
 } from '@agent/runtime/executionRegistry';
@@ -54,6 +55,45 @@ describe('executionRegistry', () => {
           },
         ],
       });
+      expect(explicit.events[2].payload).toEqual({
+        parentStreamId,
+        children: [],
+      });
+      expect(fallback.events).toEqual([]);
+    } finally {
+      untrackExecution(executionId);
+      setDefaultAgentRuntimeHost(previousDefault);
+    }
+  });
+
+  it('publishes detach updates through the caller runtime host', () => {
+    const previousDefault = getDefaultAgentRuntimeHost();
+    const explicit = createRecordingHost();
+    const fallback = createRecordingHost();
+    const executionId = 'exec-detach-runtime-host-test';
+    const parentStreamId = 'parent-detach-runtime-host-test' as StreamTabId;
+    const childStreamId = 'child-detach-runtime-host-test' as StreamTabId;
+
+    try {
+      setDefaultAgentRuntimeHost(fallback.host);
+
+      const handle = new AgentExecutionHandle(
+        executionId,
+        parentStreamId,
+        childStreamId,
+        'test-subagent',
+        'toolUse',
+        explicit.host,
+      );
+
+      trackExecution(handle);
+      detachActiveChildren(parentStreamId, explicit.host);
+
+      expect(explicit.events.map((entry) => entry.event)).toEqual([
+        'updateActiveSubagents',
+        'setParentStream',
+        'updateActiveSubagents',
+      ]);
       expect(explicit.events[2].payload).toEqual({
         parentStreamId,
         children: [],

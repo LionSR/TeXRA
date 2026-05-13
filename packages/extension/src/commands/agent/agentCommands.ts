@@ -20,7 +20,7 @@ export function stopAgent(streamId: StreamTabId): void {
   if (
     workspaceSM.get<boolean>(WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP, false)
   ) {
-    detachActiveChildren(streamId);
+    detachActiveChildren(streamId, extensionAgentRuntimeHost);
   } else {
     interruptActiveChildren(streamId);
   }
