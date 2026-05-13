@@ -104,24 +104,6 @@
     "webpack-cli": "^7.0.2",
     "zod-v3-to-v4": "^1.21.1"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron"
-    ],
-    "supportedArchitectures": {
-      "os": [
-        "current"
-      ],
-      "cpu": [
-        "current",
-        "x64",
-        "arm64"
-      ],
-      "libc": [
-        "current"
-      ]
-    }
-  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.2",
     "@awesome.me/webawesome": "^3.6.0",

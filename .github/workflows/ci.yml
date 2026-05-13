@@ -184,7 +184,20 @@ jobs:
         run: node scripts/verify-desktop-signing-env.mjs mac
 
       - name: Package macOS desktop installers
-        run: pnpm --filter @texra/desktop exec electron-builder --config ${{ steps.desktop-signing.outputs.electron_builder_config }} --publish never
+        run: |
+          if [ '${{ steps.desktop-signing.outputs.signed }}' != 'true' ]; then
+            unset CSC_LINK
+            unset CSC_KEY_PASSWORD
+            unset APPLE_API_KEY
+            unset APPLE_API_KEY_ID
+            unset APPLE_API_ISSUER
+            unset APPLE_ID
+            unset APPLE_APP_SPECIFIC_PASSWORD
+            unset APPLE_TEAM_ID
+            unset APPLE_KEYCHAIN
+            unset APPLE_KEYCHAIN_PROFILE
+          fi
+          pnpm --filter @texra/desktop exec electron-builder --config ${{ steps.desktop-signing.outputs.electron_builder_config }} --publish never
 
       - name: Check macOS packaged desktop app contents
         run: pnpm run check:desktop-package
