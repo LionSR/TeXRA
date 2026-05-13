@@ -14,6 +14,8 @@
  * file only owns the per-issue endpoint set and the dedup state.
  */
 
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+
 import { shouldDropBotEvent } from './botFilter';
 import {
   formatIssueClosed,
@@ -27,7 +29,7 @@ import {
   PollingSourceBase,
   type BasePollSubscriptionState,
 } from './PollingSourceBase';
-import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
+import { emitGitHubSubscriptionChangedToHosts } from './subscriptionEventEmitter';
 import type { GhIssue, GhIssueComment } from './prTypes';
 
 import type { Disposable } from '@platform/interfaces/disposable';
@@ -60,6 +62,7 @@ function createInitialState(issue: IssueKey): SubscriptionState {
     issue,
     slug: `${issue.owner}/${issue.repo}`,
     listeners: new Set(),
+    runtimeHostByListener: new Map(),
     initialized: false,
     state: undefined,
     seenCommentIds: new Set(),
@@ -92,13 +95,29 @@ export class IssuePollingSource extends PollingSourceBase<
     });
   }
 
-  subscribe(issue: IssueKey, onEvent: (text: string) => void): Disposable {
+  subscribe(
+    issue: IssueKey,
+    onEvent: (text: string) => void,
+    runtimeHost: AgentRuntimeHost,
+  ): Disposable {
     const key = issueKeyToString(issue);
-    return this.register(key, () => createInitialState(issue), onEvent);
+    return this.register(
+      key,
+      () => createInitialState(issue),
+      onEvent,
+      runtimeHost,
+    );
   }
 
-  protected emitKeysChangedEvent(keys: readonly string[]): void {
-    emitGitHubSubscriptionChanged('issueSubscriptionsChanged', { keys });
+  protected emitKeysChangedEvent(
+    keys: readonly string[],
+    runtimeHosts: readonly AgentRuntimeHost[],
+  ): void {
+    emitGitHubSubscriptionChangedToHosts(
+      runtimeHosts,
+      'issueSubscriptionsChanged',
+      { keys },
+    );
   }
 
   protected formatErrorEvent(

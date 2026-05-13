@@ -11,7 +11,8 @@
  * 24 h detach gate) lives here once.
  */
 
-import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 
 import {
@@ -24,6 +25,7 @@ import type { Disposable } from '@platform/interfaces/disposable';
 
 export interface BasePollSubscriptionState {
   listeners: Set<(text: string) => void>;
+  runtimeHostByListener: Map<(text: string) => void, AgentRuntimeHost>;
   /** Most recent successful poll. The 24 h detach gate compares against this. */
   lastSuccessAt: number;
   consecutiveFailures: number;
@@ -75,7 +77,10 @@ export abstract class PollingSourceBase<
   protected abstract formatErrorEvent(key: K, state: S, detail: string): string;
 
   /** Subclass: publish the externally visible subscription-changed event. */
-  protected abstract emitKeysChangedEvent(keys: readonly K[]): void;
+  protected abstract emitKeysChangedEvent(
+    keys: readonly K[],
+    runtimeHosts: readonly AgentRuntimeHost[],
+  ): void;
 
   activeKeys(): readonly K[] {
     return [...this.subscriptions.keys()];
@@ -83,6 +88,16 @@ export abstract class PollingSourceBase<
 
   protected getSubscriptionState(key: K): S | undefined {
     return this.subscriptions.get(key);
+  }
+
+  updateListenerRuntimeHost(
+    key: K,
+    onEvent: (text: string) => void,
+    runtimeHost: AgentRuntimeHost,
+  ): void {
+    this.subscriptions
+      .get(key)
+      ?.runtimeHostByListener.set(onEvent, runtimeHost);
   }
 
   has(key: K): boolean {
@@ -99,9 +114,10 @@ export abstract class PollingSourceBase<
   }
 
   disposeAll(): void {
+    const runtimeHosts = this.activeRuntimeHosts();
     this.subscriptions.clear();
     this.stopTimer();
-    this.notifyKeysChanged();
+    this.notifyKeysChanged(runtimeHosts);
   }
 
   /**
@@ -113,8 +129,10 @@ export abstract class PollingSourceBase<
     key: K,
     initState: () => S,
     onEvent: (text: string) => void,
+    runtimeHost: AgentRuntimeHost,
   ): Disposable {
     let state = this.subscriptions.get(key);
+    let created = false;
     if (!state) {
       if (this.subscriptions.size >= this.config.maxConcurrent) {
         throw new Error(
@@ -124,9 +142,11 @@ export abstract class PollingSourceBase<
       state = initState();
       this.subscriptions.set(key, state);
       this.logger.info(`Subscribed to ${key}`);
-      this.notifyKeysChanged();
+      created = true;
     }
     state.listeners.add(onEvent);
+    state.runtimeHostByListener.set(onEvent, runtimeHost);
+    if (created) this.notifyKeysChanged([runtimeHost]);
     this.ensureTimer();
     return {
       dispose: () => this.removeListener(key, onEvent),
@@ -150,24 +170,28 @@ export abstract class PollingSourceBase<
    * `pollOne`.
    */
   protected detach(key: K): void {
-    if (!this.subscriptions.has(key)) return;
+    const state = this.subscriptions.get(key);
+    if (!state) return;
+    const runtimeHosts = this.hostsForState(state);
     this.subscriptions.delete(key);
-    this.notifyKeysChanged();
+    this.notifyKeysChanged(runtimeHosts);
   }
 
   private removeListener(key: K, onEvent: (text: string) => void): void {
     const state = this.subscriptions.get(key);
     if (!state) return;
+    const runtimeHost = state.runtimeHostByListener.get(onEvent);
     state.listeners.delete(onEvent);
+    state.runtimeHostByListener.delete(onEvent);
     if (state.listeners.size === 0) {
       this.subscriptions.delete(key);
       this.logger.info(`Unsubscribed from ${key}`);
-      this.notifyKeysChanged();
+      this.notifyKeysChanged(runtimeHost ? [runtimeHost] : []);
     }
     if (this.subscriptions.size === 0) this.stopTimer();
   }
 
-  private notifyKeysChanged(): void {
+  private notifyKeysChanged(runtimeHosts = this.activeRuntimeHosts()): void {
     const keys = [...this.subscriptions.keys()];
     for (const listener of this.keysChangedListeners) {
       try {
@@ -176,7 +200,29 @@ export abstract class PollingSourceBase<
         this.logger.warn(`Keys-changed listener threw: ${String(err)}`);
       }
     }
-    this.emitKeysChangedEvent(keys);
+    this.emitKeysChangedEvent(keys, [...new Set(runtimeHosts)]);
+  }
+
+  private activeRuntimeHosts(): AgentRuntimeHost[] {
+    const runtimeHosts: AgentRuntimeHost[] = [];
+    for (const state of this.subscriptions.values()) {
+      runtimeHosts.push(...this.hostsForState(state));
+    }
+    return [...new Set(runtimeHosts)];
+  }
+
+  private hostsForState(state: S): AgentRuntimeHost[] {
+    return [...new Set(state.runtimeHostByListener.values())];
+  }
+
+  private emitToStateHosts<EventKey extends keyof ProgressEventPayloads>(
+    state: S,
+    event: EventKey,
+    payload: ProgressEventPayloads[EventKey],
+  ): void {
+    for (const runtimeHost of this.hostsForState(state)) {
+      runtimeHost.emit(event, payload);
+    }
   }
 
   private ensureTimer(): void {
@@ -233,10 +279,10 @@ export abstract class PollingSourceBase<
         `Auth error for ${key}; stopping subscription. ${err.message}`,
       );
       this.emit(state, this.formatErrorEvent(key, state, err.message));
-      this.detach(key);
-      getAgentRuntimeHost().emit('githubTokenInvalid', {
+      this.emitToStateHosts(state, 'githubTokenInvalid', {
         message: err.message,
       });
+      this.detach(key);
       return;
     }
     if (err instanceof GitHubPermanentError) {
