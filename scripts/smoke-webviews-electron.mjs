@@ -35,6 +35,11 @@ const views = [
     },
     fixtureMessages: [
       {
+        command: 'setSelectedAgent',
+        sessionType: 'workflow',
+        agentId: 'correct',
+      },
+      {
         command: 'setInputFile',
         files: ['appendix.tex', 'coverLetter.tex', 'main.tex'],
       },
