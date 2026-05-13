@@ -92,12 +92,7 @@ async function resolveModelAvailability(
   // OpenRouter routing is intentionally outside included access; a configured
   // OpenRouter key is the only ready state for these calls.
   if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
-    const personalAccess = await getPersonalAccessKindForModel(
-      config,
-      ctx.hasOpenRouter,
-      ctx.useOpenRouter,
-    );
-    if (personalAccess === 'openrouter-key') {
+    if (ctx.hasOpenRouter) {
       return {
         kind: 'openrouter-key',
         label: 'OpenRouter key',
