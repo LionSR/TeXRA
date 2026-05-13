@@ -14,6 +14,9 @@ import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 // Local imports - shared constants
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 
+// Local imports - config
+import { getUseOpenRouter } from '@utils/config/providerConfig';
+
 // Local imports - sibling
 import { API_PROVIDERS, apiKeyExists, type ApiProvider } from './apiProviders';
 import {
@@ -36,8 +39,11 @@ interface ModelAvailabilityStatus {
 async function getPersonalAccessKindForModel(
   config: ModelConfig,
   hasOpenRouter: boolean,
+  useOpenRouter: boolean,
 ): Promise<PersonalModelAccessKind | null> {
-  if (config.openRouterOnly) return hasOpenRouter ? 'openrouter-key' : null;
+  if (shouldRouteThroughOpenRouter(config, useOpenRouter)) {
+    return hasOpenRouter ? 'openrouter-key' : null;
+  }
 
   const provider = config.provider as ApiProvider;
   if (!(API_PROVIDERS as readonly string[]).includes(provider)) {
@@ -59,8 +65,17 @@ async function getPersonalAccessKindForModel(
 interface ModelAvailabilityContext {
   hasOpenRouter: boolean;
   hasServerAccess: boolean;
+  useOpenRouter: boolean;
   useIncludedAccess: boolean;
   serverSideKeyService: ReturnType<typeof getServerSideKeyService>;
+}
+
+function shouldRouteThroughOpenRouter(
+  config: ModelConfig,
+  useOpenRouter: boolean,
+): boolean {
+  if (config.requiresResponsesAPI) return false;
+  return config.openRouterOnly || useOpenRouter;
 }
 
 function canUseIncludedAccessForModel(
@@ -81,12 +96,13 @@ async function resolveModelAvailability(
   config: ModelConfig,
   ctx: ModelAvailabilityContext,
 ): Promise<ModelAvailabilityStatus> {
-  // OpenRouter-only models are intentionally outside included access; a
-  // configured OpenRouter key is the only ready state for them.
-  if (config.openRouterOnly) {
+  // OpenRouter routing is intentionally outside included access; a configured
+  // OpenRouter key is the only ready state for these calls.
+  if (shouldRouteThroughOpenRouter(config, ctx.useOpenRouter)) {
     const personalAccess = await getPersonalAccessKindForModel(
       config,
       ctx.hasOpenRouter,
+      ctx.useOpenRouter,
     );
     if (personalAccess === 'openrouter-key') {
       return {
@@ -121,6 +137,7 @@ async function resolveModelAvailability(
     const personalAccess = await getPersonalAccessKindForModel(
       config,
       ctx.hasOpenRouter,
+      ctx.useOpenRouter,
     );
     if (personalAccess === 'provider-key') {
       return {
@@ -150,7 +167,7 @@ async function resolveModelAvailability(
     kind: 'not-included',
     label: 'Not included',
     available: false,
-    requiresKey: true,
+    requiresKey: false,
   };
 }
 
@@ -163,6 +180,7 @@ async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
   return {
     hasOpenRouter,
     hasServerAccess,
+    useOpenRouter: getUseOpenRouter(),
     useIncludedAccess: serverSideKeyService.getUseIncludedModelAccess(),
     serverSideKeyService,
   };
@@ -180,7 +198,7 @@ export async function getModelUnavailableReason(
   if (availability.available) return null;
 
   // Determine the specific reason
-  if (config.openRouterOnly) {
+  if (shouldRouteThroughOpenRouter(config, ctx.useOpenRouter)) {
     return `Model "${model}" requires an OpenRouter API key. Set your OpenRouter key in the extension settings.`;
   }
 

@@ -74,11 +74,7 @@ function renderModelOption(opt: ModelOptionData): TemplateResult {
     (opt.requiresKey ? 'missing-key' : opt.disabled ? 'not-included' : '');
   const availabilityLabel =
     opt.availabilityLabel ??
-    (opt.requiresKey
-      ? 'Missing API key'
-      : opt.disabled
-        ? 'Unavailable'
-        : 'Ready');
+    (opt.requiresKey ? 'Missing API key' : opt.disabled ? 'Unavailable' : '');
 
   const hints: string[] = [];
   if (decorator.label) hints.push(decorator.label);
@@ -96,7 +92,9 @@ function renderModelOption(opt: ModelOptionData): TemplateResult {
       data-cost=${opt.cost || nothing}
       data-availability=${availability || nothing}
       data-requires-key=${opt.requiresKey ? 'true' : nothing}
-      aria-label=${`${opt.label} (${availabilityLabel})`}
+      aria-label=${availabilityLabel
+        ? `${opt.label} (${availabilityLabel})`
+        : opt.label}
     >
       ${display}
       ${opt.disabled
