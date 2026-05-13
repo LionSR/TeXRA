@@ -6,7 +6,7 @@ import { waitForRetry } from '@agent/runtime/runCoordinators';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { getConfig } from '@agent/core/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { formatProviderHttpError, toErrorMessage } from '@common/errors';
+import { normalizeProviderError, toErrorMessage } from '@common/errors';
 import type { AgentLogger } from '@logger/AgentLogger';
 import {
   MESSAGE_TYPES,
@@ -139,7 +139,7 @@ export abstract class RetryableInvocationNode<
       this._hasAttemptedTokenRefresh = false;
       return result;
     } catch (retryErr) {
-      const retryFormatted = formatProviderHttpError(retryErr);
+      const retryFormatted = normalizeProviderError(retryErr);
       if (retryFormatted.isRelayError && retryFormatted.statusCode === 401) {
         services.logger.debug(
           'Still 401 after token refresh, skipping auto-retries',
@@ -180,7 +180,7 @@ export abstract class RetryableInvocationNode<
       return await operation(controller.signal);
     } catch (err) {
       // Reactive 401 recovery: refresh token and retry once
-      const formatted = formatProviderHttpError(err);
+      const formatted = normalizeProviderError(err);
       if (
         formatted.isRelayError &&
         formatted.statusCode === 401 &&
@@ -199,7 +199,7 @@ export abstract class RetryableInvocationNode<
    *  they need human attention (switching keys, topping up). `userRetryable`
    *  only gates the manual retry UI; auto-retry is a stricter subset. */
   shouldAutoRetry(error: Error): boolean {
-    const formatted = formatProviderHttpError(error);
+    const formatted = normalizeProviderError(error);
     if (formatted.isCredentialExhausted) return false;
     if (!formatted.userRetryable) return false;
     const code = formatted.statusCode;
@@ -254,7 +254,7 @@ export abstract class RetryableInvocationNode<
   ): Promise<ManualRetryPromptResult> {
     const { streamId, logger } = this.services;
     const operationName = this.getOperationName();
-    const formatted = formatProviderHttpError(error);
+    const formatted = normalizeProviderError(error);
 
     if (!formatted.userRetryable) {
       return { shouldRetry: false, userCancelled: false };
@@ -297,7 +297,7 @@ export abstract class RetryableInvocationNode<
       return { kind: 'cancelled' };
     }
 
-    const formatted = formatProviderHttpError(error);
+    const formatted = normalizeProviderError(error);
     if (!formatted.userRetryable) {
       this.services.logger.logErrorData(
         `${this.getOperationName()} failed (no retry available): ${formatted.message}`,

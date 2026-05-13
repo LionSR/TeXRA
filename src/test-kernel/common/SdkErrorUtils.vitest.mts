@@ -28,6 +28,7 @@ import {
   attachSdkErrorMetadata,
   formatProviderHttpError,
   isUserAbort,
+  normalizeProviderError,
   sdkErrorKindFromStatusCode,
 } from '@common/errors/sdkErrorUtils';
 
@@ -414,6 +415,23 @@ describe('formatProviderHttpError', () => {
     expect(sdkErrorKindFromStatusCode(500)).toBe('internal_server');
     expect(sdkErrorKindFromStatusCode(418)).toBe('api_error');
     expect(sdkErrorKindFromStatusCode(undefined)).toBe('api_error');
+  });
+
+  it('caches normalized provider errors for downstream retry handling', () => {
+    const error = new Error('provider quota');
+    attachSdkErrorMetadata(error, {
+      provider: 'fixture',
+      kind: 'rate_limit',
+      statusCode: 429,
+    });
+
+    const first = normalizeProviderError(error);
+    const second = normalizeProviderError(error);
+
+    expect(second).toBe(first);
+    expect(second.provider).toBe('fixture');
+    expect(second.statusCode).toBe(429);
+    expect(second.userRetryable).toBe(true);
   });
 });
 
