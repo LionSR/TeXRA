@@ -632,7 +632,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
   private handleSubscribe(executionId: ExecutionId): ToolResult {
     const ctx = getCurrentToolRunContext();
     const streamId = ctx?.streamId;
-    if (!streamId) {
+    if (!streamId || !ctx.runtimeHost) {
       throw new ToolError(
         'subscribe must be called from within an agent stream.',
       );
@@ -646,7 +646,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       );
     }
     try {
-      bindExecutionSubscription(streamId, executionId);
+      bindExecutionSubscription(streamId, executionId, ctx.runtimeHost);
     } catch (err) {
       throw new ToolError(err instanceof Error ? err.message : String(err));
     }
