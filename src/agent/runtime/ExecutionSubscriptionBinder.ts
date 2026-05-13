@@ -16,10 +16,7 @@ import {
   getHandle,
   type ExecutionHandle,
 } from '@agent/runtime/executionRegistry';
-import {
-  getAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -193,6 +190,7 @@ class ExecutionSubscription implements Disposable {
 export function bindExecutionSubscription(
   streamId: StreamTabId,
   executionId: string,
+  runtimeHost: AgentRuntimeHost,
 ): void {
   ensureReleaseHook();
 
@@ -210,11 +208,7 @@ export function bindExecutionSubscription(
   }
   if (bound.has(executionId)) return;
 
-  const subscription = new ExecutionSubscription(
-    streamId,
-    handle,
-    getAgentRuntimeHost(),
-  );
+  const subscription = new ExecutionSubscription(streamId, handle, runtimeHost);
   bound.set(executionId, subscription);
   if (subscription.bind()) {
     logger.info(
