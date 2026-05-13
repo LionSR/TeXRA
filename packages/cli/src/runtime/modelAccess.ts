@@ -9,6 +9,7 @@ export interface CliModelAccess {
 }
 
 function formatModelAccessStatus(model: ModelOptionData): string {
+  if (model.availabilityLabel) return model.availabilityLabel.toLowerCase();
   if (!model.disabled && !model.requiresKey) return 'available';
   if (model.requiresKey) {
     const provider = model.provider ? `${model.provider} ` : '';

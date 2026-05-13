@@ -69,11 +69,17 @@ function renderModelOption(opt: ModelOptionData): TemplateResult {
   const display = decorator.unicode
     ? `${decorator.unicode} ${opt.label}`
     : opt.label;
+  const availability =
+    opt.availability ??
+    (opt.requiresKey ? 'missing-key' : opt.disabled ? 'not-included' : '');
+  const availabilityLabel =
+    opt.availabilityLabel ??
+    (opt.requiresKey ? 'Missing API key' : opt.disabled ? 'Not included' : '');
 
   const hints: string[] = [];
   if (decorator.label) hints.push(decorator.label);
   if (opt.hint) hints.push(opt.hint);
-  if (opt.requiresKey) hints.push('⚠ API key not configured');
+  if (availabilityLabel) hints.push(availabilityLabel);
   const tooltip = hints.join(' | ');
 
   return html`
@@ -84,11 +90,15 @@ function renderModelOption(opt: ModelOptionData): TemplateResult {
       data-provider=${opt.provider || nothing}
       data-context=${opt.context || nothing}
       data-cost=${opt.cost || nothing}
+      data-availability=${availability || nothing}
       data-requires-key=${opt.requiresKey ? 'true' : nothing}
+      aria-label=${availabilityLabel
+        ? `${opt.label} (${availabilityLabel})`
+        : opt.label}
     >
       ${display}
-      ${opt.requiresKey
-        ? html`<span class="api-key-missing"> ✗</span>`
+      ${opt.disabled
+        ? html`<span class="model-option-status"> ${availabilityLabel} </span>`
         : nothing}
     </wa-option>
   `;
