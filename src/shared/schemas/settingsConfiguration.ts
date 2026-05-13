@@ -43,6 +43,9 @@ export const DEFAULT_TEXRA_SETTINGS = {
   agentOutputs: {
     autoOpenFinal: true,
   },
+  inlineCriticism: {
+    enabled: false,
+  },
   ui: {
     showApiKeyReminders: true,
     showLoginBanner: true,
@@ -215,6 +218,7 @@ export const DEFAULT_TEXRA_SETTINGS = {
   },
   git: {
     numberOfCommitsToShow: 20,
+    emitPrCiStartedEvents: false,
   },
   audio: {
     soxPath: '',
@@ -255,6 +259,13 @@ export const TexraSettingsSchema = z
           .prefault(DEFAULT_TEXRA_SETTINGS.agentOutputs.autoOpenFinal),
       })
       .prefault(DEFAULT_TEXRA_SETTINGS.agentOutputs),
+    inlineCriticism: z
+      .strictObject({
+        enabled: z
+          .boolean()
+          .prefault(DEFAULT_TEXRA_SETTINGS.inlineCriticism.enabled),
+      })
+      .prefault(DEFAULT_TEXRA_SETTINGS.inlineCriticism),
     ui: z
       .strictObject({
         showApiKeyReminders: z
@@ -436,6 +447,9 @@ export const TexraSettingsSchema = z
           .min(1)
           .max(100)
           .prefault(DEFAULT_TEXRA_SETTINGS.git.numberOfCommitsToShow),
+        emitPrCiStartedEvents: z
+          .boolean()
+          .prefault(DEFAULT_TEXRA_SETTINGS.git.emitPrCiStartedEvents),
       })
       .prefault(DEFAULT_TEXRA_SETTINGS.git),
     audio: z
@@ -494,6 +508,7 @@ export type TexraSettings = z.infer<typeof TexraSettingsSchema>;
 
 export const TEXRA_SETTING_PATHS = [
   'agentOutputs.autoOpenFinal',
+  'inlineCriticism.enabled',
   'ui.showApiKeyReminders',
   'ui.showLoginBanner',
   'ui.showGettingStartedBanner',
@@ -535,6 +550,7 @@ export const TEXRA_SETTING_PATHS = [
   'latexdiff.pictureEnvironments',
   'latexdiff.tempFileLocation',
   'git.numberOfCommitsToShow',
+  'git.emitPrCiStartedEvents',
   'audio.soxPath',
   'apiKeys.set',
   'apiKeys.remove',
