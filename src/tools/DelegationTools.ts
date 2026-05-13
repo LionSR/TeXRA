@@ -641,7 +641,7 @@ const WorkflowAgentInputSchema = z.object({
   agent: z.string().describe('Name of the workflow agent to execute'),
   model: z
     .string()
-    .optional()
+    .nullish()
     .describe(
       'Model short name (e.g., opus47T, sonnet46T, gpt55, gemini31p). Defaults to the current model if omitted.',
     ),
@@ -860,13 +860,13 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
 const DelegateAgentInputSchema = z.object({
   agent: z
     .string()
-    .optional()
+    .nullish()
     .describe(
       'Name of the tool-use agent to delegate to. Required for new delegations, ignored when resuming via execution_id.',
     ),
   model: z
     .string()
-    .optional()
+    .nullish()
     .describe(
       'Model short name (e.g., opus47T, sonnet46T, gpt55, gemini31p). Defaults to the current model if omitted.',
     ),
@@ -879,7 +879,7 @@ const DelegateAgentInputSchema = z.object({
   working_directory: workingDirectoryField,
   execution_id: z
     .string()
-    .optional()
+    .nullish()
     .describe(
       'If set, sends follow-up instructions to a tool-use subagent instead of starting a new one. Busy subagents queue the follow-up for their next turn. Use the execution ID from the original delegation result or /executions.',
     ),
