@@ -1,3 +1,4 @@
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 
 import {
@@ -41,19 +42,24 @@ export function listPRSubscriptionBindings(
 export function bindPRSubscription(
   streamId: StreamTabId,
   pr: PRSubscribeInput,
+  runtimeHost: AgentRuntimeHost,
 ): boolean {
-  return prSubscriptions.bind(streamId, pr);
+  return prSubscriptions.bind(streamId, pr, runtimeHost);
 }
 
 export function unbindPRSubscription(
   streamId: StreamTabId,
   pr: PRSubscribeInput,
+  runtimeHost?: AgentRuntimeHost,
 ): boolean {
-  return prSubscriptions.unbind(streamId, pr);
+  return prSubscriptions.unbind(streamId, pr, runtimeHost);
 }
 
-export function unbindAllForPR(key: string): number {
-  return prSubscriptions.unbindAll(key);
+export function unbindAllForPR(
+  key: string,
+  runtimeHost?: AgentRuntimeHost,
+): number {
+  return prSubscriptions.unbindAll(key, runtimeHost);
 }
 
 export interface RepoBindInput {
@@ -70,8 +76,19 @@ const repoSubscriptions = new StreamSubscriptionRegistry<
     has: (key) => repoPollingSource.has(key),
     activeKeys: () => repoPollingSource.activeKeys(),
     onKeysChanged: (listener) => repoPollingSource.onKeysChanged(listener),
-    subscribe: (input, listener) =>
-      repoPollingSource.subscribe(input.owner, input.repo, listener),
+    subscribe: (input, listener, runtimeHost) =>
+      repoPollingSource.subscribe(
+        input.owner,
+        input.repo,
+        listener,
+        runtimeHost,
+      ),
+    updateSubscription: (input, listener, runtimeHost) =>
+      repoPollingSource.updateListenerRuntimeHost(
+        repoKeyOf(input.owner, input.repo),
+        listener,
+        runtimeHost,
+      ),
   },
   keyOf: (input) => repoKeyOf(input.owner, input.repo),
   bindingsChangedEvent: 'repoSubscriptionBindingsChanged',
@@ -91,24 +108,41 @@ export function listRepoSubscriptionBindings(
 export function bindRepoSubscription(
   streamId: StreamTabId,
   input: RepoBindInput,
+  runtimeHost: AgentRuntimeHost,
 ): boolean {
-  return repoSubscriptions.bind(streamId, input);
+  return repoSubscriptions.bind(streamId, input, runtimeHost);
 }
 
 export function unbindRepoSubscription(
   streamId: StreamTabId,
   input: RepoBindInput,
+  runtimeHost?: AgentRuntimeHost,
 ): boolean {
-  return repoSubscriptions.unbind(streamId, input);
+  return repoSubscriptions.unbind(streamId, input, runtimeHost);
 }
 
-export function unbindAllForRepo(key: string): number {
-  return repoSubscriptions.unbindAll(key);
+export function unbindAllForRepo(
+  key: string,
+  runtimeHost?: AgentRuntimeHost,
+): number {
+  return repoSubscriptions.unbindAll(key, runtimeHost);
 }
 
 const issueSubscriptions = new StreamSubscriptionRegistry<string, IssueKey>({
   name: 'IssueStreamSubscriptionRegistry',
-  source: issuePollingSource,
+  source: {
+    has: (key) => issuePollingSource.has(key),
+    activeKeys: () => issuePollingSource.activeKeys(),
+    onKeysChanged: (listener) => issuePollingSource.onKeysChanged(listener),
+    subscribe: (input, listener, runtimeHost) =>
+      issuePollingSource.subscribe(input, listener, runtimeHost),
+    updateSubscription: (input, listener, runtimeHost) =>
+      issuePollingSource.updateListenerRuntimeHost(
+        issueKeyToString(input),
+        listener,
+        runtimeHost,
+      ),
+  },
   keyOf: issueKeyToString,
   bindingsChangedEvent: 'issueSubscriptionBindingsChanged',
 });
@@ -127,17 +161,22 @@ export function listIssueSubscriptionBindings(
 export function bindIssueSubscription(
   streamId: StreamTabId,
   issue: IssueKey,
+  runtimeHost: AgentRuntimeHost,
 ): boolean {
-  return issueSubscriptions.bind(streamId, issue);
+  return issueSubscriptions.bind(streamId, issue, runtimeHost);
 }
 
 export function unbindIssueSubscription(
   streamId: StreamTabId,
   issue: IssueKey,
+  runtimeHost?: AgentRuntimeHost,
 ): boolean {
-  return issueSubscriptions.unbind(streamId, issue);
+  return issueSubscriptions.unbind(streamId, issue, runtimeHost);
 }
 
-export function unbindAllForIssue(key: string): number {
-  return issueSubscriptions.unbindAll(key);
+export function unbindAllForIssue(
+  key: string,
+  runtimeHost?: AgentRuntimeHost,
+): number {
+  return issueSubscriptions.unbindAll(key, runtimeHost);
 }

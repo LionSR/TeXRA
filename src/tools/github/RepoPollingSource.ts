@@ -34,6 +34,8 @@
  * - **CI / check-run status and inline annotations.** Per-PR by design.
  */
 
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+
 import { shouldDropBotEvent } from './botFilter';
 import {
   formatRepoIssueComment,
@@ -57,7 +59,7 @@ import {
   type GhPullsListEntry,
   type GhReviewComment,
 } from './prTypes';
-import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
+import { emitGitHubSubscriptionChangedToHosts } from './subscriptionEventEmitter';
 
 import type { Disposable } from '@platform/interfaces/disposable';
 
@@ -172,13 +174,26 @@ export class RepoPollingSource extends PollingSourceBase<
     owner: string,
     repo: string,
     onEvent: (text: string) => void,
+    runtimeHost: AgentRuntimeHost,
   ): Disposable {
     const key = repoKeyOf(owner, repo);
-    return this.register(key, () => createInitialState(owner, repo), onEvent);
+    return this.register(
+      key,
+      () => createInitialState(owner, repo),
+      onEvent,
+      runtimeHost,
+    );
   }
 
-  protected emitKeysChangedEvent(keys: readonly RepoKey[]): void {
-    emitGitHubSubscriptionChanged('repoSubscriptionsChanged', { keys });
+  protected emitKeysChangedEvent(
+    keys: readonly RepoKey[],
+    runtimeHosts: readonly AgentRuntimeHost[],
+  ): void {
+    emitGitHubSubscriptionChangedToHosts(
+      runtimeHosts,
+      'repoSubscriptionsChanged',
+      { keys },
+    );
   }
 
   protected formatErrorEvent(
@@ -419,6 +434,7 @@ function createInitialState(owner: string, repo: string): SubscriptionState {
     repo,
     slug: repoKeyOf(owner, repo),
     listeners: new Set(),
+    runtimeHostByListener: new Map(),
     initialized: false,
     subscribedAt: new Date(now).toISOString(),
     since: {
