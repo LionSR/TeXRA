@@ -1,7 +1,7 @@
 /**
- * Generic binder that ties polling-source subscriptions to agent stream
- * lifecycles. Used identically for per-PR and per-repo flavors — only the
- * polling-source reference, key derivation, and bus-event names differ.
+ * Registry that ties polling-source subscriptions to agent stream lifecycles.
+ * Used identically for per-PR, per-repo, and per-issue subscriptions; only
+ * the polling source, key derivation, and external event names differ.
  *
  * Each (streamId, key) pair holds one disposable from the polling source.
  * Event callbacks route through `sendFollowUp` so events land in the same
@@ -14,13 +14,12 @@
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { StreamTabId } from '@shared/schemas';
 
-import type { Disposable } from '@platform/interfaces/disposable';
-
 import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
+
+import type { Disposable } from '@platform/interfaces/disposable';
 
 export interface SubscriptionBinding<K extends string> {
   key: K;
@@ -31,37 +30,31 @@ interface PollingSourceLike<K extends string, Input> {
   has(key: K): boolean;
   subscribe(input: Input, onEvent: (text: string) => void): Disposable;
   activeKeys(): readonly K[];
+  onKeysChanged(listener: (keys: readonly K[]) => void): Disposable;
 }
 
-export interface SubscriptionBinderOptions<K extends string, Input> {
+export interface StreamSubscriptionRegistryOptions<K extends string, Input> {
   /** Display name for log messages. */
   name: string;
   /** The polling source that owns the subscription. */
   source: PollingSourceLike<K, Input>;
   /** Convert a subscribe-input value to the canonical string key. */
   keyOf: (input: Input) => K;
-  /**
-   * The bus event the polling source itself emits when its key set changes.
-   * The binder listens to it to prune stale per-stream entries when a
-   * subscription is auto-detached (PR closed, auth failed, etc.).
-   */
-  sourceKeysChangedEvent:
-    | 'prSubscriptionsChanged'
-    | 'repoSubscriptionsChanged'
-    | 'issueSubscriptionsChanged';
-  /** The binder-owned bus event the settings UI listens to for owner refresh. */
+  /** External event listeners use to refresh ownership display. */
   bindingsChangedEvent:
     | 'prSubscriptionBindingsChanged'
     | 'repoSubscriptionBindingsChanged'
     | 'issueSubscriptionBindingsChanged';
 }
 
-export class SubscriptionBinder<K extends string, Input> {
+export class StreamSubscriptionRegistry<K extends string, Input> {
   private readonly logger: AgentLogger;
   private readonly perStream = new Map<StreamTabId, Map<K, Disposable>>();
   private hooksRegistered = false;
 
-  constructor(private readonly opts: SubscriptionBinderOptions<K, Input>) {
+  constructor(
+    private readonly opts: StreamSubscriptionRegistryOptions<K, Input>,
+  ) {
     this.logger = new AgentLogger(opts.name);
   }
 
@@ -75,14 +68,14 @@ export class SubscriptionBinder<K extends string, Input> {
       this.perStream.set(streamId, bound);
     }
     if (bound.has(key)) return false;
-    // Set a sentinel before subscribe() so listBindings() returns correct
-    // owner data if `sourceKeysChangedEvent` fires synchronously inside
+    // Set a sentinel before subscribe() so list() returns correct owner
+    // data if the source's keys-changed hook fires synchronously inside
     // subscribe() before the real disposable is available.
     const sentinel: Disposable = { dispose: () => {} };
     bound.set(key, sentinel);
     // The source's keys-changed event fires synchronously during subscribe()
-    // for new keys (covering the UI refresh); only emit our binder event for
-    // existing keys where that source event won't fire.
+    // for new keys (covering the UI refresh); only emit our registry event
+    // for existing keys where that source event won't fire.
     const keyIsNew = !this.opts.source.has(key);
     let disposable: Disposable;
     try {
@@ -163,19 +156,22 @@ export class SubscriptionBinder<K extends string, Input> {
       this.emitBindingsChanged();
     });
     // The polling source can detach subscriptions unilaterally (PR closed,
-    // auth failure, 24 h unreachable). Without this prune the binder's
-    // `perStream` map would keep stale disposables and `bind()` calls
-    // would incorrectly short-circuit as "already subscribed".
-    bus.on(this.opts.sourceKeysChangedEvent, ({ keys }) => {
-      const active = new Set<string>(keys);
-      for (const [streamId, bound] of [...this.perStream]) {
-        for (const key of [...bound.keys()]) {
-          if (!active.has(key)) bound.delete(key);
-        }
-        if (bound.size === 0) this.perStream.delete(streamId);
-      }
+    // auth failure, 24 h unreachable). Listen to the source directly; the
+    // progress event is for UI refresh, not for internal bookkeeping.
+    this.opts.source.onKeysChanged((keys) => {
+      this.pruneMissingSourceKeys(keys);
     });
     this.hooksRegistered = true;
+  }
+
+  private pruneMissingSourceKeys(keys: readonly K[]): void {
+    const active = new Set<string>(keys);
+    for (const [streamId, bound] of [...this.perStream]) {
+      for (const key of [...bound.keys()]) {
+        if (!active.has(key)) bound.delete(key);
+      }
+      if (bound.size === 0) this.perStream.delete(streamId);
+    }
   }
 
   private removeBoundKey(
