@@ -48,6 +48,7 @@ import type {
   StreamStatus,
   TodoItem,
   TokenUsageStats,
+  ToolUseLog,
 } from '@shared/schemas';
 import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
@@ -71,6 +72,7 @@ import {
   buildCodexCommandToolLog,
   buildCodexFileChangeToolLog,
   buildCodexMcpToolLog,
+  buildCodexTodoToolLog,
   buildCodexUsageStats,
 } from './codexShared';
 
@@ -282,6 +284,9 @@ function formatCodexError(
 // Stream tab helpers
 // ============================================================================
 
+type CodexToolLogRef = ReturnType<AgentLogger['emitToolUse']>;
+type ToolUseStatus = NonNullable<ToolUseLog['status']>;
+
 export function publishCodexTodos(
   childStreamId: StreamTabId,
   todos: TodoItem[],
@@ -302,6 +307,14 @@ export function publishCodexStreamUsage(
     executionId,
     usage,
   });
+}
+
+function toProgressTodos(item: TodoListItem): TodoItem[] {
+  return item.items.map((t) => ({
+    content: t.text,
+    status: t.completed ? ('completed' as const) : ('pending' as const),
+    activeForm: t.text,
+  }));
 }
 
 /** Log a completed codex thread item to the child stream's logger. */
@@ -337,18 +350,78 @@ function logCodexItem(
       logger.logWebSearch({ query: (item as WebSearchItem).query });
       break;
     case 'todo_list': {
-      const todos = (item as TodoListItem).items.map((t) => ({
-        content: t.text,
-        status: t.completed ? ('completed' as const) : ('pending' as const),
-        activeForm: t.text,
-      }));
-      publishCodexTodos(childStreamId, todos, runtimeHost);
+      publishCodexTodos(
+        childStreamId,
+        toProgressTodos(item as TodoListItem),
+        runtimeHost,
+      );
       break;
     }
     case 'error':
       logger.error(item.message);
       break;
   }
+}
+
+function buildCodexLiveToolLog(
+  item: ThreadItem,
+  status: ToolUseStatus,
+): ToolUseLog | null {
+  switch (item.type) {
+    case 'command_execution':
+      return buildCodexCommandToolLog(item);
+    case 'file_change': {
+      const fileLog = buildCodexFileChangeToolLog(item);
+      return fileLog ? { ...fileLog, status } : null;
+    }
+    case 'mcp_tool_call':
+      return buildCodexMcpToolLog(item as McpToolCallItem);
+    case 'todo_list':
+      return buildCodexTodoToolLog(item as TodoListItem, status);
+    default:
+      return null;
+  }
+}
+
+function updateCodexLiveToolLog(
+  logger: AgentLogger,
+  refs: Map<string, CodexToolLogRef>,
+  item: ThreadItem,
+  toolLog: ToolUseLog,
+): void {
+  const existing = refs.get(item.id);
+  if (!existing) {
+    refs.set(item.id, logger.emitToolUse(toolLog));
+    return;
+  }
+
+  const { status = 'completed', ...rest } = toolLog;
+  logger.updateToolUse(existing.logId, rest, existing.groupId, status);
+}
+
+function publishCodexItemProgress(params: {
+  item: ThreadItem;
+  status: ToolUseStatus;
+  childStreamId: StreamTabId;
+  logger: AgentLogger;
+  refs: Map<string, CodexToolLogRef>;
+  runtimeHost: AgentRuntimeHost;
+}): boolean {
+  const { item, status, childStreamId, logger, refs, runtimeHost } = params;
+
+  if (item.type === 'todo_list') {
+    publishCodexTodos(
+      childStreamId,
+      toProgressTodos(item as TodoListItem),
+      runtimeHost,
+    );
+  }
+
+  const toolLog = buildCodexLiveToolLog(item, status);
+  if (!toolLog) return false;
+
+  updateCodexLiveToolLog(logger, refs, item, toolLog);
+  return true;
 }
 
 /** Log a turn summary to the child stream. */
@@ -370,7 +443,7 @@ function logTurnSummary(
 // ============================================================================
 
 /** Run a single streamed turn, logging events to the child stream. */
-async function runStreamedTurn(
+export async function runStreamedTurn(
   thread: Thread,
   prompt: string,
   childStreamId: StreamTabId,
@@ -382,12 +455,34 @@ async function runStreamedTurn(
   const { events } = await thread.runStreamed(prompt, { signal });
   const responseParts: string[] = [];
   let usage: RunResult['usage'] = null;
+  const itemLogRefs = new Map<string, CodexToolLogRef>();
 
   for await (const event of events) {
     switch (event.type) {
+      case 'item.started':
+      case 'item.updated':
+        publishCodexItemProgress({
+          item: event.item,
+          status: 'in_progress',
+          childStreamId,
+          logger,
+          refs: itemLogRefs,
+          runtimeHost,
+        });
+        break;
       case 'item.completed': {
         const { item } = event;
-        logCodexItem(item, childStreamId, logger, runtimeHost);
+        const wasRenderedAsProgress = publishCodexItemProgress({
+          item,
+          status: 'completed',
+          childStreamId,
+          logger,
+          refs: itemLogRefs,
+          runtimeHost,
+        });
+        if (!wasRenderedAsProgress) {
+          logCodexItem(item, childStreamId, logger, runtimeHost);
+        }
         if (item.type === 'agent_message') {
           responseParts.push(item.text);
         }
