@@ -8,7 +8,6 @@
 
 // Third-party imports
 import { randomUUID } from 'crypto';
-import { statSync } from 'fs';
 import { z } from 'zod';
 
 // Local imports - agent
@@ -82,7 +81,7 @@ import { displayToStoragePath } from '@tools/memory/memoryUtils';
 // Local imports - worktree config
 
 // Local imports - utils
-import { WorkspaceFS } from '@utils/files';
+import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { generateExecutionId } from '@utils/core/executionId';
 
 // ============================================================================
@@ -146,7 +145,7 @@ const WORKTREE_DISABLED_MESSAGE =
 
 function ensureWorkingDirectoryExists(dir: string): void {
   try {
-    const stat = statSync(dir);
+    const stat = AbsoluteFS.statSync(dir);
     if (stat.isDirectory()) return;
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
