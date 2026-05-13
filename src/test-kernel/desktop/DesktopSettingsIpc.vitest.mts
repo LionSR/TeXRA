@@ -206,6 +206,28 @@ function createDeferred(): {
   return { promise, resolve };
 }
 
+function inactiveLatexSettingsStatus(): unknown {
+  return {
+    outDir: true,
+    autoRevealExclude: true,
+    texDistributionInstalled: false,
+    latexWorkshopInstalled: false,
+    latexdiffInstalled: false,
+    latexindentInstalled: false,
+    texcountInstalled: false,
+    imageProcessingInstalled: false,
+    platform: 'linux',
+    pdflatexPath: null,
+    latexmkPath: null,
+    latexdiffPath: null,
+    latexindentPath: null,
+    texcountPath: null,
+    ghostscriptPath: null,
+    graphicsmagickPath: null,
+    packageManager: null,
+  };
+}
+
 describe('desktop settings IPC', () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -834,25 +856,8 @@ describe('desktop settings IPC', () => {
           requiresSetup: false,
         },
       ],
-      detectLatexSettingsStatus: async () => ({
-        outDir: true,
-        autoRevealExclude: true,
-        texDistributionInstalled: false,
-        latexWorkshopInstalled: false,
-        latexdiffInstalled: false,
-        latexindentInstalled: false,
-        texcountInstalled: false,
-        imageProcessingInstalled: false,
-        platform: 'linux',
-        pdflatexPath: null,
-        latexmkPath: null,
-        latexdiffPath: null,
-        latexindentPath: null,
-        texcountPath: null,
-        ghostscriptPath: null,
-        graphicsmagickPath: null,
-        packageManager: null,
-      }),
+      detectLatexSettingsStatus: async () => inactiveLatexSettingsStatus(),
+      onError: () => undefined,
       postToRenderer: (message) => posted.push(message),
     });
 
@@ -898,6 +903,11 @@ describe('desktop settings IPC', () => {
       config: new MemoryConfigStore(),
       sendStartupCatalogData: true,
       modelListRefresh: modelListRefresh.promise,
+      loadAgents: async () => undefined,
+      getCustomAgentDirectory: async () => '',
+      buildToolDashboardItems: async () => [],
+      detectLatexSettingsStatus: async () => inactiveLatexSettingsStatus(),
+      onError: () => undefined,
       postToRenderer: (message) => posted.push(message),
     });
 
