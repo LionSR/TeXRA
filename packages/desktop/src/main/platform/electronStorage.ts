@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import type { StorageProvider } from '@platform/interfaces/storage';
 
-function workspaceStorageId(workspacePath: string | undefined): string {
+export function workspaceStorageId(workspacePath: string | undefined): string {
   const source = workspacePath?.trim() || 'no-workspace';
   return createHash('sha256').update(source).digest('hex').slice(0, 16);
 }

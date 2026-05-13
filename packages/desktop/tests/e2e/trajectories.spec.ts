@@ -167,12 +167,9 @@ test('settings → models tab mounts and the auth surface is reachable', async (
 });
 
 /**
- * Trajectory 3 — Memory tab is the leftmost settings panel; restart-survival
- * cannot be tested from a single Playwright run (the harness recreates a
- * temp workspace per launch), but we can at least verify the tab mounts.
- *
- * Follow-up: the audit doc lists "memory survives relaunch" as a manual
- * QA scenario. Adding a multi-launch Playwright fixture is tracked there.
+ * Trajectory 3 — Memory tab is the leftmost settings panel. Cross-launch
+ * persistence is covered by `settingsPersistence.spec.ts`, which relaunches
+ * the desktop app on a shared Electron user-data directory.
  */
 test('settings → memory tab mounts', async () => {
   await setSettingsTab(SETTINGS_TAB_INDEX.MEMORY);
@@ -235,11 +232,10 @@ test('settings → tools tab mounts', async () => {
 });
 
 /**
- * Trajectory 6 — settings persistence smoke. Without a multi-launch fixture
- * we cannot fully prove restart-survival, but we can drive the tab a few
- * times and confirm the inner panels do not crash. Failures here would be
- * the kind of "renderer threw mid-tab-switch" regression that breaks the
- * standalone story; covering it cheaply is worth the few hundred ms.
+ * Trajectory 6 — settings tab switching smoke. Drive the tab a few times and
+ * confirm the inner panels do not crash. Failures here would be the kind of
+ * "renderer threw mid-tab-switch" regression that breaks the standalone story;
+ * covering it cheaply is worth the few hundred ms.
  */
 test('rapid settings-tab switching does not crash the renderer', async () => {
   for (const idx of [
