@@ -15,5 +15,14 @@ export default defineConfig({
       input: resolve(__dirname, 'src/renderer/index.html'),
     },
   },
-  resolve: { alias: aliases },
+  resolve: {
+    alias: aliases,
+    dedupe: [
+      '@awesome.me/webawesome',
+      '@lit/context',
+      '@lit-labs/signals',
+      'lit',
+      'signal-polyfill',
+    ],
+  },
 });
