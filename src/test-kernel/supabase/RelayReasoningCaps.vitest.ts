@@ -6,6 +6,16 @@ import { describe, it } from 'vitest';
 
 // Local imports - Supabase relay
 import { capOpenAIReasoningEffortForTier } from '../../../supabase/functions/relay/reasoning';
+import {
+  FREE_TIER,
+  MAX_TIER,
+  ULTRA_TIER,
+} from '../../../supabase/functions/relay/tierConstants';
+
+const TIER_CAPS = {
+  [FREE_TIER]: 'medium',
+  [MAX_TIER]: 'high',
+} as const;
 
 describe('relay GPT-5 reasoning effort caps', () => {
   it('caps chat-completions xhigh to medium for free tier GPT-5 requests', () => {
@@ -17,8 +27,9 @@ describe('relay GPT-5 reasoning effort caps', () => {
     assert.deepEqual(
       capOpenAIReasoningEffortForTier(body, {
         provider: 'openai',
-        tier: 'free',
+        tier: FREE_TIER,
         modelName: body.model,
+        tierCaps: TIER_CAPS,
       }),
       {
         model: 'gpt-5-mini-2025-08-15',
@@ -36,8 +47,9 @@ describe('relay GPT-5 reasoning effort caps', () => {
     assert.deepEqual(
       capOpenAIReasoningEffortForTier(body, {
         provider: 'openai',
-        tier: 'Max',
+        tier: MAX_TIER,
         modelName: body.model,
+        tierCaps: TIER_CAPS,
       }),
       {
         model: 'openai/gpt5-mini',
@@ -55,8 +67,9 @@ describe('relay GPT-5 reasoning effort caps', () => {
     assert.equal(
       capOpenAIReasoningEffortForTier(body, {
         provider: 'openai',
-        tier: 'Ultra',
+        tier: ULTRA_TIER,
         modelName: body.model,
+        tierCaps: TIER_CAPS,
       }),
       body,
     );
@@ -75,16 +88,18 @@ describe('relay GPT-5 reasoning effort caps', () => {
     assert.equal(
       capOpenAIReasoningEffortForTier(nonGpt5Body, {
         provider: 'openai',
-        tier: 'free',
+        tier: FREE_TIER,
         modelName: nonGpt5Body.model,
+        tierCaps: TIER_CAPS,
       }),
       nonGpt5Body,
     );
     assert.equal(
       capOpenAIReasoningEffortForTier(nonOpenAIBody, {
         provider: 'deepseek',
-        tier: 'free',
+        tier: FREE_TIER,
         modelName: nonOpenAIBody.model,
+        tierCaps: TIER_CAPS,
       }),
       nonOpenAIBody,
     );

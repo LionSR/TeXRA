@@ -69,8 +69,13 @@ import {
   getSpendingLimit,
   ULTRA_TIER,
   FREE_TIER,
+  MAX_TIER,
 } from './models.ts';
-import { capOpenAIReasoningEffortForTier } from './reasoning.ts';
+import {
+  capOpenAIReasoningEffortForTier,
+  isJsonRecord,
+  type ReasoningEffortCap,
+} from './reasoning.ts';
 
 // =============================================================================
 // Constants
@@ -85,6 +90,11 @@ const RELAY_VERSION = '1.9.0';
 
 // Upstream request timeout (390s to fit within Supabase's 400s wall clock limit)
 const UPSTREAM_TIMEOUT_MS = 390000;
+
+const OPENAI_GPT5_REASONING_EFFORT_CAPS: Record<string, ReasoningEffortCap> = {
+  [FREE_TIER]: 'medium',
+  [MAX_TIER]: 'high',
+};
 
 // =============================================================================
 // Types
@@ -108,8 +118,6 @@ type ProviderKey =
   | 'dashscope'
   | 'minimax'
   | 'glm';
-
-type JsonRecord = Record<string, unknown>;
 
 // =============================================================================
 // Provider Configuration
@@ -169,10 +177,6 @@ const PROVIDER_CONFIGS: Record<ProviderKey, ProviderConfig> = {
 
 function getProviderConfig(provider: string): ProviderConfig | null {
   return PROVIDER_CONFIGS[provider as ProviderKey] || null;
-}
-
-function isJsonRecord(value: unknown): value is JsonRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function getEnabledProviders(): string[] {
@@ -614,6 +618,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
       provider,
       tier: userTier,
       modelName,
+      tierCaps: OPENAI_GPT5_REASONING_EFFORT_CAPS,
     });
     if (cappedBody !== requestBodyJson) {
       requestBody = JSON.stringify(cappedBody);
@@ -644,6 +649,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     'proxy-authorization',
     'proxy-connection',
     'authorization',
+    'content-length',
     'x-api-key',
     'x-goog-api-key',
     'x-texra-auth',

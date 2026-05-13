@@ -2,11 +2,13 @@ export interface ReasoningEffortCapContext {
   provider: string;
   tier: string;
   modelName: string | null;
+  tierCaps: Record<string, ReasoningEffortCap>;
 }
 
-type JsonRecord = Record<string, unknown>;
+export type ReasoningEffortCap = 'high' | 'medium';
+export type JsonRecord = Record<string, unknown>;
 
-function isRecord(value: unknown): value is JsonRecord {
+export function isJsonRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -21,10 +23,11 @@ function isGpt5Model(modelName: string | null): boolean {
   return modelPart.startsWith('gpt-5') || modelPart.startsWith('gpt5');
 }
 
-function capForTier(tier: string): 'high' | 'medium' | null {
-  if (tier === 'Max') return 'high';
-  if (tier === 'free') return 'medium';
-  return null;
+function capForTier(
+  tier: string,
+  tierCaps: Record<string, ReasoningEffortCap>,
+): ReasoningEffortCap | null {
+  return tierCaps[tier] ?? null;
 }
 
 /**
@@ -38,12 +41,12 @@ export function capOpenAIReasoningEffortForTier(
   requestBody: unknown,
   context: ReasoningEffortCapContext,
 ): unknown {
-  const cappedEffort = capForTier(context.tier);
+  const cappedEffort = capForTier(context.tier, context.tierCaps);
   if (
     context.provider !== 'openai' ||
     !cappedEffort ||
     !isGpt5Model(context.modelName) ||
-    !isRecord(requestBody)
+    !isJsonRecord(requestBody)
   ) {
     return requestBody;
   }
@@ -59,7 +62,7 @@ export function capOpenAIReasoningEffortForTier(
   }
 
   if (
-    isRecord(requestBody.reasoning) &&
+    isJsonRecord(requestBody.reasoning) &&
     requestBody.reasoning.effort === 'xhigh'
   ) {
     nextBody().reasoning = {
