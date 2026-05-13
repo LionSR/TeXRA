@@ -17,6 +17,11 @@ export interface LaunchOptions {
    */
   workspacePath?: string;
   /**
+   * Electron user-data directory. Supplying this lets a test relaunch the
+   * desktop app against the same profile so app-scoped stores persist.
+   */
+  userDataPath?: string;
+  /**
    * Extra environment variables to pass to the Electron child process.
    * Useful for stubbing out keychain access.
    */
@@ -68,6 +73,9 @@ export async function launchTexraApp(
       ...process.env,
       // Hint to platform/secrets layer to avoid the macOS keychain prompt.
       TEXRA_DISABLE_KEYCHAIN: '1',
+      ...(options.userDataPath
+        ? { TEXRA_DESKTOP_E2E_USER_DATA_PATH: options.userDataPath }
+        : {}),
       NODE_ENV: 'production',
       ...options.env,
     },
@@ -93,4 +101,32 @@ export async function closeTexraApp(launched: LaunchedApp): Promise<void> {
       // teardown failure that masks the real test outcome.
     }
   }
+}
+
+export async function dismissOnboarding(page: Page): Promise<void> {
+  const hasDismissButton = await page
+    .waitForFunction(
+      () => {
+        const btn = Array.from(document.querySelectorAll('wa-button')).find(
+          (b) => b.textContent?.trim() === 'Got it',
+        );
+        return btn instanceof HTMLElement;
+      },
+      undefined,
+      { timeout: 10_000 },
+    )
+    .then(() => true)
+    .catch(() => false);
+
+  if (!hasDismissButton) return;
+
+  await page.evaluate(() => {
+    const btn = Array.from(document.querySelectorAll('wa-button')).find(
+      (b) => b.textContent?.trim() === 'Got it',
+    );
+    if (btn instanceof HTMLElement) btn.click();
+  });
+  await page
+    .locator('wa-dialog.desktop-onboarding')
+    .waitFor({ state: 'hidden', timeout: 5000 });
 }

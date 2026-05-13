@@ -150,12 +150,12 @@ close it:
   in-flight conversation from `RunStorageService` and re-attaching
   PocketFlow handles — substantial work tracked separately.
 
-### E. Multi-launch settings persistence test
+### E. Multi-launch settings persistence test — shipped
 
-- **Done when:** a Playwright fixture launches the desktop, writes a
-  Memory entry, closes, relaunches, and verifies the entry survives.
-- Notes: requires sharing the user-data directory between launches by
-  pinning `app.setPath('userData', ...)` for the test run.
+- **Status:** shipped in `packages/desktop/tests/e2e/settingsPersistence.spec.ts`.
+  The fixture launches the desktop, writes a real Memory entry into the
+  workspace storage rooted under a pinned Electron user-data directory, closes,
+  relaunches, and verifies that the Memory tab lists the same entry.
 
 ### F. Native auto-installer for external tools
 
