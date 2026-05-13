@@ -37,16 +37,11 @@ export function reportFatalStartupError(error: unknown): void {
 }
 
 export function installFatalStartupHandlers(): () => void {
-  const onUncaughtException = (error: unknown) =>
-    reportFatalStartupError(error);
-  const onUnhandledRejection = (error: unknown) =>
-    reportFatalStartupError(error);
-
-  process.on('uncaughtException', onUncaughtException);
-  process.on('unhandledRejection', onUnhandledRejection);
+  process.on('uncaughtException', reportFatalStartupError);
+  process.on('unhandledRejection', reportFatalStartupError);
 
   return () => {
-    process.off('uncaughtException', onUncaughtException);
-    process.off('unhandledRejection', onUnhandledRejection);
+    process.off('uncaughtException', reportFatalStartupError);
+    process.off('unhandledRejection', reportFatalStartupError);
   };
 }

@@ -1,7 +1,7 @@
 import * as path from 'path';
 
 // Platform imports
-import { getWorkspaceProvider } from '@agent/core/workspace';
+import { platform } from '@platform/platform';
 
 // Local imports - filesystem
 import { RelativeFS } from './relativeFS';
@@ -17,7 +17,7 @@ import {
  */
 export class WorkspaceFS extends RelativeFS {
   protected static override getBasePath(): string {
-    const wsPath = getWorkspaceProvider().getWorkspacePath();
+    const wsPath = platform().workspace.getWorkspacePath();
     if (!wsPath) {
       throw new Error('Workspace path is not available.');
     }
@@ -25,7 +25,7 @@ export class WorkspaceFS extends RelativeFS {
   }
 
   public static getPath(): string | undefined {
-    return getWorkspaceProvider().getWorkspacePath();
+    return platform().workspace.getWorkspacePath();
   }
 
   /** Workspace-relative path via the platform's symlink-aware asRelativePath. */
@@ -33,9 +33,7 @@ export class WorkspaceFS extends RelativeFS {
     if (!this.getPath()) {
       return filePath;
     }
-    return getWorkspaceProvider()
-      .asRelativePath(filePath)
-      .replaceAll('\\', '/');
+    return platform().workspace.asRelativePath(filePath).replaceAll('\\', '/');
   }
 
   /** Absolute path from relative. Already-absolute paths pass through. */

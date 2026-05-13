@@ -54,19 +54,14 @@ export function createDesktopViewStateIpc(
     });
   }
 
-  function postInitialState() {
-    postTheme();
-    postDebugMode();
-  }
-
-  const handleNativeThemeUpdate = () => postTheme();
-  nativeTheme.on('updated', handleNativeThemeUpdate);
+  nativeTheme.on('updated', postTheme);
 
   return {
     handleMessage(message: DesktopCommandMessage): boolean {
       switch (message.command) {
         case MAIN_VIEW_COMMANDS.WEBVIEW_READY:
-          postInitialState();
+          postTheme();
+          postDebugMode();
           return true;
         case MAIN_VIEW_COMMANDS.GET_THEME:
           postTheme();
@@ -79,7 +74,7 @@ export function createDesktopViewStateIpc(
       }
     },
     dispose() {
-      nativeTheme.off('updated', handleNativeThemeUpdate);
+      nativeTheme.off('updated', postTheme);
     },
   };
 }

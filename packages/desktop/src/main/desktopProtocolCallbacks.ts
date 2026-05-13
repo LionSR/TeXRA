@@ -131,7 +131,7 @@ export function createDesktopProtocolCallbackRouter(
     routeArgv(argv) {
       let routedCount = 0;
       for (const rawUrl of findDesktopProtocolUrls(argv)) {
-        routedCount += routeUrl(rawUrl) ? 1 : 0;
+        if (routeUrl(rawUrl)) routedCount++;
       }
       return routedCount;
     },

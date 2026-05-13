@@ -38,11 +38,12 @@ export function getVisibleModels(): string[] {
   );
 }
 
-/** Resolve a model to a valid visible model. */
+/**
+ * Resolve a model against the user's visible-models list.
+ */
 export function resolveVisibleModel(model: string): string {
   const visibleModels = getVisibleModels();
-  if (visibleModels.length === 0) return model;
-  if (visibleModels.includes(model)) return model;
+  if (visibleModels.length === 0 || visibleModels.includes(model)) return model;
   return visibleModels[0];
 }
 
