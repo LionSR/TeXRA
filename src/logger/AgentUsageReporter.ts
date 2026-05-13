@@ -1,8 +1,5 @@
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import {
-  getAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 
 import type {
   ExtendedTokenUsageStats,
@@ -15,8 +12,8 @@ export class AgentUsageReporter {
   constructor(
     private readonly logger: AgentLogger,
     private readonly streamId: StreamTabId,
-    private readonly agentCategory: AgentCategory = AgentCategory.Workflow,
-    private readonly runtimeHost: AgentRuntimeHost = getAgentRuntimeHost(),
+    private readonly agentCategory: AgentCategory,
+    private readonly runtimeHost: AgentRuntimeHost,
   ) {}
 
   report(
