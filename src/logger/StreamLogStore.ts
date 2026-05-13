@@ -30,7 +30,7 @@ export class StreamLogStore {
   private readonly logs = new Map<StreamTabId, StreamLog>();
   private readonly listeners = new Set<StreamLogListener>();
   private readonly dirtyStreamIds = new Set<StreamTabId>();
-  private readonly kv = new KVStore(STREAM_LOGS_DIR);
+  private readonly kv = new KVStore(STREAM_LOGS_DIR, { compactJson: true });
 
   /**
    * Lightweight summary per stream (first/last timestamp). Populated at load
@@ -615,7 +615,7 @@ export class StreamLogStore {
       dirtyIds.map((streamId) => {
         const logInstance = this.logs.get(streamId);
         return logInstance
-          ? this.kv.write(streamId, logInstance.toJSON())
+          ? this.kv.write(streamId, logInstance.toPersistedEntries())
           : Promise.resolve();
       }),
     )
