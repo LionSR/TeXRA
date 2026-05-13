@@ -5,7 +5,11 @@ import {
   issuePollingSource,
   type IssueKey,
 } from './IssuePollingSource';
-import { prKeyToString, prPollingSource, type PRKey } from './PRPollingSource';
+import {
+  prKeyToString,
+  prPollingSource,
+  type PRSubscribeInput,
+} from './PRPollingSource';
 import {
   repoKeyOf,
   repoPollingSource,
@@ -13,7 +17,10 @@ import {
 } from './RepoPollingSource';
 import { StreamSubscriptionRegistry } from './StreamSubscriptionRegistry';
 
-const prSubscriptions = new StreamSubscriptionRegistry<string, PRKey>({
+const prSubscriptions = new StreamSubscriptionRegistry<
+  string,
+  PRSubscribeInput
+>({
   name: 'PRStreamSubscriptionRegistry',
   source: prPollingSource,
   keyOf: prKeyToString,
@@ -31,13 +38,16 @@ export function listPRSubscriptionBindings(
   return prSubscriptions.list(keys);
 }
 
-export function bindPRSubscription(streamId: StreamTabId, pr: PRKey): boolean {
+export function bindPRSubscription(
+  streamId: StreamTabId,
+  pr: PRSubscribeInput,
+): boolean {
   return prSubscriptions.bind(streamId, pr);
 }
 
 export function unbindPRSubscription(
   streamId: StreamTabId,
-  pr: PRKey,
+  pr: PRSubscribeInput,
 ): boolean {
   return prSubscriptions.unbind(streamId, pr);
 }
