@@ -45,8 +45,6 @@ import {
   formatRepoSubscriptionError,
 } from './formatRepoEvent';
 import { getNewestTimestamp, setRecent, trimMap, trimSet } from './formatUtils';
-import type { Disposable } from '@platform/interfaces/disposable';
-
 import { ghGet } from './githubClient';
 import {
   PollingSourceBase,
@@ -60,6 +58,8 @@ import {
   type GhReviewComment,
 } from './prTypes';
 import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
+
+import type { Disposable } from '@platform/interfaces/disposable';
 
 // We pull all "updated since" data; a sufficiently large window guarantees we
 // catch transitions even after a brief network outage. GitHub caps these
@@ -177,7 +177,7 @@ export class RepoPollingSource extends PollingSourceBase<
     return this.register(key, () => createInitialState(owner, repo), onEvent);
   }
 
-  protected emitKeysChangedBusEvent(keys: readonly RepoKey[]): void {
+  protected emitKeysChangedEvent(keys: readonly RepoKey[]): void {
     emitGitHubSubscriptionChanged('repoSubscriptionsChanged', { keys });
   }
 

@@ -2,9 +2,9 @@
  * Shared lifecycle, error handling, and timer management for the GitHub
  * polling sources.
  *
- * Subclasses (per-PR vs per-repo) implement only `pollOne()` — the actual
- * endpoints to hit and per-tick state to mutate — plus the few format /
- * bus-event hooks that name the subscription type. Everything around it
+ * Subclasses implement only `pollOne()` — the actual endpoints to hit and
+ * per-tick state to mutate — plus the few format / event hooks that name the
+ * subscription type. Everything around it
  * (subscribe/unsubscribe, change-listener fan-out, the tick loop with
  * `tickInFlight` guard, classification of GitHub errors into auth /
  * permanent / rate-limit / transient, jittered exponential backoff, and the
@@ -14,13 +14,13 @@
 import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { AgentLogger } from '@logger/AgentLogger';
 
-import type { Disposable } from '@platform/interfaces/disposable';
-
 import {
   GitHubAuthError,
   GitHubPermanentError,
   GitHubRateLimitError,
 } from './githubClient';
+
+import type { Disposable } from '@platform/interfaces/disposable';
 
 export interface BasePollSubscriptionState {
   listeners: Set<(text: string) => void>;
@@ -52,6 +52,9 @@ export abstract class PollingSourceBase<
 > {
   protected readonly logger: AgentLogger;
   private readonly subscriptions = new Map<K, S>();
+  private readonly keysChangedListeners = new Set<
+    (keys: readonly K[]) => void
+  >();
   private timer: ReturnType<typeof setInterval> | undefined;
   private tickInFlight = false;
 
@@ -71,8 +74,8 @@ export abstract class PollingSourceBase<
   /** Subclass: format a halted-subscription error event for the listener. */
   protected abstract formatErrorEvent(key: K, state: S, detail: string): string;
 
-  /** Subclass: fire the bus event that names the subscription type. */
-  protected abstract emitKeysChangedBusEvent(keys: readonly K[]): void;
+  /** Subclass: publish the externally visible subscription-changed event. */
+  protected abstract emitKeysChangedEvent(keys: readonly K[]): void;
 
   activeKeys(): readonly K[] {
     return [...this.subscriptions.keys()];
@@ -80,6 +83,15 @@ export abstract class PollingSourceBase<
 
   has(key: K): boolean {
     return this.subscriptions.has(key);
+  }
+
+  onKeysChanged(listener: (keys: readonly K[]) => void): Disposable {
+    this.keysChangedListeners.add(listener);
+    return {
+      dispose: () => {
+        this.keysChangedListeners.delete(listener);
+      },
+    };
   }
 
   disposeAll(): void {
@@ -152,7 +164,15 @@ export abstract class PollingSourceBase<
   }
 
   private notifyKeysChanged(): void {
-    this.emitKeysChangedBusEvent([...this.subscriptions.keys()]);
+    const keys = [...this.subscriptions.keys()];
+    for (const listener of this.keysChangedListeners) {
+      try {
+        listener(keys);
+      } catch (err) {
+        this.logger.warn(`Keys-changed listener threw: ${String(err)}`);
+      }
+    }
+    this.emitKeysChangedEvent(keys);
   }
 
   private ensureTimer(): void {
