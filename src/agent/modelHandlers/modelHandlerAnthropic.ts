@@ -922,13 +922,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
             partialTextLength: partialText.length,
           },
         };
-        // Aborts are control flow, not failures. Everything else is a warn
-        // so silent proxy drops surface without debug logging enabled.
-        if (isAbort) {
-          this.logger.debug(logMessage, logData);
-        } else {
-          this.logger.warn(logMessage, logData);
-        }
+        // The retry node owns user-facing failure reporting. Keep stream
+        // diagnostics available without showing a second visible failure row.
+        this.logger.debug(logMessage, logData);
 
         attachStreamDiagnostics(enrichedError, diagnostics);
         attachPartialText(enrichedError, partialText);
