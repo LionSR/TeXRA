@@ -12,8 +12,8 @@ importers:
         specifier: ^0.95.2
         version: 0.95.2(zod@4.4.3)
       '@awesome.me/webawesome':
-        specifier: ^3.6.0
-        version: 3.6.0(@floating-ui/utils@0.2.11)(@types/react@19.2.14)
+        specifier: ^3.7.0
+        version: 3.7.0(@floating-ui/utils@0.2.11)(@types/react@19.2.14)
       '@cantoo/pdf-lib':
         specifier: ^2.6.5
         version: 2.6.5
@@ -381,8 +381,8 @@ importers:
         specifier: ^0.95.2
         version: 0.95.2(zod@4.4.3)
       '@awesome.me/webawesome':
-        specifier: ^3.6.0
-        version: 3.6.0(@floating-ui/utils@0.2.11)(@types/react@19.2.14)
+        specifier: ^3.7.0
+        version: 3.7.0(@floating-ui/utils@0.2.11)(@types/react@19.2.14)
       '@cantoo/pdf-lib':
         specifier: ^2.6.5
         version: 2.6.5
@@ -711,8 +711,8 @@ packages:
   '@asamuzakjp/nwsapi@2.3.9':
     resolution: {integrity: sha512-n8GuYSrI9bF7FFZ/SjhwevlHc8xaVlb/7HmHelnc/PZXBD2ZR49NnN9sMMuDdEGPeeRQ5d0hqlSlEpgCX3Wl0Q==}
 
-  '@awesome.me/webawesome@3.6.0':
-    resolution: {integrity: sha512-cUQWAq5KwQzy1fsMFUSJqGL6z/s9/VFOqnypOZOXZdpsfnD7gVFKnY6if9EbgzxtCXiHTOnEZ8N3mnwW2Z/Sww==}
+  '@awesome.me/webawesome@3.7.0':
+    resolution: {integrity: sha512-rAhTpJsJShv/4JWWGh+d7yQZ3pmk9j+YbwZjWWbgnPQPA+9I2/BrTUgNY+bOLehUovIbDd11J6+myGwGh0hl2w==}
     engines: {node: '>=14.17.0'}
 
   '@azu/format-text@1.0.2':
@@ -6231,7 +6231,7 @@ snapshots:
 
   '@asamuzakjp/nwsapi@2.3.9': {}
 
-  '@awesome.me/webawesome@3.6.0(@floating-ui/utils@0.2.11)(@types/react@19.2.14)':
+  '@awesome.me/webawesome@3.7.0(@floating-ui/utils@0.2.11)(@types/react@19.2.14)':
     dependencies:
       '@ctrl/tinycolor': 4.1.0
       '@floating-ui/dom': 1.7.6
