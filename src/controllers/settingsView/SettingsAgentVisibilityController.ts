@@ -71,23 +71,19 @@ export class SettingsAgentVisibilityController {
     const current =
       raw ?? allAgents.map((entry) => agentKey(entry.source, entry.name));
 
-    const updated = input.enabled
-      ? this.enableAllForSource(current, targetKeys)
-      : current.filter(
-          (key) => !targetKeys.has(key) && !targetLegacyNames.has(key),
-        );
+    let updated: string[];
+    if (input.enabled) {
+      const currentSet = new Set(current);
+      updated = [
+        ...current,
+        ...[...targetKeys].filter((key) => !currentSet.has(key)),
+      ];
+    } else {
+      updated = current.filter(
+        (key) => !targetKeys.has(key) && !targetLegacyNames.has(key),
+      );
+    }
 
     await this.deps.state.setEnabledAgentKeys(input.category, updated);
-  }
-
-  private enableAllForSource(
-    current: string[],
-    targetKeys: Set<string>,
-  ): string[] {
-    const currentSet = new Set(current);
-    return [
-      ...current,
-      ...[...targetKeys].filter((key) => !currentSet.has(key)),
-    ];
   }
 }
