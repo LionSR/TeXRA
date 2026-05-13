@@ -50,6 +50,17 @@ function getRequestId(permission: { data: unknown }): string {
   return (permission.data as ExternalInquiryPermission).requestId;
 }
 
+function safeHttpUrl(link: string): string | undefined {
+  try {
+    const url = new URL(link);
+    return url.protocol === 'http:' || url.protocol === 'https:'
+      ? url.href
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Clear draft for a resolved inquiry. Called from eventHandlers on submit/reject. */
 export function clearInquiryDraft(requestId: string): void {
   draftCache.delete(requestId);
@@ -265,7 +276,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
           ? html`
               <div class="external-inquiry-request__session-links-known">
                 <div class="external-inquiry-request__session-links-label">
-                  Known external sessions for follow-ups:
+                  Known external session links:
                 </div>
                 <div class="external-inquiry-request__session-links-list">
                   ${repeat(
@@ -279,7 +290,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
           : nothing}
         <div class="external-inquiry-request__session-links-input-group">
           <div class="external-inquiry-request__session-links-label">
-            Save external chat link for follow-ups:
+            Save external session link for follow-ups:
           </div>
           <div class="external-inquiry-request__chat-links">
             Open:
@@ -299,7 +310,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
           </div>
           <textarea
             class="external-inquiry-request__session-links-input"
-            placeholder="Paste one external thread link per line..."
+            placeholder="Paste one external session link per line..."
             .value=${live(this.sessionLinksText)}
             @input=${this.handleSessionLinksInput}
           ></textarea>
@@ -312,7 +323,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
   }
 
   private renderKnownSessionLink(link: string): TemplateResult {
-    const href = ExternalInquiryPanel.safeHttpUrl(link);
+    const href = safeHttpUrl(link);
     if (!href) {
       return html`
         <div class="external-inquiry-request__session-link-item">${link}</div>
@@ -328,17 +339,6 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
         >${link}</a
       >
     `;
-  }
-
-  private static safeHttpUrl(link: string): string | undefined {
-    try {
-      const url = new URL(link);
-      return url.protocol === 'http:' || url.protocol === 'https:'
-        ? url.href
-        : undefined;
-    } catch {
-      return undefined;
-    }
   }
 
   private renderActions(): TemplateResult {
