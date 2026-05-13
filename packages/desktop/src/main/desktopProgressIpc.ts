@@ -35,7 +35,7 @@ export function createDesktopProgressIpc(
       console.warn(`Unsupported desktop Progress command: ${message.command}`);
     });
 
-  function runAsync(work: Promise<void>): void {
+  function runAsync(work: Promise<unknown>): void {
     void work.catch(reportAsyncError);
   }
 
@@ -87,11 +87,7 @@ export function createDesktopProgressIpc(
           options.progress.handlePlanApprovalAction(result.data);
           return true;
         case PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION:
-          runAsync(
-            options.progress
-              .handleAgentProposalAction(result.data)
-              .then(() => {}),
-          );
+          runAsync(options.progress.handleAgentProposalAction(result.data));
           return true;
         case PROGRESS_VIEW_COMMANDS.OPEN_FILE:
           runAsync(

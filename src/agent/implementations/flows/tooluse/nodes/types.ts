@@ -82,24 +82,6 @@ const LegacyConversationSchema = z.looseObject({
   conversation: z.array(z.unknown()),
 });
 
-/** Try to interpret an object as ToolUseRunShared, migrating `conversation` to `messages` if needed. */
-function tryAsRunShared(
-  obj: unknown,
-): { data: ToolUseRunShared; migrated: boolean } | null {
-  if (!obj || typeof obj !== 'object') return null;
-  if (MessagesSchema.safeParse(obj).success) {
-    return { data: obj as ToolUseRunShared, migrated: false };
-  }
-  if (LegacyConversationSchema.safeParse(obj).success) {
-    const { conversation, ...rest } = obj as Record<string, unknown>;
-    return {
-      data: { ...rest, messages: conversation } as ToolUseRunShared,
-      migrated: true,
-    };
-  }
-  return null;
-}
-
 /**
  * Migrate legacy shared state formats to current ToolUseRunShared.
  * Handles: flat with `messages`, flat with `conversation`, and nested `{ state: {...} }`.
@@ -110,10 +92,21 @@ export function migrateSharedState(
 ): { data: ToolUseRunShared; migrated: boolean } | null {
   if (!shared || typeof shared !== 'object') return null;
 
-  // Flat format (no nested `{ state: {...} }` wrapper)
-  if (!('state' in shared)) return tryAsRunShared(shared);
+  // Unwrap nested `{ state: {...} }` wrapper if present. The unwrap itself
+  // counts as a migration even if the inner shape is already canonical.
+  const nested = 'state' in shared;
+  const obj = nested ? (shared as Record<string, unknown>).state : shared;
+  if (!obj || typeof obj !== 'object') return null;
 
-  // Nested format: unwrap and parse inner object
-  const inner = tryAsRunShared((shared as Record<string, unknown>).state);
-  return inner ? { data: inner.data, migrated: true } : null;
+  if (MessagesSchema.safeParse(obj).success) {
+    return { data: obj as ToolUseRunShared, migrated: nested };
+  }
+  if (LegacyConversationSchema.safeParse(obj).success) {
+    const { conversation, ...rest } = obj as Record<string, unknown>;
+    return {
+      data: { ...rest, messages: conversation } as ToolUseRunShared,
+      migrated: true,
+    };
+  }
+  return null;
 }
