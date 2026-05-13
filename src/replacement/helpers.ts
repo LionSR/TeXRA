@@ -14,7 +14,6 @@ export {
   FENCED_LATEX_ENVIRONMENT_PATTERN,
   FENCED_LATEX_BLOCK_PATTERN_MULTILINE,
   FENCED_LATEX_BLOCK_PATTERN_INLINE,
-  FENCED_LATEX_BLOCK_PATTERNS,
 } from './constants';
 
 // ============================================================================
