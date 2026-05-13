@@ -22,6 +22,23 @@ logger.initialize(CHANNEL);
 
 // Tool configurations have been moved to utils/toolUtils.ts for centralized management
 
+export function buildKpathseaSearchPath(
+  prependPaths: readonly string[],
+  existingValue: string | undefined = undefined,
+  delimiter: string = path.delimiter,
+): string | undefined {
+  const prefix = prependPaths
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .join(delimiter);
+  if (!prefix) return undefined;
+
+  const value = existingValue
+    ? `${prefix}${delimiter}${existingValue}`
+    : prefix;
+  return value.endsWith(delimiter) ? value : `${value}${delimiter}`;
+}
+
 /**
  * Compile a LaTeX file to PDF
  * @param latexLocation FileLocation for the LaTeX file
@@ -65,15 +82,30 @@ export async function compileLatex2Pdf(
     // Use path.delimiter for cross-platform compatibility (`:` on Unix, `;` on Windows)
     const needsTexInputs = texInputParts.length > 1 || process.env.TEXINPUTS;
     const texInputs = needsTexInputs
-      ? texInputParts.join(path.delimiter) +
-        path.delimiter +
-        (process.env.TEXINPUTS ?? '')
+      ? buildKpathseaSearchPath(texInputParts, process.env.TEXINPUTS)
       : undefined;
+    const bibSearchParts = workspacePath ? [workspacePath] : [];
+    const bibInputs = buildKpathseaSearchPath(
+      bibSearchParts,
+      process.env.BIBINPUTS,
+    );
+    const bstInputs = buildKpathseaSearchPath(
+      bibSearchParts,
+      process.env.BSTINPUTS,
+    );
     const env: Record<string, string> = {
       ...(texInputs && { TEXINPUTS: texInputs }),
+      ...(bibInputs && { BIBINPUTS: bibInputs }),
+      ...(bstInputs && { BSTINPUTS: bstInputs }),
     };
     if (texInputs) {
       logger.debug(channel, `Setting TEXINPUTS to: ${texInputs}`);
+    }
+    if (bibInputs) {
+      logger.debug(channel, `Setting BIBINPUTS to: ${bibInputs}`);
+    }
+    if (bstInputs) {
+      logger.debug(channel, `Setting BSTINPUTS to: ${bstInputs}`);
     }
 
     const latexmkArgs = [
