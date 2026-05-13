@@ -713,21 +713,27 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   .external-inquiry-request__session-link-item {
+    display: block;
     font-size: var(--font-size-sm);
     font-family: var(--wa-font-family-mono);
     color: var(--wa-color-text-link);
+    text-decoration: none;
     word-break: break-word;
+  }
+
+  a.external-inquiry-request__session-link-item:hover {
+    text-decoration: underline;
   }
 
   .external-inquiry-request__session-links-input {
     width: 100%;
-    min-height: 72px;
-    max-height: min(18vh, 8rem);
+    min-height: 2.75rem;
+    max-height: min(12vh, 5rem);
     resize: vertical;
     font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
-    padding: ${sp.medium};
+    padding: ${sp.small} ${sp.medium};
     background: var(--wa-form-control-background-color);
     color: var(--wa-form-control-text-color);
     border: var(--border-thin) solid var(--wa-form-control-border-color);
@@ -814,8 +820,8 @@ export const requestPanelStyles: CSSResult = css`
     }
 
     .external-inquiry-request__session-links-input {
-      min-height: 64px;
-      max-height: min(16vh, 7rem);
+      min-height: 2.5rem;
+      max-height: min(10vh, 4.5rem);
     }
   }
 

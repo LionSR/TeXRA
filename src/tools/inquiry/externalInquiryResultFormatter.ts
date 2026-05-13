@@ -47,6 +47,31 @@ function appendSessionLinks(
   lines.push('', heading, ...sessionLinks.map((link) => `- ${link}`));
 }
 
+function appendContinuationGuidance(
+  lines: string[],
+  persisted: PersistedExternalInquiryTurn,
+  knownSessionLinks: string[] | undefined,
+): void {
+  const { threadId } = persisted;
+  const hasSessionLinks = (knownSessionLinks?.length ?? 0) > 0;
+
+  lines.push(
+    '',
+    `Use thread_id=${threadId} to continue this external inquiry thread.`,
+  );
+
+  if (hasSessionLinks) {
+    lines.push(
+      'For follow-up inquiries, pass that thread_id so the user is shown the known external session links and can continue the same external conversation.',
+    );
+    return;
+  }
+
+  lines.push(
+    'Ask the user to paste the external chat URL when they submit an answer so later follow-ups can return to the same external conversation.',
+  );
+}
+
 export function collectKnownSessionLinks(
   manifest: ExternalInquiryThreadManifest | null | undefined,
 ): string[] | undefined {
@@ -64,6 +89,12 @@ export function collectKnownSessionLinks(
   }
 
   return known.length ? known : undefined;
+}
+
+function getKnownSessionLinks(
+  persisted: PersistedExternalInquiryTurn,
+): string[] | undefined {
+  return collectKnownSessionLinks(persisted.manifest);
 }
 
 export function buildRejectedExternalInquiryResult(
@@ -90,11 +121,11 @@ function buildExternalInquiryOutput(
     'Answer from external model:',
     '',
     answer,
-    '',
-    `Use thread_id=${persisted.threadId} to continue this external conversation.`,
   ];
 
-  appendSessionLinks(lines, persisted.turn.sessionLinks ?? undefined);
+  const knownSessionLinks = getKnownSessionLinks(persisted);
+  appendContinuationGuidance(lines, persisted, knownSessionLinks);
+  appendSessionLinks(lines, knownSessionLinks);
   appendManifestHint(lines, currentManifestPath(persisted));
 
   return lines.join('\n');
@@ -184,10 +215,11 @@ export function buildExternalInquiryResult(params: {
       `Thread ID: ${params.persisted.threadId}`,
       'The full answer has been saved to /executions/current/report.',
       'Use the executions tool with path=/executions/current/report to inspect it.',
-      `Use thread_id=${params.persisted.threadId} to continue this external conversation.`,
     ];
 
-    appendSessionLinks(lines, params.persisted.turn.sessionLinks ?? undefined);
+    const knownSessionLinks = getKnownSessionLinks(params.persisted);
+    appendContinuationGuidance(lines, params.persisted, knownSessionLinks);
+    appendSessionLinks(lines, knownSessionLinks);
     appendManifestHint(lines, currentManifestPath(params.persisted));
 
     if (preview) {
