@@ -51,6 +51,12 @@ export const streamStateContext = createContext<StreamContextValue>(
  */
 export interface StreamLogContextValue {
   logs: LogMessageData[];
+  /** Existing log-message indices updated by the most recent backend delta. */
+  updatedMessageIndices: readonly number[];
+  /** Generation immediately before `updatedMessageIndices` was collected. */
+  updatedMessageBaseGeneration: number;
+  /** Current log generation. */
+  messageGeneration: number;
   taskGroups: TaskGroup[];
   isToolUse: boolean;
   hasStreams: boolean;
@@ -64,6 +70,9 @@ export interface StreamLogContextValue {
 
 export const EMPTY_LOG_CONTEXT: StreamLogContextValue = {
   logs: [],
+  updatedMessageIndices: [],
+  updatedMessageBaseGeneration: 0,
+  messageGeneration: 0,
   taskGroups: [],
   isToolUse: false,
   hasStreams: false,
