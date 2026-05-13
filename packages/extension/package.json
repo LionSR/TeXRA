@@ -1568,7 +1568,7 @@
     "dotenv": "^17.4.2",
     "execa": "^9.6.1",
     "fast-json-stable-stringify": "^2.1.0",
-    "fast-xml-parser": "^5.7.3",
+    "fast-xml-parser": "^5.8.0",
     "fs-extra": "^11.3.5",
     "glob": "^13.0.6",
     "he": "^1.2.0",
