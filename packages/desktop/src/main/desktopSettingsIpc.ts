@@ -192,11 +192,6 @@ async function buildDefaultToolDashboardItems(
   return buildToolDashboardItems(cachedResults);
 }
 
-async function refreshDefaultToolAvailability(): Promise<void> {
-  const { refreshToolAvailability } = await import('@tools/toolAvailability');
-  await refreshToolAvailability();
-}
-
 async function getCachedToolCheckResults(): Promise<
   ExternalToolCheckResult[] | undefined
 > {
@@ -242,8 +237,7 @@ export function createDesktopSettingsIpc(
     options.buildToolDashboardItems == null;
   const buildToolDashboardItems =
     options.buildToolDashboardItems ?? buildDefaultToolDashboardItems;
-  const refreshToolAvailability =
-    options.refreshToolAvailability ?? refreshDefaultToolAvailability;
+  const refreshToolAvailability = options.refreshToolAvailability;
   const secrets = options.secrets ?? tryPlatform()?.secrets ?? emptySecrets;
   const getCustomAgentDirectory =
     options.getCustomAgentDirectory ?? (() => getAgentDirectories().custom());
@@ -983,8 +977,11 @@ export function createDesktopSettingsIpc(
   }
 
   async function recheckToolStatus(): Promise<void> {
-    await refreshToolAvailability();
-    await postToolDashboardData({ skipChecks: true });
+    const didRefresh = refreshToolAvailability != null;
+    if (didRefresh) {
+      await refreshToolAvailability();
+    }
+    await postToolDashboardData({ skipChecks: didRefresh });
   }
 
   async function runToolCommand(input: {
