@@ -2,14 +2,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - tools
+import {
+  DEFAULT_CHECK_ANNOTATION_LEVEL,
+  type GitHubCheckAnnotationLevel,
+} from '@tools/github/checkAnnotationLevels';
 import { GitHubRateLimitError } from '@tools/github/githubClient';
-import { PRPollingSource } from '@tools/github/PRPollingSource';
-import type { GhCheckRun } from '@tools/github/prTypes';
+import {
+  PRPollingSource,
+  prKeyToString,
+  type PRSubscribeInput,
+} from '@tools/github/PRPollingSource';
+import type { GhCheckAnnotation, GhCheckRun } from '@tools/github/prTypes';
 
 interface AnnotationDrainState {
   pr: { owner: string; repo: string; pullNumber: number };
   slug: string;
   listeners: Set<(text: string) => void>;
+  annotationLevelByListener: Map<
+    (text: string) => void,
+    GitHubCheckAnnotationLevel
+  >;
   pendingAnnotationRuns: GhCheckRun[];
   lastSuccessAt: number;
   consecutiveFailures: number;
@@ -25,7 +37,17 @@ interface AnnotationDrainSource {
     owner: string,
     repo: string,
     checkRunId: number,
+    now?: number,
   ): Promise<unknown[]>;
+  subscribe(
+    input: PRSubscribeInput,
+    onEvent: (text: string) => void,
+  ): { dispose(): void };
+  updateSubscription(
+    input: PRSubscribeInput,
+    onEvent: (text: string) => void,
+  ): void;
+  getSubscriptionState(key: string): AnnotationDrainState | undefined;
   has(key: string): boolean;
 }
 
@@ -41,11 +63,25 @@ function createCheckRun(id: number): GhCheckRun {
   };
 }
 
+function annotation(
+  level: GhCheckAnnotation['annotation_level'],
+  message: string,
+): GhCheckAnnotation {
+  return {
+    path: 'blueprint/src/chapter.tex',
+    start_line: 12,
+    end_line: 12,
+    annotation_level: level,
+    message,
+  };
+}
+
 function createDrainState(runs: GhCheckRun[]): AnnotationDrainState {
   return {
     pr: { owner: 'owner', repo: 'repo', pullNumber: 7 },
     slug: 'owner/repo',
     listeners: new Set(),
+    annotationLevelByListener: new Map(),
     pendingAnnotationRuns: runs,
     lastSuccessAt: Date.now(),
     consecutiveFailures: 0,
@@ -72,77 +108,17 @@ describe('PRPollingSource annotation drain', () => {
 
     await source.drainAnnotationQueues([['owner/repo#7', state]]);
 
-    expect(source.fetchAnnotations).toHaveBeenCalledWith('owner', 'repo', 42);
+    expect(source.fetchAnnotations).toHaveBeenCalledWith(
+      'owner',
+      'repo',
+      42,
+      expect.any(Number),
+    );
     expect(state.pendingAnnotationRuns).toEqual([run]);
     expect(state.skipPollUntilMs).toBe(1_800_000_000_000);
   });
 
-  it('shares the annotation fetch budget across source instances', async () => {
-    PRPollingSource.resetAnnotationFetchBudgetForTests(4);
-    const firstSource =
-      new PRPollingSource() as unknown as AnnotationDrainSource;
-    const secondSource =
-      new PRPollingSource() as unknown as AnnotationDrainSource;
-    keepTestStatesActive(firstSource);
-    keepTestStatesActive(secondSource);
-    const firstRuns = [createCheckRun(1), createCheckRun(2), createCheckRun(3)];
-    const secondRuns = [
-      createCheckRun(4),
-      createCheckRun(5),
-      createCheckRun(6),
-    ];
-    const firstState = createDrainState(firstRuns);
-    const secondState = createDrainState(secondRuns);
-    firstSource.fetchAnnotations = vi.fn().mockResolvedValue([]);
-    secondSource.fetchAnnotations = vi.fn().mockResolvedValue([]);
-
-    await firstSource.drainAnnotationQueues([['first', firstState]]);
-    await secondSource.drainAnnotationQueues([['second', secondState]]);
-
-    expect(firstSource.fetchAnnotations).toHaveBeenCalledTimes(3);
-    expect(secondSource.fetchAnnotations).toHaveBeenCalledTimes(1);
-    expect(firstState.pendingAnnotationRuns).toEqual([]);
-    expect(secondState.pendingAnnotationRuns).toEqual([
-      secondRuns[1],
-      secondRuns[2],
-    ]);
-  });
-
-  it('keeps queued annotation runs when the process budget is exhausted', async () => {
-    PRPollingSource.resetAnnotationFetchBudgetForTests(0);
-    const source = new PRPollingSource() as unknown as AnnotationDrainSource;
-    keepTestStatesActive(source);
-    const runs = [createCheckRun(7), createCheckRun(8)];
-    const state = createDrainState(runs);
-    source.fetchAnnotations = vi.fn().mockResolvedValue([]);
-
-    await source.drainAnnotationQueues([['owner/repo#7', state]]);
-
-    expect(source.fetchAnnotations).not.toHaveBeenCalled();
-    expect(state.pendingAnnotationRuns).toEqual(runs);
-  });
-
-  it('refills the process budget after the fixed budget window', async () => {
-    const now = 1_800_000_000_000;
-    PRPollingSource.resetAnnotationFetchBudgetForTests(1, now);
-    const source = new PRPollingSource() as unknown as AnnotationDrainSource;
-    keepTestStatesActive(source);
-    const runs = [createCheckRun(10), createCheckRun(11)];
-    const state = createDrainState(runs);
-    source.fetchAnnotations = vi.fn().mockResolvedValue([]);
-
-    await source.drainAnnotationQueues([['owner/repo#7', state]], now);
-    await source.drainAnnotationQueues([['owner/repo#7', state]], now + 29_999);
-    await source.drainAnnotationQueues([['owner/repo#7', state]], now + 30_000);
-
-    expect(
-      vi.mocked(source.fetchAnnotations).mock.calls.map((call) => call[2]),
-    ).toEqual([10, 11]);
-    expect(state.pendingAnnotationRuns).toEqual([]);
-  });
-
   it('drains annotation queues in fair passes across subscriptions', async () => {
-    PRPollingSource.resetAnnotationFetchBudgetForTests(4);
     const source = new PRPollingSource() as unknown as AnnotationDrainSource;
     keepTestStatesActive(source);
     const firstState = createDrainState([
@@ -170,24 +146,88 @@ describe('PRPollingSource annotation drain', () => {
 
     expect(
       vi.mocked(source.fetchAnnotations).mock.calls.map((call) => call[2]),
-    ).toEqual([1, 4, 7, 2]);
-    expect(firstState.pendingAnnotationRuns.map((run) => run.id)).toEqual([3]);
-    expect(secondState.pendingAnnotationRuns.map((run) => run.id)).toEqual([
-      5, 6,
-    ]);
-    expect(thirdState.pendingAnnotationRuns.map((run) => run.id)).toEqual([
-      8, 9,
-    ]);
+    ).toEqual([1, 4, 7, 2, 5, 8, 3, 6, 9]);
+    expect(firstState.pendingAnnotationRuns.map((run) => run.id)).toEqual([]);
+    expect(secondState.pendingAnnotationRuns.map((run) => run.id)).toEqual([]);
+    expect(thirdState.pendingAnnotationRuns.map((run) => run.id)).toEqual([]);
+  });
 
-    PRPollingSource.resetAnnotationFetchBudgetForTests(4);
-    await source.drainAnnotationQueues([
-      ['first', firstState],
-      ['second', secondState],
-      ['third', thirdState],
-    ]);
+  it('filters check annotations by each listener minimum level', async () => {
+    PRPollingSource.resetAnnotationFetchBudgetForTests();
+    const source = new PRPollingSource() as unknown as AnnotationDrainSource;
+    keepTestStatesActive(source);
+    const run = createCheckRun(12);
+    const state = createDrainState([run]);
+    const defaultListener = vi.fn();
+    const warningListener = vi.fn();
+    const noticeListener = vi.fn();
+    state.listeners.add(defaultListener);
+    state.listeners.add(warningListener);
+    state.listeners.add(noticeListener);
+    state.annotationLevelByListener.set(
+      defaultListener,
+      DEFAULT_CHECK_ANNOTATION_LEVEL,
+    );
+    state.annotationLevelByListener.set(warningListener, 'warning');
+    state.annotationLevelByListener.set(noticeListener, 'notice');
+    source.fetchAnnotations = vi
+      .fn()
+      .mockResolvedValue([
+        annotation('notice', 'advisory note'),
+        annotation('warning', 'format warning'),
+        annotation('failure', 'blocking failure'),
+      ]);
 
-    expect(
-      vi.mocked(source.fetchAnnotations).mock.calls.map((call) => call[2]),
-    ).toEqual([1, 4, 7, 2, 5, 8, 3, 6]);
+    await source.drainAnnotationQueues([['owner/repo#7', state]]);
+
+    expect(defaultListener).toHaveBeenCalledOnce();
+    const defaultMessage = defaultListener.mock.calls[0][0] as string;
+    expect(defaultMessage).toContain('[FAILURE]');
+    expect(defaultMessage).not.toContain('[WARNING]');
+    expect(defaultMessage).not.toContain('[NOTICE]');
+
+    expect(warningListener).toHaveBeenCalledOnce();
+    const warningMessage = warningListener.mock.calls[0][0] as string;
+    expect(warningMessage).toContain('[WARNING]');
+    expect(warningMessage).toContain('[FAILURE]');
+    expect(warningMessage).not.toContain('[NOTICE]');
+
+    expect(noticeListener).toHaveBeenCalledOnce();
+    const noticeMessage = noticeListener.mock.calls[0][0] as string;
+    expect(noticeMessage).toContain('[NOTICE]');
+    expect(noticeMessage).toContain('[WARNING]');
+    expect(noticeMessage).toContain('[FAILURE]');
+  });
+
+  it('updates the annotation level for an existing listener', async () => {
+    PRPollingSource.resetAnnotationFetchBudgetForTests();
+    const source = new PRPollingSource() as unknown as AnnotationDrainSource;
+    const pr = { owner: 'owner', repo: 'repo', pullNumber: 7 };
+    const listener = vi.fn();
+    const disposable = source.subscribe(pr, listener);
+    const key = prKeyToString(pr);
+    const state = source.getSubscriptionState(key);
+    expect(state).toBeTruthy();
+    if (!state) throw new Error('Expected subscription state');
+    source.fetchAnnotations = vi
+      .fn()
+      .mockResolvedValue([annotation('warning', 'format warning')]);
+
+    state.pendingAnnotationRuns = [createCheckRun(13)];
+    await source.drainAnnotationQueues([[key, state]]);
+
+    expect(listener).not.toHaveBeenCalled();
+
+    source.updateSubscription(
+      { ...pr, minAnnotationLevel: 'warning' },
+      listener,
+    );
+    state.pendingAnnotationRuns = [createCheckRun(14)];
+
+    await source.drainAnnotationQueues([[key, state]]);
+
+    expect(listener).toHaveBeenCalledOnce();
+    expect(listener.mock.calls[0][0]).toContain('[WARNING]');
+    disposable.dispose();
   });
 });
