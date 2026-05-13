@@ -77,7 +77,10 @@ import {
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { computeCachePercentage } from './utils/usageNormalization';
-import { tagAnthropicSdkError } from './support/sdkErrorAdapters';
+import {
+  tagAnthropicSdkError,
+  withSdkErrorTag,
+} from './support/sdkErrorAdapters';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -543,12 +546,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
   async createResponse(
     requestOptions: CreateResponseOptions<MessageParam, Anthropic>,
   ): Promise<CreateResponseResult<BetaMessage, MessageParam>> {
-    try {
-      return await this.createResponseImpl(requestOptions);
-    } catch (err) {
-      tagAnthropicSdkError(err, this.config.provider);
-      throw err;
-    }
+    return withSdkErrorTag(tagAnthropicSdkError, this.config.provider, () =>
+      this.createResponseImpl(requestOptions),
+    );
   }
 
   /** Creates an Anthropic response after SDK-boundary error tagging is installed. */
