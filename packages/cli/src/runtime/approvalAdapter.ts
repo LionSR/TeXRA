@@ -20,21 +20,36 @@ import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool'
 import { type CliContext, type CliPromptRequest } from './cliContext';
 import { askCliQuestion, writeTextStderr } from './logSinks';
 
+interface ApprovalDecision {
+  readonly accepted: boolean;
+  readonly userMessage?: string;
+}
+
+type ApprovalEvent =
+  | 'showBashPermission'
+  | 'showPlanApproval'
+  | 'showAgentProposal'
+  | 'showRetryRequest';
+
+function isApprovalEvent(
+  event: keyof ProgressEventPayloads,
+): event is ApprovalEvent {
+  return (
+    event === 'showBashPermission' ||
+    event === 'showPlanApproval' ||
+    event === 'showAgentProposal' ||
+    event === 'showRetryRequest'
+  );
+}
+
+const deniedApprovalContexts = new WeakSet<CliContext>();
+const cliPromptQueues = new WeakMap<CliContext, Promise<unknown>>();
+
 function denyMessage(policy: CliContext['approvalPolicy']): string {
   return policy === 'ask'
     ? 'Interactive approval requires a TTY; this CLI run is headless.'
     : 'Denied by CLI approval policy.';
 }
-
-function externalInquiryMessage(policy: CliContext['approvalPolicy']): string {
-  if (policy === 'yolo') {
-    return 'External inquiry requires human input; yolo mode cannot synthesize an external answer.';
-  }
-  return denyMessage(policy);
-}
-
-const deniedApprovalContexts = new WeakSet<CliContext>();
-const cliPromptQueues = new WeakMap<CliContext, Promise<unknown>>();
 
 function markApprovalDenied(context: CliContext): void {
   deniedApprovalContexts.add(context);
@@ -46,11 +61,6 @@ export function hasCliApprovalDenied(context: CliContext): boolean {
 
 function approvalPromptAllowed(context: CliContext): boolean {
   return context.approvalPolicy === 'ask' && context.mode === 'interactive';
-}
-
-function parseApprovalAnswer(answer: string): boolean {
-  const normalized = answer.trim().toLowerCase();
-  return normalized === 'y' || normalized === 'yes';
 }
 
 function enqueueCliPrompt<T>(
@@ -66,22 +76,27 @@ function enqueueCliPrompt<T>(
   return next;
 }
 
+async function askCliApprovalQuestion(
+  context: CliContext,
+  request: CliPromptRequest,
+): Promise<string> {
+  if (context.approvalPrompt) {
+    return context.approvalPrompt(request);
+  }
+  return askCliQuestion(`${request.summary}\n${request.prompt}`);
+}
+
+function immediateDecision(context: CliContext): ApprovalDecision | undefined {
+  if (context.approvalPolicy === 'yolo') return { accepted: true };
+  if (approvalPromptAllowed(context)) return undefined;
+  markApprovalDenied(context);
+  return { accepted: false, userMessage: denyMessage(context.approvalPolicy) };
+}
+
 async function askApproval(
   context: CliContext,
   summary: string,
-): Promise<{
-  accepted: boolean;
-  userMessage?: string;
-}> {
-  if (context.approvalPolicy === 'yolo') return { accepted: true };
-  if (!approvalPromptAllowed(context)) {
-    markApprovalDenied(context);
-    return {
-      accepted: false,
-      userMessage: denyMessage(context.approvalPolicy),
-    };
-  }
-
+): Promise<ApprovalDecision> {
   let answer: string;
   try {
     answer = await enqueueCliPrompt(context, () =>
@@ -96,7 +111,8 @@ async function askApproval(
     return { accepted: false, userMessage: 'CLI approval prompt failed.' };
   }
 
-  const accepted = parseApprovalAnswer(answer);
+  const normalized = answer.trim().toLowerCase();
+  const accepted = normalized === 'y' || normalized === 'yes';
   if (!accepted) markApprovalDenied(context);
   return {
     accepted,
@@ -104,64 +120,146 @@ async function askApproval(
   };
 }
 
-async function askExternalInquiry(
-  context: CliContext,
-  question: string,
-): Promise<
-  { submitted: true; answer: string } | { submitted: false; feedback: string }
-> {
-  if (context.approvalPolicy === 'yolo') {
-    return { submitted: false, feedback: externalInquiryMessage('yolo') };
+function summarizeApprovalEvent<K extends ApprovalEvent>(
+  event: K,
+  payload: ProgressEventPayloads[K],
+): string {
+  switch (event) {
+    case 'showBashPermission': {
+      const data = payload as ProgressEventPayloads['showBashPermission'];
+      return `Bash command requested:\n${data.command}`;
+    }
+    case 'showPlanApproval': {
+      const data = payload as ProgressEventPayloads['showPlanApproval'];
+      return `Plan approval requested:\n${JSON.stringify(data.plan, null, 2)}`;
+    }
+    case 'showAgentProposal': {
+      const data = payload as ProgressEventPayloads['showAgentProposal'];
+      return `Agent proposal requested:\n${JSON.stringify(data, null, 2)}`;
+    }
+    case 'showRetryRequest': {
+      const data = payload as ProgressEventPayloads['showRetryRequest'];
+      return `Retry requested for ${data.operation}: ${data.errorMessage ?? 'unknown error'}`;
+    }
+    default: {
+      const never: never = event;
+      return String(never);
+    }
   }
-  if (!approvalPromptAllowed(context)) {
-    markApprovalDenied(context);
-    return {
-      submitted: false,
-      feedback: denyMessage(context.approvalPolicy),
-    };
-  }
-
-  let answer: string;
-  try {
-    answer = await enqueueCliPrompt(context, () =>
-      askCliApprovalQuestion(context, {
-        kind: 'externalInquiry',
-        summary: `External inquiry requested:\n${question}`,
-        prompt: 'Answer (blank to skip): ',
-      }),
-    );
-  } catch {
-    markApprovalDenied(context);
-    return {
-      submitted: false,
-      feedback: 'CLI external inquiry prompt failed.',
-    };
-  }
-
-  if (answer.trim().length === 0) {
-    return { submitted: false, feedback: 'External inquiry skipped by user.' };
-  }
-  return { submitted: true, answer };
 }
 
-async function askCliApprovalQuestion(
-  context: CliContext,
-  request: CliPromptRequest,
-): Promise<string> {
-  if (context.approvalPrompt) {
-    return context.approvalPrompt(request);
+function dispatchApprovalDecision<K extends ApprovalEvent>(
+  event: K,
+  payload: ProgressEventPayloads[K],
+  decision: ApprovalDecision,
+  options: { writeRejectionToStderr?: boolean } = {},
+): void {
+  const action = decision.accepted ? 'approve' : 'reject';
+  switch (event) {
+    case 'showBashPermission': {
+      const data = payload as ProgressEventPayloads['showBashPermission'];
+      void handleProgressViewBashApprovalAction({
+        requestId: data.requestId,
+        action,
+        feedback: decision.userMessage,
+      });
+      return;
+    }
+    case 'showPlanApproval': {
+      const data = payload as ProgressEventPayloads['showPlanApproval'];
+      resolvePlanApproval(data.approvalId, {
+        action,
+        ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
+      });
+      return;
+    }
+    case 'showAgentProposal': {
+      const data = payload as ProgressEventPayloads['showAgentProposal'];
+      resolveProposal(data.proposalId, {
+        action,
+        ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
+      });
+      return;
+    }
+    case 'showRetryRequest': {
+      const data = payload as ProgressEventPayloads['showRetryRequest'];
+      if (decision.accepted) {
+        triggerRetry(data.streamId);
+        return;
+      }
+      if (options.writeRejectionToStderr) {
+        const summary = summarizeApprovalEvent(event, payload);
+        writeTextStderr(
+          decision.userMessage
+            ? `${summary}\n${decision.userMessage}`
+            : summary,
+        );
+      }
+      cancelRetry(data.streamId);
+      return;
+    }
+    default: {
+      const never: never = event;
+      return never;
+    }
   }
-  return askCliQuestion(`${request.summary}\n${request.prompt}`);
+}
+
+function handleExternalInquiry(
+  payload: ProgressEventPayloads['showExternalInquiry'],
+  context: CliContext,
+): void {
+  if (!approvalPromptAllowed(context)) {
+    const feedback =
+      context.approvalPolicy === 'yolo'
+        ? 'External inquiry requires human input; yolo mode cannot synthesize an external answer.'
+        : denyMessage(context.approvalPolicy);
+    if (context.approvalPolicy !== 'yolo') markApprovalDenied(context);
+    void handleExternalInquiryAction({
+      requestId: payload.requestId,
+      action: 'skip',
+      feedback,
+    });
+    return;
+  }
+
+  void (async () => {
+    let answer: string;
+    try {
+      answer = await enqueueCliPrompt(context, () =>
+        askCliApprovalQuestion(context, {
+          kind: 'externalInquiry',
+          summary: `External inquiry requested:\n${payload.question}`,
+          prompt: 'Answer (blank to skip): ',
+        }),
+      );
+    } catch {
+      markApprovalDenied(context);
+      await handleExternalInquiryAction({
+        requestId: payload.requestId,
+        action: 'skip',
+        feedback: 'CLI external inquiry prompt failed.',
+      });
+      return;
+    }
+
+    const submitted = answer.trim().length > 0;
+    await handleExternalInquiryAction({
+      requestId: payload.requestId,
+      action: submitted ? 'submit' : 'skip',
+      answer: submitted ? answer : undefined,
+      feedback: submitted ? undefined : 'External inquiry skipped by user.',
+    });
+  })();
 }
 
 async function decideToolEdit(
   request: ToolEditApprovalRequest,
   context: CliContext,
 ): Promise<ToolEditApprovalResult> {
-  const decision = await askApproval(
-    context,
-    `Tool edit requested by ${request.sourceTool}: ${request.path}`,
-  );
+  const summary = `Tool edit requested by ${request.sourceTool}: ${request.path}`;
+  const immediate = immediateDecision(context);
+  const decision = immediate ?? (await askApproval(context, summary));
   return decision.accepted
     ? { accepted: true, appliedContent: request.proposedContent }
     : { accepted: false, userMessage: decision.userMessage };
@@ -171,176 +269,36 @@ export function installCliApprovalHandlers(context: CliContext): void {
   setToolEditApprovalHandler((request) => decideToolEdit(request, context));
 }
 
-async function handleCliApprovalEventAsync<
-  K extends keyof ProgressEventPayloads,
->(
-  event: K,
-  payload: ProgressEventPayloads[K],
-  context: CliContext,
-): Promise<void> {
-  switch (event) {
-    case 'showBashPermission': {
-      const data = payload as ProgressEventPayloads['showBashPermission'];
-      const decision = await askApproval(
-        context,
-        `Bash command requested:\n${data.command}`,
-      );
-      await handleProgressViewBashApprovalAction({
-        requestId: data.requestId,
-        action: decision.accepted ? 'approve' : 'reject',
-        feedback: decision.userMessage,
-      });
-      return;
-    }
-    case 'showPlanApproval': {
-      const data = payload as ProgressEventPayloads['showPlanApproval'];
-      const decision = await askApproval(
-        context,
-        `Plan approval requested:\n${JSON.stringify(data.plan, null, 2)}`,
-      );
-      resolvePlanApproval(data.approvalId, {
-        action: decision.accepted ? 'approve' : 'reject',
-        ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
-      });
-      return;
-    }
-    case 'showAgentProposal': {
-      const data = payload as ProgressEventPayloads['showAgentProposal'];
-      const decision = await askApproval(
-        context,
-        `Agent proposal requested:\n${JSON.stringify(data, null, 2)}`,
-      );
-      resolveProposal(data.proposalId, {
-        action: decision.accepted ? 'approve' : 'reject',
-        ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
-      });
-      return;
-    }
-    case 'showRetryRequest': {
-      const data = payload as ProgressEventPayloads['showRetryRequest'];
-      const summary = `Retry requested for ${data.operation}: ${data.errorMessage ?? 'unknown error'}`;
-      const decision = await askApproval(context, summary);
-      if (decision.accepted) {
-        triggerRetry(data.streamId);
-      } else {
-        writeTextStderr(
-          decision.userMessage
-            ? `${summary}\n${decision.userMessage}`
-            : summary,
-        );
-        cancelRetry(data.streamId);
-      }
-      return;
-    }
-    case 'showExternalInquiry': {
-      const data = payload as ProgressEventPayloads['showExternalInquiry'];
-      const answer = await askExternalInquiry(context, data.question);
-      await handleExternalInquiryAction({
-        requestId: data.requestId,
-        action: answer.submitted ? 'submit' : 'skip',
-        answer: answer.submitted ? answer.answer : undefined,
-        feedback: answer.submitted ? undefined : answer.feedback,
-      });
-      return;
-    }
-    default:
-      return;
-  }
-}
-
-function immediateApprovalDecision(context: CliContext):
-  | {
-      accepted: boolean;
-      userMessage?: string;
-    }
-  | undefined {
-  if (context.approvalPolicy === 'yolo') return { accepted: true };
-  if (approvalPromptAllowed(context)) return undefined;
-  markApprovalDenied(context);
-  return {
-    accepted: false,
-    userMessage: denyMessage(context.approvalPolicy),
-  };
-}
-
-function handleImmediateCliApprovalEvent<K extends keyof ProgressEventPayloads>(
-  event: K,
-  payload: ProgressEventPayloads[K],
-  context: CliContext,
-): boolean {
-  if (event === 'showExternalInquiry') {
-    if (approvalPromptAllowed(context)) return false;
-    const data = payload as ProgressEventPayloads['showExternalInquiry'];
-    const feedback = externalInquiryMessage(context.approvalPolicy);
-    if (context.approvalPolicy !== 'yolo') markApprovalDenied(context);
-    void handleExternalInquiryAction({
-      requestId: data.requestId,
-      action: 'skip',
-      feedback,
-    });
-    return true;
-  }
-
-  const decision = immediateApprovalDecision(context);
-  if (!decision) return false;
-
-  switch (event) {
-    case 'showBashPermission': {
-      const data = payload as ProgressEventPayloads['showBashPermission'];
-      void handleProgressViewBashApprovalAction({
-        requestId: data.requestId,
-        action: decision.accepted ? 'approve' : 'reject',
-        feedback: decision.userMessage,
-      });
-      return true;
-    }
-    case 'showPlanApproval': {
-      const data = payload as ProgressEventPayloads['showPlanApproval'];
-      resolvePlanApproval(data.approvalId, {
-        action: decision.accepted ? 'approve' : 'reject',
-        ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
-      });
-      return true;
-    }
-    case 'showAgentProposal': {
-      const data = payload as ProgressEventPayloads['showAgentProposal'];
-      resolveProposal(data.proposalId, {
-        action: decision.accepted ? 'approve' : 'reject',
-        ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
-      });
-      return true;
-    }
-    case 'showRetryRequest': {
-      const data = payload as ProgressEventPayloads['showRetryRequest'];
-      if (decision.accepted) {
-        triggerRetry(data.streamId);
-      } else {
-        cancelRetry(data.streamId);
-      }
-      return true;
-    }
-    default:
-      return false;
-  }
-}
-
 export function handleCliApprovalEvent<K extends keyof ProgressEventPayloads>(
   event: K,
   payload: ProgressEventPayloads[K],
   context: CliContext,
 ): boolean {
-  switch (event) {
-    case 'showBashPermission':
-    case 'showPlanApproval':
-    case 'showAgentProposal':
-    case 'showRetryRequest':
-    case 'showExternalInquiry':
-      if (handleImmediateCliApprovalEvent(event, payload, context)) {
-        return true;
-      }
-      void handleCliApprovalEventAsync(event, payload, context);
-      return true;
-    default:
-      return false;
+  if (event === 'showExternalInquiry') {
+    handleExternalInquiry(
+      payload as ProgressEventPayloads['showExternalInquiry'],
+      context,
+    );
+    return true;
   }
+
+  if (!isApprovalEvent(event)) return false;
+
+  const approvalPayload = payload as ProgressEventPayloads[typeof event];
+  const immediate = immediateDecision(context);
+  if (immediate) {
+    dispatchApprovalDecision(event, approvalPayload, immediate);
+    return true;
+  }
+
+  void (async () => {
+    const decision = await askApproval(
+      context,
+      summarizeApprovalEvent(event, approvalPayload),
+    );
+    dispatchApprovalDecision(event, approvalPayload, decision, {
+      writeRejectionToStderr: true,
+    });
+  })();
+  return true;
 }

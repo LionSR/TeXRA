@@ -56,24 +56,20 @@ export const RUN_FLAGS_WITH_VALUE = new Set([
   '--instruction',
 ]);
 
-const CHAT_FLAGS_WITH_VALUE = new Set([
-  '--agent',
-  '--model',
-  '-m',
-  '--tool-display',
-]);
-
 const FLAGS_WITH_VALUE = new Set([
   ...GLOBAL_FLAGS_WITH_VALUE,
   ...RUN_FLAGS_WITH_VALUE,
-  ...CHAT_FLAGS_WITH_VALUE,
+  '--agent',
+  '--tool-display',
 ]);
 
 const GLOBAL_BOOLEAN_FLAGS = new Set(['--print', '-p']);
-const ROOT_BOOLEAN_FLAGS = new Set(['--help', '-h', '--version', '-v']);
 export const CLI_BOOLEAN_FLAGS = new Set([
   ...GLOBAL_BOOLEAN_FLAGS,
-  ...ROOT_BOOLEAN_FLAGS,
+  '--help',
+  '-h',
+  '--version',
+  '-v',
 ]);
 
 interface CliAmbientState {
@@ -216,12 +212,13 @@ export function applyCliGlobalArgs(
 }
 
 function cliMode(args: readonly string[], ambient: CliAmbientState): CliMode {
-  if (hasBooleanFlag(args, '--print', '-p')) return 'headless';
-  if (ambient.isCi) return 'headless';
-  if (!ambient.stdinIsTty) return 'headless';
-  if (!ambient.stdoutIsTty) return 'headless';
-  if (!ambient.stderrIsTty) return 'headless';
-  return 'interactive';
+  const headless =
+    hasBooleanFlag(args, '--print', '-p') ||
+    ambient.isCi ||
+    !ambient.stdinIsTty ||
+    !ambient.stdoutIsTty ||
+    !ambient.stderrIsTty;
+  return headless ? 'headless' : 'interactive';
 }
 
 function splitGlobalArgs(args: readonly string[]): {
