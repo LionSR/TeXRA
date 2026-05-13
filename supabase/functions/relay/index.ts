@@ -70,6 +70,7 @@ import {
   ULTRA_TIER,
   FREE_TIER,
 } from './models.ts';
+import { capOpenAIReasoningEffortForTier } from './reasoning.ts';
 
 // =============================================================================
 // Constants
@@ -107,6 +108,8 @@ type ProviderKey =
   | 'dashscope'
   | 'minimax'
   | 'glm';
+
+type JsonRecord = Record<string, unknown>;
 
 // =============================================================================
 // Provider Configuration
@@ -166,6 +169,10 @@ const PROVIDER_CONFIGS: Record<ProviderKey, ProviderConfig> = {
 
 function getProviderConfig(provider: string): ProviderConfig | null {
   return PROVIDER_CONFIGS[provider as ProviderKey] || null;
+}
+
+function isJsonRecord(value: unknown): value is JsonRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function getEnabledProviders(): string[] {
@@ -570,14 +577,19 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   );
 
   let requestBody: string | null = null;
+  let requestBodyJson: unknown = null;
   let modelName: string | null = null;
 
   if (userTier !== ULTRA_TIER && c.req.method !== 'GET' && !isModelFreePath) {
     requestBody = await c.req.text();
 
     try {
-      const bodyJson = JSON.parse(requestBody);
-      modelName = bodyJson.model || null;
+      requestBodyJson = JSON.parse(requestBody);
+      modelName =
+        isJsonRecord(requestBodyJson) &&
+        typeof requestBodyJson.model === 'string'
+          ? requestBodyJson.model
+          : null;
     } catch {
       // Not JSON, try extracting from path
     }
@@ -596,6 +608,15 @@ app.all('/:provider{[^/]+}/*', async (c) => {
           : `Could not determine model from request. ${tierName} tier requires explicit model specification.`,
         403,
       );
+    }
+
+    const cappedBody = capOpenAIReasoningEffortForTier(requestBodyJson, {
+      provider,
+      tier: userTier,
+      modelName,
+    });
+    if (cappedBody !== requestBodyJson) {
+      requestBody = JSON.stringify(cappedBody);
     }
   }
 
