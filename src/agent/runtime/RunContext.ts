@@ -1,15 +1,15 @@
 // Third-party imports
 import { AsyncLocalStorage } from 'async_hooks';
 
+// Local imports - shared schemas
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
+
 // Local imports - runtime
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentProposalCoordinator } from './AgentProposalCoordinator';
 import type { PlanApprovalCoordinator } from './PlanApprovalCoordinator';
 import type { RetryRequestCoordinatorImpl } from './RetryRequestCoordinator';
-
-// Local imports - shared schemas
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 
 export type RunLogData = Record<string, unknown>;
 
@@ -128,6 +128,12 @@ export function withRunContext<T>(
   fn: () => T | Promise<T>,
 ): T | Promise<T> {
   return runContextScope.run(context, fn);
+}
+
+export function resolveRunRuntimeHost(
+  explicitHost?: AgentRuntimeHost,
+): AgentRuntimeHost {
+  return explicitHost ?? useRunContext().runtimeHost;
 }
 
 /** Return the active run context, or throw if none is installed. */
