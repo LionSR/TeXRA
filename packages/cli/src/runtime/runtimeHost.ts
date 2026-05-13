@@ -1,11 +1,19 @@
 // Local imports - runtime
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import {
+  createStructuredLogger,
+  type Logger,
+  type LogSink,
+} from '@logger/structuredLogger';
 
 // Local imports - CLI runtime
 import { handleCliApprovalEvent } from './approvalAdapter';
-import { writeNdjsonStdout } from './logSinks';
-import { createCliLogger } from './logger';
+import {
+  NdjsonStdoutSink,
+  StderrTextSink,
+  writeNdjsonStdout,
+} from './logSinks';
 import type { CliContext } from './cliContext';
 
 export type CliRuntimeHost = AgentRuntimeHost & {
@@ -13,54 +21,55 @@ export type CliRuntimeHost = AgentRuntimeHost & {
 };
 
 export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
-  let logger: ReturnType<typeof createCliLogger> | undefined;
-  const cliLogger = (): ReturnType<typeof createCliLogger> =>
-    (logger ??= createCliLogger(context));
-  const quietLogs = context.quietLogs === true;
+  const quietLogs = context.quietLogs ?? false;
+  let sink: LogSink | undefined;
+  let logger: Logger | undefined;
+  const ensureLogger = (): Logger => {
+    if (logger) return logger;
+    sink =
+      context.outputFormat === 'ndjson'
+        ? new NdjsonStdoutSink()
+        : new StderrTextSink();
+    logger = createStructuredLogger(sink);
+    return logger;
+  };
 
   return {
     emit(event, payload) {
       if (handleCliApprovalEvent(event, payload, context)) return;
 
       if (context.outputFormat === 'ndjson') {
-        const record = {
+        writeNdjsonStdout({
           kind: 'progress',
           event,
           ts: new Date().toISOString(),
           payload,
-        } satisfies {
-          kind: 'progress';
-          event: keyof ProgressEventPayloads;
-          ts: string;
-          payload: ProgressEventPayloads[keyof ProgressEventPayloads];
-        };
-        writeNdjsonStdout(record);
+        });
         return;
       }
 
-      if (quietLogs && event !== 'requestShowError') {
-        return;
-      }
+      if (quietLogs && event !== 'requestShowError') return;
 
       if (event === 'requestShowError') {
-        const message = (payload as ProgressEventPayloads['requestShowError'])
-          .message;
-        cliLogger().logger.error(message);
+        ensureLogger().error(
+          (payload as ProgressEventPayloads['requestShowError']).message,
+        );
         return;
       }
 
       if (event === 'setTaskState') {
         const data = payload as ProgressEventPayloads['setTaskState'];
-        cliLogger().logger.info('Task state registered', {
+        ensureLogger().info('Task state registered', {
           streamId: data.streamId,
         });
         return;
       }
 
-      cliLogger().logger.debug(`Progress event: ${String(event)}`);
+      ensureLogger().debug(`Progress event: ${String(event)}`);
     },
     async close() {
-      await logger?.close();
+      await sink?.flush?.();
+      await sink?.close?.();
     },
   };
 }

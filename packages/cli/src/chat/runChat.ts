@@ -178,8 +178,9 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
     approvalPrompt: (request) => askChatApprovalQuestion(request),
   });
 
-  await initCliPlatform(currentSessionContext());
-  installCliApprovalHandlers(currentSessionContext());
+  const startupContext = currentSessionContext();
+  await initCliPlatform(startupContext);
+  installCliApprovalHandlers(startupContext);
   await loadAgents();
 
   const renderer = new ChatTerminalRenderer(
@@ -395,13 +396,13 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
       },
     })
       .then((result) => {
-        session.runExitCode = session.stopRequested
-          ? CliExitCode.Success
-          : result.status === 'error' && hasCliApprovalDenied(runContext)
-            ? CliExitCode.ApprovalDenied
-            : result.status === 'error'
-              ? CliExitCode.AgentError
-              : CliExitCode.Success;
+        if (session.stopRequested || result.status !== 'error') {
+          session.runExitCode = CliExitCode.Success;
+        } else if (hasCliApprovalDenied(runContext)) {
+          session.runExitCode = CliExitCode.ApprovalDenied;
+        } else {
+          session.runExitCode = CliExitCode.AgentError;
+        }
         if (
           !responsePrinter.didPrint() &&
           result.category === 'toolUse' &&
