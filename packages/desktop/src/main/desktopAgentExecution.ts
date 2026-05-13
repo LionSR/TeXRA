@@ -1162,7 +1162,12 @@ export class DesktopProgressBridge {
       import('@agent/runtime/executeAgent'),
       import('@agent/runtime/helperModel'),
     ]);
-    await executeMergeAgent(getHelperModelName(), baseFile, editedFile);
+    await executeMergeAgent(
+      getHelperModelName(),
+      baseFile,
+      editedFile,
+      this.runtimeHost,
+    );
   }
 
   private async acceptEditedFile(
