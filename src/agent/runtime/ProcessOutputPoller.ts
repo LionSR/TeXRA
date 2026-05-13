@@ -9,9 +9,7 @@ import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { ProcessExecutionHandle } from './ExecutionHandle';
 
 interface ProcessOutputSource {
-  parentStreamId: StreamTabId;
-  stdoutPath: string;
-  stderrPath: string;
+  handle: ProcessExecutionHandle;
   runtimeHost: AgentRuntimeHost;
 }
 
@@ -39,12 +37,8 @@ export function registerProcessOutput(
   handle: ProcessExecutionHandle,
   runtimeHost: AgentRuntimeHost,
 ): void {
-  if (!handle.outputPaths) return;
-
   processOutputs.set(handle.executionId, {
-    parentStreamId: handle.parentStreamId,
-    stdoutPath: handle.outputPaths.stdout,
-    stderrPath: handle.outputPaths.stderr,
+    handle,
     runtimeHost,
   });
   reconcileOutputPoller();
@@ -101,15 +95,17 @@ function schedulePoll(): void {
 
 async function pollProcessOutputs(): Promise<void> {
   await Promise.all(
-    [...processOutputs.entries()].map(([executionId, source]) =>
-      readIncremental(
-        executionId,
-        source.parentStreamId,
-        source.stdoutPath,
-        source.stderrPath,
+    [...processOutputs.values()].map((source) => {
+      const { outputPaths } = source.handle;
+      if (!outputPaths) return Promise.resolve();
+      return readIncremental(
+        source.handle.executionId,
+        source.handle.parentStreamId,
+        outputPaths.stdout,
+        outputPaths.stderr,
         source.runtimeHost,
-      ),
-    ),
+      );
+    }),
   );
 }
 

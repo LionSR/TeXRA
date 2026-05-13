@@ -11,6 +11,7 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { ProcessExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import {
   flushProcessOutput,
+  registerProcessOutput,
   unregisterProcessOutput,
 } from '@agent/runtime/ProcessOutputPoller';
 
@@ -18,6 +19,10 @@ import {
 import type { StreamTabId } from '@shared/schemas';
 
 const tmpDirs: string[] = [];
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function createRuntimeHost(): {
   host: AgentRuntimeHost;
@@ -34,7 +39,10 @@ function createRuntimeHost(): {
   };
 }
 
-async function makeProcessHandle(runtimeHost: AgentRuntimeHost): Promise<{
+async function makeProcessHandle(
+  runtimeHost: AgentRuntimeHost,
+  options: { assignOutputPaths?: boolean } = {},
+): Promise<{
   handle: ProcessExecutionHandle;
   stdoutPath: string;
   stderrPath: string;
@@ -53,12 +61,15 @@ async function makeProcessHandle(runtimeHost: AgentRuntimeHost): Promise<{
     () => true,
     runtimeHost,
   );
-  handle.outputPaths = { stdout: stdoutPath, stderr: stderrPath };
+  if (options.assignOutputPaths !== false) {
+    handle.outputPaths = { stdout: stdoutPath, stderr: stderrPath };
+  }
   return { handle, stdoutPath, stderrPath };
 }
 
 afterEach(async () => {
   unregisterProcessOutput('exec-1');
+  vi.useRealTimers();
   await Promise.all(
     tmpDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true })),
   );
@@ -73,6 +84,42 @@ describe('ProcessOutputPoller', () => {
     await fs.appendFile(stdoutPath, 'out-2');
     await fs.appendFile(stderrPath, 'err-2');
     await flushProcessOutput(handle, host);
+
+    expect(events).toEqual([
+      {
+        event: 'updateProcessOutput',
+        payload: {
+          parentStreamId: 'parent-stream',
+          executionId: 'exec-1',
+          stdout: 'out-1',
+          stderr: 'err-1',
+        },
+      },
+      {
+        event: 'updateProcessOutput',
+        payload: {
+          parentStreamId: 'parent-stream',
+          executionId: 'exec-1',
+          stdout: 'out-2',
+          stderr: 'err-2',
+        },
+      },
+    ]);
+  });
+
+  it('polls handles whose output paths are assigned after registration', async () => {
+    const { host, events } = createRuntimeHost();
+    const { handle, stdoutPath, stderrPath } = await makeProcessHandle(host, {
+      assignOutputPaths: false,
+    });
+
+    registerProcessOutput(handle, host);
+    handle.outputPaths = { stdout: stdoutPath, stderr: stderrPath };
+
+    await delay(550);
+    await fs.appendFile(stdoutPath, 'out-2');
+    await fs.appendFile(stderrPath, 'err-2');
+    await delay(550);
 
     expect(events).toEqual([
       {
