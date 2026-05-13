@@ -17,6 +17,7 @@ import {
   type DesktopCommandActions,
   type DesktopCommandMenuEntry,
 } from '../desktopCommandSurface';
+import { getRendererPlatform } from './rendererPlatform';
 
 export interface DesktopCommandPaletteOptions {
   document: Document;
@@ -151,13 +152,6 @@ function toPaletteEntry(
     category: entry.category,
     enabled: entry.enabled,
   };
-}
-
-function getRendererPlatform(view: Window | null): NodeJS.Platform {
-  const platform = view?.navigator.platform.toLowerCase() ?? '';
-  if (platform.includes('mac')) return 'darwin';
-  if (platform.includes('win')) return 'win32';
-  return 'linux';
 }
 
 function getDefaultPlatform(): NodeJS.Platform {

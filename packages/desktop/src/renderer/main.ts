@@ -110,6 +110,7 @@ import {
 } from '../desktopPdfMessages';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
 import { createFirstRunWalkthrough } from './desktopOnboarding';
+import { getRendererPlatform } from './rendererPlatform';
 
 const root = document.querySelector<HTMLElement>('#app');
 
@@ -160,13 +161,6 @@ function commandTitle(commandId: DesktopCommandId, label: string): string {
 function shortcutTitle(label: string, accelerator: string): string {
   const shortcut = formatDesktopAccelerator(accelerator, rendererPlatform);
   return shortcut ? `${label} - ${shortcut}` : label;
-}
-
-function getRendererPlatform(view: Window | null): NodeJS.Platform {
-  const platform = view?.navigator.platform.toLowerCase() ?? '';
-  if (platform.includes('mac')) return 'darwin';
-  if (platform.includes('win')) return 'win32';
-  return typeof process === 'undefined' ? 'linux' : process.platform;
 }
 
 // `<settings-app>` lives inside the wa-dialog overlay below; `<main-app>` and

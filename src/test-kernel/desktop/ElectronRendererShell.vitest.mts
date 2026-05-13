@@ -190,6 +190,8 @@ describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () 
 
     expect(rendererMain).toContain('formatDesktopAccelerator');
     expect(rendererMain).toContain('getDesktopCommandMenuEntries');
+    expect(rendererMain).toContain("from './rendererPlatform'");
+    expect(rendererMain).not.toContain('function getRendererPlatform');
     expect(rendererMain).toContain(
       "shortcutTitle('Commands', 'CommandOrControl+K')",
     );
