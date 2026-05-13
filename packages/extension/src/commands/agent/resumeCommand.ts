@@ -53,20 +53,16 @@ async function resumeFromSnapshot(
       streamId,
     });
 
-    await resumeToolUseFromSnapshot(
-      snapshot,
-      (session) => {
-        const allFollowUps =
-          followUp !== undefined
-            ? [followUp, ...queuedFollowUps]
-            : queuedFollowUps;
+    await resumeToolUseFromSnapshot(snapshot, runtimeHost, (session) => {
+      const allFollowUps =
+        followUp !== undefined
+          ? [followUp, ...queuedFollowUps]
+          : queuedFollowUps;
 
-        for (const text of allFollowUps) {
-          session.appendFollowUp(text);
-        }
-      },
-      runtimeHost,
-    );
+      for (const text of allFollowUps) {
+        session.appendFollowUp(text);
+      }
+    });
 
     return { success: true };
   } catch (error) {
