@@ -1,9 +1,18 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports
+import {
+  getDefaultAgentRuntimeHost,
+  setDefaultAgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type { StreamTabId } from '@shared/schemas';
+import {
+  cleanupAllApprovals,
+  toggleProposalBypass,
+  toggleToolEditApprovalSessionBypass,
+} from '@tools/approval';
 import {
   handleProgressViewBashApprovalAction,
   requestBashApproval,
@@ -27,6 +36,10 @@ async function waitForRecordedEvent<TEvent extends string>(
 }
 
 describe('human prompt progress events', () => {
+  afterEach(() => {
+    cleanupAllApprovals();
+  });
+
   it('publishes bash approval events through the tool runtime host', async () => {
     const { events, host } = createRecordingHost();
     const streamId = 'stream:bash-approval' as StreamTabId;
@@ -120,5 +133,56 @@ describe('human prompt progress events', () => {
         payload: { requestId: show.payload.requestId },
       },
     ]);
+  });
+
+  it('publishes tool-edit bypass changes through the explicit runtime host', () => {
+    const explicit = createRecordingHost();
+    const fallback = createRecordingHost();
+    const previousDefault = getDefaultAgentRuntimeHost();
+    const streamId = 'stream:tool-edit-bypass' as StreamTabId;
+
+    try {
+      setDefaultAgentRuntimeHost(fallback.host);
+
+      const enabled = toggleToolEditApprovalSessionBypass(
+        streamId,
+        explicit.host,
+      );
+
+      expect(enabled).toBe(true);
+      expect(explicit.events).toEqual([
+        {
+          event: 'updateToolEditApprovalBypassState',
+          payload: { streamId, bypassActive: true },
+        },
+      ]);
+      expect(fallback.events).toEqual([]);
+    } finally {
+      setDefaultAgentRuntimeHost(previousDefault);
+    }
+  });
+
+  it('publishes proposal bypass changes through the explicit runtime host', () => {
+    const explicit = createRecordingHost();
+    const fallback = createRecordingHost();
+    const previousDefault = getDefaultAgentRuntimeHost();
+    const streamId = 'stream:proposal-bypass' as StreamTabId;
+
+    try {
+      setDefaultAgentRuntimeHost(fallback.host);
+
+      const enabled = toggleProposalBypass(streamId, explicit.host);
+
+      expect(enabled).toBe(true);
+      expect(explicit.events).toEqual([
+        {
+          event: 'updateSuperYoloBypassState',
+          payload: { streamId, bypassActive: true },
+        },
+      ]);
+      expect(fallback.events).toEqual([]);
+    } finally {
+      setDefaultAgentRuntimeHost(previousDefault);
+    }
   });
 });
