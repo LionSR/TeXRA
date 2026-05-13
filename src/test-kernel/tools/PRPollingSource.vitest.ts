@@ -1,6 +1,9 @@
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Local imports - agent
+import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+
 // Local imports - tools
 import {
   DEFAULT_CHECK_ANNOTATION_LEVEL,
@@ -18,6 +21,10 @@ interface AnnotationDrainState {
   pr: { owner: string; repo: string; pullNumber: number };
   slug: string;
   listeners: Set<(text: string) => void>;
+  runtimeHostByListener: Map<
+    (text: string) => void,
+    typeof noopAgentRuntimeHost
+  >;
   annotationLevelByListener: Map<
     (text: string) => void,
     GitHubCheckAnnotationLevel
@@ -42,10 +49,12 @@ interface AnnotationDrainSource {
   subscribe(
     input: PRSubscribeInput,
     onEvent: (text: string) => void,
+    runtimeHost: typeof noopAgentRuntimeHost,
   ): { dispose(): void };
   updateSubscription(
     input: PRSubscribeInput,
     onEvent: (text: string) => void,
+    runtimeHost: typeof noopAgentRuntimeHost,
   ): void;
   getSubscriptionState(key: string): AnnotationDrainState | undefined;
   has(key: string): boolean;
@@ -81,6 +90,7 @@ function createDrainState(runs: GhCheckRun[]): AnnotationDrainState {
     pr: { owner: 'owner', repo: 'repo', pullNumber: 7 },
     slug: 'owner/repo',
     listeners: new Set(),
+    runtimeHostByListener: new Map(),
     annotationLevelByListener: new Map(),
     pendingAnnotationRuns: runs,
     lastSuccessAt: Date.now(),
@@ -204,7 +214,7 @@ describe('PRPollingSource annotation drain', () => {
     const source = new PRPollingSource() as unknown as AnnotationDrainSource;
     const pr = { owner: 'owner', repo: 'repo', pullNumber: 7 };
     const listener = vi.fn();
-    const disposable = source.subscribe(pr, listener);
+    const disposable = source.subscribe(pr, listener, noopAgentRuntimeHost);
     const key = prKeyToString(pr);
     const state = source.getSubscriptionState(key);
     expect(state).toBeTruthy();
@@ -221,6 +231,7 @@ describe('PRPollingSource annotation drain', () => {
     source.updateSubscription(
       { ...pr, minAnnotationLevel: 'warning' },
       listener,
+      noopAgentRuntimeHost,
     );
     state.pendingAnnotationRuns = [createCheckRun(14)];
 

@@ -1,6 +1,9 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
+// Local imports - agent
+import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+
 // Local imports - tools
 import type { GhCheckAnnotation, GhCheckRun } from '@tools/github/prTypes';
 
@@ -17,6 +20,10 @@ interface AnnotationDrainState {
   pr: { owner: string; repo: string; pullNumber: number };
   slug: string;
   listeners: Set<(text: string) => void>;
+  runtimeHostByListener: Map<
+    (text: string) => void,
+    typeof noopAgentRuntimeHost
+  >;
   annotationLevelByListener: Map<(text: string) => void, 'failure'>;
   pendingAnnotationRuns: GhCheckRun[];
   lastSuccessAt: number;
@@ -107,6 +114,7 @@ function drainState(runs: GhCheckRun[]): AnnotationDrainState {
     pr: { owner: 'owner', repo: 'repo', pullNumber: 7 },
     slug: 'owner/repo',
     listeners: new Set(),
+    runtimeHostByListener: new Map(),
     annotationLevelByListener: new Map(),
     pendingAnnotationRuns: runs,
     lastSuccessAt: Date.now(),

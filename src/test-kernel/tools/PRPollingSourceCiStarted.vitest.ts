@@ -1,6 +1,9 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
+// Local imports - agent
+import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+
 // Local imports - tools
 import type { GhCheckRun, GhPullRequest } from '@tools/github/prTypes';
 
@@ -8,6 +11,10 @@ interface CiStartedState {
   pr: { owner: string; repo: string; pullNumber: number };
   slug: string;
   listeners: Set<(text: string) => void>;
+  runtimeHostByListener: Map<
+    (text: string) => void,
+    typeof noopAgentRuntimeHost
+  >;
   initialized: boolean;
   seenIssueCommentIds: Set<number>;
   seenReviewCommentIds: Set<number>;
@@ -54,10 +61,12 @@ function createState(
   events: string[],
   overrides: Partial<CiStartedState> = {},
 ): CiStartedState {
+  const listener = (text: string) => events.push(text);
   return {
     pr: { owner: 'owner', repo: 'repo', pullNumber: 7 },
     slug: 'owner/repo',
-    listeners: new Set([(text) => events.push(text)]),
+    listeners: new Set([listener]),
+    runtimeHostByListener: new Map([[listener, noopAgentRuntimeHost]]),
     initialized: true,
     seenIssueCommentIds: new Set(),
     seenReviewCommentIds: new Set(),
