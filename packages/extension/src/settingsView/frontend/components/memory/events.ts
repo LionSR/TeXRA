@@ -10,6 +10,8 @@ export const MemoryViewEvents = {
     createEvent('memory-open-item', detail),
   deleteItem: (detail: MemoryItemActionDetail) =>
     createEvent('memory-delete-item', detail),
+  loadPreview: (detail: { storagePath: string }) =>
+    createEvent('memory-load-preview', detail),
   pinItem: (detail: { storagePath: string }) =>
     createEvent('memory-pin-item', detail),
   unpinItem: (detail: { storagePath: string }) =>

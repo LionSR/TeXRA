@@ -14,6 +14,7 @@ export const SETTINGS_VIEW_CMD = {
   OPEN_VSCODE_SETTINGS: 'openVscodeSettings',
   // Memory commands
   GET_MEMORY_DATA: 'getMemoryData',
+  GET_MEMORY_PREVIEW: 'getMemoryPreview',
   OPEN_MEMORY_FILE: 'openMemoryFile',
   OPEN_MEMORY_FOLDER: 'openMemoryFolder',
   DELETE_MEMORY: 'deleteMemory',
@@ -127,6 +128,7 @@ export const SETTINGS_VIEW_COMMANDS = {
   ...SETTINGS_VIEW_CMD,
   // Outbound-only commands (backend → frontend, not schema-validated)
   UPDATE_MEMORY: 'updateMemory',
+  UPDATE_MEMORY_PREVIEW: 'updateMemoryPreview',
   UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
   UPDATE_HISTORY: 'updateHistory',
   HISTORY_CLEARED: 'historyCleared',

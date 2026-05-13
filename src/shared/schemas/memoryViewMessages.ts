@@ -22,14 +22,23 @@ export const MemoryViewItemSchema = z.object({
   storagePath: z.string(),
   size: z.number(),
   mtime: z.string(),
-  lineCount: z.number(),
-  preview: z.string(),
+  lineCount: z.number().optional(),
+  preview: z.string().optional(),
+  previewError: z.boolean().optional(),
   /** Agent that last modified this file (from frontmatter attribution). */
   modifiedBy: z.string().optional(),
   /** Whether this memory is pinned as a core long-term insight. */
   pinned: z.boolean().optional(),
 });
 export type MemoryViewItem = z.infer<typeof MemoryViewItemSchema>;
+
+export const MemoryPreviewSchema = z.object({
+  storagePath: z.string(),
+  lineCount: z.number().optional(),
+  preview: z.string().optional(),
+  error: z.boolean().optional(),
+});
+export type MemoryPreview = z.infer<typeof MemoryPreviewSchema>;
 
 // ============================================================
 // Outbound message schemas (backend → frontend)
@@ -40,6 +49,14 @@ export const UpdateMemoryMessageSchema = z.object({
   items: z.array(MemoryViewItemSchema),
 });
 export type UpdateMemoryMessage = z.infer<typeof UpdateMemoryMessageSchema>;
+
+export const UpdateMemoryPreviewMessageSchema = z.object({
+  command: z.literal(MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW),
+  preview: MemoryPreviewSchema,
+});
+export type UpdateMemoryPreviewMessage = z.infer<
+  typeof UpdateMemoryPreviewMessageSchema
+>;
 
 export const UpdateMemoryEnabledMessageSchema = z.object({
   command: z.literal(MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED),
@@ -85,6 +102,11 @@ export const GetMemoryDataMessageSchema = commandOnly(
   MEMORY_VIEW_COMMANDS.GET_MEMORY_DATA,
 );
 
+export const GetMemoryPreviewMessageSchema = z.object({
+  command: z.literal(MEMORY_VIEW_COMMANDS.GET_MEMORY_PREVIEW),
+  storagePath: z.string().min(1),
+});
+
 export const OpenMemoryFileMessageSchema = z.object({
   command: z.literal(MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FILE),
   storagePath: z.string().min(1),
@@ -123,6 +145,7 @@ export const UnpinMemoryMessageSchema = MemoryPathMessageSchema.extend({
 
 export const MemoryViewInboundMessageSchema = z.discriminatedUnion('command', [
   GetMemoryDataMessageSchema,
+  GetMemoryPreviewMessageSchema,
   OpenMemoryFileMessageSchema,
   OpenMemoryFolderMessageSchema,
   DeleteMemoryMessageSchema,

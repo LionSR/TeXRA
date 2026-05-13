@@ -149,7 +149,7 @@ import {
 } from '@utils/config/providerConfig';
 import { getConfig, updateConfig } from '@utils/config/configUtils';
 import { setToolEnabled } from '@utils/config/constants';
-import { loadMemoryItems } from './utils/memoryFileSystem';
+import { loadMemoryItems, loadMemoryPreview } from './utils/memoryFileSystem';
 import { buildToolDashboardItems } from './utils/toolDashboardData';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
@@ -288,6 +288,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.memoryController = new SettingsMemoryController({
       prompt: new VscodePromptHost(),
       loadMemoryItems,
+      loadMemoryPreview,
       isMemoryEnabled: () =>
         globalSM?.get<boolean>(GlobalStateKey.MEMORY_ENABLED, true) ?? true,
       setMemoryEnabled: setToolUseMemoryEnabled,
@@ -349,6 +350,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       // Memory handlers
       [SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA]: () =>
         this.withActiveWebview((w) => this.sendMemoryData(w)),
+      [SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW]: (data) =>
+        this.handleGetMemoryPreview(data),
       [SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE]: (data) =>
         this.handleOpenMemoryFile(data),
       [SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER]: () =>
@@ -715,6 +718,25 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await webview.postMessage(
       await this.memoryController.getMemoryDataMessage(),
     );
+  }
+
+  private async handleGetMemoryPreview(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.GET_MEMORY_PREVIEW>,
+  ): Promise<void> {
+    try {
+      await this.postSettingsMemoryMessage(
+        await this.memoryController.getMemoryPreviewMessage(data.storagePath),
+      );
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to load memory preview',
+        error,
+      );
+      await this.postSettingsMemoryMessage(
+        this.memoryController.getMemoryPreviewErrorMessage(data.storagePath),
+      );
+    }
   }
 
   public async sendMemoryEnabled(webview: vscode.Webview): Promise<void> {
