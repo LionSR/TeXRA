@@ -5,6 +5,7 @@ import {
 } from '@commands/catalog';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
+import type { StreamTabId } from '@shared/schemas';
 import { type AgentCategory } from '@shared/schemas/agent';
 import {
   SETTINGS_TAB,
@@ -85,6 +86,7 @@ export interface DesktopCommandMenuEntry {
 export interface DesktopCommandActions {
   showRoute(route: DesktopRoute): void;
   showSettings(tabIndex?: SettingsTab, agentSubTab?: AgentCategory): void;
+  showStream?(streamId: StreamTabId): void;
   openDesktopDocs?(): void;
   openLogFolder?(): void;
   openWorkspaceFolder?(): void;
