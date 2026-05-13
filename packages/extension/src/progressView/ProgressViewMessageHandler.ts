@@ -30,6 +30,7 @@ import {
 import { RecordingManager } from '@common/managers/RecordingManager';
 import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
+import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { handleProgressViewToolEditApprovalAction } from '@frontend/approval/nativeToolEditApproval';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -225,22 +226,36 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]: async (
         data,
       ) => {
-        const isNowEnabled = toggleToolEditApprovalSessionBypass(data.stream);
+        const isNowEnabled = toggleToolEditApprovalSessionBypass(
+          data.stream,
+          extensionAgentRuntimeHost,
+        );
         const msg = isNowEnabled
           ? 'YOLO mode enabled: Tool actions will be auto-approved for this stream.'
           : 'YOLO mode disabled: Tool actions will prompt for approval.';
         await vscode.window.showInformationMessage(msg);
       },
       [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: async (data) => {
-        const isNowEnabled = toggleProposalBypass(data.stream);
+        const isNowEnabled = toggleProposalBypass(
+          data.stream,
+          extensionAgentRuntimeHost,
+        );
         if (isNowEnabled) {
           // Delegation auto-approval also accepts tool edits in this stream.
           if (!isApprovalBypassedForStream(data.stream)) {
-            setToolEditApprovalSessionBypass(data.stream, true);
+            setToolEditApprovalSessionBypass(
+              data.stream,
+              true,
+              extensionAgentRuntimeHost,
+            );
           }
         } else {
           // Returning to manual task approval also restores edit prompts.
-          setToolEditApprovalSessionBypass(data.stream, false);
+          setToolEditApprovalSessionBypass(
+            data.stream,
+            false,
+            extensionAgentRuntimeHost,
+          );
         }
         const msg = isNowEnabled
           ? 'Delegated task auto-approval enabled for this stream.'

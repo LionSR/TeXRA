@@ -24,12 +24,7 @@ export interface StreamApprovalController<R extends { accepted: boolean }> {
   unregisterPending(id: string): void;
   getPending(id: string): PendingApproval<R> | undefined;
   isBypassed(streamId: StreamTabId): boolean;
-  setBypass(
-    streamId: StreamTabId,
-    enabled: boolean,
-    options?: { silent?: boolean },
-  ): void;
-  toggleBypass(streamId: StreamTabId): boolean;
+  setBypass(streamId: StreamTabId, enabled: boolean): void;
   enqueue<T>(run: () => Promise<T>): Promise<T>;
   rejectPendingForStream(streamId: StreamTabId): void;
   rejectAllPending(): void;
@@ -41,7 +36,6 @@ export interface StreamApprovalControllerOptions<
   R extends { accepted: boolean },
 > {
   rejectionResult: () => R;
-  notifyBypassChange?: (streamId: StreamTabId, bypassActive: boolean) => void;
 }
 
 export function createStreamApprovalController<R extends { accepted: boolean }>(
@@ -50,13 +44,6 @@ export function createStreamApprovalController<R extends { accepted: boolean }>(
   const pending = new Map<string, PendingApproval<R>>();
   const bypassedByStream = new Map<StreamTabId, boolean>();
   let queue: Promise<void> = Promise.resolve();
-
-  function notify(streamId: StreamTabId): void {
-    options.notifyBypassChange?.(
-      streamId,
-      bypassedByStream.get(streamId) ?? false,
-    );
-  }
 
   function rejectMatching(streamId?: StreamTabId): void {
     for (const entry of pending.values()) {
@@ -80,15 +67,8 @@ export function createStreamApprovalController<R extends { accepted: boolean }>(
     isBypassed(streamId) {
       return bypassedByStream.get(streamId) ?? false;
     },
-    setBypass(streamId, enabled, opts) {
+    setBypass(streamId, enabled) {
       bypassedByStream.set(streamId, enabled);
-      if (!opts?.silent) notify(streamId);
-    },
-    toggleBypass(streamId) {
-      const next = !(bypassedByStream.get(streamId) ?? false);
-      bypassedByStream.set(streamId, next);
-      notify(streamId);
-      return next;
     },
     enqueue(run) {
       const operation = queue.then(run);

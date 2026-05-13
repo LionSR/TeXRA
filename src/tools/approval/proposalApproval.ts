@@ -1,21 +1,27 @@
 /** Per-stream bypass state for agent delegation proposals. */
-import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 
 const bypassedByStream = new Map<StreamTabId, boolean>();
 
-function notifyBypassState(streamId: StreamTabId): void {
-  getAgentRuntimeHost().emit('updateSuperYoloBypassState', {
+function notifyBypassState(
+  streamId: StreamTabId,
+  runtimeHost: AgentRuntimeHost,
+): void {
+  runtimeHost.emit('updateSuperYoloBypassState', {
     streamId,
     bypassActive: bypassedByStream.get(streamId) ?? false,
   });
 }
 
 /** Toggle per-stream proposal bypass. Returns new state. */
-export function toggleProposalBypass(streamId: StreamTabId): boolean {
+export function toggleProposalBypass(
+  streamId: StreamTabId,
+  runtimeHost: AgentRuntimeHost,
+): boolean {
   const newState = !(bypassedByStream.get(streamId) ?? false);
   bypassedByStream.set(streamId, newState);
-  notifyBypassState(streamId);
+  notifyBypassState(streamId, runtimeHost);
   return newState;
 }
 
