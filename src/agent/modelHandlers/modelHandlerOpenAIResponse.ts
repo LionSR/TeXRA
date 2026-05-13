@@ -22,11 +22,9 @@ import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE } from '@agent/core/constants';
 import { getConfig } from '@agent/core/config';
 import {
-  formatProviderHttpError,
   getSdkErrorMessage,
   isContextWindowError,
   isPreviousResponseIdError,
-  isRetryableStatusCode,
   attachPartialText,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
@@ -48,6 +46,12 @@ import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 import { tagOpenAISdkError, withSdkErrorTag } from './support/sdkErrorAdapters';
+import {
+  classifyOpenAIBackgroundResumeError,
+  createOpenAIBackgroundPollingError,
+  createOpenAIBackgroundTerminalError,
+  normalizeOpenAIResponseError,
+} from './openAIResponseErrors';
 
 // Local file imports
 import {
@@ -146,10 +150,6 @@ interface StreamingEventState {
 interface WebSocketExecutionResult {
   response: Response;
   state: StreamingEventState;
-}
-
-interface RequestIdTaggedError extends Error {
-  request_id?: string;
 }
 
 function isResponseFunctionToolCallItem(
@@ -744,27 +744,26 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.clearPendingBackgroundResponse();
         throw err;
       }
-      tagOpenAISdkError(err, this.config.provider);
       // Transient failures (no status / 5xx / 429 / 408) — the background
       // response is likely still alive server-side, so retain the ID and
       // rethrow so the outer retry resumes the same ID. Definitive failures
       // (4xx, notably 404 expired) — clear the ID and create a new request.
       //
-      // Check statusCode directly rather than formatted.userRetryable: the latter
+      // Check statusCode directly rather than providerError.userRetryable: the latter
       // is force-true for relay errors, which would incorrectly retain the ID
       // on a relay-wrapped 404 and loop until retries are exhausted.
-      const formatted = formatProviderHttpError(err);
-      const code = formatted.statusCode;
-      if (code === undefined || isRetryableStatusCode(code)) {
+      const { providerError, shouldRetainPendingResponse } =
+        classifyOpenAIBackgroundResumeError(err, this.config.provider);
+      if (shouldRetainPendingResponse) {
         throw err;
       }
       this.logger.warn(
-        `Couldn't resume the pending OpenAI response; will start a new request. (${formatted.message})`,
+        `Couldn't resume the pending OpenAI response; will start a new request. (${providerError.message})`,
         {
           data: {
             responseId: pendingId,
-            error: formatted.message,
-            statusCode: code,
+            error: providerError.message,
+            statusCode: providerError.statusCode,
           },
         },
       );
@@ -2035,10 +2034,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         updatedMessages: compactedMessages,
       };
     } catch (error) {
-      tagOpenAISdkError(error, this.config.provider);
+      // Attach a capped tail of any streamed text before normalization so the
+      // retry UI receives the same structured error shape downstream.
+      if (streamedText) {
+        attachPartialText(error, takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX));
+      }
 
       // Extract error details for diagnostics (useful for relay errors)
-      const { rawErrorBody } = formatProviderHttpError(error);
+      const providerError = normalizeOpenAIResponseError(
+        error,
+        this.config.provider,
+      );
+      const { rawErrorBody } = providerError;
       if (rawErrorBody) {
         this.logger.debug('Raw error body from provider', {
           data: { rawErrorBody },
@@ -2093,7 +2100,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // Log diagnostic info for other errors when chaining was active
         this.logger.debug(
           `Request failed with previousResponseId=${this.previousResponseId}. ` +
-            `Error: ${getSdkErrorMessage(error)}`,
+            `Error: ${providerError.message}`,
         );
       }
 
@@ -2109,12 +2116,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       // Clear diagnostic state to avoid stale comparison on retry
       this._diagPreFlightTokens = null;
-
-      // Attach a capped tail of any streamed text to the error so the retry
-      // UI can surface progress. No-op when nothing was streamed.
-      if (streamedText) {
-        attachPartialText(error, takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX));
-      }
 
       throw error;
     }
@@ -2367,9 +2368,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // gone server-side. Clear the pending ID so the next retry creates a
         // fresh background request instead of routing through
         // tryResumeBackgroundResponse to rediscover the 404. The wrapping
-        // below strips the 404 status so formatProviderHttpError classifies
-        // the error as retryable (network-like), which keeps the retry loop
-        // engaged rather than bailing out on a non-retryable 4xx.
+        // below strips the 404 status so the provider-error normalizer
+        // classifies the error as retryable (network-like), keeping the retry
+        // loop engaged rather than bailing out on a non-retryable 4xx.
         //
         // All other errors (401, 403, 5xx, network, etc.) propagate unchanged
         // so downstream handlers (relay 401 token refresh, retryability checks,
@@ -2377,17 +2378,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         const statusCode = (err as { status?: number }).status;
         if (statusCode === 404) {
           this.clearPendingBackgroundResponse();
-          const pollingError: RequestIdTaggedError = new Error(
-            `Background response polling failed for ${responseId}: ${getSdkErrorMessage(err)}`,
-            { cause: err },
+          throw createOpenAIBackgroundPollingError(
+            responseId,
+            err,
+            this.config.provider,
           );
-          // Forward request_id so formatProviderHttpError can extract it for
-          // logging diagnostics (detectRequestId doesn't follow the cause chain)
-          const origRequestId = (err as { request_id?: string }).request_id;
-          if (origRequestId) {
-            pollingError.request_id = origRequestId;
-          }
-          throw pollingError;
         }
         throw err;
       }
@@ -2427,10 +2422,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     const fallbackStatus = current.status ?? 'unknown';
-    const errorDetail =
-      current.error?.message ??
-      current.incomplete_details?.reason ??
-      'Background response did not complete successfully.';
     this.logger.error(
       `Background response ${responseId} ended with status ${fallbackStatus}`,
       {
@@ -2444,17 +2435,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         },
       },
     );
-    const wrapped = new Error(
-      `Background response ${responseId} ended with status ${fallbackStatus}: ${errorDetail}. Retrieve the latest status with client.responses.retrieve("${responseId}").`,
-    ) as Error & { error?: unknown; provider?: string };
-    // Keep the synthetic wrapper as a plain response-state error. It often has
-    // no HTTP status; tagging it as a generic SDK APIError would make the
-    // formatter treat unknown provider-side failures as non-retryable.
-    wrapped.provider = this.config.provider;
-    if (current.error) {
-      wrapped.error = current.error;
-    }
-    throw wrapped;
+    throw createOpenAIBackgroundTerminalError(current, this.config.provider);
   }
 
   /** Adds continuation instructions for models without prefill support. */
