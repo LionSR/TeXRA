@@ -112,4 +112,12 @@ export class StreamLog {
   toJSON(): StreamLogEntry[] {
     return [...this.entries];
   }
+
+  /**
+   * Internal persistence view. Callers must treat the returned array as
+   * immutable; avoiding a defensive copy matters on the stream-log save path.
+   */
+  toPersistedEntries(): readonly StreamLogEntry[] {
+    return this.entries;
+  }
 }
