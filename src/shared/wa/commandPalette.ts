@@ -30,9 +30,13 @@ export interface CommandPaletteEntry {
   readonly enabled: boolean;
 }
 
+export type CommandPaletteEntrySource =
+  | readonly CommandPaletteEntry[]
+  | (() => readonly CommandPaletteEntry[]);
+
 export interface CommandPaletteOptions {
   readonly document: Document;
-  readonly entries: readonly CommandPaletteEntry[];
+  readonly entries: CommandPaletteEntrySource;
   readonly onExecute: (id: string) => boolean | Promise<boolean>;
   // Returning false suppresses ALL palette opens — both the global
   // Cmd/Ctrl+K shortcut and any direct `controller.open()` call (e.g. while
@@ -133,6 +137,12 @@ export function isCommandPaletteShortcut(event: KeyboardEvent): boolean {
   );
 }
 
+function resolveCommandPaletteEntries(
+  entries: CommandPaletteEntrySource,
+): CommandPaletteEntry[] {
+  return [...(typeof entries === 'function' ? entries() : entries)];
+}
+
 export function createCommandPalette({
   document,
   entries,
@@ -147,8 +157,9 @@ export function createCommandPalette({
   // Reactive state — every mutation calls renderTemplate() to keep the DOM
   // in sync. wa-dialog handles modal backdrop, focus trap, escape key, and
   // focus restoration natively, so we no longer manage those by hand.
-  let visibleEntries: CommandPaletteEntry[] = [...entries];
-  let activeIndex = entries.length > 0 ? 0 : -1;
+  let allEntries: CommandPaletteEntry[] = [];
+  let visibleEntries: CommandPaletteEntry[] = [];
+  let activeIndex = -1;
   let query = '';
 
   const dialog = document.createElement('wa-dialog') as WaDialog;
@@ -165,7 +176,7 @@ export function createCommandPalette({
   const handleFilterInput = (event: Event): void => {
     const target = event.target as WaInput | null;
     query = target?.value ?? '';
-    visibleEntries = filterCommandPaletteEntries(entries, query);
+    visibleEntries = filterCommandPaletteEntries(allEntries, query);
     activeIndex = visibleEntries.length > 0 ? 0 : -1;
     renderTemplate();
   };
@@ -268,8 +279,9 @@ export function createCommandPalette({
   const open = (): void => {
     if (canOpen?.() === false) return;
     if (dialog.open) return;
+    allEntries = resolveCommandPaletteEntries(entries);
     query = '';
-    visibleEntries = [...entries];
+    visibleEntries = [...allEntries];
     activeIndex = visibleEntries.length > 0 ? 0 : -1;
     renderTemplate();
     dialog.open = true;
