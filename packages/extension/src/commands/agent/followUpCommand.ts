@@ -2,7 +2,6 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   sendFollowUp,
@@ -11,6 +10,7 @@ import {
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { hasPersistedFlowRecord } from '@agent/storage/detectWaitingStreams';
+import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { AgentLogger } from '@logger/AgentLogger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { STREAM_STATUS } from '@shared/schemas';
@@ -42,7 +42,9 @@ async function lazyDetectWaitingStatus(
   try {
     const hasFlow = await hasPersistedFlowRecord(executionId);
     if (hasFlow) {
-      StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
+      StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
+        runtimeHost: extensionAgentRuntimeHost,
+      });
       logger.debug(`Lazy detected waiting session for stream: ${streamId}`);
     }
     return hasFlow;
@@ -113,14 +115,12 @@ async function handleFollowUpResult(
   result: SendFollowUpResult,
   streamId: StreamTabId,
 ): Promise<void> {
-  const runtimeHost = getAgentRuntimeHost();
-
   switch (result.status) {
     case 'sent':
-      runtimeHost.emit('updateQueuedFollowUps', { streamId });
+      extensionAgentRuntimeHost.emit('updateQueuedFollowUps', { streamId });
       break;
     case 'queued':
-      runtimeHost.emit('updateQueuedFollowUps', { streamId });
+      extensionAgentRuntimeHost.emit('updateQueuedFollowUps', { streamId });
       if (result.reason === 'waiting' || result.reason === 'children_running') {
         const resumed = await tryAutoResume(streamId);
         // tryAutoResume also returns false when the stream is already
@@ -133,7 +133,9 @@ async function handleFollowUpResult(
             // too, but that's the lesser evil — leaving the queue open would
             // leak late child deliveries into the next run on this stream.
             ToolUseFollowUpQueue.release(streamId);
-            runtimeHost.emit('updateQueuedFollowUps', { streamId });
+            extensionAgentRuntimeHost.emit('updateQueuedFollowUps', {
+              streamId,
+            });
             await vscode.window.showWarningMessage(
               'Message dropped — no session available to receive it. Start a new agent task to continue.',
             );
