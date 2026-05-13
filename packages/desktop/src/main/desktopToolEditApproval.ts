@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { bus } from '@eventBus/ProgressEventBus';
+import type { DiffViewHost } from '@hosts/diffViewHost';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import {
   previewProposedLatex,
@@ -27,6 +28,7 @@ import { WorkspaceFS } from '@utils/files';
 export interface DesktopToolEditApprovalOptions {
   openPath?: (filePath: string) => Promise<void>;
   openBuildDisplay?: BuildDisplayFn;
+  openDiff?: DiffViewHost['openDiff'];
   showErrorMessage?: (message: string) => Promise<void> | void;
   tempRoot?: string;
 }
@@ -252,6 +254,16 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
   private async openDiffPatch(
     entry: DesktopPendingToolEditApproval,
   ): Promise<void> {
+    if (this.options.openDiff) {
+      await this.options.openDiff(
+        { filePath: entry.originalUri.fsPath },
+        { filePath: entry.proposedUri.fsPath },
+        `Tool edit: ${path.basename(entry.request.path)}`,
+        { preserveFocus: true },
+      );
+      return;
+    }
+
     if (!this.options.openPath) {
       await this.report('Desktop diff preview is unavailable.');
       return;
