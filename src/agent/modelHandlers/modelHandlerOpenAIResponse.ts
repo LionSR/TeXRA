@@ -379,20 +379,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       };
       const onError = (err: Error): void => {
         cleanup();
-        try {
-          ws.close();
-        } catch {
-          /* ignore */
-        }
+        ModelHandlerOpenAIResponse.safeCloseWs(ws);
         reject(err);
       };
       const onAbort = (): void => {
         cleanup();
-        try {
-          ws.close();
-        } catch {
-          /* ignore */
-        }
+        ModelHandlerOpenAIResponse.safeCloseWs(ws);
         reject(new DOMException('The operation was aborted', 'AbortError'));
       };
 

@@ -83,25 +83,25 @@ export async function withExecutionRunContext<T>(
     ctx.streamId,
     ctx.coordinators,
   );
-  const runContext = createRunContext({
-    runtimeHost: ctx.runtimeHost,
-    streamId: ctx.streamId,
-    executionId: ctx.executionId,
-    logger: ctx.logger,
-    approvals: {},
-    coordinators: ctx.coordinators,
-    toolRunContext: {
+  try {
+    const runContext = createRunContext({
+      runtimeHost: ctx.runtimeHost,
       streamId: ctx.streamId,
       executionId: ctx.executionId,
-      model: ctx.config.model,
-      agentName: ctx.config.agent,
-      workingDirectory: ctx.workingDirectory,
-      runtimeHost: ctx.runtimeHost,
-      delegationDepth: ctx.delegationDepth,
-      delegationConfig: ctx.delegationConfig,
-    },
-  });
-  try {
+      logger: ctx.logger,
+      approvals: {},
+      coordinators: ctx.coordinators,
+      toolRunContext: {
+        streamId: ctx.streamId,
+        executionId: ctx.executionId,
+        model: ctx.config.model,
+        agentName: ctx.config.agent,
+        workingDirectory: ctx.workingDirectory,
+        runtimeHost: ctx.runtimeHost,
+        delegationDepth: ctx.delegationDepth,
+        delegationConfig: ctx.delegationConfig,
+      },
+    });
     return await withRunContext(runContext, fn);
   } finally {
     release();
