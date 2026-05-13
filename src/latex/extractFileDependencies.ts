@@ -19,6 +19,7 @@ import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 // Local file imports
 import {
   collectBibliographyPaths,
+  existingExternalPath,
   stripLatexComments,
 } from './latexParsingUtils';
 
@@ -26,8 +27,14 @@ const INPUT_PATTERN = /\\input\s*\{([^}]+)\}/g;
 const INCLUDE_PATTERN = /\\include\s*\{([^}]+)\}/g;
 
 /**
- * Resolve a TeX input path to an existing absolute path.
- * Checks as-is first, then with .tex appended.
+ * Resolve a TeX input path (\input / \include argument) to an existing
+ * absolute path. Tries the literal path first, then with `.tex` appended
+ * (case-insensitive — `chapter.TEX` is not double-extended). Returns null
+ * for empty/whitespace input or when neither candidate exists.
+ *
+ * Uses `joinLatexPath` (not `path.join`) so leading slashes in TeX paths
+ * are stripped and absolute paths are preserved, matching LaTeX's own
+ * `\input` resolution.
  */
 async function resolveTexInputPath(
   rawPath: string,
@@ -37,29 +44,12 @@ async function resolveTexInputPath(
   if (!trimmed) return null;
 
   const absolute = joinLatexPath(baseDir, trimmed);
-  if (await flexibleFS.exists({ kind: 'external', absolutePath: absolute })) {
-    return absolute;
-  }
+  const hit = await existingExternalPath(absolute);
+  if (hit) return hit;
 
   const withExt = ensureExtension(absolute, '.tex');
-  if (
-    withExt !== absolute &&
-    (await flexibleFS.exists({ kind: 'external', absolutePath: withExt }))
-  ) {
-    return withExt;
-  }
-
-  return null;
-}
-
-/**
- * Return the candidate path if it exists on disk, otherwise null.
- */
-async function existingPath(absolute: string): Promise<string | null> {
-  if (await flexibleFS.exists({ kind: 'external', absolutePath: absolute })) {
-    return absolute;
-  }
-  return null;
+  if (withExt === absolute) return null;
+  return existingExternalPath(withExt);
 }
 
 /**
@@ -92,7 +82,9 @@ export async function extractLatexFileDependencies(
 
   const [texResolved, bibResolved] = await Promise.all([
     Promise.all(texInputPaths.map((raw) => resolveTexInputPath(raw, latexDir))),
-    Promise.all(bibCandidates.map((absolute) => existingPath(absolute))),
+    Promise.all(
+      bibCandidates.map((absolute) => existingExternalPath(absolute)),
+    ),
   ]);
 
   const results = new Set<string>();

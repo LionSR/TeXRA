@@ -91,12 +91,6 @@ export function collectKnownSessionLinks(
   return known.length ? known : undefined;
 }
 
-function getKnownSessionLinks(
-  persisted: PersistedExternalInquiryTurn,
-): string[] | undefined {
-  return collectKnownSessionLinks(persisted.manifest);
-}
-
 export function buildRejectedExternalInquiryResult(
   feedback?: string,
 ): ToolResult {
@@ -123,7 +117,7 @@ function buildExternalInquiryOutput(
     answer,
   ];
 
-  const knownSessionLinks = getKnownSessionLinks(persisted);
+  const knownSessionLinks = collectKnownSessionLinks(persisted.manifest);
   appendContinuationGuidance(lines, persisted, knownSessionLinks);
   appendSessionLinks(lines, knownSessionLinks);
   appendManifestHint(lines, currentManifestPath(persisted));
@@ -217,7 +211,9 @@ export function buildExternalInquiryResult(params: {
       'Use the executions tool with path=/executions/current/report to inspect it.',
     ];
 
-    const knownSessionLinks = getKnownSessionLinks(params.persisted);
+    const knownSessionLinks = collectKnownSessionLinks(
+      params.persisted.manifest,
+    );
     appendContinuationGuidance(lines, params.persisted, knownSessionLinks);
     appendSessionLinks(lines, knownSessionLinks);
     appendManifestHint(lines, currentManifestPath(params.persisted));
