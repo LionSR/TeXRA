@@ -18,7 +18,10 @@ import {
   clearPlanApprovalForStream,
   clearRetryRequest,
 } from '@agent/runtime/runCoordinators';
-import { tryUseRunContext } from '@agent/runtime/RunContext';
+import {
+  resolveRunRuntimeHost,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { createRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -26,7 +29,6 @@ import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { RoundPersistedFlow } from '@agent/node/roundPersistedFlow';
 import type { UsageMonitor } from '@agent/utils/UsageMonitor';
-import { getAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   WORKFLOW_DOCUMENT_OUTPUT_EXT,
   WORKFLOW_RAW_OUTPUT_EXT,
@@ -117,7 +119,7 @@ export async function runReflectionFlow<C = unknown>(
     onRoundFinalized = async () => {},
     usageMonitor,
   } = input;
-  const runtimeHost = input.runtimeHost ?? getAgentRuntimeHost();
+  const runtimeHost = resolveRunRuntimeHost(input.runtimeHost);
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
   let shared: ReflectionFlowShared | undefined;
