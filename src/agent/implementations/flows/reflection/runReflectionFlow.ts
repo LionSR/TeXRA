@@ -18,10 +18,7 @@ import {
   clearPlanApprovalForStream,
   clearRetryRequest,
 } from '@agent/runtime/runCoordinators';
-import {
-  resolveRunRuntimeHost,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { createRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -110,6 +107,7 @@ export async function runReflectionFlow<C = unknown>(
     setting,
     prompt,
     logger,
+    runtimeHost,
     streamId,
     executionId,
     storageKey,
@@ -119,7 +117,6 @@ export async function runReflectionFlow<C = unknown>(
     onRoundFinalized = async () => {},
     usageMonitor,
   } = input;
-  const runtimeHost = resolveRunRuntimeHost(input.runtimeHost);
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
   let shared: ReflectionFlowShared | undefined;
