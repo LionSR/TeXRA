@@ -84,6 +84,8 @@ import {
   buildDesktopMainViewResetMessage,
   buildDesktopSettingsTabMessage,
   DESKTOP_LOCAL_COMMANDS,
+  SETTINGS_TAB,
+  type DesktopCommandActions,
 } from '../desktopCommandSurface';
 import {
   DESKTOP_ONBOARDING_COMMANDS,
@@ -186,6 +188,11 @@ function emptyWorkspaceTemplate(): TemplateResult {
         TeXRA desktop needs a workspace before it can discover files, run
         agents, and place outputs.
       </p>
+      <ul class="desktop-empty-workspace-capabilities">
+        <li>Select TeX, Markdown, or text files from the opened folder.</li>
+        <li>Run workflow or tool-use agents with the chosen model.</li>
+        <li>Review progress, logs, and generated outputs in one window.</li>
+      </ul>
       <div class="desktop-empty-workspace-actions">
         <wa-button
           appearance="filled"
@@ -194,14 +201,54 @@ function emptyWorkspaceTemplate(): TemplateResult {
           @click=${() =>
             postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER)}
         >
-          Open Folder
+          ${waIcon('folder-open', { slot: 'start' })} Open Folder
         </wa-button>
         <wa-button
           appearance="outlined"
           class="desktop-secondary-button"
           @click=${openLogsDrawer}
         >
-          Logs
+          ${waIcon('file-lines', { slot: 'start' })} Logs
+        </wa-button>
+      </div>
+    </section>
+  `;
+}
+
+function emptyStreamsTemplate(): TemplateResult {
+  return html`
+    <section class="desktop-empty-streams" aria-label="First run suggestions">
+      <div class="desktop-empty-streams-copy">
+        <h2>Start from the launcher</h2>
+        <p>
+          Choose files and an agent above, or check model access before the
+          first run.
+        </p>
+        <p class="desktop-empty-streams-example">
+          Try: <q>polish the abstract</q>
+        </p>
+      </div>
+      <div class="desktop-empty-streams-actions">
+        <wa-button
+          appearance="outlined"
+          size="small"
+          @click=${() => openSettingsTab(SETTINGS_TAB.MODELS)}
+        >
+          ${waIcon('key', { slot: 'start' })} Models
+        </wa-button>
+        <wa-button
+          appearance="outlined"
+          size="small"
+          @click=${() => openSettingsTab(SETTINGS_TAB.AGENTS)}
+        >
+          ${waIcon('robot', { slot: 'start' })} Agents
+        </wa-button>
+        <wa-button
+          appearance="outlined"
+          size="small"
+          @click=${openCommandPalette}
+        >
+          ${waIcon('terminal', { slot: 'start' })} Commands
         </wa-button>
       </div>
     </section>
@@ -276,7 +323,9 @@ const CHROME_ICON_BUTTONS: ReadonlyArray<ChromeIconButtonSpec> = [
 
 function shellTemplate(): TemplateResult {
   const activeId = activeStreamId$.get();
-  const showConversation = activeId != null && hasAnyStreams$.get();
+  const hasStreams = hasAnyStreams$.get();
+  const showConversation = activeId != null && hasStreams;
+  const showLauncherEmptyState = hasWorkspace && !hasStreams;
   return html`
     <section class="desktop-shell">
       <nav class="desktop-nav" aria-label="Desktop chrome">
@@ -368,7 +417,18 @@ function shellTemplate(): TemplateResult {
             data-pane="launcher"
             ?hidden=${showConversation}
           >
-            ${hasWorkspace ? mainView : noWorkspacePlaceholder}
+            ${hasWorkspace
+              ? html`
+                  <section
+                    class=${showLauncherEmptyState
+                      ? 'desktop-launcher-surface desktop-launcher-surface--empty'
+                      : 'desktop-launcher-surface'}
+                  >
+                    ${mainView}
+                    ${showLauncherEmptyState ? emptyStreamsTemplate() : nothing}
+                  </section>
+                `
+              : noWorkspacePlaceholder}
           </section>
           <section
             class="desktop-pane"
@@ -602,6 +662,20 @@ function openSettingsOverlay(): void {
   currentRoute = 'settings';
   document.body.dataset.desktopRoute = 'settings';
   dialog.open = true;
+}
+
+type ShowSettingsArgs = Parameters<DesktopCommandActions['showSettings']>;
+
+function openSettingsTab(
+  tabIndex?: ShowSettingsArgs[0],
+  agentSubTab?: ShowSettingsArgs[1],
+): void {
+  openSettingsOverlay();
+  if (tabIndex == null) return;
+  window.postMessage(
+    buildDesktopSettingsTabMessage(tabIndex, agentSubTab),
+    getWindowTargetOrigin(),
+  );
 }
 
 // =============================================================================
@@ -875,14 +949,7 @@ const commandPalette = bootstrapFailed
       canOpen: () => !firstRunWalkthrough?.isVisible(),
       actions: {
         showRoute: setRoute,
-        showSettings: (tabIndex, agentSubTab) => {
-          openSettingsOverlay();
-          if (tabIndex == null) return;
-          window.postMessage(
-            buildDesktopSettingsTabMessage(tabIndex, agentSubTab),
-            getWindowTargetOrigin(),
-          );
-        },
+        showSettings: openSettingsTab,
         showStream: switchToStream,
         openDesktopDocs: () => {
           postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS);
