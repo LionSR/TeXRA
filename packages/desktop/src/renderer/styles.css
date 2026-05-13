@@ -219,6 +219,24 @@ wa-button.desktop-rail-settings::part(base) {
   height: 100%;
 }
 
+.desktop-launcher-surface {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.desktop-launcher-surface--empty {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.desktop-launcher-surface > main-app {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
 .desktop-right {
   /* Reserved column. Hidden today; will host the diff/approve UX later. */
   display: none;
@@ -552,16 +570,85 @@ wa-input.desktop-command-palette-input::part(base) {
 }
 
 .desktop-empty-workspace-panel p {
-  margin: 0 0 var(--wa-space-l);
+  margin: 0 0 var(--wa-space-m);
   color: var(--wa-color-text-quiet);
   font-size: 15px;
   line-height: 1.5;
 }
 
+.desktop-empty-workspace-capabilities {
+  display: grid;
+  gap: var(--wa-space-xs);
+  max-width: 440px;
+  margin: 0 auto var(--wa-space-l);
+  padding: 0;
+  color: var(--wa-color-text-quiet);
+  font-size: 13px;
+  line-height: 1.45;
+  list-style-position: inside;
+  text-align: left;
+}
+
 .desktop-empty-workspace-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: var(--wa-space-s);
+}
+
+.desktop-empty-streams {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--wa-space-m);
+  align-items: center;
+  padding: var(--wa-space-s) var(--wa-space-l);
+  border-top: 1px solid var(--wa-color-surface-border);
+  background: var(--wa-color-surface-lowered);
+}
+
+.desktop-empty-streams-copy {
+  min-width: 0;
+}
+
+.desktop-empty-streams-copy h2 {
+  margin: 0 0 var(--wa-space-2xs);
+  color: var(--wa-color-text-normal);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.desktop-empty-streams-copy p {
+  margin: 0;
+  color: var(--wa-color-text-quiet);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.desktop-empty-streams-copy .desktop-empty-streams-example {
+  margin-top: var(--wa-space-2xs);
+  color: var(--wa-color-text-normal);
+}
+
+.desktop-empty-streams-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--wa-space-xs);
+}
+
+.desktop-empty-streams-actions wa-button::part(base) {
+  border-radius: var(--wa-border-radius-m, 3px);
+}
+
+@media (max-width: 720px) {
+  .desktop-empty-streams {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .desktop-empty-streams-actions {
+    justify-content: flex-start;
+  }
 }
 
 .desktop-bootstrap-fallback {
