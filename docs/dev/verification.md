@@ -28,6 +28,32 @@ cd packages/desktop && npx vite build --mode development
 cd packages/desktop && pnpm exec playwright test
 ```
 
+## PR review automation
+
+Every pull request should keep the required checks green, including the Claude
+review jobs. One special case needs an explicit rule: a pull request may edit
+the review workflow, its local action, or its review prompts. In that case the
+review job must not run untrusted automation from the pull request itself.
+
+The repository handles this by running the pull request through the trusted
+automation from the base branch. The `Claude Code Review` workflow checks out
+the base branch into `.trusted-actions` and runs the review action and prompt
+files from that directory. This means changes to `.github/workflows/claude-code-review.yml`,
+`.github/actions/claude-code-with-provider/`, or `.github/prompts/` are still
+reviewed, but the changed automation only takes effect after the PR is merged.
+
+If GitHub refuses to run a self-editing workflow, or if the provider-side review
+service is unavailable, do not treat the missing review as silently acceptable.
+Use the `status:blocked-external` label and leave a PR comment that records:
+
+- the blocked check or run URL,
+- why the failure is external to the proposed code,
+- which human-reviewed files replace the missing automated review, and
+- which local and CI checks are green.
+
+Only merge such a PR when that comment is present and a maintainer has reviewed
+the changed automation or prompt files directly.
+
 ## Surfaces to confirm by hand
 
 | Surface                  | Extension (VS Code)                                                                                   | Desktop (Electron)                                                                                          |
