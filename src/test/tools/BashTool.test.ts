@@ -20,6 +20,7 @@ import type { ToolUseCycleServices } from '@agent/core/flows/CycleServices';
 
 // Local imports - agent runtime
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
+import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecResult } from '@agent/types/ResultTypes';
@@ -164,6 +165,7 @@ describe('BashTool', () => {
       } satisfies AgentPrompt,
       userVarChannels: { input: {}, transient: {} },
       logger: new AgentLogger('BashToolTest', true),
+      runtimeHost: noopAgentRuntimeHost,
       client: {} as OpenAI,
       toolRegistry: new MapToolRegistry({ bash: bashTool }),
       checkInterruption: () => false,

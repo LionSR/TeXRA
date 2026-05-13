@@ -2,11 +2,9 @@
 import { strict as assert } from 'assert';
 
 // Local imports
-import {
-  runWithAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { Plan } from '@shared/schemas';
 
@@ -29,7 +27,7 @@ function createRecordingHost(): {
 }
 
 describe('promise coordinators', () => {
-  it('captures the scoped runtime host for approval show and resolve events', async () => {
+  it('captures the run-context runtime host for approval show and resolve events', async () => {
     const coordinator = new PlanApprovalCoordinator();
     const { events, host } = createRecordingHost();
     const plan: Plan = {
@@ -44,11 +42,13 @@ describe('promise coordinators', () => {
       ],
     };
 
-    const resultPromise = runWithAgentRuntimeHost(host, () =>
-      coordinator.waitForApproval('stream:runtime', {
-        approvalId: 'approval:runtime',
-        plan,
-      }),
+    const resultPromise = withRunContext(
+      createRunContext({ runtimeHost: host }),
+      () =>
+        coordinator.waitForApproval('stream:runtime', {
+          approvalId: 'approval:runtime',
+          plan,
+        }),
     );
 
     coordinator.resolveRequest('approval:runtime', { action: 'approve' });
@@ -72,7 +72,7 @@ describe('promise coordinators', () => {
     ]);
   });
 
-  it('dismisses the previous host when a scoped request is replaced', async () => {
+  it('dismisses the previous run-context host when a request is replaced', async () => {
     const coordinator = new PlanApprovalCoordinator();
     const first = createRecordingHost();
     const second = createRecordingHost();
@@ -81,17 +81,21 @@ describe('promise coordinators', () => {
       steps: [],
     };
 
-    const firstResult = runWithAgentRuntimeHost(first.host, () =>
-      coordinator.waitForApproval('stream:first', {
-        approvalId: 'approval:replace',
-        plan,
-      }),
+    const firstResult = withRunContext(
+      createRunContext({ runtimeHost: first.host }),
+      () =>
+        coordinator.waitForApproval('stream:first', {
+          approvalId: 'approval:replace',
+          plan,
+        }),
     );
-    const secondResult = runWithAgentRuntimeHost(second.host, () =>
-      coordinator.waitForApproval('stream:second', {
-        approvalId: 'approval:replace',
-        plan,
-      }),
+    const secondResult = withRunContext(
+      createRunContext({ runtimeHost: second.host }),
+      () =>
+        coordinator.waitForApproval('stream:second', {
+          approvalId: 'approval:replace',
+          plan,
+        }),
     );
 
     assert.deepEqual(await firstResult, { action: 'reject' });

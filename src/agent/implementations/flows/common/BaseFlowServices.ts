@@ -14,7 +14,7 @@ export interface AgentCore<C = unknown> {
   setting: AgentSetting;
   prompt: AgentPrompt;
   logger: AgentLogger;
-  runtimeHost?: AgentRuntimeHost;
+  runtimeHost: AgentRuntimeHost;
   streamId: StreamTabId;
   executionId: ExecutionId;
   userVarChannels: UserVariableChannels;
