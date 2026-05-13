@@ -1,37 +1,28 @@
-import { AsyncLocalStorage } from 'async_hooks';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
-import {
-  getDefaultProgressSink,
-  setDefaultProgressSink,
-  type ProgressSink,
-} from './ProgressSink';
 import { tryUseRunContext } from './RunContext';
 
-export type AgentRuntimeHost = ProgressSink;
+export interface AgentRuntimeHost {
+  emit<K extends keyof ProgressEventPayloads>(
+    event: K,
+    payload: ProgressEventPayloads[K],
+  ): void;
+}
 
-let defaultAgentRuntimeHost: AgentRuntimeHost | undefined;
-const runtimeHostScope = new AsyncLocalStorage<AgentRuntimeHost>();
+export const noopAgentRuntimeHost: AgentRuntimeHost = {
+  emit: () => {},
+};
+
+let defaultAgentRuntimeHost: AgentRuntimeHost = noopAgentRuntimeHost;
 
 export function setDefaultAgentRuntimeHost(host: AgentRuntimeHost): void {
   defaultAgentRuntimeHost = host;
-  setDefaultProgressSink(host);
 }
 
 export function getDefaultAgentRuntimeHost(): AgentRuntimeHost {
-  return defaultAgentRuntimeHost ?? getDefaultProgressSink();
+  return defaultAgentRuntimeHost;
 }
 
 export function getAgentRuntimeHost(): AgentRuntimeHost {
-  return (
-    tryUseRunContext()?.runtimeHost ??
-    runtimeHostScope.getStore() ??
-    getDefaultAgentRuntimeHost()
-  );
-}
-
-export function runWithAgentRuntimeHost<T>(
-  host: AgentRuntimeHost | undefined,
-  fn: () => T,
-): T {
-  return host ? runtimeHostScope.run(host, fn) : fn();
+  return tryUseRunContext()?.runtimeHost ?? getDefaultAgentRuntimeHost();
 }

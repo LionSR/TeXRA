@@ -98,7 +98,6 @@ const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
 
 interface AgentLaunchContext extends AgentCore {
-  runtimeHost: AgentRuntimeHost;
   usageMonitor: UsageMonitor;
   storageKey: StorageKey;
   parentStage: AgentLogStage;
