@@ -987,7 +987,7 @@ export class DesktopProgressBridge {
   stopStream(streamId: StreamTabId): void {
     clearRetryRequest(streamId);
     if (this.options.detachSubagentsOnStop === true) {
-      detachActiveChildren(streamId);
+      detachActiveChildren(streamId, this.runtimeHost);
     } else {
       interruptActiveChildren(streamId);
     }
