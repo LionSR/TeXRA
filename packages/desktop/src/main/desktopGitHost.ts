@@ -107,22 +107,20 @@ export function createDesktopGitHost(
       // `.git`-as-pointer-file case for worktrees and submodules. The cost
       // is one extra `git` invocation up front but the call is fast (<10ms
       // typical) so we eat it for correctness.
-      let isGitRepo = false;
       try {
         const { stdout } = await execFileAsync(
           'git',
           ['rev-parse', '--is-inside-work-tree'],
           { cwd: workspace, timeout: GIT_TIMEOUT_MS },
         );
-        isGitRepo = stdout.trim() === 'true';
+        if (stdout.trim() !== 'true') {
+          return { commits: [], isGitRepo: false };
+        }
       } catch {
         // `git` missing from PATH, not a repo, or rev-parse failed for any
         // other reason — treat as "not a repo". Avoid surfacing this via
         // `onError` because it's the steady-state for any non-git workspace
         // and would spam logs.
-        return { commits: [], isGitRepo: false };
-      }
-      if (!isGitRepo) {
         return { commits: [], isGitRepo: false };
       }
 

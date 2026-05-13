@@ -69,7 +69,6 @@ export function createDesktopDiffHost(
       // Pick a language hint from the proposed file extension; the
       // proposed path is the one the user is reviewing for acceptance,
       // so its extension wins over the (possibly stale) original.
-      const language = monacoLanguageForFilePath(proposed.filePath);
       let posted = false;
       try {
         const result = options.postToRenderer(
@@ -77,7 +76,7 @@ export function createDesktopDiffHost(
             title,
             originalText: originalContent,
             proposedText: proposedContent,
-            language,
+            language: monacoLanguageForFilePath(proposed.filePath),
             originalPath: original.filePath,
             proposedPath: proposed.filePath,
           }),
@@ -90,7 +89,6 @@ export function createDesktopDiffHost(
           '[desktop] desktopDiffHost: postToRenderer failed; falling back to external editor',
           error,
         );
-        posted = false;
       }
       if (posted) return { original, proposed, title };
       // fall through to the external-editor flow below.

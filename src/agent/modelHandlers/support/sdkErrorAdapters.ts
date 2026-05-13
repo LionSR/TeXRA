@@ -96,6 +96,26 @@ export function tagGoogleSdkError(err: unknown, provider = 'google'): void {
   }
 }
 
+/**
+ * Wraps a promise so that any rejection is tagged via the supplied tagger
+ * before being re-thrown. Centralizes the common `try { return await impl() }
+ * catch (err) { tagSdkError(err, provider); throw err; }` pattern at SDK
+ * boundaries. The tagger is invoked on every thrown error, preserving the
+ * exact metadata semantics of an inline catch block.
+ */
+export async function withSdkErrorTag<T>(
+  tagger: (err: unknown, provider: string) => void,
+  provider: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    tagger(err, provider);
+    throw err;
+  }
+}
+
 export function tagOpenAISdkError(err: unknown, provider = 'openai'): void {
   if (err instanceof OpenAIAPIConnectionTimeoutError) {
     tagSdkError(err, provider, 'connection_timeout');
