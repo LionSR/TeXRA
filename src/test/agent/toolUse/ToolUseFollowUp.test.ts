@@ -5,6 +5,7 @@ import { strict as assert } from 'assert';
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { createRunState } from '@agent/core/AgentState';
+import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   AgentExecutionHandle,
   trackExecution,
@@ -79,6 +80,7 @@ describe('ToolUseFollowUp', () => {
       childStreamId,
       'test-subagent',
       'toolUse',
+      noopAgentRuntimeHost,
     );
     trackExecution(handle);
 
@@ -113,6 +115,7 @@ describe('ToolUseFollowUp', () => {
       childStreamId,
       'test-subagent',
       'toolUse',
+      noopAgentRuntimeHost,
     );
     trackExecution(handle);
     ToolUseFollowUpQueue.release(parentStreamId);
