@@ -1565,12 +1565,25 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       });
     }
 
+    const affectsModelAvailability =
+      def?.globalStateKey === GlobalStateKey.USE_OPENROUTER;
+    if (affectsModelAvailability) {
+      invalidateModelOptionsCache();
+    }
+
     await this.withActiveWebview(async (w) => {
       await Promise.all([
         this.sendProfileData(w),
         this.sendSuperYoloEnabled(w),
+        affectsModelAvailability
+          ? this.sendModelSelectionData(w)
+          : Promise.resolve(),
       ]);
     });
+
+    if (affectsModelAvailability) {
+      await vscode.commands.executeCommand('texra.refreshAllOptions');
+    }
   }
 
   // ============================================================
