@@ -17,6 +17,7 @@ import {
   truncate as truncateBody,
   wrapWebhookEvent as wrap,
 } from './formatUtils';
+import { formatCheckAnnotationLevelList } from './checkAnnotationLevels';
 import type {
   GhCheckAnnotation,
   GhCheckRun,
@@ -182,7 +183,7 @@ export function formatCheckAnnotations(
       : run.html_url;
   return wrap(
     sections(
-      `Check "${run.name}" reported ${total} inline annotation(s) on ${prRef(slug, prNumber)}. Each annotation is tagged with its level ([NOTICE], [WARNING], or [FAILURE]); investigate and determine what action (if any) is needed.`,
+      `Check "${run.name}" reported ${total} matching inline annotation(s) on ${prRef(slug, prNumber)}. Each annotation is tagged with its level (${formatCheckAnnotationLevelList(annotations)}); investigate and determine what action (if any) is needed.`,
       shown.map(annotationBlock).join('\n\n'),
       overflow,
     ),

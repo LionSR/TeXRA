@@ -2,8 +2,11 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - tools
-import { formatCIStarted } from '@tools/github/formatPREvent';
-import type { GhCheckRun } from '@tools/github/prTypes';
+import {
+  formatCheckAnnotations,
+  formatCIStarted,
+} from '@tools/github/formatPREvent';
+import type { GhCheckAnnotation, GhCheckRun } from '@tools/github/prTypes';
 
 function checkRun(id: number, name: string): GhCheckRun {
   return {
@@ -13,6 +16,19 @@ function checkRun(id: number, name: string): GhCheckRun {
     conclusion: null,
     html_url: `https://example.test/checks/${id}`,
     completed_at: null,
+  };
+}
+
+function annotation(
+  level: GhCheckAnnotation['annotation_level'],
+  index: number,
+): GhCheckAnnotation {
+  return {
+    path: 'blueprint/src/chapter.tex',
+    start_line: index + 1,
+    end_line: index + 1,
+    annotation_level: level,
+    message: `${level} ${index}`,
   };
 }
 
@@ -48,5 +64,24 @@ describe('GitHub PR event formatting', () => {
     const bullets = message.match(/^- /gm) ?? [];
     expect(bullets).toHaveLength(20);
     expect(message).toContain('…and 5 more check names.');
+  });
+
+  it('lists annotation levels from the full filtered set', () => {
+    const run = {
+      ...checkRun(1, 'lint'),
+      status: 'completed',
+      conclusion: 'failure',
+      completed_at: '2026-05-13T00:00:00Z',
+      output: { annotations_count: 21 },
+    } satisfies GhCheckRun;
+    const annotations = [
+      ...Array.from({ length: 20 }, (_, index) => annotation('warning', index)),
+      annotation('failure', 20),
+    ];
+
+    const message = formatCheckAnnotations('owner/repo', 7, run, annotations);
+
+    expect(message).toContain('[FAILURE], [WARNING]');
+    expect(message).toContain('…and 1 more annotation(s).');
   });
 });
