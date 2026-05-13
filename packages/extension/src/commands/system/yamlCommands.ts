@@ -9,12 +9,13 @@ import * as yaml from 'yaml';
 import { resolveAgent, getWorkflowAgents } from '@agent/index';
 import { loadYaml, loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { getAgentPath } from '@agent/runtime/executeAgent';
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
 } from '@frontend/editor/activeFileGuards';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'TestCommands';
@@ -93,7 +94,7 @@ export async function handleLoadSpecificAgent(): Promise<void> {
     logger.info(CHANNEL, `Testing loading of agent: ${agentName}`);
 
     // Use getAgentPath to resolve the agent
-    const agentPath = await getAgentPath(agentName);
+    const agentPath = await getAgentPath(agentName, extensionAgentRuntimeHost);
     logger.info(
       CHANNEL,
       `Loading from path: ${path.dirname(agentPath.definitionPath)}`,
