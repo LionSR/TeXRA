@@ -176,45 +176,41 @@ async function listModels(context: CliContext): Promise<CliResult> {
   return { exitCode: 0 };
 }
 
-async function copyWorkflowOutputToRequestedPath(
-  outputFile: string | undefined,
-  result: Awaited<ReturnType<typeof executeAgent>>,
-  context: CliContext,
-): Promise<string | undefined> {
-  if (!outputFile || result.category !== 'workflow') return undefined;
+type ExecuteAgentResult = Awaited<ReturnType<typeof executeAgent>>;
 
-  const finalOutput = result.outputs.at(-1);
-  if (!finalOutput) return undefined;
+async function resolveWorkflowOutput(
+  outputFile: string | undefined,
+  result: ExecuteAgentResult,
+  context: CliContext,
+): Promise<{
+  copiedOutput: string | undefined;
+  displayResult: ExecuteAgentResult;
+}> {
+  if (!outputFile || result.category !== 'workflow') {
+    return { copiedOutput: undefined, displayResult: result };
+  }
+
+  const finalOutputIndex = result.outputs.length - 1;
+  const finalOutput = result.outputs[finalOutputIndex];
+  if (!finalOutput) return { copiedOutput: undefined, displayResult: result };
 
   const targetPath = path.isAbsolute(outputFile)
     ? outputFile
     : path.join(context.cwd, outputFile);
-  if (path.resolve(finalOutput.absolutePath) === path.resolve(targetPath)) {
-    return targetPath;
+  if (path.resolve(finalOutput.absolutePath) !== path.resolve(targetPath)) {
+    await fs.mkdir(path.dirname(targetPath), { recursive: true });
+    await fs.copyFile(finalOutput.absolutePath, targetPath);
   }
 
-  await fs.mkdir(path.dirname(targetPath), { recursive: true });
-  await fs.copyFile(finalOutput.absolutePath, targetPath);
-  return targetPath;
-}
-
-function withRequestedWorkflowOutputPath(
-  result: Awaited<ReturnType<typeof executeAgent>>,
-  copiedOutput: string | undefined,
-): Awaited<ReturnType<typeof executeAgent>> {
-  if (!copiedOutput || result.category !== 'workflow') return result;
-
-  const finalOutputIndex = result.outputs.length - 1;
-  if (finalOutputIndex < 0) return result;
-
-  return {
+  const displayResult: ExecuteAgentResult = {
     ...result,
     outputs: result.outputs.map((output, index) =>
       index === finalOutputIndex
-        ? { ...output, absolutePath: copiedOutput }
+        ? { ...output, absolutePath: targetPath }
         : output,
     ),
   };
+  return { copiedOutput: targetPath, displayResult };
 }
 
 async function runWorkflowAgent(
@@ -235,11 +231,7 @@ async function runWorkflowAgent(
     return { exitCode: CliExitCode.Usage };
   }
 
-  const modelFlag = flagValue(args, '--model', '-m');
-  const model =
-    modelFlag && modelFlag.trim().length > 0
-      ? modelFlag.trim()
-      : DEFAULT_AGENT_MODEL;
+  const model = flagValue(args, '--model', '-m')?.trim() || DEFAULT_AGENT_MODEL;
   const runContext = {
     ...applyCliGlobalArgs(context, args),
     helperModel: model,
@@ -264,19 +256,18 @@ async function runWorkflowAgent(
   };
 
   const runtimeHost = createCliRuntimeHost(runContext);
-  let result: Awaited<ReturnType<typeof executeAgent>>;
+  let result: ExecuteAgentResult;
   try {
     result = await executeAgent(config, undefined, { runtimeHost });
   } finally {
     await runtimeHost.close();
   }
 
-  const copiedOutput = await copyWorkflowOutputToRequestedPath(
+  const { copiedOutput, displayResult } = await resolveWorkflowOutput(
     outputFile,
     result,
     runContext,
   );
-  const displayResult = withRequestedWorkflowOutputPath(result, copiedOutput);
 
   if (runContext.outputFormat === 'json') {
     writeTextStdout(JSON.stringify(displayResult, null, 2));
@@ -298,13 +289,11 @@ async function runWorkflowAgent(
     writeTextStdout(result.status);
   }
 
+  if (result.status !== 'error') return { exitCode: CliExitCode.Success };
   return {
-    exitCode:
-      result.status === 'error' && hasCliApprovalDenied(runContext)
-        ? CliExitCode.ApprovalDenied
-        : result.status === 'error'
-          ? CliExitCode.AgentError
-          : CliExitCode.Success,
+    exitCode: hasCliApprovalDenied(runContext)
+      ? CliExitCode.ApprovalDenied
+      : CliExitCode.AgentError,
   };
 }
 
