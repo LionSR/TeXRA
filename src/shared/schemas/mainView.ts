@@ -77,11 +77,22 @@ export const PickerOptionBaseSchema = z.object({
 });
 export type PickerOptionBase = z.infer<typeof PickerOptionBaseSchema>;
 
+export const ModelAvailabilityKindSchema = z.enum([
+  'included-access',
+  'provider-key',
+  'openrouter-key',
+  'missing-key',
+  'not-included',
+]);
+export type ModelAvailabilityKind = z.infer<typeof ModelAvailabilityKindSchema>;
+
 export const ModelOptionDataSchema = PickerOptionBaseSchema.extend({
   provider: z.string().optional(),
   context: z.string().optional(),
   cost: z.string().optional(),
   hint: z.string().optional(),
+  availability: ModelAvailabilityKindSchema.optional(),
+  availabilityLabel: z.string().optional(),
   requiresKey: z.boolean().optional(),
   disabled: z.boolean().optional(),
 });
