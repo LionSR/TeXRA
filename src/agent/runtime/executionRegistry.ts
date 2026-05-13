@@ -5,10 +5,7 @@
  * change notification, and subagent lineage tracking in a single module.
  */
 
-import {
-  getAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 import {
@@ -95,7 +92,8 @@ export function untrackExecution(executionId: string): void {
   const handle = registry.get(executionId);
   registry.delete(executionId);
   notifyWaiters(executionId);
-  const runtimeHost = handle?.runtimeHost ?? getAgentRuntimeHost();
+  if (!handle) return;
+  const runtimeHost = handle.runtimeHost;
 
   // Emit subagent UI update on removal (only for actual subagents)
   if (
@@ -252,7 +250,10 @@ export function interruptActiveChildren(parentStreamId: StreamTabId): void {
  * Subagents continue running independently and deliver results via the
  * follow-up queue. Called when stopping an orchestrator without killing children.
  */
-export function detachActiveChildren(parentStreamId: StreamTabId): void {
+export function detachActiveChildren(
+  parentStreamId: StreamTabId,
+  runtimeHost: AgentRuntimeHost,
+): void {
   for (const handle of registry.values()) {
     if (handle.parentStreamId !== parentStreamId) continue;
     if (
@@ -264,7 +265,7 @@ export function detachActiveChildren(parentStreamId: StreamTabId): void {
       handle.terminate();
     }
   }
-  emitActiveSubagentsUpdate(parentStreamId);
+  emitActiveSubagentsUpdate(parentStreamId, runtimeHost);
 }
 
 /** Get active subagent and process children for a parent stream. */
@@ -289,7 +290,7 @@ export function getActiveChildren(parentStreamId: StreamTabId): {
 /** Emit the current active subagent list for a parent to the progress UI. */
 function emitActiveSubagentsUpdate(
   parentStreamId: StreamTabId,
-  runtimeHost: AgentRuntimeHost = runtimeHostForParent(parentStreamId),
+  runtimeHost: AgentRuntimeHost,
 ): void {
   const children = collectChildSummary(
     parentStreamId,
@@ -305,7 +306,7 @@ function emitActiveSubagentsUpdate(
 /** Emit the current active processes list for a parent to the progress UI. */
 function emitActiveProcessesUpdate(
   parentStreamId: StreamTabId,
-  runtimeHost: AgentRuntimeHost = runtimeHostForParent(parentStreamId),
+  runtimeHost: AgentRuntimeHost,
 ): void {
   const processes = collectChildSummary(
     parentStreamId,
@@ -316,25 +317,6 @@ function emitActiveProcessesUpdate(
     parentStreamId,
     processes,
   });
-}
-
-// ============================================================================
-// Internal helpers
-// ============================================================================
-
-function runtimeHostForParent(parentStreamId: StreamTabId): AgentRuntimeHost {
-  for (const handle of registry.values()) {
-    if (handle.parentStreamId === parentStreamId) {
-      return handle.runtimeHost;
-    }
-    if (
-      handle instanceof AgentExecutionHandle &&
-      handle.childStreamId === parentStreamId
-    ) {
-      return handle.runtimeHost;
-    }
-  }
-  return getAgentRuntimeHost();
 }
 
 function addChangeCallback(executionId: string, cb: () => void): void {
