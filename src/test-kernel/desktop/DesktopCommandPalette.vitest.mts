@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - shared schemas
+import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - desktop test paths
@@ -20,10 +21,16 @@ interface DesktopCommandPaletteModule {
     actions: {
       showRoute(route: string): void;
       showSettings(tabIndex?: number): void;
+      showStream?(streamId: string): void;
     };
+    getStreams?: () => DesktopPaletteStream[];
     platform?: NodeJS.Platform;
     canOpen?: () => boolean;
   }): DesktopCommandPaletteController;
+  getDesktopCommandPaletteEntries(options?: {
+    streams?: DesktopPaletteStream[];
+    platform?: NodeJS.Platform;
+  }): DesktopPaletteEntry[];
   filterDesktopCommandPaletteEntries(
     entries: DesktopPaletteEntry[],
     query: string,
@@ -50,6 +57,16 @@ interface DesktopPaletteEntry {
   accelerator?: string;
   enabled: boolean;
   unavailableReason?: string;
+}
+
+interface DesktopPaletteStream {
+  name: string;
+  label: string;
+  agentCategory: string;
+  creationTimestamp: number;
+  description?: string;
+  agent?: string;
+  modelLabel?: string;
 }
 
 async function loadDesktopCommandPalette(): Promise<DesktopCommandPaletteModule> {
@@ -244,6 +261,59 @@ describe('desktop command palette', () => {
     await flushDialogTicks();
 
     expect(actions.showSettings).toHaveBeenCalledWith(SETTINGS_TAB.MODELS);
+    expect(controller.element.open).toBe(false);
+  });
+
+  it('adds current streams as switch commands when opened', async () => {
+    const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
+    const actions = {
+      showRoute: vi.fn(),
+      showSettings: vi.fn(),
+      showStream: vi.fn(),
+    };
+    let streams: DesktopPaletteStream[] = [];
+    const controller = createDesktopCommandPalette({
+      document,
+      actions,
+      getStreams: () => streams,
+      platform: 'darwin',
+    });
+
+    document.body.append(controller.element);
+    await flushDialogTicks();
+
+    streams = [
+      {
+        name: 'stream-proof',
+        label: 'Spectral proof run',
+        agentCategory: AGENT_CATEGORY.WORKFLOW,
+        creationTimestamp: 1,
+        description: 'Checking the main lemma',
+      },
+    ];
+    controller.open();
+    await flushDialogTicks();
+
+    setWaInputValue(controller.element, 'spectral lemma');
+    await flushDialogTicks();
+
+    const filteredItems =
+      controller.element.querySelectorAll<HTMLButtonElement>(
+        '.desktop-command-palette-item',
+      );
+    expect([...filteredItems].map((item) => item.dataset.commandId)).toEqual([
+      'texra.desktop.switchStream:stream-proof',
+    ]);
+
+    const waInput = controller.element.querySelector(
+      'wa-input.desktop-command-palette-input',
+    )!;
+    waInput.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+    );
+    await flushDialogTicks();
+
+    expect(actions.showStream).toHaveBeenCalledWith('stream-proof');
     expect(controller.element.open).toBe(false);
   });
 
