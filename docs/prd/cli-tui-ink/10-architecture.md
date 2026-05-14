@@ -108,8 +108,11 @@ packages/cli/src/chat/tui/
 │   ├── BaseTextInput.tsx           (wraps ink-text-input: viewport, declared-cursor, paste-aware submit)
 │   └── usePasteHandler.tsx         (consumes ParsedKey.isPasted; suppresses auto-submit during paste)
 ├── render/
-│   ├── ToolUseCard.tsx
-│   ├── Markdown.tsx                (markdown-it + ANSI rule plugin; consumes the shared LRU token cache)
+│   ├── ToolUseCard.tsx             (common chrome; dispatches body by tool name; fallback compact body)
+│   ├── tools/
+│   │   ├── BashCard.tsx            (live-tail body + exit code + truncation banner)
+│   │   └── EditCard.tsx            (embedded unified diff; shares DiffView with <EditApproval>)
+│   ├── Markdown.tsx                (markdown-it + ANSI rule plugin)
 │   ├── CodeBlock.tsx               (highlight.js via @shared/highlighting → cli-highlight render)
 │   ├── DiffView.tsx
 │   └── frameTelemetry.ts           (subscribes to ink onFrame; emits per-phase timings + flicker context to logger)
@@ -148,6 +151,21 @@ A `notify({ kind, title?, body })` entrypoint emits notifications for `agentFini
 ### Frame telemetry
 
 Per-phase frame timings (render / diff / write / yoga-layout) and flicker context are emitted to the logger at `trace` level for post-launch jank investigation.
+
+### Tool rendering
+
+**Shared data protocol first, hosts render second.** The data shape that reaches the UI — `ToolUseLogEntry` (header fields: tool name, target, status, timing, exit code, summary stats) plus a tool-specific `payload` discriminated by tool name — is defined once in `src/shared/schemas/` and consumed identically by the VS Code Progress View (webview) and the CLI TUI. The webview already reads this shape off `StreamLogStore`; the CLI TUI subscribes to the same store. Both hosts render the same data; only the _presentation layer_ differs (Lit components for the webview, Ink components for the TUI). No CLI-only fields, no TUI-only enrichments — anything renderable must come from the shared schema so the same agent run produces the same captured state regardless of which host displays it.
+
+A `<ToolUseCard>` base provides the common chrome (header row: tool · target · status · timing · expand hint; collapsed body; `Ctrl-O` to expand). Rich tools register a custom body renderer keyed on tool name; tools without a registration fall through to the generic compact body. Pattern lifted from Claude Code (`Tool.renderToolUseMessage` / `renderToolUseProgressMessage` / `renderToolResultMessage` / `renderToolUseRejectedMessage` / `renderToolUseErrorMessage` on the `Tool` object itself, plus `FallbackToolUseErrorMessage` / `FallbackToolUseRejectedMessage`).
+
+For TeXRA v1, **two** rich renderers earn their cost; everything else uses the fallback:
+
+- **Bash / shell-exec.** Live-tailed last-N-lines body with elapsed timer, exit-code on completion, truncation banner with `Ctrl-O` expand. Streaming progress overwrites the body in place per chunk.
+- **Edit / MultiEdit / Write.** Embedded unified-diff body using the same `diff` + `cli-highlight` pipeline as `<EditApproval>`. Header carries summary stats (`+N / −M · K hunks`).
+
+LaTeX-specific renderers (compile, latexdiff, BibTeX) are v1.x candidates, not v1. See [mockups/08-tool-variants.md](../cli-tui-ink/mockups/08-tool-variants.md) for the visual targets.
+
+Renderers are **stateless presentation components** — props in, JSX out. Tool state lives in `cliState.toolUses` (a `Map<toolUseId, ToolUseEntry>`); collapse/expand is a global `verbose` flag toggled by `Ctrl-O`, not per-tool local state. This matches Claude Code's design and avoids per-tool state machines.
 
 ## 8. Multi-agent specifics
 
