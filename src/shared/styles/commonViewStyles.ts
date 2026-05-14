@@ -1,5 +1,7 @@
 import { css, type CSSResult } from 'lit';
 
+import { compactFormControlStyles } from './selectStyles';
+
 /**
  * Compact icon-only action button — stricter minimalism.
  * 20×20, no hover fill, opacity-driven hover/disabled.
@@ -200,6 +202,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   ${compactIconActionButtonStyles}
+  ${compactFormControlStyles}
 
   /* Stricter compactness for wa-checkbox / wa-radio — smaller label,
    * tighter gap between control and label. */
@@ -339,6 +342,7 @@ export const commonViewStyles: CSSResult = css`
     display: inline-flex;
     align-items: center;
     gap: var(--wa-space-2xs);
+    min-height: 22px;
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
     font-size: var(--font-size-xs);
     font-family: inherit;
@@ -372,7 +376,7 @@ export const commonViewStyles: CSSResult = css`
     grid-template-columns: auto minmax(0, 1fr);
     column-gap: var(--wa-space-xs);
     row-gap: var(--wa-space-2xs);
-    padding: var(--wa-space-xs);
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
     margin-bottom: var(--wa-space-s);
     border: var(--border-thin) solid var(--wa-color-focus);
     border-radius: var(--border-radius);

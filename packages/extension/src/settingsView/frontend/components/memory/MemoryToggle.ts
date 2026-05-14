@@ -3,28 +3,28 @@
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
-import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 
 // Local imports - shared styles
-import { designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - memory view events
 import { MemoryViewEvents } from './events';
+import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 
 @customElement('memory-toggle')
 export class MemoryToggle extends LitElement {
   static override styles = [
     designTokens,
+    commonViewStyles,
     css`
       :host {
         display: block;
       }
 
       .memory-settings {
-        padding: var(--wa-space-xs);
-        background-color: var(--wa-color-neutral-fill-quiet);
-        border-radius: var(--border-radius);
-        margin-bottom: var(--wa-space-2xs);
+        display: flex;
+        align-items: center;
+        min-height: 22px;
       }
     `,
   ];
