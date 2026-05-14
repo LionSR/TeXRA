@@ -43,43 +43,43 @@ Every dependency is either already in the workspace, used by the dominant 2026 A
 
 ### Runtime & framework
 
-| Concern | Package | Rationale |
-|---|---|---|
-| TUI framework | `ink` 6 + `react` 19 | Claude Code, Codex CLI, Gemini CLI, Wrangler, Astro all on Ink. Yoga flexbox. ESM-native. `<Static>` preserves scrollback. |
-| Component kit | `@inkjs/ui` | Official. Spinner, Select, MultiSelect, TextInput, ConfirmInput, Alert, ProgressBar, UnorderedList, Badge. |
-| Focus & keys | Ink built-ins (`useInput`, `useFocus`, `useFocusManager`) | No external keybinding library needed. |
-| State inside Ink | `@lit-labs/signals` + a `useSignal` bridge (`useSyncExternalStore`) | Same primitive the webview's `progressState` uses. Shared mental model. |
-| Bundler | `esbuild` (existing) | Already wired in `packages/cli/scripts/build-bundle.mjs`. |
+| Concern          | Package                                                             | Rationale                                                                                                                  |
+| ---------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| TUI framework    | `ink` 6 + `react` 19                                                | Claude Code, Codex CLI, Gemini CLI, Wrangler, Astro all on Ink. Yoga flexbox. ESM-native. `<Static>` preserves scrollback. |
+| Component kit    | `@inkjs/ui`                                                         | Official. Spinner, Select, MultiSelect, TextInput, ConfirmInput, Alert, ProgressBar, UnorderedList, Badge.                 |
+| Focus & keys     | Ink built-ins (`useInput`, `useFocus`, `useFocusManager`)           | No external keybinding library needed.                                                                                     |
+| State inside Ink | `@lit-labs/signals` + a `useSignal` bridge (`useSyncExternalStore`) | Same primitive the webview's `progressState` uses. Shared mental model.                                                    |
+| Bundler          | `esbuild` (existing)                                                | Already wired in `packages/cli/scripts/build-bundle.mjs`.                                                                  |
 
 ### Inputs & one-shot prompts
 
-| Concern | Package |
-|---|---|
-| CLI argument parser | `citty` (UnJS) |
-| One-shot prompts outside TUI | `@clack/prompts` |
-| Inline TUI input | `ink-text-input` (+ our own autocomplete on `@inkjs/ui` `Select`) |
-| Fuzzy match (palette / file `@`) | `fzf-for-js` |
-| Input history persistence | `platform().storage` → `~/.texra/history.jsonl` |
+| Concern                          | Package                                                           |
+| -------------------------------- | ----------------------------------------------------------------- |
+| CLI argument parser              | `citty` (UnJS)                                                    |
+| One-shot prompts outside TUI     | `@clack/prompts`                                                  |
+| Inline TUI input                 | `ink-text-input` (+ our own autocomplete on `@inkjs/ui` `Select`) |
+| Fuzzy match (palette / file `@`) | `fzf-for-js`                                                      |
+| Input history persistence        | `platform().storage` → `~/.texra/history.jsonl`                   |
 
 ### Rendering (shared with webview where possible)
 
-| Concern | Source |
-|---|---|
-| Markdown | `markdown-it` + `markdown-it-texmath` (reuse webview's `markdownRenderer.ts`, with an ANSI rule plugin added for the CLI host) |
-| Syntax highlighting | `shiki` via the existing `@shared/highlighting` module, using `shiki/ansi` themes |
-| Math `$...$` | `unicodeit` fallback for inline; block math passes through raw in v1 |
-| Diffs | `diff` for hunks + shiki/ansi for line coloring |
-| Hyperlinks | `terminal-link` (OSC 8) for clickable paths |
-| ANSI-safe truncation / wrap | `string-width` + `wrap-ansi` |
+| Concern                     | Source                                                                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Markdown                    | `markdown-it` + `markdown-it-texmath` (reuse webview's `markdownRenderer.ts`, with an ANSI rule plugin added for the CLI host) |
+| Syntax highlighting         | `shiki` via the existing `@shared/highlighting` module, using `shiki/ansi` themes                                              |
+| Math `$...$`                | `unicodeit` fallback for inline; block math passes through raw in v1                                                           |
+| Diffs                       | `diff` for hunks + shiki/ansi for line coloring                                                                                |
+| Hyperlinks                  | `terminal-link` (OSC 8) for clickable paths                                                                                    |
+| ANSI-safe truncation / wrap | `string-width` + `wrap-ansi`                                                                                                   |
 
 ### Plumbing
 
-| Concern | Package |
-|---|---|
-| Serial follow-up queue | `p-queue` |
-| Colors (legacy renderer only) | `picocolors` |
-| Clipboard ("copy last response") | `clipboardy` (with OSC 52 fallback) |
-| Tests | `ink-testing-library` + existing `vitest` |
+| Concern                          | Package                                   |
+| -------------------------------- | ----------------------------------------- |
+| Serial follow-up queue           | `p-queue`                                 |
+| Colors (legacy renderer only)    | `picocolors`                              |
+| Clipboard ("copy last response") | `clipboardy` (with OSC 52 fallback)       |
+| Tests                            | `ink-testing-library` + existing `vitest` |
 
 ### Deliberately omitted
 
@@ -89,18 +89,18 @@ Every dependency is either already in the workspace, used by the dominant 2026 A
 
 Each entry is a deletion candidate, not a wrapper.
 
-| Today | Where | Replace with |
-|---|---|---|
-| `splitGlobalArgs`, `splitRunArgs`, `flagValue`, `cliFlagName`, `hasBooleanFlag`, four `FLAGS_WITH_VALUE` sets | `cliContext.ts:44–166, 224–268` | `citty` `defineCommand` |
-| `ANSI_TONES`, tone-switching `write()` | `terminalRenderer.ts:20–27, 546–552` | `picocolors` in legacy; Ink `<Text color>` in TUI |
-| `truncateText`, `formatOutputSnippet`, `formatUnknownSnippet` | `terminalRenderer.ts:61–64, 310–367` | `string-width` + `wrap-ansi` |
-| `renderedToolUseSignatures` `JSON.stringify` dedup | `terminalRenderer.ts:181–183` | `useSyncExternalStore` + React `memo` keyed on `entry.id + entry.seqNo` |
-| `MultilineDraftState` + `/multi` `/send` `/cancel` plumbing | `runChat.ts:63–66, 451–469, 507–511` | `ink-text-input` with `Ctrl-J` newline; `/multi` retained as alias |
-| `followUpFlush` promise chain, `pendingFollowUps`, `flushPendingFollowUps`, `streamReadyForFollowUps` | `runChat.ts:58–61, 255–304` | `p-queue` (`concurrency: 1`) |
-| `askCliQuestion`, `createCliLineReader` | `logSinks.ts:87–107` | `@clack/prompts` outside TUI; Ink inside |
-| `NdjsonStdoutSink.drain`, `waitForStdoutDrain` | `logSinks.ts:121–196` | Node 22 streams; not reused inside TUI |
-| `installChatResponsePrinter` log-diff loop | `runChat.ts:109–141` | `useStreamLog(streamId)` hook + `<Static>` for finalized turns |
-| ASCII `-- title --` / `| line` cards | `terminalRenderer.ts:513–524` | Ink `<Box borderStyle="round">` |
+| Today                                                                                                         | Where                                | Replace with                                                            |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------- | ------------------------------- |
+| `splitGlobalArgs`, `splitRunArgs`, `flagValue`, `cliFlagName`, `hasBooleanFlag`, four `FLAGS_WITH_VALUE` sets | `cliContext.ts:44–166, 224–268`      | `citty` `defineCommand`                                                 |
+| `ANSI_TONES`, tone-switching `write()`                                                                        | `terminalRenderer.ts:20–27, 546–552` | `picocolors` in legacy; Ink `<Text color>` in TUI                       |
+| `truncateText`, `formatOutputSnippet`, `formatUnknownSnippet`                                                 | `terminalRenderer.ts:61–64, 310–367` | `string-width` + `wrap-ansi`                                            |
+| `renderedToolUseSignatures` `JSON.stringify` dedup                                                            | `terminalRenderer.ts:181–183`        | `useSyncExternalStore` + React `memo` keyed on `entry.id + entry.seqNo` |
+| `MultilineDraftState` + `/multi` `/send` `/cancel` plumbing                                                   | `runChat.ts:63–66, 451–469, 507–511` | `ink-text-input` with `Ctrl-J` newline; `/multi` retained as alias      |
+| `followUpFlush` promise chain, `pendingFollowUps`, `flushPendingFollowUps`, `streamReadyForFollowUps`         | `runChat.ts:58–61, 255–304`          | `p-queue` (`concurrency: 1`)                                            |
+| `askCliQuestion`, `createCliLineReader`                                                                       | `logSinks.ts:87–107`                 | `@clack/prompts` outside TUI; Ink inside                                |
+| `NdjsonStdoutSink.drain`, `waitForStdoutDrain`                                                                | `logSinks.ts:121–196`                | Node 22 streams; not reused inside TUI                                  |
+| `installChatResponsePrinter` log-diff loop                                                                    | `runChat.ts:109–141`                 | `useStreamLog(streamId)` hook + `<Static>` for finalized turns          |
+| ASCII `-- title --` / `                                                                                       | line` cards                          | `terminalRenderer.ts:513–524`                                           | Ink `<Box borderStyle="round">` |
 
 Net: ~400 LOC deleted across `terminalRenderer.ts`, `runChat.ts`, `cliContext.ts`, `logSinks.ts`; replaced by ~120 LOC of provider + hook glue.
 
@@ -189,65 +189,65 @@ packages/cli/src/chat/tui/
 
 Every signal source already exists.
 
-| Event | Consumer | Render |
-|---|---|---|
-| `updateStreamUsage` | `<Header>` | tokens, cost, elapsed |
-| `updateConversationProgress` | `<Header>` | turn / tool counts |
-| `updateStreamDescription` | `<Header>` | session subtitle |
-| `StreamStatusService.onDidChange` | `<StatusBar>`, `<InputBar>` | status pill, prompt enabled |
-| `StreamLogStore` (`MODEL_RESPONSE`) | `<ConversationPane>` | streaming text → `<Static>` on turn end |
-| `StreamLogStore` (`TOOL_USE`) | `<ToolUseCard>` | header + status, expandable detail |
-| `updateActiveSubagents` | `<SubagentList>` | one row per `ActiveChildInfo`, spinner, focus key |
-| `updateActiveProcesses` | `<SubagentList>` (processes section) | one row per process |
-| `updateProcessOutput` | child stream view (on focus) | stdout / stderr tail |
-| `updateTodos` | `<TodosPlanPanel>` | checklist |
-| `updatePlan` | `<TodosPlanPanel>` | numbered steps, status |
-| `setActiveStream` | `<App>` router | switch primary streamId |
-| `setParentStream` | `<App>` router | nest child under parent |
-| `removeStream` | `<App>` router | cleanup |
-| `updateQueuedFollowUps` | `<InputBar>` | "queued: N" pill |
-| `updateToolEditApprovalBypassState` / `updateSuperYoloBypassState` | `<StatusBar>` | YOLO / BYPASS badge |
-| `addOutputFiles`, `updateMissingOutputs`, `updateCompileFailures` | `<WorkflowSidebar>` (workflow agents) | file list + diagnostics |
-| `showBashPermission` | `<BashApproval>` | resolver: `handleProgressViewBashApprovalAction` |
-| `showToolEditPermission` | `<EditApproval>` | resolver: `setToolEditApprovalHandler` callback |
-| `showPlanApproval` | `<PlanApproval>` | resolver: `resolvePlanApproval` |
-| `showAgentProposal` | `<AgentProposal>` | resolver: `resolveProposal` |
-| `showRetryRequest` | `<RetryRequest>` | resolver: `triggerRetry` / `cancelRetry` |
-| `showExternalInquiry` | `<ExternalInquiry>` | resolver: `handleExternalInquiryAction` |
+| Event                                                              | Consumer                              | Render                                            |
+| ------------------------------------------------------------------ | ------------------------------------- | ------------------------------------------------- |
+| `updateStreamUsage`                                                | `<Header>`                            | tokens, cost, elapsed                             |
+| `updateConversationProgress`                                       | `<Header>`                            | turn / tool counts                                |
+| `updateStreamDescription`                                          | `<Header>`                            | session subtitle                                  |
+| `StreamStatusService.onDidChange`                                  | `<StatusBar>`, `<InputBar>`           | status pill, prompt enabled                       |
+| `StreamLogStore` (`MODEL_RESPONSE`)                                | `<ConversationPane>`                  | streaming text → `<Static>` on turn end           |
+| `StreamLogStore` (`TOOL_USE`)                                      | `<ToolUseCard>`                       | header + status, expandable detail                |
+| `updateActiveSubagents`                                            | `<SubagentList>`                      | one row per `ActiveChildInfo`, spinner, focus key |
+| `updateActiveProcesses`                                            | `<SubagentList>` (processes section)  | one row per process                               |
+| `updateProcessOutput`                                              | child stream view (on focus)          | stdout / stderr tail                              |
+| `updateTodos`                                                      | `<TodosPlanPanel>`                    | checklist                                         |
+| `updatePlan`                                                       | `<TodosPlanPanel>`                    | numbered steps, status                            |
+| `setActiveStream`                                                  | `<App>` router                        | switch primary streamId                           |
+| `setParentStream`                                                  | `<App>` router                        | nest child under parent                           |
+| `removeStream`                                                     | `<App>` router                        | cleanup                                           |
+| `updateQueuedFollowUps`                                            | `<InputBar>`                          | "queued: N" pill                                  |
+| `updateToolEditApprovalBypassState` / `updateSuperYoloBypassState` | `<StatusBar>`                         | YOLO / BYPASS badge                               |
+| `addOutputFiles`, `updateMissingOutputs`, `updateCompileFailures`  | `<WorkflowSidebar>` (workflow agents) | file list + diagnostics                           |
+| `showBashPermission`                                               | `<BashApproval>`                      | resolver: `handleProgressViewBashApprovalAction`  |
+| `showToolEditPermission`                                           | `<EditApproval>`                      | resolver: `setToolEditApprovalHandler` callback   |
+| `showPlanApproval`                                                 | `<PlanApproval>`                      | resolver: `resolvePlanApproval`                   |
+| `showAgentProposal`                                                | `<AgentProposal>`                     | resolver: `resolveProposal`                       |
+| `showRetryRequest`                                                 | `<RetryRequest>`                      | resolver: `triggerRetry` / `cancelRetry`          |
+| `showExternalInquiry`                                              | `<ExternalInquiry>`                   | resolver: `handleExternalInquiryAction`           |
 
 ## 11. Keymap
 
-| Key | Action |
-|---|---|
-| `Enter` | Send message |
-| `Ctrl-J` | Newline (kills `/multi` ceremony) |
-| `Tab` | Autocomplete (file, slash, agent, model) |
-| `↑` / `↓` | History (input) / row navigation (lists, modals) |
-| `Ctrl-R` | Reverse history search |
-| `Ctrl-P` | Command palette |
-| `Ctrl-A` / `Ctrl-Shift-A` | Cycle active child / return to parent |
-| `1`–`9` | Jump to subagent row |
-| `Ctrl-T` | Tab view (Conversation / Subagents / Todos+Plan / Logs) |
-| `Ctrl-L` | Clear screen (scrollback preserved) |
-| `Ctrl-C` | Interrupt active session; second tap exits |
-| `Ctrl-D` | Exit on empty input |
-| `Esc` | Close modal / palette / cancel inline edit |
-| `?` | Inline help overlay |
-| `y` / `n` / `e` | Approve / reject / reject-with-feedback |
-| `@` | File-picker autocomplete |
-| `/` | Slash-command palette |
+| Key                       | Action                                                  |
+| ------------------------- | ------------------------------------------------------- |
+| `Enter`                   | Send message                                            |
+| `Ctrl-J`                  | Newline (kills `/multi` ceremony)                       |
+| `Tab`                     | Autocomplete (file, slash, agent, model)                |
+| `↑` / `↓`                 | History (input) / row navigation (lists, modals)        |
+| `Ctrl-R`                  | Reverse history search                                  |
+| `Ctrl-P`                  | Command palette                                         |
+| `Ctrl-A` / `Ctrl-Shift-A` | Cycle active child / return to parent                   |
+| `1`–`9`                   | Jump to subagent row                                    |
+| `Ctrl-T`                  | Tab view (Conversation / Subagents / Todos+Plan / Logs) |
+| `Ctrl-L`                  | Clear screen (scrollback preserved)                     |
+| `Ctrl-C`                  | Interrupt active session; second tap exits              |
+| `Ctrl-D`                  | Exit on empty input                                     |
+| `Esc`                     | Close modal / palette / cancel inline edit              |
+| `?`                       | Inline help overlay                                     |
+| `y` / `n` / `e`           | Approve / reject / reject-with-feedback                 |
+| `@`                       | File-picker autocomplete                                |
+| `/`                       | Slash-command palette                                   |
 
 ## 12. Rendering parity with the webview
 
-| Concern | Webview | CLI TUI |
-|---|---|---|
-| Markdown | `markdown-it` + `markdown-it-texmath` w/ LRU cache | Same `markdown-it` instance + thin ANSI rule plugin |
-| Code fences | `shiki` via `@shared/highlighting` | Same module, `shiki/ansi` themes |
-| Math | `katex` → HTML | `unicodeit` for inline; block math raw in v1 |
-| Diff | Monaco diff editor | `diff` + shiki/ansi |
-| Tool cards | Lit component per messageType | Ink component per messageType |
-| Subagent badges | `BackgroundTasksPanel.ts` | `<SubagentList>` (same data, same `setActiveStream` on activate) |
-| Follow-up input | `FollowUpInput.ts` textarea | `<InputBar>` with `/` palette + `@` mention |
+| Concern         | Webview                                            | CLI TUI                                                          |
+| --------------- | -------------------------------------------------- | ---------------------------------------------------------------- |
+| Markdown        | `markdown-it` + `markdown-it-texmath` w/ LRU cache | Same `markdown-it` instance + thin ANSI rule plugin              |
+| Code fences     | `shiki` via `@shared/highlighting`                 | Same module, `shiki/ansi` themes                                 |
+| Math            | `katex` → HTML                                     | `unicodeit` for inline; block math raw in v1                     |
+| Diff            | Monaco diff editor                                 | `diff` + shiki/ansi                                              |
+| Tool cards      | Lit component per messageType                      | Ink component per messageType                                    |
+| Subagent badges | `BackgroundTasksPanel.ts`                          | `<SubagentList>` (same data, same `setActiveStream` on activate) |
+| Follow-up input | `FollowUpInput.ts` textarea                        | `<InputBar>` with `/` palette + `@` mention                      |
 
 Two TUI features the webview does **not** have today:
 
@@ -292,12 +292,12 @@ Total: ~11 dev-days, six PRs.
 
 ## 16. Risks
 
-- **R1.** `markdown-it` runs in browser today; CLI use requires confirming no DOM dependencies in the existing renderer. *Mitigation:* spike during Phase 3; fall back to `marked` + custom rule set if needed.
-- **R2.** `shiki` cold-start cost (~50 ms to load grammars). *Mitigation:* lazy-load on first code fence; cache loaded languages globally.
-- **R3.** Lifting webview-side `markdownRenderer.ts` upward violates `packages/extension` → CLI direction. *Mitigation:* move the module into `src/shared/` since it's pure rendering with no VS Code coupling.
+- **R1.** `markdown-it` runs in browser today; CLI use requires confirming no DOM dependencies in the existing renderer. _Mitigation:_ spike during Phase 3; fall back to `marked` + custom rule set if needed.
+- **R2.** `shiki` cold-start cost (~50 ms to load grammars). _Mitigation:_ lazy-load on first code fence; cache loaded languages globally.
+- **R3.** Lifting webview-side `markdownRenderer.ts` upward violates `packages/extension` → CLI direction. _Mitigation:_ move the module into `src/shared/` since it's pure rendering with no VS Code coupling.
 - **R4.** Ink `<Static>` + `<Box>` interaction in tmux / screen. Established as workable by Claude Code; verify in smoke matrix.
 - **R5.** Bundle size: react 19 + ink 6 + shiki grammars ≈ 1.2 MB. Acceptable for a CLI; flag at review.
-- **R6.** Windows TTY edge cases (Ctrl-J = LF on some terminals, non-VT100 sequences). *Mitigation:* test on Windows Terminal + ConHost; rely on Ink's key normalization.
+- **R6.** Windows TTY edge cases (Ctrl-J = LF on some terminals, non-VT100 sequences). _Mitigation:_ test on Windows Terminal + ConHost; rely on Ink's key normalization.
 - **R7.** Resource path resolution (`resolveResourcesPath` in `cliContext.ts:290–299`) changes once the package is published rather than linked. Tracked separately; not Ink-specific.
 
 ## 17. Success criteria
