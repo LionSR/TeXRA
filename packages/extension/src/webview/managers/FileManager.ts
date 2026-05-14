@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 
 import * as vscode from 'vscode';
 
@@ -22,7 +23,10 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
-import type { MainViewInboundMessage } from '@shared/schemas';
+import type {
+  MainViewInboundMessage,
+  MultipleDocumentFileType,
+} from '@shared/schemas';
 import {
   WorkspaceFS,
   parseLatexDiffMetadata,
@@ -75,6 +79,10 @@ type SelectMultipleFilesMessage = MessageFor<
   typeof MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES
 >;
 
+type AttachDroppedFilesMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.ATTACH_DROPPED_FILES
+>;
+
 type GetCurrentFileMessage = MessageFor<
   typeof MAIN_VIEW_COMMANDS.GET_CURRENT_FILE
 >;
@@ -89,6 +97,16 @@ type UpdateFilesMessage = MessageFor<
 
 const CHANNEL = 'FileManager';
 logger.initialize(CHANNEL);
+
+const ATTACHABLE_DROP_CATEGORIES = [
+  'input',
+  'reference',
+  'auxiliary',
+  'media',
+] as const satisfies readonly MultipleDocumentFileType[];
+
+type AttachableDropCategory = (typeof ATTACHABLE_DROP_CATEGORIES)[number];
+type AllowedDropExtensions = Map<AttachableDropCategory, Set<string>>;
 
 type FileUpdateOptions = {
   notifyWhenEmpty?: boolean;
@@ -416,6 +434,47 @@ export class FileManager extends BaseWebviewManager {
     });
   }
 
+  async handleAttachDroppedFiles(
+    message: AttachDroppedFilesMessage,
+  ): Promise<void> {
+    const grouped = new Map<AttachableDropCategory, Set<string>>(
+      ATTACHABLE_DROP_CATEGORIES.map((category) => [category, new Set()]),
+    );
+    const allowedExtensions = this.getAllowedDropExtensions();
+    let rejectedCount = 0;
+
+    for (const rawPath of message.paths) {
+      const filePath = await this.resolveWorkspaceDropFile(rawPath);
+      const category = filePath
+        ? this.resolveDroppedFileCategory(
+            filePath,
+            allowedExtensions,
+            message.target ?? undefined,
+          )
+        : null;
+      if (!filePath || !category) {
+        rejectedCount += 1;
+        continue;
+      }
+      grouped.get(category)?.add(filePath);
+    }
+
+    let attachedCount = 0;
+    for (const [fileType, files] of grouped) {
+      if (files.size === 0) continue;
+      const droppedFiles = [...files];
+      attachedCount += droppedFiles.length;
+      this.postMessage({
+        command: MAIN_VIEW_COMMANDS.SET_OPENED_FILES,
+        files: droppedFiles,
+        fileType,
+        shouldFilter: true,
+      });
+    }
+
+    this.showDroppedFilesResult(attachedCount, rejectedCount);
+  }
+
   handleUpdateFiles(message: UpdateFilesMessage): void {
     const fileType = message.command.replace('update', '');
     logger.debug(
@@ -514,5 +573,129 @@ export class FileManager extends BaseWebviewManager {
 
     logger.debug(CHANNEL, `Found opened files: ${relevantFiles.join(', ')}`);
     return relevantFiles;
+  }
+
+  private async resolveWorkspaceDropFile(
+    rawPath: string,
+  ): Promise<string | null> {
+    const decodedPath = this.decodeDroppedPath(rawPath);
+    const resolved = WorkspaceFS.locatePath(decodedPath);
+    if (resolved.kind !== 'workspace') return null;
+
+    try {
+      const stat = await vscode.workspace.fs.stat(
+        vscode.Uri.file(resolved.absolutePath),
+      );
+      if ((stat.type & vscode.FileType.File) === 0) return null;
+      return resolved.relativePath;
+    } catch (error) {
+      logger.debug(
+        CHANNEL,
+        `Dropped file could not be read: ${decodedPath}: ${toErrorMessage(error)}`,
+      );
+      return null;
+    }
+  }
+
+  private decodeDroppedPath(rawPath: string): string {
+    const trimmed = rawPath.trim();
+    if (!trimmed.startsWith('file:')) return trimmed;
+    try {
+      return fileURLToPath(trimmed);
+    } catch {
+      return trimmed;
+    }
+  }
+
+  private resolveDroppedFileCategory(
+    filePath: string,
+    allowedExtensions: AllowedDropExtensions,
+    target?: MultipleDocumentFileType,
+  ): AttachableDropCategory | null {
+    if (target) {
+      return this.isAttachableDropCategory(target) &&
+        this.isExtensionAllowed(target, filePath, allowedExtensions)
+        ? target
+        : null;
+    }
+
+    const extension = this.normalizedExtension(filePath);
+    if (this.isExtensionAllowed('media', filePath, allowedExtensions)) {
+      return 'media';
+    }
+    if (
+      (extension === 'bib' || extension === 'bbl') &&
+      this.isExtensionAllowed('reference', filePath, allowedExtensions)
+    ) {
+      return 'reference';
+    }
+    if (
+      (extension === 'cls' || extension === 'sty') &&
+      this.isExtensionAllowed('auxiliary', filePath, allowedExtensions)
+    ) {
+      return 'auxiliary';
+    }
+    if (this.isExtensionAllowed('input', filePath, allowedExtensions)) {
+      return 'input';
+    }
+    if (this.isExtensionAllowed('reference', filePath, allowedExtensions)) {
+      return 'reference';
+    }
+    if (this.isExtensionAllowed('auxiliary', filePath, allowedExtensions)) {
+      return 'auxiliary';
+    }
+    return null;
+  }
+
+  private isAttachableDropCategory(
+    category: MultipleDocumentFileType,
+  ): category is AttachableDropCategory {
+    return (ATTACHABLE_DROP_CATEGORIES as readonly string[]).includes(category);
+  }
+
+  private isExtensionAllowed(
+    category: AttachableDropCategory,
+    filePath: string,
+    allowedExtensions: AllowedDropExtensions,
+  ): boolean {
+    const extension = this.normalizedExtension(filePath);
+    if (!extension) return false;
+    return allowedExtensions.get(category)?.has(extension) ?? false;
+  }
+
+  private getAllowedDropExtensions(): AllowedDropExtensions {
+    return new Map(
+      ATTACHABLE_DROP_CATEGORIES.map((category) => [
+        category,
+        new Set(
+          getIncludedExtensions(category).map((ext) =>
+            this.normalizedExtension(ext),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  private normalizedExtension(filePath: string): string {
+    const extension = path.extname(filePath) || filePath;
+    return extension.trim().toLowerCase().replace(/^\./, '');
+  }
+
+  private showDroppedFilesResult(
+    attachedCount: number,
+    rejectedCount: number,
+  ): void {
+    if (attachedCount > 0 && rejectedCount === 0) return;
+    if (attachedCount > 0) {
+      vscode.window.showInformationMessage(
+        `Attached ${attachedCount} dropped file${attachedCount === 1 ? '' : 's'}; skipped ${rejectedCount} unsupported, folder, or out-of-workspace item${rejectedCount === 1 ? '' : 's'}.`,
+      );
+      return;
+    }
+    if (rejectedCount > 0) {
+      vscode.window.showInformationMessage(
+        'No dropped files were attached. Use regular files inside this workspace with supported TeXRA extensions.',
+      );
+    }
   }
 }

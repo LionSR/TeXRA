@@ -229,6 +229,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.fileManager.handleRefreshAllFiles(),
       [MAIN_VIEW_COMMANDS.ADD_OPENED_FILES]: (m) =>
         this.fileManager.handleAddOpenedFiles(m.fileType),
+      [MAIN_VIEW_COMMANDS.ATTACH_DROPPED_FILES]: (m) =>
+        this.fileManager.handleAttachDroppedFiles(m),
       [MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES]: (m) =>
         this.fileManager.handleUpdateFiles(m),
       [MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES]: (m) =>
