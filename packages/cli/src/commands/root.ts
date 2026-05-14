@@ -9,6 +9,8 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
+import { isOAuthProvider } from '@auth/sharedConfig';
+import { toErrorMessage } from '@common/errors/errorMessage';
 
 // Local imports - CLI runtime
 import {
@@ -31,6 +33,16 @@ import { getCliModelAccessList } from '../runtime/modelAccess';
 import { createCliRuntimeHost } from '../runtime/runtimeHost';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
+  getCliAuthProfile,
+  signInCliSupabase,
+  signOutCliSupabase,
+} from '../runtime/supabaseAuth';
+import {
+  loginArgParseErrorMessage,
+  parseLoginArgs,
+  type ParsedLoginArgs,
+} from '../runtime/loginArgs';
+import {
   writeNdjsonStdout,
   writeTextStderr,
   writeTextStdout,
@@ -47,6 +59,9 @@ Usage:
   texra --help
   texra [--cwd <dir>] [--output-format text|json|ndjson] [--approval-policy <policy>] <command>
   texra version
+  texra login [github|google] [--provider github|google] [--no-browser]
+  texra logout
+  texra auth status
   texra agents list
   texra models list
   texra run <workflow-agent> [options]
@@ -59,6 +74,10 @@ Chat options:
   --agent <name>          Tool-use agent for the chat session
   --model, -m <name>      Model for the chat session
   --tool-display <mode>   Tool/progress rows: grouped, minimal, or hidden
+
+Login options:
+  --provider <name>       OAuth provider: github or google
+  --no-browser            Print the sign-in URL instead of opening a browser
 
 Use texra run for workflow agents and texra chat for an interactive tool-use session.`);
 }
@@ -174,6 +193,150 @@ async function listModels(context: CliContext): Promise<CliResult> {
     writeTextStdout(`${model.value}\t${model.label}\t${status}`);
   }
   return { exitCode: 0 };
+}
+
+async function login(context: CliContext): Promise<CliResult> {
+  const args = context.argv.slice(1);
+  const { globalArgs, provider, noBrowser } = parseRootLoginArgs(args);
+  const loginContext = applyCliGlobalArgs(context, globalArgs);
+  if (!isOAuthProvider(provider)) {
+    writeTextStderr(
+      `Unsupported provider: ${provider}. Expected github or google.`,
+    );
+    return { exitCode: CliExitCode.Usage };
+  }
+
+  await initCliPlatform({ ...loginContext, quietLogs: true });
+  if (loginContext.outputFormat === 'text' && !noBrowser) {
+    writeTextStdout(`Opening browser for TeXRA ${provider} sign-in...`);
+  }
+  let session: Awaited<ReturnType<typeof signInCliSupabase>>;
+  try {
+    session = await signInCliSupabase({
+      provider,
+      openBrowser: !noBrowser,
+      onAuthUrl: (url) => {
+        if (noBrowser) {
+          const writeAuthUrl =
+            loginContext.outputFormat === 'text'
+              ? writeTextStdout
+              : writeTextStderr;
+          writeAuthUrl(`Open this URL to sign in:\n${url}`);
+        }
+      },
+    });
+  } catch (error) {
+    writeTextStderr(toErrorMessage(error));
+    return { exitCode: CliExitCode.ModelOrNetworkError };
+  }
+
+  if (loginContext.outputFormat === 'json') {
+    writeTextStdout(
+      JSON.stringify(
+        {
+          authenticated: true,
+          account: session.account,
+          expiresAt: new Date(session.expiresAt).toISOString(),
+        },
+        null,
+        2,
+      ),
+    );
+  } else if (loginContext.outputFormat === 'ndjson') {
+    writeNdjsonStdout({
+      kind: 'auth',
+      ts: new Date().toISOString(),
+      authenticated: true,
+      account: session.account,
+      expiresAt: new Date(session.expiresAt).toISOString(),
+    });
+  } else {
+    writeTextStdout(`Signed in as ${session.account.label}.`);
+  }
+  return { exitCode: CliExitCode.Success };
+}
+
+function parseRootLoginArgs(args: readonly string[]): ParsedLoginArgs {
+  const parsed = parseLoginArgs(args, { allowGlobalArgs: true });
+  if (parsed.error) {
+    throw new CliUsageError(loginArgParseErrorMessage(parsed.error));
+  }
+  return parsed;
+}
+
+function parseAuthGlobalArgs(
+  args: readonly string[],
+  commandName: string,
+): readonly string[] {
+  const parsed = parseLoginArgs(args, {
+    allowGlobalArgs: true,
+    allowLoginOptions: false,
+  });
+  if (parsed.error) {
+    throw new CliUsageError(
+      loginArgParseErrorMessage(parsed.error, commandName),
+    );
+  }
+  return parsed.globalArgs;
+}
+
+async function logout(context: CliContext): Promise<CliResult> {
+  const logoutContext = applyCliGlobalArgs(
+    context,
+    parseAuthGlobalArgs(context.argv.slice(1), 'logout'),
+  );
+  await initCliPlatform({ ...logoutContext, quietLogs: true });
+  try {
+    await signOutCliSupabase();
+  } catch (error) {
+    writeTextStderr(toErrorMessage(error));
+    return { exitCode: CliExitCode.ModelOrNetworkError };
+  }
+
+  if (logoutContext.outputFormat === 'json') {
+    writeTextStdout(JSON.stringify({ authenticated: false }, null, 2));
+  } else if (logoutContext.outputFormat === 'ndjson') {
+    writeNdjsonStdout({
+      kind: 'auth',
+      ts: new Date().toISOString(),
+      authenticated: false,
+    });
+  } else {
+    writeTextStdout('Signed out.');
+  }
+  return { exitCode: CliExitCode.Success };
+}
+
+async function authStatus(context: CliContext): Promise<CliResult> {
+  const statusContext = applyCliGlobalArgs(
+    context,
+    parseAuthGlobalArgs(context.argv.slice(2), 'auth status'),
+  );
+  let profile: Awaited<ReturnType<typeof getCliAuthProfile>>;
+  try {
+    await initCliPlatform({ ...statusContext, quietLogs: true });
+    profile = await getCliAuthProfile();
+  } catch (error) {
+    writeTextStderr(toErrorMessage(error));
+    return { exitCode: CliExitCode.ModelOrNetworkError };
+  }
+
+  if (statusContext.outputFormat === 'json') {
+    writeTextStdout(JSON.stringify(profile, null, 2));
+  } else if (statusContext.outputFormat === 'ndjson') {
+    writeNdjsonStdout({
+      kind: 'auth-status',
+      ts: new Date().toISOString(),
+      ...profile,
+    });
+  } else if (profile.authenticated) {
+    writeTextStdout(
+      `Signed in as ${profile.accountLabel ?? 'unknown'} (${profile.tier ?? 'unknown'}).`,
+    );
+  } else {
+    writeTextStdout('Not signed in.');
+  }
+  return { exitCode: CliExitCode.Success };
 }
 
 type ExecuteAgentResult = Awaited<ReturnType<typeof executeAgent>>;
@@ -309,6 +472,18 @@ async function runCliResolved(argv?: readonly string[]): Promise<CliResult> {
   if (command === 'version' || command === '--version' || command === '-v') {
     writeTextStdout(context.version);
     return { exitCode: CliExitCode.Success };
+  }
+
+  if (command === 'login') {
+    return login(context);
+  }
+
+  if (command === 'logout') {
+    return logout(context);
+  }
+
+  if (command === 'auth' && subcommand === 'status') {
+    return authStatus(context);
   }
 
   if (command === 'agents' && subcommand === 'list') {
