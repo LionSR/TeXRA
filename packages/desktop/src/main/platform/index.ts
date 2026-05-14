@@ -6,19 +6,21 @@ import { consoleLog } from '@platform/defaults/consoleLog';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
-import type { LifecycleHost } from '@platform/interfaces/lifecycle';
+import { createWorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { initPlatform } from '@platform/platform';
 
 import { bootstrapElectronAgentDirectories } from './agentDirectories.js';
 import { ElectronConfigProvider } from './electronConfig.js';
 import { ElectronSecrets } from './electronSecrets.js';
 import { ElectronStateStore } from './electronState.js';
-import { ElectronStorageProvider } from './electronStorage.js';
 import { JsonStore } from './jsonStore.js';
 import { repairLaunchPath } from './pathFix.js';
 import { resolveResourcesPath, resolveWorkspacePath } from './paths.js';
 import { showSecretStorageWarningDialog } from './secretStorageWarningDialog.js';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '../../workspacePath.js';
+
+// Type imports - platform
+import type { LifecycleHost } from '@platform/interfaces/lifecycle';
 
 export interface ElectronPlatformInitResult {
   workspacePath: string | undefined;
@@ -38,7 +40,7 @@ export async function initializeElectronPlatform(
       DESKTOP_WORKSPACE_PATH_STATE_KEY,
     ),
   });
-  const storage = new ElectronStorageProvider(userDataPath, workspacePath);
+  const storage = createWorkspaceStorageProvider(userDataPath, workspacePath);
   const workspaceStateStore = await JsonStore.open(
     join(storage.getStoragePath(), 'state.json'),
   );

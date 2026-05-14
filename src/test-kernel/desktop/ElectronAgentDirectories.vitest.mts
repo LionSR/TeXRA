@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { createWorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 // Local imports - test support
 import {
@@ -24,6 +25,7 @@ import {
 import { GlobalStateKey } from '@common/state/stateKeys';
 
 import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
+import type { StorageProvider } from '@platform/interfaces/storage';
 
 interface JsonStore {
   get<T>(key: string, defaultValue?: T): T;
@@ -41,18 +43,6 @@ interface ElectronStateStoreModule {
     get<T>(key: string, defaultValue?: T): T;
     update(key: string, value: unknown): PromiseLike<void>;
   };
-}
-
-interface ElectronStorageProvider {
-  getGlobalStoragePath(): string;
-  getStoragePath(): string;
-}
-
-interface ElectronStorageModule {
-  ElectronStorageProvider: new (
-    userDataPath: string,
-    workspacePath: string | undefined,
-  ) => ElectronStorageProvider;
 }
 
 interface ElectronAgentDirectoriesModule {
@@ -89,7 +79,7 @@ describe('desktop agent directory bootstrap', () => {
     getAgentDirectories: AgentDirectoriesRegistryModule['getAgentDirectories'];
     globalStateStore: JsonStore;
     resourcesPath: string;
-    storage: ElectronStorageProvider;
+    storage: StorageProvider;
   }> {
     vi.resetModules();
     tempDir = await mkdtemp(join(tmpdir(), 'texra-electron-agents-'));
@@ -108,21 +98,19 @@ describe('desktop agent directory bootstrap', () => {
     const [
       { JsonStore },
       { ElectronStateStore },
-      { ElectronStorageProvider },
       { bootstrapElectronAgentDirectories },
       { initPlatform },
       { getAgentDirectories },
     ] = await Promise.all([
       loadDesktopPlatformModule<JsonStoreModule>('jsonStore.ts'),
       loadDesktopPlatformModule<ElectronStateStoreModule>('electronState.ts'),
-      loadDesktopPlatformModule<ElectronStorageModule>('electronStorage.ts'),
       loadDesktopPlatformModule<ElectronAgentDirectoriesModule>(
         'agentDirectories.ts',
       ),
       import('@platform/platform'),
       import('@agent/index/agentDirectoriesRegistry'),
     ]);
-    const storage = new ElectronStorageProvider(userDataPath, workspacePath);
+    const storage = createWorkspaceStorageProvider(userDataPath, workspacePath);
     const globalStateStore = await JsonStore.open(
       join(userDataPath, 'state', 'global.json'),
     );
