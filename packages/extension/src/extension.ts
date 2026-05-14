@@ -363,7 +363,8 @@ export async function activate(context: vscode.ExtensionContext) {
         SecretManager.delete(
           SecretManager.getApiKeySecretName(provider as ApiProvider),
         ),
-      apiKeyExists: (provider) => SecretManager.apiKeyExists(provider as ApiProvider),
+      apiKeyExists: (provider) =>
+        SecretManager.apiKeyExists(provider as ApiProvider),
       hasUsableApiKey: (provider) =>
         SecretManager.hasUsableApiKey(provider as ApiProvider),
       storedApiKeyExists: async (provider) => {
