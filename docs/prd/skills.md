@@ -1,9 +1,9 @@
 # PRD: Skills for TeXRA
 
-**Status:** Draft
+## Status: Draft
+
 **Tracking issue:** [LionSR/TeXRA#4031](https://github.com/LionSR/TeXRA/issues/4031)
-**Author:** sirui.lu@mpq.mpg.de
-**Last updated:** 2026-05-14
+**Last updated:** 2026-05-15
 
 ---
 
@@ -94,7 +94,7 @@ What is missing is **runtime integration** — `src/skills/` has no loader, no p
 - **FR-1.2.** `src/skills/frontmatter.ts` exports `extractFrontmatter(content): { frontmatter: unknown, body: string }`. Codex-strict framing: opening `---` and closing `---` each on their own line; body must be non-empty. Whitespace in `name`/`description` collapsed via `sanitizeSingleLine`.
 - **FR-1.3.** `src/skills/loadSkills.ts` exports `discoverSkills(root: string): { skills: Skill[], errors: SkillError[] }`. One-level scan: each `<root>/<dirname>/SKILL.md` is one skill. Real-path canonicalization for symlink dedup. Collect per-skill errors instead of failing the whole load. Missing `description` → error, skill not loaded; other rule violations → warning, skill loaded.
 - **FR-1.4.** Vitest suite in `src/test-kernel/skills/` covering: valid skill, missing description, name mismatch with directory, invalid YAML, symlink dedup, name collision (first wins).
-- **FR-1.5.** Host-agnostic (no `vscode` imports). Per CLAUDE.md `src/skills/` is a VS Code-free zone.
+- **FR-1.5.** Host-agnostic (no `vscode` imports). `src/skills/` should be treated as a VS Code-free zone alongside the others listed in CLAUDE.md (`src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, etc.); update CLAUDE.md's canonical list when this lands.
 
 ### M2 — Prompt injection (1 day; ~150 LoC)
 
@@ -218,7 +218,7 @@ Opt-in interop with `.claude/`, `.codex/` via settings.
 
 ### D5. Frontmatter parser strictness
 
-**Decision:** Codex-strict — `---` opening and closing each on own line, body non-empty. Use the `yaml` package (already a transitive dep via `js-yaml` in the workspace).
+**Decision:** Codex-strict — `---` opening and closing each on own line, body non-empty. Use the `yaml` package (already a direct dependency at the workspace root and in `packages/extension`, version `^2.9.0`).
 
 **Rationale:** Permissive parsers (e.g., `gray-matter`) silently accept malformed files. Codex's strict mode catches issues at load time, surfaces them in the errors list, and prevents downstream confusion.
 
@@ -236,7 +236,7 @@ Opt-in interop with `.claude/`, `.codex/` via settings.
 
 ### Phase A — Land M1+M2+M3 (~3-4 days)
 
-Loader, prompt injection, skill tool. Tests but no UI. Verify with one hand-written skill in `packages/extension/resources/skills/polish/SKILL.md` invoked from an existing command.
+Loader, prompt injection, skill tool. Tests but no UI. Verify against one of the existing skills under `<repoRoot>/skills/` (per D4 the bundled discovery root) — e.g., `skills/manuscript-review/SKILL.md` — invoked from an existing command. No new `packages/extension/resources/skills/` directory is created.
 
 ### Phase B — M4+M5 (~3 days)
 
