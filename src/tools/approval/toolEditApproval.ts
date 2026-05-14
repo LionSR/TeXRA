@@ -38,7 +38,7 @@ export const ToolEditApprovalResultSchema = z.object({
   userPatch: z.string().optional(),
   lineChanges: LineChangesSchema.optional(),
   /** 1-based line number where the first change occurs (for navigation) */
-  startLine: z.number().optional(),
+  startLine: z.int().positive().optional(),
 });
 export type ToolEditApprovalResult = z.infer<
   typeof ToolEditApprovalResultSchema
