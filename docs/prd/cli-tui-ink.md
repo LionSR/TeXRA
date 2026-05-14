@@ -59,7 +59,7 @@ Every dependency is either already in the workspace, used by the dominant 2026 A
 | One-shot prompts outside TUI           | `@clack/prompts`                                                                                                                                                                      |
 | Inline TUI input                       | `ink-text-input` (+ our own autocomplete on `@inkjs/ui` `Select`)                                                                                                                     |
 | Fuzzy match (palette / file `@`)       | `fzf-for-js`                                                                                                                                                                          |
-| Workspace file discovery (`@`-mention) | `fast-glob` against the CLI's workspace cwd (no current `WorkspaceProvider.findFiles`; see §17 R8)                                                                                    |
+| Workspace file discovery (`@`-mention) | `fast-glob` against the CLI's workspace cwd (no current `WorkspaceProvider.findFiles`; see §16 R8)                                                                                    |
 | Input history persistence              | File at `path.join(platform().storage.getGlobalStoragePath(), 'history.jsonl')` — `getGlobalStoragePath()` returns the directory (`~/.texra/global-storage` by default), not the file |
 
 ### Rendering (shared with webview where possible)
@@ -262,7 +262,7 @@ Two TUI features the webview does **not** have today: a slash-command palette, a
 - `texra run`, `--print/-p`, non-TTY, `CI=true` — Ink never loads. `runChat.ts` already rejects headless chat; that gate stays. `NdjsonStdoutSink` and its drain/backpressure logic remain in `logSinks.ts` for the headless `--output-format ndjson` path — they are not touched by this PRD.
 - `--legacy-renderer` flag retains today's plain renderer (also auto-forced on `TERM=dumb` or `NO_COLOR` + narrow `COLUMNS`). The legacy renderer becomes the only consumer of `picocolors` after migration; everything else lives in Ink.
 - `--output-format json|ndjson` output byte-identical. Golden test in `packages/cli/scripts/validate-run.mjs`.
-- `<App>` uses `<Static>` for finalized turns; no alt-screen by default. **Caveat:** today's `cliMode()` classifies piped stdout as headless, so `texra chat | tee transcript.log` currently fails the chat gate even with the TUI. If transcript piping becomes a requirement, the TTY gate must be relaxed (e.g. allow `stdin.isTTY && !stderr.isTTY?` — out of scope for v1). Users wanting a transcript today run `texra chat --legacy-renderer 2>&1 | tee transcript.log`.
+- `<App>` uses `<Static>` for finalized turns; no alt-screen by default. **Caveat:** today's `cliMode()` (`cliContext.ts:214–221`) classifies the session as headless if *any* of stdin / stdout / stderr is non-TTY, and `runChat.ts:161` rejects headless chat. That means `texra chat | tee`, `texra chat 2>&1 | tee`, and `texra chat --legacy-renderer 2>&1 | tee` all fail the gate today — there is no working transcript workaround. If transcript piping becomes a requirement, the TTY gate must be relaxed (e.g. require only `stdin.isTTY` and `stderr.isTTY`, allowing stdout to be piped) — out of scope for v1.
 
 ## 14. Migration phases
 
