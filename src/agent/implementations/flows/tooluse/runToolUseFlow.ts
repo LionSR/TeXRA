@@ -49,9 +49,8 @@ import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { ToolUseServices } from './ToolUseServices';
 
-export interface RunToolUseFlowInput<
-  C = unknown,
-> extends BaseFlowContextInit<C> {
+export interface RunToolUseFlowInput<C = unknown>
+  extends BaseFlowContextInit<C> {
   setting: AgentToolUseSetting;
   resumeSnapshot?: ToolUseSessionSnapshot | null;
   onFollowUpConsumed?: () => void;

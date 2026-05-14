@@ -383,9 +383,9 @@ export class StreamHeader extends LitElement {
                   );
                   const isActive = Boolean(
                     btn.isToggle &&
-                    (btn.id === ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN
-                      ? this.superYoloActive
-                      : this.yoloActive),
+                      (btn.id === ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN
+                        ? this.superYoloActive
+                        : this.yoloActive),
                   );
                   const title =
                     isActive && btn.titleActive ? btn.titleActive : btn.title;
