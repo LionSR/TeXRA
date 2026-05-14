@@ -23,8 +23,8 @@ const RoundContextSchema = z.object({
 export type RoundContext = z.infer<typeof RoundContextSchema>;
 
 export const ReflectionFlowStateSchema = z.object({
-  currentRound: z.number(),
-  totalRounds: z.number(),
+  currentRound: z.int().nonnegative(),
+  totalRounds: z.int().nonnegative(),
 
   workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
   context: RoundContextSchema.nullable(),
