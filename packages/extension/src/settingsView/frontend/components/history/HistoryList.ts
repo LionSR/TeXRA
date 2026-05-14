@@ -1,7 +1,7 @@
 /**
  * Renders the history list with search highlighting.
- * Pagination is active when there is no search term; during search, all
- * items are rendered so match navigation works across the full list.
+ * Pagination is active when there is no search term; during search, a
+ * data-level prefilter renders only plausible matches for mark.js highlighting.
  */
 
 import {
@@ -16,6 +16,7 @@ import { repeat } from 'lit/directives/repeat.js';
 // Local imports - shared
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { historyStyles } from '@shared/styles/historyStyles';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -28,8 +29,12 @@ const HISTORY_PAGE_SIZE = 25;
 
 // Local imports - history view
 import { HistoryViewEvents } from './events';
+import {
+  getHistorySearchText,
+  getHistorySearchTokens,
+  historySearchTextMatches,
+} from './historySearch';
 import './HistoryItemElement';
-import { historyStyles } from '@shared/styles/historyStyles';
 import type { HistoryViewState } from './state';
 
 /** Search navigation action (reactive trigger from parent) */
@@ -58,14 +63,35 @@ export class HistoryList extends LitElement {
   @queryAll('history-item')
   private historyItemElements!: Array<
     HTMLElement & {
+      item?: HistoryItemData;
       applySearch: (term: string) => Promise<number>;
       getMarks: () => HTMLElement[];
     }
   >;
 
+  private searchTextCache = new WeakMap<HistoryItemData, string>();
+
   /** Whether pagination is active (no active search). */
   private get paginated(): boolean {
     return !this.searchTerm;
+  }
+
+  private getCachedSearchText(item: HistoryItemData): string {
+    const cached = this.searchTextCache.get(item);
+    if (cached !== undefined) return cached;
+
+    const text = getHistorySearchText(item);
+    this.searchTextCache.set(item, text);
+    return text;
+  }
+
+  private getSearchCandidates(): HistoryItemData[] {
+    const tokens = getHistorySearchTokens(this.searchTerm);
+    if (tokens.length === 0) return this.items;
+
+    return this.items.filter((item) =>
+      historySearchTextMatches(this.getCachedSearchText(item), tokens),
+    );
   }
 
   protected willUpdate(changedProperties: PropertyValues<this>): void {
@@ -106,8 +132,7 @@ export class HistoryList extends LitElement {
   }
 
   protected updated(changedProps: Map<string, unknown>): void {
-    // Apply search after DOM update so all items are rendered
-    // (pagination is disabled during search, so we need the full DOM).
+    // Apply search after DOM update so candidate items are rendered.
     if (
       this.searchTerm &&
       (changedProps.has('searchTerm') || changedProps.has('items'))
@@ -176,11 +201,14 @@ export class HistoryList extends LitElement {
     const nextCounts = new Map<string, number>();
     const nextOffsets = new Map<string, number>();
     let total = 0;
-    this.items.forEach((item, i) => {
+    historyItems.forEach((element, i) => {
+      const itemId = element.item?.id;
+      if (itemId == null) return;
+
       const count = counts[i] ?? 0;
-      nextCounts.set(item.id, count);
+      nextCounts.set(itemId, count);
       if (count > 0) {
-        nextOffsets.set(item.id, total);
+        nextOffsets.set(itemId, total);
       }
       total += count;
     });
@@ -231,10 +259,10 @@ export class HistoryList extends LitElement {
     const hasMatches = (this.state?.totalMatches ?? 0) > 0;
     const forceOpen = Boolean(this.searchTerm && hasMatches);
 
-    // When searching, show all items; otherwise paginate
+    // When searching, render only plausible matches; otherwise paginate.
     const displayItems = this.paginated
       ? paginate(this.items, this.page, HISTORY_PAGE_SIZE).paged
-      : this.items;
+      : this.getSearchCandidates();
 
     return html`
       ${this.paginated
