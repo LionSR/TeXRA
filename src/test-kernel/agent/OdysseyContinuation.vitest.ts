@@ -2,25 +2,31 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
-import { createFakePlatform } from '@test/support/FakePlatform';
+import {
+  FakeConfigProvider,
+  createFakePlatform,
+} from '@test/support/FakePlatform';
 import { maybeBuildOdysseyContinuation } from '@agent/odyssey';
 import type { StreamTabId } from '@shared/schemas';
 import { ODYSSEY_FEATURE_FLAG_KEY, OdysseyStore } from '@tools/odyssey';
+import type { Platform } from '@platform/platform';
 
 const STREAM_ID = 'stream:odyssey-cont' as StreamTabId;
 
-async function installPlatform(flagOn: boolean): Promise<void> {
+async function installPlatform(flagOn: boolean): Promise<Platform> {
   const { initPlatform } = await import('@platform/platform');
-  initPlatform(
-    createFakePlatform({
-      config: flagOn ? { [ODYSSEY_FEATURE_FLAG_KEY]: true } : {},
-    }),
-  );
+  const platform = createFakePlatform({
+    config: flagOn ? { [ODYSSEY_FEATURE_FLAG_KEY]: true } : {},
+  });
+  initPlatform(platform);
+  return platform;
 }
 
 describe('maybeBuildOdysseyContinuation', () => {
+  let platform: Platform;
+
   beforeEach(async () => {
-    await installPlatform(true);
+    platform = await installPlatform(true);
   });
 
   afterEach(async () => {
@@ -61,15 +67,22 @@ describe('maybeBuildOdysseyContinuation', () => {
     expect(out).toBeNull();
   });
 
-  it('returns null when the feature flag is off', async () => {
+  it('returns null when the feature flag is off (with an active odyssey present)', async () => {
     await OdysseyStore.start(STREAM_ID, 'objective');
-    await installPlatform(false);
+    // Flip just the flag — keep the same workspaceState so the active
+    // odyssey is still on disk. Otherwise the test passes trivially.
+    (platform.config as FakeConfigProvider).set(
+      ODYSSEY_FEATURE_FLAG_KEY,
+      false,
+    );
     const out = await maybeBuildOdysseyContinuation({
       streamId: STREAM_ID,
       isSubagent: false,
       hasQueuedFollowUp: false,
     });
     expect(out).toBeNull();
+    // Sanity: the record still exists; only the flag stopped the loop.
+    expect(OdysseyStore.getForStream(STREAM_ID)?.status).toBe('active');
   });
 
   it('returns null when no odyssey exists for the stream', async () => {
@@ -81,18 +94,21 @@ describe('maybeBuildOdysseyContinuation', () => {
     expect(out).toBeNull();
   });
 
-  it('returns null when the odyssey is paused / complete / abandoned', async () => {
-    await OdysseyStore.start(STREAM_ID, 'objective');
-    await OdysseyStore.setStatus(STREAM_ID, 'paused');
-    const out = await maybeBuildOdysseyContinuation({
-      streamId: STREAM_ID,
-      isSubagent: false,
-      hasQueuedFollowUp: false,
-    });
-    expect(out).toBeNull();
-  });
+  it.each(['paused', 'complete', 'abandoned'] as const)(
+    'returns null when the odyssey status is %s',
+    async (status) => {
+      await OdysseyStore.start(STREAM_ID, 'objective');
+      await OdysseyStore.setStatus(STREAM_ID, status);
+      const out = await maybeBuildOdysseyContinuation({
+        streamId: STREAM_ID,
+        isSubagent: false,
+        hasQueuedFollowUp: false,
+      });
+      expect(out).toBeNull();
+    },
+  );
 
-  it('records a continuation_injected event on success', async () => {
+  it('is a pure read — never records continuation_injected itself', async () => {
     await OdysseyStore.start(STREAM_ID, 'objective');
     await maybeBuildOdysseyContinuation({
       streamId: STREAM_ID,
@@ -100,8 +116,10 @@ describe('maybeBuildOdysseyContinuation', () => {
       hasQueuedFollowUp: false,
     });
     const odyssey = OdysseyStore.getForStream(STREAM_ID);
+    // The wait-node records the event ONLY on the committed branch
+    // after re-checking hasQueuedFollowUp; the helper is pure.
     expect(
       odyssey?.history.some((e) => e.kind === 'continuation_injected'),
-    ).toBe(true);
+    ).toBe(false);
   });
 });

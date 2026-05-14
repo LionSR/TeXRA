@@ -86,6 +86,10 @@ export const OdysseyStore = {
    * records — finishing one and starting another is a normal flow.
    */
   async start(streamId: StreamTabId, objective: string): Promise<Odyssey> {
+    const trimmed = objective.trim();
+    if (!trimmed) {
+      throw new Error('objective must not be empty or whitespace-only.');
+    }
     const existing = readRaw(streamId);
     if (
       existing &&
@@ -100,13 +104,13 @@ export const OdysseyStore = {
     const odyssey: Odyssey = {
       odysseyId: generateOdysseyId(),
       streamId,
-      objective: objective.trim(),
+      objective: trimmed,
       status: 'active',
       tokensUsed: 0,
       timeUsedMs: 0,
       createdAt: now,
       updatedAt: now,
-      history: [{ at: now, kind: 'started', detail: objective.trim() }],
+      history: [{ at: now, kind: 'started', detail: trimmed }],
     };
     await writeRaw(odyssey);
     await addToIndex(streamId);
@@ -191,6 +195,10 @@ export const OdysseyStore = {
     streamId: StreamTabId,
     newObjective: string,
   ): Promise<Odyssey> {
+    const trimmed = newObjective.trim();
+    if (!trimmed) {
+      throw new Error('objective must not be empty or whitespace-only.');
+    }
     const odyssey = readRaw(streamId);
     if (!odyssey) {
       throw new Error('No odyssey found for this stream.');
@@ -198,11 +206,11 @@ export const OdysseyStore = {
     const now = nowIso();
     const updated: Odyssey = {
       ...odyssey,
-      objective: newObjective.trim(),
+      objective: trimmed,
       updatedAt: now,
       history: trimHistory([
         ...odyssey.history,
-        { at: now, kind: 'objective_edited', detail: newObjective.trim() },
+        { at: now, kind: 'objective_edited', detail: trimmed },
       ]),
     };
     await writeRaw(updated);

@@ -1,19 +1,10 @@
 import type { Odyssey } from '@tools/odyssey';
 
+import { formatOdysseyTime } from './formatOdysseyTime';
 import {
   getContinuationTemplate,
   getObjectiveUpdatedTemplate,
 } from './promptLoader';
-
-function formatTimeMs(ms: number): string {
-  const totalSec = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSec / 3600);
-  const min = Math.floor((totalSec % 3600) / 60);
-  const sec = totalSec % 60;
-  if (hours > 0) return `${hours}h ${min}m`;
-  if (min > 0) return `${min}m ${sec}s`;
-  return `${sec}s`;
-}
 
 function render(template: string, vars: Record<string, string>): string {
   return template.replaceAll(/\{\{(\w+)\}\}/g, (match, key: string) =>
@@ -32,7 +23,7 @@ export async function buildContinuationFollowUp(
   const template = await getContinuationTemplate();
   return render(template, {
     objective: odyssey.objective,
-    timeUsed: formatTimeMs(odyssey.timeUsedMs),
+    timeUsed: formatOdysseyTime(odyssey.timeUsedMs),
   });
 }
 

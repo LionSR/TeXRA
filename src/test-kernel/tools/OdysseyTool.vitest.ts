@@ -124,6 +124,40 @@ describe('OdysseyTool', () => {
     expect(result.error).toMatch(/objective/i);
   });
 
+  it('rejects whitespace-only objective on start', async () => {
+    const tool = new OdysseyTool();
+    const result = await callTool(tool, {
+      command: 'start',
+      objective: '   \n\t  ',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.error).toMatch(/whitespace/i);
+  });
+
+  it('rejects whitespace-only reason on pause', async () => {
+    const tool = new OdysseyTool();
+    await callTool(tool, { command: 'start', objective: 'objective' });
+    const result = await callTool(tool, { command: 'pause', reason: '   ' });
+    expect(result.isError).toBe(true);
+    expect(result.error).toMatch(/whitespace/i);
+  });
+
+  it('refuses to complete an abandoned odyssey', async () => {
+    const tool = new OdysseyTool();
+    await callTool(tool, { command: 'start', objective: 'objective' });
+    await OdysseyStore.setStatus(
+      'stream:odyssey-test' as StreamTabId,
+      'abandoned',
+      'user abandoned',
+    );
+    const result = await callTool(tool, {
+      command: 'complete',
+      reason: 'I think I am done.',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.error).toMatch(/abandoned/i);
+  });
+
   it('reacts to runtime flag toggles via FakeConfigProvider', async () => {
     const platform = await installPlatform(false);
     const tool = new OdysseyTool();
