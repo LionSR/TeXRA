@@ -1,11 +1,11 @@
-// Standard library imports
-import * as path from 'path';
-
 // Local imports - agent config
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { getWorkspaceState } from '@agent/core/stateStore';
-import { WorkspaceFS } from '@utils/files';
+import {
+  buildAgentWorkspaceOptions,
+  type AgentWorkspaceOptions,
+} from './agentWorkspaceOptions';
 import { CODEX_AGENT_NAME, CODEX_DISPLAY_MODEL } from './codexShared';
 
 // Type-only imports
@@ -145,10 +145,7 @@ export function buildCodexConfig(prompt: string): AgentConfig {
   });
 }
 
-export interface CodexWorkspaceOptions {
-  workingDirectory?: string;
-  additionalDirectories?: string[];
-}
+export type CodexWorkspaceOptions = AgentWorkspaceOptions;
 
 /**
  * Compute Codex workspace access options.
@@ -163,39 +160,5 @@ export interface CodexWorkspaceOptions {
 export function buildCodexWorkspaceOptions(
   workingDirectoryInput?: string | null,
 ): CodexWorkspaceOptions {
-  const workspacePath = WorkspaceFS.getPath();
-  const trimmed = workingDirectoryInput?.trim();
-
-  if (!workspacePath) {
-    return trimmed ? { workingDirectory: trimmed } : {};
-  }
-
-  const workingDirectory = trimmed
-    ? path.isAbsolute(trimmed)
-      ? trimmed
-      : path.resolve(workspacePath, trimmed)
-    : workspacePath;
-
-  const resolvedWorkspacePath = path.resolve(workspacePath);
-  const resolvedWorkingDirectory = path.resolve(workingDirectory);
-
-  if (resolvedWorkingDirectory === resolvedWorkspacePath) {
-    return { workingDirectory };
-  }
-
-  const relativeToWorkspace = path.relative(
-    resolvedWorkspacePath,
-    resolvedWorkingDirectory,
-  );
-  const isInsideWorkspace =
-    relativeToWorkspace.length > 0 &&
-    !relativeToWorkspace.startsWith('..') &&
-    !path.isAbsolute(relativeToWorkspace);
-
-  return isInsideWorkspace
-    ? {
-        workingDirectory,
-        additionalDirectories: [workspacePath],
-      }
-    : { workingDirectory };
+  return buildAgentWorkspaceOptions(workingDirectoryInput);
 }
