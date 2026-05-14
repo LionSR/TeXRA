@@ -29,15 +29,15 @@ Every dependency is either already in the workspace, used by the dominant 2026 A
 
 ### Rendering (shared with webview where possible)
 
-| Concern                      | Source                                                                                                                                                                                                                                                                                                                                            |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Markdown                     | `markdown-it` + `markdown-it-texmath` (reuse webview's `markdownRenderer.ts`, with an ANSI rule plugin added for the CLI host)                                                                                                                                                                                                                    |
-| **Markdown token LRU cache** | The webview's `markdownRenderer.ts` already memoizes lexer output by content hash. **This cache MUST be preserved** when the module is lifted into `src/shared/markdown/` — streamed responses re-render on every chunk, and re-lexing the full buffer per chunk is the dominant cost. Cap 500 entries (matches Claude Code's `TOKEN_CACHE_MAX`). |
-| Syntax highlighting          | `cli-highlight` (highlight.js wrapper for ANSI). The workspace's shared highlighter (`src/shared/highlighting/{highlightCode,hljs}.ts`) is already highlight.js-based, so this matches the existing grammar/theme surface.                                                                                                                        |
-| Math `$...$`                 | `unicodeit` fallback for inline; block math passes through raw in v1                                                                                                                                                                                                                                                                              |
-| Diffs                        | `diff` for hunks + `cli-highlight` for line coloring                                                                                                                                                                                                                                                                                              |
-| Hyperlinks                   | `terminal-link` (OSC 8) for clickable paths                                                                                                                                                                                                                                                                                                       |
-| ANSI-safe truncation / wrap  | `string-width` + `wrap-ansi`                                                                                                                                                                                                                                                                                                                      |
+| Concern                      | Source                                                                                                                                                                                                                     |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Markdown                     | `markdown-it` + `markdown-it-texmath` (reuse webview's `markdownRenderer.ts`, with an ANSI rule plugin added for the CLI host)                                                                                             |
+| **Markdown token LRU cache** | Preserve the webview's existing lexer LRU cache when lifting `markdownRenderer.ts` into `src/shared/markdown/`. Streamed responses re-render per chunk, so re-lexing dominates render cost without the cache.              |
+| Syntax highlighting          | `cli-highlight` (highlight.js wrapper for ANSI). The workspace's shared highlighter (`src/shared/highlighting/{highlightCode,hljs}.ts`) is already highlight.js-based, so this matches the existing grammar/theme surface. |
+| Math `$...$`                 | `unicodeit` fallback for inline; block math passes through raw in v1                                                                                                                                                       |
+| Diffs                        | `diff` for hunks + `cli-highlight` for line coloring                                                                                                                                                                       |
+| Hyperlinks                   | `terminal-link` (OSC 8) for clickable paths                                                                                                                                                                                |
+| ANSI-safe truncation / wrap  | `string-width` + `wrap-ansi`                                                                                                                                                                                               |
 
 ### Terminal capability discovery
 
@@ -47,14 +47,14 @@ Every dependency is either already in the workspace, used by the dominant 2026 A
 
 ### Plumbing
 
-| Concern                          | Package                                                                                                                                                                                                                |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Serial follow-up queue           | `p-queue`                                                                                                                                                                                                              |
-| Approval modal queue             | `p-queue` (`concurrency: 1`) with Promise-returning launchers — see § Approvals                                                                                                                                        |
-| Colors (legacy renderer only)    | `picocolors`                                                                                                                                                                                                           |
-| Clipboard ("copy last response") | `clipboardy` (with OSC 52 fallback; tmux/screen DCS wrapping deferred — R9)                                                                                                                                            |
-| Terminal notifications           | In-tree dispatcher emitting OSC 9 (iTerm2), OSC 99 (Kitty), and BEL fallback; OSC 9;4 progress sequences for supported terminals. Routed through the multiplexer-aware OSC wrapper (R9). See § Terminal notifications. |
-| Tests                            | `ink-testing-library` + existing `vitest`                                                                                                                                                                              |
+| Concern                          | Package                                                                                                                      |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Serial follow-up queue           | `p-queue`                                                                                                                    |
+| Approval modal queue             | `p-queue` (`concurrency: 1`) with Promise-returning launchers — see § Approvals                                              |
+| Colors (legacy renderer only)    | `picocolors`                                                                                                                 |
+| Clipboard ("copy last response") | `clipboardy` (with OSC 52 fallback; tmux/screen DCS wrapping deferred — R9)                                                  |
+| Terminal notifications           | In-tree dispatcher emitting OSC 9 / OSC 99 / BEL (and OSC 9;4 for progress), capability-gated. See § Terminal notifications. |
+| Tests                            | `ink-testing-library` + existing `vitest`                                                                                    |
 
 ### Deliberately omitted
 
@@ -62,31 +62,22 @@ Every dependency is either already in the workspace, used by the dominant 2026 A
 
 ## 7. Architecture
 
-The webview already does this. We're cloning its topology, not inventing.
+Cloning the webview's topology, not inventing one.
 
 ```
-CLI runtime host emit ─┐    (packages/cli/src/runtime/runtimeHost.ts:37–69 — the
-                       │     CLI's actual event source; events are routed here
-                       │     and do NOT pass through the global ProgressEventBus.
-                       │     The TUI wraps host.emit, exactly as today's plain
-                       │     renderer does in runChat.ts:378–388.)
+CLI runtime host emit ─┐    (runtimeHost.ts wraps the actual event source;
+                       │     events do NOT pass through ProgressEventBus)
 StreamLogStore.onChange ─┼─► signals state ─► React components (Ink)
-StreamStatusService.onDidChange ┘  (@lit-labs/signals,    │
-                                    same primitive as         ├── <Static> for finalized turns
-                                    webview's progressState)  └── live <Box> for in-flight turn
+StreamStatusService.onDidChange ┘  (@lit-labs/signals, same           │
+                                    primitive as progressState)            ├── <Static> for finalized turns
+                                                                            └── live <Box> for in-flight turn
 
 Approval payloads (intercepted in host.emit) ──► approvalQueue (p-queue, concurrency: 1)
                                                        └──► launcher returns Promise<Decision>
-                                                            <ApprovalModal> renders + resolves
-                                                            ├─► handleProgressViewBashApprovalAction
-                                                            ├─► setToolEditApprovalHandler resolver
-                                                            ├─► resolvePlanApproval
-                                                            ├─► resolveProposal
-                                                            ├─► triggerRetry / cancelRetry
-                                                            └─► handleExternalInquiryAction
+                                                            <ApprovalModal> dispatches to today's resolvers
 ```
 
-One state primitive, two renderers. The webview uses `appState = signal(createInitialState())` (`progressState.ts:66`). The CLI declares an identically-shaped signal in `packages/cli/src/chat/tui/state/cliState.ts`. The signal _primitive_ (`@lit-labs/signals`) and the _shape_ are shared; the _event sources_ differ — the webview subscribes to the global `ProgressEventBus` and to messages from the extension host, while the CLI subscribes to the runtime host wrapper plus `StreamLogStore` and `StreamStatusService` directly.
+Same signal primitive (`@lit-labs/signals`) and same state shape as the webview's `progressState`; event sources differ — CLI subscribes to `runtimeHost`, `StreamLogStore`, `StreamStatusService` directly.
 
 ```
 packages/cli/src/chat/tui/
@@ -139,51 +130,23 @@ packages/cli/src/chat/tui/
 
 ### Input component
 
-`BaseTextInput` wraps `ink-text-input` and adds three behaviors `ink-text-input` does not provide:
+`BaseTextInput` wraps `ink-text-input` with:
 
-1. **Paste-aware submit.** A `usePasteHandler` hook reads `ParsedKey.isPasted` from the keypress event. While a paste is in progress (between `CSI 200 ~` and `CSI 201 ~`), Enter is treated as a newline rather than submit. Without this, pasting an N-line LaTeX block fires N submissions and N approval modals — a routine workflow for academic users.
-2. **Viewport tracking** (`viewportCharOffset`, `viewportCharEnd`). When the input value exceeds the visible width, the input slides horizontally rather than soft-wrapping. The viewport state is exposed so that overlays (autocomplete, file mentions) can position themselves over the visible region.
-3. **Declared cursor.** The component reports its cursor position to the renderer via context, so the renderer can drive the terminal cursor (rather than ink's internal carat) — necessary for IME and screen-reader cooperation.
-
-This pattern is lifted directly from Claude Code (`src/components/BaseTextInput.tsx`, `src/hooks/usePasteHandler.tsx`).
+1. **Paste-aware submit** via `usePasteHandler` reading `ParsedKey.isPasted`. Enter is treated as newline between `CSI 200 ~` and `CSI 201 ~`, so pasting an N-line block fires one submission.
+2. **Horizontal viewport sliding** when the value exceeds visible width; the viewport offsets are exposed for overlay positioning.
+3. **Declared cursor** — the input reports cursor position upward so the renderer drives the terminal cursor (necessary for IME).
 
 ### Terminal notifications
 
-`notifications/terminalNotifier.ts` exposes a single `notify({ kind, title?, body })` entrypoint. `kind` is one of:
-
-- `agentFinished` — "agent X completed turn" alert when the user has gone idle or switched tmux panes; emits OSC 9 + OSC 99 + BEL.
-- `approvalNeeded` — pings the terminal while an approval modal is open and the focused pane is not the TeXRA one.
-- `progress` — for long-running tools (PDF compile, latexdiff), emits OSC 9;4 progress sequences (`PROGRESS.SET <pct>`, `PROGRESS.INDETERMINATE`, `PROGRESS.ERROR`, `PROGRESS.CLEAR`).
-
-Each emission is **capability-gated** by the `terminalCapabilities` signal (per § Terminal capability discovery) — terminals that didn't acknowledge the relevant query at startup fall through to BEL or silently drop. OSC sequences route through the same multiplexer-aware wrapper that clipboard OSC uses (R9), so tmux / GNU screen receive correctly framed DCS payloads once that wrapper lands.
-
-The dispatcher is **not** opt-in by default. Idle detection is the gating signal: notifications fire only after the user has been idle for ≥30 s, or when stdin reports the terminal is unfocused (modern terminals send focus-in/out via XT mode 1004). This avoids the "buzz on every token" failure mode some early Codex CLI builds shipped with.
-
-Pattern reference: Claude Code `src/ink/useTerminalNotification.ts`. The unwrapped raw BEL (not OSC-wrapped) is intentional so that tmux's `bell-action` config can trigger on it.
+A `notify({ kind, title?, body })` entrypoint emits notifications for `agentFinished` and `approvalNeeded` (Phase 1) and long-running `progress` (Phase 4). Each emission is capability-gated by the `terminalCapabilities` signal and routed through the multiplexer-aware OSC wrapper (R9). Gated on idle + unfocused-pane signals so it doesn't buzz on every token.
 
 ### Transcript search
 
-`commands/transcriptSearch.tsx` is an in-conversation search overlay bound to `Ctrl-F`. Filter strategy mirrors Claude Code (`src/components/HistorySearchDialog.tsx`, `src/ink/searchHighlight.ts`):
-
-1. **Exact substring** match (case-insensitive) is tried first.
-2. **Fuzzy subsequence** match falls back when there are no exact hits — same `fzf-for-js` instance the command palette uses.
-
-Match highlighting is a **render-time SGR 7 (inverse) overlay** applied to matched cells, not a markdown rewrite. Two non-obvious details that prevent rendering bugs:
-
-- **Non-overlapping advance.** Substring search uses `pos + queryLength` after each hit, never `pos + 1`. Overlapping matches would SGR-7-invert the same cell twice — SGR 7 is a toggle, so double-invert renders as normal and the match disappears.
-- **Codepoint-to-cell mapping.** Wide characters (CJK, emoji) occupy two cells. The overlay walks a `codeUnitToCell` map so the inverse applies to the correct cell range, not the codepoint range.
-
-Current match is rendered yellow via a separate positioned-highlight pass (`applyPositionedHighlight`) after the base inverse layer.
+`Ctrl-F` opens an in-conversation search overlay. Tries exact substring (case-insensitive) first, falls back to fuzzy subsequence via `fzf-for-js`. Match highlighting must be correct on CJK / emoji / overlapping matches.
 
 ### Frame telemetry
 
-`render/frameTelemetry.ts` subscribes to ink's `onFrame` hook (Ink 6 exposes per-frame events) and records:
-
-- per-phase wall time: render / diff / write / yoga-layout;
-- yoga-measured nodes count;
-- flicker triggers with debug context (`triggerY`, `prevLine`, `nextLine`).
-
-Output is funneled to the standard logger at `trace` level; CI can grep for flicker triggers in regression matrix runs. This is **not** a perf system, it's an observability hook — multi-agent + streaming markdown + 100-turn conversations have many small re-renders, and post-launch jank reports are unactionable without per-phase timing.
+Per-phase frame timings (render / diff / write / yoga-layout) and flicker context are emitted to the logger at `trace` level for post-launch jank investigation.
 
 ## 8. Multi-agent specifics
 
@@ -211,41 +174,41 @@ This gives the simplicity of `await launchBashApproval(payload)` at the call sit
 
 ### Wiring per event
 
-- `setToolEditApprovalHandler` is registered as before — today's CLI tool-edit path never emits `showToolEditPermission`, so the typed `ToolEditApprovalRequest` (with `originalContent` + `proposedContent`) is pushed directly from the handler. The TUI keeps that route and only changes how the user answers.
-- For `showBashPermission`, `showPlanApproval`, `showAgentProposal`, `showRetryRequest`, `showExternalInquiry`: a `handleCliApprovalEvent`-style interceptor inside the wrapped `runtimeHost.emit` constructs the payload and calls the matching `launchX(payload)` entrypoint.
-- On resolution, the modal calls the same resolvers today's adapter calls: `handleProgressViewBashApprovalAction`, `resolvePlanApproval`, `resolveProposal`, `triggerRetry` / `cancelRetry`, `handleExternalInquiryAction`. Resolver wiring is unchanged.
-- `--approval-policy never` and `--approval-policy yolo` short-circuit before reaching the queue (unchanged `immediateDecision` logic from `approvalAdapter.ts:89–94`).
-- `<EditApproval>` renders unified diffs from `originalContent` + `proposedContent` using `diff` + `cli-highlight`. Keys: `y` approve, `n` reject, `e` reject-with-feedback (inline `<TextInput>`). Diffs longer than 400 lines (Claude Code's cap in `src/components/diff/DiffDetailView.tsx`) render a summary header (`+N / −M / hunks: H`) followed by the first 400 lines and a `Ctrl-O to expand` affordance — silent truncation is a v1 footgun for academic users reviewing large LaTeX rewrites.
+- Tool-edit: `setToolEditApprovalHandler` still owns dispatch; the typed `ToolEditApprovalRequest` (with `originalContent` + `proposedContent`) is pushed from the handler.
+- Other approval events: interceptor inside the wrapped `runtimeHost.emit` constructs payloads and calls the matching `launchX`.
+- On resolution, the modal calls today's resolvers — wiring unchanged (see § 10 event map for the per-event resolver list).
+- `--approval-policy never` and `yolo` short-circuit before the queue (unchanged `immediateDecision` logic).
+- `<EditApproval>` renders unified diffs via `diff` + `cli-highlight`. Keys: `y` approve, `n` reject, `e` reject-with-feedback. Long diffs paginate with a summary header and `Ctrl-O` expand — no silent truncation.
 
 ### Audit prerequisite
 
-Before merging the Promise launcher refactor, audit whether two streams (e.g. the main stream and a running subagent) can emit approval requests within the same tick. If they can — likely, given §8 — the queue is load-bearing; if they cannot, the queue degenerates into a simple `await` chain but no code changes. Either way the API surface (`launchX → Promise<Decision>`) is identical.
+Before merging, confirm whether two streams can emit approval requests in the same tick. API surface is unchanged either way.
 
 ## 10. Event → component map
 
 Every signal source already exists.
 
-| Event                                                              | Consumer                             | Render                                                                                                                                                                                                                                                             |
-| ------------------------------------------------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `updateStreamUsage`                                                | `<Header>`                           | tokens, cost, elapsed                                                                                                                                                                                                                                              |
-| `updateConversationProgress`                                       | `<Header>`                           | turn / tool counts                                                                                                                                                                                                                                                 |
-| `updateStreamDescription`                                          | `<Header>`                           | session subtitle                                                                                                                                                                                                                                                   |
-| `StreamStatusService.onDidChange`                                  | `<StatusBar>`, `<InputBar>`          | status pill, prompt enabled                                                                                                                                                                                                                                        |
-| `StreamLogStore` (`MODEL_RESPONSE`)                                | `<ConversationPane>`                 | streaming text → `<Static>` on turn end                                                                                                                                                                                                                            |
-| `StreamLogStore` (`TOOL_USE`)                                      | `<ToolUseCard>`                      | header + status, expandable detail                                                                                                                                                                                                                                 |
-| `updateActiveSubagents`                                            | `<SubagentList>`                     | one row per `ActiveChildInfo`, rendered as a tree (`├─` / `└─` per Claude Code `AgentProgressLine.tsx`), inline status text, focus key. Elapsed-time field re-renders on a 1 s tick (a `setInterval` on the SubagentList, **not** per-row — one wakeup, one diff). |
-| `updateActiveProcesses`                                            | `<SubagentList>` (processes section) | one row per process                                                                                                                                                                                                                                                |
-| `updateProcessOutput`                                              | child stream view (on focus)         | stdout / stderr tail                                                                                                                                                                                                                                               |
-| `updateTodos`                                                      | `<TodosPlanPanel>`                   | checklist                                                                                                                                                                                                                                                          |
-| `updatePlan`                                                       | `<TodosPlanPanel>`                   | numbered steps, status                                                                                                                                                                                                                                             |
-| `setActiveStream`                                                  | `<App>` router                       | switch primary streamId                                                                                                                                                                                                                                            |
-| `setParentStream`                                                  | `<App>` router                       | nest child under parent                                                                                                                                                                                                                                            |
-| `removeStream`                                                     | `<App>` router                       | cleanup                                                                                                                                                                                                                                                            |
-| `updateQueuedFollowUps`                                            | `<InputBar>`                         | "queued: N" pill                                                                                                                                                                                                                                                   |
-| `updateToolEditApprovalBypassState` / `updateSuperYoloBypassState` | `<StatusBar>`                        | YOLO / BYPASS badge                                                                                                                                                                                                                                                |
-| `showBashPermission`                                               | `<BashApproval>`                     | resolver: `handleProgressViewBashApprovalAction`                                                                                                                                                                                                                   |
-| `showToolEditPermission`                                           | `<EditApproval>`                     | resolver: `setToolEditApprovalHandler` callback                                                                                                                                                                                                                    |
-| `showPlanApproval`                                                 | `<PlanApproval>`                     | resolver: `resolvePlanApproval`                                                                                                                                                                                                                                    |
-| `showAgentProposal`                                                | `<AgentProposal>`                    | resolver: `resolveProposal`                                                                                                                                                                                                                                        |
-| `showRetryRequest`                                                 | `<RetryRequest>`                     | resolver: `triggerRetry` / `cancelRetry`                                                                                                                                                                                                                           |
-| `showExternalInquiry`                                              | `<ExternalInquiry>`                  | resolver: `handleExternalInquiryAction`                                                                                                                                                                                                                            |
+| Event                                                              | Consumer                             | Render                                                                                                             |
+| ------------------------------------------------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `updateStreamUsage`                                                | `<Header>`                           | tokens, cost, elapsed                                                                                              |
+| `updateConversationProgress`                                       | `<Header>`                           | turn / tool counts                                                                                                 |
+| `updateStreamDescription`                                          | `<Header>`                           | session subtitle                                                                                                   |
+| `StreamStatusService.onDidChange`                                  | `<StatusBar>`, `<InputBar>`          | status pill, prompt enabled                                                                                        |
+| `StreamLogStore` (`MODEL_RESPONSE`)                                | `<ConversationPane>`                 | streaming text → `<Static>` on turn end                                                                            |
+| `StreamLogStore` (`TOOL_USE`)                                      | `<ToolUseCard>`                      | header + status, expandable detail                                                                                 |
+| `updateActiveSubagents`                                            | `<SubagentList>`                     | one row per `ActiveChildInfo`, tree-rendered with inline status text; elapsed time refreshes on a list-level tick. |
+| `updateActiveProcesses`                                            | `<SubagentList>` (processes section) | one row per process                                                                                                |
+| `updateProcessOutput`                                              | child stream view (on focus)         | stdout / stderr tail                                                                                               |
+| `updateTodos`                                                      | `<TodosPlanPanel>`                   | checklist                                                                                                          |
+| `updatePlan`                                                       | `<TodosPlanPanel>`                   | numbered steps, status                                                                                             |
+| `setActiveStream`                                                  | `<App>` router                       | switch primary streamId                                                                                            |
+| `setParentStream`                                                  | `<App>` router                       | nest child under parent                                                                                            |
+| `removeStream`                                                     | `<App>` router                       | cleanup                                                                                                            |
+| `updateQueuedFollowUps`                                            | `<InputBar>`                         | "queued: N" pill                                                                                                   |
+| `updateToolEditApprovalBypassState` / `updateSuperYoloBypassState` | `<StatusBar>`                        | YOLO / BYPASS badge                                                                                                |
+| `showBashPermission`                                               | `<BashApproval>`                     | resolver: `handleProgressViewBashApprovalAction`                                                                   |
+| `showToolEditPermission`                                           | `<EditApproval>`                     | resolver: `setToolEditApprovalHandler` callback                                                                    |
+| `showPlanApproval`                                                 | `<PlanApproval>`                     | resolver: `resolvePlanApproval`                                                                                    |
+| `showAgentProposal`                                                | `<AgentProposal>`                    | resolver: `resolveProposal`                                                                                        |
+| `showRetryRequest`                                                 | `<RetryRequest>`                     | resolver: `triggerRetry` / `cancelRetry`                                                                           |
+| `showExternalInquiry`                                              | `<ExternalInquiry>`                  | resolver: `handleExternalInquiryAction`                                                                            |
