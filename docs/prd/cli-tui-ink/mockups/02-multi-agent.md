@@ -24,6 +24,10 @@ Root stream is delegating to two subagents. One subagent has spawned its own chi
 │  │                                                                                   │
 │  └─ 4  w-7a5  research   ✓ done      · model: sonnet-4.6 · 5 tools · $0.09 · 02:14  │
 │                                                                                      │
+├─ processes ──────────────────────────────────────────────────────────────────────────┤
+│    pid 41208  latexmk -pdf main.tex            running  ·  3.2s · 47 lines           │
+│    pid 41312  python make_figures.py           ✓ done   ·  1.4s · exit 0             │
+│                                                                                      │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │  ● running · 3 subagents · queued: 0 · yolo off                                      │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
@@ -50,7 +54,9 @@ Root stream is delegating to two subagents. One subagent has spawned its own chi
 
 ## Open questions for review
 
-1. Indentation per level — is 3 chars (`├─ `) enough, or should we double to 6 chars per depth so 3-level nesting reads clearly?
-2. Should the focused row also dim other rows, or is the `●` indicator sufficient?
-3. When the SubagentList grows large (10+ subagents), should it scroll inside its section, or take over the conversation pane via `Ctrl-T`?
-4. Process rows (from `updateActiveProcesses`) currently mix with subagent rows under the same header. Should they be a sub-section `├─ processes ──┤` instead?
+1. Indentation per level — is 3 chars (`├─ `) enough, or should we double to 6 chars per depth so 3-level nesting reads clearly? User: good
+2. Should the focused row also dim other rows, or is the `●` indicator sufficient? User: good
+3. When the SubagentList grows large (10+ subagents), should it scroll inside its section, or take over the conversation pane via `Ctrl-T`? User: yes should do something. But... not top concern
+4. Process rows (from `updateActiveProcesses`) currently mix with subagent rows under the same header. Should they be a sub-section `├─ processes ──┤` instead? User: `├─ processes ──┤`
+
+User: in addition, should consider if subagents have subagents. and if one can toggle to check what is happening with the subagents.
