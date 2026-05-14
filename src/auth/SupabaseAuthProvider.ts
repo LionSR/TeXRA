@@ -3,19 +3,20 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { SupabaseClient } from './SupabaseClient';
 import {
-  SUPABASE_CONFIG,
   DEFAULT_OAUTH_PROVIDER,
-  OAUTH_PROVIDERS,
   getAuthCallbackUri,
   getExternalAuthCallbackInfo,
   AUTH_CALLBACK_TIMEOUT_MS,
-  TOKEN_REFRESH_THRESHOLD_MS,
-  SUPABASE_SESSION_KEY,
   GITHUB_TOKEN_EXCHANGE_URL,
-  GITHUB_TOKEN_REFRESH_URL,
   DEFAULT_SESSION_EXPIRY_MS,
+  isOAuthProvider,
   type OAuthProvider,
 } from './config';
+import {
+  DEFAULT_AUTH_EDGE_FUNCTION_TIMEOUT_MS,
+  createSupabaseAuthCoordinator,
+  createSupabaseSessionStorage,
+} from './SupabaseAuthCoordinator';
 import { getServerSideKeyService } from './serverKeys';
 import {
   fetchWithTimeout,
@@ -26,8 +27,6 @@ import {
 } from './SupabaseSession';
 import type { SupabaseUriHandler } from './UriHandler';
 
-/** Timeout for Edge Function requests (30 seconds) */
-const EDGE_FUNCTION_TIMEOUT_MS = 30000;
 const AUTH_URI_HANDLER_NOT_INITIALIZED =
   'OAuth handler not initialized. Restart the extension.';
 
@@ -38,15 +37,6 @@ const GITHUB_TOKEN_TYPE_MAP: Record<string, string> = {
   ghu_: 'user-to-server token',
   ghs_: 'server-to-server token',
 };
-
-/**
- * Type guard to check if a string is a valid OAuth provider.
- */
-function isOAuthProvider(value: string | undefined): value is OAuthProvider {
-  return (
-    value !== undefined && OAUTH_PROVIDERS.includes(value as OAuthProvider)
-  );
-}
 
 /**
  * Authentication provider for Supabase integration.
@@ -66,37 +56,20 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private isProcessingCallback = false;
 
   constructor(private context: vscode.ExtensionContext) {
-    SupabaseClient.initialize(
-      SUPABASE_CONFIG.url,
-      SUPABASE_CONFIG.publicKey,
-      context,
-    );
-    this.sessionCoordinator = new SupabaseSessionCoordinator({
-      storage: {
-        get: () => Promise.resolve(context.secrets.get(SUPABASE_SESSION_KEY)),
-        store: (sessionData) =>
-          Promise.resolve(
-            context.secrets.store(SUPABASE_SESSION_KEY, sessionData),
-          ),
-        delete: () =>
-          Promise.resolve(context.secrets.delete(SUPABASE_SESSION_KEY)),
-      },
-      getClient: () => SupabaseClient.getClient(),
+    this.sessionCoordinator = createSupabaseAuthCoordinator({
+      storage: createSupabaseSessionStorage({
+        get: (key) => Promise.resolve(context.secrets.get(key)),
+        set: (key, value) => Promise.resolve(context.secrets.store(key, value)),
+        delete: (key) => Promise.resolve(context.secrets.delete(key)),
+      }),
       whenReady: async () => {
         if (!this.uriHandler) {
           throw new Error(AUTH_URI_HANDLER_NOT_INITIALIZED);
         }
       },
-      tokenRefreshThresholdMs: TOKEN_REFRESH_THRESHOLD_MS,
-      defaultSessionExpiryMs: DEFAULT_SESSION_EXPIRY_MS,
-      githubTokenRefreshUrl: GITHUB_TOKEN_REFRESH_URL,
-      edgeFunctionTimeoutMs: EDGE_FUNCTION_TIMEOUT_MS,
       log: logger,
-      onTokenExpiryChanged: (expiresAt) =>
-        SupabaseClient.setTokenExpiry(expiresAt),
     });
     SupabaseAuthProvider.instance = this;
-    SupabaseClient.setAuthProvider(this.sessionCoordinator);
   }
 
   /** Get singleton instance for sign out operations. */
@@ -390,7 +363,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ github_token: githubSession.accessToken }),
         },
-        EDGE_FUNCTION_TIMEOUT_MS,
+        DEFAULT_AUTH_EDGE_FUNCTION_TIMEOUT_MS,
         'Authentication server timeout. Please try again.',
       );
 

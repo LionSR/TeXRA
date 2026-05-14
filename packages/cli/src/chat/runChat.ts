@@ -10,6 +10,12 @@ import { executeAgent } from '@agent/runtime/executeAgent';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
+
+// Local imports - auth
+import { isOAuthProvider } from '@auth/sharedConfig';
+
+// Local imports - common
+import { toErrorMessage } from '@common/errors/errorMessage';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   MESSAGE_TYPES,
@@ -30,6 +36,7 @@ import {
 } from '../runtime/approvalAdapter';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '../runtime/initPlatform';
+import { parseLoginArgs } from '../runtime/loginArgs';
 import { getCliModelAccess } from '../runtime/modelAccess';
 import { createCliRuntimeHost } from '../runtime/runtimeHost';
 import {
@@ -41,6 +48,11 @@ import {
   ChatTerminalRenderer,
   type ChatToolDisplayMode,
 } from './terminalRenderer';
+import {
+  getCliAuthProfile,
+  signInCliSupabase,
+  signOutCliSupabase,
+} from '../runtime/supabaseAuth';
 
 export interface ChatResult {
   exitCode: number;
@@ -446,7 +458,8 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
         continue;
       }
 
-      if (line.startsWith('/')) {
+      if (line.startsWith('/') || line.startsWith('\\')) {
+        const prefix = line[0] ?? '/';
         const { command, rest } = parseCommand(line);
         if (multilineDraft.active) {
           if (command === 'send') {
@@ -511,12 +524,59 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
           renderer.info('Multiline draft started. Use /send or /cancel.');
         } else if (command === 'status') {
           renderer.printStatus(currentMetadata(), session.streamId);
+        } else if (command === 'login') {
+          const loginArgs = parseLoginArgs(
+            rest.trim().split(/\s+/).filter(Boolean),
+          );
+          if (loginArgs.error || !isOAuthProvider(loginArgs.provider)) {
+            renderer.warn(
+              'Usage: /login [github|google] [--provider github|google] [--no-browser]',
+            );
+          } else {
+            try {
+              if (!loginArgs.noBrowser) {
+                renderer.info(
+                  `Opening browser for TeXRA ${loginArgs.provider} sign-in.`,
+                );
+              }
+              const authSession = await signInCliSupabase({
+                provider: loginArgs.provider,
+                openBrowser: !loginArgs.noBrowser,
+                onAuthUrl: loginArgs.noBrowser
+                  ? (url) => renderer.info(`Open this URL to sign in:\n${url}`)
+                  : undefined,
+              });
+              renderer.success(`Signed in as ${authSession.account.label}.`);
+            } catch (error) {
+              renderer.error(toErrorMessage(error));
+            }
+          }
+        } else if (command === 'logout') {
+          try {
+            await signOutCliSupabase();
+            renderer.success('Signed out.');
+          } catch (error) {
+            renderer.error(toErrorMessage(error));
+          }
+        } else if (command === 'whoami') {
+          try {
+            const profile = await getCliAuthProfile();
+            if (profile.authenticated) {
+              renderer.info(
+                `Signed in as ${profile.accountLabel ?? 'unknown'} (${profile.tier ?? 'unknown'}).`,
+              );
+            } else {
+              renderer.info('Not signed in.');
+            }
+          } catch (error) {
+            renderer.error(toErrorMessage(error));
+          }
         } else if (command === 'yolo') {
           renderer.info(
             'Use --approval-policy yolo when starting texra chat to auto-approve approval gates. External inquiry prompts still require a human answer.',
           );
         } else {
-          renderer.warn(`Unknown command: /${command}`);
+          renderer.warn(`Unknown command: ${prefix}${command}`);
         }
         if (!session.runCompleted) reader.prompt();
         continue;

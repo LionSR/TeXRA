@@ -141,6 +141,10 @@ export function flagValue(
   return undefined;
 }
 
+export function cliEnvValue(key: string): string | undefined {
+  return process.env[key];
+}
+
 function hasBooleanFlag(args: readonly string[], ...names: string[]): boolean {
   let index = 0;
   while (index < args.length) {
