@@ -130,11 +130,11 @@ This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the ext
 **Multiple File Variables:**
 
 - &#123;&#123; ALL_INPUTS &#125;&#125;: XML string containing all selected input files (primary + multiple) wrapped in `<document name="...">...</document>` tags.
-- &#123;&#123; ALL_REFERENCES &#125;&#125;: Similar XML string for all reference files.
-- &#123;&#123; ALL_AUXILIARYS &#125;&#125;: Similar XML string for all auxiliary files.
+- &#123;&#123; ALL_CONTEXTS &#125;&#125;: Similar XML string for all context files (the read-only context category that combines what used to be split into "reference" and "auxiliary").
 - &#123;&#123; LIST_OF_ALL_INPUTS &#125;&#125;: Simple comma-separated string listing all input file paths.
-- &#123;&#123; LIST_OF_ALL_REFERENCES &#125;&#125;: Similar comma-separated list for reference files.
-- &#123;&#123; LIST_OF_ALL_AUXILIARYS &#125;&#125;: Similar comma-separated list for auxiliary files.
+- &#123;&#123; LIST_OF_ALL_CONTEXTS &#125;&#125;: Similar comma-separated list for context files.
+
+_Deprecated aliases:_ &#123;&#123; ALL_REFERENCES &#125;&#125; / &#123;&#123; ALL_AUXILIARYS &#125;&#125; / &#123;&#123; LIST_OF_ALL_REFERENCES &#125;&#125; / &#123;&#123; LIST_OF_ALL_AUXILIARYS &#125;&#125; remain populated for custom YAMLs that haven't migrated. New agents should use the unified `*_CONTEXTS` variables.
 
 **Multiple Output Variable:**
 
@@ -159,8 +159,8 @@ userPrefix: |
   {{ INPUT_CONTENT }}
   </document>
 
-  Refer to these auxiliary files:
-  {{ ALL_AUXILIARYS }}
+  Refer to these context files:
+  {{ ALL_CONTEXTS }}
 
   Apply the following instruction:
   <instruction>{{ INSTRUCTION }}</instruction>
