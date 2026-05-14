@@ -13,7 +13,13 @@ import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 
 export interface AgentCore<C = unknown> {
-  modelHandler: IModelHandler<ProviderMessage, unknown, unknown, SdkToolCall, C>;
+  modelHandler: IModelHandler<
+    ProviderMessage,
+    unknown,
+    unknown,
+    SdkToolCall,
+    C
+  >;
   config: AgentConfig;
   setting: AgentSetting;
   prompt: AgentPrompt;
