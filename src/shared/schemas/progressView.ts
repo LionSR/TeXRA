@@ -601,6 +601,11 @@ const ToggleSuperYoloBypassMessageSchema = z.object({
   stream: StreamTabIdSchema,
 });
 
+const OpenOdysseyPanelMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.OPEN_ODYSSEY_PANEL),
+  stream: StreamTabIdSchema,
+});
+
 const SendFollowUpMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP),
   stream: StreamTabIdSchema,
@@ -764,6 +769,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     ToolEditApprovalActionMessageSchema,
     ToggleToolEditApprovalBypassMessageSchema,
     ToggleSuperYoloBypassMessageSchema,
+    OpenOdysseyPanelMessageSchema,
     BashApprovalActionMessageSchema,
     AgentProposalActionMessageSchema,
     PlanApprovalActionMessageSchema,
