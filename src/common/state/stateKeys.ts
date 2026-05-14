@@ -47,6 +47,7 @@ export enum WorkspaceStateKey {
   // Claude Agent settings
   CLAUDE_AGENT_MODEL = 'texra.claudeAgentModel',
   CLAUDE_AGENT_PERMISSION_MODE = 'texra.claudeAgentPermissionMode',
+  CLAUDE_AGENT_EFFORT = 'texra.claudeAgentEffort',
 
   // Git commit author settings
   GIT_MARK_COMMITS = 'texra.git.markCommits',
