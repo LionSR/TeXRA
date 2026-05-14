@@ -7,7 +7,6 @@ import {
   abstract as abstractQuery,
   category as catQuery,
 } from 'arxiv-client';
-type Category = Parameters<typeof catQuery>[0];
 import { z } from 'zod';
 
 // Local imports
@@ -22,6 +21,8 @@ import {
   extractBasePaperMetadata,
   normaliseArxivIdentifier,
 } from '@tools/latex/arxivShared';
+
+type Category = Parameters<typeof catQuery>[0];
 
 const SortBySchema = z.enum(['relevance', 'lastUpdatedDate', 'submittedDate']);
 const SortOrderSchema = z.enum(['ascending', 'descending']);
