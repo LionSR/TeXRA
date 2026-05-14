@@ -273,12 +273,20 @@ export class TaskGroupList extends LitElement {
       return;
     }
 
+    const prevGroups = groupsChanged
+      ? (changedProperties.get('groups') as TaskGroup[] | undefined)
+      : undefined;
+    const patchedGroupMetadata =
+      groupsChanged && prevGroups
+        ? this.patchGroupMetadataIfShapeStable(prevGroups)
+        : false;
+
     const prevMessages = messagesChanged
       ? (changedProperties.get('messages') as LogMessageData[] | undefined)
       : undefined;
     const prevCount = prevMessages?.length ?? 0;
 
-    if (groupsChanged) {
+    if (groupsChanged && !patchedGroupMetadata) {
       // Structural change — always full rebuild
       [this.cachedTree, this.cachedUngrouped] = this.buildGroupTree();
     } else if (messagesChanged) {
@@ -304,11 +312,14 @@ export class TaskGroupList extends LitElement {
     // Used by both tool-use and workflow streams so the user's original
     // instruction (the earliest ungrouped message) stays at the top.
     if (groupsChanged || messagesChanged) {
-      if (groupsChanged || this.messages.length < prevCount) {
+      if (
+        (groupsChanged && !patchedGroupMetadata) ||
+        this.messages.length < prevCount
+      ) {
         // Structural change, or messages shrunk (e.g. clear/resync) —
         // removed IDs must be pruned from cachedTimeline, so rebuild.
         this.cachedTimeline = this.buildFullTimeline();
-      } else if (this.messages.length > prevCount) {
+      } else if (messagesChanged && this.messages.length > prevCount) {
         // Append-only: classify each new message and insert ungrouped ones
         // into the timeline. Iterate the messages slice (not the ungrouped
         // array) so a new message spliced into the middle of cachedUngrouped
@@ -316,12 +327,42 @@ export class TaskGroupList extends LitElement {
         this.appendToTimeline(prevCount);
         // LOG_DELTA may also mutate existing timeline entries in the same batch.
         this.updateTimelineMessageRefs();
-      } else {
+      } else if (messagesChanged) {
         // Same length — streaming update. guard([item.msg]) in render()
         // detects new refs on existing timeline entries.
         this.updateTimelineMessageRefs();
       }
     }
+  }
+
+  /**
+   * Patch status/name/end-time changes into the existing group tree.
+   * This avoids re-sorting and reclassifying every log message for ordinary
+   * group-completion updates, while still rebuilding when the tree shape changes.
+   */
+  private patchGroupMetadataIfShapeStable(
+    previousGroups: readonly TaskGroup[],
+  ): boolean {
+    if (previousGroups.length !== this.groups.length) return false;
+
+    for (let i = 0; i < this.groups.length; i++) {
+      const previous = previousGroups[i];
+      const next = this.groups[i];
+      if (!previous || !next) return false;
+      if (
+        previous.id !== next.id ||
+        previous.parentGroupId !== next.parentGroupId ||
+        previous.startTime !== next.startTime
+      ) {
+        return false;
+      }
+      if (!this.groupNodeIndex.has(next.id)) return false;
+    }
+
+    for (const group of this.groups) {
+      this.groupNodeIndex.get(group.id)!.group = group;
+    }
+    return true;
   }
 
   override updated(): void {
