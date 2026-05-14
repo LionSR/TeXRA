@@ -37,8 +37,13 @@ export class ToolUseWaitNode<C> extends Node<
   }
 
   async exec(prepRes: WaitPrepResult): Promise<WaitExecResult> {
-    const { checkInterruption, session, streamId, onBeforeWaiting } =
-      this.services;
+    const {
+      checkInterruption,
+      session,
+      streamId,
+      onBeforeWaiting,
+      runtimeHost,
+    } = this.services;
 
     if (checkInterruption()) {
       return { kind: 'stop' };
@@ -56,7 +61,9 @@ export class ToolUseWaitNode<C> extends Node<
     }
 
     if (!session.hasQueuedFollowUp()) {
-      StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
+      StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
+        runtimeHost,
+      });
     }
 
     const items = await session.waitForFollowUp(checkInterruption);
@@ -80,7 +87,7 @@ export class ToolUseWaitNode<C> extends Node<
     _prepRes: WaitPrepResult,
     execRes: WaitExecResult,
   ): Promise<string | undefined> {
-    const { onFollowUpConsumed, streamId, logger, modelHandler } =
+    const { onFollowUpConsumed, streamId, logger, modelHandler, runtimeHost } =
       this.services;
 
     if (execRes.kind === 'stop') {
@@ -94,7 +101,9 @@ export class ToolUseWaitNode<C> extends Node<
     shared.userCancelledRetry = undefined;
 
     onFollowUpConsumed?.();
-    StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
+    StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
+      runtimeHost,
+    });
     logger.userMessage(execRes.followUp);
     shared.messages = await modelHandler.createUserFollowUpMessages(
       shared.messages,
