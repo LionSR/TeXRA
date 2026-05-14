@@ -3,9 +3,13 @@ import * as path from 'path';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import type { AgentConfig } from '@agent/core/AgentConfig';
+import type {
+  AgentCategory,
+  StreamTabInfo,
+  WorktreeInfo,
+} from '@shared/schemas';
 import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import { isProcessAgent } from '@shared/streams/agentKind';
-import type { AgentCategory, StreamTabInfo } from '@shared/schemas';
 
 import { getCleanAgentName, isRemoteAgent } from './agentRegistry';
 
@@ -24,6 +28,10 @@ export interface StreamTabInfoInputs {
   executionId?: string;
   parentStreamId?: string;
   description?: string;
+  /** Pre-resolved worktree context (branch, dirty, PR). Callers that have
+   *  asynchronously resolved this pass it in so the stream tab can render a
+   *  worktree chip without async work in this builder. */
+  worktreeInfo?: WorktreeInfo;
 }
 
 /**
@@ -70,6 +78,17 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   const isRemote =
     hints?.isRemote ?? (rawAgentName ? isRemoteAgent(rawAgentName) : false);
 
+  // Worktree context comes from one of two sources, in order:
+  //   1. An explicit hint passed in by the caller (already resolved branch /
+  //      dirty / PR info via `resolveWorktreeInfo`).
+  //   2. The agent config's `workingDirectory` override — surfaced as a
+  //      minimal chip carrying just the path until async resolution lands.
+  const worktree: WorktreeInfo | undefined =
+    inputs.worktreeInfo ??
+    (config?.workingDirectory
+      ? { workingDirectory: config.workingDirectory }
+      : undefined);
+
   return {
     name: streamId,
     label,
@@ -87,5 +106,6 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
     parentStreamId: inputs.parentStreamId,
     description: inputs.description,
     command,
+    worktree,
   };
 }
