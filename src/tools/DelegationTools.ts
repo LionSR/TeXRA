@@ -652,7 +652,11 @@ const WorkflowAgentInputSchema = z.object({
     .describe(
       'Model short name (e.g., opus47T, sonnet46T, gpt55, gemini31p). Defaults to the current model if omitted.',
     ),
-  instruction: z.string().describe('Plain prose instruction for the agent'),
+  instruction: z
+    .string()
+    .describe(
+      'Plain prose instruction for the agent. When attaching context files (reference/auxiliary/media), explain in the instruction what each one is for and how the sub-agent should use it — e.g., "preamble.tex defines the math macros; refs.bib is the bibliography to cite from; figure.png is the panel layout the new figure should match". The sub-agent has no other signal for why each file was attached.',
+    ),
   inputFile: z.string().describe('Primary input file to process (required)'),
   inputFiles: z
     .array(z.string())
@@ -663,23 +667,25 @@ const WorkflowAgentInputSchema = z.object({
     .nullable()
     .prefault(null)
     .describe(
-      'Reference file providing guidance or examples (not modified). Do not put .bib files here.',
+      'Read-only context file (guidance, example, related paper). Not modified. Do not put .bib files here. Explain its role in the instruction.',
     ),
   referenceFiles: z
     .array(z.string())
     .prefault([])
-    .describe('Additional reference files'),
+    .describe(
+      'Additional read-only context files. Explain each in the instruction.',
+    ),
   auxiliaryFile: z
     .string()
     .nullable()
     .prefault(null)
     .describe(
-      'Auxiliary file for supplementary content like bibliographies (.bib files).',
+      'Auxiliary supplementary content like bibliographies (.bib) or style/macro definitions (.sty/.cls). Explain its role in the instruction.',
     ),
   auxiliaryFiles: z
     .array(z.string())
     .prefault([])
-    .describe('Additional auxiliary files'),
+    .describe('Additional auxiliary files. Explain each in the instruction.'),
   mediaFile: z
     .string()
     .nullable()
