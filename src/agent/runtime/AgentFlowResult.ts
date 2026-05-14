@@ -7,19 +7,19 @@ import {
 } from '@shared/schemas';
 
 export const OutputFileSummarySchema = z.object({
-  round: z.number(),
+  round: z.int().nonnegative(),
   relativePath: z.string(),
   absolutePath: z.string(),
   location: z.enum(['workspace', 'runStorage', 'external']),
   originalPath: z.string().nullable(),
-  added: z.number().nullable(),
-  removed: z.number().nullable(),
+  added: z.int().nonnegative().nullable(),
+  removed: z.int().nonnegative().nullable(),
 });
 
 export type OutputFileSummary = z.infer<typeof OutputFileSummarySchema>;
 
 export const CompileFailureSummarySchema = z.object({
-  round: z.number(),
+  round: z.int().nonnegative(),
   displayName: z.string(),
   outputPath: z.string(),
   logPath: z.string(),
