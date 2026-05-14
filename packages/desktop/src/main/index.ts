@@ -45,6 +45,10 @@ import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
 import { createDesktopGitHost } from './desktopGitHost.js';
 import { createDesktopShellActions } from './desktopShellIpc.js';
+import {
+  openMacTerminalCommand,
+  setupCommandNeedsInteractiveTerminal,
+} from './desktopSetupTerminal.js';
 import { createDesktopTerminalRunner } from './desktopTerminalRunner.js';
 import {
   createDesktopAuthCallbackState,
@@ -187,6 +191,46 @@ async function showSetupCommandResult(
   }
 }
 
+async function showSetupCommandOpenedInTerminal(
+  window: BrowserWindow,
+  command: string,
+): Promise<void> {
+  const response = await dialog.showMessageBox(window, {
+    type: 'info',
+    message: 'Setup command opened in Terminal',
+    detail:
+      `Command:\n${command}\n\n` +
+      'Complete any prompts in the Terminal window, then return to TeXRA and recheck the dependency status.',
+    buttons: ['Copy Command', 'Close'],
+    defaultId: 1,
+    cancelId: 1,
+  });
+
+  if (response.response === 0) {
+    clipboard.writeText(command);
+  }
+}
+
+async function showManualSetupCommand(
+  window: BrowserWindow,
+  command: string,
+): Promise<void> {
+  const response = await dialog.showMessageBox(window, {
+    type: 'warning',
+    message: 'Setup command needs an interactive terminal',
+    detail:
+      `Command:\n${command}\n\n` +
+      'This command may ask for a password or confirmation. TeXRA will not run it in a hidden process. Copy it into a terminal, then return to TeXRA and recheck the dependency status.',
+    buttons: ['Copy Command', 'Close'],
+    defaultId: 0,
+    cancelId: 1,
+  });
+
+  if (response.response === 0) {
+    clipboard.writeText(command);
+  }
+}
+
 function createWindow(options: {
   workspacePath: string | undefined;
   authCoordinator: DesktopAuthCoordinator;
@@ -237,6 +281,21 @@ function createWindow(options: {
     cwd: setupCommandCwd,
   });
   const runSetupCommand = async (command: string) => {
+    if (process.platform === 'darwin') {
+      try {
+        await openMacTerminalCommand(command, setupCommandCwd);
+        await showSetupCommandOpenedInTerminal(window, command);
+      } catch {
+        await showManualSetupCommand(window, command);
+      }
+      return;
+    }
+
+    if (setupCommandNeedsInteractiveTerminal(command)) {
+      await showManualSetupCommand(window, command);
+      return;
+    }
+
     const result = await setupTerminalRunner.runCommand({
       name: 'TeXRA Setup',
       command,
