@@ -2,28 +2,28 @@
 
 ## 11. Keymap
 
-| Key                 | Action                                                                                                                                                            |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Enter`             | Send message (suppressed during bracketed paste — see [10-architecture § Input component](./10-architecture.md#input-component))                                  |
-| `Ctrl-J`            | Newline (kills `/multi` ceremony)                                                                                                                                 |
-| `Tab`               | Autocomplete (file, slash, agent, model)                                                                                                                          |
-| `↑` / `↓`           | History (input) / row navigation (lists, modals)                                                                                                                  |
-| `Ctrl-R`            | Reverse history search (input lines)                                                                                                                              |
-| `Ctrl-F`            | Transcript search (in-conversation; substring + fuzzy; SGR 7 inverse overlay — see [10-architecture § Transcript search](./10-architecture.md#transcript-search)) |
-| `Ctrl-P`            | Command palette                                                                                                                                                   |
-| `Ctrl-O`            | Expand truncated content (long diffs, collapsed summaries)                                                                                                        |
-| `Ctrl-A` / `Ctrl-B` | Cycle active child / back to parent (avoiding `Ctrl-Shift-A`, which collapses to `Ctrl-A` on many terminals)                                                      |
-| `0`                 | Jump back to root stream                                                                                                                                          |
-| `1`–`9`             | Jump to subagent row                                                                                                                                              |
-| `Ctrl-T`            | Tab view (Conversation / Subagents / Todos+Plan / Logs)                                                                                                           |
-| `Ctrl-L`            | Clear screen (scrollback preserved)                                                                                                                               |
-| `Ctrl-C`            | Interrupt active session; second tap exits                                                                                                                        |
-| `Ctrl-D`            | Exit on empty input                                                                                                                                               |
-| `Esc`               | Close modal / palette / cancel inline edit                                                                                                                        |
-| `?`                 | Inline help overlay                                                                                                                                               |
-| `y` / `n` / `e`     | Approve / reject / reject-with-feedback                                                                                                                           |
-| `@`                 | File-picker autocomplete                                                                                                                                          |
-| `/`                 | Slash-command palette                                                                                                                                             |
+| Key                 | Action                                                                                                                           |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `Enter`             | Send message (suppressed during bracketed paste — see [10-architecture § Input component](./10-architecture.md#input-component)) |
+| `Ctrl-J`            | Newline (kills `/multi` ceremony)                                                                                                |
+| `Tab`               | Autocomplete (file, slash, agent, model)                                                                                         |
+| `↑` / `↓`           | History (input) / row navigation (lists, modals)                                                                                 |
+| `Ctrl-R`            | Reverse history search (input lines)                                                                                             |
+| `Ctrl-F`            | Transcript search ([10-architecture § Transcript search](./10-architecture.md#transcript-search))                                |
+| `Ctrl-P`            | Command palette                                                                                                                  |
+| `Ctrl-O`            | Expand truncated content (long diffs, collapsed summaries)                                                                       |
+| `Ctrl-A` / `Ctrl-B` | Cycle active child / back to parent (avoiding `Ctrl-Shift-A`, which collapses to `Ctrl-A` on many terminals)                     |
+| `0`                 | Jump back to root stream                                                                                                         |
+| `1`–`9`             | Jump to subagent row                                                                                                             |
+| `Ctrl-T`            | Tab view (Conversation / Subagents / Todos+Plan / Logs)                                                                          |
+| `Ctrl-L`            | Clear screen (scrollback preserved)                                                                                              |
+| `Ctrl-C`            | Interrupt active session; second tap exits                                                                                       |
+| `Ctrl-D`            | Exit on empty input                                                                                                              |
+| `Esc`               | Close modal / palette / cancel inline edit                                                                                       |
+| `?`                 | Inline help overlay                                                                                                              |
+| `y` / `n` / `e`     | Approve / reject / reject-with-feedback                                                                                          |
+| `@`                 | File-picker autocomplete                                                                                                         |
+| `/`                 | Slash-command palette                                                                                                            |
 
 ## 12. Rendering parity with the webview
 
@@ -49,11 +49,11 @@ Two TUI features the webview does **not** have today: a slash-command palette, a
 - **R6.** Windows TTY edge cases (Ctrl-J = LF on some terminals, non-VT100 sequences). _Mitigation:_ test on Windows Terminal + ConHost; rely on Ink's key normalization and the runtime capability discovery from `terminalCapabilities.ts`.
 - **R7.** Resource path resolution (`resolveResourcesPath` in `cliContext.ts:290–299`) changes once the package is published rather than linked. Tracked separately; not Ink-specific.
 - **R8.** No `WorkspaceProvider.findFiles` exists; v1 uses CLI-local `fast-glob` against `getWorkspacePath()`. Cross-host parity (a VS Code-aware `findFiles` port) is a separate platform change — not blocking.
-- **R9 (new).** **tmux / GNU screen OSC 52 clipboard silently drops.** `clipboardy`'s OSC 52 fallback writes a bare `ESC ] 52 ; ... ST` sequence; tmux requires the sequence to be wrapped in `DCS tmux; allow-passthrough; ... ST` with escaped inner ESCs, and screen requires its own DCS wrap. Without these wrappers, "copy last response" silently fails for users in nested terminals — a routine SSH workflow. _Mitigation:_ document the v1 limitation; add multiplexer-aware OSC wrapping as a follow-up. Pattern reference: Claude Code `src/ink/termio/osc.ts`.
-- **R10 (new).** **No selection across scrollback.** Stock Ink does not retain text that scrolls out of the viewport when the user drag-selects, so copying a proof or block that spans multiple screens snaps to the visible portion. Claude Code's `src/ink/selection.ts` keeps `scrolledOffAbove`/`scrolledOffBelow` arrays to reconstruct logical lines; we are not adopting that fork in v1. _Mitigation:_ keyboard "copy last response" via clipboardy works for whole-message copy; document the gap.
-- **R11 (deferred — not adopted in v1).** **No mouse text selection.** Out of scope per [00-overview § Non-goals](./00-overview.md#4-non-goals-explicitly-excluded).
-- **R12 (new).** **React Compiler build pre-pass.** The compiler is a Babel plugin; running it before `esbuild` adds a build step the existing pipeline doesn't have. _Risks:_ (a) toolchain bloat, (b) compiler emits incorrect memoization for some patterns (rare with React 19's compiler-runtime, but possible). _Mitigation:_ gate the compiler on `packages/cli/src/chat/tui/` only — not on host-agnostic core. Validate output by checking that `react/compiler-runtime` is the only added import. If the compiler regresses behavior, disable the pre-pass and accept manual memoization.
-- **R13 (new).** **No SIGWINCH debounce.** Stock Ink (and Claude Code's fork, per `src/ink/screen.ts:1375–1410`) re-runs full Yoga layout on every resize event — terminals that emit a burst of SIGWINCH while the user drags a window edge will produce a flicker storm and may briefly tear the `<Static>` region. _Mitigation:_ add a ≥50 ms coalescing debounce around the resize handler in `tui/state/subscribeRuntimeHost.ts`. Cheap to implement; not load-bearing unless smoke testing finds tear artifacts on a target terminal.
+- **R9.** tmux / GNU screen silently drop bare OSC 52 clipboard sequences (they require multiplexer-specific DCS wrapping). _Mitigation:_ document v1 limitation; add wrapper as follow-up.
+- **R10.** Selection across scrollback is not supported. Stock Ink drops text that scrolls out of the viewport during drag-select. _Mitigation:_ keyboard "copy last response" via clipboardy works for whole-message copy.
+- **R11.** No mouse text selection. Out of scope per [00-overview § Non-goals](./00-overview.md#4-non-goals-explicitly-excluded).
+- **R12.** React Compiler adds a Babel pre-pass to the build pipeline. Toolchain bloat + risk of incorrect memoization. _Mitigation:_ scope the pre-pass to `packages/cli/src/chat/tui/` only; disable and fall back to manual memoization if it regresses behavior.
+- **R13.** SIGWINCH bursts can flicker `<Static>` during window-edge drags. _Mitigation:_ coalesce resize events. Not load-bearing unless smoke testing finds tear artifacts.
 
 ## 17. Success criteria
 
@@ -62,34 +62,34 @@ Two TUI features the webview does **not** have today: a slash-command palette, a
 - A user pastes a 50-line LaTeX block and sees **one** submission (not 50), with the full block in the input buffer ready for review before sending.
 - `texra run --output-format ndjson` output byte-identical before/after.
 - `texra chat --legacy-renderer` byte-identical to today.
-- `texra chat | tee transcript.txt` produces a clean ANSI-free transcript (or plain-text transcript with `--print`).
-- Frame telemetry trace logs land in the standard logger and can be filtered to show flicker events with `triggerY` / `prevLine` / `nextLine` context.
-- A 3-subagent run that finishes while the user is in a different tmux window surfaces a terminal notification (OSC 9 / OSC 99 / BEL — whichever the host terminal acknowledged at startup), not silent completion.
-- `Ctrl-F` opens the transcript-search overlay, accepts a query, highlights matches inverse-on-current-color without rendering corruption on emoji or CJK content, and `Esc` dismisses without state loss.
+- `texra chat | tee transcript.txt` produces a clean ANSI-free transcript (or plain-text with `--print`).
+- Frame telemetry trace logs land in the standard logger.
+- A 3-subagent run that finishes while the user is in a different tmux window surfaces a terminal notification, not silent completion.
+- `Ctrl-F` opens the transcript-search overlay and highlights matches correctly on emoji / CJK content.
 - **New runtime deps:** `react`, `ink`, `@inkjs/ui`, `ink-text-input`, `citty`, `@clack/prompts`, `picocolors`, `string-width`, `wrap-ansi`, `p-queue`, `diff`, `cli-highlight`, `fast-glob`, `fzf-for-js`, `terminal-link`, `clipboardy`, `unicodeit`.
 - **New dev deps:** `ink-testing-library`, `node-pty` (PTY-driven integration tests), `babel-plugin-react-compiler` (build pre-pass for `tui/*.tsx`).
 - Existing `markdown-it` + `markdown-it-texmath` lifted from `packages/extension/src/progressView/frontend/formatters/` into `src/shared/markdown/` **with the LRU token cache preserved**. Existing `@shared/highlighting` (highlight.js) consumed as-is.
 
 ## 18. References
 
-**CLI surfaces (current):** `packages/cli/src/runtime/cliContext.ts:44–268` · `packages/cli/src/commands/root.ts:66–113, 323` (`splitRunArgs`) · `packages/cli/src/chat/terminalRenderer.ts:20–367, 513–524` · `packages/cli/src/chat/runChat.ts:58–66, 109–141, 255–304, 451–511` · `packages/cli/src/runtime/logSinks.ts:87–196` · `packages/cli/src/runtime/runtimeHost.ts:37–69` · `packages/cli/src/runtime/approvalAdapter.ts:89–94, 268–270`.
+**CLI surfaces (current):** `packages/cli/src/runtime/cliContext.ts` · `packages/cli/src/commands/root.ts` (`splitRunArgs`) · `packages/cli/src/chat/terminalRenderer.ts` · `packages/cli/src/chat/runChat.ts` · `packages/cli/src/runtime/logSinks.ts` · `packages/cli/src/runtime/runtimeHost.ts` · `packages/cli/src/runtime/approvalAdapter.ts`.
 
-**Webview reference topology:** `packages/extension/src/progressView/frontend/progressState.ts:66` (appState declaration) · `packages/extension/src/progressView/frontend/store.ts:66–79` · `packages/extension/src/progressView/frontend/formatters/markdownRenderer.ts:6–53` · `packages/extension/src/progressView/frontend/components/{BackgroundTasksPanel,TexraDiffView,FollowUpInput,ToolEditRequestPanel,BashRequestPanel,ProposalRequestPanel,PlanApprovalRequestPanel,ExternalInquiryPanel}.ts`.
+**Webview reference topology:** `packages/extension/src/progressView/frontend/progressState.ts` · `store.ts` · `formatters/markdownRenderer.ts` · `components/{BackgroundTasksPanel,TexraDiffView,FollowUpInput,ToolEditRequestPanel,BashRequestPanel,ProposalRequestPanel,PlanApprovalRequestPanel,ExternalInquiryPanel}.ts`.
 
-**Shared infrastructure:** `src/shared/schemas/identifiers.ts` (`StreamTabIdSchema`) · `src/shared/highlighting/{highlightCode.ts, hljs.ts}` (highlight.js wrapper) · `src/agent/runtime/{StreamStatusService.ts:33–72, ExecutionHandle.ts:104–106, executionRegistry.ts:32–205, 253–269}` · `src/eventBus/ProgressEventBus.ts:60–227` · `src/logger/{StreamLogStore.ts:95–114, AgentLogger.ts:130–587, structuredLogger.ts}` · `src/platform/interfaces/{workspace.ts, storage.ts}` · `src/platform/platform.ts` + `defaults/` · `docs/pocketflow/`.
+**Shared infrastructure:** `src/shared/schemas/identifiers.ts` · `src/shared/highlighting/{highlightCode,hljs}.ts` · `src/agent/runtime/{StreamStatusService,ExecutionHandle,executionRegistry}.ts` · `src/eventBus/ProgressEventBus.ts` · `src/logger/{StreamLogStore,AgentLogger,structuredLogger}.ts` · `src/platform/interfaces/{workspace,storage}.ts` · `src/platform/platform.ts` · `docs/pocketflow/`.
 
-**External patterns adopted from Claude Code TUI** (`/Users/siruilu/Local/AI-Projects/claude-code-main 2/`):
+**External patterns adopted from Claude Code TUI:**
 
-- `src/ink/terminal-querier.ts` — DA1-sentinel runtime capability discovery (10-architecture § Terminal capability discovery).
-- `src/components/BaseTextInput.tsx` + `src/hooks/usePasteHandler.tsx` — paste-aware text input wrapper (10-architecture § Input component).
-- `src/components/Markdown.tsx` — `TOKEN_CACHE_MAX=500` lexer cache (10-architecture § Markdown token LRU cache).
-- `src/ink/frame.ts` — `FrameEvent` per-phase timings and flicker context (10-architecture § Frame telemetry).
-- `src/main.tsx` + `src/ink/ink.tsx` — `stdout.isTTY`-gated chrome with `--print` fallback (20-implementation § Headless).
-- `src/dialogLaunchers.tsx` — `Promise<T>`-returning dialog launchers with `done` callback resolution (10-architecture § Approvals).
-- `src/ink/termio/osc.ts` — multiplexer-aware OSC wrapping (R9, deferred).
-- `src/ink/selection.ts` — scrollback-aware selection state (R10, deferred).
-- `src/ink/useTerminalNotification.ts` — OSC 9 / OSC 99 / BEL / OSC 9;4 progress dispatcher (10-architecture § Terminal notifications).
-- `src/components/HistorySearchDialog.tsx` + `src/ink/searchHighlight.ts` — substring + fuzzy filter; non-overlapping SGR 7 inverse overlay with wide-char-safe `codeUnitToCell` mapping (10-architecture § Transcript search).
-- `src/components/AgentProgressLine.tsx` — `├─` / `└─` tree-character convention for nested agent rows (10-architecture event map, `<SubagentList>` row).
-- `src/components/diff/DiffDetailView.tsx` — 400-line cap with `Ctrl-O` expand affordance (10-architecture § Approvals, `<EditApproval>`).
-- `src/ink/screen.ts:1375–1410` — width-diff layout fallback (R13, no debounce).
+- `src/ink/terminal-querier.ts` — DA1-sentinel capability discovery.
+- `src/components/BaseTextInput.tsx` + `src/hooks/usePasteHandler.tsx` — paste-aware input wrapper.
+- `src/components/Markdown.tsx` — markdown lexer LRU cache.
+- `src/ink/frame.ts` — per-frame timings + flicker context.
+- `src/main.tsx` + `src/ink/ink.tsx` — `stdout.isTTY`-gated chrome with `--print` fallback.
+- `src/dialogLaunchers.tsx` — `Promise<T>`-returning dialog launchers.
+- `src/ink/termio/osc.ts` — multiplexer-aware OSC wrapping (R9).
+- `src/ink/selection.ts` — scrollback-aware selection (R10).
+- `src/ink/useTerminalNotification.ts` — OSC 9 / OSC 99 / BEL / OSC 9;4 progress dispatcher.
+- `src/components/HistorySearchDialog.tsx` + `src/ink/searchHighlight.ts` — substring + fuzzy filter, wide-char-safe inverse overlay.
+- `src/components/AgentProgressLine.tsx` — tree-character convention for nested agent rows.
+- `src/components/diff/DiffDetailView.tsx` — diff truncation with expand affordance.
+- `src/ink/screen.ts` — width-diff layout path (R13).

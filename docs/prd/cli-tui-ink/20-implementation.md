@@ -21,7 +21,7 @@ Net: roughly 400 LOC removed from the TUI mode; the `--legacy-renderer` path ret
 
 ## 13. Headless & legacy preserved
 
-The original draft enforced a strict TTY gate — if any of stdin/stdout/stderr were non-TTY, chat refused to run, breaking `texra chat | tee transcript.txt`. This PRD relaxes that gate to match Claude Code's behavior: chrome is conditional on `stdout.isTTY`, not on the full `cliMode()` check.
+Chrome is gated on `stdout.isTTY` only (not the full `cliMode()` check), so `texra chat | tee` works.
 
 ### TTY/non-TTY decision matrix
 
@@ -57,15 +57,14 @@ Every phase is independently mergeable. Each adds a `--tui` flag, default-off, u
 
 ### Phase 1 — Skeleton + input + telemetry (2–3 d)
 
-- Render `<App>` with `<Header>` + `<InputBar>` + `<ConversationPane>` (MODEL_RESPONSE only) behind `--tui`.
-- Wire `cliState` signal + `useSignal` bridge. Subscribe to the wrapped `runtimeHost.emit` + `StreamLogStore.onChange` + `StreamStatusService.onDidChange`.
-- **Implement `BaseTextInput`** with viewport tracking, declared-cursor, and `usePasteHandler`-driven paste-aware Enter (per [10-architecture § Input component](./10-architecture.md#input-component)).
-- **Implement `terminalCapabilities.ts`** — DA1-sentinel query batch at startup, populates the capabilities signal (Kitty keyboard, grapheme support, bracketed paste, OSC color). Other components consume the signal rather than calling environment-detection ad-hoc.
-- **Wire frame telemetry** — `render/frameTelemetry.ts` subscribes to ink's onFrame hook and emits structured trace logs.
-- **Wire terminal notifications** — `notifications/terminalNotifier.ts` per [10-architecture § Terminal notifications](./10-architecture.md#terminal-notifications). Gate on `terminalCapabilities`; idle-detection threshold of 30 s; subscribe to focus-in/out (XT mode 1004) for the unfocused-pane signal. Phase 1 ships `agentFinished` and `approvalNeeded` kinds; `progress` (OSC 9;4) is wired in Phase 4 alongside long-running tools.
-- **Add a SIGWINCH debounce** (≥50 ms coalesce) in `subscribeRuntimeHost.ts` per R13 — cheap and forestalls flicker storms during window-edge drags.
-- **Implement the non-TTY stdout fallback** described in [§ Headless](#13-headless--legacy-preserved). Add `--print` flag handling.
-- Introduce `p-queue`-backed follow-ups. Approvals still on legacy adapter.
+Implements components per 10-architecture §§ Input component, Terminal capability discovery, Terminal notifications, Frame telemetry.
+
+- Skeleton `<App>` (Header + InputBar + ConversationPane, MODEL_RESPONSE only) behind `--tui`; wire `cliState` signal subscriptions.
+- `BaseTextInput` with paste handling, viewport, declared-cursor.
+- `terminalCapabilities` discovery; notifier ships `agentFinished` + `approvalNeeded` (progress deferred to Phase 4).
+- Frame telemetry on ink's `onFrame`; coalesce SIGWINCH events (R13).
+- Non-TTY stdout fallback + `--print` flag.
+- `p-queue`-backed follow-ups. Approvals still on legacy adapter.
 
 ### Phase 2 — Tool & approval rendering (3 d)
 
@@ -94,8 +93,8 @@ Every phase is independently mergeable. Each adds a `--tui` flag, default-off, u
 
 - `Ctrl-P` palette (`fzf-for-js`).
 - `Ctrl-R` reverse history (input lines).
-- `Ctrl-F` transcript search per [10-architecture § Transcript search](./10-architecture.md#transcript-search) — substring + fuzzy fallback over the rendered conversation buffer; SGR 7 inverse overlay with `codeUnitToCell` wide-char safety.
-- `Ctrl-O` expand affordance for truncated content (long diffs, collapsed summaries).
+- `Ctrl-F` transcript search per [10-architecture § Transcript search](./10-architecture.md#transcript-search).
+- `Ctrl-O` expand affordance for truncated content.
 - `@` file picker.
 - `/` command palette, autocomplete on `/agent` & `/model`.
 - Input history file per [10-architecture § Tech stack](./10-architecture.md#5-tech-stack-locked).
@@ -112,11 +111,11 @@ Every phase is independently mergeable. Each adds a `--tui` flag, default-off, u
 ## 15. Testing
 
 - **Unit.** `ink-testing-library` renders each pane / modal against synthetic runtime-host emit + `StreamLogStore` mocks. Snapshot the frame string.
-- **Integration.** Extend `packages/cli/scripts/validate-run.mjs` with an interactive variant driving stdin via a PTY harness (`node-pty`, listed as a new dev dependency — note its native build step; if that proves problematic on CI we fall back to writing to `process.stdin` directly with `process.stdout` captured) and asserting frame snapshots.
+- **Integration.** Extend `packages/cli/scripts/validate-run.mjs` with an interactive variant driving stdin via `node-pty` and asserting frame snapshots.
 - **Approval flows.** Per-modal test that the right resolver is called with the right payload. Highest-risk wires. Also test queue serialization: enqueue two payloads back-to-back and assert the second modal does not appear until the first resolves.
 - **Paste handling.** PTY test that injects `CSI 200 ~` + multi-line text + `CSI 201 ~` and asserts a single submit fires (not N).
 - **Non-TTY fallback.** Run `texra chat --tui --print` and `texra chat --tui < /dev/null | tee out.txt` and assert plain text streams to stdout with no ANSI cursor codes.
-- **Terminal notifications.** Mock a stdin that acknowledges OSC 9 only (no OSC 99); assert notifier emits OSC 9 + BEL for `agentFinished` and does not emit OSC 99. Reverse case: Kitty-only terminal emits OSC 99 + BEL.
-- **Transcript search highlighting.** Test that searching `"é"` in `"café"` highlights the single composed-character cell, not the 2-codepoint range; that searching `"あ"` in CJK content inverts a 2-cell wide-char correctly; that an overlapping substring (`"aa"` in `"aaaa"`) inverts non-overlapping cells (2 cells lit, not 4).
+- **Terminal notifications.** Notifier emits only the sequences the terminal acknowledged at startup.
+- **Transcript search highlighting.** Correct on composed characters, wide chars (CJK), and overlapping substrings.
 - **Headless regression.** Existing `texra run` golden outputs unchanged. `--legacy-renderer` keeps the existing plain-mode tests green.
 - **Capability discovery.** Mock a stdin with a DA1 reply but no Kitty-keyboard reply; assert the capabilities signal records Kitty as unsupported without timing out.
