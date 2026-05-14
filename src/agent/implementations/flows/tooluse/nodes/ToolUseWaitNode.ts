@@ -1,8 +1,9 @@
 import { Node } from '@agent/node';
-import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { maybeBuildOdysseyContinuation } from '@agent/odyssey';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS } from '@shared/schemas';
+import { OdysseyStore } from '@tools/odyssey/odysseyStore';
 
 import { findLastAssistantText, extractTouchedFiles } from './types';
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
@@ -65,13 +66,27 @@ export class ToolUseWaitNode<C> extends Node<
     // Odyssey continuation runs BEFORE the blocking wait. session.waitForFollowUp
     // blocks indefinitely on an empty queue, so a post-wait check would be
     // unreachable in the happy path (idle user, active odyssey). See PRD §5.3.
-    const odysseyFollowUp = await maybeBuildOdysseyContinuation({
-      streamId,
-      isSubagent: !!isSubagent,
-      hasQueuedFollowUp: session.hasQueuedFollowUp(),
-    });
-    if (odysseyFollowUp) {
-      return { kind: 'continue', followUp: odysseyFollowUp };
+    //
+    // Three invariants this branch preserves:
+    //   - Skipped after a failed/cancelled cycle (`prepRes.afterError`) so the
+    //     existing user-recovery path still fires; otherwise post() would clear
+    //     shared.lastError and the loop would burn turns on the broken state.
+    //   - Helper rebuilds the prompt asynchronously; re-check
+    //     `session.hasQueuedFollowUp()` immediately before returning so a user
+    //     message that arrived during the async work still wins.
+    //   - The `continuation_injected` audit event is recorded only on the
+    //     committed branch (after the post-await re-check passes), keeping
+    //     the history honest if the user-input race fires.
+    if (!prepRes.afterError) {
+      const odysseyFollowUp = await maybeBuildOdysseyContinuation({
+        streamId,
+        isSubagent: !!isSubagent,
+        hasQueuedFollowUp: session.hasQueuedFollowUp(),
+      });
+      if (odysseyFollowUp && !session.hasQueuedFollowUp()) {
+        await OdysseyStore.recordEvent(streamId, 'continuation_injected');
+        return { kind: 'continue', followUp: odysseyFollowUp };
+      }
     }
 
     if (!session.hasQueuedFollowUp()) {

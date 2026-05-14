@@ -1,4 +1,5 @@
 import { platform } from '@platform/platform';
+import { formatOdysseyTime } from '@agent/odyssey/formatOdysseyTime';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 
 import { defineTool } from '../core/define';
@@ -14,12 +15,19 @@ import {
 } from './odysseyMeta';
 import { OdysseyStore } from './odysseyStore';
 
-function formatTimeMs(ms: number): string {
-  const totalSec = Math.floor(ms / 1000);
-  const min = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  if (min === 0) return `${sec}s`;
-  return `${min}m ${sec}s`;
+function requireNonEmpty(
+  value: string | null | undefined,
+  field: string,
+  command: string,
+): string {
+  const present = requireField(value, field, command);
+  const trimmed = present.trim();
+  if (!trimmed) {
+    throw new ToolError(
+      `Field "${field}" must not be empty or whitespace-only for command="${command}".`,
+    );
+  }
+  return trimmed;
 }
 
 function formatTokens(tokens: number): string {
@@ -33,7 +41,7 @@ function formatView(odyssey: Odyssey): string {
     `Status: ${odyssey.status}`,
     `Objective: ${odyssey.objective}`,
     `Tokens used: ${formatTokens(odyssey.tokensUsed)}`,
-    `Time elapsed: ${formatTimeMs(odyssey.timeUsedMs)}`,
+    `Time elapsed: ${formatOdysseyTime(odyssey.timeUsedMs)}`,
   ];
   if (odyssey.completedReason) {
     lines.push(`Completion reason: ${odyssey.completedReason}`);
@@ -93,17 +101,17 @@ Commands:
       case 'start':
         return this.start(
           streamId,
-          requireField(input.objective, 'objective', 'start'),
+          requireNonEmpty(input.objective, 'objective', 'start'),
         );
       case 'pause':
         return this.pause(
           streamId,
-          requireField(input.reason, 'reason', 'pause'),
+          requireNonEmpty(input.reason, 'reason', 'pause'),
         );
       case 'complete':
         return this.complete(
           streamId,
-          requireField(input.reason, 'reason', 'complete'),
+          requireNonEmpty(input.reason, 'reason', 'complete'),
         );
       default:
         throw new ToolError(
@@ -132,9 +140,6 @@ Commands:
     streamId: string,
     objective: string,
   ): Promise<ToolResult> {
-    if (!objective.trim()) {
-      throw new ToolError('objective must not be empty for command="start".');
-    }
     const odyssey = await OdysseyStore.start(streamId, objective);
     return {
       summary: `Odyssey started: ${odyssey.objective.slice(0, 80)}`,
@@ -177,6 +182,12 @@ Commands:
         summary: 'Odyssey already complete.',
         output: `Odyssey is already complete. Reason on record: ${odyssey.completedReason ?? '(none)'}`,
       };
+    }
+    if (odyssey.status === 'abandoned') {
+      throw new ToolError(
+        'Odyssey was abandoned by the user; complete is rejected. ' +
+          'The user must start a new odyssey explicitly.',
+      );
     }
     const updated = await OdysseyStore.setStatus(streamId, 'complete', reason);
     return {
