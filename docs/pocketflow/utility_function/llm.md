@@ -29,7 +29,6 @@ Here, we provide some minimal example implementations:
    ```
 
    > Store the API key in an environment variable like OPENAI_API_KEY for security.
-   > {: .best-practice }
 
 2. Claude (Anthropic)
 

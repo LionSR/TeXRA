@@ -88,8 +88,8 @@ part of the current agent settings schema. Update existing YAML files to declare
 
 Workflow prompts can branch on `OUTPUT_FILES_ORDER` to request and format
 multiple outputs within the `<latex_documents>` tag. `OUTPUT_FILES_ORDER` is an
-array of filenames, so templates can use `{{ OUTPUT_FILES_ORDER[0] }}` for a
-specific filename and `{{ OUTPUT_FILES_ORDER | join(", ") }}` when the prompt
+array of filenames, so templates can use `&#123;&#123; OUTPUT_FILES_ORDER[0] &#125;&#125;` for a
+specific filename and `&#123;&#123; OUTPUT_FILES_ORDER | join(", ") &#125;&#125;` when the prompt
 needs a readable list.
 
 ```yaml
