@@ -1,10 +1,9 @@
 # PRD: Odyssey — Autonomous Continuation Mode
 
-**Status:** Draft (v0.1)
+**Status:** Draft (v0.2)
 **Owner:** TBD
 **Date:** 2026-05-14
 **Branch:** `feature/odyssey`
-**Worktree:** `/Users/siruilu/Local/AI-Projects/coauthor-goal`
 
 ## 1. Summary
 
@@ -12,7 +11,7 @@ Add **Odyssey** to TeXRA — a per-conversation persistent objective that lets a
 
 The user sets an Odyssey from the stream header. While active, after every tool-use turn ends idle, TeXRA injects a hidden continuation message that re-prompts the agent to verify completion against current external state (filesystem, command output, tests) and either keep working or call `odyssey { command: 'complete' }`. The model self-terminates when the objective is met.
 
-No new runtime, no polling loop, no background worker. The mechanism is a small injection at `ToolUseWaitNode.post()`.
+No new runtime, no polling loop, no background worker. The mechanism is a small injection around `session.waitForFollowUp` in `ToolUseWaitNode.exec()`.
 
 ## 2. Goals
 
@@ -60,7 +59,7 @@ export const OdysseyStatusSchema = z.enum([
 ]);
 
 export const OdysseyEventSchema = z.object({
-  at: z.string(), // ISO timestamp
+  at: z.iso.datetime(),
   kind: z.enum([
     'started',
     'paused',
@@ -70,24 +69,24 @@ export const OdysseyEventSchema = z.object({
     'abandoned',
     'continuation_injected',
   ]),
-  detail: z.string().optional(),
+  detail: z.string().nullish(),
 });
 
 export const OdysseySchema = z.object({
   odysseyId: z.string(),
-  conversationId: z.string(),
+  streamId: z.string(), // stream-scoped — matches ToolUseWaitNode.services.streamId
   objective: z.string().min(1),
   status: OdysseyStatusSchema,
-  tokensUsed: z.number().int().nonnegative().default(0),
-  timeUsedMs: z.number().int().nonnegative().default(0),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  completedReason: z.string().optional(), // populated by tool's 'complete'
+  tokensUsed: z.int().nonnegative().default(0),
+  timeUsedMs: z.int().nonnegative().default(0),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+  completedReason: z.string().nullish(), // populated by tool's 'complete'
   history: z.array(OdysseyEventSchema).default([]),
 });
 ```
 
-One Odyssey per conversation. Persisted via `workspaceSM` under `odysseys:byConversation:<conversationId>` plus an index `odysseys:index` for the OdysseyTab list view.
+One Odyssey per stream. Persisted via `platform().workspaceState` (host-neutral `StateStore`, see `src/platform/interfaces/state.ts`) under `odysseys:byStream:<streamId>` plus an index `odysseys:index` for the OdysseyTab list view. The same store is backed by VS Code's Memento in the extension host, by an in-memory store under test, and by a file-backed store in CLI/desktop — no `vscode` import in this code path.
 
 ### 5.2 Tool surface
 
@@ -114,21 +113,39 @@ Commands deliberately omitted: `update_objective` (model must not drift the targ
 
 ### 5.3 The continuation hook
 
-`src/agent/implementations/flows/tooluse/nodes/ToolUseWaitNode.ts` — adds ~20 lines to `.post()`:
+`src/agent/implementations/flows/tooluse/nodes/ToolUseWaitNode.ts` — the wait-and-decide logic lives in `.exec()`. The hook sits around the existing `session.waitForFollowUp` call (currently at line 69) and replaces the `{ kind: 'stop' }` exit with a synthesized followUp when an active Odyssey is present. `.post()` is purely a mapper from `WaitExecResult` to `FlowTransition` and is untouched.
 
 ```
-if (no user followUp queued && not interrupted && feature flag on) {
-  goal ← OdysseyStore.getForCurrentConversation()
-  if (goal?.status === 'active') {
-    item ← buildContinuationFollowUp(goal)
-    record event 'continuation_injected'
-    return { transition: CONTINUE, followUp: [item] }
+async exec(prep) {
+  const { checkInterruption, session, streamId, isSubagent, ... } = this.services;
+
+  if (checkInterruption()) return { kind: 'stop' };
+  if (prep.afterError && isSubagent) return { kind: 'stop' };
+  if (!prep.afterError) await onBeforeWaiting?.(...);
+
+  if (!session.hasQueuedFollowUp()) {
+    StreamStatusService.set(streamId, STREAM_STATUS.WAITING, { runtimeHost });
   }
+
+  const items = await session.waitForFollowUp(checkInterruption);
+  if (!items || checkInterruption()) {
+    // NEW: try odyssey continuation before giving up
+    if (!isSubagent && platform().config.get('texra.experimental.odyssey.enabled', false)) {
+      const odyssey = await OdysseyStore.getForStream(streamId);
+      if (odyssey?.status === 'active') {
+        const synth = await buildContinuationFollowUp(odyssey);
+        await OdysseyStore.recordEvent(odyssey.odysseyId, 'continuation_injected');
+        return { kind: 'continue', followUp: synth };
+      }
+    }
+    return { kind: 'stop' };
+  }
+
+  return { kind: 'continue', followUp: items.join('\n\n') };
 }
-return originalDecision
 ```
 
-`buildContinuationFollowUp(goal)` renders `resources/odyssey/odyssey.yaml > continuation.template` with `{{objective}}` and `{{timeUsed}}` substitutions, wrapped in `<odyssey_context>…</odyssey_context>` XML tags.
+`buildContinuationFollowUp(odyssey)` renders `resources/odyssey/odyssey.yaml > continuation.template` with `{{objective}}` and `{{timeUsed}}` substitutions, wrapped in `<odyssey_context>…</odyssey_context>` XML tags. Continuation is **suppressed when `services.isSubagent` is true** — the parent orchestrator owns continuation for any subagent subtree.
 
 ### 5.4 Prompts (YAML)
 
@@ -163,9 +180,25 @@ objective_updated:
     </odyssey_context>
 ```
 
+The `objective_updated` template is injected by the host's edit-objective handler: on receipt of the `EDIT_OBJECTIVE` IPC message (see §5.5), the handler updates the Odyssey record and calls `session.appendFollowUp(rendered)` on the active stream's tool-use flow. The model sees the new objective as the next user-facing turn input. No template is ever injected when the stream is idle without an active Odyssey.
+
 ### 5.5 IPC namespace
 
-`src/shared/schemas/odysseyViewMessages.ts` — mirrors `memoryViewMessages.ts`. Discriminated union for `startOdyssey | pauseOdyssey | resumeOdyssey | abandonOdyssey | editObjective | getOdysseyStatus` (UI → host) and `odysseyUpdated` (host → UI). Re-exported from `settingsViewMessages.ts`.
+`src/shared/schemas/odysseyViewMessages.ts` — follows the exact convention of `memoryViewMessages.ts:47–146`: an `ODYSSEY_VIEW_COMMANDS` constants object keyed by UPPER_SNAKE_CASE, each message schema declaring `command: z.literal(ODYSSEY_VIEW_COMMANDS.<KEY>)`, all assembled into a `z.discriminatedUnion('command', [...])`. Re-exported from `settingsViewMessages.ts`.
+
+```typescript
+export const ODYSSEY_VIEW_COMMANDS = {
+  START_ODYSSEY: 'startOdyssey',
+  PAUSE_ODYSSEY: 'pauseOdyssey',
+  RESUME_ODYSSEY: 'resumeOdyssey',
+  ABANDON_ODYSSEY: 'abandonOdyssey',
+  EDIT_OBJECTIVE: 'editObjective',
+  GET_ODYSSEY_STATUS: 'getOdysseyStatus',
+  ODYSSEY_UPDATED: 'odysseyUpdated', // host → UI
+} as const;
+```
+
+UI → host: `START_ODYSSEY`, `PAUSE_ODYSSEY`, `RESUME_ODYSSEY`, `ABANDON_ODYSSEY`, `EDIT_OBJECTIVE`, `GET_ODYSSEY_STATUS`. Host → UI: `ODYSSEY_UPDATED`. The CLI host has no webview but reuses the same schema for any future `texra odyssey` subcommand (a CLI command translates to the same UI-side message and ends in the same handler).
 
 ### 5.6 UI surfaces
 
@@ -180,13 +213,46 @@ objective_updated:
 
 ### 5.7 Feature flag
 
-`texra.experimental.odyssey.enabled` (default `false`), declared in `package.json` contributes. Checked at three points:
+`texra.experimental.odyssey.enabled` (default `false`).
 
-1. Tool registry — the `odyssey` tool is only registered when the flag is on.
-2. Wait-node hook — continuation injection is skipped when the flag is off (even if a stale Odyssey record exists from prior runs).
-3. UI surfaces — header button + Settings tab are hidden when off.
+In the extension host, declared via `contributes.configuration` in `packages/extension/package.json`. In the desktop and CLI hosts, declared in each host's settings/`config.toml` schema. All three are read uniformly through `platform().config.get('texra.experimental.odyssey.enabled', false)` — no direct `vscode.workspace.getConfiguration` or `@utils/config` import in agnostic code paths.
+
+The `odyssey` tool **is always registered** in `createDefaultTools()` (`src/tools/registry.ts:82–137`) so that `RegisteredToolName = keyof ReturnType<typeof createDefaultTools>` stays compile-time stable. It is consumed by `src/tools/externalToolDefs.ts:18` and `src/tools/toolAvailability.ts:17`; making registration runtime-conditional would break both.
+
+The flag is checked at three runtime points:
+
+1. **Tool execute** — `OdysseyTool.execute()` short-circuits with a `featureDisabled` error if the flag is off.
+2. **Wait-node hook** — continuation injection is skipped (see §5.3 pseudocode) when the flag is off, even if a stale Odyssey record exists from a prior run.
+3. **UI surfaces** — the stream-header toggle button and Settings → Odyssey tab are hidden when off.
+
+Hosts that don't surface the experimental flag at all simply have it default to `false`; the tool stays inert and no UI appears.
+
+### 5.8 Cross-host portability
+
+Odyssey must work in three hosts: VS Code extension, Electron desktop, and `@texra/cli` (the CLI). The split is:
+
+| Concern                       | Host-neutral (kernel, all three hosts)                                                                                                                                                                                                                        | Host-specific (per host)                                                                                                                                                                                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------ | ------- | ----------------------------------------------------------------------------------------------- |
+| Schema (`OdysseySchema`)      | `src/tools/odyssey/odysseyMeta.ts`                                                                                                                                                                                                                            | —                                                                                                                                                                                                                                                                     |
+| Store (`OdysseyStore`)        | `src/tools/odyssey/odysseyStore.ts` — uses `platform().workspaceState`                                                                                                                                                                                        | Backing implementation lives in each host's platform-defaults; the kernel never imports it.                                                                                                                                                                           |
+| Tool (`OdysseyTool`)          | `src/tools/odyssey/OdysseyTool.ts`                                                                                                                                                                                                                            | —                                                                                                                                                                                                                                                                     |
+| Continuation prompt YAML      | `packages/extension/resources/odyssey/odyssey.yaml` — packaged with each host's resource bundle. The YAML loader resolves the path through the host's already-configured agent-resource pipeline; no `vscode.Uri` calls and no path joining in agnostic code. | —                                                                                                                                                                                                                                                                     |
+| Wait-node hook                | `src/agent/implementations/flows/tooluse/nodes/ToolUseWaitNode.ts` — single edit, runs in the same shape on every host (`exec()` is host-neutral).                                                                                                            | —                                                                                                                                                                                                                                                                     |
+| Feature flag read             | `platform().config.get('texra.experimental.odyssey.enabled', false)`                                                                                                                                                                                          | Each host declares the key in its own settings schema (`contributes.configuration` for the extension; settings.json + UI tab for the desktop; `[features]` in `~/.texra/config.toml` for the CLI). All three end up read through the same `ConfigProvider` interface. |
+| IPC schema                    | `src/shared/schemas/odysseyViewMessages.ts`                                                                                                                                                                                                                   | Each host's message handler routes the same messages: `SettingsViewMessageHandler` in the extension, the desktop's IPC dispatcher, and the CLI's `texra odyssey` subcommand (Phase 2 — see §9).                                                                       |
+| Stream-header button (PR 2)   | —                                                                                                                                                                                                                                                             | Extension + desktop only (`packages/extension/src/progressView/frontend/components/StreamHeader.ts`; desktop shares the webview).                                                                                                                                     |
+| Settings → Odyssey tab (PR 2) | —                                                                                                                                                                                                                                                             | Extension + desktop only.                                                                                                                                                                                                                                             |
+| Progress board entry (PR 2)   | —                                                                                                                                                                                                                                                             | Extension + desktop only.                                                                                                                                                                                                                                             |
+| CLI control surface           | —                                                                                                                                                                                                                                                             | `texra odyssey start                                                                                                                                                                                                                                                  | pause | resume | abandon | status`(Phase 2). Stdout for`status`, exit codes for the others. Same IPC schema, same handler. |
+
+Two PR-1 invariants follow from this split:
+
+1. Every file under `src/agent/`, `src/tools/`, `src/shared/`, and `src/platform/interfaces/` must remain free of `vscode` imports (see CLAUDE.md → "Separation of Concerns: VS Code Coupling"). Storage, config, and FS access go through `platform()`.
+2. The YAML prompt bundle resolution must reuse the existing agent-resource lookup — it must not bake `packages/extension/resources/` as an absolute path in agnostic code. The host configures resource roots once at startup.
 
 ## 6. File layout
+
+Host-neutral (kernel — used by extension, desktop, and CLI):
 
 ```
 src/shared/schemas/
@@ -196,7 +262,7 @@ src/shared/schemas/
 src/tools/odyssey/
   OdysseyTool.ts                      NEW
   odysseyMeta.ts                      NEW  (Zod schemas, constants)
-  odysseyStore.ts                     NEW  (workspaceSM wrapper)
+  odysseyStore.ts                     NEW  (platform().workspaceState wrapper)
   index.ts                            NEW
 
 src/agent/odyssey/
@@ -204,13 +270,18 @@ src/agent/odyssey/
   applyTurnAccounting.ts              NEW  (tokens/time bookkeeping)
 
 src/agent/implementations/flows/tooluse/nodes/
-  ToolUseWaitNode.ts                  MODIFY (~20 lines)
+  ToolUseWaitNode.ts                  MODIFY (~25 lines in exec())
 
-src/tools/registry.ts                 MODIFY (conditional registration)
+src/tools/registry.ts                 MODIFY (register OdysseyTool unconditionally;
+                                              gating happens inside OdysseyTool.execute())
 
 packages/extension/resources/odyssey/
-  odyssey.yaml                        NEW
+  odyssey.yaml                        NEW  (packaged with each host's resource bundle)
+```
 
+Extension-host UI (PR 2 — shared with the desktop host via the same webviews):
+
+```
 packages/extension/src/settingsView/
   frontend/tabs/OdysseyTab.ts                          NEW   (PR 2)
   frontend/components/odyssey/OdysseyList.ts           NEW   (PR 2)
@@ -222,30 +293,49 @@ packages/extension/src/progressView/frontend/components/
   StreamHeader.ts                     MODIFY (PR 2)
   constants.ts                        MODIFY (PR 2 — ELEMENT_IDS.ODYSSEY_TOGGLE_BTN)
 
-package.json                          MODIFY (contributes.configuration entry)
+packages/extension/package.json       MODIFY (contributes.configuration entry)
+```
+
+CLI host (Phase 2, separate PR — out of scope for PR 1 and PR 2):
+
+```
+packages/cli/src/commands/odyssey/    NEW   (Phase 2)
+  start.ts                            — texra odyssey start "<objective>"
+  pause.ts / resume.ts / abandon.ts
+  status.ts                           — prints current odyssey, exit code reflects status
+
+packages/cli/src/config/configSchema  MODIFY (Phase 2 — features.odyssey field)
+```
+
+Desktop host:
+
+```
+packages/desktop/                     no new files; reuses the extension webviews and
+                                      registers the same IPC handlers through its
+                                      existing settings-IPC pipeline.
 ```
 
 ## 7. Phased rollout
 
-**PR 1 — Core mechanism (no rich UI).** Schema, store, OdysseyTool, wait-node continuation hook, IPC schema, YAML prompt bundle, feature flag, tool-registry gating. Validation: a temporary debug log line + manual `odyssey { view }` call from the model in dev exercises the loop. No header button, no Settings tab.
+**PR 1 — Core mechanism (no rich UI).** Schema, store, OdysseyTool, wait-node continuation hook in `exec()`, IPC schema, YAML prompt bundle, feature flag declarations (extension + CLI + desktop config schemas), and unconditional tool registration with execute-time gating. Validation: a temporary debug log line + manual `odyssey { view }` call from the model in dev exercises the loop. No header button, no Settings tab. Host-neutral by construction — every file lives outside the VS Code-allowed zones.
 
 **PR 2 — UI surfaces.** StreamHeader expansion (Row 1 toggle button + Row 2 context band), Settings Odyssey tab, progress board entry, abandon-on-conversation-delete hook. Pure UI on top of working core.
 
 ## 8. Risks and mitigations
 
-| Risk                                                             | Mitigation                                                                                                                                                                         |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Model drifts away from the stated objective over many turns      | Continuation prompt insists on verifying against _current external state_ (Codex's own guardrail). Model has no tool to edit the objective.                                        |
-| Token accounting becomes stale and the badge shows wrong numbers | TeXRA already emits usage per response; apply to odyssey record at the same time as the existing usage event. Off by ≤1 turn in worst case — acceptable for an informational chip. |
-| Multi-agent orchestration interferes with continuation           | Hard guard in the wait-node hook: if the current node is inside an orchestrator-driven subagent, skip injection; the parent owns continuation.                                     |
-| User clears a conversation but the Odyssey record lingers        | Subscribe to the existing conversation-delete event in PR 2; mark odyssey `abandoned` and drop from index.                                                                         |
-| Webview reconnect shows stale odyssey state                      | State lives in `workspaceSM`; the OdysseyTab and StreamHeader band fetch on mount and on `odysseyUpdated` IPC events.                                                              |
+| Risk                                                             | Mitigation                                                                                                                                                                                                             |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Model drifts away from the stated objective over many turns      | Continuation prompt insists on verifying against _current external state_ (Codex's own guardrail). Model has no tool to edit the objective.                                                                            |
+| Token accounting becomes stale and the badge shows wrong numbers | TeXRA already emits usage per response; apply to odyssey record at the same time as the existing usage event. Off by ≤1 turn in worst case — acceptable for an informational chip.                                     |
+| Multi-agent orchestration interferes with continuation           | Hard guard in the wait-node hook: skip continuation injection when `this.services.isSubagent` is true (already checked at `ToolUseWaitNode.ts:56` for a different concern). The parent orchestrator owns continuation. |
+| User clears a conversation but the Odyssey record lingers        | Subscribe to the existing conversation-delete event in PR 2; mark odyssey `abandoned` and drop from index.                                                                                                             |
+| Webview reconnect shows stale odyssey state                      | State lives in `platform().workspaceState`; the OdysseyTab and StreamHeader band fetch on mount and on `ODYSSEY_UPDATED` IPC events.                                                                                   |
 
 ## 9. Open questions
 
 - Should `start` from the model auto-activate, or require user confirmation? Codex auto-activates. PR 1 ships auto-activate; revisit if it surprises users.
 - Maximum history length for the `events` array? Cap at 200 events per Odyssey, oldest dropped on overflow.
-- Cross-host story for CLI (`@texra/cli`) — likely a `texra odyssey` subcommand mirroring the IPC messages. Out of scope for this PRD.
+- CLI control surface (Phase 2) — see §5.8 for the high-level shape. The `texra odyssey` subcommands are a separate PR after PR 2; until then, CLI users get the tool-only flow (model can `start`, `pause`, `complete` from inside any tool-use agent run).
 
 ## 10. References
 
