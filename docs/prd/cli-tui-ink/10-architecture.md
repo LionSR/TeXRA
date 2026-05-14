@@ -2,7 +2,7 @@
 
 ## 5. Tech stack (locked)
 
-Every dependency is either already in the workspace, used by the dominant 2026 AI CLIs, or replaces an existing hand-rolled utility. Three items carry open spikes — see [30-reference.md § Risks](./30-reference.md#risks) R1 (markdown-it DOM coupling), R7 (resource path post-publish), and R12 (React Compiler build).
+Every dependency is either already in the workspace, used by the dominant 2026 AI CLIs, or replaces an existing hand-rolled utility. Three items carry open spikes — see [30-reference.md § Risks](./30-reference.md#16-risks) R1 (markdown-it DOM coupling), R7 (resource path post-publish), and R12 (React Compiler build).
 
 ### Runtime & framework
 
@@ -29,15 +29,15 @@ Every dependency is either already in the workspace, used by the dominant 2026 A
 
 ### Rendering (shared with webview where possible)
 
-| Concern                      | Source                                                                                                                                                                                                                     |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Markdown                     | `markdown-it` + `markdown-it-texmath` (reuse webview's `markdownRenderer.ts`, with an ANSI rule plugin added for the CLI host)                                                                                             |
-| **Markdown token LRU cache** | Preserve the webview's existing lexer LRU cache when lifting `markdownRenderer.ts` into `src/shared/markdown/`. Streamed responses re-render per chunk, so re-lexing dominates render cost without the cache.              |
-| Syntax highlighting          | `cli-highlight` (highlight.js wrapper for ANSI). The workspace's shared highlighter (`src/shared/highlighting/{highlightCode,hljs}.ts`) is already highlight.js-based, so this matches the existing grammar/theme surface. |
-| Math `$...$`                 | `unicodeit` fallback for inline; block math passes through raw in v1                                                                                                                                                       |
-| Diffs                        | `diff` for hunks + `cli-highlight` for line coloring                                                                                                                                                                       |
-| Hyperlinks                   | `terminal-link` (OSC 8) for clickable paths                                                                                                                                                                                |
-| ANSI-safe truncation / wrap  | `string-width` + `wrap-ansi`                                                                                                                                                                                               |
+| Concern                     | Source                                                                                                                                                                                                                                                                                                                                          |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Markdown                    | `markdown-it` + `markdown-it-texmath` (reuse webview's `markdownRenderer.ts`, with an ANSI rule plugin added for the CLI host)                                                                                                                                                                                                                  |
+| **Markdown render cache**   | The webview's existing cache is keyed `content hash → rendered HTML` (cap 2000 entries + per-entry and total-char budgets) and is therefore host-specific. The CLI host needs a parallel cache keyed `content → ANSI`. A future refactor could pull the cache down to the token level so both hosts share it, but that's a rewrite, not a lift. |
+| Syntax highlighting         | `cli-highlight` (highlight.js wrapper for ANSI). The workspace's shared highlighter (`src/shared/highlighting/{highlightCode,hljs}.ts`) is already highlight.js-based, so this matches the existing grammar/theme surface.                                                                                                                      |
+| Math `$...$`                | `unicodeit` fallback for inline; block math passes through raw in v1                                                                                                                                                                                                                                                                            |
+| Diffs                       | `diff` for hunks + `cli-highlight` for line coloring                                                                                                                                                                                                                                                                                            |
+| Hyperlinks                  | `terminal-link` (OSC 8) for clickable paths                                                                                                                                                                                                                                                                                                     |
+| ANSI-safe truncation / wrap | `string-width` + `wrap-ansi`                                                                                                                                                                                                                                                                                                                    |
 
 ### Terminal capability discovery
 
@@ -154,7 +154,7 @@ The state shape (`streamById: Map<StreamTabId, StreamTabInfo>` + `activeStreamId
 
 - **Readiness signal.** Subscribe to `setActiveStream` and `setParentStream` as primary readiness events; fall back to any transition into `RUNNING` from `StreamStatusService`. Do **not** key off `INITIALIZING → RUNNING` specifically — the existing child-stream lifecycle can produce `READY → RUNNING` instead.
 - **Detach runtime patch.** `detachActiveChildren` (`executionRegistry.ts:253–269`) today calls `handle.detach()` and re-emits `updateActiveSubagents` only — it does **not** emit `setParentStream` to clear the child's `parentStreamId`. Phase 4 adds that emit so the TUI (and any future host that consumes the parent-link) promotes detached children to top-level streams.
-- **Why not `Ctrl-Shift-*`.** Many terminals collapse Shift on a letter to the unshifted Ctrl chord; Ink cannot distinguish them on the smoke-test matrix. Hence `Ctrl-A` cycles forward and `Ctrl-B` returns to parent (see [30-reference.md § Keymap](./30-reference.md#keymap)).
+- **Why not `Ctrl-Shift-*`.** Many terminals collapse Shift on a letter to the unshifted Ctrl chord; Ink cannot distinguish them on the smoke-test matrix. Hence `Ctrl-A` cycles forward and `Ctrl-B` returns to parent (see [30-reference.md § Keymap](./30-reference.md#11-keymap)).
 
 ## 9. Approvals: Promise-returning launchers with a concurrency-1 queue
 

@@ -27,15 +27,15 @@
 
 ## 12. Rendering parity with the webview
 
-| Concern         | Webview                                                                    | CLI TUI                                                                                                   |
-| --------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Markdown        | `markdown-it` + `markdown-it-texmath` w/ LRU cache (cap 500)               | Same `markdown-it` instance + thin ANSI rule plugin + **same LRU cache** (lifted into `@shared/markdown`) |
-| Code fences     | `highlight.js` via `@shared/highlighting` (`highlightCode.ts` → `hljs.ts`) | Same module's tokenizer; `cli-highlight` renders the tokens to ANSI                                       |
-| Math            | `katex` → HTML                                                             | `unicodeit` for inline; block math raw in v1                                                              |
-| Diff            | Monaco diff editor                                                         | `diff` + `cli-highlight`                                                                                  |
-| Tool cards      | Lit component per messageType                                              | Ink component per messageType                                                                             |
-| Subagent badges | `BackgroundTasksPanel.ts`                                                  | `<SubagentList>` (same data, same `setActiveStream` on activate)                                          |
-| Follow-up input | `FollowUpInput.ts` textarea                                                | `<InputBar>` with `/` palette + `@` mention + bracketed-paste-aware submit                                |
+| Concern         | Webview                                                                    | CLI TUI                                                                                                                 |
+| --------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Markdown        | `markdown-it` + `markdown-it-texmath`, HTML output cached per content hash | Same `markdown-it` instance + ANSI rule plugin; parallel ANSI cache (the webview's HTML cache is not reusable for ANSI) |
+| Code fences     | `highlight.js` via `@shared/highlighting` (`highlightCode.ts` → `hljs.ts`) | Same module's tokenizer; `cli-highlight` renders the tokens to ANSI                                                     |
+| Math            | `katex` → HTML                                                             | `unicodeit` for inline; block math raw in v1                                                                            |
+| Diff            | Monaco diff editor                                                         | `diff` + `cli-highlight`                                                                                                |
+| Tool cards      | Lit component per messageType                                              | Ink component per messageType                                                                                           |
+| Subagent badges | `BackgroundTasksPanel.ts`                                                  | `<SubagentList>` (same data, same `setActiveStream` on activate)                                                        |
+| Follow-up input | `FollowUpInput.ts` textarea                                                | `<InputBar>` with `/` palette + `@` mention + bracketed-paste-aware submit                                              |
 
 Two TUI features the webview does **not** have today: a slash-command palette, and an `@`-mention file picker (implementation per [10-architecture § Tech stack](./10-architecture.md#5-tech-stack-locked); risk in R8). Both are pure additions and can later land in the webview behind the same registry.
 
@@ -43,7 +43,7 @@ Two TUI features the webview does **not** have today: a slash-command palette, a
 
 - **R1.** `markdown-it` runs in browser today; CLI use requires confirming no DOM dependencies in the existing renderer. _Mitigation:_ spike during Phase 3; fall back to `marked` + custom rule set if needed.
 - **R2.** `cli-highlight` / `highlight.js` grammar-load cost on first fence (~10 ms per language). _Mitigation:_ lazy-load on first code fence; cache loaded languages globally. The workspace already includes the grammars via `@shared/highlighting/hljs.ts`.
-- **R3.** Lifting webview-side `markdownRenderer.ts` upward violates `packages/extension` → CLI direction. _Mitigation:_ move the module into `src/shared/` since it's pure rendering with no VS Code coupling.
+- **R3.** Lifting webview-side `markdownRenderer.ts` upward violates `packages/extension` → CLI direction. _Mitigation:_ move the module into `src/shared/` since it's pure rendering with no VS Code coupling. The lift must also drop or replicate the `katexMacros` import (`markdownRenderer.ts:15`), which currently lives under `packages/extension/`.
 - **R4.** Ink `<Static>` + `<Box>` interaction in tmux / screen. Established as workable by Claude Code; verify in smoke matrix.
 - **R5.** Bundle size: react 19 + ink 6 + highlight.js languages ≈ 600–900 KB. Acceptable for a CLI; flag at review.
 - **R6.** Windows TTY edge cases (Ctrl-J = LF on some terminals, non-VT100 sequences). _Mitigation:_ test on Windows Terminal + ConHost; rely on Ink's key normalization and the runtime capability discovery from `terminalCapabilities.ts`.
@@ -68,7 +68,7 @@ Two TUI features the webview does **not** have today: a slash-command palette, a
 - `Ctrl-F` opens the transcript-search overlay and highlights matches correctly on emoji / CJK content.
 - **New runtime deps:** `react`, `ink`, `@inkjs/ui`, `ink-text-input`, `citty`, `@clack/prompts`, `picocolors`, `string-width`, `wrap-ansi`, `p-queue`, `diff`, `cli-highlight`, `fast-glob`, `fzf-for-js`, `terminal-link`, `clipboardy`, `unicodeit`.
 - **New dev deps:** `ink-testing-library`, `node-pty` (PTY-driven integration tests), `babel-plugin-react-compiler` (build pre-pass for `tui/*.tsx`).
-- Existing `markdown-it` + `markdown-it-texmath` lifted from `packages/extension/src/progressView/frontend/formatters/` into `src/shared/markdown/` **with the LRU token cache preserved**. Existing `@shared/highlighting` (highlight.js) consumed as-is.
+- Existing `markdown-it` + `markdown-it-texmath` lifted from `packages/extension/src/progressView/frontend/formatters/` into `src/shared/markdown/` as a configurable factory. The CLI host gets its own render-result cache (the webview's existing cache stores HTML, so it stays where it is). Existing `@shared/highlighting` (highlight.js) consumed as-is.
 
 ## 18. References
 
