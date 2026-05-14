@@ -1,0 +1,133 @@
+// Shared constants and helpers for the Claude Agent tool.
+
+import type { TokenUsageStats, ToolUseLog } from '@shared/schemas';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
+
+export const CLAUDE_AGENT_NAME = 'claude_agent';
+export const CLAUDE_AGENT_DISPLAY_MODEL = 'claude';
+export const CLAUDE_AGENT_TOOL_USE_NAME = 'claude_tool_use';
+
+const SUMMARY_MAX_LENGTH = 60;
+type ToolUseStatus = NonNullable<ToolUseLog['status']>;
+
+/**
+ * Subset of the SDK's `SDKAssistantMessage.message` shape we need to log
+ * (kept as `unknown` indices in the public type to avoid importing the
+ * private MessageParam shape from `@anthropic-ai/sdk` into VS Code-free
+ * zones).
+ */
+export interface ClaudeMessageBlock {
+  type: string;
+  text?: string;
+  thinking?: string;
+  name?: string;
+  input?: unknown;
+  tool_use_id?: string;
+  content?: unknown;
+  is_error?: boolean;
+}
+
+/** Format a usage object into TeXRA's TokenUsageStats. */
+export function buildClaudeUsageStats(usage: {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+}): TokenUsageStats {
+  return {
+    inputTokens: usage.input_tokens ?? 0,
+    outputTokens: usage.output_tokens ?? 0,
+    cost: 0,
+    ...(usage.cache_read_input_tokens != null &&
+      usage.cache_read_input_tokens > 0 && {
+        cacheReadInputTokens: usage.cache_read_input_tokens,
+      }),
+    ...(usage.cache_creation_input_tokens != null &&
+      usage.cache_creation_input_tokens > 0 && {
+        cacheCreationInputTokens: usage.cache_creation_input_tokens,
+      }),
+  };
+}
+
+function truncateSummary(text: string, maxLength: number): string {
+  const oneLine = text.replaceAll(/\s+/g, ' ').trim();
+  return truncateWithEllipsis(oneLine, maxLength);
+}
+
+/**
+ * Build a tool-use log entry for a Claude `tool_use` content block.
+ * Mirrors the rendering of Codex's command/file-change events but uses a
+ * single generic `claude_tool_use` toolName since Claude's built-in tool set
+ * (Bash, Read, Edit, Glob, etc.) is dynamic.
+ */
+export function buildClaudeToolUseLog(params: {
+  toolName: string;
+  input: unknown;
+  status: ToolUseStatus;
+  isError?: boolean;
+  output?: unknown;
+  errorMessage?: string;
+}): ToolUseLog {
+  const summarySource = describeToolInput(params.toolName, params.input);
+  return {
+    toolName: `claude:${params.toolName}`,
+    summary: truncateSummary(summarySource, SUMMARY_MAX_LENGTH),
+    input: params.input as Record<string, unknown>,
+    ...(params.output !== undefined && {
+      output: params.output as Record<string, unknown>,
+    }),
+    ...(params.isError &&
+      params.errorMessage && {
+        error: params.errorMessage,
+        isError: true,
+      }),
+    status: params.status,
+  };
+}
+
+/**
+ * Produce a short summary line for the supported built-in tools. Falls back
+ * to the tool name when the input shape isn't recognized.
+ */
+function describeToolInput(toolName: string, input: unknown): string {
+  if (input == null || typeof input !== 'object') return toolName;
+  const record = input as Record<string, unknown>;
+
+  switch (toolName) {
+    case 'Bash':
+      if (typeof record.command === 'string') return record.command;
+      break;
+    case 'Read':
+    case 'Edit':
+    case 'Write':
+    case 'NotebookEdit':
+      if (typeof record.file_path === 'string') {
+        return `${toolName} ${record.file_path}`;
+      }
+      break;
+    case 'Glob':
+      if (typeof record.pattern === 'string') {
+        return `Glob ${record.pattern}`;
+      }
+      break;
+    case 'Grep':
+      if (typeof record.pattern === 'string') {
+        return `Grep ${record.pattern}`;
+      }
+      break;
+    case 'WebFetch':
+      if (typeof record.url === 'string') return `WebFetch ${record.url}`;
+      break;
+    case 'WebSearch':
+      if (typeof record.query === 'string') return `WebSearch ${record.query}`;
+      break;
+    case 'TodoWrite':
+      return 'TodoWrite';
+    case 'Task':
+      if (typeof record.description === 'string') {
+        return `Task ${record.description}`;
+      }
+      break;
+  }
+  return toolName;
+}
