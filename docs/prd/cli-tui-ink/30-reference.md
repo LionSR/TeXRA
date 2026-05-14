@@ -2,40 +2,40 @@
 
 ## 11. Keymap
 
-| Key                 | Action                                                                                                                           |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `Enter`             | Send message (suppressed during bracketed paste — see [10-architecture § Input component](./10-architecture.md#input-component)) |
-| `Ctrl-J`            | Newline (kills `/multi` ceremony)                                                                                                |
-| `Tab`               | Autocomplete (file, slash, agent, model)                                                                                         |
-| `↑` / `↓`           | History (input) / row navigation (lists, modals)                                                                                 |
-| `Ctrl-R`            | Reverse history search (input lines)                                                                                             |
-| `Ctrl-F`            | Transcript search ([10-architecture § Transcript search](./10-architecture.md#transcript-search))                                |
-| `Ctrl-P`            | Command palette                                                                                                                  |
-| `Ctrl-O`            | Expand truncated content (long diffs, collapsed summaries)                                                                       |
-| `Ctrl-A` / `Ctrl-B` | Cycle active child / back to parent (avoiding `Ctrl-Shift-A`, which collapses to `Ctrl-A` on many terminals)                     |
-| `0`                 | Jump back to root stream                                                                                                         |
-| `1`–`9`             | Jump to subagent row                                                                                                             |
-| `Ctrl-T`            | Tab view (Conversation / Subagents / Todos+Plan / Logs)                                                                          |
-| `Ctrl-L`            | Clear screen (scrollback preserved)                                                                                              |
-| `Ctrl-C`            | Interrupt active session; second tap exits                                                                                       |
-| `Ctrl-D`            | Exit on empty input                                                                                                              |
-| `Esc`               | Close modal / palette / cancel inline edit                                                                                       |
-| `?`                 | Inline help overlay                                                                                                              |
-| `y` / `n` / `e`     | Approve / reject / reject-with-feedback                                                                                          |
-| `@`                 | File-picker autocomplete                                                                                                         |
-| `/`                 | Slash-command palette                                                                                                            |
+| Key                 | Action                                                                                                                                                                                                                                                         |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Enter`             | Send message (suppressed during bracketed paste — see [10-architecture § Input component](./10-architecture.md#input-component))                                                                                                                               |
+| `Ctrl-J`            | Newline (kills `/multi` ceremony)                                                                                                                                                                                                                              |
+| `Tab`               | Autocomplete (file, slash, agent, model)                                                                                                                                                                                                                       |
+| `↑` / `↓`           | History (input) / row navigation (lists, modals)                                                                                                                                                                                                               |
+| `Ctrl-R`            | Reverse history search (input lines)                                                                                                                                                                                                                           |
+| `Ctrl-F`            | Transcript search ([10-architecture § Transcript search](./10-architecture.md#transcript-search))                                                                                                                                                              |
+| `Ctrl-P`            | Command palette                                                                                                                                                                                                                                                |
+| `Ctrl-O`            | Expand truncated content (long diffs, collapsed summaries)                                                                                                                                                                                                     |
+| `Ctrl-A` / `Ctrl-B` | Cycle active child / back to parent (avoiding `Ctrl-Shift-A`, which collapses to `Ctrl-A` on many terminals). **Only when InputBar is not focused** — inside the input these stay as readline start-of-line / back-one-char to match bash / zsh muscle memory. |
+| `0`                 | Jump back to root stream                                                                                                                                                                                                                                       |
+| `1`–`9`             | Jump to subagent row                                                                                                                                                                                                                                           |
+| `Ctrl-T`            | Tab view (Conversation / Subagents / Todos+Plan / Logs)                                                                                                                                                                                                        |
+| `Ctrl-L`            | Clear screen (scrollback preserved)                                                                                                                                                                                                                            |
+| `Ctrl-C`            | Interrupt active session; second tap exits                                                                                                                                                                                                                     |
+| `Ctrl-D`            | Exit on empty input                                                                                                                                                                                                                                            |
+| `Esc`               | Close modal / palette / cancel inline edit                                                                                                                                                                                                                     |
+| `?`                 | Inline help overlay                                                                                                                                                                                                                                            |
+| `y` / `n` / `e`     | Approve / reject / reject-with-feedback                                                                                                                                                                                                                        |
+| `@`                 | File-picker autocomplete                                                                                                                                                                                                                                       |
+| `/`                 | Slash-command palette                                                                                                                                                                                                                                          |
 
 ## 12. Rendering parity with the webview
 
-| Concern         | Webview                                                                    | CLI TUI                                                                                                                 |
-| --------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Markdown        | `markdown-it` + `markdown-it-texmath`, HTML output cached per content hash | Same `markdown-it` instance + ANSI rule plugin; parallel ANSI cache (the webview's HTML cache is not reusable for ANSI) |
-| Code fences     | `highlight.js` via `@shared/highlighting` (`highlightCode.ts` → `hljs.ts`) | Same module's tokenizer; `cli-highlight` renders the tokens to ANSI                                                     |
-| Math            | `katex` → HTML                                                             | `unicodeit` for inline; block math raw in v1                                                                            |
-| Diff            | Monaco diff editor                                                         | `diff` + `cli-highlight`                                                                                                |
-| Tool cards      | Lit component per messageType                                              | Ink component per messageType                                                                                           |
-| Subagent badges | `BackgroundTasksPanel.ts`                                                  | `<SubagentList>` (same data, same `setActiveStream` on activate)                                                        |
-| Follow-up input | `FollowUpInput.ts` textarea                                                | `<InputBar>` with `/` palette + `@` mention + bracketed-paste-aware submit                                              |
+| Concern         | Webview                                                                    | CLI TUI                                                                                                                           |
+| --------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Markdown        | `markdown-it` + `markdown-it-texmath`, HTML output cached per content hash | Same `markdown-it` instance + ANSI rule plugin; parallel ANSI cache (the webview's HTML cache is not reusable for ANSI)           |
+| Code fences     | `highlight.js` via `@shared/highlighting` (`highlightCode.ts` → `hljs.ts`) | `cli-highlight` (which runs its own `highlight.js` internally); both paths consume the same grammars from `highlight.js/lib/core` |
+| Math            | `katex` → HTML                                                             | `unicodeit` for inline; block math raw in v1                                                                                      |
+| Diff            | Monaco diff editor                                                         | `diff` + `cli-highlight`                                                                                                          |
+| Tool cards      | Lit component per messageType                                              | Ink component per messageType                                                                                                     |
+| Subagent badges | `BackgroundTasksPanel.ts`                                                  | `<SubagentList>` (same data, same `setActiveStream` on activate)                                                                  |
+| Follow-up input | `FollowUpInput.ts` textarea                                                | `<InputBar>` with `/` palette + `@` mention + bracketed-paste-aware submit                                                        |
 
 Two TUI features the webview does **not** have today: a slash-command palette, and an `@`-mention file picker (implementation per [10-architecture § Tech stack](./10-architecture.md#5-tech-stack-locked); risk in R8). Both are pure additions and can later land in the webview behind the same registry.
 
