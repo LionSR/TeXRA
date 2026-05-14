@@ -39,7 +39,7 @@ Root stream is delegating to two subagents. One subagent has spawned its own chi
 
 - **SubagentList header** `├─ subagents ──┤` is a divider, not a tab. The list is a section of the main pane, always visible while there's at least one active child. Empties → section collapses entirely.
 - **Tree characters** use `├─` for non-last children, `└─` for the last child, `│` for spine continuity. Indent doubles per nesting level.
-- **Active indicator** `●` on the first column. Subagent index `0` is always the root; children get `1..N` in BFS order so the digit shortcuts match what the user sees.
+- **Active indicator** `●` on the first column. Subagent index `0` is always the root; children get `1..N` in **pre-order DFS** (the same order they appear on screen, so digit shortcuts always line up with the visible row count). The render above is the canonical example.
 - **Row columns** (after the index): short id · agent label · status text · model · tool count · cost · elapsed. Width-collapsing order if narrow: drop model first, then tool count.
 - **Status text** is what the subagent is currently doing — pulled from `lastToolInfo` or process state. `running` / `✓ done` / `✗ failed` / `paused` / `detached`.
 - **Elapsed time** ticks once per second at the list level (not per-row), per Claude Code's `CoordinatorTaskPanel` pattern.

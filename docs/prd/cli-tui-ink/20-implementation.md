@@ -36,7 +36,7 @@ Today's `cliMode()` (`cliContext.ts:214–222`) collapses to `headless` whenever
 | piped | any    | any    | —          | **Headless** (today's behavior, unchanged)           |
 | —     | —      | —      | `CI=true`  | **Headless** (today's behavior, unchanged)           |
 
-The new streaming-text mode is exactly the gap created by gating chrome on `stdout.isTTY` while leaving headless on the existing OR-of-three.
+The new streaming-text mode is exactly the gap created by gating chrome on `stdout.isTTY` while leaving headless on the narrowed OR-of-three defined above (the OR-of-five today's `cliMode()` runs on is collapsed by dropping `!stdoutIsTty` and `!stderrIsTty`).
 
 ### What's preserved
 
