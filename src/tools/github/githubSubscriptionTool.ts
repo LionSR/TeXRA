@@ -25,7 +25,9 @@ import { z } from 'zod';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { toErrorMessage } from '@common/errors';
+import type { StreamTabId } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
+import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 
 import { defineTool } from '../core/define';
@@ -133,19 +135,11 @@ function requireToken(): void {
 }
 
 function requireSubscriptionContext(): {
-  streamId: string;
+  streamId: StreamTabId;
   runtimeHost: AgentRuntimeHost;
 } {
-  const context = tryUseRunContext();
-  if (!context?.streamId || !context.runtimeHost) {
-    throw new ToolError(
-      'github_subscription must be called from within an agent stream.',
-    );
-  }
-  return {
-    streamId: context.streamId,
-    runtimeHost: context.runtimeHost,
-  };
+  const { streamId, runtimeHost } = requireRunStream('github_subscription');
+  return { streamId, runtimeHost };
 }
 
 function requirePath(input: GitHubSubscriptionInput): ParsedPath {
