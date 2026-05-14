@@ -3,8 +3,8 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import { bus } from '@eventBus/ProgressEventBus';
 import type { DiffViewHost } from '@hosts/diffViewHost';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import {
@@ -26,6 +26,7 @@ import {
 import { WorkspaceFS } from '@utils/files';
 
 export interface DesktopToolEditApprovalOptions {
+  runtimeHost: AgentRuntimeHost;
   openPath?: (filePath: string) => Promise<void>;
   openBuildDisplay?: BuildDisplayFn;
   openDiff?: DiffViewHost['openDiff'];
@@ -57,7 +58,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
   private readonly pending = new Map<string, DesktopPendingToolEditApproval>();
   private disposed = false;
 
-  constructor(private readonly options: DesktopToolEditApprovalOptions = {}) {
+  constructor(private readonly options: DesktopToolEditApprovalOptions) {
     setToolEditApprovalHandler((request) => this.requestApproval(request));
   }
 
@@ -180,13 +181,15 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     lineChanges: { added: number; removed: number },
   ): void {
     if (request.streamId) {
-      bus.emit('setActiveStream', { streamId: request.streamId });
+      this.options.runtimeHost.emit('setActiveStream', {
+        streamId: request.streamId,
+      });
     }
 
     const isBypassed = request.streamId
       ? isApprovalBypassedForStream(request.streamId)
       : false;
-    bus.emit('showToolEditPermission', {
+    this.options.runtimeHost.emit('showToolEditPermission', {
       requestId,
       path: request.path,
       relativePath: this.relativeDisplayPath(request.path),
@@ -214,7 +217,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     this.pending.delete(requestId);
     unregisterPendingApproval(requestId);
     entry.settle(result);
-    bus.emit('resolveToolEditPermission', { requestId });
+    this.options.runtimeHost.emit('resolveToolEditPermission', { requestId });
     this.cleanupEntry(entry);
   }
 
@@ -293,7 +296,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
 }
 
 export function createDesktopToolEditApprovalController(
-  options: DesktopToolEditApprovalOptions = {},
+  options: DesktopToolEditApprovalOptions,
 ): DesktopToolEditApprovalController {
   return new DesktopToolEditApprovalControllerImpl(options);
 }
