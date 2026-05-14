@@ -15,9 +15,8 @@ import type {
   FlowParams,
 } from '../common/BaseFlowServices';
 
-export interface ReflectionServices<
-  C = unknown,
-> extends BaseFlowContextInit<C> {
+export interface ReflectionServices<C = unknown>
+  extends BaseFlowContextInit<C> {
   readonly setting: AgentWorkflowSetting;
   readonly outputState: OutputState;
   readonly xmlManager: XmlOutputManager;
