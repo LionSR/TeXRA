@@ -39,7 +39,7 @@ The CLI is also rebuilding wheels — manual arg parsing, ANSI constants, stream
 
 ## 5. Tech stack (locked)
 
-Every dependency is either already in the workspace, used by the dominant 2026 AI CLIs, or replaces an existing hand-rolled utility. Nothing is speculative.
+Every dependency is either already in the workspace, used by the dominant 2026 AI CLIs, or replaces an existing hand-rolled utility. Two items carry open spikes — see §16 R1 (markdown-it DOM coupling) and R7 (resource path post-publish).
 
 ### Runtime & framework
 
@@ -171,15 +171,13 @@ packages/cli/src/chat/tui/
 
 `runChat.ts` shrinks to: parse args (citty), init platform (unchanged), install approval handlers (unchanged), `render(<App/>)`. The multiline state, follow-up queue, log-diff loop, and approval prompting all move into the React tree or external libraries.
 
-## 8. Multi-agent: `StreamTabId` is the only model
+## 8. Multi-agent specifics
 
-`StreamTabId` is already the shared identifier (`src/shared/schemas/identifiers.ts`). The webview's `progressState` keeps `streamById: Map<StreamTabId, StreamTabInfo>` with `activeStreamId: StreamTabId | null` (`progressState.ts:66`, `store.ts:66–79`). The CLI inherits that model unchanged.
+The state shape (`streamById: Map<StreamTabId, StreamTabInfo>` + `activeStreamId: StreamTabId | null`) is inherited from the webview (`progressState.ts:66`, `store.ts:66–79`) per §4 / §7. Three CLI-specific points:
 
-- `cliState.streamById: Signal<Map<StreamTabId, StreamTabInfo>>` — populated from `setActiveStream`, `setParentStream`, `removeStream`, `updateStreamStatus`.
-- `cliState.activeStreamId: Signal<StreamTabId | null>` — `null` before any stream exists; switched by `Ctrl-A` cycle, palette pick, or auto-follow on `setActiveStream`.
-- `<SubagentList>` renders one row per descendant of the root stream, with status / model / elapsed / tokens. Number keys `1`–`9` jump focus. `Ctrl-A` cycles forward. `Ctrl-B` returns to parent. (Avoid `Ctrl-Shift-*`: many terminals collapse Shift modifiers on letter keys to the unshifted Ctrl chord — Ink cannot distinguish them on the smoke-test matrix.)
-- Detached children (`detachActiveChildren`, `executionRegistry.ts:253–269`) **require a runtime patch**: today the function calls `handle.detach()` and re-emits `updateActiveSubagents` for the old parent only — it does **not** emit `setParentStream` to clear the child's `parentStreamId`. Phase 4 adds a `setParentStream` emit inside `detachActiveChildren` so the TUI (and any future host that consumes the parent-link) promotes detached children to top-level streams.
-- Child stream readiness signal: subscribe to `setActiveStream` and `setParentStream` as the primary readiness events, with any transition into `RUNNING` from `StreamStatusService` as a fallback. Do **not** key off the specific `INITIALIZING → RUNNING` transition; the existing child-stream lifecycle can produce `READY → RUNNING` instead.
+- **Readiness signal.** Subscribe to `setActiveStream` and `setParentStream` as primary readiness events; fall back to any transition into `RUNNING` from `StreamStatusService`. Do **not** key off `INITIALIZING → RUNNING` specifically — the existing child-stream lifecycle can produce `READY → RUNNING` instead.
+- **Detach runtime patch.** `detachActiveChildren` (`executionRegistry.ts:253–269`) today calls `handle.detach()` and re-emits `updateActiveSubagents` only — it does **not** emit `setParentStream` to clear the child's `parentStreamId`. Phase 4 adds that emit so the TUI (and any future host that consumes the parent-link) promotes detached children to top-level streams.
+- **Why not `Ctrl-Shift-*`.** Many terminals collapse Shift on a letter to the unshifted Ctrl chord; Ink cannot distinguish them on the smoke-test matrix. Hence `Ctrl-A` cycles forward and `Ctrl-B` returns to parent (see §11).
 
 ## 9. Approvals: typed modal queue replaces stderr prompts
 
@@ -256,12 +254,7 @@ Every signal source already exists.
 | Subagent badges | `BackgroundTasksPanel.ts`                                                  | `<SubagentList>` (same data, same `setActiveStream` on activate)    |
 | Follow-up input | `FollowUpInput.ts` textarea                                                | `<InputBar>` with `/` palette + `@` mention                         |
 
-Two TUI features the webview does **not** have today:
-
-1. Slash-command palette (`/agent`, `/model`, `/help`, `/status`, `/yolo`, plus registered tools).
-2. `@`-mention file picker. Implementation note: `WorkspaceProvider` currently exposes only `getWorkspacePath()`, `asRelativePath()`, and `watch()` — no `findFiles`. v1 ships a CLI-local `fast-glob` walk of `getWorkspacePath()` honoring `.gitignore`. A cross-host `WorkspaceProvider.findFiles(glob, options)` port is desirable and tracked in §17 R8 but not blocking.
-
-Pure additions; no contract change. They can later land in the webview behind the same registry.
+Two TUI features the webview does **not** have today: a slash-command palette, and an `@`-mention file picker (implementation per §5; risk in §16 R8). Both are pure additions and can later land in the webview behind the same registry.
 
 ## 13. Headless & legacy preserved
 
@@ -284,7 +277,7 @@ Every phase is independently mergeable. Each adds an `--tui` flag, default-off, 
 
 **Phase 4 — Multi-agent + tabs (2 d).** `<SubagentList>`, `<TodosPlanPanel>`, `<StatusBar>`. `Ctrl-A` / `Ctrl-B` focus cycle. Stream switching via `setActiveStream`. Process output tailing. Small runtime patch: have `detachActiveChildren` (`executionRegistry.ts:253–269`) emit `setParentStream` so detached children promote to top-level streams.
 
-**Phase 5 — Ergonomics (2 d).** `Ctrl-P` palette (`fzf-for-js`), `Ctrl-R` reverse history, `@` file picker (`fast-glob` against the workspace cwd), `/` command palette, autocomplete on `/agent` & `/model`. Input history at `path.join(platform().storage.getGlobalStoragePath(), 'history.jsonl')`.
+**Phase 5 — Ergonomics (2 d).** `Ctrl-P` palette (`fzf-for-js`), `Ctrl-R` reverse history, `@` file picker, `/` command palette, autocomplete on `/agent` & `/model`. Input history file per §5.
 
 **Phase 6 — Stabilise & flip (1 d).** `--tui` defaults on for TTY; `--legacy-renderer` becomes opt-out. README rewrite. Decide `private: true` flip (separate). Smoke matrix: Windows Terminal, iTerm2, macOS Terminal, GNOME Terminal, tmux, screen.
 
@@ -306,7 +299,7 @@ Total: ~11 dev-days, six PRs.
 - **R5.** Bundle size: react 19 + ink 6 + highlight.js languages ≈ 600–900 KB. Acceptable for a CLI; flag at review.
 - **R6.** Windows TTY edge cases (Ctrl-J = LF on some terminals, non-VT100 sequences). _Mitigation:_ test on Windows Terminal + ConHost; rely on Ink's key normalization.
 - **R7.** Resource path resolution (`resolveResourcesPath` in `cliContext.ts:290–299`) changes once the package is published rather than linked. Tracked separately; not Ink-specific.
-- **R8.** No `WorkspaceProvider.findFiles` exists today. `@`-mention v1 uses `fast-glob` against `getWorkspacePath()` from CLI code. Cross-host parity (VS Code-aware `findFiles`) is a separate platform-layer change; not blocking, but tracked.
+- **R8.** No `WorkspaceProvider.findFiles` exists; v1 uses CLI-local `fast-glob` against `getWorkspacePath()`. Cross-host parity (a VS Code-aware `findFiles` port) is a separate platform change — not blocking.
 
 ## 17. Success criteria
 
