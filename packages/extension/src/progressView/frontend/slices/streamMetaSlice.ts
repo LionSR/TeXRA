@@ -150,30 +150,12 @@ export const streamMetaHandlers: HandlerRegistry = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT]: (data, ctx) => {
     const { stream, executionId, stdout, stderr } = data;
-    ctx.setState((prev) => {
-      // Only prune stale entries when this stream is active — badge data
-      // (activeProcesses) is only refreshed for the active stream, so for
-      // inactive streams the set would be stale and we'd incorrectly delete
-      // output for still-running sibling processes. For inactive streams,
-      // pruning is handled by UPDATE_STREAM_BADGES when the user switches back.
-      const isActiveStream = prev.activeStreamId === stream;
-      return create(prev, (draft) => {
+    ctx.setState((prev) =>
+      create(prev, (draft) => {
         let streamOutputs = draft.processOutputs.get(stream);
         if (!streamOutputs) {
           streamOutputs = new Map();
           draft.processOutputs.set(stream, streamOutputs);
-        }
-        if (isActiveStream) {
-          const streamState = prev.streamStates.get(stream);
-          const activeIds = new Set(
-            (streamState?.activeProcesses ?? []).map(
-              (p: { executionId: string }) => p.executionId,
-            ),
-          );
-          for (const id of [...streamOutputs.keys()]) {
-            if (id !== executionId && !activeIds.has(id))
-              streamOutputs.delete(id);
-          }
         }
         const existing = streamOutputs.get(executionId) ?? {
           stdout: '',
@@ -183,7 +165,7 @@ export const streamMetaHandlers: HandlerRegistry = {
           stdout: capOutput(existing.stdout, stdout),
           stderr: capOutput(existing.stderr, stderr),
         });
-      });
-    });
+      }),
+    );
   },
 };
