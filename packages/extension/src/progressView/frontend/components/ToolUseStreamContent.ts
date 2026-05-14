@@ -88,6 +88,7 @@ export class ToolUseStreamContent extends LitElement {
         .progress=${currentState.conversationProgress}
         .yoloActive=${Boolean(currentState.toolEditBypass)}
         .superYoloActive=${Boolean(currentState.superYoloBypass)}
+        .odysseyActive=${Boolean(currentState.odysseyActive)}
       ></stream-header>
 
       <request-panels .permissions=${this.filteredPermissions}></request-panels>
