@@ -317,9 +317,11 @@ export class ToolsTab extends LitElement {
     return this.items.filter((item) => TOOLS_TAB_CATEGORIES.has(item.category));
   }
 
-  private groupByCategory(): Map<ToolCategory, ToolDashboardItem[]> {
+  private groupByCategory(
+    items: readonly ToolDashboardItem[],
+  ): Map<ToolCategory, ToolDashboardItem[]> {
     const groups = new Map<ToolCategory, ToolDashboardItem[]>();
-    for (const item of this.visibleItems()) {
+    for (const item of items) {
       const list = groups.get(item.category) ?? [];
       list.push(item);
       groups.set(item.category, list);
@@ -327,8 +329,9 @@ export class ToolsTab extends LitElement {
     return groups;
   }
 
-  private renderSummary(): TemplateResult | typeof nothing {
-    const items = this.visibleItems();
+  private renderSummary(
+    items: readonly ToolDashboardItem[],
+  ): TemplateResult | typeof nothing {
     if (items.length === 0) return nothing;
 
     let available = 0;
@@ -415,8 +418,6 @@ export class ToolsTab extends LitElement {
   }
 
   override render(): TemplateResult {
-    const groups = this.groupByCategory();
-
     if (!this.loaded) {
       return html`
         <div class="tools-container tab-content-container">
@@ -428,11 +429,14 @@ export class ToolsTab extends LitElement {
       `;
     }
 
+    const items = this.visibleItems();
+    const groups = this.groupByCategory(items);
+
     return html`
       <div class="tools-container tab-content-container">
         <div class="tools-header">
           <div class="tools-header-actions">
-            ${this.renderSummary()}
+            ${this.renderSummary(items)}
             <button
               class="tab-action-btn"
               @click=${this.handleRecheck}
