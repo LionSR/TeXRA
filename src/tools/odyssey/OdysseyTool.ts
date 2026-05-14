@@ -4,7 +4,7 @@ import { tryUseRunContext } from '@agent/runtime/RunContext';
 
 import { defineTool } from '../core/define';
 import { ToolError, type ToolResult } from '../result';
-import { requireField } from '../utils';
+import { requireNonEmptyString } from '../utils';
 
 import {
   ODYSSEY_TOOL_NAME,
@@ -14,21 +14,6 @@ import {
   type OdysseyToolInput,
 } from './odysseyMeta';
 import { OdysseyStore } from './odysseyStore';
-
-function requireNonEmpty(
-  value: string | null | undefined,
-  field: string,
-  command: string,
-): string {
-  const present = requireField(value, field, command);
-  const trimmed = present.trim();
-  if (!trimmed) {
-    throw new ToolError(
-      `Field "${field}" must not be empty or whitespace-only for command="${command}".`,
-    );
-  }
-  return trimmed;
-}
 
 function formatTokens(tokens: number): string {
   if (tokens < 1000) return `${tokens}`;
@@ -101,17 +86,17 @@ Commands:
       case 'start':
         return this.start(
           streamId,
-          requireNonEmpty(input.objective, 'objective', 'start'),
+          requireNonEmptyString(input.objective, 'objective'),
         );
       case 'pause':
         return this.pause(
           streamId,
-          requireNonEmpty(input.reason, 'reason', 'pause'),
+          requireNonEmptyString(input.reason, 'reason'),
         );
       case 'complete':
         return this.complete(
           streamId,
-          requireNonEmpty(input.reason, 'reason', 'complete'),
+          requireNonEmptyString(input.reason, 'reason'),
         );
       default:
         throw new ToolError(
@@ -162,7 +147,8 @@ Commands:
         output: `Odyssey is ${odyssey.status}; pause is a no-op.`,
       };
     }
-    const updated = await OdysseyStore.setStatus(streamId, 'paused', reason);
+    const updated =
+      (await OdysseyStore.setStatus(streamId, 'paused', reason)) ?? odyssey;
     return {
       summary: 'Odyssey paused.',
       output: `Odyssey paused: ${reason}\n\n${formatView(updated)}`,
@@ -189,7 +175,8 @@ Commands:
           'The user must start a new odyssey explicitly.',
       );
     }
-    const updated = await OdysseyStore.setStatus(streamId, 'complete', reason);
+    const updated =
+      (await OdysseyStore.setStatus(streamId, 'complete', reason)) ?? odyssey;
     return {
       summary: 'Odyssey complete.',
       output:
