@@ -34,6 +34,7 @@ const WORKTREE_SHARED_KEYS: ReadonlySet<WorkspaceStateKey> =
     WorkspaceStateKey.CODEX_APPROVAL_POLICY,
     WorkspaceStateKey.CLAUDE_AGENT_MODEL,
     WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
+    WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
     WorkspaceStateKey.GIT_MARK_COMMITS,
     WorkspaceStateKey.GIT_AUTHOR_NAME,
     WorkspaceStateKey.GIT_AUTHOR_EMAIL,
