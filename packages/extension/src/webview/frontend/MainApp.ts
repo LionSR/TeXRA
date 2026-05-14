@@ -474,16 +474,21 @@ export class MainApp extends MainAppBase {
     this.commit.set(state.commit);
 
     this.restorePerModeInstructions(state);
-    // Migrate persisted auxiliary state into the unified Context (reference) bucket
-    // so users who set auxiliary files in older versions keep them visible after
-    // the auxiliary picker was removed. The single auxiliary slot fills the
-    // reference single slot only when reference itself is empty (avoid clobber);
-    // multi-file auxiliary files always merge into the multi-file reference list.
+    // Migrate persisted auxiliary state into the unified Context (reference)
+    // bucket so users who set auxiliary files in older versions keep them
+    // visible after the auxiliary picker was removed. The single auxiliary
+    // slot fills the reference single slot if free; otherwise it falls through
+    // to the multi-file list so it isn't silently dropped.
     const restoredReferenceFile = state.referenceFile || state.auxiliaryFile;
+    const auxSingleNeedsFallback =
+      state.auxiliaryFile &&
+      state.referenceFile &&
+      restoredReferenceFile !== state.auxiliaryFile;
     const restoredReferenceFiles = Array.from(
       new Set([
         ...(state.referenceFiles ?? []),
         ...(state.auxiliaryFiles ?? []),
+        ...(auxSingleNeedsFallback ? [state.auxiliaryFile] : []),
       ]),
     );
     const restoredReferenceFilesVisible =
