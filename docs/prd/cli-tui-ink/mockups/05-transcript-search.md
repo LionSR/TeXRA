@@ -57,3 +57,5 @@ User pressed `Ctrl-F`. A slim search bar appears at the top of the conversation 
 2. Should there be an option to search only the user's turns, or only assistant turns? `~` or `:user` prefix in the query?
 3. When the current match is in a collapsed tool card, should the card auto-expand to show context, or stay collapsed (user can `Ctrl-O` after jumping)?
 4. Should the search persist across input — i.e., after `esc`, can the user re-open the same query with `Ctrl-F` again?
+
+   User: this can wait.

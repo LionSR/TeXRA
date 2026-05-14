@@ -8,17 +8,18 @@ Empty session, just started. No turns in the conversation pane yet. Status bar s
 │                                                                                      │
 │                                                                                      │
 │                                                                                      │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
+│                  ┏━━━━━ TeXRA ━━━━━━━━━━━━━━━━━━━━━━━┓                              │
+│                  ┃                                    ┃                              │
+│                  ┃   \documentclass{texra}            ┃                              │
+│                  ┃   \begin{document}                 ┃                              │
+│                  ┃                                    ┃                              │
+│                  ┃     your research, in LaTeX        ┃                              │
+│                  ┃                                    ┃                              │
+│                  ┃   \end{document}                   ┃                              │
+│                  ┃                                    ┃                              │
+│                  ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛                              │
 │                                                                                      │
 │  start by typing a prompt below, or press / for slash commands, @ to mention a file  │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
-│                                                                                      │
 │                                                                                      │
 │                                                                                      │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
@@ -27,6 +28,8 @@ Empty session, just started. No turns in the conversation pane yet. Status bar s
 │ › _                                                                                  │
 ╰────── enter send · ctrl-j newline · ctrl-p palette · ctrl-f search · ? help ─────────╯
 ```
+
+The pixel-art block is a LaTeX-themed wordmark — the medium TeXRA is built around, plus a `_` cursor inside `\begin{document}` hinting "your work goes here". The block stays centered both horizontally and vertically while idle; it disappears at the first user keystroke. An alternate version (smaller, just an icon + wordmark) is sketched in the open questions below — pick whichever lands better.
 
 ## Layout notes
 
@@ -38,6 +41,6 @@ Empty session, just started. No turns in the conversation pane yet. Status bar s
 
 ## Open questions for review
 
-1. Is the cumulative usage in the header the right slot, or should it live in the status bar so the header just shows agent/model?
-2. Should the welcome line be there at all, or should idle just be a blank canvas with the key-hint footer doing the work?
-3. `cwd` in the status bar — useful or noise? Could move to header on a second line.
+1. Is the cumulative usage in the header the right slot, or should it live in the status bar so the header just shows agent/model? User: good
+2. Should the welcome line be there at all, or should idle just be a blank canvas with the key-hint footer doing the work? User: yes, good. but let us also put some texra pixel arts
+3. `cwd` in the status bar — useful or noise? Could move to header on a second line. User: useful.
