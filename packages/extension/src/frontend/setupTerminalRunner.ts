@@ -1,9 +1,10 @@
 /**
  * Setup-tool integrated-terminal runner.
  *
- * Implements `SetupTerminalAdapter.runCommand`. Prefers VS Code's stable
- * `Terminal.shellIntegration` API (since 1.93) so the agent gets exit
- * code + output. When integration isn't available — custom shell, user
+ * Implements the host-neutral `TerminalRunner.runCommand` contract.
+ * Prefers VS Code's stable `Terminal.shellIntegration` API (since 1.93)
+ * so the agent gets exit code + output. When integration isn't available —
+ * custom shell, user
  * disabled the auto-inject, remote SSH edge cases — falls back to
  * `sendText` and returns an empty captured result; the caller sees the
  * same shape as a Ctrl+C interruption and re-probes with `verify_setup`.
@@ -13,20 +14,21 @@
 import * as vscode from 'vscode';
 import stripAnsi from 'strip-ansi';
 
-// Local imports
-import type { TerminalRunResult } from '@tools/setup';
+// Local imports - hosts
+import type {
+  TerminalRunRequest,
+  TerminalRunResult,
+} from '@hosts/terminalHost';
 
 const OUTPUT_MAX_CHARS = 12_000;
 const SHELL_INTEGRATION_WAIT_MS = 2_000;
 const READER_DRAIN_MS = 250;
 
-export async function runTerminalCommand(args: {
-  name: string;
-  command: string;
-  timeoutMs: number;
-}): Promise<TerminalRunResult> {
+export async function runTerminalCommand(
+  args: TerminalRunRequest,
+): Promise<TerminalRunResult> {
   const { name, command, timeoutMs } = args;
-  const terminal = revealTerminal(name);
+  const terminal = revealTerminal(args);
   const integration = await waitForShellIntegration(
     terminal,
     SHELL_INTEGRATION_WAIT_MS,
@@ -45,11 +47,15 @@ export async function runTerminalCommand(args: {
  * pile up tabs. Already-exited terminals stay in `terminals` until the
  * user closes them; treat those as gone.
  */
-function revealTerminal(name: string): vscode.Terminal {
-  const existing = vscode.window.terminals.find(
-    (t) => t.name === name && t.exitStatus === undefined,
-  );
-  const terminal = existing ?? vscode.window.createTerminal({ name });
+function revealTerminal(request: TerminalRunRequest): vscode.Terminal {
+  const { name, cwd, env } = request;
+  const hasLaunchOverrides = cwd !== undefined || env !== undefined;
+  const existing = hasLaunchOverrides
+    ? undefined
+    : vscode.window.terminals.find(
+        (t) => t.name === name && t.exitStatus === undefined,
+      );
+  const terminal = existing ?? vscode.window.createTerminal({ name, cwd, env });
   terminal.show();
   return terminal;
 }
