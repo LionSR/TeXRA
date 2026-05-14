@@ -18,7 +18,6 @@ import {
   clearPlanApprovalForStream,
   clearRetryRequest,
 } from '@agent/runtime/runCoordinators';
-import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { createRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -172,12 +171,11 @@ export async function runReflectionFlow<C = unknown>(
       return canonical;
     });
 
-  const runCoordinators = tryUseRunContext()?.coordinators;
   const interruptible: IInterruptible = {
     interrupt(): void {
       input.onInterrupt?.();
-      clearRetryRequest(streamId, runCoordinators);
-      clearPlanApprovalForStream(streamId, runCoordinators);
+      clearRetryRequest(streamId);
+      clearPlanApprovalForStream(streamId);
     },
   };
 
