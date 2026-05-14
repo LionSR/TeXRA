@@ -60,6 +60,7 @@ function runTurn(logger: AgentLogger) {
     abortController: new AbortController(),
     model: 'claude-sonnet-4-6',
     permissionMode: 'acceptEdits',
+    effort: 'high',
     cwd: undefined,
     additionalDirectories: undefined,
     env: {},
