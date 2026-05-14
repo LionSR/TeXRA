@@ -18,16 +18,14 @@ import { z } from 'zod';
 // Local imports - agent
 import { getExecutionStore } from '@agent/storage';
 
-// Local imports - tools
-import { requireRuntimeHost } from '@tools/contextHelpers';
-
 // Local imports - shared
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import { ExecutionIdSchema } from '@shared/schemas';
+import type { ExecutionId, FileLocation } from '@shared/schemas';
 
 // Local imports - tools
-import type { ExecutionId, FileLocation } from '@shared/schemas';
+import { requireRuntimeHost } from '@tools/contextHelpers';
 import { ToolError, type ToolResult } from '@tools/result';
 import { formatResultCount, pluralize } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
