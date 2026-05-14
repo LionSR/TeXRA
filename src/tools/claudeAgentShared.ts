@@ -5,6 +5,14 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 export const CLAUDE_AGENT_NAME = 'claude_agent';
 export const CLAUDE_AGENT_DISPLAY_MODEL = 'claude';
+export const CLAUDE_AGENT_PERMISSION_MODES = [
+  'default',
+  'acceptEdits',
+  'bypassPermissions',
+  'plan',
+] as const;
+export type ClaudeAgentPermissionMode =
+  (typeof CLAUDE_AGENT_PERMISSION_MODES)[number];
 
 const SUMMARY_MAX_LENGTH = 60;
 type ToolUseStatus = NonNullable<ToolUseLog['status']>;
