@@ -24,6 +24,7 @@ export const DESKTOP_LOCAL_COMMANDS = {
   SHOW_LOGS: 'texra.desktop.showLogs',
   OPEN_LOG_FOLDER: 'texra.desktop.openLogFolder',
   OPEN_WORKSPACE_FOLDER: 'texra.desktop.openWorkspaceFolder',
+  OPEN_WORKSPACE_IN_NEW_WINDOW: 'texra.desktop.openWorkspaceInNewWindow',
   SHOW_FIRST_RUN_WALKTHROUGH: 'texra.desktop.showFirstRunWalkthrough',
   OPEN_DESKTOP_DOCS: 'texra.desktop.openDesktopDocs',
 } as const;
@@ -39,6 +40,7 @@ const DESKTOP_MENU_GROUPS = [
     'texra.showProgressView',
     DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
     DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+    DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
     DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
     'texra.openSettings',
     'texra.mainView.reset',
@@ -92,6 +94,7 @@ export interface DesktopCommandActions {
   openDesktopDocs?(): void;
   openLogFolder?(): void;
   openWorkspaceFolder?(): void;
+  openWorkspaceInNewWindow?(): void;
   showFirstRunWalkthrough?(): void;
   resetMainView?(): void;
 }
@@ -137,6 +140,16 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       label: 'Open Folder',
       category: 'TeXRA',
       accelerator: 'CommandOrControl+O',
+      enabled: true,
+    },
+  ],
+  [
+    DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
+    {
+      id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
+      label: 'New Window',
+      category: 'TeXRA',
+      accelerator: 'CommandOrControl+Shift+N',
       enabled: true,
     },
   ],
@@ -299,6 +312,11 @@ const DESKTOP_COMMAND_HANDLERS = {
   [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: (actions) => {
     if (!actions.openWorkspaceFolder) return false;
     actions.openWorkspaceFolder();
+    return true;
+  },
+  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW]: (actions) => {
+    if (!actions.openWorkspaceInNewWindow) return false;
+    actions.openWorkspaceInNewWindow();
     return true;
   },
   [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: (actions) => {
