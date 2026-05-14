@@ -16,9 +16,8 @@ export type RoundFinalizedCallback = (
 ) => void | Promise<void>;
 
 /** Services for response cycle flow nodes. */
-export interface ResponseCycleServices<
-  C = unknown,
-> extends BaseFlowContextInit<C> {
+export interface ResponseCycleServices<C = unknown>
+  extends BaseFlowContextInit<C> {
   readonly client: C;
   readonly fileService: TaskRunFileService;
   readonly run: AgentRunStateSnapshot;
@@ -27,9 +26,8 @@ export interface ResponseCycleServices<
 }
 
 /** Services for tool-use cycle flow nodes. */
-export interface ToolUseCycleServices<
-  C = unknown,
-> extends BaseFlowContextInit<C> {
+export interface ToolUseCycleServices<C = unknown>
+  extends BaseFlowContextInit<C> {
   readonly client: C;
   readonly toolRegistry: IToolRegistry;
   /** Session for injecting queued user messages after tool dispatch. */
