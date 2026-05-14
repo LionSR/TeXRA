@@ -23,18 +23,14 @@ export interface IconActionButtonOptions {
   readonly onClick?: (event: MouseEvent) => void;
 }
 
-export interface LabeledActionButtonOptions extends Omit<
-  IconActionButtonOptions,
-  'label'
-> {
+export interface LabeledActionButtonOptions
+  extends Omit<IconActionButtonOptions, 'label'> {
   readonly text: string;
   readonly label?: string;
 }
 
-interface ActionButtonBaseOptions extends Omit<
-  IconActionButtonOptions,
-  'label'
-> {
+interface ActionButtonBaseOptions
+  extends Omit<IconActionButtonOptions, 'label'> {
   readonly label?: string;
   readonly text?: string;
 }

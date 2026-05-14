@@ -10,8 +10,9 @@ useLitComponentTestDom(
 
 describe('terminal-output text update planning', () => {
   it('writes only the appended suffix when output grows', async () => {
-    const { planTerminalTextUpdate } =
-      await import('@progressView/frontend/components/TerminalOutput');
+    const { planTerminalTextUpdate } = await import(
+      '@progressView/frontend/components/TerminalOutput'
+    );
 
     expect(planTerminalTextUpdate('alpha\n', 'alpha\nbeta\n')).toEqual({
       reset: false,
@@ -20,8 +21,9 @@ describe('terminal-output text update planning', () => {
   });
 
   it('falls back to a reset when retained output is replaced', async () => {
-    const { planTerminalTextUpdate } =
-      await import('@progressView/frontend/components/TerminalOutput');
+    const { planTerminalTextUpdate } = await import(
+      '@progressView/frontend/components/TerminalOutput'
+    );
 
     expect(planTerminalTextUpdate('alpha\nbeta\n', 'beta\n')).toEqual({
       reset: true,
@@ -30,8 +32,9 @@ describe('terminal-output text update planning', () => {
   });
 
   it('counts terminal rows without allocating split arrays', async () => {
-    const { countTerminalRows } =
-      await import('@progressView/frontend/components/TerminalOutput');
+    const { countTerminalRows } = await import(
+      '@progressView/frontend/components/TerminalOutput'
+    );
 
     expect(countTerminalRows('')).toBe(1);
     expect(countTerminalRows('one')).toBe(1);
@@ -39,8 +42,9 @@ describe('terminal-output text update planning', () => {
   });
 
   it('updates row count incrementally for appended output', async () => {
-    const { nextTerminalRowCount, planTerminalTextUpdate } =
-      await import('@progressView/frontend/components/TerminalOutput');
+    const { nextTerminalRowCount, planTerminalTextUpdate } = await import(
+      '@progressView/frontend/components/TerminalOutput'
+    );
 
     const updatePlan = planTerminalTextUpdate('alpha\n', 'alpha\nbeta\ngamma');
 
@@ -48,8 +52,9 @@ describe('terminal-output text update planning', () => {
   });
 
   it('recounts rows when output is reset after trimming', async () => {
-    const { nextTerminalRowCount, planTerminalTextUpdate } =
-      await import('@progressView/frontend/components/TerminalOutput');
+    const { nextTerminalRowCount, planTerminalTextUpdate } = await import(
+      '@progressView/frontend/components/TerminalOutput'
+    );
 
     const updatePlan = planTerminalTextUpdate('alpha\nbeta\n', 'beta\ngamma\n');
 

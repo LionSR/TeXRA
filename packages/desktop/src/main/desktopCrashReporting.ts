@@ -151,8 +151,9 @@ export async function initializeDesktopCrashReporting({
   const scrubCrashEvent = createDesktopCrashEventScrubber(sensitivePaths);
 
   try {
-    const sentry =
-      (await import('@sentry/electron/main')) as unknown as SentryMainModule;
+    const sentry = (await import(
+      '@sentry/electron/main'
+    )) as unknown as SentryMainModule;
     sentry.init({
       dsn,
       tracesSampleRate: 0,
