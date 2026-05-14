@@ -42,6 +42,8 @@ export interface StreamLogs {
   logs: LogMessageData[];
   /** O(1) lookup: log ID → array index. Maintained by mutation handlers. */
   logIndex: Map<string, number>;
+  /** O(1) lookup: task group ID → array index. Maintained by log handlers. */
+  taskGroupIndex: Map<string, number>;
   /**
    * Existing log-message indices updated by the most recent backend delta.
    * Pure append batches leave this empty so renderers can skip whole-log scans.
@@ -55,6 +57,7 @@ export interface StreamLogs {
 export const EMPTY_STREAM_LOGS: StreamLogs = {
   logs: [],
   logIndex: new Map(),
+  taskGroupIndex: new Map(),
   updatedMessageIndices: [],
   updatedMessageBaseGeneration: 0,
   generation: 0,
