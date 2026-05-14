@@ -74,7 +74,9 @@ function getStorageDir(): string {
 
 function getRuntimeHost(): AgentRuntimeHost {
   if (!runtimeHost) {
-    throw new Error('Tool edit approval has not been initialized.');
+    throw new Error(
+      'Tool edit approval runtime host has not been initialized.',
+    );
   }
   return runtimeHost;
 }
