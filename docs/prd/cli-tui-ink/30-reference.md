@@ -13,6 +13,7 @@
 | `Ctrl-P`            | Command palette                                                                                                                                                                                                                                                |
 | `Ctrl-O`            | Expand truncated content (long diffs, collapsed summaries)                                                                                                                                                                                                     |
 | `Ctrl-A` / `Ctrl-B` | Cycle active child / back to parent (avoiding `Ctrl-Shift-A`, which collapses to `Ctrl-A` on many terminals). **Only when InputBar is not focused** — inside the input these stay as readline start-of-line / back-one-char to match bash / zsh muscle memory. |
+| `Ctrl-Y`            | Yolo-for-turn (auto-approve subsequent bash calls in the current turn). **Only inside an open bash-approval modal** — see [mockups/03-approval-bash.md](../cli-tui-ink/mockups/03-approval-bash.md).                                                           |
 | `0`                 | Jump back to root stream                                                                                                                                                                                                                                       |
 | `1`–`9`             | Jump to subagent row                                                                                                                                                                                                                                           |
 | `Ctrl-T`            | Tab view (Conversation / Subagents / Todos+Plan / Logs)                                                                                                                                                                                                        |
@@ -62,7 +63,7 @@ Two TUI features the webview does **not** have today: a slash-command palette, a
 - A user pastes a 50-line LaTeX block and sees **one** submission (not 50), with the full block in the input buffer ready for review before sending.
 - `texra run --output-format ndjson` output byte-identical before/after.
 - `texra chat --legacy-renderer` byte-identical to today.
-- `texra chat | tee transcript.txt` produces a clean ANSI-free transcript (or plain-text with `--print`).
+- `texra chat | tee transcript.txt` produces a chrome-free transcript: color SGRs preserved (so `less -R transcript.txt` shows highlighting), no cursor codes, no Ink chrome. `NO_COLOR=1` strips colors as well. `--print` continues to produce the existing headless output, unchanged.
 - Frame telemetry trace logs land in the standard logger.
 - A 3-subagent run that finishes while the user is in a different tmux window surfaces a terminal notification, not silent completion.
 - `Ctrl-F` opens the transcript-search overlay and highlights matches correctly on emoji / CJK content.
