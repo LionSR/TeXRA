@@ -17,6 +17,7 @@ type ToolUseStatus = NonNullable<ToolUseLog['status']>;
  */
 export interface ClaudeMessageBlock {
   type: string;
+  id?: string;
   text?: string;
   thinking?: string;
   name?: string;
