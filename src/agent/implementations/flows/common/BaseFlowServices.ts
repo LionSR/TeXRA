@@ -1,4 +1,8 @@
-import type { IModelHandler } from '@agent/modelHandlers/types/IModelHandler';
+import type {
+  IModelHandler,
+  SdkToolCall,
+} from '@agent/modelHandlers/types/IModelHandler';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
@@ -9,7 +13,13 @@ import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 
 export interface AgentCore<C = unknown> {
-  modelHandler: IModelHandler<any, any, any, any, C>;
+  modelHandler: IModelHandler<
+    ProviderMessage,
+    unknown,
+    unknown,
+    SdkToolCall,
+    C
+  >;
   config: AgentConfig;
   setting: AgentSetting;
   prompt: AgentPrompt;

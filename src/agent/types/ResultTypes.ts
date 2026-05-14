@@ -4,7 +4,7 @@
 // Third-party imports
 import { z } from 'zod';
 
-export const ExecResultSchema = z.strictObject({
+const ExecResultSchema = z.strictObject({
   /** Indicates whether the command succeeded */
   success: z.boolean(),
   /** Standard output from the command, if available */
@@ -20,17 +20,14 @@ export const ExecResultSchema = z.strictObject({
 export type ExecResult = z.infer<typeof ExecResultSchema>;
 
 /** Status values for file operations - single source of truth */
-export const FileOpStatusSchema = z.enum([
+const FileOpStatusSchema = z.enum([
   'success',
   'noFiles',
   'missingParams',
   'error',
 ]);
 
-/** Derived type from schema */
-export type FileOpStatus = z.infer<typeof FileOpStatusSchema>;
-
-export const FileOpResultSchema = z.strictObject({
+const FileOpResultSchema = z.strictObject({
   /** Outcome of the pack or clean operation */
   status: FileOpStatusSchema,
   /** Output directory if files were packed */

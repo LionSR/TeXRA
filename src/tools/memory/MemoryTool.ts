@@ -5,7 +5,7 @@ import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports
-import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { isDirectory } from '@common/files/fsEntryType';
 import { formatRelativeTime } from '@shared/utils/string';
 import { StorageFS } from '@utils/files';
@@ -185,7 +185,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     content: string,
     existingMeta?: MemoryFileMeta | null,
   ): Promise<void> {
-    const ctx = getCurrentToolRunContext();
+    const ctx = tryUseRunContext();
     const meta = createMeta(ctx?.agentName, ctx?.executionId, existingMeta);
     await StorageFS.write(resolvedPath, buildFile(content, meta));
   }

@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Internal imports
-import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import * as logger from '@agent/core/logger';
 import { toErrorMessage } from '@common/errors';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
@@ -85,7 +85,7 @@ export class AddCriticismTool extends defineTool({
 }) {
   protected async execute(input: AddCriticismInput): Promise<ToolResult> {
     try {
-      const workingDirectory = getCurrentToolRunContext()?.workingDirectory;
+      const workingDirectory = tryUseRunContext()?.workingDirectory;
       const resolved = resolveWorkspaceRelativePath(
         input.path,
         workingDirectory,
