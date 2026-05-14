@@ -4,6 +4,20 @@ export interface TerminalOptions {
   env?: Record<string, string | undefined>;
 }
 
+export interface TerminalRunRequest extends TerminalOptions {
+  command: string;
+  /** Hard cap on how long to wait for captured execution. */
+  timeoutMs: number;
+}
+
+export interface TerminalRunResult {
+  /** Undefined when the host cannot observe the command exit code. */
+  exitCode: number | undefined;
+  /** ANSI-stripped, length-capped tail of command output when available. */
+  output: string;
+  timedOut: boolean;
+}
+
 export interface TerminalHandle {
   readonly name: string;
   sendText(text: string, shouldExecute?: boolean): void;
@@ -15,4 +29,8 @@ export interface TerminalHost {
   createTerminal(options: TerminalOptions): TerminalHandle;
   findTerminal(name: string): TerminalHandle | undefined;
   getTerminals(): readonly TerminalHandle[];
+}
+
+export interface TerminalRunner {
+  runCommand(request: TerminalRunRequest): Promise<TerminalRunResult>;
 }
