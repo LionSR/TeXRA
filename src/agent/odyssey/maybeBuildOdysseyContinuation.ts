@@ -16,14 +16,20 @@ export interface OdysseyContinuationContext {
 /**
  * Pre-wait Odyssey continuation check.
  *
- * Returns a synthesized followUp string when:
+ * Returns a rendered continuation prompt when:
  *   - the feature flag is on,
  *   - the current node is NOT a subagent (parent orchestrator owns continuation),
- *   - no user followUp is already queued,
+ *   - no user followUp is already queued (caller-supplied snapshot),
  *   - the stream has an Odyssey with status `active`.
  *
  * Returns null in every other case so the caller falls back to the
  * normal blocking wait.
+ *
+ * Pure: no side effects on the OdysseyStore. The caller is responsible
+ * for recording the `continuation_injected` audit event AFTER deciding
+ * to use the result — this lets it re-check `hasQueuedFollowUp` post-
+ * await and drop the synthesized followUp if user input has arrived in
+ * the meantime, without polluting the audit history.
  *
  * Called from `ToolUseWaitNode.exec()` BEFORE `session.waitForFollowUp`
  * — the wait blocks indefinitely on an empty queue, so the continuation
@@ -41,9 +47,5 @@ export async function maybeBuildOdysseyContinuation(
   const odyssey = OdysseyStore.getForStream(ctx.streamId);
   if (!odyssey || odyssey.status !== 'active') return null;
 
-  const followUp = await buildContinuationFollowUp(odyssey);
-  // Best-effort audit. recordEvent is a no-op if the record has been
-  // deleted between the read above and this call (race with abandon).
-  await OdysseyStore.recordEvent(ctx.streamId, 'continuation_injected');
-  return followUp;
+  return buildContinuationFollowUp(odyssey);
 }
