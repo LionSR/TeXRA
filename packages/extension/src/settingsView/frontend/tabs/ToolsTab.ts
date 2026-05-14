@@ -213,7 +213,6 @@ export class ToolsTab extends LitElement {
         margin-top: var(--wa-space-2xs);
         flex-wrap: wrap;
       }
-
     `,
   ];
 
