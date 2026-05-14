@@ -19,9 +19,7 @@ type ModelOutputBackups = Map<
   Map<string, { content: string; streamId: StreamTabId }>
 >;
 
-export class ProgressStreamLifecycleHost
-  implements ProgressStreamLifecycleHostPort
-{
+export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostPort {
   constructor(
     private readonly provider: ProgressViewProvider,
     private readonly modelOutputBackups: ModelOutputBackups,
