@@ -7,6 +7,7 @@ import {
   registerExecution,
   writeTerminalStatus,
 } from '@agent/storage';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   getCurrentToolContexts,
   type ToolCallContext,
@@ -127,6 +128,7 @@ export class BashTool extends defineTool({
         timeoutMs,
         runContext?.streamId,
         runContext?.executionId,
+        runContext?.runtimeHost,
         cwd,
       );
     }
@@ -184,11 +186,12 @@ export class BashTool extends defineTool({
     timeoutMs: number,
     parentStreamId: StreamTabId | undefined,
     parentExecutionId: ExecutionId | undefined,
+    runtimeHost: AgentRuntimeHost | undefined,
     cwd?: string,
   ): Promise<ToolResult> {
-    if (!parentStreamId) {
+    if (!parentStreamId || !runtimeHost) {
       throw new ToolError(
-        'Background execution requires a parent stream context.',
+        'Background execution requires a parent stream runtime context.',
       );
     }
 
@@ -222,6 +225,7 @@ export class BashTool extends defineTool({
         description: command,
         config: syntheticConfig,
         toolName: 'bash',
+        runtimeHost,
       },
     );
     let stdoutTail = '';
@@ -284,7 +288,7 @@ export class BashTool extends defineTool({
         const terminalStatus = result.success ? 'completed' : 'error';
         await writeTerminalStatus(executionId, terminalStatus).catch(() => {});
         unregisterInterruptible(childStreamId);
-        finalizeChildStream(childStreamId, executionId, logger, {
+        finalizeChildStream(childStreamId, executionId, logger, runtimeHost, {
           wallTimeMs,
           error: result.success
             ? undefined
@@ -308,7 +312,7 @@ export class BashTool extends defineTool({
       .catch(async (err: unknown) => {
         await writeTerminalStatus(executionId, 'error').catch(() => {});
         unregisterInterruptible(childStreamId);
-        finalizeChildStream(childStreamId, executionId, logger, {
+        finalizeChildStream(childStreamId, executionId, logger, runtimeHost, {
           error: err,
           autoClose: true,
         });
