@@ -5,7 +5,7 @@ import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports - tools
-import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { ToolError, type ToolResult } from '@tools/result';
 import { isOversizedImage, MANY_IMAGE_MAX_DIMENSION } from '@tools/imageUtils';
 import { buildFileAttachment } from '@tools/attachments';
@@ -67,9 +67,7 @@ export class ReadFileTool extends defineTool({
   schema: ReadInputSchema,
 }) {
   protected async execute(input: ReadInput): Promise<ToolResult> {
-    const root = parseWorkingDirectory(
-      getCurrentToolRunContext()?.workingDirectory,
-    );
+    const root = parseWorkingDirectory(tryUseRunContext()?.workingDirectory);
     const { path: resolved, display: displayPath } = resolveAndFormat(
       input.path,
       root,

@@ -7,7 +7,7 @@ import {
 import { z } from 'zod';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { getConfig } from '@agent/core/config';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import {
@@ -233,7 +233,7 @@ export async function requestToolEditApproval(
     true,
   );
 
-  const context = getCurrentToolRunContext();
+  const context = tryUseRunContext();
   const preparedRequest =
     request.streamId || !context?.streamId
       ? request
