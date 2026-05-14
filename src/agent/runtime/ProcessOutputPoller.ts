@@ -1,6 +1,9 @@
 // Node imports
 import * as fs from 'fs';
 
+// Third-party imports
+import pMap from 'p-map';
+
 // Local imports - shared
 import type { StreamTabId } from '@shared/schemas';
 
@@ -18,6 +21,9 @@ const OUTPUT_POLL_INTERVAL_MS = 500;
 
 /** Max bytes to read per file per poll to prevent huge allocations. */
 const MAX_READ_PER_POLL = 128 * 1024;
+
+/** Max process output sources read concurrently on each poll tick. */
+const OUTPUT_POLL_CONCURRENCY = 8;
 
 /** Tracks byte offsets already sent per executionId per stream. */
 const outputOffsets = new Map<string, { stdout: number; stderr: number }>();
@@ -94,8 +100,9 @@ function schedulePoll(): void {
 }
 
 async function pollProcessOutputs(): Promise<void> {
-  await Promise.all(
-    [...processOutputs.values()].map((source) => {
+  await pMap(
+    [...processOutputs.values()],
+    (source) => {
       const { outputPaths } = source.handle;
       if (!outputPaths) return Promise.resolve();
       return readIncremental(
@@ -105,7 +112,8 @@ async function pollProcessOutputs(): Promise<void> {
         outputPaths.stderr,
         source.runtimeHost,
       );
-    }),
+    },
+    { concurrency: OUTPUT_POLL_CONCURRENCY },
   );
 }
 
