@@ -74,6 +74,7 @@ StreamStatusService.onDidChange ┘  (@lit-labs/signals, same           │
 
 Approval payloads (intercepted in host.emit) ──► approvalQueue (p-queue, concurrency: 1)
                                                        └──► launcher returns Promise<Decision>
+                                                            head of queue → cliState.currentApproval signal
                                                             <ApprovalModal> dispatches to today's resolvers
 ```
 
@@ -85,7 +86,7 @@ packages/cli/src/chat/tui/
 ├── state/
 │   ├── cliState.ts                 (@lit-labs/signals; mirrors progressState shape, activeStreamId: StreamTabId | null)
 │   ├── useSignal.ts                (≈10-line useSyncExternalStore bridge)
-│   ├── subscribeRuntimeHost.ts     (wraps runtimeHost.emit; routes payloads → signal patches and approvalQueue)
+│   ├── subscribeRuntimeHost.ts     (wraps runtimeHost.emit; routes payloads → signal patches and the approval p-queue)
 │   ├── subscribeStreamLog.ts       (StreamLogStore.onChange → signal patch)
 │   ├── subscribeStreamStatus.ts    (StreamStatusService.onDidChange → signal patch)
 │   └── terminalCapabilities.ts     (DA1-sentinel feature discovery; populates signal at startup)
@@ -168,7 +169,7 @@ This replaces stderr prompts with a typed React dispatch. The implementation pat
   1. constructs the typed payload from the runtime-host event;
   2. enqueues it on a `p-queue` instance with `concurrency: 1` (the approval queue);
   3. returns a `Promise<Decision>` that resolves when the user answers.
-- Inside the queue, the head item is pushed onto the `cliState.approvalQueue` signal. `<ApprovalModal>` reads the signal, dispatches by the payload's discriminant, and calls `resolve(decision)` on action. The queue then advances to the next item.
+- Inside the queue, the head item is pushed onto the `cliState.currentApproval` signal (a single-item view of the queue head, not a parallel queue). `<ApprovalModal>` reads the signal, dispatches by the payload's discriminant, and calls `resolve(decision)` on action. The p-queue then advances and writes the next head.
 
 This gives the simplicity of `await launchBashApproval(payload)` at the call site **without** losing the ability to serialize concurrent approvals from different subagent streams — which the original FIFO queue was designed to handle.
 
