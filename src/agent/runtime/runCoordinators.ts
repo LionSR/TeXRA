@@ -14,7 +14,11 @@ import {
   type RetryRequestOptions,
   type RetryResult,
 } from './RetryRequestCoordinator';
-import { tryUseRunContext, type RunCoordinators } from './RunContext';
+import {
+  tryUseRunContext,
+  useRunContext,
+  type RunCoordinators,
+} from './RunContext';
 
 const legacyCoordinators: RunCoordinators = {
   plan: planApprovalCoordinator,
@@ -22,9 +26,12 @@ const legacyCoordinators: RunCoordinators = {
   retry: retryCoordinator,
 };
 
-/** Return the active run's coordinators, falling back to legacy singletons. */
-function getRunCoordinators(): RunCoordinators {
-  return tryUseRunContext()?.coordinators ?? legacyCoordinators;
+function useRunCoordinators(): RunCoordinators {
+  const coordinators = useRunContext().coordinators;
+  if (!coordinators) {
+    throw new Error('run coordinator request requires active run coordinators');
+  }
+  return coordinators;
 }
 
 const bridgeState = {
@@ -82,7 +89,7 @@ export async function waitForPlanApproval(
   streamId: string,
   options: PlanApprovalRequestOptions,
 ): Promise<PlanApprovalResult> {
-  const coordinators = getRunCoordinators();
+  const coordinators = useRunCoordinators();
   bridgeState.planApprovals.set(options.approvalId, coordinators);
   bridgeState.planApprovalStreams.set(options.approvalId, streamId);
   bridgeState.planStreams.set(streamId, coordinators);
@@ -135,7 +142,7 @@ export async function waitForProposal(
   streamId: string,
   options: ProposalRequestOptions,
 ): Promise<ProposalResult> {
-  const coordinators = getRunCoordinators();
+  const coordinators = useRunCoordinators();
   bridgeState.proposals.set(options.proposalId, coordinators);
   bridgeState.proposalStreams.set(options.proposalId, streamId);
   try {
@@ -184,7 +191,7 @@ export async function waitForRetry(
   streamId: string,
   options: RetryRequestOptions,
 ): Promise<RetryResult> {
-  const coordinators = getRunCoordinators();
+  const coordinators = useRunCoordinators();
   retainRetryCoordinator(coordinators);
   bridgeState.retries.set(streamId, coordinators);
   try {
