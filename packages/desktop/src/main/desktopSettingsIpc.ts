@@ -219,7 +219,6 @@ async function findToolCommand(
   return kind === 'install' ? def?.installCommand : def?.authCommand;
 }
 
-
 export function createDesktopSettingsIpc(
   options: DesktopSettingsIpcOptions,
 ): DesktopSettingsIpc {
