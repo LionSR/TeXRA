@@ -9,8 +9,10 @@ import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import {
   CLAUDE_AGENT_NAME,
   CLAUDE_AGENT_DISPLAY_MODEL,
+  CLAUDE_AGENT_EFFORT_LEVELS,
   CLAUDE_AGENT_MODELS,
   CLAUDE_AGENT_PERMISSION_MODES,
+  type ClaudeAgentEffort,
   type ClaudeAgentModel,
   type ClaudeAgentPermissionMode,
 } from './claudeAgentShared';
@@ -56,6 +58,26 @@ export function getClaudeAgentPermissionMode(): ClaudeAgentPermissionMode {
     PERMISSION_MODE_DEFAULT,
   );
   return parseClaudeAgentPermissionMode(raw);
+}
+
+// ============================================================================
+// Effort — adaptive thinking depth hint passed via `effort` SDK option
+// ============================================================================
+
+const EFFORT_DEFAULT: ClaudeAgentEffort = 'high';
+
+export function parseClaudeAgentEffort(raw: string): ClaudeAgentEffort {
+  return (CLAUDE_AGENT_EFFORT_LEVELS as readonly string[]).includes(raw)
+    ? (raw as ClaudeAgentEffort)
+    : EFFORT_DEFAULT;
+}
+
+export function getClaudeAgentEffort(): ClaudeAgentEffort {
+  const raw = getWorkspaceState().get<string>(
+    WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
+    EFFORT_DEFAULT,
+  );
+  return parseClaudeAgentEffort(raw);
 }
 
 // ============================================================================

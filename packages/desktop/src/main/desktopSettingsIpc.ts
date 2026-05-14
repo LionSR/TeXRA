@@ -80,6 +80,7 @@ import {
 } from '@tools/codexConfig';
 import {
   CLAUDE_AGENT_DEFAULT_MODEL,
+  parseClaudeAgentEffort,
   parseClaudeAgentModel,
   parseClaudeAgentPermissionMode,
 } from '@tools/claudeAgentConfig';
@@ -748,6 +749,12 @@ export function createDesktopSettingsIpc(
           'acceptEdits',
         ) ?? 'acceptEdits',
       ),
+      claudeAgentEffort: parseClaudeAgentEffort(
+        workspaceState.get<string>(
+          WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
+          'high',
+        ) ?? 'high',
+      ),
     });
   }
 
@@ -1352,6 +1359,14 @@ export function createDesktopSettingsIpc(
             updateAgentSetting(
               WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
               result.data.mode,
+            ),
+          );
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_EFFORT:
+          runAsync(
+            updateAgentSetting(
+              WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
+              result.data.effort,
             ),
           );
           return true;

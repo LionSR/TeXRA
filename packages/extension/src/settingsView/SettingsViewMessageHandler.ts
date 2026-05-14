@@ -111,8 +111,10 @@ import {
   parseCodexApprovalPolicy,
 } from '@tools/codexConfig';
 import {
-  getClaudeAgentModel,
-  getClaudeAgentPermissionMode,
+  CLAUDE_AGENT_DEFAULT_MODEL,
+  parseClaudeAgentEffort,
+  parseClaudeAgentModel,
+  parseClaudeAgentPermissionMode,
 } from '@tools/claudeAgentConfig';
 import { findExternalToolDef } from '@tools/externalToolDefs';
 import {
@@ -601,6 +603,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.updateAgentSetting(
           WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
           data.mode,
+        ),
+      [SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_EFFORT]: (data) =>
+        this.updateAgentSetting(
+          WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
+          data.effort,
         ),
 
       // Tool dashboard handlers
@@ -1106,8 +1113,24 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           'never',
         ) ?? 'never',
       ),
-      claudeAgentModel: getClaudeAgentModel(),
-      claudeAgentPermissionMode: getClaudeAgentPermissionMode(),
+      claudeAgentModel: parseClaudeAgentModel(
+        workspaceSM.get<string>(
+          WorkspaceStateKey.CLAUDE_AGENT_MODEL,
+          CLAUDE_AGENT_DEFAULT_MODEL,
+        ) ?? CLAUDE_AGENT_DEFAULT_MODEL,
+      ),
+      claudeAgentPermissionMode: parseClaudeAgentPermissionMode(
+        workspaceSM.get<string>(
+          WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
+          'acceptEdits',
+        ) ?? 'acceptEdits',
+      ),
+      claudeAgentEffort: parseClaudeAgentEffort(
+        workspaceSM.get<string>(
+          WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
+          'high',
+        ) ?? 'high',
+      ),
     });
   }
 

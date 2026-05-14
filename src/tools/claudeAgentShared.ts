@@ -14,6 +14,17 @@ export const CLAUDE_AGENT_PERMISSION_MODES = [
 export type ClaudeAgentPermissionMode =
   (typeof CLAUDE_AGENT_PERMISSION_MODES)[number];
 
+/** Effort levels mirror the SDK's `EffortLevel` (low → max). Claude decides
+ * adaptively how much thinking to do, scaled by this hint. */
+export const CLAUDE_AGENT_EFFORT_LEVELS = [
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const;
+export type ClaudeAgentEffort = (typeof CLAUDE_AGENT_EFFORT_LEVELS)[number];
+
 /** Canonical Claude model IDs surfaced by the settings dropdown.
  * The SDK accepts arbitrary model strings; this list is what we expose in the
  * UI. Keep it in sync with `ClaudeAgentModelSchema` in settingsViewMessages.ts.

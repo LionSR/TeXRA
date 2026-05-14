@@ -36,6 +36,7 @@ import {
 } from '@shared/wa/webAwesomeIcons';
 import {
   type AgentSelectionItem,
+  type ClaudeAgentEffort,
   type ClaudeAgentModel,
   type ClaudeAgentPermissionMode,
   type LatexConfigValues,
@@ -289,6 +290,7 @@ export class SettingsApp extends SettingsAppBase {
     signal<ClaudeAgentModel>('claude-opus-4-7');
   private readonly claudeAgentPermissionMode =
     signal<ClaudeAgentPermissionMode>('acceptEdits');
+  private readonly claudeAgentEffort = signal<ClaudeAgentEffort>('high');
 
   // Tool dashboard state
   private readonly toolDashboardItems = signal<ToolDashboardItem[]>([]);
@@ -349,6 +351,7 @@ export class SettingsApp extends SettingsAppBase {
       codexApprovalPolicy: this.codexApprovalPolicy,
       claudeAgentModel: this.claudeAgentModel,
       claudeAgentPermissionMode: this.claudeAgentPermissionMode,
+      claudeAgentEffort: this.claudeAgentEffort,
       toolDashboardItems: this.toolDashboardItems,
       toolDashboardLoaded: this.toolDashboardLoaded,
       gitMarkCommits: this.gitMarkCommits,
@@ -670,6 +673,10 @@ export class SettingsApp extends SettingsAppBase {
 
   private handleClaudeAgentPermissionModeChange = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_PERMISSION_MODE,
+  );
+
+  private handleClaudeAgentEffortChange = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_EFFORT,
   );
 
   // Git settings event handlers
@@ -1104,6 +1111,7 @@ export class SettingsApp extends SettingsAppBase {
               .codexApprovalPolicy=${this.codexApprovalPolicy.get()}
               .claudeAgentModel=${this.claudeAgentModel.get()}
               .claudeAgentPermissionMode=${this.claudeAgentPermissionMode.get()}
+              .claudeAgentEffort=${this.claudeAgentEffort.get()}
               @tool-open-url=${this.handleToolOpenUrl}
               @tool-install-extension=${this.handleToolInstallExtension}
               @tool-run-command=${this.handleToolRunCommand}
@@ -1117,6 +1125,7 @@ export class SettingsApp extends SettingsAppBase {
               @claude-agent-model-change=${this.handleClaudeAgentModelChange}
               @claude-agent-permission-mode-change=${this
                 .handleClaudeAgentPermissionModeChange}
+              @claude-agent-effort-change=${this.handleClaudeAgentEffortChange}
             ></ai-agents-tab>
           </wa-tab-panel>
 
