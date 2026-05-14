@@ -36,6 +36,9 @@ import {
 } from '@shared/wa/webAwesomeIcons';
 import {
   type AgentSelectionItem,
+  type ClaudeAgentEffort,
+  type ClaudeAgentModel,
+  type ClaudeAgentPermissionMode,
   type LatexConfigValues,
   type NumberVscodeSetting,
   type PRSubscriptionEntry,
@@ -283,6 +286,11 @@ export class SettingsApp extends SettingsAppBase {
   private readonly codexSandboxMode = signal<string>('workspace-write');
   private readonly codexReasoningEffort = signal<string>('high');
   private readonly codexApprovalPolicy = signal<string>('never');
+  private readonly claudeAgentModel =
+    signal<ClaudeAgentModel>('claude-opus-4-7');
+  private readonly claudeAgentPermissionMode =
+    signal<ClaudeAgentPermissionMode>('acceptEdits');
+  private readonly claudeAgentEffort = signal<ClaudeAgentEffort>('high');
 
   // Tool dashboard state
   private readonly toolDashboardItems = signal<ToolDashboardItem[]>([]);
@@ -341,6 +349,9 @@ export class SettingsApp extends SettingsAppBase {
       codexSandboxMode: this.codexSandboxMode,
       codexReasoningEffort: this.codexReasoningEffort,
       codexApprovalPolicy: this.codexApprovalPolicy,
+      claudeAgentModel: this.claudeAgentModel,
+      claudeAgentPermissionMode: this.claudeAgentPermissionMode,
+      claudeAgentEffort: this.claudeAgentEffort,
       toolDashboardItems: this.toolDashboardItems,
       toolDashboardLoaded: this.toolDashboardLoaded,
       gitMarkCommits: this.gitMarkCommits,
@@ -654,6 +665,18 @@ export class SettingsApp extends SettingsAppBase {
 
   private handleCodexApprovalPolicyChange = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_CODEX_APPROVAL_POLICY,
+  );
+
+  private handleClaudeAgentModelChange = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_MODEL,
+  );
+
+  private handleClaudeAgentPermissionModeChange = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_PERMISSION_MODE,
+  );
+
+  private handleClaudeAgentEffortChange = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_EFFORT,
   );
 
   // Git settings event handlers
@@ -1086,6 +1109,9 @@ export class SettingsApp extends SettingsAppBase {
               .codexSandboxMode=${this.codexSandboxMode.get()}
               .codexReasoningEffort=${this.codexReasoningEffort.get()}
               .codexApprovalPolicy=${this.codexApprovalPolicy.get()}
+              .claudeAgentModel=${this.claudeAgentModel.get()}
+              .claudeAgentPermissionMode=${this.claudeAgentPermissionMode.get()}
+              .claudeAgentEffort=${this.claudeAgentEffort.get()}
               @tool-open-url=${this.handleToolOpenUrl}
               @tool-install-extension=${this.handleToolInstallExtension}
               @tool-run-command=${this.handleToolRunCommand}
@@ -1096,6 +1122,10 @@ export class SettingsApp extends SettingsAppBase {
                 .handleCodexReasoningEffortChange}
               @codex-approval-policy-change=${this
                 .handleCodexApprovalPolicyChange}
+              @claude-agent-model-change=${this.handleClaudeAgentModelChange}
+              @claude-agent-permission-mode-change=${this
+                .handleClaudeAgentPermissionModeChange}
+              @claude-agent-effort-change=${this.handleClaudeAgentEffortChange}
             ></ai-agents-tab>
           </wa-tab-panel>
 
