@@ -36,7 +36,7 @@ What is missing is **runtime integration** — `src/skills/` has no loader, no p
 - **G1.** Implement an Agent Skills spec-compliant loader: discover `SKILL.md` files, parse frontmatter, expose a list of `{name, description, body, baseDir}` to the runtime.
 - **G2.** Prompt injection at turn boundaries: surface available skill names + descriptions to the model. Provider-agnostic format (plain text). Token-budgeted.
 - **G3.** Skill activation: model can invoke a skill (via dedicated tool or file-read) and have its `SKILL.md` body injected.
-- **G4.** Interop discovery: read skills from `.texra/skills/`, `~/.texra/skills/`, and (opt-in) `.claude/skills/`, `~/.claude/skills/`, `.codex/skills/`, `~/.codex/skills/`.
+- **G4.** Multi-source discovery: read skills from `<repoRoot>/skills/` (bundled), `~/.texra/skills/` (user), `<workspace>/.texra/skills/` (project), and (opt-in) `.claude/skills/`, `~/.claude/skills/`, `.codex/skills/`, `~/.codex/skills/`.
 - **G5.** `inherits_skill:` mechanism in YAML agents so multi-round CoT agents (`critiqueFix`, `verifyFix`) can keep their runtime while sourcing prompt content from a skill.
 - **G6.** Migrate single-round prompt agents from `texra-agent-prompts/` to skills. ~70-80% of the 139.
 - **G7.** Settings UI tab listing discovered skills (similar to existing Agents tab).
@@ -146,12 +146,13 @@ Convert the 139 YAMLs to skills/agents per the categorization below. Done in bat
 
 Surveyed `texra-agent-prompts/`. Breakdown:
 
-| Category                                                  | Count | Disposition                                                                                                           |
-| --------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------- |
-| **Single-round prompts** (no `rounds:`, no toolUse)       | ~100  | → Pure `SKILL.md`. Body = `systemPrompt + userPrefix + userRequest`. Templates/`.sty`/`.tex` → `assets/`.             |
-| **Multi-round CoT** (`rounds: 2+`, `prefills: [...]`)     | ~30   | → Skill (content) + thin YAML agent (`inherits_skill:` + `rounds:` + `prefills:`).                                    |
-| **Tool-use / orchestrator** (`leanOrchestrator`, `merge`) | ~5    | → Stay full YAML agents. May attach skills to dispatched sub-tasks.                                                   |
-| **`_multiple` variants**                                  | ~30   | → Either single skill with frontmatter toggle (preferred), or sibling skill with `_multiple` suffix. Decide per case. |
+| Category                                                  | Count | Disposition                                                                                                                               |
+| --------------------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Single-round prompts** (no `rounds:`, no toolUse)       | ~104  | → Pure `SKILL.md`. Body = `systemPrompt + userPrefix + userRequest`. Templates/`.sty`/`.tex` → `references/` (per existing skill layout). |
+| **Multi-round CoT** (`rounds: 2+`, `prefills: [...]`)     | ~30   | → Skill (content) + thin YAML agent (`inherits_skill:` + `rounds:` + `prefills:`).                                                        |
+| **Tool-use / orchestrator** (`leanOrchestrator`, `merge`) | ~5    | → Stay full YAML agents. May attach skills to dispatched sub-tasks.                                                                       |
+
+The `_multiple` variants (~30 files total, e.g., `polish_multiple.yaml`, `correct_multiple.yaml`) are not a separate category — they fall under single-round or multi-round depending on their settings. Counts above include them. Per-case decision during migration: collapse into one skill with a frontmatter toggle, or keep as a sibling with `_multiple` suffix.
 
 **`inherits:` chains** (e.g., `correct_more` inherits `correct`): preserved during migration. Skill format doesn't have inheritance, so `correct_more` either:
 
