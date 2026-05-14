@@ -11,6 +11,11 @@ export const API_PROVIDERS = API_KEY_PROVIDER_IDS;
 
 export type ApiProvider = (typeof API_PROVIDERS)[number];
 
+/** Runtime-checked narrowing for provider strings. */
+export function isApiProvider(provider: string): provider is ApiProvider {
+  return (API_PROVIDERS as readonly string[]).includes(provider);
+}
+
 /** Secret storage key for a provider's API key. */
 export function apiKeySecretName(provider: ApiProvider): string {
   return `apiKey.${provider}`;

@@ -8,6 +8,7 @@
  * Keep this interface narrow — add methods only when a setup tool needs them.
  */
 
+import type { ApiProvider } from '@model/apiProviders';
 import type {
   TerminalRunRequest,
   TerminalRunResult,
@@ -16,27 +17,27 @@ import type {
 
 /** Per-provider API key surface. */
 export interface SetupSecretsAdapter {
-  setApiKey(provider: string, key: string): Promise<void>;
-  deleteApiKey(provider: string): Promise<void>;
-  apiKeyExists(provider: string): Promise<boolean>;
+  setApiKey(provider: ApiProvider, key: string): Promise<void>;
+  deleteApiKey(provider: ApiProvider): Promise<void>;
+  apiKeyExists(provider: ApiProvider): Promise<boolean>;
   /**
    * Like `apiKeyExists` but rejects empty values. A stale
    * `PROVIDER_API_KEY=""` env var is "present" but unusable at launch,
    * so setup-readiness checks must use this helper rather than raw
    * `apiKeyExists` to avoid misleading the agent (and the user).
    */
-  hasUsableApiKey(provider: string): Promise<boolean>;
+  hasUsableApiKey(provider: ApiProvider): Promise<boolean>;
   /**
    * Like `apiKeyExists` but only reports SecretStorage entries — ignores
    * environment-variable-backed keys. Needed by `unset_api_key` so the
    * agent doesn't claim to have removed a key that still comes from
    * `PROVIDER_API_KEY` in the user's shell.
    */
-  storedApiKeyExists(provider: string): Promise<boolean>;
+  storedApiKeyExists(provider: ApiProvider): Promise<boolean>;
   anyApiKeyExists(): Promise<boolean>;
   gitHubTokenExists(): Promise<'secret' | 'env' | 'none'>;
   /** List of provider names known to TeXRA (matches SecretManager.API_PROVIDERS). */
-  providers: readonly string[];
+  providers: readonly ApiProvider[];
 }
 
 /** Per-command surface. */
