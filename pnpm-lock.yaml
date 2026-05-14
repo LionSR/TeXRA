@@ -108,8 +108,8 @@ importers:
         specifier: ^0.16.45
         version: 0.16.45
       lit:
-        specifier: ^3.3.2
-        version: 3.3.2
+        specifier: ^3.3.3
+        version: 3.3.3
       llm-zoo:
         specifier: ^1.6.1
         version: 1.6.1(zod@4.4.3)
@@ -477,8 +477,8 @@ importers:
         specifier: ^0.16.45
         version: 0.16.45
       lit:
-        specifier: ^3.3.2
-        version: 3.3.2
+        specifier: ^3.3.3
+        version: 3.3.3
       llm-zoo:
         specifier: ^1.6.1
         version: 1.6.1(zod@4.4.3)
@@ -4228,6 +4228,9 @@ packages:
 
   lit@3.3.2:
     resolution: {integrity: sha512-NF9zbsP79l4ao2SNrH3NkfmFgN/hBYSQo90saIVI1o5GpjAdCPVstVzO1MrLOakHoEhYkrtRjPK6Ob521aoYWQ==}
+
+  lit@3.3.3:
+    resolution: {integrity: sha512-fycuvZg/hkpozL00lm1pEJH5nN/lr9ZXd6mJI2HSN4+Bzc+LDNdEApJ6HFbPkdFNHLvOplIIuJvxkS4XUxqirw==}
 
   llm-zoo@1.6.1:
     resolution: {integrity: sha512-bZuat5sMXJrWEejuyAT1UWvrBUIz97MK3hh85vMHQNxqkXM1NOQS6pwG3BGNgvblooMwTCbkIusBSrLpY/uQBQ==}
@@ -10282,6 +10285,12 @@ snapshots:
       '@types/trusted-types': 2.0.7
 
   lit@3.3.2:
+    dependencies:
+      '@lit/reactive-element': 2.1.2
+      lit-element: 4.2.2
+      lit-html: 3.3.2
+
+  lit@3.3.3:
     dependencies:
       '@lit/reactive-element': 2.1.2
       lit-element: 4.2.2
