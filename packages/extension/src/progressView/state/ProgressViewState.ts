@@ -15,6 +15,7 @@ import type { MementoStorage } from '@progressView/persistence/PersistentMapMana
 import {
   getStreamTabStore,
   deleteAllStreamData,
+  mapStreamTabStorage,
 } from '@progressView/persistence/StreamTabStore';
 import {
   needsMigrationFromMemento,
@@ -402,12 +403,10 @@ export class ProgressViewState {
     // earlier memento→StreamTabStore migration) to the archival
     // `legacyInstructions.json` so older workflow tabs can still restore
     // their original instruction into the log stream.
-    await Promise.all(
-      this.streamLogs.keys().map((id) =>
-        getStreamTabStore(id)
-          .migrateOnDiskRunInstructions()
-          .catch(() => {}),
-      ),
+    await mapStreamTabStorage(this.streamLogs.keys(), (id) =>
+      getStreamTabStore(id)
+        .migrateOnDiskRunInstructions()
+        .catch(() => {}),
     );
 
     const restoredLegacyInstructionCount =
@@ -451,57 +450,54 @@ export class ProgressViewState {
   private async backfillLegacyWorkflowInstructions(): Promise<number> {
     let restoredCount = 0;
 
-    await Promise.all(
-      this.streamLogs.keys().map(async (streamId) => {
-        try {
-          const store = getStreamTabStore(streamId);
-          const legacyInstruction =
-            await store.readPreferredLegacyInstruction();
-          if (!legacyInstruction) return;
+    await mapStreamTabStorage(this.streamLogs.keys(), async (streamId) => {
+      try {
+        const store = getStreamTabStore(streamId);
+        const legacyInstruction = await store.readPreferredLegacyInstruction();
+        if (!legacyInstruction) return;
 
-          const text = legacyInstruction.text.trim();
-          if (!text) return;
+        const text = legacyInstruction.text.trim();
+        if (!text) return;
 
-          await this.streamLogs.ensureLoaded(streamId);
-          const log = this.streamLogs.get(streamId);
-          if (!log) return;
+        await this.streamLogs.ensureLoaded(streamId);
+        const log = this.streamLogs.get(streamId);
+        if (!log) return;
 
-          const alreadyPresent = log
-            .getRange(0, log.head)
-            .some(
-              (entry) =>
-                entry.type === STREAM_LOG_ENTRY_TYPES.LOG &&
-                entry.messageType === MESSAGE_TYPES.USER_MESSAGE &&
-                entry.text?.trim() === text,
-            );
-          if (alreadyPresent) return;
-
-          const firstTimestamp = log.firstTimestamp;
-          const baseTimestamp =
-            legacyInstruction.timestamp ?? firstTimestamp ?? Date.now();
-          const timestamp =
-            firstTimestamp == null
-              ? baseTimestamp
-              : Math.max(0, Math.min(baseTimestamp, firstTimestamp - 1));
-
-          this.streamLogs.append(streamId, {
-            id: `legacy-instruction:${streamId}:${timestamp}`,
-            type: STREAM_LOG_ENTRY_TYPES.LOG,
-            level: LOG_LEVELS.INFO,
-            timestamp,
-            messageType: MESSAGE_TYPES.USER_MESSAGE,
-            text: legacyInstruction.text,
-            data: { source: 'legacyInstruction' },
-          });
-          restoredCount++;
-        } catch (err) {
-          this.logger.warn(
-            `[Persistence] Failed to backfill legacy instruction for ${streamId}: ${toErrorMessage(err)}`,
-            { data: err },
+        const alreadyPresent = log
+          .getRange(0, log.head)
+          .some(
+            (entry) =>
+              entry.type === STREAM_LOG_ENTRY_TYPES.LOG &&
+              entry.messageType === MESSAGE_TYPES.USER_MESSAGE &&
+              entry.text?.trim() === text,
           );
-        }
-      }),
-    );
+        if (alreadyPresent) return;
+
+        const firstTimestamp = log.firstTimestamp;
+        const baseTimestamp =
+          legacyInstruction.timestamp ?? firstTimestamp ?? Date.now();
+        const timestamp =
+          firstTimestamp == null
+            ? baseTimestamp
+            : Math.max(0, Math.min(baseTimestamp, firstTimestamp - 1));
+
+        this.streamLogs.append(streamId, {
+          id: `legacy-instruction:${streamId}:${timestamp}`,
+          type: STREAM_LOG_ENTRY_TYPES.LOG,
+          level: LOG_LEVELS.INFO,
+          timestamp,
+          messageType: MESSAGE_TYPES.USER_MESSAGE,
+          text: legacyInstruction.text,
+          data: { source: 'legacyInstruction' },
+        });
+        restoredCount++;
+      } catch (err) {
+        this.logger.warn(
+          `[Persistence] Failed to backfill legacy instruction for ${streamId}: ${toErrorMessage(err)}`,
+          { data: err },
+        );
+      }
+    });
 
     return restoredCount;
   }

@@ -1,7 +1,10 @@
 import { AgentLogger } from '@logger/AgentLogger';
 import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
-import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
+import {
+  getStreamTabStore,
+  mapStreamTabStorage,
+} from '@progressView/persistence/StreamTabStore';
 import {
   CompileFailureSchema,
   OutputFileInfoListSchema,
@@ -206,26 +209,23 @@ export class OutputFilesManager {
     this._missingOutputs.clear();
     this._compileFailures.clear();
 
-    await Promise.all(
-      streamIds.map(async (streamId) => {
-        const store = getStreamTabStore(streamId);
-        const [outputFiles, missingOutputs, compileFailures] =
-          await Promise.all([
-            store.readOutputFiles(),
-            store.readMissingOutputs(),
-            store.readCompileFailures(),
-          ]);
-        if (outputFiles?.size) {
-          this.items.set(streamId, outputFiles);
-        }
-        if (missingOutputs?.size) {
-          this._missingOutputs.set(streamId, missingOutputs);
-        }
-        if (compileFailures?.size) {
-          this._compileFailures.set(streamId, compileFailures);
-        }
-      }),
-    );
+    await mapStreamTabStorage(streamIds, async (streamId) => {
+      const store = getStreamTabStore(streamId);
+      const [outputFiles, missingOutputs, compileFailures] = await Promise.all([
+        store.readOutputFiles(),
+        store.readMissingOutputs(),
+        store.readCompileFailures(),
+      ]);
+      if (outputFiles?.size) {
+        this.items.set(streamId, outputFiles);
+      }
+      if (missingOutputs?.size) {
+        this._missingOutputs.set(streamId, missingOutputs);
+      }
+      if (compileFailures?.size) {
+        this._compileFailures.set(streamId, compileFailures);
+      }
+    });
 
     this.loaded = true;
   }
