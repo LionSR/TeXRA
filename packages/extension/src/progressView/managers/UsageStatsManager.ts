@@ -4,7 +4,10 @@ import {
   TokenUsageStatsParsingSchema,
   isEmptyUsage,
 } from '@progressView/persistence/streamTabSchemas';
-import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
+import {
+  getStreamTabStore,
+  mapStreamTabStorage,
+} from '@progressView/persistence/StreamTabStore';
 import {
   emptyUsageStats,
   sumUsageStats,
@@ -79,15 +82,13 @@ export class UsageStatsManager {
   async load(streamIds: StreamTabId[]): Promise<void> {
     this.items.clear();
 
-    await Promise.all(
-      streamIds.map(async (streamId) => {
-        const store = getStreamTabStore(streamId);
-        const usageStats = await store.readUsageStats();
-        if (usageStats?.size) {
-          this.items.set(streamId, usageStats);
-        }
-      }),
-    );
+    await mapStreamTabStorage(streamIds, async (streamId) => {
+      const store = getStreamTabStore(streamId);
+      const usageStats = await store.readUsageStats();
+      if (usageStats?.size) {
+        this.items.set(streamId, usageStats);
+      }
+    });
 
     this.loaded = true;
 
