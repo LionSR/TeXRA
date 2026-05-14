@@ -1,3 +1,5 @@
+import { randomUUID } from 'crypto';
+
 import { getWorkspaceState } from '@agent/core/stateStore';
 import type { StreamTabId } from '@shared/schemas/identifiers';
 
@@ -12,6 +14,9 @@ import {
 
 const STREAM_KEY_PREFIX = 'odysseys:byStream:';
 const INDEX_KEY = 'odysseys:index';
+// Stream index growth is user-driven (one entry per stream that ever had
+// an Odyssey). `forget()` removes entries; callers that delete a stream
+// without calling `forget()` leave dangling entries until next manual cleanup.
 
 function streamKey(streamId: StreamTabId): string {
   return `${STREAM_KEY_PREFIX}${streamId}`;
@@ -22,8 +27,7 @@ function nowIso(): string {
 }
 
 function generateOdysseyId(): string {
-  const rand = Math.random().toString(36).slice(2, 10);
-  return `ody_${Date.now().toString(36)}_${rand}`;
+  return `ody_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
 }
 
 function trimHistory(events: readonly OdysseyEvent[]): OdysseyEvent[] {
@@ -43,7 +47,7 @@ async function writeRaw(odyssey: Odyssey): Promise<void> {
   await getWorkspaceState().update(streamKey(odyssey.streamId), odyssey);
 }
 
-async function readIndex(): Promise<StreamTabId[]> {
+function readIndex(): StreamTabId[] {
   const raw = getWorkspaceState().get<unknown>(INDEX_KEY);
   return Array.isArray(raw)
     ? (raw.filter((v) => typeof v === 'string') as string[])
@@ -51,16 +55,52 @@ async function readIndex(): Promise<StreamTabId[]> {
 }
 
 async function addToIndex(streamId: StreamTabId): Promise<void> {
-  const index = await readIndex();
+  const index = readIndex();
   if (index.includes(streamId)) return;
   await getWorkspaceState().update(INDEX_KEY, [...index, streamId]);
 }
 
 async function removeFromIndex(streamId: StreamTabId): Promise<void> {
-  const index = await readIndex();
+  const index = readIndex();
   const next = index.filter((id) => id !== streamId);
   if (next.length === index.length) return;
   await getWorkspaceState().update(INDEX_KEY, next);
+}
+
+/**
+ * Read-modify-write helper. Returns null if no record exists; otherwise
+ * calls `mutate`, trims the history ring, persists, and returns the result.
+ * Used by every mutation method to avoid the same boilerplate four times.
+ */
+async function update(
+  streamId: StreamTabId,
+  mutate: (odyssey: Odyssey) => Odyssey,
+): Promise<Odyssey | null> {
+  const odyssey = readRaw(streamId);
+  if (!odyssey) return null;
+  const next = mutate(odyssey);
+  const final: Odyssey = {
+    ...next,
+    history: trimHistory(next.history),
+    updatedAt: nowIso(),
+  };
+  await writeRaw(final);
+  return final;
+}
+
+const STATUS_TO_EVENT_KIND: Record<OdysseyStatus, OdysseyEventKind> = {
+  active: 'resumed',
+  paused: 'paused',
+  complete: 'completed',
+  abandoned: 'abandoned',
+};
+
+function requireNonEmpty(value: string, label: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error(`${label} must not be empty or whitespace-only.`);
+  }
+  return trimmed;
 }
 
 export const OdysseyStore = {
@@ -70,14 +110,10 @@ export const OdysseyStore = {
   },
 
   /** Get all odysseys (for the OdysseyTab cross-conversation list). */
-  async list(): Promise<Odyssey[]> {
-    const ids = await readIndex();
-    const records: Odyssey[] = [];
-    for (const id of ids) {
-      const odyssey = readRaw(id);
-      if (odyssey) records.push(odyssey);
-    }
-    return records;
+  list(): Odyssey[] {
+    return readIndex()
+      .map((id) => readRaw(id))
+      .filter((o): o is Odyssey => o !== null);
   },
 
   /**
@@ -86,10 +122,7 @@ export const OdysseyStore = {
    * records — finishing one and starting another is a normal flow.
    */
   async start(streamId: StreamTabId, objective: string): Promise<Odyssey> {
-    const trimmed = objective.trim();
-    if (!trimmed) {
-      throw new Error('objective must not be empty or whitespace-only.');
-    }
+    const trimmed = requireNonEmpty(objective, 'objective');
     const existing = readRaw(streamId);
     if (
       existing &&
@@ -117,60 +150,49 @@ export const OdysseyStore = {
     return odyssey;
   },
 
-  /** Transition status; returns the updated record. Throws on illegal transition. */
+  /**
+   * Transition status; returns the updated record. No-op when status is
+   * unchanged. Returns null when no record exists for the stream.
+   */
   async setStatus(
     streamId: StreamTabId,
     nextStatus: OdysseyStatus,
     detail?: string,
-  ): Promise<Odyssey> {
-    const odyssey = readRaw(streamId);
-    if (!odyssey) {
-      throw new Error('No odyssey found for this stream.');
-    }
-    if (odyssey.status === nextStatus) return odyssey;
-
-    const eventKindMap: Record<OdysseyStatus, OdysseyEventKind> = {
-      active: 'resumed',
-      paused: 'paused',
-      complete: 'completed',
-      abandoned: 'abandoned',
-    };
-    const now = nowIso();
-    const updated: Odyssey = {
-      ...odyssey,
-      status: nextStatus,
-      updatedAt: now,
-      completedReason:
-        nextStatus === 'complete'
-          ? (detail ?? odyssey.completedReason)
-          : odyssey.completedReason,
-      history: trimHistory([
-        ...odyssey.history,
-        { at: now, kind: eventKindMap[nextStatus], detail: detail ?? null },
-      ]),
-    };
-    await writeRaw(updated);
-    return updated;
+  ): Promise<Odyssey | null> {
+    return update(streamId, (odyssey) => {
+      if (odyssey.status === nextStatus) return odyssey;
+      return {
+        ...odyssey,
+        status: nextStatus,
+        completedReason:
+          nextStatus === 'complete'
+            ? (detail ?? odyssey.completedReason)
+            : odyssey.completedReason,
+        history: [
+          ...odyssey.history,
+          {
+            at: nowIso(),
+            kind: STATUS_TO_EVENT_KIND[nextStatus],
+            detail: detail ?? null,
+          },
+        ],
+      };
+    });
   },
 
-  /** Append an event to the history. Idempotent at the call site only. */
+  /** Append an event to the history; no-op when no record exists. */
   async recordEvent(
     streamId: StreamTabId,
     kind: OdysseyEventKind,
     detail?: string,
   ): Promise<void> {
-    const odyssey = readRaw(streamId);
-    if (!odyssey) return;
-    const now = nowIso();
-    const updated: Odyssey = {
+    await update(streamId, (odyssey) => ({
       ...odyssey,
-      updatedAt: now,
-      history: trimHistory([
+      history: [
         ...odyssey.history,
-        { at: now, kind, detail: detail ?? null },
-      ]),
-    };
-    await writeRaw(updated);
+        { at: nowIso(), kind, detail: detail ?? null },
+      ],
+    }));
   },
 
   /** Accumulate per-turn accounting numbers (called from applyTurnAccounting). */
@@ -179,15 +201,11 @@ export const OdysseyStore = {
     tokensDelta: number,
     timeDeltaMs: number,
   ): Promise<void> {
-    const odyssey = readRaw(streamId);
-    if (!odyssey) return;
-    const updated: Odyssey = {
+    await update(streamId, (odyssey) => ({
       ...odyssey,
       tokensUsed: odyssey.tokensUsed + Math.max(0, Math.floor(tokensDelta)),
       timeUsedMs: odyssey.timeUsedMs + Math.max(0, Math.floor(timeDeltaMs)),
-      updatedAt: nowIso(),
-    };
-    await writeRaw(updated);
+    }));
   },
 
   /** Replace the objective. Used by the user-side edit-objective flow. */
@@ -195,25 +213,18 @@ export const OdysseyStore = {
     streamId: StreamTabId,
     newObjective: string,
   ): Promise<Odyssey> {
-    const trimmed = newObjective.trim();
-    if (!trimmed) {
-      throw new Error('objective must not be empty or whitespace-only.');
-    }
-    const odyssey = readRaw(streamId);
-    if (!odyssey) {
-      throw new Error('No odyssey found for this stream.');
-    }
-    const now = nowIso();
-    const updated: Odyssey = {
+    const trimmed = requireNonEmpty(newObjective, 'objective');
+    const updated = await update(streamId, (odyssey) => ({
       ...odyssey,
       objective: trimmed,
-      updatedAt: now,
-      history: trimHistory([
+      history: [
         ...odyssey.history,
-        { at: now, kind: 'objective_edited', detail: trimmed },
-      ]),
-    };
-    await writeRaw(updated);
+        { at: nowIso(), kind: 'objective_edited', detail: trimmed },
+      ],
+    }));
+    if (!updated) {
+      throw new Error('No odyssey found for this stream.');
+    }
     return updated;
   },
 
