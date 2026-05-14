@@ -319,4 +319,4 @@ Once skills carry the prompt content, the legacy YAML files in `packages/extensi
 - [pi `skills.ts`](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/src/core/skills.ts)
 - [Anthropic Claude Code Skills source](https://github.com/anthropics/claude-code) (`src/skills/`, `src/tools/SkillTool/`)
 - [OpenAI Codex Skills source](https://github.com/openai/codex) (`codex-rs/core-skills/`, `codex-rs/skills/`)
-- Internal study reports (in conversation 2026-05-14)
+- [LionSR/TeXRA#4031 — implementation notes & cross-implementation comparison](https://github.com/LionSR/TeXRA/issues/4031#issuecomment-4454571034) (issue comments capture the pi / Claude Code / Codex study findings underpinning §D1–§D6)
