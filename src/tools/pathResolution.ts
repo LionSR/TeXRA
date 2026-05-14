@@ -5,6 +5,7 @@ import * as path from 'path';
 import { ToolError } from '@tools/result';
 
 // Local imports - core utilities
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { WorkspaceFS } from '@utils/files';
 import { findExternalRoot } from '@utils/files/externalRoots';
 import { locatePathInRoot } from '@utils/files/workspaceRoot';
@@ -38,6 +39,21 @@ export function parseWorkingDirectory(
     );
   }
   return trimmed;
+}
+
+/**
+ * Validated working-directory override for the current tool call.
+ *
+ * Reads `workingDirectory` from the active RunContext and runs it through
+ * `parseWorkingDirectory`. Returns undefined when no run context is active
+ * or when no override was set on the launch — callers then fall back to the
+ * workspace root via `WorkspaceFS.locatePath`.
+ *
+ * Centralizes the `parseWorkingDirectory(tryUseRunContext()?.workingDirectory)`
+ * pattern that every workspace-touching tool needs.
+ */
+export function currentToolRoot(): string | undefined {
+  return parseWorkingDirectory(tryUseRunContext()?.workingDirectory);
 }
 
 /**

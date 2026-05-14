@@ -2,7 +2,6 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { ToolError, ToolResult } from '@tools/result';
 import {
   recordToolFileRead,
@@ -12,7 +11,7 @@ import { pluralize } from '@tools/formatting';
 import {
   assertWritable,
   resolveAndFormat,
-  parseWorkingDirectory,
+  currentToolRoot,
 } from '@tools/pathResolution';
 import { countOccurrences } from '@tools/utils';
 import {
@@ -44,7 +43,7 @@ export class EditFileTool extends defineTool({
 }) {
   protected async execute(input: EditInput): Promise<ToolResult> {
     const { old_str, new_str, replace_all } = input;
-    const root = parseWorkingDirectory(tryUseRunContext()?.workingDirectory);
+    const root = currentToolRoot();
     const { path: resolved, display: displayPath } = resolveAndFormat(
       input.path,
       root,

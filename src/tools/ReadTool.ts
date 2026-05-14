@@ -5,14 +5,13 @@ import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports - tools
-import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { ToolError, type ToolResult } from '@tools/result';
 import { isOversizedImage, MANY_IMAGE_MAX_DIMENSION } from '@tools/imageUtils';
 import { buildFileAttachment } from '@tools/attachments';
 import { formatFileView, READ_FILE_MAX_LINES } from '@tools/formatting';
 import {
   resolveAndFormat,
-  parseWorkingDirectory,
+  currentToolRoot,
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
 import { recordToolFileRead } from '@tools/fileInteractions';
@@ -67,7 +66,7 @@ export class ReadFileTool extends defineTool({
   schema: ReadInputSchema,
 }) {
   protected async execute(input: ReadInput): Promise<ToolResult> {
-    const root = parseWorkingDirectory(tryUseRunContext()?.workingDirectory);
+    const root = currentToolRoot();
     const { path: resolved, display: displayPath } = resolveAndFormat(
       input.path,
       root,
