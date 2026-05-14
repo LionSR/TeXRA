@@ -18,6 +18,7 @@ import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
+import type { TerminalRunResult } from '@hosts/terminalHost';
 import { interruptAllCodexSessions } from '@tools/codex';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
@@ -44,6 +45,7 @@ import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { createDesktopSettingsIpc } from './desktopSettingsIpc.js';
 import { createDesktopGitHost } from './desktopGitHost.js';
 import { createDesktopShellActions } from './desktopShellIpc.js';
+import { createDesktopTerminalRunner } from './desktopTerminalRunner.js';
 import {
   createDesktopAuthCallbackState,
   createDesktopAuthCoordinator,
@@ -123,6 +125,7 @@ const PRODUCTION_CSP = [
   "font-src 'self' data:",
   "connect-src 'self' data:",
 ].join('; ');
+const SETUP_COMMAND_TIMEOUT_MS = 10 * 60_000;
 const DEVELOPMENT_CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-eval'",
@@ -141,6 +144,47 @@ function installContentSecurityPolicy(): void {
       },
     });
   });
+}
+
+async function showSetupCommandResult(
+  window: BrowserWindow,
+  command: string,
+  result: TerminalRunResult,
+): Promise<void> {
+  const output = result.output.trim();
+  const hasOutput = output.length > 0;
+  const timedOut = result.timedOut;
+  const failed =
+    !timedOut && result.exitCode !== undefined && result.exitCode !== 0;
+  const unknownExit = !timedOut && result.exitCode === undefined;
+  const buttons = hasOutput
+    ? ['Copy Output', 'Copy Command', 'Close']
+    : ['Copy Command', 'Close'];
+  const response = await dialog.showMessageBox(window, {
+    type: timedOut || unknownExit ? 'warning' : failed ? 'error' : 'info',
+    message: timedOut
+      ? 'Setup command timed out'
+      : failed
+        ? `Setup command failed with exit code ${result.exitCode}`
+        : unknownExit
+          ? 'Setup command finished without an observable exit code'
+          : 'Setup command finished',
+    detail: [`Command:\n${command}`, output ? `Output:\n${output}` : '']
+      .filter(Boolean)
+      .join('\n\n'),
+    buttons,
+    defaultId: 0,
+    cancelId: buttons.length - 1,
+  });
+
+  if (hasOutput && response.response === 0) {
+    clipboard.writeText(output);
+  } else if (
+    (hasOutput && response.response === 1) ||
+    (!hasOutput && response.response === 0)
+  ) {
+    clipboard.writeText(command);
+  }
 }
 
 function createWindow(options: {
@@ -187,6 +231,19 @@ function createWindow(options: {
   } = {};
   const showErrorMessage = async (message: string) => {
     await dialog.showMessageBox(window, { message, type: 'error' });
+  };
+  const setupCommandCwd = options.workspacePath ?? app.getPath('home');
+  const setupTerminalRunner = createDesktopTerminalRunner({
+    cwd: setupCommandCwd,
+  });
+  const runSetupCommand = async (command: string) => {
+    const result = await setupTerminalRunner.runCommand({
+      name: 'TeXRA Setup',
+      command,
+      cwd: setupCommandCwd,
+      timeoutMs: SETUP_COMMAND_TIMEOUT_MS,
+    });
+    await showSetupCommandResult(window, command, result);
   };
   const previewHost = createDesktopPreviewHost({
     shell,
@@ -401,31 +458,12 @@ function createWindow(options: {
       }
     },
     runToolCommand: async ({ command }) => {
-      // Add a 'Copy' affordance — without it the user has to manually
-      // select-and-copy from a non-selectable Electron native dialog,
-      // which is a common friction point reported on the desktop build.
-      const result = await dialog.showMessageBox(window, {
-        type: 'info',
-        message: 'Run this setup command in a terminal',
-        detail: command,
-        buttons: ['Copy', 'Close'],
-        defaultId: 0,
-        cancelId: 1,
-      });
-      if (result.response === 0) clipboard.writeText(command);
+      await runSetupCommand(command);
     },
     refreshToolAvailability: () =>
       refreshToolAvailability(agentExecution.progress.runtimeHost),
     runInstallCommand: async (command) => {
-      const result = await dialog.showMessageBox(window, {
-        type: 'info',
-        message: 'Run this setup command in a terminal',
-        detail: command,
-        buttons: ['Copy', 'Close'],
-        defaultId: 0,
-        cancelId: 1,
-      });
-      if (result.response === 0) clipboard.writeText(command);
+      await runSetupCommand(command);
     },
     onError: reportAsyncError,
   });
