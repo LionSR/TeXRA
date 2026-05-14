@@ -25,6 +25,7 @@ interface MockStorageOptions {
   summaries: Record<string, unknown>;
   logMtimes?: Record<string, number>;
   summaryMtimes?: Record<string, number>;
+  onLogRead?: (key: string) => Promise<void> | void;
   pauseLogWriteKey?: string;
 }
 
@@ -87,6 +88,7 @@ function mockStorage({
   summaries,
   logMtimes = {},
   summaryMtimes = {},
+  onLogRead,
   pauseLogWriteKey,
 }: MockStorageOptions): {
   deletes: string[];
@@ -127,6 +129,7 @@ function mockStorage({
     if (target.startsWith(`${STREAM_LOGS_DIR}${path.sep}`)) {
       if (!Object.hasOwn(logs, key)) throw notFound();
       fullLogReads += 1;
+      await onLogRead?.(key);
       return logs[key] as never;
     }
 
@@ -177,6 +180,17 @@ function mockStorage({
     waitForPausedWrite: () => waitForPausedWrite,
     writes,
   };
+}
+
+async function waitForCondition(
+  condition: () => boolean,
+  message: string,
+): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (condition()) return;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error(message);
 }
 
 describe('StreamLogStore load', () => {
@@ -307,6 +321,63 @@ describe('StreamLogStore load', () => {
       lastTimestamp: 100,
       hasRunningGroup: false,
     });
+  });
+
+  it('bounds stale running group rehydrates', async () => {
+    const streamIds = Array.from(
+      { length: 20 },
+      (_, index) => `stream-${index}`,
+    );
+    let releaseReads: () => void = () => {};
+    const readGate = new Promise<void>((resolve) => {
+      releaseReads = resolve;
+    });
+    let activeReads = 0;
+    let maxActiveReads = 0;
+
+    const storage = mockStorage({
+      logs: Object.fromEntries(
+        streamIds.map((streamId, index) => [
+          streamId,
+          [runningGroupEntry(streamId, 1, 100 + index)],
+        ]),
+      ),
+      summaries: Object.fromEntries(
+        streamIds.map((streamId, index) => [
+          streamId,
+          {
+            firstTimestamp: 100 + index,
+            lastTimestamp: 100 + index,
+            hasRunningGroup: true,
+          },
+        ]),
+      ),
+      onLogRead: async () => {
+        activeReads += 1;
+        maxActiveReads = Math.max(maxActiveReads, activeReads);
+        await readGate;
+        activeReads -= 1;
+      },
+    });
+
+    const store = new StreamLogStore();
+    await store.load();
+
+    const endRunningGroups = store.endRunningGroups(300);
+    await waitForCondition(
+      () => storage.fullLogReads() === 8,
+      'Expected stale stream rehydrate reads to reach the concurrency cap',
+    );
+
+    expect(maxActiveReads).toBe(8);
+
+    releaseReads();
+    const affected = await endRunningGroups;
+    await store.flush();
+
+    expect(affected).toHaveLength(streamIds.length);
+    expect(maxActiveReads).toBe(8);
+    expect(storage.fullLogReads()).toBe(streamIds.length);
   });
 
   it('lets delete win over an in-flight stream write', async () => {
