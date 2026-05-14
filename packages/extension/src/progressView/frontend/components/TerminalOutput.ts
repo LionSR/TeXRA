@@ -66,21 +66,13 @@ export function countTerminalRows(text: string): number {
   return rows;
 }
 
-function countTerminalNewRows(text: string): number {
-  let rows = 0;
-  for (let i = 0; i < text.length; i++) {
-    if (text.charCodeAt(i) === 10) rows += 1;
-  }
-  return rows;
-}
-
 export function nextTerminalRowCount(
   previousRowCount: number,
   updatePlan: TerminalTextUpdatePlan,
 ): number {
   return updatePlan.reset
     ? countTerminalRows(updatePlan.textToWrite)
-    : previousRowCount + countTerminalNewRows(updatePlan.textToWrite);
+    : previousRowCount + countTerminalRows(updatePlan.textToWrite) - 1;
 }
 
 /**
