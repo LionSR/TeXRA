@@ -13,7 +13,7 @@ import {
   type RunCoordinators,
 } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
-import type { Plan } from '@shared/schemas';
+import type { Plan, StreamTabId } from '@shared/schemas';
 import { PlanTool } from '@tools/plan/PlanTool';
 import { createRecordingHost } from '../agent/progressTestUtils';
 
@@ -39,12 +39,12 @@ describe('PlanTool work-plan state', () => {
     const resultPromise = withRunContext(
       createRunContext({
         runtimeHost: host,
+        streamId: 'stream:plan-reject' as StreamTabId,
         coordinators: { plan: coordinator } as unknown as RunCoordinators,
       }),
       () =>
         withToolFileInteractionContext(
           {
-            streamId: 'stream:plan-reject',
             tracker: new FileInteractionState(),
             workPlanState,
           },
@@ -74,12 +74,12 @@ describe('PlanTool work-plan state', () => {
     const resultPromise = withRunContext(
       createRunContext({
         runtimeHost: host,
+        streamId: 'stream:plan-timeout' as StreamTabId,
         coordinators: { plan: coordinator } as unknown as RunCoordinators,
       }),
       () =>
         withToolFileInteractionContext(
           {
-            streamId: 'stream:plan-timeout',
             tracker: new FileInteractionState(),
             workPlanState,
           },
