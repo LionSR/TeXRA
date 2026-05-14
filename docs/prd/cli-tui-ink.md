@@ -90,19 +90,20 @@ Every dependency is either already in the workspace, used by the dominant 2026 A
 
 Each entry is a deletion candidate, not a wrapper.
 
-| Today                                                                                                         | Where                                | Replace with                                                            |
-| ------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------- | ------------------------------- |
-| `splitGlobalArgs`, `splitRunArgs`, `flagValue`, `cliFlagName`, `hasBooleanFlag`, four `FLAGS_WITH_VALUE` sets | `cliContext.ts:44–166, 224–268`      | `citty` `defineCommand`                                                 |
-| `ANSI_TONES`, tone-switching `write()`                                                                        | `terminalRenderer.ts:20–27, 546–552` | `picocolors` in legacy; Ink `<Text color>` in TUI                       |
-| `truncateText`, `formatOutputSnippet`, `formatUnknownSnippet`                                                 | `terminalRenderer.ts:61–64, 310–367` | `string-width` + `wrap-ansi`                                            |
-| `renderedToolUseSignatures` `JSON.stringify` dedup                                                            | `terminalRenderer.ts:181–183`        | `useSyncExternalStore` + React `memo` keyed on `entry.id + entry.seqNo` |
-| `MultilineDraftState` + `/multi` `/send` `/cancel` plumbing                                                   | `runChat.ts:63–66, 451–469, 507–511` | `ink-text-input` with `Ctrl-J` newline; `/multi` retained as alias      |
-| `followUpFlush` promise chain, `pendingFollowUps`, `flushPendingFollowUps`, `streamReadyForFollowUps`         | `runChat.ts:58–61, 255–304`          | `p-queue` (`concurrency: 1`)                                            |
-| `askCliQuestion`, `createCliLineReader`                                                                       | `logSinks.ts:87–107`                 | `@clack/prompts` outside TUI; Ink inside                                |
-| `installChatResponsePrinter` log-diff loop                                                                    | `runChat.ts:109–141`                 | `useStreamLog(streamId)` hook + `<Static>` for finalized turns          |
-| ASCII `-- title --` / `                                                                                       | line` cards                          | `terminalRenderer.ts:513–524`                                           | Ink `<Box borderStyle="round">` |
+| Today                                                                                                 | Where                                                | Replace with                                                            |
+| ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------- |
+| `splitGlobalArgs`, `flagValue`, `cliFlagName`, `hasBooleanFlag`, three `FLAGS_WITH_VALUE` sets        | `cliContext.ts:44–166, 224–268`                      | `citty` `defineCommand`                                                 |
+| `splitRunArgs` (separate file — citty migration touches two)                                          | `commands/root.ts:66–113` (invoked at `:323`)        | `citty` subcommand args                                                 |
+| `ANSI_TONES`, tone-switching `write()`                                                                | `terminalRenderer.ts:20–27, 546–552`                 | `picocolors` in legacy; Ink `<Text color>` in TUI                       |
+| `truncateText`, `formatOutputSnippet`, `formatUnknownSnippet`                                         | `terminalRenderer.ts:61–64, 310–367`                 | `string-width` + `wrap-ansi`                                            |
+| `renderedToolUseSignatures` `JSON.stringify` dedup                                                    | `terminalRenderer.ts:181–183`                        | `useSyncExternalStore` + React `memo` keyed on `entry.id + entry.seqNo` |
+| `MultilineDraftState` + `/multi` `/send` `/cancel` plumbing                                           | `runChat.ts:63–66, 451–469, 507–511`                 | `ink-text-input` with `Ctrl-J` newline; `/multi` retained as alias      |
+| `followUpFlush` promise chain, `pendingFollowUps`, `flushPendingFollowUps`, `streamReadyForFollowUps` | `runChat.ts:58–61, 255–304`                          | `p-queue` (`concurrency: 1`)                                            |
+| `askCliQuestion`, `createCliLineReader`                                                               | `logSinks.ts:87–107`                                 | `@clack/prompts` outside TUI; Ink inside                                |
+| `installChatResponsePrinter` log-diff loop                                                            | `runChat.ts:109–141`                                 | `useStreamLog(streamId)` hook + `<Static>` for finalized turns          |
+| ASCII card rendering (`-- title --` / `\| line` form)                                                 | `terminalRenderer.ts:513–524`                        | Ink `<Box borderStyle="round">`                                         |
 
-Net: ~400 LOC deleted across `terminalRenderer.ts`, `runChat.ts`, `cliContext.ts`, `logSinks.ts`; replaced by ~120 LOC of provider + hook glue.
+Net: roughly 400 LOC removed from the TUI mode; the `--legacy-renderer` path retains the subset it actually uses (notably the ASCII card form, `askCliQuestion`, and the multiline draft state), so the deletion is bounded by which renderer is active.
 
 ## 7. Architecture
 
@@ -273,7 +274,7 @@ Every phase is independently mergeable. Each adds an `--tui` flag, default-off, 
 
 **Phase 2 — Tool & approval rendering (3 d).** `<ToolUseCard>`. Replace `installCliApprovalHandlers` with the typed TUI installer per §9. All six approval modals dispatched off the typed queue. `<DiffView>` using `diff` + `cli-highlight`. Resolver wiring unchanged.
 
-**Phase 3 — Markdown + code (1–2 d).** Lift the webview's `markdownRenderer.ts` into a shared `@shared/markdown` module (it's pure rendering, fits there). Add an ANSI rule plugin for the CLI host that delegates code fences to `cli-highlight`, reusing the grammars the existing `@shared/highlighting/hljs.ts` already pulls from `highlight.js/lib/core`. Wire `<Markdown>` and `<CodeBlock>` into `ConversationPane`. Lazy-load language packs.
+**Phase 3 — Markdown + code (1–2 d).** Lift the webview's `markdownRenderer.ts` into a shared `@shared/markdown` module **as a configurable factory**, not a frozen singleton. Today's singleton hard-wires the `texmath`/`katex` math engine and an HTML output renderer (`packages/extension/src/progressView/frontend/formatters/markdownRenderer.ts:39–53`); the CLI host needs a different math engine (`unicodeit` / raw passthrough per §5) and an ANSI renderer instead of HTML. The factory takes a math-engine option and a renderer hook; the webview keeps its current configuration, the CLI host supplies its own. Code fences delegate to `cli-highlight`, reusing the grammars `@shared/highlighting/hljs.ts` already pulls from `highlight.js/lib/core`. Wire `<Markdown>` and `<CodeBlock>` into `ConversationPane`. Lazy-load language packs.
 
 **Phase 4 — Multi-agent + tabs (2 d).** `<SubagentList>`, `<TodosPlanPanel>`, `<StatusBar>`. `Ctrl-A` / `Ctrl-B` focus cycle. Stream switching via `setActiveStream`. Process output tailing. Small runtime patch: have `detachActiveChildren` (`executionRegistry.ts:253–269`) emit `setParentStream` so detached children promote to top-level streams.
 
@@ -313,7 +314,7 @@ Total: ~11 dev-days, six PRs.
 
 ## 18. References
 
-**CLI surfaces (current):** `packages/cli/src/runtime/cliContext.ts:44–268` · `packages/cli/src/chat/terminalRenderer.ts:20–367, 513–524` · `packages/cli/src/chat/runChat.ts:58–66, 109–141, 255–304, 451–511` · `packages/cli/src/runtime/logSinks.ts:87–196` · `packages/cli/src/runtime/approvalAdapter.ts:89–94, 268–270`.
+**CLI surfaces (current):** `packages/cli/src/runtime/cliContext.ts:44–268` · `packages/cli/src/commands/root.ts:66–113, 323` (`splitRunArgs`) · `packages/cli/src/chat/terminalRenderer.ts:20–367, 513–524` · `packages/cli/src/chat/runChat.ts:58–66, 109–141, 255–304, 451–511` · `packages/cli/src/runtime/logSinks.ts:87–196` · `packages/cli/src/runtime/runtimeHost.ts:37–69` · `packages/cli/src/runtime/approvalAdapter.ts:89–94, 268–270`.
 
 **Webview reference topology:** `packages/extension/src/progressView/frontend/progressState.ts:66` (appState declaration) · `packages/extension/src/progressView/frontend/store.ts:66–79` · `packages/extension/src/progressView/frontend/formatters/markdownRenderer.ts:6–53` · `packages/extension/src/progressView/frontend/components/{BackgroundTasksPanel,TexraDiffView,FollowUpInput,ToolEditRequestPanel,BashRequestPanel,ProposalRequestPanel,PlanApprovalRequestPanel,ExternalInquiryPanel}.ts`.
 
