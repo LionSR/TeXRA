@@ -63,11 +63,10 @@ interface AnthropicStreamState {
  * runtime-efficient types (Set, timestamps) that getDiagnostics() converts
  * to the serializable output form.
  */
-interface StreamDiagnosticsState
-  extends Omit<
-    StreamDiagnostics,
-    'blockTypesSeen' | 'elapsedSecs' | 'secsSinceLastEvent' | 'finalized'
-  > {
+interface StreamDiagnosticsState extends Omit<
+  StreamDiagnostics,
+  'blockTypesSeen' | 'elapsedSecs' | 'secsSinceLastEvent' | 'finalized'
+> {
   /** Block types seen during streaming (converted to array in getDiagnostics) */
   blockTypesSeen: Set<string>;
   /** Timestamp when streaming started (converted to elapsedSecs) */
