@@ -65,8 +65,7 @@ wa-button.desktop-icon-button[aria-pressed='true']::part(base) {
   color: var(--wa-color-brand-on-quiet);
 }
 
-wa-button.desktop-command-button::part(base),
-wa-button.desktop-folder-button::part(base) {
+wa-button.desktop-command-button::part(base) {
   height: 28px;
   padding: 0 var(--wa-space-s);
   border-radius: var(--wa-border-radius-m, 3px);
@@ -116,21 +115,8 @@ wa-button.desktop-command-button {
 }
 
 .desktop-rail-header-content {
-  display: flex;
-  flex-direction: column;
   flex: 1 1 auto;
   min-width: 0;
-  gap: 2px;
-}
-
-.desktop-workspace-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--wa-color-text-quiet);
-  font-size: 10px;
-  opacity: 0.8;
 }
 
 .desktop-rail-title {
@@ -597,10 +583,6 @@ wa-input.desktop-command-palette-input::part(base) {
 }
 
 .desktop-empty-streams {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--wa-space-m);
-  align-items: center;
   padding: var(--wa-space-s) var(--wa-space-l);
   border-top: 1px solid var(--wa-color-surface-border);
   background: var(--wa-color-surface-lowered);
@@ -627,28 +609,6 @@ wa-input.desktop-command-palette-input::part(base) {
 .desktop-empty-streams-copy .desktop-empty-streams-example {
   margin-top: var(--wa-space-2xs);
   color: var(--wa-color-text-normal);
-}
-
-.desktop-empty-streams-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--wa-space-xs);
-}
-
-.desktop-empty-streams-actions wa-button::part(base) {
-  border-radius: var(--wa-border-radius-m, 3px);
-}
-
-@media (max-width: 720px) {
-  .desktop-empty-streams {
-    grid-template-columns: 1fr;
-    align-items: start;
-  }
-
-  .desktop-empty-streams-actions {
-    justify-content: flex-start;
-  }
 }
 
 .desktop-bootstrap-fallback {
