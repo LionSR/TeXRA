@@ -1,7 +1,10 @@
 import { platform, tryPlatform } from '@platform/platform';
 
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
-import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
+import {
+  isAllowedLatexInstallCommand,
+  LatexToolingController,
+} from '@controllers/settingsView/LatexToolingController';
 import {
   SettingsAgentCatalogController,
   type SettingsAgentCatalogState,
@@ -1435,6 +1438,14 @@ export function createDesktopSettingsIpc(
           );
           return true;
         case SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND:
+          if (!isAllowedLatexInstallCommand(result.data.installCommand)) {
+            onError(
+              new Error(
+                `Rejected unknown install command: ${result.data.installCommand}`,
+              ),
+            );
+            return true;
+          }
           runAsync(
             options.runInstallCommand?.(result.data.installCommand) ??
               Promise.resolve(),
