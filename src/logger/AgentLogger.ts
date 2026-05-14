@@ -26,6 +26,8 @@ import {
 } from './StreamLogStore';
 import type { LogOptions } from './logOptions';
 
+const STREAM_UPDATE_THROTTLE_MS = 50;
+
 export interface LoggerScopeOptions {
   parentGroupId?: string;
   skip?: boolean;
@@ -497,33 +499,69 @@ export class AgentLogger {
     const progressEnabled = options.progressViewEnabled ?? true;
 
     let buffer = '';
+    let pendingChunks: string[] = [];
     let created = false;
+    let storeEnabled = progressEnabled;
+    let updateTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const materializePending = (): void => {
+      if (pendingChunks.length === 0) return;
+      buffer += pendingChunks.join('');
+      pendingChunks = [];
+    };
 
     const emitNow = (): void => {
-      if (!progressEnabled) return;
+      materializePending();
+      if (!storeEnabled) return;
 
       if (!created) {
-        created = !!this.appendToStore(level, type, {
+        const appended = this.appendToStore(level, type, {
           id,
           timestamp: Date.now(),
           groupId,
           text: buffer,
         });
+        created = !!appended;
+        if (!created) storeEnabled = false;
         return;
       }
 
       this.updateStore(id, { text: buffer });
     };
 
+    const scheduleUpdate = (): void => {
+      if (updateTimer) return;
+      updateTimer = setTimeout(() => {
+        updateTimer = null;
+        emitNow();
+      }, STREAM_UPDATE_THROTTLE_MS);
+    };
+
+    const flushPendingUpdate = (): void => {
+      if (updateTimer) {
+        clearTimeout(updateTimer);
+        updateTimer = null;
+      }
+      emitNow();
+    };
+
     return {
       append: (text: string) => {
         if (!text) return;
-        buffer += text;
-        emitNow();
+        pendingChunks.push(text);
+        if (!storeEnabled) return;
+        if (!created) {
+          emitNow();
+        } else {
+          scheduleUpdate();
+        }
       },
       finalize: (finalText?: string) => {
-        if (typeof finalText === 'string') buffer = finalText;
-        emitNow();
+        if (typeof finalText === 'string') {
+          buffer = finalText;
+          pendingChunks = [];
+        }
+        flushPendingUpdate();
         this.debug(`Final ${type} length: ${buffer.length}`, { groupId });
         return buffer;
       },
