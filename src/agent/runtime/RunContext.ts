@@ -20,53 +20,10 @@ export interface RunLogger {
   error(message: string, data?: RunLogData): void;
 }
 
-export type ApprovalHandler<TRequest = unknown, TResult = unknown> = (
-  request: TRequest,
-) => Promise<TResult> | TResult;
-
-export interface ApprovalHandlers {
-  agentProposal?: ApprovalHandler;
-  bash?: ApprovalHandler;
-  plan?: ApprovalHandler;
-  toolEdit?: ApprovalHandler;
-}
-
 export interface RunCoordinators {
   readonly plan: PlanApprovalCoordinator;
   readonly proposal: AgentProposalCoordinator;
   readonly retry: RetryRequestCoordinatorImpl;
-}
-
-/**
- * Run-owned facts needed while executing tool calls.
- *
- * The active tool-call frame may still carry these fields during migration, but
- * RunContext is the durable owner. Per-call mutable state such as tracker,
- * todo, plan, and streaming callbacks belongs to ToolCallContext.
- */
-export interface ToolRunContext {
-  streamId?: StreamTabId;
-  executionId?: ExecutionId;
-  /** Model short name of the parent agent (e.g. "opus46T", "sonnet46T"). */
-  model?: string;
-  /** Agent name of the parent agent (e.g. "orchestrator", "search-agent"). */
-  agentName?: string;
-  /** Working directory override for tool calls (e.g. a git worktree path). */
-  workingDirectory?: string;
-  /** Runtime host inherited from the executing agent. */
-  runtimeHost?: AgentRuntimeHost;
-  /**
-   * Delegation depth of the agent executing this tool call. 0 for root
-   * (user-initiated), N for an agent N levels deep. Read by delegation tools
-   * to compute the child's depth.
-   */
-  delegationDepth?: number;
-  /**
-   * Delegation policy snapshot for the executing agent. Keeps delegation tool
-   * enforcement aligned with the tool list shown to the model without carrying
-   * a second depth value.
-   */
-  delegationConfig?: NestedDelegationConfig;
 }
 
 export interface RunContext {
@@ -74,9 +31,23 @@ export interface RunContext {
   readonly streamId?: StreamTabId;
   readonly executionId?: ExecutionId;
   readonly logger: RunLogger;
-  readonly approvals: ApprovalHandlers;
   readonly coordinators?: RunCoordinators;
-  readonly toolRunContext?: ToolRunContext;
+  /** Model short name of the executing agent (e.g. "opus46T", "sonnet46T"). */
+  readonly model?: string;
+  /** Agent name (e.g. "orchestrator", "search-agent"). */
+  readonly agentName?: string;
+  /** Working directory override for tool calls (e.g. a git worktree path). */
+  readonly workingDirectory?: string;
+  /**
+   * Delegation depth: 0 for root (user-initiated), N for a subagent N levels
+   * deep. Read by delegation tools to compute the child's depth.
+   */
+  readonly delegationDepth?: number;
+  /**
+   * Delegation policy snapshot for this run. Keeps delegation tool enforcement
+   * aligned with the tool list shown to the model.
+   */
+  readonly delegationConfig?: NestedDelegationConfig;
 }
 
 export interface CreateRunContextOptions {
@@ -84,9 +55,12 @@ export interface CreateRunContextOptions {
   streamId?: StreamTabId;
   executionId?: ExecutionId;
   logger?: Partial<RunLogger>;
-  approvals?: ApprovalHandlers;
   coordinators?: RunCoordinators;
-  toolRunContext?: ToolRunContext;
+  model?: string;
+  agentName?: string;
+  workingDirectory?: string;
+  delegationDepth?: number;
+  delegationConfig?: NestedDelegationConfig;
 }
 
 const noopLog = (): void => undefined;
@@ -97,7 +71,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     throw new Error('createRunContext requires an explicit runtimeHost');
   }
 
-  const { logger, approvals } = options;
+  const { logger } = options;
 
   return Object.freeze({
     runtimeHost: options.runtimeHost,
@@ -109,11 +83,12 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
       warn: logger?.warn ?? noopLog,
       error: logger?.error ?? noopLog,
     }),
-    approvals: Object.freeze({ ...approvals }),
     coordinators: options.coordinators,
-    toolRunContext: options.toolRunContext
-      ? Object.freeze({ ...options.toolRunContext })
-      : undefined,
+    model: options.model,
+    agentName: options.agentName,
+    workingDirectory: options.workingDirectory,
+    delegationDepth: options.delegationDepth,
+    delegationConfig: options.delegationConfig,
   });
 }
 

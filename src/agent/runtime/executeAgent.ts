@@ -12,11 +12,7 @@ import {
   type AgentConfig,
   type AgentConfigPayload,
 } from '@agent/core/AgentConfig';
-import {
-  AgentCategory,
-  type AgentWorkflowSetting,
-  type AgentToolUseSetting,
-} from '@agent/core/AgentDataclass';
+import { AgentCategory, isWorkflowSetting } from '@agent/core/AgentDataclass';
 import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import {
@@ -394,7 +390,7 @@ export async function executeAgent(
               ...interrupts,
               onRoundFinalized: (run) =>
                 ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
-              setting: ctx.setting as AgentToolUseSetting,
+              setting,
               isSubagent,
               onBeforeWaiting: options.onBeforeWaiting,
               onProgress: (update) => {
@@ -438,7 +434,7 @@ export async function executeAgent(
             ...interrupts,
             onRoundFinalized: (run) =>
               ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
-            setting: ctx.setting as AgentWorkflowSetting,
+            setting,
             parentStage: ctx.parentStage,
             onRoundCompleted,
           });
@@ -494,14 +490,16 @@ export async function executeMergeAgent(
       return taskStage.run(async () => {
         logger.info(`Executing merge with model ${model}`);
 
+        if (!isWorkflowSetting(ctx.setting)) {
+          throw new AgentError('merge agent must be a workflow agent');
+        }
         const fileService = new TaskRunFileService(executionId);
-        const mergeSetting = ctx.setting as AgentWorkflowSetting;
         const result = await runReflectionFlow({
           ...ctx,
           ...createInterruptCallbacks(),
           onRoundFinalized: (run) =>
             ctx.usageMonitor.recordUsage(run, { runKind: 'workflow' }),
-          setting: mergeSetting,
+          setting: ctx.setting,
           getOutputFileLocation:
             createMergeOutputFileLocationGetter(fileService),
           parentStage: ctx.parentStage,
@@ -568,7 +566,7 @@ export async function resumeToolUseFromSnapshot(
             ...createInterruptCallbacks(),
             onRoundFinalized: (run) =>
               ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
-            setting: setting as AgentToolUseSetting,
+            setting,
             resumeSnapshot: snapshot,
             // Derive from the recovered parent chain: any execution with a
             // parent is a subagent. Without this, the rebuilt system prompt
