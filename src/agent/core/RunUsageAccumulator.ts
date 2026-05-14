@@ -27,24 +27,26 @@ export const DEFAULT_TOTALS = {
   totalServerToolRequests: 0,
 } as const;
 
+const TokenCountSchema = z.int().nonnegative();
+
 /** Schema for run usage totals. Internal only. */
 const RunUsageTotalsSchema = z.object({
-  firstInputTokens: z.number().prefault(0),
-  totalInputTokens: z.number().prefault(0),
-  totalOutputTokens: z.number().prefault(0),
-  totalCost: z.number().prefault(0),
-  totalCacheReadInputTokens: z.number().prefault(0),
-  totalCacheMissInputTokens: z.number().prefault(0),
-  totalCacheCreationInputTokens: z.number().prefault(0),
-  totalReasoningTokens: z.number().prefault(0),
-  totalToolUsePromptTokens: z.number().prefault(0),
-  totalServerToolRequests: z.number().prefault(0),
+  firstInputTokens: TokenCountSchema.prefault(0),
+  totalInputTokens: TokenCountSchema.prefault(0),
+  totalOutputTokens: TokenCountSchema.prefault(0),
+  totalCost: z.number().nonnegative().prefault(0),
+  totalCacheReadInputTokens: TokenCountSchema.prefault(0),
+  totalCacheMissInputTokens: TokenCountSchema.prefault(0),
+  totalCacheCreationInputTokens: TokenCountSchema.prefault(0),
+  totalReasoningTokens: TokenCountSchema.prefault(0),
+  totalToolUsePromptTokens: TokenCountSchema.prefault(0),
+  totalServerToolRequests: TokenCountSchema.prefault(0),
 });
 export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
 
 /** Schema for normalized usage snapshot. Internal only. */
 const NormalizedUsageSnapshotSchema = z.object({
-  round: z.number(),
+  round: z.int().nonnegative(),
   usage: NormalizedUsageSchema,
 });
 

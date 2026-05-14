@@ -34,7 +34,7 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
     .literal(AgentCategory.Workflow)
     .prefault(AgentCategory.Workflow),
   isRewrite: z.boolean().prefault(true),
-  rounds: z.number().prefault(2),
+  rounds: z.int().positive().prefault(2),
   prefills: z.array(z.string()).prefault([]),
 });
 
