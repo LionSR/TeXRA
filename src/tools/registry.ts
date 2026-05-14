@@ -41,6 +41,7 @@ import {
   ZoteroExportTool,
 } from './zotero';
 import { CodexTool } from './codex';
+import { ClaudeAgentTool } from './claudeAgent';
 import {
   LeanDiagnosticsTool,
   LeanFileTool,
@@ -116,6 +117,7 @@ function createDefaultTools() {
     lean_inspect: new LeanInspectTool(),
     lean_loogle: new LeanLoogleTool(),
     codex: new CodexTool(),
+    claude_agent: new ClaudeAgentTool(),
     delegate_workflow: new WorkflowAgentTool(),
     delegate_agent: new DelegateAgentTool(),
     executions: new ExecutionsTool(),
