@@ -1,7 +1,5 @@
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
-import { tryUseRunContext } from './RunContext';
-
 export interface AgentRuntimeHost {
   emit<K extends keyof ProgressEventPayloads>(
     event: K,
@@ -21,8 +19,4 @@ export function setDefaultAgentRuntimeHost(host: AgentRuntimeHost): void {
 
 export function getDefaultAgentRuntimeHost(): AgentRuntimeHost {
   return defaultAgentRuntimeHost;
-}
-
-export function getAgentRuntimeHost(): AgentRuntimeHost {
-  return tryUseRunContext()?.runtimeHost ?? getDefaultAgentRuntimeHost();
 }

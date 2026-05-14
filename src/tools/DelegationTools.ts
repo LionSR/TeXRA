@@ -308,6 +308,19 @@ async function executeSubagent(
   const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
   const runtimeHost = parentContext?.runtimeHost;
 
+  if (!runtimeHost) {
+    return {
+      summary: 'Delegation tool runtime host unavailable',
+      error:
+        'delegate_agent and delegate_workflow require an active tool runtime host. Run delegation from an active agent session, or ensure the tool run context provides runtimeHost.',
+      isError: true,
+      diagnostics: {
+        type: 'missing_runtime_host',
+        tools: ['delegate_agent', 'delegate_workflow'],
+      },
+    };
+  }
+
   const gated = depthGateError(
     parentDelegationDepth,
     parentContext?.delegationConfig,
