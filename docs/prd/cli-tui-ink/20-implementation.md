@@ -21,28 +21,28 @@ Net: roughly 400 LOC removed from the TUI mode; the `--legacy-renderer` path ret
 
 ## 13. Headless & legacy preserved
 
-Chrome is gated on `stdout.isTTY` only (not the full `cliMode()` check), so `texra chat | tee` works.
+Today's `cliMode()` (`cliContext.ts:214–222`) collapses to `headless` whenever any of stdin / stdout / stderr is non-TTY, so `texra chat | tee` fails. This PRD splits the existing single gate into two:
 
-### TTY/non-TTY decision matrix
+1. **Headless gate (unchanged):** triggered by `--print/-p`, `CI=true`, or stdin non-TTY. `--print/-p` keeps its existing semantics (`cliContext.ts:66, 202`) — no behavior change, no new flag.
+2. **TUI chrome gate (new):** Ink chrome mounts only when `stdout.isTTY`. When stdout is piped but stdin is TTY and headless is not forced, the app mounts in a "streaming-text" mode — same React tree, but the conversation pane writes plain ANSI to stdout instead of going through ink's renderer.
 
-| stdin | stdout | stderr | Behavior                                                                                                                                                                                                                            |
-| ----- | ------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| TTY   | TTY    | TTY    | **TUI** — full Ink rendering, raw-mode input, alt-screen optional, approval modals, paste handling.                                                                                                                                 |
-| TTY   | piped  | TTY    | **Streaming text** — `BaseTextInput` reads from stdin TTY, but ConversationPane writes plain ANSI text to stdout (no `<Box>` chrome, no cursor moves, no alt-screen). Approval modals route to stderr. Enables `texra chat \| tee`. |
-| piped | \*     | \*     | **Headless** — existing `texra run`-equivalent path. No interactive input. `--print/-p` is the canonical invocation.                                                                                                                |
-| any   | any    | piped  | **Headless** — same as above; status output is structured.                                                                                                                                                                          |
+### Decision matrix
 
-The detection point is the `stdout.isTTY` check in the `<App>` setup before `render()`. When `false`, the app mounts in "stream" mode: same React tree, but ConversationPane outputs to stdout via a plain-text serializer rather than ink's renderer-driven output.
+| stdin | stdout | stderr | `--print`? | Behavior                                             |
+| ----- | ------ | ------ | ---------- | ---------------------------------------------------- |
+| TTY   | TTY    | TTY    | —          | **TUI**                                              |
+| TTY   | piped  | TTY    | —          | **Streaming text** (enables `texra chat \| tee`)     |
+| TTY   | any    | any    | yes        | **Headless** (today's `--print` behavior, unchanged) |
+| piped | any    | any    | —          | **Headless** (today's behavior, unchanged)           |
+| —     | —      | —      | `CI=true`  | **Headless** (today's behavior, unchanged)           |
+
+The new streaming-text mode is exactly the gap created by gating chrome on `stdout.isTTY` while leaving headless on the existing OR-of-three.
 
 ### What's preserved
 
-- `texra run`, `--print/-p`, non-TTY chat over `CI=true`, and `--output-format ndjson` — Ink chrome never loads. `NdjsonStdoutSink` and its drain/backpressure logic remain in `logSinks.ts` for the headless `--output-format ndjson` path; they are not touched by this PRD.
+- `texra run`, `--print/-p`, `CI=true`, and `--output-format ndjson` — Ink chrome never loads. `NdjsonStdoutSink` and its drain/backpressure logic remain in `logSinks.ts` for the headless `--output-format ndjson` path; they are not touched by this PRD.
 - `--legacy-renderer` flag retains today's plain renderer (also auto-forced on `TERM=dumb` or `NO_COLOR` + narrow `COLUMNS`). The legacy renderer becomes the only consumer of `picocolors` after migration; everything else lives in Ink.
 - `--output-format json|ndjson` output byte-identical. Golden test in `packages/cli/scripts/validate-run.mjs`.
-
-### Explicit `--print` mode
-
-A new `--print` flag forces the streaming-text mode regardless of TTY status, so scripts and pipelines can opt into deterministic plain output without depending on environment detection. Maps to the same code path as the auto-detected `stdout` non-TTY case above.
 
 ## 14. Migration phases
 
@@ -63,7 +63,7 @@ Implements components per 10-architecture §§ Input component, Terminal capabil
 - `BaseTextInput` with paste handling, viewport, declared-cursor.
 - `terminalCapabilities` discovery; notifier ships `agentFinished` + `approvalNeeded` (progress deferred to Phase 4).
 - Frame telemetry on ink's `onFrame`; coalesce SIGWINCH events (R13).
-- Non-TTY stdout fallback + `--print` flag.
+- Streaming-text fallback when stdout is piped (per [§ 13](#13-headless--legacy-preserved)); no new flag.
 - `p-queue`-backed follow-ups. Approvals still on legacy adapter.
 
 ### Phase 2 — Tool & approval rendering (3 d)
@@ -75,11 +75,11 @@ Implements components per 10-architecture §§ Input component, Terminal capabil
 - Resolver wiring unchanged.
 - **Audit** (prerequisite for closing the phase): confirm whether subagent and main-stream approvals can interleave; document the finding in the PR description. Either outcome leaves the API identical.
 
-### Phase 3 — Markdown + code + token cache (2 d)
+### Phase 3 — Markdown + code (2 d)
 
-- Lift the webview's `markdownRenderer.ts` into a shared `@shared/markdown` module **as a configurable factory**, not a frozen singleton. Today's singleton hard-wires the `texmath`/`katex` math engine and an HTML output renderer (`packages/extension/src/progressView/frontend/formatters/markdownRenderer.ts:39–53`); the CLI host needs a different math engine (`unicodeit` / raw passthrough per [§ Tech stack](./10-architecture.md#5-tech-stack-locked)) and an ANSI renderer instead of HTML. The factory takes a math-engine option and a renderer hook; the webview keeps its current configuration, the CLI host supplies its own.
-- **Preserve the LRU token cache** (cap 500) when lifting. Streamed responses re-render on every chunk; without the cache, re-lexing the full buffer per chunk dominates render cost.
-- Code fences delegate to `cli-highlight`, reusing the grammars `@shared/highlighting/hljs.ts` already pulls from `highlight.js/lib/core`. Lazy-load language packs (first-fence latency ~10 ms acceptable; risk R2).
+- Lift the webview's `markdownRenderer.ts` into a shared `@shared/markdown` module as a configurable factory, not a frozen singleton. Today's singleton hard-wires the `texmath`/`katex` math engine and an HTML output renderer; the CLI host needs a different math engine and an ANSI renderer. The factory takes a math-engine option and a renderer hook; the webview keeps its current configuration, the CLI host supplies its own. (R3: the lift also has to drop or replicate the `katexMacros` import that lives in `packages/extension/`.)
+- Add a parallel render-result cache for the CLI host (the webview's existing cache stores HTML and is not reusable for ANSI). Match the existing budget shape (per-entry + total-char caps).
+- Code fences delegate to `cli-highlight`, reusing the grammars `@shared/highlighting/hljs.ts` already pulls from `highlight.js/lib/core`. Lazy-load language packs (R2).
 - Wire `<Markdown>` and `<CodeBlock>` into `ConversationPane`.
 
 ### Phase 4 — Multi-agent + tabs (2 d)
@@ -114,7 +114,7 @@ Implements components per 10-architecture §§ Input component, Terminal capabil
 - **Integration.** Extend `packages/cli/scripts/validate-run.mjs` with an interactive variant driving stdin via `node-pty` and asserting frame snapshots.
 - **Approval flows.** Per-modal test that the right resolver is called with the right payload. Highest-risk wires. Also test queue serialization: enqueue two payloads back-to-back and assert the second modal does not appear until the first resolves.
 - **Paste handling.** PTY test that injects `CSI 200 ~` + multi-line text + `CSI 201 ~` and asserts a single submit fires (not N).
-- **Non-TTY fallback.** Run `texra chat --tui --print` and `texra chat --tui < /dev/null | tee out.txt` and assert plain text streams to stdout with no ANSI cursor codes.
+- **Streaming-text fallback.** `texra chat --tui` with stdout piped (stdin TTY) writes plain ANSI to stdout (no cursor codes, no Ink chrome). `texra chat --tui --print` continues to take the headless path unchanged.
 - **Terminal notifications.** Notifier emits only the sequences the terminal acknowledged at startup.
 - **Transcript search highlighting.** Correct on composed characters, wide chars (CJK), and overlapping substrings.
 - **Headless regression.** Existing `texra run` golden outputs unchanged. `--legacy-renderer` keeps the existing plain-mode tests green.
