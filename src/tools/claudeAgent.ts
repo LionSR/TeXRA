@@ -76,7 +76,10 @@ import { createChildStream } from './childStream';
 import {
   buildClaudeToolUseLog,
   buildClaudeUsageStats,
+  CLAUDE_AGENT_EFFORT_LEVELS,
   CLAUDE_AGENT_PERMISSION_MODES,
+  modelSupportsAdaptiveThinking,
+  type ClaudeAgentEffort,
   type ClaudeAgentPermissionMode,
   type ClaudeMessageBlock,
 } from './claudeAgentShared';
@@ -110,6 +113,12 @@ const ClaudeAgentInputSchema = z.strictObject({
     .describe(
       "Claude model to use (e.g. 'claude-opus-4-7', 'claude-sonnet-4-6'). Defaults to user-configured model.",
     ),
+  effort: z
+    .enum(CLAUDE_AGENT_EFFORT_LEVELS)
+    .nullish()
+    .describe(
+      'Reasoning depth hint passed to the SDK (defaults to user-configured effort, typically high).',
+    ),
   session_id: z
     .string()
     .nullish()
@@ -130,6 +139,7 @@ interface ActiveSession {
   executionId: ExecutionId;
   model: string;
   permissionMode: ClaudeAgentPermissionMode;
+  effort: ClaudeAgentEffort;
   cwd?: string;
   additionalDirectories?: string[];
 }
@@ -331,6 +341,7 @@ export async function runStreamedTurn(params: {
   abortController: AbortController;
   model: string;
   permissionMode: ClaudeAgentPermissionMode;
+  effort: ClaudeAgentEffort;
   cwd: string | undefined;
   additionalDirectories: string[] | undefined;
   env: NodeJS.ProcessEnv;
@@ -346,10 +357,14 @@ export async function runStreamedTurn(params: {
     abortController: params.abortController,
     model: params.model,
     permissionMode: params.permissionMode,
+    effort: params.effort,
     env: params.env,
     systemPrompt: { type: 'preset', preset: 'claude_code' },
     settingSources: ['user', 'project', 'local'],
   };
+  if (modelSupportsAdaptiveThinking(params.model)) {
+    sdkOptions.thinking = { type: 'adaptive' };
+  }
   if (params.permissionMode === 'bypassPermissions') {
     sdkOptions.allowDangerouslySkipPermissions = true;
   }
@@ -507,6 +522,7 @@ function startClaudeAgentLoop(params: {
   initialPrompt: string;
   model: string;
   permissionMode: ClaudeAgentPermissionMode;
+  effort: ClaudeAgentEffort;
   cwd: string | undefined;
   additionalDirectories: string[] | undefined;
   env: NodeJS.ProcessEnv;
@@ -562,6 +578,7 @@ function startClaudeAgentLoop(params: {
             abortController: ac,
             model: params.model,
             permissionMode: params.permissionMode,
+            effort: params.effort,
             cwd: params.cwd,
             additionalDirectories: params.additionalDirectories,
             env: params.env,
@@ -589,6 +606,7 @@ function startClaudeAgentLoop(params: {
             executionId,
             model: params.model,
             permissionMode: params.permissionMode,
+            effort: params.effort,
             cwd: params.cwd,
             additionalDirectories: params.additionalDirectories,
           });
@@ -655,6 +673,7 @@ export class ClaudeAgentTool extends defineTool({
     const permissionMode =
       input.permission_mode ?? config.getClaudeAgentPermissionMode();
     const model = input.model ?? config.getClaudeAgentModel();
+    const effort = input.effort ?? config.getClaudeAgentEffort();
 
     const approvalLabel = `[claude_agent ${permissionMode}] ${input.prompt}`;
     const approval = await requestBashApproval({ command: approvalLabel });
@@ -681,6 +700,7 @@ export class ClaudeAgentTool extends defineTool({
       input,
       permissionMode,
       model,
+      effort,
       runContext?.streamId,
       runContext?.executionId,
       runContext?.workingDirectory,
@@ -693,6 +713,7 @@ async function launchClaudeAgentSession(
   input: ClaudeAgentInput,
   permissionMode: ClaudeAgentPermissionMode,
   model: string,
+  effort: ClaudeAgentEffort,
   parentStreamId: StreamTabId | undefined,
   parentExecutionId: ExecutionId | undefined,
   parentWorkingDirectory: string | undefined,
@@ -747,6 +768,7 @@ async function launchClaudeAgentSession(
     initialPrompt: input.prompt,
     model,
     permissionMode,
+    effort,
     cwd: workspace.cwd,
     additionalDirectories: workspace.additionalDirectories,
     env,

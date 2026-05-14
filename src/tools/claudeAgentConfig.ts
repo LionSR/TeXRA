@@ -3,12 +3,17 @@ import { platform } from '@platform/platform';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { getWorkspaceState } from '@agent/core/stateStore';
+import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import {
   CLAUDE_AGENT_NAME,
   CLAUDE_AGENT_DISPLAY_MODEL,
+  CLAUDE_AGENT_EFFORT_LEVELS,
+  CLAUDE_AGENT_MODELS,
   CLAUDE_AGENT_PERMISSION_MODES,
+  type ClaudeAgentEffort,
+  type ClaudeAgentModel,
   type ClaudeAgentPermissionMode,
 } from './claudeAgentShared';
 
@@ -17,19 +22,26 @@ import {
 // ============================================================================
 
 /** Default Claude model passed to the Agent SDK. */
-export const CLAUDE_AGENT_DEFAULT_MODEL = 'claude-opus-4-7';
+export const CLAUDE_AGENT_DEFAULT_MODEL: ClaudeAgentModel = 'claude-opus-4-7';
 
-const MODEL_KEY = 'texra.claudeAgentModel';
+export function parseClaudeAgentModel(raw: string): ClaudeAgentModel {
+  return (CLAUDE_AGENT_MODELS as readonly string[]).includes(raw)
+    ? (raw as ClaudeAgentModel)
+    : CLAUDE_AGENT_DEFAULT_MODEL;
+}
 
-export function getClaudeAgentModel(): string {
-  return getWorkspaceState().get<string>(MODEL_KEY, CLAUDE_AGENT_DEFAULT_MODEL);
+export function getClaudeAgentModel(): ClaudeAgentModel {
+  const raw = getWorkspaceState().get<string>(
+    WorkspaceStateKey.CLAUDE_AGENT_MODEL,
+    CLAUDE_AGENT_DEFAULT_MODEL,
+  );
+  return parseClaudeAgentModel(raw);
 }
 
 // ============================================================================
 // Permission mode
 // ============================================================================
 
-const PERMISSION_MODE_KEY = 'texra.claudeAgentPermissionMode';
 const PERMISSION_MODE_DEFAULT: ClaudeAgentPermissionMode = 'acceptEdits';
 
 export function parseClaudeAgentPermissionMode(
@@ -42,10 +54,30 @@ export function parseClaudeAgentPermissionMode(
 
 export function getClaudeAgentPermissionMode(): ClaudeAgentPermissionMode {
   const raw = getWorkspaceState().get<string>(
-    PERMISSION_MODE_KEY,
+    WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
     PERMISSION_MODE_DEFAULT,
   );
   return parseClaudeAgentPermissionMode(raw);
+}
+
+// ============================================================================
+// Effort — adaptive thinking depth hint passed via `effort` SDK option
+// ============================================================================
+
+const EFFORT_DEFAULT: ClaudeAgentEffort = 'high';
+
+export function parseClaudeAgentEffort(raw: string): ClaudeAgentEffort {
+  return (CLAUDE_AGENT_EFFORT_LEVELS as readonly string[]).includes(raw)
+    ? (raw as ClaudeAgentEffort)
+    : EFFORT_DEFAULT;
+}
+
+export function getClaudeAgentEffort(): ClaudeAgentEffort {
+  const raw = getWorkspaceState().get<string>(
+    WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
+    EFFORT_DEFAULT,
+  );
+  return parseClaudeAgentEffort(raw);
 }
 
 // ============================================================================
