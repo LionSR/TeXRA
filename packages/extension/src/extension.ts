@@ -355,20 +355,14 @@ export async function activate(context: vscode.ExtensionContext) {
     secrets: {
       providers: SecretManager.API_PROVIDERS,
       setApiKey: (provider, key) =>
-        SecretManager.set(
-          SecretManager.getApiKeySecretName(provider as never),
-          key,
-        ),
+        SecretManager.set(SecretManager.getApiKeySecretName(provider), key),
       deleteApiKey: (provider) =>
-        SecretManager.delete(
-          SecretManager.getApiKeySecretName(provider as never),
-        ),
-      apiKeyExists: (provider) => SecretManager.apiKeyExists(provider as never),
-      hasUsableApiKey: (provider) =>
-        SecretManager.hasUsableApiKey(provider as never),
+        SecretManager.delete(SecretManager.getApiKeySecretName(provider)),
+      apiKeyExists: (provider) => SecretManager.apiKeyExists(provider),
+      hasUsableApiKey: (provider) => SecretManager.hasUsableApiKey(provider),
       storedApiKeyExists: async (provider) => {
         const stored = await SecretManager.get(
-          SecretManager.getApiKeySecretName(provider as never),
+          SecretManager.getApiKeySecretName(provider),
         );
         return stored !== undefined;
       },
