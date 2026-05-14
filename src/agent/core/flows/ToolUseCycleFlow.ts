@@ -256,13 +256,13 @@ class ToolUsePrepNode<C> extends BaseNode<
     ]);
     shared.cycleResponseTimeMs = 0;
 
-    const { modelName, agentName } = this.services;
+    const { config } = this.services;
     await maybeSaveDebugObject({
       object: shared.messages,
       objectType: 'messages',
       context: getDebugContext(this.services, {
-        modelName,
-        isRemote: isRemoteAgent(agentName),
+        modelName: config.model,
+        isRemote: isRemoteAgent(config.agent),
       }),
       fileOptions: {
         continuationCount: shared.cycleIndex,
@@ -1027,8 +1027,8 @@ export function createToolUseCycleFlow<C>(): Flow<
     },
     getDebugSaveOptions: (shared, services) => ({
       context: {
-        modelName: services.modelName,
-        isRemote: isRemoteAgent(services.agentName),
+        modelName: services.config.model,
+        isRemote: isRemoteAgent(services.config.agent),
       },
       fileOptions: {
         continuationCount: shared.cycleIndex,

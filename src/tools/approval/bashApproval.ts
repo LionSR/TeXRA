@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { getConfig } from '@agent/core/config';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
@@ -40,7 +40,7 @@ export async function requestBashApproval(
 ): Promise<BashApprovalResult> {
   const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY, true);
 
-  const context = getCurrentToolRunContext();
+  const context = tryUseRunContext();
   const streamId = request.streamId ?? context?.streamId;
 
   if (
