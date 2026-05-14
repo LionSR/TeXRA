@@ -54,6 +54,7 @@ Every phase is independently mergeable. Each adds a `--tui` flag, default-off, u
 - **Wire React Compiler.** Add `babel-plugin-react-compiler` and run a Babel pre-pass over `packages/cli/src/chat/tui/**/*.tsx` before esbuild. Validate output by smoke-running a hello-world `<App>` and confirming `react/compiler-runtime` is the only added import. Risk R12.
 - Migrate `cliContext.ts` arg parsing to `citty` (no UI change). Drop `ANSI_TONES` for `picocolors` in legacy renderer.
 - **Default subcommand:** wire `texra` (no args) to invoke `texra chat` when stdin / stdout are TTYs, fall through to `--help` otherwise. Citty's `defaultSubCommand` field.
+- **Default agent + model resolution.** Implement the four-step lookup (workspace → user → last-used → built-in) per [§ Entrypoint default](./10-architecture.md#entrypoint-default). `texra` with no args reaches this resolver before mounting `<App>`, so the header always shows a concrete agent + model.
 - Verify headless tests + `validate-run.mjs` pass.
 
 ### Phase 1 — Skeleton + input + telemetry (2–3 d)
