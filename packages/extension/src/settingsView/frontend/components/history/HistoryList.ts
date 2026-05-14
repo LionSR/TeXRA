@@ -48,6 +48,8 @@ export class HistoryList extends LitElement {
 
   @state() private matchCounts: Map<string, number> = new Map();
 
+  private matchOffsets: Map<string, number> = new Map();
+
   @state() private searchVersion = 0;
 
   /** Current zero-based page index (used when not searching). */
@@ -117,6 +119,7 @@ export class HistoryList extends LitElement {
 
   private clearSearch(): void {
     this.matchCounts = new Map();
+    this.matchOffsets = new Map();
     ++this.searchVersion;
     this.state?.setSearchIndex(-1);
     this.state?.setTotalMatches(0);
@@ -146,21 +149,12 @@ export class HistoryList extends LitElement {
     if (!this.state || this.state.searchIndex < 0) return null;
 
     const globalIndex = this.state.searchIndex;
-    let cumulativeIndex = 0;
+    const itemOffset = this.matchOffsets.get(itemId);
+    if (itemOffset == null) return null;
 
-    for (const item of this.items) {
-      const count = this.matchCounts.get(item.id) ?? 0;
-      if (item.id === itemId) {
-        // Check if the global index falls within this item's range
-        if (
-          globalIndex >= cumulativeIndex &&
-          globalIndex < cumulativeIndex + count
-        ) {
-          return globalIndex - cumulativeIndex;
-        }
-        return null;
-      }
-      cumulativeIndex += count;
+    const count = this.matchCounts.get(itemId) ?? 0;
+    if (globalIndex >= itemOffset && globalIndex < itemOffset + count) {
+      return globalIndex - itemOffset;
     }
     return null;
   }
@@ -179,11 +173,20 @@ export class HistoryList extends LitElement {
       return;
     }
 
-    this.matchCounts = new Map(
-      this.items.map((item, i) => [item.id, counts[i] ?? 0]),
-    );
+    const nextCounts = new Map<string, number>();
+    const nextOffsets = new Map<string, number>();
+    let total = 0;
+    this.items.forEach((item, i) => {
+      const count = counts[i] ?? 0;
+      nextCounts.set(item.id, count);
+      if (count > 0) {
+        nextOffsets.set(item.id, total);
+      }
+      total += count;
+    });
 
-    const total = counts.reduce((sum, count) => sum + count, 0);
+    this.matchOffsets = nextOffsets;
+    this.matchCounts = nextCounts;
     this.state?.setTotalMatches(total);
     if (total > 0) {
       this.state?.setSearchIndex(0);
