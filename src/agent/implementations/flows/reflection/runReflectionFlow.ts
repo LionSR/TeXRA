@@ -59,8 +59,9 @@ import {
 } from './ReflectionFlowState';
 import type { ReflectionServices } from './ReflectionServices';
 
-export interface RunReflectionFlowInput<C = unknown>
-  extends BaseFlowContextInit<C> {
+export interface RunReflectionFlowInput<
+  C = unknown,
+> extends BaseFlowContextInit<C> {
   setting: AgentWorkflowSetting;
   storageKey: StorageKey;
   parentStage: AgentLogStage;
