@@ -102,7 +102,7 @@ prompts:
         \end{itemize}
       userPrefix: |
         <documents>
-        {{ ALL_CONTEXT }}
+        {{ ALL_CONTEXTS }}
         {{ ADDITIONAL_INPUTS }}
         <document name="{{ INPUT_FILE }}">
         {{ INPUT_CONTENT }}

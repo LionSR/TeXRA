@@ -35,7 +35,7 @@ prompts:
     Here is the context:
 
     <documents>
-    {{ ALL_CONTEXT }}
+    {{ ALL_CONTEXTS }}
     {{ ALL_INPUTS }} 
 
     </documents>

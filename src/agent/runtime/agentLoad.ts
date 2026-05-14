@@ -39,10 +39,6 @@ export interface AgentYamlValidationResult extends ValidAgentDefinition {
   prompts: AgentPrompt;
 }
 
-export interface AgentLoadOptions {
-  outputFiles?: readonly string[];
-}
-
 /**
  * Parses a YAML string or already-parsed object and validates that it
  * represents a full agent definition. Returns the validated name, settings,
@@ -90,7 +86,6 @@ export function ensureAgentCategoryForSource<
 
 export async function loadAgentSettingAndPrompts(
   resolution: ResolvedAgent,
-  options: AgentLoadOptions = {},
 ): Promise<[AgentSetting, AgentPrompt]> {
   try {
     const { entry } = resolution;

@@ -232,19 +232,18 @@ async function getFileVars(
 ): Promise<UserVars> {
   const userVars: UserVars = {};
 
+  const contextFiles = [
+    ...getCategoryFiles(agentConfig, 'REFERENCE'),
+    ...getCategoryFiles(agentConfig, 'AUXILIARY'),
+  ];
+
   // Log file categories being loaded (skip for tool-use agents).
   // Media files are excluded: they have no user vars (display-only in Init)
   // and are already logged with full load results by MediaExtractionNode in r0.
   if (agentSetting.agentCategory !== AgentCategory.ToolUse) {
     await logFileCategoriesWithExistence(logger, [
       ['Input Files', getCategoryFiles(agentConfig, 'INPUT')],
-      [
-        'Context Files',
-        [
-          ...getCategoryFiles(agentConfig, 'REFERENCE'),
-          ...getCategoryFiles(agentConfig, 'AUXILIARY'),
-        ],
-      ],
+      ['Context Files', contextFiles],
     ]);
   }
 
@@ -273,16 +272,14 @@ async function getFileVars(
     userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(allFiles);
   }
 
-  // CONTEXT is the unified successor to REFERENCE + AUXILIARY. Emit
-  // {{ ALL_CONTEXT }} / {{ LIST_OF_ALL_CONTEXTS }} as the canonical template
-  // variables; {{ ALL_REFERENCES }} and {{ ALL_AUXILIARYS }} remain populated
-  // above as deprecated aliases for custom user YAMLs that haven't migrated.
-  const contextFiles = [
-    ...getCategoryFiles(agentConfig, 'REFERENCE'),
-    ...getCategoryFiles(agentConfig, 'AUXILIARY'),
-  ];
-  userVars.ALL_CONTEXT =
-    contextFiles.length > 0 ? await getXmlFormatFromFiles(contextFiles) : null;
+  // {{ ALL_CONTEXTS }} is the unified successor to {{ ALL_REFERENCES }} +
+  // {{ ALL_AUXILIARYS }} (kept populated above as deprecated aliases). Reuse
+  // the already-built XML strings — getXmlFormatFromFiles joins per-file blocks
+  // with newlines, so concatenation is equivalent to re-reading the files.
+  const refXml = userVars.ALL_REFERENCES as string | null;
+  const auxXml = userVars.ALL_AUXILIARYS as string | null;
+  userVars.ALL_CONTEXTS =
+    refXml && auxXml ? `${refXml}\n${auxXml}` : (refXml ?? auxXml);
   userVars.LIST_OF_ALL_CONTEXTS = getListOfFiles(contextFiles);
 
   return userVars;
