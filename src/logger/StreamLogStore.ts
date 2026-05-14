@@ -1,3 +1,5 @@
+import pMap from 'p-map';
+
 import { KVStore } from '@common/storage/KVStore';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
 import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
@@ -8,8 +10,10 @@ import {
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
+import { isObject } from '@utils/core';
 
 import {
+  isRunningGroupEntry,
   StreamLog,
   type StreamLogAppendInput,
   type StreamLogUpdatePatch,
@@ -18,12 +22,20 @@ import * as log from './logUtils';
 
 const SAVE_DEBOUNCE_MS = 300;
 const STREAM_LOGS_DIR = 'streamLogs';
+const STREAM_LOG_SUMMARIES_DIR = 'streamLogSummaries';
+const STREAM_LOG_LOAD_CONCURRENCY = 8;
 const LOG_TAG = 'StreamLogStore';
 
 type StreamLogListener = (streamId: StreamTabId) => void;
+interface StreamLogSummary {
+  firstTimestamp?: number;
+  lastTimestamp?: number;
+  hasRunningGroup?: boolean;
+}
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+interface StreamLoadResult {
+  streamId: StreamTabId;
+  summary: StreamLogSummary;
 }
 
 export class StreamLogStore {
@@ -31,16 +43,16 @@ export class StreamLogStore {
   private readonly listeners = new Set<StreamLogListener>();
   private readonly dirtyStreamIds = new Set<StreamTabId>();
   private readonly kv = new KVStore(STREAM_LOGS_DIR, { compactJson: true });
+  private readonly summaryKv = new KVStore(STREAM_LOG_SUMMARIES_DIR, {
+    compactJson: true,
+  });
 
   /**
    * Lightweight summary per stream (first/last timestamp). Populated at load
    * and refreshed on append/update. Survives `releaseEntries` so sidebar
    * metadata stays available for streams whose heavy entries have been evicted.
    */
-  private readonly summaries = new Map<
-    StreamTabId,
-    { firstTimestamp?: number; lastTimestamp?: number }
-  >();
+  private readonly summaries = new Map<StreamTabId, StreamLogSummary>();
 
   /** Deduplicates concurrent `ensureLoaded` calls for the same stream. */
   private readonly pendingLoads = new Map<StreamTabId, Promise<void>>();
@@ -76,6 +88,9 @@ export class StreamLogStore {
   private pendingResolve: (() => void) | null = null;
   private savePromise: Promise<void> | null = null;
   private inFlightWrite: Promise<void> | null = null;
+  private writeGeneration = 0;
+  private readonly writeTombstones = new Set<StreamTabId>();
+  private clearing = false;
 
   onChange(listener: StreamLogListener): () => void {
     this.listeners.add(listener);
@@ -154,8 +169,14 @@ export class StreamLogStore {
     const work = (async () => {
       try {
         const raw = await this.kv.read<unknown[]>(streamId);
-        // If `delete` ran during the read, don't resurrect the stream.
-        if (!this.summaries.has(streamId)) return;
+        // If `delete` or `clear` ran during the read, don't resurrect it.
+        if (
+          this.clearing ||
+          this.writeTombstones.has(streamId) ||
+          !this.summaries.has(streamId)
+        ) {
+          return;
+        }
         const diskEntries = this.parsePersistedEntries(raw);
         const live = this.logs.get(streamId);
         if (live && live.size > 0) {
@@ -260,48 +281,66 @@ export class StreamLogStore {
   }
 
   async delete(streamId: StreamTabId): Promise<void> {
-    this.logs.delete(streamId);
-    this.summaries.delete(streamId);
-    this.dirtyStreamIds.delete(streamId);
-    this.pendingRelease.delete(streamId);
-    this.flushing.delete(streamId);
-    this.loadFailed.delete(streamId);
-    this.pendingLoads.delete(streamId);
-    if (!this.loaded) return;
-
+    this.writeTombstones.add(streamId);
     this.cancelPendingSave();
-    log.info(LOG_TAG, `Deleting stream: ${streamId}`);
-    await this.kv.delete(streamId);
+    this.forgetStreamState(streamId);
+
+    try {
+      await this.inFlightWrite;
+      this.forgetStreamState(streamId);
+      if (!this.loaded) return;
+
+      log.info(LOG_TAG, `Deleting stream: ${streamId}`);
+      await Promise.all([
+        this.kv.delete(streamId),
+        this.summaryKv.delete(streamId),
+      ]);
+    } finally {
+      this.writeTombstones.delete(streamId);
+    }
   }
 
   async clear(): Promise<void> {
-    const count = this.logs.size;
-    this.logs.clear();
-    this.summaries.clear();
-    this.dirtyStreamIds.clear();
-    this.pendingRelease.clear();
-    this.flushing.clear();
-    this.loadFailed.clear();
-    this.pendingLoads.clear();
-    if (!this.loaded) return;
-
+    const count = this.summaries.size;
+    this.clearing = true;
+    this.writeGeneration += 1;
     this.cancelPendingSave();
-    log.info(LOG_TAG, `Clearing all ${count} streams`);
-    await this.kv.deleteDir();
+    this.forgetAllStreamState();
+
+    try {
+      await this.inFlightWrite;
+      this.forgetAllStreamState();
+      if (!this.loaded) return;
+
+      log.info(LOG_TAG, `Clearing all ${count} streams`);
+      await Promise.all([this.kv.deleteDir(), this.summaryKv.deleteDir()]);
+    } finally {
+      this.writeTombstones.clear();
+      this.clearing = false;
+    }
   }
 
-  endRunningGroups(now: number = Date.now()): StreamTabId[] {
+  async endRunningGroups(
+    now: number = Date.now(),
+    streamIds: readonly StreamTabId[] = [],
+  ): Promise<StreamTabId[]> {
+    const streamsToLoad = new Set(streamIds);
+    for (const [streamId, summary] of this.summaries) {
+      if (summary.hasRunningGroup && !this.logs.has(streamId)) {
+        streamsToLoad.add(streamId);
+      }
+    }
+
+    if (streamsToLoad.size > 0) {
+      await Promise.all([...streamsToLoad].map((id) => this.ensureLoaded(id)));
+    }
+
     const affected: StreamTabId[] = [];
     for (const [streamId, logInstance] of this.logs.entries()) {
       let updatedAny = false;
       for (const entry of logInstance.getRange(0, logInstance.head)) {
-        if (entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START) continue;
+        if (!isRunningGroupEntry(entry)) continue;
         const existingData = isObject(entry.data) ? entry.data : {};
-        const status =
-          typeof existingData.status === 'string'
-            ? existingData.status
-            : 'running';
-        if (status !== 'running') continue;
 
         updatedAny ||= !!logInstance.update(entry.id, {
           type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
@@ -311,6 +350,7 @@ export class StreamLogStore {
 
       if (updatedAny) {
         affected.push(streamId);
+        this.refreshSummary(streamId, logInstance);
         this.markDirty(streamId);
         this.notify(streamId);
       }
@@ -335,43 +375,35 @@ export class StreamLogStore {
     this.flushing.clear();
     this.loadFailed.clear();
     this.pendingLoads.clear();
+    this.writeTombstones.clear();
+    this.clearing = false;
 
     // 1. Scan directory — filenames decode back to stream IDs
     const streamIds = await this.kv.listKeys();
 
     if (streamIds.length > 0) {
-      const results = await Promise.all(
-        streamIds.map(async (streamId) => {
-          try {
-            const raw = await this.kv.read<unknown[]>(streamId);
-            return [streamId, this.parsePersistedEntries(raw)] as const;
-          } catch {
-            log.warn(LOG_TAG, `Skipping corrupt stream log: ${streamId}`);
-            return [streamId, [] as StreamLogEntry[]] as const;
-          }
-        }),
+      const results = await pMap(
+        streamIds,
+        (streamId) => this.loadStreamSummary(streamId as StreamTabId),
+        { concurrency: STREAM_LOG_LOAD_CONCURRENCY },
       );
 
-      const sortedResults = [...results].sort(
-        ([aStreamId, aEntries], [bStreamId, bEntries]) =>
-          (aEntries[0]?.timestamp ?? Number.POSITIVE_INFINITY) -
-            (bEntries[0]?.timestamp ?? Number.POSITIVE_INFINITY) ||
-          aStreamId.localeCompare(bStreamId),
-      );
+      const sortedResults = results
+        .filter((result): result is StreamLoadResult => result !== null)
+        .sort(
+          (a, b) =>
+            (a.summary.firstTimestamp ?? Number.POSITIVE_INFINITY) -
+              (b.summary.firstTimestamp ?? Number.POSITIVE_INFINITY) ||
+            a.streamId.localeCompare(b.streamId),
+        );
 
-      let totalEntries = 0;
-      for (const [streamId, entries] of sortedResults) {
-        if (entries.length > 0) {
-          const logInstance = new StreamLog(entries);
-          this.logs.set(streamId as StreamTabId, logInstance);
-          this.refreshSummary(streamId as StreamTabId, logInstance);
-          totalEntries += entries.length;
-        }
+      for (const { streamId, summary } of sortedResults) {
+        this.summaries.set(streamId, summary);
       }
 
       log.info(
         LOG_TAG,
-        `Loaded ${this.logs.size} streams, ${totalEntries} entries (file-backed)`,
+        `Loaded ${this.summaries.size} stream summaries (file-backed)`,
       );
       this.loaded = true;
       return;
@@ -471,12 +503,172 @@ export class StreamLogStore {
     if (existing) {
       existing.firstTimestamp = logInstance.firstTimestamp;
       existing.lastTimestamp = logInstance.lastTimestamp;
+      existing.hasRunningGroup = logInstance.hasRunningGroup;
     } else {
       this.summaries.set(streamId, {
         firstTimestamp: logInstance.firstTimestamp,
         lastTimestamp: logInstance.lastTimestamp,
+        hasRunningGroup: logInstance.hasRunningGroup,
       });
     }
+  }
+
+  private async loadStreamSummary(
+    streamId: StreamTabId,
+  ): Promise<StreamLoadResult | null> {
+    const persistedSummary = await this.readSummary(streamId);
+    if (persistedSummary) {
+      return { streamId, summary: persistedSummary };
+    }
+
+    try {
+      const raw = await this.kv.read<unknown[]>(streamId);
+      const entries = this.parsePersistedEntries(raw);
+      if (entries.length === 0) return null;
+
+      const summary = this.summarizeEntries(entries);
+      await this.writeSummary(streamId, summary).catch(() => {
+        log.warn(LOG_TAG, `Failed to write stream summary: ${streamId}`);
+      });
+      return { streamId, summary };
+    } catch {
+      log.warn(LOG_TAG, `Skipping corrupt stream log: ${streamId}`);
+      return null;
+    }
+  }
+
+  private async readSummary(
+    streamId: StreamTabId,
+  ): Promise<StreamLogSummary | undefined> {
+    try {
+      const summary = this.parsePersistedSummary(
+        await this.summaryKv.read<unknown>(streamId),
+      );
+      if (!summary) return undefined;
+
+      const [summaryMtime, logMtime] = await Promise.all([
+        this.summaryKv.modifiedAt(streamId),
+        this.kv.modifiedAt(streamId),
+      ]);
+      if (
+        summaryMtime !== undefined &&
+        logMtime !== undefined &&
+        summaryMtime < logMtime
+      ) {
+        return undefined;
+      }
+
+      return summary;
+    } catch {
+      log.warn(LOG_TAG, `Ignoring corrupt stream summary: ${streamId}`);
+      return undefined;
+    }
+  }
+
+  private summarizeEntries(
+    entries: readonly StreamLogEntry[],
+  ): StreamLogSummary {
+    return {
+      firstTimestamp: entries[0]?.timestamp,
+      lastTimestamp: entries.at(-1)?.timestamp,
+      hasRunningGroup: entries.some(isRunningGroupEntry),
+    };
+  }
+
+  private parsePersistedSummary(value: unknown): StreamLogSummary | undefined {
+    if (!isObject(value)) return undefined;
+    const firstTimestamp = this.parseTimestamp(value.firstTimestamp);
+    const lastTimestamp = this.parseTimestamp(value.lastTimestamp);
+    const hasRunningGroup =
+      typeof value.hasRunningGroup === 'boolean'
+        ? value.hasRunningGroup
+        : undefined;
+    if (firstTimestamp === undefined && lastTimestamp === undefined) {
+      return undefined;
+    }
+    return { firstTimestamp, lastTimestamp, hasRunningGroup };
+  }
+
+  private parseTimestamp(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isFinite(value)
+      ? value
+      : undefined;
+  }
+
+  private async writeStream(
+    streamId: StreamTabId,
+    logInstance: StreamLog,
+    expectedGeneration: number = this.writeGeneration,
+  ): Promise<void> {
+    if (this.shouldSkipWrite(streamId, expectedGeneration)) return;
+    await this.kv.write(streamId, logInstance.toPersistedEntries());
+    if (this.shouldSkipWrite(streamId, expectedGeneration)) {
+      await Promise.all([
+        this.kv.delete(streamId),
+        this.summaryKv.delete(streamId),
+      ]);
+      return;
+    }
+
+    await this.writeSummaryFromLog(streamId, logInstance).catch(() => {
+      log.warn(LOG_TAG, `Failed to write stream summary: ${streamId}`);
+    });
+    if (this.shouldSkipWrite(streamId, expectedGeneration)) {
+      await Promise.all([
+        this.kv.delete(streamId),
+        this.summaryKv.delete(streamId),
+      ]);
+    }
+  }
+
+  private shouldSkipWrite(
+    streamId: StreamTabId,
+    expectedGeneration: number,
+  ): boolean {
+    return (
+      this.clearing ||
+      expectedGeneration !== this.writeGeneration ||
+      this.writeTombstones.has(streamId) ||
+      !this.summaries.has(streamId)
+    );
+  }
+
+  private forgetStreamState(streamId: StreamTabId): void {
+    this.logs.delete(streamId);
+    this.summaries.delete(streamId);
+    this.dirtyStreamIds.delete(streamId);
+    this.pendingRelease.delete(streamId);
+    this.flushing.delete(streamId);
+    this.loadFailed.delete(streamId);
+    this.pendingLoads.delete(streamId);
+  }
+
+  private forgetAllStreamState(): void {
+    this.logs.clear();
+    this.summaries.clear();
+    this.dirtyStreamIds.clear();
+    this.pendingRelease.clear();
+    this.flushing.clear();
+    this.loadFailed.clear();
+    this.pendingLoads.clear();
+  }
+
+  private async writeSummaryFromLog(
+    streamId: StreamTabId,
+    logInstance: StreamLog,
+  ): Promise<void> {
+    await this.writeSummary(streamId, {
+      firstTimestamp: logInstance.firstTimestamp,
+      lastTimestamp: logInstance.lastTimestamp,
+      hasRunningGroup: logInstance.hasRunningGroup,
+    });
+  }
+
+  private async writeSummary(
+    streamId: StreamTabId,
+    summary: StreamLogSummary,
+  ): Promise<void> {
+    await this.summaryKv.write(streamId, summary);
   }
 
   private markDirty(streamId: StreamTabId): void {
@@ -529,7 +721,7 @@ export class StreamLogStore {
 
     await Promise.all(
       [...this.logs].map(([streamId, logInstance]) =>
-        this.kv.write(streamId, logInstance.toJSON()),
+        this.writeStream(streamId, logInstance),
       ),
     );
 
@@ -602,6 +794,7 @@ export class StreamLogStore {
     }
 
     log.debug(LOG_TAG, `Writing ${dirtyIds.length} dirty stream(s)`);
+    const writeGeneration = this.writeGeneration;
 
     // Mark these as mid-flush so `releaseEntries` defers — we need the
     // in-memory copy preserved until the write resolves, otherwise a failed
@@ -615,7 +808,7 @@ export class StreamLogStore {
       dirtyIds.map((streamId) => {
         const logInstance = this.logs.get(streamId);
         return logInstance
-          ? this.kv.write(streamId, logInstance.toPersistedEntries())
+          ? this.writeStream(streamId, logInstance, writeGeneration)
           : Promise.resolve();
       }),
     )
