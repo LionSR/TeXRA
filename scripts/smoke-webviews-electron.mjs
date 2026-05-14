@@ -57,11 +57,12 @@ const views = [
       },
       {
         command: 'setReferenceFiles',
-        files: ['refs.bib', 'References/2509.24978/only_supplement.tex'],
-      },
-      {
-        command: 'setAuxiliaryFiles',
-        files: ['ltxfront.sty', 'References/2509.24978/revtex4-2.cls'],
+        files: [
+          'refs.bib',
+          'References/2509.24978/only_supplement.tex',
+          'ltxfront.sty',
+          'References/2509.24978/revtex4-2.cls',
+        ],
       },
       {
         command: 'setMediaFiles',
