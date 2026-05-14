@@ -96,10 +96,13 @@ function createController(options?: {
           storagePath: 'item.md',
           size: 13,
           mtime: '2026-05-03T00:00:00.000Z',
-          lineCount: 1,
-          preview: 'remember this',
         },
       ],
+      loadMemoryPreview: async (storagePath) => ({
+        storagePath,
+        lineCount: 1,
+        preview: 'remember this',
+      }),
       isMemoryEnabled: () => memoryEnabled,
       setMemoryEnabled: async (enabled) => {
         memoryEnabled = enabled;
@@ -137,10 +140,33 @@ describe('SettingsMemoryController', () => {
           storagePath: 'item.md',
           size: 13,
           mtime: '2026-05-03T00:00:00.000Z',
-          lineCount: 1,
-          preview: 'remember this',
         },
       ],
+    });
+  });
+
+  it('builds preview messages through the resolved storage path', async () => {
+    const { controller } = createController();
+
+    assert.deepEqual(await controller.getMemoryPreviewMessage('item.md'), {
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
+      preview: {
+        storagePath: 'mem/item.md',
+        lineCount: 1,
+        preview: 'remember this',
+      },
+    });
+  });
+
+  it('builds preview error messages through the resolved storage path', () => {
+    const { controller } = createController();
+
+    assert.deepEqual(controller.getMemoryPreviewErrorMessage('item.md'), {
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
+      preview: {
+        storagePath: 'mem/item.md',
+        error: true,
+      },
     });
   });
 

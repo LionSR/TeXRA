@@ -37,6 +37,7 @@ import {
   DeleteMemoryMessageSchema,
   GetMemoryDataMessageSchema,
   GetMemoryEnabledMessageSchema,
+  GetMemoryPreviewMessageSchema,
   OpenMemoryFileMessageSchema,
   OpenMemoryFolderMessageSchema,
   PinMemoryMessageSchema,
@@ -103,7 +104,9 @@ const CMD = SETTINGS_VIEW_CMD;
 // Re-export data schemas from individual view messages
 export {
   MemoryViewItemSchema,
+  MemoryPreviewSchema,
   type MemoryViewItem,
+  type MemoryPreview,
   type MemoryPathMessage,
   type MemoryDeleteMessage,
   type MemoryEnabledMessage,
@@ -919,6 +922,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetInlineCriticismEnabledMessageSchema,
     // Memory messages
     GetMemoryDataMessageSchema,
+    GetMemoryPreviewMessageSchema,
     OpenMemoryFileMessageSchema,
     OpenMemoryFolderMessageSchema,
     DeleteMemoryMessageSchema,
