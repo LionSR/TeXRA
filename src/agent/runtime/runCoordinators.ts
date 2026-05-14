@@ -111,14 +111,11 @@ export function resolvePlanApproval(
   ).resolveRequest(approvalId, result);
 }
 
-export function clearPlanApprovalForStream(
-  streamId: string,
-  explicitCoordinators = tryUseRunContext()?.coordinators,
-): void {
+export function clearPlanApprovalForStream(streamId: string): void {
   (
     bridgeState.planStreams.get(streamId)?.plan ??
     bridgeState.runStreams.get(streamId)?.plan ??
-    explicitCoordinators?.plan ??
+    tryUseRunContext()?.coordinators?.plan ??
     legacyCoordinators.plan
   ).clearForStream(streamId);
   clearPlanBridgeForStream(streamId);
@@ -214,16 +211,14 @@ export function cancelRetry(streamId: string): boolean {
   ).cancelRetry(streamId);
 }
 
-export function clearRetryRequest(
-  streamId: string,
-  explicitCoordinators = tryUseRunContext()?.coordinators,
-): void {
+export function clearRetryRequest(streamId: string): void {
   const coordinators = new Set<RunCoordinators>();
   const mappedCoordinators = bridgeState.retries.get(streamId);
   if (mappedCoordinators) coordinators.add(mappedCoordinators);
   const runCoordinators = bridgeState.runStreams.get(streamId);
   if (runCoordinators) coordinators.add(runCoordinators);
-  if (explicitCoordinators) coordinators.add(explicitCoordinators);
+  const ambient = tryUseRunContext()?.coordinators;
+  if (ambient) coordinators.add(ambient);
   coordinators.add(legacyCoordinators);
   for (const coordinator of coordinators) {
     coordinator.retry.clearRequest(streamId);
@@ -247,13 +242,10 @@ export function clearAllRetryRequests(): void {
   bridgeState.retries.clear();
 }
 
-export function cleanupCoordinatorRequestsForStream(
-  streamId: string,
-  explicitCoordinators = tryUseRunContext()?.coordinators,
-): void {
-  clearPlanApprovalForStream(streamId, explicitCoordinators);
+export function cleanupCoordinatorRequestsForStream(streamId: string): void {
+  clearPlanApprovalForStream(streamId);
   clearProposalForStream(streamId);
-  clearRetryRequest(streamId, explicitCoordinators);
+  clearRetryRequest(streamId);
 }
 
 export function cleanupAllCoordinatorRequests(): void {
