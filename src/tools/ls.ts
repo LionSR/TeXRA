@@ -5,7 +5,7 @@ import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports - tools
-import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { toErrorMessage } from '@common/errors';
 import { isFile, isDirectory } from '@common/files/fsEntryType';
 import { ToolError, ToolResult } from '@tools/result';
@@ -57,9 +57,7 @@ export class LsTool extends defineTool({
   schema: LsInputSchema,
 }) {
   protected async execute(input: LsInput): Promise<ToolResult> {
-    const root = parseWorkingDirectory(
-      getCurrentToolRunContext()?.workingDirectory,
-    );
+    const root = parseWorkingDirectory(tryUseRunContext()?.workingDirectory);
     const { path: resolved, display } = resolveAndFormat(input.path, root);
     const gitignore = await getGitignoreMatcher();
     const header = `Listing for ${display}`;

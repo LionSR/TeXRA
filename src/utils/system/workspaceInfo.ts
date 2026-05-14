@@ -6,6 +6,7 @@ import * as path from 'path';
 import { execa } from 'execa';
 
 // Local imports
+import { escapeTextStrict } from '@shared/utils/xmlEscape';
 import { WorkspaceFS } from '@utils/files';
 import { listExternalRoots } from '@utils/files/externalRoots';
 import { isWSL } from './wslDetect';
@@ -113,14 +114,6 @@ async function gatherWorkspaceInfo(
   };
 }
 
-/** Escape XML special characters in a string. */
-function escapeXml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;');
-}
-
 /**
  * Build a formatted workspace info block for system prompt injection.
  *
@@ -137,23 +130,23 @@ export async function buildWorkspaceInfoBlock(
   const lines: string[] = [];
 
   if (info.workspacePath) {
-    lines.push(`Workspace: ${escapeXml(info.workspacePath)}`);
+    lines.push(`Workspace: ${escapeTextStrict(info.workspacePath)}`);
     lines.push(
       `Bash cwd: already set to the workspace path above; use relative paths directly`,
     );
   }
 
-  lines.push(`Platform: ${escapeXml(info.platform)}`);
+  lines.push(`Platform: ${escapeTextStrict(info.platform)}`);
 
   if (info.shell) {
-    lines.push(`Shell: ${escapeXml(info.shell)}`);
+    lines.push(`Shell: ${escapeTextStrict(info.shell)}`);
   }
 
   lines.push(`Date: ${info.date}`);
 
   if (info.git) {
     const branchPart = info.git.branch
-      ? `branch=${escapeXml(info.git.branch)}`
+      ? `branch=${escapeTextStrict(info.git.branch)}`
       : 'detached HEAD';
     const parts = ['Git: yes', branchPart];
     if (info.git.dirty) parts.push('uncommitted changes');
@@ -169,7 +162,7 @@ export async function buildWorkspaceInfoBlock(
     for (const root of externalRoots) {
       const rw = root.writable ? 'writable' : 'read-only';
       lines.push(
-        `  ${escapeXml(root.absolutePath)} — ${escapeXml(root.label)} (${rw})`,
+        `  ${escapeTextStrict(root.absolutePath)} — ${escapeTextStrict(root.label)} (${rw})`,
       );
     }
   }
