@@ -106,6 +106,7 @@
     "zod-v3-to-v4": "^1.21.1"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.140",
     "@anthropic-ai/sdk": "^0.96.0",
     "@awesome.me/webawesome": "^3.7.0",
     "@cantoo/pdf-lib": "^2.6.5",

@@ -12,9 +12,15 @@
  */
 
 // Local imports
+import { platform } from '@platform/platform';
+import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
 import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
 import type { RegisteredToolName } from '@tools/registry';
 import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
+import {
+  importClaudeAgentSdk,
+  findClaudeBinaryPath,
+} from '@tools/claudeAgentImport';
 import { getGitHubToken } from '@tools/github/githubAuth';
 import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
@@ -318,8 +324,8 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
   {
     id: 'external-inquiry',
     tools: ['external_inquiry'],
-    name: 'External Inquiry',
-    category: 'workflow',
+    name: 'External Chat Handoff',
+    category: 'ai-agents',
     description:
       'Lets agents ask you to query an external chat model such as ChatGPT, Claude, or Gemini and paste the answer back into the run.',
     configNotes:
@@ -333,7 +339,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     id: 'codex',
     tools: ['codex'],
     name: 'OpenAI Codex CLI',
-    category: 'computation',
+    category: 'ai-agents',
     description:
       'OpenAI Codex agent runtime. Required by the Codex SDK for local code generation and analysis.',
     installGuide:
@@ -392,6 +398,87 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       }
 
       return `Codex CLI ready. Binary: ${codexPath}`;
+    },
+  },
+
+  {
+    id: 'claude-agent',
+    tools: ['claude_agent'],
+    name: 'Claude Code Agent',
+    category: 'ai-agents',
+    description:
+      'Anthropic Claude Code agent runtime. Spins off a Claude agent in the workspace for code analysis, generation, and research.',
+    installGuide:
+      'Install the Claude Code CLI (choose one):\n\n' +
+      '  npm install -g @anthropic-ai/claude-code\n' +
+      '  brew install --cask claude-code     (macOS)\n' +
+      '  winget install Anthropic.ClaudeCode (Windows)\n\n' +
+      'Or use the native installer from https://claude.com/code (recommended).\n' +
+      'See: https://code.claude.com/docs/en/setup\n\n' +
+      'Authentication (choose one):\n' +
+      '  • Set ANTHROPIC_API_KEY in TeXRA Settings → API Keys → Anthropic\n' +
+      '  • claude login          — OAuth sign-in (Pro/Max subscription, recommended)\n' +
+      '  • claude setup-token    — long-lived OAuth token (CLAUDE_CODE_OAUTH_TOKEN)\n' +
+      '  • ANTHROPIC_API_KEY     — environment variable with Console API key',
+    installUrl: 'https://code.claude.com/docs/en/setup',
+    installCommand: 'npm install -g @anthropic-ai/claude-code',
+    authCommand: 'claude login',
+    configNotes:
+      'Requires the native `claude` binary. Supports OAuth (`claude login`), long-lived tokens (`claude setup-token` → CLAUDE_CODE_OAUTH_TOKEN), or ANTHROPIC_API_KEY (resolved from TeXRA Settings → API Keys or the environment).',
+    authNote: 'OAuth, OAuth token, or API key',
+    toggleable: true,
+    check: async () => {
+      try {
+        await importClaudeAgentSdk();
+        return findClaudeBinaryPath() != null;
+      } catch {
+        return false;
+      }
+    },
+    detailCheck: async () => {
+      try {
+        await importClaudeAgentSdk();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (
+          msg.includes('not found') ||
+          msg.includes('MODULE_NOT_FOUND') ||
+          msg.includes('Cannot find package')
+        ) {
+          return '@anthropic-ai/claude-agent-sdk not found. Reinstall TeXRA or run: npm install @anthropic-ai/claude-agent-sdk';
+        }
+        return `Claude Agent SDK import failed: ${msg}`;
+      }
+
+      const claudePath = findClaudeBinaryPath();
+      if (!claudePath) {
+        return (
+          'Claude Agent SDK loaded but native `claude` binary not found. ' +
+          'Install via: npm install -g @anthropic-ai/claude-code' +
+          (isWSL() ? ' (run this inside WSL, not on the Windows side)' : '')
+        );
+      }
+
+      const anthropicApiKeyEnv = apiKeyEnvName('anthropic');
+      const keyOrigin = await lookupApiKeyOrigin(
+        platform().secrets,
+        'anthropic',
+      ).catch(() => (process.env[anthropicApiKeyEnv] ? 'env' : 'none'));
+      const hasOauthToken = !!process.env.CLAUDE_CODE_OAUTH_TOKEN;
+      const authBits: string[] = [];
+      if (keyOrigin === 'secret') {
+        authBits.push(`${anthropicApiKeyEnv} (TeXRA Settings)`);
+      }
+      if (keyOrigin === 'env') {
+        authBits.push(`${anthropicApiKeyEnv} (environment)`);
+      }
+      if (hasOauthToken) authBits.push('CLAUDE_CODE_OAUTH_TOKEN');
+      const authNote =
+        authBits.length > 0
+          ? `Auth detected: ${authBits.join(', ')}.`
+          : 'No ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN detected — the CLI will use whatever `claude login` session you have.';
+
+      return `Claude CLI ready. Binary: ${claudePath}. ${authNote}`;
     },
   },
 
