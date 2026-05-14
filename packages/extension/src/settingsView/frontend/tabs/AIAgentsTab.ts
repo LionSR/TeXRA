@@ -148,8 +148,10 @@ export class AIAgentsTab extends LitElement {
   @property({ type: String }) codexSandboxMode = 'workspace-write';
   @property({ type: String }) codexReasoningEffort = 'high';
   @property({ type: String }) codexApprovalPolicy = 'never';
-  @property({ type: String }) claudeAgentModel = 'claude-opus-4-7';
-  @property({ type: String }) claudeAgentPermissionMode = 'acceptEdits';
+  @property({ type: String }) claudeAgentModel: ClaudeAgentModel =
+    'claude-opus-4-7';
+  @property({ type: String })
+  claudeAgentPermissionMode: ClaudeAgentPermissionMode = 'acceptEdits';
 
   private handleRecheck(): void {
     this.dispatchEvent(createEvent('tool-recheck'));
