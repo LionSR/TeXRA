@@ -67,7 +67,6 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { defineTool } from './core/define';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { createChildStream } from './childStream';
-import { getCurrentToolRuntimeHost } from './toolRuntimeHost';
 import {
   buildCodexCommandToolLog,
   buildCodexFileChangeToolLog,
@@ -295,7 +294,7 @@ type ToolUseStatus = NonNullable<ToolUseLog['status']>;
 export function publishCodexTodos(
   childStreamId: StreamTabId,
   todos: TodoItem[],
-  runtimeHost: AgentRuntimeHost = getCurrentToolRuntimeHost(),
+  runtimeHost: AgentRuntimeHost,
 ): void {
   runtimeHost.emit('updateTodos', { streamId: childStreamId, todos });
 }
@@ -304,7 +303,7 @@ export function publishCodexStreamUsage(
   childStreamId: StreamTabId,
   executionId: ExecutionId,
   usage: TokenUsageStats,
-  runtimeHost: AgentRuntimeHost = getCurrentToolRuntimeHost(),
+  runtimeHost: AgentRuntimeHost,
 ): void {
   runtimeHost.emit('updateStreamUsage', {
     streamId: childStreamId,
@@ -327,7 +326,7 @@ function logCodexItem(
   item: ThreadItem,
   childStreamId: StreamTabId,
   logger: AgentLogger,
-  runtimeHost: AgentRuntimeHost = getCurrentToolRuntimeHost(),
+  runtimeHost: AgentRuntimeHost,
 ): void {
   switch (item.type) {
     case 'command_execution': {
@@ -527,6 +526,7 @@ function startCodexLoop(params: {
   executionId: ExecutionId;
   logger: AgentLogger;
   initialPrompt: string;
+  runtimeHost: AgentRuntimeHost;
 }): void {
   const {
     thread,
@@ -535,11 +535,11 @@ function startCodexLoop(params: {
     executionId,
     logger,
     initialPrompt,
+    runtimeHost,
   } = params;
 
   const session = new CodexFollowUpSession();
   const queue = ToolUseFollowUpQueue.acquire(childStreamId);
-  const runtimeHost = getCurrentToolRuntimeHost();
   session.setQueue(queue);
   registerInterruptible(childStreamId, session);
 
@@ -739,6 +739,7 @@ export class CodexTool extends defineTool({
       runContext?.streamId,
       runContext?.executionId,
       runContext?.workingDirectory,
+      runContext?.runtimeHost,
     );
   }
 }
@@ -748,10 +749,11 @@ async function launchCodexSession(
   parentStreamId: StreamTabId | undefined,
   parentExecutionId: ExecutionId | undefined,
   parentWorkingDirectory: string | undefined,
+  runtimeHost: AgentRuntimeHost | undefined,
 ): Promise<ToolResult> {
-  if (!parentStreamId) {
+  if (!parentStreamId || !runtimeHost) {
     throw new ToolError(
-      'Codex requires a parent stream context — it must be called from an active tool-use agent.',
+      'Codex requires a parent stream runtime context — it must be called from an active tool-use agent.',
     );
   }
 
@@ -780,6 +782,7 @@ async function launchCodexSession(
       description: input.prompt,
       config,
       toolName: 'codex',
+      runtimeHost,
     },
   );
 
@@ -790,6 +793,7 @@ async function launchCodexSession(
     executionId,
     logger,
     initialPrompt: input.prompt,
+    runtimeHost,
   });
 
   const preview = truncateWithEllipsis(input.prompt, 60);
