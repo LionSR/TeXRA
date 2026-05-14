@@ -8,7 +8,7 @@ import {
 
 function render(template: string, vars: Record<string, string>): string {
   return template.replaceAll(/\{\{(\w+)\}\}/g, (match, key: string) =>
-    Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : match,
+    Object.hasOwn(vars, key) ? vars[key] : match,
   );
 }
 
