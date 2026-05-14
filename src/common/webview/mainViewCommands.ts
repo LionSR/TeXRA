@@ -53,6 +53,7 @@ export const MAIN_VIEW_COMMANDS = {
   GET_DEBUG_MODE: 'getDebugMode',
   GET_CURRENT_FILE: 'getCurrentFile',
   ADD_OPENED_FILES: 'addOpenedFiles',
+  ATTACH_DROPPED_FILES: 'attachDroppedFiles',
   POLISH_INSTRUCTION_TEXT: 'polishInstructionText',
   TRANSCRIBE_INSTRUCTION: 'transcribeInstruction',
   START_RECORDING: 'startRecording',
