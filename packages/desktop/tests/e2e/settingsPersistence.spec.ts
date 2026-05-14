@@ -86,38 +86,57 @@ async function refreshMemoryData(launched: LaunchedApp): Promise<void> {
   });
 }
 
-async function waitForMemoryEntry(launched: LaunchedApp): Promise<void> {
-  await launched.page.waitForFunction(
-    ({ displayPath, previewText }) => {
-      const settingsApp = document.querySelector('settings-app');
-      const root = settingsApp?.shadowRoot;
-      const memoryTab = root?.querySelector('memory-tab') as
-        | (HTMLElement & { shadowRoot: ShadowRoot })
-        | null;
-      const memoryList = memoryTab?.shadowRoot?.querySelector('memory-list') as
-        | (HTMLElement & { shadowRoot: ShadowRoot })
-        | null;
-      const itemElements = Array.from(
-        memoryList?.shadowRoot?.querySelectorAll('memory-item') ?? [],
-      ) as Array<
-        HTMLElement & {
-          item?: { displayPath?: string; preview?: string };
-        }
-      >;
+interface RenderedMemoryItem {
+  displayPath?: string;
+  storagePath?: string;
+  preview?: string;
+}
 
-      return itemElements.some((element) => {
-        const item = element.item;
-        return (
-          item?.displayPath === displayPath &&
-          item.preview?.includes(previewText)
-        );
-      });
-    },
-    {
-      displayPath: MEMORY_DISPLAY_PATH,
-      previewText: MEMORY_PREVIEW_TEXT,
-    },
-    { timeout: 10_000 },
+async function readRenderedMemoryItems(
+  launched: LaunchedApp,
+): Promise<RenderedMemoryItem[]> {
+  return launched.page
+    .locator('settings-app memory-tab memory-list memory-item')
+    .evaluateAll((elements) =>
+      elements.map(
+        (element) =>
+          (element as HTMLElement & { item?: RenderedMemoryItem }).item ?? {},
+      ),
+    );
+}
+
+async function waitForRenderedMemoryItem(
+  launched: LaunchedApp,
+  predicate: (item: RenderedMemoryItem) => boolean,
+): Promise<void> {
+  await expect
+    .poll(
+      async () => (await readRenderedMemoryItems(launched)).some(predicate),
+      { timeout: 10_000 },
+    )
+    .toBe(true);
+}
+
+async function waitForMemoryEntry(launched: LaunchedApp): Promise<void> {
+  await waitForRenderedMemoryItem(
+    launched,
+    (item) => item.displayPath === MEMORY_DISPLAY_PATH,
+  );
+
+  const item = (await readRenderedMemoryItems(launched)).find(
+    (candidate) => candidate.displayPath === MEMORY_DISPLAY_PATH,
+  );
+  if (item?.storagePath) {
+    await launched.page.evaluate((storagePath) => {
+      window.postMessage({ command: 'getMemoryPreview', storagePath }, '*');
+    }, item.storagePath);
+  }
+
+  await waitForRenderedMemoryItem(
+    launched,
+    (candidate) =>
+      candidate.displayPath === MEMORY_DISPLAY_PATH &&
+      candidate.preview?.includes(MEMORY_PREVIEW_TEXT) === true,
   );
 
   await expect(launched.page.locator('settings-app')).toHaveCount(1);

@@ -15,6 +15,7 @@ import {
   UpdateLatexSettingsStatusMessageSchema,
   UpdateMemoryEnabledMessageSchema,
   UpdateMemoryMessageSchema,
+  UpdateMemoryPreviewMessageSchema,
   UpdateModelSelectionMessageSchema,
   UpdatePRSubscriptionsMessageSchema,
   UpdateProfileMessageSchema,
@@ -35,6 +36,7 @@ import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
 
 interface WritableSignal<T> {
+  get(): T;
   set(value: T): void;
 }
 
@@ -145,6 +147,32 @@ export function dispatchSettingsViewMessage(
       if (!data) return false;
       ctx.memoryEnabled.set(data.enabled);
       ctx.memoryToggleDisabled.set(false);
+      return true;
+    }
+
+    case SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW: {
+      const data = parseMessage(raw, UpdateMemoryPreviewMessageSchema, ctx);
+      if (!data) return false;
+      const { storagePath, preview, lineCount, error } = data.preview;
+      ctx.memoryItems.set(
+        ctx.memoryItems.get().map((item) =>
+          item.storagePath === storagePath
+            ? error
+              ? {
+                  ...item,
+                  preview: undefined,
+                  lineCount: undefined,
+                  previewError: true,
+                }
+              : {
+                  ...item,
+                  preview,
+                  ...(lineCount === undefined ? {} : { lineCount }),
+                  previewError: undefined,
+                }
+            : item,
+        ),
+      );
       return true;
     }
 

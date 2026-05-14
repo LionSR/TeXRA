@@ -42,7 +42,10 @@ import {
   computeModelOptionsData,
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
-import { loadMemoryItems } from '@settingsView/utils/memoryFileSystem';
+import {
+  loadMemoryItems,
+  loadMemoryPreview,
+} from '@settingsView/utils/memoryFileSystem';
 import type { ExecutionId } from '@shared/schemas';
 import {
   PROVIDER_DISPLAY_NAMES,
@@ -349,6 +352,7 @@ export function createDesktopSettingsIpc(
       },
     },
     loadMemoryItems,
+    loadMemoryPreview,
     isMemoryEnabled: () =>
       globalState.get<boolean>(GlobalStateKey.MEMORY_ENABLED, true) ?? true,
     setMemoryEnabled: async (enabled) => {
@@ -499,6 +503,19 @@ export function createDesktopSettingsIpc(
 
   async function postMemoryData(): Promise<void> {
     options.postToRenderer(await memoryController.getMemoryDataMessage());
+  }
+
+  async function postMemoryPreview(storagePath: string): Promise<void> {
+    try {
+      options.postToRenderer(
+        await memoryController.getMemoryPreviewMessage(storagePath),
+      );
+    } catch (error) {
+      onError(error);
+      options.postToRenderer(
+        memoryController.getMemoryPreviewErrorMessage(storagePath),
+      );
+    }
   }
 
   function postMemoryEnabled(): void {
@@ -1138,6 +1155,9 @@ export function createDesktopSettingsIpc(
           return true;
         case SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA:
           runAsync(postMemoryData());
+          return true;
+        case SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW:
+          runAsync(postMemoryPreview(result.data.storagePath));
           return true;
         case SETTINGS_VIEW_COMMANDS.GET_MEMORY_ENABLED:
           postMemoryEnabled();

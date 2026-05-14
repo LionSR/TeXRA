@@ -5,7 +5,10 @@ import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 import type { PromptHost } from '@hosts/promptHost';
 
 // Local imports - shared
-import type { MemoryViewItem } from '@shared/schemas/settingsViewMessages';
+import type {
+  MemoryPreview,
+  MemoryViewItem,
+} from '@shared/schemas/settingsViewMessages';
 
 // Local imports - memory
 import type { MemoryFileMeta } from '@tools/memory/memoryMeta';
@@ -21,6 +24,7 @@ export type SettingsMemoryMeta = MemoryFileMeta;
 export interface SettingsMemoryControllerDeps {
   prompt: Pick<PromptHost, 'confirm' | 'warning'>;
   loadMemoryItems(): Promise<MemoryViewItem[]>;
+  loadMemoryPreview(storagePath: string): Promise<MemoryPreview>;
   isMemoryEnabled(): boolean;
   setMemoryEnabled(enabled: boolean): Promise<void>;
   resolveStoragePath(storagePath: string): string;
@@ -44,6 +48,10 @@ export type SettingsMemoryMessage =
       items: MemoryViewItem[];
     }
   | {
+      command: typeof SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW;
+      preview: MemoryPreview;
+    }
+  | {
       command: typeof SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED;
       enabled: boolean;
     };
@@ -55,6 +63,26 @@ export class SettingsMemoryController {
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY,
       items: await this.deps.loadMemoryItems(),
+    };
+  }
+
+  async getMemoryPreviewMessage(
+    storagePath: string,
+  ): Promise<SettingsMemoryMessage> {
+    const resolvedPath = this.deps.resolveStoragePath(storagePath);
+    return {
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
+      preview: await this.deps.loadMemoryPreview(resolvedPath),
+    };
+  }
+
+  getMemoryPreviewErrorMessage(storagePath: string): SettingsMemoryMessage {
+    return {
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
+      preview: {
+        storagePath: this.deps.resolveStoragePath(storagePath),
+        error: true,
+      },
     };
   }
 
