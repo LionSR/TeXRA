@@ -1,8 +1,26 @@
-import { buildStreamTabInfo } from '@agent/index';
+import {
+  buildStreamTabInfo,
+  peekWorktreeInfo,
+  resolveWorktreeInfo,
+} from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
 import { compareByNewestCreationTime } from './streamOrdering';
 import type { ProgressViewState } from './state/ProgressViewState';
+
+/** Working directories whose worktree probe has been kicked off. Prevents
+ *  re-triggering an async probe on every render while the cache is empty. */
+const probedDirs = new Set<string>();
+
+function ensureWorktreeProbe(workingDirectory: string): void {
+  if (probedDirs.has(workingDirectory)) return;
+  probedDirs.add(workingDirectory);
+  // Fire-and-forget; the cache populates for the next render. Failures fall
+  // back to the minimal `{ workingDirectory }` chip and are ignored here.
+  void resolveWorktreeInfo(workingDirectory).catch(() => {
+    probedDirs.delete(workingDirectory);
+  });
+}
 
 /**
  * Check if a session category matches the given filter.
@@ -47,6 +65,13 @@ export function buildStreamInfo(
     hints.creationTimestamp ??
     Date.now();
 
+  const workingDirectory = config?.workingDirectory ?? undefined;
+  let worktreeInfo;
+  if (workingDirectory) {
+    worktreeInfo = peekWorktreeInfo(workingDirectory);
+    ensureWorktreeProbe(workingDirectory);
+  }
+
   return buildStreamTabInfo({
     streamId: id,
     config,
@@ -58,6 +83,7 @@ export function buildStreamInfo(
     executionId: state.meta.getExecutionId(id),
     parentStreamId: state.meta.getParentStreamId(id),
     description: state.meta.getDescription(id),
+    worktreeInfo,
   });
 }
 
