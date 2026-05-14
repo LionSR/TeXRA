@@ -178,9 +178,8 @@ export async function createModelHandler(
       CHANNEL,
       `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 is replacing provider handlers with the internal validation handler.`,
     );
-    const { ModelHandlerValidation } = await import(
-      '@agent/modelHandlers/modelHandlerValidation'
-    );
+    const { ModelHandlerValidation } =
+      await import('@agent/modelHandlers/modelHandlerValidation');
     return new ModelHandlerValidation(config);
   }
 
@@ -189,9 +188,8 @@ export async function createModelHandler(
   // OpenAI Responses API (required or optional)
   if (shouldUseResponsesAPI(config, useOpenRouter)) {
     logger.debug(CHANNEL, 'Using OpenAI Responses API Handler');
-    const { ModelHandlerOpenAIResponse } = await import(
-      '@agent/modelHandlers/modelHandlerOpenAIResponse'
-    );
+    const { ModelHandlerOpenAIResponse } =
+      await import('@agent/modelHandlers/modelHandlerOpenAIResponse');
     return withReasoningOverride(new ModelHandlerOpenAIResponse(config));
   }
 
@@ -199,9 +197,8 @@ export async function createModelHandler(
   if (config.openRouterOnly || useOpenRouter) {
     const openrouterFullName =
       config.openrouterFullName ?? `${config.provider}/${config.fullName}`;
-    const { ModelHandlerOpenRouterNative } = await import(
-      '@agent/modelHandlers/modelHandlerOpenRouterNative'
-    );
+    const { ModelHandlerOpenRouterNative } =
+      await import('@agent/modelHandlers/modelHandlerOpenRouterNative');
     return withReasoningOverride(
       new ModelHandlerOpenRouterNative({ ...config, openrouterFullName }),
     );
