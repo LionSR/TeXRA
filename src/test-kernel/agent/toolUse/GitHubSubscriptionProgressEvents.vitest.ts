@@ -159,7 +159,9 @@ describe('GitHub subscription progress events', () => {
     registry.bind('stream-a' as StreamTabId, 'owner/repo', host.host);
     host.events.length = 0;
 
-    expect(registry.unbind('stream-a' as StreamTabId, 'owner/repo')).toBe(true);
+    expect(
+      registry.unbind('stream-a' as StreamTabId, 'owner/repo', host.host),
+    ).toBe(true);
 
     expect(host.events).toEqual([
       { event: 'repoSubscriptionBindingsChanged', payload: undefined },
