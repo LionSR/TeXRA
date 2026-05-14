@@ -20,7 +20,6 @@ import {
 } from '@agent/storage';
 import { flowKey } from '@agent/node/persistedFlow';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import { requireRunStream } from '@tools/contextHelpers';
 import {
   ACTIVE_STATUSES,
   AgentExecutionHandle,
@@ -46,6 +45,7 @@ import {
   ExecutionIdSchema,
   type ExecutionId,
 } from '@shared/schemas';
+import { requireRunStream } from '@tools/contextHelpers';
 import { StorageFS } from '@utils/files';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
