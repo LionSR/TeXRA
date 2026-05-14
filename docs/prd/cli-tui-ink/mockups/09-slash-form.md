@@ -10,7 +10,7 @@ Two shapes earn their cost:
 ## 9.A · Single-screen form (`/model`)
 
 ```
-╭─ TeXRA ── agent: writer  ·  model: claude-opus-4.7  ─── 8 turns · $0.13 · 09:14 ────╮
+╭─ TeXRA ── agent: chat  ·  model: claude-opus-4.7  ─── 8 turns · $0.13 · 09:14 ────╮
 │  (conversation above dimmed)                                                         │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │  › /model                                                                            │
@@ -75,7 +75,7 @@ When the user picks `/model` in the palette, the TUI mounts `<ModelForm>` inline
 When a slash command needs to show multiple related views (settings + live status + usage + stats), it opens a tabbed form: the title row is replaced with a tab strip, and the body re-renders for the active tab while the same `<KeyHints>` footer persists across all tabs.
 
 ```
-╭─ TeXRA ── agent: writer  ·  model: claude-opus-4.7  ─── 8 turns · $0.13 · 09:14 ────╮
+╭─ TeXRA ── agent: chat  ·  model: claude-opus-4.7  ─── 8 turns · $0.13 · 09:14 ────╮
 │  (conversation above dimmed)                                                         │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │  › /status                                                                           │
@@ -88,7 +88,7 @@ When a slash command needs to show multiple related views (settings + live statu
 │   Session name:   quantum-walks §3.2  ·  /rename to change                           │
 │   Session ID:     8b4e1c60-c9c9-efe7-…  ·  10:42:19 today                            │
 │   cwd:            ~/papers/quantum-walks                                             │
-│   Agent:          writer (v3)                                                        │
+│   Agent:          chat (v3)                                                        │
 │   Model:          claude-opus-4-7  ·  high effort  ·  Anthropic API key (env)        │
 │   Workspace:      8 .tex files · 2 .bib · last edit 4 m ago                          │
 │                                                                                      │

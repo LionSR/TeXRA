@@ -3,9 +3,9 @@
 The agent has produced a bash command and the approval policy isn't `yolo`. Modal opens centered, the conversation pane keeps its last frame frozen behind it. Status pill shows `‼ awaiting approval`.
 
 ```
-╭─ TeXRA ── agent: writer  ·  model: claude-opus-4.7  ─── 4 turns · $0.06 · 03:11 ────╮
+╭─ TeXRA ── agent: chat  ·  model: claude-opus-4.7  ─── 4 turns · $0.06 · 03:11 ────╮
 │                                                                                      │
-│  ◇ writer                                                                            │
+│  ◇ chat                                                                            │
 │    I want to compile the current draft to confirm the lemma renders. I'll run        │
 │    latexmk on the main file.                                                         │
 │                                                                                      │

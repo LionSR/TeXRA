@@ -94,8 +94,7 @@ Implements components per 10-architecture §§ Input component, Terminal capabil
 ### Phase 5 — Ergonomics (2 d)
 
 - `Ctrl-P` palette (`fzf-for-js`) with five sections: slash commands, agents, models, attachments, files.
-- **Structured slash forms** (per [10-architecture § Slash command forms](./10-architecture.md#slash-command-forms)). Ship `/model` (single-screen) first; tabbed-form scaffold (`Tab` / `Shift-Tab` cycle, shared footer) ships alongside for `/status`. `/agent`, `/resume`, `/rename` reuse the same primitives.
-- **Session resume** (per [§ Session resume](./10-architecture.md#session-resume)). `texra chat --continue` and `--resume <id>` CLI flags; `/resume` form lists recent sessions; transcript replays into `<Static>` on selection.
+- **Structured slash forms** (per [10-architecture § Slash command forms](./10-architecture.md#slash-command-forms)). Ship `/model` (single-screen) first; tabbed-form scaffold (`Tab` / `Shift-Tab` cycle, shared footer) ships alongside for `/status`. `/agent` reuses the same primitives. `/resume` is deferred to a follow-up PRD (needs new on-disk transcript persistence — see [§ Session resume](./10-architecture.md#session-resume-deferred-to-a-separate-prd)).
 - **Image-paste attachments** (per [§ Image attachments](./10-architecture.md#image-attachments)). Detect clipboard image bytes at `BaseTextInput`; store in `cliState.attachments`; insert `[Image #N]` tokens; surface in palette + `@` autocomplete; expand to image-payload at send time.
 - **Shared `<KeyHints>` component** mounted on every modal/form/palette per [§ Intuitiveness conventions](./10-architecture.md#intuitiveness-conventions). Any ad-hoc footer text is a review-blocker for this phase.
 - `Ctrl-R` reverse history (input lines).
