@@ -3,7 +3,11 @@ import { z } from 'zod';
 
 // Local imports
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import { invalidateApiKeyCache, isApiProvider } from '@model/apiProviders';
+import {
+  API_PROVIDERS,
+  invalidateApiKeyCache,
+  isApiProvider,
+} from '@model/apiProviders';
 import { ToolError, type ToolResult } from '@tools/result';
 
 // Local file imports
@@ -30,7 +34,7 @@ export class UnsetApiKeyTool extends defineTool({
 
     if (!isApiProvider(provider)) {
       throw new ToolError(
-        `Unknown provider "${provider}". Supported: ${platform.secrets.providers.join(', ')}.`,
+        `Unknown provider "${provider}". Supported: ${API_PROVIDERS.join(', ')}.`,
       );
     }
 
