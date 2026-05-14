@@ -82,8 +82,6 @@ export class ToolUseCycleNode<C> extends Node<
       setting: { ...setting, tools: resolvedTools },
       run: prepRes.runState,
       workspace: prepRes.workspaceState,
-      modelName: config.model,
-      agentName: config.agent,
     });
 
     const { onProgress, persistTodos } = this.services;
