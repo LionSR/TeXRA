@@ -7,6 +7,7 @@ import { AgentConfigSchema } from '@agent/core';
 import { runValidatedExecutionRequest } from '@agent/runtime/runExecutionRequest';
 import { formatZodError } from '@common/errors';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
+import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 
@@ -42,7 +43,10 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
 
     await runValidatedExecutionRequest(
       { config, executionId: wrapped?.executionId },
-      { openWorkflowOutput: openFinalOutputIfAvailable },
+      {
+        runtimeHost: extensionAgentRuntimeHost,
+        openWorkflowOutput: openFinalOutputIfAvailable,
+      },
     );
   } catch (error) {
     if (error instanceof ZodError) {
