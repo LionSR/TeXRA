@@ -331,7 +331,7 @@ export class ProgressViewState {
 
   async clearStream(stream: StreamTabId): Promise<void> {
     // Clear in-memory state
-    StreamStatusService.clear(stream);
+    StreamStatusService.clear(stream, { emit: false });
     this.outputFiles.evict(stream);
     this.usageStats.evict(stream);
     this.meta.evict(stream);
@@ -359,7 +359,7 @@ export class ProgressViewState {
     );
 
     // Clear in-memory state
-    StreamStatusService.clearAll();
+    StreamStatusService.clearAll({ emit: false });
     this.outputFiles.evictAll();
     this.usageStats.evictAll();
     this.meta.evictAll();

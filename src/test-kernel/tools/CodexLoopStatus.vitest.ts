@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports - agent runtime
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 
 // Local imports - schemas
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
@@ -15,6 +16,8 @@ const streamIds = [
   'stream:codex-loop-waiting',
   'stream:codex-loop-stopped',
 ] as const satisfies readonly StreamTabId[];
+
+const runtimeHost = { emit: () => {} } satisfies AgentRuntimeHost;
 
 function effectiveStatus(streamId: StreamTabId): string {
   return StreamStatusService.get(streamId) ?? STREAM_STATUS.READY;
@@ -31,7 +34,7 @@ describe('finalizeCodexLoopStatus', () => {
     const streamId = streamIds[0];
     StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, { emit: false });
 
-    finalizeCodexLoopStatus(streamId);
+    finalizeCodexLoopStatus(streamId, runtimeHost);
 
     expect(effectiveStatus(streamId)).toBe(STREAM_STATUS.READY);
   });
@@ -40,7 +43,7 @@ describe('finalizeCodexLoopStatus', () => {
     const streamId = streamIds[1];
     StreamStatusService.set(streamId, STREAM_STATUS.WAITING, { emit: false });
 
-    finalizeCodexLoopStatus(streamId);
+    finalizeCodexLoopStatus(streamId, runtimeHost);
 
     expect(effectiveStatus(streamId)).toBe(STREAM_STATUS.READY);
   });
@@ -49,7 +52,7 @@ describe('finalizeCodexLoopStatus', () => {
     const streamId = streamIds[2];
     StreamStatusService.set(streamId, STREAM_STATUS.STOPPED, { emit: false });
 
-    finalizeCodexLoopStatus(streamId);
+    finalizeCodexLoopStatus(streamId, runtimeHost);
 
     expect(StreamStatusService.get(streamId)).toBe(STREAM_STATUS.STOPPED);
   });
