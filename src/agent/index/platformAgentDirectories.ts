@@ -19,7 +19,8 @@ interface PlatformAgentDirectoryOptions {
   customDirectoryStore: { get(): string | undefined };
 }
 
-export interface PlatformAgentDirectoryBootstrapOptions extends PlatformAgentDirectoryOptions {
+export interface PlatformAgentDirectoryBootstrapOptions
+  extends PlatformAgentDirectoryOptions {
   resourcesPath: string;
   currentVersion: string | undefined;
   versionStore: AgentDirectoryVersionStore;
