@@ -6,7 +6,13 @@ import type {
   FileInteractionState,
   WorkPlanState,
 } from '@agent/core/AgentWorkspaceState';
-import { tryUseRunContext, type RunContext } from '@agent/runtime/RunContext';
+import {
+  createRunContext,
+  tryUseRunContext,
+  withRunContext,
+  type CreateRunContextOptions,
+  type RunContext,
+} from '@agent/runtime/RunContext';
 
 /** Fields that belong to one concrete tool call or tool-cycle state snapshot. */
 export interface ToolCallContext {
@@ -52,4 +58,22 @@ export function getCurrentToolContexts(): CurrentToolContexts | undefined {
     runContext: tryUseRunContext(),
     callContext,
   };
+}
+
+/**
+ * Test helper: install a RunContext and a tool-call frame in one call.
+ *
+ * Tests that exercise tools-side code typically need both an active run
+ * (for `tryUseRunContext()` consumers) and a tool-call frame (for tracker
+ * and callbacks). This wraps the two stack pushes in one composer.
+ */
+export function withToolEnvironment<T>(
+  env: { run: CreateRunContextOptions; call: ToolCallContext },
+  fn: () => Promise<T> | T,
+): Promise<T> {
+  return Promise.resolve(
+    withRunContext(createRunContext(env.run), () =>
+      withToolFileInteractionContext(env.call, fn),
+    ),
+  );
 }
