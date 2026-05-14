@@ -6,6 +6,7 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import { DEFAULT_GIT_MARK_COMMITS } from '@shared/constants/git';
+import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latex';
 import {
   isWorktreeSupportEnabled,
   setWorktreeSupportEnabled,
@@ -538,6 +539,60 @@ describe('desktop settings IPC', () => {
         texDistributionInstalled: true,
         latexdiffInstalled: true,
       }),
+    });
+  });
+
+  it('runs allowlisted LaTeX install commands through the desktop host', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const commands: string[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: () => {},
+      runInstallCommand: async (command) => {
+        commands.push(command);
+      },
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
+        installCommand: HOMEBREW_INSTALL_COMMAND,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(commands).toEqual([HOMEBREW_INSTALL_COMMAND]);
+  });
+
+  it('rejects unknown desktop LaTeX install commands', async () => {
+    const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
+    const commands: string[] = [];
+    const errors: unknown[] = [];
+
+    const settings = createDesktopSettingsIpc({
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+      postToRenderer: () => {},
+      runInstallCommand: async (command) => {
+        commands.push(command);
+      },
+      onError: (error) => errors.push(error),
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
+        installCommand: 'echo not-allowlisted',
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(commands).toEqual([]);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      message: 'Rejected unknown install command: echo not-allowlisted',
     });
   });
 
