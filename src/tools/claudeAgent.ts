@@ -76,20 +76,10 @@ import { createChildStream } from './childStream';
 import {
   buildClaudeToolUseLog,
   buildClaudeUsageStats,
+  CLAUDE_AGENT_PERMISSION_MODES,
+  type ClaudeAgentPermissionMode,
   type ClaudeMessageBlock,
 } from './claudeAgentShared';
-
-// ============================================================================
-// Permission modes — must be inlined for the zod schema; deeper config is
-// lazy-loaded from claudeAgentConfig.ts to keep src/tools/ free of vscode.
-// ============================================================================
-
-const CLAUDE_AGENT_SCHEMA_PERMISSION_MODES = [
-  'default',
-  'acceptEdits',
-  'bypassPermissions',
-  'plan',
-] as const;
 
 let _configModule: typeof import('./claudeAgentConfig') | null = null;
 async function getClaudeAgentConfig(): Promise<
@@ -109,7 +99,7 @@ const ClaudeAgentInputSchema = z.strictObject({
       'Instruction for the Claude Code agent. For a new session, describe the task. For a resume (session_id set), describe the follow-up.',
     ),
   permission_mode: z
-    .enum(CLAUDE_AGENT_SCHEMA_PERMISSION_MODES)
+    .enum(CLAUDE_AGENT_PERMISSION_MODES)
     .nullish()
     .describe(
       'Permission behavior for the agent (defaults to user-configured mode, typically acceptEdits).',
@@ -139,13 +129,10 @@ interface ActiveSession {
   parentStreamId: StreamTabId;
   executionId: ExecutionId;
   model: string;
-  permissionMode: ClaudeAgentPermissionModeLocal;
+  permissionMode: ClaudeAgentPermissionMode;
   cwd?: string;
   additionalDirectories?: string[];
 }
-
-type ClaudeAgentPermissionModeLocal =
-  (typeof CLAUDE_AGENT_SCHEMA_PERMISSION_MODES)[number];
 
 const sessionRegistry = new Map<string, ActiveSession>();
 
@@ -211,7 +198,7 @@ function isLoopOwnedStatus(status: StreamStatus | undefined): boolean {
   return status === STREAM_STATUS.WAITING || status === STREAM_STATUS.RUNNING;
 }
 
-export function finalizeClaudeAgentLoopStatus(
+function finalizeClaudeAgentLoopStatus(
   childStreamId: StreamTabId,
   runtimeHost: AgentRuntimeHost,
 ): void {
@@ -287,7 +274,7 @@ type ClaudeToolLogRef = ReturnType<AgentLogger['emitToolUse']> & {
   toolLog: ToolUseLog;
 };
 
-export function publishClaudeAgentStreamUsage(
+function publishClaudeAgentStreamUsage(
   childStreamId: StreamTabId,
   executionId: ExecutionId,
   usage: TokenUsageStats,
@@ -343,7 +330,7 @@ export async function runStreamedTurn(params: {
   logger: AgentLogger;
   abortController: AbortController;
   model: string;
-  permissionMode: ClaudeAgentPermissionModeLocal;
+  permissionMode: ClaudeAgentPermissionMode;
   cwd: string | undefined;
   additionalDirectories: string[] | undefined;
   env: NodeJS.ProcessEnv;
@@ -519,7 +506,7 @@ function startClaudeAgentLoop(params: {
   logger: AgentLogger;
   initialPrompt: string;
   model: string;
-  permissionMode: ClaudeAgentPermissionModeLocal;
+  permissionMode: ClaudeAgentPermissionMode;
   cwd: string | undefined;
   additionalDirectories: string[] | undefined;
   env: NodeJS.ProcessEnv;
@@ -704,7 +691,7 @@ export class ClaudeAgentTool extends defineTool({
 
 async function launchClaudeAgentSession(
   input: ClaudeAgentInput,
-  permissionMode: ClaudeAgentPermissionModeLocal,
+  permissionMode: ClaudeAgentPermissionMode,
   model: string,
   parentStreamId: StreamTabId | undefined,
   parentExecutionId: ExecutionId | undefined,

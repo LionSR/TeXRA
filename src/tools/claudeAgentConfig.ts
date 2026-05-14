@@ -11,6 +11,8 @@ import { WorkspaceFS } from '@utils/files';
 import {
   CLAUDE_AGENT_NAME,
   CLAUDE_AGENT_DISPLAY_MODEL,
+  CLAUDE_AGENT_PERMISSION_MODES,
+  type ClaudeAgentPermissionMode,
 } from './claudeAgentShared';
 
 // ============================================================================
@@ -30,22 +32,13 @@ export function getClaudeAgentModel(): string {
 // Permission mode
 // ============================================================================
 
-const PERMISSION_MODES = [
-  'default',
-  'acceptEdits',
-  'bypassPermissions',
-  'plan',
-] as const;
-export const CLAUDE_AGENT_PERMISSION_MODES = PERMISSION_MODES;
-export type ClaudeAgentPermissionMode = (typeof PERMISSION_MODES)[number];
-
 const PERMISSION_MODE_KEY = 'texra.claudeAgentPermissionMode';
 const PERMISSION_MODE_DEFAULT: ClaudeAgentPermissionMode = 'acceptEdits';
 
 export function parseClaudeAgentPermissionMode(
   raw: string,
 ): ClaudeAgentPermissionMode {
-  return (PERMISSION_MODES as readonly string[]).includes(raw)
+  return (CLAUDE_AGENT_PERMISSION_MODES as readonly string[]).includes(raw)
     ? (raw as ClaudeAgentPermissionMode)
     : PERMISSION_MODE_DEFAULT;
 }
