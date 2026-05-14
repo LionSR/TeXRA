@@ -340,7 +340,7 @@ export async function activate(context: vscode.ExtensionContext) {
   registerCommands(context);
   registerFileDecorations(context);
 
-  initializeNativeToolEditApproval(context);
+  initializeNativeToolEditApproval(context, extensionAgentRuntimeHost);
   setLeanVscodeServices(leanVscodeIntegration);
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
   setToolMissingHandler(async (message, openDocsCommand) => {
