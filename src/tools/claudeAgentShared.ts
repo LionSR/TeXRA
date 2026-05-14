@@ -5,7 +5,6 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 export const CLAUDE_AGENT_NAME = 'claude_agent';
 export const CLAUDE_AGENT_DISPLAY_MODEL = 'claude';
-export const CLAUDE_AGENT_TOOL_USE_NAME = 'claude_tool_use';
 
 const SUMMARY_MAX_LENGTH = 60;
 type ToolUseStatus = NonNullable<ToolUseLog['status']>;
@@ -56,9 +55,8 @@ function truncateSummary(text: string, maxLength: number): string {
 
 /**
  * Build a tool-use log entry for a Claude `tool_use` content block.
- * Mirrors the rendering of Codex's command/file-change events but uses a
- * single generic `claude_tool_use` toolName since Claude's built-in tool set
- * (Bash, Read, Edit, Glob, etc.) is dynamic.
+ * Mirrors the rendering of Codex's command/file-change events while retaining
+ * Claude's concrete built-in tool name.
  */
 export function buildClaudeToolUseLog(params: {
   toolName: string;

@@ -283,7 +283,9 @@ function formatClaudeError(
 // Stream tab helpers
 // ============================================================================
 
-type ClaudeToolLogRef = ReturnType<AgentLogger['emitToolUse']>;
+type ClaudeToolLogRef = ReturnType<AgentLogger['emitToolUse']> & {
+  toolLog: ToolUseLog;
+};
 
 export function publishClaudeAgentStreamUsage(
   childStreamId: StreamTabId,
@@ -335,7 +337,7 @@ interface SdkMessage {
 // TurnResult for follow-up delivery.
 // ============================================================================
 
-async function runStreamedTurn(params: {
+export async function runStreamedTurn(params: {
   prompt: string;
   childStreamId: StreamTabId;
   logger: AgentLogger;
@@ -456,7 +458,7 @@ function handleAssistantBlocks(
         });
         const blockId = (block as unknown as { id?: unknown }).id;
         const id = typeof blockId === 'string' ? blockId : block.name;
-        refs.set(id, logger.emitToolUse(toolLog));
+        refs.set(id, { ...logger.emitToolUse(toolLog), toolLog });
         break;
       }
     }
@@ -476,6 +478,7 @@ function handleToolResults(
     if (!ref) continue;
 
     const isError = block.is_error === true;
+    const { status: _status, ...baseLog } = ref.toolLog;
     const update: Partial<ToolUseLog> = {
       ...(block.content !== undefined && {
         output: block.content as ToolUseLog['output'],
@@ -485,12 +488,7 @@ function handleToolResults(
         isError: true,
       }),
     };
-    logger.updateToolUse(
-      ref.logId,
-      update,
-      ref.groupId,
-      isError ? 'completed' : 'completed',
-    );
+    logger.updateToolUse(ref.logId, { ...baseLog, ...update }, ref.groupId);
     refs.delete(id);
   }
 }
@@ -551,6 +549,7 @@ function startClaudeAgentLoop(params: {
   });
 
   let resumeSessionId: string | undefined;
+  const storedSessionIds = new Set<string>();
 
   void (async () => {
     try {
@@ -607,6 +606,7 @@ function startClaudeAgentLoop(params: {
             cwd: params.cwd,
             additionalDirectories: params.additionalDirectories,
           });
+          storedSessionIds.add(turn.sessionId);
         }
 
         if (turn?.usage) {
@@ -639,7 +639,9 @@ function startClaudeAgentLoop(params: {
       logger.endGroup(groupId, 'stopped');
       unregisterInterruptible(childStreamId);
       ToolUseFollowUpQueue.release(childStreamId);
-      if (resumeSessionId) sessionRegistry.delete(resumeSessionId);
+      for (const sessionId of storedSessionIds) {
+        sessionRegistry.delete(sessionId);
+      }
       await writeTerminalStatus(executionId, 'completed').catch(() => {});
       untrackExecution(executionId);
       finalizeClaudeAgentLoopStatus(childStreamId, runtimeHost);
