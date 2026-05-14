@@ -3,7 +3,7 @@
 Empty session, just started. No turns in the conversation pane yet. Status bar shows session metadata. Input bar accepts the first prompt.
 
 ```
-╭─ TeXRA ── agent: chat  ·  model: claude-opus-4.7  ─────  0 turns · $0.00 · 00:00 ─╮
+╭─ TeXRA ── agent: chat  ·  model: claude-opus-4-7  ─────  0 turns · $0.00 · 00:00 ─╮
 │                                                                                      │
 │                                                                                      │
 │                                                                                      │

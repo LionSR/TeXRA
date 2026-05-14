@@ -3,7 +3,7 @@
 User pressed `Ctrl-F`. A slim search bar appears at the top of the conversation pane. Matches in the visible transcript are inverse-highlighted; the current match is rendered in yellow inverse. Match count and navigation hints sit on the right.
 
 ```
-╭─ TeXRA ── agent: chat  ·  model: claude-opus-4.7  ─── 8 turns · $0.13 · 09:14 ────╮
+╭─ TeXRA ── agent: chat  ·  model: claude-opus-4-7  ─── 8 turns · $0.13 · 09:14 ────╮
 │ ⌕ fatou_                                                       3 / 7  · n next · esc │  ← search input + match counter
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                      │

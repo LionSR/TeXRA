@@ -3,7 +3,7 @@
 The assistant has finished one tool call and is now streaming markdown into a live region. The completed turn above (with its tool-use card) has flushed into the `<Static>` region — it will not re-render. Only the live block is mutating per chunk.
 
 ```
-╭─ TeXRA ── agent: chat  ·  model: claude-opus-4.7  ─── 3 turns · $0.04 · 02:14 ────╮
+╭─ TeXRA ── agent: chat  ·  model: claude-opus-4-7  ─── 3 turns · $0.04 · 02:14 ────╮
 │                                                                                      │
 │  ◆ you                                                                               │
 │    rewrite section 3.2 so the lemma proof is tighter                                 │
