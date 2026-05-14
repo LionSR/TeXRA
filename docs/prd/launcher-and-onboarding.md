@@ -1408,8 +1408,8 @@ Shipped as `builtIn: true` records in code, not in workspace state:
 | id              | name                    | icon | lead               | specialists                                                                                          | workflows                                           |
 | --------------- | ----------------------- | ---- | ------------------ | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | `mathematician` | Mathematician           | 🎓   | `orchestrator`     | `chat`, `research`, `review`, `lean`, `simplifier`, `latexFixer`, `progressCheck`                    | `correct`, `polish`, `merge`, `devise`, `apply`     |
-| `physicist`     | Physicist               | ⚛    | `orchestrator`     | `research`, `numerics`, `review`, `search`, `presenter`, `simplifier`, `latexFixer`, `progressCheck` | `criticize`, `generic`, `devise`, `apply`           |
-| `lean-project`  | Lean Project            | ⚙    | `leanOrchestrator` | `lean`, `leanSearch`, `leanBlueprint`, `leanSimplifier`, `latexFixer`, `progressCheck`               | (none)                                              |
+| `physicist`     | Physicist               | ⚛   | `orchestrator`     | `research`, `numerics`, `review`, `search`, `presenter`, `simplifier`, `latexFixer`, `progressCheck` | `criticize`, `generic`, `devise`, `apply`           |
+| `lean-project`  | Lean Project            | ⚙   | `leanOrchestrator` | `lean`, `leanSearch`, `leanBlueprint`, `leanSimplifier`, `latexFixer`, `progressCheck`               | (none)                                              |
 | `cs-ml`         | Computer Scientist (ML) | 💻   | `orchestrator`     | `numerics`, `search`, `review`, `presenter`, `simplifier`, `latexFixer`, `progressCheck`             | `criticize`, `generic`, `devise`, `apply`, `polish` |
 | `onboarding`    | Onboarding              | 🛠   | `setup`            | `latexFixer`                                                                                         | (none)                                              |
 
