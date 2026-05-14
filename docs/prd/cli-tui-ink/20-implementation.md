@@ -62,6 +62,8 @@ Every phase is independently mergeable. Each adds a `--tui` flag, default-off, u
 - **Implement `BaseTextInput`** with viewport tracking, declared-cursor, and `usePasteHandler`-driven paste-aware Enter (per [10-architecture § Input component](./10-architecture.md#input-component)).
 - **Implement `terminalCapabilities.ts`** — DA1-sentinel query batch at startup, populates the capabilities signal (Kitty keyboard, grapheme support, bracketed paste, OSC color). Other components consume the signal rather than calling environment-detection ad-hoc.
 - **Wire frame telemetry** — `render/frameTelemetry.ts` subscribes to ink's onFrame hook and emits structured trace logs.
+- **Wire terminal notifications** — `notifications/terminalNotifier.ts` per [10-architecture § Terminal notifications](./10-architecture.md#terminal-notifications). Gate on `terminalCapabilities`; idle-detection threshold of 30 s; subscribe to focus-in/out (XT mode 1004) for the unfocused-pane signal. Phase 1 ships `agentFinished` and `approvalNeeded` kinds; `progress` (OSC 9;4) is wired in Phase 4 alongside long-running tools.
+- **Add a SIGWINCH debounce** (≥50 ms coalesce) in `subscribeRuntimeHost.ts` per R13 — cheap and forestalls flicker storms during window-edge drags.
 - **Implement the non-TTY stdout fallback** described in [§ Headless](#13-headless--legacy-preserved). Add `--print` flag handling.
 - Introduce `p-queue`-backed follow-ups. Approvals still on legacy adapter.
 
@@ -91,7 +93,9 @@ Every phase is independently mergeable. Each adds a `--tui` flag, default-off, u
 ### Phase 5 — Ergonomics (2 d)
 
 - `Ctrl-P` palette (`fzf-for-js`).
-- `Ctrl-R` reverse history.
+- `Ctrl-R` reverse history (input lines).
+- `Ctrl-F` transcript search per [10-architecture § Transcript search](./10-architecture.md#transcript-search) — substring + fuzzy fallback over the rendered conversation buffer; SGR 7 inverse overlay with `codeUnitToCell` wide-char safety.
+- `Ctrl-O` expand affordance for truncated content (long diffs, collapsed summaries).
 - `@` file picker.
 - `/` command palette, autocomplete on `/agent` & `/model`.
 - Input history file per [10-architecture § Tech stack](./10-architecture.md#5-tech-stack-locked).
@@ -112,5 +116,7 @@ Every phase is independently mergeable. Each adds a `--tui` flag, default-off, u
 - **Approval flows.** Per-modal test that the right resolver is called with the right payload. Highest-risk wires. Also test queue serialization: enqueue two payloads back-to-back and assert the second modal does not appear until the first resolves.
 - **Paste handling.** PTY test that injects `CSI 200 ~` + multi-line text + `CSI 201 ~` and asserts a single submit fires (not N).
 - **Non-TTY fallback.** Run `texra chat --tui --print` and `texra chat --tui < /dev/null | tee out.txt` and assert plain text streams to stdout with no ANSI cursor codes.
+- **Terminal notifications.** Mock a stdin that acknowledges OSC 9 only (no OSC 99); assert notifier emits OSC 9 + BEL for `agentFinished` and does not emit OSC 99. Reverse case: Kitty-only terminal emits OSC 99 + BEL.
+- **Transcript search highlighting.** Test that searching `"é"` in `"café"` highlights the single composed-character cell, not the 2-codepoint range; that searching `"あ"` in CJK content inverts a 2-cell wide-char correctly; that an overlapping substring (`"aa"` in `"aaaa"`) inverts non-overlapping cells (2 cells lit, not 4).
 - **Headless regression.** Existing `texra run` golden outputs unchanged. `--legacy-renderer` keeps the existing plain-mode tests green.
 - **Capability discovery.** Mock a stdin with a DA1 reply but no Kitty-keyboard reply; assert the capabilities signal records Kitty as unsupported without timing out.
