@@ -117,10 +117,17 @@ packages/cli/src/chat/tui/
 │   ├── DiffView.tsx
 │   └── frameTelemetry.ts           (subscribes to ink onFrame; emits per-phase timings + flicker context to logger)
 ├── commands/
-│   ├── slashRegistry.ts            (reads from @agent + @model registries)
-│   ├── palette.tsx                 (Ctrl-P, fzf-for-js)
+│   ├── slashRegistry.ts            (reads from @agent + @model registries; supports inline + form commands)
+│   ├── palette.tsx                 (Ctrl-P; sections: slash · agents · models · attachments · files)
 │   ├── fileMention.tsx             (@, fast-glob against platform().workspace.getWorkspacePath())
-│   └── transcriptSearch.tsx        (Ctrl-F; substring + fuzzy fallback; SGR 7 inverse overlay — see § Transcript search)
+│   ├── transcriptSearch.tsx        (Ctrl-F; substring + fuzzy fallback; SGR 7 inverse overlay — see § Transcript search)
+│   └── forms/
+│       └── ModelForm.tsx           (structured /model form — see mockups/09-slash-form.md)
+├── attachments/
+│   ├── attachmentStore.ts          (cliState.attachments: Map<id, AttachmentRef>; auto-numbering)
+│   └── pasteIntercept.ts           (BaseTextInput hook: image bytes → attachment, insert [Image #N] token)
+├── ui/
+│   └── KeyHints.tsx                (shared footer strip; <KeyboardShortcutHint> + <Byline> per § Intuitiveness conventions)
 ├── notifications/
 │   └── terminalNotifier.ts         (OSC 9 / OSC 99 / BEL / OSC 9;4 progress; capability-gated by terminalCapabilities signal)
 ├── streams/
@@ -151,6 +158,42 @@ A `notify({ kind, title?, body })` entrypoint emits notifications for `agentFini
 ### Frame telemetry
 
 Per-phase frame timings (render / diff / write / yoga-layout) and flicker context are emitted to the logger at `trace` level for post-launch jank investigation.
+
+### Entrypoint default
+
+`texra` invoked with no subcommand defaults to `texra chat` when stdin / stdout are TTYs (the TUI path); otherwise it falls through to `--help`. Named subcommands (`texra run`, `texra config`, etc.) keep their explicit names. Wired through citty's default-subcommand mechanism, no shim. Pattern matches Claude Code's `claude` (bare command → REPL).
+
+### Slash command forms
+
+Slash commands come in two shapes:
+
+1. **Inline actions** — the default. The handler runs to completion without rendering UI (e.g., `/clear`, `/help`, `/agent <name>`). Registered with `{ name, description, handler }`.
+2. **Structured forms** — for commands where the user needs to _see_ options before committing (e.g., `/model`, future `/agent` with picker UI). The registry entry declares a `formComponent` (lazy-imported); when invoked, the TUI mounts the component inline, replacing the palette dropdown. The form receives `onDone(result)` and renders title + numbered options (`Select`) + optional sub-state controls + a mandatory `<KeyHints>` footer.
+
+Pattern lifted from Claude Code's `local-jsx` command type (e.g., `/model` → `<ModelPicker>` → `<Pane>` with `<Select>`, `<EffortLevelIndicator>`, `<Byline>` of `<KeyboardShortcutHint>`s). See [mockups/09-slash-form.md](../cli-tui-ink/mockups/09-slash-form.md) for the visual target.
+
+### Image attachments
+
+Pasted images are auto-numbered (`Image #1`, `Image #2`, …) and held in `cliState.attachments: Map<id, AttachmentRef>`. They surface in:
+
+- the `/` palette under a `─── attachments ───` section, alongside slash commands, agents, models, and files (mockup 06);
+- the `@` autocomplete (same source).
+
+Selecting an attachment inserts the literal token `[Image #N]` at the input cursor. At send time, the input parser replaces those tokens with the actual image payload (base64 + media-type per the model handler's contract). Claude Code does **not** expose pasted images in any user-facing menu — this is a TeXRA-specific UX, justified by academic workflows that paste figures and proof screenshots routinely.
+
+Paste detection runs at the `BaseTextInput` layer using the same clipboard hooks Claude Code uses (`getImageFromClipboard()` per platform). When the bracketed-paste handler sees a paste containing image bytes (not just text), it routes the bytes into `cliState.attachments` and inserts a `[Image #N]` token in place of the literal paste.
+
+### Intuitiveness conventions
+
+Every modal, form, palette, and approval card carries the same set of affordances so the user always knows what to do next:
+
+- **`›`** for the focused row in any `Select` (Ink `figures.pointer`).
+- **`✓`** for the currently-active value (Ink `figures.tick`).
+- **Footer `<KeyHints>`** strip with scope-specific keys first, navigation in the middle, and `Enter confirm · Esc cancel` last. Implemented as a single shared component (`tui/ui/KeyHints.tsx`); ad-hoc footer text is a review-blocker.
+- **Sub-state indicators** are inline (`● High effort  ← / → to adjust`), never in a separate dialog layer.
+- **Numbered options** (`1.`–`9.`) so digit shortcuts are direct jumps without arrow-key counting.
+
+Pattern source: Claude Code's `KeyboardShortcutHint` + `Byline` + `ConfigurableShortcutHint` design-system components, reused across `/model`, `/help`, permission dialogs.
 
 ### Tool rendering
 

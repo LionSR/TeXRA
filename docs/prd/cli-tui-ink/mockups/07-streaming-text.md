@@ -64,3 +64,5 @@ This split is **only** active when stdin and stderr are TTY. If any of those is 
 2. Should approval rejections land in the transcript at all (currently: yes, with `(rejected: <reason>)` suffix)?
 3. Should `--print` (which forces headless) and the auto-detected streaming-text mode produce _identical_ transcripts, or should `--print` be more terse (no usage footers, no per-turn separators) since it's optimized for scripts?
 4. Is the `=== `header line useful for the typical `tee` workflow, or just visual noise the user is going to grep past?
+
+   User: ok. do as you recummend
