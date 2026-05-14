@@ -74,6 +74,7 @@ export const SETTINGS_TAB_ORDER = [
   'AGENTS',
   'MULTI_AGENT',
   'TOOLS',
+  'AI_AGENTS',
   'GIT',
   'LATEX',
 ] as const;
@@ -272,6 +273,7 @@ export const ToolCategorySchema = z.enum([
   'lean',
   'workflow',
   'system',
+  'ai-agents',
 ]);
 export type ToolCategory = z.infer<typeof ToolCategorySchema>;
 
