@@ -65,6 +65,7 @@ interface DesktopCommandSurfaceModule {
 
 interface DesktopMenuItem {
   label?: string;
+  role?: string;
   accelerator?: string;
   enabled?: boolean;
   toolTip?: string;
@@ -96,13 +97,27 @@ describe('desktop command surface', () => {
           expect(entry.category).toBe('Help');
           continue;
         }
-        expect(['TeXRA', 'Help']).toContain(entry.category);
+        expect(['File', 'TeXRA', 'Help']).toContain(entry.category);
         continue;
       }
       expect(catalogEntry).toBeDefined();
       expect(entry.label).toBe(catalogEntry?.shortTitle ?? catalogEntry?.title);
       expect(entry.category).toBe(catalogEntry?.category);
     }
+    expect(entries).toContainEqual({
+      id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+      label: 'Open Folder',
+      category: 'File',
+      accelerator: 'Command+O',
+      enabled: true,
+    });
+    expect(entries).toContainEqual({
+      id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
+      label: 'New Window',
+      category: 'File',
+      accelerator: 'Command+Shift+N',
+      enabled: true,
+    });
     expect(entries).toContainEqual({
       id: 'texra.showMainView',
       label: 'Show Launcher',
@@ -285,10 +300,15 @@ describe('desktop command surface', () => {
   });
 
   it('wires menu clicks to the catalog-backed dispatcher', async () => {
-    const { buildDesktopMenuTemplate, getDesktopCommandMenuEntries } =
-      await loadDesktopCommandSurface();
+    const {
+      DESKTOP_LOCAL_COMMANDS,
+      buildDesktopMenuTemplate,
+      getDesktopCommandMenuEntries,
+    } = await loadDesktopCommandSurface();
     const actions = {
       openDesktopDocs: vi.fn(),
+      openWorkspaceFolder: vi.fn(),
+      openWorkspaceInNewWindow: vi.fn(),
       resetMainView: vi.fn(),
       showFirstRunWalkthrough: vi.fn(),
       showRoute: vi.fn(),
@@ -298,21 +318,29 @@ describe('desktop command surface', () => {
 
     expect(menu.map((item) => item.label ?? item.role)).toEqual([
       'appMenu',
-      'fileMenu',
+      'File',
       'TeXRA',
       'editMenu',
       'viewMenu',
       'windowMenu',
       'Help',
     ]);
+    const fileMenu = menu.find((item) => item.label === 'File');
+    const fileSubmenu = fileMenu?.submenu ?? [];
+    expect(
+      fileSubmenu.map((item) => item.label ?? item.role ?? item.type),
+    ).toEqual(['Open Folder', 'New Window', 'separator', 'close']);
+    fileSubmenu[0].click?.();
+    fileSubmenu[1].click?.();
+    expect(actions.openWorkspaceFolder).toHaveBeenCalledOnce();
+    expect(actions.openWorkspaceInNewWindow).toHaveBeenCalledOnce();
+
     const texraMenu = menu.find((item) => item.label === 'TeXRA');
     const submenu = texraMenu?.submenu ?? [];
     expect(submenu.map((item) => item.label ?? item.type)).toEqual([
       'Show Launcher',
       'Show Progress',
       'Show Logs',
-      'Open Folder',
-      'New Window',
       'Open Logs Folder',
       'Open TeXRA Settings',
       'New',
@@ -336,16 +364,24 @@ describe('desktop command surface', () => {
         .map((item) => item.label),
     ).toEqual(
       getDesktopCommandMenuEntries(undefined, 'darwin')
-        .filter((entry) => entry.category !== 'Help')
+        .filter(
+          (entry) =>
+            entry.category !== 'Help' &&
+            entry.id !== DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER &&
+            entry.id !== DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
+        )
         .map((entry) => entry.label),
     );
 
-    submenu[0].click?.();
-    submenu[9].click?.();
-    submenu[14].click?.();
+    const launcherItem = submenu.find((item) => item.label === 'Show Launcher');
+    const executeItem = submenu.find((item) => item.label === 'Execute Agent');
+    const modelsItem = submenu.find((item) => item.label === 'Show Models');
+    launcherItem?.click?.();
+    executeItem?.click?.();
+    modelsItem?.click?.();
     expect(actions.showRoute).toHaveBeenCalledWith('main');
     expect(actions.showSettings).toHaveBeenCalledWith(SETTINGS_TAB.MODELS);
-    expect(submenu[9]).toMatchObject({
+    expect(executeItem).toMatchObject({
       enabled: false,
       toolTip:
         'Use the Launcher execute button after choosing an agent and files.',
