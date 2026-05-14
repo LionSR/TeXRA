@@ -7,7 +7,7 @@ User ran `texra chat | tee transcript.txt`. stdin and stderr are still TTY so th
 Plain text only. No box-drawing, no cursor moves, no alt-screen. Lines end with `\n`. Color is preserved (so `cat transcript.txt` shows highlighting) but stripped from the headers since they're not interactive context anymore.
 
 ```
-TeXRA · agent: chat · model: claude-opus-4.7
+TeXRA · agent: chat · model: claude-opus-4-7
 ================================================================
 
 you:
@@ -65,4 +65,4 @@ This split is **only** active when stdin and stderr are TTY. If any of those is 
 3. Should `--print` (which forces headless) and the auto-detected streaming-text mode produce _identical_ transcripts, or should `--print` be more terse (no usage footers, no per-turn separators) since it's optimized for scripts?
 4. Is the `=== `header line useful for the typical `tee` workflow, or just visual noise the user is going to grep past?
 
-   User: ok. do as you recummend
+   User: ok. do as you recommend
