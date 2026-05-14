@@ -41,9 +41,7 @@ export class WriteFileTool extends defineTool({
   schema: WriteInputSchema,
 }) {
   protected async execute(input: WriteInput): Promise<ToolResult> {
-    const root = parseWorkingDirectory(
-      tryUseRunContext()?.workingDirectory,
-    );
+    const root = parseWorkingDirectory(tryUseRunContext()?.workingDirectory);
     const { path: resolved, display: displayPath } = resolveAndFormat(
       input.path,
       root,
