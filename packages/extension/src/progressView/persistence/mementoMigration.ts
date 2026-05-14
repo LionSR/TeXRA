@@ -12,7 +12,7 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { getStreamTabStore } from './StreamTabStore';
+import { getStreamTabStore, mapStreamTabStorage } from './StreamTabStore';
 import type {
   StreamTabMeta,
   OutputFilesRecord,
@@ -119,19 +119,17 @@ export async function migrateFromMemento(
   const taskStateEntries = extractTaskStateEntries(taskStatesRaw);
 
   // Migrate each stream's data to disk
-  await Promise.all(
-    [...allStreamIds].map((streamId) =>
-      migrateStreamToStore(streamId, {
-        taskStateEntries,
-        executionIdsRaw,
-        activeRunIdsRaw,
-        parentStreamIdsRaw,
-        runInstructionsRaw,
-        outputFilesRaw,
-        missingOutputsRaw,
-        usageStatsRaw,
-      }),
-    ),
+  await mapStreamTabStorage([...allStreamIds], (streamId) =>
+    migrateStreamToStore(streamId, {
+      taskStateEntries,
+      executionIdsRaw,
+      activeRunIdsRaw,
+      parentStreamIdsRaw,
+      runInstructionsRaw,
+      outputFilesRaw,
+      missingOutputsRaw,
+      usageStatsRaw,
+    }),
   );
 
   // Clear legacy workspace state keys

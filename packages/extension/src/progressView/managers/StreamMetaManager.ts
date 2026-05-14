@@ -7,7 +7,10 @@ import {
   isWorkflowTaskState,
   type TaskState,
 } from '@logger/TaskState';
-import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
+import {
+  getStreamTabStore,
+  mapStreamTabStorage,
+} from '@progressView/persistence/StreamTabStore';
 import type { StreamTabMeta } from '@progressView/persistence/streamTabSchemas';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
@@ -154,13 +157,11 @@ export class StreamMetaManager {
   async load(streamIds: StreamTabId[]): Promise<void> {
     this.evictAll();
 
-    const results = await Promise.all(
-      streamIds.map(async (streamId) => {
-        const store = getStreamTabStore(streamId);
-        const meta = await store.readMeta();
-        return { streamId, meta };
-      }),
-    );
+    const results = await mapStreamTabStorage(streamIds, async (streamId) => {
+      const store = getStreamTabStore(streamId);
+      const meta = await store.readMeta();
+      return { streamId, meta };
+    });
 
     let loadedTasks = 0;
     let skippedTasks = 0;
@@ -211,15 +212,20 @@ export class StreamMetaManager {
     );
     if (missing.length === 0) return;
 
-    const results = await Promise.all(
-      missing.map(async ([streamId, executionId]) => {
+    const results = await mapStreamTabStorage(
+      missing.map(([streamId]) => streamId),
+      async (streamId) => {
+        const executionId = this.executionIds.get(streamId);
+        if (!executionId) {
+          return { streamId, description: undefined };
+        }
         try {
           const meta = await getExecutionStore(executionId).readMeta();
           return { streamId, description: meta?.description };
         } catch {
           return { streamId, description: undefined };
         }
-      }),
+      },
     );
 
     const backfilled: StreamTabId[] = [];
@@ -233,14 +239,12 @@ export class StreamMetaManager {
     // Persist backfilled descriptions so future loads skip this I/O.
     // save() is gated on `this.loaded`, so write directly here.
     if (backfilled.length > 0) {
-      await Promise.all(
-        backfilled.map((streamId) => {
-          const meta = this.buildMeta(streamId);
-          return getStreamTabStore(streamId)
-            .writeMeta(meta)
-            .catch(() => {});
-        }),
-      );
+      await mapStreamTabStorage(backfilled, (streamId) => {
+        const meta = this.buildMeta(streamId);
+        return getStreamTabStore(streamId)
+          .writeMeta(meta)
+          .catch(() => {});
+      });
       this.logger.info(
         `Backfilled ${backfilled.length} description(s) from ExecutionMeta`,
       );
