@@ -17,6 +17,7 @@ export class WebviewBridge {
     private readonly getActiveStream: () => StreamTabId | null,
   ) {
     this.unsubscribe = this.store.onChange((streamId) => {
+      if (streamId !== this.getActiveStream()) return;
       this.changedStreams.add(streamId);
       this.scheduleFlush();
     });
