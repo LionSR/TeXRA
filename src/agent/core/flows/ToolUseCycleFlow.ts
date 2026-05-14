@@ -166,12 +166,12 @@ export const ToolUseCycleFieldsSchema = BaseCycleFieldsSchema.extend({
    * Used for debug file naming and usage tracking. Incremented after each
    * successful cycle in ToolUseProcessNode.post().
    */
-  cycleIndex: z.number(),
+  cycleIndex: z.int().nonnegative(),
   /**
    * Accumulated response time for current cycle (milliseconds).
    * Reset after finalization when continuing to next cycle.
    */
-  cycleResponseTimeMs: z.number(),
+  cycleResponseTimeMs: z.number().nonnegative(),
   /**
    * Normalized usage for current cycle.
    * Reset after finalization when continuing to next cycle.
