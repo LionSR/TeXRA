@@ -8,6 +8,12 @@
  * Keep this interface narrow — add methods only when a setup tool needs them.
  */
 
+import type {
+  TerminalRunRequest,
+  TerminalRunResult,
+  TerminalRunner,
+} from '@hosts/terminalHost';
+
 /** Per-provider API key surface. */
 export interface SetupSecretsAdapter {
   setApiKey(provider: string, key: string): Promise<void>;
@@ -78,22 +84,8 @@ export interface SetupConfigAdapter {
  * same as "user interrupted", since neither path tells us anything
  * actionable.
  */
-export interface SetupTerminalAdapter {
-  runCommand(args: {
-    name: string;
-    command: string;
-    /** Hard cap on how long to wait for the captured run before giving up. */
-    timeoutMs: number;
-  }): Promise<TerminalRunResult>;
-}
-
-export interface TerminalRunResult {
-  /** `undefined` if shell integration was unavailable, or the run was interrupted. */
-  exitCode: number | undefined;
-  /** ANSI-stripped, length-capped tail of the command's output. May be empty. */
-  output: string;
-  timedOut: boolean;
-}
+export type SetupTerminalAdapter = TerminalRunner;
+export type { TerminalRunRequest, TerminalRunResult };
 
 /** Aggregated setup platform. */
 export interface SetupPlatform {

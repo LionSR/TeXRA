@@ -17,5 +17,8 @@ export type {
   TerminalHandle,
   TerminalHost,
   TerminalOptions,
+  TerminalRunner,
+  TerminalRunRequest,
+  TerminalRunResult,
 } from './terminalHost';
 export type { UIHosts } from './uiHosts';
