@@ -76,10 +76,9 @@ async function loadApprovalModules(workspacePath = '/workspace') {
     getConfig: vi.fn(() => 'sameDirectory'),
   }));
   vi.doMock('@agent/runtime/RunContext', async () => {
-    const actual =
-      await vi.importActual<typeof import('@agent/runtime/RunContext')>(
-        '@agent/runtime/RunContext',
-      );
+    const actual = await vi.importActual<
+      typeof import('@agent/runtime/RunContext')
+    >('@agent/runtime/RunContext');
     return {
       ...actual,
       tryUseRunContext: vi.fn(() => undefined),
