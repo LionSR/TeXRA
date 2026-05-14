@@ -78,6 +78,7 @@ import { UsageLogService } from '@logger/UsageLogService';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { interruptAllCodexSessions } from '@tools/codex';
+import { interruptAllClaudeAgentSessions } from '@tools/claudeAgent';
 import { setExtensionChecker } from '@tools/externalToolDefs';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup';
@@ -187,6 +188,9 @@ export async function activate(context: vscode.ExtensionContext) {
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killBackgroundProcesses());
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
     interruptAllCodexSessions(),
+  );
+  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
+    interruptAllClaudeAgentSessions(),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killActiveRecording());
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => UsageLogService.dispose());

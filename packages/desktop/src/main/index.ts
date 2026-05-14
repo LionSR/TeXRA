@@ -20,6 +20,7 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import type { TerminalRunResult } from '@hosts/terminalHost';
 import { interruptAllCodexSessions } from '@tools/codex';
+import { interruptAllClaudeAgentSessions } from '@tools/claudeAgent';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
@@ -622,6 +623,9 @@ if (protocolLifecycle.shouldContinue) {
       );
       lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
         interruptAllCodexSessions(),
+      );
+      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
+        interruptAllClaudeAgentSessions(),
       );
 
       // before-quit semantics: hold every quit event until shutdown handlers
