@@ -3,9 +3,9 @@
 User pressed `Ctrl-P` with the buffer empty, then typed `mod`. The palette is filtering across three categories: slash commands, agent names, and model identifiers. Top result is highlighted (`▶`); `enter` selects it.
 
 ```
-╭─ TeXRA ── agent: writer  ·  model: claude-opus-4.7  ─── 8 turns · $0.13 · 09:14 ────╮
+╭─ TeXRA ── agent: chat  ·  model: claude-opus-4.7  ─── 8 turns · $0.13 · 09:14 ────╮
 │                                                                                      │
-│  ◇ writer                                                                            │
+│  ◇ chat                                                                            │
 │    ...the previous turn is still visible behind the palette, dimmed.                 │
 │                                                                                      │
 │         ╭─ command palette ─────────────────────────────────────────  mod ─╮         │
