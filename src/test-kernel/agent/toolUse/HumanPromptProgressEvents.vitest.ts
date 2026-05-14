@@ -6,6 +6,7 @@ import {
   getDefaultAgentRuntimeHost,
   setDefaultAgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type { StreamTabId } from '@shared/schemas';
 import {
@@ -49,13 +50,12 @@ describe('human prompt progress events', () => {
     try {
       setDefaultAgentRuntimeHost(fallback.host);
 
-      const approval = withToolFileInteractionContext(
-        {
-          streamId,
-          runtimeHost: explicit.host,
-          tracker: {} as never,
-        },
-        () => requestBashApproval({ command: 'echo hello' }),
+      const approval = withRunContext(
+        createRunContext({ runtimeHost: explicit.host, streamId }),
+        () =>
+          withToolFileInteractionContext({ tracker: {} as never }, () =>
+            requestBashApproval({ command: 'echo hello' }),
+          ),
       );
 
       const show = await waitForRecordedEvent(
@@ -102,19 +102,17 @@ describe('human prompt progress events', () => {
     try {
       setDefaultAgentRuntimeHost(fallback.host);
 
-      const result = withToolFileInteractionContext(
-        {
-          streamId,
-          runtimeHost: explicit.host,
-          tracker: {} as never,
-        },
+      const result = withRunContext(
+        createRunContext({ runtimeHost: explicit.host, streamId }),
         () =>
-          tool.call({
-            question: 'What should the agent check next?',
-            context: 'Runtime host boundary test',
-            suggestSearch: true,
-            attachFiles: ['notes.tex'],
-          }),
+          withToolFileInteractionContext({ tracker: {} as never }, () =>
+            tool.call({
+              question: 'What should the agent check next?',
+              context: 'Runtime host boundary test',
+              suggestSearch: true,
+              attachFiles: ['notes.tex'],
+            }),
+          ),
       );
 
       const show = await waitForRecordedEvent(
