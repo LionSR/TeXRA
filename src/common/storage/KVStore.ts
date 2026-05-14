@@ -90,6 +90,13 @@ export class KVStore {
     return StorageFS.exists(this.keyToPath(key));
   }
 
+  async modifiedAt(key: string): Promise<number | undefined> {
+    return withNotFoundFallback(
+      async () => (await StorageFS.stat(this.keyToPath(key))).mtime,
+      undefined,
+    );
+  }
+
   async listKeys(prefix?: string): Promise<string[]> {
     const entries = await withNotFoundFallback(
       () => StorageFS.readDir(this.dir),
