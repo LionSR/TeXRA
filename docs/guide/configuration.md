@@ -4,9 +4,7 @@ TeXRA provides extensive configuration options that allow you to customize its b
 
 ## The TeXRA Dashboard
 
-The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open it from the Command Palette (`Ctrl+Shift+P`) with **TeXRA: Show Dashboard**:
-
-![TeXRA Dashboard](/images/dashboard-overview.png)
+The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open it from the Command Palette (`Ctrl+Shift+P`) with **TeXRA: Show Dashboard**.
 
 - **Memory** - See what your tool-use agents have remembered across sessions, and delete entries you no longer need.
 - **History** - Search and browse past runs. Handy for finding that polish job you ran last week.
@@ -40,15 +38,11 @@ Agent visibility is managed through the **Agents** tab in the TeXRA Dashboard
 you toggle individual agents on or off for the current workspace. Agents with a
 matching `_multiple.yaml` file are flagged with a multi-output badge.
 
-![Agents Tab](/images/agents-tab.png)
-
 ### Model Configuration
 
 Which models appear in the selection dropdown is managed through the **Models**
 tab in the TeXRA Dashboard. Toggle individual models on or off per provider.
 See the [Models Guide](./models.md) for the full list of supported models.
-
-![Models Tab](/images/models-tab.png)
 
 ### API Provider Settings
 
@@ -412,8 +406,6 @@ Now that you understand how to configure TeXRA, you may want to learn about:
 ## Agent Execution Settings (Webview Interface)
 
 These settings, accessible directly in the main TeXRA webview, control how agents run:
-
-![Agent Execution Settings](/images/agent-execution-settings.png)
 
 **Tool Configuration Dropdown** (<wa-icon library="texra" name="tools"></wa-icon> ○<wa-icon library="texra" name="chevron-down"></wa-icon> next to Instruction label):
 

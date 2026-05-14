@@ -159,6 +159,7 @@ const baseConfig = {
               text: 'Working with Overleaf',
               link: '/guide/working-with-overleaf',
             },
+            { text: 'TeXRA CLI', link: '/guide/texra-cli' },
             { text: 'Codex CLI', link: '/guide/codex-cli' },
             { text: 'File Management', link: '/guide/file-management' },
             { text: 'ProgressBoard', link: '/guide/progress-board' },
