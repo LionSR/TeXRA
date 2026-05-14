@@ -110,6 +110,10 @@ import {
   parseCodexReasoningEffort,
   parseCodexApprovalPolicy,
 } from '@tools/codexConfig';
+import {
+  getClaudeAgentModel,
+  getClaudeAgentPermissionMode,
+} from '@tools/claudeAgentConfig';
 import { findExternalToolDef } from '@tools/externalToolDefs';
 import {
   issuePollingSource,
@@ -574,19 +578,29 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED]: (data) =>
         this.handleSetApprovalEnabled(BASH_APPROVAL_CONFIG_KEY, data.enabled),
       [SETTINGS_VIEW_COMMANDS.SET_CODEX_SANDBOX_MODE]: (data) =>
-        this.updateCodexSetting(
+        this.updateAgentSetting(
           WorkspaceStateKey.CODEX_SANDBOX_MODE,
           data.mode,
         ),
       [SETTINGS_VIEW_COMMANDS.SET_CODEX_REASONING_EFFORT]: (data) =>
-        this.updateCodexSetting(
+        this.updateAgentSetting(
           WorkspaceStateKey.CODEX_REASONING_EFFORT,
           data.effort,
         ),
       [SETTINGS_VIEW_COMMANDS.SET_CODEX_APPROVAL_POLICY]: (data) =>
-        this.updateCodexSetting(
+        this.updateAgentSetting(
           WorkspaceStateKey.CODEX_APPROVAL_POLICY,
           data.policy,
+        ),
+      [SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_MODEL]: (data) =>
+        this.updateAgentSetting(
+          WorkspaceStateKey.CLAUDE_AGENT_MODEL,
+          data.model,
+        ),
+      [SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_PERMISSION_MODE]: (data) =>
+        this.updateAgentSetting(
+          WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
+          data.mode,
         ),
 
       // Tool dashboard handlers
@@ -1092,6 +1106,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           'never',
         ) ?? 'never',
       ),
+      claudeAgentModel: getClaudeAgentModel(),
+      claudeAgentPermissionMode: getClaudeAgentPermissionMode(),
     });
   }
 
@@ -1106,7 +1122,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.withActiveWebview((w) => this.sendApprovalSettings(w));
   }
 
-  private async updateCodexSetting(
+  private async updateAgentSetting(
     key: WorkspaceStateKey,
     value: string,
   ): Promise<void> {
