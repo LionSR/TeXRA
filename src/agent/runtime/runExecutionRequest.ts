@@ -9,13 +9,13 @@ import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
 
 export interface RunExecutionRequestOptions {
-  runtimeHost?: AgentRuntimeHost;
+  runtimeHost: AgentRuntimeHost;
   openWorkflowOutput?: (result: WorkflowFlowResult) => Promise<void>;
 }
 
 export async function runValidatedExecutionRequest(
   request: ValidatedExecutionRequest,
-  options: RunExecutionRequestOptions = {},
+  options: RunExecutionRequestOptions,
 ): Promise<AgentFlowResult> {
   const executionId =
     request.executionId ?? (generateExecutionId() as ExecutionId);
