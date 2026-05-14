@@ -1,5 +1,7 @@
 # 10 · Session resume
 
+> **Status: UX target for a follow-up PRD, not v1.** Per [10-architecture § Session resume](../10-architecture.md#session-resume-deferred-to-a-separate-prd), today's persistence layer does not back this mockup — `HistoryItem` carries only `{id, timestamp, agentConfig, description?}`, `StreamLogStore` is in-memory, and the existing restore re-runs rather than replays. The session-record shape described in § Backing data below is the **target schema for that follow-up PRD's new persistence layer**, not what exists today. The resume identifier itself should be the existing `HistoryItem.id` (an exec id), not a new "session-id" concept.
+
 A session is the unit of conversation history TeXRA already persists today (via the extension's history browser). The CLI gains three entry points to resume:
 
 1. **`texra chat --continue`** — pick the most recent session, no UI.
@@ -9,7 +11,7 @@ A session is the unit of conversation history TeXRA already persists today (via 
 The `/resume` form (most common path):
 
 ```
-╭─ TeXRA ── agent: chat  ·  model: claude-opus-4.7  ────────────────────────────────╮
+╭─ TeXRA ── agent: chat  ·  model: claude-opus-4-7  ────────────────────────────────╮
 │                                                                                      │
 │  ◇ chat                                                                            │
 │    (current session above, dimmed)                                                   │
@@ -22,9 +24,9 @@ The `/resume` form (most common path):
 │   the session. New turns append to the same session id.                              │
 │                                                                                      │
 │   ─── recent ────────────────────────────────────────────────────────────────────    │
-│   › 1. quantum-walks §3.2 tighten lemma     · chat   · opus-4.7  · 18 turns  · 2 m ago│
+│   › 1. quantum-walks §3.2 tighten lemma     · chat   · opus-4-7  · 18 turns  · 2 m ago│
 │     2. figure 4-a placement debug           · chat   · sonnet    ·  6 turns  · 1 h ago│
-│     3. abstract rewrite                     · chat   · opus-4.7  ·  4 turns  · 3 h ago│
+│     3. abstract rewrite                     · chat   · opus-4-7  ·  4 turns  · 3 h ago│
 │     4. bibliography cleanup                 · chat   · haiku     ·  2 turns  · 1 d ago│
 │                                                                                      │
 │   ─── older (5 more) ────────────────────────────────────────────────────────────    │
@@ -38,7 +40,7 @@ The `/resume` form (most common path):
 After `Enter`, the form unmounts and the conversation pane re-renders with the resumed transcript flushed into the `<Static>` region (no re-streaming — each turn renders fully and instantly). Header `agent` / `model` slots update to the session's stored values; a one-line banner pins the resumed state:
 
 ```
-╭─ TeXRA ── agent: chat  ·  model: claude-opus-4.7  ─── 18 turns · $1.42 · resumed ─╮
+╭─ TeXRA ── agent: chat  ·  model: claude-opus-4-7  ─── 18 turns · $1.42 · resumed ─╮
 │                                                                                      │
 │  ── resumed: quantum-walks §3.2 tighten lemma (2 m ago) ─────────────────────────    │  ← one-line banner; dim
 │                                                                                      │
