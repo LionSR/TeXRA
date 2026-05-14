@@ -2,7 +2,7 @@
 
 The PRD's generic `<ToolUseCard>` is a base; rich tools (Bash, FileEdit, LaTeX-compile) replace the body with a custom renderer registered against the tool name. Most tools (Read, Grep, Glob, WebFetch, …) fall back to the generic compact form. Pattern source: Claude Code's `Tool.renderToolUse*Message()` family — see [§ Tool rendering](../10-architecture.md#tool-rendering).
 
-**Both the VS Code Progress View and the CLI TUI render off the same `ToolUseLogEntry` schema** (`src/shared/schemas/`), so the visual differences below are presentation-only. The captured tool-use state is identical regardless of which host the user happens to be looking through.
+**Both the VS Code Progress View and the CLI TUI render off the same `ToolUseLog` schema** (`src/shared/schemas/progressView.ts`), unwrapped at render time by `normalizeToolUseData` per [§ Tool rendering](../10-architecture.md#tool-rendering). The visual differences below are presentation-only; the captured tool-use state is identical regardless of which host the user happens to be looking through.
 
 This mockup shows four tools mid-stream to illustrate where the variants diverge.
 

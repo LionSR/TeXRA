@@ -45,7 +45,7 @@ User pressed `Ctrl-P` with the buffer empty, then typed `mod`. The palette is fi
 ## Layout notes
 
 - **Title bar** shows the current query right-aligned (`mod` here). Empty query shows all candidates.
-- **Category dividers** `─── slash commands ───` separate four sources: slash commands, agents, models, attachments, files. Result ordering inside each section is fuzzy-score-descending.
+- **Category dividers** `─── slash commands ───` separate five sources: slash commands, agents, models, attachments, files. Result ordering inside each section is fuzzy-score-descending.
 - **Selection cursor** uses `›` (Ink's `figures.pointer`) on the focused row — same convention as Claude Code's `CustomSelect`. No alternate glyph on unfocused rows, just a blank.
 - **Current-state marker** `✓ current` annotates the active model / agent so the user doesn't accidentally re-select what they're already on. Lifted from Claude Code's model-picker (`figures.tick`).
 - **Glyph-free row format** — the source-of-row is conveyed by its category section divider, not a per-row icon. Reduces visual noise.
