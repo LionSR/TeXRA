@@ -101,9 +101,14 @@ export class ChatTerminalRenderer {
   /send            Send the current multiline draft
   /cancel          Cancel the current multiline draft
   /status          Show active metadata and latest usage
+  /login [provider] [--no-browser] Sign in for included access
+  /logout          Sign out of TeXRA
+  /whoami          Show current TeXRA sign-in status
   /yolo            Explain yolo approval mode
   /clear           Clear the terminal
   /exit, /quit     Exit chat
+
+Backslash commands such as \\login are also accepted.
 
 Keys:
   Ctrl-C           Interrupt the active session, or exit if no session is running
