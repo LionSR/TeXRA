@@ -170,7 +170,14 @@ Slash commands come in two shapes:
 1. **Inline actions** — the default. The handler runs to completion without rendering UI (e.g., `/clear`, `/help`, `/agent <name>`). Registered with `{ name, description, handler }`.
 2. **Structured forms** — for commands where the user needs to _see_ options before committing (e.g., `/model`, future `/agent` with picker UI). The registry entry declares a `formComponent` (lazy-imported); when invoked, the TUI mounts the component inline, replacing the palette dropdown. The form receives `onDone(result)` and renders title + numbered options (`Select`) + optional sub-state controls + a mandatory `<KeyHints>` footer.
 
-Pattern lifted from Claude Code's `local-jsx` command type (e.g., `/model` → `<ModelPicker>` → `<Pane>` with `<Select>`, `<EffortLevelIndicator>`, `<Byline>` of `<KeyboardShortcutHint>`s). See [mockups/09-slash-form.md](../cli-tui-ink/mockups/09-slash-form.md) for the visual target.
+Pattern lifted from Claude Code's `local-jsx` command type (e.g., `/model` → `<ModelPicker>` → `<Pane>` with `<Select>`, `<EffortLevelIndicator>`, `<Byline>` of `<KeyboardShortcutHint>`s).
+
+Structured forms come in two shapes:
+
+- **Single-screen** — one decision (or one decision + an inline sub-state controller). Most slash forms (`/model`, `/agent`, future `/rename`, `/resume`).
+- **Tabbed** — multi-view surface where a tab strip replaces the title row and the body re-renders per active tab while a shared `<KeyHints>` footer persists. Claude Code uses this for `/status` (Settings · Status · Config · Usage · Stats); TeXRA mirrors it for `/status` and future cross-cutting views like `/settings`. `Tab` / `Shift-Tab` cycle; direct invocation `/status usage` opens straight to a tab.
+
+See [mockups/09-slash-form.md](./mockups/09-slash-form.md) for both visual targets.
 
 ### Image attachments
 
@@ -182,6 +189,26 @@ Pasted images are auto-numbered (`Image #1`, `Image #2`, …) and held in `cliSt
 Selecting an attachment inserts the literal token `[Image #N]` at the input cursor. At send time, the input parser replaces those tokens with the actual image payload (base64 + media-type per the model handler's contract). Claude Code does **not** expose pasted images in any user-facing menu — this is a TeXRA-specific UX, justified by academic workflows that paste figures and proof screenshots routinely.
 
 Paste detection runs at the `BaseTextInput` layer using the same clipboard hooks Claude Code uses (`getImageFromClipboard()` per platform). When the bracketed-paste handler sees a paste containing image bytes (not just text), it routes the bytes into `cliState.attachments` and inserts a `[Image #N]` token in place of the literal paste.
+
+### Session resume
+
+A session is the existing unit of conversation history the extension persists today. The CLI gains three entry points:
+
+- **`texra chat --continue`** — resume the most recent session, no UI.
+- **`texra chat --resume <session-id>`** — direct resume by id, no UI.
+- **`/resume`** slash command (a structured form per [§ Slash command forms](#slash-command-forms)) — listing recent sessions for interactive selection.
+
+Resume reads the session record from the existing storage (the extension's history; the CLI lifts the path lookup into `platform().storage` so both hosts share it). The flow:
+
+1. Load session metadata (`sessionId`, `agentId`, `modelId`, `turnCount`, log-entry pointer).
+2. Restore agent + model selection (warn if either is no longer registered; offer substitute via `/agent` / `/model` forms before proceeding).
+3. Replay `StreamLogStore` entries for the session into the conversation pane; turns render fully and instantly into the `<Static>` region — no chunk-by-chunk re-streaming.
+4. Pin a one-line dim banner above the replayed turn 1: `── resumed: <name> (<age>) ──`.
+5. New turns append to the **same** `sessionId` — no fork.
+
+See [mockups/10-session-resume.md](./mockups/10-session-resume.md) for the picker form and post-resume layout.
+
+**Out of scope for v1:** session forking ("re-run from turn N"), cross-host concurrent edit reconciliation (both hosts read the same log; appends are sequential through the shared store; detached subagents are not re-attached).
 
 ### Intuitiveness conventions
 
@@ -210,7 +237,7 @@ For TeXRA v1, **two** rich renderers earn their cost; everything else uses the f
 - **Bash / shell-exec.** Live-tailed last-N-lines body with elapsed timer, exit-code on completion, truncation banner with `Ctrl-O` expand. Streaming progress overwrites the body in place per chunk.
 - **Edit / MultiEdit / Write.** Embedded unified-diff body using the same `diff` + `cli-highlight` pipeline as `<EditApproval>`. Header carries summary stats (`+N / −M · K hunks`).
 
-LaTeX-specific renderers (compile, latexdiff, BibTeX) are v1.x candidates, not v1. See [mockups/08-tool-variants.md](../cli-tui-ink/mockups/08-tool-variants.md) for the visual targets.
+LaTeX-specific renderers (compile, latexdiff, BibTeX) are v1.x candidates, not v1. See [mockups/08-tool-variants.md](./mockups/08-tool-variants.md) for the visual targets.
 
 Renderers are **stateless presentation components** — props in, JSX out. Tool state lives in `cliState.toolUses` (a `Map<toolUseId, ToolUseLog>` from the schema above); collapse/expand is a global `verbose` flag toggled by `Ctrl-O`, not per-tool local state. This matches Claude Code's design and avoids per-tool state machines.
 
