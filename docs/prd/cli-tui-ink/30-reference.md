@@ -27,15 +27,15 @@
 
 ## 12. Rendering parity with the webview
 
-| Concern         | Webview                                                                    | CLI TUI                                                                                                                           |
-| --------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Markdown        | `markdown-it` + `markdown-it-texmath`, HTML output cached per content hash | Same `markdown-it` instance + ANSI rule plugin; parallel ANSI cache (the webview's HTML cache is not reusable for ANSI)           |
-| Code fences     | `highlight.js` via `@shared/highlighting` (`highlightCode.ts` → `hljs.ts`) | `cli-highlight` (which runs its own `highlight.js` internally); both paths consume the same grammars from `highlight.js/lib/core` |
-| Math            | `katex` → HTML                                                             | `unicodeit` for inline; block math raw in v1                                                                                      |
-| Diff            | Monaco diff editor                                                         | `diff` + `cli-highlight`                                                                                                          |
-| Tool cards      | Lit component per messageType                                              | Ink component per messageType                                                                                                     |
-| Subagent badges | `BackgroundTasksPanel.ts`                                                  | `<SubagentList>` (same data, same `setActiveStream` on activate)                                                                  |
-| Follow-up input | `FollowUpInput.ts` textarea                                                | `<InputBar>` with `/` palette + `@` mention + bracketed-paste-aware submit                                                        |
+| Concern         | Webview                                                                    | CLI TUI                                                                                                                                   |
+| --------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Markdown        | `markdown-it` + `markdown-it-texmath`, HTML output cached per content hash | Same factory, ANSI renderer hook (distinct `MarkdownIt` instance), parallel ANSI cache; the webview's HTML cache is not reusable for ANSI |
+| Code fences     | `highlight.js` via `@shared/highlighting` (`highlightCode.ts` → `hljs.ts`) | `cli-highlight` (which runs its own `highlight.js` internally); both paths consume the same grammars from `highlight.js/lib/core`         |
+| Math            | `katex` → HTML                                                             | `unicodeit` for inline; block math raw in v1                                                                                              |
+| Diff            | Monaco diff editor                                                         | `diff` + `cli-highlight`                                                                                                                  |
+| Tool cards      | Lit component per messageType                                              | Ink component per messageType                                                                                                             |
+| Subagent badges | `BackgroundTasksPanel.ts`                                                  | `<SubagentList>` (same data, same `setActiveStream` on activate)                                                                          |
+| Follow-up input | `FollowUpInput.ts` textarea                                                | `<InputBar>` with `/` palette + `@` mention + bracketed-paste-aware submit                                                                |
 
 Two TUI features the webview does **not** have today: a slash-command palette, and an `@`-mention file picker (implementation per [10-architecture § Tech stack](./10-architecture.md#5-tech-stack-locked); risk in R8). Both are pure additions and can later land in the webview behind the same registry.
 
