@@ -18,7 +18,7 @@ import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 // Local imports - sibling
-import { API_PROVIDERS, apiKeyExists, type ApiProvider } from './apiProviders';
+import { apiKeyExists, isApiProvider } from './apiProviders';
 import {
   buildModelHint,
   formatContext,
@@ -46,8 +46,8 @@ async function getPersonalAccessKindForModel(
     return hasOpenRouter ? 'openrouter-key' : null;
   }
 
-  const provider = config.provider as ApiProvider;
-  if (!(API_PROVIDERS as readonly string[]).includes(provider)) {
+  const { provider } = config;
+  if (!isApiProvider(provider)) {
     return 'provider-key';
   }
 
