@@ -86,7 +86,6 @@ import {
   DESKTOP_LOCAL_COMMANDS,
   formatDesktopAccelerator,
   getDesktopCommandMenuEntries,
-  SETTINGS_TAB,
   type DesktopCommandActions,
   type DesktopCommandId,
 } from '../desktopCommandSurface';
@@ -137,10 +136,6 @@ const appRoot = root;
 
 let currentRoute: DesktopRoute = 'main';
 const hasWorkspace = window.texraDesktop?.hasWorkspace ?? true;
-const workspacePath = window.texraDesktop?.workspacePath;
-const workspaceFolderName = workspacePath
-  ? workspacePath.split(/[\\/]/).pop() || workspacePath
-  : undefined;
 const rendererPlatform = getRendererPlatform(document.defaultView);
 const desktopCommandEntriesById = new Map(
   getDesktopCommandMenuEntries(undefined, rendererPlatform).map((entry) => [
@@ -245,36 +240,10 @@ function emptyStreamsTemplate(): TemplateResult {
     <section class="desktop-empty-streams" aria-label="First run suggestions">
       <div class="desktop-empty-streams-copy">
         <h2>Start from the launcher</h2>
-        <p>
-          Choose files and an agent above, or check model access before the
-          first run.
-        </p>
+        <p>Choose files and an agent above before the first run.</p>
         <p class="desktop-empty-streams-example">
           Try: <q>polish the abstract</q>
         </p>
-      </div>
-      <div class="desktop-empty-streams-actions">
-        <wa-button
-          appearance="outlined"
-          size="small"
-          @click=${() => openSettingsTab(SETTINGS_TAB.MODELS)}
-        >
-          ${waIcon('key', { slot: 'start' })} Models
-        </wa-button>
-        <wa-button
-          appearance="outlined"
-          size="small"
-          @click=${() => openSettingsTab(SETTINGS_TAB.AGENTS)}
-        >
-          ${waIcon('robot', { slot: 'start' })} Agents
-        </wa-button>
-        <wa-button
-          appearance="outlined"
-          size="small"
-          @click=${openCommandPalette}
-        >
-          ${waIcon('terminal', { slot: 'start' })} Commands
-        </wa-button>
       </div>
     </section>
   `;
@@ -330,19 +299,13 @@ function isProgressOutboundMessage(
 // =============================================================================
 
 interface ChromeIconButtonSpec {
-  readonly key: 'settings' | 'logs';
+  readonly key: 'logs';
   readonly icon: TeXRAIconName;
   readonly label: string;
   readonly onClick: () => void;
 }
 
 const CHROME_ICON_BUTTONS: ReadonlyArray<ChromeIconButtonSpec> = [
-  {
-    key: 'settings',
-    icon: 'gear',
-    label: 'Settings',
-    onClick: openSettingsOverlay,
-  },
   { key: 'logs', icon: 'file-lines', label: 'Logs', onClick: openLogsDrawer },
 ] as const;
 
@@ -376,18 +339,6 @@ function shellTemplate(): TemplateResult {
         >
           Commands
         </wa-button>
-        <wa-button
-          class="desktop-folder-button"
-          appearance="outlined"
-          size="small"
-          title=${commandTitle(
-            DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
-            'Open Folder',
-          )}
-          @click=${openWorkspaceFolder}
-        >
-          ${waIcon('folder-open', { slot: 'start' })} Open Folder
-        </wa-button>
         ${CHROME_ICON_BUTTONS.map(
           (spec) => html`
             <wa-button
@@ -397,9 +348,7 @@ function shellTemplate(): TemplateResult {
               data-route-button=${spec.key}
               aria-label=${spec.label}
               title=${commandTitle(
-                spec.key === 'settings'
-                  ? 'texra.openSettings'
-                  : DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
+                DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
                 spec.label,
               )}
               @click=${spec.onClick}
@@ -413,14 +362,6 @@ function shellTemplate(): TemplateResult {
         <aside class="desktop-rail" aria-label="Sessions">
           <header class="desktop-rail-header">
             <div class="desktop-rail-header-content">
-              ${workspaceFolderName
-                ? html`<div
-                    class="desktop-workspace-name"
-                    title=${workspacePath}
-                  >
-                    ${workspaceFolderName}
-                  </div>`
-                : nothing}
               <span class="desktop-rail-title">Sessions</span>
             </div>
             <wa-button
@@ -994,6 +935,9 @@ const commandPalette = bootstrapFailed
         openWorkspaceFolder: () => {
           postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER);
         },
+        openWorkspaceInNewWindow: () => {
+          postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW);
+        },
         showFirstRunWalkthrough: () => {
           firstRunWalkthrough?.show();
         },
@@ -1011,10 +955,6 @@ if (commandPalette) appRoot.append(commandPalette.element);
 
 function openCommandPalette(): void {
   commandPalette?.open();
-}
-
-function openWorkspaceFolder(): void {
-  postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER);
 }
 
 function switchToStream(streamId: StreamTabId): void {
