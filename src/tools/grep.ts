@@ -2,10 +2,9 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { ToolError, type ToolResult } from '@tools/result';
 import { getGitignoreMatcher } from '@tools/gitignore';
-import { resolveAndFormat, parseWorkingDirectory } from '@tools/pathResolution';
+import { resolveAndFormat, currentToolRoot } from '@tools/pathResolution';
 import { executeCommand } from '@utils/system/execUtils';
 
 // Local file imports
@@ -111,7 +110,7 @@ export class GrepTool extends defineTool({
 }) {
   protected async execute(input: GrepInput): Promise<ToolResult> {
     const { output_mode: outputMode } = input;
-    const root = parseWorkingDirectory(tryUseRunContext()?.workingDirectory);
+    const root = currentToolRoot();
     const { path, display } = resolveAndFormat(input.path ?? undefined, root);
     const gitignore = await getGitignoreMatcher();
     const args = buildArguments(input, outputMode);

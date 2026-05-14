@@ -3,14 +3,13 @@ import { glob } from 'glob';
 import { z } from 'zod';
 
 // Local imports - tools
-import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { toErrorMessage } from '@common/errors';
 import { ToolError, ToolResult } from '@tools/result';
 import { formatToolOutput, pluralize } from '@tools/formatting';
 import {
   joinWorkspaceRelativePath,
   resolveAndFormat,
-  parseWorkingDirectory,
+  currentToolRoot,
 } from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { WorkspaceFS } from '@utils/files';
@@ -38,7 +37,7 @@ export class GlobTool extends defineTool({
   schema: GlobInputSchema,
 }) {
   protected async execute(input: GlobInput): Promise<ToolResult> {
-    const root = parseWorkingDirectory(tryUseRunContext()?.workingDirectory);
+    const root = currentToolRoot();
     const { path, display } = resolveAndFormat(input.path ?? undefined, root);
     const gitignore = await getGitignoreMatcher();
 
