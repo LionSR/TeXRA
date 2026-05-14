@@ -1,7 +1,11 @@
 import { access, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { buildStreamTabInfo } from '@agent/index';
+import {
+  buildStreamTabInfo,
+  peekWorktreeInfo,
+  resolveWorktreeInfo,
+} from '@agent/index';
 
 import {
   prepareMainViewExecutionRequest,
@@ -396,6 +400,13 @@ export class DesktopProgressBridge {
   private buildStreamInfo(streamId: StreamTabId): StreamTabInfo {
     const taskState = this.taskStates.get(streamId);
     const restored = this.restoredStreams.get(streamId);
+    const workingDirectory =
+      taskState?.agentConfig.workingDirectory ?? undefined;
+    let worktreeInfo;
+    if (workingDirectory) {
+      worktreeInfo = peekWorktreeInfo(workingDirectory);
+      this.ensureWorktreeProbe(workingDirectory);
+    }
     return buildStreamTabInfo({
       streamId,
       config: taskState?.agentConfig,
@@ -408,6 +419,17 @@ export class DesktopProgressBridge {
       executionId: this.executionIds.get(streamId),
       parentStreamId: this.parentStreams.get(streamId),
       description: this.descriptions.get(streamId),
+      worktreeInfo,
+    });
+  }
+
+  private readonly probedWorktreeDirs = new Set<string>();
+
+  private ensureWorktreeProbe(workingDirectory: string): void {
+    if (this.probedWorktreeDirs.has(workingDirectory)) return;
+    this.probedWorktreeDirs.add(workingDirectory);
+    void resolveWorktreeInfo(workingDirectory).catch(() => {
+      this.probedWorktreeDirs.delete(workingDirectory);
     });
   }
 
