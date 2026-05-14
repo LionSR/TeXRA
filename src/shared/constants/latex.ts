@@ -454,6 +454,7 @@ export const LATEX_CONFIG_DEFAULTS = {
   latexdiffBetweenRounds: false,
   latexdiffTimeoutMs: 10000,
   latexdiffMathMarkup: 'coarse' as LatexdiffMathMarkupValue,
+  latexdiffChangesOnly: true,
   latexFormatter: 'latexindent' as LatexFormatterValue,
 } as const;
 
@@ -475,6 +476,7 @@ export const LATEX_FIELD_TO_KEY = {
   latexdiffBetweenRounds: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
   latexdiffTimeoutMs: WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
   latexdiffMathMarkup: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+  latexdiffChangesOnly: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
   latexFormatter: WorkspaceStateKey.LATEX_FORMATTER,
 } as const;
 export type LatexConfigField = keyof typeof LATEX_FIELD_TO_KEY;
