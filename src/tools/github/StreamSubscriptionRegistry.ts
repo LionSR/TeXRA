@@ -140,7 +140,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
   unbind(
     streamId: StreamTabId,
     input: Input,
-    runtimeHost?: AgentRuntimeHost,
+    runtimeHost: AgentRuntimeHost,
   ): boolean {
     const key = this.opts.keyOf(input);
     const bound = this.perStream.get(streamId);
@@ -148,7 +148,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     if (!bound || !binding) return false;
     this.removeBoundKey(streamId, bound, key);
     this.disposeSafe(binding.disposable, 'explicit unsubscribe');
-    this.emitBindingsChanged([runtimeHost ?? binding.runtimeHost]);
+    this.emitBindingsChanged([runtimeHost]);
     return true;
   }
 
@@ -157,7 +157,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
    * bindings removed. Lets the settings UI cancel a subscription globally
    * without needing to know which stream owns it.
    */
-  unbindAll(key: string, runtimeHost?: AgentRuntimeHost): number {
+  unbindAll(key: string, runtimeHost: AgentRuntimeHost): number {
     const removedBindings: BoundSubscription[] = [];
     const runtimeHosts: AgentRuntimeHost[] = [];
     for (const [streamId, bound] of [...this.perStream]) {
@@ -171,7 +171,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
       for (const binding of removedBindings) {
         this.disposeSafe(binding.disposable, 'unbindAll');
       }
-      if (runtimeHost) runtimeHosts.push(runtimeHost);
+      runtimeHosts.push(runtimeHost);
       this.emitBindingsChanged(runtimeHosts);
     }
     return removedBindings.length;
