@@ -53,6 +53,7 @@ Every phase is independently mergeable. Each adds a `--tui` flag, default-off, u
 - Add `react@19`, `ink@6`, `@inkjs/ui`, `citty`, `picocolors`, `string-width`, `wrap-ansi`.
 - **Wire React Compiler.** Add `babel-plugin-react-compiler` and run a Babel pre-pass over `packages/cli/src/chat/tui/**/*.tsx` before esbuild. Validate output by smoke-running a hello-world `<App>` and confirming `react/compiler-runtime` is the only added import. Risk R12.
 - Migrate `cliContext.ts` arg parsing to `citty` (no UI change). Drop `ANSI_TONES` for `picocolors` in legacy renderer.
+- **Default subcommand:** wire `texra` (no args) to invoke `texra chat` when stdin / stdout are TTYs, fall through to `--help` otherwise. Citty's `defaultSubCommand` field.
 - Verify headless tests + `validate-run.mjs` pass.
 
 ### Phase 1 — Skeleton + input + telemetry (2–3 d)
@@ -91,7 +92,10 @@ Implements components per 10-architecture §§ Input component, Terminal capabil
 
 ### Phase 5 — Ergonomics (2 d)
 
-- `Ctrl-P` palette (`fzf-for-js`).
+- `Ctrl-P` palette (`fzf-for-js`) with five sections: slash commands, agents, models, attachments, files.
+- **Structured slash forms** (per [10-architecture § Slash command forms](./10-architecture.md#slash-command-forms)). Ship `/model` form first (most-requested), reuse `<Select>` + `<KeyHints>` for `/agent` and future forms.
+- **Image-paste attachments** (per [§ Image attachments](./10-architecture.md#image-attachments)). Detect clipboard image bytes at `BaseTextInput`; store in `cliState.attachments`; insert `[Image #N]` tokens; surface in palette + `@` autocomplete; expand to image-payload at send time.
+- **Shared `<KeyHints>` component** mounted on every modal/form/palette per [§ Intuitiveness conventions](./10-architecture.md#intuitiveness-conventions). Any ad-hoc footer text is a review-blocker for this phase.
 - `Ctrl-R` reverse history (input lines).
 - `Ctrl-F` transcript search per [10-architecture § Transcript search](./10-architecture.md#transcript-search).
 - `Ctrl-O` expand affordance for truncated content.
