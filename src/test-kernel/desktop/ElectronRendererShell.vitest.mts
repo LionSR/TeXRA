@@ -99,11 +99,11 @@ describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () 
     );
     expect(rendererMain).toContain('desktop-empty-streams');
     expect(rendererMain).toContain('Try: <q>polish the abstract</q>');
-    expect(rendererMain).toContain('SETTINGS_TAB.MODELS');
-    expect(rendererMain).toContain('SETTINGS_TAB.AGENTS');
     expect(rendererMain).toContain('openCommandPalette');
+    expect(rendererMain).not.toContain('SETTINGS_TAB.MODELS');
+    expect(rendererMain).not.toContain('SETTINGS_TAB.AGENTS');
     expect(styles).toContain('.desktop-launcher-surface--empty');
-    expect(styles).toContain('.desktop-empty-streams-actions');
+    expect(styles).not.toContain('.desktop-empty-streams-actions');
   });
 
   it('renders the launcher back action as an icon-only chrome button', () => {
