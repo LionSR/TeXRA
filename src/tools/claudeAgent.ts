@@ -124,7 +124,7 @@ const ClaudeAgentInputSchema = z.strictObject({
     .string()
     .nullish()
     .describe(
-      "Resume an existing Claude Code session with a follow-up instruction. The prompt is enqueued as the next turn; if the session is currently processing, the prompt waits in its queue.",
+      'Resume an existing Claude Code session with a follow-up instruction. The prompt is enqueued as the next turn; if the session is currently processing, the prompt waits in its queue.',
     ),
 });
 
@@ -216,7 +216,9 @@ export function finalizeClaudeAgentLoopStatus(
   runtimeHost: AgentRuntimeHost,
 ): void {
   if (isLoopOwnedStatus(StreamStatusService.get(childStreamId))) {
-    StreamStatusService.set(childStreamId, STREAM_STATUS.READY, { runtimeHost });
+    StreamStatusService.set(childStreamId, STREAM_STATUS.READY, {
+      runtimeHost,
+    });
   }
 }
 
@@ -384,7 +386,12 @@ async function runStreamedTurn(params: {
     if (raw.session_id) sessionId = raw.session_id;
 
     if (raw.type === 'assistant' && raw.message?.content) {
-      handleAssistantBlocks(raw.message.content, logger, toolLogRefs, responseParts);
+      handleAssistantBlocks(
+        raw.message.content,
+        logger,
+        toolLogRefs,
+        responseParts,
+      );
       continue;
     }
     if (raw.type === 'user' && raw.message?.content) {
@@ -429,7 +436,9 @@ function handleAssistantBlocks(
     switch (block.type) {
       case 'text':
         if (typeof block.text === 'string' && block.text.length > 0) {
-          logger.info(block.text, { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
+          logger.info(block.text, {
+            messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+          });
           responseParts.push(block.text);
         }
         break;
@@ -537,7 +546,9 @@ function startClaudeAgentLoop(params: {
   const groupId = logger.startGroup('Claude Code session');
 
   queue.enqueue(initialPrompt);
-  StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING, { runtimeHost });
+  StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING, {
+    runtimeHost,
+  });
 
   let resumeSessionId: string | undefined;
 
@@ -653,7 +664,8 @@ export class ClaudeAgentTool extends defineTool({
 }) {
   protected async execute(input: ClaudeAgentInput): Promise<ToolResult> {
     const config = await getClaudeAgentConfig();
-    const permissionMode = input.permission_mode ?? config.getClaudeAgentPermissionMode();
+    const permissionMode =
+      input.permission_mode ?? config.getClaudeAgentPermissionMode();
     const model = input.model ?? config.getClaudeAgentModel();
 
     const approvalLabel = `[claude_agent ${permissionMode}] ${input.prompt}`;
