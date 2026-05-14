@@ -34,8 +34,7 @@ prompts:
     Here are the input files and document:
 
     <documents>
-    {{ ALL_AUXILIARYS }}
-    {{ ALL_REFERENCES }}
+    {{ ALL_CONTEXT }}
     {{ ADDITIONAL_INPUTS }}
     <document name="{{ INPUT_FILE }}">
     {{ INPUT_CONTENT }}

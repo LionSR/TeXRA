@@ -121,8 +121,7 @@ prompts:
     Here is the LaTeX document with input files (pay special attention to appendices where derivations are often hidden):
 
     <documents>
-    {{ ALL_AUXILIARYS }}
-    {{ ALL_REFERENCES }}
+    {{ ALL_CONTEXT }}
     {{ ADDITIONAL_INPUTS }}
     <document name="{{ INPUT_FILE }}">
     {{ INPUT_CONTENT }}

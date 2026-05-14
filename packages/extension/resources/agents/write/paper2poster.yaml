@@ -33,8 +33,7 @@ prompts:
     You are tasked with creating a detailed LaTeX Beamer poster based on the following research paper:
 
     <documents>
-    {{ ALL_AUXILIARYS }}
-    {{ ALL_REFERENCES }}
+    {{ ALL_CONTEXT }}
     {{ ADDITIONAL_INPUTS }}
     <document name="{{ TEMPLATE_POSTER_STYLE_FILE }}"
     {{ TEMPLATE_POSTER_STYLE_CONTENT }}

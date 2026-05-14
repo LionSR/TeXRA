@@ -238,8 +238,13 @@ async function getFileVars(
   if (agentSetting.agentCategory !== AgentCategory.ToolUse) {
     await logFileCategoriesWithExistence(logger, [
       ['Input Files', getCategoryFiles(agentConfig, 'INPUT')],
-      ['Reference Files', getCategoryFiles(agentConfig, 'REFERENCE')],
-      ['Auxiliary Files', getCategoryFiles(agentConfig, 'AUXILIARY')],
+      [
+        'Context Files',
+        [
+          ...getCategoryFiles(agentConfig, 'REFERENCE'),
+          ...getCategoryFiles(agentConfig, 'AUXILIARY'),
+        ],
+      ],
     ]);
   }
 
@@ -267,6 +272,18 @@ async function getFileVars(
       allFiles.length > 0 ? await getXmlFormatFromFiles(allFiles) : null;
     userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(allFiles);
   }
+
+  // CONTEXT is the unified successor to REFERENCE + AUXILIARY. Emit
+  // {{ ALL_CONTEXT }} / {{ LIST_OF_ALL_CONTEXTS }} as the canonical template
+  // variables; {{ ALL_REFERENCES }} and {{ ALL_AUXILIARYS }} remain populated
+  // above as deprecated aliases for custom user YAMLs that haven't migrated.
+  const contextFiles = [
+    ...getCategoryFiles(agentConfig, 'REFERENCE'),
+    ...getCategoryFiles(agentConfig, 'AUXILIARY'),
+  ];
+  userVars.ALL_CONTEXT =
+    contextFiles.length > 0 ? await getXmlFormatFromFiles(contextFiles) : null;
+  userVars.LIST_OF_ALL_CONTEXTS = getListOfFiles(contextFiles);
 
   return userVars;
 }

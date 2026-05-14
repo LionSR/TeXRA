@@ -46,8 +46,7 @@ prompts:
   userPrefix: |
     Project context:
     <documents>
-    {{ ALL_AUXILIARYS }}
-    {{ ALL_REFERENCES }}
+    {{ ALL_CONTEXT }}
     {{ ADDITIONAL_INPUTS }}
     <document name="{{ INPUT_FILE }}">
     {{ INPUT_CONTENT }}
