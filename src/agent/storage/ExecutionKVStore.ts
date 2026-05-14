@@ -81,8 +81,8 @@ export interface ChildRecord extends ChildRecordData {
 
 /** Result metadata for background bash processes. */
 export const ResultMetaSchema = z.object({
-  exitCode: z.number().optional(),
-  wallTimeMs: z.number().optional(),
+  exitCode: z.int().optional(),
+  wallTimeMs: z.number().nonnegative().optional(),
   success: z.boolean().optional(),
   timedOut: z.boolean().optional(),
   command: z.string().optional(),
