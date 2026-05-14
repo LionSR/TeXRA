@@ -113,35 +113,56 @@ Commands deliberately omitted: `update_objective` (model must not drift the targ
 
 ### 5.3 The continuation hook
 
-`src/agent/implementations/flows/tooluse/nodes/ToolUseWaitNode.ts` — the wait-and-decide logic lives in `.exec()`. The hook sits around the existing `session.waitForFollowUp` call (currently at line 69) and replaces the `{ kind: 'stop' }` exit with a synthesized followUp when an active Odyssey is present. `.post()` is purely a mapper from `WaitExecResult` to `FlowTransition` and is untouched.
+`src/agent/implementations/flows/tooluse/nodes/ToolUseWaitNode.ts` — the wait-and-decide logic lives in `.exec()`. The hook sits **before** the existing `session.waitForFollowUp` call (currently at line 69): if an active Odyssey is present and the user has not queued input, the hook synthesizes a followUp and returns immediately, short-circuiting the blocking wait. `.post()` is purely a mapper from `WaitExecResult` to `FlowTransition` and is untouched.
+
+Two correctness invariants this pseudocode preserves:
+
+1. **User interruption stops the loop.** When `checkInterruption()` is true (the user cancelled), the early-exit at the top returns `{ kind: 'stop' }` before the continuation check can run. An active odyssey never overrides an explicit user cancel.
+2. **Continuation does not deadlock on the wait.** `session.waitForFollowUp` blocks indefinitely on an empty queue; if the continuation check ran _after_ the wait it would be unreachable in the happy path (idle user, active odyssey). Continuation therefore runs **before** the blocking wait. The wait remains the path for "no odyssey, idle user" (which is the existing terminal behavior).
 
 ```
 async exec(prep) {
-  const { checkInterruption, session, streamId, isSubagent, ... } = this.services;
+  const { checkInterruption, session, streamId, isSubagent, runtimeHost, ... } = this.services;
 
+  // (1) Honour interruption first — never overridden by odyssey.
   if (checkInterruption()) return { kind: 'stop' };
+
   if (prep.afterError && isSubagent) return { kind: 'stop' };
   if (!prep.afterError) await onBeforeWaiting?.(...);
 
+  // (2) Try odyssey continuation BEFORE the blocking wait.
+  //     Subagents, queued user input, and disabled flag all bypass this branch.
+  const synth = await maybeBuildOdysseyContinuation({
+    streamId,
+    isSubagent,
+    hasQueuedFollowUp: session.hasQueuedFollowUp(),
+  });
+  if (synth) {
+    return { kind: 'continue', followUp: synth };
+  }
+
+  // (3) Otherwise fall through to the existing wait behavior.
   if (!session.hasQueuedFollowUp()) {
     StreamStatusService.set(streamId, STREAM_STATUS.WAITING, { runtimeHost });
   }
-
   const items = await session.waitForFollowUp(checkInterruption);
-  if (!items || checkInterruption()) {
-    // NEW: try odyssey continuation before giving up
-    if (!isSubagent && platform().config.get('texra.experimental.odyssey.enabled', false)) {
-      const odyssey = await OdysseyStore.getForStream(streamId);
-      if (odyssey?.status === 'active') {
-        const synth = await buildContinuationFollowUp(odyssey);
-        await OdysseyStore.recordEvent(odyssey.odysseyId, 'continuation_injected');
-        return { kind: 'continue', followUp: synth };
-      }
-    }
-    return { kind: 'stop' };
-  }
-
+  if (!items || checkInterruption()) return { kind: 'stop' };
   return { kind: 'continue', followUp: items.join('\n\n') };
+}
+
+// Helper (lives in src/agent/odyssey/), keeps the wait-node edit small.
+async function maybeBuildOdysseyContinuation(args: {
+  streamId: string;
+  isSubagent: boolean;
+  hasQueuedFollowUp: boolean;
+}): Promise<string | null> {
+  if (args.isSubagent) return null;            // parent orchestrator owns continuation
+  if (args.hasQueuedFollowUp) return null;     // user input takes precedence
+  if (!platform().config.get('texra.experimental.odyssey.enabled', false)) return null;
+  const odyssey = await OdysseyStore.getForStream(args.streamId);
+  if (odyssey?.status !== 'active') return null;
+  await OdysseyStore.recordEvent(odyssey.odysseyId, 'continuation_injected');
+  return buildContinuationFollowUp(odyssey);
 }
 ```
 
