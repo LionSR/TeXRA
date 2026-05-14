@@ -1,7 +1,6 @@
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ToolDefinition } from '@model';
 import type { SubagentProgressUpdate, TodoItem } from '@shared/schemas';
 import type {
@@ -12,7 +11,6 @@ import type { IToolUseSession } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 
 export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
-  readonly runtimeHost: AgentRuntimeHost;
   readonly setting: AgentToolUseSetting;
   readonly session: IToolUseSession;
   readonly resolvedTools: ToolDefinition[];

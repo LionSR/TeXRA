@@ -26,10 +26,7 @@ import {
   getHandle,
   AgentExecutionHandle,
 } from '@agent/runtime/executionRegistry';
-import {
-  getCurrentToolRunContext,
-  type ToolRunContext,
-} from '@agent/toolUse/ToolFileInteractionContext';
+import { tryUseRunContext, type RunContext } from '@agent/runtime/RunContext';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
@@ -199,16 +196,16 @@ const workingDirectoryField = z
   });
 
 /** Get required context fields, throwing if unavailable. */
-function getRequiredContext(): ToolRunContext & {
+function getRequiredContext(): RunContext & {
   streamId: StreamTabId;
 } {
-  const ctx = getCurrentToolRunContext();
+  const ctx = tryUseRunContext();
   if (!ctx?.streamId) {
     throw new Error(
       'Tool context unavailable. Cannot create proposal without active stream.',
     );
   }
-  return ctx as ToolRunContext & { streamId: StreamTabId };
+  return ctx as RunContext & { streamId: StreamTabId };
 }
 
 /** Build config payload from a proposal. */
@@ -303,12 +300,8 @@ async function executeSubagent(
   orchestratorStreamId: StreamTabId,
   options?: { enableYoloOnChild?: boolean; approvalMeta?: ApprovalMeta },
 ): Promise<ToolResult> {
-  const parentContext = getCurrentToolRunContext();
-  const parentExecutionId = parentContext?.executionId;
-  const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
-  const runtimeHost = parentContext?.runtimeHost;
-
-  if (!runtimeHost) {
+  const parentContext = tryUseRunContext();
+  if (!parentContext?.runtimeHost) {
     return {
       summary: 'Delegation tool runtime host unavailable',
       error:
@@ -320,10 +313,13 @@ async function executeSubagent(
       },
     };
   }
+  const parentExecutionId = parentContext.executionId;
+  const parentDelegationDepth = parentContext.delegationDepth ?? 0;
+  const runtimeHost = parentContext.runtimeHost;
 
   const gated = depthGateError(
     parentDelegationDepth,
-    parentContext?.delegationConfig,
+    parentContext.delegationConfig,
   );
   if (gated) return gated;
 
@@ -965,7 +961,7 @@ Git worktree support: ${
     executionId: string,
     instruction: string,
   ): Promise<ToolResult> {
-    const parentContext = getCurrentToolRunContext();
+    const parentContext = tryUseRunContext();
     const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
     const gated = depthGateError(
       parentDelegationDepth,
