@@ -1,6 +1,6 @@
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
-import { customElement, property, query } from 'lit/decorators.js';
+import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
@@ -18,6 +18,11 @@ import { getBasename, normalizeFilePath } from '@shared/utils/path';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { MainViewEvents } from '../events';
+import {
+  extractDroppedFilePaths,
+  hasDroppedFilePayload,
+  postDroppedFiles,
+} from '../fileDropHandler';
 import { SESSION_TYPES } from '../constants';
 import { SESSION_DEFAULTS } from '../sessionDefaults';
 import {
@@ -36,6 +41,16 @@ export class FileSelectGroup extends LitElement {
       :host {
         display: block;
       }
+
+      .file-select.drop-active {
+        outline: 1px dashed var(--wa-color-brand-fill-loud);
+        outline-offset: 2px;
+        background: color-mix(
+          in srgb,
+          var(--wa-color-brand-fill-quiet) 22%,
+          transparent
+        );
+      }
     `,
   ];
 
@@ -47,6 +62,11 @@ export class FileSelectGroup extends LitElement {
 
   @query('.multiple-files-list')
   private fileListElement?: HTMLElement;
+
+  @state()
+  private isDragActive = false;
+
+  private dragDepth = 0;
 
   private sortableController = new SortableController(
     this,
@@ -117,6 +137,41 @@ export class FileSelectGroup extends LitElement {
   private handleSelectMultipleFiles(): void {
     this.dispatchEvent(
       MainViewEvents.selectMultipleFiles({ listId: this.listId }),
+    );
+  }
+
+  private handleDragEnter(event: DragEvent): void {
+    if (!hasDroppedFilePayload(event.dataTransfer)) return;
+    event.preventDefault();
+    this.dragDepth += 1;
+    this.isDragActive = true;
+  }
+
+  private handleDragOver(event: DragEvent): void {
+    if (!hasDroppedFilePayload(event.dataTransfer)) return;
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'copy';
+    }
+  }
+
+  private handleDragLeave(event: DragEvent): void {
+    if (!hasDroppedFilePayload(event.dataTransfer)) return;
+    event.preventDefault();
+    this.dragDepth = Math.max(0, this.dragDepth - 1);
+    if (this.dragDepth === 0) {
+      this.isDragActive = false;
+    }
+  }
+
+  private handleDrop(event: DragEvent): void {
+    if (!hasDroppedFilePayload(event.dataTransfer)) return;
+    event.preventDefault();
+    this.dragDepth = 0;
+    this.isDragActive = false;
+    postDroppedFiles(
+      extractDroppedFilePaths(event.dataTransfer),
+      this.config.type,
     );
   }
 
@@ -370,9 +425,16 @@ export class FileSelectGroup extends LitElement {
 
     return html`
       <div
-        class="file-select"
+        class=${classMap({
+          'file-select': true,
+          'drop-active': this.isDragActive,
+        })}
         data-expanded=${String(this.currentListVisible)}
         data-has-current=${String(Boolean(this.currentSelectedValue))}
+        @dragenter=${this.handleDragEnter}
+        @dragover=${this.handleDragOver}
+        @dragleave=${this.handleDragLeave}
+        @drop=${this.handleDrop}
       >
         <div class="file-select-header">
           <div class="file-select-label-group">
