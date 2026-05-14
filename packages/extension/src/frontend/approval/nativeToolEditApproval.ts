@@ -14,8 +14,8 @@ import * as path from 'path';
 
 import * as vscode from 'vscode';
 
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import { bus } from '@eventBus/ProgressEventBus';
 import {
   type DiffSession,
   type DiffSource,
@@ -63,12 +63,22 @@ let approvalCounter = 0;
 const pendingApprovals = new Map<string, PendingApprovalEntry>();
 const diffViewHost: DiffViewHost = new VscodeDiffViewHost();
 let storageDirectory: string | undefined;
+let runtimeHost: AgentRuntimeHost | undefined;
 
 function getStorageDir(): string {
   if (!storageDirectory) {
     throw new Error('Tool edit approval has not been initialized.');
   }
   return storageDirectory;
+}
+
+function getRuntimeHost(): AgentRuntimeHost {
+  if (!runtimeHost) {
+    throw new Error(
+      'Tool edit approval runtime host has not been initialized.',
+    );
+  }
+  return runtimeHost;
 }
 
 async function ensureStorageDir(): Promise<string> {
@@ -121,11 +131,11 @@ async function showProgressViewApprovalPrompt(
 
   // Activate the stream that needs approval so user sees the prompt immediately
   if (streamId) {
-    bus.emit('setActiveStream', { streamId });
+    getRuntimeHost().emit('setActiveStream', { streamId });
   }
 
   const isBypassed = streamId ? isApprovalBypassedForStream(streamId) : false;
-  bus.emit('showToolEditPermission', {
+  getRuntimeHost().emit('showToolEditPermission', {
     requestId,
     path: request.path,
     relativePath,
@@ -139,7 +149,7 @@ async function showProgressViewApprovalPrompt(
 }
 
 function resolveProgressViewApprovalPrompt(requestId: string): void {
-  bus.emit('resolveToolEditPermission', { requestId });
+  getRuntimeHost().emit('resolveToolEditPermission', { requestId });
 }
 
 async function nativeRequestApproval(
@@ -346,8 +356,10 @@ export async function handleProgressViewToolEditApprovalAction(
  */
 export function initializeNativeToolEditApproval(
   context: vscode.ExtensionContext,
+  host: AgentRuntimeHost,
 ): void {
   const baseDir = context.storageUri ?? context.globalStorageUri;
   storageDirectory = path.join(baseDir.fsPath, 'tool-edit-previews');
+  runtimeHost = host;
   setToolEditApprovalHandler(nativeRequestApproval);
 }
