@@ -2,26 +2,28 @@
 
 ## 11. Keymap
 
-| Key                 | Action                                                                                                                           |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `Enter`             | Send message (suppressed during bracketed paste — see [10-architecture § Input component](./10-architecture.md#input-component)) |
-| `Ctrl-J`            | Newline (kills `/multi` ceremony)                                                                                                |
-| `Tab`               | Autocomplete (file, slash, agent, model)                                                                                         |
-| `↑` / `↓`           | History (input) / row navigation (lists, modals)                                                                                 |
-| `Ctrl-R`            | Reverse history search                                                                                                           |
-| `Ctrl-P`            | Command palette                                                                                                                  |
-| `Ctrl-A` / `Ctrl-B` | Cycle active child / back to parent (avoiding `Ctrl-Shift-A`, which collapses to `Ctrl-A` on many terminals)                     |
-| `0`                 | Jump back to root stream                                                                                                         |
-| `1`–`9`             | Jump to subagent row                                                                                                             |
-| `Ctrl-T`            | Tab view (Conversation / Subagents / Todos+Plan / Logs)                                                                          |
-| `Ctrl-L`            | Clear screen (scrollback preserved)                                                                                              |
-| `Ctrl-C`            | Interrupt active session; second tap exits                                                                                       |
-| `Ctrl-D`            | Exit on empty input                                                                                                              |
-| `Esc`               | Close modal / palette / cancel inline edit                                                                                       |
-| `?`                 | Inline help overlay                                                                                                              |
-| `y` / `n` / `e`     | Approve / reject / reject-with-feedback                                                                                          |
-| `@`                 | File-picker autocomplete                                                                                                         |
-| `/`                 | Slash-command palette                                                                                                            |
+| Key                 | Action                                                                                                                                                            |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Enter`             | Send message (suppressed during bracketed paste — see [10-architecture § Input component](./10-architecture.md#input-component))                                  |
+| `Ctrl-J`            | Newline (kills `/multi` ceremony)                                                                                                                                 |
+| `Tab`               | Autocomplete (file, slash, agent, model)                                                                                                                          |
+| `↑` / `↓`           | History (input) / row navigation (lists, modals)                                                                                                                  |
+| `Ctrl-R`            | Reverse history search (input lines)                                                                                                                              |
+| `Ctrl-F`            | Transcript search (in-conversation; substring + fuzzy; SGR 7 inverse overlay — see [10-architecture § Transcript search](./10-architecture.md#transcript-search)) |
+| `Ctrl-P`            | Command palette                                                                                                                                                   |
+| `Ctrl-O`            | Expand truncated content (long diffs, collapsed summaries)                                                                                                        |
+| `Ctrl-A` / `Ctrl-B` | Cycle active child / back to parent (avoiding `Ctrl-Shift-A`, which collapses to `Ctrl-A` on many terminals)                                                      |
+| `0`                 | Jump back to root stream                                                                                                                                          |
+| `1`–`9`             | Jump to subagent row                                                                                                                                              |
+| `Ctrl-T`            | Tab view (Conversation / Subagents / Todos+Plan / Logs)                                                                                                           |
+| `Ctrl-L`            | Clear screen (scrollback preserved)                                                                                                                               |
+| `Ctrl-C`            | Interrupt active session; second tap exits                                                                                                                        |
+| `Ctrl-D`            | Exit on empty input                                                                                                                                               |
+| `Esc`               | Close modal / palette / cancel inline edit                                                                                                                        |
+| `?`                 | Inline help overlay                                                                                                                                               |
+| `y` / `n` / `e`     | Approve / reject / reject-with-feedback                                                                                                                           |
+| `@`                 | File-picker autocomplete                                                                                                                                          |
+| `/`                 | Slash-command palette                                                                                                                                             |
 
 ## 12. Rendering parity with the webview
 
@@ -51,6 +53,7 @@ Two TUI features the webview does **not** have today: a slash-command palette, a
 - **R10 (new).** **No selection across scrollback.** Stock Ink does not retain text that scrolls out of the viewport when the user drag-selects, so copying a proof or block that spans multiple screens snaps to the visible portion. Claude Code's `src/ink/selection.ts` keeps `scrolledOffAbove`/`scrolledOffBelow` arrays to reconstruct logical lines; we are not adopting that fork in v1. _Mitigation:_ keyboard "copy last response" via clipboardy works for whole-message copy; document the gap.
 - **R11 (deferred — not adopted in v1).** **No mouse text selection.** Out of scope per [00-overview § Non-goals](./00-overview.md#4-non-goals-explicitly-excluded).
 - **R12 (new).** **React Compiler build pre-pass.** The compiler is a Babel plugin; running it before `esbuild` adds a build step the existing pipeline doesn't have. _Risks:_ (a) toolchain bloat, (b) compiler emits incorrect memoization for some patterns (rare with React 19's compiler-runtime, but possible). _Mitigation:_ gate the compiler on `packages/cli/src/chat/tui/` only — not on host-agnostic core. Validate output by checking that `react/compiler-runtime` is the only added import. If the compiler regresses behavior, disable the pre-pass and accept manual memoization.
+- **R13 (new).** **No SIGWINCH debounce.** Stock Ink (and Claude Code's fork, per `src/ink/screen.ts:1375–1410`) re-runs full Yoga layout on every resize event — terminals that emit a burst of SIGWINCH while the user drags a window edge will produce a flicker storm and may briefly tear the `<Static>` region. _Mitigation:_ add a ≥50 ms coalescing debounce around the resize handler in `tui/state/subscribeRuntimeHost.ts`. Cheap to implement; not load-bearing unless smoke testing finds tear artifacts on a target terminal.
 
 ## 17. Success criteria
 
@@ -61,6 +64,8 @@ Two TUI features the webview does **not** have today: a slash-command palette, a
 - `texra chat --legacy-renderer` byte-identical to today.
 - `texra chat | tee transcript.txt` produces a clean ANSI-free transcript (or plain-text transcript with `--print`).
 - Frame telemetry trace logs land in the standard logger and can be filtered to show flicker events with `triggerY` / `prevLine` / `nextLine` context.
+- A 3-subagent run that finishes while the user is in a different tmux window surfaces a terminal notification (OSC 9 / OSC 99 / BEL — whichever the host terminal acknowledged at startup), not silent completion.
+- `Ctrl-F` opens the transcript-search overlay, accepts a query, highlights matches inverse-on-current-color without rendering corruption on emoji or CJK content, and `Esc` dismisses without state loss.
 - **New runtime deps:** `react`, `ink`, `@inkjs/ui`, `ink-text-input`, `citty`, `@clack/prompts`, `picocolors`, `string-width`, `wrap-ansi`, `p-queue`, `diff`, `cli-highlight`, `fast-glob`, `fzf-for-js`, `terminal-link`, `clipboardy`, `unicodeit`.
 - **New dev deps:** `ink-testing-library`, `node-pty` (PTY-driven integration tests), `babel-plugin-react-compiler` (build pre-pass for `tui/*.tsx`).
 - Existing `markdown-it` + `markdown-it-texmath` lifted from `packages/extension/src/progressView/frontend/formatters/` into `src/shared/markdown/` **with the LRU token cache preserved**. Existing `@shared/highlighting` (highlight.js) consumed as-is.
@@ -83,3 +88,8 @@ Two TUI features the webview does **not** have today: a slash-command palette, a
 - `src/dialogLaunchers.tsx` — `Promise<T>`-returning dialog launchers with `done` callback resolution (10-architecture § Approvals).
 - `src/ink/termio/osc.ts` — multiplexer-aware OSC wrapping (R9, deferred).
 - `src/ink/selection.ts` — scrollback-aware selection state (R10, deferred).
+- `src/ink/useTerminalNotification.ts` — OSC 9 / OSC 99 / BEL / OSC 9;4 progress dispatcher (10-architecture § Terminal notifications).
+- `src/components/HistorySearchDialog.tsx` + `src/ink/searchHighlight.ts` — substring + fuzzy filter; non-overlapping SGR 7 inverse overlay with wide-char-safe `codeUnitToCell` mapping (10-architecture § Transcript search).
+- `src/components/AgentProgressLine.tsx` — `├─` / `└─` tree-character convention for nested agent rows (10-architecture event map, `<SubagentList>` row).
+- `src/components/diff/DiffDetailView.tsx` — 400-line cap with `Ctrl-O` expand affordance (10-architecture § Approvals, `<EditApproval>`).
+- `src/ink/screen.ts:1375–1410` — width-diff layout fallback (R13, no debounce).

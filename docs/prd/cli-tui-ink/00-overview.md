@@ -35,3 +35,4 @@ The CLI is also rebuilding wheels — manual arg parsing, ANSI constants, stream
 - A second state-management library — `@lit-labs/signals` is already in the workspace.
 - New approval surfaces, new agent types, new commands beyond what `chat` already exposes.
 - **Drag-to-select across scrollback**, mouse selection, and tmux/screen OSC 52 multiplexer wrapping. Tracked as v1 limitations in [30-reference.md § Risks](./30-reference.md#risks).
+- **Inline image rendering in the TUI** (iTerm2 inline-image, Kitty graphics, Sixel). LaTeX figure previews remain webview / desktop-only. Claude Code's `image-processor-napi` is not consumed from any `<Image>` component in the TUI either.
