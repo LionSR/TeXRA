@@ -7,6 +7,8 @@
 
 import * as path from 'path';
 
+import pMap from 'p-map';
+
 import { isDirectory, isSymlink } from '@common/files/fsEntryType';
 import type {
   MemoryPreview,
@@ -28,6 +30,12 @@ import {
 
 const FRONTMATTER_SCAN_BYTES = 16 * 1024;
 const PREVIEW_SCAN_BYTES = 64 * 1024;
+const MEMORY_LISTING_CONCURRENCY = 8;
+
+interface DirectoryToWalk {
+  storagePath: string;
+  relativeRoot: string;
+}
 
 async function readStoragePrefix(
   storagePath: string,
@@ -109,7 +117,7 @@ export async function loadMemoryPreview(
 }
 
 /**
- * Recursively walks the memory directory and collects all memory items.
+ * Walks the memory directory and collects all memory items.
  * @param storagePath - Current directory path to walk
  * @param relativeRoot - Path relative to MEMORY_STORAGE_ROOT (for display)
  * @returns Array of memory items found in the directory
@@ -118,44 +126,71 @@ export async function walkMemoryDirectory(
   storagePath: string,
   relativeRoot = '',
 ): Promise<MemoryViewItem[]> {
-  const entries = await StorageFS.readDir(storagePath);
-  const results: MemoryViewItem[] = [];
+  const items: MemoryViewItem[] = [];
+  const pendingDirectories: DirectoryToWalk[] = [{ storagePath, relativeRoot }];
 
-  for (const [name, type] of entries) {
-    if (shouldSkipEntry(name)) {
-      continue;
+  for (let index = 0; index < pendingDirectories.length; index++) {
+    const directory = pendingDirectories[index];
+    const entries = await StorageFS.readDir(directory.storagePath);
+
+    const results = await pMap(
+      entries,
+      async ([name, type]): Promise<{
+        item?: MemoryViewItem;
+        directory?: DirectoryToWalk;
+      } | null> => {
+        if (shouldSkipEntry(name)) {
+          return null;
+        }
+
+        // Skip symlinks to avoid cycles; we have no realpath/visited guard.
+        if (isSymlink(type)) {
+          return null;
+        }
+
+        const nextRelative = directory.relativeRoot
+          ? path.join(directory.relativeRoot, name)
+          : name;
+        const nextStoragePath = path.join(MEMORY_STORAGE_ROOT, nextRelative);
+
+        if (isDirectory(type)) {
+          return {
+            directory: {
+              storagePath: nextStoragePath,
+              relativeRoot: nextRelative,
+            },
+          };
+        }
+
+        const stats = await StorageFS.stat(nextStoragePath);
+        const meta = await readMemoryMeta(nextStoragePath, stats);
+        const displayPath = relativeToDisplayPath(nextRelative);
+
+        return {
+          item: {
+            displayPath,
+            storagePath: nextStoragePath,
+            size: stats.size,
+            mtime: new Date(stats.mtime).toISOString(),
+            modifiedBy: meta ? formatAttribution(meta) : undefined,
+            pinned: meta?.pinned,
+          },
+        };
+      },
+      { concurrency: MEMORY_LISTING_CONCURRENCY },
+    );
+
+    for (const result of results) {
+      if (result?.directory) {
+        pendingDirectories.push(result.directory);
+      }
+      if (result?.item) {
+        items.push(result.item);
+      }
     }
-
-    // Skip symlinks to avoid cycles; we have no realpath/visited guard.
-    if (isSymlink(type)) {
-      continue;
-    }
-
-    const nextRelative = relativeRoot ? path.join(relativeRoot, name) : name;
-    const nextStoragePath = path.join(MEMORY_STORAGE_ROOT, nextRelative);
-
-    if (isDirectory(type)) {
-      results.push(
-        ...(await walkMemoryDirectory(nextStoragePath, nextRelative)),
-      );
-      continue;
-    }
-
-    const stats = await StorageFS.stat(nextStoragePath);
-    const meta = await readMemoryMeta(nextStoragePath, stats);
-    const displayPath = relativeToDisplayPath(nextRelative);
-
-    results.push({
-      displayPath,
-      storagePath: nextStoragePath,
-      size: stats.size,
-      mtime: new Date(stats.mtime).toISOString(),
-      modifiedBy: meta ? formatAttribution(meta) : undefined,
-      pinned: meta?.pinned,
-    });
   }
 
-  return results;
+  return items;
 }
 
 /**
