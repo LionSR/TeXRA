@@ -14,6 +14,38 @@ export const CLAUDE_AGENT_PERMISSION_MODES = [
 export type ClaudeAgentPermissionMode =
   (typeof CLAUDE_AGENT_PERMISSION_MODES)[number];
 
+/** Effort levels mirror the SDK's `EffortLevel` (low → max). Claude decides
+ * adaptively how much thinking to do, scaled by this hint. */
+export const CLAUDE_AGENT_EFFORT_LEVELS = [
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const;
+export type ClaudeAgentEffort = (typeof CLAUDE_AGENT_EFFORT_LEVELS)[number];
+
+/** Canonical Claude model IDs surfaced by the settings dropdown.
+ * The SDK accepts arbitrary model strings; this list is what we expose in the
+ * UI. Keep it in sync with `ClaudeAgentModelSchema` in settingsViewMessages.ts.
+ * Opus and Sonnet use the alias form; Haiku 4.5 ships with a dated snapshot
+ * suffix (its only published identifier at time of writing). */
+export const CLAUDE_AGENT_MODELS = [
+  'claude-opus-4-7',
+  'claude-sonnet-4-6',
+  'claude-haiku-4-5-20251001',
+] as const;
+export type ClaudeAgentModel = (typeof CLAUDE_AGENT_MODELS)[number];
+
+/**
+ * Adaptive thinking is only supported on Opus 4.6+ and Sonnet 4.6+. Haiku
+ * (and any earlier model) rejects the `thinking: { type: 'adaptive' }`
+ * option — gate the SDK option on this predicate to keep Haiku usable.
+ */
+export function modelSupportsAdaptiveThinking(model: string): boolean {
+  return model.startsWith('claude-opus-') || model.startsWith('claude-sonnet-');
+}
+
 const SUMMARY_MAX_LENGTH = 60;
 type ToolUseStatus = NonNullable<ToolUseLog['status']>;
 

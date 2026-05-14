@@ -346,6 +346,36 @@ export const CodexApprovalPolicySchema = z.enum([
 ]);
 export type CodexApprovalPolicy = z.infer<typeof CodexApprovalPolicySchema>;
 
+/** Claude Agent model options surfaced in the picker. The SDK accepts any
+ * string, but the dropdown is fixed to the canonical Anthropic families. */
+export const ClaudeAgentModelSchema = z.enum([
+  'claude-opus-4-7',
+  'claude-sonnet-4-6',
+  'claude-haiku-4-5-20251001',
+]);
+export type ClaudeAgentModel = z.infer<typeof ClaudeAgentModelSchema>;
+
+/** Claude Agent permission modes (mirrors CLAUDE_AGENT_PERMISSION_MODES). */
+export const ClaudeAgentPermissionModeSchema = z.enum([
+  'default',
+  'acceptEdits',
+  'bypassPermissions',
+  'plan',
+]);
+export type ClaudeAgentPermissionMode = z.infer<
+  typeof ClaudeAgentPermissionModeSchema
+>;
+
+/** Claude Agent effort levels (mirrors CLAUDE_AGENT_EFFORT_LEVELS). */
+export const ClaudeAgentEffortSchema = z.enum([
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+]);
+export type ClaudeAgentEffort = z.infer<typeof ClaudeAgentEffortSchema>;
+
 /** Outbound: backend → frontend approval settings */
 export const UpdateApprovalSettingsMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS),
@@ -353,6 +383,9 @@ export const UpdateApprovalSettingsMessageSchema = z.object({
   codexSandboxMode: CodexSandboxModeSchema,
   codexReasoningEffort: CodexReasoningEffortSchema,
   codexApprovalPolicy: CodexApprovalPolicySchema,
+  claudeAgentModel: ClaudeAgentModelSchema,
+  claudeAgentPermissionMode: ClaudeAgentPermissionModeSchema,
+  claudeAgentEffort: ClaudeAgentEffortSchema,
 });
 export type UpdateApprovalSettingsMessage = z.infer<
   typeof UpdateApprovalSettingsMessageSchema
@@ -891,6 +924,18 @@ const SetCodexApprovalPolicyMessageSchema = z.object({
   command: z.literal(CMD.SET_CODEX_APPROVAL_POLICY),
   policy: CodexApprovalPolicySchema,
 });
+const SetClaudeAgentModelMessageSchema = z.object({
+  command: z.literal(CMD.SET_CLAUDE_AGENT_MODEL),
+  model: ClaudeAgentModelSchema,
+});
+const SetClaudeAgentPermissionModeMessageSchema = z.object({
+  command: z.literal(CMD.SET_CLAUDE_AGENT_PERMISSION_MODE),
+  mode: ClaudeAgentPermissionModeSchema,
+});
+const SetClaudeAgentEffortMessageSchema = z.object({
+  command: z.literal(CMD.SET_CLAUDE_AGENT_EFFORT),
+  effort: ClaudeAgentEffortSchema,
+});
 
 // Navigation inbound messages
 const OpenVscodeSettingsMessageSchema = commandOnly(CMD.OPEN_VSCODE_SETTINGS);
@@ -1004,6 +1049,9 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetCodexSandboxModeMessageSchema,
     SetCodexReasoningEffortMessageSchema,
     SetCodexApprovalPolicyMessageSchema,
+    SetClaudeAgentModelMessageSchema,
+    SetClaudeAgentPermissionModeMessageSchema,
+    SetClaudeAgentEffortMessageSchema,
     // Agent team messages
     GetAgentModePresetsMessageSchema,
     ApplyAgentModePresetMessageSchema,
