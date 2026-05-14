@@ -1,7 +1,5 @@
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
-import { tryUseRunContext } from './RunContext';
-
 export interface AgentRuntimeHost {
   emit<K extends keyof ProgressEventPayloads>(
     event: K,
@@ -15,14 +13,17 @@ export const noopAgentRuntimeHost: AgentRuntimeHost = {
 
 let defaultAgentRuntimeHost: AgentRuntimeHost = noopAgentRuntimeHost;
 
+/**
+ * Install the ambient runtime host. Only retained for legacy singleton
+ * coordinators (`planApprovalCoordinator`, `proposalCoordinator`,
+ * `retryCoordinator`) which use `getDefaultAgentRuntimeHost` as a lazy
+ * lookup. New code must pass an explicit host to `executeAgent` and to
+ * coordinator constructors — do not reach for this global.
+ */
 export function setDefaultAgentRuntimeHost(host: AgentRuntimeHost): void {
   defaultAgentRuntimeHost = host;
 }
 
 export function getDefaultAgentRuntimeHost(): AgentRuntimeHost {
   return defaultAgentRuntimeHost;
-}
-
-export function getAgentRuntimeHost(): AgentRuntimeHost {
-  return tryUseRunContext()?.runtimeHost ?? getDefaultAgentRuntimeHost();
 }

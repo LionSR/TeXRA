@@ -38,7 +38,6 @@ import { TaskRunFileService } from '@utils/files';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 
 import { StreamStatusService } from './StreamStatusService';
-import { getAgentRuntimeHost, type AgentRuntimeHost } from './AgentRuntimeHost';
 import {
   buildAgentLaunchContext,
   withExecutionRunContext,
@@ -53,6 +52,7 @@ import {
 } from './executionRegistry';
 import { generateSessionDescription } from './sessionDescription';
 import { getRunStorageService } from './RunStorageService';
+import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type {
   AgentFlowResult,
   CompileFailureSummary,
@@ -284,7 +284,7 @@ function buildFallbackNotification(config: AgentConfig) {
 /** Options for executeAgent. */
 export interface ExecuteAgentOptions {
   /** Host services used by the runtime to report progress/UI events. */
-  runtimeHost?: AgentRuntimeHost;
+  runtimeHost: AgentRuntimeHost;
   /** When true, proposal tools are filtered out to prevent nesting. */
   isSubagent?: boolean;
   /**
@@ -319,23 +319,23 @@ export interface ExecuteAgentOptions {
 
 export async function executeAgent(
   configPayload: AgentConfigPayload,
-  executionId?: ExecutionId,
-  options?: ExecuteAgentOptions,
+  executionId: ExecutionId | undefined,
+  options: ExecuteAgentOptions,
 ): Promise<AgentFlowResult> {
-  const runtimeHost = options?.runtimeHost ?? getAgentRuntimeHost();
+  const { runtimeHost } = options;
   const ctx = await buildAgentLaunchContext({
     configPayload,
     executionId,
     runtimeHost,
-    onBeforeActivation: options?.onStreamResolved,
-    enforceCategory: options?.enforceCategory,
-    suppressErrorNotification: options?.isSubagent,
+    onBeforeActivation: options.onStreamResolved,
+    enforceCategory: options.enforceCategory,
+    suppressErrorNotification: options.isSubagent,
   });
-  ctx.delegationDepth = options?.delegationDepth ?? 0;
+  ctx.delegationDepth = options.delegationDepth ?? 0;
   return withExecutionRunContext(ctx, async () => {
     const { setting, streamId, config } = ctx;
     const { agent: agentName } = config;
-    const { isSubagent } = options ?? {};
+    const { isSubagent } = options;
 
     // Fire-and-forget: generate AI session description from the user's instruction.
     // Triggered at the start so cancelled/errored sessions still get descriptions.
@@ -392,7 +392,7 @@ export async function executeAgent(
                 ctx.usageMonitor.recordUsage(run, { runKind: 'tool-use' }),
               setting: ctx.setting as AgentToolUseSetting,
               isSubagent,
-              onBeforeWaiting: options?.onBeforeWaiting,
+              onBeforeWaiting: options.onBeforeWaiting,
               onProgress: (update) => {
                 if (update.kind === 'overview') {
                   toolUseTurns++;
@@ -404,13 +404,13 @@ export async function executeAgent(
                     },
                   });
                 }
-                options?.onProgress?.(update);
+                options.onProgress?.(update);
               },
               onFollowUpConsumed: () => {
                 ctx.runtimeHost.emit('updateQueuedFollowUps', {
                   streamId: ctx.streamId,
                 });
-                options?.onFollowUpConsumed?.();
+                options.onFollowUpConsumed?.();
               },
             });
             return {
@@ -427,7 +427,7 @@ export async function executeAgent(
             ctx.executionId,
             streamId,
             ctx.runtimeHost,
-            options?.onProgress,
+            options.onProgress,
           );
           const result = await runReflectionFlow({
             ...ctx,
@@ -454,8 +454,8 @@ export async function executeAgent(
           setting.agentCategory === AgentCategory.ToolUse
             ? 'toolUse'
             : 'workflow',
-        parentStreamId: options?.parentStreamId,
-        onCompleted: options?.onCompleted,
+        parentStreamId: options.parentStreamId,
+        onCompleted: options.onCompleted,
       },
     );
   });

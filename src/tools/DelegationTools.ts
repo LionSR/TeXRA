@@ -304,9 +304,14 @@ async function executeSubagent(
   options?: { enableYoloOnChild?: boolean; approvalMeta?: ApprovalMeta },
 ): Promise<ToolResult> {
   const parentContext = getCurrentToolRunContext();
-  const parentExecutionId = parentContext?.executionId;
-  const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
-  const runtimeHost = parentContext?.runtimeHost;
+  if (!parentContext?.runtimeHost) {
+    throw new Error(
+      'executeSubagent requires a parent tool run context with an explicit runtimeHost',
+    );
+  }
+  const parentExecutionId = parentContext.executionId;
+  const parentDelegationDepth = parentContext.delegationDepth ?? 0;
+  const runtimeHost = parentContext.runtimeHost;
 
   const gated = depthGateError(
     parentDelegationDepth,
