@@ -451,14 +451,13 @@ function handleAssistantBlocks(
         break;
       case 'tool_use': {
         if (typeof block.name !== 'string') break;
+        if (typeof block.id !== 'string' || block.id.length === 0) break;
         const toolLog = buildClaudeToolUseLog({
           toolName: block.name,
           input: block.input,
           status: 'in_progress',
         });
-        const blockId = (block as unknown as { id?: unknown }).id;
-        const id = typeof blockId === 'string' ? blockId : block.name;
-        refs.set(id, { ...logger.emitToolUse(toolLog), toolLog });
+        refs.set(block.id, { ...logger.emitToolUse(toolLog), toolLog });
         break;
       }
     }
@@ -637,11 +636,11 @@ function startClaudeAgentLoop(params: {
       }
     } finally {
       logger.endGroup(groupId, 'stopped');
-      unregisterInterruptible(childStreamId);
-      ToolUseFollowUpQueue.release(childStreamId);
       for (const sessionId of storedSessionIds) {
         sessionRegistry.delete(sessionId);
       }
+      unregisterInterruptible(childStreamId);
+      ToolUseFollowUpQueue.release(childStreamId);
       await writeTerminalStatus(executionId, 'completed').catch(() => {});
       untrackExecution(executionId);
       finalizeClaudeAgentLoopStatus(childStreamId, runtimeHost);
