@@ -1,7 +1,4 @@
-import {
-  getAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   isActiveStatus,
   isInFlightStatus,
@@ -21,17 +18,24 @@ export interface StreamStatusChange {
   previousStatus: StreamStatus;
 }
 
-interface SetOptions {
-  emit?: boolean;
+interface EmitSetOptions {
+  emit?: true;
+  runtimeHost: AgentRuntimeHost;
+}
+
+interface SilentSetOptions {
+  emit: false;
   runtimeHost?: AgentRuntimeHost;
 }
+
+type SetOptions = EmitSetOptions | SilentSetOptions;
 
 export const StreamStatusService = {
   get(stream: StreamTabId): StreamStatus | undefined {
     return statusMemory.get(stream);
   },
 
-  tryAcquire(stream: StreamTabId, options: SetOptions = {}): boolean {
+  tryAcquire(stream: StreamTabId, options: SetOptions): boolean {
     if (isInFlightStatus(statusMemory.get(stream))) {
       return false;
     }
@@ -39,19 +43,13 @@ export const StreamStatusService = {
     return true;
   },
 
-  releaseIfInitializing(stream: StreamTabId, options: SetOptions = {}): void {
+  releaseIfInitializing(stream: StreamTabId, options: SetOptions): void {
     if (statusMemory.get(stream) === STREAM_STATUS.INITIALIZING) {
       this.clear(stream, options);
     }
   },
 
-  set(
-    stream: StreamTabId,
-    status: StreamStatus,
-    options: SetOptions = {},
-  ): void {
-    const { emit = true } = options;
-
+  set(stream: StreamTabId, status: StreamStatus, options: SetOptions): void {
     const previousStatus = statusMemory.get(stream) ?? STREAM_STATUS.READY;
 
     if (status === STREAM_STATUS.READY) {
@@ -60,30 +58,27 @@ export const StreamStatusService = {
       statusMemory.set(stream, status);
     }
 
-    if (emit) {
+    if (options.emit !== false) {
       const change: StreamStatusChange = {
         streamId: stream,
         status,
         previousStatus,
       };
-      (options.runtimeHost ?? getAgentRuntimeHost()).emit(
-        'updateStreamStatus',
-        change,
-      );
+      options.runtimeHost.emit('updateStreamStatus', change);
       for (const listener of statusListeners) {
         listener(change);
       }
     }
   },
 
-  clear(stream: StreamTabId, options: SetOptions = {}): void {
+  clear(stream: StreamTabId, options: SetOptions): void {
     this.set(stream, STREAM_STATUS.READY, options);
   },
 
   /** Reset every stream to READY. Used by ProgressViewState.clearAll(). */
-  clearAll(): void {
+  clearAll(options: SetOptions): void {
     for (const stream of [...statusMemory.keys()]) {
-      this.clear(stream);
+      this.clear(stream, options);
     }
   },
 
