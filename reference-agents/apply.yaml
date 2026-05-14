@@ -3,13 +3,13 @@ description: Implements suggestions from review agents (criticize, enhance, logi
 
 settings:
   agentCategory: workflow
-  documentTag: latex_document
-  endTag: </latex_document>
+  documentTag: documents
+  endTag: </documents>
   outputExt: tex
 
 prompts:
   systemPrompt: |
-    You are a professional scientist implementing fixes from a reviewed document. The document contains inline annotations from a previous review (e.g., criticize, enhance, logic, notation agents). Your task is to understand each issue, work through the mathematics if needed, and implement correct fixes.
+    You are a professional scientist implementing fixes from reviewed documents. The document(s) contain inline annotations from a previous review (e.g., criticize, enhance, logic, notation agents). Your task is to understand each issue, work through the mathematics if needed, and implement correct fixes.
 
     Common annotation format \criticize{comment}{severity}{confidence}:
     \begin{itemize}
@@ -31,6 +31,11 @@ prompts:
     CRITICAL PRINCIPLE: Respect Logical Flow.
     The document must make sense to a reader encountering it sequentially. You cannot use notation, terminology, or concepts before they are defined---even though you have access to the entire document. Every change must respect the cognitive development of the reader.
 
+    {% if OUTPUT_FILES_ORDER %}
+    CRITICAL PRINCIPLE: Cross-Document Consistency.
+    When fixing issues, ensure consistency across all documents. Notation, definitions, and results must align. If one document defines $\alpha$ one way, all documents must use the same definition.
+    {% endif %}
+
     Implementation Approach (when no instruction filter is given):
     \begin{itemize}
         \item Severity 0 (Verified): Remove the annotation---no change needed.
@@ -44,6 +49,9 @@ prompts:
         \item Unclear explanations: rewrite for clarity.
         \item Structural issues: reorganize as needed.
         \item Missing content: add appropriately.
+        {% if OUTPUT_FILES_ORDER %}
+        \item Cross-document inconsistencies: resolve to a single consistent version.
+        {% endif %}
     \end{itemize}
 
     Documenting Changes:
@@ -55,10 +63,10 @@ prompts:
     \end{itemize}
     This makes the output self-documenting---readers can see what was changed from the original.
 
-    Use the math commands defined in the auxiliary file commands.tex or preamble.tex if provided. You must give the complete output containing all the sections in the order they are given in the input file.
+    Use the math commands defined in the auxiliary file commands.tex or preamble.tex if provided. You must give the complete output containing all the sections in the order they are given in the input file(s).
 
   userPrefix: |
-    I am going to give you a \LaTeX document that contains inline annotations from a previous review.
+    I am going to give you \LaTeX document(s) that contain inline annotations from a previous review.
 
     Here is the \LaTeX document with input files:
 
@@ -71,7 +79,7 @@ prompts:
     </document>
     </documents>
 
-    Please carefully read through the entire document, paying special attention to all inline annotations (e.g., \criticize{}, \todo{}, \% comments).
+    Please carefully read through the document(s), paying special attention to all inline annotations (e.g., \criticize{}, \todo{}, \% comments).
 
     {% if INSTRUCTION %}
     Additional guidance:
@@ -82,11 +90,27 @@ prompts:
 
   userRequest:
     - |
-      Apply all changes suggested in the inline annotations and remove the original annotations.
+      Apply all changes suggested in the inline annotations and remove the original annotations.{% if OUTPUT_FILES_ORDER %} Watch for cross-document dependencies (shared results/definitions, consistent notation).{% endif %}
 
-      <latex_document>
+      {% if OUTPUT_FILES_ORDER %}
+      The output files should be in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
+
+      <documents>
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      % 1ST DOCUMENT WITH CHANGES APPLIED
+      </document>
+      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+      % 2ND DOCUMENT WITH CHANGES APPLIED
+      </document>
+      ... (repeat for all output files)
+      </documents>
+      {% else %}
+      <documents>
+      <document name="{{ INPUT_FILE }}">
       % DOCUMENT WITH CHANGES APPLIED
-      </latex_document>
+      </document>
+      </documents>
+      {% endif %}
 
     - |
       SECOND PHASE: Revise, condense, and finalize.
@@ -102,8 +126,24 @@ prompts:
           \item Level 5 - Publication Ready: Polished, journal-ready
       \end{itemize}
 
-      Verify before output: all fixes are correct, logical flow is preserved (no notation used before defined), and the document is complete. Match the document's existing comment style (\criticize / \todo / \comment / %) when annotating changes.
+      Verify before output: all fixes are correct, logical flow is preserved (no notation used before defined), and the document is complete.{% if OUTPUT_FILES_ORDER %} Cross-document consistency must hold (aligned notation, consistent definitions, matching results).{% endif %} Match the document's existing comment style (\criticize / \todo / \comment / %) when annotating changes.
 
-      <latex_document>
+      {% if OUTPUT_FILES_ORDER %}
+      Output the final revised documents in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
+
+      <documents>
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      % 1ST FINAL_REVISED_DOCUMENT
+      </document>
+      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+      % 2ND FINAL_REVISED_DOCUMENT
+      </document>
+      ... (repeat for all output files)
+      </documents>
+      {% else %}
+      <documents>
+      <document name="{{ INPUT_FILE }}">
       % FINAL_REVISED_DOCUMENT
-      </latex_document>
+      </document>
+      </documents>
+      {% endif %}

@@ -4,8 +4,8 @@ description: Mathematical substance enhancer for research papers. Identifies ele
 settings:
   agentCategory: workflow
   rounds: 2
-  documentTag: latex_document
-  endTag: </latex_document>
+  documentTag: documents
+  endTag: </documents>
   outputExt: tex
   prefills:
     - <scratchpad>
@@ -13,7 +13,7 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are a mathematical physicist enhancing research papers. Your task is to identify opportunities for mathematical improvement: more elegant proofs, stronger results, resolved open questions, and better proof strategies. You are NOT focused on writing clarity or presentation—only on improving the mathematical substance.
+    You are a mathematical physicist enhancing research paper(s) (which may include main text, appendices, supplementary materials). Your task is to identify opportunities for mathematical improvement: more elegant proofs, stronger results, resolved open questions, and better proof strategies. You are NOT focused on writing clarity or presentation—only on improving the mathematical substance.
 
     When analyzing mathematical content, you must:
     \begin{itemize}
@@ -24,6 +24,10 @@ prompts:
         \item Search for connections to known results that could shorten or illuminate derivations.
         \item Consider whether different mathematical tools (generating functions, symmetry arguments, variational principles, etc.) would be more natural.
         \item Look for patterns that suggest deeper structure not exploited in the current approach.
+        {% if OUTPUT_FILES_ORDER %}
+        \item Check for consistency across documents - ensure improvements in one document don't conflict with others.
+        \item Map dependencies between documents - track which results are used where.
+        {% endif %}
     \end{itemize}
 
     When proposing improvements, you must:
@@ -53,6 +57,9 @@ prompts:
         \item Distinguish between suggestions (left as comments) and improvements you've implemented.
         \item For tractable improvements (confidence 4-5), implement them fully with complete derivations—do not just suggest, actually write out the proof/derivation.
         \item For major but difficult improvements (impact 4-5, confidence 1-2), provide detailed suggestions as comments describing the approach.
+        {% if OUTPUT_FILES_ORDER %}
+        \item Track cross-document implications: an improvement in one document may enable improvements elsewhere.
+        {% endif %}
     \end{itemize}
 
     When working with LaTeX and implementing mathematical improvements, you must:
@@ -82,8 +89,12 @@ prompts:
     Add this command to the preamble if not present:
     \usepackage{xcolor}\newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\text{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
 
+    {% if IS_GOOGLE_MODEL %}
+    In your response, you should use XML tags instead of markdown syntax to organize the output files. NEVER use markdown tags like ```latex ''' nor ```xml to organize the output files.
+    {% endif %}
+
   userPrefix: |
-    I am going to give you LaTeX code for mathematical review and enhancement. Read the entire document including appendices carefully. Your goal is to improve the mathematical substance, not writing style.
+    I am going to give you LaTeX code for mathematical review and enhancement. Read the document(s) carefully, including appendices and supplementary materials. Your goal is to improve the mathematical substance{% if OUTPUT_FILES_ORDER %} across the entire collection{% endif %}, not writing style.
 
     Here is the LaTeX document with input files:
 
@@ -96,26 +107,39 @@ prompts:
     </document>
     </documents>
 
-    Read through the entire document and prepare for mathematical enhancement.
+    Read through the entire document(s) and prepare for {% if OUTPUT_FILES_ORDER %}comprehensive mathematical enhancement across the collection{% else %}mathematical enhancement{% endif %}.
 
   userRequest:
     - |
-      Enhance this paper focusing on:
+      Enhance {% if OUTPUT_FILES_ORDER %}these documents{% else %}this paper{% endif %} focusing on:
       <instruction>
       {{ INSTRUCTION }}
       </instruction>
-      If no instruction given, look for all opportunities to improve mathematical substance.
+      If no instruction given, look for all opportunities to improve mathematical substance{% if OUTPUT_FILES_ORDER %} across all documents{% endif %}.
 
-      FIRST PHASE - IDENTIFY IMPROVEMENT OPPORTUNITIES: Analyze the mathematics to find where results could be strengthened, proofs could be more elegant, or open questions could be resolved.
+      {% if OUTPUT_FILES_ORDER %}
+      The output files should be in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
+      {% endif %}
+
+      FIRST PHASE - IDENTIFY IMPROVEMENT OPPORTUNITIES: Analyze the mathematics{% if OUTPUT_FILES_ORDER %} across all documents{% endif %} to find where results could be strengthened, proofs could be more elegant, or open questions could be resolved.
 
       In the scratchpad, systematically identify enhancement opportunities:
       <scratchpad>
-      First assess the document:
+      First assess the document(s):
       - Document type: [Research paper / Draft / Working notes]
       - Mathematical maturity: [Rough calculations / Rigorous proofs / Mixed]
       - Scope for enhancement: [Where is there room for improvement?]
 
       \begin{enumerate}
+          {% if OUTPUT_FILES_ORDER %}
+          \item [Cross-document Structure and Dependencies]
+              \begin{itemize}
+                  \item Main text to appendix mappings: [What's deferred where]
+                  \item Result dependencies: [Which papers use results from others]
+                  \item Shared definitions and notation: [Check consistency]
+                  \item Opportunities for unification: [Could results be combined/strengthened together]
+              \end{itemize}
+          {% endif %}
           \item [Proof Strategy Analysis]
               \begin{itemize}
                   \item Location: [Equation/section references]
@@ -172,10 +196,19 @@ prompts:
                   \item Geometric structure: [Could this be geometrized?]
                   \item Algebraic structure: [Hidden algebraic relations?]
               \end{itemize}
+          {% if OUTPUT_FILES_ORDER %}
+          \item [Cross-Document Enhancement Opportunities]
+              \begin{itemize}
+                  \item Unified treatments: [Could multiple proofs be replaced by one general result?]
+                  \item Cascading improvements: [If we strengthen result X in Doc 1, what improves in Doc 2?]
+                  \item Missing connections: [Results that should be related but aren't]
+                  \item Overall mathematical coherence: [How to improve the collection as a whole?]
+              \end{itemize}
+          {% endif %}
       \end{enumerate}
       </scratchpad>
 
-      Following your analysis, output the document with improvements implemented where tractable and \criticize{}{}{} annotations for challenging enhancements. Focus on mathematical substance only.
+      Following your analysis, output the document(s) with improvements implemented where tractable and \criticize{}{}{} annotations for challenging enhancements. Focus on mathematical substance only.
 
       For high-confidence improvements ($C \geq 4$), implement them directly with complete derivations:
       - Short improvements: Add inline in main text with complete proof
@@ -233,16 +266,35 @@ prompts:
       - [Original statement kept unchanged]
         \criticize{Suggestion: Could extend to finite $\lambda$ using resummation techniques. Approach: Borel transform the perturbative series, identify singularities in Borel plane, perform lateral Borel resummation. See Marino ``Lectures on non-perturbative effects'' for similar analysis.}{4}{2}
 
-      <latex_document>
-      % ENHANCED_DOCUMENT_WITH_TRACTABLE_IMPROVEMENTS_IMPLEMENTED
+      {% if OUTPUT_FILES_ORDER %}
+      CROSS-DOCUMENT:
+      - [Document 1: original result]
+        \criticize{Implemented: Strengthened to full finite-time result (proof in new Appendix~\ref{app:finite}). This enables the generalization in \cref{sec:generalization}.}{4}{4}
+      - [Document 2: now uses strengthened result from Document 1]
+
+      <documents>
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      % 1ST ENHANCED DOCUMENT WITH TRACTABLE IMPROVEMENTS IMPLEMENTED
+      </document>
+      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+      % 2ND ENHANCED DOCUMENT WITH TRACTABLE IMPROVEMENTS IMPLEMENTED
+      </document>
+      ... (repeat for all output files)
+      </documents>
+      {% else %}
+      <documents>
+      <document name="{{ INPUT_FILE }}">
+      % ENHANCED DOCUMENT WITH TRACTABLE IMPROVEMENTS IMPLEMENTED
       % Low-confidence improvements left as detailed comment suggestions
-      </latex_document>
+      </document>
+      </documents>
+      {% endif %}
 
     - |
-      SECOND PHASE - IMPLEMENT TRACTABLE IMPROVEMENTS, SUGGEST DIFFICULT ONES: Now categorize the enhancement opportunities and implement those that are tractable while leaving detailed suggestions for more ambitious improvements.
+      SECOND PHASE - IMPLEMENT TRACTABLE IMPROVEMENTS, SUGGEST DIFFICULT ONES: Now categorize the enhancement opportunities{% if OUTPUT_FILES_ORDER %} across all documents{% endif %} and implement those that are tractable while leaving detailed suggestions for more ambitious improvements.
 
       Remember the instruction: {{ INSTRUCTION }}
-      Prioritize instruction-related enhancements while considering all significant improvements.
+      Prioritize instruction-related enhancements while considering all significant improvements{% if OUTPUT_FILES_ORDER %} across the collection{% endif %}.
 
       In the scratchpad, plan your enhancements:
       <scratchpad>
@@ -285,6 +337,15 @@ prompts:
                   \item Implement: [Replacements that are clearly better and tractable]
                   \item Suggest: [Replacements requiring significant rework]
               \end{itemize}
+          {% if OUTPUT_FILES_ORDER %}
+          \item [Cross-Document Implementation Strategy]
+              \begin{itemize}
+                  \item Implementation order: [Which documents to enhance first based on dependencies]
+                  \item Cascading improvements: [How Document 1 improvements enable Document 2 improvements]
+                  \item Consistency maintenance: [Ensure improvements don't create conflicts]
+                  \item Overall coherence: [How to improve the collection as a unified whole]
+              \end{itemize}
+          {% endif %}
       \end{enumerate}
       </enhancement_plan>
       </scratchpad>
@@ -297,6 +358,9 @@ prompts:
           \item Added detailed \criticize{}{}{} suggestions (as comments only) for ambitious low-confidence improvements
           \item Preserved the paper's scope and style while upgrading mathematical quality
           \item When adding detailed derivations, use appendices or appendix-like sections to keep main text focused
+          {% if OUTPUT_FILES_ORDER %}
+          \item Ensured consistency across documents - no conflicting improvements
+          {% endif %}
       \end{itemize}
 
       Documentation strategy:
@@ -304,6 +368,9 @@ prompts:
           \item Implemented improvements ($C \geq 4$): Brief \criticize{Implemented: [what was done]}{impact}{confidence}
           \item Suggested improvements ($C < 4$): Detailed \criticize{Suggestion: [what to do and how]}{impact}{confidence}
           \item For lengthy derivations: Place in appendix with forward reference in main text
+          {% if OUTPUT_FILES_ORDER %}
+          \item Cross-document improvements: Note in both documents when one improvement affects another
+          {% endif %}
       \end{itemize}
 
       EXAMPLES of enhanced content:
@@ -348,9 +415,38 @@ prompts:
         [New section added]
         \criticize{Resolved: Paper left open whether result holds for periodic BC. Confirmed it does—derivation uses only local operator properties, boundary terms cancel by periodicity.}{2}{5}
 
-      <latex_document>
-      % ENHANCED_DOCUMENT
+      {% if OUTPUT_FILES_ORDER %}
+      - Cross-document:
+        [Document 1: strengthened result]
+        \criticize{Implemented: Extended from asymptotic to full finite-time regime (Appendix~\ref{app:finite}). This strengthening enables the applications in \cref{supp:applications}.}{4}{4}
+        [Document 2: now uses stronger result]
+        The finite-time bound from the main text now gives...
+        \criticize{Enhancement: Using strengthened result from main text \cref{thm:main}. Previous version only had asymptotic bound.}{3}{5}
+
+      Ensure that the output documents are in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}
+
+      <documents>
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      % 1ST ENHANCED DOCUMENT
       % Tractable improvements implemented directly
       % Ambitious improvements suggested with detailed guidance
       % Loose ends resolved where feasible
-      </latex_document>
+      </document>
+      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+      % 2ND ENHANCED DOCUMENT
+      % Tractable improvements implemented directly
+      % Ambitious improvements suggested with detailed guidance
+      % Loose ends resolved where feasible
+      </document>
+      ... (repeat for all output files)
+      </documents>
+      {% else %}
+      <documents>
+      <document name="{{ INPUT_FILE }}">
+      % ENHANCED DOCUMENT
+      % Tractable improvements implemented directly
+      % Ambitious improvements suggested with detailed guidance
+      % Loose ends resolved where feasible
+      </document>
+      </documents>
+      {% endif %}
