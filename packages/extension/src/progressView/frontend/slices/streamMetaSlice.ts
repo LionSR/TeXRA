@@ -31,13 +31,15 @@ export function takePendingDescription(
 
 /** Max characters retained per output stream (stdout/stderr) per process. */
 const MAX_OUTPUT = 100_000;
+/** Trim below the cap so new output can append for a while before the next reset. */
+const TRIMMED_OUTPUT_LENGTH = 80_000;
 
 /** Append delta to prev, capping to MAX_OUTPUT by trimming the front. */
 function capOutput(prev: string, delta: string): string {
   if (!delta) return prev;
   const combined = prev + delta;
   return combined.length > MAX_OUTPUT
-    ? combined.slice(combined.length - MAX_OUTPUT)
+    ? combined.slice(combined.length - TRIMMED_OUTPUT_LENGTH)
     : combined;
 }
 
