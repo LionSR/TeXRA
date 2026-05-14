@@ -14,6 +14,9 @@ packages/extension/resources/templates/
 # Claude Code agent scratch space (worktrees contain unstaged template files)
 .claude/
 
+# Local git worktrees (contain unstaged template files prettier cannot parse)
+.worktrees/
+
 # GitHub Actions workflows — the format-pr workflow's GITHUB_TOKEN lacks
 # `workflows: write` permission, so any auto-formatting of workflow YAML
 # triggers a "refusing to update workflow" push rejection. Skip them
