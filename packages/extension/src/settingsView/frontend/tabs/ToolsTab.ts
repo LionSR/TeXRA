@@ -62,6 +62,7 @@ const CATEGORY_ORDER: ToolCategory[] = [
   'workflow',
   'system',
 ];
+const TOOLS_TAB_CATEGORIES = new Set<ToolCategory>(CATEGORY_ORDER);
 
 @customElement('tools-tab')
 export class ToolsTab extends LitElement {
@@ -312,9 +313,13 @@ export class ToolsTab extends LitElement {
     `;
   }
 
+  private visibleItems(): ToolDashboardItem[] {
+    return this.items.filter((item) => TOOLS_TAB_CATEGORIES.has(item.category));
+  }
+
   private groupByCategory(): Map<ToolCategory, ToolDashboardItem[]> {
     const groups = new Map<ToolCategory, ToolDashboardItem[]>();
-    for (const item of this.items) {
+    for (const item of this.visibleItems()) {
       const list = groups.get(item.category) ?? [];
       list.push(item);
       groups.set(item.category, list);
@@ -323,17 +328,18 @@ export class ToolsTab extends LitElement {
   }
 
   private renderSummary(): TemplateResult | typeof nothing {
-    if (this.items.length === 0) return nothing;
+    const items = this.visibleItems();
+    if (items.length === 0) return nothing;
 
     let available = 0;
     let missing = 0;
-    for (const item of this.items) {
+    for (const item of items) {
       if (item.status === 'available') available++;
       else if (item.status === 'not-found') missing++;
     }
 
     // Early return above guarantees items.length > 0.
-    const total = this.items.length;
+    const total = items.length;
     const r = 14;
     const circ = 2 * Math.PI * r;
     const availPct = available / total;
