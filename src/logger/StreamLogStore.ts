@@ -332,7 +332,9 @@ export class StreamLogStore {
     }
 
     if (streamsToLoad.size > 0) {
-      await Promise.all([...streamsToLoad].map((id) => this.ensureLoaded(id)));
+      await pMap([...streamsToLoad], (id) => this.ensureLoaded(id), {
+        concurrency: STREAM_LOG_LOAD_CONCURRENCY,
+      });
     }
 
     const affected: StreamTabId[] = [];
