@@ -72,6 +72,7 @@ import './tabs/ModelsTab';
 import './tabs/AgentsTab';
 import './tabs/MultiAgentTab';
 import './tabs/ToolsTab';
+import './tabs/AIAgentsTab';
 import './tabs/GitTab';
 import './tabs/LaTeXTab';
 import './components/profile/ProviderKeyModal';
@@ -932,6 +933,15 @@ export class SettingsApp extends SettingsAppBase {
             ></wa-icon>
             Tools</wa-tab
           >
+          <wa-tab panel="ai-agents"
+            ><wa-icon
+              class="settings-tab-icon"
+              library=${TEXRA_ICON_LIBRARY}
+              name="robot"
+              variant="solid"
+            ></wa-icon>
+            AI Agents</wa-tab
+          >
           <wa-tab panel="git"
             ><wa-icon
               class="settings-tab-icon"
@@ -1053,9 +1063,6 @@ export class SettingsApp extends SettingsAppBase {
               .items=${this.toolDashboardItems.get()}
               .loaded=${this.toolDashboardLoaded.get()}
               .bashApprovalEnabled=${this.bashApprovalEnabled.get()}
-              .codexSandboxMode=${this.codexSandboxMode.get()}
-              .codexReasoningEffort=${this.codexReasoningEffort.get()}
-              .codexApprovalPolicy=${this.codexApprovalPolicy.get()}
               .showDesktopCrashReporting=${this.isDesktopHost}
               .desktopCrashReportingEnabled=${this.desktopCrashReportingEnabled.get()}
               .desktopCrashReportingConfigured=${this.desktopCrashReportingConfigured.get()}
@@ -1065,16 +1072,31 @@ export class SettingsApp extends SettingsAppBase {
               @tool-recheck=${this.handleToolRecheck}
               @tool-toggle=${this.handleToolToggle}
               @bash-approval-toggle=${this.handleBashApprovalToggle}
-              @codex-sandbox-mode-change=${this.handleCodexSandboxModeChange}
-              @codex-reasoning-effort-change=${this
-                .handleCodexReasoningEffortChange}
-              @codex-approval-policy-change=${this
-                .handleCodexApprovalPolicyChange}
               @desktop-crash-reporting-toggle=${this
                 .handleDesktopCrashReportingToggle}
               @desktop-crash-reporting-dsn-set=${this
                 .handleDesktopCrashReportingDsnSet}
             ></tools-tab>
+          </wa-tab-panel>
+
+          <wa-tab-panel name="ai-agents">
+            <ai-agents-tab
+              .items=${this.toolDashboardItems.get()}
+              .loaded=${this.toolDashboardLoaded.get()}
+              .codexSandboxMode=${this.codexSandboxMode.get()}
+              .codexReasoningEffort=${this.codexReasoningEffort.get()}
+              .codexApprovalPolicy=${this.codexApprovalPolicy.get()}
+              @tool-open-url=${this.handleToolOpenUrl}
+              @tool-install-extension=${this.handleToolInstallExtension}
+              @tool-run-command=${this.handleToolRunCommand}
+              @tool-recheck=${this.handleToolRecheck}
+              @tool-toggle=${this.handleToolToggle}
+              @codex-sandbox-mode-change=${this.handleCodexSandboxModeChange}
+              @codex-reasoning-effort-change=${this
+                .handleCodexReasoningEffortChange}
+              @codex-approval-policy-change=${this
+                .handleCodexApprovalPolicyChange}
+            ></ai-agents-tab>
           </wa-tab-panel>
 
           <wa-tab-panel name="git">
