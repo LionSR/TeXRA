@@ -47,13 +47,14 @@ Every dependency is either already in the workspace, used by the dominant 2026 A
 
 ### Plumbing
 
-| Concern                          | Package                                                                         |
-| -------------------------------- | ------------------------------------------------------------------------------- |
-| Serial follow-up queue           | `p-queue`                                                                       |
-| Approval modal queue             | `p-queue` (`concurrency: 1`) with Promise-returning launchers — see § Approvals |
-| Colors (legacy renderer only)    | `picocolors`                                                                    |
-| Clipboard ("copy last response") | `clipboardy` (with OSC 52 fallback; tmux/screen DCS wrapping deferred — R9)     |
-| Tests                            | `ink-testing-library` + existing `vitest`                                       |
+| Concern                          | Package                                                                                                                                                                                                                |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Serial follow-up queue           | `p-queue`                                                                                                                                                                                                              |
+| Approval modal queue             | `p-queue` (`concurrency: 1`) with Promise-returning launchers — see § Approvals                                                                                                                                        |
+| Colors (legacy renderer only)    | `picocolors`                                                                                                                                                                                                           |
+| Clipboard ("copy last response") | `clipboardy` (with OSC 52 fallback; tmux/screen DCS wrapping deferred — R9)                                                                                                                                            |
+| Terminal notifications           | In-tree dispatcher emitting OSC 9 (iTerm2), OSC 99 (Kitty), and BEL fallback; OSC 9;4 progress sequences for supported terminals. Routed through the multiplexer-aware OSC wrapper (R9). See § Terminal notifications. |
+| Tests                            | `ink-testing-library` + existing `vitest`                                                                                                                                                                              |
 
 ### Deliberately omitted
 
@@ -123,7 +124,10 @@ packages/cli/src/chat/tui/
 ├── commands/
 │   ├── slashRegistry.ts            (reads from @agent + @model registries)
 │   ├── palette.tsx                 (Ctrl-P, fzf-for-js)
-│   └── fileMention.tsx             (@, fast-glob against platform().workspace.getWorkspacePath())
+│   ├── fileMention.tsx             (@, fast-glob against platform().workspace.getWorkspacePath())
+│   └── transcriptSearch.tsx        (Ctrl-F; substring + fuzzy fallback; SGR 7 inverse overlay — see § Transcript search)
+├── notifications/
+│   └── terminalNotifier.ts         (OSC 9 / OSC 99 / BEL / OSC 9;4 progress; capability-gated by terminalCapabilities signal)
 ├── streams/
 │   ├── streamTabs.ts               (reuses StreamTabId from @shared/schemas/identifiers)
 │   └── focusCycle.ts               (Ctrl-A across active descendants)
@@ -142,6 +146,34 @@ packages/cli/src/chat/tui/
 3. **Declared cursor.** The component reports its cursor position to the renderer via context, so the renderer can drive the terminal cursor (rather than ink's internal carat) — necessary for IME and screen-reader cooperation.
 
 This pattern is lifted directly from Claude Code (`src/components/BaseTextInput.tsx`, `src/hooks/usePasteHandler.tsx`).
+
+### Terminal notifications
+
+`notifications/terminalNotifier.ts` exposes a single `notify({ kind, title?, body })` entrypoint. `kind` is one of:
+
+- `agentFinished` — "agent X completed turn" alert when the user has gone idle or switched tmux panes; emits OSC 9 + OSC 99 + BEL.
+- `approvalNeeded` — pings the terminal while an approval modal is open and the focused pane is not the TeXRA one.
+- `progress` — for long-running tools (PDF compile, latexdiff), emits OSC 9;4 progress sequences (`PROGRESS.SET <pct>`, `PROGRESS.INDETERMINATE`, `PROGRESS.ERROR`, `PROGRESS.CLEAR`).
+
+Each emission is **capability-gated** by the `terminalCapabilities` signal (per § Terminal capability discovery) — terminals that didn't acknowledge the relevant query at startup fall through to BEL or silently drop. OSC sequences route through the same multiplexer-aware wrapper that clipboard OSC uses (R9), so tmux / GNU screen receive correctly framed DCS payloads once that wrapper lands.
+
+The dispatcher is **not** opt-in by default. Idle detection is the gating signal: notifications fire only after the user has been idle for ≥30 s, or when stdin reports the terminal is unfocused (modern terminals send focus-in/out via XT mode 1004). This avoids the "buzz on every token" failure mode some early Codex CLI builds shipped with.
+
+Pattern reference: Claude Code `src/ink/useTerminalNotification.ts`. The unwrapped raw BEL (not OSC-wrapped) is intentional so that tmux's `bell-action` config can trigger on it.
+
+### Transcript search
+
+`commands/transcriptSearch.tsx` is an in-conversation search overlay bound to `Ctrl-F`. Filter strategy mirrors Claude Code (`src/components/HistorySearchDialog.tsx`, `src/ink/searchHighlight.ts`):
+
+1. **Exact substring** match (case-insensitive) is tried first.
+2. **Fuzzy subsequence** match falls back when there are no exact hits — same `fzf-for-js` instance the command palette uses.
+
+Match highlighting is a **render-time SGR 7 (inverse) overlay** applied to matched cells, not a markdown rewrite. Two non-obvious details that prevent rendering bugs:
+
+- **Non-overlapping advance.** Substring search uses `pos + queryLength` after each hit, never `pos + 1`. Overlapping matches would SGR-7-invert the same cell twice — SGR 7 is a toggle, so double-invert renders as normal and the match disappears.
+- **Codepoint-to-cell mapping.** Wide characters (CJK, emoji) occupy two cells. The overlay walks a `codeUnitToCell` map so the inverse applies to the correct cell range, not the codepoint range.
+
+Current match is rendered yellow via a separate positioned-highlight pass (`applyPositionedHighlight`) after the base inverse layer.
 
 ### Frame telemetry
 
@@ -183,7 +215,7 @@ This gives the simplicity of `await launchBashApproval(payload)` at the call sit
 - For `showBashPermission`, `showPlanApproval`, `showAgentProposal`, `showRetryRequest`, `showExternalInquiry`: a `handleCliApprovalEvent`-style interceptor inside the wrapped `runtimeHost.emit` constructs the payload and calls the matching `launchX(payload)` entrypoint.
 - On resolution, the modal calls the same resolvers today's adapter calls: `handleProgressViewBashApprovalAction`, `resolvePlanApproval`, `resolveProposal`, `triggerRetry` / `cancelRetry`, `handleExternalInquiryAction`. Resolver wiring is unchanged.
 - `--approval-policy never` and `--approval-policy yolo` short-circuit before reaching the queue (unchanged `immediateDecision` logic from `approvalAdapter.ts:89–94`).
-- `<EditApproval>` renders unified diffs from `originalContent` + `proposedContent` using `diff` + `cli-highlight`. Keys: `y` approve, `n` reject, `e` reject-with-feedback (inline `<TextInput>`).
+- `<EditApproval>` renders unified diffs from `originalContent` + `proposedContent` using `diff` + `cli-highlight`. Keys: `y` approve, `n` reject, `e` reject-with-feedback (inline `<TextInput>`). Diffs longer than 400 lines (Claude Code's cap in `src/components/diff/DiffDetailView.tsx`) render a summary header (`+N / −M / hunks: H`) followed by the first 400 lines and a `Ctrl-O to expand` affordance — silent truncation is a v1 footgun for academic users reviewing large LaTeX rewrites.
 
 ### Audit prerequisite
 
@@ -193,27 +225,27 @@ Before merging the Promise launcher refactor, audit whether two streams (e.g. th
 
 Every signal source already exists.
 
-| Event                                                              | Consumer                             | Render                                            |
-| ------------------------------------------------------------------ | ------------------------------------ | ------------------------------------------------- |
-| `updateStreamUsage`                                                | `<Header>`                           | tokens, cost, elapsed                             |
-| `updateConversationProgress`                                       | `<Header>`                           | turn / tool counts                                |
-| `updateStreamDescription`                                          | `<Header>`                           | session subtitle                                  |
-| `StreamStatusService.onDidChange`                                  | `<StatusBar>`, `<InputBar>`          | status pill, prompt enabled                       |
-| `StreamLogStore` (`MODEL_RESPONSE`)                                | `<ConversationPane>`                 | streaming text → `<Static>` on turn end           |
-| `StreamLogStore` (`TOOL_USE`)                                      | `<ToolUseCard>`                      | header + status, expandable detail                |
-| `updateActiveSubagents`                                            | `<SubagentList>`                     | one row per `ActiveChildInfo`, spinner, focus key |
-| `updateActiveProcesses`                                            | `<SubagentList>` (processes section) | one row per process                               |
-| `updateProcessOutput`                                              | child stream view (on focus)         | stdout / stderr tail                              |
-| `updateTodos`                                                      | `<TodosPlanPanel>`                   | checklist                                         |
-| `updatePlan`                                                       | `<TodosPlanPanel>`                   | numbered steps, status                            |
-| `setActiveStream`                                                  | `<App>` router                       | switch primary streamId                           |
-| `setParentStream`                                                  | `<App>` router                       | nest child under parent                           |
-| `removeStream`                                                     | `<App>` router                       | cleanup                                           |
-| `updateQueuedFollowUps`                                            | `<InputBar>`                         | "queued: N" pill                                  |
-| `updateToolEditApprovalBypassState` / `updateSuperYoloBypassState` | `<StatusBar>`                        | YOLO / BYPASS badge                               |
-| `showBashPermission`                                               | `<BashApproval>`                     | resolver: `handleProgressViewBashApprovalAction`  |
-| `showToolEditPermission`                                           | `<EditApproval>`                     | resolver: `setToolEditApprovalHandler` callback   |
-| `showPlanApproval`                                                 | `<PlanApproval>`                     | resolver: `resolvePlanApproval`                   |
-| `showAgentProposal`                                                | `<AgentProposal>`                    | resolver: `resolveProposal`                       |
-| `showRetryRequest`                                                 | `<RetryRequest>`                     | resolver: `triggerRetry` / `cancelRetry`          |
-| `showExternalInquiry`                                              | `<ExternalInquiry>`                  | resolver: `handleExternalInquiryAction`           |
+| Event                                                              | Consumer                             | Render                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `updateStreamUsage`                                                | `<Header>`                           | tokens, cost, elapsed                                                                                                                                                                                                                                              |
+| `updateConversationProgress`                                       | `<Header>`                           | turn / tool counts                                                                                                                                                                                                                                                 |
+| `updateStreamDescription`                                          | `<Header>`                           | session subtitle                                                                                                                                                                                                                                                   |
+| `StreamStatusService.onDidChange`                                  | `<StatusBar>`, `<InputBar>`          | status pill, prompt enabled                                                                                                                                                                                                                                        |
+| `StreamLogStore` (`MODEL_RESPONSE`)                                | `<ConversationPane>`                 | streaming text → `<Static>` on turn end                                                                                                                                                                                                                            |
+| `StreamLogStore` (`TOOL_USE`)                                      | `<ToolUseCard>`                      | header + status, expandable detail                                                                                                                                                                                                                                 |
+| `updateActiveSubagents`                                            | `<SubagentList>`                     | one row per `ActiveChildInfo`, rendered as a tree (`├─` / `└─` per Claude Code `AgentProgressLine.tsx`), inline status text, focus key. Elapsed-time field re-renders on a 1 s tick (a `setInterval` on the SubagentList, **not** per-row — one wakeup, one diff). |
+| `updateActiveProcesses`                                            | `<SubagentList>` (processes section) | one row per process                                                                                                                                                                                                                                                |
+| `updateProcessOutput`                                              | child stream view (on focus)         | stdout / stderr tail                                                                                                                                                                                                                                               |
+| `updateTodos`                                                      | `<TodosPlanPanel>`                   | checklist                                                                                                                                                                                                                                                          |
+| `updatePlan`                                                       | `<TodosPlanPanel>`                   | numbered steps, status                                                                                                                                                                                                                                             |
+| `setActiveStream`                                                  | `<App>` router                       | switch primary streamId                                                                                                                                                                                                                                            |
+| `setParentStream`                                                  | `<App>` router                       | nest child under parent                                                                                                                                                                                                                                            |
+| `removeStream`                                                     | `<App>` router                       | cleanup                                                                                                                                                                                                                                                            |
+| `updateQueuedFollowUps`                                            | `<InputBar>`                         | "queued: N" pill                                                                                                                                                                                                                                                   |
+| `updateToolEditApprovalBypassState` / `updateSuperYoloBypassState` | `<StatusBar>`                        | YOLO / BYPASS badge                                                                                                                                                                                                                                                |
+| `showBashPermission`                                               | `<BashApproval>`                     | resolver: `handleProgressViewBashApprovalAction`                                                                                                                                                                                                                   |
+| `showToolEditPermission`                                           | `<EditApproval>`                     | resolver: `setToolEditApprovalHandler` callback                                                                                                                                                                                                                    |
+| `showPlanApproval`                                                 | `<PlanApproval>`                     | resolver: `resolvePlanApproval`                                                                                                                                                                                                                                    |
+| `showAgentProposal`                                                | `<AgentProposal>`                    | resolver: `resolveProposal`                                                                                                                                                                                                                                        |
+| `showRetryRequest`                                                 | `<RetryRequest>`                     | resolver: `triggerRetry` / `cancelRetry`                                                                                                                                                                                                                           |
+| `showExternalInquiry`                                              | `<ExternalInquiry>`                  | resolver: `handleExternalInquiryAction`                                                                                                                                                                                                                            |
