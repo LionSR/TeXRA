@@ -14,7 +14,7 @@ const ExecResultSchema = z.strictObject({
   /** True if the command timed out */
   timedOut: z.boolean().optional(),
   /** Exit code from the command (undefined if not available) */
-  exitCode: z.number().optional(),
+  exitCode: z.int().optional(),
 });
 
 export type ExecResult = z.infer<typeof ExecResultSchema>;
