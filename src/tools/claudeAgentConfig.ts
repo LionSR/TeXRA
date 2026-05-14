@@ -1,13 +1,10 @@
-// Standard library imports
-import * as path from 'path';
-
 // Local imports - agent config
 import { platform } from '@platform/platform';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { getWorkspaceState } from '@agent/core/stateStore';
 import { lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
-import { WorkspaceFS } from '@utils/files';
+import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import {
   CLAUDE_AGENT_NAME,
   CLAUDE_AGENT_DISPLAY_MODEL,
@@ -100,35 +97,17 @@ export interface ClaudeAgentWorkspaceOptions {
 export function buildClaudeAgentWorkspaceOptions(
   workingDirectoryInput?: string | null,
 ): ClaudeAgentWorkspaceOptions {
-  const workspacePath = WorkspaceFS.getPath();
-  const trimmed = workingDirectoryInput?.trim();
+  const workspace = buildAgentWorkspaceOptions(workingDirectoryInput);
+  const options: ClaudeAgentWorkspaceOptions = {};
 
-  if (!workspacePath) {
-    return trimmed ? { cwd: trimmed } : {};
+  if (workspace.workingDirectory) {
+    options.cwd = workspace.workingDirectory;
+  }
+  if (workspace.additionalDirectories) {
+    options.additionalDirectories = workspace.additionalDirectories;
   }
 
-  const cwd = trimmed
-    ? path.isAbsolute(trimmed)
-      ? trimmed
-      : path.resolve(workspacePath, trimmed)
-    : workspacePath;
-
-  const resolvedWorkspacePath = path.resolve(workspacePath);
-  const resolvedCwd = path.resolve(cwd);
-
-  if (resolvedCwd === resolvedWorkspacePath) {
-    return { cwd };
-  }
-
-  const relativeToWorkspace = path.relative(resolvedWorkspacePath, resolvedCwd);
-  const isInsideWorkspace =
-    relativeToWorkspace.length > 0 &&
-    !relativeToWorkspace.startsWith('..') &&
-    !path.isAbsolute(relativeToWorkspace);
-
-  return isInsideWorkspace
-    ? { cwd, additionalDirectories: [workspacePath] }
-    : { cwd };
+  return options;
 }
 
 // ============================================================================
