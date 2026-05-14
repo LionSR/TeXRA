@@ -199,8 +199,9 @@ const emptySecrets: PlatformSecrets = {
 async function buildDefaultToolDashboardItems(
   cachedResults?: ExternalToolCheckResult[],
 ): Promise<ToolDashboardItem[]> {
-  const { buildToolDashboardItems } =
-    await import('@settingsView/utils/toolDashboardData');
+  const { buildToolDashboardItems } = await import(
+    '@settingsView/utils/toolDashboardData'
+  );
   return buildToolDashboardItems(cachedResults);
 }
 
