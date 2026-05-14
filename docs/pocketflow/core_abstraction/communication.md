@@ -14,7 +14,6 @@ Nodes and Flows **communicate** in 2 ways:
    - Great for data results, large content, or anything multiple nodes need.
    - You shall design the data structure and populate it ahead.
    - > **Separation of Concerns:** Use `Shared Store` for almost all cases to separate _Data Schema_ from _Compute Logic_! This approach is both flexible and easy to manage, resulting in more maintainable code. `Params` is more a syntax sugar for [Batch](./batch.md).
-     > {: .best-practice }
 
 2. **Params (only for [Batch](./batch.md))**
    - Each node has a local, ephemeral `params` dict passed in by the **parent Flow**, used as an identifier for tasks. Parameter keys and values shall be **immutable**.
@@ -114,7 +113,6 @@ Here:
 > Only set the uppermost Flow params because others will be overwritten by the parent Flow.
 >
 > If you need to set child node params, see [Batch](./batch.md).
-> {: .warning }
 
 Typically, **Params** are identifiers (e.g., file name, page number). Use them to fetch the task you assigned or write to a specific part of the shared store.
 

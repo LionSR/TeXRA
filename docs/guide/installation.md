@@ -49,6 +49,12 @@ re-authenticate and reconfigure local provider, agent, Git, and LaTeX settings.
 See [Migrating to the Desktop App](./desktop-migration.md).
 :::
 
+### CLI Preview
+
+The standalone `texra` command is currently installed from a repository checkout
+rather than from npm. See [TeXRA CLI](./texra-cli.md) for build, local link, and
+uninstall instructions.
+
 ### From VSIX File
 
 1. Open VS Code
