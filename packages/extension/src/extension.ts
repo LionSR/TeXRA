@@ -41,7 +41,7 @@ import {
 } from '@common/state';
 import { isTerminalStatus } from '@common/constants/streamStatus';
 import { bus } from '@eventBus/ProgressEventBus';
-import { SecretManager, type ApiProvider } from '@frontend/secretManager';
+import { SecretManager } from '@frontend/secretManager';
 import {
   copyDefaultAgents,
   configureLatexSettings,
@@ -356,20 +356,19 @@ export async function activate(context: vscode.ExtensionContext) {
       providers: SecretManager.API_PROVIDERS,
       setApiKey: (provider, key) =>
         SecretManager.set(
-          SecretManager.getApiKeySecretName(provider as ApiProvider),
+          SecretManager.getApiKeySecretName(provider),
           key,
         ),
       deleteApiKey: (provider) =>
         SecretManager.delete(
-          SecretManager.getApiKeySecretName(provider as ApiProvider),
+          SecretManager.getApiKeySecretName(provider),
         ),
-      apiKeyExists: (provider) =>
-        SecretManager.apiKeyExists(provider as ApiProvider),
+      apiKeyExists: (provider) => SecretManager.apiKeyExists(provider),
       hasUsableApiKey: (provider) =>
-        SecretManager.hasUsableApiKey(provider as ApiProvider),
+        SecretManager.hasUsableApiKey(provider),
       storedApiKeyExists: async (provider) => {
         const stored = await SecretManager.get(
-          SecretManager.getApiKeySecretName(provider as ApiProvider),
+          SecretManager.getApiKeySecretName(provider),
         );
         return stored !== undefined;
       },
