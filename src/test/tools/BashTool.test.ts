@@ -170,7 +170,6 @@ describe('BashTool', () => {
       toolRegistry: new MapToolRegistry({ bash: bashTool }),
       checkInterruption: () => false,
       setAbortController: () => {},
-      modelName: 'test',
       streamId: 'bash-tool' as StreamTabId,
       executionId: 'test-execution-id',
       run,
