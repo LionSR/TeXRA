@@ -23,6 +23,7 @@ export {
   SUPABASE_CUSTOM_DOMAIN,
   ULTRA_TIER,
   UserTierSchema,
+  isOAuthProvider,
   type OAuthProvider,
   type SupabaseConfig,
   type UserTier,
