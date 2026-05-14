@@ -10,7 +10,7 @@ Root stream is delegating to two subagents. One subagent has spawned its own chi
 │    quantum-walk literature, one on continuous-time analogues, and one                │
 │    on graph-spectral connections. Synthesizing as they return.                       │
 │                                                                                      │
-│    ╭─ Task · spawn writer-research ──── ✓ id=w-7a3 · 0.0s ──────────────╮         │
+│    ╭─ Task · spawn chat-research ──── ✓ id=w-7a3 · 0.0s ──────────────╮         │
 │    │ {topic: "1990s quantum walks", scope: "foundational papers"}        │         │
 │    ╰─────────────────────────────────────────────────────────────────────╯         │
 │                                                                                      │

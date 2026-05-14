@@ -7,13 +7,13 @@ User ran `texra chat | tee transcript.txt`. stdin and stderr are still TTY so th
 Plain text only. No box-drawing, no cursor moves, no alt-screen. Lines end with `\n`. Color is preserved (so `cat transcript.txt` shows highlighting) but stripped from the headers since they're not interactive context anymore.
 
 ```
-TeXRA · agent: writer · model: claude-opus-4.7
+TeXRA · agent: chat · model: claude-opus-4.7
 ================================================================
 
 you:
   rewrite section 3.2 so the lemma proof is tighter
 
-writer:
+chat:
   Let me first look at the current proof.
 
   [tool: Read sec_3.2.tex]
@@ -28,7 +28,7 @@ writer:
   [tool: Edit sec_3.2.tex]
     +14 / -9, 3 hunks (approved)
 
-writer turn complete · 7,432 in · 1,103 out · $0.03 · 0:42
+chat turn complete · 7,432 in · 1,103 out · $0.03 · 0:42
 
 you:
   _
@@ -40,7 +40,7 @@ Interactive chrome stays on stderr. Approvals, status, and input prompt are stil
 
 ```
 [stderr — drawn by Ink]
-  ● streaming · agent: writer · queued: 0
+  ● streaming · agent: chat · queued: 0
   ‼ awaiting approval (bash): latexmk -pdf main.tex
     [y] approve  [n] reject  [e] reject + feedback
 
