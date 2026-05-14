@@ -36,6 +36,36 @@ const MIN_SCROLLBACK = 4_000;
 /** Maximum visible rows before terminal scrolls internally. */
 const MAX_VISIBLE_ROWS = 20;
 
+export interface TerminalTextUpdatePlan {
+  reset: boolean;
+  textToWrite: string;
+}
+
+export function planTerminalTextUpdate(
+  renderedText: string,
+  nextText: string,
+): TerminalTextUpdatePlan {
+  if (nextText.startsWith(renderedText)) {
+    return {
+      reset: false,
+      textToWrite: nextText.slice(renderedText.length),
+    };
+  }
+
+  return {
+    reset: true,
+    textToWrite: nextText,
+  };
+}
+
+export function countTerminalRows(text: string): number {
+  let rows = 1;
+  for (let i = 0; i < text.length; i++) {
+    if (text.charCodeAt(i) === 10) rows += 1;
+  }
+  return rows;
+}
+
 /**
  * Read-only terminal renderer for shell output.
  * Uses xterm.js for ANSI colors/formatting without interactive input.
@@ -68,6 +98,7 @@ export class TerminalOutput extends LitElement {
   private isFlushingText = false;
   private needsFlush = false;
   private pendingText = '';
+  private renderedText = '';
 
   private readonly handleDetailsToggle = (): void => {
     this.refitIfVisible();
@@ -174,7 +205,8 @@ export class TerminalOutput extends LitElement {
         const distanceFromBottom = previousBaseY - previousViewportY;
         const wasPinnedToBottom = distanceFromBottom <= 1;
 
-        const lineCount = text.split('\n').length;
+        const updatePlan = planTerminalTextUpdate(this.renderedText, text);
+        const lineCount = countTerminalRows(text);
         const scrollback = Math.max(MIN_SCROLLBACK, lineCount);
         if (terminal.options.scrollback !== scrollback) {
           terminal.options = {
@@ -183,21 +215,14 @@ export class TerminalOutput extends LitElement {
           };
         }
 
-        terminal.reset();
-        await new Promise<void>((resolve) => {
-          let resolved = false;
-          const complete = (): void => {
-            if (resolved) return;
-            resolved = true;
-            resolve();
-          };
-
-          terminal.write(text, complete);
-          setTimeout(complete, 100);
-        });
+        if (updatePlan.reset) {
+          terminal.reset();
+        }
+        await this.writeTerminalText(terminal, updatePlan.textToWrite);
 
         if (!this.terminal || this.terminal !== terminal) continue;
 
+        this.renderedText = text;
         if (!wasPinnedToBottom) {
           const nextBaseY = terminal.buffer.active.baseY;
           const targetViewportY = Math.max(0, nextBaseY - distanceFromBottom);
@@ -212,6 +237,25 @@ export class TerminalOutput extends LitElement {
         this.renderTerminalText();
       }
     }
+  }
+
+  private async writeTerminalText(
+    terminal: Terminal,
+    text: string,
+  ): Promise<void> {
+    if (!text) return;
+
+    await new Promise<void>((resolve) => {
+      let resolved = false;
+      const complete = (): void => {
+        if (resolved) return;
+        resolved = true;
+        resolve();
+      };
+
+      terminal.write(text, complete);
+      setTimeout(complete, 100);
+    });
   }
 
   /** Resolve theme colors and font family from VS Code CSS variables in a single getComputedStyle call. */
