@@ -670,7 +670,7 @@ export class ClaudeAgentTool extends defineTool({
     const runContext = contexts?.runContext;
     callContext?.onExecutionReady?.();
 
-    if (input.session_id && sessionRegistry.has(input.session_id)) {
+    if (input.session_id) {
       return resumeClaudeAgentSession(
         input.session_id,
         input.prompt,
@@ -766,11 +766,11 @@ async function launchClaudeAgentSession(
   };
 }
 
-async function resumeClaudeAgentSession(
+function resumeClaudeAgentSession(
   sessionId: string,
   prompt: string,
   callerStreamId: StreamTabId | undefined,
-): Promise<ToolResult> {
+): ToolResult {
   const stored = sessionRegistry.get(sessionId);
   if (!stored) {
     throw new ToolError(
