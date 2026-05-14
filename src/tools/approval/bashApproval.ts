@@ -4,7 +4,8 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { getConfig } from '@agent/core/config';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
-import { ToolError, type ToolResult } from '@tools/result';
+import { requireRuntimeHost } from '@tools/contextHelpers';
+import { type ToolResult } from '@tools/result';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import { createStreamApprovalController } from './streamApprovalQueue';
@@ -50,12 +51,7 @@ export async function requestBashApproval(
     return { accepted: true };
   }
 
-  const runtimeHost = context?.runtimeHost;
-  if (!runtimeHost) {
-    throw new ToolError(
-      'Bash approval requires a tool runtime host when approvals are enabled.',
-    );
-  }
+  const runtimeHost = requireRuntimeHost('bash approval');
 
   return bashApprovalController.enqueue(() =>
     showApprovalPrompt(request, streamId, runtimeHost),
