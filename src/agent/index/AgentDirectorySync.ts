@@ -60,9 +60,7 @@ function toMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export class PathAgentDirectoryBundleSource
-  implements AgentDirectoryBundleSource
-{
+export class PathAgentDirectoryBundleSource implements AgentDirectoryBundleSource {
   constructor(private readonly resourcesBasePath: string) {}
 
   listYamlFiles(directoryName: BundledAgentDirectoryName): Promise<string[]> {
@@ -84,9 +82,7 @@ export class PathAgentDirectoryBundleSource
   }
 }
 
-export class GlobalStorageAgentDirectoryStorage
-  implements AgentDirectoryStorage
-{
+export class GlobalStorageAgentDirectoryStorage implements AgentDirectoryStorage {
   ensureDir(relativePath: string): Promise<void> {
     return GlobalStorageFS.ensureDir(relativePath);
   }
