@@ -66,6 +66,15 @@ export function countTerminalRows(text: string): number {
   return rows;
 }
 
+export function nextTerminalRowCount(
+  previousRowCount: number,
+  updatePlan: TerminalTextUpdatePlan,
+): number {
+  return updatePlan.reset
+    ? countTerminalRows(updatePlan.textToWrite)
+    : previousRowCount + countTerminalRows(updatePlan.textToWrite) - 1;
+}
+
 /**
  * Read-only terminal renderer for shell output.
  * Uses xterm.js for ANSI colors/formatting without interactive input.
@@ -99,6 +108,7 @@ export class TerminalOutput extends LitElement {
   private needsFlush = false;
   private pendingText = '';
   private renderedText = '';
+  private renderedRowCount = countTerminalRows('');
 
   private readonly handleDetailsToggle = (): void => {
     this.refitIfVisible();
@@ -206,8 +216,11 @@ export class TerminalOutput extends LitElement {
         const wasPinnedToBottom = distanceFromBottom <= 1;
 
         const updatePlan = planTerminalTextUpdate(this.renderedText, text);
-        const lineCount = countTerminalRows(text);
-        const scrollback = Math.max(MIN_SCROLLBACK, lineCount);
+        const rowCount = nextTerminalRowCount(
+          this.renderedRowCount,
+          updatePlan,
+        );
+        const scrollback = Math.max(MIN_SCROLLBACK, rowCount);
         if (terminal.options.scrollback !== scrollback) {
           terminal.options = {
             ...terminal.options,
@@ -223,6 +236,7 @@ export class TerminalOutput extends LitElement {
         if (!this.terminal || this.terminal !== terminal) continue;
 
         this.renderedText = text;
+        this.renderedRowCount = rowCount;
         if (!wasPinnedToBottom) {
           const nextBaseY = terminal.buffer.active.baseY;
           const targetViewportY = Math.max(0, nextBaseY - distanceFromBottom);
