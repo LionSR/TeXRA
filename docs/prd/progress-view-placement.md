@@ -140,7 +140,7 @@ No user setting. Transitions are automatic and contextual. The toggle is always 
 | Trigger                                              | Action                                                                                        |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | User clicks Execute in main view                     | Sidebar swaps to progress view; auto-focuses the new stream                                   |
-| User clicks toggle (Setup ↔ Progress)                | Sidebar swaps to the selected view                                                            |
+| User clicks toggle (Setup ↔ Progress)               | Sidebar swaps to the selected view                                                            |
 | User presses `Ctrl/Cmd+Shift+T`                      | Sidebar toggles between main and progress view                                                |
 | User clicks pop-out button in progress (sidebar)     | Progress opens as editor tab; sidebar reverts to main view; sidebar progress view deactivated |
 | User clicks pop-back button in editor progress       | Editor tab closes; sidebar swaps to progress view; sidebar progress view reactivated          |

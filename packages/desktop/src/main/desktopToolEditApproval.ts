@@ -54,7 +54,9 @@ interface DesktopPendingToolEditApproval extends LatexPreviewEntry {
   settle: (result: ToolEditApprovalResult) => void;
 }
 
-class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalController {
+class DesktopToolEditApprovalControllerImpl
+  implements DesktopToolEditApprovalController
+{
   private readonly pending = new Map<string, DesktopPendingToolEditApproval>();
   private disposed = false;
 
