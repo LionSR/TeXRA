@@ -29,6 +29,16 @@ import {
   type PageChangeDetail,
 } from '../shared/Pagination';
 
+function hasSameMemoryOrder(
+  previous: readonly MemoryViewItem[] | undefined,
+  next: readonly MemoryViewItem[],
+): boolean {
+  if (!previous || previous.length !== next.length) return false;
+  return previous.every(
+    (item, index) => item.storagePath === next[index]?.storagePath,
+  );
+}
+
 @customElement('memory-list')
 export class MemoryList extends LitElement {
   static override styles = [
@@ -52,9 +62,13 @@ export class MemoryList extends LitElement {
   @state() private page = 0;
 
   protected override willUpdate(changedProperties: PropertyValues<this>): void {
-    // Reset to first page when items change (e.g. refresh, delete, pin/unpin)
     if (changedProperties.has('items')) {
-      this.page = 0;
+      const previous = changedProperties.get('items') as
+        | MemoryViewItem[]
+        | undefined;
+      if (!hasSameMemoryOrder(previous, this.items)) {
+        this.page = 0;
+      }
     }
   }
 

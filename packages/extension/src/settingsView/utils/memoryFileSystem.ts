@@ -8,7 +8,10 @@
 import * as path from 'path';
 
 import { isDirectory, isSymlink } from '@common/files/fsEntryType';
-import type { MemoryViewItem } from '@shared/schemas/settingsViewMessages';
+import type {
+  MemoryPreview,
+  MemoryViewItem,
+} from '@shared/schemas/settingsViewMessages';
 import {
   MEMORY_STORAGE_ROOT,
   MAX_PREVIEW_LINES,
@@ -18,22 +21,57 @@ import {
 import { relativeToDisplayPath } from '@tools/memory/memoryUtils';
 import { parseFrontmatter, formatAttribution } from '@tools/memory/memoryMeta';
 import { StorageFS } from '@utils/files';
-import { splitContentLines } from '@utils/text/stringUtils';
+import {
+  normalizeLineEndings,
+  splitContentLines,
+} from '@utils/text/stringUtils';
+
+const FRONTMATTER_SCAN_BYTES = 16 * 1024;
+const PREVIEW_SCAN_BYTES = 64 * 1024;
+
+async function readStoragePrefix(
+  storagePath: string,
+  maxBytes: number,
+  stats?: { size: number },
+): Promise<{ text: string; truncated: boolean }> {
+  const fileStats = stats ?? (await StorageFS.stat(storagePath));
+  if (fileStats.size === 0) {
+    return { text: '', truncated: false };
+  }
+
+  const chunks: Buffer[] = [];
+  const end = Math.min(maxBytes, fileStats.size) - 1;
+  for await (const chunk of StorageFS.createReadStream(storagePath, {
+    start: 0,
+    end,
+  })) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return {
+    text: normalizeLineEndings(Buffer.concat(chunks).toString('utf-8')),
+    truncated: fileStats.size > maxBytes,
+  };
+}
 
 /**
  * Builds a preview of content with truncation info.
  * @param content - The full file content to preview
- * @returns Preview text and total line count
+ * @returns Preview text and line count when the caller supplied complete content
  */
-export function buildPreview(content: string): {
+export function buildPreview(
+  content: string,
+  options?: { truncated?: boolean; exactLineCount?: boolean },
+): {
   preview: string;
-  lineCount: number;
+  lineCount?: number;
 } {
   const lines = splitContentLines(content);
-  const lineCount = lines.length;
+  const exactLineCount = options?.exactLineCount ?? true;
+  const lineCount = exactLineCount ? lines.length : undefined;
   const previewLines = lines.slice(0, MAX_PREVIEW_LINES);
   let preview = previewLines.join('\n');
-  let truncated = lineCount > MAX_PREVIEW_LINES;
+  let truncated =
+    lines.length > MAX_PREVIEW_LINES || (options?.truncated ?? false);
 
   if (preview.length > MAX_PREVIEW_CHARS) {
     preview = preview.slice(0, MAX_PREVIEW_CHARS);
@@ -45,6 +83,29 @@ export function buildPreview(content: string): {
   }
 
   return { preview, lineCount };
+}
+
+async function readMemoryMeta(storagePath: string, stats: { size: number }) {
+  const { text: raw } = await readStoragePrefix(
+    storagePath,
+    FRONTMATTER_SCAN_BYTES,
+    stats,
+  );
+  return parseFrontmatter(raw).meta;
+}
+
+export async function loadMemoryPreview(
+  storagePath: string,
+): Promise<MemoryPreview> {
+  const { text: raw, truncated } = await readStoragePrefix(
+    storagePath,
+    PREVIEW_SCAN_BYTES,
+  );
+  const { content } = parseFrontmatter(raw);
+  return {
+    storagePath,
+    ...buildPreview(content, { truncated, exactLineCount: !truncated }),
+  };
 }
 
 /**
@@ -81,9 +142,7 @@ export async function walkMemoryDirectory(
     }
 
     const stats = await StorageFS.stat(nextStoragePath);
-    const raw = await StorageFS.read(nextStoragePath);
-    const { meta, content } = parseFrontmatter(raw);
-    const previewData = buildPreview(content);
+    const meta = await readMemoryMeta(nextStoragePath, stats);
     const displayPath = relativeToDisplayPath(nextRelative);
 
     results.push({
@@ -91,8 +150,6 @@ export async function walkMemoryDirectory(
       storagePath: nextStoragePath,
       size: stats.size,
       mtime: new Date(stats.mtime).toISOString(),
-      lineCount: previewData.lineCount,
-      preview: previewData.preview,
       modifiedBy: meta ? formatAttribution(meta) : undefined,
       pinned: meta?.pinned,
     });
