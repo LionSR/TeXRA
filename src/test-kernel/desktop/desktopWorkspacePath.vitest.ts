@@ -5,8 +5,10 @@ import { describe, it } from 'vitest';
 import { resolveWorkspacePath } from '../../../packages/desktop/src/main/platform/paths';
 import {
   hasResolvedWorkspacePath,
+  isNewWindowLaunch,
   hasWorkspacePath,
   serializeWorkspacePresenceArg,
+  withNewWindowWorkspaceArgs,
   withWorkspacePathArg,
 } from '../../../packages/desktop/src/workspacePath';
 
@@ -136,6 +138,7 @@ describe('desktop workspace path', () => {
         [
           '/Applications/TeXRA.app',
           '--inspect',
+          '--texra-new-window',
           '--texra-workspace',
           'old-workspace',
           '--flag',
@@ -150,6 +153,34 @@ describe('desktop workspace path', () => {
         '--inspect',
         '--flag',
         '--texra-workspace-path=/Users/ray/paper',
+      ],
+    );
+  });
+
+  it('builds separate-process workspace args for desktop new-window launches', () => {
+    assert.equal(
+      isNewWindowLaunch({
+        argv: ['--texra-new-window', '--texra-workspace=/Users/ray/paper'],
+      }),
+      true,
+    );
+    assert.deepEqual(
+      withNewWindowWorkspaceArgs(
+        [
+          '/Applications/TeXRA.app',
+          '--texra-new-window',
+          '--inspect',
+          '--texra-workspace',
+          'old-workspace',
+          'texra://texra-ai.texra/auth-callback?state=old',
+        ],
+        '/Users/ray/new-paper',
+      ),
+      [
+        '/Applications/TeXRA.app',
+        '--inspect',
+        '--texra-workspace-path=/Users/ray/new-paper',
+        '--texra-new-window',
       ],
     );
   });

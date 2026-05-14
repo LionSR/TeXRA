@@ -4,6 +4,7 @@ import {
   TEXRA_PROTOCOL,
   TEXRA_PROTOCOL_SCHEME,
 } from '../desktopProtocol.js';
+import { isNewWindowLaunch } from '../workspacePath.js';
 
 export interface DesktopProtocolCallback {
   rawUrl: string;
@@ -156,18 +157,24 @@ export function installDesktopProtocolCallbackLifecycle(
 ): DesktopProtocolLifecycle {
   const { app } = options;
   const router = createDesktopProtocolCallbackRouter({ log: options.log });
+  const isExplicitNewWindow = isNewWindowLaunch({ argv: options.argv });
+  const ownsSingleInstanceLock = app.requestSingleInstanceLock();
 
-  if (!app.requestSingleInstanceLock()) {
+  if (!ownsSingleInstanceLock && !isExplicitNewWindow) {
     app.quit();
     return { router, shouldContinue: false };
   }
 
-  registerProtocolClient(options);
+  if (ownsSingleInstanceLock) {
+    registerProtocolClient(options);
 
-  app.on('second-instance', (_event, argv) => {
-    router.routeArgv(argv);
-    options.focusMainWindow?.();
-  });
+    app.on('second-instance', (_event, argv) => {
+      const routedCount = router.routeArgv(argv);
+      if (!isNewWindowLaunch({ argv }) || routedCount > 0) {
+        options.focusMainWindow?.();
+      }
+    });
+  }
 
   app.on('open-url', (event, url) => {
     event.preventDefault();
