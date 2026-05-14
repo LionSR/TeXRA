@@ -534,6 +534,7 @@ export const LatexConfigValuesSchema = z.object({
     .max(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max!)
     .optional(),
   latexdiffMathMarkup: LatexdiffMathMarkupSchema.optional(),
+  latexdiffChangesOnly: z.boolean().optional(),
   latexFormatter: LatexFormatterSchema.optional(),
 });
 export type LatexConfigValues = z.infer<typeof LatexConfigValuesSchema>;
