@@ -51,6 +51,31 @@ describe('AgentLogger stream output', () => {
     }
   });
 
+  it('drains pending stream updates for shutdown persistence', () => {
+    vi.useFakeTimers();
+
+    const previousStore = AgentLogger.getStreamLogStore();
+    const store = new StreamLogStore();
+    AgentLogger.setStreamLogStore(store);
+
+    try {
+      const logger = new AgentLogger('stream', true);
+      const stream = logger.createStream(MESSAGE_TYPES.MODEL_RESPONSE);
+
+      stream.append('a');
+      stream.append('b');
+      expect((store.get('stream')?.getRange(0) ?? [])[0]?.text).toBe('a');
+
+      AgentLogger.flushPendingStreamUpdates();
+      expect((store.get('stream')?.getRange(0) ?? [])[0]?.text).toBe('ab');
+      expect(vi.getTimerCount()).toBe(0);
+
+      expect(stream.finalize()).toBe('ab');
+    } finally {
+      AgentLogger.setStreamLogStore(previousStore);
+    }
+  });
+
   it('accumulates disabled progress streams without scheduled updates', () => {
     vi.useFakeTimers();
 

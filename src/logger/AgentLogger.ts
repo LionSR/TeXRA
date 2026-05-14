@@ -120,6 +120,7 @@ export interface AgentLogStream {
 
 export class AgentLogger {
   private static streamLogStore: StreamLogStore | undefined;
+  private static pendingStreamFlushers = new Set<() => void>();
 
   static setStreamLogStore(store: StreamLogStore): void {
     setDefaultStreamLogStore(store);
@@ -129,6 +130,12 @@ export class AgentLogger {
   static getStreamLogStore(): StreamLogStore {
     AgentLogger.streamLogStore ??= getDefaultStreamLogStore();
     return AgentLogger.streamLogStore;
+  }
+
+  static flushPendingStreamUpdates(): void {
+    for (const flush of [...AgentLogger.pendingStreamFlushers]) {
+      flush();
+    }
   }
 
   private get store(): StreamLogStore {
@@ -504,6 +511,14 @@ export class AgentLogger {
     let storeEnabled = progressEnabled;
     let updateTimer: ReturnType<typeof setTimeout> | null = null;
 
+    const registerPendingFlush = (): void => {
+      AgentLogger.pendingStreamFlushers.add(flushPendingUpdate);
+    };
+
+    const unregisterPendingFlush = (): void => {
+      AgentLogger.pendingStreamFlushers.delete(flushPendingUpdate);
+    };
+
     const materializePending = (): void => {
       if (pendingChunks.length === 0) return;
       buffer += pendingChunks.join('');
@@ -534,7 +549,9 @@ export class AgentLogger {
       updateTimer = setTimeout(() => {
         updateTimer = null;
         emitNow();
+        unregisterPendingFlush();
       }, STREAM_UPDATE_THROTTLE_MS);
+      registerPendingFlush();
     };
 
     const flushPendingUpdate = (): void => {
@@ -543,6 +560,7 @@ export class AgentLogger {
         updateTimer = null;
       }
       emitNow();
+      unregisterPendingFlush();
     };
 
     return {
