@@ -37,6 +37,15 @@ export const CLAUDE_AGENT_MODELS = [
 ] as const;
 export type ClaudeAgentModel = (typeof CLAUDE_AGENT_MODELS)[number];
 
+/**
+ * Adaptive thinking is only supported on Opus 4.6+ and Sonnet 4.6+. Haiku
+ * (and any earlier model) rejects the `thinking: { type: 'adaptive' }`
+ * option — gate the SDK option on this predicate to keep Haiku usable.
+ */
+export function modelSupportsAdaptiveThinking(model: string): boolean {
+  return model.startsWith('claude-opus-') || model.startsWith('claude-sonnet-');
+}
+
 const SUMMARY_MAX_LENGTH = 60;
 type ToolUseStatus = NonNullable<ToolUseLog['status']>;
 
