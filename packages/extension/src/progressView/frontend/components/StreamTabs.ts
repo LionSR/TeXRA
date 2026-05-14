@@ -29,6 +29,7 @@ import {
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import './WorktreeChip';
 import { formatRelativeTime } from '@shared/utils/string';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -375,6 +376,16 @@ export class StreamTab extends LitElement {
         white-space: nowrap;
         flex-shrink: 0;
       }
+
+      .worktree-chip-row {
+        display: flex;
+        align-items: center;
+        gap: var(--wa-space-2xs);
+        width: 100%;
+        margin-top: var(--wa-space-3xs);
+        min-width: 0;
+        overflow: hidden;
+      }
     `,
   ];
 
@@ -477,6 +488,11 @@ export class StreamTab extends LitElement {
                 ${stream.description
                   ? html`<div class="tab-description">
                       ${stream.description}
+                    </div>`
+                  : nothing}
+                ${stream.worktree
+                  ? html`<div class="worktree-chip-row">
+                      <worktree-chip .info=${stream.worktree}></worktree-chip>
                     </div>`
                   : nothing}
                 <div class="tab-meta">
