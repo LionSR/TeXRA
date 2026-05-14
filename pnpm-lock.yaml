@@ -340,6 +340,9 @@ importers:
 
   packages/desktop:
     dependencies:
+      '@anthropic-ai/claude-agent-sdk':
+        specifier: ^0.2.140
+        version: 0.2.140(zod@4.4.3)
       '@fortawesome/free-solid-svg-icons':
         specifier: ^7.2.0
         version: 7.2.0
@@ -380,6 +383,9 @@ importers:
 
   packages/extension:
     dependencies:
+      '@anthropic-ai/claude-agent-sdk':
+        specifier: ^0.2.140
+        version: 0.2.140(zod@4.4.3)
       '@anthropic-ai/sdk':
         specifier: ^0.96.0
         version: 0.96.0(zod@4.4.3)

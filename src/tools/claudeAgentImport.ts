@@ -25,7 +25,7 @@ type QueryFn = (params: {
   options?: Record<string, unknown>;
 }) => AsyncGenerator<unknown, void>;
 
-type PlatformInfo = { pkg: string };
+type PlatformInfo = { pkgs: readonly string[] };
 type ElectronProcess = NodeJS.Process & {
   defaultApp?: boolean;
   resourcesPath?: string;
@@ -54,7 +54,7 @@ export async function importClaudeAgentSdk(): Promise<QueryFn> {
     const code = (err as { code?: string }).code;
     if (code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND') {
       throw new Error(
-        '@anthropic-ai/claude-agent-sdk package not found. Install with: npm install -g @anthropic-ai/claude-code',
+        '@anthropic-ai/claude-agent-sdk package not found. Reinstall TeXRA or run corepack pnpm install in the TeXRA workspace.',
       );
     }
     throw err;
@@ -82,17 +82,27 @@ export async function importClaudeAgentSdk(): Promise<QueryFn> {
 // ---------------------------------------------------------------------------
 
 /**
- * Platform key → npm package name for the bundled `claude` binary.
- * The Claude Agent SDK ships one platform package per OS/arch; each contains
- * a single `claude` binary at the package root.
+ * Platform key → npm package names for the bundled `claude` binary.
+ * Linux has separate glibc and musl packages; trying both keeps the resolver
+ * independent of libc detection.
  */
 const PLATFORM_INFO: Record<string, PlatformInfo> = {
-  'linux-x64': { pkg: '@anthropic-ai/claude-agent-sdk-linux-x64' },
-  'linux-arm64': { pkg: '@anthropic-ai/claude-agent-sdk-linux-arm64' },
-  'darwin-x64': { pkg: '@anthropic-ai/claude-agent-sdk-darwin-x64' },
-  'darwin-arm64': { pkg: '@anthropic-ai/claude-agent-sdk-darwin-arm64' },
-  'win32-x64': { pkg: '@anthropic-ai/claude-agent-sdk-win32-x64' },
-  'win32-arm64': { pkg: '@anthropic-ai/claude-agent-sdk-win32-arm64' },
+  'linux-x64': {
+    pkgs: [
+      '@anthropic-ai/claude-agent-sdk-linux-x64',
+      '@anthropic-ai/claude-agent-sdk-linux-x64-musl',
+    ],
+  },
+  'linux-arm64': {
+    pkgs: [
+      '@anthropic-ai/claude-agent-sdk-linux-arm64',
+      '@anthropic-ai/claude-agent-sdk-linux-arm64-musl',
+    ],
+  },
+  'darwin-x64': { pkgs: ['@anthropic-ai/claude-agent-sdk-darwin-x64'] },
+  'darwin-arm64': { pkgs: ['@anthropic-ai/claude-agent-sdk-darwin-arm64'] },
+  'win32-x64': { pkgs: ['@anthropic-ai/claude-agent-sdk-win32-x64'] },
+  'win32-arm64': { pkgs: ['@anthropic-ai/claude-agent-sdk-win32-arm64'] },
 };
 
 /** Cached result — found paths are cached; misses are retried. */
@@ -117,8 +127,6 @@ export function findClaudeBinaryPath(): string | undefined {
 function findClaudeBinaryPathUncached(): string | undefined {
   const info = PLATFORM_INFO[`${process.platform}-${process.arch}`];
   if (!info) return undefined;
-
-  const binaryName = process.platform === 'win32' ? 'claude.exe' : 'claude';
 
   // Strategy 1: packaged Electron app.asar.unpacked resources
   // Highest priority when present — packaged apps cannot execute binaries
@@ -205,15 +213,17 @@ export function findClaudeBinaryInElectronResources(
   if (!info) return undefined;
 
   const binaryName = process.platform === 'win32' ? 'claude.exe' : 'claude';
-  const platformPkgDir = path.join(
-    resourcesPath,
-    'app.asar.unpacked',
-    'node_modules',
-    ...info.pkg.split('/'),
-  );
-
-  const binary = path.join(platformPkgDir, binaryName);
-  return existsSync(binary) ? binary : undefined;
+  for (const pkg of info.pkgs) {
+    const platformPkgDir = path.join(
+      resourcesPath,
+      'app.asar.unpacked',
+      'node_modules',
+      ...pkg.split('/'),
+    );
+    const binary = path.join(platformPkgDir, binaryName);
+    if (existsSync(binary)) return binary;
+  }
+  return undefined;
 }
 
 function getPackagedElectronResourcesPath(): string | undefined {
@@ -232,14 +242,16 @@ function resolveClaudeBinary(
   baseDir: string,
   platformInfo: PlatformInfo,
 ): string | undefined {
-  try {
-    const req = createRequire(path.join(baseDir, 'package.json'));
-    const platformPkgJson = req.resolve(`${platformInfo.pkg}/package.json`);
-    const binaryName = process.platform === 'win32' ? 'claude.exe' : 'claude';
-    const binary = path.join(path.dirname(platformPkgJson), binaryName);
-    if (existsSync(binary)) return binary;
-  } catch {
-    // Platform package not resolvable
+  const req = createRequire(path.join(baseDir, 'package.json'));
+  const binaryName = process.platform === 'win32' ? 'claude.exe' : 'claude';
+  for (const pkg of platformInfo.pkgs) {
+    try {
+      const platformPkgJson = req.resolve(`${pkg}/package.json`);
+      const binary = path.join(path.dirname(platformPkgJson), binaryName);
+      if (existsSync(binary)) return binary;
+    } catch {
+      // Platform package not resolvable
+    }
   }
   return undefined;
 }

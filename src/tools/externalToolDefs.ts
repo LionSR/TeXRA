@@ -13,7 +13,7 @@
 
 // Local imports
 import { platform } from '@platform/platform';
-import { lookupApiKey } from '@model/apiProviders';
+import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
 import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
 import type { RegisteredToolName } from '@tools/registry';
 import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
@@ -459,13 +459,19 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
         );
       }
 
-      const hasKey =
-        (await lookupApiKey(platform().secrets, 'anthropic').catch(
-          () => undefined,
-        )) != null;
+      const anthropicApiKeyEnv = apiKeyEnvName('anthropic');
+      const keyOrigin = await lookupApiKeyOrigin(
+        platform().secrets,
+        'anthropic',
+      ).catch(() => (process.env[anthropicApiKeyEnv] ? 'env' : 'none'));
       const hasOauthToken = !!process.env.CLAUDE_CODE_OAUTH_TOKEN;
       const authBits: string[] = [];
-      if (hasKey) authBits.push('ANTHROPIC_API_KEY (TeXRA Settings or env)');
+      if (keyOrigin === 'secret') {
+        authBits.push(`${anthropicApiKeyEnv} (TeXRA Settings)`);
+      }
+      if (keyOrigin === 'env') {
+        authBits.push(`${anthropicApiKeyEnv} (environment)`);
+      }
       if (hasOauthToken) authBits.push('CLAUDE_CODE_OAUTH_TOKEN');
       const authNote =
         authBits.length > 0
