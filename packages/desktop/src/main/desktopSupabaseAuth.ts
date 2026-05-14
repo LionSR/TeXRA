@@ -6,21 +6,16 @@ import {
   loadAgents,
   toRemoteAgentProfileData,
 } from '@agent/index';
+import { DEFAULT_OAUTH_PROVIDER, getAuthCallbackUri } from '@auth/config';
 import {
-  DEFAULT_OAUTH_PROVIDER,
-  DEFAULT_SESSION_EXPIRY_MS,
-  GITHUB_TOKEN_REFRESH_URL,
-  SUPABASE_CONFIG,
-  SUPABASE_SESSION_KEY,
-  TOKEN_REFRESH_THRESHOLD_MS,
-  getAuthCallbackUri,
-} from '@auth/config';
+  createSupabaseAuthCoordinator,
+  createSupabaseSessionStorage,
+} from '@auth/SupabaseAuthCoordinator';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
-  SupabaseSessionCoordinator,
   type SupabaseCallbackResult,
   type SupabaseSession,
-  type SupabaseSessionCoordinatorOptions,
+  type SupabaseSessionLog,
 } from '@auth/SupabaseSession';
 import {
   getServerSideKeyService,
@@ -39,7 +34,6 @@ import type {
   DesktopProtocolCallbackRouter,
 } from './desktopProtocolCallbacks.js';
 
-const EDGE_FUNCTION_TIMEOUT_MS = 30000;
 const DESKTOP_PENDING_OAUTH_STATE_KEY = 'texra.desktop.pendingOAuthState';
 const DESKTOP_PENDING_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
@@ -267,26 +261,10 @@ export function createDesktopSupabaseAuth(
 export function createDesktopAuthCoordinator(
   options: Pick<DesktopSupabaseAuthOptions, 'secrets' | 'log'>,
 ): DesktopAuthCoordinator {
-  SupabaseClient.initialize(SUPABASE_CONFIG.url, SUPABASE_CONFIG.publicKey);
-  const coordinator = new SupabaseSessionCoordinator({
-    storage: {
-      get: () => options.secrets.get(SUPABASE_SESSION_KEY),
-      store: (sessionData) =>
-        options.secrets.set(SUPABASE_SESSION_KEY, sessionData),
-      delete: () => options.secrets.delete(SUPABASE_SESSION_KEY),
-    },
-    getClient: () => SupabaseClient.getClient(),
-    whenReady: async () => {},
-    tokenRefreshThresholdMs: TOKEN_REFRESH_THRESHOLD_MS,
-    defaultSessionExpiryMs: DEFAULT_SESSION_EXPIRY_MS,
-    githubTokenRefreshUrl: GITHUB_TOKEN_REFRESH_URL,
-    edgeFunctionTimeoutMs: EDGE_FUNCTION_TIMEOUT_MS,
+  return createSupabaseAuthCoordinator({
+    storage: createSupabaseSessionStorage(options.secrets),
     log: createSessionLog(options.log),
-    onTokenExpiryChanged: (expiresAt) =>
-      SupabaseClient.setTokenExpiry(expiresAt),
-  } satisfies SupabaseSessionCoordinatorOptions);
-  SupabaseClient.setAuthProvider(coordinator);
-  return coordinator;
+  });
 }
 
 export function initializeDesktopServerSideKeyAccess(
@@ -415,7 +393,7 @@ export function unauthenticatedProfileData(): DesktopAuthProfileData {
 
 function createSessionLog(
   log: Pick<Console, 'debug' | 'info' | 'warn' | 'error'> | undefined,
-): NonNullable<SupabaseSessionCoordinatorOptions['log']> {
+): SupabaseSessionLog {
   return {
     debug: (source, message) => log?.debug?.(`[${source}] ${message}`),
     info: (source, message) => log?.info?.(`[${source}] ${message}`),
