@@ -19,6 +19,7 @@ import {
   ExternalInquiryThreadIdSchema,
 } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
+import { requireRuntimeHost } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 
 import {
@@ -248,13 +249,7 @@ When you have multiple independent questions for external models, you can call e
 }) {
   protected async execute(input: ExternalInquiryInput): Promise<ToolResult> {
     const context = tryUseRunContext();
-    const runtimeHost = context?.runtimeHost;
-    if (!runtimeHost) {
-      throw new ToolError(
-        'external_inquiry requires a tool runtime host to show the user prompt.',
-      );
-    }
-
+    const runtimeHost = requireRuntimeHost('external_inquiry', context);
     const streamId = context?.streamId;
     const executionId = context?.executionId;
 

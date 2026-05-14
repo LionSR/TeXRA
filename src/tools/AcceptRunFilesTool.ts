@@ -17,15 +17,15 @@ import { z } from 'zod';
 
 // Local imports - agent
 import { getExecutionStore } from '@agent/storage';
-import { tryUseRunContext } from '@agent/runtime/RunContext';
 
 // Local imports - shared
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import { ExecutionIdSchema } from '@shared/schemas';
+import type { ExecutionId, FileLocation } from '@shared/schemas';
 
 // Local imports - tools
-import type { ExecutionId, FileLocation } from '@shared/schemas';
+import { requireRuntimeHost } from '@tools/contextHelpers';
 import { ToolError, type ToolResult } from '@tools/result';
 import { formatResultCount, pluralize } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
@@ -126,12 +126,7 @@ Optional:
 }) {
   protected async execute(input: AcceptRunFilesInput): Promise<ToolResult> {
     const { execution_id: executionId, files, strip_criticize } = input;
-    const runtimeHost = tryUseRunContext()?.runtimeHost;
-    if (!runtimeHost) {
-      throw new ToolError(
-        'accept_run_files requires a tool runtime host to publish accepted file updates.',
-      );
-    }
+    const runtimeHost = requireRuntimeHost('accept_run_files');
 
     const runDir = await resolveStoragePath(executionId);
     const runDirExists = runDir !== undefined;
