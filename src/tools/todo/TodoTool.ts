@@ -81,10 +81,10 @@ Best practices:
   protected async execute(input: TodoWriteInput): Promise<ToolResult> {
     const context = getCurrentToolCallContext();
 
-    if (!context?.todoState) {
+    if (!context?.workPlanState) {
       // No context available - log warning and still format output
       logger.warn(
-        'todo_write called without todoState in context - todos will not persist or display in UI',
+        'todo_write called without workPlanState in context - todos will not persist or display in UI',
       );
       return {
         summary: 'Updated todo list (no active session)',
@@ -97,7 +97,7 @@ Best practices:
 
     // Update the todos in workspace state
     // This triggers the onUpdate callback which emits events to the UI
-    context.todoState.updateTodos(input.todos);
+    context.workPlanState.updateTodos(input.todos);
 
     const { completed, inProgress, pending } = countByStatus(input.todos);
 
