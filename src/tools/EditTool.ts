@@ -44,9 +44,7 @@ export class EditFileTool extends defineTool({
 }) {
   protected async execute(input: EditInput): Promise<ToolResult> {
     const { old_str, new_str, replace_all } = input;
-    const root = parseWorkingDirectory(
-      tryUseRunContext()?.workingDirectory,
-    );
+    const root = parseWorkingDirectory(tryUseRunContext()?.workingDirectory);
     const { path: resolved, display: displayPath } = resolveAndFormat(
       input.path,
       root,

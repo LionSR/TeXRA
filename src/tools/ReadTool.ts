@@ -67,9 +67,7 @@ export class ReadFileTool extends defineTool({
   schema: ReadInputSchema,
 }) {
   protected async execute(input: ReadInput): Promise<ToolResult> {
-    const root = parseWorkingDirectory(
-      tryUseRunContext()?.workingDirectory,
-    );
+    const root = parseWorkingDirectory(tryUseRunContext()?.workingDirectory);
     const { path: resolved, display: displayPath } = resolveAndFormat(
       input.path,
       root,
