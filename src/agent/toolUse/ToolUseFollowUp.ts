@@ -29,6 +29,28 @@ export type SendFollowUpResult =
   | { status: 'no_session'; streamStatus: string | undefined };
 
 const logger = new AgentLogger('ToolUseFollowUp');
+const followUpSentObservers = new Set<(streamId: StreamTabId) => void>();
+
+export function onFollowUpSent(
+  observer: (streamId: StreamTabId) => void,
+): () => void {
+  followUpSentObservers.add(observer);
+  return () => {
+    followUpSentObservers.delete(observer);
+  };
+}
+
+function notifyFollowUpSent(streamId: StreamTabId): void {
+  for (const observer of followUpSentObservers) {
+    try {
+      observer(streamId);
+    } catch (err) {
+      logger.warn(
+        `Follow-up sent observer threw for stream ${streamId}: ${String(err)}`,
+      );
+    }
+  }
+}
 
 /**
  * Send a follow-up message to a tool-use session.
@@ -48,6 +70,7 @@ export async function sendFollowUp(
   const flowContext = getToolUseFlowContext(streamId);
   if (flowContext) {
     flowContext.session.appendFollowUp(text);
+    notifyFollowUpSent(streamId);
     // Notify blocking tools (e.g. ExecutionsTool wait) so they can abort early
     flowContext.runtimeHost.emit('followUpSent', { streamId });
     return { status: 'sent' };
