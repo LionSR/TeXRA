@@ -50,14 +50,14 @@ export function bindPRSubscription(
 export function unbindPRSubscription(
   streamId: StreamTabId,
   pr: PRSubscribeInput,
-  runtimeHost?: AgentRuntimeHost,
+  runtimeHost: AgentRuntimeHost,
 ): boolean {
   return prSubscriptions.unbind(streamId, pr, runtimeHost);
 }
 
 export function unbindAllForPR(
   key: string,
-  runtimeHost?: AgentRuntimeHost,
+  runtimeHost: AgentRuntimeHost,
 ): number {
   return prSubscriptions.unbindAll(key, runtimeHost);
 }
@@ -116,14 +116,14 @@ export function bindRepoSubscription(
 export function unbindRepoSubscription(
   streamId: StreamTabId,
   input: RepoBindInput,
-  runtimeHost?: AgentRuntimeHost,
+  runtimeHost: AgentRuntimeHost,
 ): boolean {
   return repoSubscriptions.unbind(streamId, input, runtimeHost);
 }
 
 export function unbindAllForRepo(
   key: string,
-  runtimeHost?: AgentRuntimeHost,
+  runtimeHost: AgentRuntimeHost,
 ): number {
   return repoSubscriptions.unbindAll(key, runtimeHost);
 }
@@ -169,14 +169,14 @@ export function bindIssueSubscription(
 export function unbindIssueSubscription(
   streamId: StreamTabId,
   issue: IssueKey,
-  runtimeHost?: AgentRuntimeHost,
+  runtimeHost: AgentRuntimeHost,
 ): boolean {
   return issueSubscriptions.unbind(streamId, issue, runtimeHost);
 }
 
 export function unbindAllForIssue(
   key: string,
-  runtimeHost?: AgentRuntimeHost,
+  runtimeHost: AgentRuntimeHost,
 ): number {
   return issueSubscriptions.unbindAll(key, runtimeHost);
 }
