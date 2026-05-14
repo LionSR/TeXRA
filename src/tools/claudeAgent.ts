@@ -78,6 +78,7 @@ import {
   buildClaudeUsageStats,
   CLAUDE_AGENT_EFFORT_LEVELS,
   CLAUDE_AGENT_PERMISSION_MODES,
+  modelSupportsAdaptiveThinking,
   type ClaudeAgentEffort,
   type ClaudeAgentPermissionMode,
   type ClaudeMessageBlock,
@@ -357,11 +358,13 @@ export async function runStreamedTurn(params: {
     model: params.model,
     permissionMode: params.permissionMode,
     effort: params.effort,
-    thinking: { type: 'adaptive' },
     env: params.env,
     systemPrompt: { type: 'preset', preset: 'claude_code' },
     settingSources: ['user', 'project', 'local'],
   };
+  if (modelSupportsAdaptiveThinking(params.model)) {
+    sdkOptions.thinking = { type: 'adaptive' };
+  }
   if (params.permissionMode === 'bypassPermissions') {
     sdkOptions.allowDangerouslySkipPermissions = true;
   }
