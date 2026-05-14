@@ -26,6 +26,8 @@ import {
   type LatexConfigValues,
   type LatexSettingsStatus,
   type MemoryViewItem,
+  type ClaudeAgentModel,
+  type ClaudeAgentPermissionMode,
   type ModelSelectionItem,
   type NumberVscodeSetting,
   type PRSubscriptionEntry,
@@ -76,8 +78,8 @@ export interface SettingsMessageHandlerContext {
   codexSandboxMode: WritableSignal<string>;
   codexReasoningEffort: WritableSignal<string>;
   codexApprovalPolicy: WritableSignal<string>;
-  claudeAgentModel: WritableSignal<string>;
-  claudeAgentPermissionMode: WritableSignal<string>;
+  claudeAgentModel: WritableSignal<ClaudeAgentModel>;
+  claudeAgentPermissionMode: WritableSignal<ClaudeAgentPermissionMode>;
   toolDashboardItems: WritableSignal<ToolDashboardItem[]>;
   toolDashboardLoaded: WritableSignal<boolean>;
   gitMarkCommits: WritableSignal<boolean>;

@@ -36,6 +36,8 @@ import {
 } from '@shared/wa/webAwesomeIcons';
 import {
   type AgentSelectionItem,
+  type ClaudeAgentModel,
+  type ClaudeAgentPermissionMode,
   type LatexConfigValues,
   type NumberVscodeSetting,
   type PRSubscriptionEntry,
@@ -283,8 +285,12 @@ export class SettingsApp extends SettingsAppBase {
   private readonly codexSandboxMode = signal<string>('workspace-write');
   private readonly codexReasoningEffort = signal<string>('high');
   private readonly codexApprovalPolicy = signal<string>('never');
-  private readonly claudeAgentModel = signal<string>('claude-opus-4-7');
-  private readonly claudeAgentPermissionMode = signal<string>('acceptEdits');
+  private readonly claudeAgentModel = signal<ClaudeAgentModel>(
+    'claude-opus-4-7',
+  );
+  private readonly claudeAgentPermissionMode = signal<ClaudeAgentPermissionMode>(
+    'acceptEdits',
+  );
 
   // Tool dashboard state
   private readonly toolDashboardItems = signal<ToolDashboardItem[]>([]);
