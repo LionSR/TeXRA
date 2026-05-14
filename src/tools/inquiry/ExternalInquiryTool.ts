@@ -248,8 +248,8 @@ When you have multiple independent questions for external models, you can call e
   schema: ExternalInquiryInputSchema,
 }) {
   protected async execute(input: ExternalInquiryInput): Promise<ToolResult> {
-    const runtimeHost = requireRuntimeHost('external_inquiry');
     const context = tryUseRunContext();
+    const runtimeHost = requireRuntimeHost('external_inquiry', context);
     const streamId = context?.streamId;
     const executionId = context?.executionId;
 
