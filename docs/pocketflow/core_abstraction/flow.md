@@ -132,7 +132,6 @@ flowchart TD
 > This is mainly for debugging or testing a single node.
 >
 > Always use `flow.run(...)` in production to ensure the full pipeline runs correctly.
-> {: .warning }
 
 ## 4. Nested Flows
 
