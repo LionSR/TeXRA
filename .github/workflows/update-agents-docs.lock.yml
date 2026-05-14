@@ -234,6 +234,7 @@ jobs:
     needs: activation
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
       issues: read
       pull-requests: read
@@ -1047,6 +1048,62 @@ jobs:
           GH_HOST="${GITHUB_SERVER_URL#https://}"
           GH_HOST="${GH_HOST#http://}"
           echo "GH_HOST=${GH_HOST}" >> "$GITHUB_ENV"
+      - name: Validate patch file allowlist
+        if: (!cancelled()) && needs.agent.result != 'skipped' && contains(needs.agent.outputs.output_types, 'create_pull_request')
+        shell: bash
+        env:
+          # Hard allowlist enforced regardless of prompt or safe-output config.
+          # Keep in sync with the Scope section of update-agents-docs.md.
+          GH_AW_ALLOWED_FILES: "AGENTS.md CLAUDE.md"
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          patches=(/tmp/gh-aw/aw-*.patch)
+          if [ ${#patches[@]} -eq 0 ]; then
+            echo "No patch files at /tmp/gh-aw/aw-*.patch; nothing to validate."
+            exit 0
+          fi
+
+          # Extract every source and destination path from unified-diff
+          # "diff --git a/<src> b/<dst>" headers. Renames have different src/dst
+          # so we check both halves.
+          touched=$(
+            grep -hE '^diff --git a/' "${patches[@]}" \
+              | sed -E 's|^diff --git a/(.+) b/(.+)$|\1\n\2|' \
+              | sort -u
+          )
+
+          if [ -z "$touched" ]; then
+            echo "Patch contained no diff --git headers; nothing to validate."
+            exit 0
+          fi
+
+          echo "Files touched by agent patch:"
+          echo "$touched" | sed 's/^/  - /'
+
+          allowlist=()
+          for f in $GH_AW_ALLOWED_FILES; do allowlist+=("$f"); done
+
+          violations=()
+          while IFS= read -r path; do
+            allowed=false
+            for a in "${allowlist[@]}"; do
+              if [ "$path" = "$a" ]; then allowed=true; break; fi
+            done
+            if [ "$allowed" = "false" ]; then
+              violations+=("$path")
+            fi
+          done <<< "$touched"
+
+          if [ ${#violations[@]} -gt 0 ]; then
+            echo "::error::Agent patch touches files outside the allowlist (${GH_AW_ALLOWED_FILES})."
+            for v in "${violations[@]}"; do
+              echo "::error::  out-of-scope path: ${v}"
+            done
+            exit 1
+          fi
+
+          echo "All touched files are within the allowlist."
       - name: Process Safe Outputs
         id: process_safe_outputs
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
