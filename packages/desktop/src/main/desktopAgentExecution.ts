@@ -178,15 +178,16 @@ export class DesktopProgressBridge {
     this.unsubscribe = this.streamLogs.onChange((streamId) =>
       this.flushLogs(streamId),
     );
+    this.runtimeHost = {
+      emit: (event, payload) => this.handleProgressEvent(event, payload),
+    };
     this.toolEditApprovals = createDesktopToolEditApprovalController({
+      runtimeHost: this.runtimeHost,
       openPath: options.openPath,
       openBuildDisplay: options.openBuildDisplay,
       openDiff: options.openDiff,
       showErrorMessage: (message) => this.showErrorMessage(message),
     });
-    this.runtimeHost = {
-      emit: (event, payload) => this.handleProgressEvent(event, payload),
-    };
     this.workflowFileActions = new ProgressWorkflowFileActionsController({
       state: {
         getActiveStream: () => this.activeStream,
