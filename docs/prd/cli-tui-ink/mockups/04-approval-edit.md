@@ -59,3 +59,5 @@ When the entire diff is under ~20 lines, the truncation banner is omitted and `c
 2. Word-level highlighting within a changed line — adopt now, or defer? The webview's Monaco has it; cli-highlight does not by default. Adding it costs an extra dep (`diff-words` or similar).
 3. `e` (reject + feedback) currently opens an inline TextInput. Should that field be shown right under the diff (modal grows), or should it open a separate modal layer?
 4. After approval, the diff stays in the conversation as a tool-use card. Should the post-approval card collapse to a one-line summary (`✓ +14/−9 sec_3.2.tex · ctrl-o expand`) or keep showing the diff?
+
+Uzer:vGood. do as you recommnd. Collapse it s good idea.
