@@ -30,6 +30,49 @@ import {
 const CHANNEL = 'RemoteAgentLoader';
 logger.initialize(CHANNEL);
 
+const REMOTE_AGENT_LIST_COLUMNS =
+  'id, name, description, visibility, tools, agent_category';
+const LEGACY_REMOTE_AGENT_LIST_COLUMNS =
+  'id, name, description, visibility, agent_category';
+
+interface RemoteAgentListRow {
+  id: string;
+  name: string;
+  description?: string | null;
+  visibility?: string[] | null;
+  tools?: string[] | null;
+  agent_category?: string | null;
+}
+
+interface RemoteAgentListQueryError {
+  code?: string;
+  message?: string;
+  details?: string;
+  hint?: string;
+}
+
+/**
+ * True only for the pre-migration database shape where `remote_agents.tools`
+ * does not exist yet. Other query errors should surface directly.
+ */
+export function isMissingRemoteAgentToolsColumnError(
+  error: RemoteAgentListQueryError | null | undefined,
+): boolean {
+  if (!error) return false;
+
+  const text = [error.message, error.details, error.hint]
+    .filter((part): part is string => typeof part === 'string')
+    .join(' ')
+    .toLowerCase();
+  const schemaError =
+    error.code === 'PGRST204' ||
+    error.code === '42703' ||
+    text.includes('schema cache') ||
+    text.includes('column');
+
+  return schemaError && /\btools\b/.test(text);
+}
+
 /** Maps HTTP status codes to user-friendly error messages. */
 function mapHttpError(
   status: number,
@@ -62,14 +105,7 @@ function mapHttpError(
 }
 
 /** Parse DB row to RemoteAgentListItem, returning null on validation failure. */
-function parseListItemRow(row: {
-  id: string;
-  name: string;
-  description?: string | null;
-  visibility?: string[] | null;
-  tools?: string[] | null;
-  agent_category?: string | null;
-}): RemoteAgentListItem | null {
+function parseListItemRow(row: RemoteAgentListRow): RemoteAgentListItem | null {
   const result = RemoteAgentListItemSchema.safeParse({
     id: row.id,
     name: row.name,
@@ -149,25 +185,7 @@ export class RemoteAgentLoader {
         refresh_token: tokens.refreshToken,
       });
 
-      // Query with tools column; fall back without it for pre-migration databases.
-      // PostgREST returns 400 if the column doesn't exist.
-      let { data, error } = await supabase
-        .from('remote_agents')
-        .select('id, name, description, visibility, tools, agent_category')
-        .order('name');
-
-      if (error) {
-        logger.debug(
-          CHANNEL,
-          `Query with tools column failed, retrying without: ${error.message}`,
-        );
-        const fallback = await supabase
-          .from('remote_agents')
-          .select('id, name, description, visibility, agent_category')
-          .order('name');
-        data = fallback.data as typeof data;
-        error = fallback.error;
-      }
+      const { data, error } = await queryRemoteAgentListRows(supabase);
 
       if (error) {
         logger.error(CHANNEL, `Failed to list remote agents: ${error.message}`);
@@ -185,6 +203,44 @@ export class RemoteAgentLoader {
       return [];
     }
   }
+}
+
+async function queryRemoteAgentListRows(
+  supabase: ReturnType<typeof SupabaseClient.getClient>,
+): Promise<{
+  data: RemoteAgentListRow[] | null;
+  error: RemoteAgentListQueryError | null;
+}> {
+  const current = await supabase
+    .from('remote_agents')
+    .select(REMOTE_AGENT_LIST_COLUMNS)
+    .order('name');
+
+  if (!current.error) {
+    return {
+      data: current.data as RemoteAgentListRow[] | null,
+      error: null,
+    };
+  }
+
+  if (!isMissingRemoteAgentToolsColumnError(current.error)) {
+    return { data: null, error: current.error };
+  }
+
+  logger.debug(
+    CHANNEL,
+    `Remote agent tools column unavailable; using legacy list query: ${current.error.message}`,
+  );
+
+  const legacy = await supabase
+    .from('remote_agents')
+    .select(LEGACY_REMOTE_AGENT_LIST_COLUMNS)
+    .order('name');
+
+  return {
+    data: legacy.data as RemoteAgentListRow[] | null,
+    error: legacy.error,
+  };
 }
 
 async function fetchAgentConfigWithLegacyFallback(
