@@ -34,7 +34,7 @@ const MAX_OUTPUT = 100_000;
 /** Trim below the cap so new output can append for a while before the next reset. */
 const TRIMMED_OUTPUT_LENGTH = 80_000;
 
-/** Append delta to prev, capping to MAX_OUTPUT by trimming the front. */
+/** Append delta to prev, trimming below MAX_OUTPUT when the cap is crossed. */
 function capOutput(prev: string, delta: string): string {
   if (!delta) return prev;
   const combined = prev + delta;
