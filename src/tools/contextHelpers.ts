@@ -16,8 +16,11 @@ import { ToolError } from '@tools/result';
  * run is active or the launch had no host. Use from tools that need to
  * emit progress events.
  */
-export function requireRuntimeHost(toolName: string): AgentRuntimeHost {
-  const host = tryUseRunContext()?.runtimeHost;
+export function requireRuntimeHost(
+  toolName: string,
+  context: RunContext | undefined = tryUseRunContext(),
+): AgentRuntimeHost {
+  const host = context?.runtimeHost;
   if (!host) {
     throw new ToolError(`${toolName} requires a tool runtime host.`);
   }

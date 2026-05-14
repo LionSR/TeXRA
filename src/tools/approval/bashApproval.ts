@@ -51,7 +51,7 @@ export async function requestBashApproval(
     return { accepted: true };
   }
 
-  const runtimeHost = requireRuntimeHost('bash approval');
+  const runtimeHost = requireRuntimeHost('bash approval', context);
 
   return bashApprovalController.enqueue(() =>
     showApprovalPrompt(request, streamId, runtimeHost),
