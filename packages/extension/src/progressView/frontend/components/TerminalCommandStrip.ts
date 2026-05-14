@@ -33,20 +33,26 @@ export class TerminalCommandStrip extends LitElement {
       );
       font-size: var(--wa-editor-font-size, var(--font-size-sm));
       max-height: min(32vh, 320px);
-      overflow: auto;
-      white-space: pre;
+      overflow-y: auto;
+      overflow-x: hidden;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
-    /* flex-shrink: 0 keeps the command at its intrinsic width so the strip
-       can actually scroll horizontally for long commands. */
     .strip > span {
-      flex-shrink: 0;
+      min-width: 0;
     }
 
     .prompt {
       color: var(--wa-color-terminal-ansi-green, var(--color-success, #0a0));
       font-weight: var(--font-weight-semibold);
       user-select: none;
+      flex: 0 0 auto;
+    }
+
+    .command {
+      flex: 1 1 auto;
     }
   `;
 
@@ -58,7 +64,7 @@ export class TerminalCommandStrip extends LitElement {
     return html`
       <div class="strip">
         <span class="prompt">$</span>
-        <span>${trimmed}</span>
+        <span class="command">${trimmed}</span>
       </div>
     `;
   }
