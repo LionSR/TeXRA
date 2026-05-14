@@ -27,20 +27,26 @@ checkout:
 ```sh
 corepack pnpm install
 corepack pnpm --filter @texra/cli build
-corepack pnpm --dir packages/cli link --global
+corepack pnpm setup    # one-time; ensures $PNPM_HOME/bin is on PATH
+ln -sf "$(pwd)/packages/cli/dist/bin/texra.js" "$PNPM_HOME/bin/texra"
 texra --help
 ```
 
 This creates a global `texra` command that points to
-`packages/cli/dist/bin/texra.js`. Rebuild after changing CLI or shared runtime
-code. If `pnpm link --global` reports that no global binary directory is
-configured, run `corepack pnpm setup`, restart the shell, and repeat the link
-step.
+`packages/cli/dist/bin/texra.js`. The bundle is fully self-contained (esbuild
+inlines everything except `fsevents`), so the symlink is all that is needed.
+Rebuild after changing CLI or shared runtime code — the symlink target stays
+valid.
+
+> `pnpm link --global` is not used here because the CLI's `package.json` lists
+> `@texra/core` as a `workspace:*` dependency. pnpm refuses to resolve that spec
+> when linking the package as a standalone target, so the link step fails even
+> though the runtime binary does not need the dep (it is already bundled).
 
 To remove the linked command:
 
 ```sh
-corepack pnpm --global remove @texra/cli
+rm "$PNPM_HOME/bin/texra"
 ```
 
 ## Run locally
