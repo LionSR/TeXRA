@@ -14,7 +14,7 @@ engine: copilot
 tools:
   github:
     mode: remote
-    toolsets: [default]
+    toolsets: [default, actions]
 
 network: defaults
 
