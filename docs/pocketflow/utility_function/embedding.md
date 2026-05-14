@@ -12,7 +12,6 @@ Below you will find an overview table of various text embedding APIs, along with
 > Embedding is more a micro optimization, compared to the Flow Design.
 >
 > It's recommended to start with the most convenient one and optimize later.
-> {: .best-practice }
 
 | **API**              | **Free Tier**                           | **Pricing Model**                   | **Docs**                                                                                                                  |
 | -------------------- | --------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
