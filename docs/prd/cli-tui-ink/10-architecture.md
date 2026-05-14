@@ -165,12 +165,20 @@ Per-phase frame timings (render / diff / write / yoga-layout) and flicker contex
 
 **Default agent + model resolution.** When `texra` starts the TUI without `--agent` / `--model` overrides, the agent and model are resolved in this order:
 
-1. **Workspace setting** — `.texra/config.json` at the workspace root, if present (`agent`, `model` fields).
-2. **User setting** — `~/.texra/global-storage/config.json` (same fields).
-3. **Last-used** — the agent + model from the most recent session for this workspace, read from the same history store the resume flow uses.
-4. **Built-in default** — `agent: writer`, `model: claude-opus-4-7` (or whatever the registry's `defaultAgent` / `defaultModel` flags are set to). This is the fallback when none of the above are present.
+1. **Workspace setting** — `.texra/config.json` at the workspace root, if present (`agent`, `model` fields). New convention; no consumer of this path exists in the tree today.
+2. **User setting** — `<global-storage>/config.json` (same fields). Also new; today's user-scope settings live in `vscode.workspace.getConfiguration` and won't be there. The CLI host needs a new JSON config loader (`platform().config` currently wraps VS Code's `getConfiguration`).
+3. **Last-used** — the agent + model from the most recent `HistoryItem` for this workspace, read from the existing history store.
+4. **Built-in default** — `agent: chat`, `model: claude-opus-4-7`. The `chat` agent ships in `packages/extension/resources/tool_use_agents/`. There's no schema-level `defaultAgent` / `defaultModel` flag in the agent YAML today; this is a hardcoded fallback in the CLI host.
 
 `/agent` and `/model` slash forms write back to the user setting unless invoked with a `--workspace` modifier (future). The current selection is always visible in the header (per [mockups/00-idle.md](./mockups/00-idle.md)).
+
+**Cross-host path unification (out of scope for v1, flagged for a follow-up PRD).** Today the three hosts use different storage roots:
+
+- **CLI** — `~/.texra/global-storage/` (via `nodeStorage.ts`).
+- **VS Code extension** — VS Code's `globalStorageUri` (sandboxed under `~/Library/Application Support/Code/User/globalStorage/` on macOS).
+- **Desktop (Electron)** — Electron's `app.getPath('userData')` → `~/Library/Application Support/TeXRA/` on macOS (`packages/desktop/src/main/platform/index.ts`).
+
+A user with all three hosts has three separate `history.jsonl`s, three separate config files, three separate session histories. The right end state is a single canonical path (the flat-home-directory pattern — like Codex's `~/.codex/`, the CLI's `~/.texra/`) consumed by all three hosts. That's a platform-layer change, not a TUI change; tracked separately.
 
 ### Slash command forms
 
@@ -199,25 +207,13 @@ Selecting an attachment inserts the literal token `[Image #N]` at the input curs
 
 Paste detection runs at the `BaseTextInput` layer using the same clipboard hooks Claude Code uses (`getImageFromClipboard()` per platform). When the bracketed-paste handler sees a paste containing image bytes (not just text), it routes the bytes into `cliState.attachments` and inserts a `[Image #N]` token in place of the literal paste.
 
-### Session resume
+### Session resume (deferred to a separate PRD)
 
-A session is the existing unit of conversation history the extension persists today. The CLI gains three entry points:
+The desired UX is captured in [mockups/10-session-resume.md](./mockups/10-session-resume.md) — a `/resume` slash form lists prior executions (by their `HistoryItem.id`, the existing execution identifier in `src/shared/schemas/historyViewMessages.ts`), and `texra chat --resume <exec-id>` / `--continue` flags bypass the picker.
 
-- **`texra chat --continue`** — resume the most recent session, no UI.
-- **`texra chat --resume <session-id>`** — direct resume by id, no UI.
-- **`/resume`** slash command (a structured form per [§ Slash command forms](#slash-command-forms)) — listing recent sessions for interactive selection.
+The implementation **does not fit in this PRD** because today's persistence layer doesn't support transcript replay: `HistoryItem` carries `{id, timestamp, agentConfig, description?}` only (no turn-by-turn log), `StreamLogStore` is in-memory, and the extension's existing restore (`texra.restoreState` → `buildMainViewState`) restores `TaskState` (agent config + active files) and **re-runs** rather than replaying. A real per-exec-id resume needs (a) an on-disk transcript store keyed by exec id, (b) a replay path that flushes turns into the `<Static>` region without re-streaming, (c) a decision on stale-agent / model substitution.
 
-Resume reads the session record from the existing storage (the extension's history; the CLI lifts the path lookup into `platform().storage` so both hosts share it). The flow:
-
-1. Load session metadata (`sessionId`, `agentId`, `modelId`, `turnCount`, log-entry pointer).
-2. Restore agent + model selection (warn if either is no longer registered; offer substitute via `/agent` / `/model` forms before proceeding).
-3. Replay `StreamLogStore` entries for the session into the conversation pane; turns render fully and instantly into the `<Static>` region — no chunk-by-chunk re-streaming.
-4. Pin a one-line dim banner above the replayed turn 1: `── resumed: <name> (<age>) ──`.
-5. New turns append to the **same** `sessionId` — no fork.
-
-See [mockups/10-session-resume.md](./mockups/10-session-resume.md) for the picker form and post-resume layout.
-
-**Out of scope for v1:** session forking ("re-run from turn N"), cross-host concurrent edit reconciliation (both hosts read the same log; appends are sequential through the shared store; detached subagents are not re-attached).
+These belong in a follow-up PRD (`cli-tui-ink/02-session-resume.md` or similar). This PRD acknowledges the gap so the v1 chat session is understood as **always a fresh start** — the existing history browser in the VS Code extension remains the only way to revisit prior conversations until the resume PRD lands.
 
 ### Intuitiveness conventions
 
