@@ -15,7 +15,8 @@ Each file shows one situation and annotates the layout decisions worth feedback.
 | [06-command-palette.md](./06-command-palette.md)     | `Ctrl-P` palette open with fuzzy filter                              | Palette position, result ranking, command-vs-agent-vs-model rows              |
 | [07-streaming-text.md](./07-streaming-text.md)       | `texra chat \| tee` — stdout piped, no chrome                        | What scripts and `tee` see; how approvals route to stderr                     |
 | [08-tool-variants.md](./08-tool-variants.md)         | Generic vs. rich tool cards (Read / Bash / FileEdit / LaTeX-compile) | When a tool earns a custom renderer; what the variants look like side-by-side |
-| [09-slash-form.md](./09-slash-form.md)               | `/model` as a structured form (title + Select + sub-state + footer)  | When a slash command opens a domain-specific form vs. acting inline           |
+| [09-slash-form.md](./09-slash-form.md)               | `/model` (single-screen) and `/status` (tabbed) as structured forms  | When a slash command opens a domain-specific form vs. acting inline; tabs     |
+| [10-session-resume.md](./10-session-resume.md)       | `/resume` picker + post-resume conversation state                    | How prior sessions surface and replay into the TUI                            |
 
 The mockups use these glyphs intentionally:
 
