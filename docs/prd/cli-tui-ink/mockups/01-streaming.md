@@ -41,7 +41,7 @@ The assistant has finished one tool call and is now streaming markdown into a li
 
 ## Open questions for review
 
-1. Tool-use card colors — should the entire card border tint by tool category (file edit = blue, bash = orange, search = purple) or stay neutral with only the status pill carrying color?
-2. The collapsed body shows the first line. Should it be the **last** line so the user sees what the tool just produced, not what it started with?
-3. Should there be a "this turn is interruptible" indicator when streaming, or is the `ctrl-c interrupt` hint in the footer enough?
-4. Cached-token count in the status bar — useful for cost awareness, or noise?
+1. Tool-use card colors — should the entire card border tint by tool category (file edit = blue, bash = orange, search = purple) or stay neutral with only the status pill carrying color? User: yes
+2. The collapsed body shows the first line. Should it be the **last** line so the user sees what the tool just produced, not what it started with? User: maybe both? if too long put some ...
+3. Should there be a "this turn is interruptible" indicator when streaming, or is the `ctrl-c interrupt` hint in the footer enough? User: "enter send · ctrl-j newline · ctrl-c interrupt · ctrl-o expand last tool" these are good. but in the future maybe they can shuffle to list of tips
+4. Cached-token count in the status bar — useful for cost awareness, or noise? User: ok for now.
