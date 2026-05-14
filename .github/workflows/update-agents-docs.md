@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
   issues: read
   pull-requests: read
@@ -43,6 +44,8 @@ Out of scope (do not modify):
 - Source files, tests, build configs, lockfiles
 - Anything under `.github/` (workflows, actions, configs)
 - Other markdown files (CHANGELOG, README, design docs)
+
+The compiled workflow enforces this allowlist: a separate "Validate patch file allowlist" job step inspects the agent's patch and **fails the run** if it touches any path other than `AGENTS.md` or `CLAUDE.md`. Do not attempt to work around it — if a change requires touching another file, abort and do not propose a pull request.
 
 ## Process
 
