@@ -161,6 +161,8 @@ export class TaskGroupList extends LitElement {
   /** Memoized tree output from buildGroupTree() - recomputed only when inputs change */
   private cachedTree: GroupTree[] = [];
   private cachedUngrouped: LogMessageData[] = [];
+  private ungroupedMessageById = new Map<string, LogMessageData>();
+  private ungroupedMessageIndex = new Map<string, number>();
 
   /** Raw partial-line buffer: unprocessed bytes after the last '\n', capped at 64 KiB */
   private cachedRawTail = '';
@@ -344,9 +346,10 @@ export class TaskGroupList extends LitElement {
       const msg = this.messages[i];
       const node = msg.groupId ? this.groupNodeIndex.get(msg.groupId) : null;
       if (node) {
+        this.removeUngroupedMessageIndex(msg.id);
         this.insertMessageInPlace(node.messages, msg);
       } else {
-        this.insertMessageInPlace(this.cachedUngrouped, msg);
+        this.insertUngroupedMessageInPlace(msg);
       }
     }
   }
@@ -358,17 +361,27 @@ export class TaskGroupList extends LitElement {
   private insertMessageInPlace(
     target: LogMessageData[],
     message: LogMessageData,
-  ): void {
+  ): number {
     const msgTime = message.timestamp ?? 0;
     const lastTs =
       target.length > 0 ? (target.at(-1)!.timestamp ?? 0) : -Infinity;
     if (msgTime >= lastTs) {
       target.push(message);
+      return target.length - 1;
     } else {
       const idx = target.findIndex((e) => (e.timestamp ?? 0) > msgTime);
-      if (idx >= 0) target.splice(idx, 0, message);
-      else target.push(message);
+      if (idx >= 0) {
+        target.splice(idx, 0, message);
+        return idx;
+      }
+      target.push(message);
+      return target.length - 1;
     }
+  }
+
+  private insertUngroupedMessageInPlace(message: LogMessageData): void {
+    const index = this.insertMessageInPlace(this.cachedUngrouped, message);
+    this.reindexUngroupedMessagesFrom(index);
   }
 
   /**
@@ -445,6 +458,7 @@ export class TaskGroupList extends LitElement {
     if (msg.groupId) {
       const node = this.groupNodeIndex.get(msg.groupId);
       if (node) {
+        this.removeUngroupedMessageIndex(msg.id);
         const idx = node.messages.findIndex((m) => m.id === msg.id);
         if (idx >= 0) {
           node.messages[idx] = msg;
@@ -453,9 +467,18 @@ export class TaskGroupList extends LitElement {
       }
     }
 
+    const indexed = this.ungroupedMessageIndex.get(msg.id);
+    if (indexed !== undefined && this.cachedUngrouped[indexed]?.id === msg.id) {
+      this.cachedUngrouped[indexed] = msg;
+      this.ungroupedMessageById.set(msg.id, msg);
+      return;
+    }
+
     const idx = this.cachedUngrouped.findIndex((m) => m.id === msg.id);
     if (idx >= 0) {
       this.cachedUngrouped[idx] = msg;
+      this.ungroupedMessageIndex.set(msg.id, idx);
+      this.ungroupedMessageById.set(msg.id, msg);
     }
   }
 
@@ -536,6 +559,8 @@ export class TaskGroupList extends LitElement {
     );
     const messagesByGroup = new Map<string, LogMessageData[]>();
     const ungrouped: LogMessageData[] = [];
+    this.ungroupedMessageById.clear();
+    this.ungroupedMessageIndex.clear();
 
     for (const msg of sortedMessages) {
       if (msg.groupId && groupMap.has(msg.groupId)) {
@@ -543,6 +568,8 @@ export class TaskGroupList extends LitElement {
         bucket.push(msg);
         messagesByGroup.set(msg.groupId, bucket);
       } else {
+        this.ungroupedMessageIndex.set(msg.id, ungrouped.length);
+        this.ungroupedMessageById.set(msg.id, msg);
         ungrouped.push(msg);
       }
     }
@@ -643,7 +670,7 @@ export class TaskGroupList extends LitElement {
     for (let i = this.cachedTimeline.length - 1; i >= 0; i--) {
       const item = this.cachedTimeline[i];
       if (!('msg' in item)) continue;
-      const fresh = this.findUngroupedReverse(item.key);
+      const fresh = this.ungroupedMessageById.get(item.key);
       if (fresh && fresh !== item.msg) {
         (item as { msg: LogMessageData }).msg = fresh;
       }
@@ -685,12 +712,17 @@ export class TaskGroupList extends LitElement {
     }
   }
 
-  /** Find a message in cachedUngrouped by scanning from end (O(1) for tail changes). */
-  private findUngroupedReverse(id: string): LogMessageData | undefined {
-    for (let i = this.cachedUngrouped.length - 1; i >= 0; i--) {
-      if (this.cachedUngrouped[i].id === id) return this.cachedUngrouped[i];
+  private reindexUngroupedMessagesFrom(startIndex: number): void {
+    for (let i = startIndex; i < this.cachedUngrouped.length; i++) {
+      const message = this.cachedUngrouped[i];
+      this.ungroupedMessageIndex.set(message.id, i);
+      this.ungroupedMessageById.set(message.id, message);
     }
-    return undefined;
+  }
+
+  private removeUngroupedMessageIndex(id: string): void {
+    this.ungroupedMessageIndex.delete(id);
+    this.ungroupedMessageById.delete(id);
   }
 
   /** Check if a group is expanded */
