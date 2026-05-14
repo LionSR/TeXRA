@@ -63,6 +63,7 @@ export enum WorkspaceStateKey {
   LATEXDIFF_BETWEEN_ROUNDS = 'texra.latexdiff.generateBetweenRoundDiffs',
   LATEXDIFF_TIMEOUT_MS = 'texra.latexdiff.timeoutMs',
   LATEXDIFF_MATH_MARKUP = 'texra.latexdiff.mathMarkup',
+  LATEXDIFF_CHANGES_ONLY = 'texra.latexdiff.changesOnly',
   LATEX_FORMATTER = 'texra.latex.formatter',
   /**
    * One-shot per-workspace marker for the legacy `texra.*` config migration.
