@@ -16,6 +16,7 @@ import { loadAgents, setAgentDirectories } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
 import { setDefaultAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
+import { initializeOdysseyPrompts } from '@agent/odyssey';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import {
   getServerSideKeyService,
@@ -165,6 +166,7 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.window.createOutputChannel(name),
   );
   initializePolishModel(context.extensionPath);
+  initializeOdysseyPrompts(context.extensionPath);
   initializeStateManagers(context, gitRepoRoot);
   const lifecycle = createLifecycleHost({
     onError: (phase, error) =>

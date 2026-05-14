@@ -52,6 +52,13 @@
             "description": "Experimental: parse \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files and surface them as VS Code diagnostics (squiggles + Problems panel). Severity 5→Error, 4→Warning, 3→Info, 1–2→Hint. Tool-use agents may also push diagnostics directly via the add_criticism tool.",
             "scope": "resource",
             "order": 52
+          },
+          "texra.experimental.odyssey.enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Experimental: enable Odyssey, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Odyssey causes the agent to keep working across turns toward a stated objective until it calls odyssey(complete). Off by default; the `odyssey` tool is registered either way but errors out when this flag is off.",
+            "scope": "resource",
+            "order": 53
           }
         }
       },
