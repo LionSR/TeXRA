@@ -324,8 +324,8 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
   {
     id: 'external-inquiry',
     tools: ['external_inquiry'],
-    name: 'External Inquiry',
-    category: 'workflow',
+    name: 'External Chat Handoff',
+    category: 'ai-agents',
     description:
       'Lets agents ask you to query an external chat model such as ChatGPT, Claude, or Gemini and paste the answer back into the run.',
     configNotes:
@@ -339,7 +339,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     id: 'codex',
     tools: ['codex'],
     name: 'OpenAI Codex CLI',
-    category: 'computation',
+    category: 'ai-agents',
     description:
       'OpenAI Codex agent runtime. Required by the Codex SDK for local code generation and analysis.',
     installGuide:
@@ -405,7 +405,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     id: 'claude-agent',
     tools: ['claude_agent'],
     name: 'Claude Code Agent',
-    category: 'computation',
+    category: 'ai-agents',
     description:
       'Anthropic Claude Code agent runtime. Spins off a Claude agent in the workspace for code analysis, generation, and research.',
     installGuide:

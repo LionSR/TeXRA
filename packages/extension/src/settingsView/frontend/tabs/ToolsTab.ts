@@ -8,56 +8,21 @@ import { repeat } from 'lit/directives/repeat.js';
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 
-// Side-effect imports - register WA icon and spinner components
-import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
-import '@awesome.me/webawesome/dist/components/select/select.js';
-import '@awesome.me/webawesome/dist/components/option/option.js';
-import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
-import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
-import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
-
 // Local imports - shared schemas
 import { createEvent } from '@shared/utils/events';
 import type {
   ToolDashboardItem,
   ToolCategory,
-  CodexSandboxMode,
-  CodexReasoningEffort,
-  CodexApprovalPolicy,
 } from '@shared/schemas/settingsViewMessages';
+
+// Side-effect imports - register WA icon and spinner components
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
+import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 
 // Side-effect: register tool card component
 import '../components/tools/ToolCard';
-
-const SANDBOX_MODE_OPTIONS: readonly {
-  value: CodexSandboxMode;
-  label: string;
-}[] = [
-  { value: 'read-only', label: 'Read-only' },
-  { value: 'workspace-write', label: 'Workspace write' },
-  { value: 'danger-full-access', label: 'Full access' },
-] as const;
-
-const REASONING_EFFORT_OPTIONS: readonly {
-  value: CodexReasoningEffort;
-  label: string;
-}[] = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'xhigh', label: 'Extra high' },
-] as const;
-
-const APPROVAL_POLICY_OPTIONS: readonly {
-  value: CodexApprovalPolicy;
-  label: string;
-}[] = [
-  { value: 'never', label: 'Auto approve' },
-  { value: 'on-request', label: 'Ask when requested' },
-  { value: 'untrusted', label: 'Ask for untrusted' },
-  { value: 'on-failure', label: 'Ask on failure' },
-] as const;
 
 /** Per-category display metadata. */
 interface CategoryMeta {
@@ -80,9 +45,13 @@ const CATEGORY_META: Record<ToolCategory, CategoryMeta> = {
   lean: { label: 'Lean 4', icon: 'beaker' },
   workflow: { label: 'Memory & Workflow', icon: 'type-hierarchy' },
   system: { label: 'System Dependencies', icon: 'gear' },
+  // ai-agents lives on its own tab (AIAgentsTab); keep the meta entry so the
+  // Record stays exhaustive and the type checker enforces it.
+  'ai-agents': { label: 'AI Agents', icon: 'robot' },
 };
 
-/** Canonical category display order. */
+/** Canonical category display order. The 'ai-agents' category is rendered by
+ * the dedicated AIAgentsTab, so it is intentionally omitted here. */
 const CATEGORY_ORDER: ToolCategory[] = [
   'file',
   'latex',
@@ -245,38 +214,12 @@ export class ToolsTab extends LitElement {
         flex-wrap: wrap;
       }
 
-      .codex-inline-settings {
-        padding: var(--wa-space-2xs) var(--wa-space-xs);
-        margin-bottom: var(--wa-space-2xs);
-        border-radius: var(--border-radius);
-        background: var(--wa-color-surface-lowered, rgba(128, 128, 128, 0.08));
-      }
-
-      .setting-row {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-xs);
-      }
-
-      .setting-row label {
-        font-size: var(--font-size-sm);
-        color: var(--color-text-secondary);
-        white-space: nowrap;
-      }
-
-      .setting-select {
-        min-width: 10rem;
-        max-width: 14rem;
-      }
     `,
   ];
 
   @property({ attribute: false }) items: ToolDashboardItem[] = [];
   @property({ type: Boolean }) loaded = false;
   @property({ type: Boolean }) bashApprovalEnabled = true;
-  @property({ type: String }) codexSandboxMode = 'workspace-write';
-  @property({ type: String }) codexReasoningEffort = 'high';
-  @property({ type: String }) codexApprovalPolicy = 'never';
   @property({ attribute: false }) showDesktopCrashReporting = false;
   @property({ attribute: false }) desktopCrashReportingEnabled = false;
   @property({ attribute: false }) desktopCrashReportingConfigured = false;
@@ -294,28 +237,6 @@ export class ToolsTab extends LitElement {
 
   private handleBashApprovalToggle = (e: Event): void => {
     this.emitToggle('bash-approval-toggle', e);
-  };
-
-  private emitSelect(eventName: string, key: string, e: Event): void {
-    // Read from currentTarget (the wa-select host) to avoid relying on the
-    // shadow-DOM retargeted target, which is brittle for Web Components.
-    const select = e.currentTarget as WaSelect | null;
-    const value = typeof select?.value === 'string' ? select.value : '';
-    if (value) {
-      this.dispatchEvent(createEvent(eventName, { [key]: value }));
-    }
-  }
-
-  private handleCodexSandboxModeChange = (e: Event): void => {
-    this.emitSelect('codex-sandbox-mode-change', 'mode', e);
-  };
-
-  private handleCodexReasoningEffortChange = (e: Event): void => {
-    this.emitSelect('codex-reasoning-effort-change', 'effort', e);
-  };
-
-  private handleCodexApprovalPolicyChange = (e: Event): void => {
-    this.emitSelect('codex-approval-policy-change', 'policy', e);
   };
 
   private handleDesktopCrashReportingToggle = (e: Event): void => {
@@ -339,54 +260,9 @@ export class ToolsTab extends LitElement {
             ?checked=${this.bashApprovalEnabled}
             @change=${this.handleBashApprovalToggle}
           >
-            Require approval for shell commands &amp; Codex sessions
+            Require approval for shell commands &amp; agent sessions
           </wa-checkbox>
         </div>
-      </div>
-    `;
-  }
-
-  private renderSelectRow(
-    label: string,
-    value: string,
-    options: readonly { value: string; label: string }[],
-    onChange: (e: Event) => void,
-  ): TemplateResult {
-    return html`
-      <div class="setting-row">
-        <label>${label}</label>
-        <wa-select class="setting-select" .value=${value} @change=${onChange}>
-          ${options.map(
-            (opt) => html`
-              <wa-option value=${opt.value}> ${opt.label} </wa-option>
-            `,
-          )}
-        </wa-select>
-      </div>
-    `;
-  }
-
-  private renderCodexInlineSettings(): TemplateResult {
-    return html`
-      <div class="codex-inline-settings">
-        ${this.renderSelectRow(
-          'Sandbox mode',
-          this.codexSandboxMode,
-          SANDBOX_MODE_OPTIONS,
-          this.handleCodexSandboxModeChange,
-        )}
-        ${this.renderSelectRow(
-          'Reasoning effort',
-          this.codexReasoningEffort,
-          REASONING_EFFORT_OPTIONS,
-          this.handleCodexReasoningEffortChange,
-        )}
-        ${this.renderSelectRow(
-          'Approval policy',
-          this.codexApprovalPolicy,
-          APPROVAL_POLICY_OPTIONS,
-          this.handleCodexApprovalPolicyChange,
-        )}
       </div>
     `;
   }
@@ -527,15 +403,7 @@ export class ToolsTab extends LitElement {
         ${repeat(
           items,
           (item) => item.id,
-          (item) => html`
-            <tool-card .item=${item}>
-              ${category === 'computation' && item.id === 'codex'
-                ? html`<div slot="details">
-                    ${this.renderCodexInlineSettings()}
-                  </div>`
-                : nothing}
-            </tool-card>
-          `,
+          (item) => html`<tool-card .item=${item}></tool-card>`,
         )}
       </div>
     `;
