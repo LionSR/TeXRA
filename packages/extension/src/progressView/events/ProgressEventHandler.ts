@@ -488,8 +488,7 @@ export class ProgressEventHandler {
     this.webviewBridge.syncStream(stream);
 
     const { extras } = this.prepareStreamSyncExtras(stream);
-    const todos = this.state.getTodos(stream);
-    const plan = this.state.getPlan(stream);
+    const { todos, plan } = this.state.getWorkPlan(stream);
     const queuedFollowUps = ToolUseFollowUpQueue.getAll(stream);
     const agentCategory = this.getStreamCategory(stream);
 
