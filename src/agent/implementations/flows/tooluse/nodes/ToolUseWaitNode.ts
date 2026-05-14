@@ -1,5 +1,6 @@
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { maybeBuildOdysseyContinuation } from '@agent/odyssey';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS } from '@shared/schemas';
 
@@ -43,6 +44,7 @@ export class ToolUseWaitNode<C> extends Node<
       streamId,
       onBeforeWaiting,
       runtimeHost,
+      isSubagent,
     } = this.services;
 
     if (checkInterruption()) {
@@ -53,11 +55,23 @@ export class ToolUseWaitNode<C> extends Node<
     // it must not see a failure as a successful completion.
     // In subagent mode, stop immediately: the orchestrator was never
     // notified, so waiting for a follow-up would hang forever.
-    if (prepRes.afterError && this.services.isSubagent) {
+    if (prepRes.afterError && isSubagent) {
       return { kind: 'stop' };
     }
     if (!prepRes.afterError) {
       await onBeforeWaiting?.(prepRes.lastResponse, prepRes.touchedFiles);
+    }
+
+    // Odyssey continuation runs BEFORE the blocking wait. session.waitForFollowUp
+    // blocks indefinitely on an empty queue, so a post-wait check would be
+    // unreachable in the happy path (idle user, active odyssey). See PRD §5.3.
+    const odysseyFollowUp = await maybeBuildOdysseyContinuation({
+      streamId,
+      isSubagent: !!isSubagent,
+      hasQueuedFollowUp: session.hasQueuedFollowUp(),
+    });
+    if (odysseyFollowUp) {
+      return { kind: 'continue', followUp: odysseyFollowUp };
     }
 
     if (!session.hasQueuedFollowUp()) {
