@@ -14,6 +14,16 @@ export const CLAUDE_AGENT_PERMISSION_MODES = [
 export type ClaudeAgentPermissionMode =
   (typeof CLAUDE_AGENT_PERMISSION_MODES)[number];
 
+/** Canonical Claude model IDs surfaced by the settings dropdown.
+ * The SDK accepts arbitrary model strings; this list is what we expose in the
+ * UI. Keep it in sync with `ClaudeAgentModelSchema` in settingsViewMessages.ts. */
+export const CLAUDE_AGENT_MODELS = [
+  'claude-opus-4-7',
+  'claude-sonnet-4-6',
+  'claude-haiku-4-5-20251001',
+] as const;
+export type ClaudeAgentModel = (typeof CLAUDE_AGENT_MODELS)[number];
+
 const SUMMARY_MAX_LENGTH = 60;
 type ToolUseStatus = NonNullable<ToolUseLog['status']>;
 
