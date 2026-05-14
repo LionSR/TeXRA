@@ -19,7 +19,7 @@ import { ToolError } from '@tools/result';
 export function requireRuntimeHost(toolName: string): AgentRuntimeHost {
   const host = tryUseRunContext()?.runtimeHost;
   if (!host) {
-    throw new ToolError(`${toolName} requires an active tool runtime host.`);
+    throw new ToolError(`${toolName} requires a tool runtime host.`);
   }
   return host;
 }
