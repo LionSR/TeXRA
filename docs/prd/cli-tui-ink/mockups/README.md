@@ -29,3 +29,5 @@ The mockups use these glyphs intentionally:
 - `…` — truncation marker.
 
 Plain ASCII fallback glyphs (`+ - | < >`) are used only in [07-streaming-text.md](./07-streaming-text.md) since that mode strips Ink chrome entirely.
+
+Lines prefixed `User:` inside the "Open questions for review" sections of each mockup are **captured design feedback from review** (the spec's author answering the open question inline). They are intentional review artifacts, not raw conversation pasted in by accident — and they record decisions the implementer should treat as binding.

@@ -3,7 +3,7 @@
 Root stream is delegating to two subagents. One subagent has spawned its own child. SubagentList is rendered. The active focused stream is the root (highlighted with `●`); pressing `Ctrl-A` cycles forward, `Ctrl-B` returns to the parent, digits `1`–`9` jump directly.
 
 ```
-╭─ TeXRA ── agent: coordinator  ·  model: claude-opus-4.7  ─── 5 turns · $0.18 · 06:42 ╮
+╭─ TeXRA ── agent: coordinator  ·  model: claude-opus-4-7  ─── 5 turns · $0.18 · 06:42 ╮
 │                                                                                      │
 │  ◇ coordinator                                                                       │
 │    I'll dispatch three research workers in parallel: one on the 1990s                │
@@ -15,7 +15,7 @@ Root stream is delegating to two subagents. One subagent has spawned its own chi
 │    ╰─────────────────────────────────────────────────────────────────────╯         │
 │                                                                                      │
 ├─ subagents ──────────────────────────────────────────────────────────────────────────┤
-│  ● 0  coordinator        running     · model: opus-4.7  · 3 tools · $0.18 · 06:42    │
+│  ● 0  coordinator        running     · model: opus-4-7  · 3 tools · $0.18 · 06:42    │
 │  │                                                                                   │
 │  ├─ 1  w-7a3  research   running     · model: sonnet-4.6 · 4 tools · $0.07 · 01:53  │
 │  │  └─ 2  w-7a3-c  read  running     · model: haiku-4.5  · 11 tools · $0.01 · 00:42 │

@@ -110,4 +110,4 @@ A future TeXRA-specific rich renderer for LaTeX compilation. The generic Bash ca
 3. For LaTeX-compile (8.4), are error-line OSC 8 hyperlinks worth the complexity, or should clicking a line use a TeXRA convention (e.g., copy `sec_3.2.tex:43` to clipboard for the user to paste into VS Code)?
 4. Should the v1 PRD scope only Bash + Edit as rich renderers, or also commit to a LaTeX renderer for v1?
 
-User: ok, do as you recommend. dont overcrowding the TUI
+User: ok, do as you recommend. don't overcrowd the TUI
