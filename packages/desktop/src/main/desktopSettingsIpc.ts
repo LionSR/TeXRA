@@ -78,6 +78,11 @@ import {
   parseCodexReasoningEffort,
   parseCodexSandboxMode,
 } from '@tools/codexConfig';
+import {
+  CLAUDE_AGENT_DEFAULT_MODEL,
+  parseClaudeAgentModel,
+  parseClaudeAgentPermissionMode,
+} from '@tools/claudeAgentConfig';
 import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
 import {
   MEMORY_STORAGE_ROOT,
@@ -731,6 +736,18 @@ export function createDesktopSettingsIpc(
           'never',
         ) ?? 'never',
       ),
+      claudeAgentModel: parseClaudeAgentModel(
+        workspaceState.get<string>(
+          WorkspaceStateKey.CLAUDE_AGENT_MODEL,
+          CLAUDE_AGENT_DEFAULT_MODEL,
+        ) ?? CLAUDE_AGENT_DEFAULT_MODEL,
+      ),
+      claudeAgentPermissionMode: parseClaudeAgentPermissionMode(
+        workspaceState.get<string>(
+          WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
+          'acceptEdits',
+        ) ?? 'acceptEdits',
+      ),
     });
   }
 
@@ -938,7 +955,7 @@ export function createDesktopSettingsIpc(
     ]);
   }
 
-  async function updateCodexSetting(
+  async function updateAgentSetting(
     key: WorkspaceStateKey,
     value: string,
   ): Promise<void> {
@@ -1300,7 +1317,7 @@ export function createDesktopSettingsIpc(
           return true;
         case SETTINGS_VIEW_COMMANDS.SET_CODEX_SANDBOX_MODE:
           runAsync(
-            updateCodexSetting(
+            updateAgentSetting(
               WorkspaceStateKey.CODEX_SANDBOX_MODE,
               result.data.mode,
             ),
@@ -1308,7 +1325,7 @@ export function createDesktopSettingsIpc(
           return true;
         case SETTINGS_VIEW_COMMANDS.SET_CODEX_REASONING_EFFORT:
           runAsync(
-            updateCodexSetting(
+            updateAgentSetting(
               WorkspaceStateKey.CODEX_REASONING_EFFORT,
               result.data.effort,
             ),
@@ -1316,9 +1333,25 @@ export function createDesktopSettingsIpc(
           return true;
         case SETTINGS_VIEW_COMMANDS.SET_CODEX_APPROVAL_POLICY:
           runAsync(
-            updateCodexSetting(
+            updateAgentSetting(
               WorkspaceStateKey.CODEX_APPROVAL_POLICY,
               result.data.policy,
+            ),
+          );
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_MODEL:
+          runAsync(
+            updateAgentSetting(
+              WorkspaceStateKey.CLAUDE_AGENT_MODEL,
+              result.data.model,
+            ),
+          );
+          return true;
+        case SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_PERMISSION_MODE:
+          runAsync(
+            updateAgentSetting(
+              WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
+              result.data.mode,
             ),
           );
           return true;
