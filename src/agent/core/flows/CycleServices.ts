@@ -32,8 +32,6 @@ export interface ToolUseCycleServices<
 > extends BaseFlowContextInit<C> {
   readonly client: C;
   readonly toolRegistry: IToolRegistry;
-  readonly modelName?: string;
-  readonly agentName?: string;
   /** Session for injecting queued user messages after tool dispatch. */
   readonly session?: IToolUseSession;
   /** Callback when a queued follow-up is consumed (clears UI display). */
