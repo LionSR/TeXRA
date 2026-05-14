@@ -53,6 +53,18 @@ export function buildLatexdiffTextCommandExclusionFlag(): string {
   return `--exclude-textcmd=${LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS.join(',')}`;
 }
 
+export const LATEXDIFF_CHANGES_ONLY_SUBTYPE = 'ONLYCHANGEDPAGE';
+
+export function resolveLatexdiffSubtype(options?: {
+  subtype?: string;
+  changesOnly?: boolean;
+}): string | undefined {
+  return (
+    options?.subtype ??
+    (options?.changesOnly ? LATEXDIFF_CHANGES_ONLY_SUBTYPE : undefined)
+  );
+}
+
 /**
  * Options for diff execution.
  * @property mathMarkup - Math markup mode ('off' | 'whole' | 'coarse' | 'fine').
@@ -248,6 +260,11 @@ export class DiffCommandExecutor {
     pictureEnvs: string;
     subtype?: string;
   } {
+    const changesOnly = getWorkspaceState().get<boolean>(
+      WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
+      LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
+    );
+
     return {
       mathMarkup:
         options?.mathMarkup ??
@@ -259,7 +276,10 @@ export class DiffCommandExecutor {
         'texra.latexdiff.pictureEnvironments',
         DEFAULT_PICTURE_ENVS,
       ),
-      subtype: options?.subtype,
+      subtype: resolveLatexdiffSubtype({
+        subtype: options?.subtype,
+        changesOnly,
+      }),
     };
   }
 }
