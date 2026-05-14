@@ -285,12 +285,10 @@ export class SettingsApp extends SettingsAppBase {
   private readonly codexSandboxMode = signal<string>('workspace-write');
   private readonly codexReasoningEffort = signal<string>('high');
   private readonly codexApprovalPolicy = signal<string>('never');
-  private readonly claudeAgentModel = signal<ClaudeAgentModel>(
-    'claude-opus-4-7',
-  );
-  private readonly claudeAgentPermissionMode = signal<ClaudeAgentPermissionMode>(
-    'acceptEdits',
-  );
+  private readonly claudeAgentModel =
+    signal<ClaudeAgentModel>('claude-opus-4-7');
+  private readonly claudeAgentPermissionMode =
+    signal<ClaudeAgentPermissionMode>('acceptEdits');
 
   // Tool dashboard state
   private readonly toolDashboardItems = signal<ToolDashboardItem[]>([]);
