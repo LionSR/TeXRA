@@ -42,6 +42,12 @@ export { toRemoteAgentProfileData } from './remoteAgentProfileData';
 export { buildStreamTabInfo, type StreamTabInfoInputs } from './streamTabInfo';
 
 export {
+  peekWorktreeInfo,
+  resolveWorktreeInfo,
+  invalidateWorktreeInfo,
+} from './worktreeInfo';
+
+export {
   // Types
   type AgentEntry,
   type ResolvedAgent,
