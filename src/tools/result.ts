@@ -12,9 +12,11 @@ import type { ZodIssue } from 'zod';
  * Schema for line change statistics.
  * Single source of truth - used by ToolResult, edits, and model handlers.
  */
+const LineCountSchema = z.int().nonnegative();
+
 export const LineChangesSchema = z.object({
-  added: z.number(),
-  removed: z.number(),
+  added: LineCountSchema,
+  removed: LineCountSchema,
 });
 export type LineChanges = z.infer<typeof LineChangesSchema>;
 
@@ -51,7 +53,7 @@ export const EditRecordSchema = z.object({
   path: z.string(),
   lineChanges: LineChangesSchema.optional(),
   /** 1-based line number where the edit starts (for navigation) */
-  startLine: z.number().optional(),
+  startLine: z.int().positive().optional(),
 });
 export type EditRecord = z.infer<typeof EditRecordSchema>;
 
@@ -64,8 +66,8 @@ export type EditRecord = z.infer<typeof EditRecordSchema>;
  */
 export const FlattenedEditRecordSchema = z.object({
   path: z.string(),
-  added: z.number().prefault(0),
-  removed: z.number().prefault(0),
+  added: LineCountSchema.prefault(0),
+  removed: LineCountSchema.prefault(0),
 });
 export type FlattenedEditRecord = z.infer<typeof FlattenedEditRecordSchema>;
 
