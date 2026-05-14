@@ -176,6 +176,9 @@ export class TaskGroupList extends LitElement {
     | { key: string; time: number; tree: GroupTree }
   > = [];
 
+  /** O(1) lookup from ungrouped message ID → cachedTimeline index. */
+  private timelineMessageIndex = new Map<string, number>();
+
   /** Reference to the scroll container */
   @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
   private scrollContainer?: HTMLElement;
@@ -575,7 +578,7 @@ export class TaskGroupList extends LitElement {
 
   /** Build full chronological timeline from cached tree + ungrouped. */
   private buildFullTimeline(): typeof this.cachedTimeline {
-    return [
+    const timeline = [
       ...this.cachedUngrouped.map((m) => ({
         key: m.id,
         time: m.timestamp ?? 0,
@@ -587,6 +590,8 @@ export class TaskGroupList extends LitElement {
         tree: t,
       })),
     ].sort((a, b) => a.time - b.time);
+    this.rebuildTimelineMessageIndex(timeline);
+    return timeline;
   }
 
   /**
@@ -610,11 +615,17 @@ export class TaskGroupList extends LitElement {
           ? this.cachedTimeline.at(-1)!.time
           : -Infinity;
       if (entry.time >= lastTime) {
+        this.timelineMessageIndex.set(entry.key, this.cachedTimeline.length);
         this.cachedTimeline.push(entry);
       } else {
         const idx = this.cachedTimeline.findIndex((e) => e.time > entry.time);
-        if (idx >= 0) this.cachedTimeline.splice(idx, 0, entry);
-        else this.cachedTimeline.push(entry);
+        if (idx >= 0) {
+          this.cachedTimeline.splice(idx, 0, entry);
+          this.reindexTimelineMessagesFrom(idx);
+        } else {
+          this.timelineMessageIndex.set(entry.key, this.cachedTimeline.length);
+          this.cachedTimeline.push(entry);
+        }
       }
     }
   }
@@ -644,12 +655,32 @@ export class TaskGroupList extends LitElement {
     for (const index of indices) {
       const msg = this.messages[index];
       if (!msg) continue;
-      for (let i = this.cachedTimeline.length - 1; i >= 0; i--) {
-        const item = this.cachedTimeline[i];
-        if ('msg' in item && item.key === msg.id) {
-          (item as { msg: LogMessageData }).msg = msg;
-          break;
-        }
+      const timelineIndex = this.timelineMessageIndex.get(msg.id);
+      if (timelineIndex === undefined) continue;
+      const item = this.cachedTimeline[timelineIndex];
+      if (item && 'msg' in item && item.key === msg.id) {
+        item.msg = msg;
+      }
+    }
+  }
+
+  private rebuildTimelineMessageIndex(
+    timeline: typeof this.cachedTimeline = this.cachedTimeline,
+  ): void {
+    this.timelineMessageIndex.clear();
+    for (let i = 0; i < timeline.length; i++) {
+      const item = timeline[i];
+      if ('msg' in item) {
+        this.timelineMessageIndex.set(item.key, i);
+      }
+    }
+  }
+
+  private reindexTimelineMessagesFrom(startIndex: number): void {
+    for (let i = startIndex; i < this.cachedTimeline.length; i++) {
+      const item = this.cachedTimeline[i];
+      if ('msg' in item) {
+        this.timelineMessageIndex.set(item.key, i);
       }
     }
   }
