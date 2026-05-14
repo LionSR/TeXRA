@@ -21,6 +21,7 @@ interface DesktopCommandSurfaceModule {
     SHOW_LOGS: string;
     OPEN_LOG_FOLDER: string;
     OPEN_WORKSPACE_FOLDER: string;
+    OPEN_WORKSPACE_IN_NEW_WINDOW: string;
     SHOW_FIRST_RUN_WALKTHROUGH: string;
   };
   DESKTOP_COMMAND_IDS: readonly string[];
@@ -175,6 +176,7 @@ describe('desktop command surface', () => {
       openDesktopDocs: vi.fn(),
       openLogFolder: vi.fn(),
       openWorkspaceFolder: vi.fn(),
+      openWorkspaceInNewWindow: vi.fn(),
       showFirstRunWalkthrough: vi.fn(),
       resetMainView: vi.fn(),
       showRoute: vi.fn(),
@@ -195,6 +197,12 @@ describe('desktop command surface', () => {
     expect(
       dispatchDesktopCommand(
         DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+        actions,
+      ),
+    ).toBe(true);
+    expect(
+      dispatchDesktopCommand(
+        DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
         actions,
       ),
     ).toBe(true);
@@ -225,6 +233,7 @@ describe('desktop command surface', () => {
     );
     expect(actions.resetMainView).toHaveBeenCalledOnce();
     expect(actions.openWorkspaceFolder).toHaveBeenCalledOnce();
+    expect(actions.openWorkspaceInNewWindow).toHaveBeenCalledOnce();
     expect(actions.openLogFolder).toHaveBeenCalledOnce();
     expect(actions.showFirstRunWalkthrough).toHaveBeenCalledOnce();
     expect(
@@ -303,6 +312,7 @@ describe('desktop command surface', () => {
       'Show Progress',
       'Show Logs',
       'Open Folder',
+      'New Window',
       'Open Logs Folder',
       'Open TeXRA Settings',
       'New',
@@ -331,11 +341,11 @@ describe('desktop command surface', () => {
     );
 
     submenu[0].click?.();
-    submenu[8].click?.();
-    submenu[13].click?.();
+    submenu[9].click?.();
+    submenu[14].click?.();
     expect(actions.showRoute).toHaveBeenCalledWith('main');
     expect(actions.showSettings).toHaveBeenCalledWith(SETTINGS_TAB.MODELS);
-    expect(submenu[8]).toMatchObject({
+    expect(submenu[9]).toMatchObject({
       enabled: false,
       toolTip:
         'Use the Launcher execute button after choosing an agent and files.',
