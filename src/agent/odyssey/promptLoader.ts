@@ -62,7 +62,9 @@ let cached: OdysseyPrompts | null = null;
  * Register the host's resource root. The Odyssey YAML is resolved at
  * `<extensionPath>/resources/odyssey/odyssey.yaml` on first use.
  *
- * Safe to call multiple times; later calls replace the path and bust the cache.
+ * Safe to call multiple times; later calls replace the path and bust the
+ * cache so a previously-loaded inline fallback won't stick once the host
+ * is wired.
  */
 export function initializeOdysseyPrompts(extPath: string): void {
   extensionPath = extPath;
