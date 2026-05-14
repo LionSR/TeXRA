@@ -231,9 +231,14 @@ function isCodexLoopOwnedStatus(status: StreamStatus | undefined): boolean {
  * Explicit terminal statuses set by other runtime paths, such as STOPPED or
  * ERROR, are left intact.
  */
-export function finalizeCodexLoopStatus(childStreamId: StreamTabId): void {
+export function finalizeCodexLoopStatus(
+  childStreamId: StreamTabId,
+  runtimeHost: AgentRuntimeHost,
+): void {
   if (isCodexLoopOwnedStatus(StreamStatusService.get(childStreamId))) {
-    StreamStatusService.set(childStreamId, STREAM_STATUS.READY);
+    StreamStatusService.set(childStreamId, STREAM_STATUS.READY, {
+      runtimeHost,
+    });
   }
 }
 
@@ -557,7 +562,9 @@ function startCodexLoop(params: {
 
   // Seed the initial prompt; the loop drains it as the first turn.
   queue.enqueue(initialPrompt);
-  StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING);
+  StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING, {
+    runtimeHost,
+  });
 
   void (async () => {
     try {
@@ -568,7 +575,9 @@ function startCodexLoop(params: {
         if (!messages || session.isInterrupted()) break;
 
         const prompt = messages.join('\n\n');
-        StreamStatusService.set(childStreamId, STREAM_STATUS.RUNNING);
+        StreamStatusService.set(childStreamId, STREAM_STATUS.RUNNING, {
+          runtimeHost,
+        });
         const startedAt = Date.now();
         const signal = session.startTurn();
 
@@ -630,7 +639,9 @@ function startCodexLoop(params: {
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
 
         if (!session.isInterrupted()) {
-          StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING);
+          StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING, {
+            runtimeHost,
+          });
         }
       }
     } finally {
@@ -644,7 +655,7 @@ function startCodexLoop(params: {
       await writeTerminalStatus(executionId, 'completed').catch(() => {});
       untrackExecution(executionId);
 
-      finalizeCodexLoopStatus(childStreamId);
+      finalizeCodexLoopStatus(childStreamId, runtimeHost);
     }
   })();
 }
