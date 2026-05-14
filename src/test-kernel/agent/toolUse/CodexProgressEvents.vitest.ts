@@ -6,7 +6,6 @@ import {
   getDefaultAgentRuntimeHost,
   setDefaultAgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
-import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 
 // Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
@@ -64,25 +63,15 @@ async function* streamEvents(
 }
 
 describe('codex progress events', () => {
-  it('publishes todos and usage through the active tool runtime host', async () => {
+  it('publishes todos and usage through the explicit runtime host', () => {
     const active = createRecordingHost();
     const fallback = createRecordingHost();
     const previousDefault = getDefaultAgentRuntimeHost();
     setDefaultAgentRuntimeHost(fallback.host);
 
     try {
-      await withToolFileInteractionContext(
-        {
-          streamId,
-          executionId,
-          runtimeHost: active.host,
-          tracker: {} as never,
-        },
-        () => {
-          publishCodexTodos(streamId, todos);
-          publishCodexStreamUsage(streamId, executionId, usage);
-        },
-      );
+      publishCodexTodos(streamId, todos, active.host);
+      publishCodexStreamUsage(streamId, executionId, usage, active.host);
     } finally {
       setDefaultAgentRuntimeHost(previousDefault);
     }
@@ -103,35 +92,6 @@ describe('codex progress events', () => {
       },
     ]);
     expect(fallback.events).toEqual([]);
-  });
-
-  it('falls back to the default agent runtime host without tool context', () => {
-    const fallback = createRecordingHost();
-    const previousDefault = getDefaultAgentRuntimeHost();
-    setDefaultAgentRuntimeHost(fallback.host);
-
-    try {
-      publishCodexTodos(streamId, todos);
-      publishCodexStreamUsage(streamId, executionId, usage);
-    } finally {
-      setDefaultAgentRuntimeHost(previousDefault);
-    }
-
-    expect(fallback.events).toEqual([
-      {
-        event: 'updateTodos',
-        payload: { streamId, todos },
-      },
-      {
-        event: 'updateStreamUsage',
-        payload: {
-          streamId,
-          storageKey: executionId,
-          executionId,
-          usage,
-        },
-      },
-    ]);
   });
 
   it('updates in-flight Codex command items in place', async () => {
