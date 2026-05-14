@@ -7,12 +7,8 @@ import {
   WorkPlanState,
 } from '@agent/core/AgentWorkspaceState';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
-import {
-  createRunContext,
-  withRunContext,
-  type RunCoordinators,
-} from '@agent/runtime/RunContext';
-import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { type RunCoordinators } from '@agent/runtime/RunContext';
+import { withToolEnvironment } from '@agent/toolUse/ToolFileInteractionContext';
 import type { Plan, StreamTabId } from '@shared/schemas';
 import { PlanTool } from '@tools/plan/PlanTool';
 import { createRecordingHost } from '../agent/progressTestUtils';
@@ -36,20 +32,19 @@ describe('PlanTool work-plan state', () => {
     const workPlanState = new WorkPlanState();
     const tool = new PlanTool();
 
-    const resultPromise = withRunContext(
-      createRunContext({
-        runtimeHost: host,
-        streamId: 'stream:plan-reject' as StreamTabId,
-        coordinators: { plan: coordinator } as unknown as RunCoordinators,
-      }),
-      () =>
-        withToolFileInteractionContext(
-          {
-            tracker: new FileInteractionState(),
-            workPlanState,
-          },
-          () => tool.call({ plan }),
-        ),
+    const resultPromise = withToolEnvironment(
+      {
+        run: {
+          runtimeHost: host,
+          streamId: 'stream:plan-reject' as StreamTabId,
+          coordinators: { plan: coordinator } as unknown as RunCoordinators,
+        },
+        call: {
+          tracker: new FileInteractionState(),
+          workPlanState,
+        },
+      },
+      () => tool.call({ plan }),
     );
 
     const approval = events.find((entry) => entry.event === 'showPlanApproval');
@@ -71,20 +66,19 @@ describe('PlanTool work-plan state', () => {
     const workPlanState = new WorkPlanState();
     const tool = new PlanTool();
 
-    const resultPromise = withRunContext(
-      createRunContext({
-        runtimeHost: host,
-        streamId: 'stream:plan-timeout' as StreamTabId,
-        coordinators: { plan: coordinator } as unknown as RunCoordinators,
-      }),
-      () =>
-        withToolFileInteractionContext(
-          {
-            tracker: new FileInteractionState(),
-            workPlanState,
-          },
-          () => tool.call({ plan }),
-        ),
+    const resultPromise = withToolEnvironment(
+      {
+        run: {
+          runtimeHost: host,
+          streamId: 'stream:plan-timeout' as StreamTabId,
+          coordinators: { plan: coordinator } as unknown as RunCoordinators,
+        },
+        call: {
+          tracker: new FileInteractionState(),
+          workPlanState,
+        },
+      },
+      () => tool.call({ plan }),
     );
 
     const approval = events.find((entry) => entry.event === 'showPlanApproval');
