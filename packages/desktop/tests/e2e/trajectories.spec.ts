@@ -70,10 +70,14 @@ async function setRoute(
   }, route);
   await launched.page.waitForFunction(
     (target) => {
-      const section = document.querySelector<HTMLElement>(
-        `.desktop-route[data-route="${target}"]`,
-      );
-      return section != null && section.hidden === false;
+      if (document.body.dataset.desktopRoute !== target) return false;
+      if (target === 'main') {
+        const launcher = document.querySelector<HTMLElement>(
+          '.desktop-pane[data-pane="launcher"]',
+        );
+        return launcher != null && launcher.hidden === false;
+      }
+      return true;
     },
     route,
     { timeout: 5000 },
@@ -88,10 +92,7 @@ async function setSettingsTab(tabIndex: number): Promise<void> {
   // Best-effort: wait for the settings-app shadow DOM to mount.
   await launched.page.waitForFunction(
     () => {
-      const settingsSection = document.querySelector(
-        '.desktop-route[data-route="settings"]',
-      );
-      const settingsApp = settingsSection?.querySelector('settings-app');
+      const settingsApp = document.querySelector('settings-app');
       return settingsApp?.shadowRoot != null;
     },
     undefined,
@@ -105,7 +106,7 @@ async function setSettingsTab(tabIndex: number): Promise<void> {
  */
 test('first launch shows a usable launcher chrome', async () => {
   await setRoute('main');
-  // The chrome brand and Open Folder button must be reachable from the user.
+  // The chrome brand and command palette button must be reachable from the user.
   // The brand label is styled uppercase via CSS, but the underlying text
   // node is "TeXRA". Match case-insensitively so a future style flip won't
   // destabilise the test.
@@ -114,13 +115,13 @@ test('first launch shows a usable launcher chrome', async () => {
     .first()
     .innerText();
   expect(brand.toLowerCase()).toContain('texra');
-  const folderButton = launched.page.locator('.desktop-folder-button');
-  await expect(folderButton).toBeVisible();
+  await expect(launched.page.locator('.desktop-command-button')).toBeVisible();
+  await expect(launched.page.locator('.desktop-folder-button')).toHaveCount(0);
   // The main view itself either renders <main-app> or the no-workspace empty
   // state — both are valid first-launch outcomes. The audit doc tracks which
   // one each user actually hits.
   const mainSection = launched.page.locator(
-    '.desktop-route[data-route="main"]',
+    '.desktop-pane[data-pane="launcher"]',
   );
   await expect(mainSection).toBeVisible();
 });
@@ -138,9 +139,7 @@ test('settings → models tab mounts and the auth surface is reachable', async (
   // the previous tab's render and report a false positive.
   await launched.page.waitForFunction(
     () => {
-      const settingsApp = document.querySelector(
-        '.desktop-route[data-route="settings"] settings-app',
-      );
+      const settingsApp = document.querySelector('settings-app');
       const root = settingsApp?.shadowRoot;
       const activePanel = root?.querySelector(
         'wa-tab-panel[name="models"][active]',
@@ -155,9 +154,7 @@ test('settings → models tab mounts and the auth surface is reachable', async (
   // surface). The actual auth banner text and provider list live one or
   // two shadow roots deep, so we only assert structural presence here.
   const panelHasChild = await launched.page.evaluate(() => {
-    const settingsApp = document.querySelector(
-      '.desktop-route[data-route="settings"] settings-app',
-    );
+    const settingsApp = document.querySelector('settings-app');
     const panel = settingsApp?.shadowRoot?.querySelector(
       'wa-tab-panel[name="models"][active]',
     );
@@ -175,9 +172,7 @@ test('settings → memory tab mounts', async () => {
   await setSettingsTab(SETTINGS_TAB_INDEX.MEMORY);
   await launched.page.waitForFunction(
     () => {
-      const settingsApp = document.querySelector(
-        '.desktop-route[data-route="settings"] settings-app',
-      );
+      const settingsApp = document.querySelector('settings-app');
       const root = settingsApp?.shadowRoot;
       const activePanel = root?.querySelector(
         'wa-tab-panel[name="memory"][active]',
@@ -216,9 +211,7 @@ test('settings → tools tab mounts', async () => {
   await setSettingsTab(SETTINGS_TAB_INDEX.TOOLS);
   await launched.page.waitForFunction(
     () => {
-      const settingsApp = document.querySelector(
-        '.desktop-route[data-route="settings"] settings-app',
-      );
+      const settingsApp = document.querySelector('settings-app');
       const root = settingsApp?.shadowRoot;
       const activePanel = root?.querySelector(
         'wa-tab-panel[name="tools"][active]',

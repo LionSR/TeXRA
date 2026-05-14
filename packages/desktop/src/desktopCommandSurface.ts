@@ -39,8 +39,6 @@ const DESKTOP_MENU_GROUPS = [
     'texra.showMainView',
     'texra.showProgressView',
     DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
-    DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
-    DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
     DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
     'texra.openSettings',
     'texra.mainView.reset',
@@ -64,16 +62,26 @@ const DESKTOP_MENU_GROUPS = [
   | DesktopLocalCommandId
 )[])[];
 
+const DESKTOP_FILE_COMMANDS = [
+  DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+  DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
+] as const satisfies readonly DesktopLocalCommandId[];
+
 const DESKTOP_HELP_COMMANDS = [
   DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
   DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
 ] as const satisfies readonly DesktopLocalCommandId[];
 
 type DesktopMenuCommandId = (typeof DESKTOP_MENU_GROUPS)[number][number];
+type DesktopFileCommandId = (typeof DESKTOP_FILE_COMMANDS)[number];
 type DesktopHelpCommandId = (typeof DESKTOP_HELP_COMMANDS)[number];
-export type DesktopCommandId = DesktopMenuCommandId | DesktopHelpCommandId;
+export type DesktopCommandId =
+  | DesktopFileCommandId
+  | DesktopMenuCommandId
+  | DesktopHelpCommandId;
 
 export const DESKTOP_COMMAND_IDS: readonly DesktopCommandId[] = [
+  ...DESKTOP_FILE_COMMANDS,
   ...DESKTOP_MENU_GROUPS.flat(),
   ...DESKTOP_HELP_COMMANDS,
 ];
@@ -138,7 +146,7 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
     {
       id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
       label: 'Open Folder',
-      category: 'TeXRA',
+      category: 'File',
       accelerator: 'CommandOrControl+O',
       enabled: true,
     },
@@ -148,7 +156,7 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
     {
       id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
       label: 'New Window',
-      category: 'TeXRA',
+      category: 'File',
       accelerator: 'CommandOrControl+Shift+N',
       enabled: true,
     },
@@ -434,14 +442,19 @@ export function buildDesktopMenuTemplate(
       ...DESKTOP_MENU_GROUPS[1].map(commandItem),
     ],
   };
+  const fileMenu: MenuItemConstructorOptions = {
+    label: 'File',
+    submenu: [
+      ...DESKTOP_FILE_COMMANDS.map(commandItem),
+      { type: 'separator' },
+      platform === 'darwin' ? { role: 'close' } : { role: 'quit' },
+    ],
+  };
 
   return [
     ...(platform === 'darwin'
-      ? ([
-          { role: 'appMenu' },
-          { role: 'fileMenu' },
-        ] satisfies MenuItemConstructorOptions[])
-      : ([{ role: 'fileMenu' }] satisfies MenuItemConstructorOptions[])),
+      ? ([{ role: 'appMenu' }, fileMenu] satisfies MenuItemConstructorOptions[])
+      : ([fileMenu] satisfies MenuItemConstructorOptions[])),
     customMenu,
     { role: 'editMenu' },
     { role: 'viewMenu' },
