@@ -102,12 +102,12 @@ export class UsageMonitor {
     this.activeGroupId = groupId;
   }
 
-  async recordUsage(
-    stateGlobal: AgentRunStateSnapshot,
-    options?: { runKind?: UsageMonitorRunKind },
-  ): Promise<void> {
+  async recordUsage(stateGlobal: AgentRunStateSnapshot): Promise<void> {
     const { logger, usageReporter } = this.context;
-    const runKind: UsageMonitorRunKind = options?.runKind ?? 'workflow';
+    const runKind: UsageMonitorRunKind =
+      this.metadata?.agentCategory === AgentCategory.ToolUse
+        ? 'tool-use'
+        : 'workflow';
 
     try {
       const totals = stateGlobal.usageAccumulator.totals;
