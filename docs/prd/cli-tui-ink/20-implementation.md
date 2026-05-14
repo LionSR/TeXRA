@@ -23,7 +23,7 @@ Net: roughly 400 LOC removed from the TUI mode; the `--legacy-renderer` path ret
 
 Today's `cliMode()` (`cliContext.ts:214–222`) collapses to `headless` whenever any of stdin / stdout / stderr is non-TTY, so `texra chat | tee` fails. This PRD splits the existing single gate into two:
 
-1. **Headless gate (unchanged):** triggered by `--print/-p`, `CI=true`, or stdin non-TTY. `--print/-p` keeps its existing semantics (`cliContext.ts:66, 202`) — no behavior change, no new flag.
+1. **Headless gate (narrowed):** triggered by `--print/-p`, `CI=true`, or stdin non-TTY. `--print/-p` keeps its existing semantics (`cliContext.ts:66, 202`) — no flag change. The behavior change is in `cliMode()` itself: `!ambient.stdoutIsTty` and `!ambient.stderrIsTty` are dropped from the headless OR-chain, so piping stdout or stderr alone no longer forces headless.
 2. **TUI chrome gate (new):** Ink chrome mounts only when `stdout.isTTY`. When stdout is piped but stdin is TTY and headless is not forced, the app mounts in a "streaming-text" mode — same React tree, but the conversation pane writes plain ANSI to stdout instead of going through ink's renderer.
 
 ### Decision matrix
@@ -87,7 +87,7 @@ Implements components per 10-architecture §§ Input component, Terminal capabil
 - `<SubagentList>`, `<TodosPlanPanel>`, `<StatusBar>`.
 - `Ctrl-A` / `Ctrl-B` focus cycle. Stream switching via `setActiveStream`.
 - Process output tailing.
-- **Runtime patch:** have `detachActiveChildren` (`executionRegistry.ts:253–269`) emit `setParentStream` so detached children promote to top-level streams.
+- **Runtime patch** (non-doc code change — lands outside this PR's scope): have `detachActiveChildren` (`src/agent/runtime/executionRegistry.ts:253–269`) emit `setParentStream` so detached children promote to top-level streams. Today's path only calls `handle.detach()` and `emitActiveSubagentsUpdate`.
 
 ### Phase 5 — Ergonomics (2 d)
 
