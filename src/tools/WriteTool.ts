@@ -2,7 +2,6 @@
 import { z } from 'zod';
 
 // Internal imports
-import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import replacementEngine from '@replacement/engine';
 import { ToolResult } from '@tools/result';
@@ -13,7 +12,7 @@ import {
 import {
   assertWritable,
   resolveAndFormat,
-  parseWorkingDirectory,
+  currentToolRoot,
 } from '@tools/pathResolution';
 import {
   buildApprovalRejectedResult,
@@ -41,7 +40,7 @@ export class WriteFileTool extends defineTool({
   schema: WriteInputSchema,
 }) {
   protected async execute(input: WriteInput): Promise<ToolResult> {
-    const root = parseWorkingDirectory(tryUseRunContext()?.workingDirectory);
+    const root = currentToolRoot();
     const { path: resolved, display: displayPath } = resolveAndFormat(
       input.path,
       root,

@@ -20,6 +20,7 @@ import {
 } from '@agent/storage';
 import { flowKey } from '@agent/node/persistedFlow';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
+import { requireRunStream } from '@tools/contextHelpers';
 import {
   ACTIVE_STATUSES,
   AgentExecutionHandle,
@@ -630,17 +631,11 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
   }
 
   private handleSubscribe(executionId: ExecutionId): ToolResult {
-    const ctx = tryUseRunContext();
-    const streamId = ctx?.streamId;
-    if (!streamId || !ctx.runtimeHost) {
-      throw new ToolError(
-        'subscribe must be called from within an agent stream.',
-      );
-    }
+    const { streamId, context: ctx } = requireRunStream('subscribe');
     // Subscribing to your own execution would feed every status transition
     // back into the same session, creating a self-sustaining loop of
     // <execution-activity> follow-ups.
-    if (ctx?.executionId === executionId) {
+    if (ctx.executionId === executionId) {
       throw new ToolError(
         `Cannot subscribe to your own execution (${executionId}).`,
       );
