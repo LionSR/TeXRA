@@ -18,13 +18,15 @@ import type {
 import type { ModelCapabilities, ModelConfig } from 'llm-zoo';
 
 /**
- * Optional metadata for usage logging.
+ * Metadata for usage logging. Required because `agentCategory` controls
+ * the `runKind` derivation in `recordUsage` — a silent default would
+ * misreport usage runs from a future caller that forgot to set it.
  */
 export interface UsageMonitorMetadata {
   /** Agent name for backend logging */
-  agentName?: string;
+  agentName: string;
   /** Agent category: workflow or toolUse */
-  agentCategory?: AgentCategory;
+  agentCategory: AgentCategory;
 }
 
 /**
@@ -89,7 +91,7 @@ export class UsageMonitor {
   constructor(
     private readonly modelInfo: UsageMonitorModelInfo,
     private readonly context: UsageMonitorContext,
-    private readonly metadata?: UsageMonitorMetadata,
+    private readonly metadata: UsageMonitorMetadata,
   ) {}
 
   /**
@@ -102,12 +104,12 @@ export class UsageMonitor {
     this.activeGroupId = groupId;
   }
 
-  async recordUsage(
-    stateGlobal: AgentRunStateSnapshot,
-    options?: { runKind?: UsageMonitorRunKind },
-  ): Promise<void> {
+  async recordUsage(stateGlobal: AgentRunStateSnapshot): Promise<void> {
     const { logger, usageReporter } = this.context;
-    const runKind: UsageMonitorRunKind = options?.runKind ?? 'workflow';
+    const runKind: UsageMonitorRunKind =
+      this.metadata.agentCategory === AgentCategory.ToolUse
+        ? 'tool-use'
+        : 'workflow';
 
     try {
       const totals = stateGlobal.usageAccumulator.totals;
@@ -232,8 +234,8 @@ export class UsageMonitor {
       UsageLogService.log({
         model: config.fullName,
         provider,
-        agentName: this.metadata?.agentName,
-        agentCategory: this.metadata?.agentCategory,
+        agentName: this.metadata.agentName,
+        agentCategory: this.metadata.agentCategory,
         inputTokens: cacheMissInputTokens,
         outputTokens: usage.outputTokens,
         cost: Number(usage.cost.toFixed(6)),
