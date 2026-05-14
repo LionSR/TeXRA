@@ -430,6 +430,7 @@ export class ProgressViewProvider
 
     const streamsWithRunningGroups = await this.state.endRunningTaskGroups(
       Date.now(),
+      affectedStreams,
     );
 
     for (const streamId of streamsWithRunningGroups) {
