@@ -37,8 +37,8 @@ import {
   API_PROVIDERS,
   apiKeySecretName,
   invalidateApiKeyCache,
+  isApiProvider,
   loadApiKeyStatusMap,
-  type ApiProvider,
 } from '@model/apiProviders';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import {
@@ -219,9 +219,6 @@ async function findToolCommand(
   return kind === 'install' ? def?.installCommand : def?.authCommand;
 }
 
-function isApiProvider(provider: string): provider is ApiProvider {
-  return (API_PROVIDERS as readonly string[]).includes(provider);
-}
 
 export function createDesktopSettingsIpc(
   options: DesktopSettingsIpcOptions,

@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Local imports
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import { invalidateApiKeyCache } from '@model/apiProviders';
+import { invalidateApiKeyCache, isApiProvider } from '@model/apiProviders';
 import { ToolError, type ToolResult } from '@tools/result';
 
 // Local file imports
@@ -69,7 +69,7 @@ export class SetApiKeyTool extends defineTool({
     const platform = getSetupPlatform();
     const provider = input.provider.trim();
 
-    if (!platform.secrets.providers.includes(provider)) {
+    if (!isApiProvider(provider)) {
       throw new ToolError(
         `Unknown provider "${provider}". Supported: ${platform.secrets.providers.join(', ')}.`,
       );
