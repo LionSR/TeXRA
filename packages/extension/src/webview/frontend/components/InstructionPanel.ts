@@ -13,7 +13,8 @@ import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
-import { customElement, property, query } from 'lit/decorators.js';
+import { customElement, property, query, state } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
 import { keyed } from 'lit/directives/keyed.js';
 import { styleMap } from 'lit/directives/style-map.js';
 import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
@@ -41,6 +42,11 @@ import { renderIconActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - main view
 import { MainViewEvents } from '../events';
+import {
+  extractDroppedFilePaths,
+  hasDroppedFilePayload,
+  postDroppedFiles,
+} from '../fileDropHandler';
 import { handleImagePaste } from '../pasteHandler';
 import { SESSION_TYPES, type SessionType } from '../constants';
 import {
@@ -126,6 +132,31 @@ export class InstructionPanel extends LitElement {
           var(--wa-color-brand-fill-loud) 35%,
           var(--color-border)
         );
+      }
+
+      .instruction-box.drop-active {
+        border-color: var(--wa-color-brand-fill-loud);
+      }
+
+      .instruction-box.drop-active::after {
+        content: 'Drop to attach';
+        position: absolute;
+        inset: var(--wa-space-3xs);
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px dashed var(--wa-color-brand-fill-loud);
+        border-radius: var(--border-radius);
+        background: color-mix(
+          in srgb,
+          var(--wa-color-surface-default) 78%,
+          transparent
+        );
+        color: var(--wa-color-text-normal);
+        font-size: var(--font-size-sm);
+        font-weight: 600;
+        pointer-events: none;
       }
 
       .instruction-header {
@@ -409,9 +440,14 @@ export class InstructionPanel extends LitElement {
 
   @property({ type: Boolean }) showSessionHint = true;
 
+  @state()
+  private isDragActive = false;
+
   /** Reference to instruction textarea for paste handling */
   @query('#instruction')
   private instructionTextarea?: HTMLElement;
+
+  private dragDepth = 0;
 
   /** Get the tooltip for an agent dropdown based on the selected agent's description. */
   private getAgentTooltip(
@@ -511,6 +547,38 @@ export class InstructionPanel extends LitElement {
     }
   };
 
+  private handleDragEnter(event: DragEvent): void {
+    if (!hasDroppedFilePayload(event.dataTransfer)) return;
+    event.preventDefault();
+    this.dragDepth += 1;
+    this.isDragActive = true;
+  }
+
+  private handleDragOver(event: DragEvent): void {
+    if (!hasDroppedFilePayload(event.dataTransfer)) return;
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'copy';
+    }
+  }
+
+  private handleDragLeave(event: DragEvent): void {
+    if (!hasDroppedFilePayload(event.dataTransfer)) return;
+    event.preventDefault();
+    this.dragDepth = Math.max(0, this.dragDepth - 1);
+    if (this.dragDepth === 0) {
+      this.isDragActive = false;
+    }
+  }
+
+  private handleDrop(event: DragEvent): void {
+    if (!hasDroppedFilePayload(event.dataTransfer)) return;
+    event.preventDefault();
+    this.dragDepth = 0;
+    this.isDragActive = false;
+    postDroppedFiles(extractDroppedFilePaths(event.dataTransfer));
+  }
+
   private handleActionClick(event: MouseEvent): void {
     const button = (event.target as HTMLElement).closest<HTMLElement>(
       '[data-action]',
@@ -569,7 +637,16 @@ export class InstructionPanel extends LitElement {
       return nothing;
     }
     return html`
-      <div class="instruction-box">
+      <div
+        class=${classMap({
+          'instruction-box': true,
+          'drop-active': this.isDragActive,
+        })}
+        @dragenter=${this.handleDragEnter}
+        @dragover=${this.handleDragOver}
+        @dragleave=${this.handleDragLeave}
+        @drop=${this.handleDrop}
+      >
         <div class="instruction-header">
           <div class="instruction-header-leading">
             <div class="instruction-session-toggle">
