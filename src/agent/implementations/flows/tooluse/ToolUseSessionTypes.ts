@@ -18,7 +18,7 @@ export const ToolUseSessionSnapshotSchema = z.strictObject({
   run: AgentRunStateSnapshotSchema,
   workspace: AgentWorkspaceStateSnapshotSchema,
   user: UserVariableChannelsSchema,
-  lastUpdated: z.number(),
+  lastUpdated: z.int().nonnegative(),
 });
 
 export type ToolUseSessionSnapshot = z.infer<

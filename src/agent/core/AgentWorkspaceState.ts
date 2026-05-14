@@ -35,7 +35,7 @@ type ResponseAssemblyState = z.output<typeof ResponseAssemblyStateSchema>;
 const FileInteractionStateSnapshotSchema = z.object({
   readFiles: z.array(z.string()).prefault([]),
   edits: z.array(FlattenedEditRecordSchema).prefault([]),
-  toolCallCount: z.number().nonnegative().prefault(0),
+  toolCallCount: z.int().nonnegative().prefault(0),
 });
 
 type FileInteractionStateSnapshot = z.output<
