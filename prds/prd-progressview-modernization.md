@@ -85,15 +85,15 @@ Rewrite ProgressView in Lit + TypeScript with type-safe IPC via relocated Zod sc
 
 ### Phase 5: MainView Refactoring (New)
 
-| Task                              | Status | Impact                        |
-| --------------------------------- | ------ | ----------------------------- |
-| Extract FileSelectGroup component | ⬜     | -300 lines from MainApp       |
-| Extract BannerGroup components    | ⬜     | -150 lines from MainApp       |
-| Extract LatexDiffsSection         | ⬜     | -200 lines from MainApp       |
+| Task                              | Status | Impact                       |
+| --------------------------------- | ------ | ---------------------------- |
+| Extract FileSelectGroup component | ⬜     | -300 lines from MainApp      |
+| Extract BannerGroup components    | ⬜     | -150 lines from MainApp      |
+| Extract LatexDiffsSection         | ⬜     | -200 lines from MainApp      |
 | Create shared message schemas     | ⬜     | Type-safe frontend ↔ backend |
-| Add Zod validation to MainApp     | ⬜     | Security + type safety        |
-| Convert 37 inline arrows          | ⬜     | Performance                   |
-| Delete duplicate debug handler    | ⬜     | Code cleanup                  |
+| Add Zod validation to MainApp     | ⬜     | Security + type safety       |
+| Convert 37 inline arrows          | ⬜     | Performance                  |
+| Delete duplicate debug handler    | ⬜     | Code cleanup                 |
 
 ---
 
