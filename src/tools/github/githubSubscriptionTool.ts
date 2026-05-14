@@ -23,7 +23,7 @@ import { promisify } from 'node:util';
 import { z } from 'zod';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { toErrorMessage } from '@common/errors';
 import { ToolError, type ToolResult } from '@tools/result';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -136,7 +136,7 @@ function requireSubscriptionContext(): {
   streamId: string;
   runtimeHost: AgentRuntimeHost;
 } {
-  const context = getCurrentToolRunContext();
+  const context = tryUseRunContext();
   if (!context?.streamId || !context.runtimeHost) {
     throw new ToolError(
       'github_subscription must be called from within an agent stream.',
@@ -458,7 +458,7 @@ async function execFindCurrent(
   requireToken();
   const cwd =
     parseWorkingDirectory(input.working_directory) ??
-    getCurrentToolRunContext()?.workingDirectory;
+    tryUseRunContext()?.workingDirectory;
   if (!cwd) {
     throw new ToolError(
       'No working_directory available. Provide one explicitly.',
