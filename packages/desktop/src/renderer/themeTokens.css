@@ -137,7 +137,7 @@
   /* Neutral variant — mirrors the extension bridge in common.css where
      `neutral-fill-quiet` maps to `--vscode-button-secondaryBackground`.
      Source from `--desktop-color-button-secondary` so secondary buttons
-     and quiet surfaces (e.g. .desktop-command-button, .desktop-folder-button)
+     and quiet surfaces (e.g. .desktop-command-button)
      match the prior --texra-button-secondaryBackground value. */
   --wa-color-neutral-fill-quiet: var(--desktop-color-button-secondary);
   --wa-color-neutral-border-quiet: light-dark(#d0d7de, #2b2b2b);
