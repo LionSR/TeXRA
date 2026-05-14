@@ -4,8 +4,7 @@ import { AsyncLocalStorage } from 'async_hooks';
 // Type imports
 import type {
   FileInteractionState,
-  PlanState,
-  TodoState,
+  WorkPlanState,
 } from '@agent/core/AgentWorkspaceState';
 import {
   tryUseRunContext,
@@ -18,10 +17,8 @@ export type { ToolRunContext } from '@agent/runtime/RunContext';
 export interface ToolCallContext {
   toolCallId?: string;
   tracker: FileInteractionState;
-  /** Todo state for managing task lists. Absent in contexts without todo support. */
-  todoState?: TodoState;
-  /** Plan state for managing implementation plans. Absent in contexts without plan support. */
-  planState?: PlanState;
+  /** Plan and todo progress state. Absent in contexts without work-plan support. */
+  workPlanState?: WorkPlanState;
   /** Called by tools with approval flows to trigger in-progress log after approval. */
   onExecutionReady?: () => void;
   /** Called by tools to push partial output for live streaming to the UI. */
@@ -60,8 +57,7 @@ const TOOL_RUN_CONTEXT_KEYS = {
 const TOOL_CALL_CONTEXT_KEYS = {
   toolCallId: true,
   tracker: true,
-  todoState: true,
-  planState: true,
+  workPlanState: true,
   onExecutionReady: true,
   onToolOutput: true,
 } satisfies ContextKeyMap<ToolCallContext>;

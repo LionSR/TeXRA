@@ -15,7 +15,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { PlanState } from '@agent/core/AgentWorkspaceState';
+import type { WorkPlanState } from '@agent/core/AgentWorkspaceState';
 import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
 import { waitForPlanApproval } from '@agent/runtime/runCoordinators';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
@@ -102,9 +102,9 @@ Best practices:
     const callContext = contexts?.callContext;
     const runContext = contexts?.runContext;
 
-    if (!callContext?.planState) {
+    if (!callContext?.workPlanState) {
       logger.warn(
-        'plan called without planState in context — plan will not persist or display in UI',
+        'plan called without workPlanState in context — plan will not persist or display in UI',
       );
       return {
         summary: 'Created plan (no active session)',
@@ -121,7 +121,7 @@ Best practices:
     );
 
     // Show the plan in the UI immediately
-    callContext.planState.updatePlan(input.plan);
+    callContext.workPlanState.updatePlan(input.plan);
 
     if (isNewPlan) {
       if (!runContext?.streamId) {
@@ -135,7 +135,7 @@ Best practices:
         return this.requestApproval(
           input.plan,
           runContext.streamId,
-          callContext.planState,
+          callContext.workPlanState,
         );
       }
     }
@@ -149,7 +149,7 @@ Best practices:
   private async requestApproval(
     plan: Plan,
     streamId: string,
-    planState: PlanState,
+    workPlanState: WorkPlanState,
   ): Promise<ToolResult> {
     const approvalId = `plan-${Date.now().toString(36)}-${++approvalCounter}`;
 
@@ -166,7 +166,7 @@ Best practices:
     }
 
     // Rejected or timed out — clear the plan from UI
-    planState.updatePlan(null);
+    workPlanState.updatePlan(null);
 
     if (result.action === 'timeout') {
       logger.warn('Plan approval timed out');

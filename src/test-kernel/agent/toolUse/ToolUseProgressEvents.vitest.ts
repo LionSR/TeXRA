@@ -43,8 +43,8 @@ describe('tool-use progress events', () => {
   it('publishes skipped-cycle todo and plan events through the runtime host', async () => {
     const { events, host } = createRecordingHost();
     const workspaceState = AgentWorkspaceState.create();
-    workspaceState.todos.updateTodos([todo]);
-    workspaceState.plan.updatePlan(plan);
+    workspaceState.workPlan.updateTodos([todo]);
+    workspaceState.workPlan.updatePlan(plan);
 
     const node = new ToolUseCycleNode().setServices({
       streamId: 'stream:tool-use-cycle',

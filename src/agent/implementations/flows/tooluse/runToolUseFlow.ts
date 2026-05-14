@@ -233,7 +233,7 @@ export async function runToolUseFlow<C = unknown>(
     >(prepareNode, kv);
     pf.setServices(services);
     pf.setProjection(async (s, store) => {
-      const todos = s.stateSlices?.workspaceSnapshot?.todos?.todos;
+      const todos = s.stateSlices?.workspaceSnapshot?.workPlan?.todos;
       if (Array.isArray(todos) && todos.length) await store.writeTodos(todos);
       if (s.messages.length) await store.writeConversation(s.messages);
     });

@@ -2,13 +2,14 @@ import { z } from 'zod';
 
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import {
-  TodoItemSchema,
-  PlanSchema,
   FileLocationSchema,
+  WorkPlanSnapshotSchema,
   type TodoItem,
   type Plan,
   type FileLocation,
+  type WorkPlanSnapshot,
 } from '@shared/schemas';
+import { isPlainObject } from '@shared/utils/string';
 import { FlattenedEditRecordSchema } from '@tools/result';
 import { pathToLocation } from '@utils/files';
 
@@ -230,44 +231,77 @@ const ServerToolContentStateSchema = z.object({
 
 type ServerToolContentState = z.output<typeof ServerToolContentStateSchema>;
 
-/** Internal schema for todo state snapshot. */
-const TodoStateSnapshotSchema = z.object({
-  todos: z.array(TodoItemSchema).prefault([]),
-});
-
-type TodoStateSnapshot = z.output<typeof TodoStateSnapshotSchema>;
-
-export class TodoState {
+export class WorkPlanState {
   private _todos: TodoItem[] = [];
-  private _onUpdate?: (todos: TodoItem[]) => void;
+  private _plan: Plan | null = null;
+  private _planSummary: string | null = null;
+  private _onTodosUpdate?: (todos: TodoItem[]) => void;
+  private _onPlanUpdate?: (plan: Plan | null) => void;
 
-  static fromSnapshot(snapshot: unknown): TodoState {
-    const parsed = TodoStateSnapshotSchema.parse(snapshot);
-    const state = new TodoState();
+  static fromSnapshot(snapshot: unknown): WorkPlanState {
+    const parsed = WorkPlanSnapshotSchema.parse(snapshot);
+    const state = new WorkPlanState();
     state._todos = [...parsed.todos];
+    state._plan = parsed.plan;
+    state._planSummary = parsed.planSummary;
     return state;
   }
 
-  toSnapshot(): TodoStateSnapshot {
-    return { todos: [...this._todos] };
+  toSnapshot(): WorkPlanSnapshot {
+    return WorkPlanSnapshotSchema.parse({
+      todos: [...this._todos],
+      plan: this._plan
+        ? {
+            ...this._plan,
+            steps: this._plan.steps.map((s) => ({ ...s, files: [...s.files] })),
+          }
+        : null,
+      planSummary: this._plan?.summary ?? this._planSummary,
+    });
   }
 
   get todos(): TodoItem[] {
     return this._todos;
   }
 
-  setOnUpdate(callback: (todos: TodoItem[]) => void): void {
-    this._onUpdate = callback;
+  get plan(): Plan | null {
+    return this._plan;
+  }
+
+  get planSummary(): string | null {
+    return this._plan?.summary ?? this._planSummary;
+  }
+
+  setOnUpdate(callbacks: {
+    onTodosUpdate?: (todos: TodoItem[]) => void;
+    onPlanUpdate?: (plan: Plan | null) => void;
+  }): void {
+    this._onTodosUpdate = callbacks.onTodosUpdate;
+    this._onPlanUpdate = callbacks.onPlanUpdate;
   }
 
   clearOnUpdate(): void {
-    this._onUpdate = undefined;
+    this._onTodosUpdate = undefined;
+    this._onPlanUpdate = undefined;
   }
 
   updateTodos(todos: TodoItem[]): void {
     if (this._todosEqual(this._todos, todos)) return;
     this._todos = todos;
-    this._onUpdate?.(todos);
+    this._onTodosUpdate?.(todos);
+  }
+
+  updatePlan(plan: Plan | null): void {
+    const nextPlanSummary = plan?.summary ?? null;
+    if (
+      this._planEqual(this._plan, plan) &&
+      this._planSummary === nextPlanSummary
+    ) {
+      return;
+    }
+    this._plan = plan;
+    this._planSummary = nextPlanSummary;
+    this._onPlanUpdate?.(plan);
   }
 
   private _todosEqual(a: TodoItem[], b: TodoItem[]): boolean {
@@ -275,7 +309,7 @@ export class TodoState {
     for (let i = 0; i < a.length; i++) {
       const ai = a[i],
         bi = b[i];
-      if (!ai || !bi) return false; // Guard against sparse arrays
+      if (!ai || !bi) return false;
       if (
         ai.content !== bi.content ||
         ai.status !== bi.status ||
@@ -285,58 +319,6 @@ export class TodoState {
       }
     }
     return true;
-  }
-
-  reset(): void {
-    this._todos = [];
-  }
-}
-
-/** Internal schema for plan state snapshot. */
-const PlanStateSnapshotSchema = z.object({
-  plan: PlanSchema.nullable().prefault(null),
-});
-
-type PlanStateSnapshot = z.output<typeof PlanStateSnapshotSchema>;
-
-export class PlanState {
-  private _plan: Plan | null = null;
-  private _onUpdate?: (plan: Plan | null) => void;
-
-  static fromSnapshot(snapshot: unknown): PlanState {
-    const parsed = PlanStateSnapshotSchema.parse(snapshot);
-    const state = new PlanState();
-    state._plan = parsed.plan;
-    return state;
-  }
-
-  toSnapshot(): PlanStateSnapshot {
-    return {
-      plan: this._plan
-        ? {
-            ...this._plan,
-            steps: this._plan.steps.map((s) => ({ ...s, files: [...s.files] })),
-          }
-        : null,
-    };
-  }
-
-  get plan(): Plan | null {
-    return this._plan;
-  }
-
-  setOnUpdate(callback: (plan: Plan | null) => void): void {
-    this._onUpdate = callback;
-  }
-
-  clearOnUpdate(): void {
-    this._onUpdate = undefined;
-  }
-
-  updatePlan(plan: Plan | null): void {
-    if (this._planEqual(this._plan, plan)) return;
-    this._plan = plan;
-    this._onUpdate?.(plan);
   }
 
   private _planEqual(a: Plan | null, b: Plan | null): boolean {
@@ -362,27 +344,50 @@ export class PlanState {
   }
 
   reset(): void {
+    this._todos = [];
     this._plan = null;
+    this._planSummary = null;
   }
 }
 
-export const AgentWorkspaceStateSnapshotSchema = z.object({
-  assembly: ResponseAssemblyStateSchema.prefault({
-    lastResponse: '',
-    accumulatedOutput: '',
+function unwrapLegacyStateValue(value: unknown, key: string): unknown {
+  if (Array.isArray(value)) return value;
+  if (!isPlainObject(value)) return undefined;
+  return value[key] ?? value;
+}
+
+function normalizeAgentWorkspaceSnapshot(input: unknown): unknown {
+  const record = isPlainObject(input) ? input : {};
+  const workPlan = record.workPlan ?? {
+    todos: unwrapLegacyStateValue(record.todos, 'todos'),
+    plan: unwrapLegacyStateValue(record.plan, 'plan'),
+  };
+
+  return {
+    ...record,
+    workPlan,
+  };
+}
+
+export const AgentWorkspaceStateSnapshotSchema = z.preprocess(
+  normalizeAgentWorkspaceSnapshot,
+  z.object({
+    assembly: ResponseAssemblyStateSchema.prefault({
+      lastResponse: '',
+      accumulatedOutput: '',
+    }),
+    media: MediaAttachmentStateSnapshotSchema.prefault({ files: [] }),
+    reasoning: ReasoningCacheStateSchema.prefault({
+      thinkingBlocks: [],
+      thinkingAdded: false,
+    }),
+    interactions: FileInteractionStateSnapshotSchema.prefault({
+      readFiles: [],
+      edits: [],
+    }),
+    workPlan: WorkPlanSnapshotSchema.prefault({}),
   }),
-  media: MediaAttachmentStateSnapshotSchema.prefault({ files: [] }),
-  reasoning: ReasoningCacheStateSchema.prefault({
-    thinkingBlocks: [],
-    thinkingAdded: false,
-  }),
-  interactions: FileInteractionStateSnapshotSchema.prefault({
-    readFiles: [],
-    edits: [],
-  }),
-  todos: TodoStateSnapshotSchema.prefault({ todos: [] }),
-  plan: PlanStateSnapshotSchema.prefault({ plan: null }),
-});
+);
 
 export type AgentWorkspaceSnapshot = z.output<
   typeof AgentWorkspaceStateSnapshotSchema
@@ -394,8 +399,7 @@ export class AgentWorkspaceState {
   public readonly reasoning: ReasoningCacheState;
   public readonly interactions: FileInteractionState;
   public readonly serverToolContent: ServerToolContentState;
-  public readonly todos: TodoState;
-  public readonly plan: PlanState;
+  public readonly workPlan: WorkPlanState;
 
   private constructor(
     assembly: ResponseAssemblyState,
@@ -403,16 +407,14 @@ export class AgentWorkspaceState {
     reasoning: ReasoningCacheState,
     interactions: FileInteractionState,
     serverToolContent: ServerToolContentState,
-    todos: TodoState,
-    plan: PlanState,
+    workPlan: WorkPlanState,
   ) {
     this.assembly = assembly;
     this.media = media;
     this.reasoning = reasoning;
     this.interactions = interactions;
     this.serverToolContent = serverToolContent;
-    this.todos = todos;
-    this.plan = plan;
+    this.workPlan = workPlan;
   }
 
   static create(): AgentWorkspaceState {
@@ -422,8 +424,7 @@ export class AgentWorkspaceState {
       ReasoningCacheStateSchema.parse({}),
       new FileInteractionState(),
       ServerToolContentStateSchema.parse({}),
-      new TodoState(),
-      new PlanState(),
+      new WorkPlanState(),
     );
   }
 
@@ -444,8 +445,7 @@ export class AgentWorkspaceState {
       parsed.reasoning,
       FileInteractionState.fromSnapshot(parsed.interactions),
       ServerToolContentStateSchema.parse({}),
-      TodoState.fromSnapshot(parsed.todos),
-      PlanState.fromSnapshot(parsed.plan),
+      WorkPlanState.fromSnapshot(parsed.workPlan),
     );
   }
 
@@ -464,8 +464,7 @@ export class AgentWorkspaceState {
         thinkingBlocks: [...this.reasoning.thinkingBlocks],
       },
       interactions: this.interactions.toSnapshot(),
-      todos: this.todos.toSnapshot(),
-      plan: this.plan.toSnapshot(),
+      workPlan: this.workPlan.toSnapshot(),
     };
   }
 
