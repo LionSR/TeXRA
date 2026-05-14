@@ -90,18 +90,18 @@ Every dependency is either already in the workspace, used by the dominant 2026 A
 
 Each entry is a deletion candidate, not a wrapper.
 
-| Today                                                                                                 | Where                                                | Replace with                                                            |
-| ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------- |
-| `splitGlobalArgs`, `flagValue`, `cliFlagName`, `hasBooleanFlag`, three `FLAGS_WITH_VALUE` sets        | `cliContext.ts:44–166, 224–268`                      | `citty` `defineCommand`                                                 |
-| `splitRunArgs` (separate file — citty migration touches two)                                          | `commands/root.ts:66–113` (invoked at `:323`)        | `citty` subcommand args                                                 |
-| `ANSI_TONES`, tone-switching `write()`                                                                | `terminalRenderer.ts:20–27, 546–552`                 | `picocolors` in legacy; Ink `<Text color>` in TUI                       |
-| `truncateText`, `formatOutputSnippet`, `formatUnknownSnippet`                                         | `terminalRenderer.ts:61–64, 310–367`                 | `string-width` + `wrap-ansi`                                            |
-| `renderedToolUseSignatures` `JSON.stringify` dedup                                                    | `terminalRenderer.ts:181–183`                        | `useSyncExternalStore` + React `memo` keyed on `entry.id + entry.seqNo` |
-| `MultilineDraftState` + `/multi` `/send` `/cancel` plumbing                                           | `runChat.ts:63–66, 451–469, 507–511`                 | `ink-text-input` with `Ctrl-J` newline; `/multi` retained as alias      |
-| `followUpFlush` promise chain, `pendingFollowUps`, `flushPendingFollowUps`, `streamReadyForFollowUps` | `runChat.ts:58–61, 255–304`                          | `p-queue` (`concurrency: 1`)                                            |
-| `askCliQuestion`, `createCliLineReader`                                                               | `logSinks.ts:87–107`                                 | `@clack/prompts` outside TUI; Ink inside                                |
-| `installChatResponsePrinter` log-diff loop                                                            | `runChat.ts:109–141`                                 | `useStreamLog(streamId)` hook + `<Static>` for finalized turns          |
-| ASCII card rendering (`-- title --` / `\| line` form)                                                 | `terminalRenderer.ts:513–524`                        | Ink `<Box borderStyle="round">`                                         |
+| Today                                                                                                 | Where                                         | Replace with                                                            |
+| ----------------------------------------------------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------- |
+| `splitGlobalArgs`, `flagValue`, `cliFlagName`, `hasBooleanFlag`, three `FLAGS_WITH_VALUE` sets        | `cliContext.ts:44–166, 224–268`               | `citty` `defineCommand`                                                 |
+| `splitRunArgs` (separate file — citty migration touches two)                                          | `commands/root.ts:66–113` (invoked at `:323`) | `citty` subcommand args                                                 |
+| `ANSI_TONES`, tone-switching `write()`                                                                | `terminalRenderer.ts:20–27, 546–552`          | `picocolors` in legacy; Ink `<Text color>` in TUI                       |
+| `truncateText`, `formatOutputSnippet`, `formatUnknownSnippet`                                         | `terminalRenderer.ts:61–64, 310–367`          | `string-width` + `wrap-ansi`                                            |
+| `renderedToolUseSignatures` `JSON.stringify` dedup                                                    | `terminalRenderer.ts:181–183`                 | `useSyncExternalStore` + React `memo` keyed on `entry.id + entry.seqNo` |
+| `MultilineDraftState` + `/multi` `/send` `/cancel` plumbing                                           | `runChat.ts:63–66, 451–469, 507–511`          | `ink-text-input` with `Ctrl-J` newline; `/multi` retained as alias      |
+| `followUpFlush` promise chain, `pendingFollowUps`, `flushPendingFollowUps`, `streamReadyForFollowUps` | `runChat.ts:58–61, 255–304`                   | `p-queue` (`concurrency: 1`)                                            |
+| `askCliQuestion`, `createCliLineReader`                                                               | `logSinks.ts:87–107`                          | `@clack/prompts` outside TUI; Ink inside                                |
+| `installChatResponsePrinter` log-diff loop                                                            | `runChat.ts:109–141`                          | `useStreamLog(streamId)` hook + `<Static>` for finalized turns          |
+| ASCII card rendering (`-- title --` / `\| line` form)                                                 | `terminalRenderer.ts:513–524`                 | Ink `<Box borderStyle="round">`                                         |
 
 Net: roughly 400 LOC removed from the TUI mode; the `--legacy-renderer` path retains the subset it actually uses (notably the ASCII card form, `askCliQuestion`, and the multiline draft state), so the deletion is bounded by which renderer is active.
 
