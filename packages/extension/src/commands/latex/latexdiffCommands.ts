@@ -524,7 +524,7 @@ async function scanRunDirForOutputs(
           executionId,
         );
         // Preserve subdirectory in source (e.g. "chapters/main") so
-        // FileLineageCalculator can match it back to the workspace original.
+        // traceFileLineage can match it back to the workspace original.
         // For the generic "output" stem, fall back to the input file basename
         // so progress labels show the meaningful name instead of "output".
         const sourceNoExt = fileRelToRound.replace(/\.tex$/i, '');
