@@ -81,6 +81,9 @@ export const SETTINGS_VIEW_CMD = {
   SET_CODEX_SANDBOX_MODE: 'setCodexSandboxMode',
   SET_CODEX_REASONING_EFFORT: 'setCodexReasoningEffort',
   SET_CODEX_APPROVAL_POLICY: 'setCodexApprovalPolicy',
+  SET_CLAUDE_AGENT_MODEL: 'setClaudeAgentModel',
+  SET_CLAUDE_AGENT_PERMISSION_MODE: 'setClaudeAgentPermissionMode',
+  SET_CLAUDE_AGENT_EFFORT: 'setClaudeAgentEffort',
   // Tool dashboard commands
   GET_TOOL_DASHBOARD_DATA: 'getToolDashboardData',
   OPEN_TOOL_INSTALL_URL: 'openToolInstallUrl',
