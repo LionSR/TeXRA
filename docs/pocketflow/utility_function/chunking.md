@@ -12,7 +12,6 @@ We recommend some implementations of commonly used text chunking approaches.
 > Text Chunking is more a micro optimization, compared to the Flow Design.
 >
 > It's recommended to start with the Naive Chunking and optimize later.
-> {: .best-practice }
 
 ---
 

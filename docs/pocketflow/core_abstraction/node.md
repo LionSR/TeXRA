@@ -33,7 +33,6 @@ A **Node** is the smallest building block. Each Node has 3 steps `prep->exec->po
 > **Why 3 steps?** To enforce the principle of _separation of concerns_. The data storage and data processing are operated separately.
 >
 > All steps are _optional_. E.g., you can only implement `prep` and `post` if you just need to process data.
-> {: .note }
 
 ### Fault Tolerance & Retries
 
