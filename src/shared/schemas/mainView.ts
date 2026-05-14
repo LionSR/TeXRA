@@ -826,6 +826,11 @@ const FileOperationMessages = [
     command: z.literal(MAIN_VIEW_COMMANDS.ADD_OPENED_FILES),
     fileType: ExtendedDocumentFileTypeSchema,
   }),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.ATTACH_DROPPED_FILES),
+    paths: z.array(z.string()),
+    target: MultipleDocumentFileTypeSchema.nullish(),
+  }),
   // Note: Use withFilesArray (required files) directly instead of
   // withOptionalFiles + .extend() override pattern
   withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES).extend({
