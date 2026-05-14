@@ -2,7 +2,7 @@
 import { EnvSecrets } from '@platform/defaults/envSecrets';
 import { createMemoryStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { nodeStorage } from '@platform/defaults/nodeStorage';
+import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { initPlatform, tryPlatform } from '@platform/platform';
 
@@ -94,7 +94,9 @@ export async function initCliPlatform(
       log: cliPlatformLog,
       fs: nodeFilesystem,
       workspace: createNodeWorkspace(() => cliWorkspaceCwd),
-      storage: nodeStorage,
+      storage: createNodeStorageProvider({
+        workspacePath: () => cliWorkspaceCwd,
+      }),
       secrets: new EnvSecrets(),
       lifecycle: noopLifecycle,
     });

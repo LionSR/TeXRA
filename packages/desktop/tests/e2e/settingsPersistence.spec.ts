@@ -1,10 +1,10 @@
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { test, expect } from '@playwright/test';
 
-import { workspaceStorageId } from '../../src/main/platform/electronStorage.js';
 import {
   closeTexraApp,
   dismissOnboarding,
@@ -25,14 +25,24 @@ const MEMORY_FILE_CONTENT = `${MEMORY_PREVIEW_TEXT}
 It verifies that the same workspace storage is read after relaunch.
 `;
 
+// Mirror of `workspaceStorageId` from
+// `src/platform/defaults/workspaceStorage.ts`. Inlined because Playwright's
+// ESM loader cannot safely import root TypeScript modules through `.js`
+// specifiers during test discovery.
+function workspaceStorageId(workspacePath: string | undefined): string {
+  const source = workspacePath?.trim() || 'no-workspace';
+  return createHash('sha256').update(source).digest('hex').slice(0, 16);
+}
+
 function writeMemoryEntry(input: {
   userDataPath: string;
   workspacePath: string;
 }): void {
+  const workspaceId = workspaceStorageId(resolve(input.workspacePath));
   const memoryDir = join(
     input.userDataPath,
     'workspace-storage',
-    workspaceStorageId(input.workspacePath),
+    workspaceId,
     'memories',
   );
   mkdirSync(memoryDir, { recursive: true });
@@ -81,9 +91,28 @@ async function setSettingsTab(
 }
 
 async function refreshMemoryData(launched: LaunchedApp): Promise<void> {
-  await launched.page.evaluate(() => {
-    window.postMessage({ command: 'getMemoryData' }, '*');
-  });
+  await sendHostCommand(launched, { command: 'getMemoryData' });
+}
+
+async function sendHostCommand(
+  launched: LaunchedApp,
+  message: Record<string, unknown>,
+): Promise<void> {
+  await launched.page.evaluate((payload) => {
+    // Backend commands must use the host bridge; `window.postMessage` only
+    // reaches renderer-side listeners.
+    const bridge = (
+      window as Window & {
+        __texraHostBridgeApi?: {
+          postMessage(message: unknown): void;
+        };
+      }
+    ).__texraHostBridgeApi;
+    if (!bridge) {
+      throw new Error('TeXRA host bridge is not available');
+    }
+    bridge.postMessage(payload);
+  }, message);
 }
 
 interface RenderedMemoryItem {
@@ -127,9 +156,10 @@ async function waitForMemoryEntry(launched: LaunchedApp): Promise<void> {
     (candidate) => candidate.displayPath === MEMORY_DISPLAY_PATH,
   );
   if (item?.storagePath) {
-    await launched.page.evaluate((storagePath) => {
-      window.postMessage({ command: 'getMemoryPreview', storagePath }, '*');
-    }, item.storagePath);
+    await sendHostCommand(launched, {
+      command: 'getMemoryPreview',
+      storagePath: item.storagePath,
+    });
   }
 
   await waitForRenderedMemoryItem(

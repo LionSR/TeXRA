@@ -6,6 +6,9 @@ import { join } from 'node:path';
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+// Local imports - platform
+import { createWorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+
 // Local imports - test support
 import {
   app as electronApp,
@@ -36,18 +39,6 @@ interface ElectronStateStore {
 
 interface ElectronStateModule {
   ElectronStateStore: new (store: JsonStore) => ElectronStateStore;
-}
-
-interface ElectronStorageProvider {
-  getGlobalStoragePath(): string;
-  getStoragePath(): string;
-}
-
-interface ElectronStorageModule {
-  ElectronStorageProvider: new (
-    userDataPath: string,
-    workspacePath: string | undefined,
-  ) => ElectronStorageProvider;
 }
 
 interface ElectronSecrets {
@@ -150,16 +141,12 @@ describe('desktop platform adapters', () => {
   });
 
   it('creates stable global and workspace storage roots under userData', async () => {
-    const { ElectronStorageProvider } =
-      await loadDesktopPlatformModule<ElectronStorageModule>(
-        'electronStorage.ts',
-      );
     const root = await makeTempDir('texra-electron-storage-');
 
-    const first = new ElectronStorageProvider(root, '/workspace/a');
-    const same = new ElectronStorageProvider(root, '/workspace/a');
-    const other = new ElectronStorageProvider(root, '/workspace/b');
-    const noWorkspace = new ElectronStorageProvider(root, undefined);
+    const first = createWorkspaceStorageProvider(root, '/workspace/a');
+    const same = createWorkspaceStorageProvider(root, '/workspace/a');
+    const other = createWorkspaceStorageProvider(root, '/workspace/b');
+    const noWorkspace = createWorkspaceStorageProvider(root, undefined);
 
     expect(first.getGlobalStoragePath()).toBe(join(root, 'global-storage'));
     expect(first.getStoragePath()).toBe(same.getStoragePath());
