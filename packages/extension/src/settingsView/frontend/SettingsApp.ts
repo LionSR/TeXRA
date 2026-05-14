@@ -283,6 +283,8 @@ export class SettingsApp extends SettingsAppBase {
   private readonly codexSandboxMode = signal<string>('workspace-write');
   private readonly codexReasoningEffort = signal<string>('high');
   private readonly codexApprovalPolicy = signal<string>('never');
+  private readonly claudeAgentModel = signal<string>('claude-opus-4-7');
+  private readonly claudeAgentPermissionMode = signal<string>('acceptEdits');
 
   // Tool dashboard state
   private readonly toolDashboardItems = signal<ToolDashboardItem[]>([]);
@@ -341,6 +343,8 @@ export class SettingsApp extends SettingsAppBase {
       codexSandboxMode: this.codexSandboxMode,
       codexReasoningEffort: this.codexReasoningEffort,
       codexApprovalPolicy: this.codexApprovalPolicy,
+      claudeAgentModel: this.claudeAgentModel,
+      claudeAgentPermissionMode: this.claudeAgentPermissionMode,
       toolDashboardItems: this.toolDashboardItems,
       toolDashboardLoaded: this.toolDashboardLoaded,
       gitMarkCommits: this.gitMarkCommits,
@@ -654,6 +658,14 @@ export class SettingsApp extends SettingsAppBase {
 
   private handleCodexApprovalPolicyChange = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_CODEX_APPROVAL_POLICY,
+  );
+
+  private handleClaudeAgentModelChange = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_MODEL,
+  );
+
+  private handleClaudeAgentPermissionModeChange = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_PERMISSION_MODE,
   );
 
   // Git settings event handlers
@@ -1086,6 +1098,8 @@ export class SettingsApp extends SettingsAppBase {
               .codexSandboxMode=${this.codexSandboxMode.get()}
               .codexReasoningEffort=${this.codexReasoningEffort.get()}
               .codexApprovalPolicy=${this.codexApprovalPolicy.get()}
+              .claudeAgentModel=${this.claudeAgentModel.get()}
+              .claudeAgentPermissionMode=${this.claudeAgentPermissionMode.get()}
               @tool-open-url=${this.handleToolOpenUrl}
               @tool-install-extension=${this.handleToolInstallExtension}
               @tool-run-command=${this.handleToolRunCommand}
@@ -1096,6 +1110,9 @@ export class SettingsApp extends SettingsAppBase {
                 .handleCodexReasoningEffortChange}
               @codex-approval-policy-change=${this
                 .handleCodexApprovalPolicyChange}
+              @claude-agent-model-change=${this.handleClaudeAgentModelChange}
+              @claude-agent-permission-mode-change=${this
+                .handleClaudeAgentPermissionModeChange}
             ></ai-agents-tab>
           </wa-tab-panel>
 
