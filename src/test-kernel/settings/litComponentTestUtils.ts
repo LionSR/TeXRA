@@ -34,6 +34,7 @@ const domGlobalKeys = [
   'MouseEvent',
   'ShadowRoot',
   'Node',
+  'CSSStyleSheet',
   'AbortController',
   'AbortSignal',
   'getComputedStyle',
@@ -258,6 +259,7 @@ export function useLitComponentTestDom(
       MouseEvent: dom.window.MouseEvent,
       ShadowRoot: dom.window.ShadowRoot,
       Node: dom.window.Node,
+      CSSStyleSheet: dom.window.CSSStyleSheet,
       // wa-dialog (and other Web Awesome components) rely on these browser
       // globals; use the jsdom-backed implementations so AbortSignal/Event
       // identity matches the EventTarget instances they're attached to.
