@@ -53,6 +53,11 @@ const PLACEHOLDER_HTML = getGettingStartedHtml(
   'No runs yet—use TeXRA commands to start. Try ',
 );
 
+const DEFAULT_TIMELINE_ITEM_WINDOW = 120;
+const TIMELINE_ITEM_WINDOW_STEP = 120;
+const DEFAULT_GROUP_MESSAGE_WINDOW = 400;
+const GROUP_MESSAGE_WINDOW_STEP = 400;
+
 const ESCAPE_CHARACTER = String.fromCharCode(27);
 // Null byte used as a sentinel for ANSI erase-line sequences inside processTerminalText.
 // Real null bytes in the input are stripped first so the sentinel is unambiguous.
@@ -181,6 +186,12 @@ export class TaskGroupList extends LitElement {
   /** O(1) lookup from ungrouped message ID → cachedTimeline index. */
   private timelineMessageIndex = new Map<string, number>();
 
+  /** Number of recent top-level timeline entries currently rendered. */
+  private timelineItemWindow = DEFAULT_TIMELINE_ITEM_WINDOW;
+
+  /** Number of recent message entries rendered for each group. */
+  private groupMessageWindows = new Map<string, number>();
+
   /** Reference to the scroll container */
   @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
   private scrollContainer?: HTMLElement;
@@ -270,6 +281,7 @@ export class TaskGroupList extends LitElement {
     if (changedProperties.get('terminal') === true) {
       [this.cachedTree, this.cachedUngrouped] = this.buildGroupTree();
       this.cachedTimeline = this.buildFullTimeline();
+      this.resetRenderWindows();
       return;
     }
 
@@ -305,6 +317,7 @@ export class TaskGroupList extends LitElement {
       } else {
         // Messages shrunk (e.g. clear) — full rebuild
         [this.cachedTree, this.cachedUngrouped] = this.buildGroupTree();
+        this.resetRenderWindows();
       }
     }
 
@@ -766,6 +779,98 @@ export class TaskGroupList extends LitElement {
     this.ungroupedMessageById.delete(id);
   }
 
+  private resetRenderWindows(): void {
+    this.timelineItemWindow = DEFAULT_TIMELINE_ITEM_WINDOW;
+    this.groupMessageWindows.clear();
+  }
+
+  private groupMessageScope(groupId: string): string {
+    return `group:${groupId}`;
+  }
+
+  private renderRevealButton(options: {
+    hiddenCount: number;
+    step: number;
+    scope: string;
+    kind: 'timeline' | 'messages';
+    label: string;
+  }): TemplateResult {
+    const revealCount = Math.min(options.hiddenCount, options.step);
+    const suffix = revealCount === 1 ? options.label : `${options.label}s`;
+    return html`
+      <div class="log-reveal-row">
+        <button
+          type="button"
+          class="log-reveal-button"
+          data-reveal-kind=${options.kind}
+          data-reveal-scope=${options.scope}
+          data-hidden-count=${String(options.hiddenCount)}
+          @click=${this.handleRevealOlderRows}
+          aria-label=${`Show ${revealCount} older ${suffix}`}
+        >
+          <wa-icon
+            library="texra"
+            name="chevron-up"
+            aria-hidden="true"
+          ></wa-icon>
+          <span>Show ${revealCount} older ${suffix}</span>
+        </button>
+      </div>
+    `;
+  }
+
+  private renderMessageEntries(
+    messages: readonly LogMessageData[],
+    scope: string,
+  ): TemplateResult {
+    const windowSize =
+      this.groupMessageWindows.get(scope) ?? DEFAULT_GROUP_MESSAGE_WINDOW;
+    const hiddenCount = Math.max(0, messages.length - windowSize);
+    const visibleMessages =
+      hiddenCount > 0 ? messages.slice(hiddenCount) : messages;
+
+    return html`${hiddenCount > 0
+      ? this.renderRevealButton({
+          hiddenCount,
+          step: GROUP_MESSAGE_WINDOW_STEP,
+          scope,
+          kind: 'messages',
+          label: 'message',
+        })
+      : nothing}${repeat(
+      visibleMessages,
+      (m) => m.id,
+      (m) => guard([m], () => formatLogEntry(m)),
+    )}`;
+  }
+
+  private handleRevealOlderRows(event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const target = event.currentTarget as HTMLElement;
+    const kind = target.dataset.revealKind;
+    const scope = target.dataset.revealScope;
+    if (!scope) return;
+
+    if (kind === 'timeline') {
+      this.timelineItemWindow += TIMELINE_ITEM_WINDOW_STEP;
+    } else if (kind === 'messages') {
+      const current =
+        this.groupMessageWindows.get(scope) ?? DEFAULT_GROUP_MESSAGE_WINDOW;
+      this.groupMessageWindows.set(scope, current + GROUP_MESSAGE_WINDOW_STEP);
+    }
+    this.requestUpdate();
+  }
+
+  private visibleTimelineEntries(): typeof this.cachedTimeline {
+    if (this.cachedTimeline.length <= this.timelineItemWindow) {
+      return this.cachedTimeline;
+    }
+    return this.cachedTimeline.slice(
+      this.cachedTimeline.length - this.timelineItemWindow,
+    );
+  }
+
   /** Check if a group is expanded */
   private isExpanded(groupId: string): boolean {
     if (!this.toggleStates) return true;
@@ -846,10 +951,9 @@ export class TaskGroupList extends LitElement {
       return html`
         <div id=${detailsId} class="log-group log-run" data-run-id=${group.id}>
           <div id=${contentId} class="log-group-content">
-            ${repeat(
+            ${this.renderMessageEntries(
               messages,
-              (m) => m.id,
-              (m) => guard([m], () => formatLogEntry(m)),
+              this.groupMessageScope(group.id),
             )}
             ${repeat(
               children,
@@ -883,10 +987,9 @@ export class TaskGroupList extends LitElement {
         </summary>
         <div id=${contentId} class="log-group-content">
           ${expanded
-            ? html`${repeat(
+            ? html`${this.renderMessageEntries(
                 messages,
-                (m) => m.id,
-                (m) => guard([m], () => formatLogEntry(m)),
+                this.groupMessageScope(group.id),
               )}${repeat(
                 children,
                 (c) => c.group.id,
@@ -996,18 +1099,30 @@ export class TaskGroupList extends LitElement {
     }
 
     // Interleave ungrouped messages (user input, follow-ups, errors) with run
-    // groups chronologically so the conversation reads top-to-bottom. The
-    // user's original instruction always surfaces at the top because it has
-    // the earliest timestamp. Timeline is memoized in willUpdate() — only
-    // rebuilt when inputs change.
+    // groups chronologically so the conversation reads top-to-bottom. Large
+    // streams render a recent window first; older timeline entries remain in
+    // memory and can be revealed from the top control.
+    const visibleTimeline = this.visibleTimelineEntries();
+    const hiddenTimelineCount =
+      this.cachedTimeline.length - visibleTimeline.length;
+
     return html`
       <div
         id=${ELEMENT_IDS.LOG_CONTENT}
         class="log-container"
         @scroll=${this.handleScroll}
       >
+        ${hiddenTimelineCount > 0
+          ? this.renderRevealButton({
+              hiddenCount: hiddenTimelineCount,
+              step: TIMELINE_ITEM_WINDOW_STEP,
+              scope: 'timeline',
+              kind: 'timeline',
+              label: 'item',
+            })
+          : nothing}
         ${repeat(
-          this.cachedTimeline,
+          visibleTimeline,
           (item) => item.key,
           (item) =>
             'msg' in item

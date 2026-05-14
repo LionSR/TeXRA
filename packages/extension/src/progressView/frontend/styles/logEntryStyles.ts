@@ -45,6 +45,37 @@ export const logEntryStyles = css`
     font-style: italic;
   }
 
+  .log-reveal-row {
+    display: flex;
+    justify-content: center;
+    margin: var(--wa-space-2xs) 0;
+  }
+
+  .log-reveal-button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--wa-space-3xs);
+    min-height: 24px;
+    padding: 0 var(--wa-space-xs);
+    border: var(--border-thin) solid var(--wa-color-surface-border);
+    border-radius: var(--border-radius-small);
+    background: var(--wa-color-surface-default);
+    color: var(--color-text-secondary);
+    font: inherit;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+  }
+
+  .log-reveal-button:hover {
+    color: var(--color-text);
+    border-color: var(--color-border);
+  }
+
+  .log-reveal-button:focus-visible {
+    outline: var(--border-thin) solid var(--wa-color-focus);
+    outline-offset: 2px;
+  }
+
   .render-error-icon {
     font-style: normal;
     flex-shrink: 0;
