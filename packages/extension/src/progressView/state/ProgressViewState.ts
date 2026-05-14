@@ -313,8 +313,14 @@ export class ProgressViewState {
     return Object.fromEntries(this._streamStates.entries());
   }
 
-  async endRunningTaskGroups(now: number = Date.now()): Promise<StreamTabId[]> {
-    const affectedFromLogs = this.streamLogs.endRunningGroups(now);
+  async endRunningTaskGroups(
+    now: number = Date.now(),
+    streamIds?: readonly StreamTabId[],
+  ): Promise<StreamTabId[]> {
+    const affectedFromLogs = await this.streamLogs.endRunningGroups(
+      now,
+      streamIds,
+    );
     if (affectedFromLogs.length > 0) {
       await this.streamLogs.save();
     }
@@ -456,6 +462,7 @@ export class ProgressViewState {
           const text = legacyInstruction.text.trim();
           if (!text) return;
 
+          await this.streamLogs.ensureLoaded(streamId);
           const log = this.streamLogs.get(streamId);
           if (!log) return;
 
