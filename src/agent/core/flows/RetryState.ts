@@ -1,6 +1,7 @@
 /** Retry state management: Node retry config, error tracking, and retryable node base class. */
 
 import { Node, type NonIterableObject } from '@agent/node';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { type RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import { waitForRetry } from '@agent/runtime/runCoordinators';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
@@ -45,6 +46,7 @@ export type InvocationResult<TSuccess> =
 
 interface RetryableNodeServices {
   streamId: string;
+  runtimeHost: AgentRuntimeHost;
   logger: AgentLogger;
   setAbortController: (ac: AbortController | null) => void;
   refreshClient?: () => Promise<void>;
@@ -252,7 +254,7 @@ export abstract class RetryableInvocationNode<
   protected async handleManualRetryPrompt(
     error: Error,
   ): Promise<ManualRetryPromptResult> {
-    const { streamId, logger } = this.services;
+    const { streamId, logger, runtimeHost } = this.services;
     const operationName = this.getOperationName();
     const formatted = normalizeProviderError(error);
 
@@ -265,7 +267,9 @@ export abstract class RetryableInvocationNode<
       formatted,
     );
 
-    StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
+    StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
+      runtimeHost,
+    });
     const result: RetryResult = await waitForRetry(streamId, {
       operation: operationName,
       errorMessage: formatted.message,
@@ -275,7 +279,9 @@ export abstract class RetryableInvocationNode<
 
     if (result.action === 'retry') {
       logger.debug('Manual retry triggered');
-      StreamStatusService.set(streamId, STREAM_STATUS.RUNNING);
+      StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
+        runtimeHost,
+      });
       return { shouldRetry: true, userCancelled: false };
     }
 
@@ -284,7 +290,9 @@ export abstract class RetryableInvocationNode<
         ? 'Retry timed out (no response)'
         : 'Retry cancelled by user';
     logger.info(message, { messageType: MESSAGE_TYPES.PROGRESS_STATUS });
-    StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
+    StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
+      runtimeHost,
+    });
     return { shouldRetry: false, userCancelled: true };
   }
 
