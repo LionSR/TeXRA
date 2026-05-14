@@ -7,7 +7,9 @@ import { COMMON_COMMANDS } from './commonCommands';
 export const MEMORY_VIEW_COMMANDS = {
   ...COMMON_COMMANDS,
   GET_MEMORY_DATA: 'getMemoryData',
+  GET_MEMORY_PREVIEW: 'getMemoryPreview',
   UPDATE_MEMORY: 'updateMemory',
+  UPDATE_MEMORY_PREVIEW: 'updateMemoryPreview',
   OPEN_MEMORY_FILE: 'openMemoryFile',
   OPEN_MEMORY_FOLDER: 'openMemoryFolder',
   DELETE_MEMORY: 'deleteMemory',
