@@ -1,8 +1,4 @@
-import {
-  STREAM_LOG_ENTRY_TYPES,
-  StreamLogEntrySchema,
-  type StreamLogEntry,
-} from '@shared/schemas';
+import { STREAM_LOG_ENTRY_TYPES, type StreamLogEntry } from '@shared/schemas';
 import { isObject } from '@utils/core';
 
 export type StreamLogAppendInput = Omit<StreamLogEntry, 'seqNo'>;
@@ -69,10 +65,10 @@ export class StreamLog {
   }
 
   append(entry: StreamLogAppendInput): StreamLogEntry {
-    const fullEntry = StreamLogEntrySchema.parse({
+    const fullEntry: StreamLogEntry = {
       ...entry,
       seqNo: this.seqCounter + 1,
-    });
+    };
     this.seqCounter = fullEntry.seqNo;
     this.indexById.set(fullEntry.id, this.entries.length);
     this.entries.push(fullEntry);
@@ -89,7 +85,7 @@ export class StreamLog {
     const current = this.entries[index];
     // Direct merge — no Zod parse. update() is on the streaming hot path
     // (tool output chunks at ~200/sec) and receives trusted data from
-    // AgentLogger. The schema boundary is append(), not update().
+    // AgentLogger. Persisted entries are parsed when loaded from storage.
     const updated: StreamLogEntry = {
       ...current,
       ...patch,
