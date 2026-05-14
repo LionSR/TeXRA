@@ -37,4 +37,22 @@ describe('terminal-output text update planning', () => {
     expect(countTerminalRows('one')).toBe(1);
     expect(countTerminalRows('one\ntwo\n')).toBe(3);
   });
+
+  it('updates row count incrementally for appended output', async () => {
+    const { nextTerminalRowCount, planTerminalTextUpdate } =
+      await import('@progressView/frontend/components/TerminalOutput');
+
+    const updatePlan = planTerminalTextUpdate('alpha\n', 'alpha\nbeta\ngamma');
+
+    expect(nextTerminalRowCount(2, updatePlan)).toBe(3);
+  });
+
+  it('recounts rows when output is reset after trimming', async () => {
+    const { nextTerminalRowCount, planTerminalTextUpdate } =
+      await import('@progressView/frontend/components/TerminalOutput');
+
+    const updatePlan = planTerminalTextUpdate('alpha\nbeta\n', 'beta\ngamma\n');
+
+    expect(nextTerminalRowCount(3, updatePlan)).toBe(3);
+  });
 });
