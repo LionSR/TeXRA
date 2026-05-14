@@ -249,7 +249,8 @@ export class AIAgentsTab extends LitElement {
 
   private renderInlineSettingsFor(itemId: string): TemplateResult | null {
     if (itemId === 'codex') return this.renderCodexInlineSettings();
-    if (itemId === 'claude-agent') return this.renderClaudeAgentInlineSettings();
+    if (itemId === 'claude-agent')
+      return this.renderClaudeAgentInlineSettings();
     return null;
   }
 
@@ -299,7 +300,9 @@ export class AIAgentsTab extends LitElement {
                   items,
                   (item) => item.id,
                   (item) => {
-                    const inlineSettings = this.renderInlineSettingsFor(item.id);
+                    const inlineSettings = this.renderInlineSettingsFor(
+                      item.id,
+                    );
                     return html`
                       <tool-card .item=${item}>
                         ${inlineSettings
