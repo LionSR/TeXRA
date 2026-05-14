@@ -6,7 +6,6 @@ import { z } from 'zod';
 
 // Local imports - tool definitions
 import * as logger from '@agent/core/logger';
-import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { isDirectory } from '@common/files/fsEntryType';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import replacementEngine from '@replacement/engine';
@@ -31,7 +30,7 @@ import { formatFileView, formatLinesWithNumbers } from './formatting';
 import {
   assertWritable,
   resolveAndFormat,
-  parseWorkingDirectory,
+  currentToolRoot,
 } from './pathResolution';
 import { requireField } from './utils';
 
@@ -113,7 +112,7 @@ export class TextEditorTool extends defineTool({
 
   protected async execute(input: TextEditorInput): Promise<ToolResult> {
     const { command, path: inputPath } = input;
-    const root = parseWorkingDirectory(tryUseRunContext()?.workingDirectory);
+    const root = currentToolRoot();
     const { path: resolved, display: displayPath } = resolveAndFormat(
       inputPath,
       root,
