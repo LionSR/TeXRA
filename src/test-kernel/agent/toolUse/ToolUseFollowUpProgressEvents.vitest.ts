@@ -7,14 +7,18 @@ import {
   registerInterruptible,
   unregisterInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
-import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import { onFollowUpSent, sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import type { StreamTabId } from '@shared/schemas';
 import { createRecordingHost } from '../progressTestUtils';
 
 const streamId = 'stream:follow-up' as StreamTabId;
 
 describe('tool-use follow-up progress events', () => {
+  let unsubscribeFollowUpObserver: (() => void) | undefined;
+
   afterEach(() => {
+    unsubscribeFollowUpObserver?.();
+    unsubscribeFollowUpObserver = undefined;
     unregisterInterruptible(streamId);
   });
 
@@ -39,5 +43,27 @@ describe('tool-use follow-up progress events', () => {
         payload: { streamId },
       },
     ]);
+  });
+
+  it('notifies local follow-up observers without using the progress bus', async () => {
+    const { host } = createRecordingHost();
+    const observed: StreamTabId[] = [];
+    unsubscribeFollowUpObserver = onFollowUpSent((observedStreamId) => {
+      observed.push(observedStreamId);
+    });
+
+    registerInterruptible(streamId, {
+      session: { appendFollowUp: vi.fn() },
+      modelHandler: {},
+      runtimeHost: host,
+      interrupt: vi.fn(),
+    } as unknown as ToolUseFlowContext);
+
+    await sendFollowUp(streamId, 'break wait');
+    unsubscribeFollowUpObserver();
+    unsubscribeFollowUpObserver = undefined;
+    await sendFollowUp(streamId, 'after unsubscribe');
+
+    expect(observed).toEqual([streamId]);
   });
 });

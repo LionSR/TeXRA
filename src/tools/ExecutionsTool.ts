@@ -34,12 +34,12 @@ import {
   bindExecutionSubscription,
   unbindExecutionSubscription,
 } from '@agent/runtime/ExecutionSubscriptionBinder';
+import { onFollowUpSent } from '@agent/toolUse/ToolUseFollowUp';
 import { getWorkspaceState } from '@agent/core/stateStore';
 
 // Local imports - utils
 import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { isDirectory } from '@common/files/fsEntryType';
-import { bus } from '@eventBus/ProgressEventBus';
 import {
   STREAM_STATUS,
   ExecutionIdSchema,
@@ -100,19 +100,9 @@ function listenForFollowUp(ac: AbortController): () => void {
   if (!ctx?.streamId) return () => {};
 
   const streamId = ctx.streamId;
-  // `ready` gate: bus.on() replays buffered events synchronously during
-  // registration. Setting `ready` after the call ensures stale replayed
-  // events are ignored — only events emitted after subscription trigger abort.
-  let ready = false;
-  const cleanup = bus.on(
-    'followUpSent',
-    (payload) => {
-      if (ready && payload.streamId === streamId) ac.abort();
-    },
-    { signal: ac.signal },
-  );
-  ready = true;
-  return cleanup;
+  return onFollowUpSent((followUpStreamId) => {
+    if (followUpStreamId === streamId) ac.abort();
+  });
 }
 
 // ============================================================================
