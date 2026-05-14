@@ -114,7 +114,6 @@ async function gatherWorkspaceInfo(
   };
 }
 
-
 /**
  * Build a formatted workspace info block for system prompt injection.
  *
