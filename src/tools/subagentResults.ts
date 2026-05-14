@@ -17,7 +17,7 @@ import type {
   ActiveChildInfo,
   SubagentProgressUpdate,
   TodoItem,
-  Plan,
+  WorkPlanSnapshot,
 } from '@shared/schemas';
 import { countByStatus, STATUS_DISPLAY } from '@shared/schemas/todoDisplay';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
@@ -342,12 +342,12 @@ export function formatBashError(
 export function formatPostCompactionContext(
   subagents: ActiveChildInfo[],
   processes: ActiveChildInfo[],
-  todos?: TodoItem[],
-  plan?: Plan | null,
+  workPlan?: WorkPlanSnapshot | null,
 ): string | null {
   const hasChildren = subagents.length > 0 || processes.length > 0;
-  const hasTodos = todos != null && todos.length > 0;
-  const hasPlan = plan != null;
+  const todos = workPlan?.todos ?? [];
+  const hasTodos = todos.length > 0;
+  const hasPlan = workPlan?.plan != null || workPlan?.planSummary != null;
 
   if (!hasChildren && !hasTodos && !hasPlan) {
     return null;
@@ -394,7 +394,7 @@ export function formatPostCompactionContext(
   }
 
   if (hasPlan) {
-    lines.push(...formatPlanContext(plan));
+    lines.push(...formatPlanContext(workPlan));
   }
 
   lines.push('</post-compaction-context>');
@@ -418,19 +418,23 @@ function formatTodoContext(todos: TodoItem[]): string[] {
 /**
  * Format plan as XML lines for post-compaction context.
  */
-function formatPlanContext(plan: Plan): string[] {
-  const lines: string[] = [
-    `<current-plan summary="${escapeAttr(plan.summary)}">`,
-  ];
-  for (let i = 0; i < plan.steps.length; i++) {
-    const step = plan.steps[i]!;
-    const filesAttr =
-      step.files.length > 0
-        ? ` files="${escapeAttr(step.files.join(', '))}"`
-        : '';
-    lines.push(
-      `  <step index="${i + 1}" status="${escapeAttr(step.status)}" title="${escapeAttr(step.title)}"${filesAttr}>${escapeText(step.description)}</step>`,
-    );
+function formatPlanContext(workPlan: WorkPlanSnapshot): string[] {
+  const plan = workPlan.plan;
+  const summary = plan?.summary ?? workPlan.planSummary;
+  if (!summary) return [];
+
+  const lines: string[] = [`<current-plan summary="${escapeAttr(summary)}">`];
+  if (plan) {
+    for (let i = 0; i < plan.steps.length; i++) {
+      const step = plan.steps[i]!;
+      const filesAttr =
+        step.files.length > 0
+          ? ` files="${escapeAttr(step.files.join(', '))}"`
+          : '';
+      lines.push(
+        `  <step index="${i + 1}" status="${escapeAttr(step.status)}" title="${escapeAttr(step.title)}"${filesAttr}>${escapeText(step.description)}</step>`,
+      );
+    }
   }
   lines.push('</current-plan>');
   return lines;

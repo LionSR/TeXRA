@@ -30,8 +30,7 @@ import {
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type {
   FileInteractionState,
-  PlanState,
-  TodoState,
+  WorkPlanState,
 } from '@agent/core/AgentWorkspaceState';
 import type { ToolResult } from '@agent/core/ToolTypes';
 import { getActiveChildren } from '@agent/runtime/executionRegistry';
@@ -726,8 +725,7 @@ class ToolUseDispatchNode<C> extends Node<
       call,
       this.services,
       workspace.interactions,
-      workspace.todos,
-      workspace.plan,
+      workspace.workPlan,
     );
   }
 
@@ -745,8 +743,7 @@ class ToolUseDispatchNode<C> extends Node<
     parsedInput: unknown,
     options: ToolUseCycleServices<C>,
     tracker: FileInteractionState,
-    todoState: TodoState,
-    planState: PlanState,
+    workPlanState: WorkPlanState,
     onExecutionReady?: () => void,
     onToolOutput?: (chunk: string) => void,
   ): Promise<ToolResult> {
@@ -758,8 +755,7 @@ class ToolUseDispatchNode<C> extends Node<
       return await withToolFileInteractionContext(
         {
           tracker,
-          todoState,
-          planState,
+          workPlanState,
           toolCallId: call.callId,
           onExecutionReady,
           onToolOutput,
@@ -777,8 +773,7 @@ class ToolUseDispatchNode<C> extends Node<
     call: SdkToolCall,
     options: ToolUseCycleServices<C>,
     tracker: FileInteractionState,
-    todoState: TodoState,
-    planState: PlanState,
+    workPlanState: WorkPlanState,
   ): Promise<ToolExecutionResult> {
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
     const tool = options.toolRegistry.get(call.name);
@@ -834,8 +829,7 @@ class ToolUseDispatchNode<C> extends Node<
       parsedInput,
       options,
       tracker,
-      todoState,
-      planState,
+      workPlanState,
       onExecutionReady,
       onToolOutput,
     );
@@ -1028,8 +1022,7 @@ export function createToolUseCycleFlow<C>(): Flow<
       return formatPostCompactionContext(
         subagents,
         processes,
-        services.workspace.todos.todos,
-        services.workspace.plan.plan,
+        services.workspace.workPlan.toSnapshot(),
       );
     },
     getDebugSaveOptions: (shared, services) => ({
