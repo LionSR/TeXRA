@@ -20,17 +20,6 @@ export interface RunLogger {
   error(message: string, data?: RunLogData): void;
 }
 
-export type ApprovalHandler<TRequest = unknown, TResult = unknown> = (
-  request: TRequest,
-) => Promise<TResult> | TResult;
-
-export interface ApprovalHandlers {
-  agentProposal?: ApprovalHandler;
-  bash?: ApprovalHandler;
-  plan?: ApprovalHandler;
-  toolEdit?: ApprovalHandler;
-}
-
 export interface RunCoordinators {
   readonly plan: PlanApprovalCoordinator;
   readonly proposal: AgentProposalCoordinator;
@@ -74,7 +63,6 @@ export interface RunContext {
   readonly streamId?: StreamTabId;
   readonly executionId?: ExecutionId;
   readonly logger: RunLogger;
-  readonly approvals: ApprovalHandlers;
   readonly coordinators?: RunCoordinators;
   readonly toolRunContext?: ToolRunContext;
 }
@@ -84,7 +72,6 @@ export interface CreateRunContextOptions {
   streamId?: StreamTabId;
   executionId?: ExecutionId;
   logger?: Partial<RunLogger>;
-  approvals?: ApprovalHandlers;
   coordinators?: RunCoordinators;
   toolRunContext?: ToolRunContext;
 }
@@ -97,7 +84,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     throw new Error('createRunContext requires an explicit runtimeHost');
   }
 
-  const { logger, approvals } = options;
+  const { logger } = options;
 
   return Object.freeze({
     runtimeHost: options.runtimeHost,
@@ -109,7 +96,6 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
       warn: logger?.warn ?? noopLog,
       error: logger?.error ?? noopLog,
     }),
-    approvals: Object.freeze({ ...approvals }),
     coordinators: options.coordinators,
     toolRunContext: options.toolRunContext
       ? Object.freeze({ ...options.toolRunContext })

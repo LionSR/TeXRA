@@ -82,7 +82,6 @@ function createExecutionRunContext(ctx: AgentLaunchContext): RunContext {
     streamId: ctx.streamId,
     executionId: ctx.executionId,
     logger: ctx.logger,
-    approvals: {},
     coordinators: ctx.coordinators,
     toolRunContext: {
       streamId: ctx.streamId,
