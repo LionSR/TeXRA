@@ -406,6 +406,10 @@ export class SettingsApp extends SettingsAppBase {
     });
   }
 
+  private handleMemoryLoadPreview = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW,
+  );
+
   private handleMemoryPinItem = forwardDetail(
     SETTINGS_VIEW_COMMANDS.PIN_MEMORY,
   );
@@ -957,6 +961,7 @@ export class SettingsApp extends SettingsAppBase {
               @memory-toggle-enabled=${this.handleMemoryToggleEnabled}
               @memory-open-item=${this.handleMemoryOpenItem}
               @memory-delete-item=${this.handleMemoryDeleteItem}
+              @memory-load-preview=${this.handleMemoryLoadPreview}
               @memory-pin-item=${this.handleMemoryPinItem}
               @memory-unpin-item=${this.handleMemoryUnpinItem}
             ></memory-tab>
