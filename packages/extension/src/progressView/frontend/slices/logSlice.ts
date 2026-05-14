@@ -60,13 +60,23 @@ function toLogMessage(entry: StreamLogEntry): LogMessageData {
 
 function updateTaskGroups(
   streamState: StreamState,
+  taskGroupIndex: Map<string, number>,
   entry: StreamLogEntry,
 ): boolean {
   const payload =
     typeof entry.data === 'object' && entry.data !== null
       ? (entry.data as Record<string, unknown>)
       : {};
-  const groupIndex = streamState.taskGroups.findIndex((g) => g.id === entry.id);
+  const cachedIndex = taskGroupIndex.get(entry.id);
+  const groupIndex =
+    cachedIndex !== undefined &&
+    streamState.taskGroups[cachedIndex]?.id === entry.id
+      ? cachedIndex
+      : streamState.taskGroups.findIndex((g) => g.id === entry.id);
+
+  if (groupIndex >= 0 && groupIndex !== cachedIndex) {
+    taskGroupIndex.set(entry.id, groupIndex);
+  }
 
   if (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START) {
     const status = isTaskGroupStatus(payload.status)
@@ -81,6 +91,7 @@ function updateTaskGroups(
     };
 
     if (groupIndex === -1) {
+      taskGroupIndex.set(entry.id, streamState.taskGroups.length);
       streamState.taskGroups.push(nextGroup);
     } else {
       streamState.taskGroups[groupIndex] = nextGroup;
@@ -99,6 +110,7 @@ function updateTaskGroups(
     typeof payload.endTime === 'number' ? payload.endTime : undefined;
 
   if (groupIndex === -1) {
+    taskGroupIndex.set(entry.id, streamState.taskGroups.length);
     streamState.taskGroups.push({
       id: entry.id,
       name: entry.text ?? entry.id,
@@ -124,7 +136,11 @@ function applyEntry(
   streamLogs: StreamLogs,
   streamState: StreamState,
 ): { logChanged: boolean; stateChanged: boolean } {
-  let stateChanged = updateTaskGroups(streamState, entry);
+  let stateChanged = updateTaskGroups(
+    streamState,
+    streamLogs.taskGroupIndex,
+    entry,
+  );
 
   if (entry.messageType === MESSAGE_TYPES.CONTEXT_STATE) {
     const contextState = asContextStateData(entry.data);
@@ -163,6 +179,7 @@ export const logHandlers: HandlerRegistry = {
         const streamLogs: StreamLogs = existingStreamLogs ?? {
           logs: [],
           logIndex: new Map<string, number>(),
+          taskGroupIndex: new Map<string, number>(),
           updatedMessageIndices: [],
           updatedMessageBaseGeneration: 0,
           generation: 0,
@@ -197,6 +214,7 @@ export const logHandlers: HandlerRegistry = {
           draft.streamLogs.set(streamId, {
             logs: streamLogs.logs,
             logIndex: streamLogs.logIndex,
+            taskGroupIndex: streamLogs.taskGroupIndex,
             updatedMessageIndices: [...updatedMessageIndices],
             updatedMessageBaseGeneration,
             generation: streamLogs.generation + 1,
