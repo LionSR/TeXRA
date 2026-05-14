@@ -26,6 +26,8 @@ import {
 } from './StreamLogStore';
 import type { LogOptions } from './logOptions';
 
+const STREAM_UPDATE_THROTTLE_MS = 50;
+
 export interface LoggerScopeOptions {
   parentGroupId?: string;
   skip?: boolean;
@@ -118,6 +120,7 @@ export interface AgentLogStream {
 
 export class AgentLogger {
   private static streamLogStore: StreamLogStore | undefined;
+  private static pendingStreamFlushers = new Set<() => void>();
 
   static setStreamLogStore(store: StreamLogStore): void {
     setDefaultStreamLogStore(store);
@@ -127,6 +130,12 @@ export class AgentLogger {
   static getStreamLogStore(): StreamLogStore {
     AgentLogger.streamLogStore ??= getDefaultStreamLogStore();
     return AgentLogger.streamLogStore;
+  }
+
+  static flushPendingStreamUpdates(): void {
+    for (const flush of [...AgentLogger.pendingStreamFlushers]) {
+      flush();
+    }
   }
 
   private get store(): StreamLogStore {
@@ -497,33 +506,80 @@ export class AgentLogger {
     const progressEnabled = options.progressViewEnabled ?? true;
 
     let buffer = '';
+    let pendingChunks: string[] = [];
     let created = false;
+    let storeEnabled = progressEnabled;
+    let updateTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const registerPendingFlush = (): void => {
+      AgentLogger.pendingStreamFlushers.add(flushPendingUpdate);
+    };
+
+    const unregisterPendingFlush = (): void => {
+      AgentLogger.pendingStreamFlushers.delete(flushPendingUpdate);
+    };
+
+    const materializePending = (): void => {
+      if (pendingChunks.length === 0) return;
+      buffer += pendingChunks.join('');
+      pendingChunks = [];
+    };
 
     const emitNow = (): void => {
-      if (!progressEnabled) return;
+      materializePending();
+      if (!storeEnabled) return;
 
       if (!created) {
-        created = !!this.appendToStore(level, type, {
+        const appended = this.appendToStore(level, type, {
           id,
           timestamp: Date.now(),
           groupId,
           text: buffer,
         });
+        created = !!appended;
+        if (!created) storeEnabled = false;
         return;
       }
 
       this.updateStore(id, { text: buffer });
     };
 
+    const scheduleUpdate = (): void => {
+      if (updateTimer) return;
+      updateTimer = setTimeout(() => {
+        updateTimer = null;
+        emitNow();
+        unregisterPendingFlush();
+      }, STREAM_UPDATE_THROTTLE_MS);
+      registerPendingFlush();
+    };
+
+    const flushPendingUpdate = (): void => {
+      if (updateTimer) {
+        clearTimeout(updateTimer);
+        updateTimer = null;
+      }
+      emitNow();
+      unregisterPendingFlush();
+    };
+
     return {
       append: (text: string) => {
         if (!text) return;
-        buffer += text;
-        emitNow();
+        pendingChunks.push(text);
+        if (!storeEnabled) return;
+        if (!created) {
+          emitNow();
+        } else {
+          scheduleUpdate();
+        }
       },
       finalize: (finalText?: string) => {
-        if (typeof finalText === 'string') buffer = finalText;
-        emitNow();
+        if (typeof finalText === 'string') {
+          buffer = finalText;
+          pendingChunks = [];
+        }
+        flushPendingUpdate();
         this.debug(`Final ${type} length: ${buffer.length}`, { groupId });
         return buffer;
       },
