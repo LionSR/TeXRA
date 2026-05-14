@@ -4,7 +4,6 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
@@ -18,6 +17,7 @@ import type {
   ToolCommandKind,
   ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
+import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 
 @customElement('tool-card')
 export class ToolCard extends LitElement {
@@ -66,6 +66,20 @@ export class ToolCard extends LitElement {
 
       wa-tag.tool-badge {
         white-space: nowrap;
+      }
+
+      .tool-status-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        flex: 0 0 18px;
+        color: var(--wa-color-testing-passed, #73c991);
+      }
+
+      .tool-status-icon wa-icon {
+        font-size: var(--font-size-sm);
       }
 
       .tool-description {
@@ -248,6 +262,20 @@ export class ToolCard extends LitElement {
     const { status } = this.item;
     const config =
       ToolCard.STATUS_CONFIG[status] ?? ToolCard.STATUS_CONFIG.unknown;
+    const label = this.item.statusLabel ?? config.label;
+
+    if (status === 'available') {
+      return html`
+        <span
+          class="tool-status-icon"
+          role="img"
+          aria-label=${label}
+          title=${label}
+        >
+          <wa-icon library="texra" name=${config.icon}></wa-icon>
+        </span>
+      `;
+    }
 
     return html`
       <wa-tag
@@ -257,7 +285,7 @@ export class ToolCard extends LitElement {
         size="small"
       >
         <wa-icon library="texra" name=${config.icon}></wa-icon>
-        ${this.item.statusLabel ?? config.label}
+        ${label}
       </wa-tag>
     `;
   }

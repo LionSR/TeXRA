@@ -50,13 +50,28 @@ export class MemoryItem extends LitElement {
         margin-top: var(--wa-space-2xs);
       }
 
+      .memory-contents {
+        margin-top: var(--wa-space-3xs);
+      }
+
+      .memory-contents::part(header) {
+        min-height: 20px;
+        padding: 0;
+        font-size: var(--font-size-xs);
+        color: var(--color-text-secondary);
+      }
+
+      .memory-contents::part(content) {
+        padding: 0;
+      }
+
       .memory-preview {
         font-size: var(--font-size-sm);
         line-height: var(--line-height-tight, 1.3);
-        padding: var(--wa-space-2xs) var(--wa-space-xs);
+        padding: var(--wa-space-3xs) var(--wa-space-2xs);
         border-radius: var(--border-radius);
         margin: 0;
-        max-height: 140px;
+        max-height: 120px;
         overflow-y: auto;
       }
 
@@ -218,7 +233,7 @@ export class MemoryItem extends LitElement {
           ${this.renderMeta(this.item)}
         </div>
         <wa-details
-          class="collapsible"
+          class="collapsible memory-contents"
           summary="Contents"
           @wa-show=${this.handleContentsShow}
         >
