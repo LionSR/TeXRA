@@ -114,8 +114,8 @@ type NormalizedToolUseState = z.infer<typeof ToolUseFlowRecordStateSchema>;
  * Full validation happens when the flow actually resumes.
  */
 const WorkflowFlowRecordStateSchema = z.object({
-  currentRound: z.number(),
-  totalRounds: z.number(),
+  currentRound: z.int().nonnegative(),
+  totalRounds: z.int().nonnegative(),
 });
 
 // =============================================================================

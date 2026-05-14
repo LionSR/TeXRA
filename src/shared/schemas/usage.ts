@@ -1,12 +1,14 @@
 import { z } from 'zod';
 
+const TokenCountSchema = z.int().nonnegative();
+
 export const TokenUsageStatsSchema = z.strictObject({
-  inputTokens: z.number(),
-  outputTokens: z.number(),
-  cost: z.number(),
-  cacheReadInputTokens: z.number().optional(),
-  cacheMissInputTokens: z.number().optional(),
-  cacheCreationInputTokens: z.number().optional(),
+  inputTokens: TokenCountSchema,
+  outputTokens: TokenCountSchema,
+  cost: z.number().nonnegative(),
+  cacheReadInputTokens: TokenCountSchema.optional(),
+  cacheMissInputTokens: TokenCountSchema.optional(),
+  cacheCreationInputTokens: TokenCountSchema.optional(),
 });
 
 export type TokenUsageStats = z.infer<typeof TokenUsageStatsSchema>;
@@ -48,10 +50,10 @@ export function sumUsageStats(
  * calculated from accumulated session totals for overall caching effectiveness.
  */
 export const ExtendedTokenUsageStatsSchema = TokenUsageStatsSchema.extend({
-  elapsedTime: z.number().optional(),
-  percentageCached: z.number().optional(),
-  reasoningTokens: z.number().optional(),
-  toolUseTokens: z.number().optional(),
+  elapsedTime: z.number().nonnegative().optional(),
+  percentageCached: z.number().nonnegative().optional(),
+  reasoningTokens: TokenCountSchema.optional(),
+  toolUseTokens: TokenCountSchema.optional(),
 });
 
 export type ExtendedTokenUsageStats = z.infer<

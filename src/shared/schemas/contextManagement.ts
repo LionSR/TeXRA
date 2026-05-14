@@ -9,24 +9,27 @@ export const ContextManagementAction = z.enum([
 ]);
 export type ContextManagementAction = z.infer<typeof ContextManagementAction>;
 
+const TokenCountSchema = z.int().nonnegative();
+const PositiveTokenCountSchema = z.int().positive();
+
 export const ContextManagementDataSchema = z.object({
   action: ContextManagementAction,
-  tokensBefore: z.number().nonnegative(),
-  tokensAfter: z.number().nonnegative().optional(),
-  contextWindow: z.number().positive(),
+  tokensBefore: TokenCountSchema,
+  tokensAfter: TokenCountSchema.optional(),
+  contextWindow: PositiveTokenCountSchema,
   utilizationBefore: z.number().nonnegative(),
   utilizationAfter: z.number().nonnegative().optional(),
   details: z.string().optional(),
   summary: z.string().optional(),
-  originalMaxTokens: z.number().positive().optional(),
-  reducedMaxTokens: z.number().positive().optional(),
+  originalMaxTokens: PositiveTokenCountSchema.optional(),
+  reducedMaxTokens: PositiveTokenCountSchema.optional(),
 });
 
 export type ContextManagementData = z.infer<typeof ContextManagementDataSchema>;
 
 export const ContextStateDataSchema = z.object({
-  inputTokens: z.number().nonnegative(),
-  contextWindow: z.number().positive(),
+  inputTokens: TokenCountSchema,
+  contextWindow: PositiveTokenCountSchema,
   utilizationPercent: z.number().nonnegative(),
 });
 
