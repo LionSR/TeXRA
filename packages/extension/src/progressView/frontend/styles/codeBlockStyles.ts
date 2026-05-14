@@ -10,6 +10,8 @@ export const codeBlockStyles = css`
     position: relative;
     border-radius: var(--border-radius-small);
     overflow: hidden;
+    max-width: 100%;
+    min-width: 0;
   }
 
   .code-block-header {
@@ -36,10 +38,29 @@ export const codeBlockStyles = css`
     border: var(--border-thin) solid var(--wa-color-surface-border);
     border-radius: 0;
     overflow-x: auto;
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
   }
 
   .code-block pre code {
     display: block;
+    min-width: 0;
+  }
+
+  .code-block pre.tool-command-input,
+  .code-block pre.hljs.tool-command-input {
+    overflow-x: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .code-block pre.tool-command-input code,
+  .code-block pre.tool-command-input code * {
+    white-space: inherit;
+    overflow-wrap: inherit;
+    word-break: inherit;
   }
 
   .code-block-copy {
