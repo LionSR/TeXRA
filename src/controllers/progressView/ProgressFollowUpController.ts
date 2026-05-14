@@ -286,20 +286,11 @@ export class ProgressFollowUpController {
     compileFailures: CompileFailure[],
     runOutputs: Map<number, OutputFileInfo[]>,
   ): Promise<string[]> {
-    const outputByPath = new Map<string, OutputFileInfo>();
-    for (const output of [...runOutputs.values()].flat()) {
-      outputByPath.set(output.location.absolutePath, output);
-    }
-
-    const sourceCandidates = compileFailures
-      .map((failure) => outputByPath.get(failure.output.absolutePath)?.source)
-      .filter((source): source is string => !!source);
-    const fallbackCandidates = [
-      originalConfig.inputFile,
-      ...originalConfig.inputFiles,
-    ].filter(Boolean);
-
-    const preferred = [...sourceCandidates, ...fallbackCandidates];
+    const preferred = this.compileFixerInputCandidates(
+      originalConfig,
+      compileFailures,
+      runOutputs,
+    );
     const targets: string[] = [];
     const seen = new Set<string>();
     for (const candidate of preferred) {
@@ -311,6 +302,32 @@ export class ProgressFollowUpController {
       targets.push(location.relativePath);
     }
     return targets;
+  }
+
+  /**
+   * Prefer the source recorded for the failed generated output. Original
+   * workflow inputs are recovery candidates for older runs or incomplete output
+   * metadata, not a second owner of the compile failure.
+   */
+  private compileFixerInputCandidates(
+    originalConfig: AgentConfig,
+    compileFailures: CompileFailure[],
+    runOutputs: Map<number, OutputFileInfo[]>,
+  ): string[] {
+    const outputByPath = new Map<string, OutputFileInfo>();
+    for (const output of [...runOutputs.values()].flat()) {
+      outputByPath.set(output.location.absolutePath, output);
+    }
+
+    const generatedOutputSources = compileFailures
+      .map((failure) => outputByPath.get(failure.output.absolutePath)?.source)
+      .filter((source): source is string => !!source);
+    const originalInputRecovery = [
+      originalConfig.inputFile,
+      ...originalConfig.inputFiles,
+    ].filter(Boolean);
+
+    return [...generatedOutputSources, ...originalInputRecovery];
   }
 
   private formatOutputReferencePath(
