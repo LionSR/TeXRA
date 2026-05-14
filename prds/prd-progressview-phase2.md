@@ -59,7 +59,7 @@ These directives are useful for ProgressView. Establish patterns in Phase 1, ext
 | Directive  | Import                        | Use Case                          | ProgressView Component        |
 | ---------- | ----------------------------- | --------------------------------- | ----------------------------- |
 | `repeat`   | `lit/directives/repeat.js`    | Keyed list rendering              | StreamTabs, FileList, LogList |
-| `cache`    | `lit/directives/cache.js`     | Preserve DOM when switching views | workflow↔tooluse toggle      |
+| `cache`    | `lit/directives/cache.js`     | Preserve DOM when switching views | workflow↔tooluse toggle       |
 | `guard`    | `lit/directives/guard.js`     | Skip expensive re-renders         | Log entry formatting          |
 | `live`     | `lit/directives/live.js`      | Sync with user-modified inputs    | FollowUpInput                 |
 | `ref`      | `lit/directives/ref.js`       | Imperative DOM access             | LogList scroll position       |
@@ -291,9 +291,10 @@ Extract reusable reactive behavior into controllers.
 // shared/controllers/SortController.ts
 import { ReactiveController, ReactiveControllerHost } from 'lit';
 
-export class SortController<T, K extends keyof T>
-  implements ReactiveController
-{
+export class SortController<
+  T,
+  K extends keyof T,
+> implements ReactiveController {
   host: ReactiveControllerHost;
   private _items: T[] = [];
   private _sortKey: K;
