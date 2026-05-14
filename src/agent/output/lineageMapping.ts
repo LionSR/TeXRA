@@ -7,7 +7,7 @@
 
 import * as path from 'path';
 
-import type { OutputFileInfo, FileLocation } from '@shared/schemas';
+import type { FileLocation } from '@shared/schemas';
 import { createFileMapping, getComparablePath } from '@utils/files';
 
 import type { OutputState } from './outputState';
@@ -115,7 +115,7 @@ export function traceFileLineage(
         );
 
   const originByOutput = new Map<string, FileLocation | undefined>();
-  for (const entry of currentOutputs as OutputFileInfo[]) {
+  for (const entry of currentOutputs) {
     originByOutput.set(
       getComparablePath(entry.location),
       findMatchingBaseFile(baseEntries, entry.source),
