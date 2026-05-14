@@ -1,15 +1,28 @@
-import { StreamLogEntrySchema, type StreamLogEntry } from '@shared/schemas';
+import {
+  STREAM_LOG_ENTRY_TYPES,
+  StreamLogEntrySchema,
+  type StreamLogEntry,
+} from '@shared/schemas';
+import { isObject } from '@utils/core';
 
 export type StreamLogAppendInput = Omit<StreamLogEntry, 'seqNo'>;
 export type StreamLogUpdatePatch = Partial<
   Omit<StreamLogEntry, 'id' | 'seqNo'>
 >;
 
+export function isRunningGroupEntry(entry: StreamLogEntry): boolean {
+  if (entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START) return false;
+  const data = isObject(entry.data) ? entry.data : {};
+  const status = typeof data.status === 'string' ? data.status : 'running';
+  return status === 'running';
+}
+
 export class StreamLog {
   private entries: StreamLogEntry[] = [];
   private seqCounter = 0;
   private readonly indexById = new Map<string, number>();
   private readonly dirtyUpdates = new Set<string>();
+  private runningGroupCount = 0;
 
   constructor(entries: StreamLogEntry[] = []) {
     if (entries.length === 0) {
@@ -27,7 +40,11 @@ export class StreamLog {
     this.seqCounter = this.entries.length;
 
     for (let i = 0; i < this.entries.length; i++) {
-      this.indexById.set(this.entries[i].id, i);
+      const entry = this.entries[i];
+      this.indexById.set(entry.id, i);
+      if (isRunningGroupEntry(entry)) {
+        this.runningGroupCount += 1;
+      }
     }
   }
 
@@ -47,6 +64,10 @@ export class StreamLog {
     return this.entries.at(-1)?.timestamp;
   }
 
+  get hasRunningGroup(): boolean {
+    return this.runningGroupCount > 0;
+  }
+
   append(entry: StreamLogAppendInput): StreamLogEntry {
     const fullEntry = StreamLogEntrySchema.parse({
       ...entry,
@@ -55,6 +76,9 @@ export class StreamLog {
     this.seqCounter = fullEntry.seqNo;
     this.indexById.set(fullEntry.id, this.entries.length);
     this.entries.push(fullEntry);
+    if (isRunningGroupEntry(fullEntry)) {
+      this.runningGroupCount += 1;
+    }
     return fullEntry;
   }
 
@@ -72,6 +96,14 @@ export class StreamLog {
       id: current.id,
       seqNo: current.seqNo,
     };
+
+    const wasRunningGroup = isRunningGroupEntry(current);
+    const isNowRunningGroup = isRunningGroupEntry(updated);
+    if (wasRunningGroup && !isNowRunningGroup) {
+      this.runningGroupCount -= 1;
+    } else if (!wasRunningGroup && isNowRunningGroup) {
+      this.runningGroupCount += 1;
+    }
 
     this.entries[index] = updated;
     this.dirtyUpdates.add(id);
