@@ -51,6 +51,17 @@ export const OAUTH_PROVIDERS = ['github', 'google'] as const;
 export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
 
 /**
+ * Return whether a string is one of TeXRA's supported OAuth providers.
+ */
+export function isOAuthProvider(
+  value: string | undefined,
+): value is OAuthProvider {
+  return (
+    value !== undefined && OAUTH_PROVIDERS.includes(value as OAuthProvider)
+  );
+}
+
+/**
  * Single source of truth for tier values used in server-side API key access.
  *
  * CROSS-REFERENCE: These exact string values are duplicated in:
