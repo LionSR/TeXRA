@@ -859,6 +859,14 @@ export class LaTeXTab extends LitElement {
           { value: 'fine', label: 'fine — small changes inside equations' },
         ],
       })}
+      ${this.renderBooleanSetting({
+        field: 'latexdiffChangesOnly',
+        label: 'Show only changed pages in latexdiff PDFs',
+        description:
+          'Pass latexdiff the ONLYCHANGEDPAGE subtype so compiled diff PDFs focus on pages with edits.',
+        defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
+        currentValue: cv.latexdiffChangesOnly,
+      })}
       ${this.renderEnumSetting({
         field: 'latexFormatter',
         label: 'LaTeX formatter',
@@ -876,7 +884,10 @@ export class LaTeXTab extends LitElement {
   }
 
   private renderBooleanSetting(opts: {
-    field: 'workflowAutoCompile' | 'latexdiffBetweenRounds';
+    field:
+      | 'workflowAutoCompile'
+      | 'latexdiffBetweenRounds'
+      | 'latexdiffChangesOnly';
     label: string;
     description: string;
     defaultValue: boolean;

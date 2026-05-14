@@ -14,6 +14,7 @@ describe('LatexConfigPersistenceController', () => {
       [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE]: false,
       [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: undefined,
       [WorkspaceStateKey.LATEXDIFF_MATH_MARKUP]: 'fine',
+      [WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY]: false,
       [WorkspaceStateKey.LATEX_FORMATTER]: 'tex-fmt',
     };
 
@@ -22,6 +23,7 @@ describe('LatexConfigPersistenceController', () => {
       {
         workflowAutoCompile: false,
         latexdiffMathMarkup: 'fine',
+        latexdiffChangesOnly: false,
         latexFormatter: 'tex-fmt',
       },
     );
