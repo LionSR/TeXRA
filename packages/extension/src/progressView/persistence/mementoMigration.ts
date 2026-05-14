@@ -135,14 +135,14 @@ export async function migrateFromMemento(
   // Clear legacy workspace state keys
   logger.info('[Migration] Clearing legacy workspace state keys');
   await Promise.all([
-    storage.update(WorkspaceStateKey.TASK_STATES, undefined as never),
-    storage.update(WorkspaceStateKey.EXECUTION_IDS, undefined as never),
-    storage.update(WorkspaceStateKey.ACTIVE_RUN_IDS, undefined as never),
-    storage.update(WorkspaceStateKey.PARENT_STREAM_IDS, undefined as never),
-    storage.update(WorkspaceStateKey.RUN_INSTRUCTIONS, undefined as never),
-    storage.update(WorkspaceStateKey.OUTPUT_FILES, undefined as never),
-    storage.update(WorkspaceStateKey.MISSING_OUTPUTS, undefined as never),
-    storage.update(WorkspaceStateKey.USAGE_STATS, undefined as never),
+    storage.update(WorkspaceStateKey.TASK_STATES, undefined),
+    storage.update(WorkspaceStateKey.EXECUTION_IDS, undefined),
+    storage.update(WorkspaceStateKey.ACTIVE_RUN_IDS, undefined),
+    storage.update(WorkspaceStateKey.PARENT_STREAM_IDS, undefined),
+    storage.update(WorkspaceStateKey.RUN_INSTRUCTIONS, undefined),
+    storage.update(WorkspaceStateKey.OUTPUT_FILES, undefined),
+    storage.update(WorkspaceStateKey.MISSING_OUTPUTS, undefined),
+    storage.update(WorkspaceStateKey.USAGE_STATS, undefined),
   ]);
 
   logger.info('[Migration] Migration complete');
