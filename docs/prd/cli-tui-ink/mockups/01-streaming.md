@@ -3,12 +3,12 @@
 The assistant has finished one tool call and is now streaming markdown into a live region. The completed turn above (with its tool-use card) has flushed into the `<Static>` region — it will not re-render. Only the live block is mutating per chunk.
 
 ```
-╭─ TeXRA ── agent: writer  ·  model: claude-opus-4.7  ─── 3 turns · $0.04 · 02:14 ────╮
+╭─ TeXRA ── agent: chat  ·  model: claude-opus-4.7  ─── 3 turns · $0.04 · 02:14 ────╮
 │                                                                                      │
 │  ◆ you                                                                               │
 │    rewrite section 3.2 so the lemma proof is tighter                                 │
 │                                                                                      │
-│  ◇ writer                                                                            │
+│  ◇ chat                                                                            │
 │    let me first look at the current proof.                                           │
 │                                                                                      │
 │    ╭─ Read · sec_3.2.tex ──── ✓ 84 lines · 0.3s ──── [ctrl-o expand] ──╮            │
@@ -17,7 +17,7 @@ The assistant has finished one tool call and is now streaming markdown into a li
 │                                                                                      │
 │  ────────────────────────────────── static boundary ──────────────────────────────── │  ← line drawn for the mockup;
 │                                                                                      │     not rendered in the real TUI
-│  ◇ writer                                                                            │
+│  ◇ chat                                                                            │
 │    The current proof has three steps: a measurability argument, the                  │
 │    application of Fatou's lemma, and the final dominated-convergence pass.           │
 │    We can compress steps 1–2 by observing that the integrand is bounded              │

@@ -3,7 +3,7 @@
 The model proposes an edit to `sec_3.2.tex`. The approval modal shows the unified diff. Two hunks fit on screen; a third is signaled by the truncation banner and reachable via `Ctrl-O`.
 
 ```
-╭─ TeXRA ── agent: writer  ·  model: claude-opus-4.7  ─── 5 turns · $0.08 · 04:02 ────╮
+╭─ TeXRA ── agent: chat  ·  model: claude-opus-4.7  ─── 5 turns · $0.08 · 04:02 ────╮
 │  ╭─ ‼ edit approval needed ──────────────────────────────────────────────────╮     │
 │  │                                                                             │     │
 │  │   sec_3.2.tex      +14 / −9 · 3 hunks                                       │     │

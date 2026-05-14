@@ -3,11 +3,11 @@
 User pressed `Ctrl-F`. A slim search bar appears at the top of the conversation pane. Matches in the visible transcript are inverse-highlighted; the current match is rendered in yellow inverse. Match count and navigation hints sit on the right.
 
 ```
-╭─ TeXRA ── agent: writer  ·  model: claude-opus-4.7  ─── 8 turns · $0.13 · 09:14 ────╮
+╭─ TeXRA ── agent: chat  ·  model: claude-opus-4.7  ─── 8 turns · $0.13 · 09:14 ────╮
 │ ⌕ fatou_                                                       3 / 7  · n next · esc │  ← search input + match counter
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                      │
-│  ◇ writer                                                                            │
+│  ◇ chat                                                                            │
 │    The proof leans on **▓▓▓▓▓** ▓▓▓▓▓'s lemma applied twice, once on $X_n$           │  ← `Fatou` (current match) in
 │    and once on $-X_n$. The boundedness condition was sufficient there but            │     yellow inverse; other matches
 │    will not work for the new version of the lemma.                                   │     in plain inverse
@@ -16,7 +16,7 @@ User pressed `Ctrl-F`. A slim search bar appears at the top of the conversation 
 │    Can you tighten that — pull the bounded integrand observation up front and        │
 │    use DCT directly instead of two ▒▒▒▒▒ ▒▒▒▒▒ invocations?                          │
 │                                                                                      │
-│  ◇ writer                                                                            │
+│  ◇ chat                                                                            │
 │    Yes. Let me show you the proposed rewrite.                                        │
 │                                                                                      │
 │    ╭─ Edit · sec_3.2.tex ──── ✓ +14 / −9 · 3 hunks ──── [ctrl-o expand] ──╮          │
