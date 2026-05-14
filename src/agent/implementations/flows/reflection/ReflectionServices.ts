@@ -3,7 +3,6 @@ import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { OutputState } from '@agent/output/outputState';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { LatexMediaManager } from '@latex';
 import type { PromptBuilder } from '@utils/prompt';
 import type {
@@ -19,7 +18,6 @@ import type {
 export interface ReflectionServices<
   C = unknown,
 > extends BaseFlowContextInit<C> {
-  readonly runtimeHost: AgentRuntimeHost;
   readonly setting: AgentWorkflowSetting;
   readonly outputState: OutputState;
   readonly xmlManager: XmlOutputManager;
