@@ -643,8 +643,7 @@ export function createResponseCycleFlow<C>(): Flow<
       return formatPostCompactionContext(
         subagents,
         processes,
-        services.workspace.todos.todos,
-        services.workspace.plan.plan,
+        services.workspace.workPlan.toSnapshot(),
       );
     },
     getDebugSaveOptions: (shared, services) => ({
