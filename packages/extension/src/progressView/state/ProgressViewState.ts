@@ -26,7 +26,6 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  TodoItemSchema,
   type ActiveChildInfo,
   type AgentCategoryFilter,
   type ConversationProgress,
@@ -34,7 +33,8 @@ import {
   type StreamTabId,
   type TodoItem,
   type Plan,
-  PlanSchema,
+  type WorkPlanSnapshot,
+  WorkPlanSnapshotSchema,
 } from '@shared/schemas';
 import {
   PersistedState,
@@ -53,8 +53,7 @@ export type StreamHints = z.infer<typeof StreamHintsSchema>;
 /** Ephemeral session state per stream (not persisted). */
 const StreamSessionStateSchema = z.object({
   hints: StreamHintsSchema.prefault({}),
-  todos: z.array(TodoItemSchema).prefault([]),
-  plan: PlanSchema.nullable().prefault(null),
+  workPlan: WorkPlanSnapshotSchema.prefault({}),
   contextState: ContextStateDataSchema.nullable().prefault(null),
 });
 
@@ -225,19 +224,35 @@ export class ProgressViewState {
   }
 
   setTodos(stream: StreamTabId, todos: TodoItem[]): void {
-    this.getOrCreateSession(stream).todos = todos;
+    const state = this.getOrCreateSession(stream);
+    state.workPlan = WorkPlanSnapshotSchema.parse({
+      ...state.workPlan,
+      todos,
+    });
   }
 
   getTodos(stream: StreamTabId): TodoItem[] {
-    return this._sessionState.get(stream)?.todos ?? [];
+    return this._sessionState.get(stream)?.workPlan.todos ?? [];
   }
 
   setPlan(stream: StreamTabId, plan: Plan | null): void {
-    this.getOrCreateSession(stream).plan = plan;
+    const state = this.getOrCreateSession(stream);
+    state.workPlan = WorkPlanSnapshotSchema.parse({
+      ...state.workPlan,
+      plan,
+      planSummary: plan?.summary ?? null,
+    });
   }
 
   getPlan(stream: StreamTabId): Plan | null {
-    return this._sessionState.get(stream)?.plan ?? null;
+    return this._sessionState.get(stream)?.workPlan.plan ?? null;
+  }
+
+  getWorkPlan(stream: StreamTabId): WorkPlanSnapshot {
+    return (
+      this._sessionState.get(stream)?.workPlan ??
+      WorkPlanSnapshotSchema.parse({})
+    );
   }
 
   getContextState(stream: StreamTabId): ContextStateData | undefined {
