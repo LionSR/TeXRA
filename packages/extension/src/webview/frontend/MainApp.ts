@@ -474,25 +474,37 @@ export class MainApp extends MainAppBase {
     this.commit.set(state.commit);
 
     this.restorePerModeInstructions(state);
+    // Migrate persisted auxiliary state into the unified Context (reference) bucket
+    // so users who set auxiliary files in older versions keep them visible after
+    // the auxiliary picker was removed. The single auxiliary slot fills the
+    // reference single slot only when reference itself is empty (avoid clobber);
+    // multi-file auxiliary files always merge into the multi-file reference list.
+    const restoredReferenceFile = state.referenceFile || state.auxiliaryFile;
+    const restoredReferenceFiles = [
+      ...(state.referenceFiles ?? []),
+      ...(state.auxiliaryFiles ?? []),
+    ];
+    const restoredReferenceFilesVisible =
+      state.referenceFilesVisible || state.auxiliaryFilesVisible;
     this.singleFiles.set({
       inputFile: state.inputFile,
-      referenceFile: state.referenceFile,
-      auxiliaryFile: state.auxiliaryFile,
+      referenceFile: restoredReferenceFile,
+      auxiliaryFile: '',
       mediaFile: state.mediaFile,
       editedFile: state.editedFile,
       baseFile: state.baseFile,
     });
     this.multiFiles.set({
       inputFiles: state.inputFiles,
-      referenceFiles: state.referenceFiles,
-      auxiliaryFiles: state.auxiliaryFiles,
+      referenceFiles: restoredReferenceFiles,
+      auxiliaryFiles: [],
       mediaFiles: state.mediaFiles,
       outputFiles: state.outputFiles,
     });
     this.multiFilesVisible.set({
       inputFiles: state.inputFilesVisible,
-      referenceFiles: state.referenceFilesVisible,
-      auxiliaryFiles: state.auxiliaryFilesVisible,
+      referenceFiles: restoredReferenceFilesVisible,
+      auxiliaryFiles: false,
       mediaFiles: state.mediaFilesVisible,
       outputFiles: state.outputFilesVisible,
     });

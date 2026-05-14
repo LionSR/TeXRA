@@ -101,7 +101,6 @@ logger.initialize(CHANNEL);
 const ATTACHABLE_DROP_CATEGORIES = [
   'input',
   'reference',
-  'auxiliary',
   'media',
 ] as const satisfies readonly MultipleDocumentFileType[];
 
@@ -624,25 +623,19 @@ export class FileManager extends BaseWebviewManager {
       return 'media';
     }
     if (
-      (extension === 'bib' || extension === 'bbl') &&
+      (extension === 'bib' ||
+        extension === 'bbl' ||
+        extension === 'cls' ||
+        extension === 'sty') &&
       this.isExtensionAllowed('reference', filePath, allowedExtensions)
     ) {
       return 'reference';
-    }
-    if (
-      (extension === 'cls' || extension === 'sty') &&
-      this.isExtensionAllowed('auxiliary', filePath, allowedExtensions)
-    ) {
-      return 'auxiliary';
     }
     if (this.isExtensionAllowed('input', filePath, allowedExtensions)) {
       return 'input';
     }
     if (this.isExtensionAllowed('reference', filePath, allowedExtensions)) {
       return 'reference';
-    }
-    if (this.isExtensionAllowed('auxiliary', filePath, allowedExtensions)) {
-      return 'auxiliary';
     }
     return null;
   }
