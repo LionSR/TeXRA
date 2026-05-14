@@ -12,6 +12,7 @@ import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { SecretManager } from '@frontend/secretManager';
+import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import * as logger from '@logger/logUtils';
 import { generateExecutionId } from '@utils/core/executionId';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
@@ -330,7 +331,9 @@ export async function runSetupAssistant(): Promise<void> {
     const launch = async () => {
       const executionId = generateExecutionId();
       await registerExecution(executionId, config, config.agent);
-      await executeAgent(config, executionId);
+      await executeAgent(config, executionId, {
+        runtimeHost: extensionAgentRuntimeHost,
+      });
     };
 
     if (resolution.requiresOpenRouter) {
