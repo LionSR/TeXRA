@@ -3,7 +3,7 @@
 User pressed `Ctrl-P` with the buffer empty, then typed `mod`. The palette is filtering across three categories: slash commands, agent names, and model identifiers. Top result is highlighted (`▶`); `enter` selects it.
 
 ```
-╭─ TeXRA ── agent: chat  ·  model: claude-opus-4.7  ─── 8 turns · $0.13 · 09:14 ────╮
+╭─ TeXRA ── agent: chat  ·  model: claude-opus-4-7  ─── 8 turns · $0.13 · 09:14 ────╮
 │                                                                                      │
 │  ◇ chat                                                                            │
 │    ...the previous turn is still visible behind the palette, dimmed.                 │
@@ -68,4 +68,4 @@ Fuzzy match is `fzf-for-js` across all five sources, with each source's results 
 3. Should `[Image #N]` references support inline thumbnails when the host terminal supports iTerm2 inline images / Kitty graphics? Out of scope for v1 (text-only refs) per [00-overview § Non-goals](../00-overview.md#4-non-goals-explicitly-excluded), but worth confirming.
 4. Should there be a way to **delete** an attachment from the palette (e.g., `d` on a focused row), or is paste-only the v1 model?
 
-   User: Ok. do as you recommend for nwo
+   User: Ok. do as you recommend for now
