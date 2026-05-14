@@ -163,6 +163,15 @@ Per-phase frame timings (render / diff / write / yoga-layout) and flicker contex
 
 `texra` invoked with no subcommand defaults to `texra chat` when stdin / stdout are TTYs (the TUI path); otherwise it falls through to `--help`. Named subcommands (`texra run`, `texra config`, etc.) keep their explicit names. Wired through citty's default-subcommand mechanism, no shim. Pattern matches Claude Code's `claude` (bare command → REPL).
 
+**Default agent + model resolution.** When `texra` starts the TUI without `--agent` / `--model` overrides, the agent and model are resolved in this order:
+
+1. **Workspace setting** — `.texra/config.json` at the workspace root, if present (`agent`, `model` fields).
+2. **User setting** — `~/.texra/global-storage/config.json` (same fields).
+3. **Last-used** — the agent + model from the most recent session for this workspace, read from the same history store the resume flow uses.
+4. **Built-in default** — `agent: writer`, `model: claude-opus-4-7` (or whatever the registry's `defaultAgent` / `defaultModel` flags are set to). This is the fallback when none of the above are present.
+
+`/agent` and `/model` slash forms write back to the user setting unless invoked with a `--workspace` modifier (future). The current selection is always visible in the header (per [mockups/00-idle.md](./mockups/00-idle.md)).
+
 ### Slash command forms
 
 Slash commands come in two shapes:
