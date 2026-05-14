@@ -327,10 +327,10 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     name: 'External Chat Handoff',
     category: 'ai-agents',
     description:
-      'Lets agents ask you to query an external chat model such as ChatGPT, Claude, or Gemini and paste the answer back into the run.',
+      'Tap your premium chat subscriptions — ChatGPT Pro, Claude Opus, Gemini Deep Think, Grok, and similar — without an API key. The agent drafts a question, you paste the answer back, and the run continues. Useful for the deep-reasoning tiers that aren’t available through the API.',
     configNotes:
       'No local install required. Uses your own external chat subscription and a human-in-the-loop copy/paste flow.',
-    authNote: 'Uses external chat subscription',
+    authNote: 'Uses your premium chat subscription',
     toggleable: true,
     check: async () => true,
   },
@@ -404,10 +404,10 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
   {
     id: 'claude-agent',
     tools: ['claude_agent'],
-    name: 'Claude Code Agent',
+    name: 'Claude Agent',
     category: 'ai-agents',
     description:
-      'Anthropic Claude Code agent runtime. Spins off a Claude agent in the workspace for code analysis, generation, and research.',
+      'Spin off a Claude agent that works in your workspace. It can read files, run commands, edit code, and search the web on your behalf — great for delegating focused exploration or implementation while another agent stays in charge.',
     installGuide:
       'Install the Claude Code CLI (choose one):\n\n' +
       '  npm install -g @anthropic-ai/claude-code\n' +

@@ -20,6 +20,9 @@ import type {
   CodexSandboxMode,
   CodexReasoningEffort,
   CodexApprovalPolicy,
+  ClaudeAgentEffort,
+  ClaudeAgentModel,
+  ClaudeAgentPermissionMode,
 } from '@shared/schemas/settingsViewMessages';
 
 // Side-effect imports - register WA components
@@ -61,6 +64,36 @@ const APPROVAL_POLICY_OPTIONS: readonly {
   { value: 'on-failure', label: 'Ask on failure' },
 ] as const;
 
+const CLAUDE_MODEL_OPTIONS: readonly {
+  value: ClaudeAgentModel;
+  label: string;
+}[] = [
+  { value: 'claude-opus-4-7', label: 'Opus 4.7' },
+  { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
+  { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
+] as const;
+
+const CLAUDE_PERMISSION_MODE_OPTIONS: readonly {
+  value: ClaudeAgentPermissionMode;
+  label: string;
+}[] = [
+  { value: 'default', label: 'Prompt for risky actions' },
+  { value: 'acceptEdits', label: 'Auto-accept edits' },
+  { value: 'bypassPermissions', label: 'Bypass all (dangerous)' },
+  { value: 'plan', label: 'Plan only (read-only)' },
+] as const;
+
+const CLAUDE_EFFORT_OPTIONS: readonly {
+  value: ClaudeAgentEffort;
+  label: string;
+}[] = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'xhigh', label: 'Extra high' },
+  { value: 'max', label: 'Maximum' },
+] as const;
+
 @customElement('ai-agents-tab')
 export class AIAgentsTab extends LitElement {
   static override styles = [
@@ -96,7 +129,7 @@ export class AIAgentsTab extends LitElement {
         margin-bottom: var(--wa-space-m);
       }
 
-      .codex-inline-settings {
+      .agent-inline-settings {
         padding: var(--wa-space-2xs) var(--wa-space-xs);
         margin-bottom: var(--wa-space-2xs);
         border-radius: var(--border-radius);
@@ -127,6 +160,11 @@ export class AIAgentsTab extends LitElement {
   @property({ type: String }) codexSandboxMode = 'workspace-write';
   @property({ type: String }) codexReasoningEffort = 'high';
   @property({ type: String }) codexApprovalPolicy = 'never';
+  @property({ type: String }) claudeAgentModel: ClaudeAgentModel =
+    'claude-opus-4-7';
+  @property({ type: String })
+  claudeAgentPermissionMode: ClaudeAgentPermissionMode = 'acceptEdits';
+  @property({ type: String }) claudeAgentEffort: ClaudeAgentEffort = 'high';
 
   private handleRecheck(): void {
     this.dispatchEvent(createEvent('tool-recheck'));
@@ -152,6 +190,18 @@ export class AIAgentsTab extends LitElement {
     this.emitSelect('codex-approval-policy-change', 'policy', e);
   };
 
+  private handleClaudeAgentModelChange = (e: Event): void => {
+    this.emitSelect('claude-agent-model-change', 'model', e);
+  };
+
+  private handleClaudeAgentPermissionModeChange = (e: Event): void => {
+    this.emitSelect('claude-agent-permission-mode-change', 'mode', e);
+  };
+
+  private handleClaudeAgentEffortChange = (e: Event): void => {
+    this.emitSelect('claude-agent-effort-change', 'effort', e);
+  };
+
   private renderSelectRow(
     label: string,
     value: string,
@@ -174,7 +224,7 @@ export class AIAgentsTab extends LitElement {
 
   private renderCodexInlineSettings(): TemplateResult {
     return html`
-      <div class="codex-inline-settings">
+      <div class="agent-inline-settings">
         ${this.renderSelectRow(
           'Sandbox mode',
           this.codexSandboxMode,
@@ -195,6 +245,38 @@ export class AIAgentsTab extends LitElement {
         )}
       </div>
     `;
+  }
+
+  private renderClaudeAgentInlineSettings(): TemplateResult {
+    return html`
+      <div class="agent-inline-settings">
+        ${this.renderSelectRow(
+          'Model',
+          this.claudeAgentModel,
+          CLAUDE_MODEL_OPTIONS,
+          this.handleClaudeAgentModelChange,
+        )}
+        ${this.renderSelectRow(
+          'Reasoning effort',
+          this.claudeAgentEffort,
+          CLAUDE_EFFORT_OPTIONS,
+          this.handleClaudeAgentEffortChange,
+        )}
+        ${this.renderSelectRow(
+          'Permission mode',
+          this.claudeAgentPermissionMode,
+          CLAUDE_PERMISSION_MODE_OPTIONS,
+          this.handleClaudeAgentPermissionModeChange,
+        )}
+      </div>
+    `;
+  }
+
+  private renderInlineSettingsFor(itemId: string): TemplateResult | null {
+    if (itemId === 'codex') return this.renderCodexInlineSettings();
+    if (itemId === 'claude-agent')
+      return this.renderClaudeAgentInlineSettings();
+    return null;
   }
 
   private aiAgentItems(): ToolDashboardItem[] {
@@ -242,15 +324,18 @@ export class AIAgentsTab extends LitElement {
                 ${repeat(
                   items,
                   (item) => item.id,
-                  (item) => html`
-                    <tool-card .item=${item}>
-                      ${item.id === 'codex'
-                        ? html`<div slot="details">
-                            ${this.renderCodexInlineSettings()}
-                          </div>`
-                        : nothing}
-                    </tool-card>
-                  `,
+                  (item) => {
+                    const inlineSettings = this.renderInlineSettingsFor(
+                      item.id,
+                    );
+                    return html`
+                      <tool-card .item=${item}>
+                        ${inlineSettings
+                          ? html`<div slot="details">${inlineSettings}</div>`
+                          : nothing}
+                      </tool-card>
+                    `;
+                  },
                 )}
               </div>
             `}
