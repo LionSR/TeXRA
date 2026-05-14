@@ -429,6 +429,7 @@ export class ProgressViewState {
    * Flush pending writes from all managers.
    */
   async flush(): Promise<void> {
+    AgentLogger.flushPendingStreamUpdates();
     await Promise.all([
       this.streamLogs.flush(),
       this.meta.flush(),
