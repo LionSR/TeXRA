@@ -7,6 +7,7 @@ import {
   abstract as abstractQuery,
   category as catQuery,
 } from 'arxiv-client';
+type Category = Parameters<typeof catQuery>[0];
 import { z } from 'zod';
 
 // Local imports
@@ -85,9 +86,10 @@ export class ArxivSearchTool extends defineTool({
         const trimmed = cat.trim();
         if (trimmed.length > 0) {
           try {
-            // catQuery expects a strict Category union type (e.g., "cs.AI", "math.CO")
-            // We accept user input as string and handle invalid categories gracefully
-            categoryFilters.push(catQuery(trimmed as never));
+            // catQuery expects a strict Category union ("cs.AI", "math.CO", ...).
+            // User input is unconstrained string — cast to the expected type
+            // and rely on the library's runtime validation (caught below).
+            categoryFilters.push(catQuery(trimmed as Category));
           } catch (error) {
             // Skip invalid categories silently - they won't be used in the query
             continue;
