@@ -18,6 +18,7 @@
  */
 
 import * as path from 'path';
+import pMap from 'p-map';
 
 import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
@@ -249,7 +250,15 @@ class StreamTabKVStore extends KVStore {
 // ============================================================================
 
 const MAX_STORE_CACHE_SIZE = 50;
+export const STREAM_TAB_IO_CONCURRENCY = 8;
 const storeCache = new Map<StreamTabId, StreamTabKVStore>();
+
+export function mapStreamTabStorage<T>(
+  streamIds: readonly StreamTabId[],
+  mapper: (streamId: StreamTabId, index: number) => Promise<T> | T,
+): Promise<T[]> {
+  return pMap(streamIds, mapper, { concurrency: STREAM_TAB_IO_CONCURRENCY });
+}
 
 export function getStreamTabStore(streamTabId: StreamTabId): StreamTabKVStore {
   const cached = storeCache.get(streamTabId);
