@@ -44,6 +44,11 @@ export enum WorkspaceStateKey {
   CODEX_REASONING_EFFORT = 'texra.codexReasoningEffort',
   CODEX_APPROVAL_POLICY = 'texra.codexApprovalPolicy',
 
+  // Claude Agent settings
+  CLAUDE_AGENT_MODEL = 'texra.claudeAgentModel',
+  CLAUDE_AGENT_PERMISSION_MODE = 'texra.claudeAgentPermissionMode',
+  CLAUDE_AGENT_EFFORT = 'texra.claudeAgentEffort',
+
   // Git commit author settings
   GIT_MARK_COMMITS = 'texra.git.markCommits',
   GIT_AUTHOR_NAME = 'texra.git.authorName',
