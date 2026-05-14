@@ -131,7 +131,7 @@ describe('OdysseyTool', () => {
       objective: '   \n\t  ',
     });
     expect(result.isError).toBe(true);
-    expect(result.error).toMatch(/whitespace/i);
+    expect(result.error).toMatch(/empty/i);
   });
 
   it('rejects whitespace-only reason on pause', async () => {
@@ -139,7 +139,7 @@ describe('OdysseyTool', () => {
     await callTool(tool, { command: 'start', objective: 'objective' });
     const result = await callTool(tool, { command: 'pause', reason: '   ' });
     expect(result.isError).toBe(true);
-    expect(result.error).toMatch(/whitespace/i);
+    expect(result.error).toMatch(/empty/i);
   });
 
   it('refuses to complete an abandoned odyssey', async () => {
