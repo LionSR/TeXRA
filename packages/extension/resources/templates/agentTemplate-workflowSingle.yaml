@@ -29,7 +29,7 @@ prompts:
     Variable Retrieval (VR) exposes runtime data as variables in these prompts:
       - {{ INPUT_FILE }} / {{ INPUT_CONTENT }}: main file path and text
       - {{ ALL_INPUTS }}: XML list of all input files
-      - {{ REFERENCE_CONTENT }} / {{ AUXILIARY_CONTENT }}: extra context
+      - {{ ALL_CONTEXTS }}: XML list of context files (.bib/.bbl, reference papers, .sty/.cls)
     Use them as needed.
 
     When writing or revising \LaTeX documents, you must:

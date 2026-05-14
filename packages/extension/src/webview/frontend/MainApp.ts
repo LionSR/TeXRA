@@ -480,10 +480,12 @@ export class MainApp extends MainAppBase {
     // reference single slot only when reference itself is empty (avoid clobber);
     // multi-file auxiliary files always merge into the multi-file reference list.
     const restoredReferenceFile = state.referenceFile || state.auxiliaryFile;
-    const restoredReferenceFiles = [
-      ...(state.referenceFiles ?? []),
-      ...(state.auxiliaryFiles ?? []),
-    ];
+    const restoredReferenceFiles = Array.from(
+      new Set([
+        ...(state.referenceFiles ?? []),
+        ...(state.auxiliaryFiles ?? []),
+      ]),
+    );
     const restoredReferenceFilesVisible =
       state.referenceFilesVisible || state.auxiliaryFilesVisible;
     this.singleFiles.set({
