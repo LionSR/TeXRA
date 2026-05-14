@@ -150,7 +150,7 @@ describe('ProgressFollowUpController', () => {
     });
   });
 
-  it('plans latexFixer with source files from compile failures before fallbacks', async () => {
+  it('plans latexFixer with generated output sources before input recovery', async () => {
     const controller = createController(new Set(['source.tex', 'main.tex']));
     const output = createRunStorageOutputFile({ source: 'source.tex' });
     const plan = await controller.planCompileFixer({
@@ -179,6 +179,31 @@ describe('ProgressFollowUpController', () => {
     assert.match(
       config.instruction ?? '',
       /output \/executions\/exec-123\/files\/answer\.tex; compile log \/executions\/exec-123\/files\/answer\.log/,
+    );
+  });
+
+  it('uses original workflow inputs as recovery when source metadata is absent', async () => {
+    const controller = createController(new Set(['main.tex', 'chapter.tex']));
+    const plan = await controller.planCompileFixer({
+      streamId: 'stream-a',
+      taskState: createFollowUpWorkflowTaskState({
+        inputFile: 'main.tex',
+        inputFiles: ['chapter.tex'],
+      }),
+      compileFailures: [createCompileFailure()],
+      runOutputs: new Map(),
+      modelOptions: [{ value: 'gemini31p' }],
+      executionId: 'exec-123',
+    });
+
+    assert.equal(plan.kind, 'execute');
+    if (plan.kind !== 'execute') return;
+    const config = plan.request.config;
+    assert.equal(config.inputFile, 'main.tex');
+    assert.deepEqual(config.inputFiles, ['chapter.tex']);
+    assert.match(
+      config.instruction ?? '',
+      /Editable workspace targets: main\.tex, chapter\.tex/,
     );
   });
 
