@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import { dirname, join, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -12,13 +13,13 @@ import {
 } from 'electron';
 
 import { platform } from '@platform/platform';
+import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { interruptAllCodexSessions } from '@tools/codex';
 import { refreshToolAvailability } from '@tools/toolAvailability';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
 import {
@@ -59,6 +60,7 @@ import { initializeElectronPlatform } from './platform/index.js';
 import {
   DESKTOP_WORKSPACE_PATH_STATE_KEY,
   serializeWorkspacePresenceArg,
+  withNewWindowWorkspaceArgs,
   withWorkspacePathArg,
 } from '../workspacePath.js';
 
@@ -256,6 +258,23 @@ function createWindow(options: {
     });
     app.exit(0);
   };
+  const openWorkspaceInNewWindow = async () => {
+    const result = await dialog.showOpenDialog(window, {
+      title: 'Open Folder in New Window',
+      properties: ['openDirectory'],
+    });
+    const selectedPath = result.canceled ? undefined : result.filePaths[0];
+    if (!selectedPath) return;
+
+    spawn(
+      process.execPath,
+      withNewWindowWorkspaceArgs(process.argv.slice(1), selectedPath),
+      {
+        detached: true,
+        stdio: 'ignore',
+      },
+    ).unref();
+  };
   attachRendererConsoleLog(window.webContents);
   const agentExecution = createDesktopAgentExecution({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
@@ -435,6 +454,7 @@ function createWindow(options: {
       openExternalUrl: previewHost.openExternal,
       openLogFolder: openLogsFolder,
       openPath: previewHost.openPath,
+      openWorkspaceInNewWindow,
       openWorkspaceFolder,
       signIn: () => desktopAuth.signIn(),
       getRecentCommits: () => gitHost.getRecentCommits(),
