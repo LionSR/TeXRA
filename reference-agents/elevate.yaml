@@ -285,10 +285,10 @@ prompts:
 
       <documents>
       <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 2ND UPDATED LATEX DOCUMENT WITH ELEVATE COMMENTS HERE
+      % 2ND UPDATED LATEX DOCUMENT 1 WITH ELEVATE COMMENTS HERE
       </document>
       <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND UPDATED LATEX DOCUMENT WITH ELEVATE COMMENTS HERE
+      % 2ND UPDATED LATEX DOCUMENT 2 WITH ELEVATE COMMENTS HERE
       </document>
       ... (repeat for all output files)
       </documents>

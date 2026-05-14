@@ -232,9 +232,12 @@ async function getFileVars(
 ): Promise<UserVars> {
   const userVars: UserVars = {};
 
+  // Auxiliary files (macro/style definitions) come before references so the
+  // model sees \newcommand and \usepackage definitions before any context
+  // document that uses them — matches the historical YAML ordering.
   const contextFiles = [
-    ...getCategoryFiles(agentConfig, 'REFERENCE'),
     ...getCategoryFiles(agentConfig, 'AUXILIARY'),
+    ...getCategoryFiles(agentConfig, 'REFERENCE'),
   ];
 
   // Log file categories being loaded (skip for tool-use agents).
@@ -276,10 +279,11 @@ async function getFileVars(
   // {{ ALL_AUXILIARYS }} (kept populated above as deprecated aliases). Reuse
   // the already-built XML strings — getXmlFormatFromFiles joins per-file blocks
   // with newlines, so concatenation is equivalent to re-reading the files.
+  // Order: auxiliary before reference, matching contextFiles above.
   const refXml = userVars.ALL_REFERENCES as string | null;
   const auxXml = userVars.ALL_AUXILIARYS as string | null;
   userVars.ALL_CONTEXTS =
-    refXml && auxXml ? `${refXml}\n${auxXml}` : (refXml ?? auxXml);
+    auxXml && refXml ? `${auxXml}\n${refXml}` : (auxXml ?? refXml);
   userVars.LIST_OF_ALL_CONTEXTS = getListOfFiles(contextFiles);
 
   return userVars;
