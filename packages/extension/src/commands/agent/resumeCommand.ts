@@ -14,7 +14,7 @@ import { getToolUsePersistenceEnabled } from '@utils/config';
 
 export const ResumeAgentResultSchema = z.object({
   success: z.boolean(),
-  lostFollowUps: z.number().nonnegative().optional(),
+  lostFollowUps: z.int().nonnegative().optional(),
 });
 
 export type ResumeAgentResult = z.infer<typeof ResumeAgentResultSchema>;
