@@ -93,4 +93,3 @@ flow.run({
 ```
 
 > **Performance Tip**: The example above works sequentially. You can speed up the map phase by using `ParallelBatchNode` instead of `BatchNode`. See [(Advanced) Parallel](../core_abstraction/parallel.md) for more details.
-> {: .note }
