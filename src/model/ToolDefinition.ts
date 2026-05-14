@@ -34,12 +34,3 @@ export type ToolDefinition = z.infer<typeof ToolDefinitionSchema>;
 // Type Guards and Utilities
 // ============================================================================
 
-/**
- * Check if a tool definition has a Zod schema attached.
- * Tools created via defineTool() will have this, YAML-loaded tools won't.
- */
-export function hasZodSchema(
-  def: ToolDefinition,
-): def is ToolDefinition & { zodSchema: ZodType } {
-  return def.zodSchema !== undefined;
-}
