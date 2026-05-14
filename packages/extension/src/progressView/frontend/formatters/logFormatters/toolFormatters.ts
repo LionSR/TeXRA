@@ -605,7 +605,13 @@ function buildDefaultSections(ctx: ToolSectionContext): TemplateResult[] {
     : { isCodeOnly: false, code: '' };
 
   if (isCodeOnly) {
-    return [buildToolSection('', code, { toolName, language: codeLanguage })];
+    return [
+      buildToolSection('', code, {
+        toolName,
+        language: codeLanguage,
+        extraClass: 'tool-command-input',
+      }),
+    ];
   }
   const { text: inputValue, language: inputLanguage } =
     stringifyWithLanguage(input);

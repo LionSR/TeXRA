@@ -108,14 +108,15 @@ export class AIAgentsTab extends LitElement {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: var(--wa-space-s);
+        gap: var(--wa-space-xs);
+        margin-bottom: var(--wa-space-xs);
       }
 
       .ai-agents-intro {
-        margin: 0 0 var(--wa-space-s) 0;
+        margin: 0;
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
-        line-height: 1.5;
+        line-height: var(--line-height-normal);
       }
 
       .ai-agents-empty {
@@ -139,7 +140,8 @@ export class AIAgentsTab extends LitElement {
       .setting-row {
         display: flex;
         align-items: center;
-        gap: var(--wa-space-xs);
+        gap: var(--wa-space-2xs);
+        min-height: 24px;
       }
 
       .setting-row label {
