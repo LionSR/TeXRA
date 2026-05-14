@@ -73,7 +73,7 @@ export async function buildClaudeAgentEnv(): Promise<NodeJS.ProcessEnv> {
   const managed = await lookupApiKey(platform().secrets, 'anthropic').catch(
     () => undefined,
   );
-  if (managed && !env[apiKeyEnvName('anthropic')]) {
+  if (managed) {
     env[apiKeyEnvName('anthropic')] = managed;
   }
 
