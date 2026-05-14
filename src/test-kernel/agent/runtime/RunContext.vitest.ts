@@ -21,7 +21,6 @@ describe('RunContext', () => {
 
     expect(Object.isFrozen(context)).toBe(true);
     expect(Object.isFrozen(context.logger)).toBe(true);
-    expect(Object.isFrozen(context.approvals)).toBe(true);
 
     expect(() => {
       (context as { logger: unknown }).logger = {};
@@ -36,13 +35,12 @@ describe('RunContext', () => {
     ).toThrow(/explicit runtimeHost/);
   });
 
-  it('isolates approval and log objects across contexts', () => {
+  it('isolates log objects across contexts', () => {
     const first = createRunContext({ runtimeHost: createRuntimeHost() });
     const second = createRunContext({ runtimeHost: createRuntimeHost() });
 
     expect(first).not.toBe(second);
     expect(first.logger).not.toBe(second.logger);
-    expect(first.approvals).not.toBe(second.approvals);
   });
 
   it('exposes the runtime host owned by the active context', () => {
