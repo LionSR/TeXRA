@@ -20,6 +20,7 @@ import type {
   CodexSandboxMode,
   CodexReasoningEffort,
   CodexApprovalPolicy,
+  ClaudeAgentEffort,
   ClaudeAgentModel,
   ClaudeAgentPermissionMode,
 } from '@shared/schemas/settingsViewMessages';
@@ -80,6 +81,17 @@ const CLAUDE_PERMISSION_MODE_OPTIONS: readonly {
   { value: 'acceptEdits', label: 'Auto-accept edits' },
   { value: 'bypassPermissions', label: 'Bypass all (dangerous)' },
   { value: 'plan', label: 'Plan only (read-only)' },
+] as const;
+
+const CLAUDE_EFFORT_OPTIONS: readonly {
+  value: ClaudeAgentEffort;
+  label: string;
+}[] = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'xhigh', label: 'Extra high' },
+  { value: 'max', label: 'Maximum' },
 ] as const;
 
 @customElement('ai-agents-tab')
@@ -152,6 +164,7 @@ export class AIAgentsTab extends LitElement {
     'claude-opus-4-7';
   @property({ type: String })
   claudeAgentPermissionMode: ClaudeAgentPermissionMode = 'acceptEdits';
+  @property({ type: String }) claudeAgentEffort: ClaudeAgentEffort = 'high';
 
   private handleRecheck(): void {
     this.dispatchEvent(createEvent('tool-recheck'));
@@ -183,6 +196,10 @@ export class AIAgentsTab extends LitElement {
 
   private handleClaudeAgentPermissionModeChange = (e: Event): void => {
     this.emitSelect('claude-agent-permission-mode-change', 'mode', e);
+  };
+
+  private handleClaudeAgentEffortChange = (e: Event): void => {
+    this.emitSelect('claude-agent-effort-change', 'effort', e);
   };
 
   private renderSelectRow(
@@ -238,6 +255,12 @@ export class AIAgentsTab extends LitElement {
           this.claudeAgentModel,
           CLAUDE_MODEL_OPTIONS,
           this.handleClaudeAgentModelChange,
+        )}
+        ${this.renderSelectRow(
+          'Reasoning effort',
+          this.claudeAgentEffort,
+          CLAUDE_EFFORT_OPTIONS,
+          this.handleClaudeAgentEffortChange,
         )}
         ${this.renderSelectRow(
           'Permission mode',
