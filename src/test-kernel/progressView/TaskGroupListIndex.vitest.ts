@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports - shared schemas
 import {
   LOG_LEVELS,
+  STREAM_STATUS,
   type LogMessageData,
   type TaskGroup,
 } from '@shared/schemas';
@@ -13,20 +14,27 @@ import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 type TimelineEntry =
   | { key: string; time: number; msg: LogMessageData }
-  | { key: string; time: number; tree: unknown };
+  | { key: string; time: number; tree: GroupTreeForTest };
+
+interface GroupTreeForTest {
+  group: TaskGroup;
+  children: GroupTreeForTest[];
+  messages: LogMessageData[];
+}
 
 type TaskGroupListInternals = HTMLElement & {
   groups: TaskGroup[];
   messages: LogMessageData[];
-  cachedTree: unknown[];
+  cachedTree: GroupTreeForTest[];
   cachedUngrouped: LogMessageData[];
   cachedTimeline: TimelineEntry[];
   ungroupedMessageById: Map<string, LogMessageData>;
   ungroupedMessageIndex: Map<string, number>;
-  buildGroupTree: () => [unknown[], LogMessageData[]];
+  buildGroupTree: () => [GroupTreeForTest[], LogMessageData[]];
   buildFullTimeline: () => TimelineEntry[];
   replaceSingleMessage: (message: LogMessageData) => void;
   updateTimelineMessageRefs: () => void;
+  willUpdate: (changedProperties: Map<string, unknown>) => void;
 };
 
 useLitComponentTestDom(
@@ -37,12 +45,26 @@ function createMessage(
   id: string,
   text: string,
   timestamp: number,
+  groupId?: string,
 ): LogMessageData {
   return {
     id,
     text,
     timestamp,
     level: LOG_LEVELS.INFO,
+    ...(groupId ? { groupId } : {}),
+  };
+}
+
+function createGroup(
+  id: string,
+  status: typeof STREAM_STATUS.RUNNING | typeof STREAM_STATUS.STOPPED,
+): TaskGroup {
+  return {
+    id,
+    name: id,
+    startTime: 1,
+    status,
   };
 }
 
@@ -91,5 +113,35 @@ describe('task-group-list ungrouped message indexes', () => {
     list.updateTimelineMessageRefs();
 
     expect(timelineEntry?.msg).toBe(updated);
+  });
+
+  it('patches stable group metadata without rebuilding the message tree', () => {
+    const group = createGroup('g1', STREAM_STATUS.RUNNING);
+    const message = createMessage('m1', 'grouped', 2, group.id);
+    const list = createList([message]);
+    list.groups = [group];
+    [list.cachedTree, list.cachedUngrouped] = list.buildGroupTree();
+    list.cachedTimeline = list.buildFullTimeline();
+
+    const originalTree = list.cachedTree[0];
+    const stoppedGroup = {
+      ...group,
+      status: STREAM_STATUS.STOPPED,
+      endTime: 3,
+    };
+    list.groups = [stoppedGroup];
+    list.buildGroupTree = () => {
+      throw new Error('unexpected full group tree rebuild');
+    };
+    list.updateTimelineMessageRefs = () => {
+      throw new Error('unexpected timeline message scan');
+    };
+
+    list.willUpdate(new Map([['groups', [group]]]));
+
+    expect(list.cachedTree[0]).toBe(originalTree);
+    expect(list.cachedTree[0]?.group).toBe(stoppedGroup);
+    expect(list.cachedTree[0]?.messages).toEqual([message]);
+    expect(list.cachedTimeline).toHaveLength(1);
   });
 });
