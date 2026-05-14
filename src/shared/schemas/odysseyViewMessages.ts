@@ -15,7 +15,11 @@ import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
-import { OdysseySchema } from '@tools/odyssey';
+// Import the data schema directly from its leaf module so this file (which
+// is consumed by webview frontends via @shared/schemas) does not pull in
+// the runtime modules re-exported by the @tools/odyssey barrel
+// (OdysseyTool, OdysseyStore, platform-dependent code).
+import { OdysseySchema } from '@tools/odyssey/odysseyMeta';
 
 import { StreamTabIdSchema } from './identifiers';
 import { commandOnly } from './messageFactories';
