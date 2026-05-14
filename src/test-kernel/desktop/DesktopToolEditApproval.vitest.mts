@@ -4,7 +4,11 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type {
+  ProgressEventBusLike,
+  ProgressEventPayloads,
+} from '@eventBus/ProgressEventBus';
 import type {
   DiffOptions,
   DiffSession,
@@ -16,6 +20,7 @@ import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
 interface DesktopToolEditApprovalModule {
   createDesktopToolEditApprovalController(options: {
+    runtimeHost: AgentRuntimeHost;
     openPath?: (filePath: string) => Promise<void>;
     openBuildDisplay?: (
       location: { absolutePath: string },
@@ -31,6 +36,12 @@ interface DesktopToolEditApprovalModule {
       feedback?: string;
     }): boolean;
     dispose(): void;
+  };
+}
+
+function createBusRuntimeHost(bus: ProgressEventBusLike): AgentRuntimeHost {
+  return {
+    emit: (event, payload) => bus.emit(event, payload),
   };
 }
 
@@ -148,6 +159,7 @@ describe('desktop tool edit approval', () => {
     const { bus, requestToolEditApproval, desktopModule } =
       await loadApprovalModules();
     const controller = desktopModule.createDesktopToolEditApprovalController({
+      runtimeHost: createBusRuntimeHost(bus),
       tempRoot,
     });
     const shown: ProgressEventPayloads['showToolEditPermission'][] = [];
@@ -204,6 +216,7 @@ describe('desktop tool edit approval', () => {
       await loadApprovalModules();
     const opened: string[] = [];
     const controller = desktopModule.createDesktopToolEditApprovalController({
+      runtimeHost: createBusRuntimeHost(bus),
       tempRoot,
       openPath: async (filePath) => {
         opened.push(filePath);
@@ -274,6 +287,7 @@ describe('desktop tool edit approval', () => {
       ): Promise<DiffSession> => ({ original, proposed, title }),
     );
     const controller = desktopModule.createDesktopToolEditApprovalController({
+      runtimeHost: createBusRuntimeHost(bus),
       tempRoot,
       openPath,
       openDiff,
@@ -323,6 +337,7 @@ describe('desktop tool edit approval', () => {
       await loadApprovalModules();
     const opened: string[] = [];
     const controller = desktopModule.createDesktopToolEditApprovalController({
+      runtimeHost: createBusRuntimeHost(bus),
       tempRoot,
       openPath: async (filePath) => {
         opened.push(filePath);
@@ -385,6 +400,7 @@ describe('desktop tool edit approval', () => {
     }> = [];
     const messages: string[] = [];
     const controller = desktopModule.createDesktopToolEditApprovalController({
+      runtimeHost: createBusRuntimeHost(bus),
       tempRoot,
       openBuildDisplay: async (location, options) => {
         displayed.push({ absolutePath: location.absolutePath, options });
@@ -448,6 +464,7 @@ describe('desktop tool edit approval', () => {
       desktopModule,
     } = await loadApprovalModules();
     const controller = desktopModule.createDesktopToolEditApprovalController({
+      runtimeHost: createBusRuntimeHost(bus),
       tempRoot,
     });
     const shown: ProgressEventPayloads['showToolEditPermission'][] = [];
@@ -488,6 +505,7 @@ describe('desktop tool edit approval', () => {
     const { bus, requestToolEditApproval, desktopModule } =
       await loadApprovalModules();
     const controller = desktopModule.createDesktopToolEditApprovalController({
+      runtimeHost: createBusRuntimeHost(bus),
       tempRoot,
     });
     const shown: ProgressEventPayloads['showToolEditPermission'][] = [];
