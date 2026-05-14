@@ -9,6 +9,8 @@
  * into per-execution KV stores, then deletes the legacy sources.
  */
 
+import pMap from 'p-map';
+
 import { type AgentConfig, AgentConfigSchema } from '@agent/core/AgentConfig';
 import * as logger from '@agent/core/logger';
 import { getWorkspaceState } from '@agent/core/stateStore';
@@ -27,6 +29,7 @@ const CHANNEL = 'ExecutionListing';
 const INDEX_PATH = 'executions/index.json';
 const LEGACY_HISTORY_KEY = 'texra.agentHistory';
 const EXECUTION_ID_PATTERN = /^[0-9a-f][-0-9a-f]*$/i;
+const EXECUTION_STORAGE_CONCURRENCY = 32;
 
 // ============================================================================
 // Public types
@@ -108,9 +111,11 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
     )
     .map(([name]) => name as ExecutionId);
 
-  // Read meta + config in parallel
-  const results = await Promise.all(
-    executionDirs.map(async (id): Promise<ExecutionListingEntry | null> => {
+  // Read meta + config with bounded concurrency. Large histories should not
+  // enqueue one storage read pair per execution all at once.
+  const results = await pMap(
+    executionDirs,
+    async (id): Promise<ExecutionListingEntry | null> => {
       try {
         const store = getExecutionStore(id);
         const [meta, cfg] = await Promise.all([
@@ -137,7 +142,8 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
         });
         return null;
       }
-    }),
+    },
+    { concurrency: EXECUTION_STORAGE_CONCURRENCY },
   );
 
   const listing = results
@@ -184,9 +190,14 @@ export async function deleteAllExecutions(
     )
     .map(([name]) => name as ExecutionId);
 
-  await Promise.all(executionDirs.map((id) => getExecutionStore(id).clear()));
-
-  invalidateListingCache();
+  try {
+    await pMap(executionDirs, (id) => getExecutionStore(id).clear(), {
+      concurrency: EXECUTION_STORAGE_CONCURRENCY,
+      stopOnError: false,
+    });
+  } finally {
+    invalidateListingCache();
+  }
 }
 
 // ============================================================================
@@ -249,8 +260,9 @@ function getWorkspaceStorageKey(): string {
  * Only writes if meta.json doesn't already exist (no overwriting).
  */
 async function backfillEntries(entries: unknown[]): Promise<void> {
-  await Promise.all(
-    entries.map(async (rawEntry) => {
+  await pMap(
+    entries,
+    async (rawEntry) => {
       if (!rawEntry || typeof rawEntry !== 'object') return;
 
       const candidate = rawEntry as {
@@ -284,6 +296,10 @@ async function backfillEntries(entries: unknown[]): Promise<void> {
         }),
         store.writeConfig(normalizedConfig),
       ]);
-    }),
+    },
+    {
+      concurrency: EXECUTION_STORAGE_CONCURRENCY,
+      stopOnError: false,
+    },
   );
 }
