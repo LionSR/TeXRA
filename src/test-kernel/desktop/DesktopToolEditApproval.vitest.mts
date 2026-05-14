@@ -75,10 +75,16 @@ async function loadApprovalModules(workspacePath = '/workspace') {
   vi.doMock('@agent/core/config', () => ({
     getConfig: vi.fn(() => 'sameDirectory'),
   }));
-  vi.doMock('@agent/toolUse/ToolFileInteractionContext', () => ({
-    getCurrentToolFileInteractionContext: vi.fn(() => undefined),
-    getCurrentToolRunContext: vi.fn(() => undefined),
-  }));
+  vi.doMock('@agent/runtime/RunContext', async () => {
+    const actual =
+      await vi.importActual<typeof import('@agent/runtime/RunContext')>(
+        '@agent/runtime/RunContext',
+      );
+    return {
+      ...actual,
+      tryUseRunContext: vi.fn(() => undefined),
+    };
+  });
   vi.doMock('@utils/files', async () => {
     const actual =
       await vi.importActual<typeof import('@utils/files')>('@utils/files');

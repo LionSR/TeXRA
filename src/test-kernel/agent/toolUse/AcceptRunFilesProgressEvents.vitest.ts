@@ -6,6 +6,7 @@ import {
   getDefaultAgentRuntimeHost,
   setDefaultAgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
@@ -82,18 +83,19 @@ describe('accept_run_files progress events', () => {
 
       setToolEditApprovalHandler(async () => ({ accepted: true }));
 
-      const result = await withToolFileInteractionContext(
-        {
+      const result = await withRunContext(
+        createRunContext({
+          runtimeHost: explicit.host,
           streamId,
           executionId,
-          runtimeHost: explicit.host,
-          tracker: {} as never,
-        },
+        }),
         () =>
-          tool.call({
-            execution_id: executionId,
-            files: [{ path: 'output.tex', original: 'paper.tex' }],
-          }),
+          withToolFileInteractionContext({ tracker: {} as never }, () =>
+            tool.call({
+              execution_id: executionId,
+              files: [{ path: 'output.tex', original: 'paper.tex' }],
+            }),
+          ),
       );
 
       expect(result.isError).toBeUndefined();

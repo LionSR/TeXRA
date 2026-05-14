@@ -11,7 +11,7 @@
 import { z } from 'zod';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { getCurrentToolRunContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { ExternalInquiryAction, StreamTabId } from '@shared/schemas';
 import {
@@ -247,7 +247,7 @@ When you have multiple independent questions for external models, you can call e
   schema: ExternalInquiryInputSchema,
 }) {
   protected async execute(input: ExternalInquiryInput): Promise<ToolResult> {
-    const context = getCurrentToolRunContext();
+    const context = tryUseRunContext();
     const runtimeHost = context?.runtimeHost;
     if (!runtimeHost) {
       throw new ToolError(
