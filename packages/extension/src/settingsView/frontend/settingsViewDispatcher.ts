@@ -26,6 +26,7 @@ import {
   type LatexConfigValues,
   type LatexSettingsStatus,
   type MemoryViewItem,
+  type ClaudeAgentEffort,
   type ClaudeAgentModel,
   type ClaudeAgentPermissionMode,
   type ModelSelectionItem,
@@ -80,6 +81,7 @@ export interface SettingsMessageHandlerContext {
   codexApprovalPolicy: WritableSignal<string>;
   claudeAgentModel: WritableSignal<ClaudeAgentModel>;
   claudeAgentPermissionMode: WritableSignal<ClaudeAgentPermissionMode>;
+  claudeAgentEffort: WritableSignal<ClaudeAgentEffort>;
   toolDashboardItems: WritableSignal<ToolDashboardItem[]>;
   toolDashboardLoaded: WritableSignal<boolean>;
   gitMarkCommits: WritableSignal<boolean>;
@@ -251,6 +253,7 @@ export function dispatchSettingsViewMessage(
       ctx.codexApprovalPolicy.set(data.codexApprovalPolicy);
       ctx.claudeAgentModel.set(data.claudeAgentModel);
       ctx.claudeAgentPermissionMode.set(data.claudeAgentPermissionMode);
+      ctx.claudeAgentEffort.set(data.claudeAgentEffort);
       return true;
     }
 
