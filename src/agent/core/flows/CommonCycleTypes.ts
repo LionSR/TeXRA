@@ -17,7 +17,7 @@ export const BaseCycleFieldsSchema = z.object({
   shouldStop: z.boolean(),
   /** Distinguishes: completion (true) vs cancellation/failure (false) */
   endTurn: z.boolean(),
-  responseTimeMs: z.number().optional(),
+  responseTimeMs: z.number().nonnegative().optional(),
   stopReason: z.string().nullish(),
   lastError: RetryErrorInfoSchema.optional(),
 });
