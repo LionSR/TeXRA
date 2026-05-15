@@ -61,10 +61,9 @@ Workflow agent prompts receive:
 - `{{ INSTRUCTION }}` — the user's free-text instruction for this run
 - `{{ OUTPUT_FILES_ORDER }}` — ordered list of output filenames. Each input
   produces one output of the same name, so most agents simply iterate over
-  this list. Only merge-style agents (which write a fresh filename distinct
-  from the inputs) need to branch on `{% if OUTPUT_FILES_ORDER %}`. Use
-  `{{ OUTPUT_FILES_ORDER[0] }}` for a specific filename and
-  `{{ OUTPUT_FILES_ORDER | join(", ") }}` for a human-readable list.
+  this list. Agents that write fixed filenames distinct from the inputs should
+  declare `settings.defaultOutputFiles`. Use `{{ OUTPUT_FILES_ORDER | join(", ") }}`
+  for a human-readable list.
 
 Both categories support `{% if IS_ANTHROPIC_MODEL %}...{% endif %}` blocks
 for model-specific instructions.
@@ -96,12 +95,11 @@ Example output format in `userRequest`:
 
 ```
 <documents>
-<document name="{{ OUTPUT_FILES_ORDER[0] }}">
-% content for first output
+{% for output in OUTPUT_FILES_ORDER %}
+<document name="{{ output }}">
+% content for {{ output }}
 </document>
-<document name="{{ OUTPUT_FILES_ORDER[1] }}">
-% content for second output
-</document>
+{% endfor %}
 </documents>
 ```
 
@@ -149,8 +147,16 @@ prompts:
   userRequest:
     - |
       Brainstorm in <scratchpad>, then output the revised LaTeX inside
-      <documents><document name="{{ OUTPUT_FILES_ORDER[0] }}">...</document></documents>.
+      <documents>
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">...</document>
+      {% endfor %}
+      </documents>.
     - |
       Reflect in <scratchpad>, then emit the improved
-      <documents><document name="{{ OUTPUT_FILES_ORDER[0] }}">...</document></documents>.
+      <documents>
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">...</document>
+      {% endfor %}
+      </documents>.
 ```

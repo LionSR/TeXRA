@@ -16,7 +16,8 @@ interface DesktopFileSelectionModule {
       title: string;
       defaultPath?: string;
       filters: Array<{ name: string; extensions: string[] }>;
-    }) => Promise<string | undefined>;
+      allowMultiple?: boolean;
+    }) => Promise<string[] | undefined>;
     onError?: (error: unknown) => void;
   }): {
     handleMessage(
@@ -144,6 +145,44 @@ describe('desktop file selection', () => {
       expect(messages).toContainEqual({
         command: MAIN_VIEW_COMMANDS.SET_EDITED_FILE,
         files: ['sections/main_edited.tex', 'sections/main_r1.tex'],
+      }),
+    );
+  });
+
+  it('opens the desktop multi-file picker and returns relative input paths', async () => {
+    const { createDesktopFileSelection } = await loadDesktopFileSelection();
+    const messages: unknown[] = [];
+    const showOpenFileDialog = vi
+      .fn()
+      .mockResolvedValue([
+        join(workspacePath, 'main.tex'),
+        join(workspacePath, 'sections', 'main_r1.tex'),
+      ]);
+    const files = createDesktopFileSelection({
+      postToRenderer: (message) => messages.push(message),
+      getWorkspacePath: () => workspacePath,
+      showOpenFileDialog,
+    });
+
+    expect(
+      files.handleMessage({
+        command: MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES,
+        fileType: 'input',
+        currentFile: 'main.tex',
+      }),
+    ).toBe(true);
+
+    await vi.waitFor(() =>
+      expect(messages).toContainEqual({
+        command: MAIN_VIEW_COMMANDS.SET_INPUT_FILES,
+        files: ['main.tex', 'sections/main_r1.tex'],
+      }),
+    );
+    expect(showOpenFileDialog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Select input files',
+        allowMultiple: true,
+        defaultPath: join(workspacePath, 'main.tex'),
       }),
     );
   });

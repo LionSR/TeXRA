@@ -24,6 +24,7 @@ export interface DesktopFileSelectionDialogOptions {
   title: string;
   defaultPath?: string;
   filters: Array<{ name: string; extensions: string[] }>;
+  allowMultiple?: boolean;
 }
 
 export interface DesktopFileSelectionOptions {
@@ -31,7 +32,7 @@ export interface DesktopFileSelectionOptions {
   getWorkspacePath?: () => string | undefined;
   showOpenFileDialog?: (
     options: DesktopFileSelectionDialogOptions,
-  ) => Promise<string | undefined>;
+  ) => Promise<string[] | undefined>;
   onError?: (error: unknown) => void;
 }
 
@@ -43,6 +44,14 @@ const SET_COMMAND_BY_FILE_TYPE = {
   edited: MAIN_VIEW_COMMANDS.SET_EDITED_FILE,
   base: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
 } as const;
+
+const MULTI_SET_COMMAND_BY_FILE_TYPE = {
+  input: MAIN_VIEW_COMMANDS.SET_INPUT_FILES,
+  context: MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES,
+  media: MAIN_VIEW_COMMANDS.SET_MEDIA_FILES,
+} as const;
+
+type DesktopMultiFileType = keyof typeof MULTI_SET_COMMAND_BY_FILE_TYPE;
 
 function getListSettings() {
   return loadFileListSettings(getConfig);
@@ -102,6 +111,13 @@ export function createDesktopFileSelection(
     });
   }
 
+  function postMultiFileList(fileType: DesktopMultiFileType, files: string[]) {
+    options.postToRenderer({
+      command: MULTI_SET_COMMAND_BY_FILE_TYPE[fileType],
+      files,
+    });
+  }
+
   async function list(fileType: ListableFileType): Promise<string[]> {
     const workspacePath = getWorkspacePath();
     const config = getFileListConfig(fileType, getListSettings());
@@ -151,8 +167,65 @@ export function createDesktopFileSelection(
     postFileList('edited', files);
   }
 
+  function isDesktopMultiFileType(
+    value: unknown,
+  ): value is DesktopMultiFileType {
+    return value === 'input' || value === 'context' || value === 'media';
+  }
+
+  function getDialogConfig(fileType: DesktopMultiFileType): {
+    title: string;
+    listType: ListableFileType;
+  } {
+    switch (fileType) {
+      case 'context':
+        return { title: 'Select context files', listType: 'context' };
+      case 'media':
+        return { title: 'Select media files', listType: 'media' };
+      case 'input':
+        return { title: 'Select input files', listType: 'input' };
+    }
+  }
+
+  async function selectMultipleFiles(message: DesktopCommandMessage) {
+    if (
+      !options.showOpenFileDialog ||
+      !isDesktopMultiFileType(message.fileType)
+    ) {
+      return;
+    }
+    const workspacePath = getWorkspacePath();
+    const { title, listType } = getDialogConfig(message.fileType);
+    const listConfig = getFileListConfig(listType, getListSettings());
+    const currentFile =
+      typeof message.currentFile === 'string' ? message.currentFile : undefined;
+    const defaultPath =
+      workspacePath && currentFile
+        ? resolveWorkspaceFile(workspacePath, currentFile)
+        : workspacePath;
+    const selectedFiles = await options.showOpenFileDialog({
+      title,
+      defaultPath,
+      allowMultiple: true,
+      filters: [
+        {
+          name: 'Supported files',
+          extensions: listConfig?.extensions ?? ['*'],
+        },
+      ],
+    });
+    if (!selectedFiles || !workspacePath) return;
+    postMultiFileList(
+      message.fileType,
+      selectedFiles.map((file) => toWorkspaceRelative(workspacePath, file)),
+    );
+  }
+
   function handleMessage(message: DesktopCommandMessage): boolean {
     switch (message.command) {
+      case MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES:
+        runAsync(selectMultipleFiles(message));
+        return true;
       case MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE:
         runAsync(
           requestSingleFileList('base', {

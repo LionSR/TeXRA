@@ -132,6 +132,10 @@ const MainViewPersistedStateBaseSchema = UIFileFieldsSchema.merge(
 // migration so MainView and AgentConfig stay in sync without duplicating
 // the file-slot logic.
 function migrateLegacyMainViewState(input: unknown): unknown {
+  const original =
+    typeof input === 'object' && input !== null && !Array.isArray(input)
+      ? (input as Record<string, unknown>)
+      : {};
   const migrated = migrateLegacyContextFileFields(input);
   if (
     typeof migrated !== 'object' ||
@@ -141,6 +145,31 @@ function migrateLegacyMainViewState(input: unknown): unknown {
     return migrated;
   }
   const obj = migrated as Record<string, unknown>;
+  for (const [single, multi, visible] of [
+    ['inputFile', 'inputFiles', 'inputFilesVisible'],
+    ['contextFile', 'contextFiles', 'contextFilesVisible'],
+    ['mediaFile', 'mediaFiles', 'mediaFilesVisible'],
+  ] as const) {
+    if (
+      obj[visible] === undefined &&
+      original[single] !== undefined &&
+      Array.isArray(obj[multi]) &&
+      obj[multi].length > 0
+    ) {
+      obj[visible] = true;
+    }
+  }
+  if (
+    obj.contextFilesVisible === undefined &&
+    (original.referenceFile !== undefined ||
+      original.referenceFiles !== undefined ||
+      original.auxiliaryFile !== undefined ||
+      original.auxiliaryFiles !== undefined) &&
+    Array.isArray(obj.contextFiles) &&
+    obj.contextFiles.length > 0
+  ) {
+    obj.contextFilesVisible = true;
+  }
   if (
     obj.contextFilesVisible === undefined &&
     (obj.referenceFilesVisible || obj.auxiliaryFilesVisible)

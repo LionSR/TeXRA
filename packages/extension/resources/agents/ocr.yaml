@@ -5,6 +5,8 @@ settings:
   agentCategory: workflow
   documentTag: documents
   endTag: </documents>
+  defaultOutputFiles:
+    - ocr_result.tex
   prefills:
     - "Here is the \\LaTeX OCR output. <documents>"
     - ''

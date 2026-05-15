@@ -33,8 +33,6 @@ describe('MainViewExecutionController', () => {
       agent: 'direct-agent',
       model: 'gpt-5.4',
       inputFiles: ['paper/main.tex'],
-      outputFiles: ['paper/revised.tex'],
-      outputFilesActive: true,
       mediaFiles: ['diagram.png', null],
     });
 
@@ -44,7 +42,7 @@ describe('MainViewExecutionController', () => {
       agent: 'direct-agent',
       model: 'gpt-5.4',
       inputFiles: ['paper/main.tex'],
-      outputFiles: ['paper/revised.tex'],
+      outputFiles: [],
       agentCategory: AgentCategory.Workflow,
       mediaFiles: ['diagram.png'],
       editedFile: null,

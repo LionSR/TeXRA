@@ -3,7 +3,6 @@
  *
  * These styles are used by:
  * - FileSelectGroup
- * - OutputFilesSection
  * - LatexDiffsSection
  *
  * Consolidating them here prevents duplication across Shadow DOM components.

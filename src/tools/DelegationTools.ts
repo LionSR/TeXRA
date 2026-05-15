@@ -673,7 +673,7 @@ const WorkflowAgentInputSchema = z.object({
   mediaFiles: z
     .array(z.string())
     .prefault([])
-    .describe('Images, figures, or PDFs the agent should view.'),
+    .describe('Images, figures, PDFs, or audio files the agent should view.'),
   extractFigures: z
     .boolean()
     .nullish()

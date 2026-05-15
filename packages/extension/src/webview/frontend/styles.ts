@@ -63,9 +63,8 @@ export const mainViewStyles: CSSResult = css`
 
   /*
    * Files section sits BELOW the instruction-panel (textarea + toolbar).
-   * Wrapped in a wa-details so the four file slots (Input/Reference/
-   * Auxiliary/Media) plus Multiple Outputs collapse to a single slim
-   * summary row by default — keeping the primary "what do you want to
+   * Wrapped in a wa-details so the document slots collapse to a single
+   * slim summary row by default, keeping the primary "what do you want to
    * do?" textarea front-and-center and unblocked.
    */
   wa-details.file-selection-details {

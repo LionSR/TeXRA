@@ -14,8 +14,8 @@ const LEGACY_KEYS = [
 
 /**
  * Fold legacy single-slot and renamed (reference/auxiliary) file keys into
- * the canonical `*Files` lists. Single-slot values seed `*Files[0]` only
- * when the list is empty so modern writers always win. Runs at the
+ * the canonical `*Files` lists. Single-slot values become the head of the
+ * list so legacy primary-file semantics are preserved. Runs at the
  * persistence boundary (UI memento, execution KV store, history records);
  * skipped when no legacy keys are present so listing N executions doesn't
  * pay the clone+delete cost N times.
@@ -70,8 +70,10 @@ export function migrateLegacyContextFileFields(input: unknown): unknown {
     const list = Array.isArray(listValue)
       ? listValue.filter(isNonEmptyString)
       : [];
-    if (list.length === 0 && isNonEmptyString(obj[single])) {
-      obj[multi] = [obj[single] as string];
+    if (isNonEmptyString(obj[single])) {
+      obj[multi] = [
+        ...new Set([obj[single] as string, ...list].filter(isNonEmptyString)),
+      ];
     } else if (Array.isArray(listValue)) {
       obj[multi] = list;
     }

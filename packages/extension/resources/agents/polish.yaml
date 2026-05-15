@@ -42,13 +42,11 @@ prompts:
       Use the following format:
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 1ST UPDATED LATEX DOCUMENT HERE
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED LATEX DOCUMENT {{ loop.index }} HERE
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND UPDATED LATEX DOCUMENT HERE
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>
     - |
       Now critically reflect on the changes made and output a further enhanced version. Be brutally honest --- if I asked you to add equations but you did not add any, criticize yourself for not following the instruction.
@@ -67,11 +65,9 @@ prompts:
       Ensure that the output documents are in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 2ND UPDATED LATEX DOCUMENT HERE
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % REFINED LATEX DOCUMENT {{ loop.index }} HERE
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND UPDATED LATEX DOCUMENT HERE
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>

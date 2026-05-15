@@ -193,13 +193,14 @@ function getAgentDirectoryVars(): UserVars {
 // custom user YAMLs.
 type FileCategoryConfig = {
   multiple: keyof AgentConfig;
+  single?: keyof AgentConfig;
 };
 
 const FILE_CATEGORIES: Record<string, FileCategoryConfig> = {
   INPUT: { multiple: 'inputFiles' },
   REFERENCE: { multiple: 'contextFiles' },
   MEDIA: { multiple: 'mediaFiles' },
-  EDITED: { multiple: 'editedFiles' },
+  EDITED: { multiple: 'editedFiles', single: 'editedFile' },
 };
 
 /** Get the multi-list for a category (filtering empties) */
@@ -207,7 +208,8 @@ function getCategoryFiles(config: AgentConfig, category: string): string[] {
   const cat = FILE_CATEGORIES[category];
   if (!cat) return [];
   const list = (config[cat.multiple] as string[] | undefined) ?? [];
-  return list.filter((f): f is string => Boolean(f));
+  const single = cat.single ? (config[cat.single] as string | null) : null;
+  return [...new Set([single, ...list].filter((f): f is string => Boolean(f)))];
 }
 
 /** Categories used for building file vars (excludes MEDIA which is display-only) */
@@ -253,6 +255,14 @@ async function getFileVars(
   // alias keeps populating it for back-compat with custom YAMLs.
   userVars.ALL_CONTEXTS = userVars.ALL_REFERENCES as string | null;
   userVars.LIST_OF_ALL_CONTEXTS = getListOfFiles(contextFiles);
+  userVars.CONTEXT_FILE = userVars.REFERENCE_FILE;
+  userVars.CONTEXT_CONTENT = userVars.REFERENCE_CONTENT;
+  userVars.ALL_AUXILIARYS = userVars.ALL_CONTEXTS;
+  userVars.LIST_OF_ALL_AUXILIARYS = userVars.LIST_OF_ALL_CONTEXTS;
+
+  const mediaFiles = getCategoryFiles(agentConfig, 'MEDIA');
+  userVars.MEDIA_FILE = mediaFiles[0] ?? null;
+  userVars.MEDIA_CONTENT = null;
 
   return userVars;
 }
@@ -430,42 +440,26 @@ async function getAttachedMemories(
 export function getOutputFilesOrder(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
-  agentPrompt: AgentPrompt,
+  _agentPrompt: AgentPrompt,
 ): UserVars {
   const userVars: UserVars = {};
-  if (
-    Array.isArray(agentConfig.outputFiles) &&
-    agentConfig.outputFiles.length > 0
-  ) {
-    userVars.OUTPUT_FILES_ORDER = agentConfig.outputFiles;
-  } else if (
-    Array.isArray(agentSetting.defaultOutputFiles) &&
-    agentSetting.defaultOutputFiles.length > 0
-  ) {
-    agentConfig.outputFiles = agentSetting.defaultOutputFiles;
-    userVars.OUTPUT_FILES_ORDER = agentSetting.defaultOutputFiles;
-  } else if (shouldDeriveOutputOrderFromInputs(agentPrompt)) {
-    const inputFiles = agentConfig.inputFiles.filter(Boolean);
-    if (inputFiles.length > 0) {
-      userVars.OUTPUT_FILES_ORDER = inputFiles;
-    }
+  const explicitOutputFiles = (agentConfig.outputFiles ?? []).filter(Boolean);
+  const defaultOutputFiles = (agentSetting.defaultOutputFiles ?? []).filter(
+    Boolean,
+  );
+  const inputFiles = (agentConfig.inputFiles ?? []).filter(Boolean);
+  const outputFiles =
+    explicitOutputFiles.length > 0
+      ? explicitOutputFiles
+      : defaultOutputFiles.length > 0
+        ? defaultOutputFiles
+        : inputFiles;
+
+  agentConfig.outputFiles = outputFiles;
+  if (outputFiles.length > 0) {
+    userVars.OUTPUT_FILES_ORDER = outputFiles;
   }
   return userVars;
-}
-
-function shouldDeriveOutputOrderFromInputs(agentPrompt: AgentPrompt): boolean {
-  const userRequest = Array.isArray(agentPrompt.userRequest)
-    ? agentPrompt.userRequest.join('\n')
-    : agentPrompt.userRequest;
-  const promptText = [
-    agentPrompt.systemPrompt,
-    agentPrompt.userPrefix,
-    userRequest,
-  ].join('\n');
-  return (
-    promptText.includes('OUTPUT_FILES_ORDER') &&
-    !promptText.includes('{% if OUTPUT_FILES_ORDER %}')
-  );
 }
 
 export function getToolFlags(

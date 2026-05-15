@@ -61,7 +61,6 @@ import './components/FileSelectGroup';
 import './components/BannerGroup';
 import './components/LatexDiffsSection';
 import './components/InstructionPanel';
-import './components/OutputFilesSection';
 import {
   ELEMENT_IDS,
   DOCUMENT_FILE_TYPES,
@@ -190,7 +189,6 @@ export class MainApp extends MainAppBase {
   );
   @state() protected override debugMode = false;
   private readonly isGitRepo = signal(true);
-  private defaultOutputFiles: string[] = [];
   private instructionSaveTimer: number | null = null;
 
   private readonly fileStateContext$ = new Signal.Computed(
@@ -260,8 +258,8 @@ export class MainApp extends MainAppBase {
       this.handleSetMultipleFiles(data),
     [MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES]: (data) =>
       this.handleSetMultipleFiles(data),
-    [MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES]: (data) =>
-      this.handleSetDefaultOutputFiles(data),
+    [MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES]: () =>
+      this.handleSetDefaultOutputFiles(),
     [MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE]: (data) =>
       this.handleAddMediaFile(data),
 
@@ -405,12 +403,12 @@ export class MainApp extends MainAppBase {
       inputFiles: mf.inputFiles,
       contextFiles: mf.contextFiles,
       mediaFiles: mf.mediaFiles,
-      outputFiles: mf.outputFiles,
+      outputFiles: [],
       inputFilesVisible: mv.inputFiles,
       contextFilesVisible: mv.contextFiles,
       mediaFilesVisible: mv.mediaFiles,
-      outputFilesVisible: mv.outputFiles,
-      outputFilesActive: this.outputFilesActive.get(),
+      outputFilesVisible: false,
+      outputFilesActive: false,
       latexdiffsVisible: this.latexdiffsVisible.get(),
       autoExtractFigure: cv.autoExtractFigure,
       autoExtractTikzFigure: cv.autoExtractTikzFigure,
@@ -443,15 +441,15 @@ export class MainApp extends MainAppBase {
       inputFiles: state.inputFiles,
       contextFiles: state.contextFiles,
       mediaFiles: state.mediaFiles,
-      outputFiles: state.outputFiles,
+      outputFiles: [],
     });
     this.multiFilesVisible.set({
       inputFiles: state.inputFilesVisible,
       contextFiles: state.contextFilesVisible,
       mediaFiles: state.mediaFilesVisible,
-      outputFiles: state.outputFilesVisible,
+      outputFiles: false,
     });
-    this.outputFilesActive.set(state.outputFilesActive);
+    this.outputFilesActive.set(false);
     this.latexdiffsVisible.set(state.latexdiffsVisible);
     this.checkboxValues.set({
       autoExtractFigure: state.autoExtractFigure,
@@ -668,23 +666,13 @@ export class MainApp extends MainAppBase {
       [listId]: files.length > 0,
     });
     if (listId === ELEMENT_IDS.OUTPUT_FILES) {
-      this.outputFilesActive.set(files.length > 0);
+      this.outputFilesActive.set(false);
     }
     this.saveState();
   }
 
-  private handleSetDefaultOutputFiles(
-    message: MainViewMessageFor<
-      typeof MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES
-    >,
-  ): void {
-    this.defaultOutputFiles = [...message.files];
-    if (
-      this.outputFilesActive.get() &&
-      this.multiFiles.get().outputFiles.length === 0
-    ) {
-      this.initializeOutputFiles();
-    }
+  private handleSetDefaultOutputFiles(): void {
+    /* Output order is derived from input files or agent defaults at execution time. */
   }
 
   private handleAddMediaFile(
@@ -893,7 +881,7 @@ export class MainApp extends MainAppBase {
         attachTeXCount: state.attachTeXCount,
         attachDiagnostics: state.attachDiagnostics,
       });
-      this.outputFilesActive.set(state.outputFilesActive);
+      this.outputFilesActive.set(false);
       this.latexdiffsVisible.set(state.latexdiffsVisible);
 
       this.restoreFileArrays(state);
@@ -959,7 +947,7 @@ export class MainApp extends MainAppBase {
         });
       }
       if (defaults.outputFilesActive !== undefined) {
-        this.outputFilesActive.set(defaults.outputFilesActive);
+        this.outputFilesActive.set(false);
       }
     }
     this.saveState();
@@ -980,35 +968,9 @@ export class MainApp extends MainAppBase {
       [listId]: visible,
     });
     if (listId === ELEMENT_IDS.OUTPUT_FILES) {
-      this.outputFilesActive.set(visible);
-      if (visible && this.multiFiles.get().outputFiles.length === 0) {
-        this.initializeOutputFiles();
-      }
+      this.outputFilesActive.set(false);
     }
     this.saveState();
-  }
-
-  private initializeOutputFiles(): void {
-    const primaryInput = this.multiFiles.get().inputFiles[0];
-    if (!primaryInput) return;
-
-    const initialFiles = this.getInitialOutputFiles();
-    this.multiFiles.set({
-      ...this.multiFiles.get(),
-      outputFiles: initialFiles,
-    });
-  }
-
-  private getInitialOutputFiles(): string[] {
-    const mf = this.multiFiles.get();
-    if (mf.outputFiles.length > 0) {
-      return mf.outputFiles;
-    }
-    if (this.defaultOutputFiles.length > 0) {
-      return this.defaultOutputFiles;
-    }
-    // Default: mirror the input list (so each input gets its own output slot).
-    return [...mf.inputFiles];
   }
 
   private handleRemoveFile(listId: keyof MultiFiles, file: string): void {
@@ -1278,12 +1240,11 @@ export class MainApp extends MainAppBase {
     };
 
     const mf = this.multiFiles.get();
-    const mv = this.multiFilesVisible.get();
     const multipleFileSelections: Record<string, string[] | boolean> = {};
     MULTIPLE_DOCUMENT_FILE_TYPES.forEach((type) => {
       const listId = `${type}Files` as keyof MultiFiles;
-      const isActive = mv[listId];
-      const files = isActive ? (mf[listId] ?? []) : [];
+      const files = type === 'output' ? [] : (mf[listId] ?? []);
+      const isActive = type !== 'output' && files.length > 0;
       multipleFileSelections[listId] = files;
       multipleFileSelections[`${listId}Active`] = isActive;
     });
@@ -1343,8 +1304,9 @@ export class MainApp extends MainAppBase {
       return;
     }
 
-    const outputFiles = this.multiFiles.get().outputFiles ?? [];
-    const useMultiple = this.outputFilesActive.get() && outputFiles.length > 0;
+    const inputFiles = this.multiFiles.get().inputFiles.filter(Boolean);
+    const outputFiles = inputFiles.length > 1 ? inputFiles : [];
+    const useMultiple = outputFiles.length > 0;
     const command = this.getPackCleanCommand(action, useMultiple);
 
     postMessage(command, {
@@ -1359,7 +1321,7 @@ export class MainApp extends MainAppBase {
 
     const actionLabel = capitalize(action);
     const summary = useMultiple
-      ? `${actionLabel}ing multiple files: ${[primaryInput, ...outputFiles].join(', ')}`
+      ? `${actionLabel}ing multiple files: ${outputFiles.join(', ')}`
       : `${actionLabel}ing single file: ${primaryInput}`;
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, { text: summary });
   }
@@ -1954,14 +1916,6 @@ export class MainApp extends MainAppBase {
                         ></file-select-group>
                       `,
                     )}
-                    <output-files-section
-                      @toggle-list=${this.handleComponentToggleList}
-                      @empty-files=${this.handleComponentEmptyFiles}
-                      @select-multiple-files=${this
-                        .handleComponentSelectMultipleFiles}
-                      @remove-file=${this.handleComponentRemoveFile}
-                      @files-reordered=${this.handleComponentFilesReordered}
-                    ></output-files-section>
                   </div>
                 </wa-details>
               `}

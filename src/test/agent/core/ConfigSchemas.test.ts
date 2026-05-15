@@ -5,6 +5,7 @@ import { strict as assert } from 'assert';
 
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import { MainViewPersistedStateSchema } from '@shared/schemas/mainView';
 import { ToolConfigSchema } from '@shared/schemas/toolConfig';
 
 describe('ToolConfigSchema', () => {
@@ -54,5 +55,33 @@ describe('AgentConfigSchema', () => {
     const parsed = AgentConfigSchema.parse({});
 
     assert.strictEqual(parsed.agentCategory, AgentCategory.Workflow);
+  });
+
+  it('migrates legacy single file slots into canonical file lists', () => {
+    const parsed = AgentConfigSchema.parse({
+      inputFile: 'main.tex',
+      inputFiles: ['chapter.tex'],
+      contextFile: 'refs.bib',
+      mediaFile: 'figure.png',
+    });
+
+    assert.deepStrictEqual(parsed.inputFiles, ['main.tex', 'chapter.tex']);
+    assert.deepStrictEqual(parsed.contextFiles, ['refs.bib']);
+    assert.deepStrictEqual(parsed.mediaFiles, ['figure.png']);
+  });
+
+  it('shows legacy main-view file lists after migration', () => {
+    const parsed = MainViewPersistedStateSchema.parse({
+      inputFile: 'main.tex',
+      referenceFile: 'refs.bib',
+      mediaFile: 'figure.png',
+    });
+
+    assert.deepStrictEqual(parsed.inputFiles, ['main.tex']);
+    assert.deepStrictEqual(parsed.contextFiles, ['refs.bib']);
+    assert.deepStrictEqual(parsed.mediaFiles, ['figure.png']);
+    assert.strictEqual(parsed.inputFilesVisible, true);
+    assert.strictEqual(parsed.contextFilesVisible, true);
+    assert.strictEqual(parsed.mediaFilesVisible, true);
   });
 });

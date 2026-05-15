@@ -45,7 +45,7 @@ describe('OUTPUT_FILES_ORDER prompt variable', () => {
     expect(agentConfig.outputFiles).toEqual(['slides.tex']);
   });
 
-  it('derives output order from inputs when the prompt unconditionally needs it', () => {
+  it('uses input files when no explicit output list is provided', () => {
     const vars = getOutputFilesOrder(
       {
         inputFiles: ['main.tex', 'appendix.tex'],
@@ -62,7 +62,7 @@ describe('OUTPUT_FILES_ORDER prompt variable', () => {
     expect(vars.OUTPUT_FILES_ORDER).toEqual(['main.tex', 'appendix.tex']);
   });
 
-  it('does not derive output order for prompts that still branch on it', () => {
+  it('keeps input files available for prompts that branch on output order', () => {
     const vars = getOutputFilesOrder(
       {
         inputFiles: ['main.tex'],
@@ -76,6 +76,6 @@ describe('OUTPUT_FILES_ORDER prompt variable', () => {
       },
     );
 
-    expect(vars.OUTPUT_FILES_ORDER).toBeUndefined();
+    expect(vars.OUTPUT_FILES_ORDER).toEqual(['main.tex']);
   });
 });

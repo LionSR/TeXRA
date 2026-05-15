@@ -28,8 +28,6 @@ import type { z } from 'zod';
 export type MainViewExecuteMessage = Omit<AgentConfigInput, 'mediaFiles'> & {
   /** UI toggle indicating tool-use vs workflow agent. */
   isToolUseAgent?: boolean;
-  /** UI toggle for multiple outputs mode. */
-  outputFilesActive?: boolean;
   /** Media files may contain nulls from UI and are filtered during processing. */
   mediaFiles?: (string | null)[];
 } & z.input<typeof ToolConfigSchema>;
@@ -64,7 +62,6 @@ export function prepareMainViewExecutionRequest(
     };
   }
 
-  const outputFiles: string[] = isToolUse ? [] : (message.outputFiles ?? []);
   const toolConfigResult = isToolUse
     ? { success: true as const, data: DEFAULT_TOOL_CONFIG }
     : ToolConfigSchema.safeParse(message);
@@ -81,7 +78,7 @@ export function prepareMainViewExecutionRequest(
     config: {
       ...message,
       agentCategory: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
-      outputFiles,
+      outputFiles: [],
       toolConfig: toolConfigResult.data,
       mediaFiles: (message.mediaFiles ?? [])
         .map(mapMediaFile)
