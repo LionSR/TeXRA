@@ -63,7 +63,7 @@ prompts:
       Create a complete, self-contained LaTeX Beamer presentation that effectively communicates the paper's key findings in 10-15 slides. The presentation should be professional, condensed, and highlight the main aspects of the research paper. Use the following format:
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      <document name="{{ INPUT_FILES[0] }}">
       \documentclass{beamer}
 
       \usetheme{metropolis}
@@ -120,7 +120,7 @@ prompts:
       Output the complete, self-contained revised version based on the previous version, maintaining its professional quality and technical accuracy. Use the following format:
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      <document name="{{ INPUT_FILES[0] }}">
       % Complete revised LaTeX Beamer presentation here
       </document>
       </documents>

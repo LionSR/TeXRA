@@ -38,8 +38,8 @@ prompts:
     - {{ ALL_INPUTS }}: XML list of ALL input files (canonical for workflow agents)
     - {{ ALL_CONTEXTS }}: XML list of context files (bibliographies, reference papers, style/macro definitions like .sty/.cls)
     - {{ INSTRUCTION }}: the user's free-text instruction for this run
-    - {{ INPUT_FILES }}: ordered list of selected input filenames
-    - {{ OUTPUT_FILES }}: ordered list of declared generated filenames, populated only for agents with settings.defaultOutputFiles
+    - {{ INPUT_FILES }}: ordered list of input filenames; use these as output names for editing agents
+    - {{ OUTPUT_FILES }}: declared generated output filenames, only for agents with defaultOutputFiles
     Use these variables in the prompts section. They are substituted at runtime.
 
   userRequest: |

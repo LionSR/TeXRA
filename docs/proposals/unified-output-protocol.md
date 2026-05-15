@@ -33,7 +33,7 @@ Always. N=1 produces one `<document>` child. `documentTag`/`endTag` become proto
 
 ### 2. One input shape
 
-Inputs are always a list of `{name, content}`. `OUTPUT_FILES_ORDER` is always set; for N=1 it's a one-element array.
+Inputs are always a list of `{name, content}`. `INPUT_FILES` is always set; for N=1 it's a one-element array.
 
 ### 3. One prompt body
 

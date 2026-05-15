@@ -51,13 +51,14 @@ const AGENT_RUNTIME_TOKENS = [
   'INSTRUCTION',
   'INPUT_FILE',
   'INPUT_CONTENT',
+  'INPUT_FILES',
   'ALL_INPUTS',
   'ALL_AUXILIARYS',
   'ALL_REFERENCES',
   'ADDITIONAL_INPUTS',
   'REFERENCE_CONTENT',
   'AUXILIARY_CONTENT',
-  'OUTPUT_FILES_ORDER',
+  'OUTPUT_FILES',
 ] as const;
 
 // Frozen so the shared module-level instance can't be mutated even if a

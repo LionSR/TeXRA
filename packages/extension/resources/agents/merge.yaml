@@ -14,7 +14,7 @@ prompts:
     You are an expert LaTeX editor tasked with merging changes from an edited version of a \LaTeX document back into the original document. Your goal is to produce an accurate and complete representation of the edited document, incorporating all changes while maintaining the original structure and formatting.
 
   userPrefix: |
-    {% if OUTPUT_FILES_ORDER[1] %}
+    {% if INPUT_FILES[1] %}
     You are tasked with creating full versions of multiple edited \LaTeX documents by combining information from pairs of sources: each original \LaTeX document and its corresponding edited version. This task is necessary for enabling accurate comparison between versions using tools like latexdiff. Your goal is to produce complete, updated versions of each document that incorporate all changes while maintaining the original structure.
 
     Here are the original \LaTeX documents:
@@ -37,16 +37,16 @@ prompts:
     {% endif %}
 
   userRequest: |
-    Follow these steps to create and verify the full version{% if OUTPUT_FILES_ORDER[1] %}s{% endif %} of the edited document{% if OUTPUT_FILES_ORDER[1] %}s{% endif %}:
+    Follow these steps to create and verify the full version{% if INPUT_FILES[1] %}s{% endif %} of the edited document{% if INPUT_FILES[1] %}s{% endif %}:
 
     STEP 1 - MERGE:
-    1. Carefully read through both the original and edited versions of {% if OUTPUT_FILES_ORDER[1] %}each {% endif %}document.
+    1. Carefully read through both the original and edited versions of {% if INPUT_FILES[1] %}each {% endif %}document.
     2. For parts indicated as ``unchanged'' or ``previous parts remain unchanged'' in the edited version, copy the corresponding sections from the original document verbatim.
     3. Where specific edits or additions are shown in the edited version, incorporate these changes exactly as they appear, replacing the corresponding parts in the original document.
     4. Pay close attention to any structural elements like section headers, equations, figures, or tables. Ensure that these are maintained in their correct positions and formats.
     5. Maintain all LaTeX formatting, including commands, environments, and any custom macros or definitions present in the original document.
     6. If there are any ambiguities or unclear instructions in the edited version, default to the original document's content for those sections.
-    {% if OUTPUT_FILES_ORDER[1] %}
+    {% if INPUT_FILES[1] %}
     7. Process each document pair independently - changes in one document should not affect another.
     {% endif %}
 
@@ -55,15 +55,15 @@ prompts:
     - Sections marked as ``unchanged'' in the edited version match the original document verbatim.
     - The structure and formatting of the original document are maintained.
     - No parts of the document are accidentally omitted or duplicated.
-    - {% if OUTPUT_FILES_ORDER[1] %}Each output is{% else %}The output is{% endif %} a complete \LaTeX document, including the preamble, document class declarations, and all content up to \end{document}.
+    - {% if INPUT_FILES[1] %}Each output is{% else %}The output is{% endif %} a complete \LaTeX document, including the preamble, document class declarations, and all content up to \end{document}.
 
-    Provide your output as complete \LaTeX document{% if OUTPUT_FILES_ORDER[1] %}s{% endif %}. Accuracy is paramount - even small discrepancies can affect diff tools.
+    Provide your output as complete \LaTeX document{% if INPUT_FILES[1] %}s{% endif %}. Accuracy is paramount - even small discrepancies can affect diff tools.
 
-    {% if OUTPUT_FILES_ORDER %}
-    The output files should be in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
+    {% if INPUT_FILES %}
+    The output files should be in the following order: {{ INPUT_FILES | join(', ') }}.
 
     <documents>
-    {% for output in OUTPUT_FILES_ORDER %}
+    {% for output in INPUT_FILES %}
     <document name="{{ output }}">
     % Merged LaTeX document {{ loop.index }} here
     </document>

@@ -59,12 +59,12 @@ Workflow agent prompts receive:
 - `{{ ALL_CONTEXTS }}` — XML list of context files (.bib/.bbl, reference papers, .sty/.cls)
 - `{{ LIST_OF_ALL_CONTEXTS }}` — comma-separated list of context file paths
 - `{{ INSTRUCTION }}` — the user's free-text instruction for this run
-- `{{ INPUT_FILES }}` — ordered list of selected input filenames. Editing
-  agents should emit one output document per entry, using the same filenames.
-  Use `{{ INPUT_FILES | join(", ") }}` for a human-readable list.
+- `{{ INPUT_FILES }}` — ordered list of input filenames. Editing agents should
+  output one document for each input, preserving the same names and order. Use
+  `{{ INPUT_FILES | join(", ") }}` for a human-readable list.
 - `{{ OUTPUT_FILES }}` — ordered list of declared generated filenames. This is
-  only populated for agents that set `settings.defaultOutputFiles`, such as OCR
-  or transcription agents.
+  only populated when the agent has explicit `outputFiles` or
+  `settings.defaultOutputFiles`.
 
 Both categories support `{% if IS_ANTHROPIC_MODEL %}...{% endif %}` blocks
 for model-specific instructions.
