@@ -14,10 +14,6 @@ import {
   type StreamTabInfo,
 } from '@shared/schemas';
 import {
-  renderProgressBadgeContent,
-  getProgressBadgeTitle,
-} from '../formatters/progressBadgeFormatter';
-import {
   designTokens,
   animationStyles,
   commonViewStyles,
@@ -33,6 +29,10 @@ import './WorktreeChip';
 import { formatRelativeTime } from '@shared/utils/string';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import {
+  renderProgressBadgeContent,
+  getProgressBadgeTitle,
+} from '../formatters/progressBadgeFormatter';
 import { layoutStyles } from '../styles/logStyles';
 import {
   ACTIVE_STREAM_STATUSES,
