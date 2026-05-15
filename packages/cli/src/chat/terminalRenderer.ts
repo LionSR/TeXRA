@@ -1,3 +1,6 @@
+// Third-party imports
+import pc from 'picocolors';
+
 // Local imports - CLI runtime
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
@@ -17,13 +20,12 @@ type TerminalTone = 'muted' | 'success' | 'warning' | 'error' | 'accent';
 
 export type ChatToolDisplayMode = 'grouped' | 'minimal' | 'hidden';
 
-const ANSI_RESET = '\u001B[0m';
-const ANSI_TONES: Record<TerminalTone, string> = {
-  muted: '\u001B[2m',
-  success: '\u001B[32m',
-  warning: '\u001B[33m',
-  error: '\u001B[31m',
-  accent: '\u001B[36m',
+const TONE_PAINT: Record<TerminalTone, (input: string) => string> = {
+  muted: pc.dim,
+  success: pc.green,
+  warning: pc.yellow,
+  error: pc.red,
+  accent: pc.cyan,
 };
 
 function basename(path: string): string {
@@ -553,6 +555,6 @@ Keys:
       writeTextStderr(message);
       return;
     }
-    writeTextStderr(`${ANSI_TONES[tone]}${message}${ANSI_RESET}`);
+    writeTextStderr(TONE_PAINT[tone](message));
   }
 }

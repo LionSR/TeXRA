@@ -1,31 +1,30 @@
-// Standard library imports
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-// Local imports - agent and model surfaces
+import { defineCommand, runCommand, showUsage, type CommandDef } from 'citty';
+
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import {
   DEFAULT_AGENT_MODEL,
   type AgentConfigPayload,
 } from '@agent/core/AgentConfig';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
+import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { isOAuthProvider } from '@auth/sharedConfig';
 import { toErrorMessage } from '@common/errors/errorMessage';
+import { isNonEmptyString } from '@utils/core/stringCore';
 
-// Local imports - CLI runtime
 import {
-  applyCliGlobalArgs,
+  buildCliContext,
   CliUsageError,
-  flagValue,
-  resolveCliContext,
+  readCliAmbientState,
+  readCliArgv,
+  readCliVersion,
   type CliContext,
+  type CliOutputFormat,
 } from '../runtime/cliContext';
-import {
-  CLI_BOOLEAN_FLAGS,
-  GLOBAL_FLAGS_WITH_VALUE,
-  RUN_FLAGS_WITH_VALUE,
-  cliFlagName,
-} from '../runtime/cliFlags';
+import type { CliApprovalPolicy } from '../runtime/approvalPolicy';
 import {
   hasCliApprovalDenied,
   installCliApprovalHandlers,
@@ -39,117 +38,94 @@ import {
   signInCliSupabase,
   signOutCliSupabase,
 } from '../runtime/supabaseAuth';
-import {
-  loginArgParseErrorMessage,
-  parseLoginArgs,
-  type ParsedLoginArgs,
-} from '../runtime/loginArgs';
+import { pickGlobalArgs, type ParsedGlobalArgs } from '../runtime/globalArgs';
 import {
   writeNdjsonStdout,
   writeTextStderr,
   writeTextStdout,
 } from '../runtime/logSinks';
 
-interface CliResult {
-  exitCode: number;
+// One CLI invocation per process — module-level pending exit code is the
+// simplest way to surface handler exit codes back to `bin/texra.ts` after
+// `runCommand` returns. citty's `ctx.data` would also work but is `any`-typed.
+let pendingExitCode: number = CliExitCode.Success;
+
+function setExitCode(code: number): void {
+  pendingExitCode = code;
 }
 
-function printHelp(): void {
-  writeTextStdout(`TeXRA CLI
-
-Usage:
-  texra --help
-  texra [--cwd <dir>] [--output-format text|json|ndjson] [--approval-policy <policy>] <command>
-  texra version
-  texra login [github|google] [--provider github|google] [--no-browser]
-  texra logout
-  texra auth status
-  texra agents list
-  texra models list
-  texra run <workflow-agent> [options]
-  texra chat [options]
-
-Run options:
-  --instruction <text>    Instruction passed to the workflow agent
-
-Chat options:
-  --agent <name>          Tool-use agent for the chat session
-  --model, -m <name>      Model for the chat session
-  --tool-display <mode>   Tool/progress rows: grouped, minimal, or hidden
-
-Login options:
-  --provider <name>       OAuth provider: github or google
-  --no-browser            Print the sign-in URL instead of opening a browser
-
-Use texra run for workflow agents and texra chat for an interactive tool-use session.`);
+async function contextFromArgs(args: ParsedGlobalArgs): Promise<CliContext> {
+  return buildCliContext({ globalArgs: pickGlobalArgs(args) });
 }
 
-function splitRunArgs(args: readonly string[]): {
-  agent: string | undefined;
-  optionArgs: readonly string[];
-  unknownFlag?: string;
-} {
-  const optionArgs: string[] = [];
-  let index = 0;
+function optString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
 
-  while (index < args.length) {
-    const arg = args[index];
-    if (arg == null) break;
-    if (!arg.startsWith('-')) {
-      return {
-        agent: arg,
-        optionArgs: [...optionArgs, ...args.slice(index + 1)],
-      };
-    }
-
-    optionArgs.push(arg);
-    const value = args[index + 1];
-    const flagName = cliFlagName(arg);
-    const flagTakesValue =
-      RUN_FLAGS_WITH_VALUE.has(flagName) ||
-      GLOBAL_FLAGS_WITH_VALUE.has(flagName);
-    if (!flagTakesValue) {
-      if (CLI_BOOLEAN_FLAGS.has(flagName)) {
-        index += 1;
-        continue;
-      }
-      return { agent: undefined, optionArgs, unknownFlag: arg };
-    }
-    if (arg.includes('=')) {
-      index += 1;
-      continue;
-    }
-    if (value != null) {
-      optionArgs.push(value);
-      index += 2;
-      continue;
-    }
-    index += 1;
-  }
-
-  return {
-    agent: undefined,
-    optionArgs,
+/**
+ * Single source of truth for the four global flags accepted by every TeXRA
+ * subcommand. `as const` + spread would lose literal-type narrowing (citty's
+ * `ArgsDef` rejects `readonly string[]`), so each enum's `options` is
+ * explicitly typed as a mutable literal tuple — assignable to `string[]` and
+ * narrow enough for `defineCommand<const T>` to expose the per-option literal
+ * on `ctx.args[...]`. Adding a new global flag is a one-line change here.
+ */
+const GLOBAL_ARGS: {
+  print: { type: 'boolean'; alias: 'p' };
+  cwd: { type: 'string' };
+  'output-format': {
+    type: 'enum';
+    options: CliOutputFormat[];
+    default: 'text';
   };
-}
+  'approval-policy': {
+    type: 'enum';
+    options: CliApprovalPolicy[];
+    default: 'never';
+  };
+} = {
+  print: { type: 'boolean', alias: 'p' },
+  cwd: { type: 'string' },
+  'output-format': {
+    type: 'enum',
+    options: ['text', 'json', 'ndjson'],
+    default: 'text',
+  },
+  'approval-policy': {
+    type: 'enum',
+    options: ['never', 'ask', 'yolo'],
+    default: 'never',
+  },
+};
 
-async function listAgents(context: CliContext): Promise<CliResult> {
+const agentsListCommand = defineCommand({
+  meta: { name: 'list', description: 'List available agents' },
+  args: {
+    ...GLOBAL_ARGS,
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
+    setExitCode(await listAgents(context));
+  },
+});
+
+async function listAgents(context: CliContext): Promise<number> {
   await initCliPlatform({ ...context, quietLogs: true });
   await loadAgents();
   const agents = [
     ...getVisibleAgents('workflow').map((agent) => ({
       ...agent,
-      category: 'workflow' as const,
+      category: AgentCategory.Workflow,
     })),
     ...getVisibleAgents('toolUse').map((agent) => ({
       ...agent,
-      category: 'toolUse' as const,
+      category: AgentCategory.ToolUse,
     })),
   ];
 
   if (context.outputFormat === 'json') {
     writeTextStdout(JSON.stringify(agents, null, 2));
-    return { exitCode: 0 };
+    return CliExitCode.Success;
   }
 
   if (context.outputFormat === 'ndjson') {
@@ -157,7 +133,7 @@ async function listAgents(context: CliContext): Promise<CliResult> {
     for (const agent of agents) {
       writeNdjsonStdout({ kind: 'agent', ts, agent });
     }
-    return { exitCode: 0 };
+    return CliExitCode.Success;
   }
 
   for (const agent of agents) {
@@ -165,10 +141,26 @@ async function listAgents(context: CliContext): Promise<CliResult> {
       `${agent.category}\t${agent.name}\t${agent.description ?? ''}`,
     );
   }
-  return { exitCode: 0 };
+  return CliExitCode.Success;
 }
 
-async function listModels(context: CliContext): Promise<CliResult> {
+const agentsCommand = defineCommand({
+  meta: { name: 'agents', description: 'Inspect TeXRA agents' },
+  subCommands: { list: agentsListCommand },
+});
+
+const modelsListCommand = defineCommand({
+  meta: { name: 'list', description: 'List available models' },
+  args: {
+    ...GLOBAL_ARGS,
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
+    setExitCode(await listModels(context));
+  },
+});
+
+async function listModels(context: CliContext): Promise<number> {
   await initCliPlatform({ ...context, quietLogs: true });
   const modelAccess = await getCliModelAccessList();
 
@@ -180,7 +172,7 @@ async function listModels(context: CliContext): Promise<CliResult> {
         2,
       ),
     );
-    return { exitCode: 0 };
+    return CliExitCode.Success;
   }
 
   if (context.outputFormat === 'ndjson') {
@@ -188,52 +180,106 @@ async function listModels(context: CliContext): Promise<CliResult> {
     for (const { model } of modelAccess) {
       writeNdjsonStdout({ kind: 'model', ts, model });
     }
-    return { exitCode: 0 };
+    return CliExitCode.Success;
   }
 
   for (const { model, status } of modelAccess) {
     writeTextStdout(`${model.value}\t${model.label}\t${status}`);
   }
-  return { exitCode: 0 };
+  return CliExitCode.Success;
 }
 
-async function login(context: CliContext): Promise<CliResult> {
-  const args = context.argv.slice(1);
-  const { globalArgs, provider, noBrowser } = parseRootLoginArgs(args);
-  const loginContext = applyCliGlobalArgs(context, globalArgs);
-  if (!isOAuthProvider(provider)) {
-    writeTextStderr(
-      `Unsupported provider: ${provider}. Expected github or google.`,
-    );
-    return { exitCode: CliExitCode.Usage };
-  }
+const modelsCommand = defineCommand({
+  meta: { name: 'models', description: 'Inspect TeXRA models' },
+  subCommands: { list: modelsListCommand },
+});
 
-  await initCliPlatform({ ...loginContext, quietLogs: true });
-  if (loginContext.outputFormat === 'text' && !noBrowser) {
-    writeTextStdout(`Opening browser for TeXRA ${provider} sign-in...`);
+const versionCommand = defineCommand({
+  meta: { name: 'version', description: 'Print the CLI version' },
+  async run() {
+    writeTextStdout(await readCliVersion());
+    setExitCode(CliExitCode.Success);
+  },
+});
+
+const loginCommand = defineCommand({
+  meta: { name: 'login', description: 'Sign in to TeXRA for included access' },
+  args: {
+    ...GLOBAL_ARGS,
+    provider: {
+      type: 'string',
+      description:
+        'OAuth provider: github or google (alternative to positional)',
+    },
+    providerArg: {
+      type: 'positional',
+      required: false,
+      description: 'OAuth provider: github or google',
+    },
+    'no-browser': {
+      type: 'boolean',
+      description: 'Print the sign-in URL instead of opening a browser',
+    },
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
+    const positional = optString(ctx.args.providerArg);
+    const flag = optString(ctx.args.provider);
+    const provider = resolveLoginProvider(positional, flag);
+    setExitCode(
+      await runLogin(context, {
+        provider,
+        noBrowser: ctx.args['no-browser'] === true,
+      }),
+    );
+  },
+});
+
+export function resolveLoginProvider(
+  positional: string | undefined,
+  flag: string | undefined,
+): string {
+  if (isNonEmptyString(flag)) return flag.trim();
+  if (isNonEmptyString(positional)) return positional.trim();
+  return DEFAULT_OAUTH_PROVIDER;
+}
+
+interface LoginInit {
+  readonly provider: string;
+  readonly noBrowser: boolean;
+}
+
+async function runLogin(context: CliContext, init: LoginInit): Promise<number> {
+  if (!isOAuthProvider(init.provider)) {
+    writeTextStderr(
+      `Unsupported provider: ${init.provider}. Expected github or google.`,
+    );
+    return CliExitCode.Usage;
+  }
+  await initCliPlatform({ ...context, quietLogs: true });
+  if (context.outputFormat === 'text' && !init.noBrowser) {
+    writeTextStdout(`Opening browser for TeXRA ${init.provider} sign-in...`);
   }
   let session: Awaited<ReturnType<typeof signInCliSupabase>>;
   try {
     session = await signInCliSupabase({
-      provider,
-      openBrowser: !noBrowser,
+      provider: init.provider,
+      openBrowser: !init.noBrowser,
       manualBrowserHint: 'texra login --no-browser',
       onAuthUrl: (url) => {
-        if (noBrowser) {
+        if (init.noBrowser) {
           const writeAuthUrl =
-            loginContext.outputFormat === 'text'
-              ? writeTextStdout
-              : writeTextStderr;
+            context.outputFormat === 'text' ? writeTextStdout : writeTextStderr;
           writeAuthUrl(`Open this URL to sign in:\n${url}`);
         }
       },
     });
   } catch (error) {
     writeTextStderr(toErrorMessage(error));
-    return { exitCode: CliExitCode.ModelOrNetworkError };
+    return CliExitCode.ModelOrNetworkError;
   }
 
-  if (loginContext.outputFormat === 'json') {
+  if (context.outputFormat === 'json') {
     writeTextStdout(
       JSON.stringify(
         {
@@ -245,7 +291,7 @@ async function login(context: CliContext): Promise<CliResult> {
         2,
       ),
     );
-  } else if (loginContext.outputFormat === 'ndjson') {
+  } else if (context.outputFormat === 'ndjson') {
     writeNdjsonStdout({
       kind: 'auth',
       ts: new Date().toISOString(),
@@ -256,93 +302,130 @@ async function login(context: CliContext): Promise<CliResult> {
   } else {
     writeTextStdout(`Signed in as ${session.account.label}.`);
   }
-  return { exitCode: CliExitCode.Success };
+  return CliExitCode.Success;
 }
 
-function parseRootLoginArgs(args: readonly string[]): ParsedLoginArgs {
-  const parsed = parseLoginArgs(args, { allowGlobalArgs: true });
-  if (parsed.error) {
-    throw new CliUsageError(loginArgParseErrorMessage(parsed.error));
-  }
-  return parsed;
-}
+const logoutCommand = defineCommand({
+  meta: { name: 'logout', description: 'Sign out of TeXRA' },
+  args: {
+    ...GLOBAL_ARGS,
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
+    await initCliPlatform({ ...context, quietLogs: true });
+    try {
+      await signOutCliSupabase();
+    } catch (error) {
+      writeTextStderr(toErrorMessage(error));
+      setExitCode(CliExitCode.ModelOrNetworkError);
+      return;
+    }
 
-function parseAuthGlobalArgs(
-  args: readonly string[],
-  commandName: string,
-): readonly string[] {
-  const parsed = parseLoginArgs(args, {
-    allowGlobalArgs: true,
-    allowLoginOptions: false,
-  });
-  if (parsed.error) {
-    throw new CliUsageError(
-      loginArgParseErrorMessage(parsed.error, commandName),
+    if (context.outputFormat === 'json') {
+      writeTextStdout(JSON.stringify({ authenticated: false }, null, 2));
+    } else if (context.outputFormat === 'ndjson') {
+      writeNdjsonStdout({
+        kind: 'auth',
+        ts: new Date().toISOString(),
+        authenticated: false,
+      });
+    } else {
+      writeTextStdout('Signed out.');
+    }
+    setExitCode(CliExitCode.Success);
+  },
+});
+
+const authStatusCommand = defineCommand({
+  meta: { name: 'status', description: 'Show TeXRA sign-in status' },
+  args: {
+    ...GLOBAL_ARGS,
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
+    let profile: Awaited<ReturnType<typeof getCliAuthProfile>>;
+    try {
+      await initCliPlatform({ ...context, quietLogs: true });
+      profile = await getCliAuthProfile();
+    } catch (error) {
+      writeTextStderr(toErrorMessage(error));
+      setExitCode(CliExitCode.ModelOrNetworkError);
+      return;
+    }
+
+    if (context.outputFormat === 'json') {
+      writeTextStdout(JSON.stringify(profile, null, 2));
+    } else if (context.outputFormat === 'ndjson') {
+      writeNdjsonStdout({
+        kind: 'auth-status',
+        ts: new Date().toISOString(),
+        ...profile,
+      });
+    } else if (profile.authenticated) {
+      writeTextStdout(
+        `Signed in as ${profile.accountLabel ?? 'unknown'} (${profile.tier ?? 'unknown'}).`,
+      );
+    } else {
+      writeTextStdout('Not signed in.');
+    }
+    setExitCode(CliExitCode.Success);
+  },
+});
+
+const authCommand = defineCommand({
+  meta: { name: 'auth', description: 'Authentication commands' },
+  subCommands: { status: authStatusCommand },
+});
+
+const runWorkflowCommand = defineCommand({
+  meta: { name: 'run', description: 'Run a workflow agent' },
+  args: {
+    ...GLOBAL_ARGS,
+    agent: {
+      type: 'positional',
+      required: true,
+      description: 'Workflow agent name',
+    },
+    input: {
+      type: 'string',
+      alias: 'i',
+      required: true,
+      description: 'Input file passed to the workflow agent',
+    },
+    output: { type: 'string', description: 'Output file path' },
+    model: {
+      type: 'string',
+      alias: 'm',
+      description: 'Model for the agent',
+    },
+    instruction: {
+      type: 'string',
+      description: 'Instruction passed to the workflow agent',
+    },
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
+    setExitCode(
+      await runWorkflowAgent(context, {
+        agent: ctx.args.agent,
+        input: ctx.args.input,
+        output: optString(ctx.args.output),
+        model: optString(ctx.args.model),
+        instruction: optString(ctx.args.instruction) ?? '',
+      }),
     );
-  }
-  return parsed.globalArgs;
-}
-
-async function logout(context: CliContext): Promise<CliResult> {
-  const logoutContext = applyCliGlobalArgs(
-    context,
-    parseAuthGlobalArgs(context.argv.slice(1), 'logout'),
-  );
-  await initCliPlatform({ ...logoutContext, quietLogs: true });
-  try {
-    await signOutCliSupabase();
-  } catch (error) {
-    writeTextStderr(toErrorMessage(error));
-    return { exitCode: CliExitCode.ModelOrNetworkError };
-  }
-
-  if (logoutContext.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify({ authenticated: false }, null, 2));
-  } else if (logoutContext.outputFormat === 'ndjson') {
-    writeNdjsonStdout({
-      kind: 'auth',
-      ts: new Date().toISOString(),
-      authenticated: false,
-    });
-  } else {
-    writeTextStdout('Signed out.');
-  }
-  return { exitCode: CliExitCode.Success };
-}
-
-async function authStatus(context: CliContext): Promise<CliResult> {
-  const statusContext = applyCliGlobalArgs(
-    context,
-    parseAuthGlobalArgs(context.argv.slice(2), 'auth status'),
-  );
-  let profile: Awaited<ReturnType<typeof getCliAuthProfile>>;
-  try {
-    await initCliPlatform({ ...statusContext, quietLogs: true });
-    profile = await getCliAuthProfile();
-  } catch (error) {
-    writeTextStderr(toErrorMessage(error));
-    return { exitCode: CliExitCode.ModelOrNetworkError };
-  }
-
-  if (statusContext.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(profile, null, 2));
-  } else if (statusContext.outputFormat === 'ndjson') {
-    writeNdjsonStdout({
-      kind: 'auth-status',
-      ts: new Date().toISOString(),
-      ...profile,
-    });
-  } else if (profile.authenticated) {
-    writeTextStdout(
-      `Signed in as ${profile.accountLabel ?? 'unknown'} (${profile.tier ?? 'unknown'}).`,
-    );
-  } else {
-    writeTextStdout('Not signed in.');
-  }
-  return { exitCode: CliExitCode.Success };
-}
+  },
+});
 
 type ExecuteAgentResult = Awaited<ReturnType<typeof executeAgent>>;
+
+interface WorkflowRunInit {
+  readonly agent: string;
+  readonly input: string;
+  readonly output?: string;
+  readonly model?: string;
+  readonly instruction: string;
+}
 
 async function resolveWorkflowOutput(
   outputFile: string | undefined,
@@ -380,26 +463,12 @@ async function resolveWorkflowOutput(
 }
 
 async function runWorkflowAgent(
-  agent: string | undefined,
-  args: readonly string[],
   context: CliContext,
-): Promise<CliResult> {
-  if (!agent || agent.startsWith('-')) {
-    writeTextStderr(
-      'Usage: texra run <workflow-agent> --input <file> [--output <file>] [--model <model>]',
-    );
-    return { exitCode: CliExitCode.Usage };
-  }
-
-  const inputFile = flagValue(args, '--input', '-i');
-  if (!inputFile) {
-    writeTextStderr('Missing required flag: --input <file>');
-    return { exitCode: CliExitCode.Usage };
-  }
-
-  const model = flagValue(args, '--model', '-m')?.trim() || DEFAULT_AGENT_MODEL;
-  const runContext = {
-    ...applyCliGlobalArgs(context, args),
+  init: WorkflowRunInit,
+): Promise<number> {
+  const model = init.model?.trim() || DEFAULT_AGENT_MODEL;
+  const runContext: CliContext = {
+    ...context,
     helperModel: model,
     quietLogs: true,
   };
@@ -407,17 +476,16 @@ async function runWorkflowAgent(
   installCliApprovalHandlers(runContext);
   await loadAgents();
 
-  const outputFile = flagValue(args, '--output');
   const modelOutputFile =
-    outputFile && path.isAbsolute(outputFile)
-      ? path.basename(outputFile)
-      : outputFile;
+    init.output && path.isAbsolute(init.output)
+      ? path.basename(init.output)
+      : init.output;
   const config: AgentConfigPayload = {
-    agent,
+    agent: init.agent,
     model,
-    inputFile,
+    inputFile: init.input,
     outputFiles: modelOutputFile ? [modelOutputFile] : [],
-    instruction: flagValue(args, '--instruction') ?? '',
+    instruction: init.instruction,
     workingDirectory: runContext.cwd,
   };
 
@@ -430,7 +498,7 @@ async function runWorkflowAgent(
   }
 
   const { copiedOutput, displayResult } = await resolveWorkflowOutput(
-    outputFile,
+    init.output,
     result,
     runContext,
   );
@@ -455,77 +523,236 @@ async function runWorkflowAgent(
     writeTextStdout(result.status);
   }
 
-  if (result.status !== 'error') return { exitCode: CliExitCode.Success };
-  return {
-    exitCode: hasCliApprovalDenied(runContext)
-      ? CliExitCode.ApprovalDenied
-      : CliExitCode.AgentError,
-  };
+  if (result.status !== 'error') return CliExitCode.Success;
+  return hasCliApprovalDenied(runContext)
+    ? CliExitCode.ApprovalDenied
+    : CliExitCode.AgentError;
 }
 
-async function runCliResolved(argv?: readonly string[]): Promise<CliResult> {
-  const context = await resolveCliContext(argv);
-  const [command, subcommand] = context.argv;
-
-  if (!command || command === '--help' || command === '-h') {
-    printHelp();
-    return { exitCode: CliExitCode.Success };
-  }
-
-  if (command === 'version' || command === '--version' || command === '-v') {
-    writeTextStdout(context.version);
-    return { exitCode: CliExitCode.Success };
-  }
-
-  if (command === 'login') {
-    return login(context);
-  }
-
-  if (command === 'logout') {
-    return logout(context);
-  }
-
-  if (command === 'auth' && subcommand === 'status') {
-    return authStatus(context);
-  }
-
-  if (command === 'agents' && subcommand === 'list') {
-    return listAgents(context);
-  }
-
-  if (command === 'models' && subcommand === 'list') {
-    return listModels(context);
-  }
-
-  if (command === 'run') {
-    const { agent, optionArgs, unknownFlag } = splitRunArgs(
-      context.argv.slice(1),
-    );
-    if (unknownFlag) {
-      writeTextStderr(`Unknown run flag: ${unknownFlag}`);
-      return { exitCode: CliExitCode.Usage };
-    }
-    return runWorkflowAgent(agent, optionArgs, context);
-  }
-
-  if (command === 'chat') {
+const chatCommand = defineCommand({
+  meta: { name: 'chat', description: 'Interactive tool-use chat session' },
+  args: {
+    ...GLOBAL_ARGS,
+    agent: { type: 'string', description: 'Tool-use agent for the session' },
+    model: { type: 'string', alias: 'm', description: 'Model for the session' },
+    'tool-display': {
+      type: 'enum',
+      options: ['grouped', 'minimal', 'hidden'],
+      default: 'minimal',
+      description: 'Tool/progress rows: grouped, minimal, or hidden',
+    },
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
     const { runChat } = await import('../chat/runChat');
-    return runChat(context);
-  }
+    const result = await runChat(context, {
+      agentOverride: optString(ctx.args.agent),
+      modelOverride: optString(ctx.args.model),
+      toolDisplay: ctx.args['tool-display'],
+    });
+    setExitCode(result.exitCode);
+  },
+});
 
-  writeTextStderr(`Unknown command: ${command}`);
-  printHelp();
-  return { exitCode: CliExitCode.Usage };
+const helpCommand = defineCommand({
+  meta: { name: 'help', description: 'Show TeXRA CLI usage' },
+  async run() {
+    const { showUsage } = await import('citty');
+    await showUsage(rootCommand);
+  },
+});
+
+const rootCommand = defineCommand({
+  // Citty's `runMain` reads `meta.version` for `--version`/`-v`. We resolve
+  // lazily so the bundled binary picks up the version emitted by the build
+  // (see `readCliVersion` in cliContext.ts).
+  meta: async () => ({
+    name: 'texra',
+    description: 'TeXRA CLI — AI LaTeX research assistant',
+    version: await readCliVersion(),
+  }),
+  // Global flags are duplicated here so citty's `findSubCommandIndex` knows
+  // which leading flags take values (otherwise `texra --output-format ndjson
+  // agents list` mis-detects `ndjson` as the subcommand). The actual parsing
+  // happens on each subcommand; root only acts as a routing layer.
+  args: {
+    ...GLOBAL_ARGS,
+  },
+  subCommands: {
+    chat: chatCommand,
+    run: runWorkflowCommand,
+    agents: agentsCommand,
+    models: modelsCommand,
+    login: loginCommand,
+    logout: logoutCommand,
+    auth: authCommand,
+    version: versionCommand,
+    help: helpCommand,
+  },
+  // No subcommand on bare `texra`: dispatch to `chat` when both TTYs are
+  // interactive (per docs/prd/cli-tui-ink/10-architecture.md#entrypoint-default);
+  // fall through to the synthetic `help` subcommand otherwise.
+  default: () => {
+    const ambient = readCliAmbientState();
+    return ambient.stdinIsTty && ambient.stdoutIsTty ? 'chat' : 'help';
+  },
+});
+
+// Derived from `GLOBAL_ARGS` so adding/renaming a global flag in one place
+// flows through to `reorderGlobalFlags` automatically.
+const GLOBAL_VALUE_FLAGS = new Set<string>(
+  Object.entries(GLOBAL_ARGS)
+    .filter(([, def]) => def.type !== 'boolean')
+    .map(([name]) => `--${name}`),
+);
+const GLOBAL_BOOL_FLAGS = new Set<string>(
+  Object.entries(GLOBAL_ARGS).flatMap(([name, def]) => {
+    if (def.type !== 'boolean') return [];
+    const long = `--${name}`;
+    const alias = 'alias' in def ? def.alias : undefined;
+    return alias ? [long, `-${alias}`] : [long];
+  }),
+);
+
+/**
+ * Citty's runCommand consumes args at the root and passes only `rawArgs.slice(
+ * subCommandIndex + 1)` to the matched subcommand. That means global flags
+ * appearing before the subcommand name (`texra --output-format ndjson agents
+ * list`) never reach the subcommand's parser. We sidestep that by lifting
+ * leading global flags to the end of rawArgs so they live inside the
+ * subcommand's slice. No-op when there is no subcommand or no leading globals.
+ */
+export function reorderGlobalFlags(rawArgs: readonly string[]): string[] {
+  const leadingGlobals: string[] = [];
+  let i = 0;
+  while (i < rawArgs.length) {
+    const arg = rawArgs[i];
+    if (arg === undefined) break;
+    if (!arg.startsWith('-')) break;
+    if (arg === '--') break;
+    const inline = arg.includes('=');
+    const baseFlag = inline ? arg.slice(0, arg.indexOf('=')) : arg;
+    if (GLOBAL_BOOL_FLAGS.has(baseFlag)) {
+      leadingGlobals.push(arg);
+      i += 1;
+      continue;
+    }
+    if (GLOBAL_VALUE_FLAGS.has(baseFlag)) {
+      leadingGlobals.push(arg);
+      i += 1;
+      if (!inline) {
+        const value = rawArgs[i];
+        if (value !== undefined) {
+          leadingGlobals.push(value);
+          i += 1;
+        }
+      }
+      continue;
+    }
+    // Unknown leading flag — leave the rest intact so runMain can surface
+    // `--help`, `--version`, or an unknown-flag error.
+    return [...rawArgs];
+  }
+  if (i >= rawArgs.length || leadingGlobals.length === 0) {
+    return [...rawArgs];
+  }
+  return [...rawArgs.slice(i), ...leadingGlobals];
 }
 
-export async function runCli(argv?: readonly string[]): Promise<CliResult> {
+function isCliError(error: unknown): error is Error & { code?: string } {
+  return (
+    error instanceof Error &&
+    error.name === 'CLIError' &&
+    typeof (error as { code?: unknown }).code === 'string'
+  );
+}
+
+/**
+ * Re-implement the surface citty's `runMain` provides — `--help` / `--version`
+ * detection plus error handling around `runCommand` — so usage errors (missing
+ * required flag, unknown subcommand, invalid enum value) preserve our
+ * canonical `CliExitCode.Usage` (2) instead of citty's hard-coded `exit(1)`.
+ */
+/**
+ * Walk `rawArgs` positional-by-positional through the subcommand tree to find
+ * the deepest matched command. Used to scope `--help` to the subcommand the
+ * user typed rather than always showing root-level usage.
+ *
+ * Stops at the first positional that doesn't match a child subcommand. Returns
+ * a tuple of `[matchedCommand, parentCommandOrUndefined]` so `showUsage` can
+ * render the same breadcrumb citty's own resolver produces.
+ */
+// Citty's `CommandDef<T>` is invariant in `T` (T appears in both `run` and
+// `setup` parameters), so a narrower const-inferred command isn't assignable
+// to the parent type. We treat the subcommand tree as `CommandDef<any>` while
+// walking it; this matches citty's own `subCommands` shape and lets
+// `showUsage` accept either width via cast at the call site.
+type AnyCommand = CommandDef<any>;
+
+async function resolveDeepestSubCommand(
+  cmd: AnyCommand,
+  rawArgs: readonly string[],
+  parent?: AnyCommand,
+): Promise<[AnyCommand, AnyCommand | undefined]> {
+  const rawSubs = cmd.subCommands;
+  const subCommands =
+    typeof rawSubs === 'function'
+      ? await (rawSubs as () => Promise<Record<string, AnyCommand>>)()
+      : ((await rawSubs) as Record<string, AnyCommand> | undefined);
+  if (!subCommands) return [cmd, parent];
+  for (let i = 0; i < rawArgs.length; i++) {
+    const token = rawArgs[i];
+    if (token === undefined) break;
+    if (token.startsWith('-')) continue;
+    const next = subCommands[token];
+    if (next) return resolveDeepestSubCommand(next, rawArgs.slice(i + 1), cmd);
+    break;
+  }
+  return [cmd, parent];
+}
+
+export async function runCli(
+  argv?: readonly string[],
+): Promise<{ exitCode: number }> {
+  pendingExitCode = CliExitCode.Success;
+  const rawArgs = reorderGlobalFlags(argv ? [...argv] : readCliArgv());
+
+  // `--help` / `-h` anywhere prints usage for the deepest matched subcommand
+  // (e.g. `texra agents list --help` → list-level usage), mirroring citty's
+  // own `runMain` behavior without inheriting its `exit(1)` for usage errors.
+  if (rawArgs.some((arg) => arg === '--help' || arg === '-h')) {
+    const [target, parent] = await resolveDeepestSubCommand(
+      rootCommand,
+      rawArgs,
+    );
+    await showUsage(target, parent);
+    return { exitCode: CliExitCode.Success };
+  }
+  if (
+    rawArgs.length === 1 &&
+    (rawArgs[0] === '--version' || rawArgs[0] === '-v')
+  ) {
+    writeTextStdout(await readCliVersion());
+    return { exitCode: CliExitCode.Success };
+  }
+
   try {
-    return await runCliResolved(argv);
+    await runCommand(rootCommand, { rawArgs });
   } catch (error) {
     if (error instanceof CliUsageError) {
       writeTextStderr(error.message);
       return { exitCode: CliExitCode.Usage };
     }
+    if (isCliError(error)) {
+      const [target, parent] = await resolveDeepestSubCommand(
+        rootCommand,
+        rawArgs,
+      );
+      await showUsage(target, parent);
+      writeTextStderr(error.message);
+      return { exitCode: CliExitCode.Usage };
+    }
     throw error;
   }
+  return { exitCode: pendingExitCode };
 }

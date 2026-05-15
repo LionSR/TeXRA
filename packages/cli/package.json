@@ -14,13 +14,26 @@
     "check:architecture": "node scripts/check-host-imports.mjs",
     "bundle": "node scripts/build-bundle.mjs",
     "copy:resources": "node scripts/copy-resources.mjs",
-    "build": "pnpm run typecheck && pnpm run check:architecture && pnpm run bundle && pnpm run copy:resources",
+    "smoke:react-compiler": "node scripts/smoke-react-compiler.mjs",
+    "build": "pnpm run typecheck && pnpm run check:architecture && pnpm run smoke:react-compiler && pnpm run bundle && pnpm run copy:resources",
     "validate:run": "node scripts/validate-run.mjs"
   },
   "dependencies": {
-    "@texra/core": "workspace:*"
+    "@inkjs/ui": "^2.0.0",
+    "@texra/core": "workspace:*",
+    "citty": "^0.2.2",
+    "ink": "^6.8.0",
+    "picocolors": "^1.1.1",
+    "react": "^19.0.0",
+    "string-width": "^8.0.0",
+    "wrap-ansi": "^10.0.0"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@babel/preset-react": "^7.28.5",
+    "@babel/preset-typescript": "^7.28.5",
+    "@types/react": "^19.0.0",
+    "babel-plugin-react-compiler": "^1.0.0",
     "esbuild": "^0.28.0",
     "typescript": "^6.0.3"
   }
