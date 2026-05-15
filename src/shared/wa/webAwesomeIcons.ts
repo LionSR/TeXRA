@@ -42,6 +42,8 @@ import { faCodeCompare } from '@fortawesome/free-solid-svg-icons/faCodeCompare';
 import { faCodeMerge } from '@fortawesome/free-solid-svg-icons/faCodeMerge';
 import { faComment } from '@fortawesome/free-solid-svg-icons/faComment';
 import { faComments } from '@fortawesome/free-solid-svg-icons/faComments';
+import { faCompass } from '@fortawesome/free-solid-svg-icons/faCompass';
+import { faCompress } from '@fortawesome/free-solid-svg-icons/faCompress';
 import { faCopy } from '@fortawesome/free-solid-svg-icons/faCopy';
 import { faCube } from '@fortawesome/free-solid-svg-icons/faCube';
 import { faDatabase } from '@fortawesome/free-solid-svg-icons/faDatabase';
@@ -179,6 +181,8 @@ const icons = {
   'code-merge': faCodeMerge,
   comment: faComment,
   comments: faComments,
+  compass: faCompass,
+  compress: faCompress,
   copy: faCopy,
   cube: faCube,
   database: faDatabase,
@@ -283,7 +287,7 @@ const CODICON_ALIASES = {
   error: 'circle-exclamation',
   'file-media': 'image',
   files: 'copy',
-  fold: 'chevron-up',
+  fold: 'compress',
   'folder-library': 'folder-tree',
   'folder-opened': 'folder-open',
   github: 'code-branch',
