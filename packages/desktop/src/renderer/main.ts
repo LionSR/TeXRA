@@ -6,51 +6,12 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/drawer/drawer.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
-import type WaDrawer from '@awesome.me/webawesome/dist/components/drawer/drawer.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
-import { Signal } from '@shared/signals';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import {
-  applyHostBodyTheme,
-  getWindowTargetOrigin,
-} from '@shared/wa/hostTheme';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
-
+import { create as mutate } from 'mutative';
 import { COMMON_COMMANDS } from '@common/webview/commands';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
-import { postMessage } from '@shared/hostBridge';
-import type { DesktopThemeKind } from '@shared/constants/desktopTheme';
-import {
-  SetThemeMessageSchema,
-  type SetThemeMessage,
-} from '@shared/schemas/commonViewMessages';
-import {
-  ProgressViewOutboundMessageSchema,
-  type ProgressViewOutboundMessage,
-} from '@shared/schemas/progressView';
-import { create as mutate } from 'mutative';
-
 import '@progressView/frontend';
 import '@progressView/frontend/components/TexraDiffView';
-import '@settingsView/frontend';
-import '@webview/frontend';
-import {
-  activeStreamId$,
-  appState,
-  childStreamsByParent$,
-  hasAnyStreams$,
-  pendingApprovalIds$,
-  permissions$,
-  placement,
-  setStreamLogsForId,
-  setStreamStateForId,
-  streamFilter$,
-  streamStates$,
-  streams$,
-  tabStreams$,
-} from '@progressView/frontend/progressState';
-import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
 import {
   handleDeleteAll,
   handleFileAction,
@@ -68,7 +29,42 @@ import {
   sendFollowupCommand,
   type FrontendEventHandlerContext,
 } from '@progressView/frontend/eventHandlers';
+import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
+import {
+  activeStreamId$,
+  appState,
+  childStreamsByParent$,
+  hasAnyStreams$,
+  pendingApprovalIds$,
+  permissions$,
+  placement,
+  setStreamLogsForId,
+  setStreamStateForId,
+  streamFilter$,
+  streamStates$,
+  streams$,
+  tabStreams$,
+} from '@progressView/frontend/progressState';
+import '@settingsView/frontend';
+import '@webview/frontend';
+import { postMessage } from '@shared/hostBridge';
 import type { StreamTabId } from '@shared/schemas';
+import { Signal } from '@shared/signals';
+import {
+  SetThemeMessageSchema,
+  type SetThemeMessage,
+} from '@shared/schemas/commonViewMessages';
+import {
+  ProgressViewOutboundMessageSchema,
+  type ProgressViewOutboundMessage,
+} from '@shared/schemas/progressView';
+import type { DesktopThemeKind } from '@shared/constants/desktopTheme';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import {
+  applyHostBodyTheme,
+  getWindowTargetOrigin,
+} from '@shared/wa/hostTheme';
+import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 import {
   DesktopSetRouteMessageSchema,
@@ -110,6 +106,8 @@ import {
 import { createDesktopCommandPalette } from './desktopCommandPalette';
 import { createFirstRunWalkthrough } from './desktopOnboarding';
 import { getRendererPlatform } from './rendererPlatform';
+import type WaDrawer from '@awesome.me/webawesome/dist/components/drawer/drawer.js';
+import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 
 const root = document.querySelector<HTMLElement>('#app');
 
@@ -874,7 +872,7 @@ function openPdfOverlay(payload: DesktopShowPdfMessage): void {
  * invalid URLs for Windows drive-letter and UNC paths.
  */
 function pdfPathToFileUrl(absolutePath: string): string {
-  const normalised = absolutePath.replace(/\\/g, '/');
+  const normalised = absolutePath.replaceAll('\\', '/');
   const encodePath = (path: string): string =>
     path.split('/').map(encodeURIComponent).join('/');
   // Windows UNC: //server/share/file → file://server/share/file

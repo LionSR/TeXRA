@@ -2,20 +2,20 @@ import { access, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
-  buildStreamTabInfo,
-  peekWorktreeInfo,
-  resolveWorktreeInfo,
-} from '@agent/index';
-
-import {
   prepareMainViewExecutionRequest,
   type MainViewExecuteMessage,
 } from '@controllers/mainView/MainViewExecutionController';
+
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
 import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform, tryPlatform } from '@platform/platform';
+import {
+  buildStreamTabInfo,
+  peekWorktreeInfo,
+  resolveWorktreeInfo,
+} from '@agent/index';
 import type { ValidatedExecutionRequest } from '@agent/core/executionRequests';
 import {
   clearRetryRequest,
@@ -63,6 +63,7 @@ import {
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
+import type { RestoredStreamSnapshot } from '@shared/schemas';
 import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import {
   cleanupAllApprovals,
@@ -79,12 +80,11 @@ import {
 import { getConfig } from '@utils/config/configUtils';
 
 import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
-import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
-import type { RestoredStreamSnapshot } from '@shared/schemas';
 import {
   createDesktopToolEditApprovalController,
   type DesktopToolEditApprovalController,
 } from './desktopToolEditApproval.js';
+import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 
 export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): void;

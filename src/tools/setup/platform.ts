@@ -8,12 +8,12 @@
  * Keep this interface narrow — add methods only when a setup tool needs them.
  */
 
-import type { ApiProvider } from '@model/apiProviders';
 import type {
   TerminalRunRequest,
   TerminalRunResult,
   TerminalRunner,
 } from '@hosts/terminalHost';
+import type { ApiProvider } from '@model/apiProviders';
 
 /** Per-provider API key surface. */
 export interface SetupSecretsAdapter {
