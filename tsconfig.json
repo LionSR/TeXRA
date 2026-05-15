@@ -3,6 +3,7 @@
     "ignoreDeprecations": "6.0",
     "module": "commonjs",
     "target": "ES2022",
+    "jsx": "react-jsx",
     "lib": ["ES2023", "DOM"],
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
