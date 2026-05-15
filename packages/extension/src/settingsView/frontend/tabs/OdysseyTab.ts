@@ -5,15 +5,16 @@ import { repeat } from 'lit/directives/repeat.js';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
 import { postMessage } from '@shared/hostBridge';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { odysseyElapsedMs } from '@shared/schemas';
 import type { Odyssey, OdysseyStatus } from '@shared/schemas';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
-// Keep in sync with @agent/odyssey/formatOdysseyTime — webview can't
-// import from @agent. If this drifts, the tool's view output and the
-// settings-tab elapsed time will disagree.
-function formatElapsed(createdAt: string): string {
-  const ms = Math.max(0, Date.now() - new Date(createdAt).getTime());
+// Webview can't import from @agent; this is a local copy of formatOdysseyTime
+// matching @agent/odyssey/formatOdysseyTime — keep them aligned or the tool
+// view and the settings tab will disagree on the same odyssey's duration.
+function formatElapsed(odyssey: { createdAt: string }): string {
+  const ms = odysseyElapsedMs(odyssey);
   if (ms <= 0) return '0s';
   const totalSec = Math.floor(ms / 1000);
   const hours = Math.floor(totalSec / 3600);
@@ -134,6 +135,13 @@ export class OdysseyTab extends LitElement {
     postMessage(SETTINGS_VIEW_COMMANDS.REVEAL_ODYSSEY_STREAM, { streamId });
   }
 
+  private handleRowKey(event: KeyboardEvent, streamId: string): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      this.handleReveal(streamId);
+    }
+  }
+
   private renderReminder(): TemplateResult {
     return html`
       <div class="settings-reminder">
@@ -168,6 +176,9 @@ export class OdysseyTab extends LitElement {
       <div
         class=${'odyssey-row' + (inFlight ? ' is-clickable' : '')}
         @click=${inFlight ? () => this.handleReveal(item.streamId) : null}
+        @keydown=${inFlight
+          ? (e: KeyboardEvent) => this.handleRowKey(e, item.streamId)
+          : null}
         role=${inFlight ? 'button' : 'group'}
         tabindex=${inFlight ? 0 : -1}
       >
@@ -178,7 +189,7 @@ export class OdysseyTab extends LitElement {
           <div class="objective" title=${item.objective}>${item.objective}</div>
           <div class="meta">
             <span class="stream-id">${item.streamId}</span>
-            <span>· ${formatElapsed(item.createdAt)} elapsed</span>
+            <span>· ${formatElapsed(item)} elapsed</span>
             ${item.continuationCount > 0
               ? html`<span>· ${item.continuationCount} continuations</span>`
               : nothing}

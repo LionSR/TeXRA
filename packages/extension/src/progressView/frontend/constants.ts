@@ -36,7 +36,6 @@ export const ELEMENT_IDS = {
   COMPACT_RESPONSE_BTN: 'compactResponseBtn',
   YOLO_TOGGLE_BTN: 'yoloToggleBtn',
   SUPER_YOLO_TOGGLE_BTN: 'superYoloToggleBtn',
-  ODYSSEY_TOGGLE_BTN: 'odysseyToggleBtn',
   POLISH_FOLLOW_UP_BTN: 'polishFollowUpBtn',
   CLEAR_FOLLOW_UP_BTN: 'clearFollowUpBtn',
   SEND_FOLLOW_UP_BTN: 'sendFollowUpBtn',

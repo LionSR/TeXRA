@@ -70,7 +70,7 @@ import {
   cleanupApprovalsForStream,
   handleProgressViewBashApprovalAction,
 } from '@tools/approval';
-import { OdysseyStore } from '@tools/odyssey';
+import { OdysseyStore, isOdysseyInFlight } from '@tools/odyssey';
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import {
@@ -559,11 +559,10 @@ export class DesktopProgressBridge {
 
   private updateOdysseyActiveFromStore(streamId: StreamTabId): void {
     const odyssey = OdysseyStore.getForStream(streamId);
-    const active = odyssey?.status === 'active' || odyssey?.status === 'paused';
     this.send({
       command: PROGRESS_VIEW_COMMANDS.ODYSSEY_ACTIVE_UPDATED,
       stream: streamId,
-      active,
+      active: isOdysseyInFlight(odyssey),
       ...(odyssey?.status ? { status: odyssey.status } : {}),
       ...(odyssey?.objective ? { objective: odyssey.objective } : {}),
     });
@@ -907,11 +906,10 @@ export class DesktopProgressBridge {
         });
         break;
       }
-      case 'odysseyStateChanged': {
-        const data = payload as ProgressEventPayloads['odysseyStateChanged'];
-        this.updateOdysseyActiveFromStore(data.streamId);
-        break;
-      }
+      // `odysseyStateChanged` is dispatched via `bus.on` (see constructor);
+      // `runtimeHost.emit` is never the producer. Listed here only for
+      // TypeScript exhaustiveness.
+      case 'odysseyStateChanged':
       case 'clearMissingOutputs':
       case 'showRetryRequest':
       case 'resolveRetryRequest':

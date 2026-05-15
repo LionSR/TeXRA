@@ -28,7 +28,7 @@ export function registerToolInjection(
 }
 
 export function listToolInjections(): readonly ConditionalToolInjection[] {
-  return injections;
+  return injections.slice();
 }
 
 /** Test-only — clears the registry so suites don't leak across runs. */
