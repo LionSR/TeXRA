@@ -65,15 +65,7 @@ export const DEFAULT_CHECKBOX_VALUES: CheckboxValues = {
   autoExtractTikzFigure: DEFAULT_STATE.autoExtractTikzFigure,
   autoCompileInputPdf: DEFAULT_STATE.autoCompileInputPdf,
   attachTeXCount: DEFAULT_STATE.attachTeXCount,
-  attachDiagnostics: DEFAULT_STATE.attachDiagnostics,
 };
-
-export function workflowCheckboxValues(values: CheckboxValues): CheckboxValues {
-  return {
-    ...values,
-    attachDiagnostics: false,
-  };
-}
 
 // =========================================================================
 // Command Mappings

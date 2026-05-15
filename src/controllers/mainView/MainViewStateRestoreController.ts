@@ -53,6 +53,5 @@ export function buildMainViewState(
     autoExtractTikzFigure: toolConfig.autoExtractTikzFigure,
     autoCompileInputPdf: toolConfig.autoCompileInputPdf,
     attachTeXCount: toolConfig.attachTeXCount,
-    attachDiagnostics: false,
   });
 }
