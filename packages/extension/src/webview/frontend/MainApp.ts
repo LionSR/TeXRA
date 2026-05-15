@@ -711,12 +711,11 @@ export class MainApp extends MainAppBase {
       const mf = this.multiFiles.get();
       const existing = mf[listId] ?? [];
       const next = [filePath, ...existing.filter((f) => f !== filePath)];
-      this.multiFiles.set({ ...mf, [listId]: next });
       this.multiFilesVisible.set({
         ...this.multiFilesVisible.get(),
         [listId]: true,
       });
-      this.saveState();
+      this.updateMultiFiles(listId, next);
       return;
     }
 
