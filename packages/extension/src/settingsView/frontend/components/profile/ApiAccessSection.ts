@@ -10,7 +10,6 @@ import { designTokens } from '@shared/styles';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/radio/radio.js';
 import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
-import type WaRadioGroup from '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 
 // Local imports - shared copy
 import { PROMO_NOTICE_LONG } from '@shared/copy/promoNotice';
@@ -20,6 +19,7 @@ import { profileViewStyles } from './styles';
 
 // Local imports - profile view events
 import { ProfileViewEvents } from './events';
+import type WaRadioGroup from '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 
 @customElement('api-access-section')
 export class ApiAccessSection extends LitElement {

@@ -11,8 +11,6 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
-import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
-import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - shared utils
 import { createEvent } from '@shared/utils/events';
@@ -27,6 +25,8 @@ import {
   NESTED_DELEGATION_DEPTH_RANGE,
   clampNestedDelegationDepth,
 } from '@shared/constants/delegationPolicy';
+import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
+import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 
 function clampSetting(value: number, min?: number, max?: number): number {
   let result = value;

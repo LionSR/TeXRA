@@ -3,21 +3,21 @@
  * Sends key values only in the submit event; it never receives stored values.
  */
 
-import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
-import '@awesome.me/webawesome/dist/components/input/input.js';
-import '@awesome.me/webawesome/dist/components/button/button.js';
-import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
 
-// Side-effect imports - register WA icon component
-import '@awesome.me/webawesome/dist/components/icon/icon.js';
-
 // Local imports - shared events
 import { createEvent } from '@shared/utils/events';
+
+// Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
+import '@awesome.me/webawesome/dist/components/input/input.js';
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 @customElement('provider-key-modal')
 export class ProviderKeyModal extends LitElement {

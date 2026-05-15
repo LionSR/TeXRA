@@ -6,6 +6,7 @@ import { getCleanAgentName } from '@agent/index';
 import type { FileOpResult } from '@agent/types/ResultTypes';
 
 // Local imports - log
+import { parseWorkflowOutputRoundDir } from '@agent/output/workflowOutputLayout';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
@@ -18,7 +19,6 @@ import {
   HISTORY_DIR,
   DEFAULT_MAX_ROUNDS,
 } from './constants';
-import { parseWorkflowOutputRoundDir } from '@agent/output/workflowOutputLayout';
 import {
   generateTimestamp,
   getAgentFirstNameChunk,

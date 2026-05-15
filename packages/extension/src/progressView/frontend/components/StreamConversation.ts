@@ -6,8 +6,8 @@ import { provide } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 
 // Local imports - shared
-import { isProcessAgent } from '@shared/streams/agentKind';
 import { SignalWatcher } from '@shared/signals';
+import { isProcessAgent } from '@shared/streams/agentKind';
 
 // Local imports - progress view
 import {

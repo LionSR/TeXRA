@@ -8,11 +8,11 @@ import {
   AgentCategory,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
-import { AgentSource } from '@shared/schemas/agent';
 import * as logger from '@agent/core/logger';
 import { getGlobalState, getWorkspaceState } from '@agent/core/stateStore';
 import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
 import type { AgentOptionData } from '@shared/schemas';
+import { AgentSource } from '@shared/schemas/agent';
 import { agentKey as createKey, agentName } from '@shared/schemas/agent';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { AbsoluteFS } from '@utils/files';
