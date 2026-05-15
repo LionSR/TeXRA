@@ -214,9 +214,9 @@ export class WorktreeChip extends LitElement {
     // Display name falls back to the basename of the working directory when
     // a branch hasn't resolved yet (or the path isn't a git repo), so the
     // chip never renders an empty row when `info.workingDirectory` is set.
+    // Uses `||` (not `??`) so empty-string branches also fall back.
     const branch = this.info.branch;
-    const fallback = branch ? undefined : basename(this.info.workingDirectory);
-    const display = branch ?? fallback;
+    const display = branch || basename(this.info.workingDirectory);
     if (!display) return nothing;
 
     const tooltipBase = branch
