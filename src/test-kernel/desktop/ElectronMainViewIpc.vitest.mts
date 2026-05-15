@@ -130,7 +130,7 @@ describe('desktop main-view IPC', () => {
     const fileSelection = {
       handleMessage: vi.fn(
         (message: { command: string }) =>
-          message.command === MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
+          message.command === MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
       ),
     };
     const settings = {
@@ -194,10 +194,10 @@ describe('desktop main-view IPC', () => {
 
     rendererListener?.(
       { sender: webContents },
-      { command: MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE },
+      { command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE },
     );
     expect(fileSelection.handleMessage).toHaveBeenCalledWith({
-      command: MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
+      command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
     });
 
     rendererListener?.(

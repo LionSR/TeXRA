@@ -15,11 +15,8 @@ const BASE_INPUT: WorkflowAgentInput = {
   agent: 'criticize',
   model: 'opus47T',
   instruction: 'Review the manuscript.',
-  inputFile: 'main.tex',
-  inputFiles: [],
-  contextFile: null,
+  inputFiles: ['main.tex'],
   contextFiles: [],
-  mediaFile: null,
   mediaFiles: [],
   extractFigures: null,
   extractTikz: null,
@@ -48,7 +45,7 @@ describe('DelegationTools', () => {
 
     const result = await rejectOversizedBibAttachments({
       ...BASE_INPUT,
-      contextFile: 'references.bib',
+      contextFiles: ['references.bib'],
     });
 
     assert.strictEqual(result?.isError, true);

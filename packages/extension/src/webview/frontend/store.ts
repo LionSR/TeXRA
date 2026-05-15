@@ -31,20 +31,13 @@ import {
 export const DEFAULT_STATE: MainViewPersistedState =
   MainViewPersistedStateSchema.parse({});
 
-/** Default single files state (typed) */
 export const DEFAULT_SINGLE_FILES: SingleFiles = {
-  inputFile: DEFAULT_STATE.inputFile,
-  contextFile: DEFAULT_STATE.contextFile,
-  mediaFile: DEFAULT_STATE.mediaFile,
   baseFile: DEFAULT_STATE.baseFile,
   editedFile: DEFAULT_STATE.editedFile,
 };
 
 /** Default file options (typed, empty arrays) */
 export const DEFAULT_FILE_OPTIONS: FileOptions = {
-  inputFile: [],
-  contextFile: [],
-  mediaFile: [],
   editedFile: [],
   baseFile: [],
   commit: [],
@@ -72,7 +65,6 @@ export const DEFAULT_CHECKBOX_VALUES: CheckboxValues = {
   autoExtractTikzFigure: DEFAULT_STATE.autoExtractTikzFigure,
   autoCompileInputPdf: DEFAULT_STATE.autoCompileInputPdf,
   attachTeXCount: DEFAULT_STATE.attachTeXCount,
-  attachDiagnostics: DEFAULT_STATE.attachDiagnostics,
 };
 
 // =========================================================================
@@ -87,39 +79,9 @@ export const FILE_UPDATE_COMMANDS: Record<MultipleDocumentFileType, string> = {
   output: MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES,
 };
 
-/** Maps file types to their refresh commands */
-export const FILE_REFRESH_COMMANDS: Record<string, string> = {
-  input: MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
-  context: MAIN_VIEW_COMMANDS.REQUEST_CONTEXT_FILE,
-  media: MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
-};
-
-/** Maps file types to their selected commands */
-export const FILE_SELECTED_COMMANDS: Record<string, string> = {
-  input: MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
-  context: MAIN_VIEW_COMMANDS.CONTEXT_FILE_SELECTED,
-  media: MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED,
-};
-
 // =========================================================================
 // Command-to-Key Mappings (compile-time verifiable)
 // =========================================================================
-
-/** Maps SET_*_FILE commands to their single file keys */
-export const SINGLE_FILE_COMMAND_TO_KEY: Record<string, keyof SingleFiles> = {
-  [MAIN_VIEW_COMMANDS.SET_INPUT_FILE]: 'inputFile',
-  [MAIN_VIEW_COMMANDS.SET_CONTEXT_FILE]: 'contextFile',
-  [MAIN_VIEW_COMMANDS.SET_MEDIA_FILE]: 'mediaFile',
-  [MAIN_VIEW_COMMANDS.SET_EDITED_FILE]: 'editedFile',
-};
-
-/** Maps *_FILE_SELECTED commands to their single file keys */
-export const FILE_SELECTED_COMMAND_TO_KEY: Record<string, keyof SingleFiles> = {
-  [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: 'inputFile',
-  [MAIN_VIEW_COMMANDS.CONTEXT_FILE_SELECTED]: 'contextFile',
-  [MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED]: 'mediaFile',
-  [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: 'editedFile',
-};
 
 /** Maps SET_*_FILES commands to their multi-file keys */
 export const MULTI_FILE_COMMAND_TO_KEY: Record<string, keyof MultiFiles> = {
@@ -158,15 +120,11 @@ export const ONBOARDING_PLACEHOLDERS = {
   ],
 } satisfies Record<SessionType | 'orchestrator', string[]>;
 
-/** Static configuration for each file selector type */
 export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
   {
     type: 'input',
     label: 'Input',
     icon: 'file-code',
-    refreshTitle: 'Refresh input files',
-    currentTitle: 'Set current file as input',
-    emptyTitle: 'Clear input file',
     toggleTitle: 'Show or hide additional input files',
     addOpenedLabel: 'Add opened files as input',
     emptyListLabel: 'Clear all input files',
@@ -174,18 +132,11 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
     tooltip: 'Primary files the agent processes, such as .tex, .txt, or .md',
     description: 'Read and edited by the agent',
     toolConfig: 'tool',
-    focusInstruction: {
-      key: 'inputFileSelect',
-      text: 'Choose the main LaTeX file to process. Use the Current button to pick the active editor.',
-    },
   },
   {
     type: 'context',
     label: 'Context',
     icon: 'book',
-    refreshTitle: 'Refresh context files',
-    currentTitle: 'Set current file as context',
-    emptyTitle: 'Clear context file',
     toggleTitle: 'Show or hide additional context files',
     addOpenedLabel: 'Add opened files as context',
     emptyListLabel: 'Clear all context files',
@@ -198,9 +149,6 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
     type: 'media',
     label: 'Media',
     icon: 'device-camera-video',
-    refreshTitle: 'Refresh media files',
-    currentTitle: 'Set current file as media',
-    emptyTitle: 'Clear media file',
     toggleTitle: 'Show or hide additional media files',
     addOpenedLabel: 'Add opened files as media',
     emptyListLabel: 'Clear all media files',

@@ -13,10 +13,7 @@ export function getFilesForRound(
 ): FileLocation[] {
   if (currentRound === 0) {
     // First round: process input files
-    return [
-      fileService.createLocation(config.inputFile),
-      ...config.inputFiles.map((f) => fileService.createLocation(f)),
-    ];
+    return config.inputFiles.map((f) => fileService.createLocation(f));
   }
 
   // Subsequent rounds: process previous round's output files
