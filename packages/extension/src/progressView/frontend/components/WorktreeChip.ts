@@ -37,6 +37,13 @@ const CI_LABEL: Record<WorktreeCIState, string> = {
   [WORKTREE_CI_STATE.UNKNOWN]: 'CI status unknown',
 };
 
+/** Trailing path segment, posix or windows. Webview-safe — no node:path. */
+function basename(p: string): string {
+  const trimmed = p.replace(/[\\/]+$/, '');
+  const idx = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  return idx >= 0 ? trimmed.slice(idx + 1) : trimmed;
+}
+
 /**
  * Compact chip that mirrors GitHub's PR row: state pill, `#NNN` title, and
  * `+A −D` diff stats with a CI dot. Falls back to a branch-only chip when
@@ -201,16 +208,29 @@ export class WorktreeChip extends LitElement {
   }
 
   private renderBranch(): TemplateResult | typeof nothing {
+    // Display name falls back to the basename of the working directory when
+    // a branch hasn't resolved yet (or the path isn't a git repo), so the
+    // chip never renders an empty row when `info.workingDirectory` is set.
     const branch = this.info.branch;
-    if (!branch) return nothing;
+    const fallback = branch ? undefined : basename(this.info.workingDirectory);
+    const display = branch ?? fallback;
+    if (!display) return nothing;
+
+    const tooltipBase = branch
+      ? `Branch ${branch}`
+      : this.info.workingDirectory;
     const tooltip = this.info.dirty
-      ? `Branch ${branch} (uncommitted changes)`
-      : `Branch ${branch}`;
+      ? `${tooltipBase} (uncommitted changes)`
+      : tooltipBase;
     return html`<span class="branch" title=${tooltip}>
       ${waIcon('code-branch')}
-      <span class="branch-name">${branch}</span>
+      <span class="branch-name">${display}</span>
       ${this.info.dirty
-        ? html`<span class="dirty-dot" aria-label="uncommitted changes"></span>`
+        ? html`<span
+            class="dirty-dot"
+            role="img"
+            aria-label="uncommitted changes"
+          ></span>`
         : nothing}
     </span>`;
   }

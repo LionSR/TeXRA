@@ -405,7 +405,10 @@ export class DesktopProgressBridge {
     let worktreeInfo;
     if (workingDirectory) {
       worktreeInfo = peekWorktreeInfo(workingDirectory);
-      this.ensureWorktreeProbe(workingDirectory);
+      // Fire-and-forget. The resolver's TTL + in-flight cache handle
+      // de-duping and refresh — callers don't need to track which dirs
+      // they've probed.
+      void resolveWorktreeInfo(workingDirectory);
     }
     return buildStreamTabInfo({
       streamId,
@@ -420,16 +423,6 @@ export class DesktopProgressBridge {
       parentStreamId: this.parentStreams.get(streamId),
       description: this.descriptions.get(streamId),
       worktreeInfo,
-    });
-  }
-
-  private readonly probedWorktreeDirs = new Set<string>();
-
-  private ensureWorktreeProbe(workingDirectory: string): void {
-    if (this.probedWorktreeDirs.has(workingDirectory)) return;
-    this.probedWorktreeDirs.add(workingDirectory);
-    void resolveWorktreeInfo(workingDirectory).catch(() => {
-      this.probedWorktreeDirs.delete(workingDirectory);
     });
   }
 
