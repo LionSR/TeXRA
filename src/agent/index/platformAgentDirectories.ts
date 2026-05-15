@@ -1,4 +1,6 @@
 // Local imports - agent index
+import { platform } from '@platform/platform';
+import { isFileNotFoundError } from '@common/errors/errorPredicates';
 import { AgentDirectoryService } from './AgentDirectoryService';
 import {
   BundledAgentDirectorySync,
@@ -9,10 +11,8 @@ import {
 import { setAgentDirectories } from './agentDirectoriesRegistry';
 
 // Local imports - common
-import { isFileNotFoundError } from '@common/errors/errorPredicates';
 
 // Local imports - platform
-import { platform } from '@platform/platform';
 
 interface PlatformAgentDirectoryOptions {
   channel: string;

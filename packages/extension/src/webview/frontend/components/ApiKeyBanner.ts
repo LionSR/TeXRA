@@ -10,8 +10,8 @@ import {
 import { customElement, property } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
 import type { ApiKeyBannerState } from '@shared/schemas';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { capitalize } from '@shared/utils/string';
 import { applyBannerVisibility, bannerStyles } from '../styles/bannerStyles';
 import { MainViewEvents } from '../events';
