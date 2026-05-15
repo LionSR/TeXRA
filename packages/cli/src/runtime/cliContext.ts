@@ -8,7 +8,9 @@ import { isNonEmptyString } from '@utils/core/stringCore';
 import { type CliApprovalPolicy } from './approvalPolicy';
 
 export type CliMode = 'headless' | 'interactive';
-export type CliOutputFormat = 'text' | 'json' | 'ndjson';
+
+export const CLI_OUTPUT_FORMATS = ['text', 'json', 'ndjson'] as const;
+export type CliOutputFormat = (typeof CLI_OUTPUT_FORMATS)[number];
 
 export interface CliPromptRequest {
   readonly kind: 'approval' | 'externalInquiry';
@@ -119,8 +121,9 @@ export interface CliGlobalArgs {
 }
 
 function cliMode(globalArgs: CliGlobalArgs, ambient: CliAmbientState): CliMode {
-  // Headless gate (narrowed per PRD 13): --print/-p, CI, or stdin non-TTY.
-  // Piping stdout or stderr alone no longer forces headless.
+  // Headless trigger: explicit --print/-p, CI=1, or stdin non-TTY. Piping
+  // stdout or stderr alone does NOT force headless — that's the gap the new
+  // Ink streaming-text fallback fills.
   const headless =
     globalArgs.print === true || ambient.isCi || !ambient.stdinIsTty;
   return headless ? 'headless' : 'interactive';

@@ -18,13 +18,17 @@ import { isNonEmptyString } from '@utils/core/stringCore';
 import {
   buildCliContext,
   CliUsageError,
+  CLI_OUTPUT_FORMATS,
   readCliAmbientState,
   readCliArgv,
   readCliVersion,
   type CliContext,
   type CliOutputFormat,
 } from '../runtime/cliContext';
-import type { CliApprovalPolicy } from '../runtime/approvalPolicy';
+import {
+  CLI_APPROVAL_POLICIES,
+  type CliApprovalPolicy,
+} from '../runtime/approvalPolicy';
 import {
   hasCliApprovalDenied,
   installCliApprovalHandlers,
@@ -88,12 +92,12 @@ const GLOBAL_ARGS: {
   cwd: { type: 'string' },
   'output-format': {
     type: 'enum',
-    options: ['text', 'json', 'ndjson'],
+    options: [...CLI_OUTPUT_FORMATS],
     default: 'text',
   },
   'approval-policy': {
     type: 'enum',
-    options: ['never', 'ask', 'yolo'],
+    options: [...CLI_APPROVAL_POLICIES],
     default: 'never',
   },
 };
@@ -113,11 +117,11 @@ async function listAgents(context: CliContext): Promise<number> {
   await initCliPlatform({ ...context, quietLogs: true });
   await loadAgents();
   const agents = [
-    ...getVisibleAgents('workflow').map((agent) => ({
+    ...getVisibleAgents(AgentCategory.Workflow).map((agent) => ({
       ...agent,
       category: AgentCategory.Workflow,
     })),
-    ...getVisibleAgents('toolUse').map((agent) => ({
+    ...getVisibleAgents(AgentCategory.ToolUse).map((agent) => ({
       ...agent,
       category: AgentCategory.ToolUse,
     })),
@@ -435,7 +439,7 @@ async function resolveWorkflowOutput(
   copiedOutput: string | undefined;
   displayResult: ExecuteAgentResult;
 }> {
-  if (!outputFile || result.category !== 'workflow') {
+  if (!outputFile || result.category !== AgentCategory.Workflow) {
     return { copiedOutput: undefined, displayResult: result };
   }
 
@@ -511,7 +515,7 @@ async function runWorkflowAgent(
       ts: new Date().toISOString(),
       result: displayResult,
     });
-  } else if (result.category === 'workflow') {
+  } else if (result.category === AgentCategory.Workflow) {
     const finalOutput = result.outputs.at(-1);
     writeTextStdout(
       copiedOutput ??
@@ -541,15 +545,27 @@ const chatCommand = defineCommand({
       default: 'minimal',
       description: 'Tool/progress rows: grouped, minimal, or hidden',
     },
+    tui: {
+      type: 'boolean',
+      description:
+        'Opt into the Ink-based TUI (preview; defaults off until Phase 6).',
+    },
   },
   async run(ctx) {
     const context = await contextFromArgs(ctx.args);
-    const { runChat } = await import('../chat/runChat');
-    const result = await runChat(context, {
+    const init = {
       agentOverride: optString(ctx.args.agent),
       modelOverride: optString(ctx.args.model),
       toolDisplay: ctx.args['tool-display'],
-    });
+    };
+    if (ctx.args.tui === true) {
+      const { runChatTui } = await import('../chat/tui/runChatTui');
+      const result = await runChatTui(context, init);
+      setExitCode(result.exitCode);
+      return;
+    }
+    const { runChat } = await import('../chat/runChat');
+    const result = await runChat(context, init);
     setExitCode(result.exitCode);
   },
 });
@@ -557,7 +573,6 @@ const chatCommand = defineCommand({
 const helpCommand = defineCommand({
   meta: { name: 'help', description: 'Show TeXRA CLI usage' },
   async run() {
-    const { showUsage } = await import('citty');
     await showUsage(rootCommand);
   },
 });
