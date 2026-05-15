@@ -157,7 +157,6 @@ const HANDLERS = {
   // `definedHandler`. Matching the registry map's per-entry TArgs widening
   // (`any`) keeps inference per entry without unifying every entry on
   // `unknown`.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } satisfies Record<string, CommandHandler<ExtensionCommandActions, any>>;
 
 function makeActions(): ExtensionCommandActions {
@@ -453,7 +452,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     ] as const)('%s rejection bubbles up', async (id, actionKey) => {
       const actions = makeActions();
       const failure = new Error(`boom-${actionKey}`);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       (actions[actionKey] as any).mockRejectedValueOnce(failure);
 
       const result = dispatchCommandFromRegistry(id, HANDLERS, actions);
@@ -463,7 +462,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     it('typed handler texra.compactResponse rejection bubbles up', async () => {
       const actions = makeActions();
       const failure = new Error('boom-compactResponse');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       (actions.compactResponse as any).mockRejectedValueOnce(failure);
 
       const result = dispatchCommandFromRegistry(

@@ -14,10 +14,6 @@ import {
   handleCreateAgentWithAI as agentHandleCreateAgentWithAI,
   runExecuteCommand as agentRunExecuteCommand,
 } from '@commands/agent';
-import {
-  setApiKey as apiSetApiKey,
-  removeApiKey as apiRemoveApiKey,
-} from '@commands/api/apiKeyCommands';
 import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex';
 import { runSetupAssistant as setupRunAssistant } from '@commands/setup';
 import {
@@ -27,6 +23,10 @@ import {
   handleLoadSpecificAgent as sysHandleLoadSpecificAgent,
   showImportOptions as sysShowImportOptions,
 } from '@commands/system';
+import {
+  setApiKey as apiSetApiKey,
+  removeApiKey as apiRemoveApiKey,
+} from '@commands/api/apiKeyCommands';
 import {
   handleIndentTeX,
   handleIndentCurrentTeX as latexIndentCurrentTeX,
@@ -63,8 +63,8 @@ import {
   SIDEBAR_VIEWS,
   getActiveSidebarView,
 } from '@common/webview';
-import { getMainWebview } from '@frontend/system/commandUtils';
 import { type ApiProvider, SecretManager } from '@frontend/secretManager';
+import { getMainWebview } from '@frontend/system/commandUtils';
 import { runCleanBuild, runCleanOutput } from '@housekeeping';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import {
