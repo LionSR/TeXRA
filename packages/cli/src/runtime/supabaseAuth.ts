@@ -51,6 +51,7 @@ export interface CliLoginOptions {
   openBrowser?: boolean;
   log?: LogBackend;
   onAuthUrl?: (url: string) => void;
+  manualBrowserHint?: string;
 }
 
 let coordinator: SupabaseSessionCoordinator | undefined;
@@ -111,7 +112,11 @@ export async function signInCliSupabase(
 
     options.onAuthUrl?.(data.url);
     if (options.openBrowser ?? true) {
-      await openBrowser(data.url, options.log);
+      await openBrowser(
+        data.url,
+        options.log,
+        options.manualBrowserHint ?? 'texra login --no-browser',
+      );
     }
 
     const session = await callbackServer.waitForSession();
@@ -400,7 +405,11 @@ function escapeHtml(value: string): string {
     .replaceAll("'", '&#39;');
 }
 
-function openBrowser(url: string, log: LogBackend | undefined): Promise<void> {
+function openBrowser(
+  url: string,
+  log: LogBackend | undefined,
+  manualBrowserHint: string,
+): Promise<void> {
   const command =
     process.platform === 'darwin'
       ? 'open'
@@ -444,7 +453,7 @@ function openBrowser(url: string, log: LogBackend | undefined): Promise<void> {
       );
       reject(
         new Error(
-          `Could not open the browser automatically: ${message}. Run texra login --no-browser to open the sign-in URL manually.`,
+          `Could not open the browser automatically: ${message}. Run ${manualBrowserHint} to open the sign-in URL manually.`,
         ),
       );
     }
