@@ -38,8 +38,7 @@ prompts:
   content.
 - The ONLY template variable is `{{ INSTRUCTION }}`. Do not use any
   workflow-only variables (`INPUT_FILE`, `INPUT_CONTENT`, `ALL_INPUTS`,
-  `ALL_AUXILIARYS`, `ALL_REFERENCES`, `ADDITIONAL_INPUTS`,
-  `REFERENCE_CONTENT`, `AUXILIARY_CONTENT`, `OUTPUT_FILES_ORDER`).
+  `ALL_CONTEXTS`, `ADDITIONAL_INPUTS`, `OUTPUT_FILES_ORDER`).
 - `{% if IS_ANTHROPIC_MODEL %}...{% endif %}` works for model-specific
   instructions.
 - Agent names: lowercase with underscores or dashes.

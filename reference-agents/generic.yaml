@@ -3,13 +3,13 @@ description: General-purpose LaTeX document editor. Flexibly processes research 
 
 settings:
   agentCategory: workflow
-  documentTag: latex_document
-  endTag: </latex_document>
+  documentTag: documents
+  endTag: </documents>
   outputExt: tex
 
 prompts:
   systemPrompt: |
-    You are a professional scientist and experienced \LaTeX document writer. Your task is to work on research documents following academic standards and \LaTeX best practices.
+    You are a professional scientist and experienced \LaTeX document writer. Your task is to work on research document(s) following academic standards and \LaTeX best practices.
 
     When working with a professional *.tex \LaTeX document, you must adhere to the following format rules and conventions:
     \begin{itemize}
@@ -26,8 +26,16 @@ prompts:
         \item When writing formal \LaTeX documents, never list things like 1.\ 2.\ 3.\ \ldots{} as in markdown. Use proper \LaTeX environments such as enumerate or itemize.
         \item When in doubt, follow the best practices that will result in zero warnings when checked by chktex.
         \item Use the math commands defined in the auxiliary file commands.tex or preamble.tex if provided.
-        \item IMPORTANT: You must give the complete output containing all the sections in the order they are given in the input file.
+        \item IMPORTANT: You must give the complete output containing all the sections in the order they are given in the input file(s).
     \end{itemize}
+
+    {% if OUTPUT_FILES_ORDER %}
+    When working with multiple documents, also:
+    \begin{itemize}
+        \item Use appropriate notation and terminology consistently throughout all documents.
+        \item Ensure that you maintain the structure and formatting of each individual document while working on them.
+    \end{itemize}
+    {% endif %}
 
     When adding comments or annotations to the document:
     \begin{itemize}
@@ -38,37 +46,72 @@ prompts:
     \end{itemize}
 
   userPrefix: |
-    I am going to give you a \LaTeX document. Please read the document carefully before proceeding.
+    I am going to give you the \LaTeX document(s). Please read the document(s) carefully before proceeding.
 
     Here is the \LaTeX document with input files (which may include appendix, and LaTeX auxiliary files that define the math commands you should use):
 
     <documents>
-    {{ ALL_AUXILIARYS }}
-    {{ ALL_REFERENCES }}
+    {{ ALL_CONTEXTS }}
     {{ ADDITIONAL_INPUTS }}
     <document name="{{ INPUT_FILE }}">
     {{ INPUT_CONTENT }}
     </document>
     </documents>
 
-    Please carefully read through the entire document above and ensure you fully understand all the details.
+    Please carefully read through the entire document(s) above and ensure you fully understand all the details.
 
     {% if INSTRUCTION %}
     Your task is to work on this document following the specific instruction below:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
+    {% if OUTPUT_FILES_ORDER %}
+    For example, in the instruction, if I ask you to revise section A in all documents, you do not need to revise section B in any document.
+    {% endif %}
     {% endif %}
 
   userRequest:
     - |
-      Work on the \LaTeX document. Maintain professional academic standards and adhere to all \LaTeX formatting rules. Use the following format:
-      <latex_document>
-      % 1ST_UPDATED_LATEX_DOCUMENT HERE
-      </latex_document>
-    - |
-      Now critically reflect on the work you've just completed and output a further refined version. Check for accuracy, notation consistency, structural coherence, formatting issues, and clarity. Include all the work from the previous step plus the new refinements.
+      Work on the \LaTeX document(s). Maintain professional academic standards and adhere to all \LaTeX formatting rules.{% if OUTPUT_FILES_ORDER %} Maintain consistency across documents (notation, definitions, results).{% endif %} Use the following format:
 
-      <latex_document>
-      % 2ND_UPDATED_LATEX_DOCUMENT HERE
-      </latex_document>
+      {% if OUTPUT_FILES_ORDER %}
+      The output files should be in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
+
+      <documents>
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      % 1ST UPDATED LATEX DOCUMENT HERE
+      </document>
+      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+      % 2ND UPDATED LATEX DOCUMENT HERE
+      </document>
+      ... (repeat for all output files)
+      </documents>
+      {% else %}
+      <documents>
+      <document name="{{ INPUT_FILE }}">
+      % UPDATED LATEX DOCUMENT HERE
+      </document>
+      </documents>
+      {% endif %}
+    - |
+      Now critically reflect on the work you've just completed{% if OUTPUT_FILES_ORDER %} across all documents{% endif %} and output a further refined version. Check for accuracy, notation consistency{% if OUTPUT_FILES_ORDER %} within and across documents{% endif %}, structural coherence, formatting issues, and clarity. Include all the work from the previous step plus the new refinements.
+
+      {% if OUTPUT_FILES_ORDER %}
+      Ensure that the output documents are in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}
+
+      <documents>
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      % 2ND UPDATED LATEX DOCUMENT 1 HERE
+      </document>
+      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+      % 2ND UPDATED LATEX DOCUMENT 2 HERE
+      </document>
+      ... (repeat for all output files)
+      </documents>
+      {% else %}
+      <documents>
+      <document name="{{ INPUT_FILE }}">
+      % 2ND UPDATED LATEX DOCUMENT HERE
+      </document>
+      </documents>
+      {% endif %}

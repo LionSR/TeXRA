@@ -85,10 +85,8 @@ const ExportConfigSchema = z.object({
   inputFiles: z.array(z.string()).optional(),
   mediaFile: z.string().nullish(),
   mediaFiles: z.array(z.string()).optional(),
-  referenceFile: z.string().nullish(),
-  referenceFiles: z.array(z.string()).optional(),
-  auxiliaryFile: z.string().nullish(),
-  auxiliaryFiles: z.array(z.string()).optional(),
+  contextFile: z.string().nullish(),
+  contextFiles: z.array(z.string()).optional(),
   outputFiles: z.array(z.string()).optional(),
 });
 type ExportConfig = z.infer<typeof ExportConfigSchema>;
@@ -561,10 +559,8 @@ function collectFiles(config: ExportConfig): Array<[string, string]> {
   addFiles('Input files', config.inputFiles);
   addFile('Media file', config.mediaFile);
   addFiles('Media files', config.mediaFiles);
-  addFile('Reference', config.referenceFile);
-  addFiles('References', config.referenceFiles);
-  addFile('Auxiliary', config.auxiliaryFile);
-  addFiles('Auxiliary files', config.auxiliaryFiles);
+  addFile('Context', config.contextFile);
+  addFiles('Context files', config.contextFiles);
   addFiles('Output files', config.outputFiles);
 
   return files;

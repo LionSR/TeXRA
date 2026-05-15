@@ -84,12 +84,7 @@ export class InstructionManager extends BaseWebviewManager {
     const context: FileContext = { agent: message.agent };
 
     // Single file fields
-    const singleFields = [
-      'inputFile',
-      'referenceFile',
-      'auxiliaryFile',
-      'mediaFile',
-    ] as const;
+    const singleFields = ['inputFile', 'contextFile', 'mediaFile'] as const;
     for (const field of singleFields) {
       if (isValid(message[field])) {
         context[field] = message[field];
@@ -99,8 +94,7 @@ export class InstructionManager extends BaseWebviewManager {
     // Multi-file fields (check active flag and array content)
     const multiFields = [
       ['inputFiles', 'inputFilesActive'],
-      ['referenceFiles', 'referenceFilesActive'],
-      ['auxiliaryFiles', 'auxiliaryFilesActive'],
+      ['contextFiles', 'contextFilesActive'],
       ['mediaFiles', 'mediaFilesActive'],
       ['outputFiles', 'outputFilesActive'],
     ] as const;

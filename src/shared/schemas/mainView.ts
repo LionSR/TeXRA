@@ -11,7 +11,10 @@ import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
-import { UIFileFieldsSchema } from './fileFields';
+import {
+  UIFileFieldsSchema,
+  migrateLegacyContextFileFields,
+} from './fileFields';
 import {
   commandOnly,
   withFilesArray,
@@ -27,18 +30,12 @@ import { ToolConfigFieldsSchema } from './toolConfig';
 export const SessionTypeSchema = z.enum(['toolUse', 'workflow']);
 export type SessionType = z.infer<typeof SessionTypeSchema>;
 
-export const DocumentFileTypeSchema = z.enum([
-  'input',
-  'reference',
-  'auxiliary',
-  'media',
-]);
+export const DocumentFileTypeSchema = z.enum(['input', 'context', 'media']);
 export type DocumentFileType = z.infer<typeof DocumentFileTypeSchema>;
 
 export const MultipleDocumentFileTypeSchema = z.enum([
   'input',
-  'reference',
-  'auxiliary',
+  'context',
   'media',
   'output',
 ]);
@@ -50,8 +47,7 @@ export const MULTIPLE_DOCUMENT_FILE_TYPES =
 
 export const ExtendedDocumentFileTypeSchema = z.enum([
   'input',
-  'reference',
-  'auxiliary',
+  'context',
   'media',
   'edited',
   'output',
@@ -112,7 +108,7 @@ export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
 // ============================================================
 
 // Composes: UIFileFieldsSchema (file fields) + ToolConfigFieldsSchema (tool options)
-export const MainViewPersistedStateSchema = UIFileFieldsSchema.merge(
+const MainViewPersistedStateBaseSchema = UIFileFieldsSchema.merge(
   ToolConfigFieldsSchema,
 ).extend({
   sessionType: SessionTypeSchema.prefault('toolUse'),
@@ -125,14 +121,42 @@ export const MainViewPersistedStateSchema = UIFileFieldsSchema.merge(
   toolUseInstruction: z.string().prefault(''),
   baseFile: z.string().prefault(''),
   inputFilesVisible: z.boolean().prefault(false),
-  referenceFilesVisible: z.boolean().prefault(false),
-  auxiliaryFilesVisible: z.boolean().prefault(false),
+  contextFilesVisible: z.boolean().prefault(false),
   mediaFilesVisible: z.boolean().prefault(false),
   outputFilesVisible: z.boolean().prefault(false),
   outputFilesActive: z.boolean().prefault(false),
   latexdiffsVisible: z.boolean().prefault(false),
   openedFiles: z.array(z.string()).nullish(),
 });
+
+// Layer the visibility-key migration on top of the shared file-field
+// migration so MainView and AgentConfig stay in sync without duplicating
+// the file-slot logic.
+function migrateLegacyMainViewState(input: unknown): unknown {
+  const migrated = migrateLegacyContextFileFields(input);
+  if (
+    typeof migrated !== 'object' ||
+    migrated === null ||
+    Array.isArray(migrated)
+  ) {
+    return migrated;
+  }
+  const obj = migrated as Record<string, unknown>;
+  if (
+    obj.contextFilesVisible === undefined &&
+    (obj.referenceFilesVisible || obj.auxiliaryFilesVisible)
+  ) {
+    obj.contextFilesVisible = true;
+  }
+  delete obj.referenceFilesVisible;
+  delete obj.auxiliaryFilesVisible;
+  return obj;
+}
+
+export const MainViewPersistedStateSchema = z.preprocess(
+  migrateLegacyMainViewState,
+  MainViewPersistedStateBaseSchema,
+);
 export type MainViewPersistedState = z.infer<
   typeof MainViewPersistedStateSchema
 >;
@@ -198,8 +222,7 @@ export type CheckboxValues = z.infer<typeof CheckboxValuesSchema>;
 
 export const SingleFilesSchema = z.object({
   inputFile: z.string(),
-  referenceFile: z.string(),
-  auxiliaryFile: z.string(),
+  contextFile: z.string(),
   mediaFile: z.string(),
   baseFile: z.string(),
   editedFile: z.string(),
@@ -208,8 +231,7 @@ export type SingleFiles = z.infer<typeof SingleFilesSchema>;
 
 export const FileOptionsSchema = z.object({
   inputFile: z.array(z.string()),
-  referenceFile: z.array(z.string()),
-  auxiliaryFile: z.array(z.string()),
+  contextFile: z.array(z.string()),
   mediaFile: z.array(z.string()),
   baseFile: z.array(z.string()),
   editedFile: z.array(z.string()),
@@ -219,8 +241,7 @@ export type FileOptions = z.infer<typeof FileOptionsSchema>;
 
 export const MultiFilesSchema = z.object({
   inputFiles: z.array(z.string()),
-  referenceFiles: z.array(z.string()),
-  auxiliaryFiles: z.array(z.string()),
+  contextFiles: z.array(z.string()),
   mediaFiles: z.array(z.string()),
   outputFiles: z.array(z.string()),
 });
@@ -228,8 +249,7 @@ export type MultiFiles = z.infer<typeof MultiFilesSchema>;
 
 export const MultiFilesVisibleSchema = z.object({
   inputFiles: z.boolean(),
-  referenceFiles: z.boolean(),
-  auxiliaryFiles: z.boolean(),
+  contextFiles: z.boolean(),
   mediaFiles: z.boolean(),
   outputFiles: z.boolean(),
 });
@@ -412,12 +432,8 @@ export const SetInputFileMessageSchema = FilesPayloadSchema.extend({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_INPUT_FILE),
 });
 
-export const SetReferenceFileMessageSchema = FilesPayloadSchema.extend({
-  command: z.literal(MAIN_VIEW_COMMANDS.SET_REFERENCE_FILE),
-});
-
-export const SetAuxiliaryFileMessageSchema = FilesPayloadSchema.extend({
-  command: z.literal(MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILE),
+export const SetContextFileMessageSchema = FilesPayloadSchema.extend({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_CONTEXT_FILE),
 });
 
 export const SetMediaFileMessageSchema = FilesPayloadSchema.extend({
@@ -437,15 +453,11 @@ export const InputFileSelectedMessageSchema = SingleFileSelectedSchema.extend({
   command: z.literal(MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED),
 });
 
-export const ReferenceFileSelectedMessageSchema =
-  SingleFileSelectedSchema.extend({
-    command: z.literal(MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED),
-  });
-
-export const AuxiliaryFileSelectedMessageSchema =
-  SingleFileSelectedSchema.extend({
-    command: z.literal(MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED),
-  });
+export const ContextFileSelectedMessageSchema = SingleFileSelectedSchema.extend(
+  {
+    command: z.literal(MAIN_VIEW_COMMANDS.CONTEXT_FILE_SELECTED),
+  },
+);
 
 export const MediaFileSelectedMessageSchema = SingleFileSelectedSchema.extend({
   command: z.literal(MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED),
@@ -459,12 +471,8 @@ export const SetInputFilesMessageSchema = FilesPayloadSchema.extend({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_INPUT_FILES),
 });
 
-export const SetReferenceFilesMessageSchema = FilesPayloadSchema.extend({
-  command: z.literal(MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES),
-});
-
-export const SetAuxiliaryFilesMessageSchema = FilesPayloadSchema.extend({
-  command: z.literal(MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES),
+export const SetContextFilesMessageSchema = FilesPayloadSchema.extend({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES),
 });
 
 export const SetMediaFilesMessageSchema = FilesPayloadSchema.extend({
@@ -512,8 +520,7 @@ export const SetOpenedFilesMessageSchema = z.object({
 export const SetAllSingleFilesMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES),
   inputFiles: FileListSchema.nullish(),
-  referenceFiles: FileListSchema.nullish(),
-  auxiliaryFiles: FileListSchema.nullish(),
+  contextFiles: FileListSchema.nullish(),
   mediaFiles: FileListSchema.nullish(),
 });
 
@@ -648,19 +655,16 @@ export const MainViewMessageSchema = z.discriminatedUnion('command', [
   SetModelOptionsMessageSchema,
   SetAgentOptionsMessageSchema,
   SetInputFileMessageSchema,
-  SetReferenceFileMessageSchema,
-  SetAuxiliaryFileMessageSchema,
+  SetContextFileMessageSchema,
   SetMediaFileMessageSchema,
   SetEditedFileMessageSchema,
   SetBaseFileMessageSchema,
   InputFileSelectedMessageSchema,
-  ReferenceFileSelectedMessageSchema,
-  AuxiliaryFileSelectedMessageSchema,
+  ContextFileSelectedMessageSchema,
   MediaFileSelectedMessageSchema,
   EditedFileSelectedMessageSchema,
   SetInputFilesMessageSchema,
-  SetReferenceFilesMessageSchema,
-  SetAuxiliaryFilesMessageSchema,
+  SetContextFilesMessageSchema,
   SetMediaFilesMessageSchema,
   SetOutputFilesMessageSchema,
   SetDefaultOutputFilesMessageSchema,
@@ -768,8 +772,7 @@ const ExecutionMessages = [
 
 const FileSelectionMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE),
-  commandOnly(MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE),
-  commandOnly(MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE),
+  commandOnly(MAIN_VIEW_COMMANDS.SELECT_CONTEXT_FILE),
   commandOnly(MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE),
   commandOnly(MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE),
   z.object({
@@ -781,16 +784,14 @@ const FileSelectionMessages = [
 
 const FileSelectedMessages = [
   withOptionalFilePath(MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED),
-  withOptionalFilePath(MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED),
-  withOptionalFilePath(MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED),
+  withOptionalFilePath(MAIN_VIEW_COMMANDS.CONTEXT_FILE_SELECTED),
   withOptionalFilePath(MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED),
   withOptionalFilePath(MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED),
 ] as const;
 
 const RequestFileMessages = [
   withNotifyWhenEmpty(MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE),
-  withNotifyWhenEmpty(MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE),
-  withNotifyWhenEmpty(MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE),
+  withNotifyWhenEmpty(MAIN_VIEW_COMMANDS.REQUEST_CONTEXT_FILE),
   withNotifyWhenEmpty(MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE),
@@ -810,8 +811,7 @@ const RequestFileMessages = [
 
 const SetFilesMessages = [
   withFilesArray(MAIN_VIEW_COMMANDS.SET_INPUT_FILES),
-  withFilesArray(MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES),
-  withFilesArray(MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES),
+  withFilesArray(MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES),
   withFilesArray(MAIN_VIEW_COMMANDS.SET_MEDIA_FILES),
 ] as const;
 
@@ -836,11 +836,8 @@ const FileOperationMessages = [
   withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES).extend({
     fileType: z.literal('input'),
   }),
-  withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES).extend({
-    fileType: z.literal('reference'),
-  }),
-  withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES).extend({
-    fileType: z.literal('auxiliary'),
+  withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_CONTEXT_FILES).extend({
+    fileType: z.literal('context'),
   }),
   withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES).extend({
     fileType: z.literal('media'),
@@ -859,16 +856,13 @@ const InstructionMessages = [
     model: z.string().optional(),
     inputFile: z.string().optional(),
     inputFiles: z.array(z.string()).optional(),
-    referenceFile: z.string().optional(),
-    referenceFiles: z.array(z.string()).optional(),
-    auxiliaryFile: z.string().optional(),
-    auxiliaryFiles: z.array(z.string()).optional(),
+    contextFile: z.string().optional(),
+    contextFiles: z.array(z.string()).optional(),
     mediaFile: z.string().optional(),
     mediaFiles: z.array(z.string()).optional(),
     outputFiles: z.array(z.string()).optional(),
     inputFilesActive: z.boolean().optional(),
-    referenceFilesActive: z.boolean().optional(),
-    auxiliaryFilesActive: z.boolean().optional(),
+    contextFilesActive: z.boolean().optional(),
     mediaFilesActive: z.boolean().optional(),
     outputFilesActive: z.boolean().optional(),
   }),

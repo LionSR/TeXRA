@@ -52,16 +52,17 @@ const views = [
         files: ['appendix.tex', 'References/2509.24978/main.tex'],
       },
       {
-        command: 'setReferenceFile',
+        command: 'setContextFile',
         files: ['refs.bib', 'References/2509.24978/main.bbl'],
       },
       {
-        command: 'setReferenceFiles',
-        files: ['refs.bib', 'References/2509.24978/only_supplement.tex'],
-      },
-      {
-        command: 'setAuxiliaryFiles',
-        files: ['ltxfront.sty', 'References/2509.24978/revtex4-2.cls'],
+        command: 'setContextFiles',
+        files: [
+          'refs.bib',
+          'References/2509.24978/only_supplement.tex',
+          'ltxfront.sty',
+          'References/2509.24978/revtex4-2.cls',
+        ],
       },
       {
         command: 'setMediaFiles',
