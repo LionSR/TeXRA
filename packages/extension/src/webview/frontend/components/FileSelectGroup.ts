@@ -9,7 +9,6 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
-import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 import { SortableController } from '@shared/controllers';
 import { designTokens } from '@shared/styles';
@@ -31,6 +30,7 @@ import {
 } from '../contexts/mainViewContexts';
 import { fileSelectStyles } from '../styles/fileSelectStyles';
 import { DEFAULT_CHECKBOX_VALUES } from '../store';
+import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 @customElement('file-select-group')
 export class FileSelectGroup extends LitElement {

@@ -3,7 +3,6 @@
 // Side-effect imports - register WA select & option components
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
-import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
@@ -23,6 +22,7 @@ import {
   fileSelectLayoutStyles,
   toggleStyles,
 } from '../styles/fileSelectStyles';
+import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 @customElement('latexdiffs-section')
 export class LatexDiffsSection extends LitElement {
