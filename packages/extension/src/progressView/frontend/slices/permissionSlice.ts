@@ -108,6 +108,12 @@ export const permissionHandlers: HandlerRegistry = {
     updateToolUseState(ctx, data.stream, (prev) =>
       create(prev, (draft) => {
         draft.odysseyActive = data.active;
+        draft.odysseyStatus = data.active
+          ? (data.status ?? undefined)
+          : undefined;
+        draft.odysseyObjective = data.active
+          ? (data.objective ?? undefined)
+          : undefined;
       }),
     );
   },

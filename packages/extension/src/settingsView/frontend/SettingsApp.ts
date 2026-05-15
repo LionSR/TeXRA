@@ -41,6 +41,7 @@ import {
   type ClaudeAgentPermissionMode,
   type LatexConfigValues,
   type NumberVscodeSetting,
+  type Odyssey,
   type PRSubscriptionEntry,
   type ToolDashboardItem,
   DEFAULT_LATEX_SETTINGS_STATUS,
@@ -70,6 +71,7 @@ import {
 
 // Side-effect: register tab components
 import './tabs/MemoryTab';
+import './tabs/OdysseyTab';
 import './tabs/HistoryTab';
 import './tabs/ModelsTab';
 import './tabs/AgentsTab';
@@ -318,6 +320,9 @@ export class SettingsApp extends SettingsAppBase {
   private readonly latexConfigValuesLoaded = signal(false);
   private readonly inlineCriticismEnabled = signal(false);
 
+  // Odyssey settings state
+  private readonly odysseyItems = signal<readonly Odyssey[]>([]);
+
   private getMessageHandlerContext(): SettingsMessageHandlerContext {
     return {
       selectedTabIndex: this.selectedTabIndex,
@@ -368,6 +373,7 @@ export class SettingsApp extends SettingsAppBase {
       latexConfigValues: this.latexConfigValues,
       latexConfigValuesLoaded: this.latexConfigValuesLoaded,
       inlineCriticismEnabled: this.inlineCriticismEnabled,
+      odysseyItems: this.odysseyItems,
       clearHistorySearch: () => this.historyTab?.clearSearch(),
       logSchemaError: (message, error) => this.logSchemaError(message, error),
     };
@@ -911,6 +917,15 @@ export class SettingsApp extends SettingsAppBase {
             ></wa-icon>
             Memory</wa-tab
           >
+          <wa-tab panel="odyssey"
+            ><wa-icon
+              class="settings-tab-icon"
+              library=${TEXRA_ICON_LIBRARY}
+              name="compass"
+              variant="solid"
+            ></wa-icon>
+            Odyssey</wa-tab
+          >
           <wa-tab panel="history"
             ><wa-icon
               class="settings-tab-icon"
@@ -998,6 +1013,10 @@ export class SettingsApp extends SettingsAppBase {
               @memory-pin-item=${this.handleMemoryPinItem}
               @memory-unpin-item=${this.handleMemoryUnpinItem}
             ></memory-tab>
+          </wa-tab-panel>
+
+          <wa-tab-panel name="odyssey">
+            <odyssey-tab .items=${this.odysseyItems.get()}></odyssey-tab>
           </wa-tab-panel>
 
           <wa-tab-panel name="history">
