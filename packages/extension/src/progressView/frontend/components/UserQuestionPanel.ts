@@ -38,6 +38,7 @@ export class UserQuestionPanel extends BaseFeedbackPanel {
 
   override render(): TemplateResult {
     const data = this.permission.data as UserQuestionPermission;
+    const canSubmit = this.hasAnyAnswer(data);
 
     return html`
       <div class="user-question-request">
@@ -57,8 +58,11 @@ export class UserQuestionPanel extends BaseFeedbackPanel {
           ${renderLabeledActionButton({
             icon: 'check',
             text: 'Submit',
-            title: 'Submit answers (y)',
+            title: canSubmit
+              ? 'Submit answers (y)'
+              : 'Select or type at least one answer before submitting',
             action: 'submit',
+            disabled: !canSubmit,
             onClick: () => this.submitAnswers(),
           })}
           ${this.renderRejectButton('Reject this question (n)')}
@@ -75,6 +79,9 @@ export class UserQuestionPanel extends BaseFeedbackPanel {
   override handleKeyboardShortcut(key: string): boolean {
     if (key === 'y') {
       if (this.showFeedback) return false;
+      if (!this.hasAnyAnswer(this.permission.data as UserQuestionPermission)) {
+        return true;
+      }
       this.submitAnswers();
       return true;
     }
@@ -183,6 +190,13 @@ export class UserQuestionPanel extends BaseFeedbackPanel {
         answers,
       }),
     );
+  }
+
+  private hasAnyAnswer(data: UserQuestionPermission): boolean {
+    return data.questions.some((question) => {
+      if (this.freeText[question.question]?.trim()) return true;
+      return (this.selections[question.question] ?? []).length > 0;
+    });
   }
 }
 

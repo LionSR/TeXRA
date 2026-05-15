@@ -217,6 +217,7 @@ async function login(context: CliContext): Promise<CliResult> {
     session = await signInCliSupabase({
       provider,
       openBrowser: !noBrowser,
+      manualBrowserHint: 'texra login --no-browser',
       onAuthUrl: (url) => {
         if (noBrowser) {
           const writeAuthUrl =
