@@ -103,12 +103,12 @@ const OdysseyToolInputSchema = z.strictObject({
 });
 ```
 
-| Command    | Use                                                                       | Effect                                                                                        |
-| ---------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Command    | Use                                                                                       | Effect                                                                                        |
+| ---------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `view`     | Read situational awareness (objective, status, history, time elapsed, continuation count) | No mutation; returns formatted state                                                          |
-| `start`    | Open an odyssey from conversation when user requests autonomous work      | Creates with status `active`. Fails if any nonterminal Odyssey already exists for the stream. |
-| `pause`    | Self-pause when blocked and needing user input                            | Status → `paused`. Continuation loop stops.                                                   |
-| `complete` | Signal objective met                                                      | Status → `complete`. Stores `reason` as audit sentence.                                       |
+| `start`    | Open an odyssey from conversation when user requests autonomous work                      | Creates with status `active`. Fails if any nonterminal Odyssey already exists for the stream. |
+| `pause`    | Self-pause when blocked and needing user input                                            | Status → `paused`. Continuation loop stops.                                                   |
+| `complete` | Signal objective met                                                                      | Status → `complete`. Stores `reason` as audit sentence.                                       |
 
 Commands deliberately omitted: `update_objective` (model must not drift the target), `resume` (only the user can clear a block), `abandon` (destructive, user-only).
 
