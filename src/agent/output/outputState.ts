@@ -123,10 +123,8 @@ export function setCompileFailures(
 
 function collectRunSupportFiles(agentConfig: AgentConfig): FileLocation[] {
   const allPaths = [
-    agentConfig.referenceFile,
-    ...agentConfig.referenceFiles,
-    agentConfig.auxiliaryFile,
-    ...agentConfig.auxiliaryFiles,
+    agentConfig.contextFile,
+    ...agentConfig.contextFiles,
     agentConfig.mediaFile,
     ...agentConfig.mediaFiles,
     agentConfig.inputFile,

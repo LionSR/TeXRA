@@ -193,7 +193,7 @@
             "editPresentation": "multilineText",
             "order": 5
           },
-          "texra.files.included.referenceExtensions": {
+          "texra.files.included.contextExtensions": {
             "type": "array",
             "items": {
               "type": "string"
@@ -203,27 +203,13 @@
               ".tex",
               ".md",
               ".bib",
-              ".bbl"
-            ],
-            "description": "File extensions to include when searching for reference files",
-            "editPresentation": "multilineText",
-            "order": 6
-          },
-          "texra.files.included.auxiliaryExtensions": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "default": [
-              ".txt",
-              ".tex",
+              ".bbl",
               ".cls",
-              ".md",
               ".sty"
             ],
-            "description": "File extensions to include when searching for auxiliary files",
+            "description": "File extensions to include when searching for context files",
             "editPresentation": "multilineText",
-            "order": 7
+            "order": 6
           },
           "texra.files.included.editedExtensions": {
             "type": "array",
@@ -270,7 +256,7 @@
               "preamble.tex",
               "yaml"
             ],
-            "description": "Files to ignore when listing input, sample, and edited files, but not auxiliary files",
+            "description": "Files to ignore when listing input, sample, and edited files",
             "editPresentation": "multilineText",
             "order": 10
           },
@@ -283,32 +269,6 @@
             "description": "Additional directories to ignore when listing input and edited files",
             "editPresentation": "multilineText",
             "order": 11
-          },
-          "texra.files.ignored.auxiliaryKeywords": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "default": [
-              "o1",
-              "o3",
-              "o4",
-              "gpt",
-              "sonnet",
-              "haiku",
-              "opus",
-              "gemini",
-              "grok",
-              "deepseek",
-              "qwen",
-              "kimi",
-              "llama",
-              "egg-info",
-              "yaml"
-            ],
-            "description": "Additional keywords to ignore when listing auxiliary files, including model names",
-            "editPresentation": "multilineText",
-            "order": 12
           },
           "texra.files.ignored.mediaDirectories": {
             "type": "array",
@@ -1070,7 +1030,7 @@
           {
             "id": "texra.gettingStarted.stageFiles",
             "title": "Pick your files",
-            "description": "Open the main view and tell TeXRA what to work on:\n\n- **Input** -- the manuscript you want edited\n- **Reference** -- papers or notes for context (optional)\n- **Auxiliary** -- bib files, style files, preambles (optional)\n- **Media** -- figures and images (optional)\n\nYou really only need an Input file to get going.\n\n[Open the TeXRA main view](command:texra.showMainView)",
+            "description": "Open the main view and tell TeXRA what to work on:\n\n- **Input** -- the manuscript you want edited\n- **Context** -- bib/style files, reference papers, or any read-only context (optional)\n- **Media** -- figures and images (optional)\n\nYou really only need an Input file to get going.\n\n[Open the TeXRA main view](command:texra.showMainView)",
             "media": {
               "image": "resources/walkthroughs/media/file-selection.png",
               "altText": "Screenshot of the file selection interface"

@@ -15,10 +15,8 @@ export const BaseProposalFieldsSchema = z.object({
 const FileFieldsSchema = z.object({
   inputFile: z.string(),
   inputFiles: z.array(z.string()),
-  referenceFile: z.string().nullable(),
-  referenceFiles: z.array(z.string()),
-  auxiliaryFile: z.string().nullable(),
-  auxiliaryFiles: z.array(z.string()),
+  contextFile: z.string().nullable(),
+  contextFiles: z.array(z.string()),
   mediaFile: z.string().nullable(),
   mediaFiles: z.array(z.string()),
   outputFiles: z.array(z.string()),
@@ -52,13 +50,8 @@ export function getProposalFileGroups(data: FileFields): ProposalFileGroup[] {
       clickable: true,
     },
     {
-      label: 'Reference',
-      files: combine(data.referenceFile, data.referenceFiles),
-      clickable: true,
-    },
-    {
-      label: 'Auxiliary',
-      files: combine(data.auxiliaryFile, data.auxiliaryFiles),
+      label: 'Context',
+      files: combine(data.contextFile, data.contextFiles),
       clickable: true,
     },
     {

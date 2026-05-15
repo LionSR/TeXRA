@@ -230,17 +230,11 @@ export class HistoryItemElement extends LitElement {
 
     // File fields only exist on workflow configs (discriminated union)
     if (config.agentCategory === AGENT_CATEGORY.WORKFLOW) {
-      const referenceSection = this.renderConfigSection('Reference', [
-        ['ReferenceFile', config.referenceFile],
-        ['ReferenceFiles', config.referenceFiles],
+      const contextSection = this.renderConfigSection('Context', [
+        ['ContextFile', config.contextFile],
+        ['ContextFiles', config.contextFiles],
       ]);
-      if (referenceSection) extraDetails.push(referenceSection);
-
-      const auxiliarySection = this.renderConfigSection('Auxiliary', [
-        ['AuxiliaryFile', config.auxiliaryFile],
-        ['AuxiliaryFiles', config.auxiliaryFiles],
-      ]);
-      if (auxiliarySection) extraDetails.push(auxiliarySection);
+      if (contextSection) extraDetails.push(contextSection);
 
       const outputSection = this.renderConfigSection('Output Files', [
         ['Files', config.outputFiles],

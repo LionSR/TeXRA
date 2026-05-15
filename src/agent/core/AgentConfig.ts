@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-import { NullableFileFieldsSchema } from '@shared/schemas/fileFields';
+import {
+  NullableFileFieldsSchema,
+  migrateLegacyContextFileFields,
+} from '@shared/schemas/fileFields';
 import { ToolConfigSchema } from '@shared/schemas/toolConfig';
 import { AgentCategory } from './AgentDataclass';
 
@@ -22,9 +25,14 @@ const AgentConfigFieldsSchema = NullableFileFieldsSchema.extend({
   workingDirectory: z.string().nullish(),
 });
 
-/** Agent configuration schema with output file count validation. */
-export const AgentConfigSchema = AgentConfigFieldsSchema.superRefine(
-  (config, ctx) => {
+/**
+ * Agent configuration schema with output file count validation.
+ * Wrapped in `z.preprocess` so old execution records persisted before
+ * the reference/auxiliary → context rename keep parsing on read.
+ */
+export const AgentConfigSchema = z.preprocess(
+  migrateLegacyContextFileFields,
+  AgentConfigFieldsSchema.superRefine((config, ctx) => {
     // Validate that output files count doesn't exceed input files count
     if (config.outputFiles.length > 0) {
       const inputCount = 1 + config.inputFiles.length; // inputFile + inputFiles
@@ -37,7 +45,7 @@ export const AgentConfigSchema = AgentConfigFieldsSchema.superRefine(
         });
       }
     }
-  },
+  }),
 );
 
 export type AgentConfig = z.output<typeof AgentConfigSchema>;

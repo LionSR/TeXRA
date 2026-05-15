@@ -41,25 +41,21 @@ export type DesktopFileSelection = DesktopMessageHandler;
 const RESPONSE_BY_SELECT_COMMAND = {
   [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE]:
     MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
-  [MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE]:
-    MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED,
-  [MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE]:
-    MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED,
+  [MAIN_VIEW_COMMANDS.SELECT_CONTEXT_FILE]:
+    MAIN_VIEW_COMMANDS.CONTEXT_FILE_SELECTED,
   [MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE]:
     MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED,
 } as const;
 
 const TYPE_BY_SELECT_COMMAND = {
   [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE]: 'input',
-  [MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE]: 'reference',
-  [MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE]: 'auxiliary',
+  [MAIN_VIEW_COMMANDS.SELECT_CONTEXT_FILE]: 'context',
   [MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE]: 'media',
 } as const;
 
 const SET_COMMAND_BY_FILE_TYPE = {
   input: MAIN_VIEW_COMMANDS.SET_INPUT_FILE,
-  reference: MAIN_VIEW_COMMANDS.SET_REFERENCE_FILE,
-  auxiliary: MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILE,
+  context: MAIN_VIEW_COMMANDS.SET_CONTEXT_FILE,
   media: MAIN_VIEW_COMMANDS.SET_MEDIA_FILE,
   edited: MAIN_VIEW_COMMANDS.SET_EDITED_FILE,
   base: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
@@ -145,18 +141,15 @@ export function createDesktopFileSelection(
   }
 
   async function requestAllSingleFiles() {
-    const [inputFiles, referenceFiles, auxiliaryFiles, mediaFiles] =
-      await Promise.all([
-        list('input'),
-        list('reference'),
-        list('auxiliary'),
-        list('media'),
-      ]);
+    const [inputFiles, contextFiles, mediaFiles] = await Promise.all([
+      list('input'),
+      list('context'),
+      list('media'),
+    ]);
     options.postToRenderer({
       command: MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES,
       inputFiles,
-      referenceFiles,
-      auxiliaryFiles,
+      contextFiles,
       mediaFiles,
     });
   }
@@ -206,11 +199,8 @@ export function createDesktopFileSelection(
       case MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE:
         runAsync(requestSingleFileList('input'));
         return true;
-      case MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE:
-        runAsync(requestSingleFileList('reference'));
-        return true;
-      case MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE:
-        runAsync(requestSingleFileList('auxiliary'));
+      case MAIN_VIEW_COMMANDS.REQUEST_CONTEXT_FILE:
+        runAsync(requestSingleFileList('context'));
         return true;
       case MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE:
         runAsync(requestSingleFileList('media'));
@@ -226,8 +216,7 @@ export function createDesktopFileSelection(
         runAsync(requestAllSingleFiles());
         return true;
       case MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE:
-      case MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE:
-      case MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE:
+      case MAIN_VIEW_COMMANDS.SELECT_CONTEXT_FILE:
       case MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE:
         runAsync(selectSingleFile(message.command));
         return true;

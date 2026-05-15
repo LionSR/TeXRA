@@ -1,14 +1,19 @@
 {
   "$schema": "Placement and visibility for agents in reference-agents/. Seeded from production remote_agents on 2026-04-15. Update this file (not YAML) when an agent's storage folder or visibility tags change. Agents managed outside reference-agents/ (e.g. lean, ocr, transcribe_audio — present in Supabase Storage but not in the repo) are intentionally omitted; the script leaves them alone. Only add names to `retired` when an agent has been deleted from Supabase Storage and should also be removed from the remote_agents table.",
-  "retired": [],
+  "retired": [
+    "apply_multiple",
+    "criticize_multiple",
+    "devise_multiple",
+    "elevate_multiple",
+    "enhance_multiple",
+    "generic_multiple",
+    "logic_multiple",
+    "notation_multiple",
+    "verifyFix_multiple"
+  ],
   "agents": {
     "apply": { "folder": "researcher", "visibility": ["public"] },
-    "apply_multiple": { "folder": "researcher", "visibility": ["public"] },
     "criticize": {
-      "folder": "QITBench",
-      "visibility": ["whitelist", "QITBench", "researcher", "public"]
-    },
-    "criticize_multiple": {
       "folder": "QITBench",
       "visibility": ["whitelist", "QITBench", "researcher", "public"]
     },
@@ -16,29 +21,13 @@
       "folder": "QITBench",
       "visibility": ["researcher", "QITBench"]
     },
-    "devise_multiple": {
-      "folder": "QITBench",
-      "visibility": ["researcher", "QITBench"]
-    },
     "elevate": { "folder": "researcher", "visibility": ["researcher"] },
-    "elevate_multiple": {
-      "folder": "researcher",
-      "visibility": ["researcher"]
-    },
     "enhance": { "folder": "whitelist", "visibility": ["public"] },
-    "enhance_multiple": { "folder": "whitelist", "visibility": ["public"] },
     "generic": { "folder": "public", "visibility": ["public"] },
-    "generic_multiple": { "folder": "public", "visibility": ["public"] },
     "humanize": { "folder": "researcher", "visibility": ["researcher"] },
     "logic": { "folder": "researcher", "visibility": ["public"] },
-    "logic_multiple": { "folder": "researcher", "visibility": ["public"] },
     "notation": { "folder": "researcher", "visibility": ["public"] },
-    "notation_multiple": { "folder": "researcher", "visibility": ["public"] },
     "verifyFix": { "folder": "researcher", "visibility": ["researcher"] },
-    "verifyFix_multiple": {
-      "folder": "researcher",
-      "visibility": ["researcher"]
-    },
     "orchestrator": { "folder": "tool-use", "visibility": ["public"] },
     "presenter": { "folder": "tool-use", "visibility": ["public"] },
     "progressCheck": { "folder": "tool-use", "visibility": ["public"] },
