@@ -68,6 +68,13 @@ export const DEFAULT_CHECKBOX_VALUES: CheckboxValues = {
   attachDiagnostics: DEFAULT_STATE.attachDiagnostics,
 };
 
+export function workflowCheckboxValues(values: CheckboxValues): CheckboxValues {
+  return {
+    ...values,
+    attachDiagnostics: false,
+  };
+}
+
 // =========================================================================
 // Command Mappings
 // =========================================================================

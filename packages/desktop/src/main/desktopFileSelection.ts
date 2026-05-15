@@ -139,15 +139,18 @@ export function createDesktopFileSelection(
     );
   }
 
-  /**
-   * REFRESH_ALL_FILES on the desktop refreshes the base-file dropdown
-   * (still single-slot under LaTeXdiff). Multi-list categories
-   * (input/context/media) are owned by the user and only mutated via
-   * the picker, drag-drop, or "Add opened files".
-   */
+  // Multi-list categories (input/context/media) are user-owned and only
+  // mutated via the picker / drag-drop / Add opened — so we just refresh
+  // the still-single-slot base-file dropdown and the empty-workspace banner.
   async function refreshDiskBackedDropdowns() {
     const inputFiles = await list('input');
     postFileList('base', inputFiles, { preserveBaseFile: true });
+    options.postToRenderer({
+      command:
+        inputFiles.length === 0
+          ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
+          : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
+    });
   }
 
   async function updateEditedFiles(baseFile?: string) {
@@ -195,12 +198,14 @@ export function createDesktopFileSelection(
       return;
     }
     const workspacePath = getWorkspacePath();
+    if (!workspacePath) return;
+
     const { title, listType } = getDialogConfig(message.fileType);
     const listConfig = getFileListConfig(listType, getListSettings());
     const currentFile =
       typeof message.currentFile === 'string' ? message.currentFile : undefined;
     const defaultPath =
-      workspacePath && currentFile
+      currentFile != null
         ? resolveWorkspaceFile(workspacePath, currentFile)
         : workspacePath;
     const selectedFiles = await options.showOpenFileDialog({
@@ -214,7 +219,7 @@ export function createDesktopFileSelection(
         },
       ],
     });
-    if (!selectedFiles || !workspacePath) return;
+    if (!selectedFiles) return;
     postMultiFileList(
       message.fileType,
       selectedFiles.map((file) => toWorkspaceRelative(workspacePath, file)),

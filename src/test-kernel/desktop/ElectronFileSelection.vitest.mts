@@ -187,6 +187,25 @@ describe('desktop file selection', () => {
     );
   });
 
+  it('does not open the multi-file picker without a workspace', async () => {
+    const { createDesktopFileSelection } = await loadDesktopFileSelection();
+    const showOpenFileDialog = vi.fn();
+    const files = createDesktopFileSelection({
+      postToRenderer: vi.fn(),
+      getWorkspacePath: () => undefined,
+      showOpenFileDialog,
+    });
+
+    expect(
+      files.handleMessage({
+        command: MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES,
+        fileType: 'input',
+      }),
+    ).toBe(true);
+
+    await vi.waitFor(() => expect(showOpenFileDialog).not.toHaveBeenCalled());
+  });
+
   it('leaves recent-commit requests for the main IPC router', async () => {
     const { createDesktopFileSelection } = await loadDesktopFileSelection();
     const files = createDesktopFileSelection({
