@@ -411,7 +411,8 @@ export class ProgressViewProvider
       this.bashApprovalHandler.hasPendingForStream(streamId) ||
       this.agentProposalHandler.hasPendingForStream(streamId) ||
       this.planApprovalHandler.hasPendingForStream(streamId) ||
-      this.externalInquiryHandler.hasPendingForStream(streamId)
+      this.externalInquiryHandler.hasPendingForStream(streamId) ||
+      this.userQuestionHandler.hasPendingForStream(streamId)
     );
   }
 
