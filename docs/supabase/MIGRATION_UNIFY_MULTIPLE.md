@@ -121,8 +121,13 @@ After ~1-2 weeks of normal usage with the new client, the `*_multiple.yaml` Stor
 
 ```bash
 for agent in apply criticize devise elevate enhance generic logic notation verifyFix; do
-  folder=$(jq -r ".retired[]" docs/supabase/remote-agents.config.json | grep -q "^${agent}_multiple$" && \
-    jq -r ".agents[\"$agent\"].folder" docs/supabase/remote-agents.config.json)
+  retired_name="${agent}_multiple"
+  if ! jq -e --arg name "$retired_name" '.retired | index($name)' docs/supabase/remote-agents.config.json >/dev/null; then
+    echo "Skipping ${retired_name}: not listed as retired" >&2
+    continue
+  fi
+
+  folder=$(jq -er --arg agent "$agent" '.agents[$agent].folder' docs/supabase/remote-agents.config.json)
   supabase storage rm "ss:///remote-agents/${folder}/${agent}_multiple.yaml" --project-ref <PROJECT-REF>
 done
 ```
