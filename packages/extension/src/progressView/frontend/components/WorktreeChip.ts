@@ -127,6 +127,18 @@ export class WorktreeChip extends LitElement {
         flex-shrink: 0;
       }
 
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
       .pr-number {
         color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
         flex-shrink: 0;
@@ -201,18 +213,30 @@ export class WorktreeChip extends LitElement {
   }
 
   private renderBranch(): TemplateResult | typeof nothing {
-    const branch = this.info.branch;
+    const branch = this.info.branch ?? this.worktreeLabel();
     if (!branch) return nothing;
+    const branchKind = this.info.branch ? 'Branch' : 'Worktree';
     const tooltip = this.info.dirty
-      ? `Branch ${branch} (uncommitted changes)`
-      : `Branch ${branch}`;
+      ? `${branchKind} ${branch} (uncommitted changes)`
+      : `${branchKind} ${branch}`;
     return html`<span class="branch" title=${tooltip}>
       ${waIcon('code-branch')}
       <span class="branch-name">${branch}</span>
       ${this.info.dirty
-        ? html`<span class="dirty-dot" aria-label="uncommitted changes"></span>`
+        ? html`<span
+              class="dirty-dot"
+              role="img"
+              aria-label="uncommitted changes"
+            ></span>
+            <span class="sr-only">uncommitted changes</span>`
         : nothing}
     </span>`;
+  }
+
+  private worktreeLabel(): string | undefined {
+    const path = this.info.workingDirectory?.trim();
+    if (!path) return undefined;
+    return path.split(/[\\/]/).findLast(Boolean) ?? path;
   }
 
   private renderPRDetails(pr: NonNullable<WorktreeInfo['pr']>): TemplateResult {
