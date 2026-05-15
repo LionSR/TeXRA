@@ -1,9 +1,9 @@
 // Third-party imports
 import { postMessage } from '@shared/hostBridge';
+import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
 // Local imports
-import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 export interface RecordingButtonConfig {
   startCommand: string;

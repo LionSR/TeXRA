@@ -1,6 +1,6 @@
+import { platform } from '@platform/platform';
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { GlobalStateKey } from '@common/state/stateKeys';
-import { platform } from '@platform/platform';
 
 export async function bootstrapElectronAgentDirectories(
   resourcesPath: string,

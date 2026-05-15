@@ -11,7 +11,6 @@ import { repeat } from 'lit/directives/repeat.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
-import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 // Local imports - shared styles
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -44,6 +43,7 @@ import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
+import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type { PermissionState } from './PermissionCard';
 
 function proposalIdOf(

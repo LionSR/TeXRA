@@ -13,8 +13,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
-import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
-import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 // Local imports - shared constants
 import {
@@ -36,6 +34,8 @@ import {
 import { profileViewStyles } from './styles';
 import { ModelSelectionEvents, ProviderKeyEvents } from './events';
 import { resolveProviderKeyRows } from './providerKeyRows';
+import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
+import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 
 /** Display labels for reasoning level options. */
 const REASONING_LEVEL_LABELS: Record<ReasoningLevel, string> = {
