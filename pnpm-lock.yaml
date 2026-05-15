@@ -24,8 +24,8 @@ importers:
         specifier: ^7.2.0
         version: 7.2.0
       '@google/genai':
-        specifier: ^2.2.0
-        version: 2.2.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))
+        specifier: ^2.3.0
+        version: 2.3.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))
       '@jamesgopsill/crossref-client':
         specifier: ^1.1.0
         version: 1.1.0
@@ -145,7 +145,7 @@ importers:
         version: 0.3.0
       openai:
         specifier: ^6.37.0
-        version: 6.37.0(ws@8.20.0)(zod@4.4.3)
+        version: 6.37.0(ws@8.20.1)(zod@4.4.3)
       p-map:
         specifier: ^7.0.4
         version: 7.0.4
@@ -399,8 +399,8 @@ importers:
         specifier: ^7.2.0
         version: 7.2.0
       '@google/genai':
-        specifier: ^2.2.0
-        version: 2.2.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))
+        specifier: ^2.3.0
+        version: 2.3.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))
       '@jamesgopsill/crossref-client':
         specifier: ^1.1.0
         version: 1.1.0
@@ -517,7 +517,7 @@ importers:
         version: 0.3.0
       openai:
         specifier: ^6.37.0
-        version: 6.37.0(ws@8.20.0)(zod@4.4.3)
+        version: 6.37.0(ws@8.20.1)(zod@4.4.3)
       p-map:
         specifier: ^7.0.4
         version: 7.0.4
@@ -1202,8 +1202,8 @@ packages:
     resolution: {integrity: sha512-YTVITFGN0/24PxzXrwqCgnyd7njDuzp5ZvaCx5nq/jg55kUYd94Nj8UTchBdBofi/L0nwRfjGOg0E41d2u9T1w==}
     engines: {node: '>=6'}
 
-  '@google/genai@2.2.0':
-    resolution: {integrity: sha512-RA3cuaKLldWTrpxhNm2nAe0Oez/UEuoH11jFjPzbYL7TSP83lMk+ic7pQKZ4ekJdZfnIdgxWl1DwJoUwxmvWGQ==}
+  '@google/genai@2.3.0':
+    resolution: {integrity: sha512-rXDhXUBj31gZafcwQFbXvt8jMrMxZoK7ECjQpk88UfA/OkZls3PtZDprT9lM3jjqRtwRjQoNLoPoNq6MlV8qLw==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.25.2
@@ -6174,8 +6174,8 @@ packages:
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
 
-  ws@8.20.0:
-    resolution: {integrity: sha512-sAt8BhgNbzCtgGbt2OxmpuryO63ZoDk/sqaB/znQm94T4fCEsy/yV+7CdC1kJhOU9lboAEU7R3kquuycDoibVA==}
+  ws@8.20.1:
+    resolution: {integrity: sha512-It4dO0K5v//JtTXuPkfEOaI3uUN87iYPnqo/ZzqCoG3g8uhA66QUMs/SrM0YK7/NAu+r4LMh/9dq2A7k+rHs+w==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -6820,12 +6820,12 @@ snapshots:
     dependencies:
       '@fortawesome/fontawesome-common-types': 7.2.0
 
-  '@google/genai@2.2.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))':
+  '@google/genai@2.3.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))':
     dependencies:
       google-auth-library: 10.6.2
       p-retry: 4.6.2
       protobufjs: 7.5.8
-      ws: 8.20.0
+      ws: 8.20.1
     optionalDependencies:
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
     transitivePeerDependencies:
@@ -7783,7 +7783,7 @@ snapshots:
 
   '@types/yauzl@2.10.3':
     dependencies:
-      '@types/node': 22.19.17
+      '@types/node': 24.12.3
     optional: true
 
   '@typescript-eslint/eslint-plugin@8.59.3(@typescript-eslint/parser@8.59.3(eslint@9.39.4(jiti@2.6.1))(typescript@6.0.3))(eslint@9.39.4(jiti@2.6.1))(typescript@6.0.3)':
@@ -10877,9 +10877,9 @@ snapshots:
       is-inside-container: 1.0.0
       wsl-utils: 0.1.0
 
-  openai@6.37.0(ws@8.20.0)(zod@4.4.3):
+  openai@6.37.0(ws@8.20.1)(zod@4.4.3):
     optionalDependencies:
-      ws: 8.20.0
+      ws: 8.20.1
       zod: 4.4.3
 
   optionator@0.9.4:
@@ -12398,7 +12398,7 @@ snapshots:
 
   wrappy@1.0.2: {}
 
-  ws@8.20.0: {}
+  ws@8.20.1: {}
 
   wsl-utils@0.1.0:
     dependencies:
