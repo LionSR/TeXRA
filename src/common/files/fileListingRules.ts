@@ -1,6 +1,10 @@
 import { DEFAULT_TEXRA_SETTINGS } from '@shared/schemas/settingsConfiguration';
 
-import { getIncludedExtensions, type ExtensionCategory } from './fileTypeUtils';
+import {
+  LEGACY_AUXILIARY_KEYWORDS_KEY,
+  getIncludedExtensions,
+  type ExtensionCategory,
+} from './fileTypeUtils';
 
 export type ListableFileType = Exclude<ExtensionCategory, 'audio'>;
 
@@ -10,8 +14,10 @@ export interface FileListSettings {
   ignoredKeywords: string[];
   ignoredInputFiles: string[];
   ignoredInputDirectories: string[];
-  ignoredAuxKeywords: string[];
   ignoredMediaDirs: string[];
+  /** Carried forward from the removed `auxiliaryKeywords` setting; folded
+   *  into the context branch of getFileListConfig for back-compat. */
+  legacyAuxiliaryKeywords: string[];
 }
 
 export interface FileListConfig {
@@ -83,14 +89,14 @@ export function loadFileListSettings(
       'texra.files.ignored.inputDirectories',
       ignored.inputDirectories,
     ),
-    ignoredAuxKeywords: readConfig(
-      'texra.files.ignored.auxiliaryKeywords',
-      ignored.auxiliaryKeywords,
-    ),
     ignoredMediaDirs: readConfig(
       'texra.files.ignored.mediaDirectories',
       ignored.mediaDirectories,
     ),
+    // Back-compat: the auxiliaryKeywords setting was removed in this PR.
+    // Pass an empty fallback so we get [] if unset and the user's
+    // pre-rename customization if still set in their settings.json.
+    legacyAuxiliaryKeywords: readConfig(LEGACY_AUXILIARY_KEYWORDS_KEY, []),
   };
 }
 
@@ -110,24 +116,19 @@ export function getFileListConfig(
         ignoredKeywords: settings.ignoredKeywords,
         ignoredFiles: settings.ignoredInputFiles,
       };
-    case 'reference':
+    case 'context':
       return {
-        extensions: getIncludedExtensions('reference'),
+        extensions: getIncludedExtensions('context'),
         ignoredExtensions: settings.ignoredFileExtensions,
         ignoredDirs: settings.ignoredDirectories,
-        ignoredKeywords: settings.ignoredKeywords,
-        ignoredFiles: settings.ignoredInputFiles,
-      };
-    case 'auxiliary':
-      return {
-        extensions: getIncludedExtensions('auxiliary'),
-        ignoredExtensions: settings.ignoredFileExtensions,
-        ignoredDirs: settings.ignoredDirectories,
+        // Concatenate any pre-rename `auxiliaryKeywords` (model-name filters
+        // like `o1`/`gpt`/`sonnet`/...) so a user who customized that list
+        // keeps their filtering when `.cls`/`.sty` files land in Context.
         ignoredKeywords: [
           ...settings.ignoredKeywords,
-          ...settings.ignoredAuxKeywords,
+          ...settings.legacyAuxiliaryKeywords,
         ],
-        ignoredFiles: [],
+        ignoredFiles: settings.ignoredInputFiles,
       };
     case 'media':
       return {
