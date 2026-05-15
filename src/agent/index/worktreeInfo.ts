@@ -57,11 +57,6 @@ export async function resolveWorktreeInfo(
   return probe;
 }
 
-/** Drop any cached entry for `workingDirectory` (e.g. after a git operation). */
-export function invalidateWorktreeInfo(workingDirectory: string): void {
-  cache.delete(workingDirectory);
-}
-
 async function probeWorktree(workingDirectory: string): Promise<WorktreeInfo> {
   const [branch, dirty] = await Promise.all([
     readBranch(workingDirectory),
