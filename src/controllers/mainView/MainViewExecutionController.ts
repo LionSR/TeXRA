@@ -78,7 +78,7 @@ export function prepareMainViewExecutionRequest(
     config: {
       ...message,
       agentCategory: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
-      outputFiles: [],
+      outputFiles: message.outputFiles ?? message.inputFiles,
       toolConfig: { ...toolConfigResult.data, attachDiagnostics: false },
       mediaFiles: (message.mediaFiles ?? [])
         .map(mapMediaFile)

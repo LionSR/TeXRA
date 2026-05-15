@@ -34,10 +34,10 @@ prompts:
 
     <documents>
     {{ ALL_CONTEXTS }}
-    <document name="{{ TEMPLATE_POSTER_STYLE_FILE }}"
+    <document name="{{ TEMPLATE_POSTER_STYLE_FILE }}">
     {{ TEMPLATE_POSTER_STYLE_CONTENT }}
     </document>
-    <document name="{{ TEMPLATE_POSTER_THEME_FILE }}"
+    <document name="{{ TEMPLATE_POSTER_THEME_FILE }}">
     {{ TEMPLATE_POSTER_THEME_CONTENT }}
     </document>
     {{ ALL_INPUTS }}

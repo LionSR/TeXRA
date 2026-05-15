@@ -883,7 +883,8 @@ export class MainApp extends MainAppBase {
       Object.fromEntries(
         MULTIPLE_DOCUMENT_FILE_TYPES.map((type) => {
           const key = `${type}Files` as keyof MultiFiles;
-          const files = state[key as keyof MainViewPersistedState];
+          const files =
+            type === 'output' ? [] : state[key as keyof MainViewPersistedState];
           return [key, Array.isArray(files) ? files : []];
         }),
       ) as MultiFiles,
@@ -1153,6 +1154,10 @@ export class MainApp extends MainAppBase {
     }
   }
 
+  private get primaryInputFile(): string {
+    return this.multiFiles.get().inputFiles[0] ?? '';
+  }
+
   private isSelectedAgentOrchestrator(): boolean {
     if (this.sessionType.get() !== SESSION_TYPES.TOOL_USE) return false;
     const agentId = this.toolUseAgent.get();
@@ -1256,7 +1261,7 @@ export class MainApp extends MainAppBase {
 
   private handleMerge(): void {
     const sf = this.singleFiles.get();
-    const primaryInput = this.multiFiles.get().inputFiles[0] ?? '';
+    const primaryInput = this.primaryInputFile;
     if (!primaryInput || !sf.editedFile) {
       postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
         text: 'Please select both input and edited files to merge',
@@ -1274,7 +1279,7 @@ export class MainApp extends MainAppBase {
   }
 
   private handlePackClean(action: 'pack' | 'clean'): void {
-    const primaryInput = this.multiFiles.get().inputFiles[0] ?? '';
+    const primaryInput = this.primaryInputFile;
     if (!primaryInput || !this.model.get()) {
       postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
         text: 'Please select all required fields (input file, agent, and model)',
@@ -1323,7 +1328,7 @@ export class MainApp extends MainAppBase {
 
   private handleLatexdiff(): void {
     const sf = this.singleFiles.get();
-    const primaryInput = this.multiFiles.get().inputFiles[0] ?? '';
+    const primaryInput = this.primaryInputFile;
     postMessage(MAIN_VIEW_COMMANDS.LATEXDIFF, {
       inputFile: primaryInput,
       baseFile: sf.baseFile,
@@ -1336,7 +1341,7 @@ export class MainApp extends MainAppBase {
 
   private handleLatexdiffVC(): void {
     const sf = this.singleFiles.get();
-    const primaryInput = this.multiFiles.get().inputFiles[0] ?? '';
+    const primaryInput = this.primaryInputFile;
     const commitVal = this.commit.get();
     postMessage(MAIN_VIEW_COMMANDS.LATEXDIFFVC, {
       inputFile: primaryInput,
@@ -1350,7 +1355,7 @@ export class MainApp extends MainAppBase {
 
   private handleLatexdiffVCPack(action: 'pack' | 'clean'): void {
     const sf = this.singleFiles.get();
-    const primaryInput = this.multiFiles.get().inputFiles[0] ?? '';
+    const primaryInput = this.primaryInputFile;
     const commitVal = this.commit.get();
     postMessage(
       action === 'pack'
