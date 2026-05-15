@@ -48,9 +48,9 @@ export interface LaunchedApp {
  * `build:renderer` scripts). The harness intentionally does NOT rebuild on
  * every test — that would blow the per-suite budget.
  *
- * On macOS the first launch may trigger a keychain prompt because the app
- * touches `safeStorage`. Set `TEXRA_DISABLE_KEYCHAIN=1` (handled by the app
- * platform layer) or run the suite under a CI keychain to avoid the freeze.
+ * Set `TEXRA_DISABLE_KEYCHAIN=1` (handled by the app platform layer) so the
+ * harness never blocks on a macOS keychain prompt while reading or writing
+ * saved secrets.
  */
 export async function launchTexraApp(
   options: LaunchOptions = {},

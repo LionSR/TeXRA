@@ -49,15 +49,15 @@ secrets layer (`packages/desktop/src/main/platform/electronSecrets.ts`)
 honors by skipping `safeStorage` entirely:
 
 - `getSecretStorageMode()` returns `'unavailable'` without touching
-  `safeStorage`, so the launch-time keychain prewarm never prompts.
+  `safeStorage`.
 - `ElectronSecrets.get()` returns `undefined` for any persisted key (env-var
   API key overrides still work).
 - `ElectronSecrets.set()` silently no-ops with a one-time `console.warn`.
 
 This keeps headless Playwright runs from blocking on the macOS keychain
-prompt and crashing startup with the
-`Cannot read properties of undefined (reading 'kind')` fallback. To run
-locally exactly as CI does, prefix your invocation:
+prompt and preserves the renderer bootstrap fallback for
+`Cannot read properties of undefined (reading 'kind')`. To run locally exactly
+as CI does, prefix your invocation:
 
 ```bash
 TEXRA_DISABLE_KEYCHAIN=1 pnpm --filter @texra/desktop test:e2e
