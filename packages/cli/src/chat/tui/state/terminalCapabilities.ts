@@ -56,6 +56,10 @@ const QUERIES = {
 const DA1_SENTINEL = '[c';
 
 // Response markers we look for in the read buffer (before the DA1 reply).
+// The `\x1b` (ESC) is mandatory in every CSI/OSC reply — that's exactly
+// what `no-control-regex` flags; the rule is paranoid for terminal-protocol
+// patterns. Suppression is scoped to this block.
+/* eslint-disable no-control-regex */
 const RESPONSE_MARKERS = {
   // Kitty keyboard: `CSI ? <flags> u`
   kittyKeyboard: /\[\?[\d;]*u/,
@@ -69,6 +73,7 @@ const RESPONSE_MARKERS = {
 
 // DA1 response: `CSI ? <attrs> c`
 const DA1_RESPONSE = /\[\?[\d;]*c/;
+/* eslint-enable no-control-regex */
 
 export interface DiscoveryStreams {
   readonly stdin: NodeJS.ReadStream;

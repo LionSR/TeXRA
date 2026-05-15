@@ -7,9 +7,8 @@ import type {
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
 
-import type { CliRuntimeHost } from '../../../runtime/runtimeHost';
-
 import { cliState, patchStream, removeStream } from './cliState';
+import type { CliRuntimeHost } from '../../../runtime/runtimeHost';
 
 type Emit = <K extends ProgressEvent>(
   event: K,
