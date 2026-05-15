@@ -73,13 +73,7 @@ export function installTuiApprovals(
         ? { accepted: true, appliedContent: request.proposedContent }
         : { accepted: false, userMessage: policy.userMessage };
     }
-    const decision = await enqueueApproval({
-      kind: 'toolEdit',
-      request,
-      resolve: () => {
-        /* unused — the queue resolves the outer promise via `decide` */
-      },
-    });
+    const decision = await enqueueApproval({ kind: 'toolEdit', request });
     return decision.accepted
       ? { accepted: true, appliedContent: request.proposedContent }
       : { accepted: false, userMessage: decision.userMessage };

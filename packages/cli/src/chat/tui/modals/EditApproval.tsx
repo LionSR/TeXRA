@@ -1,9 +1,10 @@
+import { useMemo } from 'react';
 import { Box, Text } from 'ink';
 import { ConfirmInput } from '@inkjs/ui';
 
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
-import { DiffView, diffStats } from '../render/DiffView';
+import { buildHunks, DiffView, statsFromHunks } from '../render/DiffView';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface EditApprovalProps {
@@ -12,10 +13,21 @@ export interface EditApprovalProps {
 }
 
 export function EditApproval(props: EditApprovalProps): React.JSX.Element {
-  const stats = diffStats(
-    props.request.originalContent ?? '',
-    props.request.proposedContent ?? '',
+  // Single diff pass shared between the summary line and the inline view.
+  const hunks = useMemo(
+    () =>
+      buildHunks(
+        props.request.path,
+        props.request.originalContent ?? '',
+        props.request.proposedContent ?? '',
+      ),
+    [
+      props.request.path,
+      props.request.originalContent,
+      props.request.proposedContent,
+    ],
   );
+  const stats = useMemo(() => statsFromHunks(hunks), [hunks]);
 
   return (
     <Box
@@ -32,12 +44,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
         {props.request.sourceTool}
       </Text>
       <Box marginY={1} flexDirection="column">
-        <DiffView
-          fileLabel={props.request.path}
-          originalContent={props.request.originalContent ?? ''}
-          proposedContent={props.request.proposedContent ?? ''}
-          maxHunkLines={30}
-        />
+        <DiffView hunks={hunks} maxHunkLines={30} />
       </Box>
       <Box>
         <Text dimColor>y approve · n reject · </Text>

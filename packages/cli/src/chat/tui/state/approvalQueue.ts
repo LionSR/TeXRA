@@ -17,18 +17,11 @@ import type {
   PlanApprovalPermission,
   RetryPermission,
 } from '@shared/schemas';
-import type {
-  ToolEditApprovalRequest,
-  ToolEditApprovalResult,
-} from '@tools/approval/toolEditApproval';
+import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
 export type ApprovalPayload =
   | { kind: 'bash'; payload: BashPermission }
-  | {
-      kind: 'toolEdit';
-      request: ToolEditApprovalRequest;
-      resolve: (result: ToolEditApprovalResult) => void;
-    }
+  | { kind: 'toolEdit'; request: ToolEditApprovalRequest }
   | { kind: 'plan'; payload: PlanApprovalPermission }
   | { kind: 'proposal'; payload: AgentProposalPermission }
   | { kind: 'retry'; payload: RetryPermission }

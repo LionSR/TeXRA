@@ -7,7 +7,7 @@
 import { Box, Text } from 'ink';
 import { structuredPatch, type StructuredPatchHunk } from 'diff';
 
-type Hunk = StructuredPatchHunk;
+export type Hunk = StructuredPatchHunk;
 
 export interface DiffStats {
   readonly added: number;
@@ -15,17 +15,10 @@ export interface DiffStats {
   readonly hunks: number;
 }
 
-export interface DiffViewProps {
-  readonly originalContent: string;
-  readonly proposedContent: string;
-  readonly fileLabel: string;
-  /** Maximum context lines per hunk before truncating; 0 = no truncation. */
-  readonly maxHunkLines?: number;
-}
-
 const NO_NEWLINE_MARKER = '\\';
 
-function buildHunks(
+/** Compute hunks once; callers reuse for both stats and the renderer. */
+export function buildHunks(
   fileLabel: string,
   original: string,
   proposed: string,
@@ -35,7 +28,7 @@ function buildHunks(
   }).hunks;
 }
 
-function statsFromHunks(hunks: readonly Hunk[]): DiffStats {
+export function statsFromHunks(hunks: readonly Hunk[]): DiffStats {
   let added = 0;
   let removed = 0;
   for (const hunk of hunks) {
@@ -48,24 +41,18 @@ function statsFromHunks(hunks: readonly Hunk[]): DiffStats {
   return { added, removed, hunks: hunks.length };
 }
 
-export function diffStats(
-  originalContent: string,
-  proposedContent: string,
-): DiffStats {
-  return statsFromHunks(buildHunks('', originalContent, proposedContent));
+export interface DiffViewProps {
+  readonly hunks: readonly Hunk[];
+  /** Maximum context lines per hunk before truncating; 0 = no truncation. */
+  readonly maxHunkLines?: number;
 }
 
 export function DiffView(props: DiffViewProps): React.JSX.Element {
-  const hunks = buildHunks(
-    props.fileLabel,
-    props.originalContent,
-    props.proposedContent,
-  );
   const max = props.maxHunkLines ?? 0;
 
   return (
     <Box flexDirection="column">
-      {hunks.map((hunk, hi) => {
+      {props.hunks.map((hunk, hi) => {
         // `\ No newline at end of file` is a synthetic marker; not part of
         // the actual diff content.
         const lines = hunk.lines.filter(
