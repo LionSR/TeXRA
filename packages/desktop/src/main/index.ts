@@ -596,6 +596,9 @@ function createWindow(options: {
     agentExecution.dispose();
     desktopAuth.dispose();
   });
+  window.webContents.once('did-finish-load', () => {
+    void options.initializeCrashReporting();
+  });
 
   if (process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -662,7 +665,6 @@ if (protocolLifecycle.shouldContinue) {
         })();
         await crashReportingInitialization;
       };
-      await initializeCrashReporting();
       const authCoordinator = createDesktopAuthCoordinator({
         secrets: platform().secrets,
         log: console,
