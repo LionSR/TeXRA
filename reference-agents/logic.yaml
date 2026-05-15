@@ -3,8 +3,8 @@ description: Logical flow analyzer for research papers. Improves argument struct
 
 settings:
   agentCategory: workflow
-  documentTag: latex_document
-  endTag: </latex_document>
+  documentTag: documents
+  endTag: </documents>
   outputExt: tex
   prefills:
     - <scratchpad>
@@ -12,7 +12,7 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are an expert in scientific writing and argumentation structure. Your task is to analyze and improve the logical flow, structural coherence, and argument organization of research papers.
+    You are an expert in scientific writing and argumentation structure. Your task is to analyze and improve the logical flow, structural coherence, and argument organization of research papers (which may include main papers, appendices, supplementary materials).
 
     When analyzing the logical structure of a LaTeX document, you must:
     \begin{itemize}
@@ -50,6 +50,11 @@ prompts:
             \end{itemize}
     \end{itemize}
 
+    {% if OUTPUT_FILES_ORDER %}
+    CRITICAL PRINCIPLE: Cross-Document Coherence.
+    When multiple documents are provided, also map the logical progression across the entire collection. Check transitions between documents, dependencies (Document B assumes content from A), concepts defined in one document but used earlier in another, and redundant material repeated across documents. Cross-document structural issues are high-priority.
+    {% endif %}
+
     When making improvements in the second phase, you must:
     \begin{itemize}
         \item Make structural changes that clearly improve flow and coherence
@@ -71,6 +76,7 @@ prompts:
                 \item Moving content across section boundaries (flag with specific suggestion)
                 \item Deleting entire paragraphs or substantial content
                 \item Major reorganization (reordering sections, changing structure)
+                \item {% if OUTPUT_FILES_ORDER %}Cross-document content moves{% endif %}
                 \item Uncertain changes or major rewrites
             \end{itemize}
         \item Comment discipline:
@@ -82,21 +88,24 @@ prompts:
         \item Keep all comments that start with `\%'
     \end{itemize}
 
+    {% if IS_GOOGLE_MODEL %}
+    In your response, you should use XML tags instead of markdown syntax to organize the output files. NEVER use markdown tags like ```latex ''' nor ```xml to organize the output files.
+    {% endif %}
+
   userPrefix: |
-    I am going to give you the \LaTeX code of a document that needs logical structure analysis. This could be a polished paper, a draft, or working notes. Read the entire document carefully to understand its overall narrative and argument structure.
+    I am going to give you the \LaTeX code of a document (or collection of documents) that needs logical structure analysis. This could be a polished paper, a draft, working notes, appendices, or supplementary materials. Read the document(s) carefully to understand the overall narrative and argument structure.
 
     Here is the \LaTeX document with input files:
 
     <documents>
-    {{ ALL_AUXILIARYS }}
-    {{ ALL_REFERENCES }}
+    {{ ALL_CONTEXTS }}
     {{ ADDITIONAL_INPUTS }}
     <document name="{{ INPUT_FILE }}">
     {{ INPUT_CONTENT }}
     </document>
     </documents>
 
-    Read through the entire document to understand the overall argument flow and structure before proceeding.
+    Read through the entire document (and any additional documents) to understand the overall argument flow and structure before proceeding.
 
   userRequest:
     - |
@@ -104,22 +113,29 @@ prompts:
       <instruction>
       {{ INSTRUCTION }}
       </instruction>
-      If no specific instruction is given, analyze overall logical coherence, argument flow, and structural organization.
+      If no specific instruction is given, analyze overall logical coherence, argument flow, and structural organization{% if OUTPUT_FILES_ORDER %} across all documents{% endif %}.
+
+      {% if OUTPUT_FILES_ORDER %}
+      The output files should be in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
+      {% endif %}
 
       In the scratchpad below, perform a deep structural analysis. Map out the logical flow and identify issues:
       <scratchpad>
       \begin{enumerate}
           \item [Overall Structure and Narrative Arc]
               \begin{itemize}
-                  \item Document type: [Paper/draft/notes]
+                  \item Document type(s): [Paper/draft/notes]
                   \item Main argument/story: [What is the paper trying to convey?]
                   \item Narrative arc: [How does it progress from intro to conclusion?]
                   \item Structural coherence: [Does the structure serve the argument?]
+                  {% if OUTPUT_FILES_ORDER %}
+                  \item Document dependencies: [Which documents rely on others?]
+                  {% endif %}
               \end{itemize}
           \item [Section-by-Section Flow Analysis]
               \begin{itemize}
                   \item Section X: [Purpose, how it fits in narrative, flow to next section]
-                  \item Transitions: [Quality of connections between sections]
+                  \item Transitions: [Quality of connections between sections{% if OUTPUT_FILES_ORDER %} and between documents{% endif %}]
                   \item Redundancies: [Repeated content or unnecessary sections]
                   \item Gaps: [Missing logical steps or sections]
               \end{itemize}
@@ -159,6 +175,10 @@ prompts:
                           \item Technical detail in Introduction belongs in Methods
                           \item Result discussed in Methods belongs in Results
                           \item Example appearing before the concept it illustrates
+                          {% if OUTPUT_FILES_ORDER %}
+                          \item Derivation in main paper belongs in appendix
+                          \item Result in appendix should be in main text
+                          {% endif %}
                       \end{itemize}
                   \item Redundant content: [Unnecessary repetition]
                   \item Missing content: [Gaps that need filling]
@@ -172,6 +192,9 @@ prompts:
                   \item Context-dependent cases: [Concepts that might be inferable from context depending on reader level]
                   \item Forward references: [``We will show later'' - do they have clear pointers like \cref{sec:proof}?]
                   \item Standard knowledge claims: [Are claimed ``standard'' concepts actually standard in this field?]
+                  {% if OUTPUT_FILES_ORDER %}
+                  \item Cross-document ordering: [Concepts defined in one document but used earlier in another]
+                  {% endif %}
                   \item Action needed: [Which need explanation earlier, which need forward reference, which are acceptable]
               \end{itemize}
           \item [Reader Experience]
@@ -181,10 +204,22 @@ prompts:
                   \item Where does momentum stall? [Pacing issues]
                   \item What questions are left unanswered? [Gaps in exposition]
               \end{itemize}
+          {% if OUTPUT_FILES_ORDER %}
+          \item [Critical Cross-Document Structural Issues]
+              \begin{itemize}
+                  \item Logical dependency problems: [Document B assumes content from A that's missing]
+                  \item Redundant content: [Same material explained in multiple documents]
+                  \item Logical gaps: [Missing transitions between documents]
+                  \item Misplaced content across documents: [Content in wrong document - be specific]
+                  \item Unused content: [Content in one document but never used anywhere]
+                  \item Structural coherence: [Does the collection tell a coherent story?]
+                  \item Reader confusion points: [Where will readers struggle with the overall flow?]
+              \end{itemize}
+          {% endif %}
       \end{enumerate}
       </scratchpad>
 
-      Following your analysis, output the document with \criticize{...}{...}{...} annotations highlighting structural issues, flow problems, coherence/cohesion issues, and balance of explanations. Focus on logical coherence, cohesion, transitions, argument flow, balance, and overall structure.
+      Following your analysis, output the document(s) with \criticize{...}{...}{...} annotations highlighting structural issues, flow problems, coherence/cohesion issues, and balance of explanations. Focus on logical coherence, cohesion, transitions, argument flow, balance, and overall structure.
 
       EXAMPLES of comments:
       - \criticize{Cohesion: Add transition specifying technical reason. E.g., ``However, this approach fails when $n > m$ because the matrix becomes singular.''}{3}{4}
@@ -196,14 +231,32 @@ prompts:
       - \criticize{Ordering issue: This example uses results from \cref{thm:main} that haven't been introduced yet. Consider moving to after \cref{thm:main}.}{4}{4}
       - \criticize{Placement issue: This implementation detail appears in the theory section but belongs in \cref{sec:experiments}.}{3}{4}
       - \criticize{Used before explained: The concept of ``stochastic gradient'' is used here but not explained until \cref{sec:sgd}. Either explain earlier or add forward reference.}{4}{5}
+      {% if OUTPUT_FILES_ORDER %}
+      - \criticize{This assumes readers understand result from \cref{eq:main_result} in \cref{sec:main}, but that section doesn't derive it. Add brief summary.}{4}{4}
+      - \criticize{Out of place: This lengthy derivation in main text belongs in \cref{app:proofs}. Consider moving to appendix and referencing here.}{4}{4}
+      {% endif %}
 
       Add the comment command definition in the preamble if not already present:
       \usepackage{xcolor}
       \newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else gray\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\textit{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else gray\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
 
-      <latex_document>
+      {% if OUTPUT_FILES_ORDER %}
+      <documents>
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      % 1ST LATEX_DOCUMENT_WITH_LOGICAL_STRUCTURE_COMMENTS HERE
+      </document>
+      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+      % 2ND LATEX_DOCUMENT_WITH_LOGICAL_STRUCTURE_COMMENTS HERE
+      </document>
+      ... (repeat for all output files)
+      </documents>
+      {% else %}
+      <documents>
+      <document name="{{ INPUT_FILE }}">
       % LATEX_DOCUMENT_WITH_LOGICAL_STRUCTURE_COMMENTS HERE
-      </latex_document>
+      </document>
+      </documents>
+      {% endif %}
 
     - |
       Now critically reflect on the structural issues identified and plan improvements. Separate easy fixes from major decisions.
@@ -230,6 +283,10 @@ prompts:
                   \item Cross-section paragraph moves: [Moving paragraphs between sections]
                   \item Content deletion: [Entire paragraphs or substantial cuts]
                   \item Major reorganization: [Reordering sections, structural changes]
+                  {% if OUTPUT_FILES_ORDER %}
+                  \item Cross-document content moves: [Moving content between documents]
+                  \item Systemic changes: [Affecting many sections across documents]
+                  {% endif %}
                   \item Uncertain changes: [Where I'm not confident]
               \end{itemize}
           \item [Comment Quality Review]
@@ -238,6 +295,9 @@ prompts:
                   \item Are they focused on flow, logic, and structure - not notation or math correctness?
                   \item Have I identified the most critical structural issues?
                   \item Are comments placed at relevant locations?
+                  {% if OUTPUT_FILES_ORDER %}
+                  \item Are cross-document issues clearly flagged?
+                  {% endif %}
               \end{itemize}
           \item [Implementation Plan]
               \begin{itemize}
@@ -258,8 +318,24 @@ prompts:
       - Improved paragraph flow and coherence actively (documented with comments)
       - Made the logical flow clearer through better organization within sections (documented with comments)
 
-      Remember: If appendix derivations are questionable, add comments in the main text where those results are used, warning about the shaky foundation.
+      Remember: If appendix derivations are questionable, add comments in the main text where those results are used, warning about the shaky foundation. Be proactive with improvements that don't cross section boundaries{% if OUTPUT_FILES_ORDER %}, delete substantial content, or require cross-document coordination{% endif %}; leave major reorganization{% if OUTPUT_FILES_ORDER %} and cross-document changes{% endif %} as issue comments for the human to decide.
 
-      <latex_document>
+      {% if OUTPUT_FILES_ORDER %}
+      Did later documents receive less attention than earlier ones? Re-read the last document now. Ensure that the output documents are in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
+
+      <documents>
+      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      % 1ST_IMPROVED_LATEX_DOCUMENT_WITH_SAFE_CHANGES_AND_REMAINING_COMMENTS HERE
+      </document>
+      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
+      % 2ND_IMPROVED_LATEX_DOCUMENT_WITH_SAFE_CHANGES_AND_REMAINING_COMMENTS HERE
+      </document>
+      ... (repeat for all output files)
+      </documents>
+      {% else %}
+      <documents>
+      <document name="{{ INPUT_FILE }}">
       % ORIGINAL_DOCUMENT_WITH_CRITICAL_COMMENTS HERE
-      </latex_document>
+      </document>
+      </documents>
+      {% endif %}

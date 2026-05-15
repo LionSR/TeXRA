@@ -81,7 +81,7 @@ The core of TeXRA is its agent architecture in repo-root `src/agent/`:
 - **Model handlers** abstract AI provider APIs (Anthropic, OpenAI, Google, etc.)
 - Agents are configured via YAML files in `packages/extension/resources/agents/`
 
-`_multiple` YAML files provide alternate prompts for agents supporting multiple outputs. This preference only applies to the initial agent; parent definitions via `inherits` use base files.
+Agent prompts handle single and multi-document output through one unified YAML per agent: the `documentTag: documents` setting plus `{% if OUTPUT_FILES_ORDER %}` conditionals in the prompt switch between N=1 and N>1 at runtime. The previous `foo_multiple.yaml` twin-file pattern was retired in May 2026.
 
 ### Workspace Layout
 

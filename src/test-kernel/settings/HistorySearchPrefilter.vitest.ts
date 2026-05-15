@@ -19,8 +19,7 @@ const workflowHistoryItem: HistoryItem = {
     inputFile: 'paper/main.tex',
     inputFiles: ['paper/appendix.tex'],
     mediaFiles: ['figures/spectrum.png'],
-    referenceFiles: ['refs/source.tex'],
-    auxiliaryFiles: ['notes/context.md'],
+    contextFiles: ['refs/source.tex', 'notes/context.md'],
     outputFiles: ['build/revised.tex'],
     toolConfig: {
       latexEngine: 'xelatex',
