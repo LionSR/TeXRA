@@ -73,7 +73,8 @@ export class UserQuestionPanel extends BaseFeedbackPanel {
   }
 
   override handleKeyboardShortcut(key: string): boolean {
-    if (key === 'y' && !this.showFeedback) {
+    if (key === 'y') {
+      if (this.showFeedback) return false;
       this.submitAnswers();
       return true;
     }
