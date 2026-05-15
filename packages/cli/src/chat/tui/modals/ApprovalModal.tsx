@@ -10,6 +10,7 @@ import { EditApproval } from './EditApproval';
 import { ExternalInquiry } from './ExternalInquiry';
 import { PlanApproval } from './PlanApproval';
 import { RetryRequest } from './RetryRequest';
+import { assertNever } from '../assertNever';
 import type { PendingApproval } from '../state/approvalQueue';
 
 export interface ApprovalModalProps {
@@ -35,9 +36,5 @@ export function ApprovalModal(
     case 'externalInquiry':
       return <ExternalInquiry payload={payload.payload} onDecide={decide} />;
   }
-  return assertNever(payload);
-}
-
-function assertNever(value: never): never {
-  throw new Error(`Unhandled approval payload: ${JSON.stringify(value)}`);
+  return assertNever(payload, 'Unhandled approval payload');
 }

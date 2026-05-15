@@ -60,12 +60,10 @@ export function DiffView(props: DiffViewProps): React.JSX.Element {
         );
         const visible = max > 0 ? lines.slice(0, max) : lines;
         const remaining = max > 0 ? lines.length - max : 0;
+        const hunkHeader = `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`;
         return (
           <Box key={`${hi}-${hunk.oldStart}`} flexDirection="column">
-            <Text dimColor>
-              @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},
-              {hunk.newLines} @@
-            </Text>
+            <Text dimColor>{hunkHeader}</Text>
             {visible.map((line, li) => (
               <DiffLine key={li} line={line} />
             ))}

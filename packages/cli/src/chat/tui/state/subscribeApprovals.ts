@@ -36,6 +36,7 @@ import {
   markApprovalDenied,
   type ApprovalDecision as PolicyDecision,
 } from '../../../runtime/approvalAdapter';
+import { assertNever } from '../assertNever';
 import { enqueueApproval, type ApprovalDecision } from './approvalQueue';
 import type { CliContext } from '../../../runtime/cliContext';
 import type { CliRuntimeHost } from '../../../runtime/runtimeHost';
@@ -178,12 +179,8 @@ function routeApproval(
       );
       return;
     default:
-      assertNever(event);
+      assertNever(event, 'Unhandled TUI approval event');
   }
-}
-
-function assertNever(value: never): never {
-  throw new Error(`Unhandled TUI approval event: ${String(value)}`);
 }
 
 function routeWithPolicy<P>(
@@ -276,6 +273,7 @@ function handleExternalInquiry(
   }
   void enqueueApproval({ kind: 'externalInquiry', payload }).then(
     (decision) => {
+      markIfRejected(context, decision);
       // User-accept with text → submit answer; everything else (empty
       // text, reject, modal-cancel) → skip with feedback (matches
       // `action: 'skip'` from the legacy ask-mode path).
