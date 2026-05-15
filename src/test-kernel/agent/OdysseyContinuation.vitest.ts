@@ -108,6 +108,39 @@ describe('maybeBuildOdysseyContinuation', () => {
     },
   );
 
+  it('auto-pauses when continuationCount reaches maxContinuations', async () => {
+    const odyssey = await OdysseyStore.start(STREAM_ID, 'objective');
+    // Drive the count up to the cap.
+    for (let i = 0; i < odyssey.maxContinuations; i++) {
+      await OdysseyStore.recordContinuation(STREAM_ID);
+    }
+    expect(OdysseyStore.getForStream(STREAM_ID)?.continuationCount).toBe(
+      odyssey.maxContinuations,
+    );
+
+    // The next continuation attempt should pause the odyssey, not inject.
+    const out = await maybeBuildOdysseyContinuation({
+      streamId: STREAM_ID,
+      isSubagent: false,
+      hasQueuedFollowUp: false,
+    });
+    expect(out).toBeNull();
+    const after = OdysseyStore.getForStream(STREAM_ID);
+    expect(after?.status).toBe('paused');
+    expect(
+      after?.history.some((e) => e.kind === 'continuation_cap_reached'),
+    ).toBe(true);
+  });
+
+  it('resets continuationCount on resume so each leg gets a fresh budget', async () => {
+    await OdysseyStore.start(STREAM_ID, 'objective');
+    await OdysseyStore.recordContinuation(STREAM_ID);
+    await OdysseyStore.recordContinuation(STREAM_ID);
+    await OdysseyStore.setStatus(STREAM_ID, 'paused');
+    await OdysseyStore.setStatus(STREAM_ID, 'active');
+    expect(OdysseyStore.getForStream(STREAM_ID)?.continuationCount).toBe(0);
+  });
+
   it('is a pure read — never records continuation_injected itself', async () => {
     await OdysseyStore.start(STREAM_ID, 'objective');
     await maybeBuildOdysseyContinuation({
