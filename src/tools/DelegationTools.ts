@@ -655,24 +655,24 @@ const WorkflowAgentInputSchema = z.object({
   instruction: z
     .string()
     .describe(
-      'Plain prose instruction for the agent. When attaching context files (context/media), explain in the instruction what each one is for and how the sub-agent should use it — e.g., "preamble.tex defines the math macros; refs.bib is the bibliography to cite from; figure.png is the panel layout the new figure should match". The sub-agent has no other signal for why each file was attached.',
+      'What the agent should do, in plain prose. If you attach context or media files, name each one and say what role it plays — e.g., "preamble.tex defines the math macros; refs.bib is the bibliography to cite from; figure.png shows the panel layout to match". The sub-agent has no other signal for why each file was attached.',
     ),
   inputFiles: z
     .array(z.string())
     .min(1)
     .describe(
-      'Input files to process. The first entry is the primary file rewritten by the agent; later entries are additional inputs.',
+      'Files the agent rewrites. List every file you want it to touch. The agent emits one revised <document> per entry.',
     ),
   contextFiles: z
     .array(z.string())
     .prefault([])
     .describe(
-      'Read-only context files: guidance, examples, related papers, bibliographies (.bib), or style/macro definitions (.sty/.cls). Not modified by the agent. Explain each one in the instruction.',
+      'Read-only context the agent should see but not modify: guidance, examples, related papers, bibliographies (.bib), style/macro definitions (.sty/.cls). Explain each one in the instruction.',
     ),
   mediaFiles: z
     .array(z.string())
     .prefault([])
-    .describe('Media files (images, figures, PDFs) the agent should view.'),
+    .describe('Images, figures, or PDFs the agent should view.'),
   extractFigures: z
     .boolean()
     .nullish()
@@ -739,22 +739,21 @@ export async function rejectOversizedBibAttachments(
 export class WorkflowAgentTool extends defineTool({
   name: 'delegate_workflow',
   description:
-    () => `Delegate a task to a workflow agent. Workflow agents receive structured file parameters (input, context, media, output) and rewrite the entire input file from start to finish in fixed rounds. Best for uniform whole-document operations: grammar correction, style polishing, figure generation, document merging. NOT suitable for tasks requiring interactive tool use, exploration, or selective edits—use delegate_agent for those.
+    () => `Delegate to a workflow agent. The agent rewrites every file you list in inputFiles, emitting one revised <document> per input. Use for whole-document operations: proofreading, polishing, applying reviews, adding derivations, merging revisions. For interactive tool use or selective edits, use delegate_agent instead.
 
 Available agents:
 ${formatAgentList(getVisibleAgents('workflow'))}
 
-Agent selection: match the task to the most specific agent. Read each agent's description carefully. Do NOT default to correct for everything—correct is strictly for proofreading (typos, grammar, LaTeX formatting). For applying review suggestions use apply; for adding derivations use devise; for instruction-driven rewriting use polish; for critical review use criticize. Use the agent whose description best matches the task.
+Pick the agent whose description matches the task — don't default to correct. correct is for proofreading only. For applying review suggestions use apply; for new derivations use devise; for instruction-driven rewriting use polish; for critical review use criticize.
 
 Available models: ${getVisibleModels().join(', ')}
-Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
+Largest models for deep reasoning; long-context for lengthy tedious work; cost-effective for parallel routine work.
 
-Extraction attachments — automatically discover and attach assets from input LaTeX file(s):
-- extractFigures=true: Extract \\includegraphics/\\begin{overpic} figures and attach as media files.
-- extractTikz=true: Compile TikZ figures into standalone PDFs and attach as media files.
-All extraction options merge with explicitly provided files and are non-fatal on failure.
+Optional auto-attach from the input LaTeX:
+- extractFigures=true: pull \\includegraphics / \\begin{overpic} figures into mediaFiles.
+- extractTikz=true: compile TikZ figures into standalone PDFs and attach.
 
-Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="This research paper proposes a new quantum error correction scheme. Please fix grammar errors, improve sentence clarity, and ensure consistent terminology throughout. Pay particular attention to the abstract and introduction where the key contributions are summarized."`,
+Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instruction="Quantum error correction paper. Fix grammar, tighten sentences, keep terminology consistent — especially in the abstract and intro."`,
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {

@@ -92,6 +92,16 @@ export const fileSelectLayoutStyles = css`
     margin-right: var(--wa-space-2xs);
   }
 
+  .file-select-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+  }
+
   .file-select-hint {
     font-size: var(--font-size-xs);
     color: var(--color-text-secondary);

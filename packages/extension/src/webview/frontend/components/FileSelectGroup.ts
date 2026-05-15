@@ -100,10 +100,6 @@ export class FileSelectGroup extends LitElement {
     return `${this.config.type}Files`;
   }
 
-  private handleRefreshFiles(): void {
-    this.dispatchEvent(MainViewEvents.refreshFiles({ type: this.config.type }));
-  }
-
   private handleToggleList(): void {
     this.dispatchEvent(MainViewEvents.toggleList({ listId: this.listId }));
   }
@@ -378,15 +374,9 @@ export class FileSelectGroup extends LitElement {
       >
         <div class="file-select-header">
           <div class="file-select-label-group">
-            ${renderIconActionButton({
-              id: `refresh${config.type[0].toUpperCase()}${config.type.slice(
-                1,
-              )}FileButton`,
-              icon: config.icon as TeXRAIconName,
-              label: config.refreshTitle,
-              title: config.refreshTitle,
-              onClick: this.handleRefreshFiles,
-            })}
+            <span class="file-select-icon" aria-hidden="true">
+              ${waIcon(config.icon as TeXRAIconName)}
+            </span>
             <label title=${config.tooltip}>${config.label}</label>
             ${config.toolConfig === 'tool'
               ? this.renderToolConfigMenu()
