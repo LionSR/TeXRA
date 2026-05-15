@@ -1,4 +1,4 @@
-import { readdir, rm } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +7,7 @@ import {
   describeBundledCodexPackages,
   inferCodexPlatformKeys,
   pruneBundledCodexPackages,
+  readDirNames,
   resourcesDirForElectronBuilderContext,
 } from './desktop-codex-payload.mjs';
 
@@ -64,7 +65,7 @@ async function pruneClaudeAgentSdkPackages(resourcesDir, expectedPlatformKeys) {
     join(unpackedRoot, 'node_modules', '@anthropic-ai'),
     join(unpackedRoot, 'node_modules', '.pnpm'),
   ]) {
-    const entries = await safeReaddir(root);
+    const entries = await readDirNames(root);
     for (const entry of entries) {
       const matched = matchClaudeAgentSdkEntry(entry);
       if (matched == null) continue;
@@ -108,15 +109,6 @@ function matchClaudeAgentSdkEntry(entry) {
     }
   }
   return null;
-}
-
-async function safeReaddir(path) {
-  try {
-    return await readdir(path);
-  } catch (error) {
-    if (error?.code === 'ENOENT') return [];
-    throw error;
-  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
