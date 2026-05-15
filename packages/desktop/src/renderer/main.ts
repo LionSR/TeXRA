@@ -189,9 +189,7 @@ const railTabs = document.createElement('stream-tabs') as HTMLElement & {
   streamStates: unknown;
   pendingApprovalStreamIds: unknown;
   childStreamsByParent: unknown;
-  compact: boolean;
 };
-railTabs.compact = true;
 
 const settingsView: HTMLElement = document.createElement('settings-app');
 settingsView.setAttribute('data-desktop-view', 'settings');
