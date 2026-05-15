@@ -14,9 +14,9 @@ export const toolUseStyles = css`
 
   .tool-use-title {
     flex: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
     min-width: 0;
     user-select: text;
     cursor: text;
