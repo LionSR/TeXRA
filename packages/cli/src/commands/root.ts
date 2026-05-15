@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { defineCommand, runCommand, showUsage } from 'citty';
+import { defineCommand, runCommand, showUsage, type CommandDef } from 'citty';
 
 // Local imports - agent and model surfaces
 import { getVisibleAgents, loadAgents } from '@agent/index';
@@ -62,6 +62,52 @@ async function contextFromArgs(args: ParsedGlobalArgs): Promise<CliContext> {
   return buildCliContext({ globalArgs: pickGlobalArgs(args) });
 }
 
+/**
+ * Single source of truth for the four global flags accepted by every TeXRA
+ * subcommand.
+ *
+ * `as const` + spreading into each subcommand's `args` would lose its
+ * literal-type narrowing because citty's `ArgsDef` requires a *mutable*
+ * `options: string[]` (so a `readonly` literal array is rejected outright).
+ * To keep both DRY definitions AND narrow `ctx.args['output-format']` /
+ * `ctx.args['approval-policy']` enums, each enum's `options` is explicitly
+ * typed as a mutable literal tuple — that's both assignable to `string[]`
+ * and gives `defineCommand<const T>` the per-option literal it needs.
+ *
+ * Adding a new global flag now means a one-line change here instead of an
+ * eight-place edit.
+ */
+type OutputFormatOption = 'text' | 'json' | 'ndjson';
+type ApprovalPolicyOption = 'never' | 'ask' | 'yolo';
+
+const GLOBAL_ARGS: {
+  print: { type: 'boolean'; alias: 'p' };
+  cwd: { type: 'string' };
+  'output-format': {
+    type: 'enum';
+    options: OutputFormatOption[];
+    default: 'text';
+  };
+  'approval-policy': {
+    type: 'enum';
+    options: ApprovalPolicyOption[];
+    default: 'never';
+  };
+} = {
+  print: { type: 'boolean', alias: 'p' },
+  cwd: { type: 'string' },
+  'output-format': {
+    type: 'enum',
+    options: ['text', 'json', 'ndjson'],
+    default: 'text',
+  },
+  'approval-policy': {
+    type: 'enum',
+    options: ['never', 'ask', 'yolo'],
+    default: 'never',
+  },
+};
+
 // ---------------------------------------------------------------------------
 // agents list
 // ---------------------------------------------------------------------------
@@ -69,18 +115,7 @@ async function contextFromArgs(args: ParsedGlobalArgs): Promise<CliContext> {
 const agentsListCommand = defineCommand({
   meta: { name: 'list', description: 'List available agents' },
   args: {
-    print: { type: 'boolean', alias: 'p' },
-    cwd: { type: 'string' },
-    'output-format': {
-      type: 'enum',
-      options: ['text', 'json', 'ndjson'],
-      default: 'text',
-    },
-    'approval-policy': {
-      type: 'enum',
-      options: ['never', 'ask', 'yolo'],
-      default: 'never',
-    },
+    ...GLOBAL_ARGS,
   },
   async run(ctx) {
     const context = await contextFromArgs(ctx.args);
@@ -135,18 +170,7 @@ const agentsCommand = defineCommand({
 const modelsListCommand = defineCommand({
   meta: { name: 'list', description: 'List available models' },
   args: {
-    print: { type: 'boolean', alias: 'p' },
-    cwd: { type: 'string' },
-    'output-format': {
-      type: 'enum',
-      options: ['text', 'json', 'ndjson'],
-      default: 'text',
-    },
-    'approval-policy': {
-      type: 'enum',
-      options: ['never', 'ask', 'yolo'],
-      default: 'never',
-    },
+    ...GLOBAL_ARGS,
   },
   async run(ctx) {
     const context = await contextFromArgs(ctx.args);
@@ -213,18 +237,7 @@ const versionCommand = defineCommand({
 const loginCommand = defineCommand({
   meta: { name: 'login', description: 'Sign in to TeXRA for included access' },
   args: {
-    print: { type: 'boolean', alias: 'p' },
-    cwd: { type: 'string' },
-    'output-format': {
-      type: 'enum',
-      options: ['text', 'json', 'ndjson'],
-      default: 'text',
-    },
-    'approval-policy': {
-      type: 'enum',
-      options: ['never', 'ask', 'yolo'],
-      default: 'never',
-    },
+    ...GLOBAL_ARGS,
     provider: {
       type: 'string',
       description:
@@ -331,18 +344,7 @@ async function runLogin(context: CliContext, init: LoginInit): Promise<number> {
 const logoutCommand = defineCommand({
   meta: { name: 'logout', description: 'Sign out of TeXRA' },
   args: {
-    print: { type: 'boolean', alias: 'p' },
-    cwd: { type: 'string' },
-    'output-format': {
-      type: 'enum',
-      options: ['text', 'json', 'ndjson'],
-      default: 'text',
-    },
-    'approval-policy': {
-      type: 'enum',
-      options: ['never', 'ask', 'yolo'],
-      default: 'never',
-    },
+    ...GLOBAL_ARGS,
   },
   async run(ctx) {
     const context = await contextFromArgs(ctx.args);
@@ -373,18 +375,7 @@ const logoutCommand = defineCommand({
 const authStatusCommand = defineCommand({
   meta: { name: 'status', description: 'Show TeXRA sign-in status' },
   args: {
-    print: { type: 'boolean', alias: 'p' },
-    cwd: { type: 'string' },
-    'output-format': {
-      type: 'enum',
-      options: ['text', 'json', 'ndjson'],
-      default: 'text',
-    },
-    'approval-policy': {
-      type: 'enum',
-      options: ['never', 'ask', 'yolo'],
-      default: 'never',
-    },
+    ...GLOBAL_ARGS,
   },
   async run(ctx) {
     const context = await contextFromArgs(ctx.args);
@@ -429,18 +420,7 @@ const authCommand = defineCommand({
 const runWorkflowCommand = defineCommand({
   meta: { name: 'run', description: 'Run a workflow agent' },
   args: {
-    print: { type: 'boolean', alias: 'p' },
-    cwd: { type: 'string' },
-    'output-format': {
-      type: 'enum',
-      options: ['text', 'json', 'ndjson'],
-      default: 'text',
-    },
-    'approval-policy': {
-      type: 'enum',
-      options: ['never', 'ask', 'yolo'],
-      default: 'never',
-    },
+    ...GLOBAL_ARGS,
     agent: {
       type: 'positional',
       required: true,
@@ -598,18 +578,7 @@ async function runWorkflowAgent(
 const chatCommand = defineCommand({
   meta: { name: 'chat', description: 'Interactive tool-use chat session' },
   args: {
-    print: { type: 'boolean', alias: 'p' },
-    cwd: { type: 'string' },
-    'output-format': {
-      type: 'enum',
-      options: ['text', 'json', 'ndjson'],
-      default: 'text',
-    },
-    'approval-policy': {
-      type: 'enum',
-      options: ['never', 'ask', 'yolo'],
-      default: 'never',
-    },
+    ...GLOBAL_ARGS,
     agent: { type: 'string', description: 'Tool-use agent for the session' },
     model: { type: 'string', alias: 'm', description: 'Model for the session' },
     'tool-display': {
@@ -663,18 +632,7 @@ const rootCommand = defineCommand({
   // agents list` mis-detects `ndjson` as the subcommand). The actual parsing
   // happens on each subcommand; root only acts as a routing layer.
   args: {
-    print: { type: 'boolean', alias: 'p' },
-    cwd: { type: 'string' },
-    'output-format': {
-      type: 'enum',
-      options: ['text', 'json', 'ndjson'],
-      default: 'text',
-    },
-    'approval-policy': {
-      type: 'enum',
-      options: ['never', 'ask', 'yolo'],
-      default: 'never',
-    },
+    ...GLOBAL_ARGS,
   },
   subCommands: {
     chat: chatCommand,
@@ -762,14 +720,59 @@ function isCliError(error: unknown): error is Error & { code?: string } {
  * required flag, unknown subcommand, invalid enum value) preserve our
  * canonical `CliExitCode.Usage` (2) instead of citty's hard-coded `exit(1)`.
  */
+/**
+ * Walk `rawArgs` positional-by-positional through the subcommand tree to find
+ * the deepest matched command. Used to scope `--help` to the subcommand the
+ * user typed rather than always showing root-level usage.
+ *
+ * Stops at the first positional that doesn't match a child subcommand. Returns
+ * a tuple of `[matchedCommand, parentCommandOrUndefined]` so `showUsage` can
+ * render the same breadcrumb citty's own resolver produces.
+ */
+// Citty's `CommandDef<T>` is invariant in `T` (T appears in both `run` and
+// `setup` parameters), so a narrower const-inferred command isn't assignable
+// to the parent type. We treat the subcommand tree as `CommandDef<any>` while
+// walking it; this matches citty's own `subCommands` shape and lets
+// `showUsage` accept either width via cast at the call site.
+type AnyCommand = CommandDef<any>;
+
+async function resolveDeepestSubCommand(
+  cmd: AnyCommand,
+  rawArgs: readonly string[],
+  parent?: AnyCommand,
+): Promise<[AnyCommand, AnyCommand | undefined]> {
+  const rawSubs = cmd.subCommands;
+  const subCommands =
+    typeof rawSubs === 'function'
+      ? await (rawSubs as () => Promise<Record<string, AnyCommand>>)()
+      : ((await rawSubs) as Record<string, AnyCommand> | undefined);
+  if (!subCommands) return [cmd, parent];
+  for (let i = 0; i < rawArgs.length; i++) {
+    const token = rawArgs[i];
+    if (token === undefined) break;
+    if (token.startsWith('-')) continue;
+    const next = subCommands[token];
+    if (next) return resolveDeepestSubCommand(next, rawArgs.slice(i + 1), cmd);
+    break;
+  }
+  return [cmd, parent];
+}
+
 export async function runCli(
   argv?: readonly string[],
 ): Promise<{ exitCode: number }> {
   pendingExitCode = CliExitCode.Success;
   const rawArgs = reorderGlobalFlags(argv ? [...argv] : readCliArgv());
 
+  // `--help` / `-h` anywhere prints usage for the deepest matched subcommand
+  // (e.g. `texra agents list --help` → list-level usage), mirroring citty's
+  // own `runMain` behavior without inheriting its `exit(1)` for usage errors.
   if (rawArgs.some((arg) => arg === '--help' || arg === '-h')) {
-    await showUsage(rootCommand);
+    const [target, parent] = await resolveDeepestSubCommand(
+      rootCommand,
+      rawArgs,
+    );
+    await showUsage(target, parent);
     return { exitCode: CliExitCode.Success };
   }
   if (
@@ -788,7 +791,11 @@ export async function runCli(
       return { exitCode: CliExitCode.Usage };
     }
     if (isCliError(error)) {
-      await showUsage(rootCommand);
+      const [target, parent] = await resolveDeepestSubCommand(
+        rootCommand,
+        rawArgs,
+      );
+      await showUsage(target, parent);
       writeTextStderr(error.message);
       return { exitCode: CliExitCode.Usage };
     }

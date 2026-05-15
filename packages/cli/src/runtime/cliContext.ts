@@ -24,7 +24,7 @@ export interface CliContext {
   readonly helperModel?: string;
   readonly quietLogs?: boolean;
   readonly colorEnabled: boolean;
-  readonly stdin: CliAmbientState;
+  readonly terminalState: CliAmbientState;
   readonly version: string;
   readonly resourcesPath: string;
   readonly approvalPrompt?: (request: CliPromptRequest) => Promise<string>;
@@ -135,7 +135,7 @@ export async function buildCliContext(
     outputFormat: init.globalArgs.outputFormat,
     approvalPolicy: init.globalArgs.approvalPolicy,
     colorEnabled: ambient.colorEnabled,
-    stdin: ambient,
+    terminalState: ambient,
     version: await readCliVersion(),
     resourcesPath: resolveResourcesPath(),
   };
