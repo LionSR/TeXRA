@@ -13,11 +13,8 @@ const CHANNEL = 'TextEnhancement';
 
 export interface FileContext {
   agent?: string;
-  inputFile?: string;
   inputFiles?: string[];
-  contextFile?: string;
   contextFiles?: string[];
-  mediaFile?: string;
   mediaFiles?: string[];
   outputFiles?: string[];
 }
@@ -32,13 +29,6 @@ export function buildFileContextFromTaskState(
 
   if (agentConfig.agent) {
     context.agent = agentConfig.agent;
-  }
-
-  const singleFields = ['inputFile', 'contextFile', 'mediaFile'] as const;
-  for (const field of singleFields) {
-    if (isNonEmptyString(agentConfig[field])) {
-      context[field] = agentConfig[field];
-    }
   }
 
   const arrayFields = [
@@ -61,15 +51,6 @@ function formatFileContext(ctx: FileContext): string {
   if (ctx.agent) lines.push(`Agent: ${ctx.agent}`);
 
   const fileEntries: string[] = [];
-
-  const singles: Array<[string, string | undefined]> = [
-    ['Input File', ctx.inputFile],
-    ['Context File', ctx.contextFile],
-    ['Figure File', ctx.mediaFile],
-  ];
-  for (const [label, value] of singles) {
-    if (value) fileEntries.push(`${label}: ${value}`);
-  }
 
   const arrays: Array<[string, string[] | undefined]> = [
     ['Input Files', ctx.inputFiles],

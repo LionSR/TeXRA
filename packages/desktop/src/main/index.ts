@@ -438,9 +438,11 @@ function createWindow(options: {
         title: options.title,
         defaultPath: options.defaultPath,
         filters: options.filters,
-        properties: ['openFile'],
+        properties: options.allowMultiple
+          ? ['openFile', 'multiSelections']
+          : ['openFile'],
       });
-      return result.canceled ? undefined : result.filePaths[0];
+      return result.canceled ? undefined : result.filePaths;
     },
     onError: reportAsyncError,
   });

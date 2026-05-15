@@ -25,10 +25,7 @@ prompts:
 
     <documents>
     {{ ALL_CONTEXTS }}
-    {{ ADDITIONAL_INPUTS }}
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
+    {{ ALL_INPUTS }}
     </documents>
 
     Please carefully read through the entire research paper above and ensure you fully understand all the details.
@@ -40,29 +37,17 @@ prompts:
 
   userRequest:
     - |
-      {% if OUTPUT_FILES_ORDER %}
       Output updated versions of all \LaTeX documents with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. The output files should be in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
 
       Use the following format:
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 1ST UPDATED LATEX DOCUMENT HERE
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED LATEX DOCUMENT {{ loop.index }} HERE
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND UPDATED LATEX DOCUMENT HERE
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>
-      {% else %}
-      Output an updated version of the \LaTeX document with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
-
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % 1ST UPDATED LATEX DOCUMENT HERE
-      </document>
-      </documents>
-      {% endif %}
     - |
       Now critically reflect on the changes made and output a further enhanced version. Be brutally honest --- if I asked you to add equations but you did not add any, criticize yourself for not following the instruction.
 
@@ -75,26 +60,14 @@ prompts:
           \item Did you change anything NOT required by the instruction? If so, revert it.
       \end{itemize}
 
-      {% if OUTPUT_FILES_ORDER %}
       Output further enhanced and complete versions of all \LaTeX documents in the format below, incorporating the fixes above. Include all the changes you added in the previous step. Only modify sections explicitly mentioned in the instruction, unless changes in one section directly necessitate adjustments in another for consistency. Did later documents receive less attention than earlier ones? Re-read the last document now.
 
       Ensure that the output documents are in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 2ND UPDATED LATEX DOCUMENT HERE
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % REFINED LATEX DOCUMENT {{ loop.index }} HERE
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND UPDATED LATEX DOCUMENT HERE
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>
-      {% else %}
-      Output the further enhanced version based on the previous version, incorporating the fixes above. Include all the changes you added in the previous step. Stay laser-focused on the specific instruction --- if asked to revise section A, do not modify section B unless a change in A (such as notation or symbols) directly demands it. If a conclusion section was not requested, do not add one.
-
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % 2ND UPDATED LATEX DOCUMENT HERE
-      </document>
-      </documents>
-      {% endif %}

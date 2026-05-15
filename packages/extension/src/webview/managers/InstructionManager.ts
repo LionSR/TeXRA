@@ -80,16 +80,7 @@ export class InstructionManager extends BaseWebviewManager {
 
   /** Build file context for AI text polishing, filtering empty/placeholder values */
   private buildFileContext(message: PolishInstructionMessage): FileContext {
-    const isValid = (f?: string): f is string => Boolean(f) && f !== 'None';
     const context: FileContext = { agent: message.agent };
-
-    // Single file fields
-    const singleFields = ['inputFile', 'contextFile', 'mediaFile'] as const;
-    for (const field of singleFields) {
-      if (isValid(message[field])) {
-        context[field] = message[field];
-      }
-    }
 
     // Multi-file fields (check active flag and array content)
     const multiFields = [

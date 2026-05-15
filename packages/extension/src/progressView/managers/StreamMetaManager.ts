@@ -120,10 +120,11 @@ export class StreamMetaManager {
     for (const [stream, state] of this.taskStates) {
       if (!isWorkflowTaskState(state)) continue;
       const cfg = state.agentConfig;
+      const cfgPrimaryInput = (cfg.inputFiles[0] ?? '').replaceAll('\\', '/');
       if (
         getCleanAgentName(cfg.agent) !== wantAgent ||
         cfg.model !== wantModel ||
-        cfg.inputFile.replaceAll('\\', '/') !== wantFile ||
+        cfgPrimaryInput !== wantFile ||
         !sameOutputFiles(normalizeOutputFiles(cfg.outputFiles), wantOutputFiles)
       ) {
         continue;

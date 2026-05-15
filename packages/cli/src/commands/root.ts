@@ -487,7 +487,7 @@ async function runWorkflowAgent(
   const config: AgentConfigPayload = {
     agent: init.agent,
     model,
-    inputFile: init.input,
+    inputFiles: [init.input],
     outputFiles: modelOutputFile ? [modelOutputFile] : [],
     instruction: init.instruction,
     workingDirectory: runContext.cwd,
