@@ -30,6 +30,7 @@ import type {
 } from '@eventBus/ProgressEventBus';
 
 import {
+  denyMessage,
   immediateDecision,
   type ApprovalDecision as PolicyDecision,
 } from '../../../runtime/approvalAdapter';
@@ -153,11 +154,12 @@ function routeApproval<K extends ProgressEvent>(
       );
       return;
     case 'showExternalInquiry':
-      routeWithPolicy(
-        context,
-        dispatchExternalInquiry,
+      // External inquiry has bespoke policy semantics (legacy adapter uses
+      // `action: 'skip'` for both yolo *and* never with different feedback
+      // strings), so it bypasses the generic `routeWithPolicy` ladder.
+      handleExternalInquiry(
         payload as ProgressEventPayloads['showExternalInquiry'],
-        (p) => ({ kind: 'externalInquiry', payload: p }),
+        context,
       );
       return;
     default:
@@ -229,14 +231,43 @@ function dispatchRetry(
   }
 }
 
-function dispatchExternalInquiry(
+function handleExternalInquiry(
   payload: ProgressEventPayloads['showExternalInquiry'],
-  decision: ApprovalDecision,
+  context: CliContext,
 ): void {
-  void handleExternalInquiryAction({
-    requestId: payload.requestId,
-    action: decision.accepted ? 'submit' : 'reject',
-    answer: decision.accepted ? decision.userMessage : undefined,
-    feedback: decision.accepted ? undefined : decision.userMessage,
-  });
+  const policy = immediateDecision(context);
+  if (policy) {
+    // Match the legacy adapter: yolo and policy-denied both surface as
+    // `action: 'skip'`, with the appropriate explanatory feedback.
+    const feedback =
+      context.approvalPolicy === 'yolo'
+        ? 'External inquiry requires human input; yolo mode cannot synthesize an external answer.'
+        : denyMessage(context.approvalPolicy);
+    void handleExternalInquiryAction({
+      requestId: payload.requestId,
+      action: 'skip',
+      feedback,
+    });
+    return;
+  }
+  void enqueueApproval({ kind: 'externalInquiry', payload }).then(
+    (decision) => {
+      // User-accept with text → submit answer; everything else (empty
+      // text, reject, modal-cancel) → skip with feedback (matches
+      // `action: 'skip'` from the legacy ask-mode path).
+      if (decision.accepted && decision.userMessage) {
+        void handleExternalInquiryAction({
+          requestId: payload.requestId,
+          action: 'submit',
+          answer: decision.userMessage,
+        });
+        return;
+      }
+      void handleExternalInquiryAction({
+        requestId: payload.requestId,
+        action: 'skip',
+        feedback: decision.userMessage ?? 'No answer provided.',
+      });
+    },
+  );
 }

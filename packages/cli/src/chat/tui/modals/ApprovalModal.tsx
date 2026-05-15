@@ -1,8 +1,8 @@
 // Dispatches the head item of the approval queue to the right modal.
-// Phase 2 wires all six modal kinds; resolvers stay on the legacy event
-// dispatch path (modal calls back through the queue's `decide` callback,
-// which the runChatTui approval installer hooks into the original
-// resolveBashPermission / setToolEditApprovalHandler / etc.).
+//
+// The `pending` slot is passed in as a prop so the parent owns the single
+// `useSignal(currentApproval)` subscription — avoids a second store read
+// every render.
 
 import { AgentProposal } from './AgentProposal';
 import { BashApproval } from './BashApproval';
@@ -10,13 +10,17 @@ import { EditApproval } from './EditApproval';
 import { ExternalInquiry } from './ExternalInquiry';
 import { PlanApproval } from './PlanApproval';
 import { RetryRequest } from './RetryRequest';
-import { currentApproval } from '../state/approvalQueue';
-import { useSignal } from '../state/useSignal';
+import type { PendingApproval } from '../state/approvalQueue';
 
-export function ApprovalModal(): React.JSX.Element | null {
-  const pending = useSignal(currentApproval);
-  if (!pending) return null;
-  const { payload, decide } = pending;
+export interface ApprovalModalProps {
+  readonly pending: PendingApproval | undefined;
+}
+
+export function ApprovalModal(
+  props: ApprovalModalProps,
+): React.JSX.Element | null {
+  if (!props.pending) return null;
+  const { payload, decide } = props.pending;
   switch (payload.kind) {
     case 'bash':
       return <BashApproval payload={payload.payload} onDecide={decide} />;

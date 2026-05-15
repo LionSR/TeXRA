@@ -11,8 +11,7 @@ export interface RetryRequestProps {
 }
 
 export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
-  const p = props.payload as Record<string, unknown>;
-  const reason = typeof p.reason === 'string' ? p.reason : '(no reason given)';
+  const subject = props.payload.errorMessage ?? props.payload.operation;
 
   return (
     <Box
@@ -25,7 +24,7 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
         Retry the failed call?
       </Text>
       <Box marginY={1}>
-        <Text dimColor>{reason}</Text>
+        <Text dimColor>{subject}</Text>
       </Box>
       <Box>
         <Text dimColor>y retry · n give up · </Text>
