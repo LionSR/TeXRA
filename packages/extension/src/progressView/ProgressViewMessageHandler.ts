@@ -61,7 +61,7 @@ import {
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
 
-import { handleOpenOdysseyPanel } from './odysseyPanel';
+import { OdysseyStore, isOdysseyInFlight } from '@tools/odyssey';
 import { ProgressStreamLifecycleHost } from './managers/ProgressStreamLifecycleHost';
 import type { ProgressViewProvider } from './ProgressViewProvider';
 
@@ -129,8 +129,19 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
         stream: streamId,
       });
+      void OdysseyStore.forget(streamId);
     });
     context.subscriptions.push({ dispose: unsubscribeRemoveStream });
+
+    const unsubscribeOdyssey = bus.on('odysseyStateChanged', ({ streamId }) => {
+      const odyssey = OdysseyStore.getForStream(streamId);
+      this.provider.webviewUpdater.updateOdysseyActive(
+        streamId,
+        isOdysseyInFlight(odyssey),
+        { status: odyssey?.status, objective: odyssey?.objective },
+      );
+    });
+    context.subscriptions.push({ dispose: unsubscribeOdyssey });
   }
 
   /**
@@ -236,9 +247,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           ? 'YOLO mode enabled: Tool actions will be auto-approved for this stream.'
           : 'YOLO mode disabled: Tool actions will prompt for approval.';
         await vscode.window.showInformationMessage(msg);
-      },
-      [PROGRESS_VIEW_COMMANDS.OPEN_ODYSSEY_PANEL]: async (data) => {
-        await handleOpenOdysseyPanel(data.stream, this.provider.webviewUpdater);
       },
       [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: async (data) => {
         const isNowEnabled = toggleProposalBypass(

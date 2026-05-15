@@ -14,6 +14,7 @@ import {
 } from '@platform/interfaces/lifecycle';
 import { loadAgents, setAgentDirectories } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
+import { registerAgentFeatures } from '@agent/features';
 import { setDefaultAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
 import { initializeOdysseyPrompts } from '@agent/odyssey';
@@ -186,6 +187,7 @@ export async function activate(context: vscode.ExtensionContext) {
     secrets: new VscodeSecrets(context),
     lifecycle,
   });
+  registerAgentFeatures();
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => disposeStatusListener?.());
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killBackgroundProcesses());
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>

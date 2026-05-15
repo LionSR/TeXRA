@@ -223,7 +223,7 @@ export async function buildInitialToolUsePrompts(
   userVars: Record<string, any>,
   logger?: AgentLogger,
   options?: {
-    memoryEnabled?: boolean;
+    resolvedToolNames?: readonly string[];
     hasDelegationTools?: boolean;
     isSubagent?: boolean;
     /**
@@ -242,14 +242,16 @@ export async function buildInitialToolUsePrompts(
   );
   const initial = await builder.buildInitialPrompts();
 
+  const memoryEnabled = options?.resolvedToolNames?.includes('memory') ?? false;
+
   // Build instruction suffix: always include tool-use instructions,
   // optionally append memory instructions and workspace info
   const suffixParts = [TOOL_USE_INSTRUCTIONS];
-  if (options?.memoryEnabled) {
+  if (memoryEnabled) {
     suffixParts.push(MEMORY_TOOL_INSTRUCTIONS);
-    if (options.hasDelegationTools) {
+    if (options?.hasDelegationTools) {
       suffixParts.push(ORCHESTRATOR_MEMORY_INSTRUCTIONS);
-    } else if (options.isSubagent) {
+    } else if (options?.isSubagent) {
       suffixParts.push(SUBAGENT_MEMORY_INSTRUCTIONS);
     }
   }

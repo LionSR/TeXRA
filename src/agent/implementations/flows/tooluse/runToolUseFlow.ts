@@ -1,4 +1,3 @@
-import { platform } from '@platform/platform';
 import { getExecutionStore } from '@agent/storage';
 import {
   registerInterruptible,
@@ -17,9 +16,8 @@ import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { getGlobalState } from '@agent/core/stateStore';
+import { listToolInjections } from '@agent/runtime/toolInjection';
 import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
-import { GlobalStateKey } from '@common/state/stateKeys';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { ToolDefinition } from '@model';
 import {
@@ -37,10 +35,6 @@ import {
   getUnavailableToolNamesCached,
 } from '@tools/toolAvailability';
 import { notifyUnavailableTools } from '@tools/toolUnavailableNotification';
-import {
-  ODYSSEY_FEATURE_FLAG_KEY,
-  ODYSSEY_TOOL_NAME,
-} from '@tools/odyssey/odysseyMeta';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
@@ -120,36 +114,16 @@ function resolveTools(
       return true;
     });
 
-  // Inject memory tool into all tool-use agents (including subagents)
-  // so they share the same /memories directory.
-  const memoryEnabled = getGlobalState().get<boolean>(
-    GlobalStateKey.MEMORY_ENABLED,
-    true,
-  );
-  if (memoryEnabled && !resolved.some((d) => d.name === 'memory')) {
-    const memoryTool = registry.get('memory');
-    if (memoryTool) {
-      resolved.push(memoryTool.definition);
+  const resolvedNames = new Set(resolved.map((d) => d.name));
+  for (const injection of listToolInjections()) {
+    if (!injection.shouldInject()) continue;
+    if (resolvedNames.has(injection.toolName)) continue;
+    const tool = registry.get(injection.toolName);
+    if (tool) {
+      resolved.push(tool.definition);
+      resolvedNames.add(injection.toolName);
     } else {
-      logger.warn('Memory tool not found in registry');
-    }
-  }
-
-  // Inject odyssey tool into all tool-use agents when the experimental
-  // flag is on. Without it the autonomous-continuation loop would have
-  // no way to terminate — the continuation prompt asks the model to
-  // call `odyssey(complete)`, which only works if the tool is in the
-  // model's tool list. Auto-injection avoids touching every agent YAML.
-  const odysseyEnabled = platform().config.get<boolean>(
-    ODYSSEY_FEATURE_FLAG_KEY,
-    false,
-  );
-  if (odysseyEnabled && !resolved.some((d) => d.name === ODYSSEY_TOOL_NAME)) {
-    const odysseyTool = registry.get(ODYSSEY_TOOL_NAME);
-    if (odysseyTool) {
-      resolved.push(odysseyTool.definition);
-    } else {
-      logger.warn('Odyssey tool not found in registry');
+      logger.warn(`Injected tool not found in registry: ${injection.toolName}`);
     }
   }
 
