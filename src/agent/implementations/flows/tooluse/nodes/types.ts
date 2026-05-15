@@ -47,7 +47,7 @@ export type WaitExecResult =
       kind: 'continue';
       followUp: string;
       /**
-       * True when `followUp` was synthesized (e.g. an Odyssey continuation)
+       * True when `followUp` was synthesized by an idle-continuation provider
        * instead of being consumed from `session.waitForFollowUp()`. The
        * post() handler uses this to skip `onFollowUpConsumed` so synthetic
        * continuations don't emit a spurious updateQueuedFollowUps event.

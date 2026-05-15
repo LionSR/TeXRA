@@ -67,7 +67,6 @@ const ENABLED_BUTTONS_BY_STATUS: Record<string, Set<string>> = {
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
     ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
-    ELEMENT_IDS.ODYSSEY_TOGGLE_BTN,
     ELEMENT_IDS.COMPACT_RESPONSE_BTN,
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
@@ -102,7 +101,6 @@ const ENABLED_BUTTONS_BY_STATUS: Record<string, Set<string>> = {
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
     ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
-    ELEMENT_IDS.ODYSSEY_TOGGLE_BTN,
     ELEMENT_IDS.COMPACT_RESPONSE_BTN,
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
@@ -111,7 +109,6 @@ const ENABLED_BUTTONS_BY_STATUS: Record<string, Set<string>> = {
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
     ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
-    ELEMENT_IDS.ODYSSEY_TOGGLE_BTN,
     ELEMENT_IDS.COMPACT_RESPONSE_BTN,
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
@@ -251,14 +248,12 @@ export class StreamHeader extends LitElement {
 
       /* Shared toggle button base */
       .yolo-toggle-button,
-      .super-yolo-toggle-button,
-      .odyssey-toggle-button {
+      .super-yolo-toggle-button {
         flex-shrink: 0;
       }
 
       .yolo-toggle-button.is-active,
-      .super-yolo-toggle-button.is-active,
-      .odyssey-toggle-button.is-active {
+      .super-yolo-toggle-button.is-active {
         border-radius: var(--border-radius);
       }
 
@@ -271,22 +266,45 @@ export class StreamHeader extends LitElement {
         --_toggle-color: var(--color-warning);
       }
 
-      .odyssey-toggle-button.is-active {
-        --_toggle-color: var(--color-info, var(--wa-color-brand-fill-loud));
-      }
-
       /* Active toggle: color + tinted background. */
-      :is(
-        .yolo-toggle-button,
-        .super-yolo-toggle-button,
-        .odyssey-toggle-button
-      ).is-active {
+      :is(.yolo-toggle-button, .super-yolo-toggle-button).is-active {
         color: var(--_toggle-color);
         background-color: color-mix(
           in srgb,
           var(--_toggle-color) 15%,
           transparent
         );
+      }
+
+      .odyssey-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--wa-space-3xs);
+        flex-shrink: 0;
+        padding: 0 var(--wa-space-2xs);
+        border-radius: 999px;
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-medium);
+        cursor: default;
+        color: var(--wa-color-brand-on-quiet, var(--color-info));
+        background-color: color-mix(
+          in srgb,
+          var(--wa-color-brand-fill-loud, var(--color-info)) 15%,
+          transparent
+        );
+      }
+
+      .odyssey-chip.is-paused {
+        color: var(--wa-color-warning-on-quiet, var(--color-warning));
+        background-color: color-mix(
+          in srgb,
+          var(--wa-color-warning-fill-loud, var(--color-warning)) 15%,
+          transparent
+        );
+      }
+
+      .odyssey-chip wa-icon {
+        font-size: var(--font-size-xs);
       }
 
       .parent-link {
@@ -342,6 +360,8 @@ export class StreamHeader extends LitElement {
   @property({ attribute: false }) yoloActive = false;
   @property({ attribute: false }) superYoloActive = false;
   @property({ attribute: false }) odysseyActive = false;
+  @property({ attribute: false }) odysseyStatus = '';
+  @property({ attribute: false }) odysseyObjective = '';
 
   override render(): TemplateResult | typeof nothing {
     if (!this.stream) {
@@ -377,7 +397,7 @@ export class StreamHeader extends LitElement {
               })}
               data-status=${statusLabel}
             ></span>
-            ${this.renderProgressBadge()}
+            ${this.renderOdysseyChip()} ${this.renderProgressBadge()}
           </div>
           <div class="header-actions">
             <div
@@ -399,9 +419,7 @@ export class StreamHeader extends LitElement {
                     btn.isToggle &&
                     (btn.id === ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN
                       ? this.superYoloActive
-                      : btn.id === ELEMENT_IDS.ODYSSEY_TOGGLE_BTN
-                        ? this.odysseyActive
-                        : this.yoloActive),
+                      : this.yoloActive),
                   );
                   const title =
                     isActive && btn.titleActive ? btn.titleActive : btn.title;
@@ -446,6 +464,23 @@ export class StreamHeader extends LitElement {
     const hidden = EXECUTION_DEPENDENT_BUTTONS.has(buttonId) && !hasExecutionId;
     const disabled = hidden || !enabledButtons?.has(buttonId);
     return { disabled, hidden };
+  }
+
+  private renderOdysseyChip(): TemplateResult | typeof nothing {
+    if (!this.odysseyActive) return nothing;
+    const isPaused = this.odysseyStatus === 'paused';
+    const label = isPaused ? 'Odyssey paused' : 'Odyssey';
+    const tooltip = this.odysseyObjective
+      ? `${label}: ${this.odysseyObjective}`
+      : label;
+    return html`<span
+      class=${classMap({ 'odyssey-chip': true, 'is-paused': isPaused })}
+      title=${tooltip}
+      aria-label=${tooltip}
+    >
+      <wa-icon library="texra" name="compass" aria-hidden="true"></wa-icon>
+      ${label}
+    </span>`;
   }
 
   private renderProgressBadge(): TemplateResult | typeof nothing {

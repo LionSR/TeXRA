@@ -17,6 +17,7 @@ import {
   UpdateMemoryMessageSchema,
   UpdateMemoryPreviewMessageSchema,
   UpdateModelSelectionMessageSchema,
+  UpdateOdysseyListMessageSchema,
   UpdatePRSubscriptionsMessageSchema,
   UpdateProfileMessageSchema,
   UpdateSuperYoloEnabledMessageSchema,
@@ -31,6 +32,7 @@ import {
   type ClaudeAgentPermissionMode,
   type ModelSelectionItem,
   type NumberVscodeSetting,
+  type Odyssey,
   type PRSubscriptionEntry,
   type ProviderKeyStatus,
   type ToolDashboardItem,
@@ -98,6 +100,7 @@ export interface SettingsMessageHandlerContext {
   latexConfigValues: WritableSignal<LatexConfigValues>;
   latexConfigValuesLoaded: WritableSignal<boolean>;
   inlineCriticismEnabled: WritableSignal<boolean>;
+  odysseyItems: WritableSignal<readonly Odyssey[]>;
   clearHistorySearch(): void;
   logSchemaError(message: string, error: unknown): void;
 }
@@ -330,6 +333,13 @@ export function dispatchSettingsViewMessage(
       );
       if (!data) return false;
       ctx.inlineCriticismEnabled.set(data.enabled);
+      return true;
+    }
+
+    case SETTINGS_VIEW_COMMANDS.UPDATE_ODYSSEY_LIST: {
+      const data = parseMessage(raw, UpdateOdysseyListMessageSchema, ctx);
+      if (!data) return false;
+      ctx.odysseyItems.set(data.items);
       return true;
     }
 
