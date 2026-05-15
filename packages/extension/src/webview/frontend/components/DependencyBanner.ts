@@ -13,8 +13,8 @@ import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
 import type { DependencyBannerState } from '@shared/schemas';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { applyBannerVisibility, bannerStyles } from '../styles/bannerStyles';
 import { MainViewEvents } from '../events';
 

@@ -5,11 +5,6 @@
  * action buttons, agent/model selectors, and execute button.
  */
 
-// Side-effect imports - register WA select & option components
-import '@awesome.me/webawesome/dist/components/select/select.js';
-import '@awesome.me/webawesome/dist/components/option/option.js';
-import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
-
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
@@ -17,12 +12,6 @@ import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { keyed } from 'lit/directives/keyed.js';
 import { styleMap } from 'lit/directives/style-map.js';
-import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
-import '@awesome.me/webawesome/dist/components/radio/radio.js';
-import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
-import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
-import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared schemas and types
 import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
@@ -53,6 +42,15 @@ import {
   sessionContext,
   type SessionContextValue,
 } from '../contexts/mainViewContexts';
+import '@awesome.me/webawesome/dist/components/select/select.js';
+import '@awesome.me/webawesome/dist/components/option/option.js';
+import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
+import '@awesome.me/webawesome/dist/components/radio/radio.js';
+import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
+import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 type SessionHintKey = SessionType | 'orchestrator';
 
