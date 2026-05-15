@@ -30,7 +30,7 @@ prompts:
     When writing a professional scientific document, you must:
     \begin{itemize}
         \item Follow best practices to ensure zero warnings when checked by chktex.
-        \item Use consistent and appropriate mathematical notation and terminology throughout{% if OUTPUT_FILES_ORDER %} all papers{% endif %}.
+        \item Use consistent and appropriate mathematical notation and terminology throughout all papers.
         \item Preserve comments starting with % in the document.
         \item Use either `` or '' as an alternative to `"'.
         \item Put punctuation outside inner math mode.
@@ -39,14 +39,13 @@ prompts:
         \item Add punctuation in displayed math environments based on sentence continuity.
         \item Use the math commands defined in commands.tex or preamble.tex if provided.
         \item When referring to equations, always use \cref{...} instead of numbers.
-        \item IMPORTANT: You must give the complete output containing all the sections in the order they are given in {% if OUTPUT_FILES_ORDER %}each input file{% else %}the input file{% endif %}.
-        {% if OUTPUT_FILES_ORDER %}
+        \item IMPORTANT: You must give the complete output containing all the sections in the order they are given in each input file.
+
         \item Ensure that you maintain the structure and formatting of each individual paper while making improvements.
         \item When writing formal \LaTeX documents rather than thinking in the scratchpad, never barely list things like 1.\ 2.\ 3.\ \ldots{} as in markdown.
-        {% endif %}
+
     \end{itemize}
 
-    {% if OUTPUT_FILES_ORDER %}
     In addition, since you will be working with multiple papers, you must:
     \begin{itemize}
         \item Ensure consistent notation and approach across related papers
@@ -54,7 +53,6 @@ prompts:
         \item Consider cross-references between papers when appropriate
         \item Be consistent in the level of mathematical detail across papers of similar type
     \end{itemize}
-    {% endif %}
 
     {% if IS_GOOGLE_MODEL %}
     In your response, you should use XML tags instead of markdown syntax to organize the output files. NEVER use markdown tags like ```latex ''' nor ```xml to organize the output files.
@@ -67,36 +65,31 @@ prompts:
 
     <documents>
     {{ ALL_CONTEXTS }}
-    {{ ADDITIONAL_INPUTS }}
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
+    {{ ALL_INPUTS }}
     </documents>
 
     Please carefully read through the document(s) and ensure you fully understand all the mathematical content and scientific context.
 
   userRequest:
     - |
-      Your task is to enhance {% if OUTPUT_FILES_ORDER %}these papers{% else %}this paper{% endif %} focusing solely on the following specific instruction:
+      Your task is to enhance these papers focusing solely on the following specific instruction:
       <instruction>
       {{ INSTRUCTION }}
       </instruction>
-      Important: Focus solely on the given instruction. If asked to revise section A{% if OUTPUT_FILES_ORDER %} in all papers{% endif %}, do not modify section B{% if OUTPUT_FILES_ORDER %} in any paper{% endif %} unless absolutely necessary for consistency.
+      Important: Focus solely on the given instruction. If asked to revise section A in all papers, do not modify section B in any paper unless absolutely necessary for consistency.
 
-      {% if OUTPUT_FILES_ORDER %}
       The output files should be in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
-      {% endif %}
 
-      FIRST PHASE: In this initial phase, I want you to focus on DERIVATION. Start from fundamental principles and show every single step, deriving all coefficients explicitly. Show every calculation in full detail to ensure complete mathematical rigor. Think of this as creating {% if OUTPUT_FILES_ORDER %}detailed mathematical drafts{% else %}a detailed mathematical draft{% endif %} where all steps are shown.
+      FIRST PHASE: In this initial phase, I want you to focus on DERIVATION. Start from fundamental principles and show every single step, deriving all coefficients explicitly. Show every calculation in full detail to ensure complete mathematical rigor. Think of this as creating detailed mathematical drafts where all steps are shown.
 
-      In the scratchpad below, plan how to expand the mathematical derivations to show every step clearly{% if OUTPUT_FILES_ORDER %} across all papers{% endif %}. Consider:
+      In the scratchpad below, plan how to expand the mathematical derivations to show every step clearly across all papers. Consider:
       - What are the fundamental principles and definitions we start from
-      - Where additional steps are needed{% if OUTPUT_FILES_ORDER %} in each paper{% endif %}
+      - Where additional steps are needed in each paper
       - Which coefficients need explicit derivation
       - Which calculations need to be shown in full (even if similar to others)
       - How to break down complex expressions
       - What explanatory text to add between equation blocks
-      - How to maintain consistency in notation{% if OUTPUT_FILES_ORDER %} across papers{% endif %}
+      - How to maintain consistency in notation across papers
       Use the scratchpad to outline the detailed mathematical steps you plan to add.
 
       <scratchpad>
@@ -105,11 +98,11 @@ prompts:
               \begin{itemize}
                   \item Fundamental definitions: [List the basic definitions and principles]
                   \item Initial expressions: [Write out starting expressions]
-                  {% if OUTPUT_FILES_ORDER %}
+
                   \item Cross-paper dependencies: [Note any mathematical concepts that build across papers]
-                  {% endif %}
+
               \end{itemize}
-          \item [Mathematical expansion point 1{% if OUTPUT_FILES_ORDER %} / Paper 1{% endif %}]
+          \item [Mathematical expansion point 1 / Paper 1]
               \begin{itemize}
                   \item Current state: [Brief description of current derivation]
                   \item Missing steps: [List steps that need to be shown]
@@ -117,7 +110,7 @@ prompts:
                   \item Coefficients to derive: [List coefficients needing explicit derivation]
                   \item Implementation: [How to expand the derivation]
               \end{itemize}
-          \item [Mathematical expansion point 2{% if OUTPUT_FILES_ORDER %} / Paper 2{% endif %}]
+          \item [Mathematical expansion point 2 / Paper 2]
               \begin{itemize}
                   \item Current state: [Brief description]
                   \item Missing steps: [List steps]
@@ -125,31 +118,21 @@ prompts:
                   \item Coefficients to derive: [List coefficients]
                   \item Implementation: [Expansion plan]
               \end{itemize}
-          {% if OUTPUT_FILES_ORDER %}
+
           ... [Repeat for each paper]
-          {% endif %}
+
       \end{enumerate}
       </scratchpad>
 
-      Then, following your plan in the scratchpad, please output updated version(s) of the LaTeX code with expanded mathematical derivations that show every single step and derive all coefficients explicitly. {% if OUTPUT_FILES_ORDER %}These are the fully derived versions{% else %}This is the fully derived version{% endif %} that will be revised in the next phase. Use the following format:
+      Then, following your plan in the scratchpad, please output updated version(s) of the LaTeX code with expanded mathematical derivations that show every single step and derive all coefficients explicitly. These are the fully derived versions that will be revised in the next phase. Use the following format:
 
-      {% if OUTPUT_FILES_ORDER %}
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 1ST_FULLY_DERIVED_LATEX_DOCUMENT HERE
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND_FULLY_DERIVED_LATEX_DOCUMENT HERE
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % FULLY_DERIVED_LATEX_DOCUMENT HERE
-      </document>
-      </documents>
-      {% endif %}
 
     - |
       SECOND PHASE: Now, I want you to focus on REVISION. Based on the fully derived version(s) you just created, revise the document(s) to be more suitable for scientific publication. Remember that in most cases, scientific writing doesn't need to show every step, and should be written in a way that clearly motivates what will happen. The level of detail after this revision should be similar to the existing content unless the instruction specifically asks to increase the technical detail.
@@ -163,7 +146,7 @@ prompts:
       <scratchpad>
       <derive-to-revise>
       \begin{enumerate}
-          {% if OUTPUT_FILES_ORDER %}
+
           \item Overall revision strategy across papers:
               \begin{itemize}
                   \item What level of mathematical detail is appropriate for each paper
@@ -195,57 +178,19 @@ prompts:
                   \item Improving clarity of scientific exposition
                   \item Ensuring all terms and concepts are properly defined before use
               \end{itemize}
-          {% else %}
-          \item What level of mathematical detail is appropriate for this specific document:
-              \begin{itemize}
-                  \item Which detailed steps should be kept based on the instruction
-                  \item Which steps can be condensed or summarized
-                  \item How to balance mathematical rigor with readability
-                  \item What is the appropriate level of detail for the target journal/audience
-              \end{itemize}
-          \item How to improve scientific motivation and explanation:
-              \begin{itemize}
-                  \item Where to add explanatory text that helps readers understand the purpose of calculations
-                  \item How to restructure derivations to present key insights first
-                  \item Whether to reorganize the presentation to improve flow
-                  \item How to connect mathematical results to physical/scientific interpretation
-              \end{itemize}
-          \item Specific revision targets:
-              \begin{itemize}
-                  \item Section 1: [specific revision plans]
-                  \item Section 2: [specific revision plans]
-                  \item [etc.]
-              \end{itemize}
-          \item Overall quality improvements:
-              \begin{itemize}
-                  \item Are there any fluffy statements that can be made more concise
-                  \item Are all notations and quantities properly defined before use
-                  \item Is the narrative flow logical and compelling
-                  \item Are there appropriate connections to existing literature
-              \end{itemize}
-          {% endif %}
+
       \end{enumerate}
       </derive-to-revise>
       </scratchpad>
 
-      Then, following your plan in the scratchpad, please output revised version(s) of the LaTeX document(s) that transform the fully derived mathematical {% if OUTPUT_FILES_ORDER %}drafts into polished scientific papers{% else %}draft into a polished scientific paper{% endif %} with an appropriate level of detail. Focus on addressing the original instruction while maintaining scientific clarity and proper motivation. Remember, the goal is not to show every mathematical step unless specifically required by the instruction, but to present the mathematics in a way that best serves the scientific content.
+      Then, following your plan in the scratchpad, please output revised version(s) of the LaTeX document(s) that transform the fully derived mathematical drafts into polished scientific papers with an appropriate level of detail. Focus on addressing the original instruction while maintaining scientific clarity and proper motivation. Remember, the goal is not to show every mathematical step unless specifically required by the instruction, but to present the mathematics in a way that best serves the scientific content.
 
-      {% if OUTPUT_FILES_ORDER %}
       Ensure that the output documents are in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 1ST_REVISED_SCIENTIFIC_LATEX_DOCUMENT HERE
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND_REVISED_SCIENTIFIC_LATEX_DOCUMENT HERE
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % REVISED_SCIENTIFIC_LATEX_DOCUMENT HERE
-      </document>
-      </documents>
-      {% endif %}

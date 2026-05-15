@@ -32,9 +32,6 @@ export class MediaExtractionNode<C = unknown> extends Node<
 
     const extraMediaFiles: FileLocation[] = [];
     if (currentRound === 0 && modelHandler.capabilities.supportsVision) {
-      if (config.mediaFile) {
-        extraMediaFiles.push(fileService.createLocation(config.mediaFile));
-      }
       extraMediaFiles.push(
         ...config.mediaFiles.map((p) => fileService.createLocation(p)),
       );

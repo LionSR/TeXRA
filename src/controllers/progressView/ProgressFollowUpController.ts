@@ -266,15 +266,13 @@ export class ProgressFollowUpController {
     editableFiles: string[],
     instruction: string,
   ): AgentConfig {
-    const [inputFile = '', ...inputFiles] = editableFiles;
     return {
       ...originalConfig,
       agent: 'latexFixer',
       model,
       instruction,
       agentCategory: AgentCategory.ToolUse,
-      inputFile,
-      inputFiles,
+      inputFiles: editableFiles,
       outputFiles: [],
       editedFile: null,
       editedFiles: [],
@@ -322,10 +320,7 @@ export class ProgressFollowUpController {
     const generatedOutputSources = compileFailures
       .map((failure) => outputByPath.get(failure.output.absolutePath)?.source)
       .filter((source): source is string => !!source);
-    const originalInputRecovery = [
-      originalConfig.inputFile,
-      ...originalConfig.inputFiles,
-    ].filter(Boolean);
+    const originalInputRecovery = originalConfig.inputFiles.filter(Boolean);
 
     return [...generatedOutputSources, ...originalInputRecovery];
   }

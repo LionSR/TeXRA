@@ -98,7 +98,7 @@ export async function buildUserVars(
     ...(await getFileVars(agentConfig, agentSetting, logger)),
     ...requiredVars,
     ...patternVars,
-    ...getOutputFilesOrder(agentConfig, agentSetting),
+    ...getOutputFilesOrder(agentConfig, agentSetting, agentPrompt),
     ...getToolFlags(agentConfig, agentSetting, agentPrompt),
     LATEX_STYLE_RULES: latexStyleRules,
     ATTACHED_MEMORIES: attachedMemories,
@@ -187,38 +187,29 @@ function getAgentDirectoryVars(): UserVars {
   return vars;
 }
 
-/**
- * File category configuration for consistent handling across the codebase.
- * Maps category name to { single, multiple } field accessors from AgentConfig.
- */
+// Maps a template prefix to the canonical multi-list field. The
+// single-keyed aliases (INPUT_FILE, CONTEXT_FILE, …, plus _CONTENT
+// siblings) resolve to the head of this list for back-compat with
+// custom user YAMLs.
 type FileCategoryConfig = {
-  single: keyof AgentConfig;
   multiple: keyof AgentConfig;
+  single?: keyof AgentConfig;
 };
 
 const FILE_CATEGORIES: Record<string, FileCategoryConfig> = {
-  INPUT: { single: 'inputFile', multiple: 'inputFiles' },
-  REFERENCE: { single: 'contextFile', multiple: 'contextFiles' },
-  MEDIA: { single: 'mediaFile', multiple: 'mediaFiles' },
-  EDITED: { single: 'editedFile', multiple: 'editedFiles' },
+  INPUT: { multiple: 'inputFiles' },
+  REFERENCE: { multiple: 'contextFiles' },
+  MEDIA: { multiple: 'mediaFiles' },
+  EDITED: { multiple: 'editedFiles', single: 'editedFile' },
 };
 
-/** Combine a single file with an array, filtering out empty values */
-function combineFiles(
-  single: string | null | undefined,
-  multiple: string[] | undefined,
-): string[] {
-  return [single, ...(multiple ?? [])].filter((f): f is string => Boolean(f));
-}
-
-/** Get combined files for a category from AgentConfig */
+/** Get the multi-list for a category (filtering empties) */
 function getCategoryFiles(config: AgentConfig, category: string): string[] {
   const cat = FILE_CATEGORIES[category];
   if (!cat) return [];
-  return combineFiles(
-    config[cat.single] as string | null | undefined,
-    config[cat.multiple] as string[] | undefined,
-  );
+  const list = (config[cat.multiple] as string[] | undefined) ?? [];
+  const single = cat.single ? (config[cat.single] as string | null) : null;
+  return [...new Set([single, ...list].filter((f): f is string => Boolean(f)))];
 }
 
 /** Categories used for building file vars (excludes MEDIA which is display-only) */
@@ -243,36 +234,35 @@ async function getFileVars(
     ]);
   }
 
-  // Build file vars for each category
   for (const prefix of FILE_VAR_CATEGORIES) {
-    const cat = FILE_CATEGORIES[prefix];
-    const filePath = agentConfig[cat.single] as string | null | undefined;
-    const rawAdditionalFiles =
-      (agentConfig[cat.multiple] as string[] | undefined) ?? [];
-    const additionalFiles = rawAdditionalFiles.filter(Boolean);
     const allFiles = getCategoryFiles(agentConfig, prefix);
+    const primaryFile = allFiles[0];
 
-    // Single file vars
-    userVars[`${prefix}_FILE`] = filePath ?? null;
-    userVars[`${prefix}_CONTENT`] = filePath
-      ? await WorkspaceFS.read(filePath)
-      : null;
+    // Aliases for custom YAMLs that still reference INPUT_FILE / INPUT_CONTENT.
+    if (primaryFile) {
+      await setVarFromFile(primaryFile, prefix, userVars);
+    } else {
+      userVars[`${prefix}_FILE`] = null;
+      userVars[`${prefix}_CONTENT`] = null;
+    }
 
-    // Collection vars
-    userVars[`ADDITIONAL_${prefix}S`] =
-      additionalFiles.length > 0
-        ? await getXmlFormatFromFiles(additionalFiles)
-        : null;
     userVars[`ALL_${prefix}S`] =
       allFiles.length > 0 ? await getXmlFormatFromFiles(allFiles) : null;
     userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(allFiles);
   }
 
-  // {{ ALL_CONTEXTS }} is the unified successor to {{ ALL_REFERENCES }} +
-  // {{ ALL_AUXILIARYS }} (the latter has been removed). It mirrors
-  // {{ ALL_REFERENCES }} now that auxiliary has been folded into context.
+  // ALL_CONTEXTS is the unified template var; the legacy ALL_REFERENCES
+  // alias keeps populating it for back-compat with custom YAMLs.
   userVars.ALL_CONTEXTS = userVars.ALL_REFERENCES as string | null;
   userVars.LIST_OF_ALL_CONTEXTS = getListOfFiles(contextFiles);
+  userVars.CONTEXT_FILE = userVars.REFERENCE_FILE;
+  userVars.CONTEXT_CONTENT = userVars.REFERENCE_CONTENT;
+  userVars.ALL_AUXILIARYS = userVars.ALL_CONTEXTS;
+  userVars.LIST_OF_ALL_AUXILIARYS = userVars.LIST_OF_ALL_CONTEXTS;
+
+  const mediaFiles = getCategoryFiles(agentConfig, 'MEDIA');
+  userVars.MEDIA_FILE = mediaFiles[0] ?? null;
+  userVars.MEDIA_CONTENT = null;
 
   return userVars;
 }
@@ -450,19 +440,24 @@ async function getAttachedMemories(
 export function getOutputFilesOrder(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
+  _agentPrompt: AgentPrompt,
 ): UserVars {
   const userVars: UserVars = {};
-  if (
-    Array.isArray(agentConfig.outputFiles) &&
-    agentConfig.outputFiles.length > 0
-  ) {
-    userVars.OUTPUT_FILES_ORDER = agentConfig.outputFiles;
-  } else if (
-    Array.isArray(agentSetting.defaultOutputFiles) &&
-    agentSetting.defaultOutputFiles.length > 0
-  ) {
-    agentConfig.outputFiles = agentSetting.defaultOutputFiles;
-    userVars.OUTPUT_FILES_ORDER = agentSetting.defaultOutputFiles;
+  const explicitOutputFiles = (agentConfig.outputFiles ?? []).filter(Boolean);
+  const defaultOutputFiles = (agentSetting.defaultOutputFiles ?? []).filter(
+    Boolean,
+  );
+  const inputFiles = (agentConfig.inputFiles ?? []).filter(Boolean);
+  const outputFiles =
+    explicitOutputFiles.length > 0
+      ? explicitOutputFiles
+      : defaultOutputFiles.length > 0
+        ? defaultOutputFiles
+        : inputFiles;
+
+  agentConfig.outputFiles = outputFiles;
+  if (outputFiles.length > 0) {
+    userVars.OUTPUT_FILES_ORDER = outputFiles;
   }
   return userVars;
 }
