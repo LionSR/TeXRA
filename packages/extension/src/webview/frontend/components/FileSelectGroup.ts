@@ -28,14 +28,6 @@ import {
 import { fileSelectStyles } from '../styles/fileSelectStyles';
 import { DEFAULT_CHECKBOX_VALUES } from '../store';
 
-/**
- * Multi-only file selector for one of the input/context/media categories.
- *
- * Post-W4 the per-category panel no longer has a single-slot dropdown — the
- * "primary" file is the head of the multi-list (`*Files[0]`). The user adds
- * files via the picker, drag-and-drop, or "Add opened files"; the list is
- * always visible while it has entries.
- */
 @customElement('file-select-group')
 export class FileSelectGroup extends LitElement {
   static override styles = [

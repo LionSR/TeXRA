@@ -35,11 +35,6 @@ export interface ProposalFileGroup {
   clickable: boolean;
 }
 
-/**
- * Group multi-list file fields into labeled buckets, dropping empties.
- * Post-W4 collapse there is only the multi-list — no separate single-slot
- * to combine — so this is just a per-category list filter.
- */
 export function getProposalFileGroups(data: FileFields): ProposalFileGroup[] {
   return [
     {

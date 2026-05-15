@@ -31,11 +31,6 @@ import {
 export const DEFAULT_STATE: MainViewPersistedState =
   MainViewPersistedStateSchema.parse({});
 
-/**
- * Default single files state (typed). After the W4 collapse only `baseFile`
- * and `editedFile` remain single-slot — they have distinct latexdiff
- * semantics and never collapse into a list.
- */
 export const DEFAULT_SINGLE_FILES: SingleFiles = {
   baseFile: DEFAULT_STATE.baseFile,
   editedFile: DEFAULT_STATE.editedFile,
@@ -126,19 +121,11 @@ export const ONBOARDING_PLACEHOLDERS = {
   ],
 } satisfies Record<SessionType | 'orchestrator', string[]>;
 
-/**
- * Static configuration for each multi-file selector. After the W4 collapse
- * each per-category panel is multi-only (no single-slot dropdown), so the
- * config no longer carries `currentTitle` / `emptyTitle` — those buttons
- * targeted the deleted single-slot select. The "current file" affordance now
- * lives on the list-add button (set the active editor's file as the head).
- */
 export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
   {
     type: 'input',
     label: 'Input',
     icon: 'file-code',
-    refreshTitle: 'Refresh input files',
     toggleTitle: 'Show or hide additional input files',
     addOpenedLabel: 'Add opened files as input',
     emptyListLabel: 'Clear all input files',
@@ -146,16 +133,11 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
     tooltip: 'Primary files the agent processes, such as .tex, .txt, or .md',
     description: 'Read and edited by the agent',
     toolConfig: 'tool',
-    focusInstruction: {
-      key: 'inputFileSelect',
-      text: 'Choose the main LaTeX file to process. Use the Current button to pick the active editor.',
-    },
   },
   {
     type: 'context',
     label: 'Context',
     icon: 'book',
-    refreshTitle: 'Refresh context files',
     toggleTitle: 'Show or hide additional context files',
     addOpenedLabel: 'Add opened files as context',
     emptyListLabel: 'Clear all context files',
@@ -168,7 +150,6 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
     type: 'media',
     label: 'Media',
     icon: 'device-camera-video',
-    refreshTitle: 'Refresh media files',
     toggleTitle: 'Show or hide additional media files',
     addOpenedLabel: 'Add opened files as media',
     emptyListLabel: 'Clear all media files',

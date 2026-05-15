@@ -98,7 +98,7 @@ export async function buildUserVars(
     ...(await getFileVars(agentConfig, agentSetting, logger)),
     ...requiredVars,
     ...patternVars,
-    ...getOutputFilesOrder(agentConfig, agentSetting),
+    ...getOutputFilesOrder(agentConfig, agentSetting, agentPrompt),
     ...getToolFlags(agentConfig, agentSetting, agentPrompt),
     LATEX_STYLE_RULES: latexStyleRules,
     ATTACHED_MEMORIES: attachedMemories,
@@ -187,16 +187,10 @@ function getAgentDirectoryVars(): UserVars {
   return vars;
 }
 
-/**
- * File category configuration for prompt-template variable rendering.
- * Maps a template prefix to the canonical multi-list field on AgentConfig.
- *
- * After the W4 collapse there is no separate "single" slot — the "primary"
- * file is the head of the multi-list (e.g. `INPUT_FILE` ≡ `inputFiles[0]`).
- * The single-keyed template variables (`INPUT_FILE`, `CONTEXT_FILE`,
- * `MEDIA_FILE`, plus `_CONTENT` siblings) are kept as aliases so custom
- * user YAMLs that still reference them keep rendering.
- */
+// Maps a template prefix to the canonical multi-list field. The
+// single-keyed aliases (INPUT_FILE, CONTEXT_FILE, …, plus _CONTENT
+// siblings) resolve to the head of this list for back-compat with
+// custom user YAMLs.
 type FileCategoryConfig = {
   multiple: keyof AgentConfig;
 };
@@ -238,27 +232,25 @@ async function getFileVars(
     ]);
   }
 
-  // Build file vars for each category
   for (const prefix of FILE_VAR_CATEGORIES) {
     const allFiles = getCategoryFiles(agentConfig, prefix);
-    // Primary "single" file is the head of the multi-list.
-    const primaryFile = allFiles[0] ?? null;
+    const primaryFile = allFiles[0];
 
-    // Single file aliases (kept for back-compat with custom YAMLs).
-    userVars[`${prefix}_FILE`] = primaryFile;
-    userVars[`${prefix}_CONTENT`] = primaryFile
-      ? await WorkspaceFS.read(primaryFile)
-      : null;
+    // Aliases for custom YAMLs that still reference INPUT_FILE / INPUT_CONTENT.
+    if (primaryFile) {
+      await setVarFromFile(primaryFile, prefix, userVars);
+    } else {
+      userVars[`${prefix}_FILE`] = null;
+      userVars[`${prefix}_CONTENT`] = null;
+    }
 
-    // Collection vars
     userVars[`ALL_${prefix}S`] =
       allFiles.length > 0 ? await getXmlFormatFromFiles(allFiles) : null;
     userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(allFiles);
   }
 
-  // {{ ALL_CONTEXTS }} is the unified successor to {{ ALL_REFERENCES }} +
-  // {{ ALL_AUXILIARYS }} (the latter has been removed). It mirrors
-  // {{ ALL_REFERENCES }} now that auxiliary has been folded into context.
+  // ALL_CONTEXTS is the unified template var; the legacy ALL_REFERENCES
+  // alias keeps populating it for back-compat with custom YAMLs.
   userVars.ALL_CONTEXTS = userVars.ALL_REFERENCES as string | null;
   userVars.LIST_OF_ALL_CONTEXTS = getListOfFiles(contextFiles);
 
@@ -438,6 +430,7 @@ async function getAttachedMemories(
 export function getOutputFilesOrder(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
+  agentPrompt: AgentPrompt,
 ): UserVars {
   const userVars: UserVars = {};
   if (
@@ -451,8 +444,28 @@ export function getOutputFilesOrder(
   ) {
     agentConfig.outputFiles = agentSetting.defaultOutputFiles;
     userVars.OUTPUT_FILES_ORDER = agentSetting.defaultOutputFiles;
+  } else if (shouldDeriveOutputOrderFromInputs(agentPrompt)) {
+    const inputFiles = agentConfig.inputFiles.filter(Boolean);
+    if (inputFiles.length > 0) {
+      userVars.OUTPUT_FILES_ORDER = inputFiles;
+    }
   }
   return userVars;
+}
+
+function shouldDeriveOutputOrderFromInputs(agentPrompt: AgentPrompt): boolean {
+  const userRequest = Array.isArray(agentPrompt.userRequest)
+    ? agentPrompt.userRequest.join('\n')
+    : agentPrompt.userRequest;
+  const promptText = [
+    agentPrompt.systemPrompt,
+    agentPrompt.userPrefix,
+    userRequest,
+  ].join('\n');
+  return (
+    promptText.includes('OUTPUT_FILES_ORDER') &&
+    !promptText.includes('{% if OUTPUT_FILES_ORDER %}')
+  );
 }
 
 export function getToolFlags(

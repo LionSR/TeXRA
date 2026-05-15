@@ -596,7 +596,6 @@ async function discoverLatestExecutionOutputs(query: {
         if (entry.agent !== query.agent || entry.model !== query.model) {
           return false;
         }
-        // Primary input is the head of the inputFiles list (post-W4 collapse).
         const entryInput = entry.agentConfig?.inputFiles?.[0];
         return (
           typeof entryInput === 'string' &&

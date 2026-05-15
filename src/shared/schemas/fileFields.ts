@@ -1,42 +1,36 @@
-/**
- * File field schemas - single source of truth for file-related config fields.
- *
- * Two variants:
- * - NullableFileFieldsSchema: For storage/config (allows null on `editedFile`)
- * - UIFileFieldsSchema: For UI state (coerces null → '')
- *
- * The single-slot input/context/media fields were collapsed in May 2026:
- * canonical state is now `inputFiles` / `contextFiles` / `mediaFiles` lists,
- * with the "primary" file being `inputFiles[0]` etc. `baseFile` and
- * `editedFile` remain single because they have distinct latexdiff semantics.
- *
- * Both schemas run `migrateLegacyContextFileFields` so persisted records
- * written before the collapse (and before the reference/auxiliary → context
- * rename) keep parsing.
- */
 import { z } from 'zod';
 
 import { isNonEmptyString } from '@utils/core/stringCore';
 
+const LEGACY_KEYS = [
+  'referenceFile',
+  'referenceFiles',
+  'auxiliaryFile',
+  'auxiliaryFiles',
+  'inputFile',
+  'contextFile',
+  'mediaFile',
+] as const;
+
 /**
- * Fold pre-collapse single-slot file keys (`inputFile`, `contextFile`,
- * `mediaFile`) into the canonical `*Files` lists, and fold pre-rename
- * `referenceFile{,s}` / `auxiliaryFile{,s}` into the `context` namespace.
- *
- * The single-slot value becomes the head of the `*Files` list when that list
- * is empty; otherwise the existing list wins (modern writers control the
- * head explicitly). Used by every schema that reads persisted file-field
- * state (UI memento, execution KV store, history records).
+ * Fold legacy single-slot and renamed (reference/auxiliary) file keys into
+ * the canonical `*Files` lists. Single-slot values seed `*Files[0]` only
+ * when the list is empty so modern writers always win. Runs at the
+ * persistence boundary (UI memento, execution KV store, history records);
+ * skipped when no legacy keys are present so listing N executions doesn't
+ * pay the clone+delete cost N times.
  */
 export function migrateLegacyContextFileFields(input: unknown): unknown {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
     return input;
   }
-  const obj = { ...(input as Record<string, unknown>) };
+  const source = input as Record<string, unknown>;
+  if (!LEGACY_KEYS.some((key) => key in source)) {
+    return input;
+  }
+  const obj = { ...source };
 
-  // ---- Step 1: rename reference/auxiliary -> context (pre-#4035 records) --
-  // Pull the legacy single-slot context value from referenceFile, falling
-  // back to auxiliaryFile, before we collapse it into contextFiles below.
+  // Step 1: rename reference/auxiliary → context.
   if (obj.contextFile === undefined || obj.contextFile === null) {
     if (isNonEmptyString(obj.referenceFile)) {
       obj.contextFile = obj.referenceFile;
@@ -66,10 +60,7 @@ export function migrateLegacyContextFileFields(input: unknown): unknown {
   delete obj.auxiliaryFile;
   delete obj.auxiliaryFiles;
 
-  // ---- Step 2: collapse single-slot fields into *Files lists -------------
-  // For each (single, multi) pair, if the multi list is missing/empty and the
-  // single slot has a value, seed the multi list with the single value. Then
-  // drop the single key from the canonical shape.
+  // Step 2: collapse single-slot fields into *Files lists.
   for (const [single, multi] of [
     ['inputFile', 'inputFiles'],
     ['contextFile', 'contextFiles'],
@@ -91,11 +82,9 @@ export function migrateLegacyContextFileFields(input: unknown): unknown {
 }
 
 /**
- * File fields with nullable single-file fields.
- * Used by AgentConfig where null means "not set" (for editedFile only).
- * Apply `migrateLegacyContextFileFields` via `z.preprocess` at the outer
- * schema that reads persisted records, since this object is composed via
- * `.merge()`/`.extend()` and ZodEffects can't compose that way.
+ * Used by AgentConfig where `editedFile` may be null. The migration
+ * shim is applied at the outer schema (not here) because ZodEffects
+ * doesn't compose with `.merge()`/`.extend()`.
  */
 export const NullableFileFieldsSchema = z.object({
   inputFiles: z.array(z.string()).prefault([]),

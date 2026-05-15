@@ -103,10 +103,6 @@ type FileUpdateOptions = {
 export class FileManager extends BaseWebviewManager {
   protected readonly channel = CHANNEL;
 
-  /**
-   * Single-slot edited-file picker (still single-slot post-W4 because of
-   * latexdiff semantics — the edited revision is one specific file).
-   */
   async handleEditedFileSelection(
     _message?: EditedFileSelectionMessage,
   ): Promise<void> {
@@ -207,16 +203,9 @@ export class FileManager extends BaseWebviewManager {
     }
   }
 
-  /**
-   * Refresh disk-backed dropdowns (base-file picker + getting-started banner).
-   *
-   * Post-W4 collapse there are no input/context/media single-slot dropdowns
-   * to repopulate — the per-category multi-list is owned by the user (only
-   * mutated through the picker / drag-drop / "Add opened files"), so the
-   * disk listing is no longer pushed back into webview state. Refresh just
-   * rescans for an empty workspace banner and refreshes the base-file
-   * dropdown (which is still single-slot under LaTeXdiff).
-   */
+  // Multi-list categories are user-owned (only mutated through the picker /
+  // drag-drop / Add opened) so we don't push disk listings into them — just
+  // refresh the still-single-slot base-file dropdown and the empty-workspace banner.
   async handleRefreshAllFiles(): Promise<void> {
     const inputFiles = await getFileLister().list('input');
     this.postBaseFileSelect(inputFiles);

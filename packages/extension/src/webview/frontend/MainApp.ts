@@ -106,9 +106,6 @@ type MainViewMessageFor<C extends MainViewMessage['command']> = Extract<
   { command: C }
 >;
 
-// Union types for handlers that process multiple similar commands.
-// After the W4 collapse, only `editedFile` retains a single-slot SET/_SELECTED
-// pair; the other categories route through SET_*_FILES below.
 type SetEditedFileOptionsMessage = MainViewMessageFor<
   typeof MAIN_VIEW_COMMANDS.SET_EDITED_FILE
 >;
@@ -992,7 +989,6 @@ export class MainApp extends MainAppBase {
   }
 
   private initializeOutputFiles(): void {
-    // Primary input file is the head of the inputFiles list (post-W4 collapse).
     const primaryInput = this.multiFiles.get().inputFiles[0];
     if (!primaryInput) return;
 
@@ -1059,11 +1055,8 @@ export class MainApp extends MainAppBase {
     postMessage(MAIN_VIEW_COMMANDS.GET_CURRENT_FILE, payload);
   }
 
-  /**
-   * Empty a single-slot file. Post-W4 only `base`/`edited` are still
-   * single-slot; the `DocumentFileType` overload remains for the
-   * LatexDiffsSection event signature but is a no-op for input/context/media.
-   */
+  // No-op for input/context/media so the LatexDiffsSection event signature
+  // (DocumentFileType union) stays compatible — only base/edited can be cleared.
   private handleEmptyFile(type: DocumentFileType | 'base' | 'edited'): void {
     if (type !== 'base' && type !== 'edited') return;
     const sf = this.singleFiles.get();
@@ -1091,17 +1084,6 @@ export class MainApp extends MainAppBase {
       this.outputFilesActive.set(false);
     }
     this.updateMultiFiles(listId as keyof MultiFiles, []);
-  }
-
-  /**
-   * Per-category refresh button. Post-W4 there's no single-slot dropdown
-   * to repopulate, so the per-category refresh just fans out to a workspace
-   * file rescan via REFRESH_ALL_FILES (which triggers a fresh disk listing
-   * for input/context/media all at once and pushes back the base-file
-   * dropdown options as a side effect).
-   */
-  private handleRefreshFiles(_type: DocumentFileType): void {
-    postMessage(MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES);
   }
 
   private handleBaseFileChange(value: string): void {
@@ -1290,8 +1272,6 @@ export class MainApp extends MainAppBase {
         : this.workflowAgent.get();
 
     const sf = this.singleFiles.get();
-    // After the W4 collapse only base/edited remain single-slot — the rest
-    // travel via multipleFileSelections below.
     const singleFileSelections = {
       editedFile: sf.editedFile,
       baseFile: sf.baseFile,
@@ -1507,12 +1487,6 @@ export class MainApp extends MainAppBase {
   // These handlers receive custom events from child Lit components and
   // delegate to the existing handler methods.
   // =========================================================================
-
-  private handleComponentRefreshFiles(e: CustomEvent<FileActionDetail>): void {
-    if (e.detail.type !== 'base' && e.detail.type !== 'edited') {
-      this.handleRefreshFiles(e.detail.type);
-    }
-  }
 
   private handleComponentGetCurrentFile(
     e: CustomEvent<FileActionDetail>,
@@ -1968,7 +1942,6 @@ export class MainApp extends MainAppBase {
                       (config) => html`
                         <file-select-group
                           .config=${config}
-                          @refresh-files=${this.handleComponentRefreshFiles}
                           @toggle-list=${this.handleComponentToggleList}
                           @add-opened-files=${this
                             .handleComponentAddOpenedFiles}

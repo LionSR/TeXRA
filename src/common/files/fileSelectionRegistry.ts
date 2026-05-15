@@ -16,11 +16,8 @@ export const FILE_SELECTION_COMMAND_IDS = {
 export type FileSelectionCommandId =
   (typeof FILE_SELECTION_COMMAND_IDS)[keyof typeof FILE_SELECTION_COMMAND_IDS];
 
-/**
- * Single-file selection response commands. After the W4 collapse only
- * `editedFile` retains a single-slot picker; `inputFile` / `contextFile` /
- * `mediaFile` are now multi-only and route through `SET_*_FILES` instead.
- */
+// Only `editedFile` still uses single-file selection; input/context/media
+// route through SET_*_FILES.
 export type FileSelectionResponseCommand =
   typeof MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED;
 

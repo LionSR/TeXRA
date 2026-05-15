@@ -80,6 +80,7 @@ import { displayToStoragePath } from '@tools/memory/memoryUtils';
 // Local imports - utils
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { generateExecutionId } from '@utils/core/executionId';
+import { isNonEmptyString } from '@utils/core/stringCore';
 
 // ============================================================================
 // Shared utilities
@@ -702,9 +703,7 @@ function isBibFile(filePath: string): boolean {
 }
 
 function getContextFiles(input: WorkflowAgentInput): string[] {
-  return input.contextFiles.filter(
-    (path): path is string => typeof path === 'string' && path.length > 0,
-  );
+  return input.contextFiles.filter(isNonEmptyString);
 }
 
 /** Reject workflow proposals that attach oversized bibliography files. */
@@ -775,9 +774,7 @@ Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instructi
       arr: string[],
       label: string,
     ): { path: string; label: string }[] =>
-      arr
-        .filter((p): p is string => typeof p === 'string' && p.length > 0)
-        .map((path) => ({ path, label }));
+      arr.filter(isNonEmptyString).map((path) => ({ path, label }));
 
     const filesToValidate = [
       ...toValidate(input.inputFiles, 'Input file'),

@@ -37,11 +37,8 @@ export interface DesktopFileSelectionOptions {
 
 export type DesktopFileSelection = DesktopMessageHandler;
 
-/**
- * Single-slot dropdowns left after the W4 collapse: only base/edited
- * (latexdiff) — input/context/media are multi-only and route through the
- * SELECT_MULTIPLE_FILES path instead.
- */
+// Only base/edited use single-file SET commands; input/context/media
+// route through SELECT_MULTIPLE_FILES.
 const SET_COMMAND_BY_FILE_TYPE = {
   edited: MAIN_VIEW_COMMANDS.SET_EDITED_FILE,
   base: MAIN_VIEW_COMMANDS.SET_BASE_FILE,

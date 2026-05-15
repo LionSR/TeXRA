@@ -49,7 +49,6 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   const category =
     config?.agentCategory ?? hints?.agentCategory ?? AGENT_CATEGORY.WORKFLOW;
 
-  // Primary input file is the head of the inputFiles list (post-W4 collapse).
   const inputFile = config?.inputFiles?.[0] ?? hints?.inputFile ?? '';
   const rawAgentName = config?.agent ?? hints?.agent ?? streamId.split('@')[0];
   const agentName = getCleanAgentName(rawAgentName);

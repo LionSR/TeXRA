@@ -196,7 +196,6 @@ export const FileSelectConfigSchema = z.object({
   type: DocumentFileTypeSchema,
   label: z.string(),
   icon: z.string(),
-  refreshTitle: z.string(),
   toggleTitle: z.string(),
   addOpenedLabel: z.string(),
   emptyListLabel: z.string(),
@@ -204,12 +203,6 @@ export const FileSelectConfigSchema = z.object({
   tooltip: z.string(),
   description: z.string().nullish(),
   toolConfig: z.enum(['tool', 'autoExtract']).nullish(),
-  focusInstruction: z
-    .object({
-      key: z.string(),
-      text: z.string(),
-    })
-    .nullish(),
 });
 export type FileSelectConfig = z.infer<typeof FileSelectConfigSchema>;
 
@@ -272,18 +265,6 @@ export const SessionContextSchema = z.object({
   debugMode: z.boolean(),
 });
 export type SessionContextValue = z.infer<typeof SessionContextSchema>;
-
-// ============================================================
-// Event Detail Schemas (frontend custom events)
-// ============================================================
-
-export const FileSelectChangeDetailSchema = z.object({
-  type: DocumentFileTypeSchema,
-  value: z.string(),
-});
-export type FileSelectChangeDetail = z.infer<
-  typeof FileSelectChangeDetailSchema
->;
 
 export const StringValueDetailSchema = z.object({
   value: z.string(),
