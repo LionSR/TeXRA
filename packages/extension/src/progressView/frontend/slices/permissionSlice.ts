@@ -104,6 +104,14 @@ export const permissionHandlers: HandlerRegistry = {
     );
   },
 
+  [PROGRESS_VIEW_COMMANDS.ODYSSEY_ACTIVE_UPDATED]: (data, ctx) => {
+    updateToolUseState(ctx, data.stream, (prev) =>
+      create(prev, (draft) => {
+        draft.odysseyActive = data.active;
+      }),
+    );
+  },
+
   [PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION]: (data, ctx) => {
     if (data.action === 'show') {
       const { permission } = data;

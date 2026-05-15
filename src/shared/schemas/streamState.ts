@@ -97,6 +97,8 @@ export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   queuedFollowUps: z.array(z.string()).prefault([]),
   toolEditBypass: z.boolean().optional(),
   superYoloBypass: z.boolean().optional(),
+  /** True when this stream has an Odyssey in `active` or `paused` state. */
+  odysseyActive: z.boolean().optional(),
   // Per-run usage for accumulation; sessionUsage is derived as their sum.
   runUsage: RunScopedRecord(TokenUsageStatsSchema),
   sessionUsage: TokenUsageStatsSchema.nullable().prefault(null),
