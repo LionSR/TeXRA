@@ -1,4 +1,5 @@
-// Local imports - CLI commands
+import { toErrorMessage } from '@common/errors/errorMessage';
+
 import { runCli } from '../commands/root';
 import { CliExitCode } from '../runtime/exitCodes';
 import { writeTextStderr } from '../runtime/logSinks';
@@ -7,7 +8,6 @@ try {
   const result = await runCli();
   process.exitCode = result.exitCode;
 } catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  writeTextStderr(`TeXRA CLI failed: ${message}`);
+  writeTextStderr(`TeXRA CLI failed: ${toErrorMessage(error)}`);
   process.exitCode = CliExitCode.AgentError;
 }
