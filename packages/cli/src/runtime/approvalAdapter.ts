@@ -22,7 +22,7 @@ import { type CliContext, type CliPromptRequest } from './cliContext';
 import { askCliQuestion, writeTextStderr } from './logSinks';
 import { parseUserQuestionAnswer } from './userQuestionAnswer';
 
-interface ApprovalDecision {
+export interface ApprovalDecision {
   readonly accepted: boolean;
   readonly userMessage?: string;
 }
@@ -88,7 +88,9 @@ async function askCliApprovalQuestion(
   return askCliQuestion(`${request.summary}\n${request.prompt}`);
 }
 
-function immediateDecision(context: CliContext): ApprovalDecision | undefined {
+export function immediateDecision(
+  context: CliContext,
+): ApprovalDecision | undefined {
   if (context.approvalPolicy === 'yolo') return { accepted: true };
   if (approvalPromptAllowed(context)) return undefined;
   markApprovalDenied(context);

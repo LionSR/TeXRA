@@ -1,15 +1,9 @@
 // Typed approval pipeline per docs/prd/cli-tui-ink/10-architecture.md §9.
 //
-// Pattern: each launcher constructs a typed payload from a runtime-host
-// event and enqueues it on a `p-queue` with concurrency 1. The head item is
-// mirrored onto the `currentApproval` signal so `<ApprovalModal>` can
-// dispatch on its discriminant. When the modal resolves the head, the
-// queue advances to the next.
-//
-// The original event resolvers are unchanged — the modal calls them on
-// decide. Phase 1's free-text `askApproval` stderr prompt is replaced for
-// every approval kind below; the legacy adapter still runs when `--tui`
-// is off.
+// Each enqueued approval gets a position in a serial queue plus a slot on
+// the `currentApproval` signal when its turn comes up. The modal calls
+// `decide(decision)` to resolve and advance. Hard-cancel resolves every
+// in-flight + pending entry so the original requester promises don't leak.
 
 import { signal, type Signal } from '@lit-labs/signals';
 import PQueue from 'p-queue';
@@ -42,7 +36,7 @@ export interface ApprovalDecision {
   readonly accepted: boolean;
   /**
    * Free-text payload carried with the decision. For rejections this is the
-   * user's `e`-reject-with-feedback note; for the External Inquiry kind on
+   * user's `e`-reject-with-feedback note; for the ExternalInquiry kind on
    * accept, it's the answer the agent gets back.
    */
   readonly userMessage?: string;
@@ -62,33 +56,49 @@ export const currentApproval = CURRENT as Signal.State<
 
 const queue = new PQueue({ concurrency: 1 });
 
-/**
- * Enqueue an approval payload. Returns a Promise that resolves with the
- * user's decision once `<ApprovalModal>` dispatches it.
- */
+// Tracks every in-flight + queued resolver so `clearApprovals()` can settle
+// them on session interrupt instead of leaving them dangling.
+const pendingResolvers = new Set<(decision: ApprovalDecision) => void>();
+
 export function enqueueApproval(
   payload: ApprovalPayload,
 ): Promise<ApprovalDecision> {
-  return queue.add(async () => {
-    return new Promise<ApprovalDecision>((resolve) => {
-      const pending: PendingApproval = {
-        payload,
-        decide: (decision) => {
-          CURRENT.set(undefined);
-          resolve(decision);
-        },
-      };
-      CURRENT.set(pending);
-    });
-  }) as Promise<ApprovalDecision>;
+  return new Promise<ApprovalDecision>((resolveOuter) => {
+    pendingResolvers.add(resolveOuter);
+    void queue
+      .add(async () => {
+        await new Promise<void>((advance) => {
+          const pending: PendingApproval = {
+            payload,
+            decide: (decision) => {
+              if (!pendingResolvers.delete(resolveOuter)) return;
+              CURRENT.set(undefined);
+              resolveOuter(decision);
+              advance();
+            },
+          };
+          CURRENT.set(pending);
+        });
+      })
+      .catch(() => {
+        // Queue cleared while waiting — the matching resolver was either
+        // settled by clearApprovals() or removed before scheduling.
+        if (pendingResolvers.delete(resolveOuter)) {
+          resolveOuter({
+            accepted: false,
+            userMessage: 'Session interrupted.',
+          });
+        }
+      });
+  });
 }
 
-/** Hard-cancel: clear the queue + current item (e.g. session interrupt). */
+/** Hard-cancel: settle every pending resolver so requesters don't hang. */
 export function clearApprovals(): void {
   queue.clear();
-  const head = CURRENT.get();
-  if (head) {
-    head.decide({ accepted: false, userMessage: 'Session interrupted.' });
-  }
   CURRENT.set(undefined);
+  for (const resolve of [...pendingResolvers]) {
+    pendingResolvers.delete(resolve);
+    resolve({ accepted: false, userMessage: 'Session interrupted.' });
+  }
 }

@@ -37,7 +37,6 @@
     "@babel/core": "^7.29.0",
     "@babel/preset-react": "^7.28.5",
     "@babel/preset-typescript": "^7.28.5",
-    "@types/diff": "^8.0.0",
     "@types/react": "^19.0.0",
     "babel-plugin-react-compiler": "^1.0.0",
     "esbuild": "^0.28.0",

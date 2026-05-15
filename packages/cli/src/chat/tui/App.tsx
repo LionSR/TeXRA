@@ -18,6 +18,10 @@ export interface AppProps {
 export function App(props: AppProps): React.JSX.Element {
   const { exit } = useApp();
   void exit;
+  // Read the signal once and pass-as-prop. `<InputBar>` stays mounted (so
+  // its draft `useState` survives the modal) — `disabled` suspends key
+  // handling while the modal owns the screen. `<ApprovalModal>` returns
+  // null when no approval is pending, so it can render unconditionally.
   const pending = useSignal(currentApproval);
 
   return (
@@ -25,11 +29,11 @@ export function App(props: AppProps): React.JSX.Element {
       <Header />
       <ConversationPane />
       <StatusBar />
-      {pending ? (
-        <ApprovalModal />
-      ) : (
-        <InputBar onSubmit={props.onSubmit} disabled={props.inputDisabled} />
-      )}
+      <ApprovalModal />
+      <InputBar
+        onSubmit={props.onSubmit}
+        disabled={props.inputDisabled || pending !== undefined}
+      />
     </Box>
   );
 }

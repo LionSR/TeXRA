@@ -11,10 +11,9 @@ export interface PlanApprovalProps {
 }
 
 export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
-  const steps =
-    'plan' in props.payload && Array.isArray(props.payload.plan)
-      ? (props.payload.plan as Array<{ description?: string; title?: string }>)
-      : [];
+  const plan = props.payload.plan;
+  const summary = plan?.summary;
+  const steps = plan?.steps ?? [];
 
   return (
     <Box
@@ -26,14 +25,20 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
       <Text bold color="blue">
         Approve plan?
       </Text>
-      <Box marginY={1} flexDirection="column">
+      {summary ? (
+        <Box marginY={1}>
+          <Text>{summary}</Text>
+        </Box>
+      ) : null}
+      <Box flexDirection="column">
         {steps.map((step, i) => (
           <Text key={i}>
-            {i + 1}. {step.description ?? step.title ?? '(step)'}
+            {i + 1}. {step.title}
+            {step.description ? ` — ${step.description}` : ''}
           </Text>
         ))}
       </Box>
-      <Box>
+      <Box marginTop={1}>
         <Text dimColor>y approve · n reject · </Text>
         <ConfirmInput
           onConfirm={() => props.onDecide({ accepted: true })}

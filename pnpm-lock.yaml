@@ -370,9 +370,6 @@ importers:
       '@babel/preset-typescript':
         specifier: ^7.28.5
         version: 7.28.5(@babel/core@7.29.0)
-      '@types/diff':
-        specifier: ^8.0.0
-        version: 8.0.0
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.14
@@ -2158,10 +2155,6 @@ packages:
 
   '@types/diff-match-patch@1.0.36':
     resolution: {integrity: sha512-xFdR6tkm0MWvBfO8xXCSsinYxHcqkQUlcHeSpMC2ukzOb6lwQAfDmW+Qt0AvlGd8HpsS28qKsB+oPeJn9I39jg==}
-
-  '@types/diff@8.0.0':
-    resolution: {integrity: sha512-o7jqJM04gfaYrdCecCVMbZhNdG6T1MHg/oQoRFdERLV+4d+V7FijhiEAbFu0Usww84Yijk9yH58U4Jk4HbtzZw==}
-    deprecated: This is a stub types definition. diff provides its own type definitions, so you do not need this installed.
 
   '@types/eslint-scope@3.7.7':
     resolution: {integrity: sha512-MzMFlSLBqNF2gcHWO0G1vP/YQyfvrxZ0bF+u7mzUdZ1/xK4A4sru+nraZz5i3iEIk1l1uyicaDVTB4QbbEkAYg==}
@@ -8292,10 +8285,6 @@ snapshots:
   '@types/deep-eql@4.0.2': {}
 
   '@types/diff-match-patch@1.0.36': {}
-
-  '@types/diff@8.0.0':
-    dependencies:
-      diff: 7.0.0
 
   '@types/eslint-scope@3.7.7':
     dependencies:

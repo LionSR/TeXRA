@@ -134,7 +134,7 @@ export async function runChatTui(
     };
     const runtimeHost = createCliRuntimeHost(sessionContext);
     const wrapped = wrapRuntimeHost(runtimeHost);
-    const unbindApprovals = installTuiApprovals(wrapped);
+    const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
     disposers.push(unbindApprovals);
 
     session.runPromise = executeAgent(config, undefined, {

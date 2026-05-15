@@ -4,6 +4,11 @@
 // queue (-> ApprovalModal -> user) instead of the legacy stderr prompt.
 // When the modal resolves, the *original* resolvers run unchanged.
 //
+// Policy is honored *before* the modal is shown — `immediateDecision` runs
+// first so `--approval-policy yolo` auto-approves without a modal, and
+// `never` auto-rejects with `denyMessage(...)`. Only `ask` (or interactive
+// non-print) reaches the queue.
+//
 // Tool-edit goes through `setToolEditApprovalHandler` (separate API since
 // it returns a typed Promise<ToolEditApprovalResult>, not a fire-and-forget
 // event).
@@ -24,6 +29,11 @@ import type {
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
 
+import {
+  immediateDecision,
+  type ApprovalDecision as PolicyDecision,
+} from '../../../runtime/approvalAdapter';
+import type { CliContext } from '../../../runtime/cliContext';
 import type { CliRuntimeHost } from '../../../runtime/runtimeHost';
 import { enqueueApproval, type ApprovalDecision } from './approvalQueue';
 
@@ -36,19 +46,30 @@ type Emit = <K extends ProgressEvent>(
  * Install the typed approval pipeline. Returns an `unbind` callback that
  * restores the original emit + clears the tool-edit handler.
  */
-export function installTuiApprovals(host: CliRuntimeHost): () => void {
+export function installTuiApprovals(
+  host: CliRuntimeHost,
+  context: CliContext,
+): () => void {
   const originalEmit = host.emit;
   host.emit = ((event, payload) => {
-    if (interceptApproval(event, payload)) return;
-    return originalEmit(event, payload);
+    // Always forward the event through the original chain (cliState patcher,
+    // structured logger, ndjson sink, …) — interception is *additive*.
+    originalEmit(event, payload);
+    routeApproval(event, payload, context);
   }) as Emit;
 
   setToolEditApprovalHandler(async (request) => {
+    const policy = immediateDecision(context);
+    if (policy) {
+      return policy.accepted
+        ? { accepted: true, appliedContent: request.proposedContent }
+        : { accepted: false, userMessage: policy.userMessage };
+    }
     const decision = await enqueueApproval({
       kind: 'toolEdit',
       request,
       resolve: () => {
-        /* unused — modal calls `decide`, queue resolves the outer promise */
+        /* unused — the queue resolves the outer promise via `decide` */
       },
     });
     return decision.accepted
@@ -62,87 +83,86 @@ export function installTuiApprovals(host: CliRuntimeHost): () => void {
   };
 }
 
-function interceptApproval<K extends ProgressEvent>(
+function routeApproval<K extends ProgressEvent>(
   event: K,
   payload: ProgressEventPayloads[K],
-): boolean {
+  context: CliContext,
+): void {
   switch (event) {
     case 'showBashPermission':
-      void enqueueAndDispatch(
-        {
+      routeWithPolicy(
+        context,
+        dispatchBash,
+        payload as ProgressEventPayloads['showBashPermission'],
+        (p) => ({
           kind: 'bash',
-          payload: payload as ProgressEventPayloads['showBashPermission'],
-        },
-        (d) =>
-          dispatchBash(
-            payload as ProgressEventPayloads['showBashPermission'],
-            d,
-          ),
+          payload: p,
+        }),
       );
-      return true;
+      return;
     case 'showPlanApproval':
-      void enqueueAndDispatch(
-        {
+      routeWithPolicy(
+        context,
+        dispatchPlan,
+        payload as ProgressEventPayloads['showPlanApproval'],
+        (p) => ({
           kind: 'plan',
-          payload: payload as ProgressEventPayloads['showPlanApproval'],
-        },
-        (d) =>
-          dispatchPlan(payload as ProgressEventPayloads['showPlanApproval'], d),
+          payload: p,
+        }),
       );
-      return true;
+      return;
     case 'showAgentProposal':
-      void enqueueAndDispatch(
-        {
+      routeWithPolicy(
+        context,
+        dispatchProposal,
+        payload as ProgressEventPayloads['showAgentProposal'],
+        (p) => ({
           kind: 'proposal',
-          payload: payload as ProgressEventPayloads['showAgentProposal'],
-        },
-        (d) =>
-          dispatchProposal(
-            payload as ProgressEventPayloads['showAgentProposal'],
-            d,
-          ),
+          payload: p,
+        }),
       );
-      return true;
+      return;
     case 'showRetryRequest':
-      void enqueueAndDispatch(
-        {
+      routeWithPolicy(
+        context,
+        dispatchRetry,
+        payload as ProgressEventPayloads['showRetryRequest'],
+        (p) => ({
           kind: 'retry',
-          payload: payload as ProgressEventPayloads['showRetryRequest'],
-        },
-        (d) =>
-          dispatchRetry(
-            payload as ProgressEventPayloads['showRetryRequest'],
-            d,
-          ),
+          payload: p,
+        }),
       );
-      return true;
+      return;
     case 'showExternalInquiry':
-      void enqueueAndDispatch(
-        {
-          kind: 'externalInquiry',
-          payload: payload as ProgressEventPayloads['showExternalInquiry'],
-        },
-        (d) =>
-          dispatchExternalInquiry(
-            payload as ProgressEventPayloads['showExternalInquiry'],
-            d,
-          ),
+      routeWithPolicy(
+        context,
+        dispatchExternalInquiry,
+        payload as ProgressEventPayloads['showExternalInquiry'],
+        (p) => ({ kind: 'externalInquiry', payload: p }),
       );
-      return true;
+      return;
     default:
-      return false;
+      return;
   }
 }
 
-async function enqueueAndDispatch(
-  payload: Parameters<typeof enqueueApproval>[0],
-  dispatch: (decision: ApprovalDecision) => void,
-): Promise<void> {
-  const decision = await enqueueApproval(payload);
-  dispatch(decision);
+function routeWithPolicy<P>(
+  context: CliContext,
+  dispatch: (payload: P, decision: ApprovalDecision) => void,
+  payload: P,
+  toQueuePayload: (p: P) => Parameters<typeof enqueueApproval>[0],
+): void {
+  const policy: PolicyDecision | undefined = immediateDecision(context);
+  if (policy) {
+    dispatch(payload, policy);
+    return;
+  }
+  void enqueueApproval(toQueuePayload(payload)).then((decision) => {
+    dispatch(payload, decision);
+  });
 }
 
-function userMessage(decision: ApprovalDecision): string | undefined {
+function feedbackOnReject(decision: ApprovalDecision): string | undefined {
   return decision.accepted ? undefined : decision.userMessage;
 }
 
@@ -153,7 +173,7 @@ function dispatchBash(
   void handleProgressViewBashApprovalAction({
     requestId: payload.requestId,
     action: decision.accepted ? 'approve' : 'reject',
-    feedback: userMessage(decision),
+    feedback: feedbackOnReject(decision),
   });
 }
 
@@ -161,7 +181,7 @@ function dispatchPlan(
   payload: ProgressEventPayloads['showPlanApproval'],
   decision: ApprovalDecision,
 ): void {
-  const feedback = userMessage(decision);
+  const feedback = feedbackOnReject(decision);
   resolvePlanApproval(payload.approvalId, {
     action: decision.accepted ? 'approve' : 'reject',
     ...(feedback ? { feedback } : {}),
@@ -172,7 +192,7 @@ function dispatchProposal(
   payload: ProgressEventPayloads['showAgentProposal'],
   decision: ApprovalDecision,
 ): void {
-  const feedback = userMessage(decision);
+  const feedback = feedbackOnReject(decision);
   resolveProposal(payload.proposalId, {
     action: decision.accepted ? 'approve' : 'reject',
     ...(feedback ? { feedback } : {}),
@@ -184,7 +204,7 @@ function dispatchRetry(
   decision: ApprovalDecision,
 ): void {
   if (decision.accepted) {
-    triggerRetry(payload.streamId);
+    triggerRetry(payload.streamId, decision.userMessage);
   } else {
     cancelRetry(payload.streamId);
   }
@@ -198,5 +218,6 @@ function dispatchExternalInquiry(
     requestId: payload.requestId,
     action: decision.accepted ? 'submit' : 'reject',
     answer: decision.accepted ? decision.userMessage : undefined,
+    feedback: decision.accepted ? undefined : decision.userMessage,
   });
 }

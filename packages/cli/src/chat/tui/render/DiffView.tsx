@@ -1,11 +1,19 @@
 // Unified-diff renderer for edit-approval modals + tool cards.
 //
-// Phase 2 produces line-by-line `diff` hunks and colors them with picocolors
+// Phase 2 produces line-by-line `diff` hunks coloured with ink Text
 // (green added / red removed / dim context). `cli-highlight`-based syntax
 // highlighting is wired in alongside markdown rendering in Phase 3.
 
 import { Box, Text } from 'ink';
-import { createPatch, structuredPatch } from 'diff';
+import { structuredPatch, type StructuredPatchHunk } from 'diff';
+
+type Hunk = StructuredPatchHunk;
+
+export interface DiffStats {
+  readonly added: number;
+  readonly removed: number;
+  readonly hunks: number;
+}
 
 export interface DiffViewProps {
   readonly originalContent: string;
@@ -15,36 +23,67 @@ export interface DiffViewProps {
   readonly maxHunkLines?: number;
 }
 
+const NO_NEWLINE_MARKER = '\\';
+
+function buildHunks(
+  fileLabel: string,
+  original: string,
+  proposed: string,
+): Hunk[] {
+  return structuredPatch(fileLabel, fileLabel, original, proposed, '', '', {
+    context: 3,
+  }).hunks;
+}
+
+function statsFromHunks(hunks: readonly Hunk[]): DiffStats {
+  let added = 0;
+  let removed = 0;
+  for (const hunk of hunks) {
+    for (const line of hunk.lines) {
+      const first = line[0];
+      if (first === '+') added += 1;
+      else if (first === '-') removed += 1;
+    }
+  }
+  return { added, removed, hunks: hunks.length };
+}
+
+export function diffStats(
+  originalContent: string,
+  proposedContent: string,
+): DiffStats {
+  return statsFromHunks(buildHunks('', originalContent, proposedContent));
+}
+
 export function DiffView(props: DiffViewProps): React.JSX.Element {
-  const patch = structuredPatch(
-    props.fileLabel,
+  const hunks = buildHunks(
     props.fileLabel,
     props.originalContent,
     props.proposedContent,
-    '',
-    '',
-    { context: 3 },
   );
   const max = props.maxHunkLines ?? 0;
 
   return (
     <Box flexDirection="column">
-      {patch.hunks.map((hunk, hi) => {
-        const lines = max > 0 ? hunk.lines.slice(0, max) : hunk.lines;
-        const truncated = max > 0 && hunk.lines.length > max;
+      {hunks.map((hunk, hi) => {
+        // `\ No newline at end of file` is a synthetic marker; not part of
+        // the actual diff content.
+        const lines = hunk.lines.filter(
+          (line) => !line.startsWith(NO_NEWLINE_MARKER),
+        );
+        const visible = max > 0 ? lines.slice(0, max) : lines;
+        const remaining = max > 0 ? lines.length - max : 0;
         return (
           <Box key={`${hi}-${hunk.oldStart}`} flexDirection="column">
             <Text dimColor>
               @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},
               {hunk.newLines} @@
             </Text>
-            {lines.map((line, li) => (
+            {visible.map((line, li) => (
               <DiffLine key={li} line={line} />
             ))}
-            {truncated ? (
-              <Text dimColor>
-                … {hunk.lines.length - max} more lines (Ctrl-O to expand)
-              </Text>
+            {remaining > 0 ? (
+              <Text dimColor>… {remaining} more lines</Text>
             ) : null}
           </Box>
         );
@@ -58,21 +97,4 @@ function DiffLine({ line }: { line: string }): React.JSX.Element {
   if (marker === '+') return <Text color="green">{line}</Text>;
   if (marker === '-') return <Text color="red">{line}</Text>;
   return <Text dimColor>{line}</Text>;
-}
-
-/** Quick stats summary (e.g. `+12 / −7 · 3 hunks`) for embedded chrome. */
-export function diffStats(
-  originalContent: string,
-  proposedContent: string,
-): { added: number; removed: number; hunks: number } {
-  const patch = createPatch('', originalContent, proposedContent);
-  let added = 0;
-  let removed = 0;
-  let hunks = 0;
-  for (const line of patch.split('\n')) {
-    if (line.startsWith('@@')) hunks += 1;
-    else if (line.startsWith('+') && !line.startsWith('+++')) added += 1;
-    else if (line.startsWith('-') && !line.startsWith('---')) removed += 1;
-  }
-  return { added, removed, hunks };
 }
