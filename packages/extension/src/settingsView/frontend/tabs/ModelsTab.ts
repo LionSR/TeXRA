@@ -11,14 +11,16 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared schemas
 import type {
-  ProviderKeyStatus,
   ModelSelectionItem,
+  NumberVscodeSetting,
+  ProviderKeyStatus,
 } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/ApiAccessSection';
 import '../components/profile/ProviderKeyList';
 import '../components/profile/ModelSelectionList';
+import '../components/profile/ReliabilitySettingsSection';
 
 @customElement('models-tab')
 export class ModelsTab extends LitElement {
@@ -41,6 +43,8 @@ export class ModelsTab extends LitElement {
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
   @property({ attribute: false }) globalStreamingDefault = true;
   @property({ attribute: false }) modelSelectionItems: ModelSelectionItem[] =
+    [];
+  @property({ attribute: false }) reliabilitySettings: NumberVscodeSetting[] =
     [];
   @property({ attribute: false }) helperModel = '';
   @property({ type: Boolean }) preferShortModelNames = false;
@@ -124,6 +128,9 @@ export class ModelsTab extends LitElement {
           .providerKeyStatuses=${this.providerKeyStatuses}
           .preferShortModelNames=${this.preferShortModelNames}
         ></model-selection-list>
+        <reliability-settings-section
+          .settings=${this.reliabilitySettings}
+        ></reliability-settings-section>
       </div>
     `;
   }

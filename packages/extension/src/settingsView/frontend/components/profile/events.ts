@@ -30,7 +30,7 @@ export const ProviderKeyEvents = {
     createEvent('provider-endpoint-set', detail),
   setGlobalStreaming: (detail: { enabled: boolean }) =>
     createEvent('provider-global-streaming-set', detail),
-  setVscodeSetting: (detail: { key: string; value: boolean }) =>
+  setVscodeSetting: (detail: { key: string; value: boolean | number }) =>
     createEvent('provider-vscode-setting-set', detail),
   openUrl: (detail: { url: string }) =>
     createEvent('provider-open-url', detail),
