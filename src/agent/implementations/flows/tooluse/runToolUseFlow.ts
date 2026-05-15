@@ -1,3 +1,4 @@
+import { platform } from '@platform/platform';
 import { getExecutionStore } from '@agent/storage';
 import {
   registerInterruptible,
@@ -36,6 +37,10 @@ import {
   getUnavailableToolNamesCached,
 } from '@tools/toolAvailability';
 import { notifyUnavailableTools } from '@tools/toolUnavailableNotification';
+import {
+  ODYSSEY_FEATURE_FLAG_KEY,
+  ODYSSEY_TOOL_NAME,
+} from '@tools/odyssey/odysseyMeta';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
@@ -127,6 +132,24 @@ function resolveTools(
       resolved.push(memoryTool.definition);
     } else {
       logger.warn('Memory tool not found in registry');
+    }
+  }
+
+  // Inject odyssey tool into all tool-use agents when the experimental
+  // flag is on. Without it the autonomous-continuation loop would have
+  // no way to terminate — the continuation prompt asks the model to
+  // call `odyssey(complete)`, which only works if the tool is in the
+  // model's tool list. Auto-injection avoids touching every agent YAML.
+  const odysseyEnabled = platform().config.get<boolean>(
+    ODYSSEY_FEATURE_FLAG_KEY,
+    false,
+  );
+  if (odysseyEnabled && !resolved.some((d) => d.name === ODYSSEY_TOOL_NAME)) {
+    const odysseyTool = registry.get(ODYSSEY_TOOL_NAME);
+    if (odysseyTool) {
+      resolved.push(odysseyTool.definition);
+    } else {
+      logger.warn('Odyssey tool not found in registry');
     }
   }
 

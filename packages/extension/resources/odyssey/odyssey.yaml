@@ -1,0 +1,26 @@
+continuation:
+  description: Injected at the end of an idle turn while odyssey is active.
+  template: |
+    <odyssey_context>
+    Your odyssey is in progress.
+
+    Objective: {{objective}}
+    Time elapsed: {{timeUsed}}
+
+    Verify against the actual filesystem and command output — not your
+    memory — whether the objective and its stopping condition are met.
+    If yes, call `odyssey` with command="complete" and a reason citing
+    the verification evidence. If not, continue working in scoped
+    checkpoints.
+    </odyssey_context>
+
+objective_updated:
+  description: Injected once after the user edits the objective.
+  template: |
+    <odyssey_context>
+    The user has updated the odyssey objective. This overrides earlier context.
+
+    New objective: {{objective}}
+
+    Re-orient against the new objective before continuing.
+    </odyssey_context>
