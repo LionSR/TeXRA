@@ -17,15 +17,22 @@ const processInputPatterns = [
 
 const processInputAllowedFiles = new Set([
   'packages/cli/src/runtime/cliContext.ts',
+  // Ink needs the actual `process.stdin` stream object to wire its raw-mode
+  // input pipeline; this file is the TUI I/O boundary.
+  'packages/cli/src/chat/tui/runChatTui.tsx',
 ]);
 
 const processTerminalInputAllowedFiles = new Set([
   'packages/cli/src/runtime/cliContext.ts',
+  'packages/cli/src/chat/tui/runChatTui.tsx',
 ]);
 
 const processOutputAllowedFiles = new Set([
   'packages/cli/src/bin/texra.ts',
   'packages/cli/src/runtime/logSinks.ts',
+  // Ink mounts onto real `process.stdout`/`process.stderr` streams; the rest
+  // of the TUI must keep going through logSinks.
+  'packages/cli/src/chat/tui/runChatTui.tsx',
 ]);
 
 const processOutputPatterns = [

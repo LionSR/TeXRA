@@ -20,9 +20,12 @@
   },
   "dependencies": {
     "@inkjs/ui": "^2.0.0",
+    "@lit-labs/signals": "^0.3.0",
     "@texra/core": "workspace:*",
     "citty": "^0.2.2",
     "ink": "^6.8.0",
+    "ink-text-input": "^6.0.0",
+    "p-queue": "^9.2.0",
     "picocolors": "^1.1.1",
     "react": "^19.0.0",
     "string-width": "^8.0.0",

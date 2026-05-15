@@ -361,7 +361,7 @@ export async function runChat(
         }
       })
       .catch((error) => {
-        renderer.error(error instanceof Error ? error.message : String(error));
+        renderer.error(toErrorMessage(error));
         closeReader();
       });
   };
@@ -473,7 +473,7 @@ export async function runChat(
         }
         if (
           !responsePrinter.didPrint() &&
-          result.category === 'toolUse' &&
+          result.category === AgentCategory.ToolUse &&
           result.lastResponse
         ) {
           writeTextStdout(result.lastResponse);
@@ -484,9 +484,7 @@ export async function runChat(
           ? CliExitCode.Success
           : CliExitCode.AgentError;
         if (!session.stopRequested) {
-          renderer.error(
-            error instanceof Error ? error.message : String(error),
-          );
+          renderer.error(toErrorMessage(error));
         }
       })
       .finally(() => {
