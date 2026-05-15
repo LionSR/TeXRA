@@ -4,12 +4,14 @@ import {
   getWorkspaceState,
   tryGetWorkspaceState,
 } from '@agent/core/stateStore';
+import { bus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas/identifiers';
 
 import {
   ODYSSEY_DEFAULT_MAX_CONTINUATIONS,
   ODYSSEY_HISTORY_LIMIT,
   OdysseySchema,
+  isOdysseyInFlight,
   type Odyssey,
   type OdysseyEvent,
   type OdysseyEventKind,
@@ -87,6 +89,11 @@ async function removeFromIndex(streamId: StreamTabId): Promise<void> {
 async function update(
   streamId: StreamTabId,
   mutate: (odyssey: Odyssey) => Odyssey,
+  /** Set to 'history' for mutations that only append to the history ring
+   *  (e.g. recordContinuation, recordEvent). Skips the bus broadcast so the
+   *  autonomous loop's per-turn `continuation_injected` events don't fan out
+   *  to every webview. Default 'state' covers status/objective changes. */
+  kind: 'state' | 'history' = 'state',
 ): Promise<Odyssey | null> {
   const odyssey = readRaw(streamId);
   if (!odyssey) return null;
@@ -97,6 +104,7 @@ async function update(
     updatedAt: nowIso(),
   };
   await writeRaw(final);
+  if (kind === 'state') bus.emit('odysseyStateChanged', { streamId });
   return final;
 }
 
@@ -150,10 +158,7 @@ export const OdysseyStore = {
   async start(streamId: StreamTabId, objective: string): Promise<Odyssey> {
     const trimmed = requireNonEmpty(objective, 'objective');
     const existing = readRaw(streamId);
-    if (
-      existing &&
-      (existing.status === 'active' || existing.status === 'paused')
-    ) {
+    if (existing && isOdysseyInFlight(existing)) {
       throw new Error(
         `An odyssey is already in progress for this stream (status: ${existing.status}). ` +
           `Abandon or complete it before starting a new one.`,
@@ -171,8 +176,8 @@ export const OdysseyStore = {
       updatedAt: now,
       history: [{ at: now, kind: 'started', detail: trimmed }],
     };
-    await writeRaw(odyssey);
-    await addToIndex(streamId);
+    await Promise.all([writeRaw(odyssey), addToIndex(streamId)]);
+    bus.emit('odysseyStateChanged', { streamId });
     return odyssey;
   },
 
@@ -223,14 +228,18 @@ export const OdysseyStore = {
    * `continuation_injected` event in one atomic write.
    */
   async recordContinuation(streamId: StreamTabId): Promise<void> {
-    await update(streamId, (odyssey) => ({
-      ...odyssey,
-      continuationCount: odyssey.continuationCount + 1,
-      history: [
-        ...odyssey.history,
-        { at: nowIso(), kind: 'continuation_injected', detail: null },
-      ],
-    }));
+    await update(
+      streamId,
+      (odyssey) => ({
+        ...odyssey,
+        continuationCount: odyssey.continuationCount + 1,
+        history: [
+          ...odyssey.history,
+          { at: nowIso(), kind: 'continuation_injected', detail: null },
+        ],
+      }),
+      'history',
+    );
   },
 
   /**
@@ -261,13 +270,17 @@ export const OdysseyStore = {
     kind: OdysseyEventKind,
     detail?: string,
   ): Promise<void> {
-    await update(streamId, (odyssey) => ({
-      ...odyssey,
-      history: [
-        ...odyssey.history,
-        { at: nowIso(), kind, detail: detail ?? null },
-      ],
-    }));
+    await update(
+      streamId,
+      (odyssey) => ({
+        ...odyssey,
+        history: [
+          ...odyssey.history,
+          { at: nowIso(), kind, detail: detail ?? null },
+        ],
+      }),
+      'history',
+    );
   },
 
   /** Replace the objective. Used by the user-side edit-objective flow. */
@@ -290,9 +303,41 @@ export const OdysseyStore = {
     return updated;
   },
 
-  /** Drop the record (used on conversation delete). */
+  /** Drop the record (used on conversation delete). Bootstrap-tolerant —
+   *  cleanup paths shouldn't fail loudly if state isn't wired yet. */
   async forget(streamId: StreamTabId): Promise<void> {
-    await getWorkspaceState().update(streamKey(streamId), undefined);
-    await removeFromIndex(streamId);
+    const state = tryGetWorkspaceState();
+    if (!state) return;
+    const existed = readRaw(streamId) !== null;
+    if (!existed) return;
+    await Promise.all([
+      state.update(streamKey(streamId), undefined),
+      removeFromIndex(streamId),
+    ]);
+    bus.emit('odysseyStateChanged', { streamId });
+  },
+
+  /**
+   * Bulk variant for callers that need to forget many streams at once
+   * (e.g. delete-all-streams). Per-stream record deletes run in parallel
+   * — independent keys — but the index update is a single read-filter-
+   * write so concurrent `forget()` calls don't race on it.
+   */
+  async forgetMany(streamIds: readonly StreamTabId[]): Promise<void> {
+    const state = tryGetWorkspaceState();
+    if (!state) return;
+    const toRemove = streamIds.filter((id) => readRaw(id) !== null);
+    if (toRemove.length === 0) return;
+    const index = readIndex();
+    const dropped = new Set(toRemove);
+    const nextIndex = index.filter((id) => !dropped.has(id));
+    await Promise.all([
+      ...toRemove.map((id) => state.update(streamKey(id), undefined)),
+      nextIndex.length === index.length
+        ? Promise.resolve()
+        : state.update(INDEX_KEY, nextIndex),
+    ]);
+    for (const id of toRemove)
+      bus.emit('odysseyStateChanged', { streamId: id });
   },
 };

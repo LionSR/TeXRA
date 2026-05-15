@@ -22,14 +22,12 @@ export class ToolUsePrepareNode<C> extends Node<
     _prepRes: void,
   ): Promise<{ kind: 'success'; result: PrepareResult }> {
     const { userVarChannels, logger, snapshot } = this.services;
-    const memoryEnabled = this.services.resolvedTools.some(
-      (t) => t.name === 'memory',
-    );
+    const resolvedToolNames = this.services.resolvedTools.map((t) => t.name);
     const hasDelegationTools = this.services.resolvedTools.some((t) =>
       DELEGATION_TOOLS.has(t.name),
     );
     const promptOptions = {
-      memoryEnabled,
+      resolvedToolNames,
       hasDelegationTools,
       isSubagent: this.services.isSubagent,
       nestedDelegationBlocked: this.services.delegationTrimmed === true,
