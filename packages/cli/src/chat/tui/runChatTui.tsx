@@ -25,10 +25,7 @@ import { toErrorMessage } from '@common/errors/errorMessage';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 import { type CliContext } from '../../runtime/cliContext';
-import {
-  hasCliApprovalDenied,
-  installCliApprovalHandlers,
-} from '../../runtime/approvalAdapter';
+import { hasCliApprovalDenied } from '../../runtime/approvalAdapter';
 import { resolveChatDefaults } from '../../runtime/chatDefaults';
 import { CliExitCode } from '../../runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '../../runtime/initPlatform';
@@ -37,7 +34,9 @@ import { writeTextStderr } from '../../runtime/logSinks';
 import { type ChatResult, type RunChatInit } from '../runChat';
 import { App } from './App';
 import { notify } from './notifications/terminalNotifier';
+import { clearApprovals } from './state/approvalQueue';
 import { cliState, resetCliState } from './state/cliState';
+import { installTuiApprovals } from './state/subscribeApprovals';
 import { wrapRuntimeHost } from './state/subscribeRuntimeHost';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
@@ -88,7 +87,10 @@ export async function runChatTui(
     helperModel: model,
     quietLogs: true,
   };
-  installCliApprovalHandlers(sessionContext);
+  // Phase 2 replaces the legacy stderr-prompt approval adapter with the
+  // typed dispatch: events flow into the modal queue, modal calls back
+  // through the original resolvers (see state/subscribeApprovals.ts).
+  // The legacy adapter only stays on the `!--tui` path now.
   await loadAgents();
 
   // DA1 sentinel discovery runs *before* Ink mounts so it owns the raw-mode
@@ -116,6 +118,7 @@ export async function runChatTui(
   const followUpQueue = new PQueue({ concurrency: 1 });
 
   const interruptActive = (): void => {
+    clearApprovals();
     if (!session.streamId) return;
     interruptActiveChildren(session.streamId);
     getInterruptible(session.streamId)?.interrupt();
@@ -131,6 +134,8 @@ export async function runChatTui(
     };
     const runtimeHost = createCliRuntimeHost(sessionContext);
     const wrapped = wrapRuntimeHost(runtimeHost);
+    const unbindApprovals = installTuiApprovals(wrapped);
+    disposers.push(unbindApprovals);
 
     session.runPromise = executeAgent(config, undefined, {
       runtimeHost: wrapped,

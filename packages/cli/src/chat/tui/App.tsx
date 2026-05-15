@@ -1,13 +1,14 @@
-// Phase 1 Ink skeleton — Header + ConversationPane + StatusBar + InputBar
-// over the cliState signals. Approvals + tool cards + subagents + markdown
-// + slash forms land in Phases 2–5.
+// Ink TUI root. Phase 1 skeleton + Phase 2 approval-modal overlay.
 
 import { Box, useApp } from 'ink';
 
+import { ApprovalModal } from './modals/ApprovalModal';
 import { ConversationPane } from './panes/ConversationPane';
 import { Header } from './panes/Header';
 import { InputBar } from './panes/InputBar';
 import { StatusBar } from './panes/StatusBar';
+import { currentApproval } from './state/approvalQueue';
+import { useSignal } from './state/useSignal';
 
 export interface AppProps {
   readonly onSubmit: (line: string) => void;
@@ -16,16 +17,19 @@ export interface AppProps {
 
 export function App(props: AppProps): React.JSX.Element {
   const { exit } = useApp();
-  // `exit` is reachable for future approval-modal / Ctrl-D handlers that
-  // unmount via React; runChatTui currently drives lifecycle externally.
   void exit;
+  const pending = useSignal(currentApproval);
 
   return (
     <Box flexDirection="column">
       <Header />
       <ConversationPane />
       <StatusBar />
-      <InputBar onSubmit={props.onSubmit} disabled={props.inputDisabled} />
+      {pending ? (
+        <ApprovalModal />
+      ) : (
+        <InputBar onSubmit={props.onSubmit} disabled={props.inputDisabled} />
+      )}
     </Box>
   );
 }
