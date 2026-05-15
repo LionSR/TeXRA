@@ -1,6 +1,9 @@
 import { randomUUID } from 'crypto';
 
-import { getWorkspaceState } from '@agent/core/stateStore';
+import {
+  getWorkspaceState,
+  tryGetWorkspaceState,
+} from '@agent/core/stateStore';
 import type { StreamTabId } from '@shared/schemas/identifiers';
 
 import {
@@ -37,7 +40,13 @@ function trimHistory(events: readonly OdysseyEvent[]): OdysseyEvent[] {
 }
 
 function readRaw(streamId: StreamTabId): Odyssey | null {
-  const raw = getWorkspaceState().get<unknown>(streamKey(streamId));
+  // tryGetWorkspaceState — bootstrap-tolerant: read-only paths called before
+  // initPlatform() (e.g. early-stream syncs in some tests) return null
+  // rather than throwing. Write paths still use getWorkspaceState() which
+  // does throw, surfacing the misuse.
+  const state = tryGetWorkspaceState();
+  if (!state) return null;
+  const raw = state.get<unknown>(streamKey(streamId));
   if (!raw) return null;
   const parsed = OdysseySchema.safeParse(raw);
   return parsed.success ? parsed.data : null;
@@ -48,7 +57,9 @@ async function writeRaw(odyssey: Odyssey): Promise<void> {
 }
 
 function readIndex(): StreamTabId[] {
-  const raw = getWorkspaceState().get<unknown>(INDEX_KEY);
+  const state = tryGetWorkspaceState();
+  if (!state) return [];
+  const raw = state.get<unknown>(INDEX_KEY);
   return Array.isArray(raw)
     ? (raw.filter((v) => typeof v === 'string') as string[])
     : [];
@@ -93,6 +104,17 @@ const STATUS_TO_EVENT_KIND: Record<OdysseyStatus, OdysseyEventKind> = {
   paused: 'paused',
   complete: 'completed',
   abandoned: 'abandoned',
+};
+
+/**
+ * Allowed state-machine transitions. `complete` and `abandoned` are terminal
+ * — the only way past them is `forget()` followed by a fresh `start()`.
+ */
+const ALLOWED_TRANSITIONS: Record<OdysseyStatus, readonly OdysseyStatus[]> = {
+  active: ['paused', 'complete', 'abandoned'],
+  paused: ['active', 'abandoned'],
+  complete: [],
+  abandoned: [],
 };
 
 function requireNonEmpty(value: string, label: string): string {
@@ -140,7 +162,6 @@ export const OdysseyStore = {
       objective: trimmed,
       status: 'active',
       tokensUsed: 0,
-      timeUsedMs: 0,
       createdAt: now,
       updatedAt: now,
       history: [{ at: now, kind: 'started', detail: trimmed }],
@@ -152,32 +173,40 @@ export const OdysseyStore = {
 
   /**
    * Transition status; returns the updated record. No-op when status is
-   * unchanged. Returns null when no record exists for the stream.
+   * unchanged. Returns null when no record exists for the stream. Throws
+   * when the transition is not in ALLOWED_TRANSITIONS — `complete` and
+   * `abandoned` are terminal and cannot be re-entered without `forget()`.
    */
   async setStatus(
     streamId: StreamTabId,
     nextStatus: OdysseyStatus,
     detail?: string,
   ): Promise<Odyssey | null> {
-    return update(streamId, (odyssey) => {
-      if (odyssey.status === nextStatus) return odyssey;
-      return {
-        ...odyssey,
-        status: nextStatus,
-        completedReason:
-          nextStatus === 'complete'
-            ? (detail ?? odyssey.completedReason)
-            : odyssey.completedReason,
-        history: [
-          ...odyssey.history,
-          {
-            at: nowIso(),
-            kind: STATUS_TO_EVENT_KIND[nextStatus],
-            detail: detail ?? null,
-          },
-        ],
-      };
-    });
+    const current = readRaw(streamId);
+    if (!current) return null;
+    if (current.status === nextStatus) return current;
+    if (!ALLOWED_TRANSITIONS[current.status].includes(nextStatus)) {
+      throw new Error(
+        `Illegal odyssey transition: ${current.status} → ${nextStatus}. ` +
+          `Terminal statuses (complete, abandoned) require forget() before a new start().`,
+      );
+    }
+    return update(streamId, (odyssey) => ({
+      ...odyssey,
+      status: nextStatus,
+      completedReason:
+        nextStatus === 'complete'
+          ? (detail ?? odyssey.completedReason)
+          : odyssey.completedReason,
+      history: [
+        ...odyssey.history,
+        {
+          at: nowIso(),
+          kind: STATUS_TO_EVENT_KIND[nextStatus],
+          detail: detail ?? null,
+        },
+      ],
+    }));
   },
 
   /** Append an event to the history; no-op when no record exists. */
@@ -195,16 +224,12 @@ export const OdysseyStore = {
     }));
   },
 
-  /** Accumulate per-turn accounting numbers (called from applyTurnAccounting). */
-  async addUsage(
-    streamId: StreamTabId,
-    tokensDelta: number,
-    timeDeltaMs: number,
-  ): Promise<void> {
+  /** Accumulate per-turn token usage (called from applyTurnAccounting). */
+  async addUsage(streamId: StreamTabId, tokensDelta: number): Promise<void> {
+    if (tokensDelta <= 0) return;
     await update(streamId, (odyssey) => ({
       ...odyssey,
-      tokensUsed: odyssey.tokensUsed + Math.max(0, Math.floor(tokensDelta)),
-      timeUsedMs: odyssey.timeUsedMs + Math.max(0, Math.floor(timeDeltaMs)),
+      tokensUsed: odyssey.tokensUsed + Math.floor(tokensDelta),
     }));
   },
 

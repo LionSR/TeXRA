@@ -25,33 +25,37 @@ const OdysseyPromptsYamlSchema = z.object({
 
 type OdysseyPrompts = z.infer<typeof OdysseyPromptsYamlSchema>;
 
+// Trailing newline matches the YAML `|` (clip) chomping in odyssey.yaml so
+// the rendered prompt is byte-identical across host-loaded and inline paths.
 const inlineTemplates: OdysseyPrompts = {
   continuation: {
-    template: [
-      '<odyssey_context>',
-      'Your odyssey is in progress.',
-      '',
-      'Objective: {{objective}}',
-      'Time elapsed: {{timeUsed}}',
-      '',
-      'Verify against the actual filesystem and command output — not your',
-      'memory — whether the objective and its stopping condition are met.',
-      'If yes, call `odyssey` with command="complete" and a reason citing',
-      'the verification evidence. If not, continue working in scoped',
-      'checkpoints.',
-      '</odyssey_context>',
-    ].join('\n'),
+    template:
+      [
+        '<odyssey_context>',
+        'Your odyssey is in progress.',
+        '',
+        'Objective: {{objective}}',
+        'Time elapsed: {{timeUsed}}',
+        '',
+        'Verify against the actual filesystem and command output — not your',
+        'memory — whether the objective and its stopping condition are met.',
+        'If yes, call `odyssey` with command="complete" and a reason citing',
+        'the verification evidence. If not, continue working in scoped',
+        'checkpoints.',
+        '</odyssey_context>',
+      ].join('\n') + '\n',
   },
   objective_updated: {
-    template: [
-      '<odyssey_context>',
-      'The user has updated the odyssey objective. This overrides earlier context.',
-      '',
-      'New objective: {{objective}}',
-      '',
-      'Re-orient against the new objective before continuing.',
-      '</odyssey_context>',
-    ].join('\n'),
+    template:
+      [
+        '<odyssey_context>',
+        'The user has updated the odyssey objective. This overrides earlier context.',
+        '',
+        'New objective: {{objective}}',
+        '',
+        'Re-orient against the new objective before continuing.',
+        '</odyssey_context>',
+      ].join('\n') + '\n',
   },
 };
 
