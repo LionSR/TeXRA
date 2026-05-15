@@ -258,8 +258,6 @@ export class MainApp extends MainAppBase {
       this.handleSetMultipleFiles(data),
     [MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES]: (data) =>
       this.handleSetMultipleFiles(data),
-    [MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES]: () =>
-      this.handleSetDefaultOutputFiles(),
     [MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE]: (data) =>
       this.handleAddMediaFile(data),
 
@@ -659,10 +657,6 @@ export class MainApp extends MainAppBase {
       this.outputFilesActive.set(false);
     }
     this.saveState();
-  }
-
-  private handleSetDefaultOutputFiles(): void {
-    /* Output order is derived from input files or agent defaults at execution time. */
   }
 
   private handleAddMediaFile(
