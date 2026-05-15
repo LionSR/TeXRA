@@ -391,10 +391,15 @@ export class ProgressViewProvider
   /**
    * Read every open inquiry thread from durable storage and re-emit
    * its `showExternalInquiry` payload so the panel reappears after an
-   * extension reload. No-op when the webview can't accept messages.
+   * extension reload. No-op when the webview can't accept messages or
+   * when in-memory `pending` already covers everything (a sidebar
+   * toggle, not a fresh reload). `show()` itself is idempotent on
+   * `requestId` via `delivered`, so this gate is a perf optimization,
+   * not a correctness fix.
    */
   private async hydrateOpenInquiries(): Promise<void> {
     if (!this.webviewUpdater.isAvailable()) return;
+    if (this.externalInquiryHandler.pendingSize > 0) return;
 
     let open;
     try {

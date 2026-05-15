@@ -503,17 +503,19 @@ export async function recordAnswerForOpenTurn(params: {
  * overwrite an `answered` status (which would emit a contradictory
  * dropped continuation and corrupt the audit trail).
  *
- * Returns `true` if the manifest was actually flipped; `false` if the
- * drop was a no-op (thread already answered/dropped or not found) so
- * the caller can skip continuation injection.
+ * Returns the just-written manifest on success so callers can pass
+ * it to the continuation injector without a re-read (symmetric with
+ * `recordAnswerForOpenTurn`'s `PersistedAnsweredTurn.manifest`).
+ * Returns `null` when the drop was a no-op (already answered/dropped
+ * or not found).
  */
 export async function markDropped(params: {
   threadId: ExternalInquiryThreadId;
-}): Promise<boolean> {
+}): Promise<ExternalInquiryThreadManifest | null> {
   return withThreadLock(params.threadId, async () => {
     const existing = await readThreadManifest(params.threadId);
-    if (!existing) return false;
-    if (existing.status !== 'open') return false;
+    if (!existing) return null;
+    if (existing.status !== 'open') return null;
 
     const timestamp = new Date().toISOString();
     const nextManifest: ExternalInquiryThreadManifest = {
@@ -523,7 +525,7 @@ export async function markDropped(params: {
     };
 
     await writeThreadManifest(nextManifest);
-    return true;
+    return nextManifest;
   });
 }
 

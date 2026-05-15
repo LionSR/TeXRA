@@ -198,8 +198,15 @@ export async function injectContinuationForAnsweredThread(
 
 export async function injectContinuationForDroppedThread(
   threadId: ExternalInquiryThreadId,
+  /**
+   * Manifest snapshot from `markDropped` — same race-avoidance pattern
+   * as the answered path: a concurrent follow-up `ask` on the same
+   * thread from another stream could flip status away from `dropped`
+   * before a fresh read, which would mislabel the continuation.
+   */
+  manifestHint?: ExternalInquiryThreadManifest,
 ): Promise<InjectionOutcome> {
-  const manifest = await readExternalInquiryThread(threadId);
+  const manifest = manifestHint ?? (await readExternalInquiryThread(threadId));
   if (!manifest) return 'archived';
   if (manifest.parentStreamId == null) {
     await emitInquiryThreadUpdate(threadId, {

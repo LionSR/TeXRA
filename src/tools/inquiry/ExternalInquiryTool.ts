@@ -171,10 +171,10 @@ export async function handleExternalInquiryAction(
   }
 
   // drop — only flips status if the thread is still open; see markDropped.
-  const dropped = await markDropped({ threadId: payload.threadId });
+  const droppedManifest = await markDropped({ threadId: payload.threadId });
   bus.emit('resolveExternalInquiry', { requestId: payload.threadId });
-  if (dropped) {
-    await injectContinuationForDroppedThread(payload.threadId);
+  if (droppedManifest) {
+    await injectContinuationForDroppedThread(payload.threadId, droppedManifest);
   } else {
     logger.warn(
       `Inquiry drop ignored: thread ${payload.threadId} is no longer open ` +
@@ -289,13 +289,16 @@ export class ExternalInquiryTool extends defineTool({
 }) {
   protected async execute(input: InquiryInput): Promise<ToolResult> {
     const context = tryUseRunContext();
-    const runtimeHost = requireRuntimeHost('inquiry', context);
     const streamId = context?.streamId;
     const executionId = context?.executionId;
 
+    // Only `ask` emits events. `read` and `list` are pure storage reads
+    // and stay usable in contexts without a wired runtime host.
     switch (input.command) {
-      case 'ask':
+      case 'ask': {
+        const runtimeHost = requireRuntimeHost('inquiry', context);
         return this.executeAsk({ input, streamId, runtimeHost, executionId });
+      }
       case 'read':
         return this.executeRead({ input, executionId });
       case 'list':
