@@ -460,12 +460,15 @@ export const requestPanelStyles: CSSResult = css`
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-normal);
     word-break: break-word;
-    white-space: pre-wrap;
     max-height: 12em;
     overflow-y: auto;
     line-height: var(--line-height-normal);
     padding: ${sp.small} 0;
     border-bottom: var(--border-thin) solid var(--wa-color-surface-border);
+  }
+
+  .workflow-proposal__instruction pre {
+    white-space: pre-wrap;
   }
 
   .workflow-proposal__extract-flags {
