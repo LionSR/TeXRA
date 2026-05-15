@@ -7,6 +7,7 @@ import {
 import type { StreamTabId } from '@shared/schemas/identifiers';
 
 import {
+  ODYSSEY_DEFAULT_MAX_CONTINUATIONS,
   ODYSSEY_HISTORY_LIMIT,
   OdysseySchema,
   type Odyssey,
@@ -164,6 +165,8 @@ export const OdysseyStore = {
       streamId,
       objective: trimmed,
       status: 'active',
+      continuationCount: 0,
+      maxContinuations: ODYSSEY_DEFAULT_MAX_CONTINUATIONS,
       createdAt: now,
       updatedAt: now,
       history: [{ at: now, kind: 'started', detail: trimmed }],
@@ -196,6 +199,10 @@ export const OdysseyStore = {
     return update(streamId, (odyssey) => ({
       ...odyssey,
       status: nextStatus,
+      // Resuming gives the model a fresh continuation budget; otherwise
+      // the cap would re-trigger on the first turn back.
+      continuationCount:
+        nextStatus === 'active' ? 0 : odyssey.continuationCount,
       completedReason:
         nextStatus === 'complete'
           ? (detail ?? odyssey.completedReason)
@@ -209,6 +216,43 @@ export const OdysseyStore = {
         },
       ],
     }));
+  },
+
+  /**
+   * Record one auto-continuation: increment the count and append a
+   * `continuation_injected` event in one atomic write.
+   */
+  async recordContinuation(streamId: StreamTabId): Promise<void> {
+    await update(streamId, (odyssey) => ({
+      ...odyssey,
+      continuationCount: odyssey.continuationCount + 1,
+      history: [
+        ...odyssey.history,
+        { at: nowIso(), kind: 'continuation_injected', detail: null },
+      ],
+    }));
+  },
+
+  /**
+   * Auto-pause an active Odyssey because it hit `maxContinuations`. Records a
+   * `continuation_cap_reached` event so the audit log explains the pause.
+   */
+  async pauseForContinuationCap(streamId: StreamTabId): Promise<void> {
+    await update(streamId, (odyssey) => {
+      if (odyssey.status !== 'active') return odyssey;
+      return {
+        ...odyssey,
+        status: 'paused',
+        history: [
+          ...odyssey.history,
+          {
+            at: nowIso(),
+            kind: 'continuation_cap_reached',
+            detail: `Paused after ${odyssey.maxContinuations} continuations.`,
+          },
+        ],
+      };
+    });
   },
 
   /** Append an event to the history; no-op when no record exists. */
