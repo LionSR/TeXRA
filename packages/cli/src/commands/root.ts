@@ -545,15 +545,27 @@ const chatCommand = defineCommand({
       default: 'minimal',
       description: 'Tool/progress rows: grouped, minimal, or hidden',
     },
+    tui: {
+      type: 'boolean',
+      description:
+        'Opt into the Ink-based TUI (preview; defaults off until Phase 6).',
+    },
   },
   async run(ctx) {
     const context = await contextFromArgs(ctx.args);
-    const { runChat } = await import('../chat/runChat');
-    const result = await runChat(context, {
+    const init = {
       agentOverride: optString(ctx.args.agent),
       modelOverride: optString(ctx.args.model),
       toolDisplay: ctx.args['tool-display'],
-    });
+    };
+    if (ctx.args.tui === true) {
+      const { runChatTui } = await import('../chat/tui/runChatTui');
+      const result = await runChatTui(context, init);
+      setExitCode(result.exitCode);
+      return;
+    }
+    const { runChat } = await import('../chat/runChat');
+    const result = await runChat(context, init);
     setExitCode(result.exitCode);
   },
 });

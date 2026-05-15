@@ -1,0 +1,227 @@
+// Ink-mounted chat session per docs/prd/cli-tui-ink (Phase 1).
+//
+// This is the new TUI entry that the `--tui` flag mounts; the legacy
+// `runChat.ts` path is still the default until Phase 6. We intentionally
+// share as much as possible with the legacy path — platform init, default
+// resolution, approval handlers, the agent runtime host — and only swap the
+// rendering surface (Ink) and the follow-up queue (p-queue, replacing the
+// hand-rolled promise chain).
+//
+// Approvals stay on the legacy adapter for Phase 1 per the PRD; the
+// approval dispatcher only lights up in Phase 2.
+
+import { render } from 'ink';
+import PQueue from 'p-queue';
+
+import { loadAgents } from '@agent/index';
+import { type AgentConfigPayload } from '@agent/core/AgentConfig';
+import { AgentCategory } from '@agent/core/AgentDataclass';
+import { interruptActiveChildren } from '@agent/runtime/executionRegistry';
+import { executeAgent } from '@agent/runtime/executeAgent';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
+import { toErrorMessage } from '@common/errors/errorMessage';
+import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+
+import { type CliContext } from '../../runtime/cliContext';
+import {
+  hasCliApprovalDenied,
+  installCliApprovalHandlers,
+} from '../../runtime/approvalAdapter';
+import { resolveChatDefaults } from '../../runtime/chatDefaults';
+import { CliExitCode } from '../../runtime/exitCodes';
+import { initCliPlatform, setCliHelperModel } from '../../runtime/initPlatform';
+import { createCliRuntimeHost } from '../../runtime/runtimeHost';
+import { writeTextStderr } from '../../runtime/logSinks';
+import { type ChatResult, type RunChatInit } from '../runChat';
+import { App } from './App';
+import { notify } from './notifications/terminalNotifier';
+import { cliState, resetCliState } from './state/cliState';
+import { wrapRuntimeHost } from './state/subscribeRuntimeHost';
+import { subscribeStreamLog } from './state/subscribeStreamLog';
+import { subscribeStreamStatus } from './state/subscribeStreamStatus';
+import { discoverTerminalCapabilities } from './state/terminalCapabilities';
+
+interface TuiSession {
+  streamId: StreamTabId | undefined;
+  runPromise: Promise<void> | undefined;
+  runExitCode: CliExitCode;
+  runCompleted: boolean;
+  stopRequested: boolean;
+}
+
+export async function runChatTui(
+  context: CliContext,
+  init: RunChatInit,
+): Promise<ChatResult> {
+  if (context.mode === 'headless') {
+    writeTextStderr(
+      'texra chat --tui requires an interactive terminal. Did you mean texra run?',
+    );
+    return { exitCode: CliExitCode.Usage };
+  }
+
+  // Streaming-text fallback per docs/prd/cli-tui-ink/20-implementation §13:
+  // when stdout is piped but stdin is TTY, Ink chrome can't render usefully —
+  // delegate back to the legacy plain renderer so `texra chat --tui | tee` and
+  // similar shapes keep working. Phase 4 lifts this into a dedicated mode
+  // that still flows through the React tree but writes plain ANSI to stdout.
+  if (!process.stdout.isTTY) {
+    const { runChat } = await import('../runChat');
+    return runChat(context, init);
+  }
+
+  await initCliPlatform({ ...context, quietLogs: true });
+  const defaults = await resolveChatDefaults({
+    cwd: context.cwd,
+    agentOverride: init.agentOverride,
+    modelOverride: init.modelOverride,
+  });
+  const { agent, model } = defaults;
+  await setCliHelperModel(model);
+
+  cliState.sessionMeta.set({ agent, model, cwd: context.cwd });
+
+  const sessionContext: CliContext = {
+    ...context,
+    helperModel: model,
+    quietLogs: true,
+  };
+  installCliApprovalHandlers(sessionContext);
+  await loadAgents();
+
+  // DA1 sentinel discovery happens in the background — capability-gated
+  // notifications fall back to BEL until it completes (~250ms typical).
+  void discoverTerminalCapabilities({
+    stdin: process.stdin,
+    stdout: process.stdout,
+  });
+
+  const disposers: Array<() => void> = [];
+  disposers.push(subscribeStreamLog());
+  disposers.push(subscribeStreamStatus());
+
+  const session: TuiSession = {
+    streamId: undefined,
+    runPromise: undefined,
+    runExitCode: CliExitCode.Success,
+    runCompleted: false,
+    stopRequested: false,
+  };
+
+  const followUpQueue = new PQueue({ concurrency: 1 });
+
+  const interruptActive = (): void => {
+    if (!session.streamId) return;
+    interruptActiveChildren(session.streamId);
+    getInterruptible(session.streamId)?.interrupt();
+  };
+
+  const startSession = (instruction: string): void => {
+    const config: AgentConfigPayload = {
+      agent,
+      model,
+      instruction,
+      agentCategory: AgentCategory.ToolUse,
+      workingDirectory: context.cwd,
+    };
+    const runtimeHost = createCliRuntimeHost(sessionContext);
+    const wrapped = wrapRuntimeHost(runtimeHost);
+
+    session.runPromise = executeAgent(config, undefined, {
+      runtimeHost: wrapped,
+      enforceCategory: true,
+      onStreamResolved: (resolvedStreamId) => {
+        session.streamId = resolvedStreamId;
+        cliState.activeStreamId.set(resolvedStreamId);
+        if (session.stopRequested) interruptActive();
+      },
+    })
+      .then((result) => {
+        if (session.stopRequested || result.status !== 'error') {
+          session.runExitCode = CliExitCode.Success;
+        } else if (hasCliApprovalDenied(sessionContext)) {
+          session.runExitCode = CliExitCode.ApprovalDenied;
+        } else {
+          session.runExitCode = CliExitCode.AgentError;
+        }
+        notify({ kind: 'agentFinished' });
+      })
+      .catch((error: unknown) => {
+        if (!session.stopRequested) {
+          writeTextStderr(toErrorMessage(error));
+        }
+        session.runExitCode = session.stopRequested
+          ? CliExitCode.Success
+          : CliExitCode.AgentError;
+      })
+      .finally(() => {
+        session.runCompleted = true;
+        void runtimeHost.close();
+      });
+  };
+
+  const handleSubmit = (line: string): void => {
+    if (!session.runPromise) {
+      startSession(line);
+      return;
+    }
+    void followUpQueue.add(async () => {
+      if (!session.streamId || session.stopRequested) return;
+      const result = await sendFollowUp(session.streamId, line);
+      if (result.status === 'no_session') {
+        session.stopRequested = true;
+      }
+    });
+  };
+
+  const ink = render(<App onSubmit={handleSubmit} />, {
+    stdout: process.stdout,
+    stderr: process.stderr,
+    stdin: process.stdin,
+  });
+
+  // Bridge SIGINT to a graceful interrupt (first tap) / process exit (second tap).
+  let sigintCount = 0;
+  const handleSigint = (): void => {
+    sigintCount += 1;
+    if (sigintCount >= 2) {
+      process.kill(process.pid, 'SIGINT');
+      return;
+    }
+    session.stopRequested = true;
+    interruptActive();
+  };
+  process.on('SIGINT', handleSigint);
+
+  // Auto-prompt when the active stream goes WAITING so the UI clearly
+  // signals "your turn." Combined with the StatusBar pill, this replaces
+  // the legacy reader.prompt() ergonomics.
+  disposers.push(
+    StreamStatusService.onDidChange((change) => {
+      if (
+        change.streamId === session.streamId &&
+        change.status === STREAM_STATUS.WAITING &&
+        !session.stopRequested
+      ) {
+        notify({ kind: 'agentFinished' });
+      }
+    }),
+  );
+
+  try {
+    await ink.waitUntilExit();
+  } finally {
+    process.off('SIGINT', handleSigint);
+    for (const dispose of disposers) dispose();
+    await followUpQueue.onIdle();
+    if (session.runPromise && !session.runCompleted) {
+      session.stopRequested = true;
+      interruptActive();
+    }
+    await session.runPromise;
+    resetCliState();
+  }
+  return { exitCode: session.runExitCode };
+}
