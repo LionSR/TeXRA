@@ -458,32 +458,6 @@
         },
         {
           "properties": {
-            "texra.files.ignored.auxiliaryKeywords": {
-              "default": [
-                "o1",
-                "o3",
-                "o4",
-                "gpt",
-                "sonnet",
-                "haiku",
-                "opus",
-                "gemini",
-                "grok",
-                "deepseek",
-                "qwen",
-                "kimi",
-                "llama",
-                "egg-info",
-                "yaml"
-              ],
-              "description": "Additional keywords to ignore when listing auxiliary files, including model names",
-              "editPresentation": "multilineText",
-              "items": {
-                "type": "string"
-              },
-              "order": 12,
-              "type": "array"
-            },
             "texra.files.ignored.directories": {
               "default": [
                 "build",
@@ -546,7 +520,7 @@
                 "preamble.tex",
                 "yaml"
               ],
-              "description": "Files to ignore when listing input, sample, and edited files, but not auxiliary files",
+              "description": "Files to ignore when listing input, sample, and edited files",
               "editPresentation": "multilineText",
               "items": {
                 "type": "string"
@@ -591,16 +565,6 @@
                 "type": "string"
               },
               "order": 13,
-              "type": "array"
-            },
-            "texra.files.included.auxiliaryExtensions": {
-              "default": [".txt", ".tex", ".cls", ".md", ".sty"],
-              "description": "File extensions to include when searching for auxiliary files",
-              "editPresentation": "multilineText",
-              "items": {
-                "type": "string"
-              },
-              "order": 7,
               "type": "array"
             },
             "texra.files.included.editedExtensions": {
@@ -653,9 +617,17 @@
               "order": 4,
               "type": "array"
             },
-            "texra.files.included.referenceExtensions": {
-              "default": [".txt", ".tex", ".md", ".bib", ".bbl"],
-              "description": "File extensions to include when searching for reference files",
+            "texra.files.included.contextExtensions": {
+              "default": [
+                ".txt",
+                ".tex",
+                ".md",
+                ".bib",
+                ".bbl",
+                ".cls",
+                ".sty"
+              ],
+              "description": "File extensions to include when searching for context files",
               "editPresentation": "multilineText",
               "items": {
                 "type": "string"

@@ -1,6 +1,6 @@
 // Internal imports
 import { DEFAULT_TEXRA_SETTINGS } from '@shared/schemas/settingsConfiguration';
-import { getConfig } from '@utils/config/configUtils';
+import { getConfig, inspectConfig } from '@utils/config/configUtils';
 import { hasExtension } from '@utils/core/pathCore';
 
 /**
@@ -12,20 +12,22 @@ import { hasExtension } from '@utils/core/pathCore';
  */
 export type ExtensionCategory =
   | 'input'
-  | 'reference'
-  | 'auxiliary'
+  | 'context'
   | 'media'
   | 'audio'
   | 'edited';
 
 const INCLUDED_EXTENSION_KEYS: Record<ExtensionCategory, string> = {
   input: 'texra.files.included.inputExtensions',
-  reference: 'texra.files.included.referenceExtensions',
-  auxiliary: 'texra.files.included.auxiliaryExtensions',
+  context: 'texra.files.included.contextExtensions',
   media: 'texra.files.included.mediaExtensions',
   audio: 'texra.files.included.audioExtensions',
   edited: 'texra.files.included.editedExtensions',
 };
+
+/** Legacy setting key still used by some older user configs. */
+const LEGACY_REFERENCE_EXTENSIONS_KEY =
+  'texra.files.included.referenceExtensions';
 
 /**
  * Return the built-in extension defaults for a file category.
@@ -35,10 +37,8 @@ function getDefaultIncludedExtensions(category: ExtensionCategory): string[] {
   switch (category) {
     case 'input':
       return included.inputExtensions;
-    case 'reference':
-      return included.referenceExtensions;
-    case 'auxiliary':
-      return included.auxiliaryExtensions;
+    case 'context':
+      return included.contextExtensions;
     case 'media':
       return included.mediaExtensions;
     case 'edited':
@@ -50,11 +50,39 @@ function getDefaultIncludedExtensions(category: ExtensionCategory): string[] {
 
 /**
  * Retrieve included extensions for the given extension category.
+ *
+ * Back-compat: for `context`, if the user has not explicitly set the new
+ * `contextExtensions` key but did set the legacy `referenceExtensions`
+ * key (a customization from before the rename), use the legacy value.
+ * inspectConfig() distinguishes user-set from VS Code defaults — needed
+ * because getConfig() silently returns defaults when a key is unset.
  */
 export function getIncludedExtensions(category: ExtensionCategory): string[] {
-  return getConfig<string[]>(
-    INCLUDED_EXTENSION_KEYS[category],
-    getDefaultIncludedExtensions(category),
+  const defaults = getDefaultIncludedExtensions(category);
+  if (category === 'context') {
+    if (!hasUserSetting(INCLUDED_EXTENSION_KEYS.context)) {
+      const legacy = readUserSetting<string[]>(LEGACY_REFERENCE_EXTENSIONS_KEY);
+      if (legacy && legacy.length > 0) return legacy;
+    }
+  }
+  return getConfig<string[]>(INCLUDED_EXTENSION_KEYS[category], defaults);
+}
+
+function hasUserSetting(key: string): boolean {
+  const inspected = inspectConfig<unknown>(key);
+  return (
+    inspected?.workspaceValue !== undefined ||
+    inspected?.globalValue !== undefined ||
+    inspected?.workspaceFolderValue !== undefined
+  );
+}
+
+function readUserSetting<T>(key: string): T | undefined {
+  const inspected = inspectConfig<T>(key);
+  return (
+    inspected?.workspaceValue ??
+    inspected?.workspaceFolderValue ??
+    inspected?.globalValue
   );
 }
 

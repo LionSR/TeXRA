@@ -1301,7 +1301,7 @@ export class DesktopProgressBridge {
     const pattern = new RegExp(`\\\\label\\{${escape}\\}`, 'm');
     const candidates = new Set([
       ...(await this.listWorkspaceFiles('input')),
-      ...(await this.listWorkspaceFiles('reference')),
+      ...(await this.listWorkspaceFiles('context')),
     ]);
 
     for (const file of candidates) {

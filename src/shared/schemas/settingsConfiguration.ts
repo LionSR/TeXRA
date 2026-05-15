@@ -92,7 +92,7 @@ export const DEFAULT_TEXRA_SETTINGS = {
         '.flac',
       ],
       inputExtensions: ['.txt', '.tex', '.md'],
-      referenceExtensions: [
+      contextExtensions: [
         '.txt',
         '.tex',
         '.md',
@@ -101,7 +101,6 @@ export const DEFAULT_TEXRA_SETTINGS = {
         '.cls',
         '.sty',
       ],
-      auxiliaryExtensions: ['.txt', '.tex', '.cls', '.md', '.sty'],
       editedExtensions: ['.txt', '.tex'],
     },
     ignored: {
@@ -119,23 +118,6 @@ export const DEFAULT_TEXRA_SETTINGS = {
       ],
       inputFiles: ['command.tex', 'commands.tex', 'preamble.tex', 'yaml'],
       inputDirectories: [],
-      auxiliaryKeywords: [
-        'o1',
-        'o3',
-        'o4',
-        'gpt',
-        'sonnet',
-        'haiku',
-        'opus',
-        'gemini',
-        'grok',
-        'deepseek',
-        'qwen',
-        'kimi',
-        'llama',
-        'egg-info',
-        'yaml',
-      ],
       mediaDirectories: [
         'build',
         'node_modules',
@@ -346,11 +328,8 @@ export const TexraSettingsSchema = z
             inputExtensions: stringArray(
               DEFAULT_TEXRA_SETTINGS.files.included.inputExtensions,
             ),
-            referenceExtensions: stringArray(
-              DEFAULT_TEXRA_SETTINGS.files.included.referenceExtensions,
-            ),
-            auxiliaryExtensions: stringArray(
-              DEFAULT_TEXRA_SETTINGS.files.included.auxiliaryExtensions,
+            contextExtensions: stringArray(
+              DEFAULT_TEXRA_SETTINGS.files.included.contextExtensions,
             ),
             editedExtensions: stringArray(
               DEFAULT_TEXRA_SETTINGS.files.included.editedExtensions,
@@ -367,9 +346,6 @@ export const TexraSettingsSchema = z
             ),
             inputDirectories: stringArray(
               DEFAULT_TEXRA_SETTINGS.files.ignored.inputDirectories,
-            ),
-            auxiliaryKeywords: stringArray(
-              DEFAULT_TEXRA_SETTINGS.files.ignored.auxiliaryKeywords,
             ),
             mediaDirectories: stringArray(
               DEFAULT_TEXRA_SETTINGS.files.ignored.mediaDirectories,
@@ -531,13 +507,11 @@ export const TEXRA_SETTING_PATHS = [
   'model.gpt5ReasoningSummary',
   'files.included.mediaExtensions',
   'files.included.inputExtensions',
-  'files.included.referenceExtensions',
-  'files.included.auxiliaryExtensions',
+  'files.included.contextExtensions',
   'files.included.editedExtensions',
   'files.ignored.fileExtensions',
   'files.ignored.inputFiles',
   'files.ignored.inputDirectories',
-  'files.ignored.auxiliaryKeywords',
   'files.ignored.mediaDirectories',
   'files.ignored.directories',
   'files.ignored.keywords',

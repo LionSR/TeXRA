@@ -82,15 +82,13 @@ export class ProgressAgentProposalController {
       proposal.agentCategory === AgentCategory.Workflow
         ? {
             input: proposal.inputFiles.length > 0,
-            reference: proposal.referenceFiles.length > 0,
-            auxiliary: proposal.auxiliaryFiles.length > 0,
+            context: proposal.contextFiles.length > 0,
             media: proposal.mediaFiles.length > 0,
             output: proposal.outputFiles.length > 0,
           }
         : {
             input: false,
-            reference: false,
-            auxiliary: false,
+            context: false,
             media: false,
             output: false,
           };
@@ -99,8 +97,7 @@ export class ProgressAgentProposalController {
       ...proposal,
       ...(isWorkflow && {
         inputFilesActive: activeFiles.input,
-        referenceFilesActive: activeFiles.reference,
-        auxiliaryFilesActive: activeFiles.auxiliary,
+        contextFilesActive: activeFiles.context,
         mediaFilesActive: activeFiles.media,
         outputFilesActive: activeFiles.output,
       }),

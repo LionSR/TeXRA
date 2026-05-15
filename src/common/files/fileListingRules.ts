@@ -10,7 +10,6 @@ export interface FileListSettings {
   ignoredKeywords: string[];
   ignoredInputFiles: string[];
   ignoredInputDirectories: string[];
-  ignoredAuxKeywords: string[];
   ignoredMediaDirs: string[];
 }
 
@@ -83,10 +82,6 @@ export function loadFileListSettings(
       'texra.files.ignored.inputDirectories',
       ignored.inputDirectories,
     ),
-    ignoredAuxKeywords: readConfig(
-      'texra.files.ignored.auxiliaryKeywords',
-      ignored.auxiliaryKeywords,
-    ),
     ignoredMediaDirs: readConfig(
       'texra.files.ignored.mediaDirectories',
       ignored.mediaDirectories,
@@ -110,24 +105,13 @@ export function getFileListConfig(
         ignoredKeywords: settings.ignoredKeywords,
         ignoredFiles: settings.ignoredInputFiles,
       };
-    case 'reference':
+    case 'context':
       return {
-        extensions: getIncludedExtensions('reference'),
+        extensions: getIncludedExtensions('context'),
         ignoredExtensions: settings.ignoredFileExtensions,
         ignoredDirs: settings.ignoredDirectories,
         ignoredKeywords: settings.ignoredKeywords,
         ignoredFiles: settings.ignoredInputFiles,
-      };
-    case 'auxiliary':
-      return {
-        extensions: getIncludedExtensions('auxiliary'),
-        ignoredExtensions: settings.ignoredFileExtensions,
-        ignoredDirs: settings.ignoredDirectories,
-        ignoredKeywords: [
-          ...settings.ignoredKeywords,
-          ...settings.ignoredAuxKeywords,
-        ],
-        ignoredFiles: [],
       };
     case 'media':
       return {

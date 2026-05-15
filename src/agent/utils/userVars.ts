@@ -198,8 +198,7 @@ type FileCategoryConfig = {
 
 const FILE_CATEGORIES: Record<string, FileCategoryConfig> = {
   INPUT: { single: 'inputFile', multiple: 'inputFiles' },
-  REFERENCE: { single: 'referenceFile', multiple: 'referenceFiles' },
-  AUXILIARY: { single: 'auxiliaryFile', multiple: 'auxiliaryFiles' },
+  REFERENCE: { single: 'contextFile', multiple: 'contextFiles' },
   MEDIA: { single: 'mediaFile', multiple: 'mediaFiles' },
   EDITED: { single: 'editedFile', multiple: 'editedFiles' },
 };
@@ -223,7 +222,7 @@ function getCategoryFiles(config: AgentConfig, category: string): string[] {
 }
 
 /** Categories used for building file vars (excludes MEDIA which is display-only) */
-const FILE_VAR_CATEGORIES = ['INPUT', 'REFERENCE', 'AUXILIARY', 'EDITED'];
+const FILE_VAR_CATEGORIES = ['INPUT', 'REFERENCE', 'EDITED'];
 
 async function getFileVars(
   agentConfig: AgentConfig,
@@ -232,13 +231,7 @@ async function getFileVars(
 ): Promise<UserVars> {
   const userVars: UserVars = {};
 
-  // Auxiliary files (macro/style definitions) come before references so the
-  // model sees \newcommand and \usepackage definitions before any context
-  // document that uses them — matches the historical YAML ordering.
-  const contextFiles = [
-    ...getCategoryFiles(agentConfig, 'AUXILIARY'),
-    ...getCategoryFiles(agentConfig, 'REFERENCE'),
-  ];
+  const contextFiles = getCategoryFiles(agentConfig, 'REFERENCE');
 
   // Log file categories being loaded (skip for tool-use agents).
   // Media files are excluded: they have no user vars (display-only in Init)
@@ -276,14 +269,9 @@ async function getFileVars(
   }
 
   // {{ ALL_CONTEXTS }} is the unified successor to {{ ALL_REFERENCES }} +
-  // {{ ALL_AUXILIARYS }} (kept populated above as deprecated aliases). Reuse
-  // the already-built XML strings — getXmlFormatFromFiles joins per-file blocks
-  // with newlines, so concatenation is equivalent to re-reading the files.
-  // Order: auxiliary before reference, matching contextFiles above.
-  const refXml = userVars.ALL_REFERENCES as string | null;
-  const auxXml = userVars.ALL_AUXILIARYS as string | null;
-  userVars.ALL_CONTEXTS =
-    auxXml && refXml ? `${auxXml}\n${refXml}` : (auxXml ?? refXml);
+  // {{ ALL_AUXILIARYS }} (the latter has been removed). It mirrors
+  // {{ ALL_REFERENCES }} now that auxiliary has been folded into context.
+  userVars.ALL_CONTEXTS = userVars.ALL_REFERENCES as string | null;
   userVars.LIST_OF_ALL_CONTEXTS = getListOfFiles(contextFiles);
 
   return userVars;

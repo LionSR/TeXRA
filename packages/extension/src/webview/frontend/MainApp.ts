@@ -114,22 +114,19 @@ type MainViewMessageFor<C extends MainViewMessage['command']> = Extract<
 // Union types for handlers that process multiple similar commands
 type SetSingleFileOptionsMessage =
   | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_INPUT_FILE>
-  | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_REFERENCE_FILE>
-  | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILE>
+  | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_CONTEXT_FILE>
   | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_MEDIA_FILE>
   | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_EDITED_FILE>;
 
 type SingleFileSelectedMessage =
   | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED>
-  | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED>
-  | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED>
+  | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.CONTEXT_FILE_SELECTED>
   | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED>
   | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED>;
 
 type SetMultipleFilesMessage =
   | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_INPUT_FILES>
-  | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES>
-  | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES>
+  | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES>
   | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_MEDIA_FILES>
   | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES>;
 
@@ -260,9 +257,7 @@ export class MainApp extends MainAppBase {
 
     [MAIN_VIEW_COMMANDS.SET_INPUT_FILE]: (data) =>
       this.handleSetSingleFileOptions(data),
-    [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILE]: (data) =>
-      this.handleSetSingleFileOptions(data),
-    [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILE]: (data) =>
+    [MAIN_VIEW_COMMANDS.SET_CONTEXT_FILE]: (data) =>
       this.handleSetSingleFileOptions(data),
     [MAIN_VIEW_COMMANDS.SET_MEDIA_FILE]: (data) =>
       this.handleSetSingleFileOptions(data),
@@ -272,9 +267,7 @@ export class MainApp extends MainAppBase {
 
     [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: (data) =>
       this.handleSingleFileSelected(data),
-    [MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED]: (data) =>
-      this.handleSingleFileSelected(data),
-    [MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED]: (data) =>
+    [MAIN_VIEW_COMMANDS.CONTEXT_FILE_SELECTED]: (data) =>
       this.handleSingleFileSelected(data),
     [MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED]: (data) =>
       this.handleSingleFileSelected(data),
@@ -283,9 +276,7 @@ export class MainApp extends MainAppBase {
 
     [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: (data) =>
       this.handleSetMultipleFiles(data),
-    [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: (data) =>
-      this.handleSetMultipleFiles(data),
-    [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: (data) =>
+    [MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES]: (data) =>
       this.handleSetMultipleFiles(data),
     [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: (data) =>
       this.handleSetMultipleFiles(data),
@@ -434,19 +425,16 @@ export class MainApp extends MainAppBase {
       workflowInstruction: this.workflowInstruction.get(),
       toolUseInstruction: this.toolUseInstruction.get(),
       inputFile: sf.inputFile,
-      referenceFile: sf.referenceFile,
-      auxiliaryFile: sf.auxiliaryFile,
+      contextFile: sf.contextFile,
       mediaFile: sf.mediaFile,
       editedFile: sf.editedFile,
       baseFile: sf.baseFile,
       inputFiles: mf.inputFiles,
-      referenceFiles: mf.referenceFiles,
-      auxiliaryFiles: mf.auxiliaryFiles,
+      contextFiles: mf.contextFiles,
       mediaFiles: mf.mediaFiles,
       outputFiles: mf.outputFiles,
       inputFilesVisible: mv.inputFiles,
-      referenceFilesVisible: mv.referenceFiles,
-      auxiliaryFilesVisible: mv.auxiliaryFiles,
+      contextFilesVisible: mv.contextFiles,
       mediaFilesVisible: mv.mediaFiles,
       outputFilesVisible: mv.outputFiles,
       outputFilesActive: this.outputFilesActive.get(),
@@ -474,44 +462,25 @@ export class MainApp extends MainAppBase {
     this.commit.set(state.commit);
 
     this.restorePerModeInstructions(state);
-    // Migrate persisted auxiliary state into the unified Context (reference)
-    // bucket so users who set auxiliary files in older versions keep them
-    // visible after the auxiliary picker was removed. The single auxiliary
-    // slot fills the reference single slot if free; otherwise it falls through
-    // to the multi-file list so it isn't silently dropped.
-    const restoredReferenceFile = state.referenceFile || state.auxiliaryFile;
-    const auxSingleNeedsFallback =
-      state.auxiliaryFile &&
-      state.referenceFile &&
-      restoredReferenceFile !== state.auxiliaryFile;
-    const restoredReferenceFiles = Array.from(
-      new Set([
-        ...(state.referenceFiles ?? []),
-        ...(state.auxiliaryFiles ?? []),
-        ...(auxSingleNeedsFallback ? [state.auxiliaryFile] : []),
-      ]),
-    );
-    const restoredReferenceFilesVisible =
-      state.referenceFilesVisible || state.auxiliaryFilesVisible;
+    // Legacy `referenceFile`/`auxiliaryFile`/etc. keys are migrated up-front
+    // by the preprocess shim on MainViewPersistedStateSchema, so by the time
+    // we get here the state is already in canonical context-only shape.
     this.singleFiles.set({
       inputFile: state.inputFile,
-      referenceFile: restoredReferenceFile,
-      auxiliaryFile: '',
+      contextFile: state.contextFile,
       mediaFile: state.mediaFile,
       editedFile: state.editedFile,
       baseFile: state.baseFile,
     });
     this.multiFiles.set({
       inputFiles: state.inputFiles,
-      referenceFiles: restoredReferenceFiles,
-      auxiliaryFiles: [],
+      contextFiles: state.contextFiles,
       mediaFiles: state.mediaFiles,
       outputFiles: state.outputFiles,
     });
     this.multiFilesVisible.set({
       inputFiles: state.inputFilesVisible,
-      referenceFiles: restoredReferenceFilesVisible,
-      auxiliaryFiles: false,
+      contextFiles: state.contextFilesVisible,
       mediaFiles: state.mediaFilesVisible,
       outputFiles: state.outputFilesVisible,
     });
@@ -531,7 +500,7 @@ export class MainApp extends MainAppBase {
       MAIN_VIEW_COMMANDS.GET_THEME,
       MAIN_VIEW_COMMANDS.GET_DEBUG_MODE,
       MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
-      MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE,
+      MAIN_VIEW_COMMANDS.REQUEST_CONTEXT_FILE,
       MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
       MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
       MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
@@ -876,8 +845,7 @@ export class MainApp extends MainAppBase {
       const updates: Record<string, string[]> = {};
       const fileGroups = [
         { files: message.inputFiles, target: 'inputFile' },
-        { files: message.referenceFiles, target: 'referenceFile' },
-        { files: message.auxiliaryFiles, target: 'auxiliaryFile' },
+        { files: message.contextFiles, target: 'contextFile' },
         { files: message.mediaFiles, target: 'mediaFile' },
       ];
 
@@ -978,8 +946,7 @@ export class MainApp extends MainAppBase {
       this.restorePerModeInstructions(state);
       this.singleFiles.set({
         inputFile: state.inputFile,
-        referenceFile: state.referenceFile,
-        auxiliaryFile: state.auxiliaryFile,
+        contextFile: state.contextFile,
         mediaFile: state.mediaFile,
         editedFile: state.editedFile,
         baseFile: state.baseFile,
@@ -1037,23 +1004,20 @@ export class MainApp extends MainAppBase {
     if (defaults.resetFiles) {
       this.singleFiles.set({
         inputFile: '',
-        referenceFile: '',
-        auxiliaryFile: '',
+        contextFile: '',
         mediaFile: '',
         editedFile: '',
         baseFile: '',
       });
       this.multiFiles.set({
         inputFiles: [],
-        referenceFiles: [],
-        auxiliaryFiles: [],
+        contextFiles: [],
         mediaFiles: [],
         outputFiles: [],
       });
       this.multiFilesVisible.set({
         inputFiles: false,
-        referenceFiles: false,
-        auxiliaryFiles: false,
+        contextFiles: false,
         mediaFiles: false,
         outputFiles: false,
       });
@@ -1407,8 +1371,7 @@ export class MainApp extends MainAppBase {
     const sf = this.singleFiles.get();
     const singleFileSelections = {
       inputFile: sf.inputFile,
-      referenceFile: sf.referenceFile,
-      auxiliaryFile: sf.auxiliaryFile,
+      contextFile: sf.contextFile,
       mediaFile: sf.mediaFile,
       editedFile: sf.editedFile,
       baseFile: sf.baseFile,

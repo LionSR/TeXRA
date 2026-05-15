@@ -52,11 +52,11 @@ const views = [
         files: ['appendix.tex', 'References/2509.24978/main.tex'],
       },
       {
-        command: 'setReferenceFile',
+        command: 'setContextFile',
         files: ['refs.bib', 'References/2509.24978/main.bbl'],
       },
       {
-        command: 'setReferenceFiles',
+        command: 'setContextFiles',
         files: [
           'refs.bib',
           'References/2509.24978/only_supplement.tex',

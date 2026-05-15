@@ -145,8 +145,7 @@ export function createWorkflowTaskState(
     }) as AgentConfig & { agentCategory: typeof AgentCategory.Workflow },
     activeFiles: {
       input: true,
-      reference: false,
-      auxiliary: false,
+      context: false,
       media: false,
       output: true,
       ...activeFiles,
