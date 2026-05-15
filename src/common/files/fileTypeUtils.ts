@@ -1,6 +1,10 @@
 // Internal imports
 import { DEFAULT_TEXRA_SETTINGS } from '@shared/schemas/settingsConfiguration';
-import { getConfig, inspectConfig } from '@utils/config/configUtils';
+import {
+  getConfig,
+  inspectConfig,
+  isConfigExplicitlySet,
+} from '@utils/config/configUtils';
 import { hasExtension } from '@utils/core/pathCore';
 
 /**
@@ -51,30 +55,20 @@ function getDefaultIncludedExtensions(category: ExtensionCategory): string[] {
 /**
  * Retrieve included extensions for the given extension category.
  *
- * Back-compat: for `context`, if the user has not explicitly set the new
- * `contextExtensions` key but did set the legacy `referenceExtensions`
- * key (a customization from before the rename), use the legacy value.
- * inspectConfig() distinguishes user-set from VS Code defaults — needed
- * because getConfig() silently returns defaults when a key is unset.
+ * Back-compat: for `context`, fall back to a legacy `referenceExtensions`
+ * user value only when the new key was never explicitly set — otherwise
+ * `getConfig()` would mask the legacy customization with the new defaults.
  */
 export function getIncludedExtensions(category: ExtensionCategory): string[] {
   const defaults = getDefaultIncludedExtensions(category);
-  if (category === 'context') {
-    if (!hasUserSetting(INCLUDED_EXTENSION_KEYS.context)) {
-      const legacy = readUserSetting<string[]>(LEGACY_REFERENCE_EXTENSIONS_KEY);
-      if (legacy && legacy.length > 0) return legacy;
-    }
+  if (
+    category === 'context' &&
+    !isConfigExplicitlySet(INCLUDED_EXTENSION_KEYS.context)
+  ) {
+    const legacy = readUserSetting<string[]>(LEGACY_REFERENCE_EXTENSIONS_KEY);
+    if (legacy && legacy.length > 0) return legacy;
   }
   return getConfig<string[]>(INCLUDED_EXTENSION_KEYS[category], defaults);
-}
-
-function hasUserSetting(key: string): boolean {
-  const inspected = inspectConfig<unknown>(key);
-  return (
-    inspected?.workspaceValue !== undefined ||
-    inspected?.globalValue !== undefined ||
-    inspected?.workspaceFolderValue !== undefined
-  );
 }
 
 function readUserSetting<T>(key: string): T | undefined {

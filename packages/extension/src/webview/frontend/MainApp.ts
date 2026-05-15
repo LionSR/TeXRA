@@ -462,9 +462,6 @@ export class MainApp extends MainAppBase {
     this.commit.set(state.commit);
 
     this.restorePerModeInstructions(state);
-    // Legacy `referenceFile`/`auxiliaryFile`/etc. keys are migrated up-front
-    // by the preprocess shim on MainViewPersistedStateSchema, so by the time
-    // we get here the state is already in canonical context-only shape.
     this.singleFiles.set({
       inputFile: state.inputFile,
       contextFile: state.contextFile,

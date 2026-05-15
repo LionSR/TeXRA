@@ -11,6 +11,7 @@ import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
+import { isNonEmptyString } from '@utils/core/stringCore';
 import { UIFileFieldsSchema } from './fileFields';
 import {
   commandOnly,
@@ -126,72 +127,49 @@ const MainViewPersistedStateBaseSchema = UIFileFieldsSchema.merge(
   openedFiles: z.array(z.string()).nullish(),
 });
 
-/**
- * Back-compat preprocess: migrate legacy `referenceFile`/`referenceFiles`/
- * `referenceFilesVisible` and `auxiliaryFile`/`auxiliaryFiles`/
- * `auxiliaryFilesVisible` keys (persisted by older versions before the
- * auxiliary picker was unified into Context) into the canonical
- * `contextFile`/`contextFiles`/`contextFilesVisible` shape. New keys win
- * when both are present.
- */
+// New keys win when both legacy and new are present, so users with a
+// partially-migrated state don't lose their canonical selection.
 function migrateLegacyAuxiliaryReferenceState(input: unknown): unknown {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
     return input;
   }
   const obj = { ...(input as Record<string, unknown>) };
 
-  // Migrate legacy single-file slot.
   if (obj.contextFile === undefined) {
-    if (
-      obj.referenceFile !== undefined &&
-      obj.referenceFile !== null &&
-      obj.referenceFile !== ''
-    ) {
+    if (isNonEmptyString(obj.referenceFile)) {
       obj.contextFile = obj.referenceFile;
-    } else if (
-      obj.auxiliaryFile !== undefined &&
-      obj.auxiliaryFile !== null &&
-      obj.auxiliaryFile !== ''
-    ) {
+    } else if (isNonEmptyString(obj.auxiliaryFile)) {
       obj.contextFile = obj.auxiliaryFile;
     }
   }
 
-  // Merge legacy multi-file lists: contextFiles wins; otherwise concatenate
-  // referenceFiles and auxiliaryFiles. If the auxiliary single slot didn't
-  // claim the contextFile spot, also fold it into the multi list to avoid
-  // silently dropping the user's selection.
   if (obj.contextFiles === undefined) {
     const refList = Array.isArray(obj.referenceFiles) ? obj.referenceFiles : [];
     const auxList = Array.isArray(obj.auxiliaryFiles) ? obj.auxiliaryFiles : [];
-    const auxSingleNeedsFallback =
-      typeof obj.auxiliaryFile === 'string' &&
-      obj.auxiliaryFile.length > 0 &&
-      obj.contextFile !== obj.auxiliaryFile;
-    const merged: string[] = [];
-    const seen = new Set<string>();
-    for (const f of [
-      ...refList,
-      ...auxList,
-      ...(auxSingleNeedsFallback ? [obj.auxiliaryFile as string] : []),
-    ]) {
-      if (typeof f === 'string' && !seen.has(f)) {
-        seen.add(f);
-        merged.push(f);
-      }
-    }
+    // Fold an unclaimed auxiliary single slot into the multi list so it
+    // isn't silently dropped when reference already took the contextFile spot.
+    const auxFallback =
+      isNonEmptyString(obj.auxiliaryFile) &&
+      obj.contextFile !== obj.auxiliaryFile
+        ? [obj.auxiliaryFile]
+        : [];
+    const merged = [
+      ...new Set(
+        [...refList, ...auxList, ...auxFallback].filter(isNonEmptyString),
+      ),
+    ];
     if (merged.length > 0 || refList.length > 0 || auxList.length > 0) {
       obj.contextFiles = merged;
     }
   }
 
-  if (obj.contextFilesVisible === undefined) {
-    if (obj.referenceFilesVisible || obj.auxiliaryFilesVisible) {
-      obj.contextFilesVisible = true;
-    }
+  if (
+    obj.contextFilesVisible === undefined &&
+    (obj.referenceFilesVisible || obj.auxiliaryFilesVisible)
+  ) {
+    obj.contextFilesVisible = true;
   }
 
-  // Drop legacy keys so they don't sneak through unknown-key handling.
   delete obj.referenceFile;
   delete obj.referenceFiles;
   delete obj.referenceFilesVisible;
