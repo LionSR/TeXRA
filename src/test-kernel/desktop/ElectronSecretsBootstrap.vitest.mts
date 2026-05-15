@@ -93,9 +93,11 @@ describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
     const electron = (await import('electron')) as unknown as {
       safeStorage: { decryptString: (value: Buffer) => string };
     };
-    vi.spyOn(electron.safeStorage, 'decryptString').mockImplementation(() => {
-      throw new Error('denied');
-    });
+    const decryptSpy = vi
+      .spyOn(electron.safeStorage, 'decryptString')
+      .mockImplementation(() => {
+        throw new Error('denied');
+      });
     const { ElectronSecrets } = await loadElectronSecrets();
     const warnings: string[] = [];
     const fakeStore = {
@@ -116,6 +118,7 @@ describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
     await secrets.get('c');
 
     expect(warnings).toHaveLength(1);
+    expect(decryptSpy).toHaveBeenCalledOnce();
   });
 });
 
@@ -265,5 +268,7 @@ describe('desktop main process keychain access', () => {
     );
     expect(source).not.toContain('prewarmElectronKeychain');
     expect(source).not.toContain('safeStorage.encryptString');
+    expect(source).not.toContain('await initializeCrashReporting();');
+    expect(source).toContain("webContents.once('did-finish-load'");
   });
 });
