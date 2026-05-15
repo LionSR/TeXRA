@@ -258,7 +258,7 @@ async function exists(path) {
   }
 }
 
-async function readDirNames(path) {
+export async function readDirNames(path) {
   try {
     return await readdir(path);
   } catch (error) {
