@@ -63,12 +63,13 @@ if (!recorded.contents.includes('react/compiler-runtime')) {
 // bare imports plus a small allow-list. (Re-imports of the same module
 // under different specifiers are fine.)
 const source = await readFile(smokeFile, 'utf8');
-const importRe = /import[^'"`]+['"`]([^'"`]+)['"`]/g;
 
 function collectBareImports(code) {
+  // Fresh regex per call — a module-scoped `g`-flag regex is stateful via
+  // `lastIndex` and would leak between calls if either loop exited early.
+  const importRe = /import[^'"`]+['"`]([^'"`]+)['"`]/g;
   const imports = new Set();
-  let match;
-  while ((match = importRe.exec(code)) != null) {
+  for (const match of code.matchAll(importRe)) {
     imports.add(match[1]);
   }
   return imports;
