@@ -47,10 +47,7 @@ prompts:
     Project context:
     <documents>
     {{ ALL_CONTEXTS }}
-    {{ ADDITIONAL_INPUTS }}
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
+    {{ ALL_INPUTS }}
     </documents>
 
     {% raw %}{% if INSTRUCTION %}{% endraw %}
@@ -62,7 +59,7 @@ prompts:
 
   userRequest:
     - |
-      Output the revised \LaTeX as <documents><document name="{{ INPUT_FILE }}">...</document></documents>.
+      Output the revised \LaTeX as <documents><document name="{{ OUTPUT_FILES_ORDER[0] }}">...</document></documents>.
     - |
       Critically reflect on your previous revision, identify the most impactful
-      follow-up edits, and output the updated <documents><document name="{{ INPUT_FILE }}">...</document></documents>.
+      follow-up edits, and output the updated <documents><document name="{{ OUTPUT_FILES_ORDER[0] }}">...</document></documents>.

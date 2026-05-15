@@ -28,10 +28,7 @@ prompts:
   userPrefix: |
     <documents>
     {{ ALL_CONTEXTS }}
-    {{ ADDITIONAL_INPUTS }}
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
+    {{ ALL_INPUTS }}
     </documents>
     <instruction>{{ INSTRUCTION }}</instruction>
   userRequest: # MUST be an array with exactly `rounds` entries
@@ -61,11 +58,11 @@ Workflow agent prompts receive:
 - `{{ ALL_INPUTS }}` — XML list of all input files (when multiple selected)
 - `{{ ALL_CONTEXTS }}` — XML list of context files (.bib/.bbl, reference papers, .sty/.cls)
 - `{{ LIST_OF_ALL_CONTEXTS }}` — comma-separated list of context file paths
-- `{{ ADDITIONAL_INPUTS }}` — extra context files
 - `{{ INSTRUCTION }}` — the user's free-text instruction for this run
-- `{{ OUTPUT_FILES_ORDER }}` — ordered list of output filenames; empty/falsy
-  when the user has not selected output files (use `{% if OUTPUT_FILES_ORDER %}`
-  to branch between multi-file and single-file output formats). Use
+- `{{ OUTPUT_FILES_ORDER }}` — ordered list of output filenames. Each input
+  produces one output of the same name, so most agents simply iterate over
+  this list. Only merge-style agents (which write a fresh filename distinct
+  from the inputs) need to branch on `{% if OUTPUT_FILES_ORDER %}`. Use
   `{{ OUTPUT_FILES_ORDER[0] }}` for a specific filename and
   `{{ OUTPUT_FILES_ORDER | join(", ") }}` for a human-readable list.
 
@@ -90,15 +87,14 @@ they produce one file or many. No separate `_multiple` variant is needed.
   tag for a legacy single-output agent.
 - Add `defaultOutputFiles` with the list of expected filenames when the agent
   produces a fixed set of outputs.
-- In `userRequest`, branch on `{% if OUTPUT_FILES_ORDER %}` to cover both the
-  multi-file case (user selects multiple outputs) and the single-file fallback.
-  Each output file goes in a separate `<document name="filename.tex">` block
-  inside `<documents>`.
+- In `userRequest`, iterate over `OUTPUT_FILES_ORDER` to emit one
+  `<document name="filename.tex">` block per output file inside `<documents>`.
+  Each input file produces one output of the same name; the runtime always
+  populates `OUTPUT_FILES_ORDER` with at least one entry.
 
 Example output format in `userRequest`:
 
 ```
-{% if OUTPUT_FILES_ORDER %}
 <documents>
 <document name="{{ OUTPUT_FILES_ORDER[0] }}">
 % content for first output
@@ -107,13 +103,6 @@ Example output format in `userRequest`:
 % content for second output
 </document>
 </documents>
-{% else %}
-<documents>
-<document name="output.tex">
-% single output content
-</document>
-</documents>
-{% endif %}
 ```
 
 ## Inheritance
@@ -153,18 +142,15 @@ prompts:
   userPrefix: |
     <documents>
     {{ ALL_CONTEXTS }}
-    {{ ADDITIONAL_INPUTS }}
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
+    {{ ALL_INPUTS }}
     </documents>
     <instruction>{{ INSTRUCTION }}</instruction>
 
   userRequest:
     - |
       Brainstorm in <scratchpad>, then output the revised LaTeX inside
-      <documents><document name="{{ INPUT_FILE }}">...</document></documents>.
+      <documents><document name="{{ OUTPUT_FILES_ORDER[0] }}">...</document></documents>.
     - |
       Reflect in <scratchpad>, then emit the improved
-      <documents><document name="{{ INPUT_FILE }}">...</document></documents>.
+      <documents><document name="{{ OUTPUT_FILES_ORDER[0] }}">...</document></documents>.
 ```

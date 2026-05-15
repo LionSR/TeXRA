@@ -30,11 +30,7 @@ prompts:
 
     <documents>
     {{ ALL_CONTEXTS }}
-    {{ ADDITIONAL_INPUTS }}
-
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
+    {{ ALL_INPUTS }}
     </documents>
 
     Please carefully review the provided research paper before creating the presentation.
@@ -66,7 +62,6 @@ prompts:
 
       Create a complete, self-contained LaTeX Beamer presentation that effectively communicates the paper's key findings in 10-15 slides. The presentation should be professional, condensed, and highlight the main aspects of the research paper. Use the following format:
 
-      {% if OUTPUT_FILES_ORDER %}
       <documents>
       <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       \documentclass{beamer}
@@ -109,50 +104,6 @@ prompts:
       \end{document}
       </document>
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      \documentclass{beamer}
-
-      \usetheme{metropolis}
-
-      \setbeamertemplate{navigation symbols}{}
-
-      \AtBeginSection[]
-      {
-      \begin{frame}<beamer>
-      \frametitle{Outline}
-      \tableofcontents[currentsection]
-      \end{frame}
-      }
-
-      \usepackage{amsmath}
-      \usepackage{amssymb}
-      \usepackage{graphicx}
-      \usepackage{physics}
-      \usepackage{hyperref}
-      \usepackage{natbib}
-
-      % Add any additional packages needed
-
-      % Title information
-      \title{...}
-      \author{...}
-      \institute{...}
-      \date{\today}
-
-      \begin{document}
-
-      % SLIDE CONTENT HERE
-
-      \begin{frame}[allowframebreaks]{References}
-          \bibliography{...}
-      \end{frame}
-
-      \end{document}
-      </document>
-      </documents>
-      {% endif %}
     - |
       Critically review your draft and output a revised version. Check these aspects and fix any issues found:
       \begin{enumerate}
@@ -168,16 +119,8 @@ prompts:
 
       Output the complete, self-contained revised version based on the previous version, maintaining its professional quality and technical accuracy. Use the following format:
 
-      {% if OUTPUT_FILES_ORDER %}
       <documents>
       <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       % Complete revised LaTeX Beamer presentation here
       </document>
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % Complete revised LaTeX Beamer presentation here
-      </document>
-      </documents>
-      {% endif %}

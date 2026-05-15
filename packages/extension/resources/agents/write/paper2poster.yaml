@@ -34,16 +34,13 @@ prompts:
 
     <documents>
     {{ ALL_CONTEXTS }}
-    {{ ADDITIONAL_INPUTS }}
     <document name="{{ TEMPLATE_POSTER_STYLE_FILE }}"
     {{ TEMPLATE_POSTER_STYLE_CONTENT }}
     </document>
     <document name="{{ TEMPLATE_POSTER_THEME_FILE }}"
     {{ TEMPLATE_POSTER_THEME_CONTENT }}
     </document>
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
+    {{ ALL_INPUTS }}
     </documents>
 
     Please carefully review the provided research paper before creating the poster.
@@ -76,19 +73,11 @@ prompts:
     - |
       Create a detailed, mathematically rich LaTeX Beamer poster for a scientific audience in A5 format. The poster should be professional, mathematically detailed, and effectively highlight the main aspects of the research paper. Use the following format:
 
-      {% if OUTPUT_FILES_ORDER %}
       <documents>
       <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       {{ TEMPLATE_POSTER_CONTENT }}
       </document>
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      {{ TEMPLATE_POSTER_CONTENT }}
-      </document>
-      </documents>
-      {% endif %}
     - |
       Critically review your draft and output a revised version. Check these aspects and fix any issues found:
       \begin{enumerate}
@@ -107,16 +96,8 @@ prompts:
 
       Output the revised poster based on the previous version, balancing detailed mathematical content with visual appeal:
 
-      {% if OUTPUT_FILES_ORDER %}
       <documents>
       <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       % Complete revised LaTeX Beamer poster here
       </document>
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % Complete revised LaTeX Beamer poster here
-      </document>
-      </documents>
-      {% endif %}

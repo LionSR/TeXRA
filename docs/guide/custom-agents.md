@@ -14,7 +14,9 @@ Before creating a custom agent, it's highly recommended to understand the underl
 
 ## <wa-icon library="texra" name="library"></wa-icon> Reference Agents
 
-TeXRA includes ready-made reference agents you can use as starting points. Think of them as recipes: copy one into your custom agents directory, tweak it, and you have a new agent in minutes. Examples range from content-enhancement workflows to notation standardizers and multi-agent orchestrators. Each agent handles both single-file and multi-file output through one unified YAML — set `documentTag: documents` and use `{% if OUTPUT_FILES_ORDER %}` to branch on whether the user picked multiple output files.
+TeXRA includes ready-made reference agents you can use as starting points. Think of them as recipes: copy one into your custom agents directory, tweak it, and you have a new agent in minutes. Examples range from content-enhancement workflows to notation standardizers and multi-agent orchestrators. Each agent handles one input or several through a unified protocol: set `documentTag: documents` and your prompt emits one `<document name="...">` per input.
+
+> **Migrating an older custom YAML?** See [agent-yaml-migration.md](./agent-yaml-migration.md) for the full before/after walk-through covering the W2/W3/W4 changes (auxiliary→context picker merge, `_multiple` retirement, single-slot collapse).
 
 ## <wa-icon library="texra" name="new-file"></wa-icon> Creating a Custom Agent File
 

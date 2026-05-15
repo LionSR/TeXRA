@@ -46,10 +46,8 @@ prompts:
             \end{itemize}
     \end{itemize}
 
-    {% if OUTPUT_FILES_ORDER %}
     CRITICAL PRINCIPLE: Cross-Document Notation Consistency.
     When multiple documents are provided, track notation across ALL documents. Flag symbols defined in one document but used earlier in another, conflicting conventions between documents (e.g., $\mathcal{H}$ in main paper vs $H$ in appendix), and symbol reuse with different meanings across documents. Cross-document notation conflicts are high-priority issues. Always propose graceful, minimal-change solutions (e.g., introduce a new symbol in one document rather than rewriting another).
-    {% endif %}
 
     When making improvements in the second phase, you must:
     \begin{itemize}
@@ -66,17 +64,17 @@ prompts:
                 \item Systemic notation changes affecting many sections (provide graceful solution)
                 \item Cross-section notation unification (provide graceful solution)
                 \item Major symbol renaming affecting the entire document
-                {% if OUTPUT_FILES_ORDER %}
+
                 \item Cross-document notation unification (provide graceful solution)
                 \item Major symbol renaming affecting multiple documents
-                {% endif %}
+
                 \item Uncertain changes or cases requiring domain knowledge
             \end{itemize}
         \item Comment discipline:
             \begin{itemize}
                 \item Silent fixes only for: obvious typos in math symbols, clear transcription errors
                 \item Brief \criticize{Fixed: [description]}{severity}{confidence} for: notation unified in local equations, unused symbols removed
-                \item Full \criticize{Issue: [...]. Graceful solution: [...]}{severity}{confidence} for: systemic{% if OUTPUT_FILES_ORDER %} and cross-document{% endif %} issues with proposed minimal-change solution
+                \item Full \criticize{Issue: [...]. Graceful solution: [...]}{severity}{confidence} for: systemic and cross-document issues with proposed minimal-change solution
             \end{itemize}
         \item Keep all comments that start with `\%'
     \end{itemize}
@@ -92,10 +90,7 @@ prompts:
 
     <documents>
     {{ ALL_CONTEXTS }}
-    {{ ADDITIONAL_INPUTS }}
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
+    {{ ALL_INPUTS }}
     </documents>
 
     Read through the entire document (and any additional documents) to understand the notation system before proceeding.
@@ -106,11 +101,9 @@ prompts:
       <instruction>
       {{ INSTRUCTION }}
       </instruction>
-      If no specific instruction is given, analyze overall notation consistency, symbol usage, and mathematical conventions{% if OUTPUT_FILES_ORDER %} across all documents{% endif %}.
+      If no specific instruction is given, analyze overall notation consistency, symbol usage, and mathematical conventions across all documents.
 
-      {% if OUTPUT_FILES_ORDER %}
       The output files should be in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
-      {% endif %}
 
       In the scratchpad below, perform a deep notation analysis. Track symbols systematically and identify issues:
       <scratchpad>
@@ -163,7 +156,7 @@ prompts:
                           \item Rationale: [Why this solution minimizes changes]
                       \end{itemize}
               \end{itemize}
-          {% if OUTPUT_FILES_ORDER %}
+
           \item [Cross-Document Notation Consistency Check]
               \begin{itemize}
                   \item Document-by-document notation: [List key symbols used in each document]
@@ -175,7 +168,7 @@ prompts:
                   \item Cross-document graceful solutions: [Minimal-change fixes for each cross-document conflict]
                   \item Unused notation across all documents: [Symbols defined but never used anywhere]
               \end{itemize}
-          {% endif %}
+
       \end{enumerate}
       </scratchpad>
 
@@ -189,16 +182,14 @@ prompts:
       - \criticize{Used before defined: $\nabla_\theta L$ appears here but is not defined until \cref{eq:loss}. Either define earlier or add forward reference.}{4}{5}
       - \criticize{Index inconsistency: Earlier equations use subscript $x_i$ but here uses superscript $x^i$ for the same vector component. Standardize.}{3}{5}
       - \criticize{Convention conflict: \Cref{sec:vectors} treats vectors as column vectors, but here they are row vectors in matrix multiplication. Clarify or make consistent.}{4}{4}
-      {% if OUTPUT_FILES_ORDER %}
+
       - \criticize{Cross-document inconsistency: Main paper uses $\mathcal{H}$ for Hilbert space, but appendix uses $H$. Graceful solution: standardize on $\mathcal{H}$ across documents.}{3}{5}
       - \criticize{Unused across all documents: The quantity $\Gamma$ is defined here but never used in \cref{sec:main} or appendices. Consider removing.}{2}{5}
-      {% endif %}
 
       Add the comment command definition in the preamble if not already present:
       \usepackage{xcolor}
       \newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else gray\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\textit{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else gray\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
 
-      {% if OUTPUT_FILES_ORDER %}
       <documents>
       <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       % 1ST LATEX_DOCUMENT_WITH_NOTATION_COMMENTS HERE
@@ -208,13 +199,6 @@ prompts:
       </document>
       ... (repeat for all output files)
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % LATEX_DOCUMENT_WITH_NOTATION_COMMENTS HERE
-      </document>
-      </documents>
-      {% endif %}
 
     - |
       Now critically reflect on the notation issues identified and plan improvements. Separate easy fixes from systemic changes.
@@ -231,9 +215,9 @@ prompts:
                   \item Minor inconsistencies: [Less urgent, can leave as comment]
                   \item Graceful solutions inventory: [List minimal-change solutions for each conflict]
                   \item Unused content to remove: [List symbol definitions that are unused]
-                  {% if OUTPUT_FILES_ORDER %}
+
                   \item Cross-document notation conflicts: [Require coordination - leave for human with graceful solutions]
-                  {% endif %}
+
               \end{itemize}
           \item [Changes to Implement Now]
               \begin{itemize}
@@ -247,14 +231,14 @@ prompts:
                   \item Cross-section notation unification: [Affecting multiple sections - provide graceful solution]
                   \item Systemic changes: [Notation affecting many different sections - provide graceful solution]
                   \item Major symbol renaming: [Changing notation throughout document - provide graceful solution]
-                  {% if OUTPUT_FILES_ORDER %}
+
                   \item Cross-document notation unification: [Affecting multiple documents - provide graceful solution]
-                  {% endif %}
+
                   \item Uncertain changes: [Where I'm not confident or need domain knowledge]
               \end{itemize}
           \item [Graceful Solutions Summary]
               \begin{itemize}
-                  \item For each systemic{% if OUTPUT_FILES_ORDER %} or cross-document{% endif %} issue left as comment, confirm graceful solution is:
+                  \item For each systemic or cross-document issue left as comment, confirm graceful solution is:
                       \begin{itemize}
                           \item Minimal-change: [Introduces new symbol rather than changing existing]
                           \item Localized: [Makes change in one place rather than many]
@@ -277,12 +261,11 @@ prompts:
       - Fixed notation inconsistencies within sections (2-5 related equations) with brief comments documenting changes
       - Removed clearly unused symbol definitions (documented with comments)
       - Added \criticize{Fixed: [description]}{severity}{confidence} for all implemented changes except obvious typos
-      - Kept all \criticize{Issue: [...]. Graceful solution: [...]}{severity}{confidence} for systemic{% if OUTPUT_FILES_ORDER %} and cross-document{% endif %} issues with proposed minimal-change solutions
+      - Kept all \criticize{Issue: [...]. Graceful solution: [...]}{severity}{confidence} for systemic and cross-document issues with proposed minimal-change solutions
       - Made local notation clearer through standardization (documented with comments)
 
-      Remember: Be proactive with local notation improvements (within sections, 2-5 equations), but document all non-trivial changes with comments. Leave systemic{% if OUTPUT_FILES_ORDER %} and cross-document{% endif %} notation changes as issue comments for the human to decide, but ALWAYS provide graceful solutions that minimize changes.
+      Remember: Be proactive with local notation improvements (within sections, 2-5 equations), but document all non-trivial changes with comments. Leave systemic and cross-document notation changes as issue comments for the human to decide, but ALWAYS provide graceful solutions that minimize changes.
 
-      {% if OUTPUT_FILES_ORDER %}
       Ensure that the output documents are in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
 
       <documents>
@@ -294,10 +277,3 @@ prompts:
       </document>
       ... (repeat for all output files)
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % IMPROVED_LATEX_DOCUMENT_WITH_SAFE_NOTATION_CHANGES_AND_REMAINING_COMMENTS HERE
-      </document>
-      </documents>
-      {% endif %}

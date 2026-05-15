@@ -50,10 +50,8 @@ prompts:
             \end{itemize}
     \end{itemize}
 
-    {% if OUTPUT_FILES_ORDER %}
     CRITICAL PRINCIPLE: Cross-Document Coherence.
     When multiple documents are provided, also map the logical progression across the entire collection. Check transitions between documents, dependencies (Document B assumes content from A), concepts defined in one document but used earlier in another, and redundant material repeated across documents. Cross-document structural issues are high-priority.
-    {% endif %}
 
     When making improvements in the second phase, you must:
     \begin{itemize}
@@ -76,7 +74,7 @@ prompts:
                 \item Moving content across section boundaries (flag with specific suggestion)
                 \item Deleting entire paragraphs or substantial content
                 \item Major reorganization (reordering sections, changing structure)
-                \item {% if OUTPUT_FILES_ORDER %}Cross-document content moves{% endif %}
+                \item Cross-document content moves
                 \item Uncertain changes or major rewrites
             \end{itemize}
         \item Comment discipline:
@@ -99,10 +97,7 @@ prompts:
 
     <documents>
     {{ ALL_CONTEXTS }}
-    {{ ADDITIONAL_INPUTS }}
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
+    {{ ALL_INPUTS }}
     </documents>
 
     Read through the entire document (and any additional documents) to understand the overall argument flow and structure before proceeding.
@@ -113,11 +108,9 @@ prompts:
       <instruction>
       {{ INSTRUCTION }}
       </instruction>
-      If no specific instruction is given, analyze overall logical coherence, argument flow, and structural organization{% if OUTPUT_FILES_ORDER %} across all documents{% endif %}.
+      If no specific instruction is given, analyze overall logical coherence, argument flow, and structural organization across all documents.
 
-      {% if OUTPUT_FILES_ORDER %}
       The output files should be in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
-      {% endif %}
 
       In the scratchpad below, perform a deep structural analysis. Map out the logical flow and identify issues:
       <scratchpad>
@@ -128,14 +121,14 @@ prompts:
                   \item Main argument/story: [What is the paper trying to convey?]
                   \item Narrative arc: [How does it progress from intro to conclusion?]
                   \item Structural coherence: [Does the structure serve the argument?]
-                  {% if OUTPUT_FILES_ORDER %}
+
                   \item Document dependencies: [Which documents rely on others?]
-                  {% endif %}
+
               \end{itemize}
           \item [Section-by-Section Flow Analysis]
               \begin{itemize}
                   \item Section X: [Purpose, how it fits in narrative, flow to next section]
-                  \item Transitions: [Quality of connections between sections{% if OUTPUT_FILES_ORDER %} and between documents{% endif %}]
+                  \item Transitions: [Quality of connections between sections and between documents]
                   \item Redundancies: [Repeated content or unnecessary sections]
                   \item Gaps: [Missing logical steps or sections]
               \end{itemize}
@@ -175,10 +168,10 @@ prompts:
                           \item Technical detail in Introduction belongs in Methods
                           \item Result discussed in Methods belongs in Results
                           \item Example appearing before the concept it illustrates
-                          {% if OUTPUT_FILES_ORDER %}
+
                           \item Derivation in main paper belongs in appendix
                           \item Result in appendix should be in main text
-                          {% endif %}
+
                       \end{itemize}
                   \item Redundant content: [Unnecessary repetition]
                   \item Missing content: [Gaps that need filling]
@@ -192,9 +185,9 @@ prompts:
                   \item Context-dependent cases: [Concepts that might be inferable from context depending on reader level]
                   \item Forward references: [``We will show later'' - do they have clear pointers like \cref{sec:proof}?]
                   \item Standard knowledge claims: [Are claimed ``standard'' concepts actually standard in this field?]
-                  {% if OUTPUT_FILES_ORDER %}
+
                   \item Cross-document ordering: [Concepts defined in one document but used earlier in another]
-                  {% endif %}
+
                   \item Action needed: [Which need explanation earlier, which need forward reference, which are acceptable]
               \end{itemize}
           \item [Reader Experience]
@@ -204,7 +197,7 @@ prompts:
                   \item Where does momentum stall? [Pacing issues]
                   \item What questions are left unanswered? [Gaps in exposition]
               \end{itemize}
-          {% if OUTPUT_FILES_ORDER %}
+
           \item [Critical Cross-Document Structural Issues]
               \begin{itemize}
                   \item Logical dependency problems: [Document B assumes content from A that's missing]
@@ -215,7 +208,7 @@ prompts:
                   \item Structural coherence: [Does the collection tell a coherent story?]
                   \item Reader confusion points: [Where will readers struggle with the overall flow?]
               \end{itemize}
-          {% endif %}
+
       \end{enumerate}
       </scratchpad>
 
@@ -231,16 +224,14 @@ prompts:
       - \criticize{Ordering issue: This example uses results from \cref{thm:main} that haven't been introduced yet. Consider moving to after \cref{thm:main}.}{4}{4}
       - \criticize{Placement issue: This implementation detail appears in the theory section but belongs in \cref{sec:experiments}.}{3}{4}
       - \criticize{Used before explained: The concept of ``stochastic gradient'' is used here but not explained until \cref{sec:sgd}. Either explain earlier or add forward reference.}{4}{5}
-      {% if OUTPUT_FILES_ORDER %}
+
       - \criticize{This assumes readers understand result from \cref{eq:main_result} in \cref{sec:main}, but that section doesn't derive it. Add brief summary.}{4}{4}
       - \criticize{Out of place: This lengthy derivation in main text belongs in \cref{app:proofs}. Consider moving to appendix and referencing here.}{4}{4}
-      {% endif %}
 
       Add the comment command definition in the preamble if not already present:
       \usepackage{xcolor}
       \newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else gray\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\textit{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else gray\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
 
-      {% if OUTPUT_FILES_ORDER %}
       <documents>
       <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       % 1ST LATEX_DOCUMENT_WITH_LOGICAL_STRUCTURE_COMMENTS HERE
@@ -250,13 +241,6 @@ prompts:
       </document>
       ... (repeat for all output files)
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % LATEX_DOCUMENT_WITH_LOGICAL_STRUCTURE_COMMENTS HERE
-      </document>
-      </documents>
-      {% endif %}
 
     - |
       Now critically reflect on the structural issues identified and plan improvements. Separate easy fixes from major decisions.
@@ -283,10 +267,10 @@ prompts:
                   \item Cross-section paragraph moves: [Moving paragraphs between sections]
                   \item Content deletion: [Entire paragraphs or substantial cuts]
                   \item Major reorganization: [Reordering sections, structural changes]
-                  {% if OUTPUT_FILES_ORDER %}
+
                   \item Cross-document content moves: [Moving content between documents]
                   \item Systemic changes: [Affecting many sections across documents]
-                  {% endif %}
+
                   \item Uncertain changes: [Where I'm not confident]
               \end{itemize}
           \item [Comment Quality Review]
@@ -295,9 +279,9 @@ prompts:
                   \item Are they focused on flow, logic, and structure - not notation or math correctness?
                   \item Have I identified the most critical structural issues?
                   \item Are comments placed at relevant locations?
-                  {% if OUTPUT_FILES_ORDER %}
+
                   \item Are cross-document issues clearly flagged?
-                  {% endif %}
+
               \end{itemize}
           \item [Implementation Plan]
               \begin{itemize}
@@ -318,9 +302,8 @@ prompts:
       - Improved paragraph flow and coherence actively (documented with comments)
       - Made the logical flow clearer through better organization within sections (documented with comments)
 
-      Remember: If appendix derivations are questionable, add comments in the main text where those results are used, warning about the shaky foundation. Be proactive with improvements that don't cross section boundaries{% if OUTPUT_FILES_ORDER %}, delete substantial content, or require cross-document coordination{% endif %}; leave major reorganization{% if OUTPUT_FILES_ORDER %} and cross-document changes{% endif %} as issue comments for the human to decide.
+      Remember: If appendix derivations are questionable, add comments in the main text where those results are used, warning about the shaky foundation. Be proactive with improvements that don't cross section boundaries, delete substantial content, or require cross-document coordination; leave major reorganization and cross-document changes as issue comments for the human to decide.
 
-      {% if OUTPUT_FILES_ORDER %}
       Did later documents receive less attention than earlier ones? Re-read the last document now. Ensure that the output documents are in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
 
       <documents>
@@ -332,10 +315,3 @@ prompts:
       </document>
       ... (repeat for all output files)
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % ORIGINAL_DOCUMENT_WITH_CRITICAL_COMMENTS HERE
-      </document>
-      </documents>
-      {% endif %}

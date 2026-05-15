@@ -35,11 +35,10 @@ prompts:
     TEMPLATE VARIABLES available in prompts (Nunjucks double-brace syntax):
     - {{ INPUT_FILE }}: path of the main input file
     - {{ INPUT_CONTENT }}: full text of the main input file
-    - {{ ALL_INPUTS }}: XML list of ALL input files (when multiple files selected)
+    - {{ ALL_INPUTS }}: XML list of ALL input files (canonical for workflow agents)
     - {{ ALL_CONTEXTS }}: XML list of context files (bibliographies, reference papers, style/macro definitions like .sty/.cls)
-    - {{ ADDITIONAL_INPUTS }}: extra context files
     - {{ INSTRUCTION }}: the user's free-text instruction for this run
-    - {{ OUTPUT_FILES_ORDER }}: ordered list of output filenames (multiple-output agents only)
+    - {{ OUTPUT_FILES_ORDER }}: ordered list of output filenames (one per input)
     Use these variables in the prompts section. They are substituted at runtime.
 
   userRequest: |
@@ -66,8 +65,8 @@ prompts:
          use `` and '' instead of straight quotes, no markdown-style enumerations.>
       userPrefix: |
         <Context block wrapping input documents in <documents> XML tags.
-         Must reference {{ ALL_CONTEXTS }}, {{ ADDITIONAL_INPUTS }},
-         and wrap {{ INPUT_CONTENT }} in <document name="{{ INPUT_FILE }}"> tags.
+         Must reference {{ ALL_CONTEXTS }} and {{ ALL_INPUTS }} (which already
+         wraps each input file in its own <document name="..."> block).
          Should include an <instruction>{{ INSTRUCTION }}</instruction> block.>
       userRequest:
         - |
@@ -100,15 +99,12 @@ prompts:
       userPrefix: |
         <documents>
         {{ ALL_CONTEXTS }}
-        {{ ADDITIONAL_INPUTS }}
-        <document name="{{ INPUT_FILE }}">
-        {{ INPUT_CONTENT }}
-        </document>
+        {{ ALL_INPUTS }}
         </documents>
         <instruction>{{ INSTRUCTION }}</instruction>
       userRequest:
         - |
-          Output the revised \LaTeX as <documents><document name="{{ INPUT_FILE }}">...</document></documents>, focusing solely on the instruction.
+          Output the revised \LaTeX as <documents><document name="{{ OUTPUT_FILES_ORDER[0] }}">...</document></documents>, focusing solely on the instruction.
         - |
           Critically reflect on the changes and output a further enhanced version. Check for these
           failure modes and fix any you find:
@@ -118,7 +114,7 @@ prompts:
               \item Did you add generic filler sentences? Use ``show not tell.''
               \item Did you change anything NOT required by the instruction? If so, revert it.
           \end{itemize}
-          Output the further enhanced content as <documents><document name="{{ INPUT_FILE }}">...</document></documents>.
+          Output the further enhanced content as <documents><document name="{{ OUTPUT_FILES_ORDER[0] }}">...</document></documents>.
 
     IMPORTANT REMINDERS:
     - The documentTag in prompts must match the settings.documentTag.

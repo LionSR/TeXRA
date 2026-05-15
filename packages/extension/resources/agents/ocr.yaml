@@ -35,10 +35,7 @@ prompts:
 
     <documents>
     {{ ALL_CONTEXTS }}
-    {{ ADDITIONAL_INPUTS }}
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
+    {{ ALL_INPUTS }}
     </documents>
 
   userRequest:
@@ -49,19 +46,11 @@ prompts:
 
       Analyze the document to understand its notation conventions and mathematical style, then generate the LaTeX code for the handwritten content. Ensure it integrates seamlessly with the existing document --- match notation, mathematical environments, and symbol usage. Use the same documentclass as the existing document. Include \begin{document} and \end{document} tags so that the standalone file can be compiled.
 
-      {% if OUTPUT_FILES_ORDER %}
       <documents>
       <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       {LATEX_OCR_CONTENT}
       </document>
       </documents>
-      {% else %}
-      <documents>
-      <document name="ocr_result.tex">
-      {LATEX_OCR_CONTENT}
-      </document>
-      </documents>
-      {% endif %}
     - |
       Critically review the OCR conversion and output a refined version. Find the three most likely OCR errors or misinterpretations and check the following, fixing any issues found:
       \begin{itemize}
@@ -73,16 +62,8 @@ prompts:
 
       Output the refined LaTeX content with improved notation consistency and integration:
 
-      {% if OUTPUT_FILES_ORDER %}
       <documents>
       <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       {REFINED_LATEX_OCR_CONTENT}
       </document>
       </documents>
-      {% else %}
-      <documents>
-      <document name="ocr_result.tex">
-      {REFINED_LATEX_OCR_CONTENT}
-      </document>
-      </documents>
-      {% endif %}

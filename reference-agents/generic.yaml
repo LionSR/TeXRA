@@ -29,13 +29,11 @@ prompts:
         \item IMPORTANT: You must give the complete output containing all the sections in the order they are given in the input file(s).
     \end{itemize}
 
-    {% if OUTPUT_FILES_ORDER %}
     When working with multiple documents, also:
     \begin{itemize}
         \item Use appropriate notation and terminology consistently throughout all documents.
         \item Ensure that you maintain the structure and formatting of each individual document while working on them.
     \end{itemize}
-    {% endif %}
 
     When adding comments or annotations to the document:
     \begin{itemize}
@@ -52,10 +50,7 @@ prompts:
 
     <documents>
     {{ ALL_CONTEXTS }}
-    {{ ADDITIONAL_INPUTS }}
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
+    {{ ALL_INPUTS }}
     </documents>
 
     Please carefully read through the entire document(s) above and ensure you fully understand all the details.
@@ -65,16 +60,13 @@ prompts:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
-    {% if OUTPUT_FILES_ORDER %}
     For example, in the instruction, if I ask you to revise section A in all documents, you do not need to revise section B in any document.
-    {% endif %}
     {% endif %}
 
   userRequest:
     - |
-      Work on the \LaTeX document(s). Maintain professional academic standards and adhere to all \LaTeX formatting rules.{% if OUTPUT_FILES_ORDER %} Maintain consistency across documents (notation, definitions, results).{% endif %} Use the following format:
+      Work on the \LaTeX document(s). Maintain professional academic standards and adhere to all \LaTeX formatting rules. Maintain consistency across documents (notation, definitions, results). Use the following format:
 
-      {% if OUTPUT_FILES_ORDER %}
       The output files should be in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
 
       <documents>
@@ -86,17 +78,9 @@ prompts:
       </document>
       ... (repeat for all output files)
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % UPDATED LATEX DOCUMENT HERE
-      </document>
-      </documents>
-      {% endif %}
     - |
-      Now critically reflect on the work you've just completed{% if OUTPUT_FILES_ORDER %} across all documents{% endif %} and output a further refined version. Check for accuracy, notation consistency{% if OUTPUT_FILES_ORDER %} within and across documents{% endif %}, structural coherence, formatting issues, and clarity. Include all the work from the previous step plus the new refinements.
+      Now critically reflect on the work you've just completed across all documents and output a further refined version. Check for accuracy, notation consistency within and across documents, structural coherence, formatting issues, and clarity. Include all the work from the previous step plus the new refinements.
 
-      {% if OUTPUT_FILES_ORDER %}
       Ensure that the output documents are in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}
 
       <documents>
@@ -108,10 +92,3 @@ prompts:
       </document>
       ... (repeat for all output files)
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % 2ND UPDATED LATEX DOCUMENT HERE
-      </document>
-      </documents>
-      {% endif %}
