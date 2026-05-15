@@ -4,7 +4,7 @@ import type { ConversationProgress } from '@shared/schemas';
 
 /**
  * Render progress badge with conversation turns and tool call count.
- * Used by StreamHeader (wa-tag variant) and StreamTabs (inline span variant).
+ * Used by StreamHeader.
  */
 export function renderProgressBadgeContent(
   progress: ConversationProgress | undefined,
