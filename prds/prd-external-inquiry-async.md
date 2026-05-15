@@ -13,7 +13,7 @@ Today the `external_inquiry` tool blocks the agent's tool-use cycle on an in-mem
 
 This PRD makes the tool — renamed `inquiry` — **non-blocking and durable**. The tool returns `dispatched` immediately. The user can paste the answer hours later — even after a reload. When the answer lands, a continuation message is injected into the originating stream's follow-up queue and the agent auto-resumes. Multiple inquiries dispatched in the same turn live independently; each resumes the agent on arrival.
 
-Mechanism mirrors **Odyssey's** continuation-injection pattern (`ToolUseFollowUpQueue.appendFollowUp`) — no new runtime, no polling, no background worker.
+Mechanism rides on the existing follow-up pipeline (`src/agent/toolUse/ToolUseFollowUp.ts` → `sendFollowUp`) plus the host's `texra.resumeAgent` for the post-reload case — no new runtime, no polling, no background worker. (Odyssey writes to `ToolUseFollowUpQueue.enqueue` directly, which works for its always-in-process case but does **not** cover post-reload resume — see §6.5.)
 
 ## 2. Goals
 
@@ -189,47 +189,36 @@ Webview-side handler in `ProgressViewMessageHandler.ts` is updated to route the 
 
 **Goal**: deliver the continuation text to the parent stream's tool-use cycle, correctly handling four states the parent may be in — actively running, idle at `ToolUseWaitNode`, in `WAITING` status (cycle exited; needs auto-resume), or fully gone (released, no snapshot).
 
-The existing `texra.sendFollowUp` command already implements all four (`packages/extension/src/commands/agent/followUpCommand.ts`): it enqueues to `ToolUseFollowUpQueue`, lazy-detects `WAITING`, calls `texra.resumeAgent` with the persisted snapshot on a stale stream, and reports the failure mode otherwise. Routing the inquiry continuation through this command — not raw `ToolUseFollowUpQueue.enqueue` — is what makes "answer after extension reload auto-resumes the agent" actually work.
+**Why not just call `texra.sendFollowUp`?** That command is registered as a void async handler (`packages/extension/src/commands/agent/followUpCommand.ts:160-169`) — `vscode.commands.executeCommand` resolves to `undefined` and an outer `handleFollowUpResult` surfaces `vscode.window.showWarningMessage` toasts on `no_session` and `queued+children_running`. Calling it from the inquiry path would (1) give us no usable return value and (2) fire user-visible toasts the inquiry flow shouldn't trigger (the panel already shows status).
 
-Because `texra.sendFollowUp` is a VS Code command (host-coupled) and the inquiry action handler is invoked in the host layer (webview message), we expose it via the existing platform port pattern rather than importing `vscode` from `src/tools/inquiry/`.
+**Approach.** Bypass the host command. Call the core `sendFollowUp()` (`src/agent/toolUse/ToolUseFollowUp.ts`) directly to get the typed `SendFollowUpResult`. That covers cases 1 and 2 (live and queued). For the `WAITING` and `children_running` cases, invoke a small new platform port that wraps the snapshot-driven resume (currently the private `tryAutoResume` helper in `followUpCommand.ts`). We then map the combined result into one of four outcomes the UI can badge on. No toasts fire because we are not going through the void host command.
 
-**Platform port** (new, in `src/platform/`):
+**New platform port** in `src/platform/platform.ts`:
 
 ```typescript
-export interface AgentFollowUpPort {
-  /** Routes through host's resume-aware send pipeline.
-   *  Returns the outcome so callers can update UI. */
-  send(params: { streamId: StreamTabId; text: string }): Promise<
-    | { status: 'sent' } // live cycle received it
-    | { status: 'queued' } // buffered for next wait boundary
-    | { status: 'resumed' } // auto-resumed a WAITING stream
-    | { status: 'no_session' } // parent gone — answer archives only
-  >;
+export interface AgentResumePort {
+  /** Attempts to resume a WAITING stream from its persisted snapshot.
+   *  Returns true if the resume command was dispatched successfully.
+   *  Implementation invokes `texra.resumeAgent`; not part of core. */
+  tryResumeStream(streamId: StreamTabId): Promise<boolean>;
 }
 ```
 
-The VS Code host wires this in `extension.ts`:
+VS Code host wires it in `extension.ts` by extracting (or duplicating) the existing `tryAutoResume(streamId)` from `followUpCommand.ts:56-112` and exposing it as `tryResumeStream`. The current `tryAutoResume` is private to that file; refactor it to live in a small new module `packages/extension/src/commands/agent/resumeFromSnapshot.ts` so both `texra.sendFollowUp`'s handler and the new port can call it.
+
+**Continuation helper** in `src/tools/inquiry/inquiryContinuation.ts` — host-neutral, no `vscode` import:
 
 ```typescript
-agentFollowUp: {
-  send: async ({ streamId, text }) => {
-    return vscode.commands.executeCommand('texra.sendFollowUp', { stream: streamId, text });
-  },
-},
-```
+type InjectionOutcome = 'sent' | 'queued' | 'resumed' | 'archived';
 
-**Continuation helper** in `src/tools/inquiry/inquiryContinuation.ts`:
-
-```typescript
 export async function injectContinuationForAnsweredThread(
   threadId: ExternalInquiryThreadId,
-): Promise<'resumed' | 'archived'> {
+): Promise<InjectionOutcome> {
   const manifest = await readExternalInquiryThread(threadId);
   if (!manifest) return 'archived';
 
   const lastTurn = manifest.turns.at(-1);
   if (!lastTurn?.answer) return 'archived';
-
   if (manifest.parentStreamId == null) return 'archived'; // orphan / legacy
 
   const stillOpen = await listOpenThreadsForStream(manifest.parentStreamId);
@@ -243,33 +232,61 @@ export async function injectContinuationForAnsweredThread(
     stillOpen,
   });
 
-  const outcome = await platform().agentFollowUp.send({
-    streamId: manifest.parentStreamId,
-    text,
-  });
+  const result = await sendFollowUp(manifest.parentStreamId, text);
 
-  // Capture and propagate the outcome so the UI can badge the thread.
-  if (outcome.status === 'no_session') {
-    await emitThreadOutcome(threadId, 'parent_finished');
-    return 'archived';
+  switch (result.status) {
+    case 'sent':
+      await emitInquiryThreadUpdate(threadId, { resumeOutcome: 'sent' });
+      return 'sent';
+    case 'queued':
+      if (result.reason === 'waiting' || result.reason === 'children_running') {
+        const resumed = await platform().agentResume.tryResumeStream(
+          manifest.parentStreamId,
+        );
+        const outcome: InjectionOutcome = resumed ? 'resumed' : 'queued';
+        await emitInquiryThreadUpdate(threadId, { resumeOutcome: outcome });
+        return outcome;
+      }
+      // 'resuming' — another consumer is already on the way; nothing to do.
+      await emitInquiryThreadUpdate(threadId, { resumeOutcome: 'queued' });
+      return 'queued';
+    case 'no_session':
+      await emitInquiryThreadUpdate(threadId, {
+        resumeOutcome: 'parent_finished',
+      });
+      return 'archived';
   }
-  await emitThreadOutcome(threadId, 'resumed');
-  return 'resumed';
 }
 ```
 
-`injectContinuationForDroppedThread` is parallel; it uses `event: 'dropped'` and the Variant C template.
+`injectContinuationForDroppedThread` is parallel; it uses `event: 'dropped'` and the Variant C template, identical control flow.
 
-The injected text is enqueued as a **user-role** message (same role `texra.sendFollowUp` uses for typed-in follow-ups and Odyssey continuations).
+**`emitInquiryThreadUpdate`** is a thin wrapper around the existing event bus, defined in the same file:
 
-**Four state cases handled by `texra.sendFollowUp` → `AgentFollowUpPort.send` → outcome**:
+```typescript
+async function emitInquiryThreadUpdate(
+  threadId: ExternalInquiryThreadId,
+  extra: { resumeOutcome: 'sent' | 'queued' | 'resumed' | 'parent_finished' },
+): Promise<void> {
+  const summary = await getThreadSummary(threadId);
+  if (!summary) return;
+  eventBus.emit('inquiryThreadUpdated', { ...summary, ...extra });
+}
+```
 
-| Parent state                           | `outcome.status` | Effect                                                                                            |
-| -------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------- |
-| Live cycle parked at `ToolUseWaitNode` | `sent`           | Cycle wakes naturally on the next drain.                                                          |
-| Live cycle mid-turn                    | `queued`         | Drained at next `ToolUseWaitNode` boundary.                                                       |
-| `WAITING` (cycle exited, e.g. reload)  | `resumed`        | `texra.resumeAgent` reanimates from snapshot; text is queued for the resumed cycle.               |
-| Released / no snapshot                 | `no_session`     | Persist-only. UI badges thread `answered · parent finished` via the `inquiryThreadUpdated` event. |
+The Background Tasks UI consumes `resumeOutcome` to render the appropriate badge (e.g. `parent_finished` → `answered · parent finished`). All UI changes are silent — no toasts, no host-level dialogs.
+
+The injected text is enqueued as a **user-role** message (same role `sendFollowUp` uses for typed-in follow-ups and Odyssey continuations).
+
+**Four state cases**, end-to-end:
+
+| Parent state                           | `sendFollowUp` returns                           | Port call?        | Final outcome        | Effect                                                |
+| -------------------------------------- | ------------------------------------------------ | ----------------- | -------------------- | ----------------------------------------------------- |
+| Live cycle parked at `ToolUseWaitNode` | `{status: 'sent'}`                               | no                | `sent`               | Cycle wakes naturally.                                |
+| Live cycle mid-turn                    | `{status: 'queued', reason: 'resuming'}`         | no                | `queued`             | Drained at next wait boundary.                        |
+| `WAITING` (cycle exited, e.g. reload)  | `{status: 'queued', reason: 'waiting'}`          | `tryResumeStream` | `resumed` / `queued` | Snapshot reanimates cycle; text drains on first wait. |
+| Children still running                 | `{status: 'queued', reason: 'children_running'}` | `tryResumeStream` | `resumed` / `queued` | Same as WAITING.                                      |
+| Released / no snapshot                 | `{status: 'no_session'}`                         | no                | `archived`           | Persist-only. UI badges `answered · parent finished`. |
 
 Continuation text shape — three variants, deterministic templates.
 
@@ -586,7 +603,7 @@ Notes:
 Vitest (`src/test-kernel/`):
 
 - `externalInquiryStorage.vitest.ts`: open → answer round-trip; dropped path; legacy manifest migration; concurrent-write lock for the same thread.
-- `inquiryContinuation.vitest.ts`: continuation text shape (single-answer, partial-still-open, all-answered, dropped); parent-gone path returns `false` from `ToolUseFollowUpQueue.enqueue` and is a no-op.
+- `inquiryContinuation.vitest.ts`: continuation text shape (single-answer, partial-still-open, all-answered, dropped); `sendFollowUp` returning `sent`/`queued`/`no_session` maps to the right `InjectionOutcome`; `queued+waiting` triggers `AgentResumePort.tryResumeStream` (mock the port); `no_session` skips the port call and emits `parent_finished` on `inquiryThreadUpdated`.
 - `ExternalInquiryTool.vitest.ts`: `ask` returns `dispatched` and never awaits; re-dispatch on open thread errors; follow-up on `answered` thread reopens with parent-stream update; follow-up on `dropped` thread errors; `read` returns full transcript; `list` filters correctly across status (`open`/`answered`/`dropped`/`any`) and scope (`stream`/`all`).
 
 Mocha integration (`src/test/`):
@@ -600,25 +617,26 @@ Mocha integration (`src/test/`):
 
 ## 12. File-by-file
 
-| File                                                                              | Action                                                                                                                                                                                                 |
-| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/tools/inquiry/externalInquiryStorage.ts`                                     | Add `parentStreamId` (nullable), `status`, open-turn support (with `suggestSearch`/`attachFiles`/`context` persisted), draft field, list helpers; Zod union for legacy migration                       |
-| `src/tools/inquiry/ExternalInquiryTool.ts`                                        | Rename tool's `name` field `external_inquiry` → `inquiry`; return `dispatched` synchronously; delete pending-map + reject helpers; action handler delegates to storage + continuation                  |
-| `src/tools/inquiry/inquiryContinuation.ts`                                        | **New** — continuation-text builder + `platform().agentFollowUp.send` invocation                                                                                                                       |
-| `src/tools/inquiry/index.ts`                                                      | Drop reject exports                                                                                                                                                                                    |
-| `src/tools/registry.ts`                                                           | Rename registry key `external_inquiry` → `inquiry`                                                                                                                                                     |
-| `src/tools/approval/index.ts`                                                     | Drop inquiry reject calls in `cleanupApprovalsForStream` and `cleanupAllApprovals`                                                                                                                     |
-| `src/agent/core/flows/ToolUseCycleFlow.ts`                                        | Delete inquiry-specific concurrency carve-out (preserve `_duplicateCallIds`, the generic dedup guard)                                                                                                  |
-| `src/platform/platform.ts` + host wiring                                          | **New** `AgentFollowUpPort.send` port; VS Code host invokes `texra.sendFollowUp`                                                                                                                       |
-| `src/shared/schemas/inquiry.ts` (or wherever existing inquiry types live)         | Extend manifest schema (`parentStreamId` nullable, status, open-turn payload fields); new `ExternalInquiryThreadSummarySchema`; new `InquiryActionMessageSchema`; `inquiryThreadUpdated` event payload |
-| `packages/extension/resources/tool_use_agents/chat.yaml` (+ inheritors)           | Rename `external_inquiry` → `inquiry` in agent tool lists                                                                                                                                              |
-| `src/eventBus/ProgressEventBus.ts`                                                | Add `inquiryThreadUpdated` event                                                                                                                                                                       |
-| `packages/extension/src/progressView/frontend/components/BackgroundTasksPanel.ts` | Add INQUIRIES section parallel to SUBAGENTS/BASH                                                                                                                                                       |
-| `packages/extension/src/progressView/frontend/components/ExternalInquiryPanel.ts` | Transcript view for prior turns; draft persistence to manifest                                                                                                                                         |
-| `packages/extension/src/progressView/frontend/components/RequestPanels.ts`        | Inline inquiry render → compact "Open panel" card                                                                                                                                                      |
-| `packages/extension/src/progressView/frontend/contexts/streamContexts.ts`         | Add `inquiryThreadContext`                                                                                                                                                                             |
-| `packages/extension/src/progressView/frontend/slices/inquiryThreadsSlice.ts`      | **New** — subscribes to `inquiryThreadUpdated`, hydrates on first load                                                                                                                                 |
-| `packages/extension/src/progressView/ProgressViewProvider.ts`                     | Hydrate `listOpenThreads()` on activation; wire events                                                                                                                                                 |
+| File                                                                                         | Action                                                                                                                                                                                                                                                                                                                                                        |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/tools/inquiry/externalInquiryStorage.ts`                                                | Add `parentStreamId` (nullable), `status`, open-turn support (with `suggestSearch`/`attachFiles`/`context` persisted), draft field, list helpers; Zod union for legacy migration                                                                                                                                                                              |
+| `src/tools/inquiry/ExternalInquiryTool.ts`                                                   | Rename tool's `name` field `external_inquiry` → `inquiry`; return `dispatched` synchronously; delete pending-map + reject helpers; action handler delegates to storage + continuation                                                                                                                                                                         |
+| `src/tools/inquiry/inquiryContinuation.ts`                                                   | **New** — continuation-text builder + `platform().agentFollowUp.send` invocation                                                                                                                                                                                                                                                                              |
+| `src/tools/inquiry/index.ts`                                                                 | Drop reject exports                                                                                                                                                                                                                                                                                                                                           |
+| `src/tools/registry.ts`                                                                      | Rename registry key `external_inquiry` → `inquiry`                                                                                                                                                                                                                                                                                                            |
+| `src/tools/approval/index.ts`                                                                | Drop inquiry reject calls in `cleanupApprovalsForStream` and `cleanupAllApprovals`                                                                                                                                                                                                                                                                            |
+| `src/agent/core/flows/ToolUseCycleFlow.ts`                                                   | Delete inquiry-specific concurrency carve-out (preserve `_duplicateCallIds`, the generic dedup guard)                                                                                                                                                                                                                                                         |
+| `src/platform/platform.ts` + host wiring                                                     | **New** `AgentResumePort.tryResumeStream` port; VS Code host calls into the shared snapshot-driven resume helper                                                                                                                                                                                                                                              |
+| `packages/extension/src/commands/agent/resumeFromSnapshot.ts`                                | **New** — extract `tryAutoResume` from `followUpCommand.ts` so the new port and the existing `texra.sendFollowUp` handler share one implementation                                                                                                                                                                                                            |
+| `src/shared/schemas/inquiry.ts` (new module, re-exported from `src/shared/schemas/index.ts`) | Extend manifest schema (`parentStreamId` nullable, status, open-turn payload fields); new `ExternalInquiryThreadSummarySchema`; new `InquiryActionMessageSchema`; `inquiryThreadUpdated` event payload. Existing `ExternalInquiryThreadIdSchema` / `ExternalInquirySessionLinksSchema` (currently imported from `@shared/schemas`) move here for co-location. |
+| `packages/extension/resources/tool_use_agents/chat.yaml` (+ inheritors)                      | Rename `external_inquiry` → `inquiry` in agent tool lists                                                                                                                                                                                                                                                                                                     |
+| `src/eventBus/ProgressEventBus.ts`                                                           | Add `inquiryThreadUpdated` event                                                                                                                                                                                                                                                                                                                              |
+| `packages/extension/src/progressView/frontend/components/BackgroundTasksPanel.ts`            | Add INQUIRIES section parallel to SUBAGENTS/BASH                                                                                                                                                                                                                                                                                                              |
+| `packages/extension/src/progressView/frontend/components/ExternalInquiryPanel.ts`            | Transcript view for prior turns; draft persistence to manifest                                                                                                                                                                                                                                                                                                |
+| `packages/extension/src/progressView/frontend/components/RequestPanels.ts`                   | Inline inquiry render → compact "Open panel" card                                                                                                                                                                                                                                                                                                             |
+| `packages/extension/src/progressView/frontend/contexts/streamContexts.ts`                    | Add `inquiryThreadContext`                                                                                                                                                                                                                                                                                                                                    |
+| `packages/extension/src/progressView/frontend/slices/inquiryThreadsSlice.ts`                 | **New** — subscribes to `inquiryThreadUpdated`, hydrates on first load                                                                                                                                                                                                                                                                                        |
+| `packages/extension/src/progressView/ProgressViewProvider.ts`                                | Hydrate `listOpenThreads()` on activation; wire events                                                                                                                                                                                                                                                                                                        |
 
 ## 13. Subcommand surface (endpoint tool shape)
 
@@ -640,7 +658,6 @@ Each command and field carries a `.describe()` string so the model has enough gu
 const AskSchema = z.object({
   command: z
     .literal('ask')
-    .prefault('ask')
     .describe(
       'Dispatch a question to the user (who will consult an external AI model). ' +
         'Returns immediately with {status: "dispatched", thread_id}. ' +
@@ -722,7 +739,7 @@ const ExternalInquiryInputSchema = z.discriminatedUnion('command', [
 
 ### 13.3 Why these three
 
-- **`ask`** — the dispatch path, covering both new threads (omit `thread_id`) and follow-ups (pass `thread_id`). Default via `.prefault('ask')` so existing tool calls that omit `command` keep working without schema change. See §13.4 for follow-up semantics.
+- **`ask`** — the dispatch path, covering both new threads (omit `thread_id`) and follow-ups (pass `thread_id`). The model must include `command: 'ask'` explicitly. `.prefault` does not work with `z.discriminatedUnion` (Zod reads the raw discriminator value before any per-branch transforms or defaults run), so there is no implicit-default backward-compat path; agents transition to the new shape via the tool description and registry refresh. See §13.4 for follow-up semantics.
 - **`read`** — recovers full Q/A bodies when the continuation message's truncation (Q ≤ 400, A ≤ 2000) would otherwise lose information. Mostly mitigates the truncation concern in §14.
 - **`list`** — lets the model self-orient when it has been woken multiple times across long-running work or after a long pause. `status='open'` is the most common need and the default; `status='answered'` recovers earlier-resolved threads (forgotten thread_id, cross-stream review); `status='dropped'` surfaces user-rejected inquiries the agent may want to retry differently; `status='any'` gives the full picture.
 
