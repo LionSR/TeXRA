@@ -258,8 +258,6 @@ export class MainApp extends MainAppBase {
       this.handleSetMultipleFiles(data),
     [MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES]: (data) =>
       this.handleSetMultipleFiles(data),
-    [MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES]: () =>
-      this.handleSetDefaultOutputFiles(),
     [MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE]: (data) =>
       this.handleAddMediaFile(data),
 
@@ -471,14 +469,6 @@ export class MainApp extends MainAppBase {
       MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
     ];
     commands.forEach((command) => postMessage(command));
-
-    const agent =
-      this.sessionType.get() === SESSION_TYPES.TOOL_USE
-        ? this.toolUseAgent.get()
-        : this.workflowAgent.get();
-    if (agent) {
-      postMessage(MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES, { agent });
-    }
   }
 
   private updateMultiFiles(listId: keyof MultiFiles, files: string[]): void {
@@ -669,10 +659,6 @@ export class MainApp extends MainAppBase {
       this.outputFilesActive.set(false);
     }
     this.saveState();
-  }
-
-  private handleSetDefaultOutputFiles(): void {
-    /* Output order is derived from input files or agent defaults at execution time. */
   }
 
   private handleAddMediaFile(
@@ -1089,11 +1075,6 @@ export class MainApp extends MainAppBase {
     this.refreshInstructionPlaceholder(false);
     this.saveState();
     postMessage(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER);
-    if (value) {
-      postMessage(MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES, {
-        agent: value,
-      });
-    }
   }
 
   private handleModelChange(value: string): void {
@@ -1305,8 +1286,8 @@ export class MainApp extends MainAppBase {
     }
 
     const inputFiles = this.multiFiles.get().inputFiles.filter(Boolean);
-    const outputFiles = inputFiles.length > 1 ? inputFiles : [];
-    const useMultiple = outputFiles.length > 0;
+    const additionalInputFiles = inputFiles.slice(1);
+    const useMultiple = additionalInputFiles.length > 0;
     const command = this.getPackCleanCommand(action, useMultiple);
 
     postMessage(command, {
@@ -1316,12 +1297,12 @@ export class MainApp extends MainAppBase {
           ? this.toolUseAgent.get()
           : this.workflowAgent.get(),
       model: this.model.get(),
-      outputFiles: useMultiple ? outputFiles : undefined,
+      outputFiles: useMultiple ? additionalInputFiles : undefined,
     });
 
     const actionLabel = capitalize(action);
     const summary = useMultiple
-      ? `${actionLabel}ing multiple files: ${outputFiles.join(', ')}`
+      ? `${actionLabel}ing multiple files: ${inputFiles.join(', ')}`
       : `${actionLabel}ing single file: ${primaryInput}`;
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, { text: summary });
   }
@@ -1450,13 +1431,13 @@ export class MainApp extends MainAppBase {
   // delegate to the existing handler methods.
   // =========================================================================
 
-  private handleComponentGetCurrentFile(
+  private handleLatexdiffGetCurrentFile(
     e: CustomEvent<FileActionDetail>,
   ): void {
     this.handleGetCurrentFile(e.detail.type);
   }
 
-  private handleComponentEmptyFile(e: CustomEvent<FileActionDetail>): void {
+  private handleLatexdiffEmptyFile(e: CustomEvent<FileActionDetail>): void {
     this.handleEmptyFile(e.detail.type);
   }
 
@@ -1937,8 +1918,8 @@ export class MainApp extends MainAppBase {
                 @latexdiffs-action=${this.handleComponentLatexDiffsAction}
                 @base-file-change=${this.handleComponentBaseFileChange}
                 @edited-file-change=${this.handleComponentEditedFileChange}
-                @get-current-file=${this.handleComponentGetCurrentFile}
-                @empty-file=${this.handleComponentEmptyFile}
+                @get-current-file=${this.handleLatexdiffGetCurrentFile}
+                @empty-file=${this.handleLatexdiffEmptyFile}
                 @refresh-edited-files=${this.handleComponentRefreshEditedFiles}
                 @commit-change=${this.handleComponentCommitChange}
                 @refresh-commits=${this.handleComponentRefreshCommits}
