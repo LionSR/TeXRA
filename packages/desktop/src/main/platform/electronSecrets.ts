@@ -155,46 +155,8 @@ export class ElectronSecrets implements PlatformSecrets {
   }
 }
 
-/**
- * Force the OS keychain prompt to appear at app launch (before the renderer
- * loads) by performing one harmless `safeStorage.encryptString` call. macOS
- * (and Linux keyring backends) trigger the "@texra/desktop wants to use your
- * confidential information" dialog on the first encrypt/decrypt; running it
- * here turns that into a deterministic startup event instead of a surprise
- * during user interaction. Subsequent calls reuse the unlocked key without
- * prompting.
- *
- * Safe to call multiple times — the first invocation does the work and the
- * rest are no-ops. Returns `true` when the prewarm encrypt succeeded; returns
- * `false` when `safeStorage.isEncryptionAvailable()` is false (e.g., Linux
- * without a configured keyring) or when the encrypt itself threw (e.g., the
- * user denied the OS keychain prompt). The latch is only set on success so
- * the caller can retry on a subsequent boot once permissions change.
- */
-let keychainPrewarmed = false;
-export async function prewarmElectronKeychain(): Promise<boolean> {
-  if (keychainPrewarmed) return true;
-  if (isKeychainDisabled()) {
-    warnKeychainDisabledOnce();
-    return false;
-  }
-  if (!safeStorage.isEncryptionAvailable()) return false;
-  try {
-    safeStorage.encryptString('texra-keychain-prewarm');
-    keychainPrewarmed = true;
-    return true;
-  } catch (error) {
-    console.warn(
-      `prewarmElectronKeychain: encryptString failed; continuing without prewarm. ` +
-        `Cause: ${toErrorMessage(error)}`,
-    );
-    return false;
-  }
-}
-
 /** Test-only: reset latched module-level state so unit tests can re-exercise the path. */
 export function __resetKeychainStateForTests(): void {
-  keychainPrewarmed = false;
   warnedAboutKeychainDisabled = false;
 }
 
