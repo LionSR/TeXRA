@@ -366,6 +366,15 @@ export const SyncStreamContentMessageSchema = z.object({
   // Toggle bypass state (hydrated on tab switch so toggles display correctly)
   toolEditBypass: z.boolean().optional(),
   superYoloBypass: z.boolean().optional(),
+  // Whether an Odyssey is active or paused on this stream (drives the
+  // header button's .is-active treatment).
+  odysseyActive: z.boolean().optional(),
+});
+
+const OdysseyActiveUpdatedMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.ODYSSEY_ACTIVE_UPDATED),
+  stream: StreamTabIdSchema,
+  active: z.boolean(),
 });
 
 export const ProgressSetThemeMessageSchema = z.object({
@@ -410,6 +419,7 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     SyncStreamContentMessageSchema,
     UpdatePermissionMessageSchema,
     UpdateBypassMessageSchema,
+    OdysseyActiveUpdatedMessageSchema,
     UpdateFollowUpTextMessageSchema,
     UpdateRecordingMessageSchema,
     SetPlacementMessageSchema,

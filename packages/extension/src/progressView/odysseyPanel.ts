@@ -9,12 +9,27 @@
 import * as vscode from 'vscode';
 
 import { platform } from '@platform/platform';
+import { buildObjectiveUpdatedFollowUp } from '@agent/odyssey';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { StreamTabId } from '@shared/schemas';
 import {
   ODYSSEY_FEATURE_FLAG_KEY,
   OdysseyStore,
   type Odyssey,
 } from '@tools/odyssey';
+
+import type { WebviewUpdater } from './managers/WebviewUpdater';
+
+function broadcastActive(
+  webviewUpdater: WebviewUpdater | null,
+  streamId: StreamTabId,
+): void {
+  if (!webviewUpdater) return;
+  const odyssey = OdysseyStore.getForStream(streamId);
+  const active: boolean =
+    odyssey?.status === 'active' || odyssey?.status === 'paused';
+  webviewUpdater.updateOdysseyActive(streamId, active);
+}
 
 const OBJECTIVE_PLACEHOLDER =
   'Complete X until Y holds. Be specific about the stopping condition.';
@@ -36,11 +51,15 @@ async function promptForObjective(
   });
 }
 
-async function startNewOdyssey(streamId: StreamTabId): Promise<void> {
+async function startNewOdyssey(
+  streamId: StreamTabId,
+  webviewUpdater: WebviewUpdater | null,
+): Promise<void> {
   const objective = await promptForObjective();
   if (!objective) return;
   try {
     await OdysseyStore.start(streamId, objective);
+    broadcastActive(webviewUpdater, streamId);
     await vscode.window.showInformationMessage(
       'Odyssey started. The agent will keep working toward this objective ' +
         'until it calls odyssey(complete) or you abandon it.',
@@ -55,6 +74,7 @@ async function startNewOdyssey(streamId: StreamTabId): Promise<void> {
 async function manageActiveOdyssey(
   streamId: StreamTabId,
   odyssey: Odyssey,
+  webviewUpdater: WebviewUpdater | null,
 ): Promise<void> {
   const actions: Array<vscode.QuickPickItem & { id: string }> =
     odyssey.status === 'active'
@@ -103,17 +123,28 @@ async function manageActiveOdyssey(
     case 'edit': {
       const next = await promptForObjective(odyssey.objective);
       if (!next) return;
-      await OdysseyStore.editObjective(streamId, next);
+      const updated = await OdysseyStore.editObjective(streamId, next);
+      // Inject objective_updated prompt as the next followUp so the model
+      // re-orients on the next turn.
+      try {
+        const text = await buildObjectiveUpdatedFollowUp(updated);
+        ToolUseFollowUpQueue.enqueue(streamId, text);
+      } catch {
+        /* If queue is unavailable the user can resend; not fatal. */
+      }
+      broadcastActive(webviewUpdater, streamId);
       await vscode.window.showInformationMessage('Odyssey objective updated.');
       return;
     }
     case 'pause': {
       await OdysseyStore.setStatus(streamId, 'paused', 'paused by user');
+      broadcastActive(webviewUpdater, streamId);
       await vscode.window.showInformationMessage('Odyssey paused.');
       return;
     }
     case 'resume': {
       await OdysseyStore.setStatus(streamId, 'active', 'resumed by user');
+      broadcastActive(webviewUpdater, streamId);
       await vscode.window.showInformationMessage('Odyssey resumed.');
       return;
     }
@@ -125,6 +156,7 @@ async function manageActiveOdyssey(
       );
       if (confirm !== 'Abandon') return;
       await OdysseyStore.setStatus(streamId, 'abandoned', 'abandoned by user');
+      broadcastActive(webviewUpdater, streamId);
       await vscode.window.showInformationMessage('Odyssey abandoned.');
       return;
     }
@@ -133,6 +165,7 @@ async function manageActiveOdyssey(
       if (!objective) return;
       await OdysseyStore.forget(streamId);
       await OdysseyStore.start(streamId, objective);
+      broadcastActive(webviewUpdater, streamId);
       await vscode.window.showInformationMessage('New Odyssey started.');
       return;
     }
@@ -141,6 +174,7 @@ async function manageActiveOdyssey(
 
 export async function handleOpenOdysseyPanel(
   streamId: StreamTabId,
+  webviewUpdater: WebviewUpdater | null = null,
 ): Promise<void> {
   if (!platform().config.get<boolean>(ODYSSEY_FEATURE_FLAG_KEY, false)) {
     await vscode.window.showInformationMessage(
@@ -151,8 +185,8 @@ export async function handleOpenOdysseyPanel(
   }
   const existing = OdysseyStore.getForStream(streamId);
   if (!existing) {
-    await startNewOdyssey(streamId);
+    await startNewOdyssey(streamId, webviewUpdater);
     return;
   }
-  await manageActiveOdyssey(streamId, existing);
+  await manageActiveOdyssey(streamId, existing, webviewUpdater);
 }

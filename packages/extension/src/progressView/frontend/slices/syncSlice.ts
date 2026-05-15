@@ -86,6 +86,8 @@ export const syncHandlers: HandlerRegistry = {
               d.toolEditBypass = data.toolEditBypass;
             if (data.superYoloBypass !== undefined)
               d.superYoloBypass = data.superYoloBypass;
+            if (data.odysseyActive !== undefined)
+              d.odysseyActive = data.odysseyActive;
           }
 
           if (data.conversationProgress) {
