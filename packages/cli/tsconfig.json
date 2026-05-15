@@ -5,9 +5,10 @@
     "moduleResolution": "bundler",
     "rootDir": "../..",
     "outDir": "dist",
+    "jsx": "react-jsx",
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "../../src/**/*.d.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "../../src/**/*.d.ts"],
   "exclude": []
 }
