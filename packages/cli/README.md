@@ -27,8 +27,10 @@ checkout:
 ```sh
 corepack pnpm install
 corepack pnpm --filter @texra/cli build
-corepack pnpm setup    # one-time; ensures $PNPM_HOME/bin is on PATH
-ln -sf "$(pwd)/packages/cli/dist/bin/texra.js" "$PNPM_HOME/bin/texra"
+corepack pnpm setup    # one-time; then restart your shell or source its rc file
+PNPM_BIN="$(corepack pnpm bin -g)"
+mkdir -p "$PNPM_BIN"
+ln -sf "$(pwd)/packages/cli/dist/bin/texra.js" "$PNPM_BIN/texra"
 texra --help
 ```
 
@@ -46,7 +48,7 @@ valid.
 To remove the linked command:
 
 ```sh
-rm "$PNPM_HOME/bin/texra"
+rm "$(corepack pnpm bin -g)/texra"
 ```
 
 ## Run locally

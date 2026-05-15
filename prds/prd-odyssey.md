@@ -1,22 +1,21 @@
 # PRD: Odyssey — Autonomous Continuation Mode
 
-**Status:** Draft (v0.2)
+**Status:** Draft (v0.3)
 **Owner:** TBD
 **Date:** 2026-05-14
-**Branch:** `feature/odyssey`
 
 ## 1. Summary
 
-Add **Odyssey** to TeXRA — a per-conversation persistent objective that lets a tool-use agent autonomously continue across many turns until a verifiable stopping condition is met. Inspired by Codex CLI's experimental `/goal` feature ([docs](https://developers.openai.com/codex/use-cases/follow-goals)).
+Add **Odyssey** to TeXRA — a per-conversation persistent objective that lets a tool-use agent autonomously continue across many turns until a verifiable stopping condition is met or a safety checkpoint is reached. Inspired by Codex CLI's experimental `/goal` feature ([docs](https://developers.openai.com/codex/use-cases/follow-goals)).
 
 The user sets an Odyssey from the stream header. While active, after every tool-use turn ends idle, TeXRA injects a hidden continuation message that re-prompts the agent to verify completion against current external state (filesystem, command output, tests) and either keep working or call `odyssey { command: 'complete' }`. The model self-terminates when the objective is met.
 
-No new runtime, no polling loop, no background worker. The mechanism is a small injection around `session.waitForFollowUp` in `ToolUseWaitNode.exec()`.
+No new runtime, no polling loop, no background worker. The mechanism is a small injection before `session.waitForFollowUp` in `ToolUseWaitNode.exec()`.
 
 ## 2. Goals
 
 - One persistent objective per conversation that survives across tool-use turns.
-- Model can self-direct work for many turns without user input until the stopping condition holds.
+- Model can self-direct work for many turns without user input until the stopping condition holds or a configured continuation cap is reached.
 - User retains full control: start, pause, resume, abandon, and edit-objective from the UI at any time.
 - Zero new infrastructure: reuse the existing tool-use cycle, workspaceSM, settings webview tabs, and stream-header toolbar patterns.
 - Feature-gated and opt-in (`texra.experimental.odyssey.enabled`); defaults off; ships as experimental.
@@ -25,7 +24,7 @@ No new runtime, no polling loop, no background worker. The mechanism is a small 
 
 - **No workflow-agent support.** Odyssey only applies to tool-use agents (orchestrator, devise, search, generic chat). Workflow agents (correct, polish, …) run once and emit output; "continuation" is meaningless.
 - **No multi-agent orchestrator-level odyssey.** If a goal-bearing tool-use agent is itself a subagent of an orchestrator, the parent orchestrator owns continuation; the subagent's Odyssey is suspended for that subtree. Surfaces as a hard guard, not a feature.
-- **No token budget.** Codex's public docs do not surface a budget; the internal one is purely accounting. We track tokens used for display only — no cap, no `BudgetLimited` status.
+- **No user-visible token budget.** Codex's public docs do not surface one. We track tokens used for display, but v1 uses a simpler operational stop: a maximum continuation count, after which Odyssey pauses and asks the user whether to continue.
 - **No slash command on extension/desktop.** Entry is the stream-header button and the Settings → Odyssey tab. (CLI host may add `/odyssey` later; out of scope here.)
 - **No model-driven objective edits.** Codex restricts `update_goal` to `status='complete'` for the same reason: the model must not drift the target. The user edits objectives via the OdysseyTab.
 
@@ -34,15 +33,15 @@ No new runtime, no polling loop, no background worker. The mechanism is a small 
 The mechanism is mundane. Every "long-running" turn is many short turns chained:
 
 1. A tool-use turn ends (model emitted final response, no more tool calls).
-2. The runtime checks: is there an active goal? Is the user idle (no queued input)?
+2. The runtime checks: is there an active goal? Is the user idle (no queued input)? Has the continuation cap not been reached?
 3. If yes, the runtime synthesizes a hidden user message:
    > `<goal_context>` Your goal is still: `<objective>`. Verify against the current filesystem/command output — not your memory. Call `update_goal(complete)` if done, else keep working. `</goal_context>`
 4. That message is appended as the next turn's input, and the agent runs again — exactly like the user had said "keep going."
-5. The model either calls `update_goal(complete)` (loop exits) or keeps working (back to step 1).
+5. The model either calls `update_goal(complete)` (loop exits), keeps working (back to step 1), or reaches the continuation cap, at which point the loop pauses for user confirmation.
 
 The model is the only thing that knows when the work is _actually_ done, so the model has to be given a tool that signals "stop the loop." Everything else (status display, pause/resume, accounting) is bookkeeping around that one loop.
 
-TeXRA's `ToolUseWaitNode.post()` is the moral equivalent of Codex's idle hook — it's the function that decides whether to loop back to `ToolUseCycleNode` or exit. That's the entire integration point.
+TeXRA's `ToolUseWaitNode.exec()` is the correct idle hook because it runs before the blocking follow-up wait. `ToolUseWaitNode.post()` remains a simple mapper from the wait result to the next flow transition.
 
 ## 5. Architecture
 
@@ -77,16 +76,20 @@ export const OdysseySchema = z.object({
   streamId: z.string(), // stream-scoped — matches ToolUseWaitNode.services.streamId
   objective: z.string().min(1),
   status: OdysseyStatusSchema,
-  tokensUsed: z.int().nonnegative().default(0),
-  timeUsedMs: z.int().nonnegative().default(0),
+  tokensUsed: z.int().nonnegative().prefault(0),
+  timeUsedMs: z.int().nonnegative().prefault(0),
+  continuationCount: z.int().nonnegative().prefault(0),
+  maxContinuations: z.int().positive().prefault(50),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   completedReason: z.string().nullish(), // populated by tool's 'complete'
-  history: z.array(OdysseyEventSchema).default([]),
+  history: z.array(OdysseyEventSchema).prefault([]),
 });
 ```
 
 One Odyssey per stream. Persisted via `platform().workspaceState` (host-neutral `StateStore`, see `src/platform/interfaces/state.ts`) under `odysseys:byStream:<streamId>` plus an index `odysseys:index` for the OdysseyTab list view. The same store is backed by VS Code's Memento in the extension host, by an in-memory store under test, and by a file-backed store in CLI/desktop — no `vscode` import in this code path.
+
+The store enforces bounded state growth. `recordEvent` trims `history` to the most recent 200 events after every write. Each injected continuation increments `continuationCount`; if it reaches `maxContinuations`, the store pauses the Odyssey and records a cap-reached event instead of returning another continuation.
 
 ### 5.2 Tool surface
 
@@ -102,12 +105,12 @@ const OdysseyToolInputSchema = z.strictObject({
 });
 ```
 
-| Command    | Use                                                                       | Effect                                                        |
-| ---------- | ------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `view`     | Read situational awareness (objective, status, history, time/tokens used) | No mutation; returns formatted state                          |
-| `start`    | Open an odyssey from conversation when user requests autonomous work      | Creates with status `active`. Fails if one is already active. |
-| `pause`    | Self-pause when blocked and needing user input                            | Status → `paused`. Continuation loop stops.                   |
-| `complete` | Signal objective met                                                      | Status → `complete`. Stores `reason` as audit sentence.       |
+| Command    | Use                                                                       | Effect                                                                                        |
+| ---------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `view`     | Read situational awareness (objective, status, history, time/tokens used) | No mutation; returns formatted state                                                          |
+| `start`    | Open an odyssey from conversation when user requests autonomous work      | Creates with status `active`. Fails if any nonterminal Odyssey already exists for the stream. |
+| `pause`    | Self-pause when blocked and needing user input                            | Status → `paused`. Continuation loop stops.                                                   |
+| `complete` | Signal objective met                                                      | Status → `complete`. Stores `reason` as audit sentence.                                       |
 
 Commands deliberately omitted: `update_objective` (model must not drift the target), `resume` (only the user can clear a block), `abandon` (destructive, user-only).
 
@@ -161,6 +164,10 @@ async function maybeBuildOdysseyContinuation(args: {
   if (!platform().config.get('texra.experimental.odyssey.enabled', false)) return null;
   const odyssey = await OdysseyStore.getForStream(args.streamId);
   if (odyssey?.status !== 'active') return null;
+  if (odyssey.continuationCount >= odyssey.maxContinuations) {
+    await OdysseyStore.pauseForContinuationCap(odyssey.odysseyId);
+    return null;
+  }
   await OdysseyStore.recordEvent(odyssey.odysseyId, 'continuation_injected');
   return buildContinuationFollowUp(odyssey);
 }
@@ -253,7 +260,7 @@ Hosts that don't surface the experimental flag at all simply have it default to 
 Odyssey must work in three hosts: VS Code extension, Electron desktop, and `@texra/cli` (the CLI). The split is:
 
 | Concern                       | Host-neutral (kernel, all three hosts)                                                                                                                                                                                                                        | Host-specific (per host)                                                                                                                                                                                                                                              |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------ | ------- | ----------------------------------------------------------------------------------------------- |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Schema (`OdysseySchema`)      | `src/tools/odyssey/odysseyMeta.ts`                                                                                                                                                                                                                            | —                                                                                                                                                                                                                                                                     |
 | Store (`OdysseyStore`)        | `src/tools/odyssey/odysseyStore.ts` — uses `platform().workspaceState`                                                                                                                                                                                        | Backing implementation lives in each host's platform-defaults; the kernel never imports it.                                                                                                                                                                           |
 | Tool (`OdysseyTool`)          | `src/tools/odyssey/OdysseyTool.ts`                                                                                                                                                                                                                            | —                                                                                                                                                                                                                                                                     |
@@ -264,7 +271,7 @@ Odyssey must work in three hosts: VS Code extension, Electron desktop, and `@tex
 | Stream-header button (PR 2)   | —                                                                                                                                                                                                                                                             | Extension + desktop only (`packages/extension/src/progressView/frontend/components/StreamHeader.ts`; desktop shares the webview).                                                                                                                                     |
 | Settings → Odyssey tab (PR 2) | —                                                                                                                                                                                                                                                             | Extension + desktop only.                                                                                                                                                                                                                                             |
 | Progress board entry (PR 2)   | —                                                                                                                                                                                                                                                             | Extension + desktop only.                                                                                                                                                                                                                                             |
-| CLI control surface           | —                                                                                                                                                                                                                                                             | `texra odyssey start                                                                                                                                                                                                                                                  | pause | resume | abandon | status`(Phase 2). Stdout for`status`, exit codes for the others. Same IPC schema, same handler. |
+| CLI control surface           | —                                                                                                                                                                                                                                                             | `texra odyssey start`, `pause`, `resume`, `abandon`, and `status` subcommands (Phase 2). `status` writes to stdout; mutating commands use exit codes and stderr diagnostics. Same IPC schema, same handler.                                                           |
 
 Two PR-1 invariants follow from this split:
 
@@ -309,10 +316,14 @@ packages/extension/src/settingsView/
   frontend/components/odyssey/OdysseyEditor.ts         NEW   (PR 2)
   utils/odysseyFileSystem.ts                           NEW   (PR 2)
   SettingsViewMessageHandler.ts                        MODIFY (PR 2)
+  frontend/SettingsApp.ts                              MODIFY (PR 2)
+  frontend/tabs/index.ts                               MODIFY (PR 2)
 
 packages/extension/src/progressView/frontend/components/
   StreamHeader.ts                     MODIFY (PR 2)
   constants.ts                        MODIFY (PR 2 — ELEMENT_IDS.ODYSSEY_TOGGLE_BTN)
+
+src/common/webview/commands.ts        MODIFY (PR 2 — settings tab command/schema)
 
 packages/extension/package.json       MODIFY (contributes.configuration entry)
 ```
@@ -347,6 +358,7 @@ packages/desktop/                     no new files; reuses the extension webview
 | Risk                                                             | Mitigation                                                                                                                                                                                                             |
 | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Model drifts away from the stated objective over many turns      | Continuation prompt insists on verifying against _current external state_ (Codex's own guardrail). Model has no tool to edit the objective.                                                                            |
+| Model never calls `complete`                                     | `maxContinuations` defaults to 50 and pauses the Odyssey when reached. The user can resume explicitly.                                                                                                                 |
 | Token accounting becomes stale and the badge shows wrong numbers | TeXRA already emits usage per response; apply to odyssey record at the same time as the existing usage event. Off by ≤1 turn in worst case — acceptable for an informational chip.                                     |
 | Multi-agent orchestration interferes with continuation           | Hard guard in the wait-node hook: skip continuation injection when `this.services.isSubagent` is true (already checked at `ToolUseWaitNode.ts:56` for a different concern). The parent orchestrator owns continuation. |
 | User clears a conversation but the Odyssey record lingers        | Subscribe to the existing conversation-delete event in PR 2; mark odyssey `abandoned` and drop from index.                                                                                                             |
@@ -355,12 +367,11 @@ packages/desktop/                     no new files; reuses the extension webview
 ## 9. Open questions
 
 - Should `start` from the model auto-activate, or require user confirmation? Codex auto-activates. PR 1 ships auto-activate; revisit if it surprises users.
-- Maximum history length for the `events` array? Cap at 200 events per Odyssey, oldest dropped on overflow.
+- Should the default `maxContinuations` be 50, or should it be lower for the first experimental release?
 - CLI control surface (Phase 2) — see §5.8 for the high-level shape. The `texra odyssey` subcommands are a separate PR after PR 2; until then, CLI users get the tool-only flow (model can `start`, `pause`, `complete` from inside any tool-use agent run).
 
 ## 10. References
 
 - Codex `/goal` user-facing docs: https://developers.openai.com/codex/use-cases/follow-goals
-- Codex internals scout (this conversation): turn-end idle hook at `codex-rs/core/src/tasks/mod.rs:802`, continuation candidate check at `codex-rs/core/src/goals.rs:1301`, ThreadGoal schema at `codex-rs/state/src/model/thread_goal.rs:52`.
 - TeXRA tool pattern reference: `src/tools/memory/MemoryTool.ts` (single tool with `command` enum discriminator).
 - TeXRA wait-node integration point: `src/agent/implementations/flows/tooluse/nodes/ToolUseWaitNode.ts:39-114`.

@@ -3,11 +3,10 @@ import { JSDOM } from 'jsdom';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports - progress view component types
-import type { PermissionState } from '@progressView/frontend/components/PermissionCard';
-import type { UserQuestionPanel } from '@progressView/frontend/components/UserQuestionPanel';
+import type { WorktreeChip } from '@progressView/frontend/components/WorktreeChip';
 
-// Local imports - shared constants
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+// Local imports - shared schemas
+import type { WorktreeInfo } from '@shared/schemas';
 
 // Local imports - test utilities
 import { installAttachInternalsFallback } from '../settings/litComponentTestUtils';
@@ -33,7 +32,7 @@ class NoopResizeObserver implements ResizeObserver {
   unobserve(): void {}
 }
 
-function installDom(): JSDOM {
+function installDom(): void {
   const dom = new JSDOM('<!doctype html><body></body>', {
     url: 'http://localhost',
   });
@@ -54,7 +53,6 @@ function installDom(): JSDOM {
       typeof installAttachInternalsFallback
     >[0],
   );
-  return dom;
 }
 
 function restoreDom(): void {
@@ -76,29 +74,9 @@ function restoreDom(): void {
   }
 }
 
-function createPermission(): PermissionState {
-  return {
-    kind: PERMISSION_KIND.USER_QUESTION,
-    data: {
-      requestId: 'question-1',
-      allowBypass: false,
-      streamId: 'stream-1',
-      questions: [
-        {
-          question: 'Choose an answer',
-          options: [{ label: 'A' }, { label: 'B' }],
-          allowFreeText: true,
-        },
-      ],
-    },
-  };
-}
-
-async function mountPanel(): Promise<UserQuestionPanel> {
-  const element = document.createElement(
-    'user-question-panel',
-  ) as UserQuestionPanel;
-  element.permission = createPermission();
+async function mountChip(info: WorktreeInfo): Promise<WorktreeChip> {
+  const element = document.createElement('worktree-chip') as WorktreeChip;
+  element.info = info;
   document.body.append(element);
   await element.updateComplete;
   return element;
@@ -106,7 +84,7 @@ async function mountPanel(): Promise<UserQuestionPanel> {
 
 beforeAll(async () => {
   installDom();
-  await import('@progressView/frontend/components/UserQuestionPanel');
+  await import('@progressView/frontend/components/WorktreeChip');
 });
 
 afterEach(() => {
@@ -117,33 +95,25 @@ afterAll(() => {
   restoreDom();
 });
 
-describe('user-question-panel', () => {
-  it('does not emit inherited approve action while rejection feedback is open', async () => {
-    const element = await mountPanel();
-    const actions: string[] = [];
-    element.addEventListener('permission-action', (event) => {
-      actions.push((event as CustomEvent<{ action: string }>).detail.action);
+describe('worktree-chip', () => {
+  it('renders a working-directory fallback when git metadata is absent', async () => {
+    const element = await mountChip({
+      workingDirectory: '/tmp/texra/issue-4018',
     });
 
-    expect(element.handleKeyboardShortcut('n')).toBe(true);
-    await element.updateComplete;
-
-    expect(element.handleKeyboardShortcut('y')).toBe(false);
-    expect(actions).toEqual([]);
+    expect(element.shadowRoot?.textContent).toContain('issue-4018');
   });
 
-  it('does not submit an empty answer set', async () => {
-    const element = await mountPanel();
-    const actions: string[] = [];
-    element.addEventListener('permission-action', (event) => {
-      actions.push((event as CustomEvent<{ action: string }>).detail.action);
+  it('exposes dirty state to assistive technology', async () => {
+    const element = await mountChip({
+      workingDirectory: '/tmp/texra/issue-4018',
+      branch: 'issue-4018',
+      dirty: true,
     });
 
-    const button = element.shadowRoot?.querySelector(
-      'wa-button[data-action="submit"]',
-    ) as HTMLElement & { disabled?: boolean };
-    expect(button?.disabled).toBe(true);
-    expect(element.handleKeyboardShortcut('y')).toBe(true);
-    expect(actions).toEqual([]);
+    const dirty = element.shadowRoot?.querySelector('.dirty-dot');
+    expect(dirty?.getAttribute('role')).toBe('img');
+    expect(dirty?.getAttribute('aria-label')).toBe('uncommitted changes');
+    expect(element.shadowRoot?.textContent).toContain('uncommitted changes');
   });
 });
