@@ -31,10 +31,8 @@ prompts:
     CRITICAL PRINCIPLE: Respect Logical Flow.
     The document must make sense to a reader encountering it sequentially. You cannot use notation, terminology, or concepts before they are defined---even though you have access to the entire document. Every change must respect the cognitive development of the reader.
 
-    {% if OUTPUT_FILES_ORDER %}
     CRITICAL PRINCIPLE: Cross-Document Consistency.
     When fixing issues, ensure consistency across all documents. Notation, definitions, and results must align. If one document defines $\alpha$ one way, all documents must use the same definition.
-    {% endif %}
 
     Implementation Approach (when no instruction filter is given):
     \begin{itemize}
@@ -49,9 +47,7 @@ prompts:
         \item Unclear explanations: rewrite for clarity.
         \item Structural issues: reorganize as needed.
         \item Missing content: add appropriately.
-        {% if OUTPUT_FILES_ORDER %}
         \item Cross-document inconsistencies: resolve to a single consistent version.
-        {% endif %}
     \end{itemize}
 
     Documenting Changes:
@@ -72,10 +68,7 @@ prompts:
 
     <documents>
     {{ ALL_CONTEXTS }}
-    {{ ADDITIONAL_INPUTS }}
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
+    {{ ALL_INPUTS }}
     </documents>
 
     Please carefully read through the document(s), paying special attention to all inline annotations (e.g., \criticize{}, \todo{}, \% comments).
@@ -89,27 +82,17 @@ prompts:
 
   userRequest:
     - |
-      Apply all changes suggested in the inline annotations and remove the original annotations.{% if OUTPUT_FILES_ORDER %} Watch for cross-document dependencies (shared results/definitions, consistent notation).{% endif %}
+      Apply all changes suggested in the inline annotations and remove the original annotations. Watch for cross-document dependencies (shared results/definitions, consistent notation).
 
-      {% if OUTPUT_FILES_ORDER %}
       The output files should be in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 1ST DOCUMENT WITH CHANGES APPLIED
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND DOCUMENT WITH CHANGES APPLIED
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % DOCUMENT WITH CHANGES APPLIED
-      </document>
-      </documents>
-      {% endif %}
 
     - |
       SECOND PHASE: Revise, condense, and finalize.
@@ -125,24 +108,14 @@ prompts:
           \item Level 5 - Publication Ready: Polished, journal-ready
       \end{itemize}
 
-      Verify before output: all fixes are correct, logical flow is preserved (no notation used before defined), and the document is complete.{% if OUTPUT_FILES_ORDER %} Cross-document consistency must hold (aligned notation, consistent definitions, matching results).{% endif %} Match the document's existing comment style (\criticize / \todo / \comment / %) when annotating changes.
+      Verify before output: all fixes are correct, logical flow is preserved (no notation used before defined), and the document is complete. Cross-document consistency must hold (aligned notation, consistent definitions, matching results). Match the document's existing comment style (\criticize / \todo / \comment / %) when annotating changes.
 
-      {% if OUTPUT_FILES_ORDER %}
       Output the final revised documents in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 1ST FINAL_REVISED_DOCUMENT
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND FINAL_REVISED_DOCUMENT
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % FINAL_REVISED_DOCUMENT
-      </document>
-      </documents>
-      {% endif %}

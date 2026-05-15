@@ -14,7 +14,6 @@ import type {
   CommitChangeDetail,
   EditedFileChangeDetail,
   FileActionDetail,
-  FileSelectChangeDetail,
   FocusInstructionDetail,
   InstallGuideDetail,
   InstructionChangeDetail,
@@ -30,17 +29,11 @@ import type {
 import { createEvent } from '@shared/utils/events';
 export const MainViewEvents = {
   // File select events
-  fileChange: (detail: FileSelectChangeDetail) =>
-    createEvent('file-change', detail),
-
   baseFileChange: (detail: BaseFileChangeDetail) =>
     createEvent('base-file-change', detail),
 
   editedFileChange: (detail: EditedFileChangeDetail) =>
     createEvent('edited-file-change', detail),
-
-  refreshFiles: (detail: FileActionDetail) =>
-    createEvent('refresh-files', detail),
 
   getCurrentFile: (detail: FileActionDetail) =>
     createEvent('get-current-file', detail),

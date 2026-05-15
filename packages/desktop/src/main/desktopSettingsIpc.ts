@@ -590,11 +590,8 @@ export function createDesktopSettingsIpc(
               : {
                   agentCategory: 'workflow' as const,
                   ...base,
-                  inputFile: cfg.inputFile,
                   inputFiles: cfg.inputFiles,
-                  mediaFile: cfg.mediaFile,
                   mediaFiles: cfg.mediaFiles,
-                  contextFile: cfg.contextFile,
                   contextFiles: cfg.contextFiles,
                   outputFiles: cfg.outputFiles,
                   toolConfig: cfg.toolConfig,

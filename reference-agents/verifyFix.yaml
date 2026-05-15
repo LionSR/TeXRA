@@ -32,10 +32,8 @@ prompts:
         \item Keep LaTeX code simple and clean.
     \end{itemize}
 
-    {% if OUTPUT_FILES_ORDER %}
     CRITICAL PRINCIPLE: Cross-Document Consistency.
     When multiple documents are provided, check consistency between documents - conflicting results are unacceptable. Track cross-document dependencies (results used between papers, shared definitions, appendix connections to main text) and propagation of errors. Maintain consistent mathematical notation across all documents. Ensure clarity and logical flow within and between documents.
-    {% endif %}
 
     Requirements for your review process:
     \begin{itemize}
@@ -46,9 +44,9 @@ prompts:
         \item Verify physical consistency throughout
         \item Ensure clarity and logical flow
         \item Check all assumptions and approximations
-        {% if OUTPUT_FILES_ORDER %}
+
         \item Track cross-document dependencies and consistency
-        {% endif %}
+
     \end{itemize}
 
     {% if IS_GOOGLE_MODEL %}
@@ -62,10 +60,7 @@ prompts:
 
     <documents>
     {{ ALL_CONTEXTS }}
-    {{ ADDITIONAL_INPUTS }}
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
+    {{ ALL_INPUTS }}
     </documents>
 
     Read through the entire document (and any additional documents) including appendices and prepare for a thorough three-phase analysis.
@@ -78,24 +73,21 @@ prompts:
       </instruction>
       If no instruction given, apply full scrutiny to all content.
 
-      {% if OUTPUT_FILES_ORDER %}
       The output files should be in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
-      {% endif %}
 
       PHASE 1 - EXPANSION AND DISCOVERY: Create an expanded version showing all mathematical steps to identify issues. This expansion is for verification only - the final output maintains the original's detail level unless instructed otherwise.
 
       In the scratchpad, identify issues and expansion needs:
       <scratchpad>
-      {% if OUTPUT_FILES_ORDER %}
+
       Document assessment:
       - Document 1 state: [Polished / Draft / Notes / Outline]
       - Document 2 state: [Polished / Draft / Notes / Outline]
       ... [Continue for all documents]
       - Adjustment needed: [If drafts/notes, focus on math not polish]
-      {% endif %}
 
       \begin{enumerate}
-          {% if OUTPUT_FILES_ORDER %}
+
           \item [Cross-document dependencies]
               \begin{itemize}
                   \item Shared definitions: [Check consistency across papers]
@@ -103,15 +95,15 @@ prompts:
                   \item Notation conflicts: [Identify inconsistencies]
                   \item Appendix connections: [How appendices relate to main texts]
               \end{itemize}
-          {% endif %}
+
           \item [Main text derivations to expand]
               \begin{itemize}
                   \item Location: [Equation \ref{...}]
                   \item Missing: [Steps, assumptions, unjustified coefficients]
                   \item Plan: [How to expand fully]
-                  {% if OUTPUT_FILES_ORDER %}
+
                   \item Impact on other papers: [How errors propagate]
-                  {% endif %}
+
               \end{itemize}
           \item [Appendix derivations to expand]
               \begin{itemize}
@@ -122,7 +114,7 @@ prompts:
               \end{itemize}
           \item [Physical consistency]
               \begin{itemize}
-                  \item Conservation laws: [Issues{% if OUTPUT_FILES_ORDER %} across documents{% endif %}]
+                  \item Conservation laws: [Issues across documents]
                   \item Boundary conditions: [Problems]
                   \item Limiting cases: [Concerns]
               \end{itemize}
@@ -143,32 +135,22 @@ prompts:
                   \item Sound derivations: [List specific equations checked]
                   \item Verification methods: [How checked]
                   \item Results: [What calculations confirmed]
-                  {% if OUTPUT_FILES_ORDER %}
+
                   \item Cross-paper consistency: [Results that match properly]
-                  {% endif %}
+
               \end{itemize}
       \end{enumerate}
       </scratchpad>
 
       Following your analysis, output the FULLY EXPANDED version with all derivations shown explicitly:
 
-      {% if OUTPUT_FILES_ORDER %}
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 1ST_FULLY_EXPANDED_LATEX_DOCUMENT HERE
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND_FULLY_EXPANDED_LATEX_DOCUMENT HERE
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % FULLY_EXPANDED_LATEX_DOCUMENT HERE
-      </document>
-      </documents>
-      {% endif %}
 
     - |
       PHASE 2 - CRITIQUE AND INDEPENDENT VERIFICATION: Add critical comments and perform independent verification of high-impact calculations.
@@ -180,7 +162,7 @@ prompts:
       <scratchpad>
       <critical_issues>
       \begin{enumerate}
-          {% if OUTPUT_FILES_ORDER %}
+
           \item [Cross-paper critical issues]
               \begin{itemize}
                   \item Conflicting results: [Between which papers]
@@ -188,12 +170,12 @@ prompts:
                   \item Impact: [Consequences for the collection]
                   \item Verification: [Independent approach]
               \end{itemize}
-          {% endif %}
+
           \item [High-impact calculation 1]
               \begin{itemize}
                   \item Location: [Equation \ref{...}]
                   \item Original result: [What document claims]
-                  \item Impact: [Consequences if wrong{% if OUTPUT_FILES_ORDER %}, including for other papers{% endif %}]
+                  \item Impact: [Consequences if wrong, including for other papers]
                   \item Verification: [Independent approach]
               \end{itemize}
           \item [High-impact calculation 2]
@@ -215,9 +197,9 @@ prompts:
                   \item Derive: [Step-by-step independent calculation]
                   \item Result: [Your answer]
                   \item Compare: [Match/mismatch analysis]
-                  {% if OUTPUT_FILES_ORDER %}
+
                   \item Cross-paper impact: [How this affects other papers]
-                  {% endif %}
+
               \end{itemize}
           \item [Calculation 2 - Fresh derivation]
               \begin{itemize}
@@ -225,9 +207,9 @@ prompts:
                   \item Work: [Independent steps]
                   \item Result: [Final answer]
                   \item Analysis: [Comparison with original]
-                  {% if OUTPUT_FILES_ORDER %}
+
                   \item Consistency: [Check against other papers]
-                  {% endif %}
+
               \end{itemize}
       \end{enumerate}
       </independent_verification>
@@ -260,14 +242,14 @@ prompts:
       \begin{enumerate}
           \item Mathematical errors: [List with \ref{...}]
           \item Unjustified steps: [What remains unclear]
-          \item Notation inconsistencies: [Specific problems{% if OUTPUT_FILES_ORDER %}, between and within papers{% endif %}]
+          \item Notation inconsistencies: [Specific problems, between and within papers]
           \item Physical violations: [Conservation, causality, etc.]
           \item Clarity failures: [Explanation issues]
           \item Verification discrepancies: [Where calculations differ]
           \item Appendix errors affecting main text: [Critical connections]
-          {% if OUTPUT_FILES_ORDER %}
+
           \item Cross-paper conflicts: [Inconsistent results between documents]
-          {% endif %}
+
       \end{enumerate}
       </all_issues_found>
       </scratchpad>
@@ -281,30 +263,19 @@ prompts:
       - For issues: \critique{Missing factor of $1/2$ in drift term - needs Itô correction.}
       - For verified: \critique{VERIFIED: Checked entropy production $\dot{S} = k_B\int J^2/(D\rho)\dd x = 0.23$ W/K - matches stated value.}
       - For verified: \critique{VERIFIED: Jarzynski equality $\eE[\exp(-\beta W)] = \exp(-\beta \Delta F)$ confirmed by path integral.}
-      {% if OUTPUT_FILES_ORDER %}
+
       - For cross-paper: \critique{VERIFIED: Results consistent between Paper 1 \cref{eq:main} and Paper 2 \cref{thm:derived}.}
       - For cross-paper: \critique{VERIFIED: Entropy production positive in all examples across papers.}
-      {% endif %}
 
       Remember: Text inside \critique{...} must use proper LaTeX syntax.
 
-      {% if OUTPUT_FILES_ORDER %}
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 1ST_EXPANDED_DOCUMENT_WITH_CRITIQUE_COMMENTS HERE
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND_EXPANDED_DOCUMENT_WITH_CRITIQUE_COMMENTS HERE
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % EXPANDED_DOCUMENT_WITH_CRITIQUE_COMMENTS HERE
-      </document>
-      </documents>
-      {% endif %}
 
     - |
       PHASE 3 - FIX AND DOCUMENT: Provide the corrected version with \criticize{} annotations.
@@ -317,18 +288,18 @@ prompts:
           \item FAITHFULLY PRESERVE unaffected content exactly as written
           \item RESPECT ORIGINAL DEPTH: Keep all correct mathematical steps and explanations
           \item MAINTAIN INTEGRITY: Consistent rigor and technical detail throughout
-          {% if OUTPUT_FILES_ORDER %}
+
           \item ENSURE CONSISTENCY: Fix conflicts between papers
-          {% endif %}
+
           \item GRADUATED FIX APPROACH:
               \begin{itemize}
                   \item Minor (typos, signs): Fix silently
                   \item Moderate (missing steps): Fix with \criticize{Fixed: [brief description]}
                   \item Major (wrong derivations): Fix with \criticize{Issue: [...]. Fix: [...]. Note: [...]}
                   \item Verification confirmations: \criticize{Verified: [...] checked and correct.}
-                  {% if OUTPUT_FILES_ORDER %}
+
                   \item Cross-paper issues: \criticize{Fixed inconsistency with Paper 2 \cref{eq:other}.}
-                  {% endif %}
+
                   \item Ambiguous: \criticize{Multiple approaches: [A], [B]. Human decision needed. Using [A] because...}
               \end{itemize}
           \item HONOR author's style, notation, and document structure
@@ -338,9 +309,9 @@ prompts:
       <scratchpad>
       <fix_strategy>
       \begin{enumerate}
-          {% if OUTPUT_FILES_ORDER %}
+
           \item [Cross-paper fixes]: Inconsistencies between papers at [...], Fix: [unified approach]
-          {% endif %}
+
           \item [Minor fixes - silent]: Signs, factors, typos at [locations]
           \item [Moderate - brief comment]: Missing steps at [...], Comment: "Fixed: added [...]"
           \item [Major - detailed comment]: Error at [...], Comment: "Issue: [...]. Fix: [...]. Note: [...]"
@@ -352,21 +323,19 @@ prompts:
 
       <implementation_checklist>
       \begin{enumerate}
-          \item Every error actually corrected in text{% if OUTPUT_FILES_ORDER %} across all papers{% endif %}?
+          \item Every error actually corrected in text across all papers?
           \item All fixes fully implemented with correct equations?
           \item Derivations complete start-to-finish?
-          \item Notation consistent throughout{% if OUTPUT_FILES_ORDER %} all documents{% endif %}?
+          \item Notation consistent throughout all documents?
           \item Document(s) complete and self-contained?
           \item Every \criticize{} matches actual change or verification?
           \item Comments used appropriately (graduated approach)?
           \item Verified sections acknowledged?
-          {% if OUTPUT_FILES_ORDER %}
+
           \item Cross-paper consistency achieved?
           \item Can each document be used standalone?
           \item Collection works as unified whole?
-          {% else %}
-          \item Can be used standalone?
-          {% endif %}
+
           \item Honors mathematical rigor?
       \end{enumerate}
       </implementation_checklist>
@@ -378,12 +347,12 @@ prompts:
       \begin{itemize}
           \item COMPLETE DOCUMENT: Output the entire document from beginning to end
           \item FULLY IMPLEMENTED FIXES: Every identified issue must be actually corrected in the text
-          \item SELF-CONTAINED: The document should stand alone as a finished product{% if OUTPUT_FILES_ORDER %} while being consistent with others{% endif %}
+          \item SELF-CONTAINED: The document should stand alone as a finished product while being consistent with others
           \item COMMENT ANNOTATIONS: Add \criticize{} to document changes and verifications
           \item ACKNOWLEDGE CORRECT WORK: Include comments where verification confirmed correctness
-          {% if OUTPUT_FILES_ORDER %}
+
           \item CROSS-PAPER CONSISTENCY: Ensure all documents work together properly
-          {% endif %}
+
       \end{itemize}
 
       Add this command to the preamble (in addition to \critique):
@@ -395,46 +364,34 @@ prompts:
           \item Moderate fixes: Use brief \criticize{Fixed: [concise description]}
           \item Major fixes: Use detailed \criticize{Issue: [...]. Fix: [...]. Note: [...]}
           \item Verified correct: Use \criticize{Verified: Calculated $\dot{S}$ using the given formula and obtained the stated value.}
-          {% if OUTPUT_FILES_ORDER %}
+
           \item Cross-paper: Use \criticize{Fixed to match Paper 2 \cref{eq:corresponding}.}
-          {% endif %}
+
           \item Ambiguous cases: Use \criticize{Multiple approaches: [...]. Human decision needed.}
       \end{itemize}
 
       Your final document(s) should:
       \begin{itemize}
-          \item DELIVER a complete, standalone document that requires no external references{% if OUTPUT_FILES_ORDER %} (each document standalone while working together){% endif %}
+          \item DELIVER a complete, standalone document that requires no external references (each document standalone while working together)
           \item IMPLEMENT all corrections fully - every fix applied, derivations completed
           \item FAITHFULLY PRESERVE all unaffected content exactly as written
           \item HONOR the original's mathematical depth - keep all correct steps
           \item RETAIN existing examples and explanations that are correct
           \item ACHIEVE immediate usability - ready for use without further editing
           \item MAINTAIN the document's original technical level throughout
-          {% if OUTPUT_FILES_ORDER %}
+
           \item ENSURE cross-document consistency
-          {% endif %}
+
           \item DOCUMENT changes through \criticize{} where fixes made or correctness verified
           \item PRESENT a clean document where every identified issue is resolved
       \end{itemize}
 
-      GUIDING PRINCIPLE: Fix only what needs fixing. Acknowledge what is correct.{% if OUTPUT_FILES_ORDER %} Ensure consistency across all documents.{% endif %} Do not add new content beyond necessary corrections. Preserve the document's original character and scope.
+      GUIDING PRINCIPLE: Fix only what needs fixing. Acknowledge what is correct. Ensure consistency across all documents. Do not add new content beyond necessary corrections. Preserve the document's original character and scope.
 
-      {% if OUTPUT_FILES_ORDER %}
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 1ST_COMPLETE_FIXED_DOCUMENT_WITH_ALL_CORRECTIONS_IMPLEMENTED_AND_COMMENT_ANNOTATIONS
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND_COMPLETE_FIXED_DOCUMENT_WITH_ALL_CORRECTIONS_IMPLEMENTED_AND_COMMENT_ANNOTATIONS
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % COMPLETE_FIXED_DOCUMENT_WITH_ALL_CORRECTIONS_IMPLEMENTED_AND_COMMENT_ANNOTATIONS
-      % All fixes must be actually implemented in the text, not just noted
-      % Include verification confirmations where appropriate
-      </document>
-      </documents>
-      {% endif %}

@@ -160,50 +160,21 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.ACCEPT_EDITED]: (m) =>
         this.executionManager.handleFileOperation(m as any),
 
-      [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE]: (m) =>
-        this.fileManager.handleFileSelection(m),
-      [MAIN_VIEW_COMMANDS.SELECT_CONTEXT_FILE]: (m) =>
-        this.fileManager.handleFileSelection(m),
-      [MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE]: (m) =>
-        this.fileManager.handleFileSelection(m),
       [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: () =>
         this.fileManager.handleEditedFileSelection(),
       [MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES]: (m) =>
         this.fileManager.handleSelectMultipleFiles(m),
 
-      [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: (m) =>
-        this.fileManager.handleInputFileSelected({
-          command: m.command,
-          filePath: m.filePath ?? '',
-        }),
-      [MAIN_VIEW_COMMANDS.CONTEXT_FILE_SELECTED]: (m) =>
-        this.fileManager.handleGenericFileSelected({
-          command: m.command,
-          filePath: m.filePath ?? '',
-        }),
-      [MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED]: (m) =>
-        this.fileManager.handleGenericFileSelected({
-          command: m.command,
-          filePath: m.filePath ?? '',
-        }),
       [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: (m) =>
         this.fileManager.handleGenericFileSelected({
           command: m.command,
           filePath: m.filePath ?? '',
         }),
 
-      [MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE]: (m) =>
-        this.fileManager.handleRequestInputFile(m),
-      [MAIN_VIEW_COMMANDS.REQUEST_CONTEXT_FILE]: (m) =>
-        this.fileManager.handleRequestFile(m),
-      [MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE]: (m) =>
-        this.fileManager.handleRequestFile(m),
       [MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE]: (m) =>
         this.fileManager.handleRequestEditedFile(m),
       [MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE]: (m) =>
         this.fileManager.handleRequestBaseFile(m),
-      [MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES]: (m) =>
-        this.fileManager.handleRequestDefaultOutputFiles(m),
 
       [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: (m) =>
         this.fileManager.handleSetMultipleFiles(m),

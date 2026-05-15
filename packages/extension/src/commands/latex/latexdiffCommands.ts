@@ -596,7 +596,7 @@ async function discoverLatestExecutionOutputs(query: {
         if (entry.agent !== query.agent || entry.model !== query.model) {
           return false;
         }
-        const entryInput = entry.agentConfig?.inputFile;
+        const entryInput = entry.agentConfig?.inputFiles?.[0];
         return (
           typeof entryInput === 'string' &&
           path.normalize(entryInput) === normalizedInput

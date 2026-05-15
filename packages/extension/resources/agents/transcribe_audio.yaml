@@ -5,6 +5,8 @@ settings:
   agentCategory: workflow
   documentTag: documents
   endTag: </documents>
+  defaultOutputFiles:
+    - transcript.tex
   prefills:
     - 'Here is the audio transcript. <documents>'
     - ''
@@ -50,19 +52,11 @@ prompts:
 
       Analyze the attached audio content and any provided context, then generate the initial audio transcript with timestamps, speaker identification, sectioning, and LaTeX equations. Do not use markdown. Use the following format:
 
-      {% if OUTPUT_FILES_ORDER %}
       <documents>
       <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       [HH:MM:SS:MS] SpeakerName: INITIAL_TRANSCRIPT_WITH_SPEAKERS_AND_EQUATIONS
       </document>
       </documents>
-      {% else %}
-      <documents>
-      <document name="transcript.tex">
-      [HH:MM:SS:MS] SpeakerName: INITIAL_TRANSCRIPT_WITH_SPEAKERS_AND_EQUATIONS
-      </document>
-      </documents>
-      {% endif %}
     - |
       Critically review the initial transcription and produce a final, refined transcript. Check the following aspects and fix any issues found:
       \begin{itemize}
@@ -78,16 +72,8 @@ prompts:
 
       Output the final, refined audio transcript with improved accuracy, correct speaker identification with timestamps, LaTeX equations, sectioning, and formatting. Ensure no markdown is used. Use the following format:
 
-      {% if OUTPUT_FILES_ORDER %}
       <documents>
       <document name="{{ OUTPUT_FILES_ORDER[0] }}">
       [HH:MM:SS:MS] SpeakerName: REFINED_TRANSCRIPT_WITH_SECTIONS_SPEAKERS_AND_EQUATIONS
       </document>
       </documents>
-      {% else %}
-      <documents>
-      <document name="transcript.tex">
-      [HH:MM:SS:MS] SpeakerName: REFINED_TRANSCRIPT_WITH_SECTIONS_SPEAKERS_AND_EQUATIONS
-      </document>
-      </documents>
-      {% endif %}

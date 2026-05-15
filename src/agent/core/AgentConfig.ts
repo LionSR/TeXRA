@@ -35,7 +35,7 @@ export const AgentConfigSchema = z.preprocess(
   AgentConfigFieldsSchema.superRefine((config, ctx) => {
     // Validate that output files count doesn't exceed input files count
     if (config.outputFiles.length > 0) {
-      const inputCount = 1 + config.inputFiles.length; // inputFile + inputFiles
+      const inputCount = config.inputFiles.length;
       if (config.outputFiles.length > inputCount) {
         ctx.addIssue({
           code: 'custom',
