@@ -37,9 +37,12 @@ const CI_LABEL: Record<WorktreeCIState, string> = {
   [WORKTREE_CI_STATE.UNKNOWN]: 'CI status unknown',
 };
 
-/** Trailing path segment, posix or windows. Webview-safe — no node:path. */
+/** Trailing path segment, posix or windows. Webview-safe — no node:path.
+ *  Falls back to the original input for separator-only paths (e.g. `/`)
+ *  so callers always get a non-empty label. */
 function basename(p: string): string {
   const trimmed = p.replace(/[\\/]+$/, '');
+  if (!trimmed) return p;
   const idx = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
   return idx >= 0 ? trimmed.slice(idx + 1) : trimmed;
 }
