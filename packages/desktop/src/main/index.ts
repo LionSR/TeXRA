@@ -62,7 +62,6 @@ import {
 import { reportFatalStartupError } from './fatalStartupError.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeDesktopCrashReporting } from './desktopCrashReporting.js';
-import { prewarmElectronKeychain } from './platform/electronSecrets.js';
 import { initializeElectronPlatform } from './platform/index.js';
 import {
   DESKTOP_WORKSPACE_PATH_STATE_KEY,
@@ -610,12 +609,6 @@ if (protocolLifecycle.shouldContinue) {
   app
     .whenReady()
     .then(async () => {
-      // Trigger the OS keychain prompt deterministically at launch (before
-      // the renderer asks for any saved secret) so the user sees one dialog
-      // up-front rather than a surprise mid-startup. ElectronSecrets.get()
-      // also has a per-key fallback that returns undefined on decrypt
-      // failure, so a denied prompt won't crash the renderer either way.
-      await prewarmElectronKeychain();
       const platformInit = await initializeElectronPlatform(__dirname);
       const { lifecycle } = platformInit;
       lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
