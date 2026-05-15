@@ -6,7 +6,7 @@ import {
   cliFlagName,
   CLI_BOOLEAN_FLAGS,
   GLOBAL_FLAGS_WITH_VALUE,
-} from './cliContext';
+} from './cliFlags';
 
 export type LoginArgParseError =
   | { kind: 'missing-value'; flag: string }
