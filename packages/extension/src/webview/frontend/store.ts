@@ -67,6 +67,13 @@ export const DEFAULT_CHECKBOX_VALUES: CheckboxValues = {
   attachTeXCount: DEFAULT_STATE.attachTeXCount,
 };
 
+export function workflowCheckboxValues(values: CheckboxValues): CheckboxValues {
+  return {
+    ...values,
+    attachDiagnostics: false,
+  };
+}
+
 // =========================================================================
 // Command Mappings
 // =========================================================================

@@ -94,6 +94,7 @@ import {
   PLACEHOLDER_ROTATION_MS,
   ONBOARDING_PLACEHOLDERS,
   FILE_SELECT_CONFIGS,
+  workflowCheckboxValues,
 } from './store';
 import { mainViewStyles } from './styles';
 
@@ -158,9 +159,9 @@ export class MainApp extends MainAppBase {
   });
   private readonly outputFilesActive = signal(DEFAULT_STATE.outputFilesActive);
   private readonly latexdiffsVisible = signal(DEFAULT_STATE.latexdiffsVisible);
-  private readonly checkboxValues = signal<CheckboxValues>({
-    ...DEFAULT_CHECKBOX_VALUES,
-  });
+  private readonly checkboxValues = signal<CheckboxValues>(
+    workflowCheckboxValues(DEFAULT_CHECKBOX_VALUES),
+  );
   // Tracks whether the workflow Files <wa-details> is open. Initialized to
   // match the initial session type and updated imperatively from
   // wa-show/wa-hide so user toggles survive across re-renders. Without this,
@@ -194,7 +195,7 @@ export class MainApp extends MainAppBase {
   private readonly fileStateContext$ = new Signal.Computed(
     (): FileStateContextValue => ({
       sessionType: this.sessionType.get(),
-      checkboxValues: this.checkboxValues.get(),
+      checkboxValues: workflowCheckboxValues(this.checkboxValues.get()),
       singleFiles: this.singleFiles.get(),
       fileOptions: this.fileOptions.get(),
       multiFiles: this.multiFiles.get(),
@@ -385,7 +386,7 @@ export class MainApp extends MainAppBase {
     const sf = this.singleFiles.get();
     const mf = this.multiFiles.get();
     const mv = this.multiFilesVisible.get();
-    const cv = this.checkboxValues.get();
+    const cv = workflowCheckboxValues(this.checkboxValues.get());
 
     const persisted: MainViewPersistedState = {
       sessionType: this.sessionType.get(),
@@ -412,7 +413,7 @@ export class MainApp extends MainAppBase {
       autoExtractTikzFigure: cv.autoExtractTikzFigure,
       autoCompileInputPdf: cv.autoCompileInputPdf,
       attachTeXCount: cv.attachTeXCount,
-      attachDiagnostics: false,
+      attachDiagnostics: cv.attachDiagnostics,
     };
 
     this.stateManager.setState(persisted);
@@ -449,13 +450,15 @@ export class MainApp extends MainAppBase {
     });
     this.outputFilesActive.set(false);
     this.latexdiffsVisible.set(state.latexdiffsVisible);
-    this.checkboxValues.set({
-      autoExtractFigure: state.autoExtractFigure,
-      autoExtractTikzFigure: state.autoExtractTikzFigure,
-      autoCompileInputPdf: state.autoCompileInputPdf,
-      attachTeXCount: state.attachTeXCount,
-      attachDiagnostics: false,
-    });
+    this.checkboxValues.set(
+      workflowCheckboxValues({
+        autoExtractFigure: state.autoExtractFigure,
+        autoExtractTikzFigure: state.autoExtractTikzFigure,
+        autoCompileInputPdf: state.autoCompileInputPdf,
+        attachTeXCount: state.attachTeXCount,
+        attachDiagnostics: state.attachDiagnostics,
+      }),
+    );
   }
 
   private requestInitialData(): void {
@@ -859,13 +862,15 @@ export class MainApp extends MainAppBase {
         baseFile: state.baseFile,
       });
 
-      this.checkboxValues.set({
-        autoExtractFigure: state.autoExtractFigure,
-        autoExtractTikzFigure: state.autoExtractTikzFigure,
-        autoCompileInputPdf: state.autoCompileInputPdf,
-        attachTeXCount: state.attachTeXCount,
-        attachDiagnostics: false,
-      });
+      this.checkboxValues.set(
+        workflowCheckboxValues({
+          autoExtractFigure: state.autoExtractFigure,
+          autoExtractTikzFigure: state.autoExtractTikzFigure,
+          autoCompileInputPdf: state.autoCompileInputPdf,
+          attachTeXCount: state.attachTeXCount,
+          attachDiagnostics: state.attachDiagnostics,
+        }),
+      );
       this.outputFilesActive.set(false);
       this.latexdiffsVisible.set(state.latexdiffsVisible);
 
@@ -927,10 +932,12 @@ export class MainApp extends MainAppBase {
         outputFiles: false,
       });
       if (defaults.checkboxOverrides) {
-        this.checkboxValues.set({
-          ...this.checkboxValues.get(),
-          ...defaults.checkboxOverrides,
-        });
+        this.checkboxValues.set(
+          workflowCheckboxValues({
+            ...this.checkboxValues.get(),
+            ...defaults.checkboxOverrides,
+          }),
+        );
       }
       if (defaults.outputFilesActive !== undefined) {
         this.outputFilesActive.set(false);
@@ -1234,10 +1241,7 @@ export class MainApp extends MainAppBase {
       multipleFileSelections[`${listId}Active`] = isActive;
     });
 
-    const checkboxValues = {
-      ...this.checkboxValues.get(),
-      attachDiagnostics: false,
-    };
+    const checkboxValues = workflowCheckboxValues(this.checkboxValues.get());
 
     return {
       agent,
@@ -1493,10 +1497,12 @@ export class MainApp extends MainAppBase {
     const { id, checked } = e.detail;
     const cv = this.checkboxValues.get();
     if (id in cv) {
-      this.checkboxValues.set({
-        ...cv,
-        [id]: checked,
-      });
+      this.checkboxValues.set(
+        workflowCheckboxValues({
+          ...cv,
+          [id]: checked,
+        }),
+      );
       this.saveState();
     }
   }
