@@ -91,9 +91,12 @@ export async function runChatTui(
   installCliApprovalHandlers(sessionContext);
   await loadAgents();
 
-  // DA1 sentinel discovery happens in the background — capability-gated
-  // notifications fall back to BEL until it completes (~250ms typical).
-  void discoverTerminalCapabilities({
+  // DA1 sentinel discovery runs *before* Ink mounts so it owns the raw-mode
+  // toggle exclusively — interleaving with Ink's own raw-mode lifecycle (set
+  // when `useInput` mounts) caused capability discovery to flip raw mode off
+  // ~250ms in, breaking input. Capability-gated notifications fall back to
+  // BEL during this window (~250ms typical, hard 250ms cap on no DA1 reply).
+  await discoverTerminalCapabilities({
     stdin: process.stdin,
     stdout: process.stdout,
   });
@@ -167,7 +170,18 @@ export async function runChatTui(
       startSession(line);
       return;
     }
+    // PRD success criterion: follow-ups must not be silently dropped when the
+    // user submits before `onStreamResolved` populates `session.streamId`.
+    // p-queue serializes work but doesn't have an "await predicate" primitive,
+    // so the task itself waits for the stream id via a tiny poll loop.
     void followUpQueue.add(async () => {
+      while (
+        session.streamId === undefined &&
+        !session.stopRequested &&
+        !session.runCompleted
+      ) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 25));
+      }
       if (!session.streamId || session.stopRequested) return;
       const result = await sendFollowUp(session.streamId, line);
       if (result.status === 'no_session') {
@@ -182,13 +196,17 @@ export async function runChatTui(
     stdin: process.stdin,
   });
 
-  // Bridge SIGINT to a graceful interrupt (first tap) / process exit (second tap).
+  // Bridge SIGINT to a graceful interrupt (first tap) / process exit
+  // (second tap). We detach the handler before exiting on the second tap so
+  // Node's default termination path runs — re-`process.kill`-ing while the
+  // listener is still installed would re-enter `handleSigint` and loop.
   let sigintCount = 0;
   const handleSigint = (): void => {
     sigintCount += 1;
     if (sigintCount >= 2) {
-      process.kill(process.pid, 'SIGINT');
-      return;
+      process.off('SIGINT', handleSigint);
+      ink.unmount();
+      process.exit(130);
     }
     session.stopRequested = true;
     interruptActive();

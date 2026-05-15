@@ -55,13 +55,12 @@ function applyToState<K extends ProgressEvent>(
       return;
     }
     case 'updateQueuedFollowUps': {
-      const p = payload as ProgressEventPayloads['updateQueuedFollowUps'];
-      patchStream(p.streamId, (s) => ({
-        ...s,
-        // We only get a "something queued" pulse — bump by one and let the
-        // consumer (StatusBar / InputBar pill) reset on submit.
-        queuedFollowUps: s.queuedFollowUps + 1,
-      }));
+      // `updateQueuedFollowUps` fires for both enqueue AND consume of the
+      // tool-use follow-up queue with no delta payload, so any local counter
+      // would drift one-way. Phase 1 leaves `queuedFollowUps` at its default
+      // (0); Phase 4 wires the StatusBar pill to the real queue length via
+      // `ToolUseFollowUpQueue.getAll(streamId).length` when the multi-agent
+      // surface lands.
       return;
     }
     default:

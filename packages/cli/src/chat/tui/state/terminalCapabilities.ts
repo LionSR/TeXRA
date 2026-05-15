@@ -3,8 +3,9 @@
 // We write a batch of capability queries (Kitty keyboard protocol, DECRQM
 // for grapheme cluster mode, DECRQM for bracketed paste, OSC color reads)
 // followed by `CSI c` (Device Attributes 1). Every terminal answers DA1, so
-// any feature whose reply lands before the DA1 response is supported, and
-// anything missing isn't — no timeouts, no false negatives.
+// any feature whose reply lands before the DA1 response is supported.
+// There are no *per-capability* timeouts — only an outer 250ms safeguard for
+// terminals that fail to answer DA1 at all, so startup never blocks.
 //
 // Pattern adapted from Claude Code's `src/ink/terminal-querier.ts` per
 // docs/prd/cli-tui-ink/10-architecture.md (Terminal capability discovery).

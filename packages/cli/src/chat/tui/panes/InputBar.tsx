@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Box, Text, useStdout } from 'ink';
+import { Box, Text } from 'ink';
 
 import { BaseTextInput } from '../input/BaseTextInput';
 
@@ -13,7 +13,6 @@ export interface InputBarProps {
 }
 
 export function InputBar(props: InputBarProps): React.JSX.Element {
-  const { stdout } = useStdout();
   const [value, setValue] = useState('');
 
   const handleSubmit = useCallback(
@@ -34,7 +33,6 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         focus={!props.disabled}
         onChange={setValue}
         onSubmit={handleSubmit}
-        width={Math.max(20, (stdout?.columns ?? 80) - 4)}
       />
     </Box>
   );

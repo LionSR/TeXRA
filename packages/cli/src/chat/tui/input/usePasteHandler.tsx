@@ -1,10 +1,15 @@
 // Bracketed-paste detection per
 // docs/prd/cli-tui-ink/10-architecture.md (Input component).
 //
-// Reads `CSI 200 ~` / `CSI 201 ~` from raw stdin and exposes an
-// `isPasted` flag plus a `currentPaste` buffer. Consumers (BaseTextInput,
+// Reads `CSI 200 ~` / `CSI 201 ~` from raw stdin and exposes an `isPasted`
+// flag plus a `currentPaste` buffer. Consumers (BaseTextInput, future
 // attachment paste) read these to decide whether `Enter` is "submit" or
 // "newline".
+//
+// We attach an additional `data` listener to `stdin`. Ink's `useInput` has
+// already put stdin into raw mode for the rendered tree, so we don't touch
+// raw-mode state here — letting Ink own that lifecycle avoids the race
+// where two consumers fight over the raw-mode toggle.
 
 import { useEffect, useState } from 'react';
 import { useStdin } from 'ink';
@@ -16,21 +21,15 @@ interface PasteState {
 
 const INITIAL: PasteState = { isPasted: false, currentPaste: '' };
 
-const PASTE_START = '[200~';
-const PASTE_END = '[201~';
+const PASTE_START = '\u001B[200~';
+const PASTE_END = '\u001B[201~';
 
-/**
- * Track bracketed-paste boundaries. Returns the current paste state plus a
- * `handleInput` helper consumers can call with raw chunks (when ink's
- * `useInput` path isn't sufficient).
- */
 export function usePasteHandler(): PasteState {
-  const { stdin, isRawModeSupported, setRawMode } = useStdin();
+  const { stdin, isRawModeSupported } = useStdin();
   const [state, setState] = useState<PasteState>(INITIAL);
 
   useEffect(() => {
     if (!stdin || !isRawModeSupported) return;
-    setRawMode(true);
 
     let inPaste = false;
     let pasteBuffer = '';
@@ -59,7 +58,7 @@ export function usePasteHandler(): PasteState {
         const finalPaste = pasteBuffer;
         pasteBuffer = '';
         setState({ isPasted: true, currentPaste: finalPaste });
-        // Snap back to non-paste mode for the next render so Enter goes
+        // Snap back to non-paste mode on the next microtask so Enter goes
         // back to "submit" after the paste fully lands.
         queueMicrotask(() => setState(INITIAL));
       }
@@ -69,7 +68,7 @@ export function usePasteHandler(): PasteState {
     return () => {
       stdin.off('data', onData);
     };
-  }, [stdin, isRawModeSupported, setRawMode]);
+  }, [stdin, isRawModeSupported]);
 
   return state;
 }
