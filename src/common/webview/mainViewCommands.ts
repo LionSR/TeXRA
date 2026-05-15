@@ -18,22 +18,19 @@ export const MAIN_VIEW_COMMANDS = {
 
   // File selection cases
   SELECT_INPUT_FILE: 'selectInputFile',
-  SELECT_REFERENCE_FILE: 'selectReferenceFile',
-  SELECT_AUXILIARY_FILE: 'selectAuxiliaryFile',
+  SELECT_CONTEXT_FILE: 'selectContextFile',
   SELECT_MEDIA_FILE: 'selectMediaFile',
   SELECT_EDITED_FILE: 'selectEditedFile',
 
   // File selected cases
   INPUT_FILE_SELECTED: 'inputFileSelected',
-  REFERENCE_FILE_SELECTED: 'referenceFileSelected',
-  AUXILIARY_FILE_SELECTED: 'auxiliaryFileSelected',
+  CONTEXT_FILE_SELECTED: 'contextFileSelected',
   MEDIA_FILE_SELECTED: 'mediaFileSelected',
   EDITED_FILE_SELECTED: 'editedFileSelected',
 
   // Request file cases
   REQUEST_INPUT_FILE: 'requestInputFile',
-  REQUEST_REFERENCE_FILE: 'requestReferenceFile',
-  REQUEST_AUXILIARY_FILE: 'requestAuxiliaryFile',
+  REQUEST_CONTEXT_FILE: 'requestContextFile',
   REQUEST_MEDIA_FILE: 'requestMediaFile',
   REQUEST_EDITED_FILE: 'requestEditedFile',
   REQUEST_BASE_FILE: 'requestBaseFile',
@@ -41,8 +38,7 @@ export const MAIN_VIEW_COMMANDS = {
 
   // Multiple file operations
   SET_INPUT_FILES: 'setInputFiles',
-  SET_REFERENCE_FILES: 'setReferenceFiles',
-  SET_AUXILIARY_FILES: 'setAuxiliaryFiles',
+  SET_CONTEXT_FILES: 'setContextFiles',
   SET_MEDIA_FILES: 'setMediaFiles',
   SELECT_MULTIPLE_FILES: 'selectMultipleFiles',
 
@@ -97,8 +93,7 @@ export const MAIN_VIEW_COMMANDS = {
   RECORDING_STARTED: 'recordingStarted',
   RECORDING_ERROR: 'recordingError',
   SET_INPUT_FILE: 'setInputFile',
-  SET_REFERENCE_FILE: 'setReferenceFile',
-  SET_AUXILIARY_FILE: 'setAuxiliaryFile',
+  SET_CONTEXT_FILE: 'setContextFile',
   SET_MEDIA_FILE: 'setMediaFile',
   SET_EDITED_FILE: 'setEditedFile',
   SET_DEFAULT_OUTPUT_FILES: 'setDefaultOutputFiles',
@@ -117,8 +112,7 @@ export const MAIN_VIEW_COMMANDS = {
   // File refresh and update operations
   REFRESH_ALL_FILES: 'refreshAllFiles',
   UPDATE_INPUT_FILES: 'updateInputFiles',
-  UPDATE_REFERENCE_FILES: 'updateReferenceFiles',
-  UPDATE_AUXILIARY_FILES: 'updateAuxiliaryFiles',
+  UPDATE_CONTEXT_FILES: 'updateContextFiles',
   UPDATE_MEDIA_FILES: 'updateMediaFiles',
   UPDATE_OUTPUT_FILES: 'updateOutputFiles',
 

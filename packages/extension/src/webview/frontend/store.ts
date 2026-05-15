@@ -34,8 +34,7 @@ export const DEFAULT_STATE: MainViewPersistedState =
 /** Default single files state (typed) */
 export const DEFAULT_SINGLE_FILES: SingleFiles = {
   inputFile: DEFAULT_STATE.inputFile,
-  referenceFile: DEFAULT_STATE.referenceFile,
-  auxiliaryFile: DEFAULT_STATE.auxiliaryFile,
+  contextFile: DEFAULT_STATE.contextFile,
   mediaFile: DEFAULT_STATE.mediaFile,
   baseFile: DEFAULT_STATE.baseFile,
   editedFile: DEFAULT_STATE.editedFile,
@@ -44,8 +43,7 @@ export const DEFAULT_SINGLE_FILES: SingleFiles = {
 /** Default file options (typed, empty arrays) */
 export const DEFAULT_FILE_OPTIONS: FileOptions = {
   inputFile: [],
-  referenceFile: [],
-  auxiliaryFile: [],
+  contextFile: [],
   mediaFile: [],
   editedFile: [],
   baseFile: [],
@@ -55,8 +53,7 @@ export const DEFAULT_FILE_OPTIONS: FileOptions = {
 /** Default multi-files state (typed) */
 export const DEFAULT_MULTI_FILES: MultiFiles = {
   inputFiles: [],
-  referenceFiles: [],
-  auxiliaryFiles: [],
+  contextFiles: [],
   mediaFiles: [],
   outputFiles: [],
 };
@@ -64,8 +61,7 @@ export const DEFAULT_MULTI_FILES: MultiFiles = {
 /** Default multi-files visibility state (typed) */
 export const DEFAULT_MULTI_FILES_VISIBLE: MultiFilesVisible = {
   inputFiles: false,
-  referenceFiles: false,
-  auxiliaryFiles: false,
+  contextFiles: false,
   mediaFiles: false,
   outputFiles: false,
 };
@@ -86,8 +82,7 @@ export const DEFAULT_CHECKBOX_VALUES: CheckboxValues = {
 /** Maps file types to their update commands */
 export const FILE_UPDATE_COMMANDS: Record<MultipleDocumentFileType, string> = {
   input: MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES,
-  reference: MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES,
-  auxiliary: MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES,
+  context: MAIN_VIEW_COMMANDS.UPDATE_CONTEXT_FILES,
   media: MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES,
   output: MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES,
 };
@@ -95,16 +90,14 @@ export const FILE_UPDATE_COMMANDS: Record<MultipleDocumentFileType, string> = {
 /** Maps file types to their refresh commands */
 export const FILE_REFRESH_COMMANDS: Record<string, string> = {
   input: MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
-  reference: MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE,
-  auxiliary: MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE,
+  context: MAIN_VIEW_COMMANDS.REQUEST_CONTEXT_FILE,
   media: MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
 };
 
 /** Maps file types to their selected commands */
 export const FILE_SELECTED_COMMANDS: Record<string, string> = {
   input: MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
-  reference: MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED,
-  auxiliary: MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED,
+  context: MAIN_VIEW_COMMANDS.CONTEXT_FILE_SELECTED,
   media: MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED,
 };
 
@@ -115,8 +108,7 @@ export const FILE_SELECTED_COMMANDS: Record<string, string> = {
 /** Maps SET_*_FILE commands to their single file keys */
 export const SINGLE_FILE_COMMAND_TO_KEY: Record<string, keyof SingleFiles> = {
   [MAIN_VIEW_COMMANDS.SET_INPUT_FILE]: 'inputFile',
-  [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILE]: 'referenceFile',
-  [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILE]: 'auxiliaryFile',
+  [MAIN_VIEW_COMMANDS.SET_CONTEXT_FILE]: 'contextFile',
   [MAIN_VIEW_COMMANDS.SET_MEDIA_FILE]: 'mediaFile',
   [MAIN_VIEW_COMMANDS.SET_EDITED_FILE]: 'editedFile',
 };
@@ -124,8 +116,7 @@ export const SINGLE_FILE_COMMAND_TO_KEY: Record<string, keyof SingleFiles> = {
 /** Maps *_FILE_SELECTED commands to their single file keys */
 export const FILE_SELECTED_COMMAND_TO_KEY: Record<string, keyof SingleFiles> = {
   [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: 'inputFile',
-  [MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED]: 'referenceFile',
-  [MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED]: 'auxiliaryFile',
+  [MAIN_VIEW_COMMANDS.CONTEXT_FILE_SELECTED]: 'contextFile',
   [MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED]: 'mediaFile',
   [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: 'editedFile',
 };
@@ -133,8 +124,7 @@ export const FILE_SELECTED_COMMAND_TO_KEY: Record<string, keyof SingleFiles> = {
 /** Maps SET_*_FILES commands to their multi-file keys */
 export const MULTI_FILE_COMMAND_TO_KEY: Record<string, keyof MultiFiles> = {
   [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: 'inputFiles',
-  [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: 'referenceFiles',
-  [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: 'auxiliaryFiles',
+  [MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES]: 'contextFiles',
   [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: 'mediaFiles',
   [MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES]: 'outputFiles',
 };
@@ -190,34 +180,19 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
     },
   },
   {
-    type: 'reference',
-    label: 'Reference',
+    type: 'context',
+    label: 'Context',
     icon: 'book',
-    refreshTitle: 'Refresh reference files',
-    currentTitle: 'Set current file as reference',
-    emptyTitle: 'Clear reference file',
-    toggleTitle: 'Show or hide additional reference files',
-    addOpenedLabel: 'Add opened files as reference',
-    emptyListLabel: 'Clear all reference files',
-    selectListLabel: 'Add reference files',
+    refreshTitle: 'Refresh context files',
+    currentTitle: 'Set current file as context',
+    emptyTitle: 'Clear context file',
+    toggleTitle: 'Show or hide additional context files',
+    addOpenedLabel: 'Add opened files as context',
+    emptyListLabel: 'Clear all context files',
+    selectListLabel: 'Add context files',
     tooltip:
-      "Context files such as .bib/.bbl or other papers that guide output but won't be modified",
+      "Read-only context the agent sees but won't modify — bibliographies (.bib/.bbl), reference papers, style/macro files (.sty/.cls), or any document the output should match",
     description: 'Read-only context — not modified',
-  },
-  {
-    type: 'auxiliary',
-    label: 'Auxiliary',
-    icon: 'archive',
-    refreshTitle: 'Refresh auxiliary files',
-    currentTitle: 'Set current file as auxiliary',
-    emptyTitle: 'Clear auxiliary file',
-    toggleTitle: 'Show or hide additional auxiliary files',
-    addOpenedLabel: 'Add opened files as auxiliary',
-    emptyListLabel: 'Clear all auxiliary files',
-    selectListLabel: 'Add auxiliary files',
-    tooltip:
-      'Files such as .cls/.sty that define document structure and styles',
-    description: 'Style/structure files (.cls/.sty)',
   },
   {
     type: 'media',

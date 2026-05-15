@@ -101,13 +101,9 @@ export function getHistorySearchText(item: HistoryItem): string {
     addLabelledValue(parts, 'MediaFiles', config.mediaFiles);
 
     const hasMoreDetails = [
-      addConfigSection(parts, 'Reference', [
-        ['ReferenceFile', config.referenceFile],
-        ['ReferenceFiles', config.referenceFiles],
-      ]),
-      addConfigSection(parts, 'Auxiliary', [
-        ['AuxiliaryFile', config.auxiliaryFile],
-        ['AuxiliaryFiles', config.auxiliaryFiles],
+      addConfigSection(parts, 'Context', [
+        ['ContextFile', config.contextFile],
+        ['ContextFiles', config.contextFiles],
       ]),
       addConfigSection(parts, 'Output Files', [['Files', config.outputFiles]]),
       config.toolConfig

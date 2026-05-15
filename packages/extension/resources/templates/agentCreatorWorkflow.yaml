@@ -36,12 +36,9 @@ prompts:
     - {{ INPUT_FILE }}: path of the main input file
     - {{ INPUT_CONTENT }}: full text of the main input file
     - {{ ALL_INPUTS }}: XML list of ALL input files (when multiple files selected)
-    - {{ ALL_AUXILIARYS }}: auxiliary files (preamble.tex, commands.tex, etc.)
-    - {{ ALL_REFERENCES }}: reference/bibliography files
+    - {{ ALL_CONTEXTS }}: XML list of context files (bibliographies, reference papers, style/macro definitions like .sty/.cls)
     - {{ ADDITIONAL_INPUTS }}: extra context files
     - {{ INSTRUCTION }}: the user's free-text instruction for this run
-    - {{ REFERENCE_CONTENT }}: content of reference files
-    - {{ AUXILIARY_CONTENT }}: content of auxiliary files
     - {{ OUTPUT_FILES_ORDER }}: ordered list of output filenames (multiple-output agents only)
     Use these variables in the prompts section. They are substituted at runtime.
 
@@ -69,7 +66,7 @@ prompts:
          use `` and '' instead of straight quotes, no markdown-style enumerations.>
       userPrefix: |
         <Context block wrapping input documents in <documents> XML tags.
-         Must reference {{ ALL_AUXILIARYS }}, {{ ALL_REFERENCES }}, {{ ADDITIONAL_INPUTS }},
+         Must reference {{ ALL_CONTEXTS }}, {{ ADDITIONAL_INPUTS }},
          and wrap {{ INPUT_CONTENT }} in <document name="{{ INPUT_FILE }}"> tags.
          Should include an <instruction>{{ INSTRUCTION }}</instruction> block.>
       userRequest:
@@ -102,8 +99,7 @@ prompts:
         \end{itemize}
       userPrefix: |
         <documents>
-        {{ ALL_AUXILIARYS }}
-        {{ ALL_REFERENCES }}
+        {{ ALL_CONTEXTS }}
         {{ ADDITIONAL_INPUTS }}
         <document name="{{ INPUT_FILE }}">
         {{ INPUT_CONTENT }}

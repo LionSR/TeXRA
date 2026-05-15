@@ -3,11 +3,9 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview';
 
 export const FILE_SELECTION_COMMAND_IDS = {
   selectInputFile: 'texra.selectInputFile',
-  selectReferenceFile: 'texra.selectReferenceFile',
-  selectAuxiliaryFile: 'texra.selectAuxiliaryFile',
+  selectContextFile: 'texra.selectContextFile',
   selectInputFiles: 'texra.selectInputFiles',
-  selectReferenceFiles: 'texra.selectReferenceFiles',
-  selectAuxiliaryFiles: 'texra.selectAuxiliaryFiles',
+  selectContextFiles: 'texra.selectContextFiles',
   selectMediaFiles: 'texra.selectMediaFiles',
   selectMediaFile: 'texra.selectMediaFile',
   selectOutputFiles: 'texra.selectOutputFiles',
@@ -23,14 +21,12 @@ export type FileSelectionCommandId =
 
 export type FileSelectionCommand =
   | typeof MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE
-  | typeof MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE
-  | typeof MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE
+  | typeof MAIN_VIEW_COMMANDS.SELECT_CONTEXT_FILE
   | typeof MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE;
 
 export type FileSelectionResponseCommand =
   | typeof MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED
-  | typeof MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED
-  | typeof MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED
+  | typeof MAIN_VIEW_COMMANDS.CONTEXT_FILE_SELECTED
   | typeof MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED
   | typeof MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED;
 
@@ -46,12 +42,8 @@ export const FILE_SELECTION_COMMANDS = new Map<FileSelectionCommand, string>([
     FILE_SELECTION_COMMAND_IDS.selectInputFile,
   ],
   [
-    MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE,
-    FILE_SELECTION_COMMAND_IDS.selectReferenceFile,
-  ],
-  [
-    MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE,
-    FILE_SELECTION_COMMAND_IDS.selectAuxiliaryFile,
+    MAIN_VIEW_COMMANDS.SELECT_CONTEXT_FILE,
+    FILE_SELECTION_COMMAND_IDS.selectContextFile,
   ],
   [
     MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE,
@@ -68,12 +60,8 @@ export const FILE_SELECTION_RESPONSES = new Map<
     MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
   ],
   [
-    MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE,
-    MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED,
-  ],
-  [
-    MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE,
-    MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED,
+    MAIN_VIEW_COMMANDS.SELECT_CONTEXT_FILE,
+    MAIN_VIEW_COMMANDS.CONTEXT_FILE_SELECTED,
   ],
   [
     MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE,
@@ -82,12 +70,7 @@ export const FILE_SELECTION_RESPONSES = new Map<
 ]);
 
 /** File categories that support multiple file selection */
-export type MultiFileCategory =
-  | 'input'
-  | 'reference'
-  | 'auxiliary'
-  | 'media'
-  | 'output';
+export type MultiFileCategory = 'input' | 'context' | 'media' | 'output';
 
 /**
  * Commands for multi-file selection operations.
@@ -105,17 +88,10 @@ export const MULTIPLE_FILE_COMMANDS: ReadonlyMap<
     },
   ],
   [
-    'reference',
+    'context',
     {
-      selectCommand: FILE_SELECTION_COMMAND_IDS.selectReferenceFiles,
-      responseCommand: MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES,
-    },
-  ],
-  [
-    'auxiliary',
-    {
-      selectCommand: FILE_SELECTION_COMMAND_IDS.selectAuxiliaryFiles,
-      responseCommand: MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES,
+      selectCommand: FILE_SELECTION_COMMAND_IDS.selectContextFiles,
+      responseCommand: MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES,
     },
   ],
   [

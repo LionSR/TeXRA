@@ -27,8 +27,7 @@ prompts:
     [Role, LaTeX conventions, task instructions — use LaTeX formatting like \begin{itemize}]
   userPrefix: |
     <documents>
-    {{ ALL_AUXILIARYS }}
-    {{ ALL_REFERENCES }}
+    {{ ALL_CONTEXTS }}
     {{ ADDITIONAL_INPUTS }}
     <document name="{{ INPUT_FILE }}">
     {{ INPUT_CONTENT }}
@@ -60,12 +59,10 @@ Workflow agent prompts receive:
 - `{{ INPUT_FILE }}` — path of the main input file
 - `{{ INPUT_CONTENT }}` — full text of the main input file
 - `{{ ALL_INPUTS }}` — XML list of all input files (when multiple selected)
-- `{{ ALL_AUXILIARYS }}` — auxiliary files (preamble, commands, etc.)
-- `{{ ALL_REFERENCES }}` — reference/bibliography files
+- `{{ ALL_CONTEXTS }}` — XML list of context files (.bib/.bbl, reference papers, .sty/.cls)
+- `{{ LIST_OF_ALL_CONTEXTS }}` — comma-separated list of context file paths
 - `{{ ADDITIONAL_INPUTS }}` — extra context files
 - `{{ INSTRUCTION }}` — the user's free-text instruction for this run
-- `{{ REFERENCE_CONTENT }}` — content of reference files
-- `{{ AUXILIARY_CONTENT }}` — content of auxiliary files
 - `{{ OUTPUT_FILES_ORDER }}` — ordered list of output filenames; empty/falsy
   when the user has not selected output files (use `{% if OUTPUT_FILES_ORDER %}`
   to branch between multi-file and single-file output formats). Use
@@ -155,8 +152,7 @@ prompts:
 
   userPrefix: |
     <documents>
-    {{ ALL_AUXILIARYS }}
-    {{ ALL_REFERENCES }}
+    {{ ALL_CONTEXTS }}
     {{ ADDITIONAL_INPUTS }}
     <document name="{{ INPUT_FILE }}">
     {{ INPUT_CONTENT }}

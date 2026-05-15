@@ -17,10 +17,8 @@ const BASE_INPUT: WorkflowAgentInput = {
   instruction: 'Review the manuscript.',
   inputFile: 'main.tex',
   inputFiles: [],
-  referenceFile: null,
-  referenceFiles: [],
-  auxiliaryFile: null,
-  auxiliaryFiles: [],
+  contextFile: null,
+  contextFiles: [],
   mediaFile: null,
   mediaFiles: [],
   extractFigures: null,
@@ -45,12 +43,12 @@ describe('DelegationTools', () => {
     WorkspaceFS.stat = originalStat;
   });
 
-  it('rejects auxiliary .bib files larger than 100KB', async () => {
+  it('rejects context .bib files larger than 100KB', async () => {
     WorkspaceFS.stat = async () => stat(100 * 1024 + 1);
 
     const result = await rejectOversizedBibAttachments({
       ...BASE_INPUT,
-      auxiliaryFile: 'references.bib',
+      contextFile: 'references.bib',
     });
 
     assert.strictEqual(result?.isError, true);
@@ -68,12 +66,12 @@ describe('DelegationTools', () => {
     });
   });
 
-  it('rejects reference .bib files larger than 100KB', async () => {
+  it('rejects context .bib files in the multi-list larger than 100KB', async () => {
     WorkspaceFS.stat = async () => stat(150 * 1024);
 
     const result = await rejectOversizedBibAttachments({
       ...BASE_INPUT,
-      referenceFiles: ['paper.tex', 'bibliography/main.bib'],
+      contextFiles: ['paper.tex', 'bibliography/main.bib'],
     });
 
     assert.strictEqual(result?.isError, true);
@@ -90,13 +88,13 @@ describe('DelegationTools', () => {
 
     const result = await rejectOversizedBibAttachments({
       ...BASE_INPUT,
-      auxiliaryFiles: ['library.bib'],
+      contextFiles: ['library.bib'],
     });
 
     assert.strictEqual(result, null);
   });
 
-  it('ignores non-bib reference and auxiliary files', async () => {
+  it('ignores non-bib context files', async () => {
     let statCalled = false;
     WorkspaceFS.stat = async () => {
       statCalled = true;
@@ -105,8 +103,7 @@ describe('DelegationTools', () => {
 
     const result = await rejectOversizedBibAttachments({
       ...BASE_INPUT,
-      referenceFiles: ['paper.tex'],
-      auxiliaryFiles: ['preamble.tex'],
+      contextFiles: ['paper.tex', 'preamble.tex'],
     });
 
     assert.strictEqual(result, null);
