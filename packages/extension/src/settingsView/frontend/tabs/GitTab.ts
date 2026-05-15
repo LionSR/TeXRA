@@ -11,8 +11,6 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
-import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
-import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - shared schemas
 import type { PRSubscriptionEntry } from '@shared/schemas/settingsViewMessages';
@@ -25,6 +23,8 @@ import {
   DEFAULT_GIT_AUTHOR_NAME,
   DEFAULT_GIT_AUTHOR_EMAIL,
 } from '@shared/constants/git';
+import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
+import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 
 @customElement('git-tab')
 export class GitTab extends LitElement {

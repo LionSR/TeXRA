@@ -15,7 +15,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
-import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -26,6 +25,7 @@ import {
 } from '@shared/utils/selectTemplates';
 
 import { ProgressEvents } from '../events';
+import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type { FollowupOptionsState } from '../store';
 
 @customElement('workflow-tool-use-followup-section')
