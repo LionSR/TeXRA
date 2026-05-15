@@ -143,10 +143,26 @@ function createDefaultTools() {
 /** Union of all tool names registered in the default registry. */
 export type RegisteredToolName = keyof ReturnType<typeof createDefaultTools>;
 
+/**
+ * Legacy tool-name aliases — keep prior YAML configs working when a tool is
+ * renamed. Each entry maps `<old name> → <canonical name>`. The alias resolves
+ * to the same tool instance; the tool's `definition.name` (and therefore what
+ * the model sees) is still the canonical one.
+ */
+const TOOL_ALIASES: Record<string, string> = {
+  external_inquiry: 'inquiry',
+};
+
 /** Lazy singleton accessor for the default tool registry. */
 export function getDefaultToolRegistry(): IToolRegistry {
   if (!defaultRegistryInstance) {
-    defaultRegistryInstance = new MapToolRegistry(createDefaultTools());
+    const tools = createDefaultTools();
+    const withAliases: Record<string, ITool> = { ...tools };
+    for (const [alias, target] of Object.entries(TOOL_ALIASES)) {
+      const tool = (tools as Record<string, ITool>)[target];
+      if (tool) withAliases[alias] = tool;
+    }
+    defaultRegistryInstance = new MapToolRegistry(withAliases);
   }
   return defaultRegistryInstance;
 }

@@ -18,6 +18,7 @@
 import { z } from 'zod';
 
 import { tryUseRunContext } from '@agent/runtime/RunContext';
+import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   ExternalInquiryThreadIdSchema,
@@ -154,13 +155,25 @@ export async function handleExternalInquiryAction(
       );
       return;
     }
+    // Removes the inquiry card from `ApprovalRequestHandler.pending`; without
+    // this the request would replay on next webview load and the stream would
+    // be reported as having pending permissions forever.
+    bus.emit('resolveExternalInquiry', { requestId: payload.threadId });
     await injectContinuationForAnsweredThread(payload.threadId);
     return;
   }
 
-  // drop
-  await markDropped({ threadId: payload.threadId });
-  await injectContinuationForDroppedThread(payload.threadId);
+  // drop — only flips status if the thread is still open; see markDropped.
+  const dropped = await markDropped({ threadId: payload.threadId });
+  bus.emit('resolveExternalInquiry', { requestId: payload.threadId });
+  if (dropped) {
+    await injectContinuationForDroppedThread(payload.threadId);
+  } else {
+    logger.warn(
+      `Inquiry drop ignored: thread ${payload.threadId} is no longer open ` +
+        `(stale/duplicate drop after submit?). Skipping continuation.`,
+    );
+  }
 }
 
 // ============================================================================
@@ -241,9 +254,9 @@ This tool is NON-BLOCKING. The 'ask' subcommand dispatches a question and return
 Do NOT wait on a dispatched question. Either continue with independent work or end your turn now and let the continuation wake you up.
 
 Subcommands:
-  - ask   (default behavior) — dispatch a new question or follow up on an existing thread
+  - ask   — dispatch a new question or follow up on an existing thread
   - read  — return the full untruncated transcript of one inquiry thread
-  - list  — enumerate inquiry threads by status (open / answered / dropped / any) and scope (this stream / all)
+  - list  — enumerate inquiry threads. Defaults: status='open', scope='stream'
 
 IMPORTANT for 'ask':
   Questions MUST be self-contained. The external model has NO context from this conversation. Include all background, definitions, notation, and problem setup directly.
@@ -360,7 +373,11 @@ export class ExternalInquiryTool extends defineTool({
     input: Extract<InquiryInput, { command: 'read' }>;
     executionId?: string;
   }): Promise<ToolResult> {
-    const manifest = await readExternalInquiryThread(args.input.thread_id);
+    // Hydrate inline answer text from disk for legacy manifests whose
+    // turns only stored an `answerRelativePath`.
+    const manifest = await readExternalInquiryThread(args.input.thread_id, {
+      hydrate: true,
+    });
     if (!manifest) {
       throw new ToolError(
         `External inquiry thread not found: ${args.input.thread_id}`,

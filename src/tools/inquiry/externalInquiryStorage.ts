@@ -182,6 +182,32 @@ function threadTurnDir(
   return path.join(threadDir(threadId), turnDir(turnIndex));
 }
 
+/**
+ * Hydrate inline `answer` from disk for any turn that has an
+ * `answerRelativePath` but no inline `answer` field. Legacy single-shot
+ * manifests stored the answer text only on disk; the new canonical
+ * shape carries it inline so renderers don't need a second read.
+ */
+async function hydrateAnswersFromDisk(
+  threadId: ExternalInquiryThreadId,
+  manifest: ExternalInquiryThreadManifest,
+): Promise<ExternalInquiryThreadManifest> {
+  const turns = await Promise.all(
+    manifest.turns.map(async (turn) => {
+      if (turn.answer || !turn.answerRelativePath) return turn;
+      try {
+        const content = await GlobalStorageFS.read(
+          path.join(threadDir(threadId), turn.answerRelativePath),
+        );
+        return { ...turn, answer: content };
+      } catch {
+        return turn;
+      }
+    }),
+  );
+  return { ...manifest, turns };
+}
+
 async function readThreadManifest(
   threadId: ExternalInquiryThreadId,
 ): Promise<ExternalInquiryThreadManifest | null> {
@@ -472,16 +498,22 @@ export async function recordAnswerForOpenTurn(params: {
 }
 
 /**
- * Mark the thread as dropped by the user. Terminal — the agent cannot
- * follow up on a dropped thread; it must start a new one.
+ * Mark the thread as dropped by the user. Only valid from `open` —
+ * stale or duplicate drop actions arriving after a submit must NOT
+ * overwrite an `answered` status (which would emit a contradictory
+ * dropped continuation and corrupt the audit trail).
+ *
+ * Returns `true` if the manifest was actually flipped; `false` if the
+ * drop was a no-op (thread already answered/dropped or not found) so
+ * the caller can skip continuation injection.
  */
 export async function markDropped(params: {
   threadId: ExternalInquiryThreadId;
-}): Promise<void> {
-  await withThreadLock(params.threadId, async () => {
+}): Promise<boolean> {
+  return withThreadLock(params.threadId, async () => {
     const existing = await readThreadManifest(params.threadId);
-    if (!existing) return;
-    if (existing.status === 'dropped') return;
+    if (!existing) return false;
+    if (existing.status !== 'open') return false;
 
     const timestamp = new Date().toISOString();
     const nextManifest: ExternalInquiryThreadManifest = {
@@ -491,6 +523,7 @@ export async function markDropped(params: {
     };
 
     await writeThreadManifest(nextManifest);
+    return true;
   });
 }
 
@@ -528,12 +561,25 @@ export async function persistOpenTurnDraft(params: {
 // Public read API
 // ============================================================================
 
+/**
+ * Read a thread manifest. When `hydrate` is true, fills in inline
+ * `answer` text from `answerRelativePath` for legacy manifests so
+ * callers don't see "(awaiting user answer)" for migrated threads.
+ * Continuation injection uses the canonical inline `answer` field
+ * already, so hydration is opt-in to keep the hot path cheap.
+ */
 export async function readExternalInquiryThread(
   threadId: string,
+  options?: { hydrate?: boolean },
 ): Promise<ExternalInquiryThreadManifest | null> {
   const parsed = ExternalInquiryThreadIdSchema.safeParse(threadId);
   if (!parsed.success) return null;
-  return readThreadManifest(parsed.data);
+  const manifest = await readThreadManifest(parsed.data);
+  if (!manifest) return null;
+  if (options?.hydrate) {
+    return hydrateAnswersFromDisk(parsed.data, manifest);
+  }
+  return manifest;
 }
 
 function manifestToSummary(
