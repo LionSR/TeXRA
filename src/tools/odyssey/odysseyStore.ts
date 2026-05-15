@@ -305,13 +305,17 @@ export const OdysseyStore = {
     return updated;
   },
 
-  /** Drop the record (used on conversation delete). */
+  /** Drop the record (used on conversation delete). Bootstrap-tolerant —
+   *  cleanup paths shouldn't fail loudly if state isn't wired yet. */
   async forget(streamId: StreamTabId): Promise<void> {
+    const state = tryGetWorkspaceState();
+    if (!state) return;
     const existed = readRaw(streamId) !== null;
+    if (!existed) return;
     await Promise.all([
-      getWorkspaceState().update(streamKey(streamId), undefined),
+      state.update(streamKey(streamId), undefined),
       removeFromIndex(streamId),
     ]);
-    if (existed) bus.emit('odysseyStateChanged', { streamId });
+    bus.emit('odysseyStateChanged', { streamId });
   },
 };
