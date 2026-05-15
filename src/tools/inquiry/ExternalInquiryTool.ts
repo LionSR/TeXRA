@@ -159,7 +159,14 @@ export async function handleExternalInquiryAction(
     // this the request would replay on next webview load and the stream would
     // be reported as having pending permissions forever.
     bus.emit('resolveExternalInquiry', { requestId: payload.threadId });
-    await injectContinuationForAnsweredThread(payload.threadId);
+    // Pass the manifest we just wrote so the injector doesn't re-read from
+    // disk — a concurrent follow-up `ask` from another stream could flip
+    // the status back to `open` between writes and would otherwise cause
+    // the continuation to silently drop.
+    await injectContinuationForAnsweredThread(
+      payload.threadId,
+      persisted.manifest,
+    );
     return;
   }
 

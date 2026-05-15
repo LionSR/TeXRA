@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Local imports - core flow primitives
 import { isRemoteAgent } from '@agent/index';
-import { BaseNode, Flow, Node } from '@agent/node';
+import { BaseNode, BatchNode, Flow, Node } from '@agent/node';
 import { recordCycleMetrics } from '@agent/core/AgentState';
 import {
   BaseCycleFieldsSchema,
@@ -504,7 +504,7 @@ interface ToolExecutionResult {
  *
  * Batches follow-up messages for Google/DeepSeek handlers to preserve thought signatures.
  */
-class ToolUseDispatchNode<C> extends Node<
+class ToolUseDispatchNode<C> extends BatchNode<
   ToolUseCycleShared,
   CycleParams,
   ToolUseCycleServices<C>

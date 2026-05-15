@@ -27,6 +27,7 @@ import {
   getThreadSummary,
   listOpenThreadsForStream,
   readExternalInquiryThread,
+  type ExternalInquiryThreadManifest,
 } from './externalInquiryStorage';
 
 const logger = new AgentLogger('inquiryContinuation');
@@ -159,8 +160,15 @@ async function deliverContinuation(params: {
 
 export async function injectContinuationForAnsweredThread(
   threadId: ExternalInquiryThreadId,
+  /**
+   * Manifest snapshot from the writer (action handler) — pass it to
+   * avoid a re-read race: a concurrent follow-up `ask` from another
+   * stream could flip `answered → open` between the write and the
+   * re-read, which would otherwise drop the continuation as archived.
+   */
+  manifestHint?: ExternalInquiryThreadManifest,
 ): Promise<InjectionOutcome> {
-  const manifest = await readExternalInquiryThread(threadId);
+  const manifest = manifestHint ?? (await readExternalInquiryThread(threadId));
   if (!manifest) return 'archived';
 
   const lastTurn = manifest.turns.at(-1);
