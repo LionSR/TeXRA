@@ -567,6 +567,24 @@
               "order": 13,
               "type": "array"
             },
+            "texra.files.included.contextExtensions": {
+              "default": [
+                ".txt",
+                ".tex",
+                ".md",
+                ".bib",
+                ".bbl",
+                ".cls",
+                ".sty"
+              ],
+              "description": "File extensions to include when searching for context files",
+              "editPresentation": "multilineText",
+              "items": {
+                "type": "string"
+              },
+              "order": 6,
+              "type": "array"
+            },
             "texra.files.included.editedExtensions": {
               "default": [".txt", ".tex"],
               "description": "File extensions to include when searching for edited files",
@@ -615,24 +633,6 @@
                 "type": "string"
               },
               "order": 4,
-              "type": "array"
-            },
-            "texra.files.included.contextExtensions": {
-              "default": [
-                ".txt",
-                ".tex",
-                ".md",
-                ".bib",
-                ".bbl",
-                ".cls",
-                ".sty"
-              ],
-              "description": "File extensions to include when searching for context files",
-              "editPresentation": "multilineText",
-              "items": {
-                "type": "string"
-              },
-              "order": 6,
               "type": "array"
             },
             "texra.maxImageDimension": {
