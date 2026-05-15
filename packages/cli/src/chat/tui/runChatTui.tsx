@@ -1,14 +1,10 @@
-// Ink-mounted chat session per docs/prd/cli-tui-ink (Phase 1).
+// Ink-mounted chat session per docs/prd/cli-tui-ink.
 //
 // This is the new TUI entry that the `--tui` flag mounts; the legacy
 // `runChat.ts` path is still the default until Phase 6. We intentionally
 // share as much as possible with the legacy path — platform init, default
-// resolution, approval handlers, the agent runtime host — and only swap the
-// rendering surface (Ink) and the follow-up queue (p-queue, replacing the
-// hand-rolled promise chain).
-//
-// Approvals stay on the legacy adapter for Phase 1 per the PRD; the
-// approval dispatcher only lights up in Phase 2.
+// resolution, and the agent runtime host — and swap the rendering surface
+// (Ink), approval UI, and follow-up queue.
 
 import { render } from 'ink';
 import PQueue from 'p-queue';
