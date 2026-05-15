@@ -53,6 +53,7 @@ import { WorkflowAgentTool, DelegateAgentTool } from './DelegationTools';
 import { ExecutionsTool } from './ExecutionsTool';
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
 import { ExternalInquiryTool } from './inquiry';
+import { AskUserQuestionTool } from './userQuestion';
 import { GitHubSubscriptionTool } from './github';
 import {
   ProbeEnvironmentTool,
@@ -123,6 +124,7 @@ function createDefaultTools() {
     executions: new ExecutionsTool(),
     accept_run_files: new AcceptRunFilesTool(),
     external_inquiry: new ExternalInquiryTool(),
+    ask_user_question: new AskUserQuestionTool(),
     github_subscription: new GitHubSubscriptionTool(),
     probe_environment: new ProbeEnvironmentTool(),
     verify_setup: new VerifySetupTool(),

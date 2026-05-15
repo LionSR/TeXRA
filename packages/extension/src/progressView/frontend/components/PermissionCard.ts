@@ -18,6 +18,7 @@ import type {
   PlanApprovalPermission,
   RetryPermission,
   ToolEditPermission,
+  UserQuestionPermission,
   WorkflowAgentProposalPermission,
 } from '@shared/schemas';
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
@@ -59,6 +60,10 @@ export type PermissionState =
   | {
       kind: typeof PERMISSION_KIND.EXTERNAL_INQUIRY;
       data: ExternalInquiryPermission;
+    }
+  | {
+      kind: typeof PERMISSION_KIND.USER_QUESTION;
+      data: UserQuestionPermission;
     };
 
 /** Action button configuration */
@@ -81,6 +86,7 @@ const PERMISSION_ICONS: Record<PermissionState['kind'], string> = {
   [PERMISSION_KIND.PROPOSAL]: 'rocket',
   [PERMISSION_KIND.PLAN_APPROVAL]: 'tasklist',
   [PERMISSION_KIND.EXTERNAL_INQUIRY]: 'globe',
+  [PERMISSION_KIND.USER_QUESTION]: 'circle-question',
 };
 
 /** Title for each permission type */
@@ -91,6 +97,7 @@ const PERMISSION_TITLES: Record<PermissionState['kind'], string> = {
   [PERMISSION_KIND.PROPOSAL]: 'Approve task',
   [PERMISSION_KIND.PLAN_APPROVAL]: 'Approve plan',
   [PERMISSION_KIND.EXTERNAL_INQUIRY]: 'External inquiry',
+  [PERMISSION_KIND.USER_QUESTION]: 'Question',
 };
 
 /** Primary actions (approve/reject) for each permission type */
@@ -119,6 +126,9 @@ const PRIMARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
   [PERMISSION_KIND.EXTERNAL_INQUIRY]: [
     { action: 'reject', label: 'Reject', icon: 'x', variant: 'reject' },
   ],
+  [PERMISSION_KIND.USER_QUESTION]: [
+    { action: 'reject', label: 'Reject', icon: 'x', variant: 'reject' },
+  ],
 };
 
 /** Secondary actions for each permission type */
@@ -145,6 +155,7 @@ const SECONDARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
   ],
   [PERMISSION_KIND.PLAN_APPROVAL]: [],
   [PERMISSION_KIND.EXTERNAL_INQUIRY]: [],
+  [PERMISSION_KIND.USER_QUESTION]: [],
 };
 
 // =============================================================================

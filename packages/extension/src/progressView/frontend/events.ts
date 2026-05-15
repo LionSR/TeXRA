@@ -4,6 +4,7 @@
  */
 
 import type { StringValueDetail } from '@shared/schemas';
+import type { UserQuestionAnswers } from '@shared/schemas';
 import { createEvent } from '@shared/utils/events';
 
 import type { PermissionState } from './components/PermissionCard';
@@ -46,6 +47,8 @@ export interface PermissionActionDetail {
   answer?: string;
   /** External chat/thread links captured from the user (submit action only). */
   sessionLinks?: string[];
+  /** Structured answers from the user-question panel (submit action only). */
+  answers?: UserQuestionAnswers;
 }
 
 /**
