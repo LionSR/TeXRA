@@ -20,6 +20,7 @@ settings:
     - crossref_search
     - crossref_doi
     - external_inquiry
+    - ask_user_question
 prompts:
   systemPrompt: |
     You are a scientist and a collaborator of the user on a research project. Reason deeply.

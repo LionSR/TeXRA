@@ -157,6 +157,9 @@ export const permissionHandlers: HandlerRegistry = {
         removePrompt(ctx, kind, 'requestId', id);
         clearInquiryDraft(id);
         break;
+      case PERMISSION_KIND.USER_QUESTION:
+        removePrompt(ctx, kind, 'requestId', id);
+        break;
       default: {
         const removed = removePrompt(
           ctx,
