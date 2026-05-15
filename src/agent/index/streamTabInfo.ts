@@ -64,7 +64,8 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   // Process agents (e.g. bash) carry a synthetic AgentConfig whose `model`
   // is the schema's prefault, not a real inference model — omit so the
   // tab footer doesn't lie.
-  const processAgent = isProcessAgent(config?.agent ?? hints?.agent);
+  const resolvedAgent = config?.agent ?? hints?.agent ?? agentName;
+  const processAgent = isProcessAgent(resolvedAgent);
 
   // Surface the full untruncated command for process streams (description
   // is capped for tab/tooltip rendering).
@@ -97,7 +98,7 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
       !processAgent && config?.model
         ? (MODEL_CONFIGS[config.model]?.label ?? config.model)
         : undefined,
-    agent: config?.agent ?? hints?.agent,
+    agent: resolvedAgent,
     agentCategory: category,
     isRemote,
     inputFile,
