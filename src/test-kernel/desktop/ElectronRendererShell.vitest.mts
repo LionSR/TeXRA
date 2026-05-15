@@ -59,6 +59,7 @@ describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () 
     expect(rendererMain).toMatch(
       /document\.createElement\(\s*'stream-tabs'\s*[,)]/,
     );
+    expect(rendererMain).not.toMatch(/\brailTabs\.compact\s*=/);
   });
 
   it('listens for desktop route pushes from the Electron host', () => {
@@ -83,7 +84,7 @@ describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () 
 
     // Three-pane CSS grid template — left rail width, flexible center,
     // collapsed right column reserved for future diff/approve UX.
-    expect(styles).toContain('--desktop-rail-width');
+    expect(styles).toContain('--desktop-rail-width: clamp(');
     expect(styles).toContain(
       'grid-template-columns: var(--desktop-rail-width)',
     );
