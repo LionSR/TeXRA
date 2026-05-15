@@ -132,6 +132,15 @@ function truncatePrompt(text: string, maxLength: number): string {
   return truncateWithEllipsis(oneLine, maxLength);
 }
 
+/** Truncate tool header text without pulling streamed stdout/stderr into it. */
+function truncateHeaderSummary(text: string, maxLength: number): string {
+  const oneLine = text.replaceAll(/\s+/g, ' ').trim();
+  const outputMarker = oneLine.search(/\s+<(?:stdout|stderr)>/i);
+  const summary =
+    outputMarker >= 0 ? oneLine.slice(0, outputMarker).trim() : oneLine;
+  return truncateWithEllipsis(summary || oneLine, maxLength);
+}
+
 /** Join template sections with horizontal rule separators. */
 function joinWithSeparator(sections: TemplateResult[]): TemplateResult {
   return html`${sections.map(
@@ -734,6 +743,7 @@ export function formatToolUseTemplate(
       headerSummary = truncatePrompt(input.command, 60);
     }
   }
+  headerSummary = truncateHeaderSummary(headerSummary, 120);
   const titleText = headerSummary
     ? `${titleBase} — ${headerSummary}`
     : titleBase;
