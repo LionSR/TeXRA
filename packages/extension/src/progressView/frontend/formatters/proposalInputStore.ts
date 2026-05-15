@@ -57,28 +57,23 @@ function parseProposalInput(
   }
 
   if (toolName === 'delegate_workflow' || toolName === 'propose_workflow') {
-    const migrated = migrateLegacyContextFileFields(spread);
+    const migrated = migrateLegacyContextFileFields(spread) as Record<
+      string,
+      unknown
+    >;
     // Map extraction shorthand flags into toolConfig.
     // Note: at runtime, DelegationTools.execute also inherits flags from the
     // parent agent's toolConfig when omitted. That inheritance can't be
     // replicated here (no access to parent context), so the store reflects
     // only what the LLM explicitly requested.
     const extractFigures =
-      isPlainObject(migrated) &&
-      'extractFigures' in migrated &&
       migrated.extractFigures != null
         ? Boolean(migrated.extractFigures)
         : undefined;
     const extractTikz =
-      isPlainObject(migrated) &&
-      'extractTikz' in migrated &&
-      migrated.extractTikz != null
-        ? Boolean(migrated.extractTikz)
-        : undefined;
-    const existingToolConfig = isPlainObject(migrated)
-      ? isPlainObject(migrated.toolConfig)
-        ? migrated.toolConfig
-        : {}
+      migrated.extractTikz != null ? Boolean(migrated.extractTikz) : undefined;
+    const existingToolConfig = isPlainObject(migrated.toolConfig)
+      ? migrated.toolConfig
       : {};
     const toolConfig = {
       ...existingToolConfig,
@@ -92,7 +87,7 @@ function parseProposalInput(
 
     const result = LenientWorkflowProposalSchema.safeParse({
       agentCategory: AGENT_CATEGORY.WORKFLOW,
-      ...(isPlainObject(migrated) ? migrated : spread),
+      ...migrated,
       toolConfig,
     });
     return result.success ? result.data : null;
