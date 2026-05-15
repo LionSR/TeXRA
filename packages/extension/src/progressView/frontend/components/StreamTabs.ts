@@ -2,14 +2,12 @@
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
-import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports
 import {
   STREAM_STATUS,
-  type ConversationProgress,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
@@ -29,10 +27,6 @@ import './WorktreeChip';
 import { formatRelativeTime } from '@shared/utils/string';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import {
-  renderProgressBadgeContent,
-  getProgressBadgeTitle,
-} from '../formatters/progressBadgeFormatter';
 import { layoutStyles } from '../styles/logStyles';
 import {
   ACTIVE_STREAM_STATUSES,
@@ -364,19 +358,6 @@ export class StreamTab extends LitElement {
         transform: rotate(90deg);
       }
 
-      .progress-badge-inline {
-        font-size: var(--font-size-xs);
-        padding: var(--wa-space-3xs) var(--wa-space-2xs);
-        border-radius: var(--border-radius-small);
-        background-color: color-mix(
-          in srgb,
-          var(--color-text-secondary) 10%,
-          transparent
-        );
-        white-space: nowrap;
-        flex-shrink: 0;
-      }
-
       .worktree-chip-row {
         display: flex;
         align-items: center;
@@ -399,9 +380,6 @@ export class StreamTab extends LitElement {
   @property({ type: Number }) childCount = 0;
   /** Whether the child list is expanded. */
   @property({ type: Boolean, reflect: true }) expanded = false;
-  /** Progress data (conversation turns, tool calls). */
-  @property({ attribute: false }) progress: ConversationProgress | undefined =
-    undefined;
 
   // Cached derived values — only recomputed when inputs change
   private _cachedInfo: StreamTabInfo | null = null;
@@ -504,7 +482,6 @@ export class StreamTab extends LitElement {
                   <span class="model"
                     >${stream.modelLabel ?? stream.model ?? ''}</span
                   >
-                  ${this.renderProgressBadge()}
                   <wa-icon
                     library="texra"
                     name=${agentDecorator.icon}
@@ -542,16 +519,6 @@ export class StreamTab extends LitElement {
         </wa-button>
       </div>
     `;
-  }
-
-  private renderProgressBadge(): TemplateResult | typeof nothing {
-    if (!this.progress?.conversationTurns) return nothing;
-    return html`<span
-      class="progress-badge-inline"
-      title=${ifDefined(getProgressBadgeTitle(this.progress))}
-    >
-      ${renderProgressBadgeContent(this.progress)}
-    </span>`;
   }
 }
 
@@ -753,11 +720,6 @@ export class StreamTabs extends LitElement {
     return this.streamStates.get(name)?.lastTimestamp;
   }
 
-  private getProgress(name: StreamTabId): ConversationProgress | undefined {
-    const state = this.streamStates.get(name);
-    return state?.conversationProgress;
-  }
-
   /**
    * Classify an entire child branch, not just the direct row. Results are
    * memoized for each reactive update so deep child trees are traversed once
@@ -824,7 +786,6 @@ export class StreamTabs extends LitElement {
         .compact=${options.compact}
         .status=${this.getStatus(stream.name)}
         .lastTimestamp=${this.getTimestamp(stream.name)}
-        .progress=${this.getProgress(stream.name)}
         ?active=${stream.name === this.activeStreamId}
         .hasPendingApproval=${this.pendingApprovalStreamIds.has(stream.name)}
         .childCount=${childCount}
