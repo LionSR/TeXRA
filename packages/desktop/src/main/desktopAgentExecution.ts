@@ -40,7 +40,7 @@ import {
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import { COMMON_COMMANDS } from '@common/webview/commonCommands';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { DiffViewHost } from '@hosts/diffViewHost';
 import type { ExternalOpener } from '@hosts/externalOpener';
 import { getAcceptedFileTarget } from '@latex/acceptedFileTarget';
@@ -70,6 +70,7 @@ import {
   cleanupApprovalsForStream,
   handleProgressViewBashApprovalAction,
 } from '@tools/approval';
+import { OdysseyStore } from '@tools/odyssey';
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import {
@@ -180,9 +181,16 @@ export class DesktopProgressBridge {
   ) {
     AgentLogger.setStreamLogStore(this.streamLogs);
     setRunStorageService({ isViewVisible: () => true });
-    this.unsubscribe = this.streamLogs.onChange((streamId) =>
+    const unsubscribeStreamLogs = this.streamLogs.onChange((streamId) =>
       this.flushLogs(streamId),
     );
+    const unsubscribeOdyssey = bus.on('odysseyStateChanged', ({ streamId }) => {
+      this.updateOdysseyActiveFromStore(streamId);
+    });
+    this.unsubscribe = () => {
+      unsubscribeStreamLogs();
+      unsubscribeOdyssey();
+    };
     this.runtimeHost = {
       emit: (event, payload) => this.handleProgressEvent(event, payload),
     };
@@ -549,6 +557,18 @@ export class DesktopProgressBridge {
     this.cursors.set(streamId, log.head);
   }
 
+  private updateOdysseyActiveFromStore(streamId: StreamTabId): void {
+    const odyssey = OdysseyStore.getForStream(streamId);
+    const active = odyssey?.status === 'active' || odyssey?.status === 'paused';
+    this.send({
+      command: PROGRESS_VIEW_COMMANDS.ODYSSEY_ACTIVE_UPDATED,
+      stream: streamId,
+      active,
+      ...(odyssey?.status ? { status: odyssey.status } : {}),
+      ...(odyssey?.objective ? { objective: odyssey.objective } : {}),
+    });
+  }
+
   private handleProgressEvent<K extends keyof ProgressEventPayloads>(
     event: K,
     payload: ProgressEventPayloads[K],
@@ -887,6 +907,11 @@ export class DesktopProgressBridge {
         });
         break;
       }
+      case 'odysseyStateChanged': {
+        const data = payload as ProgressEventPayloads['odysseyStateChanged'];
+        this.updateOdysseyActiveFromStore(data.streamId);
+        break;
+      }
       case 'clearMissingOutputs':
       case 'showRetryRequest':
       case 'resolveRetryRequest':
@@ -969,6 +994,7 @@ export class DesktopProgressBridge {
     this.streamBadges.delete(streamId);
     this.workflowFileActions.clearStreamBackups(streamId);
     this.cursors.delete(streamId);
+    await OdysseyStore.forget(streamId);
 
     const shouldSelectFallback = this.activeStream === streamId;
     if (shouldSelectFallback) {
@@ -991,9 +1017,17 @@ export class DesktopProgressBridge {
   async deleteAllStreams(): Promise<void> {
     // Shared approval cleanup also owns retry/proposal/plan coordinator cleanup.
     cleanupAllApprovals();
-    for (const streamId of this.streamLogs.keys()) {
+    const streamIds = new Set<StreamTabId>([
+      ...this.streamLogs.keys(),
+      ...this.taskStates.keys(),
+      ...this.restoredStreams.keys(),
+    ]);
+    for (const streamId of streamIds) {
       ToolUseFollowUpQueue.release(streamId);
     }
+    await Promise.all(
+      [...streamIds].map((streamId) => OdysseyStore.forget(streamId)),
+    );
     // Drop persisted ghosts too: a "delete all" should leave nothing
     // for the next launch to hydrate, otherwise users would see the
     // ghosts come back zombie-style after relaunch.
