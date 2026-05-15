@@ -33,7 +33,7 @@ extraResources:
 mac:
   category: public.app-category.productivity
   icon: build/icon.icns
-  x64ArchFiles: '**/app.asar.unpacked/node_modules/@openai/codex-*/vendor/**'
+  x64ArchFiles: '**/app.asar.unpacked/node_modules/{@openai/codex-*/vendor,@anthropic-ai/claude-agent-sdk-*}/**'
   target:
     - target: dmg
       arch:
