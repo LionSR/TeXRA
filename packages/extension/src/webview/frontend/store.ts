@@ -96,7 +96,6 @@ export const FILE_UPDATE_COMMANDS: Record<MultipleDocumentFileType, string> = {
 export const FILE_REFRESH_COMMANDS: Record<string, string> = {
   input: MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
   reference: MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE,
-  auxiliary: MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE,
   media: MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
 };
 
@@ -104,7 +103,6 @@ export const FILE_REFRESH_COMMANDS: Record<string, string> = {
 export const FILE_SELECTED_COMMANDS: Record<string, string> = {
   input: MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
   reference: MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED,
-  auxiliary: MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED,
   media: MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED,
 };
 

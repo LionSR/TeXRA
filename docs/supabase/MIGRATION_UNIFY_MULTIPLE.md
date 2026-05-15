@@ -40,6 +40,17 @@ Run all of these from a workstation logged into the production Supabase project.
 
 3. **Build and validate the new extension locally**. Run an end-to-end test of `apply` on a 2-file input pointing at the production Supabase project (the new YAMLs are already deployed locally via `reference-agents/`). Confirm the prompt rendering is correct, all 9 unified agents work.
 
+4. **Verify the currently-shipped client tolerates `documentTag: documents`**. The DELETE in step 2 is irreversible without a snapshot restore, and the shipped client's behavior under the new YAML is the only thing that can break it. Confirm `documentTag` is parsed at runtime, not pinned to `latex_documents`:
+
+   ```bash
+   # Replace <VERSION> with the published marketplace version users are on.
+   curl -L -o /tmp/texra.vsix \
+     "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/LionSR/vsextensions/texra/<VERSION>/vspackage"
+   unzip -p /tmp/texra.vsix extension/dist/extension.js | grep -E "latex_documents|documentTag" | head -20
+   ```
+
+   Expect: `documentTag` referenced as a YAML field read, **not** any `latex_documents` literal hard-coded into the parser. If the published bundle pins `latex_documents`, **stop** — the migration would brick every shipped client between step 2 and the user upgrading. Coordinate a different rollout (e.g., publish first, wait for marketplace propagation, then DELETE).
+
 ## Migration steps (single coordinated release)
 
 Execute in this order — do not parallelize.
@@ -93,7 +104,7 @@ Before publishing the new extension, run the _currently shipped_ version of TeXR
 - Supabase returns the unified `apply.yaml` content.
 - `documentTag` declared in the YAML is `documents` (not `latex_documents` as the old client expected for multi-output).
 
-The third point is the risk. Confirm the old client parses `documentTag` from the YAML at runtime rather than pinning it to `latex_documents`. If the old client breaks, **roll back the SQL** using the snapshot from the pre-migration checklist:
+The third point was already verified in the pre-flight checklist (step 4) before the SQL ran — this smoke test is the runtime confirmation. If the old client breaks anyway, **roll back the SQL** using the snapshot from the pre-migration checklist:
 
 ```sql
 -- For each retired row, re-insert from the snapshot

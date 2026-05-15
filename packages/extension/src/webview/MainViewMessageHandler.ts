@@ -203,8 +203,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.fileManager.handleRequestInputFile(m),
       [MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE]: (m) =>
         this.fileManager.handleRequestFile(m),
-      [MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE]: (m) =>
-        this.fileManager.handleRequestFile(m),
       [MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE]: (m) =>
         this.fileManager.handleRequestFile(m),
       [MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE]: (m) =>

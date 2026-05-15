@@ -52,7 +52,6 @@ type RequestInputFileMessage = MessageFor<
 
 type RequestFileMessage = MessageFor<
   | typeof MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE
-  | typeof MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE
   | typeof MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE
 >;
 
@@ -180,10 +179,7 @@ export class FileManager extends BaseWebviewManager {
 
   async handleRequestFile(message: RequestFileMessage): Promise<void> {
     const fileType = message.command.replace('request', '').replace('File', '');
-    const listType = fileType.toLowerCase() as
-      | 'reference'
-      | 'auxiliary'
-      | 'media';
+    const listType = fileType.toLowerCase() as 'reference' | 'media';
     const files = await getFileLister().list(listType);
     this.postFileUpdate(fileType, files, {
       notifyWhenEmpty: Boolean(message.notifyWhenEmpty),

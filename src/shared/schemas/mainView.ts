@@ -790,7 +790,6 @@ const FileSelectedMessages = [
 const RequestFileMessages = [
   withNotifyWhenEmpty(MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE),
   withNotifyWhenEmpty(MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE),
-  withNotifyWhenEmpty(MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE),
   withNotifyWhenEmpty(MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE),

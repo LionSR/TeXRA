@@ -134,8 +134,6 @@ This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the ext
 - &#123;&#123; LIST_OF_ALL_INPUTS &#125;&#125;: Simple comma-separated string listing all input file paths.
 - &#123;&#123; LIST_OF_ALL_CONTEXTS &#125;&#125;: Similar comma-separated list for context files.
 
-_Deprecated aliases:_ &#123;&#123; ALL_REFERENCES &#125;&#125; / &#123;&#123; ALL_AUXILIARYS &#125;&#125; / &#123;&#123; LIST_OF_ALL_REFERENCES &#125;&#125; / &#123;&#123; LIST_OF_ALL_AUXILIARYS &#125;&#125; remain populated for custom YAMLs that haven't migrated. New agents should use the unified `*_CONTEXTS` variables.
-
 **Multiple Output Variable:**
 
 - &#123;&#123; OUTPUT_FILES_ORDER &#125;&#125;: Array of output filenames specified in
