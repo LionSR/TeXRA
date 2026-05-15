@@ -275,7 +275,7 @@ export class SettingsApp extends SettingsAppBase {
   // Agent teams state
   private readonly customPresets = signal<AgentModePreset[]>([]);
 
-  // Multi-agent coordination / reliability state
+  // Multi-agent coordination state
   private readonly reliabilitySettings = signal<NumberVscodeSetting[]>([]);
   private readonly allowOrchestratorKill = signal(true);
   private readonly detachSubagentsOnStop = signal(false);
@@ -1035,6 +1035,7 @@ export class SettingsApp extends SettingsAppBase {
               .providerKeyStatuses=${this.providerKeyStatuses.get()}
               .globalStreamingDefault=${this.globalStreamingDefault.get()}
               .modelSelectionItems=${this.modelSelectionItems.get()}
+              .reliabilitySettings=${this.reliabilitySettings.get()}
               .helperModel=${this.helperModel.get()}
               .preferShortModelNames=${this.preferShortModelNames.get()}
               @profile-api-access-mode=${this.handleApiAccessMode}
@@ -1081,7 +1082,6 @@ export class SettingsApp extends SettingsAppBase {
 
           <wa-tab-panel name="multi-agent">
             <multi-agent-tab
-              .reliabilitySettings=${this.reliabilitySettings.get()}
               .customPresets=${this.customPresets.get()}
               .allowOrchestratorKill=${this.allowOrchestratorKill.get()}
               .detachSubagentsOnStop=${this.detachSubagentsOnStop.get()}
@@ -1094,7 +1094,6 @@ export class SettingsApp extends SettingsAppBase {
               @worktree-support-toggle=${this.handleWorktreeSupportToggle}
               @nested-delegation-max-depth-change=${this
                 .handleNestedDelegationMaxDepthChange}
-              @reliability-setting-change=${this.handleSetProviderVscodeSetting}
               @apply-agent-mode-preset=${this.handleApplyAgentModePreset}
               @delete-agent-mode-preset=${this.handleDeleteAgentModePreset}
             ></multi-agent-tab>

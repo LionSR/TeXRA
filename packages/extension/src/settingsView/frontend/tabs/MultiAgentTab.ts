@@ -1,4 +1,4 @@
-/** Multi-agent teams, coordination toggles, and reliability tuning. */
+/** Multi-agent teams and coordination toggles. */
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
@@ -20,20 +20,12 @@ import {
   AGENT_MODE_PRESETS,
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
-import type { NumberVscodeSetting } from '@shared/schemas/settingsViewMessages';
 import {
   NESTED_DELEGATION_DEPTH_RANGE,
   clampNestedDelegationDepth,
 } from '@shared/constants/delegationPolicy';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
-
-function clampSetting(value: number, min?: number, max?: number): number {
-  let result = value;
-  if (min != null) result = Math.max(min, result);
-  if (max != null) result = Math.min(max, result);
-  return result;
-}
 
 @customElement('multi-agent-tab')
 export class MultiAgentTab extends LitElement {
@@ -205,30 +197,24 @@ export class MultiAgentTab extends LitElement {
         display: inline-flex;
       }
 
-      /* Reliability settings */
-      .reliability-row {
+      .numeric-setting-row {
         display: flex;
         align-items: center;
         gap: var(--wa-space-xs);
         padding: var(--wa-space-2xs) 0;
       }
 
-      .reliability-row label {
+      .numeric-setting-row label {
         min-width: 140px;
         font-size: var(--font-size-sm);
         color: var(--wa-color-text-normal);
       }
 
-      .reliability-input {
+      .numeric-setting-input {
         width: 80px;
       }
 
-      .reliability-unit {
-        color: var(--color-text-secondary);
-        font-size: var(--font-size-sm);
-      }
-
-      .reliability-description {
+      .numeric-setting-description {
         color: var(--color-text-secondary);
         font-size: var(--font-size-xs);
         margin: 0;
@@ -242,8 +228,6 @@ export class MultiAgentTab extends LitElement {
   @property({ attribute: false }) worktreeSupport = false;
   @property({ attribute: false }) nestedDelegationMaxDepth =
     NESTED_DELEGATION_DEPTH_RANGE.default;
-  @property({ attribute: false }) reliabilitySettings: NumberVscodeSetting[] =
-    [];
   @property({ attribute: false }) customPresets: AgentModePreset[] = [];
   @state() private activePresetId: string | null = null;
 
@@ -278,22 +262,6 @@ export class MultiAgentTab extends LitElement {
     event.stopPropagation();
     this.dispatchEvent(
       createEvent('delete-agent-mode-preset', { presetId: preset.id }),
-    );
-  }
-
-  private handleReliabilityChange(
-    setting: NumberVscodeSetting,
-    input: WaInput,
-  ): void {
-    const parsed = Number(input.value);
-    if (Number.isNaN(parsed)) {
-      input.value = String(setting.value);
-      return;
-    }
-    const value = clampSetting(parsed, setting.min, setting.max);
-    if (value !== parsed) input.value = String(value);
-    this.dispatchEvent(
-      createEvent('reliability-setting-change', { key: setting.key, value }),
     );
   }
 
@@ -377,29 +345,6 @@ export class MultiAgentTab extends LitElement {
             </button>`
           : nothing}
       </div>
-    `;
-  }
-
-  private renderReliabilitySetting(
-    setting: NumberVscodeSetting,
-  ): TemplateResult {
-    return html`
-      <div class="reliability-row">
-        <label>${setting.label}</label>
-        <wa-input
-          class="reliability-input"
-          type="number"
-          .value=${String(setting.value)}
-          min=${setting.min ?? nothing}
-          max=${setting.max ?? nothing}
-          @change=${(e: Event) =>
-            this.handleReliabilityChange(setting, e.target as WaInput)}
-        ></wa-input>
-        ${setting.unit
-          ? html`<span class="reliability-unit">${setting.unit}</span>`
-          : nothing}
-      </div>
-      <p class="reliability-description">${setting.description}</p>
     `;
   }
 
@@ -516,10 +461,10 @@ export class MultiAgentTab extends LitElement {
         </div>
 
         <div class="setting-block">
-          <div class="reliability-row">
+          <div class="numeric-setting-row">
             <label>Max delegation depth</label>
             <wa-input
-              class="reliability-input"
+              class="numeric-setting-input"
               type="number"
               .value=${String(this.nestedDelegationMaxDepth)}
               min=${NESTED_DELEGATION_DEPTH_RANGE.min}
@@ -528,27 +473,13 @@ export class MultiAgentTab extends LitElement {
                 this.handleNestedDelegationMaxDepthChange(e.target as WaInput)}
             ></wa-input>
           </div>
-          <p class="reliability-description">
+          <p class="numeric-setting-description">
             Depth 1 (default): only the top-level orchestrator may delegate;
             subagents cannot delegate further. Depth 2 lets a sub-orchestrator
             delegate once more (orchestrator → sub-orchestrator → leaf). Higher
             values allow deeper chains.
           </p>
         </div>
-
-        ${this.reliabilitySettings.length > 0
-          ? html`
-              <h3>Reliability</h3>
-              <p class="text-secondary setting-description">
-                Tweak how long sessions handle retries and context limits.
-              </p>
-              <div class="setting-block">
-                ${this.reliabilitySettings.map((s) =>
-                  this.renderReliabilitySetting(s),
-                )}
-              </div>
-            `
-          : nothing}
       </div>
     `;
   }
