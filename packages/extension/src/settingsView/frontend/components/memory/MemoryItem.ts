@@ -71,7 +71,7 @@ export class MemoryItem extends LitElement {
         padding: var(--wa-space-3xs) var(--wa-space-2xs);
         border-radius: var(--border-radius);
         margin: 0;
-        max-height: 120px;
+        max-height: clamp(220px, 45vh, 420px);
         overflow-y: auto;
       }
 
