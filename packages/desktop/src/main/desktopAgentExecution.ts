@@ -1023,9 +1023,7 @@ export class DesktopProgressBridge {
     for (const streamId of streamIds) {
       ToolUseFollowUpQueue.release(streamId);
     }
-    await Promise.all(
-      [...streamIds].map((streamId) => OdysseyStore.forget(streamId)),
-    );
+    await OdysseyStore.forgetMany([...streamIds]);
     // Drop persisted ghosts too: a "delete all" should leave nothing
     // for the next launch to hydrate, otherwise users would see the
     // ghosts come back zombie-style after relaunch.

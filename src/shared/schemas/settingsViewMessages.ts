@@ -69,10 +69,16 @@ import { StreamTabIdSchema } from './identifiers';
 import {
   OdysseySchema,
   formatOdysseyTime,
+  isOdysseyInFlight,
   odysseyElapsedMs,
 } from '@tools/odyssey/odysseyMeta';
 export { SETTINGS_VIEW_CMD };
-export { OdysseySchema, formatOdysseyTime, odysseyElapsedMs };
+export {
+  OdysseySchema,
+  formatOdysseyTime,
+  isOdysseyInFlight,
+  odysseyElapsedMs,
+};
 export type { Odyssey, OdysseyStatus } from '@tools/odyssey/odysseyMeta';
 
 /** Tab name order - single source of truth for tab indices */

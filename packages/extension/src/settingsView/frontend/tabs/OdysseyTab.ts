@@ -5,7 +5,11 @@ import { repeat } from 'lit/directives/repeat.js';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
 import { postMessage } from '@shared/hostBridge';
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { formatOdysseyTime, odysseyElapsedMs } from '@shared/schemas';
+import {
+  formatOdysseyTime,
+  isOdysseyInFlight,
+  odysseyElapsedMs,
+} from '@shared/schemas';
 import type { Odyssey, OdysseyStatus } from '@shared/schemas';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -156,7 +160,7 @@ export class OdysseyTab extends LitElement {
   }
 
   private renderRow(item: Odyssey): TemplateResult {
-    const inFlight = item.status === 'active' || item.status === 'paused';
+    const inFlight = isOdysseyInFlight(item);
     return html`
       <div
         class=${'odyssey-row' + (inFlight ? ' is-clickable' : '')}
