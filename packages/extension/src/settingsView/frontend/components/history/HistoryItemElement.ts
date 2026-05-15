@@ -231,7 +231,6 @@ export class HistoryItemElement extends LitElement {
     // File fields only exist on workflow configs (discriminated union)
     if (config.agentCategory === AGENT_CATEGORY.WORKFLOW) {
       const contextSection = this.renderConfigSection('Context', [
-        ['ContextFile', config.contextFile],
         ['ContextFiles', config.contextFiles],
       ]);
       if (contextSection) extraDetails.push(contextSection);
@@ -328,24 +327,12 @@ export class HistoryItemElement extends LitElement {
           </div>
           ${config.agentCategory === AGENT_CATEGORY.WORKFLOW
             ? html`
-                ${config.inputFile
-                  ? html`
-                      <span class="history-label">InputFile:</span>
-                      <span class="history-value">${config.inputFile}</span>
-                    `
-                  : nothing}
                 ${config.inputFiles?.length
                   ? html`
                       <span class="history-label">InputFiles:</span>
                       <span class="history-value"
                         >${config.inputFiles.join(', ')}</span
                       >
-                    `
-                  : nothing}
-                ${config.mediaFile
-                  ? html`
-                      <span class="history-label">MediaFile:</span>
-                      <span class="history-value">${config.mediaFile}</span>
                     `
                   : nothing}
                 ${config.mediaFiles?.length

@@ -35,7 +35,6 @@ import {
   type CommitChangeDetail,
   type EditedFileChangeDetail,
   type FileActionDetail,
-  type FileSelectChangeDetail,
   type FocusInstructionDetail,
   type InstallGuideDetail,
   type InstructionChangeDetail,
@@ -92,10 +91,6 @@ import {
   DEFAULT_MULTI_FILES_VISIBLE,
   DEFAULT_CHECKBOX_VALUES,
   FILE_UPDATE_COMMANDS,
-  FILE_REFRESH_COMMANDS,
-  FILE_SELECTED_COMMANDS,
-  SINGLE_FILE_COMMAND_TO_KEY,
-  FILE_SELECTED_COMMAND_TO_KEY,
   MULTI_FILE_COMMAND_TO_KEY,
   PLACEHOLDER_ROTATION_MS,
   ONBOARDING_PLACEHOLDERS,
@@ -111,18 +106,16 @@ type MainViewMessageFor<C extends MainViewMessage['command']> = Extract<
   { command: C }
 >;
 
-// Union types for handlers that process multiple similar commands
-type SetSingleFileOptionsMessage =
-  | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_INPUT_FILE>
-  | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_CONTEXT_FILE>
-  | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_MEDIA_FILE>
-  | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_EDITED_FILE>;
+// Union types for handlers that process multiple similar commands.
+// After the W4 collapse, only `editedFile` retains a single-slot SET/_SELECTED
+// pair; the other categories route through SET_*_FILES below.
+type SetEditedFileOptionsMessage = MainViewMessageFor<
+  typeof MAIN_VIEW_COMMANDS.SET_EDITED_FILE
+>;
 
-type SingleFileSelectedMessage =
-  | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED>
-  | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.CONTEXT_FILE_SELECTED>
-  | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED>
-  | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED>;
+type EditedFileSelectedMessage = MainViewMessageFor<
+  typeof MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED
+>;
 
 type SetMultipleFilesMessage =
   | MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_INPUT_FILES>
@@ -255,24 +248,12 @@ export class MainApp extends MainAppBase {
     [MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS]: (data) =>
       this.handleSetAgentOptions(data),
 
-    [MAIN_VIEW_COMMANDS.SET_INPUT_FILE]: (data) =>
-      this.handleSetSingleFileOptions(data),
-    [MAIN_VIEW_COMMANDS.SET_CONTEXT_FILE]: (data) =>
-      this.handleSetSingleFileOptions(data),
-    [MAIN_VIEW_COMMANDS.SET_MEDIA_FILE]: (data) =>
-      this.handleSetSingleFileOptions(data),
     [MAIN_VIEW_COMMANDS.SET_EDITED_FILE]: (data) =>
-      this.handleSetSingleFileOptions(data),
+      this.handleSetEditedFileOptions(data),
     [MAIN_VIEW_COMMANDS.SET_BASE_FILE]: (data) => this.handleSetBaseFile(data),
 
-    [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: (data) =>
-      this.handleSingleFileSelected(data),
-    [MAIN_VIEW_COMMANDS.CONTEXT_FILE_SELECTED]: (data) =>
-      this.handleSingleFileSelected(data),
-    [MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED]: (data) =>
-      this.handleSingleFileSelected(data),
     [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: (data) =>
-      this.handleSingleFileSelected(data),
+      this.handleEditedFileSelected(data),
 
     [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: (data) =>
       this.handleSetMultipleFiles(data),
@@ -295,8 +276,6 @@ export class MainApp extends MainAppBase {
       this.handleSetSelectedCommit(data),
     [MAIN_VIEW_COMMANDS.SET_OPENED_FILES]: (data) =>
       this.handleSetOpenedFiles(data),
-    [MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES]: (data) =>
-      this.handleSetAllSingleFiles(data),
 
     [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED]: (data) =>
       this.handleInstructionTextPolished(data),
@@ -424,9 +403,6 @@ export class MainApp extends MainAppBase {
       instruction: this.instruction.get(),
       workflowInstruction: this.workflowInstruction.get(),
       toolUseInstruction: this.toolUseInstruction.get(),
-      inputFile: sf.inputFile,
-      contextFile: sf.contextFile,
-      mediaFile: sf.mediaFile,
       editedFile: sf.editedFile,
       baseFile: sf.baseFile,
       inputFiles: mf.inputFiles,
@@ -463,9 +439,6 @@ export class MainApp extends MainAppBase {
 
     this.restorePerModeInstructions(state);
     this.singleFiles.set({
-      inputFile: state.inputFile,
-      contextFile: state.contextFile,
-      mediaFile: state.mediaFile,
       editedFile: state.editedFile,
       baseFile: state.baseFile,
     });
@@ -496,9 +469,9 @@ export class MainApp extends MainAppBase {
     const commands = [
       MAIN_VIEW_COMMANDS.GET_THEME,
       MAIN_VIEW_COMMANDS.GET_DEBUG_MODE,
-      MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
-      MAIN_VIEW_COMMANDS.REQUEST_CONTEXT_FILE,
-      MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
+      // Multi-list refresh: backend pushes back the current input/context/media
+      // pickable file lists for the base-file dropdown and the multi-file picker.
+      MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES,
       MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
       MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
     ];
@@ -649,17 +622,14 @@ export class MainApp extends MainAppBase {
     return currentValue;
   }
 
-  private handleSetSingleFileOptions(
-    message: SetSingleFileOptionsMessage,
+  private handleSetEditedFileOptions(
+    message: SetEditedFileOptionsMessage,
   ): void {
     const files = message.files ?? [];
-    const targetId = this.extractFileKeyFromCommand(message.command);
-    if (!targetId) return;
-
-    this.fileOptions.set({ ...this.fileOptions.get(), [targetId]: files });
-    const currentValue = this.singleFiles.get()[targetId as keyof SingleFiles];
+    this.fileOptions.set({ ...this.fileOptions.get(), editedFile: files });
+    const currentValue = this.singleFiles.get().editedFile;
     if (currentValue && !files.includes(currentValue)) {
-      this.singleFiles.set({ ...this.singleFiles.get(), [targetId]: '' });
+      this.singleFiles.set({ ...this.singleFiles.get(), editedFile: '' });
     }
     this.saveState();
   }
@@ -680,11 +650,11 @@ export class MainApp extends MainAppBase {
     this.saveState();
   }
 
-  private handleSingleFileSelected(message: SingleFileSelectedMessage): void {
-    const value = message.filePath;
-    const key = this.extractFileKeyFromCommand(message.command);
-    if (!key) return;
-    this.singleFiles.set({ ...this.singleFiles.get(), [key]: value });
+  private handleEditedFileSelected(message: EditedFileSelectedMessage): void {
+    this.singleFiles.set({
+      ...this.singleFiles.get(),
+      editedFile: message.filePath,
+    });
     this.saveState();
   }
 
@@ -763,10 +733,28 @@ export class MainApp extends MainAppBase {
     message: MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_CURRENT_FILE>,
   ): void {
     const { fileType, filePath } = message;
+    if (!filePath) return;
+
+    // Workflow categories (input/context/media): prepend the active editor's
+    // file to the multi-list head so it becomes the "primary" file.
+    if (DOCUMENT_FILE_TYPES.includes(fileType as DocumentFileType)) {
+      const listId = `${fileType}Files` as keyof MultiFiles;
+      const mf = this.multiFiles.get();
+      const existing = mf[listId] ?? [];
+      const next = [filePath, ...existing.filter((f) => f !== filePath)];
+      this.multiFiles.set({ ...mf, [listId]: next });
+      this.multiFilesVisible.set({
+        ...this.multiFilesVisible.get(),
+        [listId]: true,
+      });
+      this.saveState();
+      return;
+    }
+
+    // Base/edited single-slot fields go through fileOptions like before.
     const key = `${fileType}File` as keyof FileOptions;
     const sf = this.singleFiles.get();
-    if (!filePath || !(key in sf)) return;
-
+    if (!(key in sf)) return;
     const options = this.fileOptions.get()[key] ?? [];
     if (!options.includes(filePath)) {
       postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
@@ -774,11 +762,6 @@ export class MainApp extends MainAppBase {
       });
       return;
     }
-    if (DOCUMENT_FILE_TYPES.includes(fileType as DocumentFileType)) {
-      this.handleSingleFileChange(fileType as DocumentFileType, filePath);
-      return;
-    }
-
     this.singleFiles.set({ ...sf, [key]: filePath });
     this.saveState();
   }
@@ -813,17 +796,7 @@ export class MainApp extends MainAppBase {
     const mf = this.multiFiles.get();
     if (!(listId in mf)) return;
 
-    let filesToAdd = message.files ?? [];
-
-    if (message.shouldFilter) {
-      const singleFileKey = `${normalizedType.replace('Files', '')}File`;
-      const selected =
-        this.singleFiles.get()[singleFileKey as keyof SingleFiles];
-      if (selected) {
-        filesToAdd = filesToAdd.filter((file) => file !== selected);
-      }
-    }
-
+    const filesToAdd = message.files ?? [];
     const existing = mf[listId] ?? [];
     const merged = this.mergeUnique(existing, filesToAdd);
     this.multiFiles.set({ ...mf, [listId]: merged });
@@ -832,36 +805,6 @@ export class MainApp extends MainAppBase {
       [listId]: true,
     });
     this.saveState();
-  }
-
-  private handleSetAllSingleFiles(
-    message: MainViewMessageFor<typeof MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES>,
-  ): void {
-    this.blockSave();
-    try {
-      const updates: Record<string, string[]> = {};
-      const fileGroups = [
-        { files: message.inputFiles, target: 'inputFile' },
-        { files: message.contextFiles, target: 'contextFile' },
-        { files: message.mediaFiles, target: 'mediaFile' },
-      ];
-
-      let sf = this.singleFiles.get();
-      fileGroups.forEach(({ files, target }) => {
-        if (!files || !Array.isArray(files)) {
-          return;
-        }
-        updates[target] = files;
-        const currentValue = sf[target as keyof SingleFiles];
-        if (currentValue && !files.includes(currentValue)) {
-          sf = { ...sf, [target]: '' };
-        }
-      });
-      this.singleFiles.set(sf);
-      this.fileOptions.set({ ...this.fileOptions.get(), ...updates });
-    } finally {
-      this.unblockSave();
-    }
   }
 
   private handleInstructionTextPolished(
@@ -942,9 +885,6 @@ export class MainApp extends MainAppBase {
       this.commit.set(state.commit);
       this.restorePerModeInstructions(state);
       this.singleFiles.set({
-        inputFile: state.inputFile,
-        contextFile: state.contextFile,
-        mediaFile: state.mediaFile,
         editedFile: state.editedFile,
         baseFile: state.baseFile,
       });
@@ -1000,9 +940,6 @@ export class MainApp extends MainAppBase {
     const defaults = SESSION_DEFAULTS[this.sessionType.get()];
     if (defaults.resetFiles) {
       this.singleFiles.set({
-        inputFile: '',
-        contextFile: '',
-        mediaFile: '',
         editedFile: '',
         baseFile: '',
       });
@@ -1032,15 +969,11 @@ export class MainApp extends MainAppBase {
   }
 
   /**
-   * Extracts the file key from a command name using explicit maps.
-   * Compile-time verifiable - no regex parsing needed.
+   * Extracts the multi-list key from a SET_*_FILES command name.
+   * Compile-time verifiable via the `MULTI_FILE_COMMAND_TO_KEY` map.
    */
   private extractFileKeyFromCommand(command: string): string | undefined {
-    return (
-      SINGLE_FILE_COMMAND_TO_KEY[command] ??
-      FILE_SELECTED_COMMAND_TO_KEY[command] ??
-      MULTI_FILE_COMMAND_TO_KEY[command]
-    );
+    return MULTI_FILE_COMMAND_TO_KEY[command];
   }
 
   private toggleListVisibility(listId: keyof MultiFiles): void {
@@ -1059,17 +992,18 @@ export class MainApp extends MainAppBase {
   }
 
   private initializeOutputFiles(): void {
-    const inputFile = this.singleFiles.get().inputFile;
-    if (!inputFile) return;
+    // Primary input file is the head of the inputFiles list (post-W4 collapse).
+    const primaryInput = this.multiFiles.get().inputFiles[0];
+    if (!primaryInput) return;
 
-    const initialFiles = this.getInitialOutputFiles(inputFile);
+    const initialFiles = this.getInitialOutputFiles();
     this.multiFiles.set({
       ...this.multiFiles.get(),
       outputFiles: initialFiles,
     });
   }
 
-  private getInitialOutputFiles(inputFile: string): string[] {
+  private getInitialOutputFiles(): string[] {
     const mf = this.multiFiles.get();
     if (mf.outputFiles.length > 0) {
       return mf.outputFiles;
@@ -1077,13 +1011,8 @@ export class MainApp extends MainAppBase {
     if (this.defaultOutputFiles.length > 0) {
       return this.defaultOutputFiles;
     }
-    const files = [inputFile];
-    for (const file of mf.inputFiles) {
-      if (!files.includes(file)) {
-        files.push(file);
-      }
-    }
-    return files;
+    // Default: mirror the input list (so each input gets its own output slot).
+    return [...mf.inputFiles];
   }
 
   private handleRemoveFile(listId: keyof MultiFiles, file: string): void {
@@ -1103,10 +1032,12 @@ export class MainApp extends MainAppBase {
   }
 
   private handleSelectMultipleFiles(listId: string): void {
-    const currentFileKey = listId.replace('Files', 'File');
-    const currentFile =
-      this.singleFiles.get()[currentFileKey as keyof SingleFiles];
+    // Hint the OS dialog with the head of the multi-list (the "primary"
+    // file post-collapse) so it opens at the right folder.
     const fileType = listId.replace('Files', '');
+    const mf = this.multiFiles.get();
+    const listKey = listId as keyof MultiFiles;
+    const currentFile = (mf[listKey] ?? [])[0];
     postMessage(MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES, {
       fileType,
       currentFile,
@@ -1128,18 +1059,19 @@ export class MainApp extends MainAppBase {
     postMessage(MAIN_VIEW_COMMANDS.GET_CURRENT_FILE, payload);
   }
 
+  /**
+   * Empty a single-slot file. Post-W4 only `base`/`edited` are still
+   * single-slot; the `DocumentFileType` overload remains for the
+   * LatexDiffsSection event signature but is a no-op for input/context/media.
+   */
   private handleEmptyFile(type: DocumentFileType | 'base' | 'edited'): void {
-    const key = `${type}File` as keyof SingleFiles;
+    if (type !== 'base' && type !== 'edited') return;
     const sf = this.singleFiles.get();
-    if (key in sf) {
-      this.singleFiles.set({ ...sf, [key]: '' });
-      this.saveState();
-    }
-
-    const command = FILE_SELECTED_COMMANDS[type];
-    if (command) {
-      postMessage(command, { filePath: '' });
-    }
+    this.singleFiles.set({
+      ...sf,
+      [type === 'base' ? 'baseFile' : 'editedFile']: '',
+    });
+    this.saveState();
   }
 
   private handleRefreshEditedFiles(): void {
@@ -1161,22 +1093,15 @@ export class MainApp extends MainAppBase {
     this.updateMultiFiles(listId as keyof MultiFiles, []);
   }
 
-  private handleRefreshFiles(type: DocumentFileType): void {
-    const command = FILE_REFRESH_COMMANDS[type];
-    if (command) postMessage(command);
-  }
-
-  private handleSingleFileChange(type: DocumentFileType, value: string): void {
-    const key = `${type}File` as keyof SingleFiles;
-    this.singleFiles.set({ ...this.singleFiles.get(), [key]: value });
-    this.saveState();
-
-    const command = FILE_SELECTED_COMMANDS[type];
-    if (command) postMessage(command, { filePath: value });
-
-    if (type === 'input') {
-      postMessage(MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE, { baseFile: value });
-    }
+  /**
+   * Per-category refresh button. Post-W4 there's no single-slot dropdown
+   * to repopulate, so the per-category refresh just fans out to a workspace
+   * file rescan via REFRESH_ALL_FILES (which triggers a fresh disk listing
+   * for input/context/media all at once and pushes back the base-file
+   * dropdown options as a side effect).
+   */
+  private handleRefreshFiles(_type: DocumentFileType): void {
+    postMessage(MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES);
   }
 
   private handleBaseFileChange(value: string): void {
@@ -1220,7 +1145,6 @@ export class MainApp extends MainAppBase {
     this.refreshInstructionPlaceholder(false);
     this.saveState();
     postMessage(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER);
-    postMessage(MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE);
     if (value) {
       postMessage(MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES, {
         agent: value,
@@ -1366,10 +1290,9 @@ export class MainApp extends MainAppBase {
         : this.workflowAgent.get();
 
     const sf = this.singleFiles.get();
+    // After the W4 collapse only base/edited remain single-slot — the rest
+    // travel via multipleFileSelections below.
     const singleFileSelections = {
-      inputFile: sf.inputFile,
-      contextFile: sf.contextFile,
-      mediaFile: sf.mediaFile,
       editedFile: sf.editedFile,
       baseFile: sf.baseFile,
     };
@@ -1414,7 +1337,8 @@ export class MainApp extends MainAppBase {
 
   private handleMerge(): void {
     const sf = this.singleFiles.get();
-    if (!sf.inputFile || !sf.editedFile) {
+    const primaryInput = this.multiFiles.get().inputFiles[0] ?? '';
+    if (!primaryInput || !sf.editedFile) {
       postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
         text: 'Please select both input and edited files to merge',
       });
@@ -1422,17 +1346,17 @@ export class MainApp extends MainAppBase {
     }
 
     postMessage(MAIN_VIEW_COMMANDS.MERGE, {
-      inputFile: sf.inputFile,
+      inputFile: primaryInput,
       editedFile: sf.editedFile,
     });
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-      text: `Merging files: ${sf.inputFile} and ${sf.editedFile}`,
+      text: `Merging files: ${primaryInput} and ${sf.editedFile}`,
     });
   }
 
   private handlePackClean(action: 'pack' | 'clean'): void {
-    const sf = this.singleFiles.get();
-    if (!sf.inputFile || !this.model.get()) {
+    const primaryInput = this.multiFiles.get().inputFiles[0] ?? '';
+    if (!primaryInput || !this.model.get()) {
       postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
         text: 'Please select all required fields (input file, agent, and model)',
       });
@@ -1444,7 +1368,7 @@ export class MainApp extends MainAppBase {
     const command = this.getPackCleanCommand(action, useMultiple);
 
     postMessage(command, {
-      inputFile: sf.inputFile,
+      inputFile: primaryInput,
       agent:
         this.sessionType.get() === SESSION_TYPES.TOOL_USE
           ? this.toolUseAgent.get()
@@ -1455,8 +1379,8 @@ export class MainApp extends MainAppBase {
 
     const actionLabel = capitalize(action);
     const summary = useMultiple
-      ? `${actionLabel}ing multiple files: ${[sf.inputFile, ...outputFiles].join(', ')}`
-      : `${actionLabel}ing single file: ${sf.inputFile}`;
+      ? `${actionLabel}ing multiple files: ${[primaryInput, ...outputFiles].join(', ')}`
+      : `${actionLabel}ing single file: ${primaryInput}`;
     postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, { text: summary });
   }
 
@@ -1476,8 +1400,9 @@ export class MainApp extends MainAppBase {
 
   private handleLatexdiff(): void {
     const sf = this.singleFiles.get();
+    const primaryInput = this.multiFiles.get().inputFiles[0] ?? '';
     postMessage(MAIN_VIEW_COMMANDS.LATEXDIFF, {
-      inputFile: sf.inputFile,
+      inputFile: primaryInput,
       baseFile: sf.baseFile,
       editedFile: sf.editedFile,
     });
@@ -1488,9 +1413,10 @@ export class MainApp extends MainAppBase {
 
   private handleLatexdiffVC(): void {
     const sf = this.singleFiles.get();
+    const primaryInput = this.multiFiles.get().inputFiles[0] ?? '';
     const commitVal = this.commit.get();
     postMessage(MAIN_VIEW_COMMANDS.LATEXDIFFVC, {
-      inputFile: sf.inputFile,
+      inputFile: primaryInput,
       baseFile: sf.baseFile,
       commitHash: commitVal,
     });
@@ -1501,13 +1427,14 @@ export class MainApp extends MainAppBase {
 
   private handleLatexdiffVCPack(action: 'pack' | 'clean'): void {
     const sf = this.singleFiles.get();
+    const primaryInput = this.multiFiles.get().inputFiles[0] ?? '';
     const commitVal = this.commit.get();
     postMessage(
       action === 'pack'
         ? MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC
         : MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC,
       {
-        inputFile: sf.inputFile,
+        inputFile: primaryInput,
         baseFile: sf.baseFile,
         commitHash: commitVal,
         clean: action === 'clean',
@@ -1580,12 +1507,6 @@ export class MainApp extends MainAppBase {
   // These handlers receive custom events from child Lit components and
   // delegate to the existing handler methods.
   // =========================================================================
-
-  private handleComponentFileChange(
-    e: CustomEvent<FileSelectChangeDetail>,
-  ): void {
-    this.handleSingleFileChange(e.detail.type, e.detail.value);
-  }
 
   private handleComponentRefreshFiles(e: CustomEvent<FileActionDetail>): void {
     if (e.detail.type !== 'base' && e.detail.type !== 'edited') {
@@ -2047,11 +1968,7 @@ export class MainApp extends MainAppBase {
                       (config) => html`
                         <file-select-group
                           .config=${config}
-                          @file-change=${this.handleComponentFileChange}
                           @refresh-files=${this.handleComponentRefreshFiles}
-                          @get-current-file=${this
-                            .handleComponentGetCurrentFile}
-                          @empty-file=${this.handleComponentEmptyFile}
                           @toggle-list=${this.handleComponentToggleList}
                           @add-opened-files=${this
                             .handleComponentAddOpenedFiles}
@@ -2061,8 +1978,6 @@ export class MainApp extends MainAppBase {
                           @remove-file=${this.handleComponentRemoveFile}
                           @files-reordered=${this.handleComponentFilesReordered}
                           @checkbox-change=${this.handleComponentCheckboxChange}
-                          @focus-instruction=${this
-                            .handleComponentFocusInstruction}
                         ></file-select-group>
                       `,
                     )}

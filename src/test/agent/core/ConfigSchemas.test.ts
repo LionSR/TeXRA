@@ -42,7 +42,7 @@ describe('AgentConfigSchema', () => {
     assert.strictEqual('reflect' in parsed.toolConfig, false);
     assert.strictEqual(parsed.toolConfig.autoExtractFigure, false);
     assert.strictEqual('legacyFlag' in parsed, false);
-    assert.strictEqual(parsed.inputFile, '');
+    assert.deepStrictEqual(parsed.inputFiles, []);
     assert.strictEqual(
       'usePrefillFromInput' in (parsed.toolConfig as Record<string, unknown>),
       false,

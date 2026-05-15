@@ -99,12 +99,14 @@ export class XmlOutputManager {
     const sourceName =
       outputContent.match(DOCUMENT_NAME_REGEX)?.[1]?.trim() ?? '';
 
-    // Name the extracted .tex after: input file stem → first XML document name
-    // → raw output stem.  Input file takes priority because extractDocument()
-    // also uses agentConfig.inputFile as its matching hint, so the destination
-    // name and the extracted content are always in sync.  For agents without an
-    // inputFile, the XML document name gives a human-readable fallback.
-    const inputFileStem = path.parse(this.agentConfig.inputFile).name;
+    // Name the extracted .tex after: primary input file stem → first XML
+    // document name → raw output stem. The primary input takes priority
+    // because extractDocument() also uses inputFiles[0] as its matching hint,
+    // so the destination name and the extracted content stay in sync. For
+    // agents without an input, the XML document name is a human-readable
+    // fallback.
+    const primaryInput = this.agentConfig.inputFiles[0] ?? '';
+    const inputFileStem = primaryInput ? path.parse(primaryInput).name : '';
     // sourceName comes from model XML and may carry path components or a .tex
     // extension — strip both.  inputFileStem and rawStem are already clean stems.
     const safeSourceName = sourceName
@@ -125,7 +127,7 @@ export class XmlOutputManager {
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = addCdataToTags(outputContent, tagsToWrap);
 
-    const filename = path.basename(this.agentConfig.inputFile);
+    const filename = primaryInput ? path.basename(primaryInput) : '';
     const regexResult = extractDocument(outputContent, documentTag, filename);
     if (regexResult.content) {
       const suffix = EXTRACTION_METHOD_MESSAGES[regexResult.method];
@@ -293,7 +295,7 @@ export class XmlOutputManager {
     );
 
     return {
-      source: sourceName || this.agentConfig.inputFile,
+      source: sourceName || (this.agentConfig.inputFiles[0] ?? ''),
       round,
       location,
       lineage: null,

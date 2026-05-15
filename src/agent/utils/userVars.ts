@@ -188,37 +188,32 @@ function getAgentDirectoryVars(): UserVars {
 }
 
 /**
- * File category configuration for consistent handling across the codebase.
- * Maps category name to { single, multiple } field accessors from AgentConfig.
+ * File category configuration for prompt-template variable rendering.
+ * Maps a template prefix to the canonical multi-list field on AgentConfig.
+ *
+ * After the W4 collapse there is no separate "single" slot — the "primary"
+ * file is the head of the multi-list (e.g. `INPUT_FILE` ≡ `inputFiles[0]`).
+ * The single-keyed template variables (`INPUT_FILE`, `CONTEXT_FILE`,
+ * `MEDIA_FILE`, plus `_CONTENT` siblings) are kept as aliases so custom
+ * user YAMLs that still reference them keep rendering.
  */
 type FileCategoryConfig = {
-  single: keyof AgentConfig;
   multiple: keyof AgentConfig;
 };
 
 const FILE_CATEGORIES: Record<string, FileCategoryConfig> = {
-  INPUT: { single: 'inputFile', multiple: 'inputFiles' },
-  REFERENCE: { single: 'contextFile', multiple: 'contextFiles' },
-  MEDIA: { single: 'mediaFile', multiple: 'mediaFiles' },
-  EDITED: { single: 'editedFile', multiple: 'editedFiles' },
+  INPUT: { multiple: 'inputFiles' },
+  REFERENCE: { multiple: 'contextFiles' },
+  MEDIA: { multiple: 'mediaFiles' },
+  EDITED: { multiple: 'editedFiles' },
 };
 
-/** Combine a single file with an array, filtering out empty values */
-function combineFiles(
-  single: string | null | undefined,
-  multiple: string[] | undefined,
-): string[] {
-  return [single, ...(multiple ?? [])].filter((f): f is string => Boolean(f));
-}
-
-/** Get combined files for a category from AgentConfig */
+/** Get the multi-list for a category (filtering empties) */
 function getCategoryFiles(config: AgentConfig, category: string): string[] {
   const cat = FILE_CATEGORIES[category];
   if (!cat) return [];
-  return combineFiles(
-    config[cat.single] as string | null | undefined,
-    config[cat.multiple] as string[] | undefined,
-  );
+  const list = (config[cat.multiple] as string[] | undefined) ?? [];
+  return list.filter((f): f is string => Boolean(f));
 }
 
 /** Categories used for building file vars (excludes MEDIA which is display-only) */
@@ -245,24 +240,17 @@ async function getFileVars(
 
   // Build file vars for each category
   for (const prefix of FILE_VAR_CATEGORIES) {
-    const cat = FILE_CATEGORIES[prefix];
-    const filePath = agentConfig[cat.single] as string | null | undefined;
-    const rawAdditionalFiles =
-      (agentConfig[cat.multiple] as string[] | undefined) ?? [];
-    const additionalFiles = rawAdditionalFiles.filter(Boolean);
     const allFiles = getCategoryFiles(agentConfig, prefix);
+    // Primary "single" file is the head of the multi-list.
+    const primaryFile = allFiles[0] ?? null;
 
-    // Single file vars
-    userVars[`${prefix}_FILE`] = filePath ?? null;
-    userVars[`${prefix}_CONTENT`] = filePath
-      ? await WorkspaceFS.read(filePath)
+    // Single file aliases (kept for back-compat with custom YAMLs).
+    userVars[`${prefix}_FILE`] = primaryFile;
+    userVars[`${prefix}_CONTENT`] = primaryFile
+      ? await WorkspaceFS.read(primaryFile)
       : null;
 
     // Collection vars
-    userVars[`ADDITIONAL_${prefix}S`] =
-      additionalFiles.length > 0
-        ? await getXmlFormatFromFiles(additionalFiles)
-        : null;
     userVars[`ALL_${prefix}S`] =
       allFiles.length > 0 ? await getXmlFormatFromFiles(allFiles) : null;
     userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(allFiles);

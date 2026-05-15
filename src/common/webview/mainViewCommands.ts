@@ -16,22 +16,13 @@ export const MAIN_VIEW_COMMANDS = {
   MODEL_SELECTED: 'modelSelected',
   SETTINGS_OPEN: 'openSettings',
 
-  // File selection cases
-  SELECT_INPUT_FILE: 'selectInputFile',
-  SELECT_CONTEXT_FILE: 'selectContextFile',
-  SELECT_MEDIA_FILE: 'selectMediaFile',
+  // File selection cases (single-file pickers; multi pickers go through SELECT_MULTIPLE_FILES)
   SELECT_EDITED_FILE: 'selectEditedFile',
 
-  // File selected cases
-  INPUT_FILE_SELECTED: 'inputFileSelected',
-  CONTEXT_FILE_SELECTED: 'contextFileSelected',
-  MEDIA_FILE_SELECTED: 'mediaFileSelected',
+  // File selected cases (single-file response messages)
   EDITED_FILE_SELECTED: 'editedFileSelected',
 
-  // Request file cases
-  REQUEST_INPUT_FILE: 'requestInputFile',
-  REQUEST_CONTEXT_FILE: 'requestContextFile',
-  REQUEST_MEDIA_FILE: 'requestMediaFile',
+  // Request file cases (single-file refresh requests)
   REQUEST_EDITED_FILE: 'requestEditedFile',
   REQUEST_BASE_FILE: 'requestBaseFile',
   REQUEST_DEFAULT_OUTPUT_FILES: 'requestDefaultOutputFiles',
@@ -92,9 +83,6 @@ export const MAIN_VIEW_COMMANDS = {
   INSTRUCTION_TEXT_TRANSCRIBED: 'instructionTextTranscribed',
   RECORDING_STARTED: 'recordingStarted',
   RECORDING_ERROR: 'recordingError',
-  SET_INPUT_FILE: 'setInputFile',
-  SET_CONTEXT_FILE: 'setContextFile',
-  SET_MEDIA_FILE: 'setMediaFile',
   SET_EDITED_FILE: 'setEditedFile',
   SET_DEFAULT_OUTPUT_FILES: 'setDefaultOutputFiles',
   ADD_MEDIA_FILE: 'addMediaFile',
@@ -103,7 +91,6 @@ export const MAIN_VIEW_COMMANDS = {
   SET_CURRENT_FILE: 'setCurrentFile',
   SET_OPENED_FILES: 'setOpenedFiles',
   SET_BASE_FILE: 'setBaseFile',
-  SET_ALL_SINGLE_FILES: 'setAllSingleFiles',
   SET_SELECTED_COMMIT: 'setSelectedCommit',
   SET_MODEL_OPTIONS: 'setModelOptions',
   SET_AGENT_OPTIONS: 'setAgentOptions',

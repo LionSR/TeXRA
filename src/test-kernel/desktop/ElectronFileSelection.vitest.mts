@@ -32,6 +32,12 @@ async function loadDesktopFileSelection(): Promise<DesktopFileSelectionModule> {
   ) as Promise<DesktopFileSelectionModule>;
 }
 
+/**
+ * Post W4-collapse the desktop file selection module routes only single-slot
+ * base/edited dropdowns + the disk-listing refresh; input/context/media are
+ * multi-only and travel through the SELECT_MULTIPLE_FILES path which the
+ * desktop main delegates to its native picker elsewhere.
+ */
 describe('desktop file selection', () => {
   let workspacePath: string;
 
@@ -62,7 +68,7 @@ describe('desktop file selection', () => {
     await rm(workspacePath, { recursive: true, force: true });
   });
 
-  it('responds to launcher file-list requests with filtered workspace-relative files', async () => {
+  it('refreshes the base-file dropdown options on REFRESH_ALL_FILES', async () => {
     const { createDesktopFileSelection } = await loadDesktopFileSelection();
     const messages: unknown[] = [];
     const files = createDesktopFileSelection({
@@ -71,12 +77,12 @@ describe('desktop file selection', () => {
     });
 
     expect(
-      files.handleMessage({ command: MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE }),
+      files.handleMessage({ command: MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES }),
     ).toBe(true);
 
     await vi.waitFor(() =>
       expect(messages).toContainEqual({
-        command: MAIN_VIEW_COMMANDS.SET_INPUT_FILE,
+        command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
         files: [
           'main.tex',
           'notes.md',
@@ -84,74 +90,7 @@ describe('desktop file selection', () => {
           'sections/main_r1.tex',
           'templates/main.tex',
         ],
-      }),
-    );
-
-    messages.length = 0;
-    files.handleMessage({ command: MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES });
-    await vi.waitFor(() =>
-      expect(messages[0]).toMatchObject({
-        command: MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES,
-        inputFiles: [
-          'main.tex',
-          'notes.md',
-          'sections/main_edited.tex',
-          'sections/main_r1.tex',
-          'templates/main.tex',
-        ],
-      }),
-    );
-  });
-
-  it('opens the host picker and returns workspace-relative selections', async () => {
-    const { createDesktopFileSelection } = await loadDesktopFileSelection();
-    const messages: unknown[] = [];
-    const showOpenFileDialog = vi.fn(async () =>
-      join(workspacePath, 'main.tex'),
-    );
-    const files = createDesktopFileSelection({
-      postToRenderer: (message) => messages.push(message),
-      getWorkspacePath: () => workspacePath,
-      showOpenFileDialog,
-    });
-
-    expect(
-      files.handleMessage({ command: MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE }),
-    ).toBe(true);
-
-    await vi.waitFor(() =>
-      expect(messages).toContainEqual({
-        command: MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
-        filePath: 'main.tex',
-      }),
-    );
-    expect(showOpenFileDialog).toHaveBeenCalledWith(
-      expect.objectContaining({
-        defaultPath: workspacePath,
-        filters: [{ name: 'input files', extensions: ['txt', 'tex', 'md'] }],
-      }),
-    );
-  });
-
-  it('updates edited-file options when an input file is selected', async () => {
-    const { createDesktopFileSelection } = await loadDesktopFileSelection();
-    const messages: unknown[] = [];
-    const files = createDesktopFileSelection({
-      postToRenderer: (message) => messages.push(message),
-      getWorkspacePath: () => workspacePath,
-    });
-
-    expect(
-      files.handleMessage({
-        command: MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
-        filePath: 'main.tex',
-      }),
-    ).toBe(true);
-
-    await vi.waitFor(() =>
-      expect(messages).toContainEqual({
-        command: MAIN_VIEW_COMMANDS.SET_EDITED_FILE,
-        files: ['sections/main_edited.tex', 'sections/main_r1.tex'],
+        preserveBaseFile: true,
       }),
     );
   });
@@ -186,6 +125,29 @@ describe('desktop file selection', () => {
     );
   });
 
+  it('lists edited-file options for a given base file', async () => {
+    const { createDesktopFileSelection } = await loadDesktopFileSelection();
+    const messages: unknown[] = [];
+    const files = createDesktopFileSelection({
+      postToRenderer: (message) => messages.push(message),
+      getWorkspacePath: () => workspacePath,
+    });
+
+    expect(
+      files.handleMessage({
+        command: MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE,
+        baseFile: 'main.tex',
+      }),
+    ).toBe(true);
+
+    await vi.waitFor(() =>
+      expect(messages).toContainEqual({
+        command: MAIN_VIEW_COMMANDS.SET_EDITED_FILE,
+        files: ['sections/main_edited.tex', 'sections/main_r1.tex'],
+      }),
+    );
+  });
+
   it('leaves recent-commit requests for the main IPC router', async () => {
     const { createDesktopFileSelection } = await loadDesktopFileSelection();
     const files = createDesktopFileSelection({
@@ -210,29 +172,9 @@ describe('desktop file selection', () => {
     });
 
     expect(
-      files.handleMessage({ command: MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE }),
+      files.handleMessage({ command: MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES }),
     ).toBe(true);
 
     await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
-  });
-
-  it('normalizes selected external paths before sending them to the renderer', async () => {
-    const { createDesktopFileSelection } = await loadDesktopFileSelection();
-    const messages: unknown[] = [];
-    const externalFile = `${join(workspacePath, '..', 'external')}\\paper.tex`;
-    const files = createDesktopFileSelection({
-      postToRenderer: (message) => messages.push(message),
-      getWorkspacePath: () => workspacePath,
-      showOpenFileDialog: async () => externalFile,
-    });
-
-    files.handleMessage({ command: MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE });
-
-    await vi.waitFor(() =>
-      expect(messages).toContainEqual({
-        command: MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
-        filePath: externalFile.replaceAll('\\', '/'),
-      }),
-    );
   });
 });

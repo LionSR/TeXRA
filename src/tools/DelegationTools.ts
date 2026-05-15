@@ -506,8 +506,8 @@ function summarizeProposal(
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
 ): string {
   const parts = [`Agent: ${proposal.agent}`, `Model: ${proposal.model}`];
-  if ('inputFile' in proposal && proposal.inputFile) {
-    parts.push(`File: ${proposal.inputFile}`);
+  if ('inputFiles' in proposal && proposal.inputFiles?.[0]) {
+    parts.push(`File: ${proposal.inputFiles[0]}`);
   }
   if (proposal.memories.length > 0) {
     parts.push(`Memories: ${proposal.memories.join(', ')}`);
@@ -657,33 +657,22 @@ const WorkflowAgentInputSchema = z.object({
     .describe(
       'Plain prose instruction for the agent. When attaching context files (context/media), explain in the instruction what each one is for and how the sub-agent should use it — e.g., "preamble.tex defines the math macros; refs.bib is the bibliography to cite from; figure.png is the panel layout the new figure should match". The sub-agent has no other signal for why each file was attached.',
     ),
-  inputFile: z.string().describe('Primary input file to process (required)'),
   inputFiles: z
     .array(z.string())
-    .prefault([])
-    .describe('Additional input files'),
-  contextFile: z
-    .string()
-    .nullable()
-    .prefault(null)
+    .min(1)
     .describe(
-      'Read-only context file: guidance, example, related paper, bibliography (.bib), or style/macro definitions (.sty/.cls). Not modified by the agent. Explain its role in the instruction.',
+      'Input files to process. The first entry is the primary file rewritten by the agent; later entries are additional inputs.',
     ),
   contextFiles: z
     .array(z.string())
     .prefault([])
     .describe(
-      'Additional read-only context files. Explain each in the instruction.',
+      'Read-only context files: guidance, examples, related papers, bibliographies (.bib), or style/macro definitions (.sty/.cls). Not modified by the agent. Explain each one in the instruction.',
     ),
-  mediaFile: z
-    .string()
-    .nullable()
-    .prefault(null)
-    .describe('Media file for images/figures'),
   mediaFiles: z
     .array(z.string())
     .prefault([])
-    .describe('Additional media files'),
+    .describe('Media files (images, figures, PDFs) the agent should view.'),
   extractFigures: z
     .boolean()
     .nullish()
@@ -713,7 +702,7 @@ function isBibFile(filePath: string): boolean {
 }
 
 function getContextFiles(input: WorkflowAgentInput): string[] {
-  return [input.contextFile, ...input.contextFiles].filter(
+  return input.contextFiles.filter(
     (path): path is string => typeof path === 'string' && path.length > 0,
   );
 }
@@ -775,25 +764,26 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
     // Resolve model: explicit input → parent model → first visible model
     const model = resolveVisibleModel(input.model ?? ctx.model ?? '');
 
-    // Validate inputFile is provided
-    if (!input.inputFile) {
-      throw new Error('inputFile is required for workflow agents.');
+    // Validate at least one input file is provided
+    if (input.inputFiles.length === 0) {
+      throw new Error(
+        'At least one entry in inputFiles is required for workflow agents.',
+      );
     }
 
     // Validate all file paths exist (parallel for performance)
     const toValidate = (
-      single: string | null | undefined,
       arr: string[],
       label: string,
     ): { path: string; label: string }[] =>
-      [single, ...arr]
+      arr
         .filter((p): p is string => typeof p === 'string' && p.length > 0)
         .map((path) => ({ path, label }));
 
     const filesToValidate = [
-      ...toValidate(input.inputFile, input.inputFiles, 'Input file'),
-      ...toValidate(input.contextFile, input.contextFiles, 'Context file'),
-      ...toValidate(input.mediaFile, input.mediaFiles, 'Media file'),
+      ...toValidate(input.inputFiles, 'Input file'),
+      ...toValidate(input.contextFiles, 'Context file'),
+      ...toValidate(input.mediaFiles, 'Media file'),
     ];
 
     const validationResults = await Promise.all(
@@ -819,11 +809,8 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
       agent: input.agent,
       model,
       instruction: input.instruction,
-      inputFile: input.inputFile,
       inputFiles: input.inputFiles,
-      contextFile: input.contextFile,
       contextFiles: input.contextFiles,
-      mediaFile: input.mediaFile,
       mediaFiles: input.mediaFiles,
       outputFiles: input.outputFiles,
       toolConfig: {

@@ -2,7 +2,6 @@ import { isAbsolute, relative, resolve } from 'node:path';
 
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform, tryPlatform } from '@platform/platform';
-import { getFilterExtensions } from '@common/files/fileTypeUtils';
 import {
   getEditedFileListConfig,
   getFileListConfig,
@@ -38,25 +37,12 @@ export interface DesktopFileSelectionOptions {
 
 export type DesktopFileSelection = DesktopMessageHandler;
 
-const RESPONSE_BY_SELECT_COMMAND = {
-  [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE]:
-    MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
-  [MAIN_VIEW_COMMANDS.SELECT_CONTEXT_FILE]:
-    MAIN_VIEW_COMMANDS.CONTEXT_FILE_SELECTED,
-  [MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE]:
-    MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED,
-} as const;
-
-const TYPE_BY_SELECT_COMMAND = {
-  [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE]: 'input',
-  [MAIN_VIEW_COMMANDS.SELECT_CONTEXT_FILE]: 'context',
-  [MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE]: 'media',
-} as const;
-
+/**
+ * Single-slot dropdowns left after the W4 collapse: only base/edited
+ * (latexdiff) — input/context/media are multi-only and route through the
+ * SELECT_MULTIPLE_FILES path instead.
+ */
 const SET_COMMAND_BY_FILE_TYPE = {
-  input: MAIN_VIEW_COMMANDS.SET_INPUT_FILE,
-  context: MAIN_VIEW_COMMANDS.SET_CONTEXT_FILE,
-  media: MAIN_VIEW_COMMANDS.SET_MEDIA_FILE,
   edited: MAIN_VIEW_COMMANDS.SET_EDITED_FILE,
   base: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
 } as const;
@@ -140,41 +126,15 @@ export function createDesktopFileSelection(
     );
   }
 
-  async function requestAllSingleFiles() {
-    const [inputFiles, contextFiles, mediaFiles] = await Promise.all([
-      list('input'),
-      list('context'),
-      list('media'),
-    ]);
-    options.postToRenderer({
-      command: MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES,
-      inputFiles,
-      contextFiles,
-      mediaFiles,
-    });
-  }
-
-  async function selectSingleFile(
-    command: keyof typeof TYPE_BY_SELECT_COMMAND,
-  ) {
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath || !options.showOpenFileDialog) return;
-    const fileType = TYPE_BY_SELECT_COMMAND[command];
-    const selected = await options.showOpenFileDialog({
-      title: `Select ${fileType} file`,
-      defaultPath: workspacePath,
-      filters: [
-        {
-          name: `${fileType} files`,
-          extensions: getFilterExtensions(fileType),
-        },
-      ],
-    });
-    if (!selected) return;
-    options.postToRenderer({
-      command: RESPONSE_BY_SELECT_COMMAND[command],
-      filePath: toWorkspaceRelative(workspacePath, selected),
-    });
+  /**
+   * REFRESH_ALL_FILES on the desktop refreshes the base-file dropdown
+   * (still single-slot under LaTeXdiff). Multi-list categories
+   * (input/context/media) are owned by the user and only mutated via
+   * the picker, drag-drop, or "Add opened files".
+   */
+  async function refreshDiskBackedDropdowns() {
+    const inputFiles = await list('input');
+    postFileList('base', inputFiles, { preserveBaseFile: true });
   }
 
   async function updateEditedFiles(baseFile?: string) {
@@ -196,15 +156,6 @@ export function createDesktopFileSelection(
 
   function handleMessage(message: DesktopCommandMessage): boolean {
     switch (message.command) {
-      case MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE:
-        runAsync(requestSingleFileList('input'));
-        return true;
-      case MAIN_VIEW_COMMANDS.REQUEST_CONTEXT_FILE:
-        runAsync(requestSingleFileList('context'));
-        return true;
-      case MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE:
-        runAsync(requestSingleFileList('media'));
-        return true;
       case MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE:
         runAsync(
           requestSingleFileList('base', {
@@ -213,19 +164,7 @@ export function createDesktopFileSelection(
         );
         return true;
       case MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES:
-        runAsync(requestAllSingleFiles());
-        return true;
-      case MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE:
-      case MAIN_VIEW_COMMANDS.SELECT_CONTEXT_FILE:
-      case MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE:
-        runAsync(selectSingleFile(message.command));
-        return true;
-      case MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED:
-        runAsync(
-          updateEditedFiles(
-            typeof message.filePath === 'string' ? message.filePath : undefined,
-          ),
-        );
+        runAsync(refreshDiskBackedDropdowns());
         return true;
       case MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE:
         runAsync(

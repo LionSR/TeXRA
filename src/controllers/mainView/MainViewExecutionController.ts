@@ -56,7 +56,7 @@ export function prepareMainViewExecutionRequest(
   }
 
   const isToolUse = Boolean(message.isToolUseAgent);
-  if (!isToolUse && !message.inputFile) {
+  if (!isToolUse && (message.inputFiles?.length ?? 0) === 0) {
     return {
       valid: false,
       message: 'Please select an input file.',
@@ -83,7 +83,6 @@ export function prepareMainViewExecutionRequest(
       agentCategory: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
       outputFiles,
       toolConfig: toolConfigResult.data,
-      mediaFile: mapMediaFile(message.mediaFile ?? null),
       mediaFiles: (message.mediaFiles ?? [])
         .map(mapMediaFile)
         .filter((file: string | null): file is string => file !== null),

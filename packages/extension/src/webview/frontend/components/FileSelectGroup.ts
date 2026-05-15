@@ -3,12 +3,9 @@ import { consume } from '@lit/context';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
-import { when } from 'lit/directives/when.js';
 
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
-import '@awesome.me/webawesome/dist/components/select/select.js';
-import '@awesome.me/webawesome/dist/components/option/option.js';
 
 import { SortableController } from '@shared/controllers';
 import { designTokens } from '@shared/styles';
@@ -30,8 +27,15 @@ import {
 } from '../contexts/mainViewContexts';
 import { fileSelectStyles } from '../styles/fileSelectStyles';
 import { DEFAULT_CHECKBOX_VALUES } from '../store';
-import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
+/**
+ * Multi-only file selector for one of the input/context/media categories.
+ *
+ * Post-W4 the per-category panel no longer has a single-slot dropdown — the
+ * "primary" file is the head of the multi-list (`*Files[0]`). The user adds
+ * files via the picker, drag-and-drop, or "Add opened files"; the list is
+ * always visible while it has entries.
+ */
 @customElement('file-select-group')
 export class FileSelectGroup extends LitElement {
   static override styles = [
@@ -96,28 +100,8 @@ export class FileSelectGroup extends LitElement {
     return `${this.config.type}Files`;
   }
 
-  private get selectId(): string {
-    return `${this.config.type}File`;
-  }
-
-  private handleFileChange(value: string): void {
-    this.dispatchEvent(
-      MainViewEvents.fileChange({ type: this.config.type, value }),
-    );
-  }
-
   private handleRefreshFiles(): void {
     this.dispatchEvent(MainViewEvents.refreshFiles({ type: this.config.type }));
-  }
-
-  private handleGetCurrentFile(): void {
-    this.dispatchEvent(
-      MainViewEvents.getCurrentFile({ type: this.config.type }),
-    );
-  }
-
-  private handleEmptyFile(): void {
-    this.dispatchEvent(MainViewEvents.emptyFile({ type: this.config.type }));
   }
 
   private handleToggleList(): void {
@@ -192,37 +176,8 @@ export class FileSelectGroup extends LitElement {
     this.dispatchEvent(MainViewEvents.checkboxChange({ id, checked }));
   }
 
-  private handleSelectChange(event: Event): void {
-    const target = event.currentTarget as WaSelect | null;
-    const value = target?.value;
-    this.handleFileChange(typeof value === 'string' ? value : '');
-  }
-
-  private handleFocus(): void {
-    if (this.config.focusInstruction) {
-      this.dispatchEvent(
-        MainViewEvents.focusInstruction({
-          key: this.config.focusInstruction.key,
-          text: this.config.focusInstruction.text,
-        }),
-      );
-    }
-  }
-
   private get currentCheckboxValues(): CheckboxValues {
     return this.fileState?.checkboxValues ?? DEFAULT_CHECKBOX_VALUES;
-  }
-
-  private get currentSelectedValue(): string {
-    const key =
-      `${this.config.type}File` as keyof FileStateContextValue['singleFiles'];
-    return this.fileState?.singleFiles[key] ?? '';
-  }
-
-  private get currentOptions(): string[] {
-    const key =
-      `${this.config.type}File` as keyof FileStateContextValue['fileOptions'];
-    return this.fileState?.fileOptions[key] ?? [];
   }
 
   private get currentFiles(): string[] {
@@ -240,20 +195,6 @@ export class FileSelectGroup extends LitElement {
   private get isFileInputDisabled(): boolean {
     const sessionType = this.fileState?.sessionType ?? SESSION_TYPES.WORKFLOW;
     return !SESSION_DEFAULTS[sessionType].fileInputEnabled;
-  }
-
-  private renderFileOptions(): TemplateResult {
-    const sortedOptions = [...this.currentOptions].sort((a, b) =>
-      a.localeCompare(b),
-    );
-    return html`
-      <wa-option value="">None</wa-option>
-      ${repeat(
-        sortedOptions,
-        (opt) => opt,
-        (opt) => html` <wa-option value=${opt}>${opt}</wa-option> `,
-      )}
-    `;
   }
 
   /**
@@ -430,7 +371,6 @@ export class FileSelectGroup extends LitElement {
           'drop-active': this.isDragActive,
         })}
         data-expanded=${String(this.currentListVisible)}
-        data-has-current=${String(Boolean(this.currentSelectedValue))}
         @dragenter=${this.handleDragEnter}
         @dragover=${this.handleDragOver}
         @dragleave=${this.handleDragLeave}
@@ -447,15 +387,13 @@ export class FileSelectGroup extends LitElement {
               title: config.refreshTitle,
               onClick: this.handleRefreshFiles,
             })}
-            <label for=${this.selectId} title=${config.tooltip}
-              >${config.label}</label
-            >
-            ${when(config.toolConfig === 'tool', () =>
-              this.renderToolConfigMenu(),
-            )}
-            ${when(config.toolConfig === 'autoExtract', () =>
-              this.renderAutoExtractMenu(),
-            )}
+            <label title=${config.tooltip}>${config.label}</label>
+            ${config.toolConfig === 'tool'
+              ? this.renderToolConfigMenu()
+              : nothing}
+            ${config.toolConfig === 'autoExtract'
+              ? this.renderAutoExtractMenu()
+              : nothing}
             ${config.description
               ? html`<span class="file-select-hint" title=${config.description}
                   >${config.description}</span
@@ -463,24 +401,6 @@ export class FileSelectGroup extends LitElement {
               : nothing}
           </div>
           <div class="file-select-actions">
-            ${renderIconActionButton({
-              id: `current${config.type[0].toUpperCase()}${config.type.slice(
-                1,
-              )}FileButton`,
-              icon: 'file-code',
-              label: config.currentTitle,
-              title: config.currentTitle,
-              onClick: this.handleGetCurrentFile,
-            })}
-            ${renderIconActionButton({
-              id: `empty${config.type[0].toUpperCase()}${config.type.slice(
-                1,
-              )}FileButton`,
-              icon: 'close',
-              label: config.emptyTitle,
-              title: config.emptyTitle,
-              onClick: this.handleEmptyFile,
-            })}
             <button
               id=${toggleId}
               class="toggle-icon"
@@ -520,26 +440,20 @@ export class FileSelectGroup extends LitElement {
             })}
           </div>
         </div>
-        <wa-select
-          id=${this.selectId}
-          .value=${this.currentSelectedValue}
-          @focus=${this.handleFocus}
-          @change=${this.handleSelectChange}
-        >
-          ${this.renderFileOptions()}
-        </wa-select>
-        ${when(
-          this.currentListVisible,
-          () => html`
-            <div id="${this.listId}Container" class="multiple-files-container">
-              <div class="multiple-files-content">
-                <div id=${this.listId} class="multiple-files-list">
-                  ${this.renderFileList()}
+        ${this.currentListVisible
+          ? html`
+              <div
+                id="${this.listId}Container"
+                class="multiple-files-container"
+              >
+                <div class="multiple-files-content">
+                  <div id=${this.listId} class="multiple-files-list">
+                    ${this.renderFileList()}
+                  </div>
                 </div>
               </div>
-            </div>
-          `,
-        )}
+            `
+          : nothing}
       </div>
     `;
   }

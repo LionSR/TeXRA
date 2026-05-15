@@ -32,7 +32,7 @@ describe('MainViewExecutionController', () => {
     const result = prepareMainViewExecutionRequest({
       agent: 'direct-agent',
       model: 'gpt-5.4',
-      inputFile: 'paper/main.tex',
+      inputFiles: ['paper/main.tex'],
       outputFiles: ['paper/revised.tex'],
       outputFilesActive: true,
       mediaFiles: ['diagram.png', null],
@@ -43,7 +43,7 @@ describe('MainViewExecutionController', () => {
     expect(result.request.config).toMatchObject({
       agent: 'direct-agent',
       model: 'gpt-5.4',
-      inputFile: 'paper/main.tex',
+      inputFiles: ['paper/main.tex'],
       outputFiles: ['paper/revised.tex'],
       agentCategory: AgentCategory.Workflow,
       mediaFiles: ['diagram.png'],

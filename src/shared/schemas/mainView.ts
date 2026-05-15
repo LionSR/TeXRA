@@ -18,7 +18,6 @@ import {
 import {
   commandOnly,
   withFilesArray,
-  withNotifyWhenEmpty,
   withOptionalFilePath,
 } from './messageFactories';
 import { ToolConfigFieldsSchema } from './toolConfig';
@@ -198,8 +197,6 @@ export const FileSelectConfigSchema = z.object({
   label: z.string(),
   icon: z.string(),
   refreshTitle: z.string(),
-  currentTitle: z.string(),
-  emptyTitle: z.string(),
   toggleTitle: z.string(),
   addOpenedLabel: z.string(),
   emptyListLabel: z.string(),
@@ -221,18 +218,12 @@ export const CheckboxValuesSchema = ToolConfigFieldsSchema;
 export type CheckboxValues = z.infer<typeof CheckboxValuesSchema>;
 
 export const SingleFilesSchema = z.object({
-  inputFile: z.string(),
-  contextFile: z.string(),
-  mediaFile: z.string(),
   baseFile: z.string(),
   editedFile: z.string(),
 });
 export type SingleFiles = z.infer<typeof SingleFilesSchema>;
 
 export const FileOptionsSchema = z.object({
-  inputFile: z.array(z.string()),
-  contextFile: z.array(z.string()),
-  mediaFile: z.array(z.string()),
   baseFile: z.array(z.string()),
   editedFile: z.array(z.string()),
   commit: z.array(z.string()).optional(),
@@ -428,18 +419,6 @@ export const SetAgentOptionsMessageSchema = z.object({
     .optional(),
 });
 
-export const SetInputFileMessageSchema = FilesPayloadSchema.extend({
-  command: z.literal(MAIN_VIEW_COMMANDS.SET_INPUT_FILE),
-});
-
-export const SetContextFileMessageSchema = FilesPayloadSchema.extend({
-  command: z.literal(MAIN_VIEW_COMMANDS.SET_CONTEXT_FILE),
-});
-
-export const SetMediaFileMessageSchema = FilesPayloadSchema.extend({
-  command: z.literal(MAIN_VIEW_COMMANDS.SET_MEDIA_FILE),
-});
-
 export const SetEditedFileMessageSchema = FilesPayloadSchema.extend({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_EDITED_FILE),
 });
@@ -447,20 +426,6 @@ export const SetEditedFileMessageSchema = FilesPayloadSchema.extend({
 export const SetBaseFileMessageSchema = FilesPayloadSchema.extend({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_BASE_FILE),
   preserveBaseFile: BaseFileOptionsSchema.shape.preserveBaseFile,
-});
-
-export const InputFileSelectedMessageSchema = SingleFileSelectedSchema.extend({
-  command: z.literal(MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED),
-});
-
-export const ContextFileSelectedMessageSchema = SingleFileSelectedSchema.extend(
-  {
-    command: z.literal(MAIN_VIEW_COMMANDS.CONTEXT_FILE_SELECTED),
-  },
-);
-
-export const MediaFileSelectedMessageSchema = SingleFileSelectedSchema.extend({
-  command: z.literal(MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED),
 });
 
 export const EditedFileSelectedMessageSchema = SingleFileSelectedSchema.extend({
@@ -515,13 +480,6 @@ export const SetOpenedFilesMessageSchema = z.object({
   files: FileListSchema,
   fileType: z.string(),
   shouldFilter: z.boolean().nullish(),
-});
-
-export const SetAllSingleFilesMessageSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES),
-  inputFiles: FileListSchema.nullish(),
-  contextFiles: FileListSchema.nullish(),
-  mediaFiles: FileListSchema.nullish(),
 });
 
 export const InstructionTextPolishedMessageSchema = z.object({
@@ -654,14 +612,8 @@ export const LatexdiffvcOperationMessageSchema = z.discriminatedUnion(
 export const MainViewMessageSchema = z.discriminatedUnion('command', [
   SetModelOptionsMessageSchema,
   SetAgentOptionsMessageSchema,
-  SetInputFileMessageSchema,
-  SetContextFileMessageSchema,
-  SetMediaFileMessageSchema,
   SetEditedFileMessageSchema,
   SetBaseFileMessageSchema,
-  InputFileSelectedMessageSchema,
-  ContextFileSelectedMessageSchema,
-  MediaFileSelectedMessageSchema,
   EditedFileSelectedMessageSchema,
   SetInputFilesMessageSchema,
   SetContextFilesMessageSchema,
@@ -673,7 +625,6 @@ export const MainViewMessageSchema = z.discriminatedUnion('command', [
   SetCurrentFileMessageSchema,
   SetSelectedCommitMessageSchema,
   SetOpenedFilesMessageSchema,
-  SetAllSingleFilesMessageSchema,
   InstructionTextPolishedMessageSchema,
   InstructionTextPolishErrorMessageSchema,
   InstructionTextTranscribedMessageSchema,
@@ -771,9 +722,6 @@ const ExecutionMessages = [
 ] as const;
 
 const FileSelectionMessages = [
-  commandOnly(MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE),
-  commandOnly(MAIN_VIEW_COMMANDS.SELECT_CONTEXT_FILE),
-  commandOnly(MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE),
   commandOnly(MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES),
@@ -783,16 +731,10 @@ const FileSelectionMessages = [
 ] as const;
 
 const FileSelectedMessages = [
-  withOptionalFilePath(MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED),
-  withOptionalFilePath(MAIN_VIEW_COMMANDS.CONTEXT_FILE_SELECTED),
-  withOptionalFilePath(MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED),
   withOptionalFilePath(MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED),
 ] as const;
 
 const RequestFileMessages = [
-  withNotifyWhenEmpty(MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE),
-  withNotifyWhenEmpty(MAIN_VIEW_COMMANDS.REQUEST_CONTEXT_FILE),
-  withNotifyWhenEmpty(MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE),
     notifyWhenEmpty: z.boolean().nullish(),
@@ -854,11 +796,8 @@ const InstructionMessages = [
     text: z.string(),
     agent: z.string().optional(),
     model: z.string().optional(),
-    inputFile: z.string().optional(),
     inputFiles: z.array(z.string()).optional(),
-    contextFile: z.string().optional(),
     contextFiles: z.array(z.string()).optional(),
-    mediaFile: z.string().optional(),
     mediaFiles: z.array(z.string()).optional(),
     outputFiles: z.array(z.string()).optional(),
     inputFilesActive: z.boolean().optional(),

@@ -106,7 +106,7 @@ export async function runReflectionFlow<C = unknown>(
   const fileService = new TaskRunFileService(executionId);
 
   const baseFiles: WorkspaceFileLocation[] = (
-    config.outputFiles.length > 0 ? config.outputFiles : [config.inputFile]
+    config.outputFiles.length > 0 ? config.outputFiles : config.inputFiles
   ).map((f) => {
     const absolutePath = path.isAbsolute(f) ? f : WorkspaceFS.fullPath(f);
     const relativePath = path.isAbsolute(f) ? WorkspaceFS.relativePath(f) : f;
