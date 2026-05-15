@@ -2,6 +2,7 @@ import { join } from 'node:path';
 
 import { app } from 'electron';
 
+import { registerAgentFeatures } from '@agent/features';
 import { consoleLog } from '@platform/defaults/consoleLog';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -66,6 +67,7 @@ export async function initializeElectronPlatform(
     }),
     lifecycle,
   });
+  registerAgentFeatures();
 
   await bootstrapElectronAgentDirectories(
     resolveResourcesPath(mainDirname),

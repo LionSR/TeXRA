@@ -76,7 +76,8 @@ import {
 } from '@model/apiProviders';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { buildStreamInfo } from '@progressView/streamInfoUtils';
-import type { ExecutionId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { OdysseyStore } from '@tools/odyssey';
 import type { HistoryItem } from '@shared/schemas/historyViewMessages';
 import {
   dispatchSettingsViewInbound,
@@ -339,6 +340,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       void this.withActiveWebview((w) =>
         this.sendToolDashboardData(w, { skipChecks: true }),
       );
+    });
+    bus.on('odysseyStateChanged', () => {
+      void this.withActiveWebview((w) => this.sendOdysseyList(w));
     });
   }
 
@@ -630,7 +634,39 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       },
       [SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND]: (data) =>
         this.handleRunToolCommand(data),
+
+      [SETTINGS_VIEW_COMMANDS.GET_ODYSSEY_LIST]: () =>
+        this.withActiveWebview((w) => this.sendOdysseyList(w)),
+      [SETTINGS_VIEW_COMMANDS.REVEAL_ODYSSEY_STREAM]: (data) =>
+        this.handleRevealOdysseyStream(data.streamId),
     };
+  }
+
+  public async sendOdysseyList(webview: vscode.Webview): Promise<void> {
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_ODYSSEY_LIST,
+      items: OdysseyStore.list(),
+    });
+  }
+
+  private async handleRevealOdysseyStream(
+    streamId: StreamTabId,
+  ): Promise<void> {
+    const provider = ProgressViewProvider.getInstance();
+    if (!provider) return;
+    if (!provider.state.streamLogs.has(streamId)) return;
+    await provider.showProgressView();
+    if (
+      buildStreamInfo(
+        provider.state,
+        streamId,
+        provider.state.agentCategoryFilter,
+      ) === null
+    ) {
+      provider.state.agentCategoryFilter = 'all';
+      provider.syncFullView();
+    }
+    await provider.setActiveStream(streamId);
   }
 
   private handleRunToolCommand(
@@ -732,6 +768,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.latexHandlers.sendLatexSettingsStatus(webview),
       this.latexHandlers.sendLatexConfigValues(webview),
       this.sendInlineCriticismEnabled(webview),
+      this.sendOdysseyList(webview),
     ]);
   }
 

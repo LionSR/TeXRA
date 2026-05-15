@@ -1,5 +1,4 @@
 import { platform } from '@platform/platform';
-import { formatOdysseyTime } from '@agent/odyssey/formatOdysseyTime';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 
 import { defineTool } from '../core/define';
@@ -10,6 +9,7 @@ import {
   ODYSSEY_TOOL_NAME,
   ODYSSEY_FEATURE_FLAG_KEY,
   OdysseyToolInputSchema,
+  formatOdysseyTime,
   odysseyElapsedMs,
   type Odyssey,
   type OdysseyToolInput,

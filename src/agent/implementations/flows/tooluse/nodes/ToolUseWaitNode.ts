@@ -1,9 +1,8 @@
 import { Node } from '@agent/node';
-import { maybeBuildOdysseyContinuation } from '@agent/odyssey';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { listIdleContinuationProviders } from '@agent/runtime/idleContinuation';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS } from '@shared/schemas';
-import { OdysseyStore } from '@tools/odyssey/odysseyStore';
 
 import { findLastAssistantText, extractTouchedFiles } from './types';
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
@@ -63,24 +62,27 @@ export class ToolUseWaitNode<C> extends Node<
       await onBeforeWaiting?.(prepRes.lastResponse, prepRes.touchedFiles);
     }
 
-    // Odyssey continuation must run BEFORE `waitForFollowUp` blocks; once
+    // Idle-continuation providers run BEFORE `waitForFollowUp` blocks; once
     // inside the wait, a continuation check is unreachable. Skipped after a
     // failed/cancelled cycle so the user-recovery path still fires. The
     // post-await re-check of `hasQueuedFollowUp` lets user input that
-    // arrived during the prompt build win the race. See PRD §5.3.
+    // arrived during the build win the race; providers do their persistent
+    // side effects in `commit()` so a loser leaves no audit trace.
     if (!prepRes.afterError) {
-      const odysseyFollowUp = await maybeBuildOdysseyContinuation({
-        streamId,
-        isSubagent: !!isSubagent,
-        hasQueuedFollowUp: session.hasQueuedFollowUp(),
-      });
-      if (odysseyFollowUp && !session.hasQueuedFollowUp()) {
-        await OdysseyStore.recordContinuation(streamId);
-        return {
-          kind: 'continue',
-          followUp: odysseyFollowUp,
-          synthetic: true,
-        };
+      for (const provider of listIdleContinuationProviders()) {
+        const continuation = await provider.build({
+          streamId,
+          isSubagent: !!isSubagent,
+          hasQueuedFollowUp: session.hasQueuedFollowUp(),
+        });
+        if (continuation && !session.hasQueuedFollowUp()) {
+          await continuation.commit();
+          return {
+            kind: 'continue',
+            followUp: continuation.followUp,
+            synthetic: true,
+          };
+        }
       }
     }
 
@@ -124,9 +126,9 @@ export class ToolUseWaitNode<C> extends Node<
     shared.lastError = undefined;
     shared.userCancelledRetry = undefined;
 
-    // Synthesized continuations (e.g. Odyssey) don't come from the user
-    // queue, so they must not emit updateQueuedFollowUps via the consume
-    // callback. They also don't need to be replayed in the chat log.
+    // Synthesized continuations don't come from the user queue, so they
+    // must not emit updateQueuedFollowUps via the consume callback. They
+    // also don't need to be replayed in the chat log.
     if (!execRes.synthetic) {
       onFollowUpConsumed?.();
       logger.userMessage(execRes.followUp);
