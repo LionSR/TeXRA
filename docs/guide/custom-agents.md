@@ -14,7 +14,7 @@ Before creating a custom agent, it's highly recommended to understand the underl
 
 ## <wa-icon library="texra" name="library"></wa-icon> Reference Agents
 
-TeXRA includes ready-made reference agents you can use as starting points. Think of them as recipes: copy one into your custom agents directory, tweak it, and you have a new agent in minutes. Examples range from content-enhancement workflows to notation standardizers and multi-agent orchestrators. Each also has a `_multiple` variant for multi-file output.
+TeXRA includes ready-made reference agents you can use as starting points. Think of them as recipes: copy one into your custom agents directory, tweak it, and you have a new agent in minutes. Examples range from content-enhancement workflows to notation standardizers and multi-agent orchestrators. Each agent handles both single-file and multi-file output through one unified YAML — set `documentTag: documents` and use `{% if OUTPUT_FILES_ORDER %}` to branch on whether the user picked multiple output files.
 
 ## <wa-icon library="texra" name="new-file"></wa-icon> Creating a Custom Agent File
 
@@ -72,7 +72,7 @@ settings:
   # filePatternsContain:
   #   - pattern: 'bibliography' # Find files whose names contain this pattern.
   #     varName: BIBLIOGRAPHY # Make content available via {{ BIBLIOGRAPHY_CONTENT }} in prompts.
-  #     categories: ['auxiliaryFile', 'auxiliaryFiles'] # Search within these UI file categories.
+  #     categories: ['contextFile', 'contextFiles'] # Search within these UI file categories.
   # defaultOutputFiles: # Used when the agent is designed to produce multiple outputs.
   #   - 'introduction.tex'
   #   - 'methods.tex'

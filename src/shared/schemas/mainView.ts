@@ -11,8 +11,10 @@ import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
-import { isNonEmptyString } from '@utils/core/stringCore';
-import { UIFileFieldsSchema } from './fileFields';
+import {
+  UIFileFieldsSchema,
+  migrateLegacyContextFileFields,
+} from './fileFields';
 import {
   commandOnly,
   withFilesArray,
@@ -127,61 +129,32 @@ const MainViewPersistedStateBaseSchema = UIFileFieldsSchema.merge(
   openedFiles: z.array(z.string()).nullish(),
 });
 
-// New keys win when both legacy and new are present, so users with a
-// partially-migrated state don't lose their canonical selection.
-function migrateLegacyAuxiliaryReferenceState(input: unknown): unknown {
-  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-    return input;
+// Layer the visibility-key migration on top of the shared file-field
+// migration so MainView and AgentConfig stay in sync without duplicating
+// the file-slot logic.
+function migrateLegacyMainViewState(input: unknown): unknown {
+  const migrated = migrateLegacyContextFileFields(input);
+  if (
+    typeof migrated !== 'object' ||
+    migrated === null ||
+    Array.isArray(migrated)
+  ) {
+    return migrated;
   }
-  const obj = { ...(input as Record<string, unknown>) };
-
-  if (obj.contextFile === undefined) {
-    if (isNonEmptyString(obj.referenceFile)) {
-      obj.contextFile = obj.referenceFile;
-    } else if (isNonEmptyString(obj.auxiliaryFile)) {
-      obj.contextFile = obj.auxiliaryFile;
-    }
-  }
-
-  if (obj.contextFiles === undefined) {
-    const refList = Array.isArray(obj.referenceFiles) ? obj.referenceFiles : [];
-    const auxList = Array.isArray(obj.auxiliaryFiles) ? obj.auxiliaryFiles : [];
-    // Fold an unclaimed auxiliary single slot into the multi list so it
-    // isn't silently dropped when reference already took the contextFile spot.
-    const auxFallback =
-      isNonEmptyString(obj.auxiliaryFile) &&
-      obj.contextFile !== obj.auxiliaryFile
-        ? [obj.auxiliaryFile]
-        : [];
-    const merged = [
-      ...new Set(
-        [...refList, ...auxList, ...auxFallback].filter(isNonEmptyString),
-      ),
-    ];
-    if (merged.length > 0 || refList.length > 0 || auxList.length > 0) {
-      obj.contextFiles = merged;
-    }
-  }
-
+  const obj = migrated as Record<string, unknown>;
   if (
     obj.contextFilesVisible === undefined &&
     (obj.referenceFilesVisible || obj.auxiliaryFilesVisible)
   ) {
     obj.contextFilesVisible = true;
   }
-
-  delete obj.referenceFile;
-  delete obj.referenceFiles;
   delete obj.referenceFilesVisible;
-  delete obj.auxiliaryFile;
-  delete obj.auxiliaryFiles;
   delete obj.auxiliaryFilesVisible;
-
   return obj;
 }
 
 export const MainViewPersistedStateSchema = z.preprocess(
-  migrateLegacyAuxiliaryReferenceState,
+  migrateLegacyMainViewState,
   MainViewPersistedStateBaseSchema,
 );
 export type MainViewPersistedState = z.infer<

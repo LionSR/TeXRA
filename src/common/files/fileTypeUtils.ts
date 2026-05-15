@@ -29,9 +29,13 @@ const INCLUDED_EXTENSION_KEYS: Record<ExtensionCategory, string> = {
   edited: 'texra.files.included.editedExtensions',
 };
 
-/** Legacy setting key still used by some older user configs. */
+/** Legacy keys preserved so older user customizations carry through the rename. */
 const LEGACY_REFERENCE_EXTENSIONS_KEY =
   'texra.files.included.referenceExtensions';
+const LEGACY_AUXILIARY_EXTENSIONS_KEY =
+  'texra.files.included.auxiliaryExtensions';
+export const LEGACY_AUXILIARY_KEYWORDS_KEY =
+  'texra.files.ignored.auxiliaryKeywords';
 
 /**
  * Return the built-in extension defaults for a file category.
@@ -55,9 +59,10 @@ function getDefaultIncludedExtensions(category: ExtensionCategory): string[] {
 /**
  * Retrieve included extensions for the given extension category.
  *
- * Back-compat: for `context`, fall back to a legacy `referenceExtensions`
- * user value only when the new key was never explicitly set — otherwise
- * `getConfig()` would mask the legacy customization with the new defaults.
+ * Back-compat: for `context`, fall back to the union of legacy
+ * `referenceExtensions` and `auxiliaryExtensions` user values only when
+ * the new key was never explicitly set — otherwise `getConfig()` would
+ * mask the legacy customization with the new defaults.
  */
 export function getIncludedExtensions(category: ExtensionCategory): string[] {
   const defaults = getDefaultIncludedExtensions(category);
@@ -65,13 +70,23 @@ export function getIncludedExtensions(category: ExtensionCategory): string[] {
     category === 'context' &&
     !isConfigExplicitlySet(INCLUDED_EXTENSION_KEYS.context)
   ) {
-    const legacy = readUserSetting<string[]>(LEGACY_REFERENCE_EXTENSIONS_KEY);
-    if (legacy && legacy.length > 0) return legacy;
+    const legacyRef = readUserSetting<string[]>(
+      LEGACY_REFERENCE_EXTENSIONS_KEY,
+    );
+    const legacyAux = readUserSetting<string[]>(
+      LEGACY_AUXILIARY_EXTENSIONS_KEY,
+    );
+    if (
+      (legacyRef && legacyRef.length > 0) ||
+      (legacyAux && legacyAux.length > 0)
+    ) {
+      return [...new Set([...(legacyRef ?? []), ...(legacyAux ?? [])])];
+    }
   }
   return getConfig<string[]>(INCLUDED_EXTENSION_KEYS[category], defaults);
 }
 
-function readUserSetting<T>(key: string): T | undefined {
+export function readUserSetting<T>(key: string): T | undefined {
   const inspected = inspectConfig<T>(key);
   return (
     inspected?.workspaceValue ??
