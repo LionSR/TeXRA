@@ -41,8 +41,6 @@ export const OdysseySchema = z.object({
   streamId: StreamTabIdSchema,
   objective: z.string().min(1),
   status: OdysseyStatusSchema,
-  /** Cumulative token usage attributed to this odyssey (input + output). */
-  tokensUsed: z.int().nonnegative().default(0),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   completedReason: z.string().nullish(),
