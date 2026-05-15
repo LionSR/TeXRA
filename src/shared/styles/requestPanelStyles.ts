@@ -340,6 +340,16 @@ export const requestPanelStyles: CSSResult = css`
     font-size: var(--font-size-xs);
   }
 
+  .retry-request__error-details::part(header) {
+    min-height: 28px;
+    padding: ${sp.small} ${sp.large};
+    color: var(--wa-color-text-quiet);
+  }
+
+  .retry-request__error-details::part(content) {
+    padding: 0 ${sp.large} ${sp.large};
+  }
+
   .retry-request__error-summary {
     cursor: pointer;
     color: var(--wa-color-text-quiet);
