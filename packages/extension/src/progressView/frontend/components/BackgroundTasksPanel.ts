@@ -62,25 +62,26 @@ export class BackgroundTasksPanel extends LitElement {
       .task-list {
         display: flex;
         flex-direction: column;
-        gap: var(--wa-space-3xs);
       }
 
       .section-content {
-        max-height: 16rem;
+        max-height: clamp(12rem, 42vh, 24rem);
         overflow-y: auto;
         scrollbar-gutter: stable;
       }
 
       .task-item {
-        margin-bottom: var(--wa-space-3xs);
+        margin-bottom: 0;
       }
 
       .task-header {
         display: flex;
         align-items: center;
         gap: var(--wa-space-2xs);
-        padding: var(--wa-space-3xs) 0;
+        min-height: 1.5rem;
+        padding: 1px 0;
         font-size: var(--font-size-sm);
+        line-height: var(--line-height-tight);
       }
 
       .task-icon {
@@ -97,8 +98,8 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       .task-name {
-        flex-shrink: 0;
-        max-width: 40%;
+        flex: 0 1 auto;
+        max-width: min(14rem, 40%);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -117,7 +118,7 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       .task-description {
-        flex: 1;
+        flex: 1 1 8rem;
         min-width: 0;
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
@@ -130,6 +131,18 @@ export class BackgroundTasksPanel extends LitElement {
         flex-shrink: 0;
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
+      }
+
+      wa-tag.task-status {
+        flex: 0 0 auto;
+        margin-left: auto;
+      }
+
+      wa-tag.task-status::part(base) {
+        min-height: 1.25rem;
+        padding: 0 var(--wa-space-xs);
+        font-size: var(--font-size-xs);
+        line-height: 1;
       }
 
       .section-label {
@@ -351,7 +364,10 @@ export class BackgroundTasksPanel extends LitElement {
           ${child.elapsed
             ? html`<span class="task-elapsed">(${child.elapsed})</span>`
             : nothing}
-          <wa-tag variant=${waiting ? 'neutral' : 'warning'} size="small"
+          <wa-tag
+            class="task-status"
+            variant=${waiting ? 'neutral' : 'warning'}
+            size="small"
             >${waiting ? 'waiting' : 'running'}</wa-tag
           >
         </div>
