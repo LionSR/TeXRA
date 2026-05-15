@@ -333,6 +333,9 @@ importers:
       citty:
         specifier: ^0.2.2
         version: 0.2.2
+      diff:
+        specifier: ^9.0.0
+        version: 9.0.0
       ink:
         specifier: ^6.8.0
         version: 6.8.0(@types/react@19.2.14)(react@19.2.6)
@@ -3230,6 +3233,10 @@ packages:
 
   diff@7.0.0:
     resolution: {integrity: sha512-PJWHUb1RFevKCwaFA9RlG5tCd+FO5iRh9A8HEtkmBH2Li03iJriB6m6JIN4rGz3K3JLawI7/veA1xzRKP6ISBw==}
+    engines: {node: '>=0.3.1'}
+
+  diff@9.0.0:
+    resolution: {integrity: sha512-svtcdpS8CgJyqAjEQIXdb3OjhFVVYjzGAPO8WGCmRbrml64SPw/jJD4GoE98aR7r25A0XcgrK3F02yw9R/vhQw==}
     engines: {node: '>=0.3.1'}
 
   dir-compare@4.2.0:
@@ -9504,6 +9511,8 @@ snapshots:
   diff-match-patch@1.0.5: {}
 
   diff@7.0.0: {}
+
+  diff@9.0.0: {}
 
   dir-compare@4.2.0:
     dependencies:

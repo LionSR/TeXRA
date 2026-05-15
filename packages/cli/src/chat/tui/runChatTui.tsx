@@ -1,14 +1,10 @@
-// Ink-mounted chat session per docs/prd/cli-tui-ink (Phase 1).
+// Ink-mounted chat session per docs/prd/cli-tui-ink.
 //
 // This is the new TUI entry that the `--tui` flag mounts; the legacy
 // `runChat.ts` path is still the default until Phase 6. We intentionally
 // share as much as possible with the legacy path — platform init, default
-// resolution, approval handlers, the agent runtime host — and only swap the
-// rendering surface (Ink) and the follow-up queue (p-queue, replacing the
-// hand-rolled promise chain).
-//
-// Approvals stay on the legacy adapter for Phase 1 per the PRD; the
-// approval dispatcher only lights up in Phase 2.
+// resolution, and the agent runtime host — and swap the rendering surface
+// (Ink), approval UI, and follow-up queue.
 
 import { render } from 'ink';
 import PQueue from 'p-queue';
@@ -25,10 +21,7 @@ import { toErrorMessage } from '@common/errors/errorMessage';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 import { type CliContext } from '../../runtime/cliContext';
-import {
-  hasCliApprovalDenied,
-  installCliApprovalHandlers,
-} from '../../runtime/approvalAdapter';
+import { hasCliApprovalDenied } from '../../runtime/approvalAdapter';
 import { resolveChatDefaults } from '../../runtime/chatDefaults';
 import { CliExitCode } from '../../runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '../../runtime/initPlatform';
@@ -37,7 +30,9 @@ import { writeTextStderr } from '../../runtime/logSinks';
 import { type ChatResult, type RunChatInit } from '../runChat';
 import { App } from './App';
 import { notify } from './notifications/terminalNotifier';
+import { clearApprovals } from './state/approvalQueue';
 import { cliState, resetCliState } from './state/cliState';
+import { installTuiApprovals } from './state/subscribeApprovals';
 import { wrapRuntimeHost } from './state/subscribeRuntimeHost';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
@@ -88,7 +83,10 @@ export async function runChatTui(
     helperModel: model,
     quietLogs: true,
   };
-  installCliApprovalHandlers(sessionContext);
+  // Phase 2 replaces the legacy stderr-prompt approval adapter with the
+  // typed dispatch: events flow into the modal queue, modal calls back
+  // through the original resolvers (see state/subscribeApprovals.ts).
+  // The legacy adapter only stays on the `!--tui` path now.
   await loadAgents();
 
   // DA1 sentinel discovery runs *before* Ink mounts so it owns the raw-mode
@@ -116,6 +114,7 @@ export async function runChatTui(
   const followUpQueue = new PQueue({ concurrency: 1 });
 
   const interruptActive = (): void => {
+    clearApprovals();
     if (!session.streamId) return;
     interruptActiveChildren(session.streamId);
     getInterruptible(session.streamId)?.interrupt();
@@ -131,6 +130,8 @@ export async function runChatTui(
     };
     const runtimeHost = createCliRuntimeHost(sessionContext);
     const wrapped = wrapRuntimeHost(runtimeHost);
+    const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
+    disposers.push(unbindApprovals);
 
     session.runPromise = executeAgent(config, undefined, {
       runtimeHost: wrapped,
