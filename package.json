@@ -106,12 +106,12 @@
     "zod-v3-to-v4": "^1.21.1"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.140",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.142",
     "@anthropic-ai/sdk": "^0.96.0",
     "@awesome.me/webawesome": "^3.7.0",
     "@cantoo/pdf-lib": "^2.6.5",
     "@fortawesome/free-solid-svg-icons": "^7.2.0",
-    "@google/genai": "^2.2.0",
+    "@google/genai": "^2.3.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@lit-labs/signals": "^0.3.0",
     "@lit-labs/virtualizer": "^2.1.1",
@@ -139,7 +139,7 @@
     "highlightjs-lean": "^1.2.0",
     "http-status-codes": "^2.3.0",
     "identifiers-arxiv": "^0.1.1",
-    "katex": "^0.16.45",
+    "katex": "^0.16.46",
     "lit": "^3.3.3",
     "llm-zoo": "^1.6.1",
     "mark.js": "^8.11.1",

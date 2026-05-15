@@ -52,6 +52,13 @@
             "description": "Experimental: parse \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files and surface them as VS Code diagnostics (squiggles + Problems panel). Severity 5→Error, 4→Warning, 3→Info, 1–2→Hint. Tool-use agents may also push diagnostics directly via the add_criticism tool.",
             "scope": "resource",
             "order": 52
+          },
+          "texra.experimental.odyssey.enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Experimental: enable Odyssey, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Odyssey causes the agent to keep working across turns toward a stated objective until it calls odyssey(complete). Off by default; the `odyssey` tool is registered either way but errors out when this flag is off.",
+            "scope": "resource",
+            "order": 53
           }
         }
       },
@@ -1023,7 +1030,7 @@
           {
             "id": "texra.gettingStarted.stageFiles",
             "title": "Pick your files",
-            "description": "Open the main view and tell TeXRA what to work on:\n\n- **Input** -- the manuscript you want edited\n- **Reference** -- papers or notes for context (optional)\n- **Auxiliary** -- bib files, style files, preambles (optional)\n- **Media** -- figures and images (optional)\n\nYou really only need an Input file to get going.\n\n[Open the TeXRA main view](command:texra.showMainView)",
+            "description": "Open the main view and tell TeXRA what to work on:\n\n- **Input** -- the manuscript you want edited\n- **Context** -- bib/style files, reference papers, or any read-only context (optional)\n- **Media** -- figures and images (optional)\n\nYou really only need an Input file to get going.\n\n[Open the TeXRA main view](command:texra.showMainView)",
             "media": {
               "image": "resources/walkthroughs/media/file-selection.png",
               "altText": "Screenshot of the file selection interface"
@@ -1504,12 +1511,12 @@
   },
   "homepage": "https://texra.ai",
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.140",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.142",
     "@anthropic-ai/sdk": "^0.96.0",
     "@awesome.me/webawesome": "^3.7.0",
     "@cantoo/pdf-lib": "^2.6.5",
     "@fortawesome/free-solid-svg-icons": "^7.2.0",
-    "@google/genai": "^2.2.0",
+    "@google/genai": "^2.3.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@lit-labs/signals": "^0.3.0",
     "@lit-labs/virtualizer": "^2.1.1",
@@ -1537,7 +1544,7 @@
     "highlightjs-lean": "^1.2.0",
     "http-status-codes": "^2.3.0",
     "identifiers-arxiv": "^0.1.1",
-    "katex": "^0.16.45",
+    "katex": "^0.16.46",
     "lit": "^3.3.3",
     "llm-zoo": "^1.6.1",
     "mark.js": "^8.11.1",

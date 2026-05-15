@@ -362,6 +362,13 @@
               "scope": "resource",
               "type": "boolean"
             },
+            "texra.experimental.odyssey.enabled": {
+              "default": false,
+              "description": "Experimental: enable Odyssey, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Odyssey causes the agent to keep working across turns toward a stated objective until it calls odyssey(complete). Off by default; the `odyssey` tool is registered either way but errors out when this flag is off.",
+              "order": 53,
+              "scope": "resource",
+              "type": "boolean"
+            },
             "texra.inlineCriticism.enabled": {
               "default": false,
               "description": "Experimental: parse \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files and surface them as VS Code diagnostics (squiggles + Problems panel). Severity 5→Error, 4→Warning, 3→Info, 1–2→Hint. Tool-use agents may also push diagnostics directly via the add_criticism tool.",
@@ -1368,7 +1375,7 @@
             },
             {
               "completionEvents": ["onCommand:texra.showMainView"],
-              "description": "Open the main view and tell TeXRA what to work on:\n\n- **Input** -- the manuscript you want edited\n- **Reference** -- papers or notes for context (optional)\n- **Auxiliary** -- bib files, style files, preambles (optional)\n- **Media** -- figures and images (optional)\n\nYou really only need an Input file to get going.\n\n[Open the TeXRA main view](command:texra.showMainView)",
+              "description": "Open the main view and tell TeXRA what to work on:\n\n- **Input** -- the manuscript you want edited\n- **Context** -- bib/style files, reference papers, or any read-only context (optional)\n- **Media** -- figures and images (optional)\n\nYou really only need an Input file to get going.\n\n[Open the TeXRA main view](command:texra.showMainView)",
               "id": "texra.gettingStarted.stageFiles",
               "media": {
                 "altText": "Screenshot of the file selection interface",
