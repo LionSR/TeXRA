@@ -7,12 +7,15 @@ npm package.
 ## Install From a Checkout
 
 Clone the repository, install workspace dependencies, build the CLI package, and
-link it into the global pnpm bin directory:
+link the bundled CLI binary into the global pnpm bin directory:
 
 ```bash
 corepack pnpm install
 corepack pnpm --filter @texra/cli build
-corepack pnpm --dir packages/cli link --global
+corepack pnpm setup    # one-time; then restart your shell or source its rc file
+PNPM_BIN="$(corepack pnpm bin -g)"
+mkdir -p "$PNPM_BIN"
+ln -sf "$(pwd)/packages/cli/dist/bin/texra.js" "$PNPM_BIN/texra"
 ```
 
 Verify the command:
@@ -30,14 +33,8 @@ changing CLI code or shared runtime code:
 corepack pnpm --filter @texra/cli build
 ```
 
-If `pnpm link --global` reports that no global binary directory is configured,
-run:
-
-```bash
-corepack pnpm setup
-```
-
-Then restart the shell and repeat the link command.
+The symlink is used instead of `pnpm link --global` because the CLI package
+still has workspace-only dependencies, while the built binary is self-contained.
 
 ## Run Without Linking
 
@@ -57,7 +54,7 @@ node packages/cli/dist/bin/texra.js run polish --input paper.tex --output paper.
 ## Remove the Linked Command
 
 ```bash
-corepack pnpm --global remove @texra/cli
+rm "$(corepack pnpm bin -g)/texra"
 ```
 
 ## Validation
