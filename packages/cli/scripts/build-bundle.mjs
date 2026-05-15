@@ -1,9 +1,14 @@
 #!/usr/bin/env node
 
 import { chmod } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 import { reactCompilerPlugin } from './reactCompilerPlugin.mjs';
+
+const reactDevtoolsStub = fileURLToPath(
+  new URL('./react-devtools-core-stub.mjs', import.meta.url),
+);
 
 const outfile = 'dist/bin/texra.js';
 
@@ -14,6 +19,14 @@ await build({
   format: 'esm',
   target: 'node20',
   external: ['fsevents'],
+  alias: {
+    // Ink statically imports `react-devtools-core` from its `devtools.js`,
+    // which is only reached when `process.env.DEV === 'true'`. We never
+    // attach to React DevTools from the production CLI, so alias the import
+    // to a no-op stub. Avoids pulling the (heavy) real package into the
+    // bundle while keeping ink's dynamic-import path resolvable.
+    'react-devtools-core': reactDevtoolsStub,
+  },
   outfile,
   // The React Compiler runs as a Babel pre-pass scoped to .tsx files under
   // packages/cli/src/chat/tui/. Confirmed addition is only
