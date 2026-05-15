@@ -10,6 +10,13 @@ import {
   parseCliApprovalPolicy,
   type CliApprovalPolicy,
 } from './approvalPolicy';
+import {
+  CLI_BOOLEAN_FLAGS,
+  FLAGS_WITH_VALUE,
+  GLOBAL_BOOLEAN_FLAGS,
+  GLOBAL_FLAGS_WITH_VALUE,
+  cliFlagName,
+} from './cliFlags';
 
 export type CliMode = 'headless' | 'interactive';
 export type CliOutputFormat = 'text' | 'json' | 'ndjson';
@@ -41,37 +48,6 @@ export class CliUsageError extends Error {
   }
 }
 
-export const GLOBAL_FLAGS_WITH_VALUE = new Set([
-  '--approval-policy',
-  '--cwd',
-  '--output-format',
-]);
-
-export const RUN_FLAGS_WITH_VALUE = new Set([
-  '--input',
-  '-i',
-  '--output',
-  '--model',
-  '-m',
-  '--instruction',
-]);
-
-const FLAGS_WITH_VALUE = new Set([
-  ...GLOBAL_FLAGS_WITH_VALUE,
-  ...RUN_FLAGS_WITH_VALUE,
-  '--agent',
-  '--tool-display',
-]);
-
-const GLOBAL_BOOLEAN_FLAGS = new Set(['--print', '-p']);
-export const CLI_BOOLEAN_FLAGS = new Set([
-  ...GLOBAL_BOOLEAN_FLAGS,
-  '--help',
-  '-h',
-  '--version',
-  '-v',
-]);
-
 interface CliAmbientState {
   readonly isCi: boolean;
   readonly stdinIsTty: boolean;
@@ -92,10 +68,6 @@ function readCliAmbientState(): CliAmbientState {
       process.env.NO_COLOR == null &&
       process.env.TERM !== 'dumb',
   };
-}
-
-export function cliFlagName(arg: string): string {
-  return arg.split('=', 1)[0] ?? arg;
 }
 
 function inlineFlagValue(arg: string, ...names: string[]): string | undefined {
