@@ -44,6 +44,7 @@ export class ProcessStreamContent extends LitElement {
         .progress=${streamState.conversationProgress}
         .yoloActive=${Boolean(toolUse?.toolEditBypass)}
         .superYoloActive=${Boolean(toolUse?.superYoloBypass)}
+        .odysseyActive=${Boolean(toolUse?.odysseyActive)}
       ></stream-header>
 
       <terminal-command-strip .command=${command}></terminal-command-strip>

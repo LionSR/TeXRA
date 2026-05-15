@@ -67,6 +67,7 @@ const ENABLED_BUTTONS_BY_STATUS: Record<string, Set<string>> = {
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
     ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
+    ELEMENT_IDS.ODYSSEY_TOGGLE_BTN,
     ELEMENT_IDS.COMPACT_RESPONSE_BTN,
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
@@ -101,6 +102,7 @@ const ENABLED_BUTTONS_BY_STATUS: Record<string, Set<string>> = {
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
     ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
+    ELEMENT_IDS.ODYSSEY_TOGGLE_BTN,
     ELEMENT_IDS.COMPACT_RESPONSE_BTN,
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
@@ -109,6 +111,7 @@ const ENABLED_BUTTONS_BY_STATUS: Record<string, Set<string>> = {
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.YOLO_TOGGLE_BTN,
     ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
+    ELEMENT_IDS.ODYSSEY_TOGGLE_BTN,
     ELEMENT_IDS.COMPACT_RESPONSE_BTN,
     ELEMENT_IDS.RESTORE_STATE_BTN,
     ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
@@ -248,12 +251,14 @@ export class StreamHeader extends LitElement {
 
       /* Shared toggle button base */
       .yolo-toggle-button,
-      .super-yolo-toggle-button {
+      .super-yolo-toggle-button,
+      .odyssey-toggle-button {
         flex-shrink: 0;
       }
 
       .yolo-toggle-button.is-active,
-      .super-yolo-toggle-button.is-active {
+      .super-yolo-toggle-button.is-active,
+      .odyssey-toggle-button.is-active {
         border-radius: var(--border-radius);
       }
 
@@ -266,8 +271,16 @@ export class StreamHeader extends LitElement {
         --_toggle-color: var(--color-warning);
       }
 
+      .odyssey-toggle-button.is-active {
+        --_toggle-color: var(--color-info, var(--wa-color-brand-fill-loud));
+      }
+
       /* Active toggle: color + tinted background. */
-      :is(.yolo-toggle-button, .super-yolo-toggle-button).is-active {
+      :is(
+        .yolo-toggle-button,
+        .super-yolo-toggle-button,
+        .odyssey-toggle-button
+      ).is-active {
         color: var(--_toggle-color);
         background-color: color-mix(
           in srgb,
@@ -328,6 +341,7 @@ export class StreamHeader extends LitElement {
   @property({ attribute: false }) progress: ConversationProgress | undefined;
   @property({ attribute: false }) yoloActive = false;
   @property({ attribute: false }) superYoloActive = false;
+  @property({ attribute: false }) odysseyActive = false;
 
   override render(): TemplateResult | typeof nothing {
     if (!this.stream) {
@@ -385,7 +399,9 @@ export class StreamHeader extends LitElement {
                     btn.isToggle &&
                     (btn.id === ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN
                       ? this.superYoloActive
-                      : this.yoloActive),
+                      : btn.id === ELEMENT_IDS.ODYSSEY_TOGGLE_BTN
+                        ? this.odysseyActive
+                        : this.yoloActive),
                   );
                   const title =
                     isActive && btn.titleActive ? btn.titleActive : btn.title;

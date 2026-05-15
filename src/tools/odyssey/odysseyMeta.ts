@@ -1,0 +1,104 @@
+import { z } from 'zod';
+
+import { StreamTabIdSchema } from '@shared/schemas/identifiers';
+
+export const ODYSSEY_TOOL_NAME = 'odyssey' as const;
+
+export const ODYSSEY_FEATURE_FLAG_KEY =
+  'texra.experimental.odyssey.enabled' as const;
+
+/** Cap on the history-event ring buffer per Odyssey record (oldest dropped). */
+export const ODYSSEY_HISTORY_LIMIT = 200;
+
+/**
+ * Default maximum continuations before the Odyssey auto-pauses for user
+ * confirmation. Acts as a safety net so a model that never calls
+ * `odyssey(complete)` doesn't loop forever.
+ */
+export const ODYSSEY_DEFAULT_MAX_CONTINUATIONS = 50;
+
+export const OdysseyStatusSchema = z.enum([
+  'active',
+  'paused',
+  'complete',
+  'abandoned',
+]);
+export type OdysseyStatus = z.infer<typeof OdysseyStatusSchema>;
+
+export const OdysseyEventKindSchema = z.enum([
+  'started',
+  'paused',
+  'resumed',
+  'objective_edited',
+  'completed',
+  'abandoned',
+  'continuation_injected',
+  'continuation_cap_reached',
+]);
+export type OdysseyEventKind = z.infer<typeof OdysseyEventKindSchema>;
+
+export const OdysseyEventSchema = z.object({
+  at: z.iso.datetime(),
+  kind: OdysseyEventKindSchema,
+  detail: z.string().nullish(),
+});
+export type OdysseyEvent = z.infer<typeof OdysseyEventSchema>;
+
+export const OdysseySchema = z.object({
+  odysseyId: z.string().min(1),
+  streamId: StreamTabIdSchema,
+  objective: z.string().min(1),
+  status: OdysseyStatusSchema,
+  /** Continuations injected since the last resume / start. */
+  continuationCount: z.int().nonnegative().prefault(0),
+  /** Cap before auto-pause. Reset on resume so each leg gets a fresh budget. */
+  maxContinuations: z
+    .int()
+    .positive()
+    .prefault(ODYSSEY_DEFAULT_MAX_CONTINUATIONS),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+  completedReason: z.string().nullish(),
+  history: z.array(OdysseyEventSchema).default([]),
+});
+
+/**
+ * Wall-clock elapsed time since the odyssey was started.
+ * Computed live so we don't need to accumulate ticks (which would either
+ * be wrong while paused or wrong while idle between turns).
+ */
+export function odysseyElapsedMs(odyssey: { createdAt: string }): number {
+  return Math.max(0, Date.now() - new Date(odyssey.createdAt).getTime());
+}
+export type Odyssey = z.infer<typeof OdysseySchema>;
+
+/** Top-level command names exposed by the OdysseyTool. */
+export const OdysseyCommandSchema = z.enum([
+  'view',
+  'start',
+  'pause',
+  'complete',
+]);
+export type OdysseyCommand = z.infer<typeof OdysseyCommandSchema>;
+
+export const OdysseyToolInputSchema = z.strictObject({
+  command: OdysseyCommandSchema,
+  objective: z
+    .string()
+    .nullish()
+    .describe(
+      'Required for command="start". Phrase as "Complete X until Y holds" ' +
+        'with a verifiable stopping condition.',
+    ),
+  reason: z
+    .string()
+    .nullish()
+    .describe(
+      'Required for command="pause" and command="complete". ' +
+        'For "pause": describe what you need from the user. ' +
+        'For "complete": describe HOW you verified the objective is met ' +
+        '(cite current filesystem state, test output, or command results — ' +
+        'never conversation memory).',
+    ),
+});
+export type OdysseyToolInput = z.infer<typeof OdysseyToolInputSchema>;
