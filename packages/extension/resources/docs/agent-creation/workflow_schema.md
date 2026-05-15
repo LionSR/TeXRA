@@ -59,11 +59,12 @@ Workflow agent prompts receive:
 - `{{ ALL_CONTEXTS }}` — XML list of context files (.bib/.bbl, reference papers, .sty/.cls)
 - `{{ LIST_OF_ALL_CONTEXTS }}` — comma-separated list of context file paths
 - `{{ INSTRUCTION }}` — the user's free-text instruction for this run
-- `{{ OUTPUT_FILES_ORDER }}` — ordered list of output filenames. Each input
-  produces one output of the same name, so most agents simply iterate over
-  this list. Agents that write fixed filenames distinct from the inputs should
-  declare `settings.defaultOutputFiles`. Use `{{ OUTPUT_FILES_ORDER | join(", ") }}`
-  for a human-readable list.
+- `{{ INPUT_FILES }}` — ordered list of selected input filenames. Editing
+  agents should emit one output document per entry, using the same filenames.
+  Use `{{ INPUT_FILES | join(", ") }}` for a human-readable list.
+- `{{ OUTPUT_FILES }}` — ordered list of declared generated filenames. This is
+  only populated for agents that set `settings.defaultOutputFiles`, such as OCR
+  or transcription agents.
 
 Both categories support `{% if IS_ANTHROPIC_MODEL %}...{% endif %}` blocks
 for model-specific instructions.
@@ -84,18 +85,18 @@ they produce one file or many. No separate `_multiple` variant is needed.
 
 - Use `documentTag: documents` (the default). Omit it unless you need a custom
   tag for a legacy single-output agent.
-- Add `defaultOutputFiles` with the list of expected filenames when the agent
-  produces a fixed set of outputs.
-- In `userRequest`, iterate over `OUTPUT_FILES_ORDER` to emit one
-  `<document name="filename.tex">` block per output file inside `<documents>`.
-  Each input file produces one output of the same name; the runtime always
-  populates `OUTPUT_FILES_ORDER` with at least one entry.
+- For editing agents, iterate over `INPUT_FILES` to emit one
+  `<document name="filename.tex">` block per selected input file inside
+  `<documents>`.
+- Add `defaultOutputFiles` only when the agent produces generated files with
+  fixed names distinct from the inputs. Those names are exposed as
+  `OUTPUT_FILES`.
 
 Example output format in `userRequest`:
 
 ```
 <documents>
-{% for output in OUTPUT_FILES_ORDER %}
+{% for output in INPUT_FILES %}
 <document name="{{ output }}">
 % content for {{ output }}
 </document>
@@ -148,14 +149,14 @@ prompts:
     - |
       Brainstorm in <scratchpad>, then output the revised LaTeX inside
       <documents>
-      {% for output in OUTPUT_FILES_ORDER %}
+      {% for output in INPUT_FILES %}
       <document name="{{ output }}">...</document>
       {% endfor %}
       </documents>.
     - |
       Reflect in <scratchpad>, then emit the improved
       <documents>
-      {% for output in OUTPUT_FILES_ORDER %}
+      {% for output in INPUT_FILES %}
       <document name="{{ output }}">...</document>
       {% endfor %}
       </documents>.
