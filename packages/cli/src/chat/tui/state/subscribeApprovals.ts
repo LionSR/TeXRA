@@ -52,10 +52,17 @@ export function installTuiApprovals(
 ): () => void {
   const originalEmit = host.emit;
   host.emit = ((event, payload) => {
-    // Always forward the event through the original chain (cliState patcher,
-    // structured logger, ndjson sink, …) — interception is *additive*.
+    // Approval events are intentionally NOT forwarded to originalEmit.
+    // The underlying `createCliRuntimeHost.emit` chains through
+    // `handleCliApprovalEvent`, which would re-handle the same approval
+    // via the legacy stderr prompt — racing the TUI modal for the same
+    // resolver. Non-approval events (status, usage, log) keep flowing
+    // through the original chain.
+    if (isApprovalEvent(event)) {
+      routeApproval(event, payload, context);
+      return;
+    }
     originalEmit(event, payload);
-    routeApproval(event, payload, context);
   }) as Emit;
 
   setToolEditApprovalHandler(async (request) => {
@@ -81,6 +88,18 @@ export function installTuiApprovals(
     host.emit = originalEmit;
     setToolEditApprovalHandler();
   };
+}
+
+const APPROVAL_EVENTS = new Set<ProgressEvent>([
+  'showBashPermission',
+  'showPlanApproval',
+  'showAgentProposal',
+  'showRetryRequest',
+  'showExternalInquiry',
+]);
+
+function isApprovalEvent(event: ProgressEvent): boolean {
+  return APPROVAL_EVENTS.has(event);
 }
 
 function routeApproval<K extends ProgressEvent>(

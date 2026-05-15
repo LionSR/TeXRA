@@ -1,9 +1,11 @@
 // Typed approval pipeline per docs/prd/cli-tui-ink/10-architecture.md §9.
 //
-// Each enqueued approval gets a position in a serial queue plus a slot on
-// the `currentApproval` signal when its turn comes up. The modal calls
-// `decide(decision)` to resolve and advance. Hard-cancel resolves every
-// in-flight + pending entry so the original requester promises don't leak.
+// Each enqueued approval becomes a `p-queue` task. When its turn comes up
+// it publishes itself on the `currentApproval` signal and waits for the
+// modal to call `decide(decision)`. Both `pendingResolvers` (outer Promise
+// returned to the caller) and the currently-running task's `advance` are
+// settled by `clearApprovals` so a session interrupt never leaves the
+// queue blocked or the caller hanging.
 
 import { signal, type Signal } from '@lit-labs/signals';
 import PQueue from 'p-queue';
@@ -42,7 +44,6 @@ export interface ApprovalDecision {
   readonly userMessage?: string;
 }
 
-/** Modal's reply primitive — `decide(decision)` advances the queue. */
 export interface PendingApproval {
   readonly payload: ApprovalPayload;
   readonly decide: (decision: ApprovalDecision) => void;
@@ -56,49 +57,69 @@ export const currentApproval = CURRENT as Signal.State<
 
 const queue = new PQueue({ concurrency: 1 });
 
-// Tracks every in-flight + queued resolver so `clearApprovals()` can settle
-// them on session interrupt instead of leaving them dangling.
 const pendingResolvers = new Set<(decision: ApprovalDecision) => void>();
+let currentAdvance: (() => void) | undefined;
+
+const INTERRUPT: ApprovalDecision = {
+  accepted: false,
+  userMessage: 'Session interrupted.',
+};
 
 export function enqueueApproval(
   payload: ApprovalPayload,
 ): Promise<ApprovalDecision> {
-  return new Promise<ApprovalDecision>((resolveOuter) => {
-    pendingResolvers.add(resolveOuter);
-    void queue
-      .add(async () => {
-        await new Promise<void>((advance) => {
-          const pending: PendingApproval = {
-            payload,
-            decide: (decision) => {
-              if (!pendingResolvers.delete(resolveOuter)) return;
-              CURRENT.set(undefined);
-              resolveOuter(decision);
-              advance();
-            },
-          };
-          CURRENT.set(pending);
-        });
-      })
-      .catch(() => {
-        // Queue cleared while waiting — the matching resolver was either
-        // settled by clearApprovals() or removed before scheduling.
-        if (pendingResolvers.delete(resolveOuter)) {
-          resolveOuter({
-            accepted: false,
-            userMessage: 'Session interrupted.',
-          });
-        }
-      });
+  let resolveOuter!: (decision: ApprovalDecision) => void;
+  const outer = new Promise<ApprovalDecision>((resolve) => {
+    resolveOuter = resolve;
   });
+  pendingResolvers.add(resolveOuter);
+
+  void queue
+    .add(async () => {
+      // Already cleared before scheduling — resolveOuter was settled
+      // by clearApprovals; nothing more to do.
+      if (!pendingResolvers.has(resolveOuter)) return;
+      await new Promise<void>((advance) => {
+        currentAdvance = advance;
+        CURRENT.set({
+          payload,
+          decide: (decision) => {
+            if (!pendingResolvers.delete(resolveOuter)) return;
+            CURRENT.set(undefined);
+            currentAdvance = undefined;
+            resolveOuter(decision);
+            advance();
+          },
+        });
+      });
+    })
+    .catch(() => {
+      // p-queue rejects when `queue.clear()` drops the task. Settle the
+      // outer promise so the requester (e.g. ToolEditApprovalHandler)
+      // doesn't hang forever.
+      if (pendingResolvers.delete(resolveOuter)) {
+        resolveOuter(INTERRUPT);
+      }
+    });
+
+  return outer;
 }
 
-/** Hard-cancel: settle every pending resolver so requesters don't hang. */
+/**
+ * Hard-cancel: settle every pending resolver AND unblock the
+ * currently-running task so the queue's single concurrency slot doesn't
+ * stay permanently occupied.
+ */
 export function clearApprovals(): void {
   queue.clear();
   CURRENT.set(undefined);
   for (const resolve of [...pendingResolvers]) {
     pendingResolvers.delete(resolve);
-    resolve({ accepted: false, userMessage: 'Session interrupted.' });
+    resolve(INTERRUPT);
+  }
+  if (currentAdvance) {
+    const advance = currentAdvance;
+    currentAdvance = undefined;
+    advance();
   }
 }
