@@ -65,7 +65,7 @@ function createWebviewConfig(webviewName: string, isDev: boolean) {
           entryFileNames: `${webviewName}/bundle.js`,
           assetFileNames: `${webviewName}/[name][extname]`,
           // Inline all imports - required for nonce-only CSP
-          inlineDynamicImports: true,
+          codeSplitting: false,
         },
       },
     },
@@ -124,6 +124,3 @@ export default defineConfig(({ mode }) => {
     },
   };
 });
-
-/** Export webview names for use in build scripts */
-export { webviews };

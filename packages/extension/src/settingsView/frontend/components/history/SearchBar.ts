@@ -3,7 +3,6 @@
 import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
-import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -12,6 +11,7 @@ import { historyStyles } from '@shared/styles/historyStyles';
 
 // Local imports - history view events
 import { HistoryViewEvents } from './events';
+import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 @customElement('history-search-bar')
 export class SearchBar extends LitElement {

@@ -12,8 +12,6 @@ import { renderIconActionButton } from '@shared/wa/actionButtons';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
-import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
-import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - profile view styles and events
 import type {
@@ -23,6 +21,8 @@ import type {
 import { profileViewStyles } from './styles';
 import { ProviderKeyEvents } from './events';
 import { resolveProviderKeyRows } from './providerKeyRows';
+import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
+import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 
 const STATUS_LABELS: Record<ProviderKeyStatus['status'], string> = {
   set: 'Set',
