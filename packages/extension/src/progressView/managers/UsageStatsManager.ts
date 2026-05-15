@@ -1,4 +1,3 @@
-import { applyTurnAccounting } from '@agent/odyssey';
 import { AgentLogger } from '@logger/AgentLogger';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import {
@@ -59,17 +58,6 @@ export class UsageStatsManager {
     this.items.set(stream, current);
 
     this.saveStream(stream);
-
-    // Best-effort: accumulate per-Odyssey accounting at the same point usage
-    // is recorded. No-op when the stream has no Odyssey or it's in a terminal
-    // state. Imported lazily to avoid coupling usage tracking to the
-    // optional feature.
-    void applyTurnAccounting(stream, {
-      tokens: (delta.inputTokens ?? 0) + (delta.outputTokens ?? 0),
-    }).catch(() => {
-      /* accounting is informational only; never fail usage on this */
-    });
-
     return accumulated;
   }
 
