@@ -28,6 +28,9 @@ import {
   PlanApprovalPermissionSchema,
   RetryPermissionSchema,
   ToolEditPermissionSchema,
+  USER_QUESTION_ACTIONS,
+  UserQuestionAnswersSchema,
+  UserQuestionPermissionSchema,
 } from './prompts';
 import { StreamStatusSchema, StreamTabInfoSchema } from './stream';
 import {
@@ -245,6 +248,7 @@ const PermissionKindSchema = z.enum([
   'proposal',
   'planApproval',
   'externalInquiry',
+  'userQuestion',
 ]);
 export type ProgressPermissionKind = z.infer<typeof PermissionKindSchema>;
 
@@ -274,6 +278,10 @@ const PermissionPayloadSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('externalInquiry'),
     data: ExternalInquiryPermissionSchema,
+  }),
+  z.object({
+    kind: z.literal('userQuestion'),
+    data: UserQuestionPermissionSchema,
   }),
 ]);
 export type PermissionPayload = z.infer<typeof PermissionPayloadSchema>;
@@ -663,6 +671,14 @@ const ExternalInquiryActionMessageSchema = z.object({
   sessionLinks: ExternalInquirySessionLinksSchema.optional(),
 });
 
+const UserQuestionActionMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION),
+  requestId: z.string().min(1),
+  action: z.enum([...USER_QUESTION_ACTIONS, 'skip'] as const),
+  answers: UserQuestionAnswersSchema.optional(),
+  feedback: z.string().optional(),
+});
+
 const RestoreProposalConfigMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG),
   proposal: AgentProposalSchema,
@@ -752,6 +768,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     AgentProposalActionMessageSchema,
     PlanApprovalActionMessageSchema,
     ExternalInquiryActionMessageSchema,
+    UserQuestionActionMessageSchema,
     RestoreProposalConfigMessageSchema,
     ShowInformationMessageSchema,
     OpenProfileMessageSchema,

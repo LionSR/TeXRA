@@ -48,6 +48,10 @@ export interface UICallbacks {
     payload: ProgressEventPayloads['showExternalInquiry'],
   ) => void;
   resolveExternalInquiry: (requestId: string) => void;
+  showUserQuestion: (
+    payload: ProgressEventPayloads['showUserQuestion'],
+  ) => void;
+  resolveUserQuestion: (requestId: string) => void;
 }
 
 /** Helper to register an event with error handling wrapper. */
@@ -185,6 +189,22 @@ export function registerUIEvents(
     'resolveExternalInquiry',
     (p) => callbacks.resolveExternalInquiry(p.requestId),
     'failed to resolve external inquiry',
+    signal,
+  );
+
+  // User question events
+  registerEvent(
+    bus,
+    'showUserQuestion',
+    callbacks.showUserQuestion,
+    'failed to show user question',
+    signal,
+  );
+  registerEvent(
+    bus,
+    'resolveUserQuestion',
+    (p) => callbacks.resolveUserQuestion(p.requestId),
+    'failed to resolve user question',
     signal,
   );
 }

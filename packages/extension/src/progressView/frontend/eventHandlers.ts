@@ -237,7 +237,7 @@ export function handlePermissionAction(
 ): void {
   const { permission, action, feedback, modelOverride, agentOverride, answer } =
     event.detail;
-  const { sessionLinks } = event.detail;
+  const { answers, sessionLinks } = event.detail;
 
   switch (permission.kind) {
     case PERMISSION_KIND.TOOL_EDIT:
@@ -349,6 +349,17 @@ export function handlePermissionAction(
         requestId,
       );
       clearInquiryDraft(requestId);
+      break;
+    }
+    case PERMISSION_KIND.USER_QUESTION: {
+      const { requestId } = permission.data;
+      postMessage(PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION, {
+        requestId,
+        action,
+        feedback,
+        answers,
+      });
+      removePrompt(ctx, PERMISSION_KIND.USER_QUESTION, 'requestId', requestId);
       break;
     }
   }

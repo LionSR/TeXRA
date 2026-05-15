@@ -42,6 +42,7 @@ import {
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
 import { handleExternalInquiryAction } from '@tools/inquiry';
+import { handleUserQuestionAction } from '@tools/userQuestion';
 import {
   handleProgressViewBashApprovalAction,
   toggleToolEditApprovalSessionBypass,
@@ -289,6 +290,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.handlePlanApprovalAction(data),
       [PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION]: (data) =>
         handleExternalInquiryAction(data),
+      [PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION]: (data) =>
+        handleUserQuestionAction(data),
 
       // Profile & Memory - direct command execution
       [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: async () => {
