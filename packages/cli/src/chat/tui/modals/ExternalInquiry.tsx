@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Text } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 
 import type { ExternalInquiryPermission } from '@shared/schemas';
@@ -14,9 +14,24 @@ export interface ExternalInquiryProps {
 export function ExternalInquiry(
   props: ExternalInquiryProps,
 ): React.JSX.Element {
-  const p = props.payload as Record<string, unknown>;
-  const question = typeof p.question === 'string' ? p.question : '(question)';
   const [answer, setAnswer] = useState('');
+  useInput((input, key) => {
+    if (key.escape) {
+      props.onDecide({
+        accepted: false,
+        userMessage: 'External inquiry skipped by user.',
+      });
+      return;
+    }
+    if (key.ctrl && input.toLowerCase() === 'r') {
+      const feedback = answer.trim();
+      props.onDecide({
+        accepted: false,
+        userMessage:
+          feedback.length > 0 ? feedback : 'External inquiry rejected by user.',
+      });
+    }
+  });
 
   return (
     <Box
@@ -29,7 +44,7 @@ export function ExternalInquiry(
         Agent asks:
       </Text>
       <Box marginY={1}>
-        <Text>{question}</Text>
+        <Text>{props.payload.question}</Text>
       </Box>
       <Box>
         <Text>{'> '}</Text>
@@ -46,6 +61,7 @@ export function ExternalInquiry(
           }}
         />
       </Box>
+      <Text dimColor>Enter answer · Ctrl-R reject with note · Esc skip</Text>
     </Box>
   );
 }

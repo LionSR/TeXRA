@@ -1,13 +1,10 @@
 // Paste-aware text input wrapping `ink-text-input`.
 //
-// Phase 1 ships paste-aware Enter and Ctrl-J → newline. Phase 5 will pick
-// up the horizontal viewport once the palette / @-mention overlays need it.
+// Ctrl-J inserts a newline. Bracketed paste detection returns in Phase 5;
+// the raw-stdin listener was removed because it drained bytes before Ink.
 
-import { useCallback } from 'react';
 import { useInput } from 'ink';
 import TextInput from 'ink-text-input';
-
-import { usePasteHandler } from './usePasteHandler';
 
 export interface BaseTextInputProps {
   readonly value: string;
@@ -18,21 +15,6 @@ export interface BaseTextInputProps {
 }
 
 export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
-  const { isPasted, currentPaste } = usePasteHandler();
-
-  const handleSubmit = useCallback(
-    (next: string) => {
-      if (isPasted) {
-        // Inside a bracketed paste: Enter is a literal newline, not "submit".
-        // Avoids pasting a 50-line block firing 50 submits (PRD criterion).
-        props.onChange(`${next}\n${currentPaste}`);
-        return;
-      }
-      props.onSubmit(next);
-    },
-    [isPasted, currentPaste, props],
-  );
-
   useInput(
     (input, key) => {
       if (key.ctrl && input === 'j') {
@@ -50,7 +32,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
       focus={props.focus ?? true}
       showCursor
       onChange={props.onChange}
-      onSubmit={handleSubmit}
+      onSubmit={props.onSubmit}
     />
   );
 }

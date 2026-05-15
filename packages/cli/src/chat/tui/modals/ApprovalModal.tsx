@@ -35,4 +35,9 @@ export function ApprovalModal(
     case 'externalInquiry':
       return <ExternalInquiry payload={payload.payload} onDecide={decide} />;
   }
+  return assertNever(payload);
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled approval payload: ${JSON.stringify(value)}`);
 }

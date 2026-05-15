@@ -18,8 +18,8 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
     () =>
       buildHunks(
         props.request.path,
-        props.request.originalContent ?? '',
-        props.request.proposedContent ?? '',
+        props.request.originalContent,
+        props.request.proposedContent,
       ),
     [
       props.request.path,

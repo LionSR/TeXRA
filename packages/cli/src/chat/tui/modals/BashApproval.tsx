@@ -11,11 +11,6 @@ export interface BashApprovalProps {
 }
 
 export function BashApproval(props: BashApprovalProps): React.JSX.Element {
-  const command =
-    'command' in props.payload && typeof props.payload.command === 'string'
-      ? props.payload.command
-      : '(unknown command)';
-
   return (
     <Box
       borderStyle="double"
@@ -27,7 +22,7 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
         Run bash command?
       </Text>
       <Box marginY={1}>
-        <Text>$ {command}</Text>
+        <Text>$ {props.payload.command}</Text>
       </Box>
       <Box>
         <Text dimColor>y approve · n reject · </Text>

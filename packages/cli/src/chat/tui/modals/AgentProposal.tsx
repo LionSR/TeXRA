@@ -11,11 +11,6 @@ export interface AgentProposalProps {
 }
 
 export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
-  const p = props.payload as Record<string, unknown>;
-  const agent = typeof p.agent === 'string' ? p.agent : '(agent)';
-  const instruction =
-    typeof p.instruction === 'string' ? p.instruction : '(no instruction)';
-
   return (
     <Box
       borderStyle="double"
@@ -24,10 +19,10 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
       paddingX={1}
     >
       <Text bold color="magenta">
-        Spawn {agent}?
+        Spawn {props.payload.agent}?
       </Text>
       <Box marginY={1}>
-        <Text>{instruction}</Text>
+        <Text>{props.payload.instruction}</Text>
       </Box>
       <Box>
         <Text dimColor>y approve · n reject · </Text>

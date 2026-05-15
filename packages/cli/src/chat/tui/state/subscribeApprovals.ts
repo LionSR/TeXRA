@@ -19,29 +19,37 @@ import {
   resolveProposal,
   triggerRetry,
 } from '@agent/runtime/runCoordinators';
-import {
-  handleProgressViewBashApprovalAction,
-  setToolEditApprovalHandler,
-} from '@tools/approval';
-import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
+import {
+  handleProgressViewBashApprovalAction,
+  setToolEditApprovalHandler,
+} from '@tools/approval';
+import { handleUserQuestionAction } from '@tools/userQuestion';
+import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 
 import {
   denyMessage,
   immediateDecision,
   type ApprovalDecision as PolicyDecision,
 } from '../../../runtime/approvalAdapter';
+import { enqueueApproval, type ApprovalDecision } from './approvalQueue';
 import type { CliContext } from '../../../runtime/cliContext';
 import type { CliRuntimeHost } from '../../../runtime/runtimeHost';
-import { enqueueApproval, type ApprovalDecision } from './approvalQueue';
 
 type Emit = <K extends ProgressEvent>(
   event: K,
   payload: ProgressEventPayloads[K],
 ) => void;
+type ApprovalEvent =
+  | 'showBashPermission'
+  | 'showPlanApproval'
+  | 'showAgentProposal'
+  | 'showRetryRequest'
+  | 'showExternalInquiry'
+  | 'showUserQuestion';
 
 /**
  * Install the typed approval pipeline. Returns an `unbind` callback that
@@ -60,7 +68,11 @@ export function installTuiApprovals(
     // resolver. Non-approval events (status, usage, log) keep flowing
     // through the original chain.
     if (isApprovalEvent(event)) {
-      routeApproval(event, payload, context);
+      routeApproval(
+        event,
+        payload as ProgressEventPayloads[ApprovalEvent],
+        context,
+      );
       return;
     }
     originalEmit(event, payload);
@@ -85,21 +97,22 @@ export function installTuiApprovals(
   };
 }
 
-const APPROVAL_EVENTS = new Set<ProgressEvent>([
+const APPROVAL_EVENTS = new Set<ApprovalEvent>([
   'showBashPermission',
   'showPlanApproval',
   'showAgentProposal',
   'showRetryRequest',
   'showExternalInquiry',
+  'showUserQuestion',
 ]);
 
-function isApprovalEvent(event: ProgressEvent): boolean {
-  return APPROVAL_EVENTS.has(event);
+function isApprovalEvent(event: ProgressEvent): event is ApprovalEvent {
+  return APPROVAL_EVENTS.has(event as ApprovalEvent);
 }
 
-function routeApproval<K extends ProgressEvent>(
-  event: K,
-  payload: ProgressEventPayloads[K],
+function routeApproval(
+  event: ApprovalEvent,
+  payload: ProgressEventPayloads[ApprovalEvent],
   context: CliContext,
 ): void {
   switch (event) {
@@ -156,9 +169,19 @@ function routeApproval<K extends ProgressEvent>(
         context,
       );
       return;
-    default:
+    case 'showUserQuestion':
+      handleUserQuestion(
+        payload as ProgressEventPayloads['showUserQuestion'],
+        context,
+      );
       return;
+    default:
+      assertNever(event);
   }
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled TUI approval event: ${String(value)}`);
 }
 
 function routeWithPolicy<P>(
@@ -264,4 +287,21 @@ function handleExternalInquiry(
       });
     },
   );
+}
+
+function handleUserQuestion(
+  payload: ProgressEventPayloads['showUserQuestion'],
+  context: CliContext,
+): void {
+  const policy = immediateDecision(context);
+  const feedback = policy
+    ? context.approvalPolicy === 'yolo'
+      ? 'User question requires human input; yolo mode cannot synthesize an answer.'
+      : denyMessage(context.approvalPolicy)
+    : 'User questions are not yet supported in the CLI TUI.';
+  void handleUserQuestionAction({
+    requestId: payload.requestId,
+    action: 'skip',
+    feedback,
+  });
 }
