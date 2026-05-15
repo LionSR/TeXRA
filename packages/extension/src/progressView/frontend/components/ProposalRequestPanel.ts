@@ -6,6 +6,7 @@ import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -28,6 +29,7 @@ import {
   type WorkflowAgentProposalPermission,
 } from '@shared/schemas';
 import { postMessage } from '@shared/hostBridge';
+import { markdownStyles } from '@shared/styles/markdownStyles';
 import {
   renderAgentOptions,
   renderModelOptions,
@@ -43,6 +45,7 @@ import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
+import { processMarkdownContent } from '../formatters/markdownRenderer';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type { PermissionState } from './PermissionCard';
 
@@ -57,6 +60,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   static override styles = [
     designTokens,
     commonViewStyles,
+    markdownStyles,
     requestPanelStyles,
     selectStyles,
   ];
@@ -164,7 +168,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
                   >${data.model}</span
                 >`}
           </div>
-          <div class="workflow-proposal__instruction">${data.instruction}</div>
+          ${this.renderInstruction(data.instruction)}
           ${isWorkflow ? this.renderExtractFlags(data) : nothing}
           ${this.renderProposalFiles(data)}
         </div>
@@ -196,6 +200,13 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   // ===========================================================================
   // Proposal-specific rendering
   // ===========================================================================
+
+  private renderInstruction(instruction: string): TemplateResult {
+    const markdownHtml = processMarkdownContent(instruction);
+    return html`<div class="workflow-proposal__instruction markdown-content">
+      ${unsafeHTML(markdownHtml)}
+    </div>`;
+  }
 
   private renderWorkingDirectory(
     data: AgentProposalPermission,
