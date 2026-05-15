@@ -34,6 +34,7 @@ import { CrossrefDoiTool, CrossrefSearchTool } from './citation';
 import { PlanTool } from './plan/PlanTool';
 import { TodoWriteTool } from './todo/TodoTool';
 import { MemoryTool } from './memory/MemoryTool';
+import { OdysseyTool } from './odyssey';
 import {
   ZoteroAddTool,
   ZoteroCollectionsTool,
@@ -112,6 +113,7 @@ function createDefaultTools() {
     todo_write: new TodoWriteTool(),
     plan: new PlanTool(),
     memory: new MemoryTool(),
+    odyssey: new OdysseyTool(),
     lean_diagnostics: new LeanDiagnosticsTool(),
     lean_file: new LeanFileTool(),
     lean_project: new LeanProjectTool(),
