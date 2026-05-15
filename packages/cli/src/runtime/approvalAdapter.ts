@@ -8,6 +8,7 @@ import {
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local imports - tools
+import { handleUserQuestionAction } from '@tools/userQuestion';
 import { handleProgressViewBashApprovalAction } from '@tools/approval/bashApproval';
 import {
   setToolEditApprovalHandler,
@@ -253,6 +254,105 @@ function handleExternalInquiry(
   })();
 }
 
+function formatUserQuestionPrompt(
+  payload: ProgressEventPayloads['showUserQuestion'],
+): string {
+  return payload.questions
+    .map((question, index) => {
+      const options = question.options
+        .map((option, optionIndex) => {
+          const description = option.description
+            ? ` - ${option.description}`
+            : '';
+          return `  ${optionIndex + 1}. ${option.label}${description}`;
+        })
+        .join('\n');
+      const multi = question.multiSelect
+        ? ' Select comma-separated numbers.'
+        : '';
+      const free = question.allowFreeText ? ' Or type a custom answer.' : '';
+      return `${index + 1}. ${question.question}\n${options}\n${multi}${free}`;
+    })
+    .join('\n\n');
+}
+
+function parseUserQuestionAnswer(
+  raw: string,
+  question: ProgressEventPayloads['showUserQuestion']['questions'][number],
+): string | string[] | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+
+  const selected = trimmed
+    .split(',')
+    .map((part) => Number.parseInt(part.trim(), 10))
+    .filter((value) => Number.isInteger(value))
+    .map((index) => question.options[index - 1]?.label)
+    .filter((value): value is string => Boolean(value));
+
+  if (selected.length > 0) {
+    return question.multiSelect ? selected : selected[0];
+  }
+  return question.allowFreeText ? trimmed : undefined;
+}
+
+function handleUserQuestion(
+  payload: ProgressEventPayloads['showUserQuestion'],
+  context: CliContext,
+): void {
+  if (!approvalPromptAllowed(context)) {
+    const feedback =
+      context.approvalPolicy === 'yolo'
+        ? 'User question requires human input; yolo mode cannot synthesize an answer.'
+        : denyMessage(context.approvalPolicy);
+    if (context.approvalPolicy !== 'yolo') markApprovalDenied(context);
+    void handleUserQuestionAction({
+      requestId: payload.requestId,
+      action: 'skip',
+      feedback,
+    });
+    return;
+  }
+
+  void (async () => {
+    const answers: Record<string, string | string[]> = {};
+    try {
+      for (const question of payload.questions) {
+        const answer = await enqueueCliPrompt(context, () =>
+          askCliApprovalQuestion(context, {
+            kind: 'approval',
+            summary: payload.context
+              ? `${payload.context}\n\n${formatUserQuestionPrompt({
+                  ...payload,
+                  questions: [question],
+                })}`
+              : formatUserQuestionPrompt({ ...payload, questions: [question] }),
+            prompt: 'Answer (blank to skip): ',
+          }),
+        );
+        const parsed = parseUserQuestionAnswer(answer, question);
+        if (parsed != null) answers[question.question] = parsed;
+      }
+    } catch {
+      markApprovalDenied(context);
+      await handleUserQuestionAction({
+        requestId: payload.requestId,
+        action: 'skip',
+        feedback: 'CLI user question prompt failed.',
+      });
+      return;
+    }
+
+    const submitted = Object.keys(answers).length > 0;
+    await handleUserQuestionAction({
+      requestId: payload.requestId,
+      action: submitted ? 'submit' : 'skip',
+      answers: submitted ? answers : undefined,
+      feedback: submitted ? undefined : 'User question skipped by user.',
+    });
+  })();
+}
+
 async function decideToolEdit(
   request: ToolEditApprovalRequest,
   context: CliContext,
@@ -277,6 +377,14 @@ export function handleCliApprovalEvent<K extends keyof ProgressEventPayloads>(
   if (event === 'showExternalInquiry') {
     handleExternalInquiry(
       payload as ProgressEventPayloads['showExternalInquiry'],
+      context,
+    );
+    return true;
+  }
+
+  if (event === 'showUserQuestion') {
+    handleUserQuestion(
+      payload as ProgressEventPayloads['showUserQuestion'],
       context,
     );
     return true;

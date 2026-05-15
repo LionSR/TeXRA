@@ -6,7 +6,7 @@ import type { BaseRequestPanel } from './BaseRequestPanel';
 import type { PermissionState } from './PermissionCard';
 
 const REQUEST_PANEL_SELECTOR =
-  'tool-edit-request-panel, bash-request-panel, retry-request-panel, proposal-request-panel, plan-approval-request-panel, external-inquiry-panel';
+  'tool-edit-request-panel, bash-request-panel, retry-request-panel, proposal-request-panel, plan-approval-request-panel, external-inquiry-panel, user-question-panel';
 
 export interface PermissionGroups {
   approval: PermissionState[];
@@ -15,6 +15,7 @@ export interface PermissionGroups {
   proposal: PermissionState[];
   planApproval: PermissionState[];
   externalInquiry: PermissionState[];
+  userQuestion: PermissionState[];
 }
 
 export function createEmptyPermissionGroups(): PermissionGroups {
@@ -25,6 +26,7 @@ export function createEmptyPermissionGroups(): PermissionGroups {
     proposal: [],
     planApproval: [],
     externalInquiry: [],
+    userQuestion: [],
   };
 }
 
@@ -52,6 +54,9 @@ export function groupPermissions(
         break;
       case PERMISSION_KIND.EXTERNAL_INQUIRY:
         groups.externalInquiry.push(permission);
+        break;
+      case PERMISSION_KIND.USER_QUESTION:
+        groups.userQuestion.push(permission);
         break;
     }
   }

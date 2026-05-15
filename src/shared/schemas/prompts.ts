@@ -138,6 +138,42 @@ export type ExternalInquiryPermission = z.infer<
 >;
 
 // ============================================================================
+// User Question
+// ============================================================================
+
+export const USER_QUESTION_ACTIONS = ['submit', 'reject'] as const;
+export type UserQuestionAction = (typeof USER_QUESTION_ACTIONS)[number];
+
+export const UserQuestionOptionSchema = z.strictObject({
+  label: z.string().min(1),
+  description: z.string().nullish(),
+});
+export type UserQuestionOption = z.infer<typeof UserQuestionOptionSchema>;
+
+export const UserQuestionPromptSchema = z.strictObject({
+  question: z.string().min(1),
+  header: z.string().max(12).nullish(),
+  options: z.array(UserQuestionOptionSchema).min(2).max(4),
+  multiSelect: z.boolean().nullish(),
+  allowFreeText: z.boolean().nullish(),
+});
+export type UserQuestionPrompt = z.infer<typeof UserQuestionPromptSchema>;
+
+export const UserQuestionAnswersSchema = z.record(
+  z.string(),
+  z.union([z.string(), z.array(z.string())]),
+);
+export type UserQuestionAnswers = z.infer<typeof UserQuestionAnswersSchema>;
+
+export const UserQuestionPermissionSchema = PermissionBaseSchema.extend({
+  questions: z.array(UserQuestionPromptSchema).min(1).max(3),
+  context: z.string().nullish(),
+});
+export type UserQuestionPermission = z.infer<
+  typeof UserQuestionPermissionSchema
+>;
+
+// ============================================================================
 // Plan Approval
 // ============================================================================
 
