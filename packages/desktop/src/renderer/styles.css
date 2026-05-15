@@ -1,6 +1,6 @@
 :root {
   --desktop-nav-height: 40px;
-  --desktop-rail-width: 260px;
+  --desktop-rail-width: clamp(320px, 28vw, 390px);
   --desktop-right-width: 0px; /* reserved; collapsed today (PRD § 6) */
   font-family: var(--wa-font-family-body);
   background: var(--wa-color-surface-default);
