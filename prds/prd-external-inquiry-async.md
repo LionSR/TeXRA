@@ -69,7 +69,7 @@ Extend `ExternalInquiryThreadManifestSchema` in `src/tools/inquiry/externalInqui
 ```typescript
 const ExternalInquiryThreadManifestSchema = z.looseObject({
   threadId: ExternalInquiryThreadIdSchema,
-  parentStreamId: StreamTabIdSchema, // NEW
+  parentStreamId: StreamTabIdSchema.nullable(), // NEW — null = orphan / legacy
   status: z.enum(['open', 'answered', 'dropped']), // NEW
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
@@ -77,16 +77,20 @@ const ExternalInquiryThreadManifestSchema = z.looseObject({
 });
 ```
 
-Per-turn record gains an optional `answer` — a turn with `answer === undefined` is the open turn. Legacy single-shot turns (always atomic Q+A) load as `answered` via a Zod union/transform per the project's backward-compat pattern.
+`parentStreamId` is **nullable** to support two cases: legacy manifests migrated from the pre-rename storage (no parent recorded), and orphan threads whose original parent was deleted before the answer arrived. Either way, `null` disables continuation injection while keeping the thread inspectable via `read` and `list`.
 
-Optional per-turn `draft: { answer: string; sessionLinks: string }` field to persist the panel's textarea state across reloads (debounced write). Replaces the in-module `draftCache` in `ExternalInquiryPanel.ts`.
+Per-turn record changes:
+
+- Optional `answer` — a turn with `answer === undefined` is the open turn. Legacy single-shot turns (atomic Q+A) load as `answered` via Zod union/transform.
+- An open turn carries **the full dispatch payload** so it can be re-rendered identically after reload: `question` (existing), plus newly-persisted `context?`, `suggestSearch?`, `attachFiles?`, `sessionLinks?` (inherited from prior turns when continuing a thread). These fields are written by `recordOpenQuestion` and never change after they're set.
+- Optional `draft: { answer: string; sessionLinks: string }` field to persist the panel's textarea state across reloads (debounced write). Replaces the in-module `draftCache` in `ExternalInquiryPanel.ts`.
 
 New shared schema in `src/shared/schemas/`:
 
 ```typescript
 const ExternalInquiryThreadSummarySchema = z.object({
   threadId: ExternalInquiryThreadIdSchema,
-  parentStreamId: StreamTabIdSchema,
+  parentStreamId: StreamTabIdSchema.nullable(),
   status: z.enum(['open', 'answered', 'dropped']),
   lastQuestionPreview: z.string(),
   lastActivityIso: z.iso.datetime(),
@@ -101,24 +105,36 @@ Cheap to render in the Background Tasks section without loading full Q/A bodies.
 Additions in `externalInquiryStorage.ts`:
 
 ```typescript
-recordOpenQuestion({threadId?, parentStreamId, question, context, attachFiles, ...})
-  ─► PersistedOpenTurn
+recordOpenQuestion({
+  threadId?, parentStreamId, question, context, suggestSearch, attachFiles,
+}): Promise<PersistedOpenTurn>
 
-recordAnswerForOpenTurn({threadId, answer, sessionLinks})
-  ─► PersistedAnsweredTurn
+recordAnswerForOpenTurn({threadId, answer, sessionLinks}): Promise<PersistedAnsweredTurn>
 
-markDropped({threadId})
-  ─► void
+markDropped({threadId}): Promise<void>
 
 listOpenThreads(): Promise<ExternalInquiryThreadSummary[]>
 listOpenThreadsForStream(streamId): Promise<ExternalInquiryThreadSummary[]>
+
+// Broader queries for hydration and the `list` subcommand:
+listThreadsByStatus({
+  status: 'open' | 'answered' | 'dropped' | 'any',
+  scope: 'stream' | 'all',
+  streamId?: StreamTabId,
+  limit?: number,
+  since?: string,           // ISO timestamp lower bound
+}): Promise<ExternalInquiryThreadSummary[]>
+
+listRecentClosedThreads({
+  limit?: number, since?: string,
+}): Promise<ExternalInquiryThreadSummary[]>
 ```
 
 Existing `persistExternalInquiryTurn` (atomic Q+A) becomes a thin shim around the two split calls, or is removed if no other caller needs it.
 
 ### 6.3 Tool behavior
 
-The tool gains a subcommand shape — see §14. Below describes the `ask` subcommand (default, current dispatch behavior).
+The tool gains a subcommand shape — see §13. Below describes the `ask` subcommand (default, current dispatch behavior).
 
 `ExternalInquiryTool.execute({command: 'ask', …})`:
 
@@ -143,54 +159,117 @@ Delete `pendingInquiries: Map`, `awaitExternalInquiryResponse`, `_rejectPendingI
 
 ### 6.4 Action handler
 
+The action payload is **keyed by `threadId`, not by `requestId`**. The old `requestId` was an ephemeral handle for the in-memory Promise (now deleted) — after reload or after the tool has returned, there is no live request to address. Submissions and drops must be addressable purely by the durable thread identifier.
+
+New IPC schema in `src/shared/schemas/`:
+
+```typescript
+const InquiryActionMessageSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('submit'),
+    threadId: ExternalInquiryThreadIdSchema,
+    answer: z.string().min(1),
+    sessionLinks: z.array(z.string()).nullish(),
+  }),
+  z.object({
+    action: z.literal('drop'),
+    threadId: ExternalInquiryThreadIdSchema,
+  }),
+]);
+```
+
 `handleExternalInquiryAction(payload)` becomes purely persistence + continuation:
 
-- Submit: `recordAnswerForOpenTurn()` → `enqueueContinuationForAnsweredThread(threadId)`.
-- Reject: `markDropped()` → `enqueueContinuationForDroppedThread(threadId)`.
+- `submit`: `recordAnswerForOpenTurn(threadId, answer, sessionLinks)` → `injectContinuationForAnsweredThread(threadId)`.
+- `drop`: `markDropped(threadId)` → `injectContinuationForDroppedThread(threadId)`.
+
+Webview-side handler in `ProgressViewMessageHandler.ts` is updated to route the new message shape; the old `requestId`-keyed payloads are removed (the legacy in-memory pending-map is gone, so there's nothing to match against).
 
 ### 6.5 Continuation injection
 
-New file `src/tools/inquiry/inquiryContinuation.ts` — single-purpose, ~30 lines. **No PocketFlow changes** — we ride on the existing static `ToolUseFollowUpQueue.enqueue` already used by Odyssey and the GitHub subscription registry.
+**Goal**: deliver the continuation text to the parent stream's tool-use cycle, correctly handling four states the parent may be in — actively running, idle at `ToolUseWaitNode`, in `WAITING` status (cycle exited; needs auto-resume), or fully gone (released, no snapshot).
+
+The existing `texra.sendFollowUp` command already implements all four (`packages/extension/src/commands/agent/followUpCommand.ts`): it enqueues to `ToolUseFollowUpQueue`, lazy-detects `WAITING`, calls `texra.resumeAgent` with the persisted snapshot on a stale stream, and reports the failure mode otherwise. Routing the inquiry continuation through this command — not raw `ToolUseFollowUpQueue.enqueue` — is what makes "answer after extension reload auto-resumes the agent" actually work.
+
+Because `texra.sendFollowUp` is a VS Code command (host-coupled) and the inquiry action handler is invoked in the host layer (webview message), we expose it via the existing platform port pattern rather than importing `vscode` from `src/tools/inquiry/`.
+
+**Platform port** (new, in `src/platform/`):
 
 ```typescript
-export async function enqueueContinuationForAnsweredThread(
+export interface AgentFollowUpPort {
+  /** Routes through host's resume-aware send pipeline.
+   *  Returns the outcome so callers can update UI. */
+  send(params: { streamId: StreamTabId; text: string }): Promise<
+    | { status: 'sent' } // live cycle received it
+    | { status: 'queued' } // buffered for next wait boundary
+    | { status: 'resumed' } // auto-resumed a WAITING stream
+    | { status: 'no_session' } // parent gone — answer archives only
+  >;
+}
+```
+
+The VS Code host wires this in `extension.ts`:
+
+```typescript
+agentFollowUp: {
+  send: async ({ streamId, text }) => {
+    return vscode.commands.executeCommand('texra.sendFollowUp', { stream: streamId, text });
+  },
+},
+```
+
+**Continuation helper** in `src/tools/inquiry/inquiryContinuation.ts`:
+
+```typescript
+export async function injectContinuationForAnsweredThread(
   threadId: ExternalInquiryThreadId,
-): Promise<void> {
+): Promise<'resumed' | 'archived'> {
   const manifest = await readExternalInquiryThread(threadId);
-  if (!manifest) return;
+  if (!manifest) return 'archived';
 
   const lastTurn = manifest.turns.at(-1);
-  if (!lastTurn?.answer) return;
+  if (!lastTurn?.answer) return 'archived';
 
-  const stillOpenOnStream = await listOpenThreadsForStream(
-    manifest.parentStreamId,
-  );
+  if (manifest.parentStreamId == null) return 'archived'; // orphan / legacy
 
+  const stillOpen = await listOpenThreadsForStream(manifest.parentStreamId);
   const text = buildContinuationText({
+    event: 'answered',
     answered: {
       id: threadId,
       question: lastTurn.question,
       answer: lastTurn.answer,
     },
-    stillOpen: stillOpenOnStream,
+    stillOpen,
   });
 
-  // Returns false (and logs/discards) if the parent stream was released.
-  // That's our "parent gone" signal — answer stays on disk, UI badges the
-  // thread as "answered · parent finished" and no resume fires.
-  ToolUseFollowUpQueue.enqueue(manifest.parentStreamId, text);
+  const outcome = await platform().agentFollowUp.send({
+    streamId: manifest.parentStreamId,
+    text,
+  });
+
+  // Capture and propagate the outcome so the UI can badge the thread.
+  if (outcome.status === 'no_session') {
+    await emitThreadOutcome(threadId, 'parent_finished');
+    return 'archived';
+  }
+  await emitThreadOutcome(threadId, 'resumed');
+  return 'resumed';
 }
 ```
 
-**Why this works without touching PocketFlow.** `ToolUseFollowUpQueue.enqueue` is non-blocking and handles all three relevant cases for us:
+`injectContinuationForDroppedThread` is parallel; it uses `event: 'dropped'` and the Variant C template.
 
-- Stream parked at `ToolUseWaitNode` → queue notifies waiter → cycle wakes naturally.
-- Stream mid-turn → followup sits in the buffer; drained at the next `ToolUseWaitNode` boundary.
-- Stream released → returns `false`; we treat as persist-only.
+The injected text is enqueued as a **user-role** message (same role `texra.sendFollowUp` uses for typed-in follow-ups and Odyssey continuations).
 
-The mechanism is identical to how Odyssey's `appendFollowUp` and the GitHub `StreamSubscriptionRegistry` already drive resumption. No node behavior changes, no new accessor, no preemption.
+**Four state cases handled by `texra.sendFollowUp` → `AgentFollowUpPort.send` → outcome**:
 
-The injected text is enqueued as a **user-role** message via `ToolUseFollowUpQueue.enqueue(parentStreamId, text)` (same role used by Odyssey continuations and `appendFollowUp`).
+| Parent state                           | `outcome.status` | Effect                                                                                            |
+| -------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------- |
+| Live cycle parked at `ToolUseWaitNode` | `sent`           | Cycle wakes naturally on the next drain.                                                          |
+| Live cycle mid-turn                    | `queued`         | Drained at next `ToolUseWaitNode` boundary.                                                       |
+| `WAITING` (cycle exited, e.g. reload)  | `resumed`        | `texra.resumeAgent` reanimates from snapshot; text is queued for the resumed cycle.               |
+| Released / no snapshot                 | `no_session`     | Persist-only. UI badges thread `answered · parent finished` via the `inquiryThreadUpdated` event. |
 
 Continuation text shape — three variants, deterministic templates.
 
@@ -238,7 +317,11 @@ All three variants are produced by `buildContinuationText({ event, manifest, sti
 
 ### 6.6 Cycle changes
 
-`src/agent/core/flows/ToolUseCycleFlow.ts`: delete the entire concurrent-inquiry block (`CONCURRENT_EXTERNAL_INQUIRY_TOOL`, `_concurrentCallIds`, `_duplicateCallIds`, `buildConcurrentCallIds`, `getExternalInquiryFollowupThreadKey`, `isConcurrentExternalInquiryCall`, `buildConcurrentFailureResult`) — roughly lines 460–600. Net deletion; nothing replaces it. The tool no longer blocks, so the cycle's default sequential dispatch is fine.
+`src/agent/core/flows/ToolUseCycleFlow.ts`: delete only the **inquiry-specific concurrency carve-out** — `CONCURRENT_EXTERNAL_INQUIRY_TOOL`, `_concurrentCallIds`, `buildConcurrentCallIds`, `getExternalInquiryFollowupThreadKey`, `isConcurrentExternalInquiryCall`, `buildConcurrentFailureResult`. Roughly the inquiry-tagged lines in 460–600.
+
+**Preserve** `_duplicateCallIds` and its detection logic — that's a generic guard against identical parallel tool calls with side effects (applies to all tools, not just inquiry). Removing it would let duplicate `bash`/`web_fetch`/etc. calls fire multiple times. The duplicate-call dedup stays.
+
+The tool no longer blocks, so the cycle's default sequential dispatch is fine for inquiry calls.
 
 ### 6.7 Cleanup
 
@@ -255,7 +338,14 @@ All three variants are produced by `buildContinuationText({ event, manifest, sti
     💬 "Series convergence rate"         ✓ answered  (1h)
 ```
 
-Click → focuses the inquiry panel for that thread. Hydration on extension activation via `listOpenThreads()`. One new event type `inquiryThreadUpdated` carries `ExternalInquiryThreadSummary` payloads.
+Click → focuses the inquiry panel for that thread.
+
+**Hydration on activation** uses two reads, not just open threads:
+
+- `listOpenThreads()` — every still-pending inquiry (drives the OPEN section).
+- `listRecentClosedThreads({ limit: 50, since: '7d' })` — recently answered/dropped inquiries (drives the ANSWERED summary count and any "parent finished" orphan rows). The 50/7d cap keeps the panel bounded; the agent can still reach older threads via `inquiry { command: 'list', status: 'any' }` or `read`.
+
+One new event type `inquiryThreadUpdated` carries `ExternalInquiryThreadSummary` payloads for live updates.
 
 ### 6.9 UI — inquiry panel
 
@@ -284,7 +374,7 @@ Buttons unchanged: `Copy` (on the open question), `Submit Answer`, `Reject` (→
    │  user opens panel, pastes answer, clicks Submit                  │
    │  └─► recordAnswerForOpenTurn                                     │
    │      └─► status=ANSWERED                                         │
-   │          └─► enqueueContinuationForAnsweredThread                │
+   │          └─► injectContinuationForAnsweredThread                 │
    │              └─► ToolUseFollowUpQueue.enqueue(parent, text)      │
    │                  └─► cycle wakes; next turn starts with the      │
    │                      synthesized "[inquiry] …" message  │
@@ -471,24 +561,25 @@ Notes:
 
 ## 8. Edge cases
 
-| Case                                                       | Behavior                                                                                                                                                               |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Extension reload while inquiry open                        | Open inquiries hydrate into the Background Tasks section on next activation. Submitting still injects a continuation if the parent stream is alive.                    |
-| Parent stream deleted while inquiry open                   | Thread stays listed (orphan badge). Submit persists answer to disk; no continuation fires.                                                                             |
-| User submits empty answer                                  | Existing validation (`ToolError('External inquiry answer cannot be empty.')`) preserved.                                                                               |
-| Two answers land within ms                                 | Two `ToolUseFollowUpQueue.enqueue` calls in order; the wait node's drain delivers both followups together at the next wait boundary. No special-case batching.         |
-| Agent re-dispatches same `thread_id` while open            | Storage layer rejects with `ToolError('Thread already has an open question; wait for answer or call Drop.')`. Belt-and-suspenders with the tool-description guardrail. |
-| Agent follows up on an `answered` thread via `ask`         | Status returns to `open`, new turn appended, `parentStreamId` updates to caller (§13.4). Panel reopens with prior turns rendered as conversation bubbles (§7.5).       |
-| Agent follows up on a `dropped` thread via `ask`           | Storage layer rejects with `ToolError('Thread was dropped by user; start a new thread instead.')`. `dropped` is terminal.                                              |
-| Follow-up from a different stream than the original        | Allowed. `parentStreamId` updates to the caller; continuation flows back to that stream (§13.5). Original stream retains its answered turns.                           |
-| Agent dispatches multiple inquiries in one turn            | Each independently durable. Each answer arrival fires its own continuation; agent gets woken multiple times, last-open marker shrinks each time.                       |
-| User submits answer for a thread whose parent has finished | Persist to disk; show "answered (no resume — parent finished)" badge in Background Tasks.                                                                              |
+| Case                                                       | Behavior                                                                                                                                                                                                                                                                     |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Extension reload while inquiry open                        | Open inquiries hydrate into the Background Tasks section on next activation. Submitting still injects a continuation if the parent stream is alive.                                                                                                                          |
+| Parent stream deleted while inquiry open                   | Thread stays listed (orphan badge). Submit persists answer to disk; no continuation fires.                                                                                                                                                                                   |
+| User submits empty answer                                  | Existing validation (`ToolError('External inquiry answer cannot be empty.')`) preserved.                                                                                                                                                                                     |
+| Two answers land within ms                                 | Two `ToolUseFollowUpQueue.enqueue` calls in order; the wait node's drain delivers both followups together at the next wait boundary. No special-case batching.                                                                                                               |
+| Agent re-dispatches same `thread_id` while open            | Storage layer rejects with `ToolError('Thread already has an open question; wait for the continuation. Use inquiry { command: "read", thread_id } to inspect or list to recover thread IDs. Do not re-dispatch.')`. Belt-and-suspenders with the tool-description guardrail. |
+| Agent follows up on an `answered` thread via `ask`         | Status returns to `open`, new turn appended, `parentStreamId` updates to caller (§13.4). Panel reopens with prior turns rendered as conversation bubbles (§7.5).                                                                                                             |
+| Agent follows up on a `dropped` thread via `ask`           | Storage layer rejects with `ToolError('Thread was dropped by user; start a new thread instead.')`. `dropped` is terminal.                                                                                                                                                    |
+| Follow-up from a different stream than the original        | Allowed. `parentStreamId` updates to the caller; continuation flows back to that stream (§13.5). Original stream retains its answered turns.                                                                                                                                 |
+| Agent dispatches multiple inquiries in one turn            | Each independently durable. Each answer arrival fires its own continuation; agent gets woken multiple times, last-open marker shrinks each time.                                                                                                                             |
+| User submits answer for a thread whose parent has finished | Persist to disk; show "answered (no resume — parent finished)" badge in Background Tasks.                                                                                                                                                                                    |
 
 ## 9. Migration
 
 - **Manifest schema.** Existing manifests have no `parentStreamId` or `status`. Zod union/transform pattern (CLAUDE.md §"Backward Compatibility with Zod"): legacy form parses to `{status: 'answered', parentStreamId: null, …}`. `null` parent disables continuation but preserves history.
 - **Existing in-flight inquiries on upgrade.** On extension upgrade with the new code, any in-memory `pendingInquiries` from a prior session are already gone (in-memory only). No-op.
-- **Agent prompts.** Update the `inquiry` tool description to emphasize the non-blocking semantics (already done in §6.3 message field). Agent YAML tool lists referencing `external_inquiry` must be updated to `inquiry` (e.g., `packages/extension/resources/tool_use_agents/chat.yaml` and its inheritors).
+- **Agent prompts.** Update the `inquiry` tool description to emphasize the non-blocking semantics (already done in §6.3 message field).
+- **Tool registry rename.** The rename is model-facing, so the keys must match in three places: (a) the tool's `name` field in `src/tools/inquiry/ExternalInquiryTool.ts` (`external_inquiry` → `inquiry`); (b) the registry entry in `src/tools/registry.ts` (`external_inquiry: new ExternalInquiryTool()` → `inquiry: …`); (c) all agent YAML `tools:` lists that reference `external_inquiry` (e.g., `packages/extension/resources/tool_use_agents/chat.yaml` and its inheritors). If only the YAML is updated, tool resolution fails. If only the registry is updated, every agent that listed `external_inquiry` loses access. Do all three in one commit.
 
 ## 10. Tests
 
@@ -509,22 +600,25 @@ Mocha integration (`src/test/`):
 
 ## 12. File-by-file
 
-| File                                                                              | Action                                                                                                                     |
-| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `src/tools/inquiry/externalInquiryStorage.ts`                                     | Add `parentStreamId`, `status`, open-turn support, draft field, list helpers; Zod union for legacy migration               |
-| `src/tools/inquiry/ExternalInquiryTool.ts`                                        | Return `dispatched` synchronously; delete pending-map + reject helpers; action handler delegates to storage + continuation |
-| `src/tools/inquiry/inquiryContinuation.ts`                                        | **New** — continuation-text builder + queue injector                                                                       |
-| `src/tools/inquiry/index.ts`                                                      | Drop reject exports                                                                                                        |
-| `src/tools/approval/index.ts`                                                     | Drop inquiry reject calls in `cleanupApprovalsForStream` and `cleanupAllApprovals`                                         |
-| `src/agent/core/flows/ToolUseCycleFlow.ts`                                        | Delete concurrent-inquiry block (~140 LoC deletion)                                                                        |
-| `src/shared/schemas/inquiry.ts` (or wherever existing inquiry types live)         | Extend manifest schema; new `ExternalInquiryThreadSummarySchema`; `inquiryThreadUpdated` event payload                     |
-| `src/eventBus/ProgressEventBus.ts`                                                | Add `inquiryThreadUpdated` event                                                                                           |
-| `packages/extension/src/progressView/frontend/components/BackgroundTasksPanel.ts` | Add INQUIRIES section parallel to SUBAGENTS/BASH                                                                           |
-| `packages/extension/src/progressView/frontend/components/ExternalInquiryPanel.ts` | Transcript view for prior turns; draft persistence to manifest                                                             |
-| `packages/extension/src/progressView/frontend/components/RequestPanels.ts`        | Inline inquiry render → compact "Open panel" card                                                                          |
-| `packages/extension/src/progressView/frontend/contexts/streamContexts.ts`         | Add `inquiryThreadContext`                                                                                                 |
-| `packages/extension/src/progressView/frontend/slices/inquiryThreadsSlice.ts`      | **New** — subscribes to `inquiryThreadUpdated`, hydrates on first load                                                     |
-| `packages/extension/src/progressView/ProgressViewProvider.ts`                     | Hydrate `listOpenThreads()` on activation; wire events                                                                     |
+| File                                                                              | Action                                                                                                                                                                                                 |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/tools/inquiry/externalInquiryStorage.ts`                                     | Add `parentStreamId` (nullable), `status`, open-turn support (with `suggestSearch`/`attachFiles`/`context` persisted), draft field, list helpers; Zod union for legacy migration                       |
+| `src/tools/inquiry/ExternalInquiryTool.ts`                                        | Rename tool's `name` field `external_inquiry` → `inquiry`; return `dispatched` synchronously; delete pending-map + reject helpers; action handler delegates to storage + continuation                  |
+| `src/tools/inquiry/inquiryContinuation.ts`                                        | **New** — continuation-text builder + `platform().agentFollowUp.send` invocation                                                                                                                       |
+| `src/tools/inquiry/index.ts`                                                      | Drop reject exports                                                                                                                                                                                    |
+| `src/tools/registry.ts`                                                           | Rename registry key `external_inquiry` → `inquiry`                                                                                                                                                     |
+| `src/tools/approval/index.ts`                                                     | Drop inquiry reject calls in `cleanupApprovalsForStream` and `cleanupAllApprovals`                                                                                                                     |
+| `src/agent/core/flows/ToolUseCycleFlow.ts`                                        | Delete inquiry-specific concurrency carve-out (preserve `_duplicateCallIds`, the generic dedup guard)                                                                                                  |
+| `src/platform/platform.ts` + host wiring                                          | **New** `AgentFollowUpPort.send` port; VS Code host invokes `texra.sendFollowUp`                                                                                                                       |
+| `src/shared/schemas/inquiry.ts` (or wherever existing inquiry types live)         | Extend manifest schema (`parentStreamId` nullable, status, open-turn payload fields); new `ExternalInquiryThreadSummarySchema`; new `InquiryActionMessageSchema`; `inquiryThreadUpdated` event payload |
+| `packages/extension/resources/tool_use_agents/chat.yaml` (+ inheritors)           | Rename `external_inquiry` → `inquiry` in agent tool lists                                                                                                                                              |
+| `src/eventBus/ProgressEventBus.ts`                                                | Add `inquiryThreadUpdated` event                                                                                                                                                                       |
+| `packages/extension/src/progressView/frontend/components/BackgroundTasksPanel.ts` | Add INQUIRIES section parallel to SUBAGENTS/BASH                                                                                                                                                       |
+| `packages/extension/src/progressView/frontend/components/ExternalInquiryPanel.ts` | Transcript view for prior turns; draft persistence to manifest                                                                                                                                         |
+| `packages/extension/src/progressView/frontend/components/RequestPanels.ts`        | Inline inquiry render → compact "Open panel" card                                                                                                                                                      |
+| `packages/extension/src/progressView/frontend/contexts/streamContexts.ts`         | Add `inquiryThreadContext`                                                                                                                                                                             |
+| `packages/extension/src/progressView/frontend/slices/inquiryThreadsSlice.ts`      | **New** — subscribes to `inquiryThreadUpdated`, hydrates on first load                                                                                                                                 |
+| `packages/extension/src/progressView/ProgressViewProvider.ts`                     | Hydrate `listOpenThreads()` on activation; wire events                                                                                                                                                 |
 
 ## 13. Subcommand surface (endpoint tool shape)
 
@@ -629,7 +723,7 @@ const ExternalInquiryInputSchema = z.discriminatedUnion('command', [
 ### 13.3 Why these three
 
 - **`ask`** — the dispatch path, covering both new threads (omit `thread_id`) and follow-ups (pass `thread_id`). Default via `.prefault('ask')` so existing tool calls that omit `command` keep working without schema change. See §13.4 for follow-up semantics.
-- **`read`** — recovers full Q/A bodies when the continuation message's truncation (Q ≤ 400, A ≤ 2000) would otherwise lose information. Mostly mitigates Open Question §14.2.
+- **`read`** — recovers full Q/A bodies when the continuation message's truncation (Q ≤ 400, A ≤ 2000) would otherwise lose information. Mostly mitigates the truncation concern in §14.
 - **`list`** — lets the model self-orient when it has been woken multiple times across long-running work or after a long pause. `status='open'` is the most common need and the default; `status='answered'` recovers earlier-resolved threads (forgotten thread_id, cross-stream review); `status='dropped'` surfaces user-rejected inquiries the agent may want to retry differently; `status='any'` gives the full picture.
 
 ### 13.4 Follow-up semantics — `ask` with `thread_id`
@@ -640,7 +734,7 @@ A single `ask` call covers both new threads and follow-ups on existing ones. Beh
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | _(no thread_id)_        | Start a new thread; new `threadId` minted; `parentStreamId = context.streamId`.                                                                                                                                                                                                                                                                |
 | `answered`              | **Follow-up turn.** Append a new open turn to existing manifest. Transition status `answered → open`. Update `parentStreamId` to the caller's stream (continuation flows back to the asker, even if a different stream than the original). Panel reopens; all prior turns render as conversation bubbles above the new open question per §7.5. |
-| `open`                  | Reject with `ToolError('Thread already has an open question; wait for answer or call Drop.')`. Same guard as §8 edge case; belt-and-suspenders with the tool-description.                                                                                                                                                                      |
+| `open`                  | Reject with `ToolError('Thread already has an open question; wait for the continuation. Use inquiry { command: "read", thread_id } to inspect or list to recover thread IDs. Do not re-dispatch.')`. Same guard as §8 edge case; belt-and-suspenders with the tool-description.                                                                |
 | `dropped`               | Reject with `ToolError('Thread was dropped by user; start a new thread instead.')`. `dropped` is terminal.                                                                                                                                                                                                                                     |
 | _(thread_id not found)_ | Reject with `ToolError('External inquiry thread not found: <id>.')` (existing behavior in `resolveExistingThread`).                                                                                                                                                                                                                            |
 
