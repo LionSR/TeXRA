@@ -95,14 +95,11 @@ export function getHistorySearchText(item: HistoryItem): string {
   );
 
   if (config.agentCategory === 'workflow') {
-    addLabelledValue(parts, 'InputFile', config.inputFile);
     addLabelledValue(parts, 'InputFiles', config.inputFiles);
-    addLabelledValue(parts, 'MediaFile', config.mediaFile);
     addLabelledValue(parts, 'MediaFiles', config.mediaFiles);
 
     const hasMoreDetails = [
       addConfigSection(parts, 'Context', [
-        ['ContextFile', config.contextFile],
         ['ContextFiles', config.contextFiles],
       ]),
       addConfigSection(parts, 'Output Files', [['Files', config.outputFiles]]),

@@ -58,10 +58,7 @@ prompts:
 
     <documents>
     {{ ALL_CONTEXTS }}
-    {{ ADDITIONAL_INPUTS }}
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
+    {{ ALL_INPUTS }}
     </documents>
 
     Please carefully read through the entire research paper(s) above and ensure you fully understand the contributions, results, and narrative.
@@ -111,29 +108,29 @@ prompts:
           \item [Handling difficulty:] Are there subtle or tricky points that the paper hand-waves, overexplains, or buries in vagueness? Could they be made navigable through a concrete example, analogy, or decomposition?
           \item [Concision, precision \& confidence:] Are there redundant sentences, throat-clearing phrases, or paragraphs that restate what has already been said? Is repetition purposeful re-emphasis (same result in abstract, intro, and conclusion serving different rhetorical roles) or wheel-spinning (paraphrasing the previous sentence)? Are there passages that are overly hedged or generic? Triviality signals (``straightforward,'' ``trivially,'' ``it is easy to see'') that diminish the perceived contribution? Could any passage be cut without weakening the argument? Are claims backed by specific numbers or left vague (``significant improvement'' vs ``40\% improvement'')? Is active voice used for the paper's own claims and contributions? Are there ornate words where precise common words would communicate better (``utilize'' $\to$ ``use'')? Do verbs carry their weight, or are they padded with adverbs? Do connectives signal exact logical relationships, or are they vague filler (``moreover,'' ``furthermore'')?
           \item [Internal consistency:] Do key numbers match across abstract, introduction, results, and conclusion? Do claims in the abstract match what the results actually show? Is terminology consistent throughout---or are different words used for the same concept? Are there contradictions between sections (e.g., a limitation acknowledged in the discussion but ignored in the abstract)?
-          {% if OUTPUT_FILES_ORDER %}
+
           \item [Cross-document coherence:] Across all documents, are shared notation, terminology, and key claims consistent? Are dependencies between documents (main text $\to$ appendix, paper $\to$ supplementary) clearly signposted? Does each document's contribution stand out, and do they collectively tell a coherent story?
-          {% endif %}
+
       \end{enumerate}
       [Improvement plan:]
       \begin{enumerate}
           \item [Specific improvement 1]
               \begin{itemize}
-                  \item Location: [Where in the paper{% if OUTPUT_FILES_ORDER %} / which document(s){% endif %}]
+                  \item Location: [Where in the paper / which document(s)]
                   \item Current issue: [What weakens the writing]
                   \item Planned fix: [How to make it more compelling]
                   \item Severity/Confidence: [S/C rating]
               \end{itemize}
           \item [Specific improvement 2]
               \begin{itemize}
-                  \item Location: [Where in the paper{% if OUTPUT_FILES_ORDER %} / which document(s){% endif %}]
+                  \item Location: [Where in the paper / which document(s)]
                   \item Current issue: [What weakens the writing]
                   \item Planned fix: [How to make it more compelling]
                   \item Severity/Confidence: [S/C rating]
               \end{itemize}
           \item [Specific improvement 3]
               \begin{itemize}
-                  \item Location: [Where in the paper{% if OUTPUT_FILES_ORDER %} / which document(s){% endif %}]
+                  \item Location: [Where in the paper / which document(s)]
                   \item Current issue: [What weakens the writing]
                   \item Planned fix: [How to make it more compelling]
                   \item Severity/Confidence: [S/C rating]
@@ -203,25 +200,16 @@ prompts:
           \item \criticize{Draft maturity: \cref{sec:discussion} contains TODO placeholders and skeletal outlines. Sentence-level polish is premature here---focus on what content this section needs rather than how it reads.}{3}{5}
       \end{itemize}
 
-      {% if OUTPUT_FILES_ORDER %}
       The output files should be in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 1ST UPDATED LATEX DOCUMENT WITH ELEVATE COMMENTS HERE
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND UPDATED LATEX DOCUMENT WITH ELEVATE COMMENTS HERE
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % 1ST UPDATED LATEX DOCUMENT WITH ELEVATE COMMENTS HERE
-      </document>
-      </documents>
-      {% endif %}
+
     - |
       Now let's critically evaluate the revised version through the eyes of a demanding reviewer.
 
@@ -241,9 +229,9 @@ prompts:
           \item [Internal consistency:] Do key numbers match across abstract, intro, results, and conclusion? Is terminology consistent? Has the revision introduced any new contradictions?
           \item [Completeness:] Are there missing equations, derivations, or key details from the original?
           \item [Comment quality:] Are the \criticize{} annotations actionable? Do they indicate which audience is affected?
-          {% if OUTPUT_FILES_ORDER %}
+
           \item [Cross-document re-test:] Is shared notation, terminology, and key claims consistent across all documents? Did later documents receive less attention than earlier ones? Re-read the last document now.
-          {% endif %}
+
       \end{enumerate}
       </reflection>
       <improvements>
@@ -265,7 +253,7 @@ prompts:
               \end{itemize}
           \item [Specific additional improvements]
               \begin{itemize}
-                  \item Location: [Where in the paper{% if OUTPUT_FILES_ORDER %} / which document(s){% endif %}]
+                  \item Location: [Where in the paper / which document(s)]
                   \item Issue: [What still weakens the writing]
                   \item Fix: [How to strengthen it]
                   \item Action: [Implement directly / Leave as comment]
@@ -280,22 +268,12 @@ prompts:
 
       The goal is writing that makes a reviewer think: ``This is a well-written, important paper.''
 
-      {% if OUTPUT_FILES_ORDER %}
       Ensure that the output documents are in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 2ND UPDATED LATEX DOCUMENT 1 WITH ELEVATE COMMENTS HERE
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND UPDATED LATEX DOCUMENT 2 WITH ELEVATE COMMENTS HERE
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % 2ND UPDATED LATEX DOCUMENT WITH ELEVATE COMMENTS HERE
-      </document>
-      </documents>
-      {% endif %}

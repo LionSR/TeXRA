@@ -29,11 +29,8 @@ const BaseConfigSummarySchema = z.object({
 /** Workflow agents carry file-related fields. */
 const WorkflowConfigSummarySchema = BaseConfigSummarySchema.extend({
   agentCategory: z.literal(AGENT_CATEGORY.WORKFLOW),
-  inputFile: z.string().optional(),
   inputFiles: z.array(z.string()).optional(),
-  mediaFile: z.string().nullish(),
   mediaFiles: z.array(z.string()).optional(),
-  contextFile: z.string().nullish(),
   contextFiles: z.array(z.string()).optional(),
   outputFiles: z.array(z.string()).optional(),
   toolConfig: z.record(z.string(), z.unknown()).nullish(),

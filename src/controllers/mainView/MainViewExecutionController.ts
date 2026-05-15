@@ -28,8 +28,6 @@ import type { z } from 'zod';
 export type MainViewExecuteMessage = Omit<AgentConfigInput, 'mediaFiles'> & {
   /** UI toggle indicating tool-use vs workflow agent. */
   isToolUseAgent?: boolean;
-  /** UI toggle for multiple outputs mode. */
-  outputFilesActive?: boolean;
   /** Media files may contain nulls from UI and are filtered during processing. */
   mediaFiles?: (string | null)[];
 } & z.input<typeof ToolConfigSchema>;
@@ -56,7 +54,7 @@ export function prepareMainViewExecutionRequest(
   }
 
   const isToolUse = Boolean(message.isToolUseAgent);
-  if (!isToolUse && !message.inputFile) {
+  if (!isToolUse && (message.inputFiles?.length ?? 0) === 0) {
     return {
       valid: false,
       message: 'Please select an input file.',
@@ -64,7 +62,6 @@ export function prepareMainViewExecutionRequest(
     };
   }
 
-  const outputFiles: string[] = isToolUse ? [] : (message.outputFiles ?? []);
   const toolConfigResult = isToolUse
     ? { success: true as const, data: DEFAULT_TOOL_CONFIG }
     : ToolConfigSchema.safeParse(message);
@@ -81,9 +78,8 @@ export function prepareMainViewExecutionRequest(
     config: {
       ...message,
       agentCategory: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
-      outputFiles,
-      toolConfig: toolConfigResult.data,
-      mediaFile: mapMediaFile(message.mediaFile ?? null),
+      outputFiles: message.outputFiles ?? message.inputFiles,
+      toolConfig: { ...toolConfigResult.data, attachDiagnostics: false },
       mediaFiles: (message.mediaFiles ?? [])
         .map(mapMediaFile)
         .filter((file: string | null): file is string => file !== null),

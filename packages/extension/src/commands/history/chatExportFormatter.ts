@@ -81,11 +81,8 @@ const ExportConfigSchema = z.object({
   agent: z.string().optional(),
   model: z.string().optional(),
   instruction: z.string().optional(),
-  inputFile: z.string().optional(),
   inputFiles: z.array(z.string()).optional(),
-  mediaFile: z.string().nullish(),
   mediaFiles: z.array(z.string()).optional(),
-  contextFile: z.string().nullish(),
   contextFiles: z.array(z.string()).optional(),
   outputFiles: z.array(z.string()).optional(),
 });
@@ -548,18 +545,12 @@ const HEADER_FIELDS: Array<{ key: keyof DocumentMeta; label: string }> = [
 function collectFiles(config: ExportConfig): Array<[string, string]> {
   const files: Array<[string, string]> = [];
 
-  const addFile = (label: string, value: string | null | undefined) => {
-    if (value?.trim()) files.push([label, value]);
-  };
   const addFiles = (label: string, values: string[] | undefined) => {
     if (values?.length) files.push([label, values.join(', ')]);
   };
 
-  addFile('Input file', config.inputFile);
   addFiles('Input files', config.inputFiles);
-  addFile('Media file', config.mediaFile);
   addFiles('Media files', config.mediaFiles);
-  addFile('Context', config.contextFile);
   addFiles('Context files', config.contextFiles);
   addFiles('Output files', config.outputFiles);
 

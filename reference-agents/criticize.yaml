@@ -25,14 +25,14 @@ prompts:
         \item Use multi-line align environments to show each mathematical step clearly.
         \item Include explanatory text between equations to justify steps.
         \item Pay special attention to appendices and supplementary materials - they often hide sloppy derivations that need expansion.
-        {% if OUTPUT_FILES_ORDER %}
+
         \item Ensure mathematical consistency across all documents - conflicting results are unacceptable.
-        {% endif %}
+
     \end{itemize}
 
     When providing critical feedback, you must:
     \begin{itemize}
-        \item ALWAYS CHECK APPENDICES{% if OUTPUT_FILES_ORDER %} AND ALL OTHER DOCUMENTS{% endif %} FIRST: Before claiming steps are missing, thoroughly check if they are explained in appendices or supplementary materials.
+        \item ALWAYS CHECK APPENDICES AND ALL OTHER DOCUMENTS FIRST: Before claiming steps are missing, thoroughly check if they are explained in appendices or supplementary materials.
         \item If derivations are in appendices, comment should be: \criticize{The derivation is provided in Appendix~\ref{app:X}. Consider adding a brief outline here for readability.}{1}{5} (low severity, high confidence)
         \item If appendices have the full derivation but with errors, focus your criticism on the appendix errors, not the main text brevity.
         \item Focus on technical issues requiring action, prioritized by severity.
@@ -40,10 +40,10 @@ prompts:
         \item Be strategic: fewer, targeted comments are better than many.
         \item Focus on points that matter for the paper's validity.
         \item Group related minor issues into single comments when possible.
-        {% if OUTPUT_FILES_ORDER %}
+
         \item Note when issues in appendices or other documents affect the main text.
         \item Check for inconsistencies between documents - these are often severity 4-5.
-        {% endif %}
+
         \item CRITICAL: The text inside \criticize{...}{...} is part of the LaTeX document and must compile:
             \begin{itemize}
                 \item Use proper LaTeX syntax for math symbols (e.g., $F_t$ not `F_t')
@@ -58,7 +58,7 @@ prompts:
     For rough notes/drafts: Be lenient with presentation issues (reduce severity by 1-2 levels for polish-related problems)
     For polished papers: Apply full severity as listed below
 
-    Note: Mathematical errors maintain their severity regardless of document state.{% if OUTPUT_FILES_ORDER %} If documents are at different stages, assess each appropriately.{% endif %}
+    Note: Mathematical errors maintain their severity regardless of document state. If documents are at different stages, assess each appropriately.
     \begin{itemize}
         \item Level 5 (Fatal): Issues that invalidate the main claims or results
             \begin{itemize}
@@ -66,10 +66,10 @@ prompts:
                 \item Mathematical errors in core theorems
                 \item Violations of fundamental principles
                 \item Wrong conclusions from correct premises
-                {% if OUTPUT_FILES_ORDER %}
+
                 \item Contradictory results between documents
                 \item Cascading errors that affect multiple documents
-                {% endif %}
+
             \end{itemize}
         \item Level 4 (Critical): Serious flaws that significantly weaken the paper
             \begin{itemize}
@@ -77,10 +77,10 @@ prompts:
                 \item Missing essential derivation steps
                 \item Undefined critical quantities
                 \item Major notation inconsistencies affecting understanding
-                {% if OUTPUT_FILES_ORDER %}
+
                 \item Inconsistent definitions across documents
                 \item Major notation conflicts between documents
-                {% endif %}
+
             \end{itemize}
         \item Level 3 (Major): Important issues that need addressing
             \begin{itemize}
@@ -88,9 +88,9 @@ prompts:
                 \item Unclear approximations without error bounds
                 \item Missing boundary conditions or constraints
                 \item Significant pedagogical failures
-                {% if OUTPUT_FILES_ORDER %}
+
                 \item Missing cross-references between documents
-                {% endif %}
+
             \end{itemize}
         \item Level 2 (Minor): Issues that should be fixed but don't affect validity
             \begin{itemize}
@@ -122,10 +122,7 @@ prompts:
 
     <documents>
     {{ ALL_CONTEXTS }}
-    {{ ADDITIONAL_INPUTS }}
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
+    {{ ALL_INPUTS }}
     </documents>
 
     Read through the document(s) including appendices and prepare for a thorough critical analysis.
@@ -138,9 +135,7 @@ prompts:
       </instruction>
       If no specific instruction is given, apply your full critical scrutiny to all mathematical content.
 
-      {% if OUTPUT_FILES_ORDER %}
       The output files should be in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
-      {% endif %}
 
       FIRST PHASE - DERIVATION EXPANSION: First, create an expanded version showing all mathematical steps explicitly. This is your working document where you verify every claim.
 
@@ -152,7 +147,7 @@ prompts:
       - Example: If you see "Introduction: [TODO: explain motivation]", don't criticize missing intro, instead suggest what motivation might include
 
       \begin{enumerate}
-          {% if OUTPUT_FILES_ORDER %}
+
           \item [Cross-document dependencies and connections]
               \begin{itemize}
                   \item Main text to appendix mappings: [Which derivations are deferred where]
@@ -162,7 +157,7 @@ prompts:
                   \item Potential contradictions: [Flag severity 5 candidates]
                   \item Notation conflicts: [List inconsistencies]
               \end{itemize}
-          {% endif %}
+
           \item [Main text derivations needing expansion]
               \begin{itemize}
                   \item Location: [Section/equation references]
@@ -210,7 +205,7 @@ prompts:
                   \item Results obtained: [What specific results found, e.g., ``Partition function gives $F = -k_BT\ln Z$ as expected'']
                   \item No issues found: [Which sections verified correct, e.g., ``Gaussian integrals in Appendix A have correct $\sqrt{2\pi}$ factors'']
               \end{itemize}
-          {% if OUTPUT_FILES_ORDER %}
+
           \item [Critical cross-paper issues]
               \begin{itemize}
                   \item Conflicting assumptions: [Different papers assume different things]
@@ -219,7 +214,7 @@ prompts:
                   \item Overall severity assessment: [What could invalidate the collection]
                   \item Cross-document verifications: [Consistency checks that passed]
               \end{itemize}
-          {% endif %}
+
       \end{enumerate}
       </scratchpad>
 
@@ -231,59 +226,47 @@ prompts:
       - Be specific about what calculation you performed and what result you obtained
       This helps track both problems and verified sections during the expansion phase.
 
-      {% if OUTPUT_FILES_ORDER %}
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 1ST_FULLY_EXPANDED_LATEX_DOCUMENT WITH INITIAL CRITICIZE COMMENTS HERE
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND_FULLY_EXPANDED_LATEX_DOCUMENT WITH INITIAL CRITICIZE COMMENTS HERE
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % FULLY_EXPANDED_LATEX_DOCUMENT WITH INITIAL CRITICIZE COMMENTS HERE
-      % Example: After expanding a derivation, if you find a gap, add:
-      % \criticize{Missing justification for why this integral converges}{3}{3}
-      </document>
-      </documents>
-      {% endif %}
 
     - |
-      SECOND PHASE - PRIORITIZED CRITICAL COMMENTARY: Now refine and consolidate your critical commentary. Focus on the crucial points - the issues that truly matter{% if OUTPUT_FILES_ORDER %} for the collection's validity{% endif %}.
+      SECOND PHASE - PRIORITIZED CRITICAL COMMENTARY: Now refine and consolidate your critical commentary. Focus on the crucial points - the issues that truly matter for the collection's validity.
 
-      First, verify the expanded derivations and categorize all issues by severity{% if OUTPUT_FILES_ORDER %} across all documents{% endif %}:
+      First, verify the expanded derivations and categorize all issues by severity across all documents:
       <scratchpad>
       <verification>
       \begin{enumerate}
-          \item [SEVERITY 5 - Fatal Issues (invalidate main claims{% if OUTPUT_FILES_ORDER %} or create contradictions{% endif %})]
+          \item [SEVERITY 5 - Fatal Issues (invalidate main claims or create contradictions)]
               \begin{itemize}
-                  {% if OUTPUT_FILES_ORDER %}
+
                   \item Paper(s) affected: [Which papers]
-                  {% endif %}
+
                   \item Issue: [Description with equation/section reference]
-                  {% if OUTPUT_FILES_ORDER %}
+
                   \item Cross-paper impact: [How it affects other documents]
-                  {% endif %}
+
                   \item Why fatal: [How it breaks the main argument]
                   \item Required fix: [What must be done]
               \end{itemize}
-          \item [SEVERITY 4 - Critical Issues (seriously weaken{% if OUTPUT_FILES_ORDER %} the collection{% else %} paper{% endif %})]
+          \item [SEVERITY 4 - Critical Issues (seriously weaken the collection)]
               \begin{itemize}
-                  {% if OUTPUT_FILES_ORDER %}
+
                   \item Paper(s) affected: [Which papers]
-                  {% endif %}
+
                   \item Issue: [Description with reference]
                   \item Impact: [How it affects the paper]
                   \item Required fix: [Specific action needed]
               \end{itemize}
           \item [SEVERITY 3 - Major Issues (important but not fatal)]
               \begin{itemize}
-                  {% if OUTPUT_FILES_ORDER %}
+
                   \item Paper(s) affected: [Which papers]
-                  {% endif %}
+
                   \item Issue: [Description]
                   \item Impact: [Why it matters]
                   \item Suggested fix: [How to address]
@@ -303,19 +286,19 @@ prompts:
                   \item Rigorous sections: [Specific sound parts, e.g., ``Sec. 2.3-2.5: FDT derivation complete'']
                   \item Verification performed: [Specific checks, e.g., ``Traced path integral'', ``Verified $L_{ij} = L_{ji}$'']
                   \item Results: [Specific confirmations, e.g., ``Green-Kubo reduces to Einstein relation at equilibrium'']
-                  {% if OUTPUT_FILES_ORDER %}
+
                   \item Cross-document consistency: [Results that match properly]
-                  {% endif %}
+
               \end{itemize}
       \end{enumerate}
 
       STRATEGIC ASSESSMENT:
       \begin{itemize}
           \item Total issues found: [Count by severity]
-          {% if OUTPUT_FILES_ORDER %}
+
           \item Cross-paper issues: [Count and severity]
           \item Most problematic paper: [Which needs most work]
-          {% endif %}
+
           \item Focus areas: [Where to concentrate author's attention]
           \item Key message: [What's the most important feedback?]
           \item Comment strategy: [How to be helpful without overwhelming]
@@ -323,17 +306,12 @@ prompts:
       </verification>
       </scratchpad>
 
-      Now output the original document{% if OUTPUT_FILES_ORDER %}s{% endif %} with STRATEGIC critical comments using \criticize{comment}{severity}{confidence}.
+      Now output the original documents with STRATEGIC critical comments using \criticize{comment}{severity}{confidence}.
 
       Add this command to the preamble if it is not already there:
       \usepackage{xcolor}\newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\text{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
 
-
-      {% if OUTPUT_FILES_ORDER %}
-      COMMENTING STRATEGY FOR MULTIPLE PAPERS: Limit yourself to 10-15 comments per paper, focusing on severity 3-5 issues while including 1-2 severity 0 verifications. Prioritize cross-paper issues (often severity 4-5). When the same issue appears in multiple documents, comment in the first occurrence and reference it in others. For systemic problems across documents, add one comment in the first paper. Include verification confirmations where derivations are particularly well-done. Balance comments across documents---don't overwhelm one paper.
-      {% else %}
-      COMMENTING STRATEGY: Limit yourself to 15-20 comments total, focusing on severity 3-5 issues but including some severity 0 verifications. Group minor issues into single comments and place comments at the first occurrence of an issue. For systemic problems, comment once with a general note. Be specific and actionable in every comment. Include 2-3 severity 0 comments with specific details of verification performed, documenting exactly what calculations you did and what matched.
-      {% endif %}
+      COMMENTING STRATEGY: If there is one document, limit yourself to 15-20 total comments, focusing on severity 3-5 issues while including 1-2 severity 0 verifications. If there are multiple documents, limit yourself to 10-15 comments per document and prioritize cross-document issues (often severity 4-5). When the same issue appears in multiple documents, comment in the first occurrence and reference it in others. For systemic problems across documents, add one comment in the first document. Include verification confirmations where derivations are particularly well-done. Balance comments across documents---do not overwhelm one document.
 
       CONFIDENCE LEVELS:
       \begin{itemize}
@@ -344,7 +322,7 @@ prompts:
           \item 1: Very uncertain (speculative)
       \end{itemize}
 
-      CONFIDENCE SCORING GUIDANCE: Assess each issue individually based on its actual complexity, not just the type. Simple multi-step calculations that follow standard procedures can have high confidence (4-5), while complex or novel derivations should have lower confidence (1-3). When you successfully verify something step-by-step, confidence depends on the clarity of the steps. Obvious notation issues, undefined terms, or clear typos warrant high confidence (4-5). {% if OUTPUT_FILES_ORDER %}Cross-document inconsistencies you can directly observe warrant high confidence (4-5). {% endif %}Subtle mathematical errors or questionable approximations warrant lower confidence (2-3). Be honest about your uncertainty---if you're not sure, use lower confidence.
+      CONFIDENCE SCORING GUIDANCE: Assess each issue individually based on its actual complexity, not just the type. Simple multi-step calculations that follow standard procedures can have high confidence (4-5), while complex or novel derivations should have lower confidence (1-3). When you successfully verify something step-by-step, confidence depends on the clarity of the steps. Obvious notation issues, undefined terms, or clear typos warrant high confidence (4-5). Cross-document inconsistencies you can directly observe warrant high confidence (4-5). Subtle mathematical errors or questionable approximations warrant lower confidence (2-3). Be honest about your uncertainty---if you're not sure, use lower confidence.
 
       EXAMPLES of proper comment syntax:
       \begin{itemize}
@@ -354,30 +332,20 @@ prompts:
           \item SEVERITY 2: \criticize{The intermediate steps are shown in Appendix~\ref{app:integration}. Consider adding a reference here for clarity.}{2}{5}
           \item SEVERITY 1: \criticize{Typo: should be $\partial_t$ not $\partial t$.}{1}{5}
           \item SEVERITY 0: \criticize{Verified: Jarzynski equality $\eE[\exp(-\beta W)] = \exp(-\beta \Delta F)$ confirmed using path integral over protocol $\lambda(t)$.}{0}{3}
-          {% if OUTPUT_FILES_ORDER %}
+
           \item CROSS-DOC SEVERITY 5: \criticize{This contradicts the result in Appendix~\ref{sec:dissipative}, \cref{thm:main}. Either this derivation or that theorem is wrong.}{5}{4}
           \item CROSS-DOC SEVERITY 4: \criticize{The definition of $\mathcal{H}$ differs from Appendix~\ref{sec:dissipative}. This inconsistency affects all subsequent results.}{4}{5}
-          {% endif %}
+
       \end{itemize}
 
-      Remember: Focus on the crucial points that matter most. Quality over quantity---better to identify 5 critical issues than 50 minor ones. If appendix errors invalidate main results, that's severity 5. Be harsh on what matters, lenient on what doesn't.{% if OUTPUT_FILES_ORDER %} Identify issues that cascade between documents. If one paper's errors invalidate others, that's severity 5. Be strategic about comment placement to maximize clarity.{% endif %}
+      Remember: Focus on the crucial points that matter most. Quality over quantity---better to identify 5 critical issues than 50 minor ones. If appendix errors invalidate main results, that's severity 5. Be harsh on what matters, lenient on what doesn't. Identify issues that cascade between documents. If one paper's errors invalidate others, that's severity 5. Be strategic about comment placement to maximize clarity.
 
-      {% if OUTPUT_FILES_ORDER %}
       Ensure that the output documents are in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 1ST_ORIGINAL_DOCUMENT_WITH_PRIORITIZED_CRITICAL_COMMENTS HERE
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND_ORIGINAL_DOCUMENT_WITH_PRIORITIZED_CRITICAL_COMMENTS HERE
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>
-      {% else %}
-      <documents>
-      <document name="{{ INPUT_FILE }}">
-      % ORIGINAL_DOCUMENT_WITH_PRIORITIZED_CRITICAL_COMMENTS HERE
-      </document>
-      </documents>
-      {% endif %}

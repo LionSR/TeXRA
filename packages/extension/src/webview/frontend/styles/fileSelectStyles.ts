@@ -3,7 +3,6 @@
  *
  * These styles are used by:
  * - FileSelectGroup
- * - OutputFilesSection
  * - LatexDiffsSection
  *
  * Consolidating them here prevents duplication across Shadow DOM components.
@@ -90,6 +89,16 @@ export const fileSelectLayoutStyles = css`
 
   .file-select-label-group label {
     margin-right: var(--wa-space-2xs);
+  }
+
+  .file-select-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
   }
 
   .file-select-hint {

@@ -19,8 +19,7 @@ import {
 // Local imports - controllers
 
 const followUpWorkflowDefaults: Partial<AgentConfig> = {
-  inputFile: 'main.tex',
-  inputFiles: [],
+  inputFiles: ['main.tex'],
   outputFiles: ['answer.tex'],
 };
 
@@ -121,7 +120,7 @@ describe('ProgressFollowUpController', () => {
       plan.taskState.agentConfig.agentCategory,
       AgentCategory.ToolUse,
     );
-    assert.equal(plan.taskState.agentConfig.inputFile, 'main.tex');
+    assert.equal(plan.taskState.agentConfig.inputFiles[0], 'main.tex');
     assert.equal(plan.taskState.agentConfig.outputFiles.length, 0);
     assert.match(
       plan.taskState.agentConfig.instruction,
@@ -156,8 +155,7 @@ describe('ProgressFollowUpController', () => {
     const plan = await controller.planCompileFixer({
       streamId: 'stream-a',
       taskState: createFollowUpWorkflowTaskState({
-        inputFile: 'main.tex',
-        inputFiles: ['source.tex'],
+        inputFiles: ['main.tex', 'source.tex'],
       }),
       compileFailures: [createCompileFailure()],
       runOutputs: new Map([[2, [output]]]),
@@ -170,8 +168,7 @@ describe('ProgressFollowUpController', () => {
     const config = plan.request.config;
     assert.equal(config.agent, 'latexFixer');
     assert.equal(config.model, 'other-model');
-    assert.equal(config.inputFile, 'source.tex');
-    assert.deepEqual(config.inputFiles, ['main.tex']);
+    assert.deepEqual(config.inputFiles, ['source.tex', 'main.tex']);
     assert.match(
       config.instruction ?? '',
       /Editable workspace targets: source\.tex, main\.tex/,
@@ -187,8 +184,7 @@ describe('ProgressFollowUpController', () => {
     const plan = await controller.planCompileFixer({
       streamId: 'stream-a',
       taskState: createFollowUpWorkflowTaskState({
-        inputFile: 'main.tex',
-        inputFiles: ['chapter.tex'],
+        inputFiles: ['main.tex', 'chapter.tex'],
       }),
       compileFailures: [createCompileFailure()],
       runOutputs: new Map(),
@@ -199,8 +195,7 @@ describe('ProgressFollowUpController', () => {
     assert.equal(plan.kind, 'execute');
     if (plan.kind !== 'execute') return;
     const config = plan.request.config;
-    assert.equal(config.inputFile, 'main.tex');
-    assert.deepEqual(config.inputFiles, ['chapter.tex']);
+    assert.deepEqual(config.inputFiles, ['main.tex', 'chapter.tex']);
     assert.match(
       config.instruction ?? '',
       /Editable workspace targets: main\.tex, chapter\.tex/,
@@ -211,7 +206,7 @@ describe('ProgressFollowUpController', () => {
     const plan = await createController(new Set()).planCompileFixer({
       streamId: 'stream-a',
       taskState: createFollowUpWorkflowTaskState({
-        inputFile: '/external/main.tex',
+        inputFiles: ['/external/main.tex'],
       }),
       compileFailures: [createCompileFailure()],
       runOutputs: new Map([

@@ -61,14 +61,6 @@ export function registerFileSelectionCommands(
 ): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      FILE_SELECTION_COMMAND_IDS.selectInputFile,
-      selectInputFile,
-    ),
-    vscode.commands.registerCommand(
-      FILE_SELECTION_COMMAND_IDS.selectContextFile,
-      selectContextFile,
-    ),
-    vscode.commands.registerCommand(
       FILE_SELECTION_COMMAND_IDS.selectInputFiles,
       selectInputFiles,
     ),
@@ -79,10 +71,6 @@ export function registerFileSelectionCommands(
     vscode.commands.registerCommand(
       FILE_SELECTION_COMMAND_IDS.selectMediaFiles,
       selectMediaFiles,
-    ),
-    vscode.commands.registerCommand(
-      FILE_SELECTION_COMMAND_IDS.selectMediaFile,
-      selectMediaFile,
     ),
     vscode.commands.registerCommand(
       FILE_SELECTION_COMMAND_IDS.selectOutputFiles,
@@ -111,22 +99,6 @@ export function registerFileSelectionCommands(
   );
 }
 
-const selectInputFile = createPicker({
-  allowMany: false,
-  openLabel: 'Select File',
-  filters: () => ({
-    'Text files': getFilterExtensions('input'),
-  }),
-});
-
-const selectContextFile = createPicker({
-  allowMany: false,
-  openLabel: 'Select Context File',
-  filters: () => ({
-    'Text files': getFilterExtensions('context'),
-  }),
-});
-
 const selectInputFiles = createPicker({
   allowMany: true,
   openLabel: 'Select Files',
@@ -148,15 +120,6 @@ const selectMediaFiles = createPicker({
   openLabel: 'Select Media',
   filters: () => ({
     'Image files': getFilterExtensions('media'),
-    'Audio files': getFilterExtensions('audio'),
-  }),
-});
-
-const selectMediaFile = createPicker({
-  allowMany: false,
-  openLabel: 'Select Media File',
-  filters: () => ({
-    Images: getFilterExtensions('media'),
     'Audio files': getFilterExtensions('audio'),
   }),
 });

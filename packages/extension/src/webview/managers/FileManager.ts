@@ -3,16 +3,11 @@ import { fileURLToPath } from 'url';
 
 import * as vscode from 'vscode';
 
-import { getAgent } from '@agent/index';
 import {
   ExtensionCategory,
-  FILE_SELECTION_COMMANDS,
   FILE_SELECTION_COMMAND_IDS,
-  FILE_SELECTION_RESPONSES,
   MULTIPLE_FILE_COMMANDS,
   getIncludedExtensions,
-  type FileSelectionCommand,
-  type FileSelectionResponseCommand,
   type MultiFileCategory,
 } from '@common/files';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
@@ -42,17 +37,12 @@ type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
   { command: C }
 >;
 
-type FileSelectionMessage = MessageFor<FileSelectionCommand>;
-
-type FileSelectedMessage = MessageFor<FileSelectionResponseCommand>;
-
-type RequestInputFileMessage = MessageFor<
-  typeof MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE
+type EditedFileSelectionMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE
 >;
 
-type RequestFileMessage = MessageFor<
-  | typeof MAIN_VIEW_COMMANDS.REQUEST_CONTEXT_FILE
-  | typeof MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE
+type EditedFileSelectedMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED
 >;
 
 type RequestEditedFileMessage = MessageFor<
@@ -61,10 +51,6 @@ type RequestEditedFileMessage = MessageFor<
 
 type RequestBaseFileMessage = MessageFor<
   typeof MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE
->;
-
-type RequestDefaultOutputFilesMessage = MessageFor<
-  typeof MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES
 >;
 
 type SetMultipleFilesMessage = MessageFor<
@@ -112,27 +98,9 @@ type FileUpdateOptions = {
 export class FileManager extends BaseWebviewManager {
   protected readonly channel = CHANNEL;
 
-  async handleFileSelection(message: FileSelectionMessage): Promise<void> {
-    const executeCommand = FILE_SELECTION_COMMANDS.get(message.command);
-    const responseCommand = FILE_SELECTION_RESPONSES.get(message.command);
-    const singleFileType = message.command.replace('select', '');
-    if (!executeCommand || !responseCommand) {
-      logger.warn(CHANNEL, `Unsupported file command: ${message.command}`);
-      return;
-    }
-
-    logger.debug(CHANNEL, `Selecting ${singleFileType}`);
-    const file = await vscode.commands.executeCommand<string>(executeCommand);
-    if (file) {
-      logger.debug(CHANNEL, `Selected ${singleFileType}: ${file}`);
-      this.postMessage({
-        command: responseCommand,
-        filePath: file,
-      });
-    }
-  }
-
-  async handleEditedFileSelection(): Promise<void> {
+  async handleEditedFileSelection(
+    _message?: EditedFileSelectionMessage,
+  ): Promise<void> {
     const editedFile = await vscode.commands.executeCommand<string>(
       FILE_SELECTION_COMMAND_IDS.selectEditedFile,
     );
@@ -144,44 +112,8 @@ export class FileManager extends BaseWebviewManager {
     }
   }
 
-  async handleInputFileSelected(message: FileSelectedMessage): Promise<void> {
-    if (!message.filePath) {
-      this.postFileUpdate('Edited', []);
-      return;
-    }
-    const baseFileNameForInput = path.basename(
-      message.filePath,
-      path.extname(message.filePath),
-    );
-    const filteredEditedFiles =
-      await getFileLister().listEditedFiles(baseFileNameForInput);
-    this.postFileUpdate('Edited', filteredEditedFiles);
-  }
-
-  handleGenericFileSelected(message: FileSelectedMessage): void {
+  handleGenericFileSelected(message: EditedFileSelectedMessage): void {
     logger.debug(CHANNEL, `${message.command}: ${message.filePath}`);
-  }
-
-  async handleRequestInputFile(
-    message: RequestInputFileMessage,
-  ): Promise<void> {
-    const refreshedInputFiles =
-      (await vscode.commands.executeCommand<string[]>(
-        FILE_SELECTION_COMMAND_IDS.refreshInputFiles,
-      )) ?? [];
-    this.postFileUpdate('Input', refreshedInputFiles, {
-      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
-    });
-    this.postGettingStartedBanner(refreshedInputFiles.length === 0);
-  }
-
-  async handleRequestFile(message: RequestFileMessage): Promise<void> {
-    const fileType = message.command.replace('request', '').replace('File', '');
-    const listType = fileType.toLowerCase() as 'context' | 'media';
-    const files = await getFileLister().list(listType);
-    this.postFileUpdate(fileType, files, {
-      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
-    });
   }
 
   async handleRequestEditedFile(
@@ -206,27 +138,6 @@ export class FileManager extends BaseWebviewManager {
         : undefined,
     });
     this.postGettingStartedBanner(files.length === 0);
-  }
-
-  async handleRequestDefaultOutputFiles(
-    message: RequestDefaultOutputFilesMessage,
-  ): Promise<void> {
-    let files: string[] = [];
-    if (message.agent) {
-      try {
-        const entry = getAgent(message.agent);
-        files = entry?.defaultOutputFiles ?? [];
-      } catch (err) {
-        logger.error(
-          CHANNEL,
-          `Error requesting default output files: ${toErrorMessage(err)}`,
-        );
-      }
-    }
-    this.postMessage({
-      command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
-      files,
-    });
   }
 
   handleSetMultipleFiles(message: SetMultipleFilesMessage): void {
@@ -266,20 +177,11 @@ export class FileManager extends BaseWebviewManager {
     }
   }
 
+  // Multi-list categories are user-owned (only mutated through the picker /
+  // drag-drop / Add opened) so we don't push disk listings into them — just
+  // refresh the still-single-slot base-file dropdown and the empty-workspace banner.
   async handleRefreshAllFiles(): Promise<void> {
-    const [inputFiles, contextFiles, mediaFiles] = await Promise.all([
-      getFileLister().list('input'),
-      getFileLister().list('context'),
-      getFileLister().list('media'),
-    ]);
-
-    this.postMessage({
-      command: MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES,
-      inputFiles,
-      contextFiles,
-      mediaFiles,
-    });
-
+    const inputFiles = await getFileLister().list('input');
     this.postBaseFileSelect(inputFiles);
     this.postGettingStartedBanner(inputFiles.length === 0);
   }
