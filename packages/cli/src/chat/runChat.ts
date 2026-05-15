@@ -542,6 +542,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
               const authSession = await signInCliSupabase({
                 provider: loginArgs.provider,
                 openBrowser: !loginArgs.noBrowser,
+                manualBrowserHint: '/login --no-browser',
                 onAuthUrl: loginArgs.noBrowser
                   ? (url) => renderer.info(`Open this URL to sign in:\n${url}`)
                   : undefined,
