@@ -64,11 +64,17 @@ import {
   SignOutMessageSchema,
 } from './profileViewMessages';
 import { StreamTabIdSchema } from './identifiers';
+// Import OdysseySchema from its leaf module so this file (consumed by
+// webview frontends) does not pull in OdysseyTool/OdysseyStore runtime modules.
+import { OdysseySchema } from '@tools/odyssey/odysseyMeta';
 export { SETTINGS_VIEW_CMD };
+export { OdysseySchema };
+export type { Odyssey, OdysseyStatus } from '@tools/odyssey/odysseyMeta';
 
 /** Tab name order - single source of truth for tab indices */
 export const SETTINGS_TAB_ORDER = [
   'MEMORY',
+  'ODYSSEY',
   'HISTORY',
   'MODELS',
   'AGENTS',
@@ -941,6 +947,24 @@ const SetClaudeAgentEffortMessageSchema = z.object({
 // Navigation inbound messages
 const OpenVscodeSettingsMessageSchema = commandOnly(CMD.OPEN_VSCODE_SETTINGS);
 
+// Odyssey settings-tab inbound messages — strictly read-only. State
+// transitions (start/pause/complete/abandon/edit) are model-driven via
+// the odyssey() tool; no user-action commands are exposed here.
+const GetOdysseyListMessageSchema = commandOnly(CMD.GET_ODYSSEY_LIST);
+const RevealOdysseyStreamMessageSchema = z.object({
+  command: z.literal(CMD.REVEAL_ODYSSEY_STREAM),
+  streamId: StreamTabIdSchema,
+});
+
+/** Outbound: pushed when the list changes or in response to GET_ODYSSEY_LIST. */
+export const UpdateOdysseyListMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_ODYSSEY_LIST),
+  items: z.array(OdysseySchema),
+});
+export type UpdateOdysseyListMessage = z.infer<
+  typeof UpdateOdysseyListMessageSchema
+>;
+
 // ============================================================
 // Discriminated union of all inbound messages
 // ============================================================
@@ -1058,6 +1082,9 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     ApplyAgentModePresetMessageSchema,
     SaveAgentModePresetMessageSchema,
     DeleteAgentModePresetMessageSchema,
+    // Odyssey settings-tab messages (read-only)
+    GetOdysseyListMessageSchema,
+    RevealOdysseyStreamMessageSchema,
   ],
 );
 

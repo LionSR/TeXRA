@@ -367,14 +367,20 @@ export const SyncStreamContentMessageSchema = z.object({
   toolEditBypass: z.boolean().optional(),
   superYoloBypass: z.boolean().optional(),
   // Whether an Odyssey is active or paused on this stream (drives the
-  // header button's .is-active treatment).
+  // header status chip's visibility).
   odysseyActive: z.boolean().optional(),
+  /** "active" | "paused" when odysseyActive, omitted otherwise. */
+  odysseyStatus: z.string().optional(),
+  /** Objective summary for the header chip tooltip. */
+  odysseyObjective: z.string().optional(),
 });
 
 const OdysseyActiveUpdatedMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.ODYSSEY_ACTIVE_UPDATED),
   stream: StreamTabIdSchema,
   active: z.boolean(),
+  status: z.string().optional(),
+  objective: z.string().optional(),
 });
 
 export const ProgressSetThemeMessageSchema = z.object({
@@ -611,11 +617,6 @@ const ToggleSuperYoloBypassMessageSchema = z.object({
   stream: StreamTabIdSchema,
 });
 
-const OpenOdysseyPanelMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.OPEN_ODYSSEY_PANEL),
-  stream: StreamTabIdSchema,
-});
-
 const SendFollowUpMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP),
   stream: StreamTabIdSchema,
@@ -779,7 +780,6 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     ToolEditApprovalActionMessageSchema,
     ToggleToolEditApprovalBypassMessageSchema,
     ToggleSuperYoloBypassMessageSchema,
-    OpenOdysseyPanelMessageSchema,
     BashApprovalActionMessageSchema,
     AgentProposalActionMessageSchema,
     PlanApprovalActionMessageSchema,

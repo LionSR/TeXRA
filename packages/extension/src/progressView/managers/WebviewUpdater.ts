@@ -75,6 +75,10 @@ export interface SyncStreamContentPayload {
   superYoloBypass?: boolean;
   /** True when this stream has an Odyssey in `active` or `paused` state. */
   odysseyActive?: boolean;
+  /** Status string (`active`/`paused`) so the chip can switch styling. */
+  odysseyStatus?: string;
+  /** Objective summary surfaced in the chip tooltip. */
+  odysseyObjective?: string;
 }
 
 /**
@@ -189,12 +193,18 @@ export class WebviewUpdater {
     });
   }
 
-  /** Notify the frontend that this stream's odyssey-active flag changed. */
-  updateOdysseyActive(stream: StreamTabId, active: boolean): void {
+  /** Notify the frontend that this stream's odyssey state changed. */
+  updateOdysseyActive(
+    stream: StreamTabId,
+    active: boolean,
+    details?: { status?: string; objective?: string },
+  ): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.ODYSSEY_ACTIVE_UPDATED,
       stream,
       active,
+      ...(details?.status ? { status: details.status } : {}),
+      ...(details?.objective ? { objective: details.objective } : {}),
     });
   }
 

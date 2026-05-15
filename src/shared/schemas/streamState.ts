@@ -99,6 +99,10 @@ export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   superYoloBypass: z.boolean().optional(),
   /** True when this stream has an Odyssey in `active` or `paused` state. */
   odysseyActive: z.boolean().optional(),
+  /** Active odyssey status (`active`/`paused`) when odysseyActive is true. */
+  odysseyStatus: z.string().optional(),
+  /** Active odyssey objective summary, surfaced in the header chip tooltip. */
+  odysseyObjective: z.string().optional(),
   // Per-run usage for accumulation; sessionUsage is derived as their sum.
   runUsage: RunScopedRecord(TokenUsageStatsSchema),
   sessionUsage: TokenUsageStatsSchema.nullable().prefault(null),

@@ -163,21 +163,14 @@ const COMPACT_RESPONSE_BUTTON = Object.freeze({
   disabled: true,
 });
 
-const ODYSSEY_TOGGLE_BUTTON = Object.freeze({
-  id: ELEMENT_IDS.ODYSSEY_TOGGLE_BTN,
-  icon: 'compass',
-  command: PROGRESS_VIEW_COMMANDS.OPEN_ODYSSEY_PANEL,
-  title: 'Odyssey: set a persistent objective the agent works toward',
-  titleActive: 'Odyssey active — click to manage (pause/resume/abandon)',
-  className: 'odyssey-toggle-button',
-  isToggle: true,
-});
+// Odyssey is model-driven (the agent starts/pauses/completes via its
+// odyssey() tool). The header surfaces a passive status chip when an
+// odyssey is active — there is no user-clickable button here by design.
 
 const TOOL_USE_TOOLBAR = [
   STOP_STREAM_BUTTON,
   YOLO_TOGGLE_BUTTON,
   SUPER_YOLO_TOGGLE_BUTTON,
-  ODYSSEY_TOGGLE_BUTTON,
   COMPACT_RESPONSE_BUTTON,
   RESTORE_STATE_BUTTON,
   OPEN_TASK_STORAGE_BUTTON,

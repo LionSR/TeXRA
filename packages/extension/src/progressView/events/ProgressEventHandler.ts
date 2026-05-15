@@ -534,6 +534,8 @@ export class ProgressEventHandler {
       toolEditBypass,
       superYoloBypass,
       odysseyActive,
+      odysseyStatus: odysseyActive ? odyssey?.status : undefined,
+      odysseyObjective: odysseyActive ? odyssey?.objective : undefined,
     });
   }
 

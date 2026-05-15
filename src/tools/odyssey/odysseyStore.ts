@@ -4,6 +4,7 @@ import {
   getWorkspaceState,
   tryGetWorkspaceState,
 } from '@agent/core/stateStore';
+import { bus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas/identifiers';
 
 import {
@@ -97,6 +98,7 @@ async function update(
     updatedAt: nowIso(),
   };
   await writeRaw(final);
+  bus.emit('odysseyStateChanged', { streamId });
   return final;
 }
 
@@ -173,6 +175,7 @@ export const OdysseyStore = {
     };
     await writeRaw(odyssey);
     await addToIndex(streamId);
+    bus.emit('odysseyStateChanged', { streamId });
     return odyssey;
   },
 
@@ -292,7 +295,9 @@ export const OdysseyStore = {
 
   /** Drop the record (used on conversation delete). */
   async forget(streamId: StreamTabId): Promise<void> {
+    const existed = readRaw(streamId) !== null;
     await getWorkspaceState().update(streamKey(streamId), undefined);
     await removeFromIndex(streamId);
+    if (existed) bus.emit('odysseyStateChanged', { streamId });
   },
 };
