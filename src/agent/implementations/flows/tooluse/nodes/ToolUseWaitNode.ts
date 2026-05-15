@@ -75,7 +75,7 @@ export class ToolUseWaitNode<C> extends Node<
         hasQueuedFollowUp: session.hasQueuedFollowUp(),
       });
       if (odysseyFollowUp && !session.hasQueuedFollowUp()) {
-        await OdysseyStore.recordEvent(streamId, 'continuation_injected');
+        await OdysseyStore.recordContinuation(streamId);
         return {
           kind: 'continue',
           followUp: odysseyFollowUp,
