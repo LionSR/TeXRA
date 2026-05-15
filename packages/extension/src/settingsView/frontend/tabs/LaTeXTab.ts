@@ -6,9 +6,6 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
-import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
-import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
-import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
@@ -49,6 +46,9 @@ import {
 // Local imports - shared utilities
 import { copyTextToClipboard } from '@shared/utils/clipboard';
 import { createEvent } from '@shared/utils/events';
+import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
+import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
+import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 /** Path keys in LatexSettingsStatus for tool paths. */
 type ToolPathKey =
