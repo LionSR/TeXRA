@@ -105,4 +105,47 @@ describe('BashTool error feedback', () => {
     expect(toolResult?.output).toContain('stderr failure details');
     expect(toolResult?.output).toContain('stdout failure guidance');
   });
+
+  it('rejects shell-level backgrounding before command execution', async () => {
+    vi.spyOn(agentConfig, 'getConfig').mockImplementation(
+      <T>(key: string, defaultValue?: T): T => {
+        if (key === BASH_APPROVAL_CONFIG_KEY) return false as T;
+        return defaultValue as T;
+      },
+    );
+    const executeSpy = vi.spyOn(execUtils, 'executeCommand');
+
+    const result = await new BashTool().call({
+      command:
+        'nohup python verify_residual_order.py > verify_residual_order_run.log 2>&1 &\necho "PID: $!"',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.error).toContain('shell-level backgrounding');
+    expect(result.error).toContain('run_in_background: true');
+    expect(executeSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not reject ampersands in later shell command segments', async () => {
+    vi.spyOn(agentConfig, 'getConfig').mockImplementation(
+      <T>(key: string, defaultValue?: T): T => {
+        if (key === BASH_APPROVAL_CONFIG_KEY) return false as T;
+        return defaultValue as T;
+      },
+    );
+    const executeSpy = vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
+      success: true,
+      stdout: 'done',
+      stderr: '',
+      timedOut: false,
+      exitCode: 0,
+    });
+
+    const result = await new BashTool().call({
+      command: 'nohup longtask; echo done &',
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(executeSpy).toHaveBeenCalledOnce();
+  });
 });
