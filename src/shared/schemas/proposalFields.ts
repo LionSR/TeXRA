@@ -13,11 +13,8 @@ export const BaseProposalFieldsSchema = z.object({
 });
 
 const FileFieldsSchema = z.object({
-  inputFile: z.string(),
   inputFiles: z.array(z.string()),
-  contextFile: z.string().nullable(),
   contextFiles: z.array(z.string()),
-  mediaFile: z.string().nullable(),
   mediaFiles: z.array(z.string()),
   outputFiles: z.array(z.string()),
 });
@@ -38,25 +35,21 @@ export interface ProposalFileGroup {
   clickable: boolean;
 }
 
-/** Merge singular + plural file fields into labeled groups, filtering empties. */
 export function getProposalFileGroups(data: FileFields): ProposalFileGroup[] {
-  const combine = (single: string | null | undefined, arr: string[] = []) =>
-    [single, ...arr].filter((f): f is string => Boolean(f));
-
   return [
     {
       label: 'Input',
-      files: combine(data.inputFile, data.inputFiles),
+      files: data.inputFiles ?? [],
       clickable: true,
     },
     {
       label: 'Context',
-      files: combine(data.contextFile, data.contextFiles),
+      files: data.contextFiles ?? [],
       clickable: true,
     },
     {
       label: 'Media',
-      files: combine(data.mediaFile, data.mediaFiles),
+      files: data.mediaFiles ?? [],
       clickable: true,
     },
     { label: 'Output', files: data.outputFiles ?? [], clickable: true },

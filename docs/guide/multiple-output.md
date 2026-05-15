@@ -13,16 +13,10 @@ Working with multiple files is often necessary when:
 
 ## UI for Multiple Files
 
-The TeXRA UI provides dedicated sections for managing multiple files:
+The TeXRA UI provides dedicated sections for managing multiple input files.
 
-<!-- ![Multiple Files UI Placeholder](/images/multiple-files-ui.png) _(Placeholder: Screenshot highlighting Input Files & Multiple Outputs sections)_ -->
-
-- **Input Files**: Use the "▼" toggle to add multiple source files. These are typically concatenated and provided as context to the selected agent.
-  - **Multiple Outputs**:
-    - Use the "▼" toggle to activate multiple output mode.
-    - Use the "+" button (<wa-icon library="texra" name="add"></wa-icon>) to list the _exact filenames_ you expect the agent to generate. **Order matters** if the agent references them by position.
-    - The list can be cleared (<wa-icon library="texra" name="trash"></wa-icon>).
-    - If this section is _not_ toggled/activated, TeXRA expects the agent to produce only a single output file, named based on the primary input file.
+- **Input Files**: Use the "▼" toggle to add multiple source files. These are typically concatenated and provided as context to the selected agent. For editing agents, the expected output filenames are the selected input filenames in the same order.
+- **Fixed Outputs**: Agents that create files with names not determined by the inputs declare those filenames in `settings.defaultOutputFiles`.
 
 _(See [File Management](./file-management.md) for general UI controls.)_
 
@@ -34,7 +28,7 @@ When you provide multiple input files, TeXRA typically combines their content (o
 
 This is the crucial part for generating multiple distinct files:
 
-1. **User Specifies Outputs:** You list the desired output filenames in the "Multiple Outputs" UI section (e.g., `chapter2.tex`, `appendixA.tex`).
+1. **TeXRA Determines Outputs:** Editing agents use the selected input filenames as the output filenames. Generator agents can declare fixed filenames through `settings.defaultOutputFiles`.
 2. **Agent Generates Structured XML:** The selected agent must be designed (through its `prompts`) to produce a _single XML response_ containing separate blocks for each intended output file, using a structure like this:
 
    ```xml
@@ -49,7 +43,7 @@ This is the crucial part for generating multiple distinct files:
    </latex_documents>
    ```
 
-3. **TeXRA Extracts:** The TeXRA backend (`OutputHandler.ts`) parses this XML response. It looks for `<document>` tags with a `name` attribute that **exactly matches** one of the filenames you listed in the UI.
+3. **TeXRA Extracts:** The TeXRA backend parses this XML response. It looks for `<document>` tags with a `name` attribute that **exactly matches** one of the expected output filenames.
 4. **Files Saved:** For each matching tag found, TeXRA extracts the content within that tag and saves it to the corresponding filename. If the agent's response doesn't include a `<document>` tag with a name matching one you specified, that file will not be created or updated.
 
 **Key Point:** The agent must be explicitly instructed via its prompts to
@@ -59,17 +53,17 @@ provided through `OUTPUT_FILES_ORDER`.
 ## Tracking Multi-Output Runs
 
 TeXRA determines whether an agent advertises multiple-output support from its
-`defaultOutputFiles` setting. During a run, the selected filenames are carried
-as `outputFiles` and exposed to prompts through `OUTPUT_FILES_ORDER`. Stream
-identifiers may still append `_multiple` for readability, but prompt rendering
-and output extraction depend on the filename list, not on a separate YAML flag.
+`defaultOutputFiles` setting. During a run, `OUTPUT_FILES_ORDER` is either that
+fixed list or the selected input filenames. Stream identifiers may still append
+`_multiple` for readability, but prompt rendering and output extraction depend
+on the filename list, not on a separate YAML flag.
 
 ### Declaring multi-output agents in YAML
 
 Custom workflow agents can advertise that they expect multiple outputs by
-setting `settings.defaultOutputFiles` to the expected filenames. This enables
-frontend affordances like the "∶∶" dropdown badge and gives prompts a default
-`OUTPUT_FILES_ORDER` when the user has not supplied filenames.
+setting `settings.defaultOutputFiles` to the expected filenames. This gives
+prompts a fixed `OUTPUT_FILES_ORDER` when the filenames are not the input
+filenames.
 
 ```yaml
 name: my_agent_multiple
@@ -86,11 +80,10 @@ part of the current agent settings schema. Update existing YAML files to declare
 
 ## Example: Multiple-Output Agent Prompts
 
-Workflow prompts can branch on `OUTPUT_FILES_ORDER` to request and format
+Workflow prompts can use `OUTPUT_FILES_ORDER` to request and format
 multiple outputs within the `<latex_documents>` tag. `OUTPUT_FILES_ORDER` is an
-array of filenames, so templates can use `&#123;&#123; OUTPUT_FILES_ORDER[0] &#125;&#125;` for a
-specific filename and `&#123;&#123; OUTPUT_FILES_ORDER | join(", ") &#125;&#125;` when the prompt
-needs a readable list.
+array of filenames, so templates should iterate over it. Use
+`&#123;&#123; OUTPUT_FILES_ORDER | join(", ") &#125;&#125;` when the prompt needs a readable list.
 
 ```yaml
 # Inside a workflow agent's userRequest prompt:
@@ -100,18 +93,16 @@ The output files should be in this order: {{ OUTPUT_FILES_ORDER | join(", ") }}.
 {% endif %}
 
 # Use the following format:
-<latex_documents>
-<document name="{{ OUTPUT_FILES_ORDER[0] }}">
-% 1ST_UPDATED_LATEX_DOCUMENT_1 HERE
+<documents>
+{% for output in OUTPUT_FILES_ORDER %}
+<document name="{{ output }}">
+% UPDATED_CONTENT_FOR_{{ output }}
 </document>
-<document name="{{ OUTPUT_FILES_ORDER[1] }}">
-% 1ST_UPDATED_LATEX_DOCUMENT_2 HERE
-</document>
-... (repeat for all output files)
-</latex_documents>
+{% endfor %}
+</documents>
 ```
 
-This instructs the LLM to generate the necessary XML structure that TeXRA's `OutputHandler` can parse.
+This instructs the model to generate the necessary XML structure that TeXRA can parse.
 
 ## When to Use
 
@@ -125,17 +116,9 @@ This instructs the LLM to generate the necessary XML structure that TeXRA's `Out
 - [File Management](./file-management.md): Review the file selection UI in detail.
 - [Agent Architecture](./agent-architecture.md): Understand the overall agent execution flow.
 
-## Enabling Multiple Outputs
-
-To enable multiple output files, simply click the toggle icon (▼) next to the "Multiple Outputs" label in the main TeXRA interface file selection area. This will expand the section, allowing you to manage the output file list.
-
-## Managing Output Files
-
-Once expanded, you can manage the output files:
-
-1.  **Add Files**: Use the "Add" button (<wa-icon library="texra" name="add"></wa-icon>) to specify output filenames. You typically need one output file for each corresponding input file.
-2.  **Remove Files**: Click the "-" button next to a file to remove it.
-3.  **Reorder Files**: Drag and drop files to ensure the order matches the input file order.
-4.  **Clear List**: Use the "Empty List" button (<wa-icon library="texra" name="trash"></wa-icon>) to remove all specified output files.
-
 ## Output Naming
+
+By default, TeXRA uses the selected input filenames as the output filenames.
+Agents that write fixed new files should declare `settings.defaultOutputFiles`.
+Your prompt should reference `OUTPUT_FILES_ORDER` so the model emits matching
+`<document name="...">` tags.

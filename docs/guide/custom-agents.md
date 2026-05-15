@@ -14,7 +14,9 @@ Before creating a custom agent, it's highly recommended to understand the underl
 
 ## <wa-icon library="texra" name="library"></wa-icon> Reference Agents
 
-TeXRA includes ready-made reference agents you can use as starting points. Think of them as recipes: copy one into your custom agents directory, tweak it, and you have a new agent in minutes. Examples range from content-enhancement workflows to notation standardizers and multi-agent orchestrators. Each agent handles both single-file and multi-file output through one unified YAML — set `documentTag: documents` and use `{% if OUTPUT_FILES_ORDER %}` to branch on whether the user picked multiple output files.
+TeXRA includes ready-made reference agents you can use as starting points. Think of them as recipes: copy one into your custom agents directory, tweak it, and you have a new agent in minutes. Examples range from content-enhancement workflows to notation standardizers and multi-agent orchestrators. Each agent handles one input or several through a unified protocol: set `documentTag: documents` and your prompt emits one `<document name="...">` per input.
+
+> **Migrating an older custom YAML?** See [agent-yaml-migration.md](./agent-yaml-migration.md) for the full before/after walk-through covering the W2/W3/W4 changes (auxiliary→context picker merge, `_multiple` retirement, single-slot collapse).
 
 ## <wa-icon library="texra" name="new-file"></wa-icon> Creating a Custom Agent File
 
@@ -118,10 +120,8 @@ This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the ext
 - &#123;&#123; INSTRUCTION &#125;&#125;: The text entered into the "Instruction" box in the UI.
 - &#123;&#123; INPUT_FILE &#125;&#125;: The path of the primary input file.
 - &#123;&#123; INPUT_CONTENT &#125;&#125;: The full text content of the primary input file.
-- &#123;&#123; REFERENCE_FILE &#125;&#125;: Path of the primary reference file.
-- &#123;&#123; REFERENCE_CONTENT &#125;&#125;: Content of the primary reference file.
-- &#123;&#123; AUXILIARY_FILE &#125;&#125;: Path of the primary auxiliary file.
-- &#123;&#123; AUXILIARY_CONTENT &#125;&#125;: Content of the primary auxiliary file.
+- &#123;&#123; CONTEXT_FILE &#125;&#125;: Path of the primary context file.
+- &#123;&#123; CONTEXT_CONTENT &#125;&#125;: Content of the primary context file.
 - &#123;&#123; EDITED_FILE &#125;&#125;: Path of the edited file (used in `merge`).
 - &#123;&#123; EDITED_CONTENT &#125;&#125;: Content of the edited file.
 - &#123;&#123; MEDIA_FILE &#125;&#125;: Path of the primary media file.
@@ -133,12 +133,13 @@ This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the ext
 - &#123;&#123; ALL_CONTEXTS &#125;&#125;: Similar XML string for all context files (the read-only context category that combines what used to be split into "reference" and "auxiliary").
 - &#123;&#123; LIST_OF_ALL_INPUTS &#125;&#125;: Simple comma-separated string listing all input file paths.
 - &#123;&#123; LIST_OF_ALL_CONTEXTS &#125;&#125;: Similar comma-separated list for context files.
+- Legacy custom agents can still read `REFERENCE_*` and `AUXILIARY_*` aliases, but new agents should use `CONTEXT_*`.
 
 **Multiple Output Variable:**
 
 - &#123;&#123; OUTPUT_FILES_ORDER &#125;&#125;: Array of output filenames specified in
-  the UI or in `defaultOutputFiles`. Use
-  `&#123;&#123; OUTPUT_FILES_ORDER[0] &#125;&#125;` for a specific filename and
+  the UI or in `defaultOutputFiles`. Most agents should iterate over this list
+  and emit one `<document name="...">` block per filename. Use
   `&#123;&#123; OUTPUT_FILES_ORDER | join(", ") &#125;&#125;` for a human-readable list. See
   [Handling Multiple Files](./multiple-output.md).
 
@@ -224,8 +225,8 @@ for a workflow agent that writes two output files:
 inherits: polish
 settings:
   agentCategory: workflow
-  documentTag: latex_documents
-  endTag: </latex_documents>
+  documentTag: documents
+  endTag: </documents>
   defaultOutputFiles:
     - introduction.tex
     - conclusion.tex
@@ -240,19 +241,18 @@ prompts:
     - Plan revisions for each file
     </scratchpad>
 
-    <latex_documents>
-    <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-    % UPDATED_FILE_1
+    <documents>
+    {% for output in OUTPUT_FILES_ORDER %}
+    <document name="{{ output }}">
+    % UPDATED_CONTENT_FOR_{{ output }}
     </document>
-    <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-    % UPDATED_FILE_2
-    </document>
-    </latex_documents>
+    {% endfor %}
+    </documents>
 ```
 
 This structure lets TeXRA save each `<document>` block to the corresponding
-filename from the UI list. See [Handling Multiple Files](./multiple-output.md)
-for more details.
+filename from the selected input list or from `settings.defaultOutputFiles`. See
+[Handling Multiple Files](./multiple-output.md) for more details.
 
 ### <wa-icon library="texra" name="save"></wa-icon> Step 4 — Save and Reload
 

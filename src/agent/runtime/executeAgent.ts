@@ -255,8 +255,9 @@ function buildStoppedFlowResult(
 }
 
 function buildFallbackNotification(config: AgentConfig) {
-  const inputName = config.inputFile
-    ? path.basename(config.inputFile)
+  const primaryInput = config.inputFiles[0];
+  const inputName = primaryInput
+    ? path.basename(primaryInput)
     : 'selected input';
   const { outputFiles = [] } = config;
   const outputInfo =
@@ -358,7 +359,7 @@ export async function executeAgent(
           runtimeHost: ctx.runtimeHost,
         });
         logger.info(`Starting task execution (streamId: ${streamId})`);
-        logger.info(`Input file: ${config.inputFile}`);
+        logger.info(`Input file: ${config.inputFiles[0] ?? '(none)'}`);
         logger.debug(
           `Stream ID: ${streamId}, Agent: ${config.agent}, Model: ${config.model}`,
         );
@@ -468,7 +469,7 @@ export async function executeMergeAgent(
   const configPayload: AgentConfigPayload = {
     agent: 'merge',
     model,
-    inputFile,
+    inputFiles: [inputFile],
     editedFile,
   };
   const ctx = await buildAgentLaunchContext({

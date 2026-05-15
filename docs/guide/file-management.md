@@ -94,11 +94,9 @@ The "Add Opened Files" button (<wa-icon library="texra" name="folder-opened"></w
 
 ### Output Files
 
-When using multiple input files, you may need to specify multiple output files:
-
-1. Enable the "Multiple Outputs" section by clicking the toggle (▼)
-2. Add output files corresponding to your input files using the "Add" button (<wa-icon library="texra" name="add"></wa-icon>)
-3. Optionally set a custom output filename
+For workflow agents that edit documents, output filenames are the selected input
+filenames in the same order. Agents that create fixed new files declare those
+names in their YAML with `settings.defaultOutputFiles`.
 
 ## File Path Handling
 
