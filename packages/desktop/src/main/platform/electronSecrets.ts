@@ -56,6 +56,7 @@ function isStoredSecret(value: unknown): value is StoredSecret {
 export class ElectronSecrets implements PlatformSecrets {
   private warnedAboutBasicText = false;
   private warnedAboutKeychainDenied = false;
+  private keychainDecryptUnavailable = false;
 
   constructor(
     private readonly store: JsonStore,
@@ -76,11 +77,14 @@ export class ElectronSecrets implements PlatformSecrets {
       return undefined;
     }
 
+    if (this.keychainDecryptUnavailable) return undefined;
+
     const stored = this.store.get<unknown>(key);
     if (!isStoredSecret(stored)) return undefined;
     try {
       return safeStorage.decryptString(Buffer.from(stored.value, 'base64'));
     } catch (error) {
+      this.keychainDecryptUnavailable = true;
       // The macOS keychain (and Linux libsecret/KWallet) can reject decrypts
       // when the user denies the OS prompt or the entry encryption key has
       // been rotated. Treat this as "no saved secret" so the rest of the
