@@ -15,10 +15,8 @@ export interface FileContext {
   agent?: string;
   inputFile?: string;
   inputFiles?: string[];
-  referenceFile?: string;
-  referenceFiles?: string[];
-  auxiliaryFile?: string;
-  auxiliaryFiles?: string[];
+  contextFile?: string;
+  contextFiles?: string[];
   mediaFile?: string;
   mediaFiles?: string[];
   outputFiles?: string[];
@@ -36,12 +34,7 @@ export function buildFileContextFromTaskState(
     context.agent = agentConfig.agent;
   }
 
-  const singleFields = [
-    'inputFile',
-    'referenceFile',
-    'auxiliaryFile',
-    'mediaFile',
-  ] as const;
+  const singleFields = ['inputFile', 'contextFile', 'mediaFile'] as const;
   for (const field of singleFields) {
     if (isNonEmptyString(agentConfig[field])) {
       context[field] = agentConfig[field];
@@ -50,8 +43,7 @@ export function buildFileContextFromTaskState(
 
   const arrayFields = [
     'inputFiles',
-    'referenceFiles',
-    'auxiliaryFiles',
+    'contextFiles',
     'mediaFiles',
     'outputFiles',
   ] as const;
@@ -72,8 +64,7 @@ function formatFileContext(ctx: FileContext): string {
 
   const singles: Array<[string, string | undefined]> = [
     ['Input File', ctx.inputFile],
-    ['Reference File', ctx.referenceFile],
-    ['Auxiliary File', ctx.auxiliaryFile],
+    ['Context File', ctx.contextFile],
     ['Figure File', ctx.mediaFile],
   ];
   for (const [label, value] of singles) {
@@ -82,8 +73,7 @@ function formatFileContext(ctx: FileContext): string {
 
   const arrays: Array<[string, string[] | undefined]> = [
     ['Input Files', ctx.inputFiles],
-    ['Reference Files', ctx.referenceFiles],
-    ['Auxiliary Files', ctx.auxiliaryFiles],
+    ['Context Files', ctx.contextFiles],
     ['Media Files', ctx.mediaFiles],
     ['Output Files', ctx.outputFiles],
   ];

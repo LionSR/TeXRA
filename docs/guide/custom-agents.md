@@ -14,7 +14,7 @@ Before creating a custom agent, it's highly recommended to understand the underl
 
 ## <wa-icon library="texra" name="library"></wa-icon> Reference Agents
 
-TeXRA includes ready-made reference agents you can use as starting points. Think of them as recipes: copy one into your custom agents directory, tweak it, and you have a new agent in minutes. Examples range from content-enhancement workflows to notation standardizers and multi-agent orchestrators. Each also has a `_multiple` variant for multi-file output.
+TeXRA includes ready-made reference agents you can use as starting points. Think of them as recipes: copy one into your custom agents directory, tweak it, and you have a new agent in minutes. Examples range from content-enhancement workflows to notation standardizers and multi-agent orchestrators. Each agent handles both single-file and multi-file output through one unified YAML — set `documentTag: documents` and use `{% if OUTPUT_FILES_ORDER %}` to branch on whether the user picked multiple output files.
 
 ## <wa-icon library="texra" name="new-file"></wa-icon> Creating a Custom Agent File
 
@@ -72,7 +72,7 @@ settings:
   # filePatternsContain:
   #   - pattern: 'bibliography' # Find files whose names contain this pattern.
   #     varName: BIBLIOGRAPHY # Make content available via {{ BIBLIOGRAPHY_CONTENT }} in prompts.
-  #     categories: ['auxiliaryFile', 'auxiliaryFiles'] # Search within these UI file categories.
+  #     categories: ['contextFile', 'contextFiles'] # Search within these UI file categories.
   # defaultOutputFiles: # Used when the agent is designed to produce multiple outputs.
   #   - 'introduction.tex'
   #   - 'methods.tex'
@@ -130,11 +130,9 @@ This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the ext
 **Multiple File Variables:**
 
 - &#123;&#123; ALL_INPUTS &#125;&#125;: XML string containing all selected input files (primary + multiple) wrapped in `<document name="...">...</document>` tags.
-- &#123;&#123; ALL_REFERENCES &#125;&#125;: Similar XML string for all reference files.
-- &#123;&#123; ALL_AUXILIARYS &#125;&#125;: Similar XML string for all auxiliary files.
+- &#123;&#123; ALL_CONTEXTS &#125;&#125;: Similar XML string for all context files (the read-only context category that combines what used to be split into "reference" and "auxiliary").
 - &#123;&#123; LIST_OF_ALL_INPUTS &#125;&#125;: Simple comma-separated string listing all input file paths.
-- &#123;&#123; LIST_OF_ALL_REFERENCES &#125;&#125;: Similar comma-separated list for reference files.
-- &#123;&#123; LIST_OF_ALL_AUXILIARYS &#125;&#125;: Similar comma-separated list for auxiliary files.
+- &#123;&#123; LIST_OF_ALL_CONTEXTS &#125;&#125;: Similar comma-separated list for context files.
 
 **Multiple Output Variable:**
 
@@ -159,8 +157,8 @@ userPrefix: |
   {{ INPUT_CONTENT }}
   </document>
 
-  Refer to these auxiliary files:
-  {{ ALL_AUXILIARYS }}
+  Refer to these context files:
+  {{ ALL_CONTEXTS }}
 
   Apply the following instruction:
   <instruction>{{ INSTRUCTION }}</instruction>

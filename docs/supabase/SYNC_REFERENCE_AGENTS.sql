@@ -27,22 +27,6 @@ ON CONFLICT (name) DO UPDATE SET
 
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
-  'apply_multiple',
-  'Implements suggestions from review agents across multiple documents. Reads inline annotations, works through issues, and applies corrections while maintaining cross-document consistency.',
-  'researcher/apply_multiple.yaml',
-  ARRAY['public'],
-  'workflow',
-  NULL
-)
-ON CONFLICT (name) DO UPDATE SET
-  description    = EXCLUDED.description,
-  storage_path   = EXCLUDED.storage_path,
-  visibility     = EXCLUDED.visibility,
-  agent_category = EXCLUDED.agent_category,
-  tools          = EXCLUDED.tools;
-
-INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
-VALUES (
   'criticize',
   'Critical reviewer for mathematical physics papers. Inserts inline comments using \criticize{}{severity}{confidence} without modifying original content.',
   'QITBench/criticize.yaml',
@@ -59,41 +43,9 @@ ON CONFLICT (name) DO UPDATE SET
 
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
-  'criticize_multiple',
-  'Critical reviewer for multiple related documents. Inserts inline comments using \criticize{}{severity}{confidence} across papers without modifying original content.',
-  'QITBench/criticize_multiple.yaml',
-  ARRAY['whitelist', 'QITBench', 'researcher', 'public'],
-  'workflow',
-  NULL
-)
-ON CONFLICT (name) DO UPDATE SET
-  description    = EXCLUDED.description,
-  storage_path   = EXCLUDED.storage_path,
-  visibility     = EXCLUDED.visibility,
-  agent_category = EXCLUDED.agent_category,
-  tools          = EXCLUDED.tools;
-
-INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
-VALUES (
   'devise',
-  'Mathematical paper enhancer with two-phase workflow. Rewrites document by first adding rigorous derivations then revising to publication-ready scientific style.',
+  'Mathematical paper enhancer with two-phase workflow. Rewrites document(s) by first adding rigorous derivations then revising to publication-ready scientific style.',
   'QITBench/devise.yaml',
-  ARRAY['researcher', 'QITBench'],
-  'workflow',
-  NULL
-)
-ON CONFLICT (name) DO UPDATE SET
-  description    = EXCLUDED.description,
-  storage_path   = EXCLUDED.storage_path,
-  visibility     = EXCLUDED.visibility,
-  agent_category = EXCLUDED.agent_category,
-  tools          = EXCLUDED.tools;
-
-INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
-VALUES (
-  'devise_multiple',
-  'Multi-paper enhancement workflow with derivation and revision phases. Rewrites documents through two-phase process ensuring consistent notation and rigor across collections.',
-  'QITBench/devise_multiple.yaml',
   ARRAY['researcher', 'QITBench'],
   'workflow',
   NULL
@@ -123,22 +75,6 @@ ON CONFLICT (name) DO UPDATE SET
 
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
-  'elevate_multiple',
-  'Two-phase writing strategist that elevates multiple academic paper documents for publication. Diagnoses multi-audience impact (editor, expert reviewer, broad peer), optimizes persuasive arc and rhetorical rhythm, and sharpens precision across document collections. Makes confident improvements directly (marked with \criticize{Comment text}{S}{C}) and leaves strategic decisions as \criticize{}{}{} comments for author review.',
-  'researcher/elevate_multiple.yaml',
-  ARRAY['researcher'],
-  'workflow',
-  NULL
-)
-ON CONFLICT (name) DO UPDATE SET
-  description    = EXCLUDED.description,
-  storage_path   = EXCLUDED.storage_path,
-  visibility     = EXCLUDED.visibility,
-  agent_category = EXCLUDED.agent_category,
-  tools          = EXCLUDED.tools;
-
-INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
-VALUES (
   'enhance',
   'Mathematical substance enhancer for research papers. Identifies elegant proofs and stronger results.',
   'whitelist/enhance.yaml',
@@ -155,41 +91,9 @@ ON CONFLICT (name) DO UPDATE SET
 
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
-  'enhance_multiple',
-  'Multi-document mathematical enhancer for research papers. Improves proofs and results across paper collections.',
-  'whitelist/enhance_multiple.yaml',
-  ARRAY['public'],
-  'workflow',
-  NULL
-)
-ON CONFLICT (name) DO UPDATE SET
-  description    = EXCLUDED.description,
-  storage_path   = EXCLUDED.storage_path,
-  visibility     = EXCLUDED.visibility,
-  agent_category = EXCLUDED.agent_category,
-  tools          = EXCLUDED.tools;
-
-INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
-VALUES (
   'generic',
   'General-purpose LaTeX document editor. Flexibly processes research papers following academic standards and user instructions. Detects and uses existing comment styles (\todo, \comment, %).',
   'public/generic.yaml',
-  ARRAY['public'],
-  'workflow',
-  NULL
-)
-ON CONFLICT (name) DO UPDATE SET
-  description    = EXCLUDED.description,
-  storage_path   = EXCLUDED.storage_path,
-  visibility     = EXCLUDED.visibility,
-  agent_category = EXCLUDED.agent_category,
-  tools          = EXCLUDED.tools;
-
-INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
-VALUES (
-  'generic_multiple',
-  'General-purpose LaTeX document editor for multiple documents. Flexibly processes research papers following academic standards while maintaining consistency across document collections.',
-  'public/generic_multiple.yaml',
   ARRAY['public'],
   'workflow',
   NULL
@@ -235,22 +139,6 @@ ON CONFLICT (name) DO UPDATE SET
 
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
-  'logic_multiple',
-  'Multi-document logical flow analyzer for research papers. Ensures coherent argumentation across paper collections.',
-  'researcher/logic_multiple.yaml',
-  ARRAY['public'],
-  'workflow',
-  NULL
-)
-ON CONFLICT (name) DO UPDATE SET
-  description    = EXCLUDED.description,
-  storage_path   = EXCLUDED.storage_path,
-  visibility     = EXCLUDED.visibility,
-  agent_category = EXCLUDED.agent_category,
-  tools          = EXCLUDED.tools;
-
-INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
-VALUES (
   'notation',
   'Notation consistency checker for research papers. Ensures consistent symbol usage throughout documents.',
   'researcher/notation.yaml',
@@ -267,41 +155,9 @@ ON CONFLICT (name) DO UPDATE SET
 
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
-  'notation_multiple',
-  'Multi-document notation checker for research papers. Ensures consistent symbols across paper collections.',
-  'researcher/notation_multiple.yaml',
-  ARRAY['public'],
-  'workflow',
-  NULL
-)
-ON CONFLICT (name) DO UPDATE SET
-  description    = EXCLUDED.description,
-  storage_path   = EXCLUDED.storage_path,
-  visibility     = EXCLUDED.visibility,
-  agent_category = EXCLUDED.agent_category,
-  tools          = EXCLUDED.tools;
-
-INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
-VALUES (
   'verifyFix',
   'Three-phase verification and fix agent for research papers. Expands, critiques with verification, then fixes with documentation.',
   'researcher/verifyFix.yaml',
-  ARRAY['researcher'],
-  'workflow',
-  NULL
-)
-ON CONFLICT (name) DO UPDATE SET
-  description    = EXCLUDED.description,
-  storage_path   = EXCLUDED.storage_path,
-  visibility     = EXCLUDED.visibility,
-  agent_category = EXCLUDED.agent_category,
-  tools          = EXCLUDED.tools;
-
-INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
-VALUES (
-  'verifyFix_multiple',
-  'Multi-document verification and fix agent for research papers. Comprehensive three-phase review across paper collections.',
-  'researcher/verifyFix_multiple.yaml',
   ARRAY['researcher'],
   'workflow',
   NULL
@@ -480,6 +336,12 @@ ON CONFLICT (name) DO UPDATE SET
   visibility     = EXCLUDED.visibility,
   agent_category = EXCLUDED.agent_category,
   tools          = EXCLUDED.tools;
+
+-- ---------------------------------------------------------------------------
+-- Cleanup stale entries (renamed/removed agents)
+-- ---------------------------------------------------------------------------
+
+DELETE FROM remote_agents WHERE name IN ('apply_multiple', 'criticize_multiple', 'devise_multiple', 'elevate_multiple', 'enhance_multiple', 'generic_multiple', 'logic_multiple', 'notation_multiple', 'verifyFix_multiple');
 
 -- Verify
 SELECT name, description, agent_category, tools, visibility

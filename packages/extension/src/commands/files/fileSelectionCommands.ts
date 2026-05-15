@@ -65,24 +65,16 @@ export function registerFileSelectionCommands(
       selectInputFile,
     ),
     vscode.commands.registerCommand(
-      FILE_SELECTION_COMMAND_IDS.selectReferenceFile,
-      selectReferenceFile,
-    ),
-    vscode.commands.registerCommand(
-      FILE_SELECTION_COMMAND_IDS.selectAuxiliaryFile,
-      selectAuxiliaryFile,
+      FILE_SELECTION_COMMAND_IDS.selectContextFile,
+      selectContextFile,
     ),
     vscode.commands.registerCommand(
       FILE_SELECTION_COMMAND_IDS.selectInputFiles,
       selectInputFiles,
     ),
     vscode.commands.registerCommand(
-      FILE_SELECTION_COMMAND_IDS.selectReferenceFiles,
-      selectReferenceFiles,
-    ),
-    vscode.commands.registerCommand(
-      FILE_SELECTION_COMMAND_IDS.selectAuxiliaryFiles,
-      selectAuxiliaryFiles,
+      FILE_SELECTION_COMMAND_IDS.selectContextFiles,
+      selectContextFiles,
     ),
     vscode.commands.registerCommand(
       FILE_SELECTION_COMMAND_IDS.selectMediaFiles,
@@ -127,19 +119,11 @@ const selectInputFile = createPicker({
   }),
 });
 
-const selectReferenceFile = createPicker({
+const selectContextFile = createPicker({
   allowMany: false,
-  openLabel: 'Select Ref File',
+  openLabel: 'Select Context File',
   filters: () => ({
-    'Text files': getFilterExtensions('reference'),
-  }),
-});
-
-const selectAuxiliaryFile = createPicker({
-  allowMany: false,
-  openLabel: 'Select Auxiliary File',
-  filters: () => ({
-    'Text files': getFilterExtensions('auxiliary'),
+    'Text files': getFilterExtensions('context'),
   }),
 });
 
@@ -151,19 +135,11 @@ const selectInputFiles = createPicker({
   }),
 });
 
-const selectReferenceFiles = createPicker({
+const selectContextFiles = createPicker({
   allowMany: true,
-  openLabel: 'Select Ref Files',
+  openLabel: 'Select Context Files',
   filters: () => ({
-    'Text files': getFilterExtensions('reference'),
-  }),
-});
-
-const selectAuxiliaryFiles = createPicker({
-  allowMany: true,
-  openLabel: 'Select Auxiliary Files',
-  filters: () => ({
-    'Text files': getFilterExtensions('auxiliary'),
+    'Text files': getFilterExtensions('context'),
   }),
 });
 
