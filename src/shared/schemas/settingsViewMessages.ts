@@ -947,9 +947,8 @@ const SetClaudeAgentEffortMessageSchema = z.object({
 // Navigation inbound messages
 const OpenVscodeSettingsMessageSchema = commandOnly(CMD.OPEN_VSCODE_SETTINGS);
 
-// Odyssey settings-tab inbound messages — strictly read-only. State
-// transitions (start/pause/complete/abandon/edit) are model-driven via
-// the odyssey() tool; no user-action commands are exposed here.
+// Settings-tab IPC is read-only: state transitions are owned by the
+// odyssey() tool, not the user. Don't add mutation commands here.
 const GetOdysseyListMessageSchema = commandOnly(CMD.GET_ODYSSEY_LIST);
 const RevealOdysseyStreamMessageSchema = z.object({
   command: z.literal(CMD.REVEAL_ODYSSEY_STREAM),

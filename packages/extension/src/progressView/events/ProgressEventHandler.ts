@@ -24,7 +24,7 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { OdysseyStore } from '@tools/odyssey';
+import { OdysseyStore, isOdysseyInFlight } from '@tools/odyssey';
 import {
   isApprovalBypassedForStream,
   isProposalBypassedForStream,
@@ -517,8 +517,7 @@ export class ProgressEventHandler {
     const toolEditBypass = isApprovalBypassedForStream(stream);
     const superYoloBypass = isProposalBypassedForStream(stream);
     const odyssey = OdysseyStore.getForStream(stream);
-    const odysseyActive =
-      odyssey?.status === 'active' || odyssey?.status === 'paused';
+    const odysseyActive = isOdysseyInFlight(odyssey);
 
     this.webviewUpdater.sendSyncStreamContent({
       stream,

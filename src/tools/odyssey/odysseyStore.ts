@@ -88,6 +88,11 @@ async function removeFromIndex(streamId: StreamTabId): Promise<void> {
 async function update(
   streamId: StreamTabId,
   mutate: (odyssey: Odyssey) => Odyssey,
+  /** Set to 'history' for mutations that only append to the history ring
+   *  (e.g. recordContinuation, recordEvent). Skips the bus broadcast so the
+   *  autonomous loop's per-turn `continuation_injected` events don't fan out
+   *  to every webview. Default 'state' covers status/objective changes. */
+  kind: 'state' | 'history' = 'state',
 ): Promise<Odyssey | null> {
   const odyssey = readRaw(streamId);
   if (!odyssey) return null;
@@ -98,7 +103,7 @@ async function update(
     updatedAt: nowIso(),
   };
   await writeRaw(final);
-  bus.emit('odysseyStateChanged', { streamId });
+  if (kind === 'state') bus.emit('odysseyStateChanged', { streamId });
   return final;
 }
 
@@ -173,8 +178,7 @@ export const OdysseyStore = {
       updatedAt: now,
       history: [{ at: now, kind: 'started', detail: trimmed }],
     };
-    await writeRaw(odyssey);
-    await addToIndex(streamId);
+    await Promise.all([writeRaw(odyssey), addToIndex(streamId)]);
     bus.emit('odysseyStateChanged', { streamId });
     return odyssey;
   },
@@ -226,14 +230,18 @@ export const OdysseyStore = {
    * `continuation_injected` event in one atomic write.
    */
   async recordContinuation(streamId: StreamTabId): Promise<void> {
-    await update(streamId, (odyssey) => ({
-      ...odyssey,
-      continuationCount: odyssey.continuationCount + 1,
-      history: [
-        ...odyssey.history,
-        { at: nowIso(), kind: 'continuation_injected', detail: null },
-      ],
-    }));
+    await update(
+      streamId,
+      (odyssey) => ({
+        ...odyssey,
+        continuationCount: odyssey.continuationCount + 1,
+        history: [
+          ...odyssey.history,
+          { at: nowIso(), kind: 'continuation_injected', detail: null },
+        ],
+      }),
+      'history',
+    );
   },
 
   /**
@@ -264,13 +272,17 @@ export const OdysseyStore = {
     kind: OdysseyEventKind,
     detail?: string,
   ): Promise<void> {
-    await update(streamId, (odyssey) => ({
-      ...odyssey,
-      history: [
-        ...odyssey.history,
-        { at: nowIso(), kind, detail: detail ?? null },
-      ],
-    }));
+    await update(
+      streamId,
+      (odyssey) => ({
+        ...odyssey,
+        history: [
+          ...odyssey.history,
+          { at: nowIso(), kind, detail: detail ?? null },
+        ],
+      }),
+      'history',
+    );
   },
 
   /** Replace the objective. Used by the user-side edit-objective flow. */
@@ -296,8 +308,10 @@ export const OdysseyStore = {
   /** Drop the record (used on conversation delete). */
   async forget(streamId: StreamTabId): Promise<void> {
     const existed = readRaw(streamId) !== null;
-    await getWorkspaceState().update(streamKey(streamId), undefined);
-    await removeFromIndex(streamId);
+    await Promise.all([
+      getWorkspaceState().update(streamKey(streamId), undefined),
+      removeFromIndex(streamId),
+    ]);
     if (existed) bus.emit('odysseyStateChanged', { streamId });
   },
 };

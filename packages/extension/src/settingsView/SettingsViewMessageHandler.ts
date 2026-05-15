@@ -635,7 +635,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND]: (data) =>
         this.handleRunToolCommand(data),
 
-      // Odyssey settings tab is read-only — the model owns state transitions.
       [SETTINGS_VIEW_COMMANDS.GET_ODYSSEY_LIST]: () =>
         this.withActiveWebview((w) => this.sendOdysseyList(w)),
       [SETTINGS_VIEW_COMMANDS.REVEAL_ODYSSEY_STREAM]: (data) =>

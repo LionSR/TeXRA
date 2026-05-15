@@ -61,7 +61,7 @@ import {
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
 
-import { OdysseyStore } from '@tools/odyssey';
+import { OdysseyStore, isOdysseyInFlight } from '@tools/odyssey';
 import { ProgressStreamLifecycleHost } from './managers/ProgressStreamLifecycleHost';
 import type { ProgressViewProvider } from './ProgressViewProvider';
 
@@ -129,35 +129,19 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
         stream: streamId,
       });
-      void this.forgetOdysseyForStream(streamId);
+      void OdysseyStore.forget(streamId);
     });
     context.subscriptions.push({ dispose: unsubscribeRemoveStream });
 
-    // Odyssey is model-driven — every state transition the agent makes
-    // fires `odysseyStateChanged` on the bus so the header chip refreshes
-    // without the user touching anything.
     const unsubscribeOdyssey = bus.on('odysseyStateChanged', ({ streamId }) => {
       const odyssey = OdysseyStore.getForStream(streamId);
-      const active =
-        odyssey?.status === 'active' || odyssey?.status === 'paused';
-      this.provider.webviewUpdater.updateOdysseyActive(streamId, active, {
-        status: odyssey?.status,
-        objective: odyssey?.objective,
-      });
+      this.provider.webviewUpdater.updateOdysseyActive(
+        streamId,
+        isOdysseyInFlight(odyssey),
+        { status: odyssey?.status, objective: odyssey?.objective },
+      );
     });
     context.subscriptions.push({ dispose: unsubscribeOdyssey });
-  }
-
-  /**
-   * Drop the stream's Odyssey record (if any) and clear the active-flag in
-   * UI clients. Without this the record + index entry linger in
-   * workspaceState long after the conversation is gone.
-   */
-  private async forgetOdysseyForStream(streamId: StreamTabId): Promise<void> {
-    const had = OdysseyStore.getForStream(streamId) !== null;
-    if (!had) return;
-    await OdysseyStore.forget(streamId);
-    this.provider.webviewUpdater.updateOdysseyActive(streamId, false);
   }
 
   /**

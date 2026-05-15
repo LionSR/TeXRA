@@ -276,8 +276,6 @@ export class StreamHeader extends LitElement {
         );
       }
 
-      /* Passive odyssey indicator — surfaces the model-driven state.
-         Not a button: the agent owns transitions. */
       .odyssey-chip {
         display: inline-flex;
         align-items: center;

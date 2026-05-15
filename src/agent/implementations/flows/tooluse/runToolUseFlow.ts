@@ -114,16 +114,14 @@ function resolveTools(
       return true;
     });
 
-  // Conditional tool injections. Each feature registers its own predicate
-  // at startup; this loop is the only thing core flow code knows about.
-  // Without injection, features that need to be present in every tool-use
-  // agent's tool list would require touching every agent YAML.
+  const resolvedNames = new Set(resolved.map((d) => d.name));
   for (const injection of listToolInjections()) {
     if (!injection.shouldInject()) continue;
-    if (resolved.some((d) => d.name === injection.toolName)) continue;
+    if (resolvedNames.has(injection.toolName)) continue;
     const tool = registry.get(injection.toolName);
     if (tool) {
       resolved.push(tool.definition);
+      resolvedNames.add(injection.toolName);
     } else {
       logger.warn(`Injected tool not found in registry: ${injection.toolName}`);
     }

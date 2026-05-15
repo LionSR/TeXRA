@@ -8,15 +8,6 @@ import {
 } from '@tools/odyssey/odysseyMeta';
 import { OdysseyStore } from '@tools/odyssey/odysseyStore';
 
-/**
- * Wire the Odyssey feature into the agent-runtime extension points:
- *   - tool injection (so `odyssey(complete)` is callable from every agent),
- *   - idle-continuation provider (so the autonomous loop synthesizes a
- *     follow-up instead of letting the wait-node block).
- *
- * Both are gated by `texra.experimental.odyssey.enabled` — when the flag is
- * off the provider returns null and the injection skips.
- */
 export function registerOdysseyFeature(): void {
   registerToolInjection({
     toolName: ODYSSEY_TOOL_NAME,

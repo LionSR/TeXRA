@@ -163,10 +163,6 @@ const COMPACT_RESPONSE_BUTTON = Object.freeze({
   disabled: true,
 });
 
-// Odyssey is model-driven (the agent starts/pauses/completes via its
-// odyssey() tool). The header surfaces a passive status chip when an
-// odyssey is active — there is no user-clickable button here by design.
-
 const TOOL_USE_TOOLBAR = [
   STOP_STREAM_BUTTON,
   YOLO_TOGGLE_BUTTON,

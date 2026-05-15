@@ -12,6 +12,7 @@ import { PlanSchema } from './plan';
 import { TodoItemSchema } from './todo';
 import { ContextStateDataSchema } from './contextManagement';
 import { TokenUsageStatsSchema } from './usage';
+import { OdysseyStatusSchema } from '@tools/odyssey/odysseyMeta';
 
 // Active Child Info (shared shape for subagent and process badges)
 
@@ -97,11 +98,8 @@ export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   queuedFollowUps: z.array(z.string()).prefault([]),
   toolEditBypass: z.boolean().optional(),
   superYoloBypass: z.boolean().optional(),
-  /** True when this stream has an Odyssey in `active` or `paused` state. */
   odysseyActive: z.boolean().optional(),
-  /** Active odyssey status (`active`/`paused`) when odysseyActive is true. */
-  odysseyStatus: z.string().optional(),
-  /** Active odyssey objective summary, surfaced in the header chip tooltip. */
+  odysseyStatus: OdysseyStatusSchema.optional(),
   odysseyObjective: z.string().optional(),
   // Per-run usage for accumulation; sessionUsage is derived as their sum.
   runUsage: RunScopedRecord(TokenUsageStatsSchema),

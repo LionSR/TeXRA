@@ -25,6 +25,12 @@ export const OdysseyStatusSchema = z.enum([
 ]);
 export type OdysseyStatus = z.infer<typeof OdysseyStatusSchema>;
 
+export function isOdysseyInFlight(
+  odyssey: { status: OdysseyStatus } | null | undefined,
+): boolean {
+  return odyssey?.status === 'active' || odyssey?.status === 'paused';
+}
+
 export const OdysseyEventKindSchema = z.enum([
   'started',
   'paused',

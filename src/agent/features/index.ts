@@ -1,11 +1,8 @@
 import { registerMemoryFeature } from './registerMemory';
 import { registerOdysseyFeature } from './registerOdyssey';
 
-/**
- * Bootstrap all agent-side feature integrations: idle-continuation providers
- * and conditional tool injections. Hosts must call this exactly once, AFTER
- * `initPlatform()` (predicates read host services), at composition root.
- */
+// Must be called after initPlatform(): predicates read host services
+// (platform().config, getGlobalState).
 export function registerAgentFeatures(): void {
   registerMemoryFeature();
   registerOdysseyFeature();

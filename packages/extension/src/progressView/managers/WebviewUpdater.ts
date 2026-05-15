@@ -26,6 +26,7 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
+import type { OdysseyStatus } from '@tools/odyssey';
 
 /**
  * Extra content to include with log updates.
@@ -73,11 +74,8 @@ export interface SyncStreamContentPayload {
   /** Toggle bypass state (hydrated on tab switch so toggles display correctly). */
   toolEditBypass?: boolean;
   superYoloBypass?: boolean;
-  /** True when this stream has an Odyssey in `active` or `paused` state. */
   odysseyActive?: boolean;
-  /** Status string (`active`/`paused`) so the chip can switch styling. */
-  odysseyStatus?: string;
-  /** Objective summary surfaced in the chip tooltip. */
+  odysseyStatus?: OdysseyStatus;
   odysseyObjective?: string;
 }
 
@@ -197,7 +195,7 @@ export class WebviewUpdater {
   updateOdysseyActive(
     stream: StreamTabId,
     active: boolean,
-    details?: { status?: string; objective?: string },
+    details?: { status?: OdysseyStatus; objective?: string },
   ): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.ODYSSEY_ACTIVE_UPDATED,

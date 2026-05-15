@@ -14,6 +14,7 @@ export {
   type OdysseyStatus,
   type OdysseyCommand,
   type OdysseyToolInput,
+  isOdysseyInFlight,
 } from './odysseyMeta';
 
 export { OdysseyStore } from './odysseyStore';

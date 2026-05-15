@@ -122,9 +122,6 @@ export const SETTINGS_VIEW_CMD = {
   // Experimental settings
   GET_INLINE_CRITICISM_ENABLED: 'getInlineCriticismEnabled',
   SET_INLINE_CRITICISM_ENABLED: 'setInlineCriticismEnabled',
-  // Odyssey settings tab — read-only. State transitions are model-driven
-  // via the odyssey() tool; the user only observes here. There are no
-  // pause/resume/abandon/edit commands by design.
   GET_ODYSSEY_LIST: 'getOdysseyList',
   REVEAL_ODYSSEY_STREAM: 'revealOdysseyStream',
 } as const;

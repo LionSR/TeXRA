@@ -33,6 +33,7 @@ import {
   UserQuestionPermissionSchema,
 } from './prompts';
 import { StreamStatusSchema, StreamTabInfoSchema } from './stream';
+import { OdysseyStatusSchema } from '@tools/odyssey/odysseyMeta';
 import {
   ActiveChildInfoSchema,
   ConversationProgressSchema,
@@ -366,12 +367,8 @@ export const SyncStreamContentMessageSchema = z.object({
   // Toggle bypass state (hydrated on tab switch so toggles display correctly)
   toolEditBypass: z.boolean().optional(),
   superYoloBypass: z.boolean().optional(),
-  // Whether an Odyssey is active or paused on this stream (drives the
-  // header status chip's visibility).
   odysseyActive: z.boolean().optional(),
-  /** "active" | "paused" when odysseyActive, omitted otherwise. */
-  odysseyStatus: z.string().optional(),
-  /** Objective summary for the header chip tooltip. */
+  odysseyStatus: OdysseyStatusSchema.optional(),
   odysseyObjective: z.string().optional(),
 });
 
@@ -379,7 +376,7 @@ const OdysseyActiveUpdatedMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.ODYSSEY_ACTIVE_UPDATED),
   stream: StreamTabIdSchema,
   active: z.boolean(),
-  status: z.string().optional(),
+  status: OdysseyStatusSchema.optional(),
   objective: z.string().optional(),
 });
 

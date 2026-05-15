@@ -1,10 +1,4 @@
-/**
- * Read-only Odyssey list. Odyssey state transitions (start, pause, complete,
- * abandon, edit) are model-driven via the odyssey() tool — the user observes
- * here and navigates to the owning stream; they do not mutate state from
- * settings.
- */
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -15,14 +9,19 @@ import type { Odyssey, OdysseyStatus } from '@shared/schemas';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
+// Keep in sync with @agent/odyssey/formatOdysseyTime — webview can't
+// import from @agent. If this drifts, the tool's view output and the
+// settings-tab elapsed time will disagree.
 function formatElapsed(createdAt: string): string {
   const ms = Math.max(0, Date.now() - new Date(createdAt).getTime());
+  if (ms <= 0) return '0s';
   const totalSec = Math.floor(ms / 1000);
   const hours = Math.floor(totalSec / 3600);
   const min = Math.floor((totalSec % 3600) / 60);
+  const sec = totalSec % 60;
   if (hours > 0) return `${hours}h ${min}m`;
-  if (min > 0) return `${min}m`;
-  return `${totalSec}s`;
+  if (min > 0) return `${min}m ${sec}s`;
+  return `${sec}s`;
 }
 
 function statusLabel(status: OdysseyStatus): string {
@@ -70,28 +69,26 @@ export class OdysseyTab extends LitElement {
         font-weight: var(--wa-font-weight-semibold);
         padding: 2px 8px;
         border-radius: 999px;
-        background: var(--wa-color-neutral-fill-quiet);
-        color: var(--wa-color-neutral-on-quiet);
+        background: var(--_chip-bg, var(--wa-color-neutral-fill-quiet));
+        color: var(--_chip-fg, var(--wa-color-neutral-on-quiet));
       }
 
-      .status-chip.active {
-        background: var(--wa-color-success-fill-quiet);
-        color: var(--wa-color-success-on-quiet);
+      .status-chip[data-status='active'] {
+        --_chip-bg: var(--wa-color-success-fill-quiet);
+        --_chip-fg: var(--wa-color-success-on-quiet);
       }
 
-      .status-chip.paused {
-        background: var(--wa-color-warning-fill-quiet);
-        color: var(--wa-color-warning-on-quiet);
+      .status-chip[data-status='paused'] {
+        --_chip-bg: var(--wa-color-warning-fill-quiet);
+        --_chip-fg: var(--wa-color-warning-on-quiet);
       }
 
-      .status-chip.complete {
-        background: var(--wa-color-brand-fill-quiet);
-        color: var(--wa-color-brand-on-quiet);
+      .status-chip[data-status='complete'] {
+        --_chip-bg: var(--wa-color-brand-fill-quiet);
+        --_chip-fg: var(--wa-color-brand-on-quiet);
       }
 
-      .status-chip.abandoned {
-        background: var(--wa-color-neutral-fill-quiet);
-        color: var(--wa-color-neutral-on-quiet);
+      .status-chip[data-status='abandoned'] {
         text-decoration: line-through;
       }
 
@@ -123,12 +120,6 @@ export class OdysseyTab extends LitElement {
         padding: var(--wa-space-xl);
         text-align: center;
         color: var(--wa-color-text-quiet);
-      }
-
-      .header-actions {
-        display: flex;
-        justify-content: flex-end;
-        margin-bottom: var(--wa-space-xs);
       }
     `,
   ];
@@ -180,7 +171,7 @@ export class OdysseyTab extends LitElement {
         role=${inFlight ? 'button' : 'group'}
         tabindex=${inFlight ? 0 : -1}
       >
-        <span class=${`status-chip ${item.status}`}
+        <span class="status-chip" data-status=${item.status}
           >${statusLabel(item.status)}</span
         >
         <div>
@@ -190,12 +181,12 @@ export class OdysseyTab extends LitElement {
             <span>· ${formatElapsed(item.createdAt)} elapsed</span>
             ${item.continuationCount > 0
               ? html`<span>· ${item.continuationCount} continuations</span>`
-              : null}
+              : nothing}
           </div>
         </div>
         ${inFlight
           ? html`<wa-icon library="texra" name="arrow-right"></wa-icon>`
-          : null}
+          : nothing}
       </div>
     `;
   }
@@ -208,10 +199,6 @@ export class OdysseyTab extends LitElement {
           ? html`<div class="empty-state">
               <wa-icon library="texra" name="compass"></wa-icon>
               <p>No Odysseys yet.</p>
-              <p class="text-secondary">
-                Describe a goal with a verifiable stopping condition in a
-                conversation, and the assistant can enter an Odyssey itself.
-              </p>
             </div>`
           : html`
               <div class="odyssey-list">
