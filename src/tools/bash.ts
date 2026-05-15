@@ -46,6 +46,11 @@ const BASH_TIMEOUT_MS = 120_000; // 120 s
 const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
 /** Max chars logged to the child stream tab to prevent unbounded memory growth. */
 const BACKGROUND_LOG_CAP_CHARS = 200_000;
+const SHELL_BACKGROUNDING_PATTERN =
+  /(?:^|[\s;])nohup\b[^\n;]*(?<![>&])&(?![>&])/;
+const SHELL_BACKGROUNDING_MESSAGE =
+  'This command uses shell-level backgrounding (`nohup ... &`) inside a foreground bash tool call. ' +
+  'Do not emulate background execution inside the shell; call the bash tool again with `run_in_background: true` and the command without `nohup` or a trailing `&`.';
 
 const BashInputSchema = z.strictObject({
   command: z.string(),
@@ -66,6 +71,10 @@ const BashInputSchema = z.strictObject({
 });
 
 export type BashInput = z.infer<typeof BashInputSchema>;
+
+function usesShellLevelBackgrounding(command: string): boolean {
+  return SHELL_BACKGROUNDING_PATTERN.test(command);
+}
 
 function appendTail(current: string, chunk: string, maxChars: number): string {
   if (!chunk) return current;
@@ -102,6 +111,13 @@ export class BashTool extends defineTool({
   schema: BashInputSchema,
 }) {
   protected async execute(input: BashInput): Promise<ToolResult> {
+    if (
+      !input.run_in_background &&
+      usesShellLevelBackgrounding(input.command)
+    ) {
+      throw new ToolError(SHELL_BACKGROUNDING_MESSAGE);
+    }
+
     // Request approval before executing the command
     const approval = await requestBashApproval({ command: input.command });
 
@@ -160,7 +176,8 @@ export class BashTool extends defineTool({
       parts.push(
         `To fix, either:\n` +
           `- Increase the timeout parameter up to 600s (600000ms): { "timeout": 600000 }\n` +
-          `- Set run_in_background: true to execute asynchronously: { "run_in_background": true }`,
+          `- Set run_in_background: true to execute asynchronously: { "run_in_background": true }\n` +
+          `Do not use shell-level backgrounding such as \`nohup ... &\` inside a foreground call.`,
       );
       throw new ToolError(parts.join('\n'));
     }
