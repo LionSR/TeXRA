@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { defineCommand, runMain } from 'citty';
+import { defineCommand, runCommand, showUsage } from 'citty';
 
 // Local imports - agent and model surfaces
 import { getVisibleAgents, loadAgents } from '@agent/index';
@@ -748,19 +748,47 @@ export function reorderGlobalFlags(rawArgs: readonly string[]): string[] {
   return [...rawArgs.slice(i), ...leadingGlobals];
 }
 
+function isCliError(error: unknown): error is Error & { code?: string } {
+  return (
+    error instanceof Error &&
+    error.name === 'CLIError' &&
+    typeof (error as { code?: unknown }).code === 'string'
+  );
+}
+
+/**
+ * Re-implement the surface citty's `runMain` provides — `--help` / `--version`
+ * detection plus error handling around `runCommand` — so usage errors (missing
+ * required flag, unknown subcommand, invalid enum value) preserve our
+ * canonical `CliExitCode.Usage` (2) instead of citty's hard-coded `exit(1)`.
+ */
 export async function runCli(
   argv?: readonly string[],
 ): Promise<{ exitCode: number }> {
   pendingExitCode = CliExitCode.Success;
   const rawArgs = reorderGlobalFlags(argv ? [...argv] : readCliArgv());
+
+  if (rawArgs.some((arg) => arg === '--help' || arg === '-h')) {
+    await showUsage(rootCommand);
+    return { exitCode: CliExitCode.Success };
+  }
+  if (
+    rawArgs.length === 1 &&
+    (rawArgs[0] === '--version' || rawArgs[0] === '-v')
+  ) {
+    writeTextStdout(await readCliVersion());
+    return { exitCode: CliExitCode.Success };
+  }
+
   try {
-    // Citty's `runMain` handles `--help`/`-h` (showUsage + exit 0) and
-    // `--version`/`-v` (printed via meta.version). Subcommand dispatch is
-    // delegated to `runCommand`; on a CLIError, runMain prints usage + the
-    // error and calls process.exit(1) before this wrapper resumes.
-    await runMain(rootCommand, { rawArgs });
+    await runCommand(rootCommand, { rawArgs });
   } catch (error) {
     if (error instanceof CliUsageError) {
+      writeTextStderr(error.message);
+      return { exitCode: CliExitCode.Usage };
+    }
+    if (isCliError(error)) {
+      await showUsage(rootCommand);
       writeTextStderr(error.message);
       return { exitCode: CliExitCode.Usage };
     }

@@ -88,34 +88,73 @@ function parseCommand(line: string): { command: string; rest: string } {
   return { command: command.toLowerCase(), rest: rest.join(' ') };
 }
 
-interface SlashLoginArgs {
+export interface SlashLoginArgs {
   readonly provider?: string;
   readonly noBrowser: boolean;
+  readonly unknownFlag?: string;
 }
 
-/** Slash-command parser for `/tools <mode>` — citty does not see slash args. */
-function parseToolDisplaySlash(rest: string): ChatToolDisplayMode | undefined {
+/**
+ * Slash-command parser for `/tools <mode>` — citty does not see slash args.
+ * Returns `undefined` for empty or unrecognised values so the caller can
+ * surface a usage hint (`Usage: /tools <grouped|minimal|hidden>`).
+ */
+export function parseToolDisplaySlash(
+  rest: string,
+): ChatToolDisplayMode | undefined {
   const trimmed = rest.trim();
-  if (trimmed === '') return 'minimal';
   if (trimmed === 'grouped' || trimmed === 'minimal' || trimmed === 'hidden') {
     return trimmed;
   }
   return undefined;
 }
 
-/** Minimal parser for the `/login [provider] [--no-browser]` slash command. */
-function parseSlashLoginArgs(rest: string): SlashLoginArgs {
+/**
+ * Parser for the `/login [provider] [--provider github|google] [--no-browser]`
+ * slash command. Both the positional and `--provider` flag are accepted; the
+ * explicit flag wins. Unknown flags are surfaced so the caller can show usage
+ * instead of silently signing in with the wrong provider.
+ */
+export function parseSlashLoginArgs(rest: string): SlashLoginArgs {
   const tokens = rest.trim().split(/\s+/).filter(Boolean);
-  let provider: string | undefined;
+  let positional: string | undefined;
+  let flagProvider: string | undefined;
   let noBrowser = false;
-  for (const token of tokens) {
+  let unknownFlag: string | undefined;
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token === undefined) continue;
     if (token === '--no-browser') {
       noBrowser = true;
-    } else if (!token.startsWith('-') && !provider) {
-      provider = token;
+      continue;
+    }
+    if (token === '--provider') {
+      const next = tokens[i + 1];
+      if (next !== undefined && !next.startsWith('-')) {
+        flagProvider = next;
+        i += 1;
+      } else {
+        unknownFlag ??= '--provider (missing value)';
+      }
+      continue;
+    }
+    if (token.startsWith('--provider=')) {
+      flagProvider = token.slice('--provider='.length) || undefined;
+      continue;
+    }
+    if (token.startsWith('-')) {
+      unknownFlag ??= token;
+      continue;
+    }
+    if (!positional) {
+      positional = token;
     }
   }
-  return { provider, noBrowser };
+  return {
+    provider: flagProvider ?? positional,
+    noBrowser,
+    unknownFlag,
+  };
 }
 
 async function modelAvailable(
@@ -550,8 +589,14 @@ export async function runChat(
         } else if (command === 'login') {
           const loginArgs = parseSlashLoginArgs(rest);
           const provider = loginArgs.provider ?? DEFAULT_OAUTH_PROVIDER;
-          if (!isOAuthProvider(provider)) {
-            renderer.warn('Usage: /login [github|google] [--no-browser]');
+          if (loginArgs.unknownFlag) {
+            renderer.warn(
+              `Unknown /login flag: ${loginArgs.unknownFlag}. Usage: /login [github|google] [--provider github|google] [--no-browser]`,
+            );
+          } else if (!isOAuthProvider(provider)) {
+            renderer.warn(
+              'Usage: /login [github|google] [--provider github|google] [--no-browser]',
+            );
           } else {
             try {
               if (!loginArgs.noBrowser) {

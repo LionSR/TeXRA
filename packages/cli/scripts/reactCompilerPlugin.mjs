@@ -10,7 +10,7 @@
 // runtime). Hand the transformed JS back to esbuild.
 
 import { readFile } from 'node:fs/promises';
-import { sep, normalize } from 'node:path';
+import { normalize } from 'node:path';
 
 const TUI_PATH_SEGMENT = normalize('packages/cli/src/chat/tui/');
 const FALLBACK_SEGMENT = normalize('src/chat/tui/');
@@ -45,11 +45,14 @@ export function reactCompilerPlugin() {
           configFile: false,
           sourceMaps: 'inline',
           presets: [
+            // `@babel/preset-typescript` requires `allExtensions: true` when
+            // `isTSX: true` — otherwise the preset throws on the first .tsx
+            // it sees.
             [
               '@babel/preset-typescript',
               {
                 isTSX: true,
-                allExtensions: false,
+                allExtensions: true,
                 onlyRemoveTypeImports: true,
               },
             ],
