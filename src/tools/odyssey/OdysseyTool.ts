@@ -16,17 +16,11 @@ import {
 } from './odysseyMeta';
 import { OdysseyStore } from './odysseyStore';
 
-function formatTokens(tokens: number): string {
-  if (tokens < 1000) return `${tokens}`;
-  return `${(tokens / 1000).toFixed(1)}K`;
-}
-
 function formatView(odyssey: Odyssey): string {
   const lines = [
     `Odyssey: ${odyssey.odysseyId}`,
     `Status: ${odyssey.status}`,
     `Objective: ${odyssey.objective}`,
-    `Tokens used: ${formatTokens(odyssey.tokensUsed)}`,
     `Time elapsed: ${formatOdysseyTime(odysseyElapsedMs(odyssey))}`,
   ];
   if (odyssey.completedReason) {
@@ -58,7 +52,7 @@ export class OdysseyTool extends defineTool({
   description: `Manage the autonomous Odyssey for this conversation.
 
 Commands:
-- view: Read the current odyssey state (objective, status, history, time/tokens used).
+- view: Read the current odyssey state (objective, status, history, time elapsed).
 - start: Propose and start a new odyssey toward a stated objective. Only valid when no odyssey is active.
 - pause: Self-pause the odyssey when you cannot proceed without user input. Provide a reason describing what you need from the user.
 - complete: Mark the odyssey complete. Provide a reason describing HOW you verified completion against current external state (filesystem, command output, test results) — never conversation memory.`,

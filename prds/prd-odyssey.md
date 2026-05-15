@@ -24,7 +24,7 @@ No new runtime, no polling loop, no background worker. The mechanism is a small 
 
 - **No workflow-agent support.** Odyssey only applies to tool-use agents (orchestrator, devise, search, generic chat). Workflow agents (correct, polish, …) run once and emit output; "continuation" is meaningless.
 - **No multi-agent orchestrator-level odyssey.** If a goal-bearing tool-use agent is itself a subagent of an orchestrator, the parent orchestrator owns continuation; the subagent's Odyssey is suspended for that subtree. Surfaces as a hard guard, not a feature.
-- **No user-visible token budget.** Codex's public docs do not surface one. We track tokens used for display, but v1 uses a simpler operational stop: a maximum continuation count, after which Odyssey pauses and asks the user whether to continue.
+- **No token accounting at all.** Codex's public docs do not surface a token budget, and the per-stream token count adds storage churn and UI noise for limited value. v1 uses a simpler operational stop: a maximum continuation count, after which Odyssey pauses and asks the user whether to continue.
 - **No slash command on extension/desktop.** Entry is the stream-header button and the Settings → Odyssey tab. (CLI host may add `/odyssey` later; out of scope here.)
 - **No model-driven objective edits.** Codex restricts `update_goal` to `status='complete'` for the same reason: the model must not drift the target. The user edits objectives via the OdysseyTab.
 
@@ -76,8 +76,6 @@ export const OdysseySchema = z.object({
   streamId: z.string(), // stream-scoped — matches ToolUseWaitNode.services.streamId
   objective: z.string().min(1),
   status: OdysseyStatusSchema,
-  tokensUsed: z.int().nonnegative().prefault(0),
-  timeUsedMs: z.int().nonnegative().prefault(0),
   continuationCount: z.int().nonnegative().prefault(0),
   maxContinuations: z.int().positive().prefault(50),
   createdAt: z.iso.datetime(),
@@ -107,7 +105,7 @@ const OdysseyToolInputSchema = z.strictObject({
 
 | Command    | Use                                                                       | Effect                                                                                        |
 | ---------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `view`     | Read situational awareness (objective, status, history, time/tokens used) | No mutation; returns formatted state                                                          |
+| `view`     | Read situational awareness (objective, status, history, time elapsed, continuation count) | No mutation; returns formatted state                                                          |
 | `start`    | Open an odyssey from conversation when user requests autonomous work      | Creates with status `active`. Fails if any nonterminal Odyssey already exists for the stream. |
 | `pause`    | Self-pause when blocked and needing user input                            | Status → `paused`. Continuation loop stops.                                                   |
 | `complete` | Signal objective met                                                      | Status → `complete`. Stores `reason` as audit sentence.                                       |
@@ -295,7 +293,9 @@ src/tools/odyssey/
 
 src/agent/odyssey/
   buildContinuationFollowUp.ts        NEW  (YAML template render)
-  applyTurnAccounting.ts              NEW  (tokens/time bookkeeping)
+  formatOdysseyTime.ts                NEW  (hour-aware duration formatter)
+  maybeBuildOdysseyContinuation.ts    NEW  (pre-wait continuation check)
+  promptLoader.ts                     NEW  (YAML loader + inline fallback)
 
 src/agent/implementations/flows/tooluse/nodes/
   ToolUseWaitNode.ts                  MODIFY (~25 lines in exec())
