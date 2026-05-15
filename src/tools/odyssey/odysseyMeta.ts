@@ -25,6 +25,12 @@ export const OdysseyStatusSchema = z.enum([
 ]);
 export type OdysseyStatus = z.infer<typeof OdysseyStatusSchema>;
 
+export function isOdysseyInFlight(
+  odyssey: { status: OdysseyStatus } | null | undefined,
+): boolean {
+  return odyssey?.status === 'active' || odyssey?.status === 'paused';
+}
+
 export const OdysseyEventKindSchema = z.enum([
   'started',
   'paused',
@@ -69,6 +75,22 @@ export const OdysseySchema = z.object({
  */
 export function odysseyElapsedMs(odyssey: { createdAt: string }): number {
   return Math.max(0, Date.now() - new Date(odyssey.createdAt).getTime());
+}
+
+/**
+ * Hour-aware duration formatter for Odyssey timings. Lives here (not in
+ * `@utils/core/stringCore`) so it's importable from webview frontends via
+ * `@shared/schemas`, keeping the tool view and the settings tab in sync.
+ */
+export function formatOdysseyTime(ms: number): string {
+  if (ms <= 0) return '0s';
+  const totalSec = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSec / 3600);
+  const min = Math.floor((totalSec % 3600) / 60);
+  const sec = totalSec % 60;
+  if (hours > 0) return `${hours}h ${min}m`;
+  if (min > 0) return `${min}m ${sec}s`;
+  return `${sec}s`;
 }
 export type Odyssey = z.infer<typeof OdysseySchema>;
 
