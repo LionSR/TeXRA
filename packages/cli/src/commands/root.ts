@@ -15,15 +15,17 @@ import { toErrorMessage } from '@common/errors/errorMessage';
 // Local imports - CLI runtime
 import {
   applyCliGlobalArgs,
-  cliFlagName,
-  CLI_BOOLEAN_FLAGS,
   CliUsageError,
   flagValue,
-  GLOBAL_FLAGS_WITH_VALUE,
   resolveCliContext,
-  RUN_FLAGS_WITH_VALUE,
   type CliContext,
 } from '../runtime/cliContext';
+import {
+  CLI_BOOLEAN_FLAGS,
+  GLOBAL_FLAGS_WITH_VALUE,
+  RUN_FLAGS_WITH_VALUE,
+  cliFlagName,
+} from '../runtime/cliFlags';
 import {
   hasCliApprovalDenied,
   installCliApprovalHandlers,
