@@ -54,6 +54,7 @@ import './RetryRequestPanel';
 import './ProposalRequestPanel';
 import './PlanApprovalRequestPanel';
 import './ExternalInquiryPanel';
+import './UserQuestionPanel';
 
 /** Section configuration for rendering permission groups */
 interface SectionConfig {
@@ -110,6 +111,13 @@ const SECTION_CONFIGS: Record<string, SectionConfig> = {
     renderPanel: (p) =>
       html`<external-inquiry-panel .permission=${p}></external-inquiry-panel>`,
   },
+  userQuestion: {
+    cssClass: 'user-question-requests',
+    icon: 'circle-question',
+    title: 'Question',
+    renderPanel: (p) =>
+      html`<user-question-panel .permission=${p}></user-question-panel>`,
+  },
 };
 
 @customElement('request-panels')
@@ -152,8 +160,15 @@ export class RequestPanels extends LitElement {
   override render(): TemplateResult | typeof nothing {
     if (this.permissions.length === 0) return nothing;
 
-    const { approval, bash, retry, proposal, planApproval, externalInquiry } =
-      this.permissionGroups;
+    const {
+      approval,
+      bash,
+      retry,
+      proposal,
+      planApproval,
+      externalInquiry,
+      userQuestion,
+    } = this.permissionGroups;
 
     return html`
       ${this.renderSection(SECTION_CONFIGS.approval, approval)}
@@ -162,6 +177,7 @@ export class RequestPanels extends LitElement {
       ${this.renderSection(SECTION_CONFIGS.proposal, proposal)}
       ${this.renderSection(SECTION_CONFIGS.planApproval, planApproval)}
       ${this.renderExternalInquirySection(externalInquiry)}
+      ${this.renderSection(SECTION_CONFIGS.userQuestion, userQuestion)}
     `;
   }
 

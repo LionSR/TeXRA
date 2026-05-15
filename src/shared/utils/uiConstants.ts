@@ -14,6 +14,7 @@ export const PERMISSION_KIND = {
   PROPOSAL: 'proposal',
   PLAN_APPROVAL: 'planApproval',
   EXTERNAL_INQUIRY: 'externalInquiry',
+  USER_QUESTION: 'userQuestion',
 } as const;
 
 export type PermissionKind =
@@ -26,6 +27,7 @@ export const FEEDBACK_ELIGIBLE_KINDS = new Set<PermissionKind>([
   PERMISSION_KIND.PROPOSAL,
   PERMISSION_KIND.PLAN_APPROVAL,
   PERMISSION_KIND.EXTERNAL_INQUIRY,
+  PERMISSION_KIND.USER_QUESTION,
 ]);
 
 /** Generates the getting started banner HTML with command links. */

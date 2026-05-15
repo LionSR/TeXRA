@@ -86,6 +86,9 @@ export function createDesktopProgressIpc(
         case PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION:
           options.progress.handlePlanApprovalAction(result.data);
           return true;
+        case PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION:
+          runAsync(options.progress.handleUserQuestionAction(result.data));
+          return true;
         case PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION:
           runAsync(options.progress.handleAgentProposalAction(result.data));
           return true;

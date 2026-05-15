@@ -21,6 +21,7 @@ import type {
   ToolEditPermission,
   UpdatePlanPayload,
   UpdateTodosPayload,
+  UserQuestionPermission,
 } from '@shared/schemas';
 
 /** Payload for stream-scoped output events (one run per workflow tab). */
@@ -115,6 +116,8 @@ export interface ProgressEventPayloads {
   resolvePlanApproval: { approvalId: string };
   showExternalInquiry: ExternalInquiryPermission;
   resolveExternalInquiry: { requestId: string };
+  showUserQuestion: UserQuestionPermission;
+  resolveUserQuestion: { requestId: string };
   updateTodos: UpdateTodosPayload;
   updatePlan: UpdatePlanPayload;
   updateConversationProgress: {

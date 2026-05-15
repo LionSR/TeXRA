@@ -10,6 +10,10 @@ import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type { StreamTabId } from '@shared/schemas';
 import {
+  AskUserQuestionTool,
+  handleUserQuestionAction,
+} from '@tools/userQuestion';
+import {
   cleanupAllApprovals,
   toggleProposalBypass,
   toggleToolEditApprovalSessionBypass,
@@ -148,6 +152,85 @@ describe('human prompt progress events', () => {
         },
         {
           event: 'resolveExternalInquiry',
+          payload: { requestId: show.payload.requestId },
+        },
+      ]);
+      expect(fallback.events).toEqual([]);
+    } finally {
+      setDefaultAgentRuntimeHost(previousDefault);
+    }
+  });
+
+  it('publishes user question events through the tool runtime host', async () => {
+    const explicit = createRecordingHost();
+    const fallback = createRecordingHost();
+    const previousDefault = getDefaultAgentRuntimeHost();
+    const streamId = 'stream:user-question' as StreamTabId;
+    const tool = new AskUserQuestionTool();
+
+    try {
+      setDefaultAgentRuntimeHost(fallback.host);
+
+      const result = withRunContext(
+        createRunContext({ runtimeHost: explicit.host, streamId }),
+        () =>
+          withToolFileInteractionContext({ tracker: {} as never }, () =>
+            tool.call({
+              context: 'Choose the next step.',
+              questions: [
+                {
+                  question: 'Which path should the agent take?',
+                  header: 'Path',
+                  options: [
+                    { label: 'Inspect logs' },
+                    { label: 'Run the build' },
+                  ],
+                },
+              ],
+            }),
+          ),
+      );
+
+      const show = await waitForRecordedEvent(
+        explicit.events,
+        'showUserQuestion',
+      );
+      await handleUserQuestionAction({
+        requestId: show.payload.requestId,
+        action: 'submit',
+        answers: {
+          'Which path should the agent take?': 'Run the build',
+        },
+      });
+
+      await expect(result).resolves.toMatchObject({
+        summary: 'Answered 1 user question(s).',
+      });
+
+      expect(explicit.events).toEqual([
+        { event: 'requestEnsureProgressView', payload: {} },
+        { event: 'setActiveStream', payload: { streamId } },
+        {
+          event: 'showUserQuestion',
+          payload: {
+            requestId: show.payload.requestId,
+            questions: [
+              {
+                question: 'Which path should the agent take?',
+                header: 'Path',
+                options: [
+                  { label: 'Inspect logs' },
+                  { label: 'Run the build' },
+                ],
+              },
+            ],
+            context: 'Choose the next step.',
+            allowBypass: false,
+            streamId,
+          },
+        },
+        {
+          event: 'resolveUserQuestion',
           payload: { requestId: show.payload.requestId },
         },
       ]);

@@ -16,6 +16,10 @@ import {
   _rejectAllPendingInquiries,
   _rejectPendingInquiriesForStream,
 } from '@tools/inquiry';
+import {
+  _rejectAllPendingUserQuestions,
+  _rejectPendingUserQuestionsForStream,
+} from '@tools/userQuestion';
 
 import { bashApprovalController } from './bashApproval';
 import {
@@ -35,6 +39,7 @@ export function cleanupApprovalsForStream(streamId: StreamTabId): void {
   toolEditApprovalController.rejectPendingForStream(streamId);
   bashApprovalController.rejectPendingForStream(streamId);
   _rejectPendingInquiriesForStream(streamId);
+  _rejectPendingUserQuestionsForStream(streamId);
   toolEditApprovalController.clearBypassForStream(streamId);
   _clearProposalBypassForStream(streamId);
   cleanupCoordinatorRequestsForStream(streamId);
@@ -48,6 +53,7 @@ export function cleanupAllApprovals(): void {
   toolEditApprovalController.rejectAllPending();
   bashApprovalController.rejectAllPending();
   _rejectAllPendingInquiries();
+  _rejectAllPendingUserQuestions();
   toolEditApprovalController.clearAllBypass();
   _clearAllProposalBypass();
   cleanupAllCoordinatorRequests();

@@ -98,6 +98,10 @@ export class ProgressViewProvider
     ExternalInquiryPermission,
     'requestId'
   >;
+  private readonly userQuestionHandler: ApprovalRequestHandler<
+    ProgressEventPayloads['showUserQuestion'],
+    'requestId'
+  >;
 
   constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
@@ -162,6 +166,16 @@ export class ProgressViewProvider
       (id) => u.resolvePermission(PERMISSION_KIND.EXTERNAL_INQUIRY, id),
       canSend,
     );
+    this.userQuestionHandler = new ApprovalRequestHandler(
+      'requestId',
+      (p) =>
+        u.showPermission({
+          kind: PERMISSION_KIND.USER_QUESTION,
+          data: p,
+        }),
+      (id) => u.resolvePermission(PERMISSION_KIND.USER_QUESTION, id),
+      canSend,
+    );
 
     this.eventHandler = new ProgressEventHandler(
       this.state,
@@ -188,6 +202,8 @@ export class ProgressViewProvider
         resolvePlanApproval: (id) => this.planApprovalHandler.resolve(id),
         showExternalInquiry: (p) => this.externalInquiryHandler.show(p),
         resolveExternalInquiry: (id) => this.externalInquiryHandler.resolve(id),
+        showUserQuestion: (p) => this.userQuestionHandler.show(p),
+        resolveUserQuestion: (id) => this.userQuestionHandler.resolve(id),
       },
       (streamId) => this.hasPendingPermissionsForStream(streamId),
     );

@@ -69,6 +69,7 @@ import {
   cleanupApprovalsForStream,
   handleProgressViewBashApprovalAction,
 } from '@tools/approval';
+import { handleUserQuestionAction } from '@tools/userQuestion';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import {
   createExternalLocation,
@@ -847,6 +848,27 @@ export class DesktopProgressBridge {
         });
         break;
       }
+      case 'showUserQuestion': {
+        this.send({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+          action: 'show',
+          permission: {
+            kind: 'userQuestion',
+            data: payload as ProgressEventPayloads['showUserQuestion'],
+          },
+        });
+        break;
+      }
+      case 'resolveUserQuestion': {
+        const data = payload as ProgressEventPayloads['resolveUserQuestion'];
+        this.send({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+          action: 'resolve',
+          kind: 'userQuestion',
+          id: data.requestId,
+        });
+        break;
+      }
       case 'updateSuperYoloBypassState': {
         const data =
           payload as ProgressEventPayloads['updateSuperYoloBypassState'];
@@ -1134,6 +1156,15 @@ export class DesktopProgressBridge {
       action: message.action,
       ...(message.action === 'reject' && { feedback: message.feedback }),
     });
+  }
+
+  async handleUserQuestionAction(
+    message: Extract<
+      ProgressViewInboundMessage,
+      { command: typeof PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION }
+    >,
+  ): Promise<void> {
+    await handleUserQuestionAction(message);
   }
 
   async handleAgentProposalAction(
