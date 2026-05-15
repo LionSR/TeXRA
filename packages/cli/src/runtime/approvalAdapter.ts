@@ -20,6 +20,7 @@ import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool'
 // Local imports - CLI runtime
 import { type CliContext, type CliPromptRequest } from './cliContext';
 import { askCliQuestion, writeTextStderr } from './logSinks';
+import { parseUserQuestionAnswer } from './userQuestionAnswer';
 
 interface ApprovalDecision {
   readonly accepted: boolean;
@@ -274,26 +275,6 @@ function formatUserQuestionPrompt(
       return `${index + 1}. ${question.question}\n${options}\n${multi}${free}`;
     })
     .join('\n\n');
-}
-
-function parseUserQuestionAnswer(
-  raw: string,
-  question: ProgressEventPayloads['showUserQuestion']['questions'][number],
-): string | string[] | undefined {
-  const trimmed = raw.trim();
-  if (!trimmed) return undefined;
-
-  const selected = trimmed
-    .split(',')
-    .map((part) => Number.parseInt(part.trim(), 10))
-    .filter((value) => Number.isInteger(value))
-    .map((index) => question.options[index - 1]?.label)
-    .filter((value): value is string => Boolean(value));
-
-  if (selected.length > 0) {
-    return question.multiSelect ? selected : selected[0];
-  }
-  return question.allowFreeText ? trimmed : undefined;
 }
 
 function handleUserQuestion(
