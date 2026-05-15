@@ -34,6 +34,7 @@ describe('MainViewExecutionController', () => {
       model: 'gpt-5.4',
       inputFiles: ['paper/main.tex'],
       mediaFiles: ['diagram.png', null],
+      attachDiagnostics: true,
     });
 
     expect(result.valid).toBe(true);
@@ -46,6 +47,9 @@ describe('MainViewExecutionController', () => {
       agentCategory: AgentCategory.Workflow,
       mediaFiles: ['diagram.png'],
       editedFile: null,
+      toolConfig: {
+        attachDiagnostics: false,
+      },
     });
   });
 });

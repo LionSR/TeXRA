@@ -412,7 +412,7 @@ export class MainApp extends MainAppBase {
       autoExtractTikzFigure: cv.autoExtractTikzFigure,
       autoCompileInputPdf: cv.autoCompileInputPdf,
       attachTeXCount: cv.attachTeXCount,
-      attachDiagnostics: cv.attachDiagnostics,
+      attachDiagnostics: false,
     };
 
     this.stateManager.setState(persisted);
@@ -454,7 +454,7 @@ export class MainApp extends MainAppBase {
       autoExtractTikzFigure: state.autoExtractTikzFigure,
       autoCompileInputPdf: state.autoCompileInputPdf,
       attachTeXCount: state.attachTeXCount,
-      attachDiagnostics: state.attachDiagnostics,
+      attachDiagnostics: false,
     });
   }
 
@@ -865,7 +865,7 @@ export class MainApp extends MainAppBase {
         autoExtractTikzFigure: state.autoExtractTikzFigure,
         autoCompileInputPdf: state.autoCompileInputPdf,
         attachTeXCount: state.attachTeXCount,
-        attachDiagnostics: state.attachDiagnostics,
+        attachDiagnostics: false,
       });
       this.outputFilesActive.set(false);
       this.latexdiffsVisible.set(state.latexdiffsVisible);
@@ -1230,7 +1230,10 @@ export class MainApp extends MainAppBase {
       multipleFileSelections[`${listId}Active`] = isActive;
     });
 
-    const checkboxValues = { ...this.checkboxValues.get() };
+    const checkboxValues = {
+      ...this.checkboxValues.get(),
+      attachDiagnostics: false,
+    };
 
     return {
       agent,

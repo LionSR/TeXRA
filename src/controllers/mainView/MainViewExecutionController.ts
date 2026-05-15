@@ -79,7 +79,7 @@ export function prepareMainViewExecutionRequest(
       ...message,
       agentCategory: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
       outputFiles: [],
-      toolConfig: toolConfigResult.data,
+      toolConfig: { ...toolConfigResult.data, attachDiagnostics: false },
       mediaFiles: (message.mediaFiles ?? [])
         .map(mapMediaFile)
         .filter((file: string | null): file is string => file !== null),

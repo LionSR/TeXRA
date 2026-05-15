@@ -204,7 +204,7 @@ export class FileSelectGroup extends LitElement {
 
   private renderToolConfigMenu(): TemplateResult {
     const values = this.currentCheckboxValues;
-    const hasChecked = values.attachTeXCount || values.attachDiagnostics;
+    const hasChecked = values.attachTeXCount;
     const disabled = this.isFileInputDisabled;
 
     return html`
@@ -232,14 +232,6 @@ export class FileSelectGroup extends LitElement {
           ?disabled=${disabled}
         >
           Attach TeX Count
-        </wa-dropdown-item>
-        <wa-dropdown-item
-          type="checkbox"
-          value="attachDiagnostics"
-          ?checked=${values.attachDiagnostics}
-          ?disabled=${disabled}
-        >
-          Attach Diagnostics
         </wa-dropdown-item>
       </wa-dropdown>
     `;
