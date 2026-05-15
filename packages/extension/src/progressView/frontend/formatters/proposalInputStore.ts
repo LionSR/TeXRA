@@ -32,10 +32,8 @@ const LenientToolUseProposalSchema = ToolUseAgentProposalSchema.extend({
 const LenientWorkflowProposalSchema = WorkflowAgentProposalSchema.extend({
   model: z.string().prefault('gemini31p'),
   inputFiles: z.array(z.string()).prefault([]),
-  referenceFile: z.string().nullable().prefault(null),
-  referenceFiles: z.array(z.string()).prefault([]),
-  auxiliaryFile: z.string().nullable().prefault(null),
-  auxiliaryFiles: z.array(z.string()).prefault([]),
+  contextFile: z.string().nullable().prefault(null),
+  contextFiles: z.array(z.string()).prefault([]),
   mediaFile: z.string().nullable().prefault(null),
   mediaFiles: z.array(z.string()).prefault([]),
   outputFiles: z.array(z.string()).prefault([]),

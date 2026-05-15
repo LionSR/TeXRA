@@ -52,7 +52,7 @@ export async function openLabel(
   const pattern = new RegExp(`\\\\label\\{${escape}\\}`, 'm');
   const candidates = new Set([
     ...(await getFileLister().list('input')),
-    ...(await getFileLister().list('reference')),
+    ...(await getFileLister().list('context')),
   ]);
 
   for (const file of candidates) {

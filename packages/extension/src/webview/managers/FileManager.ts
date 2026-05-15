@@ -51,8 +51,7 @@ type RequestInputFileMessage = MessageFor<
 >;
 
 type RequestFileMessage = MessageFor<
-  | typeof MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE
-  | typeof MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE
+  | typeof MAIN_VIEW_COMMANDS.REQUEST_CONTEXT_FILE
   | typeof MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE
 >;
 
@@ -70,8 +69,7 @@ type RequestDefaultOutputFilesMessage = MessageFor<
 
 type SetMultipleFilesMessage = MessageFor<
   | typeof MAIN_VIEW_COMMANDS.SET_INPUT_FILES
-  | typeof MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES
-  | typeof MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES
+  | typeof MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES
   | typeof MAIN_VIEW_COMMANDS.SET_MEDIA_FILES
 >;
 
@@ -89,8 +87,7 @@ type GetCurrentFileMessage = MessageFor<
 
 type UpdateFilesMessage = MessageFor<
   | typeof MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES
-  | typeof MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES
-  | typeof MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES
+  | typeof MAIN_VIEW_COMMANDS.UPDATE_CONTEXT_FILES
   | typeof MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES
   | typeof MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES
 >;
@@ -100,8 +97,7 @@ logger.initialize(CHANNEL);
 
 const ATTACHABLE_DROP_CATEGORIES = [
   'input',
-  'reference',
-  'auxiliary',
+  'context',
   'media',
 ] as const satisfies readonly MultipleDocumentFileType[];
 
@@ -181,10 +177,7 @@ export class FileManager extends BaseWebviewManager {
 
   async handleRequestFile(message: RequestFileMessage): Promise<void> {
     const fileType = message.command.replace('request', '').replace('File', '');
-    const listType = fileType.toLowerCase() as
-      | 'reference'
-      | 'auxiliary'
-      | 'media';
+    const listType = fileType.toLowerCase() as 'context' | 'media';
     const files = await getFileLister().list(listType);
     this.postFileUpdate(fileType, files, {
       notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
@@ -274,19 +267,16 @@ export class FileManager extends BaseWebviewManager {
   }
 
   async handleRefreshAllFiles(): Promise<void> {
-    const [inputFiles, referenceFiles, auxiliaryFiles, mediaFiles] =
-      await Promise.all([
-        getFileLister().list('input'),
-        getFileLister().list('reference'),
-        getFileLister().list('auxiliary'),
-        getFileLister().list('media'),
-      ]);
+    const [inputFiles, contextFiles, mediaFiles] = await Promise.all([
+      getFileLister().list('input'),
+      getFileLister().list('context'),
+      getFileLister().list('media'),
+    ]);
 
     this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES,
       inputFiles,
-      referenceFiles,
-      auxiliaryFiles,
+      contextFiles,
       mediaFiles,
     });
 
@@ -624,25 +614,19 @@ export class FileManager extends BaseWebviewManager {
       return 'media';
     }
     if (
-      (extension === 'bib' || extension === 'bbl') &&
-      this.isExtensionAllowed('reference', filePath, allowedExtensions)
+      (extension === 'bib' ||
+        extension === 'bbl' ||
+        extension === 'cls' ||
+        extension === 'sty') &&
+      this.isExtensionAllowed('context', filePath, allowedExtensions)
     ) {
-      return 'reference';
-    }
-    if (
-      (extension === 'cls' || extension === 'sty') &&
-      this.isExtensionAllowed('auxiliary', filePath, allowedExtensions)
-    ) {
-      return 'auxiliary';
+      return 'context';
     }
     if (this.isExtensionAllowed('input', filePath, allowedExtensions)) {
       return 'input';
     }
-    if (this.isExtensionAllowed('reference', filePath, allowedExtensions)) {
-      return 'reference';
-    }
-    if (this.isExtensionAllowed('auxiliary', filePath, allowedExtensions)) {
-      return 'auxiliary';
+    if (this.isExtensionAllowed('context', filePath, allowedExtensions)) {
+      return 'context';
     }
     return null;
   }

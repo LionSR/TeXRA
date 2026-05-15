@@ -162,9 +162,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
 
       [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE]: (m) =>
         this.fileManager.handleFileSelection(m),
-      [MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE]: (m) =>
-        this.fileManager.handleFileSelection(m),
-      [MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE]: (m) =>
+      [MAIN_VIEW_COMMANDS.SELECT_CONTEXT_FILE]: (m) =>
         this.fileManager.handleFileSelection(m),
       [MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE]: (m) =>
         this.fileManager.handleFileSelection(m),
@@ -178,12 +176,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           command: m.command,
           filePath: m.filePath ?? '',
         }),
-      [MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED]: (m) =>
-        this.fileManager.handleGenericFileSelected({
-          command: m.command,
-          filePath: m.filePath ?? '',
-        }),
-      [MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED]: (m) =>
+      [MAIN_VIEW_COMMANDS.CONTEXT_FILE_SELECTED]: (m) =>
         this.fileManager.handleGenericFileSelected({
           command: m.command,
           filePath: m.filePath ?? '',
@@ -201,9 +194,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
 
       [MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE]: (m) =>
         this.fileManager.handleRequestInputFile(m),
-      [MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE]: (m) =>
-        this.fileManager.handleRequestFile(m),
-      [MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE]: (m) =>
+      [MAIN_VIEW_COMMANDS.REQUEST_CONTEXT_FILE]: (m) =>
         this.fileManager.handleRequestFile(m),
       [MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE]: (m) =>
         this.fileManager.handleRequestFile(m),
@@ -216,9 +207,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
 
       [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: (m) =>
         this.fileManager.handleSetMultipleFiles(m),
-      [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: (m) =>
-        this.fileManager.handleSetMultipleFiles(m),
-      [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: (m) =>
+      [MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES]: (m) =>
         this.fileManager.handleSetMultipleFiles(m),
       [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: (m) =>
         this.fileManager.handleSetMultipleFiles(m),
@@ -233,9 +222,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.fileManager.handleAttachDroppedFiles(m),
       [MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES]: (m) =>
         this.fileManager.handleUpdateFiles(m),
-      [MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES]: (m) =>
-        this.fileManager.handleUpdateFiles(m),
-      [MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES]: (m) =>
+      [MAIN_VIEW_COMMANDS.UPDATE_CONTEXT_FILES]: (m) =>
         this.fileManager.handleUpdateFiles(m),
       [MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES]: (m) =>
         this.fileManager.handleUpdateFiles(m),
