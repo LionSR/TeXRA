@@ -129,10 +129,7 @@ function parseListItemRow(row: RemoteAgentListRow): RemoteAgentListItem | null {
 /** Loader for remote agents stored in Supabase. */
 export class RemoteAgentLoader {
   /** Load a remote agent configuration by name. */
-  static async loadRemoteAgent(
-    agentName: string,
-    options: { preferMultiOutput?: boolean } = {},
-  ): Promise<RemoteAgentConfig> {
+  static async loadRemoteAgent(agentName: string): Promise<RemoteAgentConfig> {
     if (!(await SupabaseClient.isAuthenticated())) {
       throw new Error(
         'Remote agents require authentication. Sign in using the "TeXRA: Sign In" command.',
@@ -142,10 +139,7 @@ export class RemoteAgentLoader {
     logger.info(CHANNEL, `Loading remote agent: ${agentName}`);
 
     try {
-      const config = await fetchAgentConfigWithLegacyFallback(
-        agentName,
-        options,
-      );
+      const config = await fetchAgentConfig(agentName);
 
       const registryId = `remote:${agentName}`;
       if (config.description) {
@@ -241,40 +235,6 @@ async function queryRemoteAgentListRows(
     data: legacy.data as RemoteAgentListRow[] | null,
     error: legacy.error,
   };
-}
-
-async function fetchAgentConfigWithLegacyFallback(
-  agentName: string,
-  options: { preferMultiOutput?: boolean },
-): Promise<{
-  settings: RemoteAgentConfig['settings'];
-  prompts: RemoteAgentConfig['prompts'];
-  description?: string;
-  tools?: string[];
-  defaultOutputFiles?: string[];
-}> {
-  const candidates =
-    options.preferMultiOutput && !agentName.endsWith('_multiple')
-      ? [`${agentName}_multiple`, agentName]
-      : [agentName];
-  let lastError: unknown;
-
-  for (const candidate of candidates) {
-    try {
-      return await fetchAgentConfig(candidate);
-    } catch (error) {
-      lastError = error;
-      if (candidate === agentName) break;
-      logger.debug(
-        CHANNEL,
-        `Legacy remote multi-output agent "${candidate}" unavailable; falling back to "${agentName}": ${toErrorMessage(error)}`,
-      );
-    }
-  }
-
-  throw lastError instanceof Error
-    ? lastError
-    : new Error(toErrorMessage(lastError));
 }
 
 /** Fetch and parse agent config from edge function. */

@@ -652,34 +652,29 @@ const WorkflowAgentInputSchema = z.object({
     .describe(
       'Model short name (e.g., opus47T, sonnet46T, gpt55, gemini31p). Defaults to the current model if omitted.',
     ),
-  instruction: z.string().describe('Plain prose instruction for the agent'),
+  instruction: z
+    .string()
+    .describe(
+      'Plain prose instruction for the agent. When attaching context files (context/media), explain in the instruction what each one is for and how the sub-agent should use it — e.g., "preamble.tex defines the math macros; refs.bib is the bibliography to cite from; figure.png is the panel layout the new figure should match". The sub-agent has no other signal for why each file was attached.',
+    ),
   inputFile: z.string().describe('Primary input file to process (required)'),
   inputFiles: z
     .array(z.string())
     .prefault([])
     .describe('Additional input files'),
-  referenceFile: z
+  contextFile: z
     .string()
     .nullable()
     .prefault(null)
     .describe(
-      'Reference file providing guidance or examples (not modified). Do not put .bib files here.',
+      'Read-only context file: guidance, example, related paper, bibliography (.bib), or style/macro definitions (.sty/.cls). Not modified by the agent. Explain its role in the instruction.',
     ),
-  referenceFiles: z
+  contextFiles: z
     .array(z.string())
     .prefault([])
-    .describe('Additional reference files'),
-  auxiliaryFile: z
-    .string()
-    .nullable()
-    .prefault(null)
     .describe(
-      'Auxiliary file for supplementary content like bibliographies (.bib files).',
+      'Additional read-only context files. Explain each in the instruction.',
     ),
-  auxiliaryFiles: z
-    .array(z.string())
-    .prefault([])
-    .describe('Additional auxiliary files'),
   mediaFile: z
     .string()
     .nullable()
@@ -717,13 +712,8 @@ function isBibFile(filePath: string): boolean {
   return basename?.toLowerCase().endsWith('.bib') ?? false;
 }
 
-function getReferenceAndAuxiliaryFiles(input: WorkflowAgentInput): string[] {
-  return [
-    input.referenceFile,
-    ...input.referenceFiles,
-    input.auxiliaryFile,
-    ...input.auxiliaryFiles,
-  ].filter(
+function getContextFiles(input: WorkflowAgentInput): string[] {
+  return [input.contextFile, ...input.contextFiles].filter(
     (path): path is string => typeof path === 'string' && path.length > 0,
   );
 }
@@ -732,7 +722,7 @@ function getReferenceAndAuxiliaryFiles(input: WorkflowAgentInput): string[] {
 export async function rejectOversizedBibAttachments(
   input: WorkflowAgentInput,
 ): Promise<ToolResult | null> {
-  const bibFiles = getReferenceAndAuxiliaryFiles(input).filter(isBibFile);
+  const bibFiles = getContextFiles(input).filter(isBibFile);
 
   for (const bibFile of bibFiles) {
     const stats = await WorkspaceFS.stat(bibFile);
@@ -760,7 +750,7 @@ export async function rejectOversizedBibAttachments(
 export class WorkflowAgentTool extends defineTool({
   name: 'delegate_workflow',
   description:
-    () => `Delegate a task to a workflow agent. Workflow agents receive structured file parameters (input, reference, auxiliary, media, output) and rewrite the entire input file from start to finish in fixed rounds. Best for uniform whole-document operations: grammar correction, style polishing, figure generation, document merging. NOT suitable for tasks requiring interactive tool use, exploration, or selective edits—use delegate_agent for those.
+    () => `Delegate a task to a workflow agent. Workflow agents receive structured file parameters (input, context, media, output) and rewrite the entire input file from start to finish in fixed rounds. Best for uniform whole-document operations: grammar correction, style polishing, figure generation, document merging. NOT suitable for tasks requiring interactive tool use, exploration, or selective edits—use delegate_agent for those.
 
 Available agents:
 ${formatAgentList(getVisibleAgents('workflow'))}
@@ -802,16 +792,7 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
 
     const filesToValidate = [
       ...toValidate(input.inputFile, input.inputFiles, 'Input file'),
-      ...toValidate(
-        input.referenceFile,
-        input.referenceFiles,
-        'Reference file',
-      ),
-      ...toValidate(
-        input.auxiliaryFile,
-        input.auxiliaryFiles,
-        'Auxiliary file',
-      ),
+      ...toValidate(input.contextFile, input.contextFiles, 'Context file'),
       ...toValidate(input.mediaFile, input.mediaFiles, 'Media file'),
     ];
 
@@ -840,10 +821,8 @@ Example: agent=correct, inputFile=paper.tex, extractFigures=true, instruction="T
       instruction: input.instruction,
       inputFile: input.inputFile,
       inputFiles: input.inputFiles,
-      referenceFile: input.referenceFile,
-      referenceFiles: input.referenceFiles,
-      auxiliaryFile: input.auxiliaryFile,
-      auxiliaryFiles: input.auxiliaryFiles,
+      contextFile: input.contextFile,
+      contextFiles: input.contextFiles,
       mediaFile: input.mediaFile,
       mediaFiles: input.mediaFiles,
       outputFiles: input.outputFiles,

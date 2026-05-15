@@ -33,10 +33,8 @@ const WorkflowConfigSummarySchema = BaseConfigSummarySchema.extend({
   inputFiles: z.array(z.string()).optional(),
   mediaFile: z.string().nullish(),
   mediaFiles: z.array(z.string()).optional(),
-  referenceFile: z.string().nullish(),
-  referenceFiles: z.array(z.string()).optional(),
-  auxiliaryFile: z.string().nullish(),
-  auxiliaryFiles: z.array(z.string()).optional(),
+  contextFile: z.string().nullish(),
+  contextFiles: z.array(z.string()).optional(),
   outputFiles: z.array(z.string()).optional(),
   toolConfig: z.record(z.string(), z.unknown()).nullish(),
 });

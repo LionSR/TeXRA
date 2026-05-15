@@ -60,8 +60,7 @@ prompts:
     Create a LaTeX Beamer presentation based on the following research paper:
 
     <documents>
-    {{ ALL_AUXILIARYS }}
-    {{ ALL_REFERENCES }}
+    {{ ALL_CONTEXTS }}
     {{ ADDITIONAL_INPUTS }}
 
     <document name="{{ INPUT_FILE }}">

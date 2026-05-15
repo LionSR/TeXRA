@@ -198,8 +198,7 @@ type FileCategoryConfig = {
 
 const FILE_CATEGORIES: Record<string, FileCategoryConfig> = {
   INPUT: { single: 'inputFile', multiple: 'inputFiles' },
-  REFERENCE: { single: 'referenceFile', multiple: 'referenceFiles' },
-  AUXILIARY: { single: 'auxiliaryFile', multiple: 'auxiliaryFiles' },
+  REFERENCE: { single: 'contextFile', multiple: 'contextFiles' },
   MEDIA: { single: 'mediaFile', multiple: 'mediaFiles' },
   EDITED: { single: 'editedFile', multiple: 'editedFiles' },
 };
@@ -223,7 +222,7 @@ function getCategoryFiles(config: AgentConfig, category: string): string[] {
 }
 
 /** Categories used for building file vars (excludes MEDIA which is display-only) */
-const FILE_VAR_CATEGORIES = ['INPUT', 'REFERENCE', 'AUXILIARY', 'EDITED'];
+const FILE_VAR_CATEGORIES = ['INPUT', 'REFERENCE', 'EDITED'];
 
 async function getFileVars(
   agentConfig: AgentConfig,
@@ -232,14 +231,15 @@ async function getFileVars(
 ): Promise<UserVars> {
   const userVars: UserVars = {};
 
+  const contextFiles = getCategoryFiles(agentConfig, 'REFERENCE');
+
   // Log file categories being loaded (skip for tool-use agents).
   // Media files are excluded: they have no user vars (display-only in Init)
   // and are already logged with full load results by MediaExtractionNode in r0.
   if (agentSetting.agentCategory !== AgentCategory.ToolUse) {
     await logFileCategoriesWithExistence(logger, [
       ['Input Files', getCategoryFiles(agentConfig, 'INPUT')],
-      ['Reference Files', getCategoryFiles(agentConfig, 'REFERENCE')],
-      ['Auxiliary Files', getCategoryFiles(agentConfig, 'AUXILIARY')],
+      ['Context Files', contextFiles],
     ]);
   }
 
@@ -267,6 +267,12 @@ async function getFileVars(
       allFiles.length > 0 ? await getXmlFormatFromFiles(allFiles) : null;
     userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(allFiles);
   }
+
+  // {{ ALL_CONTEXTS }} is the unified successor to {{ ALL_REFERENCES }} +
+  // {{ ALL_AUXILIARYS }} (the latter has been removed). It mirrors
+  // {{ ALL_REFERENCES }} now that auxiliary has been folded into context.
+  userVars.ALL_CONTEXTS = userVars.ALL_REFERENCES as string | null;
+  userVars.LIST_OF_ALL_CONTEXTS = getListOfFiles(contextFiles);
 
   return userVars;
 }
