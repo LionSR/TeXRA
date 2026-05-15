@@ -20,7 +20,6 @@ interface ElectronSecretsModule {
     get(key: string): Promise<string | undefined>;
     set(key: string, value: string): Promise<void>;
   };
-  prewarmElectronKeychain: () => Promise<boolean>;
   __resetKeychainStateForTests: () => void;
   KEYCHAIN_DENIED_WARNING_MESSAGE: string;
 }
@@ -118,30 +117,6 @@ describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
 
     expect(warnings).toHaveLength(1);
   });
-
-  it('prewarmElectronKeychain returns true when safeStorage encrypts cleanly', async () => {
-    const { prewarmElectronKeychain, __resetKeychainStateForTests } =
-      await loadElectronSecrets();
-    __resetKeychainStateForTests();
-
-    expect(await prewarmElectronKeychain()).toBe(true);
-    // Idempotent — second call short-circuits.
-    expect(await prewarmElectronKeychain()).toBe(true);
-  });
-
-  it('prewarmElectronKeychain returns false when safeStorage is unavailable', async () => {
-    const electron = (await import('electron')) as unknown as {
-      safeStorage: { isEncryptionAvailable: () => boolean };
-    };
-    vi.spyOn(electron.safeStorage, 'isEncryptionAvailable').mockReturnValue(
-      false,
-    );
-    const { prewarmElectronKeychain, __resetKeychainStateForTests } =
-      await loadElectronSecrets();
-    __resetKeychainStateForTests();
-
-    expect(await prewarmElectronKeychain()).toBe(false);
-  });
 });
 
 describe('desktop renderer bootstrap fallback', () => {
@@ -207,29 +182,6 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
 
     expect(mod.getSecretStorageMode()).toBe('unavailable');
     expect(isAvailableSpy).not.toHaveBeenCalled();
-  });
-
-  it('prewarmElectronKeychain returns false and never calls safeStorage', async () => {
-    process.env.TEXRA_DISABLE_KEYCHAIN = '1';
-    const electron = (await import('electron')) as unknown as {
-      safeStorage: {
-        isEncryptionAvailable: () => boolean;
-        encryptString: (value: string) => Buffer;
-      };
-    };
-    const isAvailableSpy = vi.spyOn(
-      electron.safeStorage,
-      'isEncryptionAvailable',
-    );
-    const encryptSpy = vi.spyOn(electron.safeStorage, 'encryptString');
-
-    const { prewarmElectronKeychain, __resetKeychainStateForTests } =
-      await loadElectronSecrets();
-    __resetKeychainStateForTests();
-
-    expect(await prewarmElectronKeychain()).toBe(false);
-    expect(isAvailableSpy).not.toHaveBeenCalled();
-    expect(encryptSpy).not.toHaveBeenCalled();
   });
 
   it('ElectronSecrets.get() returns undefined without calling safeStorage', async () => {
@@ -305,19 +257,13 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
   });
 });
 
-describe('desktop main process keychain prewarm', () => {
-  it('calls prewarmElectronKeychain immediately after app.whenReady()', () => {
+describe('desktop main process keychain access', () => {
+  it('does not force a keychain prewarm during startup', () => {
     const source = readFileSync(
       repoPath('packages/desktop/src/main/index.ts'),
       'utf8',
     );
-    expect(source).toContain('prewarmElectronKeychain');
-    // The prewarm must run BEFORE initializeElectronPlatform — that is the
-    // function that constructs ElectronSecrets and starts the chain that
-    // eventually triggers crash-reporting / auth secret reads.
-    const prewarmIndex = source.indexOf('await prewarmElectronKeychain()');
-    const initIndex = source.indexOf('await initializeElectronPlatform(');
-    expect(prewarmIndex).toBeGreaterThan(0);
-    expect(initIndex).toBeGreaterThan(prewarmIndex);
+    expect(source).not.toContain('prewarmElectronKeychain');
+    expect(source).not.toContain('safeStorage.encryptString');
   });
 });
