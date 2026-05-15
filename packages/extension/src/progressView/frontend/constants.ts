@@ -155,7 +155,7 @@ const SUPER_YOLO_TOGGLE_BUTTON = Object.freeze({
 
 const COMPACT_RESPONSE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.COMPACT_RESPONSE_BTN,
-  icon: 'fold',
+  icon: 'compress',
   command: PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE,
   title:
     'Compact conversation context (summarize history to reduce token usage)',
