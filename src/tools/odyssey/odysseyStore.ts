@@ -112,7 +112,10 @@ const STATUS_TO_EVENT_KIND: Record<OdysseyStatus, OdysseyEventKind> = {
  */
 const ALLOWED_TRANSITIONS: Record<OdysseyStatus, readonly OdysseyStatus[]> = {
   active: ['paused', 'complete', 'abandoned'],
-  paused: ['active', 'abandoned'],
+  // paused → complete: the model can still be invoked from a paused stream
+  // by user input, and may call odyssey(complete) after verifying the
+  // objective. Don't force a resume just to mark it done.
+  paused: ['active', 'complete', 'abandoned'],
   complete: [],
   abandoned: [],
 };
@@ -161,7 +164,6 @@ export const OdysseyStore = {
       streamId,
       objective: trimmed,
       status: 'active',
-      tokensUsed: 0,
       createdAt: now,
       updatedAt: now,
       history: [{ at: now, kind: 'started', detail: trimmed }],
@@ -221,15 +223,6 @@ export const OdysseyStore = {
         ...odyssey.history,
         { at: nowIso(), kind, detail: detail ?? null },
       ],
-    }));
-  },
-
-  /** Accumulate per-turn token usage (called from applyTurnAccounting). */
-  async addUsage(streamId: StreamTabId, tokensDelta: number): Promise<void> {
-    if (tokensDelta <= 0) return;
-    await update(streamId, (odyssey) => ({
-      ...odyssey,
-      tokensUsed: odyssey.tokensUsed + Math.floor(tokensDelta),
     }));
   },
 
