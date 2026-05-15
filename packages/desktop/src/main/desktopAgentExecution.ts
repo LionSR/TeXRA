@@ -424,13 +424,11 @@ export class DesktopProgressBridge {
     });
   }
 
-  private readonly probedWorktreeDirs = new Set<string>();
-
   private ensureWorktreeProbe(workingDirectory: string): void {
-    if (this.probedWorktreeDirs.has(workingDirectory)) return;
-    this.probedWorktreeDirs.add(workingDirectory);
+    // Fire-and-forget; the resolver owns TTL/in-flight de-duplication. Calling
+    // it on each render lets branch/dirty state refresh after the cache expires.
     void resolveWorktreeInfo(workingDirectory).catch(() => {
-      this.probedWorktreeDirs.delete(workingDirectory);
+      /* best-effort chip enrichment */
     });
   }
 
