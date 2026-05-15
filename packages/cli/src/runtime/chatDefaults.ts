@@ -1,25 +1,17 @@
-// Standard library imports
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-// Local imports - agent / shared
 import { listExecutions } from '@agent/storage';
+import { AgentCategory } from '@agent/core/AgentDataclass';
+import { isNonEmptyString } from '@utils/core/stringCore';
+import { GlobalStorageFS } from '@utils/files/storageFS';
 
-// Local imports - platform
-import { platform } from '@platform/platform';
-
-/**
- * Built-in fallback defaults — used when no workspace, user, or history
- * configuration provides an explicit choice. The PRD calls out `chat` and
- * `claude-opus-4-7` as the v1 fallbacks for the TUI entrypoint.
- */
 export const BUILTIN_DEFAULT_CHAT_AGENT = 'chat';
 export const BUILTIN_DEFAULT_CHAT_MODEL = 'claude-opus-4-7';
 
 export interface ChatDefaults {
   readonly agent: string;
   readonly model: string;
-  /** Where the agent/model values originated, for logging or `/status`. */
   readonly source: ChatDefaultSource;
 }
 
@@ -38,41 +30,43 @@ interface PartialDefaults {
 const CONFIG_FILE = 'config.json';
 const WORKSPACE_CONFIG_DIR = '.texra';
 
-async function readJsonConfig(filePath: string): Promise<PartialDefaults> {
+function pickDefaults(parsed: unknown): PartialDefaults {
+  if (typeof parsed !== 'object' || parsed === null) return {};
+  const record = parsed as Record<string, unknown>;
+  const out: { -readonly [K in keyof PartialDefaults]: PartialDefaults[K] } =
+    {};
+  if (isNonEmptyString(record.agent)) out.agent = record.agent.trim();
+  if (isNonEmptyString(record.model)) out.model = record.model.trim();
+  return out;
+}
+
+async function loadWorkspaceDefaults(cwd: string): Promise<PartialDefaults> {
   try {
-    const raw = await readFile(filePath, 'utf8');
-    const parsed = JSON.parse(raw) as unknown;
-    if (typeof parsed !== 'object' || parsed === null) return {};
-    const out: { -readonly [K in keyof PartialDefaults]: PartialDefaults[K] } =
-      {};
-    const record = parsed as Record<string, unknown>;
-    if (typeof record.agent === 'string' && record.agent.trim().length > 0) {
-      out.agent = record.agent.trim();
-    }
-    if (typeof record.model === 'string' && record.model.trim().length > 0) {
-      out.model = record.model.trim();
-    }
-    return out;
+    const raw = await readFile(
+      path.join(cwd, WORKSPACE_CONFIG_DIR, CONFIG_FILE),
+      'utf8',
+    );
+    return pickDefaults(JSON.parse(raw));
   } catch {
-    // Missing or malformed config — caller falls through to next source.
     return {};
   }
 }
 
-async function loadWorkspaceDefaults(cwd: string): Promise<PartialDefaults> {
-  return readJsonConfig(path.join(cwd, WORKSPACE_CONFIG_DIR, CONFIG_FILE));
-}
-
 async function loadUserDefaults(): Promise<PartialDefaults> {
-  const storage = platform().storage;
-  return readJsonConfig(path.join(storage.getGlobalStoragePath(), CONFIG_FILE));
+  try {
+    return pickDefaults(await GlobalStorageFS.readJson(CONFIG_FILE));
+  } catch {
+    return {};
+  }
 }
 
 async function loadHistoryDefaults(): Promise<PartialDefaults> {
   try {
     const entries = await listExecutions();
     const mostRecent = entries
-      .filter((entry) => entry.agentConfig?.agentCategory === 'toolUse')
+      .filter(
+        (entry) => entry.agentConfig?.agentCategory === AgentCategory.ToolUse,
+      )
       .sort(
         (a, b) =>
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
@@ -96,25 +90,16 @@ function deriveSource(picked: {
 }
 
 export interface ResolveChatDefaultsInit {
-  /** CLI working directory used to locate `.texra/config.json`. */
   readonly cwd: string;
-  /** Explicit `--agent` override; bypasses all lookup tiers when present. */
   readonly agentOverride?: string;
-  /** Explicit `--model` override; bypasses all lookup tiers when present. */
   readonly modelOverride?: string;
 }
 
 /**
- * Resolve the chat agent and model using the four-tier lookup defined in
- * `docs/prd/cli-tui-ink/10-architecture.md#entrypoint-default`:
- *
- *   1. workspace `.texra/config.json`
- *   2. user `<global-storage>/config.json`
- *   3. last toolUse execution recorded in this workspace's history
- *   4. built-in (`chat`, `claude-opus-4-7`)
- *
- * Per-field independence: a workspace that only sets `agent` still falls
- * through to user/history for `model`.
+ * Four-tier lookup per `docs/prd/cli-tui-ink/10-architecture.md#entrypoint-default`:
+ * workspace `.texra/config.json` → user `<global-storage>/config.json` →
+ * last toolUse execution → built-in. Per-field independence: a workspace that
+ * only sets `agent` still falls through to user/history for `model`.
  */
 export async function resolveChatDefaults(
   init: ResolveChatDefaultsInit,
@@ -123,25 +108,27 @@ export async function resolveChatDefaults(
   const overrideModel = init.modelOverride?.trim();
 
   if (overrideAgent && overrideModel) {
-    return {
-      agent: overrideAgent,
-      model: overrideModel,
-      source: 'mixed',
-    };
+    return { agent: overrideAgent, model: overrideModel, source: 'mixed' };
   }
 
+  // Tiers are independent I/O — fan out in parallel.
+  const [workspace, user, history] = await Promise.all([
+    loadWorkspaceDefaults(init.cwd),
+    loadUserDefaults(),
+    loadHistoryDefaults(),
+  ]);
   const tiers: ReadonlyArray<readonly [ChatDefaultSource, PartialDefaults]> = [
-    ['workspace', await loadWorkspaceDefaults(init.cwd)],
-    ['user', await loadUserDefaults()],
-    ['history', await loadHistoryDefaults()],
+    ['workspace', workspace],
+    ['user', user],
+    ['history', history],
   ];
 
   const pickedSources: {
     agent?: ChatDefaultSource;
     model?: ChatDefaultSource;
   } = {};
-  let agent: string | undefined = overrideAgent;
-  let model: string | undefined = overrideModel;
+  let agent = overrideAgent;
+  let model = overrideModel;
 
   for (const [source, defaults] of tiers) {
     if (!agent && defaults.agent) {

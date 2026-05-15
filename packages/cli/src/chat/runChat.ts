@@ -215,11 +215,8 @@ export async function runChat(
   context: CliContext,
   init: RunChatInit,
 ): Promise<ChatResult> {
-  const chatContext = context;
-  if (chatContext.mode === 'headless') {
-    const validationRenderer = new ChatTerminalRenderer(
-      chatContext.colorEnabled,
-    );
+  if (context.mode === 'headless') {
+    const validationRenderer = new ChatTerminalRenderer(context.colorEnabled);
     validationRenderer.error(
       'texra chat requires an interactive terminal. Did you mean texra run?',
     );
@@ -229,9 +226,9 @@ export async function runChat(
   // Resolve defaults via workspace → user → last-used → built-in.
   // The platform isn't initialised yet, so the history tier reads the same
   // workspace storage that `initCliPlatform` will mount below.
-  await initCliPlatform({ ...chatContext, quietLogs: true });
+  await initCliPlatform({ ...context, quietLogs: true });
   const defaults = await resolveChatDefaults({
-    cwd: chatContext.cwd,
+    cwd: context.cwd,
     agentOverride: init.agentOverride,
     modelOverride: init.modelOverride,
   });
@@ -240,11 +237,11 @@ export async function runChat(
   const currentMetadata = () => ({
     agent,
     model,
-    cwd: chatContext.cwd,
+    cwd: context.cwd,
     toolDisplay,
   });
   const currentSessionContext = (): CliContext => ({
-    ...chatContext,
+    ...context,
     helperModel: model,
     quietLogs: true,
     approvalPrompt: (request) => askChatApprovalQuestion(request),
@@ -257,10 +254,7 @@ export async function runChat(
   installCliApprovalHandlers(startupContext);
   await loadAgents();
 
-  const renderer = new ChatTerminalRenderer(
-    chatContext.colorEnabled,
-    toolDisplay,
-  );
+  const renderer = new ChatTerminalRenderer(context.colorEnabled, toolDisplay);
   const reader = createCliLineReader(renderer.prompt);
   const session: ChatSessionState = {
     readerClosed: false,
@@ -443,7 +437,7 @@ export async function runChat(
       model,
       instruction,
       agentCategory: AgentCategory.ToolUse,
-      workingDirectory: chatContext.cwd,
+      workingDirectory: context.cwd,
     };
 
     const runContext = currentSessionContext();

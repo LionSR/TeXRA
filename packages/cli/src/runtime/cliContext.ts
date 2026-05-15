@@ -1,10 +1,10 @@
-// Standard library imports
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Local imports - CLI runtime
+import { isNonEmptyString } from '@utils/core/stringCore';
+
 import { type CliApprovalPolicy } from './approvalPolicy';
 
 export type CliMode = 'headless' | 'interactive';
@@ -24,7 +24,6 @@ export interface CliContext {
   readonly helperModel?: string;
   readonly quietLogs?: boolean;
   readonly colorEnabled: boolean;
-  readonly terminalState: CliAmbientState;
   readonly version: string;
   readonly resourcesPath: string;
   readonly approvalPrompt?: (request: CliPromptRequest) => Promise<string>;
@@ -45,9 +44,12 @@ export interface CliAmbientState {
   readonly colorEnabled: boolean;
 }
 
+let cachedAmbient: CliAmbientState | undefined;
+
 export function readCliAmbientState(): CliAmbientState {
+  if (cachedAmbient) return cachedAmbient;
   const stderrIsTty = process.stderr.isTTY === true;
-  return {
+  cachedAmbient = {
     isCi: Boolean(process.env.CI),
     stdinIsTty: process.stdin.isTTY === true,
     stdoutIsTty: process.stdout.isTTY === true,
@@ -57,6 +59,7 @@ export function readCliAmbientState(): CliAmbientState {
       process.env.NO_COLOR == null &&
       process.env.TERM !== 'dumb',
   };
+  return cachedAmbient;
 }
 
 export function cliEnvValue(key: string): string | undefined {
@@ -69,17 +72,21 @@ export function readCliArgv(): string[] {
 }
 
 function resolveCwdFlag(value: string | undefined, fallback: string): string {
-  return value && value.trim().length > 0
-    ? path.resolve(value.trim())
-    : fallback;
+  return isNonEmptyString(value) ? path.resolve(value.trim()) : fallback;
 }
 
-export async function readCliVersion(): Promise<string> {
+let cachedVersion: Promise<string> | undefined;
+
+export function readCliVersion(): Promise<string> {
+  cachedVersion ??= resolveCliVersion();
+  return cachedVersion;
+}
+
+async function resolveCliVersion(): Promise<string> {
   const candidates = [
     new URL('../../package.json', import.meta.url),
     new URL('../package.json', import.meta.url),
   ];
-
   for (const candidate of candidates) {
     try {
       const pkg = JSON.parse(await readFile(candidate, 'utf8')) as {
@@ -87,10 +94,9 @@ export async function readCliVersion(): Promise<string> {
       };
       if (pkg.version) return pkg.version;
     } catch {
-      // Try the next source/build layout candidate.
+      // Try the next source/build-layout candidate.
     }
   }
-
   return 'unknown';
 }
 
@@ -135,7 +141,6 @@ export async function buildCliContext(
     outputFormat: init.globalArgs.outputFormat,
     approvalPolicy: init.globalArgs.approvalPolicy,
     colorEnabled: ambient.colorEnabled,
-    terminalState: ambient,
     version: await readCliVersion(),
     resourcesPath: resolveResourcesPath(),
   };

@@ -1,6 +1,7 @@
-// Local imports - CLI runtime
-import { type CliApprovalPolicy } from './approvalPolicy';
-import type { CliGlobalArgs } from './cliContext';
+import { isNonEmptyString } from '@utils/core/stringCore';
+
+import type { CliApprovalPolicy } from './approvalPolicy';
+import type { CliGlobalArgs, CliOutputFormat } from './cliContext';
 
 /**
  * Shape produced by citty's parser for the four global flags after each
@@ -12,18 +13,14 @@ import type { CliGlobalArgs } from './cliContext';
 export interface ParsedGlobalArgs {
   readonly print?: boolean;
   readonly cwd?: string;
-  readonly 'output-format': 'text' | 'json' | 'ndjson';
+  readonly 'output-format': CliOutputFormat;
   readonly 'approval-policy': CliApprovalPolicy;
 }
 
 export function pickGlobalArgs(args: ParsedGlobalArgs): CliGlobalArgs {
-  const cwd =
-    typeof args.cwd === 'string' && args.cwd.trim().length > 0
-      ? args.cwd.trim()
-      : undefined;
   return {
     print: args.print === true,
-    cwd,
+    cwd: isNonEmptyString(args.cwd) ? args.cwd.trim() : undefined,
     outputFormat: args['output-format'],
     approvalPolicy: args['approval-policy'],
   };

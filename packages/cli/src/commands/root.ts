@@ -1,22 +1,20 @@
-// Standard library imports
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-// Third-party imports
 import { defineCommand, runCommand, showUsage, type CommandDef } from 'citty';
 
-// Local imports - agent and model surfaces
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import {
   DEFAULT_AGENT_MODEL,
   type AgentConfigPayload,
 } from '@agent/core/AgentConfig';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { isOAuthProvider } from '@auth/sharedConfig';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
+import { isOAuthProvider } from '@auth/sharedConfig';
 import { toErrorMessage } from '@common/errors/errorMessage';
+import { isNonEmptyString } from '@utils/core/stringCore';
 
-// Local imports - CLI runtime
 import {
   buildCliContext,
   CliUsageError,
@@ -24,7 +22,9 @@ import {
   readCliArgv,
   readCliVersion,
   type CliContext,
+  type CliOutputFormat,
 } from '../runtime/cliContext';
+import type { CliApprovalPolicy } from '../runtime/approvalPolicy';
 import {
   hasCliApprovalDenied,
   installCliApprovalHandlers,
@@ -46,51 +46,41 @@ import {
 } from '../runtime/logSinks';
 
 // One CLI invocation per process — module-level pending exit code is the
-// simplest typed-throw alternative for surfacing handler exit codes back to
-// `bin/texra.ts` after `runCommand` returns.
+// simplest way to surface handler exit codes back to `bin/texra.ts` after
+// `runCommand` returns. citty's `ctx.data` would also work but is `any`-typed.
 let pendingExitCode: number = CliExitCode.Success;
 
 function setExitCode(code: number): void {
   pendingExitCode = code;
 }
 
-/**
- * Adapt citty-parsed args into the `CliContext` shape consumed by the rest of
- * the CLI. Handlers call this once at entry — no further global-flag re-parsing.
- */
 async function contextFromArgs(args: ParsedGlobalArgs): Promise<CliContext> {
   return buildCliContext({ globalArgs: pickGlobalArgs(args) });
 }
 
+function optString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
 /**
  * Single source of truth for the four global flags accepted by every TeXRA
- * subcommand.
- *
- * `as const` + spreading into each subcommand's `args` would lose its
- * literal-type narrowing because citty's `ArgsDef` requires a *mutable*
- * `options: string[]` (so a `readonly` literal array is rejected outright).
- * To keep both DRY definitions AND narrow `ctx.args['output-format']` /
- * `ctx.args['approval-policy']` enums, each enum's `options` is explicitly
- * typed as a mutable literal tuple — that's both assignable to `string[]`
- * and gives `defineCommand<const T>` the per-option literal it needs.
- *
- * Adding a new global flag now means a one-line change here instead of an
- * eight-place edit.
+ * subcommand. `as const` + spread would lose literal-type narrowing (citty's
+ * `ArgsDef` rejects `readonly string[]`), so each enum's `options` is
+ * explicitly typed as a mutable literal tuple — assignable to `string[]` and
+ * narrow enough for `defineCommand<const T>` to expose the per-option literal
+ * on `ctx.args[...]`. Adding a new global flag is a one-line change here.
  */
-type OutputFormatOption = 'text' | 'json' | 'ndjson';
-type ApprovalPolicyOption = 'never' | 'ask' | 'yolo';
-
 const GLOBAL_ARGS: {
   print: { type: 'boolean'; alias: 'p' };
   cwd: { type: 'string' };
   'output-format': {
     type: 'enum';
-    options: OutputFormatOption[];
+    options: CliOutputFormat[];
     default: 'text';
   };
   'approval-policy': {
     type: 'enum';
-    options: ApprovalPolicyOption[];
+    options: CliApprovalPolicy[];
     default: 'never';
   };
 } = {
@@ -107,10 +97,6 @@ const GLOBAL_ARGS: {
     default: 'never',
   },
 };
-
-// ---------------------------------------------------------------------------
-// agents list
-// ---------------------------------------------------------------------------
 
 const agentsListCommand = defineCommand({
   meta: { name: 'list', description: 'List available agents' },
@@ -129,11 +115,11 @@ async function listAgents(context: CliContext): Promise<number> {
   const agents = [
     ...getVisibleAgents('workflow').map((agent) => ({
       ...agent,
-      category: 'workflow' as const,
+      category: AgentCategory.Workflow,
     })),
     ...getVisibleAgents('toolUse').map((agent) => ({
       ...agent,
-      category: 'toolUse' as const,
+      category: AgentCategory.ToolUse,
     })),
   ];
 
@@ -162,10 +148,6 @@ const agentsCommand = defineCommand({
   meta: { name: 'agents', description: 'Inspect TeXRA agents' },
   subCommands: { list: agentsListCommand },
 });
-
-// ---------------------------------------------------------------------------
-// models list
-// ---------------------------------------------------------------------------
 
 const modelsListCommand = defineCommand({
   meta: { name: 'list', description: 'List available models' },
@@ -212,27 +194,13 @@ const modelsCommand = defineCommand({
   subCommands: { list: modelsListCommand },
 });
 
-// ---------------------------------------------------------------------------
-// version
-// ---------------------------------------------------------------------------
-
 const versionCommand = defineCommand({
   meta: { name: 'version', description: 'Print the CLI version' },
   async run() {
-    const context = await buildCliContext({
-      globalArgs: {
-        outputFormat: 'text',
-        approvalPolicy: 'never',
-      },
-    });
-    writeTextStdout(context.version);
+    writeTextStdout(await readCliVersion());
     setExitCode(CliExitCode.Success);
   },
 });
-
-// ---------------------------------------------------------------------------
-// login / logout / auth status
-// ---------------------------------------------------------------------------
 
 const loginCommand = defineCommand({
   meta: { name: 'login', description: 'Sign in to TeXRA for included access' },
@@ -255,12 +223,8 @@ const loginCommand = defineCommand({
   },
   async run(ctx) {
     const context = await contextFromArgs(ctx.args);
-    const positional =
-      typeof ctx.args.providerArg === 'string'
-        ? ctx.args.providerArg
-        : undefined;
-    const flag =
-      typeof ctx.args.provider === 'string' ? ctx.args.provider : undefined;
+    const positional = optString(ctx.args.providerArg);
+    const flag = optString(ctx.args.provider);
     const provider = resolveLoginProvider(positional, flag);
     setExitCode(
       await runLogin(context, {
@@ -275,8 +239,8 @@ export function resolveLoginProvider(
   positional: string | undefined,
   flag: string | undefined,
 ): string {
-  if (flag && flag.trim().length > 0) return flag.trim();
-  if (positional && positional.trim().length > 0) return positional.trim();
+  if (isNonEmptyString(flag)) return flag.trim();
+  if (isNonEmptyString(positional)) return positional.trim();
   return DEFAULT_OAUTH_PROVIDER;
 }
 
@@ -413,10 +377,6 @@ const authCommand = defineCommand({
   subCommands: { status: authStatusCommand },
 });
 
-// ---------------------------------------------------------------------------
-// run (workflow agent)
-// ---------------------------------------------------------------------------
-
 const runWorkflowCommand = defineCommand({
   meta: { name: 'run', description: 'Run a workflow agent' },
   args: {
@@ -449,11 +409,9 @@ const runWorkflowCommand = defineCommand({
       await runWorkflowAgent(context, {
         agent: ctx.args.agent,
         input: ctx.args.input,
-        output:
-          typeof ctx.args.output === 'string' ? ctx.args.output : undefined,
-        model: typeof ctx.args.model === 'string' ? ctx.args.model : undefined,
-        instruction:
-          typeof ctx.args.instruction === 'string' ? ctx.args.instruction : '',
+        output: optString(ctx.args.output),
+        model: optString(ctx.args.model),
+        instruction: optString(ctx.args.instruction) ?? '',
       }),
     );
   },
@@ -571,10 +529,6 @@ async function runWorkflowAgent(
     : CliExitCode.AgentError;
 }
 
-// ---------------------------------------------------------------------------
-// chat (interactive tool-use agent)
-// ---------------------------------------------------------------------------
-
 const chatCommand = defineCommand({
   meta: { name: 'chat', description: 'Interactive tool-use chat session' },
   args: {
@@ -592,19 +546,13 @@ const chatCommand = defineCommand({
     const context = await contextFromArgs(ctx.args);
     const { runChat } = await import('../chat/runChat');
     const result = await runChat(context, {
-      agentOverride:
-        typeof ctx.args.agent === 'string' ? ctx.args.agent : undefined,
-      modelOverride:
-        typeof ctx.args.model === 'string' ? ctx.args.model : undefined,
+      agentOverride: optString(ctx.args.agent),
+      modelOverride: optString(ctx.args.model),
       toolDisplay: ctx.args['tool-display'],
     });
     setExitCode(result.exitCode);
   },
 });
-
-// ---------------------------------------------------------------------------
-// help (synthetic subcommand used as the no-TTY default)
-// ---------------------------------------------------------------------------
 
 const helpCommand = defineCommand({
   meta: { name: 'help', description: 'Show TeXRA CLI usage' },
@@ -613,10 +561,6 @@ const helpCommand = defineCommand({
     await showUsage(rootCommand);
   },
 });
-
-// ---------------------------------------------------------------------------
-// root command
-// ---------------------------------------------------------------------------
 
 const rootCommand = defineCommand({
   // Citty's `runMain` reads `meta.version` for `--version`/`-v`. We resolve
@@ -654,12 +598,21 @@ const rootCommand = defineCommand({
   },
 });
 
-const GLOBAL_VALUE_FLAGS = new Set([
-  '--cwd',
-  '--output-format',
-  '--approval-policy',
-]);
-const GLOBAL_BOOL_FLAGS = new Set(['--print', '-p']);
+// Derived from `GLOBAL_ARGS` so adding/renaming a global flag in one place
+// flows through to `reorderGlobalFlags` automatically.
+const GLOBAL_VALUE_FLAGS = new Set<string>(
+  Object.entries(GLOBAL_ARGS)
+    .filter(([, def]) => def.type !== 'boolean')
+    .map(([name]) => `--${name}`),
+);
+const GLOBAL_BOOL_FLAGS = new Set<string>(
+  Object.entries(GLOBAL_ARGS).flatMap(([name, def]) => {
+    if (def.type !== 'boolean') return [];
+    const long = `--${name}`;
+    const alias = 'alias' in def ? def.alias : undefined;
+    return alias ? [long, `-${alias}`] : [long];
+  }),
+);
 
 /**
  * Citty's runCommand consumes args at the root and passes only `rawArgs.slice(

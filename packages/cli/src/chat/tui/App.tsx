@@ -1,15 +1,9 @@
-// Phase 0 hello-world `<App>` — exists only to validate the React Compiler
-// Babel pre-pass wired in scripts/reactCompilerPlugin.mjs, exercised by
-// `scripts/smoke-react-compiler.mjs` on every build. Not imported from any
-// runtime path yet. The skeleton TUI lands in Phase 1.
+// Smoke target for the React Compiler Babel pre-pass
+// (scripts/smoke-react-compiler.mjs). Not on any runtime path yet.
 
-import { Box, Text } from 'ink';
+import { Text } from 'ink';
 import type { ReactElement } from 'react';
 
 export function App(): ReactElement {
-  return (
-    <Box>
-      <Text>TeXRA TUI scaffold ready (Phase 1+).</Text>
-    </Box>
-  );
+  return <Text>TeXRA TUI scaffold ready (Phase 1+).</Text>;
 }
