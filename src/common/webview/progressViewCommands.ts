@@ -65,6 +65,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   RESTORE_PROPOSAL_CONFIG: 'restoreProposalConfig',
   TOGGLE_SUPER_YOLO_BYPASS: 'toggleSuperYoloBypass',
   OPEN_ODYSSEY_PANEL: 'openOdysseyPanel',
+  ODYSSEY_ACTIVE_UPDATED: 'odysseyActiveUpdated',
 
   OPEN_MEMORY_VIEW: 'openMemoryView',
 

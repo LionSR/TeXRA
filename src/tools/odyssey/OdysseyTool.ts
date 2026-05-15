@@ -10,6 +10,7 @@ import {
   ODYSSEY_TOOL_NAME,
   ODYSSEY_FEATURE_FLAG_KEY,
   OdysseyToolInputSchema,
+  odysseyElapsedMs,
   type Odyssey,
   type OdysseyToolInput,
 } from './odysseyMeta';
@@ -26,7 +27,7 @@ function formatView(odyssey: Odyssey): string {
     `Status: ${odyssey.status}`,
     `Objective: ${odyssey.objective}`,
     `Tokens used: ${formatTokens(odyssey.tokensUsed)}`,
-    `Time elapsed: ${formatOdysseyTime(odyssey.timeUsedMs)}`,
+    `Time elapsed: ${formatOdysseyTime(odysseyElapsedMs(odyssey))}`,
   ];
   if (odyssey.completedReason) {
     lines.push(`Completion reason: ${odyssey.completedReason}`);
