@@ -166,7 +166,7 @@ import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 type MessageFor<C extends SettingsViewInboundMessage['command']> =
   SettingsMessageFor<C>;
 
-/** Reliability settings surfaced in the Multi-Agent tab. */
+/** Reliability settings surfaced in the Models tab. */
 const RELIABILITY_SETTINGS: (Omit<NumberVscodeSetting, 'value'> & {
   defaultValue: number;
 })[] = [
