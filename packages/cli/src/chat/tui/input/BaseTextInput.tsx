@@ -1,7 +1,7 @@
-// Paste-aware text input wrapping `ink-text-input`.
+// Text input wrapping `ink-text-input`.
 //
-// Ctrl-J inserts a newline. Bracketed paste detection returns in Phase 5;
-// the raw-stdin listener was removed because it drained bytes before Ink.
+// Ctrl-J inserts a newline. Bracketed-paste detection lands fresh in
+// Phase 5 alongside the palette / @-mention overlays that consume it.
 
 import { useInput } from 'ink';
 import TextInput from 'ink-text-input';
