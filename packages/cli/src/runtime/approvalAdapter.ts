@@ -53,7 +53,7 @@ export function denyMessage(policy: CliContext['approvalPolicy']): string {
     : 'Denied by CLI approval policy.';
 }
 
-function markApprovalDenied(context: CliContext): void {
+export function markApprovalDenied(context: CliContext): void {
   deniedApprovalContexts.add(context);
 }
 

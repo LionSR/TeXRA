@@ -33,6 +33,7 @@ import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool'
 import {
   denyMessage,
   immediateDecision,
+  markApprovalDenied,
   type ApprovalDecision as PolicyDecision,
 } from '../../../runtime/approvalAdapter';
 import { enqueueApproval, type ApprovalDecision } from './approvalQueue';
@@ -86,6 +87,7 @@ export function installTuiApprovals(
         : { accepted: false, userMessage: policy.userMessage };
     }
     const decision = await enqueueApproval({ kind: 'toolEdit', request });
+    markIfRejected(context, decision);
     return decision.accepted
       ? { accepted: true, appliedContent: request.proposedContent }
       : { accepted: false, userMessage: decision.userMessage };
@@ -196,12 +198,17 @@ function routeWithPolicy<P>(
     return;
   }
   void enqueueApproval(toQueuePayload(payload)).then((decision) => {
+    markIfRejected(context, decision);
     dispatch(payload, decision);
   });
 }
 
 function feedbackOnReject(decision: ApprovalDecision): string | undefined {
   return decision.accepted ? undefined : decision.userMessage;
+}
+
+function markIfRejected(context: CliContext, decision: ApprovalDecision): void {
+  if (!decision.accepted) markApprovalDenied(context);
 }
 
 function dispatchBash(
