@@ -266,13 +266,11 @@ prompts:
       - [Document 2: now uses strengthened result from Document 1]
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 1ST ENHANCED DOCUMENT WITH TRACTABLE IMPROVEMENTS IMPLEMENTED
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND ENHANCED DOCUMENT WITH TRACTABLE IMPROVEMENTS IMPLEMENTED
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>
 
     - |
@@ -410,17 +408,9 @@ prompts:
       Ensure that the output documents are in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 1ST ENHANCED DOCUMENT
-      % Tractable improvements implemented directly
-      % Ambitious improvements suggested with detailed guidance
-      % Loose ends resolved where feasible
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND ENHANCED DOCUMENT
-      % Tractable improvements implemented directly
-      % Ambitious improvements suggested with detailed guidance
-      % Loose ends resolved where feasible
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>

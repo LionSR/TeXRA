@@ -191,13 +191,11 @@ prompts:
       \newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else gray\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\textit{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else gray\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 1ST LATEX_DOCUMENT_WITH_NOTATION_COMMENTS HERE
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND LATEX_DOCUMENT_WITH_NOTATION_COMMENTS HERE
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>
 
     - |
@@ -269,11 +267,9 @@ prompts:
       Ensure that the output documents are in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 1ST_IMPROVED_LATEX_DOCUMENT_WITH_SAFE_NOTATION_CHANGES_AND_REMAINING_COMMENTS HERE
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND_IMPROVED_LATEX_DOCUMENT_WITH_SAFE_NOTATION_CHANGES_AND_REMAINING_COMMENTS HERE
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>

@@ -145,13 +145,11 @@ prompts:
       Following your analysis, output the FULLY EXPANDED version with all derivations shown explicitly:
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 1ST_FULLY_EXPANDED_LATEX_DOCUMENT HERE
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND_FULLY_EXPANDED_LATEX_DOCUMENT HERE
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>
 
     - |
@@ -272,13 +270,11 @@ prompts:
       Remember: Text inside \critique{...} must use proper LaTeX syntax.
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 1ST_EXPANDED_DOCUMENT_WITH_CRITIQUE_COMMENTS HERE
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND_EXPANDED_DOCUMENT_WITH_CRITIQUE_COMMENTS HERE
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>
 
     - |
@@ -393,11 +389,9 @@ prompts:
       GUIDING PRINCIPLE: Fix only what needs fixing. Acknowledge what is correct. Ensure consistency across all documents. Do not add new content beyond necessary corrections. Preserve the document's original character and scope.
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
-      % 1ST_COMPLETE_FIXED_DOCUMENT_WITH_ALL_CORRECTIONS_IMPLEMENTED_AND_COMMENT_ANNOTATIONS
+      {% for output in OUTPUT_FILES_ORDER %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
       </document>
-      <document name="{{ OUTPUT_FILES_ORDER[1] }}">
-      % 2ND_COMPLETE_FIXED_DOCUMENT_WITH_ALL_CORRECTIONS_IMPLEMENTED_AND_COMMENT_ANNOTATIONS
-      </document>
-      ... (repeat for all output files)
+      {% endfor %}
       </documents>
