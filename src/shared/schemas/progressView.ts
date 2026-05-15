@@ -18,11 +18,13 @@ import { StreamLogEntrySchema } from './log';
 import { AgentOptionDataSchema, ModelOptionDataSchema } from './mainView';
 import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import {
+  ExternalInquirySessionLinksSchema,
+  ExternalInquiryThreadIdSchema,
+} from './inquiry';
+import {
   AgentProposalSchema,
   AgentProposalPermissionSchema,
   BashPermissionSchema,
-  EXTERNAL_INQUIRY_ACTIONS,
-  ExternalInquirySessionLinksSchema,
   ExternalInquiryPermissionSchema,
   PLAN_APPROVAL_ACTIONS,
   PlanApprovalPermissionSchema,
@@ -675,14 +677,31 @@ const PlanApprovalActionMessageSchema = z.object({
   feedback: z.string().optional(),
 });
 
-const ExternalInquiryActionMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION),
-  requestId: z.string().min(1),
-  action: z.enum([...EXTERNAL_INQUIRY_ACTIONS, 'skip'] as const),
-  answer: z.string().optional(),
-  feedback: z.string().optional(),
-  sessionLinks: ExternalInquirySessionLinksSchema.optional(),
-});
+const ExternalInquiryActionMessageSchema = z.discriminatedUnion('action', [
+  z.object({
+    command: z.literal(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION),
+    action: z.literal('submit'),
+    threadId: ExternalInquiryThreadIdSchema,
+    answer: z.string().min(1),
+    sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
+  }),
+  z.object({
+    command: z.literal(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION),
+    action: z.literal('drop'),
+    threadId: ExternalInquiryThreadIdSchema,
+  }),
+  z.object({
+    command: z.literal(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION),
+    action: z.literal('draft'),
+    threadId: ExternalInquiryThreadIdSchema,
+    draft: z
+      .object({
+        answer: z.string(),
+        sessionLinks: z.string(),
+      })
+      .nullable(),
+  }),
+]);
 
 const UserQuestionActionMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION),

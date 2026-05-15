@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 // Local imports - core
 import { initPlatform } from '@platform/platform';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { tryResumeFromSnapshot } from '@commands/agent/resumeFromSnapshot';
 import {
   SHUTDOWN_PHASE,
   type LifecycleHost,
@@ -186,6 +187,9 @@ export async function activate(context: vscode.ExtensionContext) {
     storage: new VscodeStorage(context),
     secrets: new VscodeSecrets(context),
     lifecycle,
+    agentResume: {
+      tryResumeStream: (streamId) => tryResumeFromSnapshot(streamId),
+    },
   });
   registerAgentFeatures();
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => disposeStatusListener?.());

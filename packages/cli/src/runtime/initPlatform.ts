@@ -92,6 +92,7 @@ export async function initCliPlatform(
       }),
       secrets: getCliSecrets(),
       lifecycle: noopLifecycle,
+      agentResume: { tryResumeStream: async () => false },
     });
     initializeCliSupabaseAuth(cliPlatformLog);
     initializeServerSideKeyAccess(

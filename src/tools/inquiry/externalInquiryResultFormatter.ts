@@ -7,7 +7,7 @@ import type { ToolResult } from '@tools/result';
 // Local imports - inquiry storage
 import type {
   ExternalInquiryThreadManifest,
-  PersistedExternalInquiryTurn,
+  PersistedAnsweredTurn,
 } from './externalInquiryStorage';
 
 const EXTERNAL_INQUIRY_REPORT_THRESHOLD = 20_000;
@@ -22,7 +22,7 @@ function toCurrentExecutionPath(path: string, executionId?: string): string {
 }
 
 function currentManifestPath(
-  persisted: PersistedExternalInquiryTurn,
+  persisted: PersistedAnsweredTurn,
 ): string | undefined {
   const mirror = persisted.executionMirrorPaths;
   if (!mirror) return undefined;
@@ -49,7 +49,7 @@ function appendSessionLinks(
 
 function appendContinuationGuidance(
   lines: string[],
-  persisted: PersistedExternalInquiryTurn,
+  persisted: PersistedAnsweredTurn,
   knownSessionLinks: string[] | undefined,
 ): void {
   const { threadId } = persisted;
@@ -106,7 +106,7 @@ export function buildRejectedExternalInquiryResult(
 }
 
 function buildExternalInquiryOutput(
-  persisted: PersistedExternalInquiryTurn,
+  persisted: PersistedAnsweredTurn,
   answer: string,
 ): string {
   const lines = [
@@ -126,7 +126,7 @@ function buildExternalInquiryOutput(
 }
 
 function buildExternalInquiryReport(
-  persisted: PersistedExternalInquiryTurn,
+  persisted: PersistedAnsweredTurn,
   answer: string,
 ): string {
   const lines = [
@@ -164,7 +164,7 @@ const reportLocks = new Map<string, Promise<void>>();
 
 export async function appendExternalInquiryReport(params: {
   executionId: string;
-  persisted: PersistedExternalInquiryTurn;
+  persisted: PersistedAnsweredTurn;
   answer: string;
 }): Promise<void> {
   const prev = reportLocks.get(params.executionId) ?? Promise.resolve();
@@ -195,7 +195,7 @@ export async function appendExternalInquiryReport(params: {
 }
 
 export function buildExternalInquiryResult(params: {
-  persisted: PersistedExternalInquiryTurn;
+  persisted: PersistedAnsweredTurn;
   answer: string;
   includeLongAnswerRedirect: boolean;
 }): ToolResult {

@@ -125,7 +125,7 @@ function createDefaultTools() {
     delegate_agent: new DelegateAgentTool(),
     executions: new ExecutionsTool(),
     accept_run_files: new AcceptRunFilesTool(),
-    external_inquiry: new ExternalInquiryTool(),
+    inquiry: new ExternalInquiryTool(),
     ask_user_question: new AskUserQuestionTool(),
     github_subscription: new GitHubSubscriptionTool(),
     probe_environment: new ProbeEnvironmentTool(),

@@ -13,10 +13,6 @@ import {
 } from '@agent/runtime/runCoordinators';
 import type { StreamTabId } from '@shared/schemas';
 import {
-  _rejectAllPendingInquiries,
-  _rejectPendingInquiriesForStream,
-} from '@tools/inquiry';
-import {
   _rejectAllPendingUserQuestions,
   _rejectPendingUserQuestionsForStream,
 } from '@tools/userQuestion';
@@ -38,7 +34,6 @@ import {
 export function cleanupApprovalsForStream(streamId: StreamTabId): void {
   toolEditApprovalController.rejectPendingForStream(streamId);
   bashApprovalController.rejectPendingForStream(streamId);
-  _rejectPendingInquiriesForStream(streamId);
   _rejectPendingUserQuestionsForStream(streamId);
   toolEditApprovalController.clearBypassForStream(streamId);
   _clearProposalBypassForStream(streamId);
@@ -52,7 +47,6 @@ export function cleanupApprovalsForStream(streamId: StreamTabId): void {
 export function cleanupAllApprovals(): void {
   toolEditApprovalController.rejectAllPending();
   bashApprovalController.rejectAllPending();
-  _rejectAllPendingInquiries();
   _rejectAllPendingUserQuestions();
   toolEditApprovalController.clearAllBypass();
   _clearAllProposalBypass();
