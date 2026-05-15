@@ -66,7 +66,6 @@ export class UsageStatsManager {
     // optional feature.
     void applyTurnAccounting(stream, {
       tokens: (delta.inputTokens ?? 0) + (delta.outputTokens ?? 0),
-      durationMs: 0,
     }).catch(() => {
       /* accounting is informational only; never fail usage on this */
     });

@@ -1,4 +1,5 @@
 import type { Odyssey } from '@tools/odyssey';
+import { odysseyElapsedMs } from '@tools/odyssey/odysseyMeta';
 
 import { formatOdysseyTime } from './formatOdysseyTime';
 import {
@@ -23,7 +24,7 @@ export async function buildContinuationFollowUp(
   const template = await getContinuationTemplate();
   return render(template, {
     objective: odyssey.objective,
-    timeUsed: formatOdysseyTime(odyssey.timeUsedMs),
+    timeUsed: formatOdysseyTime(odysseyElapsedMs(odyssey)),
   });
 }
 

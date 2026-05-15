@@ -76,7 +76,11 @@ export class ToolUseWaitNode<C> extends Node<
       });
       if (odysseyFollowUp && !session.hasQueuedFollowUp()) {
         await OdysseyStore.recordEvent(streamId, 'continuation_injected');
-        return { kind: 'continue', followUp: odysseyFollowUp };
+        return {
+          kind: 'continue',
+          followUp: odysseyFollowUp,
+          synthetic: true,
+        };
       }
     }
 
@@ -120,11 +124,16 @@ export class ToolUseWaitNode<C> extends Node<
     shared.lastError = undefined;
     shared.userCancelledRetry = undefined;
 
-    onFollowUpConsumed?.();
+    // Synthesized continuations (e.g. Odyssey) don't come from the user
+    // queue, so they must not emit updateQueuedFollowUps via the consume
+    // callback. They also don't need to be replayed in the chat log.
+    if (!execRes.synthetic) {
+      onFollowUpConsumed?.();
+      logger.userMessage(execRes.followUp);
+    }
     StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
       runtimeHost,
     });
-    logger.userMessage(execRes.followUp);
     shared.messages = await modelHandler.createUserFollowUpMessages(
       shared.messages,
       execRes.followUp,

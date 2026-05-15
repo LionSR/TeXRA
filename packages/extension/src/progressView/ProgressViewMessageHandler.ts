@@ -238,7 +238,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         await vscode.window.showInformationMessage(msg);
       },
       [PROGRESS_VIEW_COMMANDS.OPEN_ODYSSEY_PANEL]: async (data) => {
-        await handleOpenOdysseyPanel(data.stream);
+        await handleOpenOdysseyPanel(data.stream, this.provider.webviewUpdater);
       },
       [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: async (data) => {
         const isNowEnabled = toggleProposalBypass(
