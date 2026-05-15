@@ -3,7 +3,6 @@ import { fileURLToPath } from 'url';
 
 import * as vscode from 'vscode';
 
-import { getAgent } from '@agent/index';
 import {
   ExtensionCategory,
   FILE_SELECTION_COMMAND_IDS,
@@ -52,10 +51,6 @@ type RequestEditedFileMessage = MessageFor<
 
 type RequestBaseFileMessage = MessageFor<
   typeof MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE
->;
-
-type RequestDefaultOutputFilesMessage = MessageFor<
-  typeof MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES
 >;
 
 type SetMultipleFilesMessage = MessageFor<
@@ -143,27 +138,6 @@ export class FileManager extends BaseWebviewManager {
         : undefined,
     });
     this.postGettingStartedBanner(files.length === 0);
-  }
-
-  async handleRequestDefaultOutputFiles(
-    message: RequestDefaultOutputFilesMessage,
-  ): Promise<void> {
-    let files: string[] = [];
-    if (message.agent) {
-      try {
-        const entry = getAgent(message.agent);
-        files = entry?.defaultOutputFiles ?? [];
-      } catch (err) {
-        logger.error(
-          CHANNEL,
-          `Error requesting default output files: ${toErrorMessage(err)}`,
-        );
-      }
-    }
-    this.postMessage({
-      command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
-      files,
-    });
   }
 
   handleSetMultipleFiles(message: SetMultipleFilesMessage): void {

@@ -25,7 +25,6 @@ export const MAIN_VIEW_COMMANDS = {
   // Request file cases (single-file refresh requests)
   REQUEST_EDITED_FILE: 'requestEditedFile',
   REQUEST_BASE_FILE: 'requestBaseFile',
-  REQUEST_DEFAULT_OUTPUT_FILES: 'requestDefaultOutputFiles',
 
   // Multiple file operations
   SET_INPUT_FILES: 'setInputFiles',
@@ -84,7 +83,6 @@ export const MAIN_VIEW_COMMANDS = {
   RECORDING_STARTED: 'recordingStarted',
   RECORDING_ERROR: 'recordingError',
   SET_EDITED_FILE: 'setEditedFile',
-  SET_DEFAULT_OUTPUT_FILES: 'setDefaultOutputFiles',
   ADD_MEDIA_FILE: 'addMediaFile',
   SET_OUTPUT_FILES: 'setOutputFiles',
   SET_RECENT_COMMITS: 'setRecentCommits',

@@ -461,10 +461,6 @@ export const SetOutputFilesMessageSchema = FilesPayloadSchema.extend({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES),
 });
 
-export const SetDefaultOutputFilesMessageSchema = FilesPayloadSchema.extend({
-  command: z.literal(MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES),
-});
-
 export const AddMediaFileMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE),
   file: z.string(),
@@ -632,7 +628,6 @@ export const MainViewMessageSchema = z.discriminatedUnion('command', [
   SetContextFilesMessageSchema,
   SetMediaFilesMessageSchema,
   SetOutputFilesMessageSchema,
-  SetDefaultOutputFilesMessageSchema,
   AddMediaFileMessageSchema,
   SetRecentCommitsMessageSchema,
   SetCurrentFileMessageSchema,
@@ -757,10 +752,6 @@ const RequestFileMessages = [
     command: z.literal(MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE),
     notifyWhenEmpty: z.boolean().nullish(),
     preserveBaseFile: z.boolean().optional(),
-  }),
-  z.object({
-    command: z.literal(MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES),
-    agent: z.string().optional(),
   }),
 ] as const;
 
