@@ -1,9 +1,6 @@
 // Local imports - agent
 import { loadAgents } from '@agent/index';
-import {
-  DEFAULT_AGENT_MODEL,
-  type AgentConfigPayload,
-} from '@agent/core/AgentConfig';
+import { type AgentConfigPayload } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { interruptActiveChildren } from '@agent/runtime/executionRegistry';
 import { executeAgent } from '@agent/runtime/executeAgent';
@@ -12,6 +9,7 @@ import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
 
 // Local imports - auth
+import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { isOAuthProvider } from '@auth/sharedConfig';
 
 // Local imports - common
@@ -24,19 +22,14 @@ import {
 } from '@shared/schemas';
 
 // Local imports - CLI runtime
-import {
-  applyCliGlobalArgs,
-  flagValue,
-  type CliContext,
-  type CliPromptRequest,
-} from '../runtime/cliContext';
+import { type CliContext, type CliPromptRequest } from '../runtime/cliContext';
 import {
   hasCliApprovalDenied,
   installCliApprovalHandlers,
 } from '../runtime/approvalAdapter';
+import { resolveChatDefaults } from '../runtime/chatDefaults';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '../runtime/initPlatform';
-import { parseLoginArgs } from '../runtime/loginArgs';
 import { getCliModelAccess } from '../runtime/modelAccess';
 import { createCliRuntimeHost } from '../runtime/runtimeHost';
 import {
@@ -58,7 +51,14 @@ export interface ChatResult {
   exitCode: number;
 }
 
-const DEFAULT_CHAT_AGENT = 'chat';
+export interface RunChatInit {
+  /** `--agent` override from the CLI; falls through `resolveChatDefaults`. */
+  readonly agentOverride?: string;
+  /** `--model` override from the CLI; falls through `resolveChatDefaults`. */
+  readonly modelOverride?: string;
+  /** `--tool-display` parsed enum value. */
+  readonly toolDisplay: ChatToolDisplayMode;
+}
 
 interface ChatSessionState {
   readerClosed: boolean;
@@ -88,14 +88,34 @@ function parseCommand(line: string): { command: string; rest: string } {
   return { command: command.toLowerCase(), rest: rest.join(' ') };
 }
 
-function parseToolDisplayMode(
-  value: string | undefined,
-): ChatToolDisplayMode | undefined {
-  if (value == null) return 'minimal';
-  if (value === 'grouped' || value === 'minimal' || value === 'hidden') {
-    return value;
+interface SlashLoginArgs {
+  readonly provider?: string;
+  readonly noBrowser: boolean;
+}
+
+/** Slash-command parser for `/tools <mode>` — citty does not see slash args. */
+function parseToolDisplaySlash(rest: string): ChatToolDisplayMode | undefined {
+  const trimmed = rest.trim();
+  if (trimmed === '') return 'minimal';
+  if (trimmed === 'grouped' || trimmed === 'minimal' || trimmed === 'hidden') {
+    return trimmed;
   }
   return undefined;
+}
+
+/** Minimal parser for the `/login [provider] [--no-browser]` slash command. */
+function parseSlashLoginArgs(rest: string): SlashLoginArgs {
+  const tokens = rest.trim().split(/\s+/).filter(Boolean);
+  let provider: string | undefined;
+  let noBrowser = false;
+  for (const token of tokens) {
+    if (token === '--no-browser') {
+      noBrowser = true;
+    } else if (!token.startsWith('-') && !provider) {
+      provider = token;
+    }
+  }
+  return { provider, noBrowser };
 }
 
 async function modelAvailable(
@@ -152,31 +172,32 @@ function installChatResponsePrinter(
   };
 }
 
-export async function runChat(context: CliContext): Promise<ChatResult> {
-  const args = context.argv.slice(1);
-  const chatContext = applyCliGlobalArgs(context, args);
-  const initialToolDisplay = parseToolDisplayMode(
-    flagValue(args, '--tool-display'),
-  );
-  let validationRenderer: ChatTerminalRenderer | undefined;
-  const usageError = (message: string): ChatResult => {
-    validationRenderer ??= new ChatTerminalRenderer(chatContext.colorEnabled);
-    validationRenderer.error(message);
-    return { exitCode: CliExitCode.Usage };
-  };
-  if (initialToolDisplay == null) {
-    return usageError(
-      'Unsupported --tool-display. Expected grouped, minimal, or hidden.',
-    );
-  }
-  let toolDisplay: ChatToolDisplayMode = initialToolDisplay;
+export async function runChat(
+  context: CliContext,
+  init: RunChatInit,
+): Promise<ChatResult> {
+  const chatContext = context;
   if (chatContext.mode === 'headless') {
-    return usageError(
+    const validationRenderer = new ChatTerminalRenderer(
+      chatContext.colorEnabled,
+    );
+    validationRenderer.error(
       'texra chat requires an interactive terminal. Did you mean texra run?',
     );
+    return { exitCode: CliExitCode.Usage };
   }
-  let agent = flagValue(args, '--agent') ?? DEFAULT_CHAT_AGENT;
-  let model = flagValue(args, '--model', '-m') ?? DEFAULT_AGENT_MODEL;
+  let toolDisplay: ChatToolDisplayMode = init.toolDisplay;
+  // Resolve defaults via workspace → user → last-used → built-in.
+  // The platform isn't initialised yet, so the history tier reads the same
+  // workspace storage that `initCliPlatform` will mount below.
+  await initCliPlatform({ ...chatContext, quietLogs: true });
+  const defaults = await resolveChatDefaults({
+    cwd: chatContext.cwd,
+    agentOverride: init.agentOverride,
+    modelOverride: init.modelOverride,
+  });
+  let agent = defaults.agent;
+  let model = defaults.model;
   const currentMetadata = () => ({
     agent,
     model,
@@ -191,7 +212,9 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
   });
 
   const startupContext = currentSessionContext();
-  await initCliPlatform(startupContext);
+  // Platform is already initialised above (before default resolution); this
+  // call only re-aligns `helperModel` to the resolved model.
+  await setCliHelperModel(model);
   installCliApprovalHandlers(startupContext);
   await loadAgents();
 
@@ -510,7 +533,7 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
             renderer.warn('Usage: /model <name>');
           }
         } else if (command === 'tools') {
-          const mode = parseToolDisplayMode(rest);
+          const mode = parseToolDisplaySlash(rest);
           if (mode == null) {
             renderer.warn('Usage: /tools <grouped|minimal|hidden>');
           } else {
@@ -525,22 +548,17 @@ export async function runChat(context: CliContext): Promise<ChatResult> {
         } else if (command === 'status') {
           renderer.printStatus(currentMetadata(), session.streamId);
         } else if (command === 'login') {
-          const loginArgs = parseLoginArgs(
-            rest.trim().split(/\s+/).filter(Boolean),
-          );
-          if (loginArgs.error || !isOAuthProvider(loginArgs.provider)) {
-            renderer.warn(
-              'Usage: /login [github|google] [--provider github|google] [--no-browser]',
-            );
+          const loginArgs = parseSlashLoginArgs(rest);
+          const provider = loginArgs.provider ?? DEFAULT_OAUTH_PROVIDER;
+          if (!isOAuthProvider(provider)) {
+            renderer.warn('Usage: /login [github|google] [--no-browser]');
           } else {
             try {
               if (!loginArgs.noBrowser) {
-                renderer.info(
-                  `Opening browser for TeXRA ${loginArgs.provider} sign-in.`,
-                );
+                renderer.info(`Opening browser for TeXRA ${provider} sign-in.`);
               }
               const authSession = await signInCliSupabase({
-                provider: loginArgs.provider,
+                provider,
                 openBrowser: !loginArgs.noBrowser,
                 manualBrowserHint: '/login --no-browser',
                 onAuthUrl: loginArgs.noBrowser
