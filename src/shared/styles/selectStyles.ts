@@ -33,6 +33,19 @@ export const compactFormControlStyles: CSSResult = css`
     margin-inline-start: var(--wa-space-3xs);
   }
 
+  wa-select::part(listbox) {
+    padding-block: var(--wa-space-3xs);
+    border-radius: var(--border-radius);
+    box-shadow: var(--wa-shadow-s, var(--wa-shadow-m));
+  }
+
+  wa-select wa-option::part(base) {
+    min-height: 22px;
+    padding: 2px 8px 2px 4px;
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+  }
+
   wa-input {
     font-size: var(--font-size-sm);
   }
