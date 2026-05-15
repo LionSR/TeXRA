@@ -100,7 +100,12 @@ export class ToolCard extends LitElement {
         font-family: var(--wa-font-family-mono, monospace), monospace;
         font-size: var(--font-size-xs);
         padding: var(--border-thin) var(--border-radius-large);
-        background: var(--wa-color-badge-bg, rgba(128, 128, 128, 0.15));
+        background: var(
+          --wa-color-neutral-fill-quiet,
+          rgba(128, 128, 128, 0.15)
+        );
+        border: var(--border-thin) solid
+          var(--wa-color-neutral-border-quiet, transparent);
         color: var(--wa-color-neutral-on-quiet);
         border-radius: var(--border-radius);
       }
