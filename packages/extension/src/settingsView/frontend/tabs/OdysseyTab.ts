@@ -5,25 +5,10 @@ import { repeat } from 'lit/directives/repeat.js';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
 import { postMessage } from '@shared/hostBridge';
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { odysseyElapsedMs } from '@shared/schemas';
+import { formatOdysseyTime, odysseyElapsedMs } from '@shared/schemas';
 import type { Odyssey, OdysseyStatus } from '@shared/schemas';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-
-// Webview can't import from @agent; this is a local copy of formatOdysseyTime
-// matching @agent/odyssey/formatOdysseyTime — keep them aligned or the tool
-// view and the settings tab will disagree on the same odyssey's duration.
-function formatElapsed(odyssey: { createdAt: string }): string {
-  const ms = odysseyElapsedMs(odyssey);
-  if (ms <= 0) return '0s';
-  const totalSec = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSec / 3600);
-  const min = Math.floor((totalSec % 3600) / 60);
-  const sec = totalSec % 60;
-  if (hours > 0) return `${hours}h ${min}m`;
-  if (min > 0) return `${min}m ${sec}s`;
-  return `${sec}s`;
-}
 
 function statusLabel(status: OdysseyStatus): string {
   return status[0].toUpperCase() + status.slice(1);
@@ -189,7 +174,7 @@ export class OdysseyTab extends LitElement {
           <div class="objective" title=${item.objective}>${item.objective}</div>
           <div class="meta">
             <span class="stream-id">${item.streamId}</span>
-            <span>· ${formatElapsed(item)} elapsed</span>
+            <span>· ${formatOdysseyTime(odysseyElapsedMs(item))} elapsed</span>
             ${item.continuationCount > 0
               ? html`<span>· ${item.continuationCount} continuations</span>`
               : nothing}

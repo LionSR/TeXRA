@@ -15,6 +15,8 @@ export {
   type OdysseyCommand,
   type OdysseyToolInput,
   isOdysseyInFlight,
+  formatOdysseyTime,
+  odysseyElapsedMs,
 } from './odysseyMeta';
 
 export { OdysseyStore } from './odysseyStore';

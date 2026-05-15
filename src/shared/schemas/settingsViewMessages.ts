@@ -66,9 +66,13 @@ import {
 import { StreamTabIdSchema } from './identifiers';
 // Import OdysseySchema from its leaf module so this file (consumed by
 // webview frontends) does not pull in OdysseyTool/OdysseyStore runtime modules.
-import { OdysseySchema, odysseyElapsedMs } from '@tools/odyssey/odysseyMeta';
+import {
+  OdysseySchema,
+  formatOdysseyTime,
+  odysseyElapsedMs,
+} from '@tools/odyssey/odysseyMeta';
 export { SETTINGS_VIEW_CMD };
-export { OdysseySchema, odysseyElapsedMs };
+export { OdysseySchema, formatOdysseyTime, odysseyElapsedMs };
 export type { Odyssey, OdysseyStatus } from '@tools/odyssey/odysseyMeta';
 
 /** Tab name order - single source of truth for tab indices */
