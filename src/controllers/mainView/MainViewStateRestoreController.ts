@@ -39,9 +39,6 @@ export function buildMainViewState(
     toolUseAgent: isToolUse ? resolvedAgent : undefined,
     model: agentConfig.model,
     instruction: agentConfig.instruction,
-    inputFile: agentConfig.inputFile,
-    contextFile: agentConfig.contextFile,
-    mediaFile: agentConfig.mediaFile,
     editedFile: agentConfig.editedFile,
     inputFiles: agentConfig.inputFiles,
     contextFiles: agentConfig.contextFiles,
@@ -56,6 +53,5 @@ export function buildMainViewState(
     autoExtractTikzFigure: toolConfig.autoExtractTikzFigure,
     autoCompileInputPdf: toolConfig.autoCompileInputPdf,
     attachTeXCount: toolConfig.attachTeXCount,
-    attachDiagnostics: toolConfig.attachDiagnostics,
   });
 }

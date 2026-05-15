@@ -101,33 +101,17 @@ const mainWorkflowMessages = [
   { command: 'setModelOptions', optionsData: modelOptions },
   { command: 'setSelectedAgent', sessionType: 'workflow', agentId: 'correct' },
   {
-    command: 'setInputFile',
-    files: ['main.tex', 'appendix.tex', 'sections/introduction.tex'],
-  },
-  { command: 'inputFileSelected', filePath: 'main.tex' },
-  {
     command: 'setInputFiles',
     files: ['main.tex', 'sections/introduction.tex', 'appendix.tex'],
   },
   {
-    command: 'setContextFile',
-    files: ['references.bib', 'notes/algebraic-expanders.tex'],
-  },
-  {
     command: 'setContextFiles',
-    files: ['references.bib', 'notes/algebraic-expanders.tex'],
-  },
-  {
-    command: 'setAuxiliaryFile',
-    files: ['macros.tex', 'revtex4-2.cls'],
-  },
-  {
-    command: 'setAuxiliaryFiles',
-    files: ['macros.tex', 'style/revtex4-2.cls'],
-  },
-  {
-    command: 'setMediaFile',
-    files: ['figures/spectral-gap.pdf', 'figures/proof-sketch.png'],
+    files: [
+      'references.bib',
+      'notes/algebraic-expanders.tex',
+      'macros.tex',
+      'style/revtex4-2.cls',
+    ],
   },
   {
     command: 'setMediaFiles',
@@ -413,7 +397,6 @@ function progressMessages() {
               model: 'gemini31p',
               instruction:
                 'Tighten the exposition in the introduction and preserve all LaTeX notation.',
-              inputFile: 'paper/main.tex',
               inputFiles: ['paper/main.tex'],
               contextFiles: ['references.bib'],
               mediaFiles: ['figures/spectral-gap.pdf'],
@@ -474,11 +457,8 @@ function progressMessages() {
             'Tighten the exposition in the introduction and preserve all mathematical notation.',
           memories: [],
           workingDirectory: null,
-          inputFile: 'paper/main.tex',
           inputFiles: ['paper/main.tex'],
-          contextFile: 'references.bib',
           contextFiles: ['references.bib', 'macros.tex'],
-          mediaFile: 'figures/spectral-gap.pdf',
           mediaFiles: ['figures/spectral-gap.pdf'],
           outputFiles: ['History/main_polished.tex'],
           toolConfig: {

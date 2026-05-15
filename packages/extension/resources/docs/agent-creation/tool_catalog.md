@@ -58,7 +58,7 @@ recommended groups at the bottom are a good starting point.
 ## Agent delegation
 
 - `delegate_workflow` — delegate to a workflow agent for whole-document
-  operations. Pass `agent`, `model`, `instruction`, `inputFile`. Returns
+  operations. Pass `agent`, `model`, `instruction`, `inputFiles`. Returns
   asynchronously via the follow-up queue.
 - `delegate_agent` — delegate to another tool-use agent. Pass `agent`,
   `model`, and `instruction` for a fresh run, or `execution_id` +

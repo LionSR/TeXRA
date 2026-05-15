@@ -40,20 +40,8 @@ const views = [
         agentId: 'correct',
       },
       {
-        command: 'setInputFile',
-        files: ['appendix.tex', 'coverLetter.tex', 'main.tex'],
-      },
-      {
-        command: 'inputFileSelected',
-        filePath: 'main.tex',
-      },
-      {
         command: 'setInputFiles',
-        files: ['appendix.tex', 'References/2509.24978/main.tex'],
-      },
-      {
-        command: 'setContextFile',
-        files: ['refs.bib', 'References/2509.24978/main.bbl'],
+        files: ['main.tex', 'appendix.tex', 'References/2509.24978/main.tex'],
       },
       {
         command: 'setContextFiles',

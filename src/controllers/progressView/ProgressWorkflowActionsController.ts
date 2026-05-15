@@ -85,7 +85,7 @@ export class ProgressWorkflowActionsController {
       await this.deps.runDiff({
         agent: taskState.agentConfig.agent,
         model: taskState.agentConfig.model,
-        inputFile: taskState.agentConfig.inputFile,
+        inputFile: taskState.agentConfig.inputFiles[0] ?? '',
         outputFiles: taskState.agentConfig.outputFiles,
         outputFilesActive: taskState.activeFiles.output,
         streamId: stream,
@@ -107,7 +107,7 @@ export class ProgressWorkflowActionsController {
         streamId: stream,
         agent: taskState.agentConfig.agent,
         model: taskState.agentConfig.model,
-        inputFile: taskState.agentConfig.inputFile,
+        inputFile: taskState.agentConfig.inputFiles[0] ?? '',
         outputFiles,
         ...(executionId && { executionId }),
         skipProgressViewClear: true,
