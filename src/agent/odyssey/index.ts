@@ -3,8 +3,6 @@ export {
   buildObjectiveUpdatedFollowUp,
 } from './buildContinuationFollowUp';
 
-export { formatOdysseyTime } from './formatOdysseyTime';
-
 export {
   maybeBuildOdysseyContinuation,
   type OdysseyContinuationContext,

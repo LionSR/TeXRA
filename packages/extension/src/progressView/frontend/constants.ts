@@ -36,7 +36,6 @@ export const ELEMENT_IDS = {
   COMPACT_RESPONSE_BTN: 'compactResponseBtn',
   YOLO_TOGGLE_BTN: 'yoloToggleBtn',
   SUPER_YOLO_TOGGLE_BTN: 'superYoloToggleBtn',
-  ODYSSEY_TOGGLE_BTN: 'odysseyToggleBtn',
   POLISH_FOLLOW_UP_BTN: 'polishFollowUpBtn',
   CLEAR_FOLLOW_UP_BTN: 'clearFollowUpBtn',
   SEND_FOLLOW_UP_BTN: 'sendFollowUpBtn',
@@ -163,21 +162,10 @@ const COMPACT_RESPONSE_BUTTON = Object.freeze({
   disabled: true,
 });
 
-const ODYSSEY_TOGGLE_BUTTON = Object.freeze({
-  id: ELEMENT_IDS.ODYSSEY_TOGGLE_BTN,
-  icon: 'compass',
-  command: PROGRESS_VIEW_COMMANDS.OPEN_ODYSSEY_PANEL,
-  title: 'Odyssey: set a persistent objective the agent works toward',
-  titleActive: 'Odyssey active — click to manage (pause/resume/abandon)',
-  className: 'odyssey-toggle-button',
-  isToggle: true,
-});
-
 const TOOL_USE_TOOLBAR = [
   STOP_STREAM_BUTTON,
   YOLO_TOGGLE_BUTTON,
   SUPER_YOLO_TOGGLE_BUTTON,
-  ODYSSEY_TOGGLE_BUTTON,
   COMPACT_RESPONSE_BUTTON,
   RESTORE_STATE_BUTTON,
   OPEN_TASK_STORAGE_BUTTON,

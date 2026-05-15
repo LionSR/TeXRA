@@ -86,8 +86,15 @@ export const syncHandlers: HandlerRegistry = {
               d.toolEditBypass = data.toolEditBypass;
             if (data.superYoloBypass !== undefined)
               d.superYoloBypass = data.superYoloBypass;
-            if (data.odysseyActive !== undefined)
+            // Treat odysseyActive as the source of truth: when it is
+            // explicitly set, also overwrite status/objective. JSON drops
+            // `undefined`, so the absence of these fields when active=false
+            // is expected and means "clear them".
+            if (data.odysseyActive !== undefined) {
               d.odysseyActive = data.odysseyActive;
+              d.odysseyStatus = data.odysseyStatus;
+              d.odysseyObjective = data.odysseyObjective;
+            }
           }
 
           if (data.conversationProgress) {

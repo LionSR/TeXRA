@@ -20,9 +20,14 @@ describe('progress toolbar icon consistency', () => {
     const constants = readSource(
       'packages/extension/src/progressView/frontend/constants.ts',
     );
+    const streamHeader = readSource(
+      'packages/extension/src/progressView/frontend/components/StreamHeader.ts',
+    );
     const iconRegistry = readSource('src/shared/wa/webAwesomeIcons.ts');
 
-    expect(constants).toContain("icon: 'compass'");
+    // Compass: Odyssey is no longer a toolbar toggle button — it's a passive
+    // header chip surfaced when the agent enters Odyssey mode.
+    expect(streamHeader).toContain('name="compass"');
     expect(iconRegistry).toContain('compass: faCompass');
 
     expect(constants).toContain("icon: 'compress'");

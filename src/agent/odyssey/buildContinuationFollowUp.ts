@@ -1,7 +1,9 @@
 import type { Odyssey } from '@tools/odyssey';
-import { odysseyElapsedMs } from '@tools/odyssey/odysseyMeta';
+import {
+  formatOdysseyTime,
+  odysseyElapsedMs,
+} from '@tools/odyssey/odysseyMeta';
 
-import { formatOdysseyTime } from './formatOdysseyTime';
 import {
   getContinuationTemplate,
   getObjectiveUpdatedTemplate,
