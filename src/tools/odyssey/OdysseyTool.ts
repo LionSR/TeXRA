@@ -22,6 +22,7 @@ function formatView(odyssey: Odyssey): string {
     `Status: ${odyssey.status}`,
     `Objective: ${odyssey.objective}`,
     `Time elapsed: ${formatOdysseyTime(odysseyElapsedMs(odyssey))}`,
+    `Continuations: ${odyssey.continuationCount} / ${odyssey.maxContinuations}`,
   ];
   if (odyssey.completedReason) {
     lines.push(`Completion reason: ${odyssey.completedReason}`);

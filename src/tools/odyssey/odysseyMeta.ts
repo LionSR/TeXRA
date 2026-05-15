@@ -10,6 +10,13 @@ export const ODYSSEY_FEATURE_FLAG_KEY =
 /** Cap on the history-event ring buffer per Odyssey record (oldest dropped). */
 export const ODYSSEY_HISTORY_LIMIT = 200;
 
+/**
+ * Default maximum continuations before the Odyssey auto-pauses for user
+ * confirmation. Acts as a safety net so a model that never calls
+ * `odyssey(complete)` doesn't loop forever.
+ */
+export const ODYSSEY_DEFAULT_MAX_CONTINUATIONS = 50;
+
 export const OdysseyStatusSchema = z.enum([
   'active',
   'paused',
@@ -26,6 +33,7 @@ export const OdysseyEventKindSchema = z.enum([
   'completed',
   'abandoned',
   'continuation_injected',
+  'continuation_cap_reached',
 ]);
 export type OdysseyEventKind = z.infer<typeof OdysseyEventKindSchema>;
 
@@ -41,6 +49,13 @@ export const OdysseySchema = z.object({
   streamId: StreamTabIdSchema,
   objective: z.string().min(1),
   status: OdysseyStatusSchema,
+  /** Continuations injected since the last resume / start. */
+  continuationCount: z.int().nonnegative().prefault(0),
+  /** Cap before auto-pause. Reset on resume so each leg gets a fresh budget. */
+  maxContinuations: z
+    .int()
+    .positive()
+    .prefault(ODYSSEY_DEFAULT_MAX_CONTINUATIONS),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   completedReason: z.string().nullish(),
