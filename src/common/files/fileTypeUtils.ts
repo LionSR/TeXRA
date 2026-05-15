@@ -1,6 +1,10 @@
 // Internal imports
 import { DEFAULT_TEXRA_SETTINGS } from '@shared/schemas/settingsConfiguration';
-import { getConfig } from '@utils/config/configUtils';
+import {
+  getConfig,
+  inspectConfig,
+  isConfigExplicitlySet,
+} from '@utils/config/configUtils';
 import { hasExtension } from '@utils/core/pathCore';
 
 /**
@@ -12,20 +16,26 @@ import { hasExtension } from '@utils/core/pathCore';
  */
 export type ExtensionCategory =
   | 'input'
-  | 'reference'
-  | 'auxiliary'
+  | 'context'
   | 'media'
   | 'audio'
   | 'edited';
 
 const INCLUDED_EXTENSION_KEYS: Record<ExtensionCategory, string> = {
   input: 'texra.files.included.inputExtensions',
-  reference: 'texra.files.included.referenceExtensions',
-  auxiliary: 'texra.files.included.auxiliaryExtensions',
+  context: 'texra.files.included.contextExtensions',
   media: 'texra.files.included.mediaExtensions',
   audio: 'texra.files.included.audioExtensions',
   edited: 'texra.files.included.editedExtensions',
 };
+
+/** Legacy keys preserved so older user customizations carry through the rename. */
+const LEGACY_REFERENCE_EXTENSIONS_KEY =
+  'texra.files.included.referenceExtensions';
+const LEGACY_AUXILIARY_EXTENSIONS_KEY =
+  'texra.files.included.auxiliaryExtensions';
+export const LEGACY_AUXILIARY_KEYWORDS_KEY =
+  'texra.files.ignored.auxiliaryKeywords';
 
 /**
  * Return the built-in extension defaults for a file category.
@@ -35,10 +45,8 @@ function getDefaultIncludedExtensions(category: ExtensionCategory): string[] {
   switch (category) {
     case 'input':
       return included.inputExtensions;
-    case 'reference':
-      return included.referenceExtensions;
-    case 'auxiliary':
-      return included.auxiliaryExtensions;
+    case 'context':
+      return included.contextExtensions;
     case 'media':
       return included.mediaExtensions;
     case 'edited':
@@ -50,11 +58,40 @@ function getDefaultIncludedExtensions(category: ExtensionCategory): string[] {
 
 /**
  * Retrieve included extensions for the given extension category.
+ *
+ * Back-compat: for `context`, fall back to the union of legacy
+ * `referenceExtensions` and `auxiliaryExtensions` user values only when
+ * the new key was never explicitly set — otherwise `getConfig()` would
+ * mask the legacy customization with the new defaults.
  */
 export function getIncludedExtensions(category: ExtensionCategory): string[] {
-  return getConfig<string[]>(
-    INCLUDED_EXTENSION_KEYS[category],
-    getDefaultIncludedExtensions(category),
+  const defaults = getDefaultIncludedExtensions(category);
+  if (
+    category === 'context' &&
+    !isConfigExplicitlySet(INCLUDED_EXTENSION_KEYS.context)
+  ) {
+    const legacyRef = readUserSetting<string[]>(
+      LEGACY_REFERENCE_EXTENSIONS_KEY,
+    );
+    const legacyAux = readUserSetting<string[]>(
+      LEGACY_AUXILIARY_EXTENSIONS_KEY,
+    );
+    if (
+      (legacyRef && legacyRef.length > 0) ||
+      (legacyAux && legacyAux.length > 0)
+    ) {
+      return [...new Set([...(legacyRef ?? []), ...(legacyAux ?? [])])];
+    }
+  }
+  return getConfig<string[]>(INCLUDED_EXTENSION_KEYS[category], defaults);
+}
+
+export function readUserSetting<T>(key: string): T | undefined {
+  const inspected = inspectConfig<T>(key);
+  return (
+    inspected?.workspaceValue ??
+    inspected?.workspaceFolderValue ??
+    inspected?.globalValue
   );
 }
 

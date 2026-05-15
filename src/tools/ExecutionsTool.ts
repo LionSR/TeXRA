@@ -75,10 +75,8 @@ import {
 const WORKFLOW_ONLY_FIELDS = new Set([
   'inputFile',
   'inputFiles',
-  'referenceFile',
-  'referenceFiles',
-  'auxiliaryFile',
-  'auxiliaryFiles',
+  'contextFile',
+  'contextFiles',
   'mediaFile',
   'mediaFiles',
   'outputFiles',

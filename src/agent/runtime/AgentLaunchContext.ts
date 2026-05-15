@@ -167,10 +167,7 @@ async function assembleAgentLaunchContext(
   const { configPayload } = input;
   const fullConfig = AgentConfigSchema.parse(configPayload);
   const resolution = await getAgentPath(fullConfig.agent, runtimeHost);
-  const [loadedSettings, prompt] = await loadAgentSettingAndPrompts(
-    resolution,
-    { outputFiles: fullConfig.outputFiles },
-  );
+  const [loadedSettings, prompt] = await loadAgentSettingAndPrompts(resolution);
   const setting = ensureAgentCategoryForSource(
     loadedSettings,
     resolution.entry.source,
