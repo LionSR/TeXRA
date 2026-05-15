@@ -30,6 +30,9 @@ prompts:
 
     Do NOT use any of these workflow-only variables: INPUT_FILE, INPUT_CONTENT,
     ALL_INPUTS, ALL_CONTEXTS, ADDITIONAL_INPUTS, OUTPUT_FILES_ORDER.
+    Also do NOT use the deprecated context aliases (kept only for back-compat
+    with old custom YAMLs): ALL_REFERENCES, ALL_AUXILIARYS, REFERENCE_CONTENT,
+    AUXILIARY_CONTENT.
     Tool-use agents access files through their tools, not through injected variables.
 
   userRequest: |
