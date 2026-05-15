@@ -41,13 +41,22 @@ export const OdysseySchema = z.object({
   streamId: StreamTabIdSchema,
   objective: z.string().min(1),
   status: OdysseyStatusSchema,
+  /** Cumulative token usage attributed to this odyssey (input + output). */
   tokensUsed: z.int().nonnegative().default(0),
-  timeUsedMs: z.int().nonnegative().default(0),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   completedReason: z.string().nullish(),
   history: z.array(OdysseyEventSchema).default([]),
 });
+
+/**
+ * Wall-clock elapsed time since the odyssey was started.
+ * Computed live so we don't need to accumulate ticks (which would either
+ * be wrong while paused or wrong while idle between turns).
+ */
+export function odysseyElapsedMs(odyssey: { createdAt: string }): number {
+  return Math.max(0, Date.now() - new Date(odyssey.createdAt).getTime());
+}
 export type Odyssey = z.infer<typeof OdysseySchema>;
 
 /** Top-level command names exposed by the OdysseyTool. */
