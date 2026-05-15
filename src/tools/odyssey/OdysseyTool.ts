@@ -22,8 +22,14 @@ function formatView(odyssey: Odyssey): string {
     `Status: ${odyssey.status}`,
     `Objective: ${odyssey.objective}`,
     `Time elapsed: ${formatOdysseyTime(odysseyElapsedMs(odyssey))}`,
-    `Continuations: ${odyssey.continuationCount} / ${odyssey.maxContinuations}`,
   ];
+  // Only surface the continuation count when we're close to the cap.
+  // Below 80% it's just noise the model doesn't need to weigh.
+  if (odyssey.continuationCount >= 0.8 * odyssey.maxContinuations) {
+    lines.push(
+      `Continuations: ${odyssey.continuationCount} / ${odyssey.maxContinuations} (approaching cap — odyssey will auto-pause for user confirmation)`,
+    );
+  }
   if (odyssey.completedReason) {
     lines.push(`Completion reason: ${odyssey.completedReason}`);
   }
