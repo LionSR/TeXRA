@@ -1,6 +1,4 @@
 // Third-party imports
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
-import type { ModelConfig } from 'llm-zoo';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -15,6 +13,8 @@ import type { FileLocation } from '@utils/files';
 
 // Local imports - model handlers
 import { ModelHandler } from './ModelHandler';
+import type { ModelConfig } from 'llm-zoo';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type {
   CreateResponseOptions,
   CreateResponseResult,
