@@ -158,6 +158,18 @@ describe('OdysseyTool', () => {
     expect(result.error).toMatch(/abandoned/i);
   });
 
+  it('rejects illegal store-level transitions from terminal states', async () => {
+    const tool = new OdysseyTool();
+    await callTool(tool, { command: 'start', objective: 'objective' });
+    await OdysseyStore.setStatus(STREAM_ID, 'abandoned');
+    await expect(OdysseyStore.setStatus(STREAM_ID, 'active')).rejects.toThrow(
+      /illegal/i,
+    );
+    await expect(OdysseyStore.setStatus(STREAM_ID, 'complete')).rejects.toThrow(
+      /illegal/i,
+    );
+  });
+
   it('reacts to runtime flag toggles via FakeConfigProvider', async () => {
     const platform = await installPlatform(false);
     const tool = new OdysseyTool();
