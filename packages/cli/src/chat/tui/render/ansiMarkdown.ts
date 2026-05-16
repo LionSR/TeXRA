@@ -46,10 +46,34 @@ function configureAnsi(md: MarkdownItInstance): void {
   const quotePrefix = (): string =>
     quoteDepth > 0 ? pico.dim('│ '.repeat(quoteDepth)) : '';
 
+  const startsAtQuoteOpen = (tokens: Parameters<RenderRule>[0], idx: number) =>
+    tokens[idx - 1]?.type === 'blockquote_open';
+
+  const quoteBlockStart = (
+    tokens: Parameters<RenderRule>[0],
+    idx: number,
+  ): string => {
+    if (quoteDepth === 0 || startsAtQuoteOpen(tokens, idx)) return '';
+    return quotePrefix();
+  };
+
+  const withQuoteGutter = (
+    tokens: Parameters<RenderRule>[0],
+    idx: number,
+    body: string,
+  ): string => {
+    if (quoteDepth === 0) return body;
+    return `${quoteBlockStart(tokens, idx)}${body.replaceAll(
+      '\n',
+      `\n${quotePrefix()}`,
+    )}`;
+  };
+
   const headingOpen: RenderRule = (tokens, idx) => {
     const level = Number(tokens[idx]?.tag?.slice(1) ?? 1);
     const marker = '#'.repeat(level);
-    return `\n${pico.bold(pico.cyan(`${marker} `))}`;
+    const start = quoteDepth === 0 ? '\n' : quoteBlockStart(tokens, idx);
+    return `${start}${pico.bold(pico.cyan(`${marker} `))}`;
   };
   const codeInline: RenderRule = (tokens, idx) =>
     pico.cyan(`\`${tokens[idx]?.content ?? ''}\``);
@@ -60,10 +84,18 @@ function configureAnsi(md: MarkdownItInstance): void {
     const body = md.options.highlight
       ? md.options.highlight(token.content, langName, '')
       : null;
-    return `${body || pico.gray(token.content.replace(/\n+$/, ''))}\n\n`;
+    return `${withQuoteGutter(
+      tokens,
+      idx,
+      body || pico.gray(token.content.replace(/\n+$/, '')),
+    )}\n\n`;
   };
   const codeBlock: RenderRule = (tokens, idx) =>
-    `${pico.gray(tokens[idx]?.content.replace(/\n+$/, '') ?? '')}\n\n`;
+    `${withQuoteGutter(
+      tokens,
+      idx,
+      pico.gray(tokens[idx]?.content.replace(/\n+$/, '') ?? ''),
+    )}\n\n`;
   const listItemOpen: RenderRule = (tokens, idx) => {
     const token = tokens[idx];
     const marker = token?.info ? `${token.info}${token.markup || '.'}` : '•';
@@ -89,6 +121,11 @@ function configureAnsi(md: MarkdownItInstance): void {
     if (prev === 'blockquote_open' || prev === 'list_item_open') return '';
     return quotePrefix();
   };
+  const paragraphClose: RenderRule = (tokens, idx) => {
+    if (tokens[idx]?.hidden) return '\n';
+    if (tokens[idx + 1]?.type === 'blockquote_close') return '\n';
+    return quoteDepth > 0 ? `\n${quotePrefix()}\n` : '\n\n';
+  };
   const textRule: RenderRule = (tokens, idx) => tokens[idx]?.content ?? '';
   const image: RenderRule = (tokens, idx) => {
     const alt = tokens[idx]?.content ?? '';
@@ -99,7 +136,7 @@ function configureAnsi(md: MarkdownItInstance): void {
   r.heading_close = () => '\n';
 
   r.paragraph_open = paragraphOpen;
-  r.paragraph_close = () => '\n';
+  r.paragraph_close = paragraphClose;
 
   r.strong_open = () => sgr(1);
   r.strong_close = () => sgr(22);
@@ -130,7 +167,8 @@ function configureAnsi(md: MarkdownItInstance): void {
     return '\n';
   };
 
-  r.hr = () => `${pico.dim('─'.repeat(40))}\n`;
+  r.hr = (tokens, idx) =>
+    `${quoteBlockStart(tokens, idx)}${pico.dim('─'.repeat(40))}\n`;
 
   // Emit raw SGR codes so the styling stays open across the link body. The
   // bracket characters are part of the styled run; if we used `pico.blue('[')`
@@ -145,6 +183,16 @@ function configureAnsi(md: MarkdownItInstance): void {
   // markdown-it default `text` rule escapes HTML; we want raw text.
   r.text = textRule;
   r.image = image;
+
+  const render = md.renderer.render.bind(md.renderer);
+  md.renderer.render = (tokens, options, env) => {
+    quoteDepth = 0;
+    try {
+      return render(tokens, options, env);
+    } finally {
+      quoteDepth = 0;
+    }
+  };
 }
 
 function formatAnsiLatexReference(refType: string, label: string): string {

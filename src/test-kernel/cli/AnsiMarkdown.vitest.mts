@@ -3,7 +3,7 @@
 // We don't snapshot the exact ANSI bytes — that locks the layout in too hard.
 // Instead, verify the renderer (a) preserves raw text, (b) doesn't HTML-escape
 // inside fenced code, (c) routes through the shared factory + cache without
-// crashing, and (d) hides the fence sentinel from the final output.
+// crashing, and (d) keeps implementation markers out of the final output.
 
 import { describe, expect, it } from 'vitest';
 import stripAnsi from 'strip-ansi';
@@ -43,13 +43,18 @@ describe('renderAnsiMarkdown', () => {
   it('prefixes every rendered blockquote line', () => {
     _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown('> first\n> second\n>\n> third');
-    expect(stripAnsi(out)).toContain('│ first\n│ second\n│ third');
+    const plain = stripAnsi(out);
+    expect(plain).toContain('│ first\n│ second');
+    expect(plain).toContain('│ third');
   });
 
   it('renders nested blockquote prefixes once per depth', () => {
     _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown('> outer\n> > inner');
-    expect(stripAnsi(out)).toContain('│ outer\n│ │ inner');
+    const plain = stripAnsi(out);
+    expect(plain).toContain('│ outer');
+    expect(plain).toContain('│ │ inner');
+    expect(plain).not.toContain('│ │ │ inner');
   });
 
   it('keeps the blockquote gutter on tight lists inside the quote', () => {
@@ -64,11 +69,29 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).not.toMatch(/•\s+│/);
   });
 
+  it('keeps the blockquote gutter on quoted block nodes', () => {
+    _resetAnsiMarkdownForTests();
+    const out = renderAnsiMarkdown(
+      '> # Heading\n>\n> ```ts\n> const x = 1;\n> const y = 2;\n> ```\n>\n> ---',
+    );
+    const plain = stripAnsi(out);
+    expect(plain).toContain('│ # Heading');
+    expect(plain).toContain('│ const x = 1;');
+    expect(plain).toContain('│ const y = 2;');
+    expect(plain).toContain('│ ─');
+  });
+
   it('preserves ordered-list delimiter markup', () => {
     _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown('1) one\n2) two');
     expect(stripAnsi(out)).toContain('1) one');
     expect(stripAnsi(out)).toContain('2) two');
+  });
+
+  it('separates consecutive paragraphs visually', () => {
+    _resetAnsiMarkdownForTests();
+    const out = renderAnsiMarkdown('First paragraph.\n\nSecond paragraph.');
+    expect(stripAnsi(out)).toContain('First paragraph.\n\nSecond paragraph.');
   });
 
   it('memoises identical inputs (second call hits the cache)', () => {

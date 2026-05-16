@@ -12,7 +12,6 @@ import katex from 'katex';
 import {
   createMarkdownProcessor,
   createMarkdownRenderer,
-  type MarkdownItInstance,
 } from '@shared/markdown';
 import { highlightCode } from '@shared/highlighting/highlightCode';
 // Direct path import — see `src/shared/markdown/index.ts` for why this isn't
@@ -21,12 +20,11 @@ import { createTexmathPlugin } from '@shared/markdown/texmathPlugin';
 
 import { katexMacros } from '../katexMacros';
 
-let cachedRenderer: MarkdownItInstance | null = null;
 let cachedProcess: ((content: string) => string) | null = null;
 
 function ensureInitialised(): (content: string) => string {
-  if (!cachedRenderer || !cachedProcess) {
-    cachedRenderer = createMarkdownRenderer({
+  if (!cachedProcess) {
+    const renderer = createMarkdownRenderer({
       highlight: highlightCode,
       usePlugin: createTexmathPlugin({
         engine: katex,
@@ -37,7 +35,7 @@ function ensureInitialised(): (content: string) => string {
         },
       }),
     });
-    cachedProcess = createMarkdownProcessor({ renderer: cachedRenderer });
+    cachedProcess = createMarkdownProcessor({ renderer });
   }
   return cachedProcess;
 }
