@@ -127,8 +127,12 @@ function configureAnsi(md: MdInstance): void {
 
   r.hr = () => `${pico.dim('─'.repeat(40))}\n`;
 
-  r.link_open = () => pico.underline(pico.blue('['));
-  r.link_close = () => pico.underline(pico.blue(']'));
+  // Emit raw SGR codes so the styling stays open across the link body. The
+  // bracket characters are part of the styled run; if we used `pico.blue('[')`
+  // here the close-code would land immediately and the link text would render
+  // unstyled (Cursor finding).
+  r.link_open = () => `${sgr(4)}${sgr(34)}[`;
+  r.link_close = () => `]${sgr(39)}${sgr(24)}`;
 
   r.softbreak = () => '\n';
   r.hardbreak = () => '\n';
@@ -166,4 +170,15 @@ export function renderAnsiMarkdown(content: string): string {
 /** Test seam: drop the cached processor so tests can re-init cleanly. */
 export function _resetAnsiMarkdownForTests(): void {
   cachedProcessor = null;
+}
+
+/** Test seam: returns cache hit/miss counters for the active processor. */
+export function _ansiMarkdownStatsForTests(): {
+  hits: number;
+  misses: number;
+} {
+  return {
+    hits: cachedProcessor?.stats.hits() ?? 0,
+    misses: cachedProcessor?.stats.misses() ?? 0,
+  };
 }

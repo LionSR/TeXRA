@@ -44,7 +44,20 @@ export interface MarkdownProcessorConfig {
   readonly formatLatexReference?: LatexReferenceFormatter;
 }
 
-export type MarkdownProcessor = (content: string) => string;
+/**
+ * Test-only telemetry returned alongside the processor. `hits` increments
+ * every time the LRU returns a cached value; `misses` every time the
+ * renderer runs. Tests assert against these directly so the cache is
+ * exercised as a behaviour, not as a string-equality coincidence.
+ */
+export interface MarkdownProcessorStats {
+  readonly hits: () => number;
+  readonly misses: () => number;
+}
+
+export type MarkdownProcessor = ((content: string) => string) & {
+  readonly stats: MarkdownProcessorStats;
+};
 
 interface ProtectedRef {
   readonly refType: string;
@@ -105,17 +118,21 @@ export function createMarkdownProcessor(
     ? undefined
     : new Map<string, string>();
   let cacheChars = 0;
+  let hitCount = 0;
+  let missCount = 0;
 
-  return (content: string): string => {
+  const processor = ((content: string): string => {
     const key = cache ? hashContent(content) : undefined;
     if (cache && key !== undefined && cache.has(key)) {
       const cached = cache.get(key);
       if (cached === undefined) return '';
+      hitCount += 1;
       // Promote to MRU.
       cache.delete(key);
       cache.set(key, cached);
       return cached;
     }
+    missCount += 1;
 
     const { content: protectedContent, refs } = protectLatexReferences(content);
     // OpenAI reasoning summaries sometimes omit the line break before a bold
@@ -141,5 +158,14 @@ export function createMarkdownProcessor(
     }
 
     return result;
-  };
+  }) as MarkdownProcessor;
+
+  Object.defineProperty(processor, 'stats', {
+    value: {
+      hits: () => hitCount,
+      misses: () => missCount,
+    } satisfies MarkdownProcessorStats,
+    enumerable: false,
+  });
+  return processor;
 }

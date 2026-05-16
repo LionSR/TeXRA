@@ -13,6 +13,7 @@ import { highlightCode } from '@shared/highlighting/highlightCode';
 import {
   createMarkdownProcessor,
   createMarkdownRenderer,
+  createTexmathPlugin,
   type MarkdownItInstance,
 } from '@shared/markdown';
 
@@ -28,14 +29,14 @@ function ensureInitialised(): {
   if (!cachedRenderer || !cachedProcess) {
     cachedRenderer = createMarkdownRenderer({
       highlight: highlightCode,
-      math: {
+      usePlugin: createTexmathPlugin({
         engine: katex,
         engineOptions: {
           throwOnError: false,
           errorColor: 'var(--color-error, #cc0000)',
           macros: katexMacros,
         },
-      },
+      }),
     });
     cachedProcess = createMarkdownProcessor({ renderer: cachedRenderer });
   }

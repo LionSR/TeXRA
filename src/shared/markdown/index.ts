@@ -2,7 +2,6 @@ export {
   createMarkdownRenderer,
   type MarkdownItInstance,
   type MarkdownRendererConfig,
-  type MathConfig,
 } from './createMarkdownRenderer';
 export {
   createMarkdownProcessor,
@@ -11,3 +10,7 @@ export {
   type MarkdownProcessor,
   type MarkdownProcessorConfig,
 } from './createMarkdownProcessor';
+export {
+  createTexmathPlugin,
+  type TexmathPluginOptions,
+} from './texmathPlugin';

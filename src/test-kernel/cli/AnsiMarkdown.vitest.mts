@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  _ansiMarkdownStatsForTests,
   _resetAnsiMarkdownForTests,
   renderAnsiMarkdown,
 } from '../../../packages/cli/src/chat/tui/render/ansiMarkdown';
@@ -41,7 +42,12 @@ describe('renderAnsiMarkdown', () => {
   it('memoises identical inputs (second call hits the cache)', () => {
     _resetAnsiMarkdownForTests();
     const first = renderAnsiMarkdown('# Title\n\nParagraph.');
+    const before = _ansiMarkdownStatsForTests();
     const second = renderAnsiMarkdown('# Title\n\nParagraph.');
+    const after = _ansiMarkdownStatsForTests();
     expect(second).toBe(first);
+    // The second call must hit the cache, not re-render through markdown-it.
+    expect(after.hits - before.hits).toBe(1);
+    expect(after.misses - before.misses).toBe(0);
   });
 });
