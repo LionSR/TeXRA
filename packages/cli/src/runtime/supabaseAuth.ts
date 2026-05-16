@@ -9,10 +9,7 @@ import {
 
 // Local imports - auth
 import { AUTH_CALLBACK_TIMEOUT_MS, DEFAULT_OAUTH_PROVIDER } from '@auth/config';
-import {
-  createSupabaseAuthCoordinator,
-  createSupabaseSessionStorage,
-} from '@auth/SupabaseAuthCoordinator';
+import { createHostAuthCoordinator } from '@auth/createHostAuthCoordinator';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   type SupabaseSession,
@@ -80,8 +77,8 @@ function getCliSupabaseAuthCoordinator(): SupabaseSessionCoordinator {
 
 export function initializeCliSupabaseAuth(log?: LogBackend): void {
   activeAuthLog = log ?? activeAuthLog;
-  coordinator ??= createSupabaseAuthCoordinator({
-    storage: createSupabaseSessionStorage(getCliSecrets()),
+  coordinator ??= createHostAuthCoordinator({
+    secrets: getCliSecrets(),
     log: deferredAuthLog,
   });
 }
