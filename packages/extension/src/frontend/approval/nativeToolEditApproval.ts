@@ -8,7 +8,6 @@
  * approval/rejection via the progress view.
  */
 
-import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 
@@ -29,6 +28,7 @@ import {
   previewProposedLatex,
   runLatexdiff,
 } from '@tools/approval/latexPreview';
+import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import {
   computeLineChangeSummary,
   computeUserPatch,
@@ -85,23 +85,6 @@ async function ensureStorageDir(): Promise<string> {
   const dir = getStorageDir();
   await fs.mkdir(dir, { recursive: true });
   return dir;
-}
-
-async function createTempFile(
-  side: 'original' | 'proposed',
-  targetPath: string,
-  content: string,
-): Promise<DiffSource> {
-  const dir = await ensureStorageDir();
-  const ext = path.extname(targetPath) || '.txt';
-  const fileName = `${randomUUID()}-${side}${ext}`;
-  const filePath = path.join(dir, fileName);
-  await fs.writeFile(filePath, content, 'utf8');
-  return { filePath };
-}
-
-async function cleanupTempFile(source: DiffSource): Promise<void> {
-  await fs.unlink(source.filePath).catch(() => {});
 }
 
 async function revealFirstChangedLine(
@@ -167,16 +150,19 @@ async function nativeRequestApproval(
 
   approvalCounter += 1;
   const requestId = `approval-${Date.now().toString(36)}-${approvalCounter}`;
-  const originalSource = await createTempFile(
-    'original',
-    filePath,
+  const directory = await ensureStorageDir();
+  const {
+    originalPath,
+    proposedPath,
+    cleanup: cleanupApprovalSources,
+  } = await writeApprovalTempFiles({
+    directory,
+    targetPath: filePath,
     originalContent,
-  );
-  const proposedSource = await createTempFile(
-    'proposed',
-    filePath,
     proposedContent,
-  );
+  });
+  const originalSource: DiffSource = { filePath: originalPath };
+  const proposedSource: DiffSource = { filePath: proposedPath };
 
   const description = vscode.workspace.asRelativePath(
     WorkspaceFS.fullPath(filePath),
@@ -282,8 +268,7 @@ async function nativeRequestApproval(
     if (diffSession) {
       await diffViewHost.closeDiff(diffSession);
     }
-    await cleanupTempFile(originalSource);
-    await cleanupTempFile(proposedSource);
+    await cleanupApprovalSources();
 
     // Clean up any workspace temp files created by preview/latexdiff (parallel for performance)
     if (entry?.workspaceTempCleanup.length) {
