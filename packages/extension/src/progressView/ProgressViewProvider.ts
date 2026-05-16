@@ -432,7 +432,9 @@ export class ProgressViewProvider
 
     for (const summary of open) {
       try {
-        const manifest = await readExternalInquiryThread(summary.threadId);
+        const manifest = await readExternalInquiryThread(summary.threadId, {
+          hydrate: true,
+        });
         if (!manifest || manifest.status !== 'open') continue;
         if (!manifest.parentStreamId) continue;
         const lastTurn = manifest.turns.at(-1);

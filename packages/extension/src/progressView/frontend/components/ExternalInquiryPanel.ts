@@ -39,6 +39,7 @@ import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 import { ProgressEvents } from '../events';
+import type { PermissionState } from './PermissionCard';
 
 // ── Draft persistence ──
 
@@ -47,6 +48,16 @@ const DRAFT_SAVE_DELAY_MS = 400;
 const draftCache = new Map<string, InquiryDraft>();
 const resolvedIds = new Set<string>();
 const INQUIRY_SUBMIT_ACTION = 'submit';
+
+interface InquiryPermissionIds {
+  requestId: string;
+  threadId: string;
+}
+
+interface PendingDraftSave extends InquiryPermissionIds {
+  draft: InquiryDraft | null;
+  timer: ReturnType<typeof setTimeout>;
+}
 
 function getRequestId(permission: { data: unknown }): string {
   return (permission.data as ExternalInquiryPermission).requestId;
@@ -90,7 +101,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
 
   private copyController = new CopyButtonController(this);
   private draftRestored = false;
-  private draftSaveTimer: ReturnType<typeof setTimeout> | undefined;
+  private pendingDraftSave: PendingDraftSave | undefined;
 
   // ── Lifecycle ──
 
@@ -102,6 +113,12 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
   protected override willUpdate(changed: PropertyValues): void {
     super.willUpdate(changed);
     if (changed.has('permission')) {
+      const previousPermission = changed.get('permission') as
+        | PermissionState
+        | undefined;
+      if (previousPermission) this.flushDraft(previousPermission);
+      this.answerText = '';
+      this.sessionLinksText = '';
       this.draftRestored = false;
     }
     // Restore draft once on first update (avoids the extra render from connectedCallback).
@@ -124,45 +141,79 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
     };
   }
 
-  private saveDraft(options: { persist: boolean }): void {
-    const id = getRequestId(this.permission);
-    if (resolvedIds.has(id)) return;
-    const draft = this.currentDraft();
+  private getPermissionIds(
+    permission: { data: unknown } = this.permission,
+  ): InquiryPermissionIds {
+    return {
+      requestId: getRequestId(permission),
+      threadId: getThreadId(permission),
+    };
+  }
+
+  private writeDraft(
+    ids: InquiryPermissionIds,
+    draft: InquiryDraft | null,
+    options: { persist: boolean },
+  ): void {
+    if (resolvedIds.has(ids.requestId)) return;
     if (draft) {
-      draftCache.set(id, draft);
+      draftCache.set(ids.requestId, draft);
       if (draftCache.size > DRAFT_CACHE_CAP) {
         const oldest = draftCache.keys().next().value;
         if (oldest !== undefined) draftCache.delete(oldest);
       }
     } else {
-      draftCache.delete(id);
+      draftCache.delete(ids.requestId);
     }
     if (options.persist) {
       postMessage(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION, {
         action: 'draft',
-        threadId: getThreadId(this.permission),
+        threadId: ids.threadId,
         draft,
       });
     }
   }
 
-  private scheduleDraftSave(): void {
-    this.saveDraft({ persist: false });
-    if (this.draftSaveTimer) {
-      clearTimeout(this.draftSaveTimer);
-    }
-    this.draftSaveTimer = setTimeout(() => {
-      this.draftSaveTimer = undefined;
-      this.saveDraft({ persist: true });
-    }, DRAFT_SAVE_DELAY_MS);
+  private clearPendingDraftSave(): void {
+    if (!this.pendingDraftSave) return;
+    clearTimeout(this.pendingDraftSave.timer);
+    this.pendingDraftSave = undefined;
   }
 
-  private flushDraft(): void {
-    if (this.draftSaveTimer) {
-      clearTimeout(this.draftSaveTimer);
-      this.draftSaveTimer = undefined;
+  private scheduleDraftSave(): void {
+    const ids = this.getPermissionIds();
+    const draft = this.currentDraft();
+    this.writeDraft(ids, draft, { persist: false });
+    this.clearPendingDraftSave();
+    const timer = setTimeout(() => {
+      const pending = this.pendingDraftSave;
+      this.pendingDraftSave = undefined;
+      if (!pending) return;
+      const currentIds = this.getPermissionIds();
+      if (
+        currentIds.requestId !== pending.requestId ||
+        currentIds.threadId !== pending.threadId
+      ) {
+        return;
+      }
+      this.writeDraft(pending, pending.draft, { persist: true });
+    }, DRAFT_SAVE_DELAY_MS);
+    this.pendingDraftSave = { ...ids, draft, timer };
+  }
+
+  private flushDraft(permission: { data: unknown } = this.permission): void {
+    const ids = this.getPermissionIds(permission);
+    const pending = this.pendingDraftSave;
+    if (
+      pending &&
+      pending.requestId === ids.requestId &&
+      pending.threadId === ids.threadId
+    ) {
+      this.clearPendingDraftSave();
+      this.writeDraft(ids, pending.draft, { persist: true });
+      return;
     }
-    this.saveDraft({ persist: true });
+    this.writeDraft(ids, this.currentDraft(), { persist: true });
   }
 
   override handleKeyboardShortcut(key: string): boolean {

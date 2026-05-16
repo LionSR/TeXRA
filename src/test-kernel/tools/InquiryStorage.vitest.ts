@@ -230,6 +230,13 @@ describe('InquiryStorage', () => {
     await platform.fs.createDirectory(
       `${platform.storage.getGlobalStoragePath()}/ei_threads/ei_aabbccdd0011`,
     );
+    await platform.fs.createDirectory(
+      `${platform.storage.getGlobalStoragePath()}/ei_threads/ei_aabbccdd0011/t1`,
+    );
+    await platform.fs.writeFile(
+      `${platform.storage.getGlobalStoragePath()}/ei_threads/ei_aabbccdd0011/t1/answer.txt`,
+      Buffer.from('Legacy A', 'utf8'),
+    );
     await platform.fs.writeFile(
       `${platform.storage.getGlobalStoragePath()}/${path}`,
       Buffer.from(JSON.stringify(legacy), 'utf8'),
@@ -239,5 +246,12 @@ describe('InquiryStorage', () => {
     expect(manifest).not.toBeNull();
     expect(manifest!.status).toBe('answered');
     expect(manifest!.parentStreamId).toBeNull();
+
+    const hydrated = await readExternalInquiryThread('ei_aabbccdd0011', {
+      hydrate: true,
+    });
+    expect(manifestToTranscript(hydrated!)).toMatchObject([
+      { turnIndex: 1, question: 'Legacy Q', answer: 'Legacy A' },
+    ]);
   });
 });

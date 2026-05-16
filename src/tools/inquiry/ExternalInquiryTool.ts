@@ -338,6 +338,10 @@ export class ExternalInquiryTool extends defineTool({
       suggestSearch: input.suggestSearch ?? undefined,
       attachFiles: input.attachFiles ?? undefined,
     });
+    const manifest =
+      (await readExternalInquiryThread(persisted.threadId, {
+        hydrate: true,
+      })) ?? persisted.manifest;
 
     // Mirror to execution so the agent can read prior turns via the executions tool.
     if (executionId) {
@@ -362,9 +366,9 @@ export class ExternalInquiryTool extends defineTool({
       context: input.context ?? undefined,
       suggestSearch: input.suggestSearch ?? undefined,
       attachFiles: input.attachFiles ?? undefined,
-      sessionLinks: collectKnownSessionLinks(persisted.manifest),
-      draft: getOpenTurnDraft(persisted.manifest),
-      transcript: manifestToTranscript(persisted.manifest),
+      sessionLinks: collectKnownSessionLinks(manifest),
+      draft: getOpenTurnDraft(manifest),
+      transcript: manifestToTranscript(manifest),
       allowBypass: false,
       streamId,
     });
