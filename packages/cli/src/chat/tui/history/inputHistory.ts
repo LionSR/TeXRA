@@ -75,7 +75,7 @@ export async function loadInputHistory(): Promise<InputHistory> {
   }
   // Cap on load; older entries fall off when the ring is full.
   if (records.length > MAX_LINES) records = records.slice(-MAX_LINES);
-  let entries = records.map((r) => r.v);
+  const entries = records.map((r) => r.v);
 
   return {
     all() {
