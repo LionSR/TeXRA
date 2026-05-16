@@ -111,6 +111,8 @@ export type AgentProposalPermission = z.infer<
 // ============================================================================
 
 import {
+  InquiryDraftSchema,
+  InquiryTranscriptTurnSchema,
   ExternalInquirySessionLinksSchema,
   ExternalInquiryThreadIdSchema,
 } from './inquiry';
@@ -122,6 +124,8 @@ export const ExternalInquiryPermissionSchema = PermissionBaseSchema.extend({
   suggestSearch: z.boolean().nullish(),
   attachFiles: z.array(z.string()).nullish(),
   sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
+  draft: InquiryDraftSchema.nullish(),
+  transcript: z.array(InquiryTranscriptTurnSchema).nullish(),
 });
 export type ExternalInquiryPermission = z.infer<
   typeof ExternalInquiryPermissionSchema

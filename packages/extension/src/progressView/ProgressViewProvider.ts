@@ -31,8 +31,10 @@ import { AGENT_CATEGORY } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
 import {
+  getOpenTurnDraft,
   listThreadsByStatus,
   listOpenThreads,
+  manifestToTranscript,
   readExternalInquiryThread,
 } from '@tools/inquiry/externalInquiryStorage';
 
@@ -430,7 +432,9 @@ export class ProgressViewProvider
 
     for (const summary of open) {
       try {
-        const manifest = await readExternalInquiryThread(summary.threadId);
+        const manifest = await readExternalInquiryThread(summary.threadId, {
+          hydrate: true,
+        });
         if (!manifest || manifest.status !== 'open') continue;
         if (!manifest.parentStreamId) continue;
         const lastTurn = manifest.turns.at(-1);
@@ -443,6 +447,8 @@ export class ProgressViewProvider
           suggestSearch: lastTurn.suggestSearch ?? undefined,
           attachFiles: lastTurn.attachFiles ?? undefined,
           sessionLinks: collectKnownSessionLinks(manifest),
+          draft: getOpenTurnDraft(manifest),
+          transcript: manifestToTranscript(manifest),
           allowBypass: false,
           streamId: manifest.parentStreamId,
         });
