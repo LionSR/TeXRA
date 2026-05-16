@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
+import { shouldProbePersistedFlowForFollowUp } from '@agent/runtime/followUpResumeDetection';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   sendFollowUp,
@@ -25,8 +26,11 @@ async function lazyDetectWaitingStatus(
   streamId: StreamTabId,
 ): Promise<boolean> {
   const currentStatus = StreamStatusService.get(streamId);
-  if (currentStatus) {
-    return currentStatus === STREAM_STATUS.WAITING;
+  if (currentStatus === STREAM_STATUS.WAITING) {
+    return true;
+  }
+  if (!shouldProbePersistedFlowForFollowUp(currentStatus)) {
+    return false;
   }
   if (inFlightDetections.has(streamId)) {
     return false;
