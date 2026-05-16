@@ -8,6 +8,7 @@
  *
  * Pattern: Composition Root (Mark Seemann) + Frozen Object.
  */
+import type { AgentResumePort } from './interfaces/agentResume';
 import type { ConfigProvider } from './interfaces/config';
 import type { StateStore } from './interfaces/state';
 import type { LogBackend } from './interfaces/log';
@@ -31,6 +32,7 @@ export interface Platform {
   readonly storage: StorageProvider;
   readonly secrets: PlatformSecrets;
   readonly lifecycle: LifecycleHost;
+  readonly agentResume: AgentResumePort;
 }
 
 let _platform: Readonly<Platform> | null = null;

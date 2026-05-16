@@ -22,10 +22,6 @@ import {
   handleProgressViewBashApprovalAction,
   requestBashApproval,
 } from '@tools/approval/bashApproval';
-import {
-  ExternalInquiryTool,
-  handleExternalInquiryAction,
-} from '@tools/inquiry/ExternalInquiryTool';
 import { createRecordingHost } from '../progressTestUtils';
 
 async function waitForRecordedEvent<TEvent extends string>(
@@ -87,71 +83,6 @@ describe('human prompt progress events', () => {
         },
         {
           event: 'resolveBashPermission',
-          payload: { requestId: show.payload.requestId },
-        },
-      ]);
-      expect(fallback.events).toEqual([]);
-    } finally {
-      setDefaultAgentRuntimeHost(previousDefault);
-    }
-  });
-
-  it('publishes external inquiry events through the tool runtime host', async () => {
-    const explicit = createRecordingHost();
-    const fallback = createRecordingHost();
-    const previousDefault = getDefaultAgentRuntimeHost();
-    const streamId = 'stream:external-inquiry' as StreamTabId;
-    const tool = new ExternalInquiryTool();
-
-    try {
-      setDefaultAgentRuntimeHost(fallback.host);
-
-      const result = withRunContext(
-        createRunContext({ runtimeHost: explicit.host, streamId }),
-        () =>
-          withToolFileInteractionContext({ tracker: {} as never }, () =>
-            tool.call({
-              question: 'What should the agent check next?',
-              context: 'Runtime host boundary test',
-              suggestSearch: true,
-              attachFiles: ['notes.tex'],
-            }),
-          ),
-      );
-
-      const show = await waitForRecordedEvent(
-        explicit.events,
-        'showExternalInquiry',
-      );
-      await handleExternalInquiryAction({
-        requestId: show.payload.requestId,
-        action: 'skip',
-        feedback: 'Use local evidence instead.',
-      });
-
-      await expect(result).resolves.toMatchObject({
-        summary: 'User rejected external inquiry with feedback',
-      });
-
-      expect(explicit.events).toEqual([
-        { event: 'requestEnsureProgressView', payload: {} },
-        { event: 'setActiveStream', payload: { streamId } },
-        {
-          event: 'showExternalInquiry',
-          payload: {
-            requestId: show.payload.requestId,
-            question: 'What should the agent check next?',
-            threadId: undefined,
-            context: 'Runtime host boundary test',
-            suggestSearch: true,
-            attachFiles: ['notes.tex'],
-            sessionLinks: undefined,
-            allowBypass: false,
-            streamId,
-          },
-        },
-        {
-          event: 'resolveExternalInquiry',
           payload: { requestId: show.payload.requestId },
         },
       ]);

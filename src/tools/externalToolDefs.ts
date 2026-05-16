@@ -323,7 +323,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
 
   {
     id: 'external-inquiry',
-    tools: ['external_inquiry'],
+    tools: ['inquiry'],
     name: 'External Chat Handoff',
     category: 'ai-agents',
     description:

@@ -107,23 +107,13 @@ export type AgentProposalPermission = z.infer<
 >;
 
 // ============================================================================
-// External Inquiry
+// External Inquiry — see also `./inquiry.ts` for thread / session-link / action schemas
 // ============================================================================
 
-export const EXTERNAL_INQUIRY_ACTIONS = ['submit', 'reject'] as const;
-export type ExternalInquiryAction = (typeof EXTERNAL_INQUIRY_ACTIONS)[number];
-const ExternalInquirySessionLinkSchema = z.string().trim().min(1);
-export const ExternalInquirySessionLinksSchema = z.array(
-  ExternalInquirySessionLinkSchema,
-);
-
-export const ExternalInquiryThreadIdSchema = z
-  .string()
-  .regex(/^ei_[0-9a-f]{12}$/i, 'Invalid external inquiry thread ID')
-  .transform((value) => value.toLowerCase());
-export type ExternalInquiryThreadId = z.infer<
-  typeof ExternalInquiryThreadIdSchema
->;
+import {
+  ExternalInquirySessionLinksSchema,
+  ExternalInquiryThreadIdSchema,
+} from './inquiry';
 
 export const ExternalInquiryPermissionSchema = PermissionBaseSchema.extend({
   question: z.string(),

@@ -66,6 +66,7 @@ export async function initializeElectronPlatform(
       showWarningMessage: showSecretStorageWarningDialog,
     }),
     lifecycle,
+    agentResume: { tryResumeStream: async () => false },
   });
   registerAgentFeatures();
 
