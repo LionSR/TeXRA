@@ -1,6 +1,9 @@
 // Third-party imports
 import { toJSONSchema } from 'zod';
 
+// Local imports - agent
+import * as logger from '@agent/core/logger';
+
 // Type imports
 import type { ToolDefinition } from '@model';
 import type {
@@ -19,6 +22,9 @@ import type {
 // Shared Tool Conversion Utilities
 // ============================================================================
 
+const CHANNEL = 'toolConversion';
+logger.initialize(CHANNEL);
+
 /**
  * Converts a Zod schema to JSON Schema, or returns the pre-converted parameters.
  * Shared utility used by all provider tool converters.
@@ -28,7 +34,9 @@ function convertToolSchema(
 ): Record<string, unknown> | null {
   if (def.zodSchema) {
     return toJSONSchema(def.zodSchema, {
+      target: 'draft-2020-12',
       unrepresentable: 'any',
+      io: 'input',
     }) as Record<string, unknown>;
   }
   return (def.parameters ?? null) as Record<string, unknown> | null;
@@ -44,8 +52,23 @@ const EMPTY_TOOL_PARAMETERS_SCHEMA: Record<string, unknown> = {
   additionalProperties: false,
 };
 
+function toOpenAIParametersSchema(
+  schema: Record<string, unknown> | null,
+): Record<string, unknown> {
+  if (!schema) return EMPTY_TOOL_PARAMETERS_SCHEMA;
+  if (schema.type === 'object') return schema;
+  if (schema.type !== undefined) {
+    logger.warn(
+      CHANNEL,
+      `OpenAI tool parameters must be object schemas; received type "${String(schema.type)}". Falling back to an empty object schema.`,
+    );
+    return EMPTY_TOOL_PARAMETERS_SCHEMA;
+  }
+  return { ...schema, type: 'object' };
+}
+
 function toOpenAISchemaObject(def: ToolDefinition): Record<string, unknown> {
-  return convertToolSchema(def) ?? EMPTY_TOOL_PARAMETERS_SCHEMA;
+  return toOpenAIParametersSchema(convertToolSchema(def));
 }
 
 // Map local tool names to Anthropic remote tool types.

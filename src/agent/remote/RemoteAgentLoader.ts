@@ -167,22 +167,14 @@ export class RemoteAgentLoader {
 
   /** List all available remote agents for the current user. */
   static async listRemoteAgents(): Promise<RemoteAgentListItem[]> {
-    if (!(await SupabaseClient.isAuthenticated())) return [];
-
     try {
-      const tokens = await SupabaseClient.getSessionTokens();
-      if (!tokens) return [];
+      const token = await SupabaseClient.getAccessToken();
+      if (!token) return [];
 
-      const supabase = SupabaseClient.getClient();
-      await supabase.auth.setSession({
-        access_token: tokens.accessToken,
-        refresh_token: tokens.refreshToken,
-      });
-
-      const { data, error } = await queryRemoteAgentListRows(supabase);
+      const { data, error } = await queryRemoteAgentListRows(token);
 
       if (error) {
-        logger.error(CHANNEL, `Failed to list remote agents: ${error.message}`);
+        logger.debug(CHANNEL, `Failed to list remote agents: ${error.message}`);
         return [];
       }
 
@@ -190,7 +182,7 @@ export class RemoteAgentLoader {
         .map(parseListItemRow)
         .filter((item): item is RemoteAgentListItem => item !== null);
     } catch (error) {
-      logger.error(
+      logger.debug(
         CHANNEL,
         `Error listing remote agents: ${toErrorMessage(error)}`,
       );
@@ -199,16 +191,14 @@ export class RemoteAgentLoader {
   }
 }
 
-async function queryRemoteAgentListRows(
-  supabase: ReturnType<typeof SupabaseClient.getClient>,
-): Promise<{
+async function queryRemoteAgentListRows(accessToken: string): Promise<{
   data: RemoteAgentListRow[] | null;
   error: RemoteAgentListQueryError | null;
 }> {
-  const current = await supabase
-    .from('remote_agents')
-    .select(REMOTE_AGENT_LIST_COLUMNS)
-    .order('name');
+  const current = await fetchRemoteAgentListRows(
+    accessToken,
+    REMOTE_AGENT_LIST_COLUMNS,
+  );
 
   if (!current.error) {
     return {
@@ -226,15 +216,64 @@ async function queryRemoteAgentListRows(
     `Remote agent tools column unavailable; using legacy list query: ${current.error.message}`,
   );
 
-  const legacy = await supabase
-    .from('remote_agents')
-    .select(LEGACY_REMOTE_AGENT_LIST_COLUMNS)
-    .order('name');
+  const legacy = await fetchRemoteAgentListRows(
+    accessToken,
+    LEGACY_REMOTE_AGENT_LIST_COLUMNS,
+  );
 
   return {
     data: legacy.data as RemoteAgentListRow[] | null,
     error: legacy.error,
   };
+}
+
+async function fetchRemoteAgentListRows(
+  accessToken: string,
+  columns: string,
+): Promise<{
+  data: RemoteAgentListRow[] | null;
+  error: RemoteAgentListQueryError | null;
+}> {
+  const url = new URL('/rest/v1/remote_agents', SUPABASE_CONFIG.url);
+  url.searchParams.set('select', columns);
+  url.searchParams.set('order', 'name.asc');
+
+  const response = await fetch(url, {
+    headers: {
+      apikey: SUPABASE_CONFIG.publicKey,
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+    },
+  });
+
+  if (response.ok) {
+    return {
+      data: (await response.json()) as RemoteAgentListRow[],
+      error: null,
+    };
+  }
+
+  const fallbackMessage = `${response.status} ${response.statusText}`.trim();
+  const rawBody = await response.text().catch(() => '');
+  const error = parseRemoteAgentListErrorBody(rawBody);
+  return {
+    data: null,
+    error: {
+      ...error,
+      message: error.message || fallbackMessage || 'remote list request failed',
+    },
+  };
+}
+
+function parseRemoteAgentListErrorBody(
+  rawBody: string,
+): RemoteAgentListQueryError {
+  if (!rawBody) return {};
+  try {
+    return JSON.parse(rawBody) as RemoteAgentListQueryError;
+  } catch {
+    return { message: rawBody };
+  }
 }
 
 /** Fetch and parse agent config from edge function. */
