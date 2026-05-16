@@ -17,29 +17,37 @@ export interface ConfirmCardProps {
   readonly onDecide: (decision: ApprovalDecision) => void;
 }
 
-export function ConfirmCard(props: ConfirmCardProps): React.JSX.Element {
+export function ConfirmCard({
+  borderStyle,
+  color,
+  title,
+  approveLabel = 'approve',
+  rejectLabel = 'reject',
+  children,
+  onDecide,
+}: ConfirmCardProps): React.JSX.Element {
   return (
     <Box
-      borderStyle={props.borderStyle}
-      borderColor={props.color}
+      borderStyle={borderStyle}
+      borderColor={color}
       flexDirection="column"
       paddingX={1}
     >
-      <Text bold color={props.color}>
-        {props.title}
+      <Text bold color={color}>
+        {title}
       </Text>
-      {props.children}
+      {children}
       <Box>
         <ConfirmInput
-          onConfirm={() => props.onDecide({ accepted: true })}
-          onCancel={() => props.onDecide({ accepted: false })}
+          onConfirm={() => onDecide({ accepted: true })}
+          onCancel={() => onDecide({ accepted: false })}
         />
       </Box>
       <Box marginTop={1}>
         <KeyHints
           hints={[
-            { key: 'y', action: props.approveLabel ?? 'approve' },
-            { key: 'n', action: props.rejectLabel ?? 'reject' },
+            { key: 'y', action: approveLabel },
+            { key: 'n', action: rejectLabel },
           ]}
           confirmCancel={false}
         />
