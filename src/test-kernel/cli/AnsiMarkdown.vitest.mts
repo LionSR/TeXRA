@@ -52,6 +52,18 @@ describe('renderAnsiMarkdown', () => {
     expect(stripAnsi(out)).toContain('│ outer\n│ │ inner');
   });
 
+  it('keeps the blockquote gutter on tight lists inside the quote', () => {
+    _resetAnsiMarkdownForTests();
+    const out = renderAnsiMarkdown('> - item 1\n> - item 2');
+    const plain = stripAnsi(out);
+    // First bullet inherits the gutter from blockquote_open; the second
+    // bullet must re-inject it so it doesn't render at column 0.
+    expect(plain).toContain('│   • item 1');
+    expect(plain).toContain('│   • item 2');
+    // Mid-line gutter would mean `│   • │ item` — guard against regression.
+    expect(plain).not.toMatch(/•\s+│/);
+  });
+
   it('preserves ordered-list delimiter markup', () => {
     _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown('1) one\n2) two');

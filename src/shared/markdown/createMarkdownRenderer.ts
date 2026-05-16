@@ -18,9 +18,7 @@ export type MarkdownItInstance = InstanceType<typeof MarkdownIt>;
 export interface MarkdownRendererConfig {
   /**
    * Code-fence highlighter — same shape as markdown-it's `highlight` option.
-   * The webview returns HTML; the CLI host returns an ANSI-coloured string
-   * wrapped in a sentinel so the ANSI renderer rules can pass it through
-   * unescaped.
+   * The webview returns HTML; the CLI host returns an ANSI-coloured string.
    */
   readonly highlight: (code: string, lang: string) => string;
   /**

@@ -27,31 +27,16 @@ import type { RenderRule } from 'markdown-it/lib/renderer.mjs';
 const ESC = String.fromCharCode(27);
 const sgr = (code: number): string => `${ESC}[${code}m`;
 
-/** Sentinel that wraps pre-coloured fence output so the fence rule can pass
- *  it through without HTML-style wrapping. NUL bytes (0x00) keep it out of
- *  any realistic markdown source. */
-const NUL = String.fromCharCode(0);
-const ANSI_FENCE_OPEN = `${NUL}${NUL}ANSI_FENCE_OPEN${NUL}${NUL}`;
-const ANSI_FENCE_CLOSE = `${NUL}${NUL}ANSI_FENCE_CLOSE${NUL}${NUL}`;
-
 function highlightForTui(code: string, lang: string): string {
   const trimmed = code.replace(/\n+$/, '');
   if (lang && supportsLanguage(lang)) {
     try {
-      const coloured = highlight(trimmed, {
-        language: lang,
-        ignoreIllegals: true,
-      });
-      return `${ANSI_FENCE_OPEN}${coloured}${ANSI_FENCE_CLOSE}`;
+      return highlight(trimmed, { language: lang, ignoreIllegals: true });
     } catch {
       // fall through to plain rendering
     }
   }
-  return `${ANSI_FENCE_OPEN}${pico.gray(trimmed)}${ANSI_FENCE_CLOSE}`;
-}
-
-function stripFenceMarkers(raw: string): string {
-  return raw.replaceAll(ANSI_FENCE_OPEN, '').replaceAll(ANSI_FENCE_CLOSE, '');
+  return pico.gray(trimmed);
 }
 
 function configureAnsi(md: MarkdownItInstance): void {
@@ -72,25 +57,37 @@ function configureAnsi(md: MarkdownItInstance): void {
     const token = tokens[idx];
     if (!token) return '';
     const langName = token.info.trim().split(/\s+/)[0] ?? '';
-    const raw = md.options.highlight
+    const body = md.options.highlight
       ? md.options.highlight(token.content, langName, '')
-      : '';
-    const body =
-      typeof raw === 'string' && raw.length > 0
-        ? raw
-        : `${ANSI_FENCE_OPEN}${pico.gray(token.content.replace(/\n+$/, ''))}${ANSI_FENCE_CLOSE}`;
-    return `${stripFenceMarkers(body)}\n\n`;
+      : null;
+    return `${body || pico.gray(token.content.replace(/\n+$/, ''))}\n\n`;
   };
   const codeBlock: RenderRule = (tokens, idx) =>
     `${pico.gray(tokens[idx]?.content.replace(/\n+$/, '') ?? '')}\n\n`;
   const listItemOpen: RenderRule = (tokens, idx) => {
     const token = tokens[idx];
     const marker = token?.info ? `${token.info}${token.markup || '.'}` : '•';
-    return `  ${pico.dim(marker)} `;
+    // The first item in a list inherits the blockquote gutter from
+    // `blockquote_open`; continuation items follow a `list_item_close → \n`
+    // and need the gutter re-injected so the second bullet doesn't render
+    // at column 0.
+    const prev = tokens[idx - 1]?.type;
+    const fresh = prev === 'bullet_list_open' || prev === 'ordered_list_open';
+    return `${fresh ? '' : quotePrefix()}  ${pico.dim(marker)} `;
   };
   const paragraphOpen: RenderRule = (tokens, idx) => {
     if (quoteDepth === 0) return '';
-    return tokens[idx - 1]?.type === 'blockquote_open' ? '' : quotePrefix();
+    const token = tokens[idx];
+    // markdown-it fires custom rules even for `hidden` paragraph tokens
+    // (only the default `renderToken` short-circuits on hidden). Tight
+    // lists inside blockquotes (`> - a\n> - b`) emit such hidden
+    // paragraphs right after `list_item_open` — re-prefixing here would
+    // inject the gutter after the bullet marker. The bullet rule already
+    // sits inside the blockquote run, so the gutter is intact.
+    if (token?.hidden) return '';
+    const prev = tokens[idx - 1]?.type;
+    if (prev === 'blockquote_open' || prev === 'list_item_open') return '';
+    return quotePrefix();
   };
   const textRule: RenderRule = (tokens, idx) => tokens[idx]?.content ?? '';
   const image: RenderRule = (tokens, idx) => {
