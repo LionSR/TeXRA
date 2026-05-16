@@ -1,8 +1,9 @@
 // Signal-backed state for the CLI TUI. Mirrors the webview's `progressState`
 // shape — same primitives (`@lit-labs/signals`), same shape (one record per
 // stream + an `activeStreamId`) so future feature parity is a port, not a
-// rewrite. Phase 4 extends with subagent/process/todos/plan/process-output
-// fields plus the global bypass-state badges the StatusBar consumes.
+// rewrite. Phase 4 extends with per-stream subagent/process/todos/plan/
+// process-output fields plus the per-stream bypass-state badges the
+// StatusBar consumes.
 
 import { signal, type Signal } from '@lit-labs/signals';
 

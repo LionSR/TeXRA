@@ -7,6 +7,7 @@ import type {
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { appendTail } from '@utils/strings/appendTail';
 
 import {
   cliState,
@@ -22,20 +23,10 @@ type Emit = <K extends ProgressEvent>(
 ) => void;
 
 /** Cap on per-process tail length held in the signal map (UTF-16 code
- *  units, not bytes — markdown-it / ink work in JS strings). Beyond this we
- *  truncate at the head so the live pane never grows unbounded. */
-const PROCESS_TAIL_CHARS_MAX = 8 * 1024;
-
-function appendTail(prev: string, next: string): string {
-  if (!next) return prev;
-  const joined = `${prev}${next}`;
-  if (joined.length <= PROCESS_TAIL_CHARS_MAX) return joined;
-  let cut = joined.length - PROCESS_TAIL_CHARS_MAX;
-  // Don't slice in the middle of a surrogate pair.
-  const code = joined.charCodeAt(cut);
-  if (code >= 0xdc00 && code <= 0xdfff) cut += 1;
-  return joined.slice(cut);
-}
+ *  units, not bytes — markdown-it / ink work in JS strings). Beyond this
+ *  we truncate at the head via the shared `appendTail` helper so the live
+ *  pane never grows unbounded. */
+export const PROCESS_TAIL_CHARS_MAX = 8 * 1024;
 
 export function wrapRuntimeHost(host: CliRuntimeHost): CliRuntimeHost {
   const original = host.emit;
@@ -104,8 +95,8 @@ function applyToState<K extends ProgressEvent>(
           stderr: '',
         };
         const next = {
-          stdout: appendTail(prev.stdout, p.stdout),
-          stderr: appendTail(prev.stderr, p.stderr),
+          stdout: appendTail(prev.stdout, p.stdout, PROCESS_TAIL_CHARS_MAX),
+          stderr: appendTail(prev.stderr, p.stderr, PROCESS_TAIL_CHARS_MAX),
         };
         const map = new Map(s.processOutput);
         map.set(p.executionId, next);
