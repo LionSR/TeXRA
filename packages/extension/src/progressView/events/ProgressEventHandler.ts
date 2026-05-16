@@ -118,6 +118,11 @@ export class ProgressEventHandler {
             );
           }
         },
+        inquiryThreadUpdated: (_, thread) => {
+          if (this.webviewUpdater.isAvailable()) {
+            this.webviewUpdater.updateInquiryThread(thread);
+          }
+        },
         updateStreamDescription: (_, { streamId, description }) => {
           this.state.meta.setDescription(streamId, description);
           if (this.webviewUpdater.isAvailable()) {
