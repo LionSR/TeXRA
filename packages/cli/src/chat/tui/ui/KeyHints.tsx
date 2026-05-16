@@ -24,29 +24,22 @@ export interface KeyHintsProps {
 
 const SEP = ' · ';
 
-function Hint({ hint }: { hint: KeyHint }): React.JSX.Element {
-  return (
-    <Text dimColor>
-      <Text bold>{hint.key}</Text> {hint.action}
-    </Text>
-  );
-}
+const DEFAULT_TAIL: readonly KeyHint[] = [
+  { key: 'Enter', action: 'confirm' },
+  { key: 'Esc', action: 'cancel' },
+];
 
 export function KeyHints(props: KeyHintsProps): React.JSX.Element {
-  const tail: KeyHint[] =
+  const all =
     props.confirmCancel === false
-      ? []
-      : [
-          { key: 'Enter', action: 'confirm' },
-          { key: 'Esc', action: 'cancel' },
-        ];
-  const all = [...props.hints, ...tail];
+      ? props.hints
+      : [...props.hints, ...DEFAULT_TAIL];
   return (
     <Box>
       {all.map((hint, i) => (
-        <Text key={i}>
-          {i > 0 ? <Text dimColor>{SEP}</Text> : null}
-          <Hint hint={hint} />
+        <Text key={i} dimColor>
+          {i > 0 ? SEP : ''}
+          <Text bold>{hint.key}</Text> {hint.action}
         </Text>
       ))}
     </Box>
