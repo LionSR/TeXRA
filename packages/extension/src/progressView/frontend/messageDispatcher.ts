@@ -21,6 +21,7 @@ import { taskHandlers } from './slices/taskSlice';
 import { runTrackingHandlers } from './slices/runTrackingSlice';
 import { permissionHandlers } from './slices/permissionSlice';
 import { followUpHandlers } from './slices/followUpSlice';
+import { inquiryHandlers } from './slices/inquirySlice';
 import { syncHandlers } from './slices/syncSlice';
 import { uiHandlers } from './slices/uiSlice';
 
@@ -71,6 +72,7 @@ const handlers: HandlerRegistry = {
   ...runTrackingHandlers,
   ...permissionHandlers,
   ...followUpHandlers,
+  ...inquiryHandlers,
   ...syncHandlers,
   ...uiHandlers,
 };

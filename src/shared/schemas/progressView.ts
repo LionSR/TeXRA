@@ -11,6 +11,7 @@ import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
+import { OdysseyStatusSchema } from '@tools/odyssey/odysseyMeta';
 
 import { AgentCategorySchema } from './agent';
 import { StreamTabIdSchema } from './identifiers';
@@ -20,6 +21,7 @@ import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import {
   ExternalInquirySessionLinksSchema,
   ExternalInquiryThreadIdSchema,
+  InquiryThreadUpdatedEventSchema,
 } from './inquiry';
 import {
   AgentProposalSchema,
@@ -35,7 +37,6 @@ import {
   UserQuestionPermissionSchema,
 } from './prompts';
 import { StreamStatusSchema, StreamTabInfoSchema } from './stream';
-import { OdysseyStatusSchema } from '@tools/odyssey/odysseyMeta';
 import {
   ActiveChildInfoSchema,
   ConversationProgressSchema,
@@ -337,6 +338,16 @@ export const UpdateRecordingMessageSchema = z.object({
   error: z.string().optional(),
 });
 
+export const SyncInquiryThreadsMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.SYNC_INQUIRY_THREADS),
+  threads: z.array(InquiryThreadUpdatedEventSchema),
+});
+
+export const UpdateInquiryThreadMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_INQUIRY_THREAD),
+  thread: InquiryThreadUpdatedEventSchema,
+});
+
 export const SyncStreamContentMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT),
   stream: z.union([StreamTabIdSchema, z.literal('')]),
@@ -427,6 +438,8 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     OdysseyActiveUpdatedMessageSchema,
     UpdateFollowUpTextMessageSchema,
     UpdateRecordingMessageSchema,
+    SyncInquiryThreadsMessageSchema,
+    UpdateInquiryThreadMessageSchema,
     SetPlacementMessageSchema,
     ProgressSetThemeMessageSchema,
     ProgressDeleteStreamMessageSchema,
