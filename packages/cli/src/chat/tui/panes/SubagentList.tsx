@@ -1,8 +1,8 @@
 // Lists active subagents + processes for the currently-focused stream.
 //
-// One row per `ActiveChildInfo`. Numeric key (1-9) on the left mirrors the
-// `0` / `1`–`9` jump shortcuts (see 30-reference.md § Keymap); the focus
-// cycle in `App.tsx` consumes the same ordering.
+// One row per `ActiveChildInfo`. The leading numeric index is currently a
+// visual cue only — the `1`–`9` jump shortcuts land in Phase 5 alongside
+// the input-focus toggle.
 
 import { Box, Text } from 'ink';
 

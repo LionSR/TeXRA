@@ -26,7 +26,19 @@ export function App(props: AppProps): React.JSX.Element {
   // Single subscription site; pass the value down so ApprovalModal renders
   // off the same read and InputBar can stay mounted but disabled.
   const pending = useSignal(currentApproval);
+  const activeStreamId = useSignal(cliState.activeStreamId);
+  const streams = useSignal(cliState.streams);
   const inputDisabled = props.inputDisabled || pending !== undefined;
+
+  // Hide the side column when both side panes would render empty —
+  // otherwise the conversation loses 28 columns of width for nothing.
+  const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
+  const showSideColumn = activeSlice
+    ? activeSlice.activeSubagents.length > 0 ||
+      activeSlice.activeProcesses.length > 0 ||
+      activeSlice.todos.length > 0 ||
+      activeSlice.plan !== null
+    : false;
 
   // Ctrl-A / Ctrl-B focus cycle — runs at the App layer so the same chord
   // lands no matter which pane the user just glanced at. The readline-style
@@ -51,10 +63,12 @@ export function App(props: AppProps): React.JSX.Element {
         <Box flexDirection="column" flexGrow={1}>
           <ConversationPane />
         </Box>
-        <Box flexDirection="column" minWidth={28}>
-          <SubagentList />
-          <TodosPlanPanel />
-        </Box>
+        {showSideColumn ? (
+          <Box flexDirection="column" minWidth={28}>
+            <SubagentList />
+            <TodosPlanPanel />
+          </Box>
+        ) : null}
       </Box>
       <StatusBar />
       <ApprovalModal pending={pending} />

@@ -21,16 +21,20 @@ type Emit = <K extends ProgressEvent>(
   payload: ProgressEventPayloads[K],
 ) => void;
 
-/** Cap on per-process tail bytes held in the signal map — beyond this we
- *  truncate at the head so the live pane never grows unbounded. Matches the
- *  PRD "Phase 4 doesn't buffer beyond a small per-line cap" guidance. */
-const PROCESS_TAIL_BYTES_MAX = 8 * 1024;
+/** Cap on per-process tail length held in the signal map (UTF-16 code
+ *  units, not bytes — markdown-it / ink work in JS strings). Beyond this we
+ *  truncate at the head so the live pane never grows unbounded. */
+const PROCESS_TAIL_CHARS_MAX = 8 * 1024;
 
-function tailBytes(prev: string, next: string): string {
+function appendTail(prev: string, next: string): string {
   if (!next) return prev;
   const joined = `${prev}${next}`;
-  if (joined.length <= PROCESS_TAIL_BYTES_MAX) return joined;
-  return joined.slice(joined.length - PROCESS_TAIL_BYTES_MAX);
+  if (joined.length <= PROCESS_TAIL_CHARS_MAX) return joined;
+  let cut = joined.length - PROCESS_TAIL_CHARS_MAX;
+  // Don't slice in the middle of a surrogate pair.
+  const code = joined.charCodeAt(cut);
+  if (code >= 0xdc00 && code <= 0xdfff) cut += 1;
+  return joined.slice(cut);
 }
 
 export function wrapRuntimeHost(host: CliRuntimeHost): CliRuntimeHost {
@@ -100,8 +104,8 @@ function applyToState<K extends ProgressEvent>(
           stderr: '',
         };
         const next = {
-          stdout: tailBytes(prev.stdout, p.stdout),
-          stderr: tailBytes(prev.stderr, p.stderr),
+          stdout: appendTail(prev.stdout, p.stdout),
+          stderr: appendTail(prev.stderr, p.stderr),
         };
         const map = new Map(s.processOutput);
         map.set(p.executionId, next);
@@ -122,18 +126,18 @@ function applyToState<K extends ProgressEvent>(
     case 'updateToolEditApprovalBypassState': {
       const p =
         payload as ProgressEventPayloads['updateToolEditApprovalBypassState'];
-      cliState.bypass.set({
-        ...cliState.bypass.get(),
-        toolEdit: p.bypassActive,
-      });
+      patchStream(p.streamId, (s) => ({
+        ...s,
+        bypass: { ...s.bypass, toolEdit: p.bypassActive },
+      }));
       return;
     }
     case 'updateSuperYoloBypassState': {
       const p = payload as ProgressEventPayloads['updateSuperYoloBypassState'];
-      cliState.bypass.set({
-        ...cliState.bypass.get(),
-        superYolo: p.bypassActive,
-      });
+      patchStream(p.streamId, (s) => ({
+        ...s,
+        bypass: { ...s.bypass, superYolo: p.bypassActive },
+      }));
       return;
     }
     case 'updateQueuedFollowUps': {

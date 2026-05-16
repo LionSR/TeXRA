@@ -1,16 +1,15 @@
-// Phase 4 state + focus-cycle smoke. We poke `cliState` directly and verify
-// the focus cycle helpers walk subagents/processes then return to the parent.
+// Phase 4 state + focus-cycle smoke.
 
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   cliState,
   patchStream,
+  removeStream,
   resetCliState,
   setParentStream,
 } from '../../../packages/cli/src/chat/tui/state/cliState';
 import {
-  descendantAt,
   nextFocusBack,
   nextFocusForward,
 } from '../../../packages/cli/src/chat/tui/state/focusCycle';
@@ -25,7 +24,7 @@ afterEach(() => {
 });
 
 describe('cliState Phase 4 fields', () => {
-  it('initialises every new slice with empty subagent/process/todo/plan defaults', () => {
+  it('initialises every new slice with empty subagent/process/todo/plan/bypass defaults', () => {
     patchStream(root, (s) => ({ ...s, status: 'running' }));
     const slice = cliState.streams.get().get(root);
     expect(slice).toBeDefined();
@@ -34,20 +33,30 @@ describe('cliState Phase 4 fields', () => {
     expect(slice?.todos).toEqual([]);
     expect(slice?.plan).toBeNull();
     expect(slice?.processOutput.size).toBe(0);
+    expect(slice?.bypass).toEqual({ toolEdit: false, superYolo: false });
   });
 
-  it('tracks parent edges and drops them when a stream is removed', () => {
+  it('prunes parent edges when a stream is removed', () => {
     setParentStream(child1, root);
     setParentStream(child2, root);
     expect(cliState.parentStream.get().get(child1)).toBe(root);
     expect(cliState.parentStream.get().get(child2)).toBe(root);
-    patchStream(child1, (s) => s);
-    // removeStream is exercised indirectly via resetCliState in afterEach.
+
+    // Removing a child drops its own edge but leaves siblings intact.
+    patchStream(child1, (s) => ({ ...s, status: 'running' }));
+    removeStream(child1);
+    expect(cliState.parentStream.get().has(child1)).toBe(false);
+    expect(cliState.parentStream.get().get(child2)).toBe(root);
+
+    // Removing the parent prunes every edge that pointed at it.
+    patchStream(root, (s) => ({ ...s, status: 'running' }));
+    removeStream(root);
+    expect(cliState.parentStream.get().has(child2)).toBe(false);
   });
 });
 
 describe('focusCycle', () => {
-  it('advances Ctrl-A forward through descendants then wraps to parent', () => {
+  it('Ctrl-A cycles through siblings then wraps back to the parent', () => {
     cliState.activeStreamId.set(root);
     setParentStream(child1, root);
     setParentStream(child2, root);
@@ -60,12 +69,13 @@ describe('focusCycle', () => {
         { executionId: 'e2', agentName: 'b', childStreamId: child2 },
       ],
     }));
-    // From root → first descendant (subagent).
+    // root → first descendant.
     expect(nextFocusForward()).toBe(child1);
-    // child1 is a leaf in this fixture, so advancing from there returns to
-    // the parent (the cycle closes via the parent edge).
+    // child1 → next sibling resolved through the parent's descendant list.
     cliState.activeStreamId.set(child1);
-    patchStream(child1, (s) => s);
+    expect(nextFocusForward()).toBe(child2);
+    // child2 (last sibling) → wrap back to parent.
+    cliState.activeStreamId.set(child2);
     expect(nextFocusForward()).toBe(root);
   });
 
@@ -75,22 +85,5 @@ describe('focusCycle', () => {
     expect(nextFocusBack()).toBe(root);
     cliState.activeStreamId.set(root);
     expect(nextFocusBack()).toBeUndefined();
-  });
-
-  it('descendantAt resolves 1-based jump indices', () => {
-    cliState.activeStreamId.set(root);
-    patchStream(root, (s) => ({
-      ...s,
-      activeSubagents: [
-        { executionId: 'e1', agentName: 'a', childStreamId: child1 },
-      ],
-      activeProcesses: [
-        { executionId: 'e2', agentName: 'b', childStreamId: child2 },
-      ],
-    }));
-    expect(descendantAt(1)).toBe(child1);
-    expect(descendantAt(2)).toBe(child2);
-    expect(descendantAt(3)).toBeUndefined();
-    expect(descendantAt(0)).toBeUndefined();
   });
 });

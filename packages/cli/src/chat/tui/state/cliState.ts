@@ -36,6 +36,11 @@ export interface ProcessOutputTail {
   readonly stderr: string;
 }
 
+export interface BypassState {
+  readonly toolEdit: boolean;
+  readonly superYolo: boolean;
+}
+
 export interface StreamSlice {
   readonly streamId: StreamTabId;
   readonly status: StreamStatus | undefined;
@@ -48,14 +53,13 @@ export interface StreamSlice {
   readonly activeProcesses: readonly ActiveChildInfo[];
   readonly todos: readonly TodoItem[];
   readonly plan: Plan | null;
-  /** Tailed stdout/stderr per execution id; latest only — Phase 4 doesn't
-   *  buffer beyond a small per-line cap (see subscribeRuntimeHost). */
+  /** Tailed stdout/stderr per execution id; latest only — capped at
+   *  `PROCESS_TAIL_CHARS_MAX` in subscribeRuntimeHost. */
   readonly processOutput: ReadonlyMap<string, ProcessOutputTail>;
-}
-
-export interface BypassState {
-  readonly toolEdit: boolean;
-  readonly superYolo: boolean;
+  /** YOLO / BYPASS state is stream-scoped upstream (see
+   *  `permissionSlice.ts` in the extension), so concurrent parent/child
+   *  sessions can show distinct badges. */
+  readonly bypass: BypassState;
 }
 
 const SESSION_META = signal<SessionMeta>({
@@ -72,8 +76,6 @@ const STREAMS = signal<ReadonlyMap<StreamTabId, StreamSlice>>(new Map());
  *  (Ctrl-A / Ctrl-B) walks this when stepping back to the parent. */
 const PARENT_STREAM = signal<ReadonlyMap<StreamTabId, StreamTabId>>(new Map());
 
-const BYPASS_STATE = signal<BypassState>({ toolEdit: false, superYolo: false });
-
 export const cliState = {
   sessionMeta: SESSION_META as Signal.State<SessionMeta>,
   activeStreamId: ACTIVE_STREAM_ID as Signal.State<StreamTabId | undefined>,
@@ -81,8 +83,9 @@ export const cliState = {
   parentStream: PARENT_STREAM as Signal.State<
     ReadonlyMap<StreamTabId, StreamTabId>
   >,
-  bypass: BYPASS_STATE as Signal.State<BypassState>,
 };
+
+export const NO_BYPASS: BypassState = { toolEdit: false, superYolo: false };
 
 function emptySlice(streamId: StreamTabId): StreamSlice {
   return {
@@ -98,6 +101,7 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
     todos: [],
     plan: null,
     processOutput: new Map(),
+    bypass: NO_BYPASS,
   };
 }
 
@@ -161,5 +165,4 @@ export function resetCliState(): void {
   cliState.activeStreamId.set(undefined);
   cliState.streams.set(new Map());
   cliState.parentStream.set(new Map());
-  cliState.bypass.set({ toolEdit: false, superYolo: false });
 }

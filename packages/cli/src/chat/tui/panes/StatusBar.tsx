@@ -2,7 +2,7 @@ import { Box, Text } from 'ink';
 
 import { STREAM_STATUS } from '@shared/schemas';
 
-import { cliState } from '../state/cliState';
+import { cliState, NO_BYPASS } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
 
 function statusLabel(status: string | undefined): string {
@@ -25,9 +25,9 @@ function statusLabel(status: string | undefined): string {
 export function StatusBar(): React.JSX.Element {
   const activeStreamId = useSignal(cliState.activeStreamId);
   const streams = useSignal(cliState.streams);
-  const bypass = useSignal(cliState.bypass);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const queued = slice?.queuedFollowUps ?? 0;
+  const bypass = slice?.bypass ?? NO_BYPASS;
 
   return (
     <Box paddingX={1} justifyContent="space-between">
