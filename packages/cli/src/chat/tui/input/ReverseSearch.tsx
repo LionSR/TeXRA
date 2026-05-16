@@ -15,7 +15,8 @@ export interface ReverseSearchProps {
   readonly history: InputHistory;
   /** Commit the selected line — caller writes it into the input. */
   readonly onCommit: (line: string) => void;
-  /** User hit Esc / Ctrl-G — close without committing. */
+  /** User hit Esc (or Ctrl-G, which Ink reports as Ctrl-G → wired below) —
+   *  close without committing. */
   readonly onCancel: () => void;
 }
 
@@ -26,7 +27,7 @@ export function ReverseSearch(props: ReverseSearchProps): React.JSX.Element {
   const match = props.history.reverseFind(query, cursor);
 
   useInput((input, key) => {
-    if (key.escape) {
+    if (key.escape || (key.ctrl && input.toLowerCase() === 'g')) {
       props.onCancel();
       return;
     }
