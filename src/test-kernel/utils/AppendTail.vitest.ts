@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { appendTail } from '../../utils/strings/appendTail';
+import { appendTail } from '@utils/strings/appendTail';
 
 describe('appendTail', () => {
   it('returns the current string when the chunk is empty', () => {

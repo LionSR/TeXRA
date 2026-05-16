@@ -2,6 +2,8 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import type { StreamTabId } from '@shared/schemas';
+
 import {
   cliState,
   patchStream,
@@ -13,7 +15,6 @@ import {
   nextFocusBack,
   nextFocusForward,
 } from '../../../packages/cli/src/chat/tui/state/focusCycle';
-import type { StreamTabId } from '@shared/schemas';
 
 const root = 'root' as StreamTabId;
 const child1 = 'child-1' as StreamTabId;

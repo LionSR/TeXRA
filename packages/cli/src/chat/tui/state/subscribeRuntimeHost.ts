@@ -2,11 +2,11 @@
 // still flowing through the original emitter. Approvals are intentionally
 // not handled here — `subscribeApprovals.ts` owns the typed-modal pipeline.
 
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { appendTail } from '@utils/strings/appendTail';
 
 import {
