@@ -29,6 +29,11 @@ import type {
 } from '@shared/schemas';
 import { AGENT_CATEGORY } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
+import {
+  listOpenThreads,
+  readExternalInquiryThread,
+} from '@tools/inquiry/externalInquiryStorage';
 
 import { ProgressEventHandler } from './events/ProgressEventHandler';
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
@@ -375,7 +380,56 @@ export class ProgressViewProvider
     this._pendingUpdateOptions = null;
     this._panelJustDisposed = false;
     this.syncFullView({ forceRebuild: true });
+    // Manifest-backed open inquiries must be re-shown after a full
+    // extension reload — ApprovalRequestHandler.pending is in-memory and
+    // empty at construction. Fire-and-forget: the replay below covers
+    // anything already in-memory; this fills in the durable rows.
+    void this.hydrateOpenInquiries();
     this.replayPendingPrompts();
+  }
+
+  /**
+   * Read every open inquiry thread from durable storage and re-emit
+   * its `showExternalInquiry` payload so the panel reappears after an
+   * extension reload. No-op when the webview can't accept messages or
+   * when in-memory `pending` already covers everything (a sidebar
+   * toggle, not a fresh reload). `show()` itself is idempotent on
+   * `requestId` via `delivered`, so this gate is a perf optimization,
+   * not a correctness fix.
+   */
+  private async hydrateOpenInquiries(): Promise<void> {
+    if (!this.webviewUpdater.isAvailable()) return;
+    if (this.externalInquiryHandler.pendingSize > 0) return;
+
+    let open;
+    try {
+      open = await listOpenThreads();
+    } catch {
+      return;
+    }
+
+    for (const summary of open) {
+      try {
+        const manifest = await readExternalInquiryThread(summary.threadId);
+        if (!manifest || manifest.status !== 'open') continue;
+        if (!manifest.parentStreamId) continue;
+        const lastTurn = manifest.turns.at(-1);
+        if (!lastTurn || lastTurn.answer) continue;
+        this.externalInquiryHandler.show({
+          requestId: manifest.threadId,
+          threadId: manifest.threadId,
+          question: lastTurn.question,
+          context: lastTurn.context ?? undefined,
+          suggestSearch: lastTurn.suggestSearch ?? undefined,
+          attachFiles: lastTurn.attachFiles ?? undefined,
+          sessionLinks: collectKnownSessionLinks(manifest),
+          allowBypass: false,
+          streamId: manifest.parentStreamId,
+        });
+      } catch {
+        // Skip threads whose manifest can't be read; surface logs elsewhere.
+      }
+    }
   }
 
   private replayPendingPrompts(): void {

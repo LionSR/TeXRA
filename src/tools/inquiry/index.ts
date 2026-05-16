@@ -1,6 +1,4 @@
-export { ExternalInquiryTool } from './ExternalInquiryTool';
 export {
+  ExternalInquiryTool,
   handleExternalInquiryAction,
-  _rejectPendingInquiriesForStream,
-  _rejectAllPendingInquiries,
 } from './ExternalInquiryTool';
