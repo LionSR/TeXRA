@@ -77,6 +77,17 @@ const STREAMS = signal<ReadonlyMap<StreamTabId, StreamSlice>>(new Map());
  *  (Ctrl-A / Ctrl-B) walks this when stepping back to the parent. */
 const PARENT_STREAM = signal<ReadonlyMap<StreamTabId, StreamTabId>>(new Map());
 
+/** Active inline slash form, or `undefined` when the chat input owns the
+ *  screen. The form's `onDone` clears this slot. Kept opaque (the form
+ *  carries its own state) so the registry stays declarative. */
+export interface ActiveSlashForm {
+  /** The slash command that mounted the form (for the header strip). */
+  readonly commandName: string;
+  /** Render the form body. Receives the close callback. */
+  readonly render: (onDone: () => void) => React.ReactNode;
+}
+const ACTIVE_FORM = signal<ActiveSlashForm | undefined>(undefined);
+
 export const cliState = {
   sessionMeta: SESSION_META as Signal.State<SessionMeta>,
   activeStreamId: ACTIVE_STREAM_ID as Signal.State<StreamTabId | undefined>,
@@ -84,6 +95,7 @@ export const cliState = {
   parentStream: PARENT_STREAM as Signal.State<
     ReadonlyMap<StreamTabId, StreamTabId>
   >,
+  activeForm: ACTIVE_FORM as Signal.State<ActiveSlashForm | undefined>,
 };
 
 export const NO_BYPASS: BypassState = { toolEdit: false, superYolo: false };
@@ -166,4 +178,5 @@ export function resetCliState(): void {
   cliState.activeStreamId.set(undefined);
   cliState.streams.set(new Map());
   cliState.parentStream.set(new Map());
+  cliState.activeForm.set(undefined);
 }

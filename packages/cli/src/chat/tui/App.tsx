@@ -30,7 +30,9 @@ export function App(props: AppProps): React.JSX.Element {
   const pending = useSignal(currentApproval);
   const activeStreamId = useSignal(cliState.activeStreamId);
   const streams = useSignal(cliState.streams);
-  const inputDisabled = props.inputDisabled || pending !== undefined;
+  const activeForm = useSignal(cliState.activeForm);
+  const inputDisabled =
+    props.inputDisabled || pending !== undefined || activeForm !== undefined;
 
   // Hide the side column when both side panes would render empty —
   // otherwise the conversation loses 28 columns of width for nothing.
@@ -71,6 +73,9 @@ export function App(props: AppProps): React.JSX.Element {
       </Box>
       <StatusBar />
       <ApprovalModal pending={pending} />
+      {activeForm
+        ? activeForm.render(() => cliState.activeForm.set(undefined))
+        : null}
       <InputBar
         onSubmit={props.onSubmit}
         disabled={inputDisabled}
