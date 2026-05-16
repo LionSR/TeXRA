@@ -8,7 +8,6 @@
  * approval/rejection via the progress view.
  */
 
-import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 
@@ -29,6 +28,10 @@ import {
   previewProposedLatex,
   runLatexdiff,
 } from '@tools/approval/latexPreview';
+import {
+  writeApprovalTempFiles,
+  type ApprovalTempFiles,
+} from '@tools/approval/tempFileManager';
 import {
   computeLineChangeSummary,
   computeUserPatch,
@@ -87,21 +90,27 @@ async function ensureStorageDir(): Promise<string> {
   return dir;
 }
 
-async function createTempFile(
-  side: 'original' | 'proposed',
+async function stageApprovalSources(
   targetPath: string,
-  content: string,
-): Promise<DiffSource> {
-  const dir = await ensureStorageDir();
-  const ext = path.extname(targetPath) || '.txt';
-  const fileName = `${randomUUID()}-${side}${ext}`;
-  const filePath = path.join(dir, fileName);
-  await fs.writeFile(filePath, content, 'utf8');
-  return { filePath };
-}
-
-async function cleanupTempFile(source: DiffSource): Promise<void> {
-  await fs.unlink(source.filePath).catch(() => {});
+  originalContent: string,
+  proposedContent: string,
+): Promise<{
+  original: DiffSource;
+  proposed: DiffSource;
+  cleanup: ApprovalTempFiles['cleanup'];
+}> {
+  const directory = await ensureStorageDir();
+  const staged = await writeApprovalTempFiles({
+    directory,
+    targetPath,
+    originalContent,
+    proposedContent,
+  });
+  return {
+    original: { filePath: staged.originalPath },
+    proposed: { filePath: staged.proposedPath },
+    cleanup: staged.cleanup,
+  };
 }
 
 async function revealFirstChangedLine(
@@ -167,16 +176,11 @@ async function nativeRequestApproval(
 
   approvalCounter += 1;
   const requestId = `approval-${Date.now().toString(36)}-${approvalCounter}`;
-  const originalSource = await createTempFile(
-    'original',
-    filePath,
-    originalContent,
-  );
-  const proposedSource = await createTempFile(
-    'proposed',
-    filePath,
-    proposedContent,
-  );
+  const {
+    original: originalSource,
+    proposed: proposedSource,
+    cleanup: cleanupApprovalSources,
+  } = await stageApprovalSources(filePath, originalContent, proposedContent);
 
   const description = vscode.workspace.asRelativePath(
     WorkspaceFS.fullPath(filePath),
@@ -282,8 +286,7 @@ async function nativeRequestApproval(
     if (diffSession) {
       await diffViewHost.closeDiff(diffSession);
     }
-    await cleanupTempFile(originalSource);
-    await cleanupTempFile(proposedSource);
+    await cleanupApprovalSources();
 
     // Clean up any workspace temp files created by preview/latexdiff (parallel for performance)
     if (entry?.workspaceTempCleanup.length) {
