@@ -80,12 +80,13 @@ const TOOL_USE_VARS = ['INSTRUCTION'];
 const WORKFLOW_VARS = [
   'INPUT_FILE',
   'INPUT_CONTENT',
+  'INPUT_FILES',
   'ALL_INPUTS',
   'ALL_CONTEXTS',
   'LIST_OF_ALL_CONTEXTS',
   'ADDITIONAL_INPUTS',
   'INSTRUCTION',
-  'OUTPUT_FILES_ORDER',
+  'OUTPUT_FILES',
 ];
 
 function buildPassthrough(vars: string[]): Record<string, string> {

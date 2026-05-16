@@ -48,21 +48,22 @@ This is the crucial part for generating multiple distinct files:
 
 **Key Point:** The agent must be explicitly instructed via its prompts to
 generate the `<document name=\"...\">` structure matching the output filenames
-provided through `OUTPUT_FILES_ORDER`.
+provided through `INPUT_FILES` for editing agents, or `OUTPUT_FILES` for agents
+that declare generated output filenames.
 
 ## Tracking Multi-Output Runs
 
-TeXRA determines whether an agent advertises multiple-output support from its
-`defaultOutputFiles` setting. During a run, `OUTPUT_FILES_ORDER` is either that
-fixed list or the selected input filenames. Stream identifiers may still append
-`_multiple` for readability, but prompt rendering and output extraction depend
-on the filename list, not on a separate YAML flag.
+TeXRA uses the selected input filenames as the output filenames for ordinary
+editing agents. Agents that generate files with fixed names can declare
+`defaultOutputFiles`; those names are exposed as `OUTPUT_FILES`. Stream
+identifiers may still append `_multiple` for readability, but prompt rendering
+and output extraction depend on the filename lists, not on a separate YAML flag.
 
 ### Declaring multi-output agents in YAML
 
 Custom workflow agents can advertise that they expect multiple outputs by
 setting `settings.defaultOutputFiles` to the expected filenames. This gives
-prompts a fixed `OUTPUT_FILES_ORDER` when the filenames are not the input
+prompts a fixed `OUTPUT_FILES` list when the filenames are not the input
 filenames.
 
 ```yaml
@@ -80,27 +81,28 @@ part of the current agent settings schema. Update existing YAML files to declare
 
 ## Example: Multiple-Output Agent Prompts
 
-Workflow prompts can use `OUTPUT_FILES_ORDER` to request and format
-multiple outputs within the `<latex_documents>` tag. `OUTPUT_FILES_ORDER` is an
-array of filenames, so templates should iterate over it. Use
-`&#123;&#123; OUTPUT_FILES_ORDER | join(", ") &#125;&#125;` when the prompt needs a readable list.
+Workflow edit prompts can use `INPUT_FILES` to request and format
+multiple outputs within the `<latex_documents>` tag. `INPUT_FILES` is an array
+of selected input filenames, so templates should iterate over it. Use
+`&#123;&#123; INPUT_FILES | join(", ") &#125;&#125;` when the prompt needs a readable list.
 
 ```yaml
 # Inside a workflow agent's userRequest prompt:
 # ... instructions ...
-{% if OUTPUT_FILES_ORDER %}
-The output files should be in this order: {{ OUTPUT_FILES_ORDER | join(", ") }}.
-{% endif %}
+The output files should be in this order: {{ INPUT_FILES | join(", ") }}.
 
 # Use the following format:
 <documents>
-{% for output in OUTPUT_FILES_ORDER %}
+{% for output in INPUT_FILES %}
 <document name="{{ output }}">
 % UPDATED_CONTENT_FOR_{{ output }}
 </document>
 {% endfor %}
 </documents>
 ```
+
+For agents with `settings.defaultOutputFiles`, iterate over `OUTPUT_FILES`
+instead.
 
 This instructs the model to generate the necessary XML structure that TeXRA can parse.
 
@@ -120,5 +122,6 @@ This instructs the model to generate the necessary XML structure that TeXRA can 
 
 By default, TeXRA uses the selected input filenames as the output filenames.
 Agents that write fixed new files should declare `settings.defaultOutputFiles`.
-Your prompt should reference `OUTPUT_FILES_ORDER` so the model emits matching
-`<document name="...">` tags.
+Editing prompts should reference `INPUT_FILES`; generated-output prompts should
+reference `OUTPUT_FILES` so the model emits matching `<document name="...">`
+tags.

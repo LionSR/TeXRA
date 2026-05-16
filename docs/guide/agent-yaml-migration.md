@@ -8,11 +8,11 @@ If you've never written a custom agent, skip this guide.
 
 Three rounds of cleanup landed across recent releases:
 
-| Round                       | What                                                                                                                                                                                        | Why                                                                                                                                                                                                    |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **W2** (PR #4035, May 2026) | Merge `Reference` + `Auxiliary` file pickers into one **Context** picker                                                                                                                    | The two pickers had overlapping extensions (`.tex`, `.md`) and an invisible conceptual split that scared new users                                                                                     |
-| **W3** (PR #4035, May 2026) | Retire the `_multiple` agent YAML variants                                                                                                                                                  | Keeping `foo.yaml` and `foo_multiple.yaml` in sync by hand was a maintenance tax. One unified YAML now handles single- and multi-output via `documentTag: documents` and `{% if OUTPUT_FILES_ORDER %}` |
-| **W4** (this PR)            | Drop the **single-file slot** for input/context/media; retire `ADDITIONAL_INPUTS`; drop `OUTPUT_FILES_ORDER` from non-merge agents; rewrite the prompt protocol as "one document per input" | The single-vs-multi distinction in the UI was extra cognitive load that newer models don't need                                                                                                        |
+| Round                       | What                                                                                                                                                                                         | Why                                                                                                                                                                           |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **W2** (PR #4035, May 2026) | Merge `Reference` + `Auxiliary` file pickers into one **Context** picker                                                                                                                     | The two pickers had overlapping extensions (`.tex`, `.md`) and an invisible conceptual split that scared new users                                                            |
+| **W3** (PR #4035, May 2026) | Retire the `_multiple` agent YAML variants                                                                                                                                                   | Keeping `foo.yaml` and `foo_multiple.yaml` in sync by hand was a maintenance tax. One unified YAML now handles single- and multi-document output via `documentTag: documents` |
+| **W4** (this PR)            | Drop the **single-file slot** for input/context/media; retire `ADDITIONAL_INPUTS`; retire the separate output-order prompt variable; rewrite the prompt protocol as "one document per input" | The single-vs-multi distinction in the UI was extra cognitive load that newer models don't need                                                                               |
 
 ## Quick reference: old → new
 
@@ -25,7 +25,7 @@ Three rounds of cleanup landed across recent releases:
 | `{{ REFERENCE_CONTENT }}`, `{{ AUXILIARY_CONTENT }}`                           | dropped                                                                 | No replacement — these were content of the _single_ reference/auxiliary file. Use `{{ ALL_CONTEXTS }}` (XML of all context files) |
 | `{{ ADDITIONAL_INPUTS }}`                                                      | **drop the line**                                                       | The "additional" concept disappears with the single-slot collapse. `{{ ALL_INPUTS }}` already includes everything                 |
 | `{{ INPUT_FILE }}`, `{{ INPUT_CONTENT }}`                                      | still resolve at runtime as aliases for `inputFiles[0]` and its content | Custom YAMLs that reference these keep working. New YAMLs should prefer `{{ ALL_INPUTS }}` for the document body                  |
-| `{% if OUTPUT_FILES_ORDER %}` ... `{% else %}` ... `{% endif %}` branches      | drop the conditional, keep the multi-output branch unconditionally      | Exception: `merge.yaml`-style agents that write a _new_ output filename distinct from inputs still use `OUTPUT_FILES_ORDER`       |
+| Output-order variables and `{% if ... %}` single-vs-multiple branches          | iterate over `{{ INPUT_FILES }}` for edit outputs                       | Agents that write fresh filenames use `{{ OUTPUT_FILES }}` from `settings.defaultOutputFiles`                                     |
 | `foo_multiple.yaml` siblings                                                   | merged into the base `foo.yaml`                                         | If you cloned a `_multiple` variant, copy your customizations onto the base                                                       |
 | `latex_documents` / `latex_document` document tag                              | `documents` (use `documentTag: documents` in settings)                  | The unified protocol uses `<documents><document name="...">...</document></documents>`                                            |
 
@@ -86,7 +86,7 @@ Why this works:
 - `{{ ALL_CONTEXTS }}` already wraps every context file in `<document name="...">...</document>`.
 - `{{ ALL_INPUTS }}` already wraps every input file the same way — including what used to be the "primary" input. There is no separate primary.
 
-### Step 3 — Drop `{% if OUTPUT_FILES_ORDER %}` branches (unless your agent writes a fresh filename)
+### Step 3 — Use input filenames for edit outputs
 
 If your agent rewrites each input as one output (the common case — `correct`, `polish`, `enhance` style), the conditional is unnecessary now:
 
@@ -95,12 +95,12 @@ Old:
 ```yaml
 userRequest:
   - |
-    {% if OUTPUT_FILES_ORDER %}
+    {% if INPUT_FILES %}
     Output the revised files as multiple documents in the order:
-    {{ OUTPUT_FILES_ORDER | join(', ') }}.
+    {{ INPUT_FILES | join(', ') }}.
     <documents>
-    <document name="{{ OUTPUT_FILES_ORDER[0] }}">...</document>
-    <document name="{{ OUTPUT_FILES_ORDER[1] }}">...</document>
+    <document name="{{ INPUT_FILES[0] }}">...</document>
+    <document name="{{ INPUT_FILES[1] }}">...</document>
     </documents>
     {% else %}
     Output the revised file as <documents><document name="{{ INPUT_FILE }}">...</document></documents>.
@@ -116,14 +116,15 @@ userRequest:
     <documents>...</documents>.
 ```
 
-If your agent writes to a _different_ filename than its inputs (the `merge.yaml` shape — input pairs in, single new file out), keep `OUTPUT_FILES_ORDER`:
+If your agent writes to a _different_ filename than its inputs, declare
+`settings.defaultOutputFiles` and iterate over `OUTPUT_FILES`:
 
 ```yaml
 userRequest:
   - |
     Merge the original/edited pairs and emit:
     <documents>
-    {% for name in OUTPUT_FILES_ORDER %}
+    {% for name in OUTPUT_FILES %}
     <document name="{{ name }}">...</document>
     {% endfor %}
     </documents>
@@ -222,18 +223,19 @@ The `_multiple` sibling is gone; this YAML works for one input or several.
 
 Workflow agents receive these template variables at runtime:
 
-| Variable                     | Resolves to                                                                                    |
-| ---------------------------- | ---------------------------------------------------------------------------------------------- |
-| `{{ INPUT_FILE }}`           | `inputFiles[0]` (alias)                                                                        |
-| `{{ INPUT_CONTENT }}`        | content of `inputFiles[0]` (alias)                                                             |
-| `{{ ALL_INPUTS }}`           | XML of all input files: `<document name="...">...</document>` per file                         |
-| `{{ LIST_OF_ALL_INPUTS }}`   | comma-separated list of input file paths                                                       |
-| `{{ ALL_CONTEXTS }}`         | XML of all context files (`.bib`/`.bbl`, reference papers, `.sty`/`.cls`)                      |
-| `{{ LIST_OF_ALL_CONTEXTS }}` | comma-separated list of context file paths                                                     |
-| `{{ INSTRUCTION }}`          | the user's free-text instruction for this run                                                  |
-| `{{ OUTPUT_FILES_ORDER }}`   | array of explicit output filenames (only set for merge-style agents that write a new filename) |
-| `{{ EDITED_FILE }}`          | path of the edited file (used in `merge`)                                                      |
-| `{{ EDITED_CONTENT }}`       | content of the edited file                                                                     |
-| `{{ MEDIA_FILE }}`           | `mediaFiles[0]` (alias). Media content is handled separately for multimodal models             |
+| Variable                     | Resolves to                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------- |
+| `{{ INPUT_FILE }}`           | `inputFiles[0]` (alias)                                                               |
+| `{{ INPUT_CONTENT }}`        | content of `inputFiles[0]` (alias)                                                    |
+| `{{ ALL_INPUTS }}`           | XML of all input files: `<document name="...">...</document>` per file                |
+| `{{ LIST_OF_ALL_INPUTS }}`   | comma-separated list of input file paths                                              |
+| `{{ ALL_CONTEXTS }}`         | XML of all context files (`.bib`/`.bbl`, reference papers, `.sty`/`.cls`)             |
+| `{{ LIST_OF_ALL_CONTEXTS }}` | comma-separated list of context file paths                                            |
+| `{{ INSTRUCTION }}`          | the user's free-text instruction for this run                                         |
+| `{{ INPUT_FILES }}`          | array of selected input filenames; edit agents should output one document per entry   |
+| `{{ OUTPUT_FILES }}`         | array of declared generated output filenames; only set for explicit/generated outputs |
+| `{{ EDITED_FILE }}`          | path of the edited file (used in `merge`)                                             |
+| `{{ EDITED_CONTENT }}`       | content of the edited file                                                            |
+| `{{ MEDIA_FILE }}`           | `mediaFiles[0]` (alias). Media content is handled separately for multimodal models    |
 
 Tool-use agents receive only `{{ INSTRUCTION }}` — files are accessed via tool calls.
