@@ -5,7 +5,6 @@ import { Box, useInput } from 'ink';
 
 import { ApprovalModal } from './modals/ApprovalModal';
 import { ConversationPane } from './panes/ConversationPane';
-import { Header } from './panes/Header';
 import { InputBar } from './panes/InputBar';
 import { StatusBar } from './panes/StatusBar';
 import { SubagentList } from './panes/SubagentList';
@@ -57,7 +56,6 @@ export function App(props: AppProps): React.JSX.Element {
 
   return (
     <Box flexDirection="column">
-      <Header />
       <Box flexDirection="row" flexGrow={1}>
         <Box flexDirection="column" flexGrow={1}>
           <ConversationPane />
