@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Local imports - core flow primitives
 import { isRemoteAgent } from '@agent/index';
-import { BaseNode, Flow, Node } from '@agent/node';
+import { BaseNode, BatchNode, Flow, Node } from '@agent/node';
 import { recordCycleMetrics } from '@agent/core/AgentState';
 import {
   BaseCycleFieldsSchema,
@@ -470,9 +470,6 @@ const DEFERRED_LOG_TOOLS = new Set(['bash', 'codex']);
 /** Tools that support streaming partial output to the UI. */
 const STREAMABLE_TOOLS = new Set(['bash']);
 
-/** External inquiry calls can run concurrently when they start distinct threads. */
-const CONCURRENT_EXTERNAL_INQUIRY_TOOL = 'external_inquiry';
-
 /** Maximum size of the streaming output buffer sent to the UI (bytes). */
 const STREAM_BUFFER_MAX = 50_000;
 
@@ -497,23 +494,21 @@ interface ToolExecutionResult {
 }
 
 /**
- * Dispatches tool calls with hybrid sequential/parallel execution.
+ * Dispatches tool calls sequentially.
  *
- * Sequential by default to preserve ordering guarantees when tools have
- * dependencies (e.g., read file then edit file). Consecutive independent
- * external_inquiry calls run in parallel so the user can work through
- * multiple outside-model prompts at once.
+ * Sequential dispatch preserves ordering guarantees when tools have
+ * dependencies (e.g., read file then edit file). The inquiry tool used
+ * to need a concurrency carve-out because it blocked on a human round-
+ * trip; it now returns synchronously, so the default sequential path
+ * is sufficient.
  *
  * Batches follow-up messages for Google/DeepSeek handlers to preserve thought signatures.
  */
-class ToolUseDispatchNode<C> extends Node<
+class ToolUseDispatchNode<C> extends BatchNode<
   ToolUseCycleShared,
   CycleParams,
   ToolUseCycleServices<C>
 > {
-  /** Call IDs that are safe to dispatch concurrently in this batch. */
-  private _concurrentCallIds = new Set<string>();
-
   /**
    * Call IDs of duplicate parallel calls detected during prep().
    * These are skipped during exec() and receive a synthetic error result
@@ -521,141 +516,9 @@ class ToolUseDispatchNode<C> extends Node<
    */
   private _duplicateCallIds = new Set<string>();
 
-  /** Extract a normalized thread key for external_inquiry follow-up calls. */
-  private getExternalInquiryFollowupThreadKey(
-    call: SdkToolCall,
-  ): string | null {
-    if (call.name !== CONCURRENT_EXTERNAL_INQUIRY_TOOL) return null;
-    const input = parseToolInput(call.input, call.callId, this.services.logger);
-    if (typeof input !== 'object' || input == null) return null;
-    const threadId = (input as Record<string, unknown>).thread_id;
-    if (typeof threadId !== 'string' || threadId.trim().length === 0) {
-      return null;
-    }
-    return threadId.toLowerCase();
-  }
-
-  /**
-   * Compute which calls are safe to run concurrently.
-   *
-   * external_inquiry calls are parallel-safe only when independent:
-   * - calls without thread_id start new threads and are always independent
-   * - calls with thread_id are follow-ups and are parallel-safe only when the
-   *   thread_id is unique in the current batch
-   */
-  private buildConcurrentCallIds(toolCalls: SdkToolCall[]): Set<string> {
-    const concurrent = new Set<string>();
-    const followupCounts = new Map<string, number>();
-
-    for (const call of toolCalls) {
-      if (call.name !== CONCURRENT_EXTERNAL_INQUIRY_TOOL) continue;
-      const threadKey = this.getExternalInquiryFollowupThreadKey(call);
-      if (!threadKey) continue;
-      followupCounts.set(threadKey, (followupCounts.get(threadKey) ?? 0) + 1);
-    }
-
-    for (const call of toolCalls) {
-      if (call.name !== CONCURRENT_EXTERNAL_INQUIRY_TOOL) continue;
-      const threadKey = this.getExternalInquiryFollowupThreadKey(call);
-      if (!threadKey) {
-        // thread_id omitted: starts a new thread, so it remains parallel-safe.
-        concurrent.add(call.callId);
-        continue;
-      }
-      if ((followupCounts.get(threadKey) ?? 0) === 1) {
-        concurrent.add(call.callId);
-      }
-    }
-
-    return concurrent;
-  }
-
-  private isConcurrentExternalInquiryCall(call: SdkToolCall): boolean {
-    return this._concurrentCallIds.has(call.callId);
-  }
-
-  private buildConcurrentFailureResult(
-    call: SdkToolCall,
-    error: unknown,
-  ): ToolExecutionResult {
-    const parsedInput = parseToolInput(
-      call.input,
-      call.callId,
-      this.services.logger,
-    );
-    const { message, diagnostics } = normalizeToolCallError(call.name, error);
-
-    return {
-      call,
-      result: {
-        error: message,
-        isError: true,
-        ...(diagnostics ? { diagnostics } : {}),
-      },
-      parsedInput,
-      extracted: {
-        sanitizedResult: { error: message },
-        attachments: [],
-      },
-      editedFiles: [],
-      logRef: {
-        logId: undefined,
-        groupId: this.services.logger.resolveActiveGroupId(),
-      },
-    };
-  }
-
-  private async executeConcurrentGroup(
-    group: SdkToolCall[],
-  ): Promise<(ToolExecutionResult | null)[]> {
-    const settled = await Promise.allSettled(
-      group.map((call) => super._exec(call)),
-    );
-    return settled.map((result, index) =>
-      result.status === 'fulfilled'
-        ? (result.value as ToolExecutionResult | null)
-        : this.buildConcurrentFailureResult(group[index], result.reason),
-    );
-  }
-
-  override async _exec(
-    items: unknown[],
-  ): Promise<(ToolExecutionResult | null)[]> {
-    if (!Array.isArray(items)) return [];
-
-    const toolCalls = items as SdkToolCall[];
-    const results: (ToolExecutionResult | null)[] = [];
-    let index = 0;
-
-    while (index < toolCalls.length) {
-      if (this.signal?.aborted || this.services.checkInterruption()) break;
-
-      const currentCall = toolCalls[index];
-      if (this.isConcurrentExternalInquiryCall(currentCall)) {
-        const group: SdkToolCall[] = [];
-        while (
-          index < toolCalls.length &&
-          this.isConcurrentExternalInquiryCall(toolCalls[index])
-        ) {
-          group.push(toolCalls[index++]);
-        }
-        results.push(...(await this.executeConcurrentGroup(group)));
-        continue;
-      }
-
-      results.push(
-        (await super._exec(currentCall)) as ToolExecutionResult | null,
-      );
-      index++;
-    }
-
-    return results;
-  }
-
   /** Returns tool calls to execute, or empty array if skipped/interrupted. */
   async prep(shared: ToolUseCycleShared): Promise<SdkToolCall[]> {
     this._duplicateCallIds.clear();
-    this._concurrentCallIds.clear();
     const toolCalls = shared.toolCalls ?? [];
 
     if (shared.shouldStop || toolCalls.length === 0) {
@@ -666,8 +529,6 @@ class ToolUseDispatchNode<C> extends Node<
       shared.shouldStop = true;
       return [];
     }
-
-    this._concurrentCallIds = this.buildConcurrentCallIds(toolCalls);
 
     // Deduplicate parallel calls: when multiple calls have the same tool name
     // and identical arguments, only execute the first one. Later duplicates
@@ -732,7 +593,6 @@ class ToolUseDispatchNode<C> extends Node<
   clone(): this {
     const cloned = super.clone();
     cloned._duplicateCallIds = new Set();
-    cloned._concurrentCallIds = new Set();
     return cloned;
   }
 

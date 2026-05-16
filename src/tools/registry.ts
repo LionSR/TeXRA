@@ -125,7 +125,7 @@ function createDefaultTools() {
     delegate_agent: new DelegateAgentTool(),
     executions: new ExecutionsTool(),
     accept_run_files: new AcceptRunFilesTool(),
-    external_inquiry: new ExternalInquiryTool(),
+    inquiry: new ExternalInquiryTool(),
     ask_user_question: new AskUserQuestionTool(),
     github_subscription: new GitHubSubscriptionTool(),
     probe_environment: new ProbeEnvironmentTool(),
@@ -142,6 +142,20 @@ function createDefaultTools() {
 
 /** Union of all tool names registered in the default registry. */
 export type RegisteredToolName = keyof ReturnType<typeof createDefaultTools>;
+
+/**
+ * Legacy tool-name aliases — keep prior YAML configs working when a tool is
+ * renamed. Each entry maps `<old name> → <canonical name>`. Aliases are
+ * normalized while loading configs, rather than registered as extra tool names,
+ * so the model sees only the canonical definition.
+ */
+const TOOL_ALIASES: Record<string, string> = {
+  external_inquiry: 'inquiry',
+};
+
+function canonicalToolName(name: string): string {
+  return TOOL_ALIASES[name] ?? name;
+}
 
 /** Lazy singleton accessor for the default tool registry. */
 export function getDefaultToolRegistry(): IToolRegistry {
@@ -178,23 +192,27 @@ export function resolveToolDefinitions(
 
   return tools.map((item): ToolDefinition => {
     const name = typeof item === 'string' ? item : item.name;
+    const canonicalName = canonicalToolName(name);
 
-    if (!VALID_TOOL_NAME.test(name)) {
+    if (!VALID_TOOL_NAME.test(canonicalName)) {
       warnOnMissing?.(name);
-      return { name };
+      return { name: canonicalName };
     }
 
-    const tool = registry.get(name);
+    const tool = registry.get(canonicalName);
     if (!tool) {
       warnOnMissing?.(name);
     }
 
     // String items: return tool definition or minimal fallback
     if (typeof item === 'string') {
-      return tool?.definition ?? { name };
+      return tool?.definition ?? { name: canonicalName };
     }
 
     // Object items: always parse with schema to validate/merge overrides
-    return ToolDefinitionSchema.catch({ name }).parse(item);
+    return ToolDefinitionSchema.catch({ name: canonicalName }).parse({
+      ...item,
+      name: canonicalName,
+    });
   });
 }
