@@ -113,7 +113,7 @@ prompts:
       </instruction>
       If no instruction given, look for all opportunities to improve mathematical substance across all documents.
 
-      The output files should be in the following order: {{ INPUT_FILES | join(', ') }}.
+      Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
 
       FIRST PHASE - IDENTIFY IMPROVEMENT OPPORTUNITIES: Analyze the mathematics across all documents to find where results could be strengthened, proofs could be more elegant, or open questions could be resolved.
 
