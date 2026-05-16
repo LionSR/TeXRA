@@ -170,48 +170,34 @@ export function createDesktopShellActions(
     openWorkspaceFolder,
     resetMainView,
     sendRecentCommits: () => {
-      // Prefer the real git host when wired (closes audit item A from
-      // `docs/dev/standalone-trajectory-audit.md`). Falls back to the
-      // synchronous `.git` probe so the boolean stays honest even when no
-      // git host is supplied (e.g. in tests, or before the host is wired).
-      const getRecentCommits = options.getRecentCommits;
+      const postReply = (commits: string[], isGitRepo: boolean) => {
+        renderer.postToRenderer({
+          command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
+          commits,
+          isGitRepo,
+        });
+      };
+      const { getRecentCommits } = options;
       if (getRecentCommits) {
         void getRecentCommits()
-          .then(({ commits, isGitRepo }) => {
-            renderer.postToRenderer({
-              command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
-              commits,
-              isGitRepo,
-            });
-          })
+          .then(({ commits, isGitRepo }) => postReply(commits, isGitRepo))
           .catch((error) => {
-            // The git host already swallows expected errors; reaching this
-            // catch implies a programmer bug. Surface the error so it gets
-            // logged, but still send a conservative reply so the launcher
-            // banner doesn't hang waiting for a response.
+            // The git host swallows expected errors; reaching this catch
+            // is a programmer bug. Log and send a conservative reply so
+            // the launcher banner doesn't hang.
             reportAsyncError(error);
-            renderer.postToRenderer({
-              command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
-              commits: [],
-              isGitRepo: false,
-            });
+            postReply([], false);
           });
         return;
       }
-      // No git host: best-effort `isGitRepo` boolean, empty commit list.
+      // No git host wired (tests / pre-init): best-effort isGitRepo probe.
       let isGitRepo = false;
       try {
         isGitRepo = options.isWorkspaceGitRepo?.() ?? false;
       } catch (error) {
-        // Probe failures should never break the IPC reply — fall back
-        // to the conservative "not a repo" answer.
         reportAsyncError(error);
       }
-      renderer.postToRenderer({
-        command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
-        commits: [],
-        isGitRepo,
-      });
+      postReply([], isGitRepo);
     },
     showRoute: postRoute,
     showSettings: postSettingsRoute,

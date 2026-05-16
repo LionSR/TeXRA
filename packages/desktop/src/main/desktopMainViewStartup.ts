@@ -15,6 +15,10 @@ import {
 } from './desktopIpcTypes.js';
 import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
 
+async function defaultGetAuthStatus(): Promise<MainViewAuthStatus> {
+  return { authenticated: false };
+}
+
 export interface DesktopMainViewStartupOptions {
   renderer: DesktopRenderer;
   modelListRefresh?: PromiseLike<void>;
@@ -42,7 +46,7 @@ export function createDesktopMainViewStartup({
       ]);
       return { agentOptions, modelOptions };
     },
-    getAuthStatus: getAuthStatus ?? (async () => ({ authenticated: false })),
+    getAuthStatus: getAuthStatus ?? defaultGetAuthStatus,
   });
 
   async function postStartupMessages(): Promise<void> {
