@@ -55,7 +55,7 @@ export async function runChatTui(
 ): Promise<ChatResult> {
   if (context.mode === 'headless') {
     writeTextStderr(
-      'texra chat requires an interactive terminal. Did you mean texra run? (Pass --legacy-renderer to force the line-based renderer.)',
+      'texra chat requires an interactive terminal (TTY stdin). For non-interactive use, try `texra run`.',
     );
     return { exitCode: CliExitCode.Usage };
   }
