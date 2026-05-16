@@ -335,13 +335,24 @@ export function handlePermissionAction(
       break;
     case PERMISSION_KIND.EXTERNAL_INQUIRY: {
       const { requestId } = permission.data;
-      postMessage(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION, {
-        requestId,
-        action,
-        feedback,
-        answer,
-        sessionLinks,
-      });
+      // The host now packs `threadId` into `requestId` for the showExternalInquiry
+      // emit; the panel addresses inquiries by their durable thread id.
+      const threadId = (permission.data.threadId ?? requestId) as string;
+      if (action === 'submit' && answer !== undefined) {
+        postMessage(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION, {
+          action: 'submit',
+          threadId,
+          answer,
+          sessionLinks,
+        });
+      } else {
+        // 'reject' (and any other non-submit action) → drop the thread.
+        postMessage(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION, {
+          action: 'drop',
+          threadId,
+          feedback,
+        });
+      }
       removePrompt(
         ctx,
         PERMISSION_KIND.EXTERNAL_INQUIRY,

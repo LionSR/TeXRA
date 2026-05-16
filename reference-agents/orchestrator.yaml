@@ -20,7 +20,7 @@ settings:
     - extract_figures
     - extract_bib_entries
     - texcount
-    - external_inquiry
+    - inquiry
     - codex
     # GitHub subscription (repos, PRs, issues) — opt-in. Disabled by default;
     # enable in Dashboard → Tools and configure a GitHub token in Dashboard →

@@ -180,7 +180,7 @@ VALUES (
   'tool-use/orchestrator.yaml',
   ARRAY['public'],
   'toolUse',
-  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'texcount', 'external_inquiry', 'codex', 'github_subscription']
+  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'texcount', 'inquiry', 'codex', 'github_subscription']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
@@ -212,7 +212,7 @@ VALUES (
   'tool-use/progressCheck.yaml',
   ARRAY['public'],
   'toolUse',
-  ARRAY['executions', 'read_file', 'glob', 'grep', 'ls', 'bash', 'memory', 'github_subscription', 'web_fetch', 'external_inquiry']
+  ARRAY['executions', 'read_file', 'glob', 'grep', 'ls', 'bash', 'memory', 'github_subscription', 'web_fetch', 'inquiry']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
