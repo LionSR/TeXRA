@@ -1,171 +1,60 @@
 /**
- * Markdown rendering utilities with LaTeX reference support.
+ * Markdown rendering for the progress view.
+ *
+ * Thin webview-side adapter around the shared `@shared/markdown` factory:
+ * registers the KaTeX math engine + project macros and the existing
+ * `highlightCode` hljs hook, then exposes the legacy `getMarkdownRenderer` /
+ * `processMarkdownContent` API the rest of the webview already imports.
  */
 
-// Third-party imports
-import MarkdownIt from 'markdown-it';
-import texmath from 'markdown-it-texmath';
 import katex from 'katex';
 
-// Local imports - shared highlighting
 import { highlightCode } from '@shared/highlighting/highlightCode';
-import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
+import {
+  createMarkdownProcessor,
+  createMarkdownRenderer,
+  type MarkdownItInstance,
+} from '@shared/markdown';
 
-// Local imports - progress view helpers
 import { katexMacros } from '../katexMacros';
 
-// Add inline rule for \[...\] display math (texmath only defines it as block rule)
-// This must happen before renderer initialization
-texmath.rules.brackets.inline.push({
-  name: 'math_inline_display',
-  rex: /\\\[([\s\S]+?)\\\]/gy,
-  tmpl: '<section><eqn>$1</eqn></section>',
-  tag: '\\[',
-  displayMode: true,
-});
+let cachedRenderer: MarkdownItInstance | null = null;
+let cachedProcess: ((content: string) => string) | null = null;
 
-let markdownRenderer: MarkdownIt | null = null;
-
-// LRU cache for rendered markdown (content hash → HTML)
-const CACHE_MAX_ENTRIES = 2000;
-const CACHE_MAX_ENTRY_CHARS = 200_000;
-const CACHE_MAX_TOTAL_CHARS = 2_000_000;
-const markdownCache = new Map<string, string>();
-let markdownCacheChars = 0;
-
-/** Get the shared markdown renderer instance. */
-export const getMarkdownRenderer = (): MarkdownIt => {
-  if (!markdownRenderer) {
-    markdownRenderer = new MarkdownIt({
-      breaks: false,
-      linkify: true,
-      html: false,
+function ensureInitialised(): {
+  renderer: MarkdownItInstance;
+  process: (content: string) => string;
+} {
+  if (!cachedRenderer || !cachedProcess) {
+    cachedRenderer = createMarkdownRenderer({
       highlight: highlightCode,
-    }).use(texmath, {
-      engine: katex,
-      // Include beg_end to catch \begin{...}...\end{...} environments directly
-      delimiters: ['dollars', 'brackets', 'beg_end'],
-      katexOptions: {
-        throwOnError: false,
-        errorColor: 'var(--color-error, #cc0000)',
-        macros: katexMacros,
+      math: {
+        engine: katex,
+        engineOptions: {
+          throwOnError: false,
+          errorColor: 'var(--color-error, #cc0000)',
+          macros: katexMacros,
+        },
       },
     });
+    cachedProcess = createMarkdownProcessor({ renderer: cachedRenderer });
   }
-
-  return markdownRenderer;
-};
-
-/** Create LaTeX reference HTML element. Labels arrive from model output and
- *  may carry crafted characters; escape via the shared util so a label
- *  cannot break out of the `data-label` attribute or the inner text. */
-const createLatexReferenceHtml = (refType: string, label: string): string => {
-  const safeAttrLabel = escapeAttr(label);
-  const safeTextLabel = escapeText(label);
-  return `<span class="latex-ref clickable-link" data-label="${safeAttrLabel}">\\${refType}{${safeTextLabel}}</span>`;
-};
-
-interface ProtectedLatexReference {
-  refType: string;
-  label: string;
+  return { renderer: cachedRenderer, process: cachedProcess };
 }
 
-/** Protect LaTeX references from markdown parsing. */
-const protectLatexReferences = (
-  content: string,
-): { content: string; refs: ProtectedLatexReference[] } => {
-  const refs: ProtectedLatexReference[] = [];
-  const protectedContent = content.replaceAll(
-    /\\(ref|cref|eqref)\{([^}]+)\}/g,
-    (_match, refType: string, label: string) => {
-      const index = refs.push({ refType, label }) - 1;
-      return `@@LATEX-REF-${index}@@`;
-    },
-  );
-  return { content: protectedContent, refs };
-};
-
-/** Restore LaTeX references from placeholders to clickable elements. */
-const restoreLatexReferences = (
-  content: string,
-  refs: ProtectedLatexReference[],
-): string => {
-  return content.replaceAll(/@@LATEX-REF-(\d+)@@/g, (match, rawIndex) => {
-    const index = Number(rawIndex);
-    const ref = refs[index];
-    return ref ? createLatexReferenceHtml(ref.refType, ref.label) : match;
-  });
-};
-
-/** Simple hash function for cache keys (FNV-1a variant). */
-const hashContent = (str: string): string => {
-  let hash = 2166136261;
-  for (let i = 0; i < str.length; i++) {
-    hash ^= str.charCodeAt(i);
-    hash = (hash * 16777619) >>> 0;
-  }
-  return hash.toString(36);
-};
+/** Get the shared markdown renderer instance. */
+export const getMarkdownRenderer = (): MarkdownItInstance =>
+  ensureInitialised().renderer;
 
 /** Process markdown content with LaTeX reference protection. */
 export const processMarkdownContent = (
   content: string,
-  renderer?: MarkdownIt,
+  renderer?: MarkdownItInstance,
 ): string => {
-  // Check cache first (only for default renderer)
-  const useCache = !renderer;
-  const cacheKey = useCache ? hashContent(content) : null;
-
-  if (useCache && cacheKey && markdownCache.has(cacheKey)) {
-    // Move to end for LRU behavior
-    const cached = markdownCache.get(cacheKey);
-    if (!cached) {
-      return '';
-    }
-    markdownCache.delete(cacheKey);
-    markdownCache.set(cacheKey, cached);
-    return cached;
-  }
-
-  // Pre-process LaTeX references to protect them from markdown parsing
-  // Note: Pandoc reference formats are normalized to LaTeX at the source (xmlUtils.ts)
-  const { content: protectedContent, refs } = protectLatexReferences(content);
-
-  // Add line break before bold text starting a new sentence (capital letter after period)
-  // This fixes OpenAI reasoning summary output which omits line breaks before bold headers
-  const formattedContent = protectedContent.replaceAll(
-    /\.(\*\*[A-Z])/g,
-    '.\n$1',
-  );
-
-  const md = renderer || getMarkdownRenderer();
-
-  // Process content as markdown
-  const parsedMarkdown = md.render(formattedContent);
-
-  // Post-process to restore and style LaTeX references
-  const result = restoreLatexReferences(parsedMarkdown, refs);
-
-  // Store in cache with LRU eviction
-  if (useCache && cacheKey) {
-    if (result.length > CACHE_MAX_ENTRY_CHARS) {
-      return result;
-    }
-
-    while (
-      markdownCache.size >= CACHE_MAX_ENTRIES ||
-      markdownCacheChars + result.length > CACHE_MAX_TOTAL_CHARS
-    ) {
-      // Delete oldest entry (first key) to preserve LRU order.
-      const firstKey = markdownCache.keys().next().value;
-      if (!firstKey) break;
-      const firstValue = markdownCache.get(firstKey);
-      markdownCache.delete(firstKey);
-      if (firstValue) markdownCacheChars -= firstValue.length;
-    }
-    markdownCacheChars += result.length;
-    markdownCache.set(cacheKey, result);
-  }
-
-  return result;
+  if (!renderer) return ensureInitialised().process(content);
+  // Custom renderer escape hatch (existing callers occasionally supply
+  // bespoke instances — bypass the cached processor so we don't mix output
+  // shapes inside the same memoiser).
+  const process = createMarkdownProcessor({ renderer, disableCache: true });
+  return process(content);
 };

@@ -4,11 +4,13 @@
 // re-renders and stay in scrollback. The in-flight entry (last one when the
 // stream is still streaming) renders in a live `<Box>` above the input bar.
 //
-// Tool cards, multi-agent stripes, and approval modals all land in later
+// Phase 3 routes entry text through the ANSI markdown renderer
+// (`render/Markdown.tsx`); tool cards and multi-agent stripes land in later
 // phases.
 
-import { Box, Static, Text } from 'ink';
+import { Box, Static } from 'ink';
 
+import { Markdown } from '../render/Markdown';
 import { cliState, type ConversationEntry } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
 
@@ -37,13 +39,13 @@ export function ConversationPane(): React.JSX.Element {
       <Static items={finalized}>
         {(entry) => (
           <Box key={entry.id} marginBottom={1}>
-            <Text>{entry.text}</Text>
+            <Markdown content={entry.text} />
           </Box>
         )}
       </Static>
       {live ? (
         <Box marginBottom={1}>
-          <Text>{live.text}</Text>
+          <Markdown content={live.text} />
         </Box>
       ) : null}
     </Box>
