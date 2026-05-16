@@ -19,6 +19,7 @@ import { Signal, signal, select, combine } from '@shared/signals';
 import {
   createStreamState,
   type ProgressViewPlacement,
+  type InquiryThreadUpdatedEvent,
   type StreamTabId,
   type StreamTabInfo,
   type TaskGroup,
@@ -50,6 +51,9 @@ import type { PermissionState } from './components/PermissionCard';
 
 /** Stable empty array for activeTaskGroups$ default (avoids new [] per read). */
 const EMPTY_TASK_GROUPS: TaskGroup[] = [];
+
+/** Stable empty array for activeInquiries$ default. */
+const EMPTY_INQUIRIES: InquiryThreadUpdatedEvent[] = [];
 
 /** Stable empty map returned when no parent has active children. */
 const EMPTY_CHILD_MAP: Map<StreamTabId, StreamTabInfo[]> = new Map();
@@ -84,6 +88,7 @@ export const streamStates$ = select(appState, (s) => s.streamStates);
 export const streamLogs$ = select(appState, (s) => s.streamLogs);
 export const activeStreamId$ = select(appState, (s) => s.activeStreamId);
 export const processOutputs$ = select(appState, (s) => s.processOutputs);
+export const inquiries$ = select(appState, (s) => s.inquiries);
 export const followupOptions$ = select(
   appState,
   (s) => s.followupOptionsByStream,
@@ -231,6 +236,18 @@ export const activeProcessOutputs$ = new Signal.Computed(
 export const activeTaskGroups$ = new Signal.Computed(
   () => activeStreamState$.get()?.taskGroups ?? EMPTY_TASK_GROUPS,
 );
+
+/** Inquiry threads whose latest parent stream is the active stream. */
+export const activeInquiries$ = new Signal.Computed(() => {
+  const activeStreamId = activeStreamId$.get();
+  if (!activeStreamId) return EMPTY_INQUIRIES;
+  const threads = [...inquiries$.get().values()]
+    .filter((thread) => thread.parentStreamId === activeStreamId)
+    .sort(
+      (a, b) => Date.parse(b.lastActivityIso) - Date.parse(a.lastActivityIso),
+    );
+  return threads.length > 0 ? threads : EMPTY_INQUIRIES;
+});
 
 export const activeIsToolUse$ = new Signal.Computed(() => {
   const state = activeStreamState$.get();

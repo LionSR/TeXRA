@@ -14,6 +14,7 @@ import type {
   ContextStateData,
   OutputFileInfo,
   CompileFailure,
+  InquiryThreadUpdatedEvent,
   PermissionPayload,
   ProgressPermissionKind,
   ProgressViewPlacement,
@@ -314,6 +315,20 @@ export class WebviewUpdater {
       executionId,
       stdout,
       stderr,
+    });
+  }
+
+  syncInquiryThreads(threads: InquiryThreadUpdatedEvent[]): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.SYNC_INQUIRY_THREADS,
+      threads,
+    });
+  }
+
+  updateInquiryThread(thread: InquiryThreadUpdatedEvent): void {
+    this.sendMessage({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_INQUIRY_THREAD,
+      thread,
     });
   }
 
