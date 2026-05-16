@@ -100,3 +100,14 @@ export const InquiryDraftSchema = z.object({
   sessionLinks: z.string(),
 });
 export type InquiryDraft = z.infer<typeof InquiryDraftSchema>;
+
+export const InquiryTranscriptTurnSchema = z.object({
+  turnIndex: z.int().positive(),
+  timestamp: z.string().min(1),
+  question: z.string(),
+  context: z.string().nullish(),
+  answer: z.string().nullish(),
+  answeredAt: z.string().nullish(),
+  sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
+});
+export type InquiryTranscriptTurn = z.infer<typeof InquiryTranscriptTurnSchema>;

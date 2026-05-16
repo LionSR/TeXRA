@@ -656,6 +656,72 @@ export const requestPanelStyles: CSSResult = css`
     border-top: var(--border-thin) solid var(--wa-color-surface-border);
   }
 
+  .external-inquiry-request__transcript {
+    border: var(--border-thin) solid var(--wa-color-surface-border);
+    border-radius: var(--border-radius);
+    background: var(--wa-color-surface-lowered, rgba(0, 0, 0, 0.05));
+  }
+
+  .external-inquiry-request__transcript-summary {
+    display: flex;
+    align-items: center;
+    gap: ${sp.small};
+    padding: ${sp.small} ${sp.medium};
+    cursor: pointer;
+    color: var(--wa-color-text-normal);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .external-inquiry-request__transcript-turns {
+    display: flex;
+    flex-direction: column;
+    gap: ${sp.medium};
+    max-height: min(28vh, 18rem);
+    overflow-y: auto;
+    padding: ${sp.medium};
+    border-top: var(--border-thin) solid var(--wa-color-surface-border);
+    scrollbar-gutter: stable;
+  }
+
+  .external-inquiry-request__transcript-turn {
+    display: flex;
+    flex-direction: column;
+    gap: ${sp.small};
+  }
+
+  .external-inquiry-request__transcript-turn
+    + .external-inquiry-request__transcript-turn {
+    padding-top: ${sp.medium};
+    border-top: var(--border-thin) solid var(--wa-color-surface-border);
+  }
+
+  .external-inquiry-request__transcript-turn-header,
+  .external-inquiry-request__transcript-label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--wa-color-text-quiet);
+  }
+
+  .external-inquiry-request__transcript-context {
+    font-size: var(--font-size-sm);
+    color: var(--wa-color-text-quiet);
+  }
+
+  .external-inquiry-request__transcript-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--wa-color-text-normal);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+  }
+
+  .external-inquiry-request__transcript-links {
+    display: flex;
+    flex-direction: column;
+    gap: ${sp.tiny};
+  }
+
   .external-inquiry-request__search-hint {
     display: flex;
     align-items: center;
