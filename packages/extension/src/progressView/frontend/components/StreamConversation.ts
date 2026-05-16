@@ -6,11 +6,13 @@ import { provide } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 
 // Local imports - shared
+import type { InquiryThreadUpdatedEvent } from '@shared/schemas';
 import { SignalWatcher } from '@shared/signals';
 import { isProcessAgent } from '@shared/streams/agentKind';
 
 // Local imports - progress view
 import {
+  activeInquiries$,
   activeProcessOutputs$,
   logContext$,
   permissions$,
@@ -18,10 +20,12 @@ import {
   streamContext$,
 } from '../progressState';
 import {
+  EMPTY_INQUIRY_THREADS,
   EMPTY_LOG_CONTEXT,
   EMPTY_PROCESS_OUTPUTS,
   EMPTY_STREAM_BY_ID,
   EMPTY_STREAM_CONTEXT,
+  inquiryThreadsContext,
   permissionsContext,
   processOutputContext,
   streamByIdContext,
@@ -79,6 +83,11 @@ export class StreamConversation extends SignalWatcher(LitElement) {
   @state()
   private streamByIdContextValue: StreamByIdMap = EMPTY_STREAM_BY_ID;
 
+  @provide({ context: inquiryThreadsContext })
+  @state()
+  private inquiryThreadsContextValue: InquiryThreadUpdatedEvent[] =
+    EMPTY_INQUIRY_THREADS;
+
   /** Sync signal-computed values into @provide/@state context properties. */
   protected override willUpdate(): void {
     this.streamContextValue = streamContext$.get();
@@ -86,6 +95,7 @@ export class StreamConversation extends SignalWatcher(LitElement) {
     this.permissionsContextValue = permissions$.get();
     this.processOutputContextValue = activeProcessOutputs$.get();
     this.streamByIdContextValue = streamById$.get();
+    this.inquiryThreadsContextValue = activeInquiries$.get();
   }
 
   override render(): TemplateResult {
