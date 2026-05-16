@@ -61,11 +61,9 @@ export async function runChat(
   context: CliContext,
   init: RunChatInit,
 ): Promise<ChatResult> {
-  if (
-    context.mode === 'headless' ||
-    !process.stdin.isTTY ||
-    !process.stdout.isTTY
-  ) {
+  // `mode === 'headless'` already covers --print / CI / non-TTY stdin
+  // (see cliContext.cliMode); stdout must also be a TTY for Ink to render.
+  if (context.mode === 'headless' || !process.stdout.isTTY) {
     writeTextStderr(
       'texra chat requires an interactive terminal (TTY stdin and stdout). For non-interactive runs, use `texra run`.',
     );
@@ -83,15 +81,7 @@ export async function runChat(
 
   cliState.sessionMeta.set({ agent, model, cwd: context.cwd });
 
-  const currentSessionContext = (helperModel: string): CliContext => ({
-    ...context,
-    helperModel,
-    quietLogs: true,
   });
-  // Phase 2 replaces the legacy stderr-prompt approval adapter with the
-  // typed dispatch: events flow into the modal queue, modal calls back
-  // through the original resolvers (see state/subscribeApprovals.ts).
-  // The legacy adapter only stays on the `!--tui` path now.
   await loadAgents();
 
   const inputHistory = await loadInputHistory();
