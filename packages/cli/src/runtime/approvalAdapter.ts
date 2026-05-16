@@ -220,8 +220,12 @@ function handleExternalInquiry(
   }
 
   if (!approvalPromptAllowed(context)) {
+    const feedback =
+      context.approvalPolicy === 'yolo'
+        ? 'External inquiry requires human input; yolo mode cannot synthesize an external answer.'
+        : denyMessage(context.approvalPolicy);
     if (context.approvalPolicy !== 'yolo') markApprovalDenied(context);
-    void handleExternalInquiryAction({ action: 'drop', threadId });
+    void handleExternalInquiryAction({ action: 'drop', threadId, feedback });
     return;
   }
 
@@ -237,13 +241,21 @@ function handleExternalInquiry(
       );
     } catch {
       markApprovalDenied(context);
-      await handleExternalInquiryAction({ action: 'drop', threadId });
+      await handleExternalInquiryAction({
+        action: 'drop',
+        threadId,
+        feedback: 'CLI external inquiry prompt failed.',
+      });
       return;
     }
 
     const trimmed = answer.trim();
     if (trimmed.length === 0) {
-      await handleExternalInquiryAction({ action: 'drop', threadId });
+      await handleExternalInquiryAction({
+        action: 'drop',
+        threadId,
+        feedback: 'External inquiry skipped by user.',
+      });
       return;
     }
     await handleExternalInquiryAction({

@@ -677,7 +677,7 @@ const PlanApprovalActionMessageSchema = z.object({
   feedback: z.string().optional(),
 });
 
-const ExternalInquiryActionMessageSchema = z.discriminatedUnion('action', [
+const ExternalInquiryActionMessageSchemas = [
   z.object({
     command: z.literal(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION),
     action: z.literal('submit'),
@@ -689,6 +689,7 @@ const ExternalInquiryActionMessageSchema = z.discriminatedUnion('action', [
     command: z.literal(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION),
     action: z.literal('drop'),
     threadId: ExternalInquiryThreadIdSchema,
+    feedback: z.string().optional(),
   }),
   z.object({
     command: z.literal(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION),
@@ -701,7 +702,7 @@ const ExternalInquiryActionMessageSchema = z.discriminatedUnion('action', [
       })
       .nullable(),
   }),
-]);
+] as const;
 
 const UserQuestionActionMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION),
@@ -799,7 +800,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     BashApprovalActionMessageSchema,
     AgentProposalActionMessageSchema,
     PlanApprovalActionMessageSchema,
-    ExternalInquiryActionMessageSchema,
+    ...ExternalInquiryActionMessageSchemas,
     UserQuestionActionMessageSchema,
     RestoreProposalConfigMessageSchema,
     ShowInformationMessageSchema,

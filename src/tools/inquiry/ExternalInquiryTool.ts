@@ -171,6 +171,11 @@ export async function handleExternalInquiryAction(
   }
 
   // drop — only flips status if the thread is still open; see markDropped.
+  if (payload.feedback) {
+    logger.info(
+      `Inquiry ${payload.threadId} dropped with feedback: ${payload.feedback}`,
+    );
+  }
   const droppedManifest = await markDropped({ threadId: payload.threadId });
   bus.emit('resolveExternalInquiry', { requestId: payload.threadId });
   if (droppedManifest) {

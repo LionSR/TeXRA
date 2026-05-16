@@ -86,6 +86,7 @@ export const InquiryActionMessageSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('drop'),
     threadId: ExternalInquiryThreadIdSchema,
+    feedback: z.string().optional(),
   }),
 ]);
 export type InquiryActionMessage = z.infer<typeof InquiryActionMessageSchema>;

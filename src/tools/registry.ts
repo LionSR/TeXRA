@@ -145,24 +145,22 @@ export type RegisteredToolName = keyof ReturnType<typeof createDefaultTools>;
 
 /**
  * Legacy tool-name aliases — keep prior YAML configs working when a tool is
- * renamed. Each entry maps `<old name> → <canonical name>`. The alias resolves
- * to the same tool instance; the tool's `definition.name` (and therefore what
- * the model sees) is still the canonical one.
+ * renamed. Each entry maps `<old name> → <canonical name>`. Aliases are
+ * normalized while loading configs, rather than registered as extra tool names,
+ * so the model sees only the canonical definition.
  */
 const TOOL_ALIASES: Record<string, string> = {
   external_inquiry: 'inquiry',
 };
 
+function canonicalToolName(name: string): string {
+  return TOOL_ALIASES[name] ?? name;
+}
+
 /** Lazy singleton accessor for the default tool registry. */
 export function getDefaultToolRegistry(): IToolRegistry {
   if (!defaultRegistryInstance) {
-    const tools = createDefaultTools();
-    const withAliases: Record<string, ITool> = { ...tools };
-    for (const [alias, target] of Object.entries(TOOL_ALIASES)) {
-      const tool = (tools as Record<string, ITool>)[target];
-      if (tool) withAliases[alias] = tool;
-    }
-    defaultRegistryInstance = new MapToolRegistry(withAliases);
+    defaultRegistryInstance = new MapToolRegistry(createDefaultTools());
   }
   return defaultRegistryInstance;
 }
@@ -194,23 +192,27 @@ export function resolveToolDefinitions(
 
   return tools.map((item): ToolDefinition => {
     const name = typeof item === 'string' ? item : item.name;
+    const canonicalName = canonicalToolName(name);
 
-    if (!VALID_TOOL_NAME.test(name)) {
+    if (!VALID_TOOL_NAME.test(canonicalName)) {
       warnOnMissing?.(name);
       return { name };
     }
 
-    const tool = registry.get(name);
+    const tool = registry.get(canonicalName);
     if (!tool) {
       warnOnMissing?.(name);
     }
 
     // String items: return tool definition or minimal fallback
     if (typeof item === 'string') {
-      return tool?.definition ?? { name };
+      return tool?.definition ?? { name: canonicalName };
     }
 
     // Object items: always parse with schema to validate/merge overrides
-    return ToolDefinitionSchema.catch({ name }).parse(item);
+    return ToolDefinitionSchema.catch({ name: canonicalName }).parse({
+      ...item,
+      name: canonicalName,
+    });
   });
 }

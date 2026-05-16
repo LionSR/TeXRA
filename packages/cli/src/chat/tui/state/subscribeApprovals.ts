@@ -261,7 +261,11 @@ function handleExternalInquiry(
 
   const policy = immediateDecision(context);
   if (policy) {
-    void handleExternalInquiryAction({ action: 'drop', threadId });
+    const feedback =
+      context.approvalPolicy === 'yolo'
+        ? 'External inquiry requires human input; yolo mode cannot synthesize an external answer.'
+        : denyMessage(context.approvalPolicy);
+    void handleExternalInquiryAction({ action: 'drop', threadId, feedback });
     return;
   }
   void enqueueApproval({ kind: 'externalInquiry', payload }).then(
