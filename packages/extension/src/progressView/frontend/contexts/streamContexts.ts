@@ -10,6 +10,7 @@ import { createContext } from '@lit/context';
 // Local imports - progress view
 import type {
   LogMessageData,
+  InquiryThreadUpdatedEvent,
   StreamStatus,
   StreamTabId,
   StreamTabInfo,
@@ -105,6 +106,12 @@ export const EMPTY_PROCESS_OUTPUTS: ProcessOutputMap = new Map();
 
 export const processOutputContext = createContext<ProcessOutputMap>(
   'progress-process-outputs',
+);
+
+export const EMPTY_INQUIRY_THREADS: InquiryThreadUpdatedEvent[] = [];
+
+export const inquiryThreadsContext = createContext<InquiryThreadUpdatedEvent[]>(
+  'progress-inquiry-threads',
 );
 
 /**
