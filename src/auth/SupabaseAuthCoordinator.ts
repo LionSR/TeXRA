@@ -22,14 +22,14 @@ export interface SupabaseSecretStore {
   delete(key: string): Promise<void>;
 }
 
-export interface SupabaseAuthCoordinatorOptions {
+interface SupabaseAuthCoordinatorOptions {
   storage: SupabaseSessionStorage;
   whenReady?: () => Promise<void>;
   log?: SupabaseSessionLog;
   edgeFunctionTimeoutMs?: number;
 }
 
-export function createSupabaseSessionStorage(
+function createSupabaseSessionStorage(
   secrets: SupabaseSecretStore,
   sessionKey = SUPABASE_SESSION_KEY,
 ): SupabaseSessionStorage {
@@ -40,7 +40,7 @@ export function createSupabaseSessionStorage(
   };
 }
 
-export function createSupabaseAuthCoordinator(
+function createSupabaseAuthCoordinator(
   options: SupabaseAuthCoordinatorOptions,
 ): SupabaseSessionCoordinator {
   try {
@@ -65,4 +65,24 @@ export function createSupabaseAuthCoordinator(
   });
   SupabaseClient.setAuthProvider(coordinator);
   return coordinator;
+}
+
+export interface HostAuthCoordinatorInit {
+  readonly secrets: SupabaseSecretStore;
+  readonly log?: SupabaseSessionLog;
+  /**
+   * Gate the coordinator awaits before processing OAuth callbacks. The VS
+   * Code host uses this to ensure the URI handler is installed first.
+   */
+  readonly whenReady?: () => Promise<void>;
+}
+
+export function createHostAuthCoordinator(
+  init: HostAuthCoordinatorInit,
+): SupabaseSessionCoordinator {
+  return createSupabaseAuthCoordinator({
+    storage: createSupabaseSessionStorage(init.secrets),
+    log: init.log,
+    whenReady: init.whenReady,
+  });
 }
