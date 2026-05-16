@@ -78,7 +78,9 @@ export function prepareMainViewExecutionRequest(
     config: {
       ...message,
       agentCategory: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
-      outputFiles: message.outputFiles ?? message.inputFiles,
+      // Workflow output paths are implicit in the input list. Agent settings
+      // may still declare generated filenames later during prompt rendering.
+      outputFiles: [],
       toolConfig: { ...toolConfigResult.data, attachDiagnostics: false },
       mediaFiles: (message.mediaFiles ?? [])
         .map(mapMediaFile)

@@ -448,15 +448,18 @@ export function resolveOutputFiles(
     Boolean,
   );
   const inputFiles = (agentConfig.inputFiles ?? []).filter(Boolean);
+  const explicitFilesAreSubsetOfInputs =
+    explicitOutputFiles.length > 0 &&
+    explicitOutputFiles.every((file) => inputFiles.includes(file));
   const outputFiles =
-    explicitOutputFiles.length > 0
+    !explicitFilesAreSubsetOfInputs && explicitOutputFiles.length > 0
       ? explicitOutputFiles
       : defaultOutputFiles.length > 0
         ? defaultOutputFiles
-        : inputFiles;
+        : [];
 
   agentConfig.outputFiles = outputFiles;
-  if (explicitOutputFiles.length > 0 || defaultOutputFiles.length > 0) {
+  if (outputFiles.length > 0) {
     userVars.OUTPUT_FILES = outputFiles;
   }
   return userVars;
