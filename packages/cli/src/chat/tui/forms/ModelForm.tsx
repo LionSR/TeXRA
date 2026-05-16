@@ -1,11 +1,8 @@
 // Single-screen `/model` form. Renders the resolved model list with
 // availability status, lets the user pick a new active model with arrow
-// keys + Enter, and writes the choice back into `cliState.sessionMeta`
-// alongside the existing CLI helper-model wiring.
-//
-// Phase 5b ships the *picker* surface; ramping the new selection through
-// `setCliHelperModel` for follow-up turns is a downstream concern handled
-// by the caller's `onPick` (see `App.tsx` → `applyModelSelection`).
+// keys + Enter, and forwards the choice to `onSelect`. Ramping the new
+// selection through `setCliHelperModel` is a downstream concern handled
+// by the caller (see `commands/registerBuiltins.tsx`).
 
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useState } from 'react';
@@ -21,6 +18,34 @@ export interface ModelFormProps {
   readonly currentModel: string;
   readonly onSelect: (value: string) => void;
   readonly onCancel: () => void;
+}
+
+interface ModelFrameProps {
+  readonly color: string;
+  readonly title: string;
+  readonly children: React.ReactNode;
+}
+
+function ModelFrame(props: ModelFrameProps): React.JSX.Element {
+  return (
+    <Box
+      borderStyle="round"
+      borderColor={props.color}
+      flexDirection="column"
+      paddingX={1}
+    >
+      <Text bold color={props.color}>
+        {props.title}
+      </Text>
+      {props.children}
+      <Box marginTop={1}>
+        <KeyHints
+          hints={[{ key: 'Esc', action: 'cancel' }]}
+          confirmCancel={false}
+        />
+      </Box>
+    </Box>
+  );
 }
 
 export function ModelForm(props: ModelFormProps): React.JSX.Element {
@@ -54,44 +79,16 @@ export function ModelForm(props: ModelFormProps): React.JSX.Element {
 
   if (loading) {
     return (
-      <Box
-        borderStyle="round"
-        borderColor="cyan"
-        flexDirection="column"
-        paddingX={1}
-      >
-        <Text bold color="cyan">
-          /model
-        </Text>
+      <ModelFrame color="cyan" title="/model">
         <Text dimColor>Loading model registry…</Text>
-        <Box marginTop={1}>
-          <KeyHints
-            hints={[{ key: 'Esc', action: 'cancel' }]}
-            confirmCancel={false}
-          />
-        </Box>
-      </Box>
+      </ModelFrame>
     );
   }
   if (error) {
     return (
-      <Box
-        borderStyle="round"
-        borderColor="red"
-        flexDirection="column"
-        paddingX={1}
-      >
-        <Text bold color="red">
-          /model — error
-        </Text>
+      <ModelFrame color="red" title="/model — error">
         <Text>{error}</Text>
-        <Box marginTop={1}>
-          <KeyHints
-            hints={[{ key: 'Esc', action: 'cancel' }]}
-            confirmCancel={false}
-          />
-        </Box>
-      </Box>
+      </ModelFrame>
     );
   }
 
