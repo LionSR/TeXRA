@@ -41,20 +41,20 @@ let serverSideKeysInitialized = false;
 let cliWorkspaceCwd = '';
 let quietPlatformLogs = false;
 
+function logAt(
+  level: 'debug' | 'info' | 'warn',
+  channel: string,
+  message: string,
+): void {
+  if (quietPlatformLogs) return;
+  writeTextStderr(`[${level}] [${channel}] ${message}`);
+}
+
 const cliPlatformLog: LogBackend = {
   initialize() {},
-  debug: (channel, message) =>
-    quietPlatformLogs
-      ? undefined
-      : writeTextStderr(`[debug] [${channel}] ${message}`),
-  info: (channel, message) =>
-    quietPlatformLogs
-      ? undefined
-      : writeTextStderr(`[info] [${channel}] ${message}`),
-  warn: (channel, message) =>
-    quietPlatformLogs
-      ? undefined
-      : writeTextStderr(`[warn] [${channel}] ${message}`),
+  debug: (channel, message) => logAt('debug', channel, message),
+  info: (channel, message) => logAt('info', channel, message),
+  warn: (channel, message) => logAt('warn', channel, message),
   error: (channel, message) =>
     writeTextStderr(`[error] [${channel}] ${message}`),
 };
@@ -79,10 +79,9 @@ export async function initCliPlatform(
   );
 
   if (!tryPlatform()) {
-    const globalState = createMemoryStore();
     initPlatform({
       config: new MemoryConfigProvider(),
-      globalState,
+      globalState: createMemoryStore(),
       workspaceState: createMemoryStore(),
       log: cliPlatformLog,
       fs: nodeFilesystem,
@@ -94,32 +93,19 @@ export async function initCliPlatform(
       lifecycle: noopLifecycle,
       agentResume: { tryResumeStream: async () => false },
     });
+  }
+
+  if (!serverSideKeysInitialized) {
     initializeCliSupabaseAuth(cliPlatformLog);
     initializeServerSideKeyAccess(
-      {
-        state: globalState,
-        logger: cliPlatformLog,
-      },
-      getCliAuthProvider(),
-    );
-    serverSideKeysInitialized = true;
-  } else if (!serverSideKeysInitialized) {
-    initializeCliSupabaseAuth(cliPlatformLog);
-    initializeServerSideKeyAccess(
-      {
-        state: tryPlatform()?.globalState,
-        logger: cliPlatformLog,
-      },
+      { state: tryPlatform()?.globalState, logger: cliPlatformLog },
       getCliAuthProvider(),
     );
     serverSideKeysInitialized = true;
   }
 
-  if (await getCliAuthProvider().isAuthenticated()) {
-    await getServerSideKeyService().setUseIncludedModelAccess(true);
-  } else {
-    await getServerSideKeyService().setUseIncludedModelAccess(false);
-  }
+  const authed = await getCliAuthProvider().isAuthenticated();
+  await getServerSideKeyService().setUseIncludedModelAccess(authed);
   await setCliHelperModel(context.helperModel);
 
   if (bootstrappedResourcesPath !== context.resourcesPath) {

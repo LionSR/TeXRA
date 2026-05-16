@@ -21,10 +21,9 @@ export type CliRuntimeHost = AgentRuntimeHost & {
 };
 
 export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
-  const quietLogs = context.quietLogs ?? false;
   let sink: LogSink | undefined;
   let logger: Logger | undefined;
-  const ensureLogger = (): Logger => {
+  function ensureLogger(): Logger {
     if (logger) return logger;
     sink =
       context.outputFormat === 'ndjson'
@@ -32,7 +31,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
         : new StderrTextSink();
     logger = createStructuredLogger(sink);
     return logger;
-  };
+  }
 
   return {
     emit(event, payload) {
@@ -48,14 +47,14 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
         return;
       }
 
-      if (quietLogs && event !== 'requestShowError') return;
-
       if (event === 'requestShowError') {
         ensureLogger().error(
           (payload as ProgressEventPayloads['requestShowError']).message,
         );
         return;
       }
+
+      if (context.quietLogs) return;
 
       if (event === 'setTaskState') {
         const data = payload as ProgressEventPayloads['setTaskState'];
