@@ -43,7 +43,7 @@ describe('MainViewExecutionController', () => {
       agent: 'direct-agent',
       model: 'gpt-5.4',
       inputFiles: ['paper/main.tex'],
-      outputFiles: ['paper/main.tex'],
+      outputFiles: [],
       agentCategory: AgentCategory.Workflow,
       mediaFiles: ['diagram.png'],
       editedFile: null,
@@ -51,5 +51,18 @@ describe('MainViewExecutionController', () => {
         attachDiagnostics: false,
       },
     });
+  });
+
+  it('ignores stale UI output file selections', () => {
+    const result = prepareMainViewExecutionRequest({
+      agent: 'direct-agent',
+      model: 'gpt-5.4',
+      inputFiles: ['paper/main.tex'],
+      outputFiles: ['paper/old-output.tex'],
+    });
+
+    expect(result.valid).toBe(true);
+    if (!result.valid) return;
+    expect(result.request.config.outputFiles).toEqual([]);
   });
 });

@@ -20,6 +20,7 @@ import type {
 export interface ConversationEntry {
   /** Same id as the upstream `StreamLogEntry.id` — stable across deltas. */
   readonly id: string;
+  readonly role: 'assistant' | 'user';
   /** Concatenated text for `MODEL_RESPONSE` entries. */
   readonly text: string;
   /** True once the stream transitions to `WAITING`/`COMPLETED`. */

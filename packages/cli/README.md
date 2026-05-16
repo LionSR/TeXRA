@@ -67,6 +67,10 @@ Run a workflow agent:
 node packages/cli/dist/bin/texra.js run polish --input paper.tex --output paper.polished.tex --print
 ```
 
+For workflow agents, text output prints the final generated path in run storage
+such as `r1/paper.polished.tex`. If `--output` is provided, TeXRA also copies
+that final artifact to the requested destination.
+
 Machine-readable output modes:
 
 ```sh

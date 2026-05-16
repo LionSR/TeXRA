@@ -119,8 +119,8 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           onCancel={() => setReverseSearchOpen(false)}
         />
       ) : null}
-      <Box borderStyle="round" paddingX={1}>
-        <Text>{prompt ?? '>'} </Text>
+      <Box paddingX={1}>
+        <Text color="cyan">{prompt ?? '›'} </Text>
         <BaseTextInput
           value={value}
           focus={!disabled && !reverseSearchOpen}

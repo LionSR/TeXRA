@@ -25,7 +25,7 @@ describe('output file prompt variables', () => {
     expect(agentConfig.outputFiles).toEqual(['slides.tex']);
   });
 
-  it('uses input files internally without exposing a separate output order', () => {
+  it('leaves input-named outputs implicit', () => {
     const agentConfig = {
       inputFiles: ['main.tex', 'appendix.tex'],
       outputFiles: [],
@@ -35,6 +35,19 @@ describe('output file prompt variables', () => {
     } as unknown as AgentSetting);
 
     expect(vars).toEqual({});
-    expect(agentConfig.outputFiles).toEqual(['main.tex', 'appendix.tex']);
+    expect(agentConfig.outputFiles).toEqual([]);
+  });
+
+  it('ignores stale output lists that only name selected inputs', () => {
+    const agentConfig = {
+      inputFiles: ['main.tex', 'appendix.tex'],
+      outputFiles: ['appendix.tex'],
+    } as unknown as AgentConfig;
+    const vars = resolveOutputFiles(agentConfig, {
+      defaultOutputFiles: [],
+    } as unknown as AgentSetting);
+
+    expect(vars).toEqual({});
+    expect(agentConfig.outputFiles).toEqual([]);
   });
 });
