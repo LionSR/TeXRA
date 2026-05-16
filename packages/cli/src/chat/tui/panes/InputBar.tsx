@@ -6,6 +6,8 @@ import { ReverseSearch } from '../input/ReverseSearch';
 import { SlashPalette } from '../commands/SlashPalette';
 import { matchSlashCommands, parseSlashInput } from '../commands/slashRegistry';
 import type { InputHistory } from '../history/inputHistory';
+import { writeTextStderr } from '../../../runtime/logSinks';
+import { cliState } from '../state/cliState';
 
 export interface InputBarProps {
   /** Forwarded to BaseTextInput; called only on real (non-paste) Enter. */
@@ -40,11 +42,11 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       if (trimmed.length === 0) return;
       setValue('');
       // Persisting history is best-effort — a disk failure (read-only fs,
-      // ENOSPC) must not block the submit. Surface the failure to stderr
-      // so it isn't completely silent.
+      // ENOSPC) must not block the submit. Surface the failure through the
+      // shared log sink so it isn't completely silent.
       historyRef.current?.push(trimmed).catch((err: unknown) => {
-        process.stderr.write(
-          `texra: failed to persist input history: ${String(err)}\n`,
+        writeTextStderr(
+          `texra: failed to persist input history: ${String(err)}`,
         );
       });
       onSubmit(trimmed);
@@ -77,13 +79,29 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       {showPalette ? (
         <SlashPalette
           query={parsed.name}
-          onPick={(cmd) =>
+          onPick={(cmd) => {
+            if (cmd.formComponent) {
+              // Structured forms own the screen — clear the input and let
+              // the active-form signal mount the component (see App.tsx).
+              const Form = cmd.formComponent;
+              setValue('');
+              cliState.activeForm.set({
+                commandName: cmd.name,
+                render: (close) => (
+                  <Form
+                    remainder={parsed.remainder.trimStart()}
+                    onDone={() => close()}
+                  />
+                ),
+              });
+              return;
+            }
             setValue(
               `/${cmd.name}${
                 parsed.remainder ? ` ${parsed.remainder.trimStart()}` : ' '
               }`,
-            )
-          }
+            );
+          }}
           onCancel={() => {
             /* Esc clears the slash — caller can re-open by typing again. */
             setValue('');
