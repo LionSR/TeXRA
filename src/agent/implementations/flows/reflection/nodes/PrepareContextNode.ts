@@ -55,7 +55,16 @@ export class PrepareContextNode<C = unknown> extends Node<
       );
     }
 
-    const prefill = await promptBuilder.buildPrefill(currentRound);
+    // Reasoning models produce their own preamble through extended thinking,
+    // so any configured prefill would force an unnecessary surface-level
+    // continuation. Skip it for those models regardless of YAML configuration.
+    const prefill = modelHandler.capabilities.supportsReasoning
+      ? ''
+      : await promptBuilder.buildPrefill(currentRound);
+
+    if (modelHandler.capabilities.supportsReasoning) {
+      logger.debug('Reasoning-capable model detected; skipping prefill');
+    }
 
     logger.debug(
       `Prepared ${isFirstRound ? 'first' : `round ${currentRound}`} context with ${messages.length} messages`,

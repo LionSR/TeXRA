@@ -12,9 +12,9 @@ working-directory fields), resolves the YAML, and dispatches one of two
 flow shapes:
 
 - **Workflow flow** for `agentCategory: workflow`. Fixed rounds, each round
-  consumes paired `prefills[i]` / `userRequest[i]`. Operates on `inputFiles`
-  (or the active editor selection). Emits LaTeX output files per `documentTag`
-  / `defaultOutputFiles`.
+  consumes `userRequest[i]`. Operates on `inputFiles` (or the active editor
+  selection). Emits LaTeX output files per `documentTag` /
+  `defaultOutputFiles`.
 - **Tool-use flow** for `agentCategory: toolUse`. Multi-step loop invoking
   declared tools. May WAIT for interim follow-ups, spawn subagents via
   `delegate_workflow` / `delegate_agent`, and resume.

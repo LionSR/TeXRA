@@ -1118,6 +1118,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       );
       workspaceState.assembly.accumulatedOutput = prefill;
 
+      if (prefill.length === 0) {
+        this.logger.debug(
+          'No prefill provided; skipping pseudo-prefill instruction',
+        );
+        return [false, messages];
+      }
+
       // Add pseudo-prefill instruction to user message
       // (Google's Chat API requires alternating user/model turns)
       const lastMessage = messages.at(-1);

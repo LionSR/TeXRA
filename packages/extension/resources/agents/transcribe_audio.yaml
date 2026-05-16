@@ -7,9 +7,6 @@ settings:
   endTag: </documents>
   defaultOutputFiles:
     - transcript.tex
-  prefills:
-    - 'Here is the audio transcript. <documents>'
-    - ''
 
 prompts:
   systemPrompt: |
