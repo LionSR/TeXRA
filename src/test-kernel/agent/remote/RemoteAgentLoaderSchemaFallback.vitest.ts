@@ -14,30 +14,27 @@ function installRemoteAgentListClient(
 ): string[] {
   const selectedColumns: string[] = [];
   const queue = [...results];
-  const supabase = {
-    auth: {
-      setSession: vi.fn().mockResolvedValue({}),
-    },
-    from: vi.fn(() => ({
-      select: (columns: string) => {
-        selectedColumns.push(columns);
-        return {
-          order: vi.fn(
-            async () => queue.shift() ?? { data: null, error: null },
-          ),
-        };
-      },
-    })),
-  };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      selectedColumns.push(url.searchParams.get('select') ?? '');
+      const result = queue.shift() ?? { data: null, error: null };
 
-  vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
-  vi.spyOn(SupabaseClient, 'getSessionTokens').mockResolvedValue({
-    accessToken: 'access-token',
-    refreshToken: 'refresh-token',
-  });
-  vi.spyOn(SupabaseClient, 'getClient').mockReturnValue(
-    supabase as unknown as ReturnType<typeof SupabaseClient.getClient>,
+      if (result.error) {
+        return new Response(JSON.stringify(result.error), {
+          status: 400,
+          statusText: 'Bad Request',
+        });
+      }
+
+      return new Response(JSON.stringify(result.data), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }),
   );
+  vi.spyOn(SupabaseClient, 'getAccessToken').mockResolvedValue('access-token');
 
   return selectedColumns;
 }
@@ -45,6 +42,7 @@ function installRemoteAgentListClient(
 describe('remote agent schema compatibility', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('recognizes the pre-migration missing tools column error', () => {
