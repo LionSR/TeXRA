@@ -6,6 +6,7 @@ import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
 import { buildHunks, DiffView, statsFromHunks } from '../render/DiffView';
 import type { ApprovalDecision } from '../state/approvalQueue';
+import { KeyHints } from '../ui/KeyHints';
 
 export interface EditApprovalProps {
   readonly request: ToolEditApprovalRequest;
@@ -47,10 +48,18 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
         <DiffView hunks={hunks} maxHunkLines={30} />
       </Box>
       <Box>
-        <Text dimColor>y approve · n reject · </Text>
         <ConfirmInput
           onConfirm={() => props.onDecide({ accepted: true })}
           onCancel={() => props.onDecide({ accepted: false })}
+        />
+      </Box>
+      <Box marginTop={1}>
+        <KeyHints
+          hints={[
+            { key: 'y', action: 'approve' },
+            { key: 'n', action: 'reject' },
+          ]}
+          confirmCancel={false}
         />
       </Box>
     </Box>
