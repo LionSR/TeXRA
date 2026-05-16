@@ -284,6 +284,7 @@ function handleExternalInquiry(
       void handleExternalInquiryAction({
         action: 'drop',
         threadId,
+        feedback: decision.userMessage || 'No answer provided.',
       });
     },
   );

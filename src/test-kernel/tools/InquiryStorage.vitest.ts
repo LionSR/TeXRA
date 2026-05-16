@@ -42,11 +42,13 @@ describe('InquiryStorage', () => {
     const opened = await recordOpenQuestion({
       parentStreamId: STREAM_A,
       question: 'What is the Sobolev constant?',
+      suggestSearch: false,
     });
 
     expect(opened.manifest.status).toBe('open');
     expect(opened.manifest.parentStreamId).toBe(STREAM_A);
     expect(opened.manifest.turns).toHaveLength(1);
+    expect(opened.turn.suggestSearch).toBe(false);
 
     const open = await listOpenThreads();
     expect(open).toHaveLength(1);

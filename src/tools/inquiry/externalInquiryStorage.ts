@@ -410,7 +410,7 @@ export async function recordOpenQuestion(params: {
       questionRelativePath,
       contextRelativePath,
       // answerRelativePath, answer, answeredAt all omitted — open turn.
-      suggestSearch: params.suggestSearch || undefined,
+      suggestSearch: params.suggestSearch ?? undefined,
       attachFiles: params.attachFiles?.length ? params.attachFiles : undefined,
     };
 
