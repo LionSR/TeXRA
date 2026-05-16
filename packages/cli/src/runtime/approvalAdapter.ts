@@ -213,17 +213,19 @@ function handleExternalInquiry(
   payload: ProgressEventPayloads['showExternalInquiry'],
   context: CliContext,
 ): void {
+  const threadId = payload.threadId;
+  if (!threadId) {
+    // No persistent thread to address — pre-async legacy payload. Ignore.
+    return;
+  }
+
   if (!approvalPromptAllowed(context)) {
     const feedback =
       context.approvalPolicy === 'yolo'
         ? 'External inquiry requires human input; yolo mode cannot synthesize an external answer.'
         : denyMessage(context.approvalPolicy);
     if (context.approvalPolicy !== 'yolo') markApprovalDenied(context);
-    void handleExternalInquiryAction({
-      requestId: payload.requestId,
-      action: 'skip',
-      feedback,
-    });
+    void handleExternalInquiryAction({ action: 'drop', threadId, feedback });
     return;
   }
 
@@ -240,19 +242,26 @@ function handleExternalInquiry(
     } catch {
       markApprovalDenied(context);
       await handleExternalInquiryAction({
-        requestId: payload.requestId,
-        action: 'skip',
+        action: 'drop',
+        threadId,
         feedback: 'CLI external inquiry prompt failed.',
       });
       return;
     }
 
-    const submitted = answer.trim().length > 0;
+    const trimmed = answer.trim();
+    if (trimmed.length === 0) {
+      await handleExternalInquiryAction({
+        action: 'drop',
+        threadId,
+        feedback: 'External inquiry skipped by user.',
+      });
+      return;
+    }
     await handleExternalInquiryAction({
-      requestId: payload.requestId,
-      action: submitted ? 'submit' : 'skip',
-      answer: submitted ? answer : undefined,
-      feedback: submitted ? undefined : 'External inquiry skipped by user.',
+      action: 'submit',
+      threadId,
+      answer: trimmed,
     });
   })();
 }

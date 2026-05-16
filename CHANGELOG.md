@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Features
+
+- **Non-blocking external inquiries** — the `external_inquiry` tool is renamed to `inquiry` and is now non-blocking and durable. Dispatching a question no longer freezes the agent's cycle waiting for the human round-trip to ChatGPT/Gemini/etc. The cycle continues, and the agent is woken with a continuation message when you submit the answer in the panel — even after closing the tab or reloading the extension. Existing custom agent YAMLs that reference `external_inquiry` continue to work via a compatibility alias.
+
 ## [0.37.8] - 2026-05-01
 
 ### Breaking Changes

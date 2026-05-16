@@ -11,6 +11,7 @@ import type {
   ExecutionId,
   ExternalInquiryPermission,
   FileLocation,
+  InquiryThreadUpdatedEvent,
   OutputFileInfo,
   PlanApprovalPermission,
   RetryPermission,
@@ -116,6 +117,8 @@ export interface ProgressEventPayloads {
   resolvePlanApproval: { approvalId: string };
   showExternalInquiry: ExternalInquiryPermission;
   resolveExternalInquiry: { requestId: string };
+  /** Inquiry thread state changed (open, answered, dropped, or resume outcome). */
+  inquiryThreadUpdated: InquiryThreadUpdatedEvent;
   showUserQuestion: UserQuestionPermission;
   resolveUserQuestion: { requestId: string };
   updateTodos: UpdateTodosPayload;

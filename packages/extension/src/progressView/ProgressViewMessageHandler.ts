@@ -42,6 +42,7 @@ import {
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
 import { handleExternalInquiryAction } from '@tools/inquiry';
+import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import {
   handleProgressViewBashApprovalAction,
@@ -300,8 +301,37 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         handleProgressViewBashApprovalAction(data),
       [PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION]: (data) =>
         this.handlePlanApprovalAction(data),
-      [PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION]: (data) =>
-        handleExternalInquiryAction(data),
+      [PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION]: async (data) => {
+        if (data.action === 'draft') {
+          await persistOpenTurnDraft({
+            threadId: data.threadId,
+            draft: data.draft ?? null,
+          });
+          return;
+        }
+        if (data.action === 'submit') {
+          if (data.answer == null || data.answer.length === 0) {
+            this.logger.warn(
+              this.channel,
+              'Ignoring external inquiry submit without an answer',
+              { data: { threadId: data.threadId } },
+            );
+            return;
+          }
+          await handleExternalInquiryAction({
+            action: 'submit',
+            threadId: data.threadId,
+            answer: data.answer,
+            sessionLinks: data.sessionLinks,
+          });
+          return;
+        }
+        await handleExternalInquiryAction({
+          action: 'drop',
+          threadId: data.threadId,
+          feedback: data.feedback,
+        });
+      },
       [PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION]: (data) =>
         handleUserQuestionAction(data),
 
