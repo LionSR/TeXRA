@@ -915,6 +915,7 @@ export class DesktopProgressBridge {
       case 'resolveRetryRequest':
       case 'showExternalInquiry':
       case 'resolveExternalInquiry':
+      case 'inquiryThreadUpdated':
       case 'followUpSent':
       case 'removeStream':
       case 'extensionDeactivating':

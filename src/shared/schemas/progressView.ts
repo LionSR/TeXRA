@@ -18,11 +18,13 @@ import { StreamLogEntrySchema } from './log';
 import { AgentOptionDataSchema, ModelOptionDataSchema } from './mainView';
 import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import {
+  ExternalInquirySessionLinksSchema,
+  ExternalInquiryThreadIdSchema,
+} from './inquiry';
+import {
   AgentProposalSchema,
   AgentProposalPermissionSchema,
   BashPermissionSchema,
-  EXTERNAL_INQUIRY_ACTIONS,
-  ExternalInquirySessionLinksSchema,
   ExternalInquiryPermissionSchema,
   PLAN_APPROVAL_ACTIONS,
   PlanApprovalPermissionSchema,
@@ -675,14 +677,38 @@ const PlanApprovalActionMessageSchema = z.object({
   feedback: z.string().optional(),
 });
 
-const ExternalInquiryActionMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION),
-  requestId: z.string().min(1),
-  action: z.enum([...EXTERNAL_INQUIRY_ACTIONS, 'skip'] as const),
-  answer: z.string().optional(),
-  feedback: z.string().optional(),
-  sessionLinks: ExternalInquirySessionLinksSchema.optional(),
-});
+const ExternalInquiryActionMessageSchema = z
+  .object({
+    command: z.literal(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION),
+    action: z.enum(['submit', 'drop', 'draft']),
+    threadId: ExternalInquiryThreadIdSchema,
+    answer: z.string().min(1).optional(),
+    sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
+    feedback: z.string().optional(),
+    draft: z
+      .object({
+        answer: z.string(),
+        sessionLinks: z.string(),
+      })
+      .nullable()
+      .optional(),
+  })
+  .superRefine((message, ctx) => {
+    if (message.action === 'submit' && !message.answer) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['answer'],
+        message: 'Submit actions require an answer.',
+      });
+    }
+    if (message.action === 'draft' && message.draft === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['draft'],
+        message: 'Draft actions require a draft value.',
+      });
+    }
+  });
 
 const UserQuestionActionMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION),

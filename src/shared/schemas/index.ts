@@ -24,6 +24,7 @@ export * from './todoDisplay';
 export * from './plan';
 export * from './workPlan';
 export * from './subagentProgress';
+export * from './inquiry';
 export * from './prompts';
 export * from './diffResult';
 

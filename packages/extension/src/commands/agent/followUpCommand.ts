@@ -9,14 +9,14 @@ import {
   type SendFollowUpResult,
 } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { hasPersistedFlowRecord } from '@agent/storage/detectWaitingStreams';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { AgentLogger } from '@logger/AgentLogger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { STREAM_STATUS } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
-import { ResumeAgentResultSchema } from './resumeCommand';
+
+import { tryResumeFromSnapshot } from './resumeFromSnapshot';
 
 const logger = new AgentLogger('followUpCommand');
 
@@ -57,64 +57,6 @@ async function lazyDetectWaitingStatus(
   }
 }
 
-async function tryAutoResume(streamId: StreamTabId): Promise<boolean> {
-  if (StreamStatusService.isActiveOrResuming(streamId)) {
-    logger.debug(`Stream ${streamId} is active/resuming, skipping auto-resume`);
-    return false;
-  }
-
-  const progressState = ProgressViewProvider.getInstance()?.state;
-  const executionId = progressState?.meta.getExecutionId(streamId);
-  const taskState = progressState?.meta.getTaskState(streamId);
-
-  if (!progressState) {
-    logger.warn(`No ProgressViewProvider found for stream: ${streamId}`);
-    return false;
-  }
-  if (!executionId) {
-    logger.warn(`No execution ID found for stream: ${streamId}`);
-    return false;
-  }
-  if (!taskState) {
-    logger.warn(`No task state found for stream: ${streamId}`);
-    return false;
-  }
-
-  const resumeData = await retrieveSessionResumeData(
-    streamId,
-    executionId,
-    taskState,
-  );
-  if (!resumeData) {
-    return false;
-  }
-
-  logger.info(
-    `Auto-resuming ${resumeData.type} session for stream: ${streamId}`,
-  );
-  try {
-    if (resumeData.type === 'toolUse') {
-      const rawResult = await vscode.commands.executeCommand(
-        'texra.resumeAgent',
-        { snapshot: resumeData.snapshot },
-      );
-      const parseResult = ResumeAgentResultSchema.safeParse(rawResult);
-      return parseResult.success && parseResult.data.success;
-    }
-    // Workflow: execute returns void - success if no exception thrown
-    await vscode.commands.executeCommand('texra.execute', {
-      config: resumeData.agentConfig,
-      executionId: resumeData.executionId,
-    });
-    return true;
-  } catch (error) {
-    logger.error(`Failed to execute resume command for stream: ${streamId}`, {
-      data: error,
-    });
-    return false;
-  }
-}
-
 async function handleFollowUpResult(
   result: SendFollowUpResult,
   streamId: StreamTabId,
@@ -126,10 +68,10 @@ async function handleFollowUpResult(
     case 'queued':
       extensionAgentRuntimeHost.emit('updateQueuedFollowUps', { streamId });
       if (result.reason === 'waiting' || result.reason === 'children_running') {
-        const resumed = await tryAutoResume(streamId);
-        // tryAutoResume also returns false when the stream is already
-        // active/resuming — another consumer is on the way, so neither
-        // branch below should drop the queue or warn the user.
+        const resumed = await tryResumeFromSnapshot(streamId);
+        // tryResumeFromSnapshot also returns false when the stream is
+        // already active/resuming — another consumer is on the way, so
+        // neither branch below should drop the queue or warn the user.
         if (!resumed && !StreamStatusService.isActiveOrResuming(streamId)) {
           if (result.reason === 'children_running') {
             // sendFollowUp force-reopened a released queue on behalf of the

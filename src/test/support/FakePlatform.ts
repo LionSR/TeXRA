@@ -759,6 +759,7 @@ export function createFakePlatform(
     ),
     secrets: new FakeSecrets(options.secrets),
     lifecycle: createLifecycleHost(),
+    agentResume: { tryResumeStream: async () => false },
     ...overrides,
   };
 }

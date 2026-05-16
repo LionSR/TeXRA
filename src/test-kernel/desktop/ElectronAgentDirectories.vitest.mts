@@ -128,6 +128,7 @@ describe('desktop agent directory bootstrap', () => {
       storage,
       secrets: new FakeSecrets(),
       lifecycle: createLifecycleHost(),
+      agentResume: { tryResumeStream: async () => false },
     });
 
     return {
