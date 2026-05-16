@@ -29,6 +29,8 @@ import { createCliRuntimeHost } from '../../runtime/runtimeHost';
 import { writeTextStderr } from '../../runtime/logSinks';
 import { type ChatResult, type RunChatInit } from '../runChat';
 import { App } from './App';
+import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
+import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
 import { clearApprovals } from './state/approvalQueue';
 import { cliState, resetCliState } from './state/cliState';
@@ -88,6 +90,10 @@ export async function runChatTui(
   // through the original resolvers (see state/subscribeApprovals.ts).
   // The legacy adapter only stays on the `!--tui` path now.
   await loadAgents();
+
+  const inputHistory = await loadInputHistory();
+  // Pre-register the slash commands the input palette uses.
+  registerBuiltinSlashCommands();
 
   // DA1 sentinel discovery runs *before* Ink mounts so it owns the raw-mode
   // toggle exclusively — interleaving with Ink's own raw-mode lifecycle (set
@@ -191,7 +197,7 @@ export async function runChatTui(
     });
   };
 
-  const ink = render(<App onSubmit={handleSubmit} />, {
+  const ink = render(<App onSubmit={handleSubmit} history={inputHistory} />, {
     stdout: process.stdout,
     stderr: process.stderr,
     stdin: process.stdin,
