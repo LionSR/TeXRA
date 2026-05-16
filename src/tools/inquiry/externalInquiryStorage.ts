@@ -602,22 +602,22 @@ function manifestToSummary(
 }
 
 async function listAllManifests(): Promise<ExternalInquiryThreadManifest[]> {
-  const out: ExternalInquiryThreadManifest[] = [];
   let entries: [string, number][] = [];
   try {
     entries = await GlobalStorageFS.readDir(THREADS_DIR);
   } catch {
-    return out;
+    return [];
   }
 
-  for (const [name, type] of entries) {
-    if (!isDirectory(type)) continue;
+  const reads = entries.flatMap(([name, type]) => {
+    if (!isDirectory(type)) return [];
     const parsed = ExternalInquiryThreadIdSchema.safeParse(name);
-    if (!parsed.success) continue;
-    const manifest = await readThreadManifest(parsed.data);
-    if (manifest) out.push(manifest);
-  }
-  return out;
+    return parsed.success ? [readThreadManifest(parsed.data)] : [];
+  });
+  const manifests = await Promise.all(reads);
+  return manifests.filter(
+    (manifest): manifest is ExternalInquiryThreadManifest => manifest != null,
+  );
 }
 
 export async function getThreadSummary(
