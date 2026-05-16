@@ -77,7 +77,7 @@ The `research` agent can call `wolfram` to run Wolfram Language code and check s
 
 ### <wa-icon library="texra" name="comment-discussion"></wa-icon> Ask Another Model for a Second Opinion
 
-The `external_inquiry` tool lets a TeXRA agent paste a question to an external chat (ChatGPT, Claude, Gemini) via a copy/paste hand-off so you can bring a second opinion into the loop without switching windows. No API key required — uses your existing subscription.
+The `inquiry` tool lets a TeXRA agent dispatch a question to an external chat (ChatGPT, Claude, Gemini) via a copy/paste hand-off so you can bring a second opinion into the loop without switching windows. Dispatch is non-blocking — the agent's cycle continues while you fetch the answer, and resumes automatically once you paste it back (even after a reload). No API key required — uses your existing subscription.
 
 ## Which Agent to Use
 

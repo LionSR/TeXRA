@@ -28,7 +28,6 @@ import {
   requestPanelStyles,
 } from '@shared/styles';
 import type { ExternalInquiryPermission } from '@shared/schemas';
-import { EXTERNAL_INQUIRY_ACTIONS } from '@shared/schemas';
 import { CopyButtonController } from '@shared/controllers/CopyButtonController';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
@@ -45,6 +44,7 @@ interface InquiryDraft {
 const DRAFT_CACHE_CAP = 50;
 const draftCache = new Map<string, InquiryDraft>();
 const resolvedIds = new Set<string>();
+const INQUIRY_SUBMIT_ACTION = 'submit';
 
 function getRequestId(permission: { data: unknown }): string {
   return (permission.data as ExternalInquiryPermission).requestId;
@@ -61,7 +61,7 @@ function safeHttpUrl(link: string): string | undefined {
   }
 }
 
-/** Clear draft for a resolved inquiry. Called from eventHandlers on submit/reject. */
+/** Clear draft for a resolved inquiry. Called from eventHandlers on submit/drop. */
 export function clearInquiryDraft(requestId: string): void {
   draftCache.delete(requestId);
   resolvedIds.add(requestId);
@@ -348,7 +348,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
           icon: 'check',
           text: 'Submit Answer',
           title: 'Submit the answer from the external model',
-          action: EXTERNAL_INQUIRY_ACTIONS[0],
+          action: INQUIRY_SUBMIT_ACTION,
           disabled: !this.hasAnswer,
           onClick: this.handleSubmit,
         })}
@@ -384,7 +384,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
     this.dispatchEvent(
       ProgressEvents.permissionAction({
         permission: this.permission,
-        action: EXTERNAL_INQUIRY_ACTIONS[0],
+        action: INQUIRY_SUBMIT_ACTION,
         answer,
         sessionLinks: sessionLinks.length ? sessionLinks : undefined,
       }),
