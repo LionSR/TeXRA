@@ -1,7 +1,4 @@
-// Slash command palette — pops up as the user types `/...` in the input bar.
-//
-// Phase 5 ships the inline-action shape only. Pick with arrow keys + Enter or
-// Tab to accept; Esc dismisses the palette without changing the input.
+// Slash command palette: pick with arrow keys + Enter or Tab; Esc dismisses it.
 
 import { Box, Text, useInput } from 'ink';
 import { useState, useEffect } from 'react';
@@ -24,35 +21,44 @@ export function SlashPalette(
 ): React.JSX.Element | null {
   const matches = matchSlashCommands(props.query);
   const [highlight, setHighlight] = useState(0);
+  const visible = matches.slice(0, MAX_VISIBLE);
+  const visibleCount = visible.length;
 
   // Whenever the match list resizes (user kept typing), clamp the cursor
   // so it doesn't point past the end.
   useEffect(() => {
-    if (highlight >= matches.length)
-      setHighlight(Math.max(0, matches.length - 1));
-  }, [matches.length, highlight]);
+    if (visibleCount === 0) {
+      if (highlight !== 0) setHighlight(0);
+      return;
+    }
+    if (highlight < 0 || highlight >= visibleCount) {
+      setHighlight(Math.min(Math.max(highlight, 0), visibleCount - 1));
+    }
+  }, [visibleCount, highlight]);
 
-  useInput((input, key) => {
-    if (key.escape) {
-      props.onCancel();
-      return;
-    }
-    if (key.upArrow) {
-      setHighlight((h) => (h <= 0 ? matches.length - 1 : h - 1));
-      return;
-    }
-    if (key.downArrow) {
-      setHighlight((h) => (h + 1) % Math.max(matches.length, 1));
-      return;
-    }
-    if (key.return || key.tab || input === '\t') {
-      const chosen = matches[highlight];
-      if (chosen) props.onPick(chosen);
-    }
-  });
+  useInput(
+    (input, key) => {
+      if (key.escape) {
+        props.onCancel();
+        return;
+      }
+      if (key.upArrow) {
+        setHighlight((h) => (h <= 0 ? visibleCount - 1 : h - 1));
+        return;
+      }
+      if (key.downArrow) {
+        setHighlight((h) => (h + 1) % visibleCount);
+        return;
+      }
+      if (key.return || key.tab || input === '\t') {
+        const chosen = visible[highlight];
+        if (chosen) props.onPick(chosen);
+      }
+    },
+    { isActive: visibleCount > 0 },
+  );
 
-  if (matches.length === 0) return null;
-  const visible = matches.slice(0, MAX_VISIBLE);
+  if (visibleCount === 0) return null;
   const truncated = matches.length - visible.length;
 
   return (

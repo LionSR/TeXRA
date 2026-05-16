@@ -30,7 +30,7 @@ export function ReverseSearch(props: ReverseSearchProps): React.JSX.Element {
       props.onCancel();
       return;
     }
-    if (key.upArrow || (key.ctrl && input === 'r')) {
+    if (key.upArrow || (key.ctrl && input.toLowerCase() === 'r')) {
       // Step to the next older match.
       if (!match) return;
       const next = props.history.reverseFind(query, match.index);
