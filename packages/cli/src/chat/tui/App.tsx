@@ -14,10 +14,12 @@ import { currentApproval } from './state/approvalQueue';
 import { cliState } from './state/cliState';
 import { nextFocusBack, nextFocusForward } from './state/focusCycle';
 import { useSignal } from './state/useSignal';
+import type { InputHistory } from './history/inputHistory';
 
 export interface AppProps {
   readonly onSubmit: (line: string) => void;
   readonly inputDisabled?: boolean;
+  readonly history?: InputHistory;
 }
 
 export function App(props: AppProps): React.JSX.Element {
@@ -72,7 +74,11 @@ export function App(props: AppProps): React.JSX.Element {
       </Box>
       <StatusBar />
       <ApprovalModal pending={pending} />
-      <InputBar onSubmit={props.onSubmit} disabled={inputDisabled} />
+      <InputBar
+        onSubmit={props.onSubmit}
+        disabled={inputDisabled}
+        history={props.history}
+      />
     </Box>
   );
 }
