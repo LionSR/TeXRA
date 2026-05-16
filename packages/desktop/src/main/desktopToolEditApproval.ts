@@ -12,6 +12,7 @@ import {
   runLatexdiff,
   type LatexPreviewEntry,
 } from '@tools/approval/latexPreview';
+import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import {
   computeLineChangeSummary,
   computeUserPatch,
@@ -151,13 +152,12 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
   ): Promise<DesktopPendingToolEditApproval> {
     const tempRoot = this.options.tempRoot ?? tmpdir();
     const tempDir = await mkdtemp(path.join(tempRoot, 'texra-tool-edit-'));
-    const ext = path.extname(request.path) || '.txt';
-    const originalPath = path.join(tempDir, `${randomUUID()}-original${ext}`);
-    const proposedPath = path.join(tempDir, `${randomUUID()}-proposed${ext}`);
-    await Promise.all([
-      writeFile(originalPath, request.originalContent, 'utf8'),
-      writeFile(proposedPath, request.proposedContent, 'utf8'),
-    ]);
+    const { originalPath, proposedPath } = await writeApprovalTempFiles({
+      directory: tempDir,
+      targetPath: request.path,
+      originalContent: request.originalContent,
+      proposedContent: request.proposedContent,
+    });
 
     return {
       requestId,
