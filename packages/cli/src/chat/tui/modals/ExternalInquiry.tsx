@@ -5,6 +5,7 @@ import TextInput from 'ink-text-input';
 import type { ExternalInquiryPermission } from '@shared/schemas';
 
 import type { ApprovalDecision } from '../state/approvalQueue';
+import { KeyHints } from '../ui/KeyHints';
 
 export interface ExternalInquiryProps {
   readonly payload: ExternalInquiryPermission;
@@ -61,7 +62,16 @@ export function ExternalInquiry(
           }}
         />
       </Box>
-      <Text dimColor>Enter answer · Ctrl-R reject with note · Esc skip</Text>
+      <Box marginTop={1}>
+        <KeyHints
+          hints={[
+            { key: 'Enter', action: 'submit answer' },
+            { key: 'Ctrl-R', action: 'reject with note' },
+            { key: 'Esc', action: 'skip' },
+          ]}
+          confirmCancel={false}
+        />
+      </Box>
     </Box>
   );
 }
