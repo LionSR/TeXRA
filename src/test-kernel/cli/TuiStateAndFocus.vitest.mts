@@ -15,6 +15,8 @@ import {
   nextFocusBack,
   nextFocusForward,
 } from '../../../packages/cli/src/chat/tui/state/focusCycle';
+import { wrapRuntimeHost } from '../../../packages/cli/src/chat/tui/state/subscribeRuntimeHost';
+import type { CliRuntimeHost } from '../../../packages/cli/src/runtime/runtimeHost';
 
 const root = 'root' as StreamTabId;
 const child1 = 'child-1' as StreamTabId;
@@ -53,6 +55,52 @@ describe('cliState Phase 4 fields', () => {
     patchStream(root, (s) => ({ ...s, status: 'running' }));
     removeStream(root);
     expect(cliState.parentStream.get().has(child2)).toBe(false);
+  });
+});
+
+describe('subscribeRuntimeHost.updateActiveProcesses', () => {
+  function makeHost(): CliRuntimeHost {
+    return {
+      emit: () => {},
+      close: async () => {},
+    } as unknown as CliRuntimeHost;
+  }
+
+  it('prunes processOutput entries whose executionId left the active list', () => {
+    const wrapped = wrapRuntimeHost(makeHost());
+
+    // Seed: two live processes with tail output.
+    wrapped.emit('updateActiveProcesses', {
+      parentStreamId: root,
+      processes: [
+        { executionId: 'exec-a', agentName: 'bash' },
+        { executionId: 'exec-b', agentName: 'bash' },
+      ],
+    });
+    wrapped.emit('updateProcessOutput', {
+      parentStreamId: root,
+      executionId: 'exec-a',
+      stdout: 'A',
+      stderr: '',
+    });
+    wrapped.emit('updateProcessOutput', {
+      parentStreamId: root,
+      executionId: 'exec-b',
+      stdout: 'B',
+      stderr: '',
+    });
+    expect(cliState.streams.get().get(root)?.processOutput.size).toBe(2);
+
+    // exec-a finishes: its output buffer must be dropped on the next
+    // active-processes update.
+    wrapped.emit('updateActiveProcesses', {
+      parentStreamId: root,
+      processes: [{ executionId: 'exec-b', agentName: 'bash' }],
+    });
+    const out = cliState.streams.get().get(root)?.processOutput;
+    expect(out?.size).toBe(1);
+    expect(out?.has('exec-a')).toBe(false);
+    expect(out?.has('exec-b')).toBe(true);
   });
 });
 

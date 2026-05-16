@@ -14,6 +14,7 @@ import {
   patchStream,
   removeStream,
   setParentStream,
+  type ProcessOutputTail,
 } from './cliState';
 import type { CliRuntimeHost } from '../../../runtime/runtimeHost';
 
@@ -81,10 +82,27 @@ function applyToState<K extends ProgressEvent>(
     }
     case 'updateActiveProcesses': {
       const p = payload as ProgressEventPayloads['updateActiveProcesses'];
-      patchStream(p.parentStreamId, (s) => ({
-        ...s,
-        activeProcesses: p.processes,
-      }));
+      // Drop tails for executions that just left the active list — mirrors
+      // `pruneStaleOutputs` in the webview's streamMetaSlice so the map
+      // doesn't grow unboundedly for the lifetime of the parent stream.
+      const live = new Set(p.processes.map((c) => c.executionId));
+      patchStream(p.parentStreamId, (s) => {
+        let nextOutput = s.processOutput;
+        if (s.processOutput.size > 0) {
+          let mutated: Map<string, ProcessOutputTail> | undefined;
+          for (const id of s.processOutput.keys()) {
+            if (live.has(id)) continue;
+            if (!mutated) mutated = new Map(s.processOutput);
+            mutated.delete(id);
+          }
+          if (mutated) nextOutput = mutated;
+        }
+        return {
+          ...s,
+          activeProcesses: p.processes,
+          processOutput: nextOutput,
+        };
+      });
       return;
     }
     case 'updateProcessOutput': {
