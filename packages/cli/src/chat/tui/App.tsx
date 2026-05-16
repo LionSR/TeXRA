@@ -45,12 +45,12 @@ export function App(props: AppProps): React.JSX.Element {
   // start-of-line / back-one-char binding of those chords inside the input
   // bar lands in Phase 5 alongside the explicit focus-mode toggle; until
   // then ink-text-input ignores ctrl chords anyway.
-  useInput((_input, key) => {
+  useInput((input, key) => {
     if (!key.ctrl) return;
-    if (_input === 'a') {
+    if (input === 'a') {
       const next = nextFocusForward();
       if (next) cliState.activeStreamId.set(next);
-    } else if (_input === 'b') {
+    } else if (input === 'b') {
       const next = nextFocusBack();
       if (next) cliState.activeStreamId.set(next);
     }

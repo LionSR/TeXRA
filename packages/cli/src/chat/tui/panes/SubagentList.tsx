@@ -74,49 +74,31 @@ export function SubagentList(): React.JSX.Element | null {
   const { activeSubagents, activeProcesses, processOutput } = slice;
   if (activeSubagents.length === 0 && activeProcesses.length === 0) return null;
 
-  // Flatten + index up front so we don't mutate a counter inside JSX.
-  const rows: ReadonlyArray<{
-    section: 'subagent' | 'process';
-    child: ActiveChildInfo;
-    index: number;
-  }> = [
-    ...activeSubagents.map((child, i) => ({
-      section: 'subagent' as const,
-      child,
-      index: i,
-    })),
-    ...activeProcesses.map((child, i) => ({
-      section: 'process' as const,
-      child,
-      index: activeSubagents.length + i,
-    })),
-  ];
-
-  const subagentRows = rows.filter((r) => r.section === 'subagent');
-  const processRows = rows.filter((r) => r.section === 'process');
-
   return (
     <Box flexDirection="column" paddingX={1} marginBottom={1}>
-      {subagentRows.length > 0 ? (
+      {activeSubagents.length > 0 ? (
         <Box flexDirection="column">
           <Text bold dimColor>
             Subagents
           </Text>
-          {subagentRows.map(({ child, index }) => (
-            <Row key={child.executionId} child={child} index={index} />
+          {activeSubagents.map((child, i) => (
+            <Row key={child.executionId} child={child} index={i} />
           ))}
         </Box>
       ) : null}
-      {processRows.length > 0 ? (
-        <Box flexDirection="column" marginTop={subagentRows.length > 0 ? 1 : 0}>
+      {activeProcesses.length > 0 ? (
+        <Box
+          flexDirection="column"
+          marginTop={activeSubagents.length > 0 ? 1 : 0}
+        >
           <Text bold dimColor>
             Processes
           </Text>
-          {processRows.map(({ child, index }) => (
+          {activeProcesses.map((child, i) => (
             <Row
               key={child.executionId}
               child={child}
-              index={index}
+              index={activeSubagents.length + i}
               tail={processOutput.get(child.executionId)}
             />
           ))}
