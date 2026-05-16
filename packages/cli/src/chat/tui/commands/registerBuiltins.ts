@@ -1,6 +1,8 @@
 // Registers the slash commands the input palette surfaces.
 //
-// Idempotent — `registerSlashCommand` overwrites by name.
+// Idempotent at the call-site granularity: the module-scope `installed`
+// flag short-circuits repeat invocations, so registrations that were
+// individually unregistered won't reappear without a process restart.
 
 import { registerSlashCommand } from './slashRegistry';
 
@@ -32,6 +34,12 @@ export function registerBuiltinSlashCommands(): void {
   });
   registerSlashCommand({
     name: 'resume',
-    description: 'Resume a previous session — separate PRD',
+    description: 'Resume a previous session',
   });
+}
+
+/** Test seam — drops registered commands so vitests can re-register from
+ *  scratch without a hot-module reload. */
+export function _resetBuiltinSlashCommandsForTests(): void {
+  installed = false;
 }

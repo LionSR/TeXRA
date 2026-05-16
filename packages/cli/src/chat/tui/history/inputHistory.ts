@@ -48,22 +48,34 @@ function parseRecord(raw: string): HistoryRecord | undefined {
   return undefined;
 }
 
-function serializeRecords(entries: readonly string[]): string {
-  const now = Date.now();
-  return entries.map((v) => JSON.stringify({ t: now, v })).join('\n') + '\n';
+/** Serialise the in-memory ring back to JSONL. Records keep their original
+ *  timestamp so a compaction doesn't collapse the entire history to "now"
+ *  in case anything ever reads the file externally. */
+function serializeRecords(records: readonly HistoryRecord[]): string {
+  return records.map((r) => JSON.stringify(r)).join('\n') + '\n';
 }
 
 export async function loadInputHistory(): Promise<InputHistory> {
-  let entries: string[] = [];
+  // Each record keeps its original timestamp so compactions don't rewrite
+  // every entry's `t` to `now`.
+  let records: HistoryRecord[] = [];
   if (await GlobalStorageFS.exists(HISTORY_PATH)) {
-    const raw = await GlobalStorageFS.read(HISTORY_PATH);
-    for (const line of raw.split('\n')) {
-      const rec = parseRecord(line);
-      if (rec && rec.v.length > 0) entries.push(rec.v);
+    try {
+      const raw = await GlobalStorageFS.read(HISTORY_PATH);
+      for (const line of raw.split('\n')) {
+        const rec = parseRecord(line);
+        if (rec && rec.v.length > 0) records.push(rec);
+      }
+    } catch {
+      // A read failure (EIO, permission, race-after-exists) must not block
+      // the TUI from mounting — the user can still type, just without
+      // history this session.
+      records = [];
     }
   }
   // Cap on load; older entries fall off when the ring is full.
-  if (entries.length > MAX_LINES) entries = entries.slice(-MAX_LINES);
+  if (records.length > MAX_LINES) records = records.slice(-MAX_LINES);
+  let entries = records.map((r) => r.v);
 
   return {
     all() {
@@ -77,14 +89,17 @@ export async function loadInputHistory(): Promise<InputHistory> {
           ? trimmed.slice(0, MAX_LINE_CHARS)
           : trimmed;
       if (entries.at(-1) === stored) return;
+      const record: HistoryRecord = { t: Date.now(), v: stored };
       entries.push(stored);
+      records.push(record);
       await GlobalStorageFS.ensureDir(HISTORY_DIR);
       if (entries.length > MAX_LINES) {
-        entries.splice(0, entries.length - MAX_LINES);
-        await GlobalStorageFS.write(HISTORY_PATH, serializeRecords(entries));
+        const drop = entries.length - MAX_LINES;
+        entries.splice(0, drop);
+        records.splice(0, drop);
+        await GlobalStorageFS.write(HISTORY_PATH, serializeRecords(records));
         return;
       }
-      const record: HistoryRecord = { t: Date.now(), v: stored };
       await GlobalStorageFS.appendFile(
         HISTORY_PATH,
         `${JSON.stringify(record)}\n`,
