@@ -350,6 +350,7 @@ export function handlePermissionAction(
         postMessage(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION, {
           action: 'drop',
           threadId,
+          feedback,
         });
       }
       removePrompt(

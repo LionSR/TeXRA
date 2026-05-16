@@ -196,7 +196,7 @@ export function resolveToolDefinitions(
 
     if (!VALID_TOOL_NAME.test(canonicalName)) {
       warnOnMissing?.(name);
-      return { name };
+      return { name: canonicalName };
     }
 
     const tool = registry.get(canonicalName);
