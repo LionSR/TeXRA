@@ -309,7 +309,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           });
           return;
         }
-        if (data.action === 'submit' && data.answer) {
+        if (data.action === 'submit') {
+          if (data.answer == null || data.answer.length === 0) {
+            this.logger.warn(
+              this.channel,
+              'Ignoring external inquiry submit without an answer',
+              { data: { threadId: data.threadId } },
+            );
+            return;
+          }
           await handleExternalInquiryAction({
             action: 'submit',
             threadId: data.threadId,
