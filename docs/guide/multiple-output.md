@@ -89,7 +89,8 @@ of selected input filenames, so templates should iterate over it. Use
 ```yaml
 # Inside a workflow agent's userRequest prompt:
 # ... instructions ...
-The output files should be in this order: {{ INPUT_FILES | join(", ") }}.
+Output one updated document for each input file, using the matching input
+filename as the document name.
 
 # Use the following format:
 <documents>
