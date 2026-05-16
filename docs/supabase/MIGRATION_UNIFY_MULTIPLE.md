@@ -2,7 +2,7 @@
 
 ## What this migration does
 
-Removes the 9 `*_multiple` rows from the `remote_agents` table now that the base agents (`apply`, `criticize`, `devise`, `elevate`, `enhance`, `generic`, `logic`, `notation`, `verifyFix`) handle both single-output and multi-output workflows through a single unified YAML each, gated by `{% if OUTPUT_FILES_ORDER %}` at runtime.
+Removes the 9 `*_multiple` rows from the `remote_agents` table now that the base agents (`apply`, `criticize`, `devise`, `elevate`, `enhance`, `generic`, `logic`, `notation`, `verifyFix`) handle both single-output and multi-output workflows through a single unified YAML each.
 
 The 10 surviving workflow rows (`apply`, `criticize`, `devise`, `elevate`, `enhance`, `generic`, `humanize`, `logic`, `notation`, `verifyFix`) also get refreshed descriptions and storage paths from the new YAMLs.
 

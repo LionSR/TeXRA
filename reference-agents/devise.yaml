@@ -78,7 +78,7 @@ prompts:
       </instruction>
       Important: Focus solely on the given instruction. If asked to revise section A in all papers, do not modify section B in any paper unless absolutely necessary for consistency.
 
-      The output files should be in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
+      The output files should be in the following order: {{ INPUT_FILES | join(', ') }}.
 
       FIRST PHASE: In this initial phase, I want you to focus on DERIVATION. Start from fundamental principles and show every single step, deriving all coefficients explicitly. Show every calculation in full detail to ensure complete mathematical rigor. Think of this as creating detailed mathematical drafts where all steps are shown.
 
@@ -127,7 +127,7 @@ prompts:
       Then, following your plan in the scratchpad, please output updated version(s) of the LaTeX code with expanded mathematical derivations that show every single step and derive all coefficients explicitly. These are the fully derived versions that will be revised in the next phase. Use the following format:
 
       <documents>
-      {% for output in OUTPUT_FILES_ORDER %}
+      {% for output in INPUT_FILES %}
       <document name="{{ output }}">
       % UPDATED_CONTENT_FOR_{{ output }}
       </document>
@@ -185,10 +185,10 @@ prompts:
 
       Then, following your plan in the scratchpad, please output revised version(s) of the LaTeX document(s) that transform the fully derived mathematical drafts into polished scientific papers with an appropriate level of detail. Focus on addressing the original instruction while maintaining scientific clarity and proper motivation. Remember, the goal is not to show every mathematical step unless specifically required by the instruction, but to present the mathematics in a way that best serves the scientific content.
 
-      Ensure that the output documents are in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
+      Ensure that the output documents are in the following order: {{ INPUT_FILES | join(', ') }}.
 
       <documents>
-      {% for output in OUTPUT_FILES_ORDER %}
+      {% for output in INPUT_FILES %}
       <document name="{{ output }}">
       % UPDATED_CONTENT_FOR_{{ output }}
       </document>

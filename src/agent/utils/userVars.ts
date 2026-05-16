@@ -98,7 +98,7 @@ export async function buildUserVars(
     ...(await getFileVars(agentConfig, agentSetting, logger)),
     ...requiredVars,
     ...patternVars,
-    ...getOutputFilesOrder(agentConfig, agentSetting, agentPrompt),
+    ...resolveOutputFiles(agentConfig, agentSetting),
     ...getToolFlags(agentConfig, agentSetting, agentPrompt),
     LATEX_STYLE_RULES: latexStyleRules,
     ATTACHED_MEMORIES: attachedMemories,
@@ -248,6 +248,7 @@ async function getFileVars(
 
     userVars[`ALL_${prefix}S`] =
       allFiles.length > 0 ? await getXmlFormatFromFiles(allFiles) : null;
+    userVars[`${prefix}_FILES`] = allFiles;
     userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(allFiles);
   }
 
@@ -437,10 +438,9 @@ async function getAttachedMemories(
   return `<attached_memories>\n${parts.join('\n')}\n</attached_memories>`;
 }
 
-export function getOutputFilesOrder(
+export function resolveOutputFiles(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
-  _agentPrompt: AgentPrompt,
 ): UserVars {
   const userVars: UserVars = {};
   const explicitOutputFiles = (agentConfig.outputFiles ?? []).filter(Boolean);
@@ -456,8 +456,8 @@ export function getOutputFilesOrder(
         : inputFiles;
 
   agentConfig.outputFiles = outputFiles;
-  if (outputFiles.length > 0) {
-    userVars.OUTPUT_FILES_ORDER = outputFiles;
+  if (explicitOutputFiles.length > 0 || defaultOutputFiles.length > 0) {
+    userVars.OUTPUT_FILES = outputFiles;
   }
   return userVars;
 }
