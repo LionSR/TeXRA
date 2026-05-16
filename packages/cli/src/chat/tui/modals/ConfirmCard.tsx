@@ -1,14 +1,14 @@
 // Shared scaffolding for y/n approval modals — bordered frame, colored
 // title, padded body slot, ConfirmInput, and `y / n` KeyHints footer.
 
-import { Box, Text } from 'ink';
+import { Box, Text, type BoxProps } from 'ink';
 import { ConfirmInput } from '@inkjs/ui';
 
 import type { ApprovalDecision } from '../state/approvalQueue';
 import { KeyHints } from '../ui/KeyHints';
 
 export interface ConfirmCardProps {
-  readonly borderStyle: 'single' | 'double';
+  readonly borderStyle: BoxProps['borderStyle'];
   readonly color: string;
   readonly title: string;
   readonly approveLabel?: string;
