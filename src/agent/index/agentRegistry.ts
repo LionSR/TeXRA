@@ -137,6 +137,12 @@ const cache = new Map<string, AgentEntry>();
 /** Initialization state */
 let initialized = false;
 let initPromise: Promise<void> | null = null;
+let cacheIncludesRemote = false;
+
+export interface LoadAgentsOptions {
+  /** Include remote agent metadata that requires auth/network access. */
+  includeRemote?: boolean;
+}
 
 // =============================================================================
 // CORE API
@@ -146,20 +152,37 @@ let initPromise: Promise<void> | null = null;
  * Load all agents into cache. Call once at activation.
  * Thread-safe: concurrent calls share the same promise.
  */
-export async function loadAgents(): Promise<void> {
+export async function loadAgents(
+  options: LoadAgentsOptions = {},
+): Promise<void> {
+  const includeRemote = options.includeRemote ?? true;
+
   if (initPromise) {
-    return initPromise;
+    await initPromise;
   }
 
-  initPromise = doLoad().then(() => {
-    initialized = true;
-    initPromise = null;
-  });
+  if (initialized && (!includeRemote || cacheIncludesRemote)) {
+    return;
+  }
+
+  initPromise = doLoad({ includeRemote })
+    .then(() => {
+      initialized = true;
+      cacheIncludesRemote = includeRemote;
+    })
+    .catch((error: unknown) => {
+      initialized = false;
+      cacheIncludesRemote = false;
+      throw error;
+    })
+    .finally(() => {
+      initPromise = null;
+    });
 
   return initPromise;
 }
 
-async function doLoad(): Promise<void> {
+async function doLoad(options: LoadAgentsOptions = {}): Promise<void> {
   const startTime = Date.now();
   cache.clear();
 
@@ -174,12 +197,13 @@ async function doLoad(): Promise<void> {
     dirs.builtInToolUse(),
   ]);
 
+  const includeRemote = options.includeRemote ?? true;
   const [customEntries, builtInEntries, toolUseEntries, remoteEntries] =
     await Promise.all([
       scanDirectory(customDir, 'custom'),
       scanDirectory(builtInDir, 'builtInWorkflow'),
       scanDirectory(toolUseDir, 'builtInToolUse'),
-      loadRemoteAgents(),
+      includeRemote ? loadRemoteAgents() : Promise.resolve([]),
     ]);
 
   // Register all entries
@@ -327,6 +351,7 @@ export function getAgentsBySource(source: AgentSource): AgentEntry[] {
 /** Refresh the cache. */
 export async function refresh(): Promise<void> {
   initialized = false;
+  cacheIncludesRemote = false;
   await loadAgents();
 }
 

@@ -23,6 +23,7 @@ function statusLabel(status: string | undefined): string {
 }
 
 export function StatusBar(): React.JSX.Element {
+  const meta = useSignal(cliState.sessionMeta);
   const activeStreamId = useSignal(cliState.activeStreamId);
   const streams = useSignal(cliState.streams);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
@@ -32,7 +33,18 @@ export function StatusBar(): React.JSX.Element {
   return (
     <Box paddingX={1} justifyContent="space-between">
       <Box>
+        <Text color="cyan">◆ </Text>
+        <Text>{meta.agent || 'chat'}</Text>
+        <Text dimColor> · </Text>
+        <Text>{meta.model || '—'}</Text>
+        <Text dimColor> · </Text>
         <Text dimColor>{statusLabel(slice?.status)}</Text>
+        {slice?.description ? (
+          <>
+            <Text dimColor> · </Text>
+            <Text dimColor>{slice.description}</Text>
+          </>
+        ) : null}
         {bypass.superYolo ? (
           <Text color="red" bold>
             {'  YOLO'}
