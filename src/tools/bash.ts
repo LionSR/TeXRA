@@ -34,6 +34,7 @@ import {
 import { formatDuration } from '@utils/core';
 import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
+import { appendTail } from '@utils/strings/appendTail';
 import { executeCommand, signalProcessGroup } from '@utils/system/execUtils';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
@@ -74,14 +75,6 @@ export type BashInput = z.infer<typeof BashInputSchema>;
 
 function usesShellLevelBackgrounding(command: string): boolean {
   return SHELL_BACKGROUNDING_PATTERN.test(command);
-}
-
-function appendTail(current: string, chunk: string, maxChars: number): string {
-  if (!chunk) return current;
-  const combined = current + chunk;
-  return combined.length > maxChars
-    ? combined.slice(combined.length - maxChars)
-    : combined;
 }
 
 class BashBackgroundSession implements IInterruptible {
