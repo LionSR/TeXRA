@@ -73,7 +73,7 @@ prompts:
       </instruction>
       If no instruction given, apply full scrutiny to all content.
 
-      The output files should be in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
+      The output files should be in the following order: {{ INPUT_FILES | join(', ') }}.
 
       PHASE 1 - EXPANSION AND DISCOVERY: Create an expanded version showing all mathematical steps to identify issues. This expansion is for verification only - the final output maintains the original's detail level unless instructed otherwise.
 
@@ -145,7 +145,7 @@ prompts:
       Following your analysis, output the FULLY EXPANDED version with all derivations shown explicitly:
 
       <documents>
-      {% for output in OUTPUT_FILES_ORDER %}
+      {% for output in INPUT_FILES %}
       <document name="{{ output }}">
       % UPDATED_CONTENT_FOR_{{ output }}
       </document>
@@ -270,7 +270,7 @@ prompts:
       Remember: Text inside \critique{...} must use proper LaTeX syntax.
 
       <documents>
-      {% for output in OUTPUT_FILES_ORDER %}
+      {% for output in INPUT_FILES %}
       <document name="{{ output }}">
       % UPDATED_CONTENT_FOR_{{ output }}
       </document>
@@ -389,7 +389,7 @@ prompts:
       GUIDING PRINCIPLE: Fix only what needs fixing. Acknowledge what is correct. Ensure consistency across all documents. Do not add new content beyond necessary corrections. Preserve the document's original character and scope.
 
       <documents>
-      {% for output in OUTPUT_FILES_ORDER %}
+      {% for output in INPUT_FILES %}
       <document name="{{ output }}">
       % UPDATED_CONTENT_FOR_{{ output }}
       </document>
