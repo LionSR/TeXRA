@@ -4,84 +4,43 @@ import { createInterface } from 'node:readline/promises';
 // Local imports - logger
 import type { LogRecord, LogSink } from '@logger/structuredLogger';
 
-let stdoutClosed = false;
-let stderrClosed = false;
+const closed = { stdout: false, stderr: false };
 
-function writeLine(
-  stream: NodeJS.WriteStream,
-  text: string,
-  streamClosed: () => boolean,
-  markClosed: () => void,
-): void {
-  if (streamClosed() || stream.destroyed) return;
-  const handleWriteError = (): void => {
-    // CLI output is best effort: throwing from an async write callback bypasses
-    // the command error boundary and can crash the process.
-    markClosed();
-  };
+type StreamKey = 'stdout' | 'stderr';
+
+// CLI output is best effort: throwing from an async write callback would bypass
+// the command error boundary and can crash the process.
+function writeRaw(key: StreamKey, text: string): void {
+  if (closed[key]) return;
+  const stream = process[key];
+  if (stream.destroyed) return;
   try {
-    stream.write(`${text}\n`, (error) => {
-      if (!error) return;
-      handleWriteError();
+    stream.write(text, (error) => {
+      if (error) closed[key] = true;
     });
   } catch {
-    handleWriteError();
+    closed[key] = true;
   }
 }
 
 export function writeNdjsonStdout(record: unknown): void {
-  writeLine(
-    process.stdout,
-    JSON.stringify(record),
-    () => stdoutClosed,
-    () => {
-      stdoutClosed = true;
-    },
-  );
+  writeRaw('stdout', `${JSON.stringify(record)}\n`);
 }
 
 export function writeTextStdout(text: string): void {
-  writeLine(
-    process.stdout,
-    text,
-    () => stdoutClosed,
-    () => {
-      stdoutClosed = true;
-    },
-  );
+  writeRaw('stdout', `${text}\n`);
 }
 
 export function writeRawStdout(text: string): void {
-  if (stdoutClosed || process.stdout.destroyed) return;
-  try {
-    process.stdout.write(text, (error) => {
-      if (error) stdoutClosed = true;
-    });
-  } catch {
-    stdoutClosed = true;
-  }
+  writeRaw('stdout', text);
 }
 
 export function writeRawStderr(text: string): void {
-  if (stderrClosed || process.stderr.destroyed) return;
-  try {
-    process.stderr.write(text, (error) => {
-      if (error) stderrClosed = true;
-    });
-  } catch {
-    stderrClosed = true;
-  }
+  writeRaw('stderr', text);
 }
 
 export function writeTextStderr(text: string): void {
-  writeLine(
-    process.stderr,
-    text,
-    () => stderrClosed,
-    () => {
-      stderrClosed = true;
-    },
-  );
+  writeRaw('stderr', `${text}\n`);
 }
 
 export async function askCliQuestion(question: string): Promise<string> {
