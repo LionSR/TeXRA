@@ -21,6 +21,7 @@ import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import {
   ExternalInquirySessionLinksSchema,
   ExternalInquiryThreadIdSchema,
+  InquiryDraftSchema,
   InquiryThreadUpdatedEventSchema,
 } from './inquiry';
 import {
@@ -698,13 +699,7 @@ const ExternalInquiryActionMessageSchema = z
     answer: z.string().min(1).optional(),
     sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
     feedback: z.string().optional(),
-    draft: z
-      .object({
-        answer: z.string(),
-        sessionLinks: z.string(),
-      })
-      .nullable()
-      .optional(),
+    draft: InquiryDraftSchema.nullable().optional(),
   })
   .superRefine((message, ctx) => {
     if (message.action === 'submit' && !message.answer) {
