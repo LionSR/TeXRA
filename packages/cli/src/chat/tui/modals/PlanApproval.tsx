@@ -4,6 +4,7 @@ import { ConfirmInput } from '@inkjs/ui';
 import type { PlanApprovalPermission } from '@shared/schemas';
 
 import type { ApprovalDecision } from '../state/approvalQueue';
+import { KeyHints } from '../ui/KeyHints';
 
 export interface PlanApprovalProps {
   readonly payload: PlanApprovalPermission;
@@ -39,10 +40,18 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
         ))}
       </Box>
       <Box marginTop={1}>
-        <Text dimColor>y approve · n reject · </Text>
         <ConfirmInput
           onConfirm={() => props.onDecide({ accepted: true })}
           onCancel={() => props.onDecide({ accepted: false })}
+        />
+      </Box>
+      <Box marginTop={1}>
+        <KeyHints
+          hints={[
+            { key: 'y', action: 'approve' },
+            { key: 'n', action: 'reject' },
+          ]}
+          confirmCancel={false}
         />
       </Box>
     </Box>
