@@ -36,18 +36,14 @@ export interface ApprovalTempFiles {
 }
 
 export interface WriteApprovalTempFilesInput {
-  /** Pre-existing directory the caller owns (mkdtemp result, storage dir, etc.). */
   readonly directory: string;
-  /** Target file path (used to pick the extension shown in the diff view). */
+  /** Seeds the file extension shown in the diff view; not a write target. */
   readonly targetPath: string;
   readonly originalContent: string;
   readonly proposedContent: string;
 }
 
 /**
- * Materialize the original/proposed pair into `directory` and return
- * the resulting paths plus a per-file cleanup closure.
- *
  * File names use a per-side UUID so reusing a shared directory across
  * concurrent requests cannot collide.
  */

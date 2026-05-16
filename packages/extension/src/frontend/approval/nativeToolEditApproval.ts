@@ -28,10 +28,7 @@ import {
   previewProposedLatex,
   runLatexdiff,
 } from '@tools/approval/latexPreview';
-import {
-  writeApprovalTempFiles,
-  type ApprovalTempFiles,
-} from '@tools/approval/tempFileManager';
+import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import {
   computeLineChangeSummary,
   computeUserPatch,
@@ -88,29 +85,6 @@ async function ensureStorageDir(): Promise<string> {
   const dir = getStorageDir();
   await fs.mkdir(dir, { recursive: true });
   return dir;
-}
-
-async function stageApprovalSources(
-  targetPath: string,
-  originalContent: string,
-  proposedContent: string,
-): Promise<{
-  original: DiffSource;
-  proposed: DiffSource;
-  cleanup: ApprovalTempFiles['cleanup'];
-}> {
-  const directory = await ensureStorageDir();
-  const staged = await writeApprovalTempFiles({
-    directory,
-    targetPath,
-    originalContent,
-    proposedContent,
-  });
-  return {
-    original: { filePath: staged.originalPath },
-    proposed: { filePath: staged.proposedPath },
-    cleanup: staged.cleanup,
-  };
 }
 
 async function revealFirstChangedLine(
@@ -176,11 +150,19 @@ async function nativeRequestApproval(
 
   approvalCounter += 1;
   const requestId = `approval-${Date.now().toString(36)}-${approvalCounter}`;
+  const directory = await ensureStorageDir();
   const {
-    original: originalSource,
-    proposed: proposedSource,
+    originalPath,
+    proposedPath,
     cleanup: cleanupApprovalSources,
-  } = await stageApprovalSources(filePath, originalContent, proposedContent);
+  } = await writeApprovalTempFiles({
+    directory,
+    targetPath: filePath,
+    originalContent,
+    proposedContent,
+  });
+  const originalSource: DiffSource = { filePath: originalPath };
+  const proposedSource: DiffSource = { filePath: proposedPath };
 
   const description = vscode.workspace.asRelativePath(
     WorkspaceFS.fullPath(filePath),
