@@ -1,12 +1,11 @@
 import { useMemo } from 'react';
 import { Box, Text } from 'ink';
-import { ConfirmInput } from '@inkjs/ui';
 
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
+import { ConfirmCard } from './ConfirmCard';
 import { buildHunks, DiffView, statsFromHunks } from '../render/DiffView';
 import type { ApprovalDecision } from '../state/approvalQueue';
-import { KeyHints } from '../ui/KeyHints';
 
 export interface EditApprovalProps {
   readonly request: ToolEditApprovalRequest;
@@ -31,15 +30,12 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   const stats = useMemo(() => statsFromHunks(hunks), [hunks]);
 
   return (
-    <Box
+    <ConfirmCard
       borderStyle="double"
-      borderColor="cyan"
-      flexDirection="column"
-      paddingX={1}
+      color="cyan"
+      title={`Apply edit to ${props.request.path}?`}
+      onDecide={props.onDecide}
     >
-      <Text bold color="cyan">
-        Apply edit to {props.request.path}?
-      </Text>
       <Text dimColor>
         +{stats.added} / −{stats.removed} · {stats.hunks} hunks · source:{' '}
         {props.request.sourceTool}
@@ -47,21 +43,6 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
       <Box marginY={1} flexDirection="column">
         <DiffView hunks={hunks} maxHunkLines={30} />
       </Box>
-      <Box>
-        <ConfirmInput
-          onConfirm={() => props.onDecide({ accepted: true })}
-          onCancel={() => props.onDecide({ accepted: false })}
-        />
-      </Box>
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[
-            { key: 'y', action: 'approve' },
-            { key: 'n', action: 'reject' },
-          ]}
-          confirmCancel={false}
-        />
-      </Box>
-    </Box>
+    </ConfirmCard>
   );
 }
