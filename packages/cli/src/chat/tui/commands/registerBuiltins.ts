@@ -1,6 +1,4 @@
-// Registers the slash commands the Phase 5 input palette surfaces. Each is
-// inline-only for now; structured-form variants (`/model`, `/status`,
-// `/agent`) land in the Phase 5 follow-up.
+// Registers the slash commands the input palette surfaces.
 //
 // Idempotent — `registerSlashCommand` overwrites by name.
 
@@ -8,7 +6,7 @@ import { registerSlashCommand } from './slashRegistry';
 
 let installed = false;
 
-export function registerPhase5SlashCommands(): void {
+export function registerBuiltinSlashCommands(): void {
   if (installed) return;
   installed = true;
 
@@ -22,24 +20,18 @@ export function registerPhase5SlashCommands(): void {
   });
   registerSlashCommand({
     name: 'agent',
-    description: 'Switch the active agent — single-screen form in Phase 5b',
+    description: 'Switch the active agent',
   });
   registerSlashCommand({
     name: 'model',
-    description: 'Switch the active model — single-screen form in Phase 5b',
+    description: 'Switch the active model',
   });
   registerSlashCommand({
     name: 'status',
-    description: 'Open the session status tabs — Phase 5b',
+    description: 'Open the session status tabs',
   });
   registerSlashCommand({
     name: 'resume',
     description: 'Resume a previous session — separate PRD',
   });
-}
-
-/** Test seam — drops registered commands so vitests can re-register from
- *  scratch without a hot-module reload. */
-export function _resetBuiltinSlashCommandsForTests(): void {
-  installed = false;
 }

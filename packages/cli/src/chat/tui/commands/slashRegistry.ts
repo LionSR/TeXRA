@@ -1,9 +1,4 @@
 // In-tree slash command registry.
-//
-// Phase 5 ships an inline-action registry (just `name`, `description`,
-// `handler`); structured-form commands (`/model`, `/status`, `/agent`)
-// register via a `formComponent` field that lands in a follow-up PR per the
-// PRD's Phase-5 split note.
 
 export interface SlashCommand {
   /** Command name without the leading `/`. */
@@ -32,8 +27,10 @@ export function listSlashCommands(): readonly SlashCommand[] {
   return [...COMMANDS.values()];
 }
 
-/** Returns the registered commands whose name or any alias starts with the
- *  given prefix (case-insensitive). Ordered by registration. */
+/**
+ * Returns registered commands whose name or an alias starts with `prefix`.
+ * Results are case-insensitive and preserve registration order.
+ */
 export function matchSlashCommands(prefix: string): readonly SlashCommand[] {
   const lower = prefix.toLowerCase();
   return listSlashCommands().filter((cmd) => {
@@ -42,8 +39,10 @@ export function matchSlashCommands(prefix: string): readonly SlashCommand[] {
   });
 }
 
-/** Parse a `"/cmd remainder"` input into `{ name, remainder }`. Returns
- *  `undefined` if `text` doesn't begin with `/`. */
+/**
+ * Parse a `"/cmd remainder"` input into `{ name, remainder }`.
+ * Returns `undefined` if `text` does not begin with `/`.
+ */
 export function parseSlashInput(
   text: string,
 ): { name: string; remainder: string } | undefined {
