@@ -4,6 +4,8 @@ settings:
   documentTag: documents
   endTag: </documents>
   isRewrite: False
+  defaultOutputFiles:
+    - poster.tex
   prefills:
     - 'Here is the Beamer poster. <documents>'
     - ''
@@ -74,7 +76,7 @@ prompts:
       Create a detailed, mathematically rich LaTeX Beamer poster for a scientific audience in A5 format. The poster should be professional, mathematically detailed, and effectively highlight the main aspects of the research paper. Use the following format:
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      <document name="{{ OUTPUT_FILES[0] }}">
       {{ TEMPLATE_POSTER_CONTENT }}
       </document>
       </documents>
@@ -97,7 +99,7 @@ prompts:
       Output the revised poster based on the previous version, balancing detailed mathematical content with visual appeal:
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      <document name="{{ OUTPUT_FILES[0] }}">
       % Complete revised LaTeX Beamer poster here
       </document>
       </documents>

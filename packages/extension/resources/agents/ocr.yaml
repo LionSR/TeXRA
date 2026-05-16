@@ -49,7 +49,7 @@ prompts:
       Analyze the document to understand its notation conventions and mathematical style, then generate the LaTeX code for the handwritten content. Ensure it integrates seamlessly with the existing document --- match notation, mathematical environments, and symbol usage. Use the same documentclass as the existing document. Include \begin{document} and \end{document} tags so that the standalone file can be compiled.
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      <document name="{{ OUTPUT_FILES[0] }}">
       {LATEX_OCR_CONTENT}
       </document>
       </documents>
@@ -65,7 +65,7 @@ prompts:
       Output the refined LaTeX content with improved notation consistency and integration:
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      <document name="{{ OUTPUT_FILES[0] }}">
       {REFINED_LATEX_OCR_CONTENT}
       </document>
       </documents>

@@ -113,7 +113,7 @@ prompts:
       </instruction>
       If no instruction given, look for all opportunities to improve mathematical substance across all documents.
 
-      The output files should be in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}.
+      The output files should be in the following order: {{ INPUT_FILES | join(', ') }}.
 
       FIRST PHASE - IDENTIFY IMPROVEMENT OPPORTUNITIES: Analyze the mathematics across all documents to find where results could be strengthened, proofs could be more elegant, or open questions could be resolved.
 
@@ -266,7 +266,7 @@ prompts:
       - [Document 2: now uses strengthened result from Document 1]
 
       <documents>
-      {% for output in OUTPUT_FILES_ORDER %}
+      {% for output in INPUT_FILES %}
       <document name="{{ output }}">
       % UPDATED_CONTENT_FOR_{{ output }}
       </document>
@@ -405,10 +405,10 @@ prompts:
         The finite-time bound from the main text now gives...
         \criticize{Enhancement: Using strengthened result from main text \cref{thm:main}. Previous version only had asymptotic bound.}{3}{5}
 
-      Ensure that the output documents are in the following order: {{ OUTPUT_FILES_ORDER | join(', ') }}
+      Ensure that the output documents are in the following order: {{ INPUT_FILES | join(', ') }}
 
       <documents>
-      {% for output in OUTPUT_FILES_ORDER %}
+      {% for output in INPUT_FILES %}
       <document name="{{ output }}">
       % UPDATED_CONTENT_FOR_{{ output }}
       </document>
