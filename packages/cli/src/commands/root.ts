@@ -116,16 +116,10 @@ const agentsListCommand = defineCommand({
 async function listAgents(context: CliContext): Promise<number> {
   await initCliPlatform({ ...context, quietLogs: true });
   await loadAgents();
-  const agents = [
-    ...getVisibleAgents(AgentCategory.Workflow).map((agent) => ({
-      ...agent,
-      category: AgentCategory.Workflow,
-    })),
-    ...getVisibleAgents(AgentCategory.ToolUse).map((agent) => ({
-      ...agent,
-      category: AgentCategory.ToolUse,
-    })),
-  ];
+  const agents = [AgentCategory.Workflow, AgentCategory.ToolUse].flatMap(
+    (category) =>
+      getVisibleAgents(category).map((agent) => ({ ...agent, category })),
+  );
 
   if (context.outputFormat === 'json') {
     writeTextStdout(JSON.stringify(agents, null, 2));
@@ -695,12 +689,6 @@ function isCliError(error: unknown): error is Error & { code?: string } {
 }
 
 /**
- * Re-implement the surface citty's `runMain` provides — `--help` / `--version`
- * detection plus error handling around `runCommand` — so usage errors (missing
- * required flag, unknown subcommand, invalid enum value) preserve our
- * canonical `CliExitCode.Usage` (2) instead of citty's hard-coded `exit(1)`.
- */
-/**
  * Walk `rawArgs` positional-by-positional through the subcommand tree to find
  * the deepest matched command. Used to scope `--help` to the subcommand the
  * user typed rather than always showing root-level usage.
@@ -738,6 +726,12 @@ async function resolveDeepestSubCommand(
   return [cmd, parent];
 }
 
+/**
+ * Re-implement the surface citty's `runMain` provides — `--help` / `--version`
+ * detection plus error handling around `runCommand` — so usage errors (missing
+ * required flag, unknown subcommand, invalid enum value) preserve our
+ * canonical `CliExitCode.Usage` (2) instead of citty's hard-coded `exit(1)`.
+ */
 export async function runCli(
   argv?: readonly string[],
 ): Promise<{ exitCode: number }> {

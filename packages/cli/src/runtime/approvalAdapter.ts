@@ -27,21 +27,18 @@ export interface ApprovalDecision {
   readonly userMessage?: string;
 }
 
-type ApprovalEvent =
-  | 'showBashPermission'
-  | 'showPlanApproval'
-  | 'showAgentProposal'
-  | 'showRetryRequest';
+const APPROVAL_EVENTS = [
+  'showBashPermission',
+  'showPlanApproval',
+  'showAgentProposal',
+  'showRetryRequest',
+] as const;
+type ApprovalEvent = (typeof APPROVAL_EVENTS)[number];
 
 function isApprovalEvent(
   event: keyof ProgressEventPayloads,
 ): event is ApprovalEvent {
-  return (
-    event === 'showBashPermission' ||
-    event === 'showPlanApproval' ||
-    event === 'showAgentProposal' ||
-    event === 'showRetryRequest'
-  );
+  return (APPROVAL_EVENTS as readonly string[]).includes(event);
 }
 
 const deniedApprovalContexts = new WeakSet<CliContext>();
@@ -209,6 +206,15 @@ function dispatchApprovalDecision<K extends ApprovalEvent>(
   }
 }
 
+function humanInputDenialFeedback(
+  context: CliContext,
+  yoloMessage: string,
+): string {
+  if (context.approvalPolicy === 'yolo') return yoloMessage;
+  markApprovalDenied(context);
+  return denyMessage(context.approvalPolicy);
+}
+
 function handleExternalInquiry(
   payload: ProgressEventPayloads['showExternalInquiry'],
   context: CliContext,
@@ -220,11 +226,10 @@ function handleExternalInquiry(
   }
 
   if (!approvalPromptAllowed(context)) {
-    const feedback =
-      context.approvalPolicy === 'yolo'
-        ? 'External inquiry requires human input; yolo mode cannot synthesize an external answer.'
-        : denyMessage(context.approvalPolicy);
-    if (context.approvalPolicy !== 'yolo') markApprovalDenied(context);
+    const feedback = humanInputDenialFeedback(
+      context,
+      'External inquiry requires human input; yolo mode cannot synthesize an external answer.',
+    );
     void handleExternalInquiryAction({ action: 'drop', threadId, feedback });
     return;
   }
@@ -293,11 +298,10 @@ function handleUserQuestion(
   context: CliContext,
 ): void {
   if (!approvalPromptAllowed(context)) {
-    const feedback =
-      context.approvalPolicy === 'yolo'
-        ? 'User question requires human input; yolo mode cannot synthesize an answer.'
-        : denyMessage(context.approvalPolicy);
-    if (context.approvalPolicy !== 'yolo') markApprovalDenied(context);
+    const feedback = humanInputDenialFeedback(
+      context,
+      'User question requires human input; yolo mode cannot synthesize an answer.',
+    );
     void handleUserQuestionAction({
       requestId: payload.requestId,
       action: 'skip',
