@@ -13,9 +13,11 @@ import { highlightCode } from '@shared/highlighting/highlightCode';
 import {
   createMarkdownProcessor,
   createMarkdownRenderer,
-  createTexmathPlugin,
   type MarkdownItInstance,
 } from '@shared/markdown';
+// Direct path import — see `src/shared/markdown/index.ts` for why this isn't
+// re-exported through the barrel.
+import { createTexmathPlugin } from '@shared/markdown/texmathPlugin';
 
 import { katexMacros } from '../katexMacros';
 
@@ -48,14 +50,5 @@ export const getMarkdownRenderer = (): MarkdownItInstance =>
   ensureInitialised().renderer;
 
 /** Process markdown content with LaTeX reference protection. */
-export const processMarkdownContent = (
-  content: string,
-  renderer?: MarkdownItInstance,
-): string => {
-  if (!renderer) return ensureInitialised().process(content);
-  // Custom renderer escape hatch (existing callers occasionally supply
-  // bespoke instances — bypass the cached processor so we don't mix output
-  // shapes inside the same memoiser).
-  const process = createMarkdownProcessor({ renderer, disableCache: true });
-  return process(content);
-};
+export const processMarkdownContent = (content: string): string =>
+  ensureInitialised().process(content);
