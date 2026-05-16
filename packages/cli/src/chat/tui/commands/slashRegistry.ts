@@ -1,5 +1,13 @@
 // In-tree slash command registry.
 
+/** A structured-form component renders inline when the user picks a slash
+ *  command that declares one (e.g. `/model`). Calls `onDone(result)` to
+ *  commit the user's selection or `onDone(undefined)` on cancel. */
+export interface SlashFormProps<T = unknown> {
+  readonly onDone: (result: T | undefined) => void;
+  readonly remainder: string;
+}
+
 export interface SlashCommand {
   /** Command name without the leading `/`. */
   readonly name: string;
@@ -11,6 +19,11 @@ export interface SlashCommand {
    * (everything after the command name + whitespace).
    */
   readonly handler?: (remainder: string) => void;
+  /**
+   * Optional structured-form renderer. When present, picking the command
+   * mounts this component instead of routing through `handler` / the input.
+   */
+  readonly formComponent?: React.ComponentType<SlashFormProps>;
 }
 
 const COMMANDS = new Map<string, SlashCommand>();
