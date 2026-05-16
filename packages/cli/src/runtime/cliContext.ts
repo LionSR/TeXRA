@@ -85,10 +85,6 @@ export function readCliArgv(): string[] {
   return process.argv.slice(2);
 }
 
-function resolveCwdFlag(value: string | undefined, fallback: string): string {
-  return isNonEmptyString(value) ? path.resolve(value.trim()) : fallback;
-}
-
 let cachedVersion: Promise<string> | undefined;
 
 export function readCliVersion(): Promise<string> {
@@ -150,8 +146,11 @@ export async function buildCliContext(
   init: BuildCliContextInit,
 ): Promise<CliContext> {
   const ambient = init.ambient ?? readCliAmbientState();
+  const cwdFlag = init.globalArgs.cwd;
   return {
-    cwd: resolveCwdFlag(init.globalArgs.cwd, process.cwd()),
+    cwd: isNonEmptyString(cwdFlag)
+      ? path.resolve(cwdFlag.trim())
+      : process.cwd(),
     mode: cliMode(init.globalArgs, ambient),
     outputFormat: init.globalArgs.outputFormat,
     approvalPolicy: init.globalArgs.approvalPolicy,
