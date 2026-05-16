@@ -137,10 +137,27 @@ Keys:
     event: K,
     payload: ProgressEventPayloads[K],
   ): void {
-    if (this.isApprovalEvent(event)) {
-      this.renderApprovalEvent(event, payload);
-      return;
+    switch (event) {
+      case 'showToolEditPermission':
+        this.renderToolEditApproval(payload);
+        return;
+      case 'showBashPermission':
+        this.renderBashApproval(payload);
+        return;
+      case 'showAgentProposal':
+        this.renderAgentProposalApproval(payload);
+        return;
+      case 'showPlanApproval':
+        this.renderPlanApproval(payload);
+        return;
+      case 'showExternalInquiry':
+        this.renderExternalInquiryApproval(payload);
+        return;
+      case 'showRetryRequest':
+        this.renderRetryApproval(payload);
+        return;
     }
+
     if (this.toolDisplay === 'hidden') return;
 
     switch (event) {
@@ -372,45 +389,6 @@ Keys:
     const normalized = text.trim();
     if (!normalized || normalized === '{}') return undefined;
     return truncateText(normalized.replaceAll('\n', ' | '), 420);
-  }
-
-  private isApprovalEvent(event: keyof ProgressEventPayloads): boolean {
-    return (
-      event === 'showToolEditPermission' ||
-      event === 'showBashPermission' ||
-      event === 'showAgentProposal' ||
-      event === 'showPlanApproval' ||
-      event === 'showExternalInquiry' ||
-      event === 'showRetryRequest'
-    );
-  }
-
-  private renderApprovalEvent(
-    event: keyof ProgressEventPayloads,
-    payload: unknown,
-  ): void {
-    switch (event) {
-      case 'showToolEditPermission':
-        this.renderToolEditApproval(payload);
-        return;
-      case 'showBashPermission':
-        this.renderBashApproval(payload);
-        return;
-      case 'showAgentProposal':
-        this.renderAgentProposalApproval(payload);
-        return;
-      case 'showPlanApproval':
-        this.renderPlanApproval(payload);
-        return;
-      case 'showExternalInquiry':
-        this.renderExternalInquiryApproval(payload);
-        return;
-      case 'showRetryRequest':
-        this.renderRetryApproval(payload);
-        return;
-      default:
-        this.renderApprovalCard('approval requested', [event]);
-    }
   }
 
   private renderToolEditApproval(payload: unknown): void {

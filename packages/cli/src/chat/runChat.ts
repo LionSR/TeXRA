@@ -538,58 +538,70 @@ export async function runChat(
           requestChatExit();
           break;
         }
-        if (command === 'help') {
-          renderer.printHelp();
-        } else if (command === 'clear') {
-          renderer.printClearScreen();
-        } else if (command === 'agent') {
-          if (session.runPromise) {
-            renderer.warn('The active session already owns its agent.');
-          } else if (rest) {
-            agent = rest;
-            renderer.success(`Agent set to ${agent}.`);
-          } else {
-            renderer.warn('Usage: /agent <name>');
-          }
-        } else if (command === 'model') {
-          if (session.runPromise) {
-            renderer.warn('The active session already owns its model.');
-          } else if (rest) {
-            if (await modelAvailable(rest, renderer)) {
-              model = rest;
-              await setCliHelperModel(model);
-              renderer.success(`Model set to ${model}.`);
+        switch (command) {
+          case 'help':
+            renderer.printHelp();
+            break;
+          case 'clear':
+            renderer.printClearScreen();
+            break;
+          case 'agent':
+            if (session.runPromise) {
+              renderer.warn('The active session already owns its agent.');
+            } else if (rest) {
+              agent = rest;
+              renderer.success(`Agent set to ${agent}.`);
+            } else {
+              renderer.warn('Usage: /agent <name>');
             }
-          } else {
-            renderer.warn('Usage: /model <name>');
+            break;
+          case 'model':
+            if (session.runPromise) {
+              renderer.warn('The active session already owns its model.');
+            } else if (rest) {
+              if (await modelAvailable(rest, renderer)) {
+                model = rest;
+                await setCliHelperModel(model);
+                renderer.success(`Model set to ${model}.`);
+              }
+            } else {
+              renderer.warn('Usage: /model <name>');
+            }
+            break;
+          case 'tools': {
+            const mode = parseToolDisplaySlash(rest);
+            if (mode == null) {
+              renderer.warn('Usage: /tools <grouped|minimal|hidden>');
+            } else {
+              toolDisplay = mode;
+              renderer.setToolDisplay(toolDisplay);
+            }
+            break;
           }
-        } else if (command === 'tools') {
-          const mode = parseToolDisplaySlash(rest);
-          if (mode == null) {
-            renderer.warn('Usage: /tools <grouped|minimal|hidden>');
-          } else {
-            toolDisplay = mode;
-            renderer.setToolDisplay(toolDisplay);
-          }
-        } else if (command === 'multi') {
-          multilineDraft.active = true;
-          multilineDraft.lines = [];
-          setReaderPrompt();
-          renderer.info('Multiline draft started. Use /send or /cancel.');
-        } else if (command === 'status') {
-          renderer.printStatus(currentMetadata(), session.streamId);
-        } else if (command === 'login') {
-          const loginArgs = parseSlashLoginArgs(rest);
-          const provider = loginArgs.provider ?? DEFAULT_OAUTH_PROVIDER;
-          if (loginArgs.unknownFlag) {
-            renderer.warn(
-              `Unknown /login flag: ${loginArgs.unknownFlag}. Usage: /login [github|google] [--provider github|google] [--no-browser]`,
-            );
-          } else if (!isOAuthProvider(provider)) {
-            renderer.warn(
-              'Usage: /login [github|google] [--provider github|google] [--no-browser]',
-            );
-          } else {
+          case 'multi':
+            multilineDraft.active = true;
+            multilineDraft.lines = [];
+            setReaderPrompt();
+            renderer.info('Multiline draft started. Use /send or /cancel.');
+            break;
+          case 'status':
+            renderer.printStatus(currentMetadata(), session.streamId);
+            break;
+          case 'login': {
+            const loginArgs = parseSlashLoginArgs(rest);
+            const provider = loginArgs.provider ?? DEFAULT_OAUTH_PROVIDER;
+            if (loginArgs.unknownFlag) {
+              renderer.warn(
+                `Unknown /login flag: ${loginArgs.unknownFlag}. Usage: /login [github|google] [--provider github|google] [--no-browser]`,
+              );
+              break;
+            }
+            if (!isOAuthProvider(provider)) {
+              renderer.warn(
+                'Usage: /login [github|google] [--provider github|google] [--no-browser]',
+              );
+              break;
+            }
             try {
               if (!loginArgs.noBrowser) {
                 renderer.info(`Opening browser for TeXRA ${provider} sign-in.`);
@@ -606,33 +618,37 @@ export async function runChat(
             } catch (error) {
               renderer.error(toErrorMessage(error));
             }
+            break;
           }
-        } else if (command === 'logout') {
-          try {
-            await signOutCliSupabase();
-            renderer.success('Signed out.');
-          } catch (error) {
-            renderer.error(toErrorMessage(error));
-          }
-        } else if (command === 'whoami') {
-          try {
-            const profile = await getCliAuthProfile();
-            if (profile.authenticated) {
-              renderer.info(
-                `Signed in as ${profile.accountLabel ?? 'unknown'} (${profile.tier ?? 'unknown'}).`,
-              );
-            } else {
-              renderer.info('Not signed in.');
+          case 'logout':
+            try {
+              await signOutCliSupabase();
+              renderer.success('Signed out.');
+            } catch (error) {
+              renderer.error(toErrorMessage(error));
             }
-          } catch (error) {
-            renderer.error(toErrorMessage(error));
-          }
-        } else if (command === 'yolo') {
-          renderer.info(
-            'Use --approval-policy yolo when starting texra chat to auto-approve approval gates. External inquiry prompts still require a human answer.',
-          );
-        } else {
-          renderer.warn(`Unknown command: ${prefix}${command}`);
+            break;
+          case 'whoami':
+            try {
+              const profile = await getCliAuthProfile();
+              if (profile.authenticated) {
+                renderer.info(
+                  `Signed in as ${profile.accountLabel ?? 'unknown'} (${profile.tier ?? 'unknown'}).`,
+                );
+              } else {
+                renderer.info('Not signed in.');
+              }
+            } catch (error) {
+              renderer.error(toErrorMessage(error));
+            }
+            break;
+          case 'yolo':
+            renderer.info(
+              'Use --approval-policy yolo when starting texra chat to auto-approve approval gates. External inquiry prompts still require a human answer.',
+            );
+            break;
+          default:
+            renderer.warn(`Unknown command: ${prefix}${command}`);
         }
         if (!session.runCompleted) reader.prompt();
         continue;
