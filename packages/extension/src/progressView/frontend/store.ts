@@ -10,6 +10,8 @@ import {
   type StreamTabInfo,
   type StreamTabId,
   type SetFollowupOptionsMessage,
+  type InquiryThreadUpdatedEvent,
+  type ExternalInquiryThreadId,
 } from '@shared/schemas';
 import type { ProcessOutputMap } from './contexts/streamContexts';
 
@@ -77,6 +79,8 @@ export interface ProgressState {
   processOutputs: Map<StreamTabId, ProcessOutputMap>;
   /** Workflow-result follow-up option data, keyed per stream. */
   followupOptionsByStream: Map<StreamTabId, FollowupOptionsState>;
+  /** Durable external inquiry thread summaries, keyed by thread id. */
+  inquiries: Map<ExternalInquiryThreadId, InquiryThreadUpdatedEvent>;
 }
 
 /** Return the first stream ID from a streamById Map, or null if empty. */
@@ -95,6 +99,7 @@ export function createInitialState(): ProgressState {
     streamLogs: new Map(),
     processOutputs: new Map(),
     followupOptionsByStream: new Map(),
+    inquiries: new Map(),
   };
 }
 
