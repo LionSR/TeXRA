@@ -53,7 +53,7 @@ prompts:
       Analyze the attached audio content and any provided context, then generate the initial audio transcript with timestamps, speaker identification, sectioning, and LaTeX equations. Do not use markdown. Use the following format:
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      <document name="{{ OUTPUT_FILES[0] }}">
       [HH:MM:SS:MS] SpeakerName: INITIAL_TRANSCRIPT_WITH_SPEAKERS_AND_EQUATIONS
       </document>
       </documents>
@@ -73,7 +73,7 @@ prompts:
       Output the final, refined audio transcript with improved accuracy, correct speaker identification with timestamps, LaTeX equations, sectioning, and formatting. Ensure no markdown is used. Use the following format:
 
       <documents>
-      <document name="{{ OUTPUT_FILES_ORDER[0] }}">
+      <document name="{{ OUTPUT_FILES[0] }}">
       [HH:MM:SS:MS] SpeakerName: REFINED_TRANSCRIPT_WITH_SECTIONS_SPEAKERS_AND_EQUATIONS
       </document>
       </documents>

@@ -135,13 +135,16 @@ This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the ext
 - &#123;&#123; LIST_OF_ALL_CONTEXTS &#125;&#125;: Similar comma-separated list for context files.
 - Legacy custom agents can still read `REFERENCE_*` and `AUXILIARY_*` aliases, but new agents should use `CONTEXT_*`.
 
-**Multiple Output Variable:**
+**Multiple Document Output:**
 
-- &#123;&#123; OUTPUT_FILES_ORDER &#125;&#125;: Array of output filenames specified in
-  the UI or in `defaultOutputFiles`. Most agents should iterate over this list
-  and emit one `<document name="...">` block per filename. Use
-  `&#123;&#123; OUTPUT_FILES_ORDER | join(", ") &#125;&#125;` for a human-readable list. See
+- &#123;&#123; INPUT_FILES &#125;&#125;: Array of input filenames. Editing agents
+  should iterate over this list and emit one `<document name="...">` block per
+  input filename, preserving the input order and names. Use
+  `&#123;&#123; INPUT_FILES | join(", ") &#125;&#125;` for a human-readable list. See
   [Handling Multiple Files](./multiple-output.md).
+- &#123;&#123; OUTPUT_FILES &#125;&#125;: Array of declared generated output filenames.
+  This is only populated for agents that set `defaultOutputFiles` or receive an
+  explicit generated output list.
 
 **Custom Variables (from `settings`):**
 
@@ -218,8 +221,8 @@ The ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) lo
 ### <wa-icon library="texra" name="files"></wa-icon> Example: Multiple Output Agent
 
 If your workflow requires several output files, your agent must structure its
-response using the `OUTPUT_FILES_ORDER` variable. Below is a simplified template
-for a workflow agent that writes two output files:
+response using the appropriate filename list. Below is a simplified template
+for a workflow agent that writes two generated output files:
 
 ```yaml
 inherits: polish
@@ -233,16 +236,14 @@ settings:
 
 prompts:
   userRequest: |
-    {% if OUTPUT_FILES_ORDER %}
-    The output files should be in this order: {{ OUTPUT_FILES_ORDER | join(", ") }}.
-    {% endif %}
+    The output files should be in this order: {{ OUTPUT_FILES | join(", ") }}.
 
     <scratchpad>
     - Plan revisions for each file
     </scratchpad>
 
     <documents>
-    {% for output in OUTPUT_FILES_ORDER %}
+    {% for output in OUTPUT_FILES %}
     <document name="{{ output }}">
     % UPDATED_CONTENT_FOR_{{ output }}
     </document>
