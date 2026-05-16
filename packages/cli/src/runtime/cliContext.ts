@@ -119,8 +119,9 @@ export interface CliGlobalArgs {
 
 function cliMode(globalArgs: CliGlobalArgs, ambient: CliAmbientState): CliMode {
   // Headless trigger: explicit --print/-p, CI=1, or stdin non-TTY. Piping
-  // stdout or stderr alone does NOT force headless — that's the gap the new
-  // Ink streaming-text fallback fills.
+  // stdout/stderr alone doesn't force headless here — `texra chat` hard-errors
+  // on its own TTY-stdout check (see `chat/tui/runChatTui.tsx`), and `texra
+  // run` is happy with piped output.
   const headless =
     globalArgs.print === true || ambient.isCi || !ambient.stdinIsTty;
   return headless ? 'headless' : 'interactive';

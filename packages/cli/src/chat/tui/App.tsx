@@ -1,5 +1,5 @@
-// Ink TUI root. Phase 1 skeleton + Phase 2 approval-modal overlay + Phase 4
-// SubagentList / TodosPlanPanel side panels and Ctrl-A / Ctrl-B focus cycle.
+// Ink TUI root: header, conversation, optional side column, status, approval
+// modal, and input bar. Tab / Shift-Tab cycles focus across subagent streams.
 
 import { Box, useInput } from 'ink';
 
@@ -41,17 +41,13 @@ export function App(props: AppProps): React.JSX.Element {
       activeSlice.todos.length > 0 ||
       activeSlice.plan !== null);
 
-  // Ctrl-A / Ctrl-B focus cycle runs at the App layer so the same chord
-  // lands no matter which pane currently has the user's attention.
-  useInput((input, key) => {
-    if (!key.ctrl) return;
-    if (input === 'a') {
-      const next = nextFocusForward();
-      if (next) cliState.activeStreamId.set(next);
-    } else if (input === 'b') {
-      const next = nextFocusBack();
-      if (next) cliState.activeStreamId.set(next);
-    }
+  // Tab / Shift-Tab cycles stream focus at the App layer. Chosen over Ctrl-A/B
+  // so the text-input chord for "go to line start" (Emacs/readline standard)
+  // doesn't collide once cursor-controlled inputs propagate the chord.
+  useInput((_input, key) => {
+    if (!key.tab) return;
+    const next = key.shift ? nextFocusBack() : nextFocusForward();
+    if (next) cliState.activeStreamId.set(next);
   });
 
   return (

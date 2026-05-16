@@ -4,17 +4,23 @@
 // usePaste auto-enables bracketed paste mode so multi-line pastes arrive as
 // a single string and never trigger `onSubmit` on the first embedded `\n`.
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Text, useInput, usePaste } from 'ink';
 
 export interface BaseTextInputProps {
   readonly value: string;
   readonly placeholder?: string;
   readonly focus?: boolean;
+  /** Pin the caret externally. When omitted, the component tracks the caret
+   *  internally so arrow keys / Home/End / Ctrl-A,E,U,K,W work out of the box. */
   readonly cursor?: number;
   readonly onCursorChange?: (cursor: number) => void;
   readonly onSubmit: (value: string) => void;
   readonly onChange: (value: string) => void;
+}
+
+function clamp(n: number, max: number): number {
+  return Math.max(0, Math.min(n, max));
 }
 
 export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
@@ -27,19 +33,30 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     onCursorChange,
   } = props;
 
-  // Caret is uncontrolled by default: caller may pin it with `cursor` +
-  // `onCursorChange`, otherwise it tracks the end of `value`.
-  const cursor =
-    props.cursor !== undefined
-      ? Math.max(0, Math.min(props.cursor, value.length))
-      : value.length;
+  const isControlled = props.cursor !== undefined;
+  const [internalCursor, setInternalCursor] = useState<number>(value.length);
+  const cursor = clamp(
+    isControlled ? (props.cursor as number) : internalCursor,
+    value.length,
+  );
 
-  const setBoth = useCallback(
-    (nextValue: string, nextCursor: number) => {
-      onChange(nextValue);
-      onCursorChange?.(Math.max(0, Math.min(nextCursor, nextValue.length)));
+  const moveCursor = useCallback(
+    (next: number) => {
+      const c = clamp(next, value.length);
+      if (!isControlled) setInternalCursor(c);
+      onCursorChange?.(c);
     },
-    [onChange, onCursorChange],
+    [isControlled, value.length, onCursorChange],
+  );
+
+  const replaceText = useCallback(
+    (nextValue: string, nextCursor: number) => {
+      const c = clamp(nextCursor, nextValue.length);
+      onChange(nextValue);
+      if (!isControlled) setInternalCursor(c);
+      onCursorChange?.(c);
+    },
+    [isControlled, onChange, onCursorChange],
   );
 
   useInput(
@@ -50,7 +67,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
       }
       if (key.ctrl && input === 'j') {
         // Ctrl-J → literal newline (kills the legacy `/multi` ceremony).
-        setBoth(
+        replaceText(
           value.slice(0, cursor) + '\n' + value.slice(cursor),
           cursor + 1,
         );
@@ -58,47 +75,50 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
       }
       if (key.backspace) {
         if (cursor === 0) return;
-        setBoth(value.slice(0, cursor - 1) + value.slice(cursor), cursor - 1);
+        replaceText(
+          value.slice(0, cursor - 1) + value.slice(cursor),
+          cursor - 1,
+        );
         return;
       }
       if (key.delete) {
         if (cursor >= value.length) return;
-        setBoth(value.slice(0, cursor) + value.slice(cursor + 1), cursor);
+        replaceText(value.slice(0, cursor) + value.slice(cursor + 1), cursor);
         return;
       }
       if (key.leftArrow) {
-        onCursorChange?.(Math.max(0, cursor - 1));
+        moveCursor(cursor - 1);
         return;
       }
       if (key.rightArrow) {
-        onCursorChange?.(Math.min(value.length, cursor + 1));
+        moveCursor(cursor + 1);
         return;
       }
       if (key.home || (key.ctrl && input === 'a')) {
-        onCursorChange?.(0);
+        moveCursor(0);
         return;
       }
       if (key.end || (key.ctrl && input === 'e')) {
-        onCursorChange?.(value.length);
+        moveCursor(value.length);
         return;
       }
       if (key.ctrl && input === 'u') {
-        setBoth(value.slice(cursor), 0);
+        replaceText(value.slice(cursor), 0);
         return;
       }
       if (key.ctrl && input === 'k') {
-        setBoth(value.slice(0, cursor), cursor);
+        replaceText(value.slice(0, cursor), cursor);
         return;
       }
       if (key.ctrl && input === 'w') {
         const left = value.slice(0, cursor);
         const trimmed = left.replace(/\S*\s*$/, '');
-        setBoth(trimmed + value.slice(cursor), trimmed.length);
+        replaceText(trimmed + value.slice(cursor), trimmed.length);
         return;
       }
-      // Drop control/meta combos we don't handle; pass printable input through.
+      // Drop unhandled control/meta combos; pass printable input through.
       if (key.ctrl || key.meta || !input) return;
-      setBoth(
+      replaceText(
         value.slice(0, cursor) + input + value.slice(cursor),
         cursor + input.length,
       );
@@ -110,7 +130,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
   // so newlines in the paste are preserved literally instead of firing Enter.
   usePaste(
     (text) => {
-      setBoth(
+      replaceText(
         value.slice(0, cursor) + text + value.slice(cursor),
         cursor + text.length,
       );
@@ -122,12 +142,10 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     if (!focus) {
       return placeholder ? <Text dimColor>{placeholder}</Text> : <Text> </Text>;
     }
-    const head = placeholder?.[0] ?? ' ';
-    const tail = placeholder ? placeholder.slice(1) : '';
     return (
       <Text>
-        <Text inverse>{head}</Text>
-        {tail ? <Text dimColor>{tail}</Text> : null}
+        <Text inverse> </Text>
+        {placeholder ? <Text dimColor>{placeholder}</Text> : null}
       </Text>
     );
   }
@@ -135,12 +153,24 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
   if (!focus) return <Text>{value}</Text>;
 
   const before = value.slice(0, cursor);
-  const at = value[cursor] ?? ' ';
+  const ch = value[cursor];
   const after = value.slice(cursor + 1);
+  // Inverse-on-newline collapses to nothing visible; render the caret as a
+  // leading space and let the literal newline carry the line break.
+  if (ch === '\n') {
+    return (
+      <Text>
+        {before}
+        <Text inverse> </Text>
+        {'\n'}
+        {after}
+      </Text>
+    );
+  }
   return (
     <Text>
       {before}
-      <Text inverse>{at}</Text>
+      <Text inverse>{ch ?? ' '}</Text>
       {after}
     </Text>
   );

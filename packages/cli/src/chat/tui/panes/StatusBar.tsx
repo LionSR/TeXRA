@@ -1,4 +1,5 @@
 import { Box, Text } from 'ink';
+import { Badge } from '@inkjs/ui';
 
 import { STREAM_STATUS } from '@shared/schemas';
 
@@ -32,29 +33,21 @@ export function StatusBar(): React.JSX.Element {
 
   return (
     <Box paddingX={1} justifyContent="space-between">
-      <Box>
-        <Text color="cyan">◆ </Text>
+      <Box gap={1}>
+        <Text color="cyan">◆</Text>
         <Text>{meta.agent || 'chat'}</Text>
-        <Text dimColor> · </Text>
+        <Text dimColor>·</Text>
         <Text>{meta.model || '—'}</Text>
-        <Text dimColor> · </Text>
+        <Text dimColor>·</Text>
         <Text dimColor>{statusLabel(slice?.status)}</Text>
         {slice?.description ? (
           <>
-            <Text dimColor> · </Text>
+            <Text dimColor>·</Text>
             <Text dimColor>{slice.description}</Text>
           </>
         ) : null}
-        {bypass.superYolo ? (
-          <Text color="red" bold>
-            {'  YOLO'}
-          </Text>
-        ) : null}
-        {bypass.toolEdit ? (
-          <Text color="yellow" bold>
-            {'  BYPASS'}
-          </Text>
-        ) : null}
+        {bypass.superYolo ? <Badge color="red">YOLO</Badge> : null}
+        {bypass.toolEdit ? <Badge color="yellow">BYPASS</Badge> : null}
       </Box>
       {queued > 0 ? <Text dimColor>queued: {queued}</Text> : null}
     </Box>
