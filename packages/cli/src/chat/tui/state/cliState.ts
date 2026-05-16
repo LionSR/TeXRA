@@ -118,26 +118,17 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
   };
 }
 
-function withSliceUpdate(
-  current: ReadonlyMap<StreamTabId, StreamSlice>,
-  streamId: StreamTabId,
-  update: (slice: StreamSlice) => StreamSlice,
-): ReadonlyMap<StreamTabId, StreamSlice> {
-  const slice = current.get(streamId) ?? emptySlice(streamId);
-  const next = update(slice);
-  if (next === slice) return current;
-  const out = new Map(current);
-  out.set(streamId, next);
-  return out;
-}
-
 export function patchStream(
   streamId: StreamTabId,
   update: (slice: StreamSlice) => StreamSlice,
 ): void {
-  cliState.streams.set(
-    withSliceUpdate(cliState.streams.get(), streamId, update),
-  );
+  const current = cliState.streams.get();
+  const slice = current.get(streamId) ?? emptySlice(streamId);
+  const next = update(slice);
+  if (next === slice) return;
+  const out = new Map(current);
+  out.set(streamId, next);
+  cliState.streams.set(out);
 }
 
 export function setParentStream(
@@ -163,14 +154,13 @@ export function removeStream(streamId: StreamTabId): void {
   // Drop any parent-map edges that touched this stream so the focus cycle
   // never lands on a stale id.
   const parents = cliState.parentStream.get();
-  if (parents.has(streamId) || [...parents.values()].includes(streamId)) {
-    const nextParents = new Map(parents);
-    nextParents.delete(streamId);
-    for (const [child, parent] of nextParents) {
-      if (parent === streamId) nextParents.delete(child);
-    }
-    cliState.parentStream.set(nextParents);
+  let nextParents: Map<StreamTabId, StreamTabId> | undefined;
+  for (const [child, parent] of parents) {
+    if (child !== streamId && parent !== streamId) continue;
+    if (!nextParents) nextParents = new Map(parents);
+    nextParents.delete(child);
   }
+  if (nextParents) cliState.parentStream.set(nextParents);
 }
 
 export function resetCliState(): void {
