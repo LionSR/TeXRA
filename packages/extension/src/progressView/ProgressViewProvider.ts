@@ -31,6 +31,7 @@ import { AGENT_CATEGORY } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
 import {
+  listThreadsByStatus,
   listOpenThreads,
   readExternalInquiryThread,
 } from '@tools/inquiry/externalInquiryStorage';
@@ -41,6 +42,8 @@ import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 import { ProgressViewState } from './state/ProgressViewState';
 
 import type { MainViewProvider } from '../MainViewProvider';
+
+const MAX_INQUIRY_THREAD_HYDRATION = 100;
 
 /**
  * Orchestrates the progress view webview with exclusive rendering:
@@ -384,8 +387,25 @@ export class ProgressViewProvider
     // extension reload — ApprovalRequestHandler.pending is in-memory and
     // empty at construction. Fire-and-forget: the replay below covers
     // anything already in-memory; this fills in the durable rows.
+    void this.syncInquiryThreads();
     void this.hydrateOpenInquiries();
     this.replayPendingPrompts();
+  }
+
+  private async syncInquiryThreads(): Promise<void> {
+    if (!this.webviewUpdater.isAvailable()) return;
+
+    try {
+      const threads = await listThreadsByStatus({
+        status: 'any',
+        scope: 'all',
+        limit: MAX_INQUIRY_THREAD_HYDRATION,
+      });
+      this.webviewUpdater.syncInquiryThreads(threads);
+    } catch {
+      // A damaged manifest should not prevent the progress view from
+      // showing streams or replaying pending request panels.
+    }
   }
 
   /**
