@@ -1,30 +1,17 @@
 /**
- * Generic promise-based coordinator for user interaction flows.
+ * Generic promise-based coordinator for user-interaction flows
+ * (retry requests, agent proposals, plan approvals, ...).
  *
- * Provides a reusable pattern for:
- * - Retry requests (after API failures)
- * - Agent proposals (workflow/tool-use delegation)
- * - Future interactive flows
- *
- * Architecture:
- * - Single Map tracks all pending requests by ID
- * - Promise-based: callers await a Promise that resolves on user action
- * - Two states: pending (waiting) or resolved (done)
- *
- * Flow:
- * 1. Caller invokes waitForUserAction() → returns Promise, emits show event
- * 2. User acts → appropriate method resolves Promise with result
- * 3. On resolution → emits resolve event to dismiss UI, defers cleanup
+ * Each request is keyed by a string id. waitForUserAction() returns a Promise
+ * that resolves when a corresponding resolveRequest()/clearRequest() runs.
+ * Replacing a still-pending id auto-rejects the previous waiter with
+ * getDefaultCancelResult().
  */
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-/** Base result type - subclasses extend with specific actions */
+/** Base result type — subclasses extend with specific actions. */
 interface BaseResult {
   action: string;
   feedback?: string;
@@ -40,7 +27,6 @@ function toRuntimeHostProvider(
   return typeof runtimeHost === 'function' ? runtimeHost : () => runtimeHost;
 }
 
-/** Internal state: pending (waiting for user) or resolved (done) */
 type RequestState<TResult> =
   | {
       status: 'pending';
@@ -50,24 +36,15 @@ type RequestState<TResult> =
     }
   | { status: 'resolved' };
 
-/** Configuration for coordinator behavior */
 export interface CoordinatorConfig {
-  /** Event name emitted to show UI (e.g., 'showRetryRequest') */
+  /** Event name emitted to show UI (e.g. 'showRetryRequest'). */
   showEventName: keyof ProgressEventPayloads;
-  /** Event name emitted to resolve/hide UI (e.g., 'resolveRetryRequest') */
+  /** Event name emitted to resolve/hide UI (e.g. 'resolveRetryRequest'). */
   resolveEventName: keyof ProgressEventPayloads;
-  /** Field name for ID in resolve event payload (e.g., 'streamId', 'proposalId') */
+  /** Field name for the id in the resolve event payload (e.g. 'streamId', 'proposalId'). */
   idFieldName: string;
 }
 
-// ============================================================================
-// Base Coordinator Implementation
-// ============================================================================
-
-/**
- * Generic coordinator for promise-based user interaction flows.
- * Subclasses provide specific result types and event configurations.
- */
 export abstract class BasePromiseCoordinator<
   TResult extends BaseResult,
   TShowPayload extends Record<string, unknown>,
@@ -82,25 +59,21 @@ export abstract class BasePromiseCoordinator<
     return this.getRuntimeHost();
   }
 
-  /** Single source of truth for all pending requests */
   protected readonly requests = new Map<string, RequestState<TResult>>();
 
-  /** Configuration for this coordinator */
   protected abstract readonly config: CoordinatorConfig;
 
-  /**
-   * Get the default result for cancelled/replaced requests.
-   * Subclasses override to provide appropriate default (e.g., { action: 'cancel' }).
-   */
+  /** Result used when a pending request is cancelled or replaced. */
   protected abstract getDefaultCancelResult(): TResult;
 
+  /** Result used on timeout (defaults to `{ action: 'timeout' }`). */
+  protected getTimeoutResult(): TResult {
+    return { action: 'timeout' } as TResult;
+  }
+
   /**
-   * Wait for user action. Emits show event and returns Promise.
-   *
-   * @param id - Unique identifier for this request
-   * @param payload - Data to emit with show event
-   * @param options - Optional timeout configuration
-   * @returns Promise that resolves with user's action
+   * Wait for user action. Emits the show event and returns a Promise that
+   * resolves once the user (or timeout) decides.
    */
   waitForUserAction(
     id: string,
@@ -109,7 +82,6 @@ export abstract class BasePromiseCoordinator<
   ): Promise<TResult> {
     const runtimeHost = this.runtimeHost;
 
-    // Cancel any existing pending request for this ID
     const existing = this.requests.get(id);
     if (existing?.status === 'pending') {
       clearTimeout(existing.timeoutId);
@@ -136,29 +108,15 @@ export abstract class BasePromiseCoordinator<
         timeoutId,
       });
 
-      // Emit show event (cast needed for generic base class)
       runtimeHost.emit(this.config.showEventName, payload as any);
     });
   }
 
-  /**
-   * Get timeout result. Override if different from cancel.
-   */
-  protected getTimeoutResult(): TResult {
-    return { action: 'timeout' } as TResult;
-  }
-
-  /**
-   * Check if a request is pending.
-   */
   hasPendingRequest(id: string): boolean {
     return this.getPendingRequest(id) !== null;
   }
 
-  /**
-   * Clear a pending request without user action.
-   * Used for cleanup when flow is cancelled externally.
-   */
+  /** Clear a pending request without user action (external cancellation). */
   clearRequest(id: string): void {
     const req = this.getPendingRequest(id);
     if (!req) return;
@@ -168,22 +126,12 @@ export abstract class BasePromiseCoordinator<
     this.cleanup(id, req.runtimeHost);
   }
 
-  /**
-   * Clear every pending request owned by this coordinator.
-   */
   clearAll(): void {
     for (const id of this.requests.keys()) {
       this.clearRequest(id);
     }
   }
 
-  // ==========================================================================
-  // Protected helpers for subclasses
-  // ==========================================================================
-
-  /**
-   * Get a pending request if it exists.
-   */
   protected getPendingRequest(
     id: string,
   ): (RequestState<TResult> & { status: 'pending' }) | null {
@@ -191,9 +139,6 @@ export abstract class BasePromiseCoordinator<
     return req?.status === 'pending' ? req : null;
   }
 
-  /**
-   * Resolve a pending request with a result.
-   */
   resolveRequest(id: string, result: TResult): boolean {
     const req = this.getPendingRequest(id);
     if (!req) return false;
@@ -204,18 +149,15 @@ export abstract class BasePromiseCoordinator<
     return true;
   }
 
-  /**
-   * Clean up state and emit resolution event.
-   */
   private cleanup(id: string, runtimeHost: AgentRuntimeHost): void {
     this.requests.set(id, { status: 'resolved' });
 
-    // Emit resolve event (cast needed for generic base class)
     runtimeHost.emit(this.config.resolveEventName, {
       [this.config.idFieldName]: id,
     } as any);
 
-    // Defer Map deletion to avoid blocking current execution
+    // Defer Map deletion so callers re-entering this method (e.g. resolving
+    // and then immediately re-checking pending state) see the resolved entry.
     setImmediate(() => {
       if (this.requests.get(id)?.status === 'resolved') {
         this.requests.delete(id);
