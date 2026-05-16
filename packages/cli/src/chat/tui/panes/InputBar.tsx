@@ -44,7 +44,8 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       // Persisting history is best-effort — a disk failure (read-only fs,
       // ENOSPC) must not block the submit. Surface the failure through the
       // shared log sink so it isn't completely silent.
-      historyRef.current?.push(trimmed).catch((err: unknown) => {
+      const historyPersist = historyRef.current?.push(trimmed);
+      historyPersist?.catch((err: unknown) => {
         writeTextStderr(
           `texra: failed to persist input history: ${String(err)}`,
         );

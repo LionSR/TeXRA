@@ -59,9 +59,3 @@ export function registerBuiltinSlashCommands(): void {
     description: 'Resume a previous session',
   });
 }
-
-/** Test seam — drops registered commands so vitests can re-register from
- *  scratch without a hot-module reload. */
-export function _resetBuiltinSlashCommandsForTests(): void {
-  installed = false;
-}

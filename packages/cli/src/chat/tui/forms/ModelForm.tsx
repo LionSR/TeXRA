@@ -7,7 +7,7 @@
 // `setCliHelperModel` for follow-up turns is a downstream concern handled
 // by the caller's `onPick` (see `App.tsx` → `applyModelSelection`).
 
-import { Box, Text } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import { useEffect, useState } from 'react';
 
 import { Select } from '../ui/Select';
@@ -27,6 +27,12 @@ export function ModelForm(props: ModelFormProps): React.JSX.Element {
   const [models, setModels] = useState<readonly CliModelAccess[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>(undefined);
+
+  useInput((_input, key) => {
+    if ((loading || error) && key.escape) {
+      props.onCancel();
+    }
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -58,6 +64,12 @@ export function ModelForm(props: ModelFormProps): React.JSX.Element {
           /model
         </Text>
         <Text dimColor>Loading model registry…</Text>
+        <Box marginTop={1}>
+          <KeyHints
+            hints={[{ key: 'Esc', action: 'cancel' }]}
+            confirmCancel={false}
+          />
+        </Box>
       </Box>
     );
   }
@@ -74,7 +86,10 @@ export function ModelForm(props: ModelFormProps): React.JSX.Element {
         </Text>
         <Text>{error}</Text>
         <Box marginTop={1}>
-          <KeyHints hints={[]} />
+          <KeyHints
+            hints={[{ key: 'Esc', action: 'cancel' }]}
+            confirmCancel={false}
+          />
         </Box>
       </Box>
     );

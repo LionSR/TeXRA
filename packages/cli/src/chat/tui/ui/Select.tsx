@@ -8,7 +8,7 @@
 // receive a 1-based numeric prefix so digit shortcuts can jump directly.
 
 import { Box, Text, useInput } from 'ink';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export interface SelectItem<T> {
   readonly value: T;
@@ -27,14 +27,24 @@ export interface SelectProps<T> {
   readonly initialIndex?: number;
 }
 
+function clampIndex(index: number, length: number): number {
+  if (length <= 0) return 0;
+  return Math.min(Math.max(index, 0), length - 1);
+}
+
 export function Select<T>(props: SelectProps<T>): React.JSX.Element {
-  const initial =
-    props.initialIndex ??
-    Math.max(
-      0,
-      props.items.findIndex((it) => it.value === props.activeValue),
-    );
+  const activeIndex = props.items.findIndex(
+    (it) => it.value === props.activeValue,
+  );
+  const initial = clampIndex(
+    props.initialIndex ?? (activeIndex >= 0 ? activeIndex : 0),
+    props.items.length,
+  );
   const [highlight, setHighlight] = useState(initial);
+
+  useEffect(() => {
+    setHighlight((h) => clampIndex(h, props.items.length));
+  }, [props.items.length]);
 
   useInput((input, key) => {
     if (key.escape) {
@@ -42,11 +52,15 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
       return;
     }
     if (key.upArrow) {
-      setHighlight((h) => (h <= 0 ? props.items.length - 1 : h - 1));
+      setHighlight((h) =>
+        clampIndex(h <= 0 ? props.items.length - 1 : h - 1, props.items.length),
+      );
       return;
     }
     if (key.downArrow) {
-      setHighlight((h) => (h + 1) % props.items.length);
+      setHighlight((h) =>
+        props.items.length === 0 ? 0 : (h + 1) % props.items.length,
+      );
       return;
     }
     if (key.return) {
