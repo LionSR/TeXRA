@@ -23,6 +23,8 @@ export const PROGRESS_VIEW_COMMANDS = {
   UPDATE_STREAM_BADGES: 'updateStreamBadges',
   UPDATE_STREAM_DESCRIPTION: 'updateStreamDescription',
   UPDATE_PROCESS_OUTPUT: 'updateProcessOutput',
+  SYNC_INQUIRY_THREADS: 'syncInquiryThreads',
+  UPDATE_INQUIRY_THREAD: 'updateInquiryThread',
   UPDATE_PARENT_STREAM: 'updateParentStream',
   UPDATE_FILES: 'updateFiles',
   UPDATE_MISSING_OUTPUTS: 'updateMissingOutputs',

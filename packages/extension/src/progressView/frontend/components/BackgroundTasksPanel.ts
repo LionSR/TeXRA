@@ -25,14 +25,20 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-import { STREAM_STATUS, type ActiveChildInfo } from '@shared/schemas';
+import {
+  STREAM_STATUS,
+  type ActiveChildInfo,
+  type InquiryThreadUpdatedEvent,
+} from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { ProgressEvents } from '../events';
 
 // Local imports - contexts
 import {
   EMPTY_PROCESS_OUTPUTS,
+  EMPTY_INQUIRY_THREADS,
   EMPTY_STREAM_BY_ID,
+  inquiryThreadsContext,
   processOutputContext,
   streamByIdContext,
   type ProcessOutputMap,
@@ -97,6 +103,10 @@ export class BackgroundTasksPanel extends LitElement {
         color: var(--color-info);
       }
 
+      .task-icon--inquiry {
+        color: var(--wa-color-brand-fill-loud);
+      }
+
       .task-name {
         flex: 0 1 auto;
         max-width: min(14rem, 40%);
@@ -129,6 +139,13 @@ export class BackgroundTasksPanel extends LitElement {
 
       .task-elapsed {
         flex-shrink: 0;
+        font-size: var(--font-size-xs);
+        color: var(--color-text-secondary);
+      }
+
+      .inquiry-id {
+        flex: 0 0 auto;
+        font-family: var(--wa-font-family-code);
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
       }
@@ -218,12 +235,19 @@ export class BackgroundTasksPanel extends LitElement {
   @state()
   private streamById: StreamByIdMap = EMPTY_STREAM_BY_ID;
 
+  @consume({ context: inquiryThreadsContext, subscribe: true })
+  @state()
+  private inquiries: InquiryThreadUpdatedEvent[] = EMPTY_INQUIRY_THREADS;
+
   /** Track previous active count to detect transitions. */
   private prevActiveCount = 0;
 
   protected override willUpdate(changed: PropertyValues): void {
     super.willUpdate(changed);
-    const active = this.activeProcesses.length + this.activeSubagents.length;
+    const active =
+      this.activeProcesses.length +
+      this.activeSubagents.length +
+      this.inquiries.filter((thread) => thread.status === 'open').length;
     // Auto-open when tasks appear (0 → N), auto-close when all finish (N → 0)
     if (this.prevActiveCount === 0 && active > 0) {
       this.open = true;
@@ -236,7 +260,7 @@ export class BackgroundTasksPanel extends LitElement {
   override render(): TemplateResult | typeof nothing {
     const active = this.activeProcesses.length + this.activeSubagents.length;
     const finished = this.finishedProcessCount + this.finishedSubagentCount;
-    if (active + finished === 0) return nothing;
+    if (active + finished + this.inquiries.length === 0) return nothing;
 
     return html`
       <wa-details
@@ -257,8 +281,80 @@ export class BackgroundTasksPanel extends LitElement {
             this.finishedSubagentCount,
             'subagent',
           )}
+          ${this.renderInquirySection()}
         </div>
       </wa-details>
+    `;
+  }
+
+  private renderInquirySection(): TemplateResult | typeof nothing {
+    if (this.inquiries.length === 0) return nothing;
+
+    const openCount = this.inquiries.filter((t) => t.status === 'open').length;
+    const answeredCount = this.inquiries.filter(
+      (t) => t.status === 'answered',
+    ).length;
+    const droppedCount = this.inquiries.filter(
+      (t) => t.status === 'dropped',
+    ).length;
+
+    return html`
+      <details open>
+        <summary class="section-label">
+          <wa-icon
+            library="texra"
+            name="chevron-right"
+            class="toggle-icon"
+            aria-hidden="true"
+          ></wa-icon>
+          <wa-icon library="texra" name="comments" aria-hidden="true"></wa-icon>
+          <span
+            >Inquiries${openCount
+              ? html` &middot; ${openCount} open`
+              : nothing}${answeredCount
+              ? html` &middot; ${answeredCount} answered`
+              : nothing}${droppedCount
+              ? html` &middot; ${droppedCount} dropped`
+              : nothing}</span
+          >
+        </summary>
+        <div class="section-content">
+          ${repeat(
+            this.inquiries,
+            (thread) => thread.threadId,
+            (thread) => this.renderInquiryItem(thread),
+          )}
+        </div>
+      </details>
+    `;
+  }
+
+  private renderInquiryItem(thread: InquiryThreadUpdatedEvent): TemplateResult {
+    const preview = thread.lastQuestionPreview || '(empty question)';
+    return html`
+      <div class="task-item">
+        <div class="task-header">
+          <wa-icon
+            library="texra"
+            name="circle-question"
+            aria-hidden="true"
+            class="task-icon task-icon--inquiry"
+          ></wa-icon>
+          <span class="inquiry-id" title=${thread.threadId}
+            >${thread.threadId}</span
+          >
+          <span class="task-description" title=${preview}>${preview}</span>
+          <span class="task-elapsed" title=${thread.lastActivityIso}
+            >${formatInquiryActivity(thread.lastActivityIso)}</span
+          >
+          <wa-tag
+            class="task-status"
+            variant=${inquiryStatusVariant(thread.status)}
+            size="small"
+            >${thread.status}</wa-tag
+          >
+        </div>
+      </div>
     `;
   }
 
@@ -439,6 +535,28 @@ function isWaiting(child: ActiveChildInfo): boolean {
     child.status === STREAM_STATUS.WAITING ||
     child.status === STREAM_STATUS.READY
   );
+}
+
+function inquiryStatusVariant(
+  status: InquiryThreadUpdatedEvent['status'],
+): 'warning' | 'success' | 'neutral' {
+  if (status === 'open') return 'warning';
+  if (status === 'answered') return 'success';
+  return 'neutral';
+}
+
+function formatInquiryActivity(iso: string): string {
+  const time = Date.parse(iso);
+  if (Number.isNaN(time)) return '';
+
+  const elapsedMs = Date.now() - time;
+  if (elapsedMs < 60_000) return 'now';
+  if (elapsedMs < 3_600_000) return `${Math.floor(elapsedMs / 60_000)}m`;
+  if (elapsedMs < 86_400_000) return `${Math.floor(elapsedMs / 3_600_000)}h`;
+  return new Date(time).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 declare global {
