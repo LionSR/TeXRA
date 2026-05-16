@@ -68,6 +68,7 @@
     "@types/he": "^1.2.3",
     "@types/identifiers-arxiv": "^0.1.2",
     "@types/jsdom": "^28.0.3",
+    "@types/markdown-it": "^14.1.2",
     "@types/mime-types": "^3.0.1",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.19.17",
