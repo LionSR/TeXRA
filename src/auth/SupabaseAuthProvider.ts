@@ -12,11 +12,8 @@ import {
   isOAuthProvider,
   type OAuthProvider,
 } from './config';
-import {
-  DEFAULT_AUTH_EDGE_FUNCTION_TIMEOUT_MS,
-  createSupabaseAuthCoordinator,
-  createSupabaseSessionStorage,
-} from './SupabaseAuthCoordinator';
+import { DEFAULT_AUTH_EDGE_FUNCTION_TIMEOUT_MS } from './SupabaseAuthCoordinator';
+import { createHostAuthCoordinator } from './createHostAuthCoordinator';
 import { getServerSideKeyService } from './serverKeys';
 import {
   fetchWithTimeout,
@@ -56,12 +53,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private isProcessingCallback = false;
 
   constructor(private context: vscode.ExtensionContext) {
-    this.sessionCoordinator = createSupabaseAuthCoordinator({
-      storage: createSupabaseSessionStorage({
+    this.sessionCoordinator = createHostAuthCoordinator({
+      secrets: {
         get: (key) => Promise.resolve(context.secrets.get(key)),
         set: (key, value) => Promise.resolve(context.secrets.store(key, value)),
         delete: (key) => Promise.resolve(context.secrets.delete(key)),
-      }),
+      },
       whenReady: async () => {
         if (!this.uriHandler) {
           throw new Error(AUTH_URI_HANDLER_NOT_INITIALIZED);
