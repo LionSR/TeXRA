@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
-import TextInput from 'ink-text-input';
 
 import type { ExternalInquiryPermission } from '@shared/schemas';
 
 import type { ApprovalDecision } from '../state/approvalQueue';
+import { BaseTextInput } from '../input/BaseTextInput';
 import { KeyHints } from '../ui/KeyHints';
 
 export interface ExternalInquiryProps {
@@ -49,7 +49,7 @@ export function ExternalInquiry(
       </Box>
       <Box>
         <Text>{'> '}</Text>
-        <TextInput
+        <BaseTextInput
           value={answer}
           onChange={setAnswer}
           onSubmit={(value) => {

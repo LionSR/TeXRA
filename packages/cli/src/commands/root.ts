@@ -551,45 +551,14 @@ const chatCommand = defineCommand({
     ...GLOBAL_ARGS,
     agent: { type: 'string', description: 'Tool-use agent for the session' },
     model: { type: 'string', alias: 'm', description: 'Model for the session' },
-    'tool-display': {
-      type: 'enum',
-      options: ['grouped', 'minimal', 'hidden'],
-      default: 'minimal',
-      description: 'Tool/progress rows: grouped, minimal, or hidden',
-    },
-    tui: {
-      type: 'boolean',
-      default: true,
-      description:
-        'Use the Ink-based TUI (default for TTY; pass --no-tui to opt out).',
-    },
-    'legacy-renderer': {
-      type: 'boolean',
-      description:
-        'Use the legacy line-based renderer instead of the Ink TUI (alias for --no-tui).',
-    },
   },
   async run(ctx) {
     const context = await contextFromArgs(ctx.args);
-    const init = {
+    const { runChat } = await import('../chat/tui/runChatTui');
+    const result = await runChat(context, {
       agentOverride: optString(ctx.args.agent),
       modelOverride: optString(ctx.args.model),
-      toolDisplay: ctx.args['tool-display'],
-    };
-    // Phase 6: the Ink TUI is the default for capable TTYs. Auto-fallback
-    // to the legacy renderer when the terminal can't render usefully
-    // (`TERM=dumb`, `NO_COLOR` + narrow columns, or non-TTY pipes). Users
-    // can also opt out manually with `--no-tui` / `--legacy-renderer`.
-    const tuiOptOut =
-      ctx.args.tui === false || ctx.args['legacy-renderer'] === true;
-    if (!tuiOptOut && context.tuiCapable) {
-      const { runChatTui } = await import('../chat/tui/runChatTui');
-      const result = await runChatTui(context, init);
-      setExitCode(result.exitCode);
-      return;
-    }
-    const { runChat } = await import('../chat/runChat');
-    const result = await runChat(context, init);
+    });
     setExitCode(result.exitCode);
   },
 });

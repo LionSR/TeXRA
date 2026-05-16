@@ -28,7 +28,8 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   historyRef.current = history;
 
   // Listen for Ctrl-R *outside* the text input — Ink emits the keystroke
-  // to every `useInput` consumer, but ink-text-input ignores ctrl chords.
+  // to every `useInput` consumer, and BaseTextInput drops unhandled ctrl
+  // chords so this handler still fires.
   useInput((input, key) => {
     if (disabled) return;
     if (key.ctrl && input.toLowerCase() === 'r' && historyRef.current) {

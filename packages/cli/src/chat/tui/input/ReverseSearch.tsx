@@ -6,10 +6,10 @@
 
 import { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
-import TextInput from 'ink-text-input';
 
 import type { InputHistory } from '../history/inputHistory';
 import { KeyHints } from '../ui/KeyHints';
+import { BaseTextInput } from './BaseTextInput';
 
 export interface ReverseSearchProps {
   readonly history: InputHistory;
@@ -53,7 +53,7 @@ export function ReverseSearch(props: ReverseSearchProps): React.JSX.Element {
     >
       <Box>
         <Text color="magenta">(reverse-i-search)`</Text>
-        <TextInput
+        <BaseTextInput
           value={query}
           onChange={(value) => {
             setQuery(value);

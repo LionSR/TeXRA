@@ -26,9 +26,6 @@ export interface CliContext {
   readonly helperModel?: string;
   readonly quietLogs?: boolean;
   readonly colorEnabled: boolean;
-  /** `true` when the ambient terminal can usefully render the Ink TUI —
-   *  see `readCliAmbientState`. Drives the Phase 6 default-on dispatch. */
-  readonly tuiCapable: boolean;
   readonly version: string;
   readonly resourcesPath: string;
   readonly approvalPrompt?: (request: CliPromptRequest) => Promise<string>;
@@ -47,10 +44,6 @@ export interface CliAmbientState {
   readonly stdoutIsTty: boolean;
   readonly stderrIsTty: boolean;
   readonly colorEnabled: boolean;
-  /** Whether the Ink TUI can render usefully — false on `TERM=dumb`,
-   *  `NO_COLOR` + narrow terminals, or non-TTY shells. Drives Phase 6's
-   *  auto-fallback to the legacy renderer (see `commands/root.ts`). */
-  readonly tuiCapable: boolean;
 }
 
 let cachedAmbient: CliAmbientState | undefined;
@@ -68,10 +61,6 @@ export function readCliAmbientState(): CliAmbientState {
     stdoutIsTty,
     stderrIsTty,
     colorEnabled: stderrIsTty && !noColor && !dumbTerm,
-    // Ink needs real TTYs on both stdin and stdout; `TERM=dumb` strips the
-    // cursor controls Ink relies on. `NO_COLOR` alone doesn't disqualify
-    // the TUI (Ink degrades to monochrome), so we don't gate on it here.
-    tuiCapable: stdinIsTty && stdoutIsTty && !dumbTerm,
   };
   return cachedAmbient;
 }
@@ -155,7 +144,6 @@ export async function buildCliContext(
     outputFormat: init.globalArgs.outputFormat,
     approvalPolicy: init.globalArgs.approvalPolicy,
     colorEnabled: ambient.colorEnabled,
-    tuiCapable: ambient.tuiCapable,
     version: await readCliVersion(),
     resourcesPath: resolveResourcesPath(),
   };

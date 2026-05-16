@@ -1,11 +1,9 @@
-// Ink-mounted chat session per docs/prd/cli-tui-ink.
+// `texra chat` entry point — single Ink-based session.
 //
-// As of Phase 6 this is the default `texra chat` path for interactive TTYs;
-// `runChat.ts` only runs when the user passes `--no-tui` / `--legacy-renderer`
-// or when stdout isn't a TTY. We intentionally share as much as possible
-// with the legacy path — platform init, default resolution, and the agent
-// runtime host — and swap the rendering surface (Ink), approval UI, and
-// follow-up queue.
+// The legacy line-based renderer was retired in favour of one canonical
+// path: the Ink TUI runs for every interactive `texra chat` invocation, and
+// non-TTY callers are pointed at `texra run` (which is what they actually
+// want for piping/scripting).
 
 import { render } from 'ink';
 import PQueue from 'p-queue';
@@ -28,7 +26,6 @@ import { CliExitCode } from '../../runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '../../runtime/initPlatform';
 import { createCliRuntimeHost } from '../../runtime/runtimeHost';
 import { writeTextStderr } from '../../runtime/logSinks';
-import { type ChatResult, type RunChatInit } from '../runChat';
 import { App } from './App';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { loadInputHistory } from './history/inputHistory';
@@ -41,6 +38,17 @@ import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 
+export interface ChatResult {
+  exitCode: number;
+}
+
+export interface RunChatInit {
+  /** `--agent` override from the CLI; falls through `resolveChatDefaults`. */
+  readonly agentOverride?: string;
+  /** `--model` override from the CLI; falls through `resolveChatDefaults`. */
+  readonly modelOverride?: string;
+}
+
 interface TuiSession {
   streamId: StreamTabId | undefined;
   runPromise: Promise<void> | undefined;
@@ -49,25 +57,19 @@ interface TuiSession {
   stopRequested: boolean;
 }
 
-export async function runChatTui(
+export async function runChat(
   context: CliContext,
   init: RunChatInit,
 ): Promise<ChatResult> {
-  if (context.mode === 'headless') {
+  if (
+    context.mode === 'headless' ||
+    !process.stdin.isTTY ||
+    !process.stdout.isTTY
+  ) {
     writeTextStderr(
-      'texra chat requires an interactive terminal (TTY stdin). For non-interactive use, try `texra run`.',
+      'texra chat requires an interactive terminal (TTY stdin and stdout). For non-interactive runs, use `texra run`.',
     );
     return { exitCode: CliExitCode.Usage };
-  }
-
-  // Streaming-text fallback per docs/prd/cli-tui-ink/20-implementation §13:
-  // when stdout is piped but stdin is TTY, Ink chrome can't render usefully —
-  // delegate back to the legacy plain renderer so `texra chat --tui | tee` and
-  // similar shapes keep working. Phase 4 lifts this into a dedicated mode
-  // that still flows through the React tree but writes plain ANSI to stdout.
-  if (!process.stdout.isTTY) {
-    const { runChat } = await import('../runChat');
-    return runChat(context, init);
   }
 
   await initCliPlatform({ ...context, quietLogs: true });
@@ -205,10 +207,16 @@ export async function runChatTui(
     });
   };
 
+  // alternateScreen (Ink 7.0+) parks rendering on the terminal's alt buffer:
+  // stray stderr writes from agent errors or approval prompts can't leak
+  // into main-screen scrollback, and exit restores the user's pre-launch
+  // terminal contents intact (no banner/conversation mixing with the shell
+  // prompt the way main-screen mode did).
   const ink = render(<App onSubmit={handleSubmit} history={inputHistory} />, {
     stdout: process.stdout,
     stderr: process.stderr,
     stdin: process.stdin,
+    alternateScreen: true,
   });
 
   // Bridge SIGINT to a graceful interrupt (first tap) / process exit

@@ -25,12 +25,11 @@
     "citty": "^0.2.2",
     "cli-highlight": "^2.1.11",
     "diff": "^9.0.0",
-    "ink": "^6.8.0",
-    "ink-text-input": "^6.0.0",
+    "ink": "^7.0.3",
     "markdown-it": "^14.1.1",
     "p-queue": "^9.2.0",
     "picocolors": "^1.1.1",
-    "react": "^19.0.0",
+    "react": "^19.2.0",
     "string-width": "^8.0.0",
     "wrap-ansi": "^10.0.0"
   },
@@ -39,7 +38,7 @@
     "@babel/preset-react": "^7.28.5",
     "@babel/preset-typescript": "^7.28.5",
     "@types/markdown-it": "^14.1.2",
-    "@types/react": "^19.0.0",
+    "@types/react": "^19.2.0",
     "babel-plugin-react-compiler": "^1.0.0",
     "esbuild": "^0.28.0",
     "typescript": "^6.0.3"
