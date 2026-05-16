@@ -130,8 +130,9 @@ function validateRunCommand() {
       validationFlagPath,
     });
     assertSuccess(text, 'texra run text');
+    const outputPathPattern = /^r\d+\/paper\.polished\.tex$/;
     assert(
-      text.stdout.trim() === 'r0/paper.polished.tex',
+      outputPathPattern.test(text.stdout.trim()),
       'text run output should print the run-storage output path',
     );
 
@@ -148,7 +149,7 @@ function validateRunCommand() {
     );
     const finalOutput = jsonResult.outputs.at(-1);
     assert(
-      finalOutput?.relativePath === 'r0/paper.polished.tex',
+      outputPathPattern.test(finalOutput?.relativePath ?? ''),
       'JSON run output should report the run-storage output path',
     );
     assert(

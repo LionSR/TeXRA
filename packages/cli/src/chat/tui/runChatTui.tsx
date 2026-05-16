@@ -81,11 +81,11 @@ export async function runChatTui(
 
   cliState.sessionMeta.set({ agent, model, cwd: context.cwd });
 
-  const sessionContext: CliContext = {
+  const currentSessionContext = (helperModel: string): CliContext => ({
     ...context,
-    helperModel: model,
+    helperModel,
     quietLogs: true,
-  };
+  });
   // Phase 2 replaces the legacy stderr-prompt approval adapter with the
   // typed dispatch: events flow into the modal queue, modal calls back
   // through the original resolvers (see state/subscribeApprovals.ts).
@@ -128,9 +128,13 @@ export async function runChatTui(
   };
 
   const startSession = (instruction: string): void => {
+    const meta = cliState.sessionMeta.get();
+    const currentAgent = meta.agent || agent;
+    const currentModel = meta.model || model;
+    const sessionContext = currentSessionContext(currentModel);
     const config: AgentConfigPayload = {
-      agent,
-      model,
+      agent: currentAgent,
+      model: currentModel,
       instruction,
       agentCategory: AgentCategory.ToolUse,
       workingDirectory: context.cwd,
@@ -140,15 +144,18 @@ export async function runChatTui(
     const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
     disposers.push(unbindApprovals);
 
-    session.runPromise = executeAgent(config, undefined, {
-      runtimeHost: wrapped,
-      enforceCategory: true,
-      onStreamResolved: (resolvedStreamId) => {
-        session.streamId = resolvedStreamId;
-        cliState.activeStreamId.set(resolvedStreamId);
-        if (session.stopRequested) interruptActive();
-      },
-    })
+    session.runPromise = setCliHelperModel(currentModel)
+      .then(() =>
+        executeAgent(config, undefined, {
+          runtimeHost: wrapped,
+          enforceCategory: true,
+          onStreamResolved: (resolvedStreamId) => {
+            session.streamId = resolvedStreamId;
+            cliState.activeStreamId.set(resolvedStreamId);
+            if (session.stopRequested) interruptActive();
+          },
+        }),
+      )
       .then((result) => {
         if (session.stopRequested || result.status !== 'error') {
           session.runExitCode = CliExitCode.Success;

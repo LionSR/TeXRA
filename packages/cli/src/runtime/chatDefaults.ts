@@ -2,12 +2,13 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { listExecutions } from '@agent/storage';
+import { DEFAULT_AGENT_MODEL } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { isNonEmptyString } from '@utils/core/stringCore';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
 export const BUILTIN_DEFAULT_CHAT_AGENT = 'chat';
-export const BUILTIN_DEFAULT_CHAT_MODEL = 'claude-opus-4-7';
+export const BUILTIN_DEFAULT_CHAT_MODEL = DEFAULT_AGENT_MODEL;
 
 export interface ChatDefaults {
   readonly agent: string;

@@ -1,21 +1,61 @@
-// Conversation pane — Phase 1 renders MODEL_RESPONSE entries only.
+// Conversation pane for user and assistant transcript entries.
 //
 // Finalized entries are committed to ink's `<Static>` region so they survive
 // re-renders and stay in scrollback. The in-flight entry (last one when the
 // stream is still streaming) renders in a live `<Box>` above the input bar.
 //
-// Phase 3 routes entry text through the ANSI markdown renderer
-// (`render/Markdown.tsx`); tool cards and multi-agent stripes land in later
-// phases.
+// Finalized assistant text goes through the ANSI markdown renderer
+// (`render/Markdown.tsx`). Live assistant text stays plain so a growing
+// response does not repeatedly parse a full Markdown document while the input
+// bar is also accepting keystrokes.
 
-import { Box, Static } from 'ink';
+import { Box, Static, Text } from 'ink';
+
+import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 
 import { Markdown } from '../render/Markdown';
 import { cliState, type ConversationEntry } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
 
-function isStreaming(entry: ConversationEntry): boolean {
-  return !entry.finalized;
+function isAppending(status: StreamStatus | undefined): boolean {
+  return (
+    status === STREAM_STATUS.INITIALIZING ||
+    status === STREAM_STATUS.RUNNING ||
+    status === STREAM_STATUS.RESUMING
+  );
+}
+
+function TranscriptEntry({
+  entry,
+}: {
+  readonly entry: ConversationEntry;
+}): React.JSX.Element {
+  if (entry.role === 'user') {
+    return (
+      <Box marginBottom={1} paddingX={1}>
+        <Text dimColor>› </Text>
+        <Text>{entry.text}</Text>
+      </Box>
+    );
+  }
+
+  return (
+    <Box marginBottom={1}>
+      <Markdown content={entry.text} />
+    </Box>
+  );
+}
+
+function LiveTranscriptEntry({
+  entry,
+}: {
+  readonly entry: ConversationEntry;
+}): React.JSX.Element {
+  return (
+    <Box marginBottom={1}>
+      <Text>{entry.text}</Text>
+    </Box>
+  );
 }
 
 export function ConversationPane(): React.JSX.Element {
@@ -23,11 +63,17 @@ export function ConversationPane(): React.JSX.Element {
   const streams = useSignal(cliState.streams);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const entries = slice?.entries ?? [];
+  const streamIsAppending = isAppending(slice?.status);
 
   const finalized: ConversationEntry[] = [];
   let live: ConversationEntry | undefined;
   for (const entry of entries) {
-    if (isStreaming(entry) && entry === entries.at(-1)) {
+    if (
+      streamIsAppending &&
+      entry.role === 'assistant' &&
+      !entry.finalized &&
+      entry === entries.at(-1)
+    ) {
       live = entry;
     } else {
       finalized.push({ ...entry, finalized: true });
@@ -37,17 +83,9 @@ export function ConversationPane(): React.JSX.Element {
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Static items={finalized}>
-        {(entry) => (
-          <Box key={entry.id} marginBottom={1}>
-            <Markdown content={entry.text} />
-          </Box>
-        )}
+        {(entry) => <TranscriptEntry key={entry.id} entry={entry} />}
       </Static>
-      {live ? (
-        <Box marginBottom={1}>
-          <Markdown content={live.text} />
-        </Box>
-      ) : null}
+      {live ? <LiveTranscriptEntry entry={live} /> : null}
     </Box>
   );
 }

@@ -1,6 +1,9 @@
 // Standard library imports
 import { strict as assert } from 'assert';
 
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports - test
 import {
   toGoogleTools,
@@ -11,7 +14,10 @@ import {
 // Type imports
 import type { ToolDefinition } from '@model';
 import type { Tool as GeminiTool } from '@google/genai';
+import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import type { FunctionTool } from 'openai/resources/responses/responses';
+
+type OpenAIFunctionTool = Extract<ChatCompletionTool, { type: 'function' }>;
 
 describe('toOpenAITools', () => {
   it('leaves Chat Completions function tools non-strict', () => {
@@ -33,6 +39,31 @@ describe('toOpenAITools', () => {
     assert.equal(tools[0].type, 'function');
     assert.equal(tools[0].function.name, 'delegate_workflow');
     assert.equal(tools[0].function.strict, undefined);
+  });
+
+  it('normalizes object-union zod schemas for OpenAI function tools', () => {
+    const defs: ToolDefinition[] = [
+      {
+        name: 'inquiry',
+        description: 'Ask or read',
+        zodSchema: z.discriminatedUnion('command', [
+          z.object({
+            command: z.literal('ask'),
+            question: z.string(),
+          }),
+          z.object({
+            command: z.literal('read'),
+            thread_id: z.string(),
+          }),
+        ]),
+      },
+    ];
+
+    const tools = toOpenAITools(defs);
+    const tool = tools[0] as OpenAIFunctionTool;
+    const parameters = tool.function.parameters as Record<string, unknown>;
+    assert.equal(parameters.type, 'object');
+    assert.ok(Array.isArray(parameters.oneOf));
   });
 });
 
@@ -59,7 +90,7 @@ describe('toOpenAIResponseTools', () => {
     assert.deepEqual(tool.parameters, defs[0].parameters);
   });
 
-  it('sets parameters to null when omitted', () => {
+  it('uses an empty object schema when parameters are omitted', () => {
     const defs: ToolDefinition[] = [
       {
         name: 'noop',
@@ -69,7 +100,11 @@ describe('toOpenAIResponseTools', () => {
 
     const tools = toOpenAIResponseTools(defs);
     const tool = tools[0] as FunctionTool;
-    assert.equal(tool.parameters, null);
+    assert.deepEqual(tool.parameters, {
+      type: 'object',
+      properties: {},
+      additionalProperties: false,
+    });
   });
 
   it('converts web_search to native WebSearchTool when supportsNativeWebSearch is true', () => {

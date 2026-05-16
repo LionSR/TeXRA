@@ -3,7 +3,7 @@ import * as path from 'node:path';
 
 import { defineCommand, runCommand, showUsage, type CommandDef } from 'citty';
 
-import { getVisibleAgents, loadAgents } from '@agent/index';
+import { getAgent, getVisibleAgents, loadAgents } from '@agent/index';
 import {
   DEFAULT_AGENT_MODEL,
   type AgentConfigPayload,
@@ -38,6 +38,7 @@ import { getCliModelAccessList } from '../runtime/modelAccess';
 import { createCliRuntimeHost } from '../runtime/runtimeHost';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
+  getCliAuthProvider,
   getCliAuthProfile,
   signInCliSupabase,
   signOutCliSupabase,
@@ -114,8 +115,12 @@ const agentsListCommand = defineCommand({
 });
 
 async function listAgents(context: CliContext): Promise<number> {
-  await initCliPlatform({ ...context, quietLogs: true });
-  await loadAgents();
+  await initCliPlatform({
+    ...context,
+    quietLogs: true,
+    skipIncludedModelAccess: true,
+  });
+  await loadAgents({ includeRemote: false });
   const agents = [AgentCategory.Workflow, AgentCategory.ToolUse].flatMap(
     (category) =>
       getVisibleAgents(category).map((agent) => ({ ...agent, category })),
@@ -472,7 +477,13 @@ async function runWorkflowAgent(
   };
   await initCliPlatform(runContext);
   installCliApprovalHandlers(runContext);
-  await loadAgents();
+  await loadAgents({ includeRemote: false });
+  if (
+    !getAgent(init.agent) ||
+    (await shouldHonorRemoteAgentPriority(init.agent))
+  ) {
+    await loadAgents();
+  }
 
   const modelOutputFile =
     init.output && path.isAbsolute(init.output)
@@ -512,8 +523,8 @@ async function runWorkflowAgent(
   } else if (result.category === AgentCategory.Workflow) {
     const finalOutput = result.outputs.at(-1);
     writeTextStdout(
-      copiedOutput ??
-        finalOutput?.relativePath ??
+      finalOutput?.relativePath ??
+        copiedOutput ??
         finalOutput?.absolutePath ??
         result.status,
     );
@@ -525,6 +536,13 @@ async function runWorkflowAgent(
   return hasCliApprovalDenied(runContext)
     ? CliExitCode.ApprovalDenied
     : CliExitCode.AgentError;
+}
+
+async function shouldHonorRemoteAgentPriority(
+  agentName: string,
+): Promise<boolean> {
+  if (agentName.includes(':')) return false;
+  return getCliAuthProvider().isAuthenticated();
 }
 
 const chatCommand = defineCommand({
