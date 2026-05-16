@@ -28,6 +28,7 @@ prompts:
 
     Variable Retrieval (VR) exposes runtime data as variables in these prompts:
       - {{ INPUT_FILE }} / {{ INPUT_CONTENT }}: main file path and text
+      - {{ INPUT_FILES }}: ordered list of selected input filenames
       - {{ ALL_INPUTS }}: XML list of all input files
       - {{ ALL_CONTEXTS }}: XML list of context files (.bib/.bbl, reference papers, .sty/.cls)
     Use them as needed.
@@ -59,7 +60,7 @@ prompts:
 
   userRequest:
     - |
-      Output the revised \LaTeX as <documents>{% for output in OUTPUT_FILES_ORDER %}<document name="{{ output }}">...</document>{% endfor %}</documents>.
+      Output the revised \LaTeX as <documents>{% for output in INPUT_FILES %}<document name="{{ output }}">...</document>{% endfor %}</documents>.
     - |
       Critically reflect on your previous revision, identify the most impactful
-      follow-up edits, and output the updated <documents>{% for output in OUTPUT_FILES_ORDER %}<document name="{{ output }}">...</document>{% endfor %}</documents>.
+      follow-up edits, and output the updated <documents>{% for output in INPUT_FILES %}<document name="{{ output }}">...</document>{% endfor %}</documents>.

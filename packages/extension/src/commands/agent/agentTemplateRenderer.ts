@@ -25,16 +25,13 @@ const FILES: Record<AgentTemplateKind, string> = {
  * Variables the bundled templates accept.
  *
  * Only `AGENT_NAME` and `DESCRIPTION` are required. `TOOLS_YAML` is used by
- * the tool-use template and `OUTPUT_FILES` by the multi-output workflow
- * template; both are optional here and default to sensible empty values.
+ * the tool-use template and defaults to the standard tool set.
  */
 export interface AgentTemplateVars {
   agentName: string;
   description: string;
   /** YAML list string for the tool-use template, e.g. `    - bash\n    - read_file`. */
   toolsYaml?: string;
-  /** YAML list string for the multi-output template, e.g. `- fileA.tex\n    - fileB.tex`. */
-  outputFilesYaml?: string;
 }
 
 // Isolated Nunjucks environment so `autoescape: false` does not leak into the
@@ -51,13 +48,14 @@ const AGENT_RUNTIME_TOKENS = [
   'INSTRUCTION',
   'INPUT_FILE',
   'INPUT_CONTENT',
+  'INPUT_FILES',
   'ALL_INPUTS',
   'ALL_AUXILIARYS',
   'ALL_REFERENCES',
   'ADDITIONAL_INPUTS',
   'REFERENCE_CONTENT',
   'AUXILIARY_CONTENT',
-  'OUTPUT_FILES_ORDER',
+  'OUTPUT_FILES',
 ] as const;
 
 // Frozen so the shared module-level instance can't be mutated even if a
@@ -83,7 +81,6 @@ function buildRenderVars(vars: AgentTemplateVars): Record<string, string> {
     AGENT_NAME: vars.agentName,
     DESCRIPTION: vars.description,
     TOOLS_YAML: vars.toolsYaml ?? DEFAULT_TOOLS_YAML,
-    OUTPUT_FILES: vars.outputFilesYaml ?? '',
   };
 }
 
