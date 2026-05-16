@@ -76,6 +76,13 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     if (disabled && reverseSearchOpen) setReverseSearchOpen(false);
   }, [disabled, reverseSearchOpen]);
 
+  // Surface palette visibility so the App-level Tab handler (focus cycle)
+  // can stand down while the palette owns Tab for "accept selection".
+  useEffect(() => {
+    cliState.slashPaletteOpen.set(showPalette);
+    return () => cliState.slashPaletteOpen.set(false);
+  }, [showPalette]);
+
   return (
     <Box flexDirection="column">
       {showPalette ? (

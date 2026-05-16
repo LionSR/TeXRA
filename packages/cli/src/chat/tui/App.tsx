@@ -28,6 +28,7 @@ export function App(props: AppProps): React.JSX.Element {
   const activeStreamId = useSignal(cliState.activeStreamId);
   const streams = useSignal(cliState.streams);
   const activeForm = useSignal(cliState.activeForm);
+  const slashPaletteOpen = useSignal(cliState.slashPaletteOpen);
   const inputDisabled =
     props.inputDisabled || pending !== undefined || activeForm !== undefined;
 
@@ -41,14 +42,18 @@ export function App(props: AppProps): React.JSX.Element {
       activeSlice.todos.length > 0 ||
       activeSlice.plan !== null);
 
-  // Tab / Shift-Tab cycles stream focus at the App layer. Chosen over Ctrl-A/B
-  // so the text-input chord for "go to line start" (Emacs/readline standard)
-  // doesn't collide once cursor-controlled inputs propagate the chord.
-  useInput((_input, key) => {
-    if (!key.tab) return;
-    const next = key.shift ? nextFocusBack() : nextFocusForward();
-    if (next) cliState.activeStreamId.set(next);
-  });
+  // Tab / Shift-Tab cycles stream focus at the App layer. Stand down while a
+  // modal/form is up (they own input) or the slash palette is open (Tab there
+  // means "accept selection") — Ink broadcasts useInput, so both handlers
+  // would otherwise fire on the same chord.
+  useInput(
+    (_input, key) => {
+      if (!key.tab) return;
+      const next = key.shift ? nextFocusBack() : nextFocusForward();
+      if (next) cliState.activeStreamId.set(next);
+    },
+    { isActive: !inputDisabled && !slashPaletteOpen },
+  );
 
   return (
     <Box flexDirection="column">

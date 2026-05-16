@@ -62,10 +62,15 @@ export async function runChat(
   init: RunChatInit,
 ): Promise<ChatResult> {
   // `mode === 'headless'` already covers --print / CI / non-TTY stdin
-  // (see cliContext.cliMode); stdout must also be a TTY for Ink to render.
-  if (context.mode === 'headless' || !process.stdout.isTTY) {
+  // (see cliContext.cliMode); stdout must also be a TTY for Ink to render,
+  // and `TERM=dumb` strips the cursor controls Ink depends on (Ink would
+  // mount and emit garbled output instead of a usable session).
+  const dumbTerm = process.env.TERM === 'dumb';
+  if (context.mode === 'headless' || !process.stdout.isTTY || dumbTerm) {
     writeTextStderr(
-      'texra chat requires an interactive terminal (TTY stdin and stdout). For non-interactive runs, use `texra run`.',
+      dumbTerm
+        ? 'texra chat needs a capable terminal — TERM=dumb strips the cursor controls Ink uses. For non-interactive runs, use `texra run`.'
+        : 'texra chat requires an interactive terminal (TTY stdin and stdout). For non-interactive runs, use `texra run`.',
     );
     return { exitCode: CliExitCode.Usage };
   }
