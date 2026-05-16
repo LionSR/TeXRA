@@ -4,7 +4,7 @@ import { Box, Text, useInput } from 'ink';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { ReverseSearch } from '../input/ReverseSearch';
 import { SlashPalette } from '../commands/SlashPalette';
-import { parseSlashInput } from '../commands/slashRegistry';
+import { matchSlashCommands, parseSlashInput } from '../commands/slashRegistry';
 import type { InputHistory } from '../history/inputHistory';
 
 export interface InputBarProps {
@@ -19,15 +19,16 @@ export interface InputBarProps {
 }
 
 export function InputBar(props: InputBarProps): React.JSX.Element {
+  const { disabled, history, onSubmit, prompt } = props;
   const [value, setValue] = useState('');
   const [reverseSearchOpen, setReverseSearchOpen] = useState(false);
-  const historyRef = useRef(props.history);
-  historyRef.current = props.history;
+  const historyRef = useRef(history);
+  historyRef.current = history;
 
   // Listen for Ctrl-R *outside* the text input — Ink emits the keystroke
   // to every `useInput` consumer, but ink-text-input ignores ctrl chords.
   useInput((input, key) => {
-    if (props.disabled) return;
+    if (disabled) return;
     if (key.ctrl && input.toLowerCase() === 'r' && historyRef.current) {
       setReverseSearchOpen(true);
     }
@@ -39,22 +40,30 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       if (trimmed.length === 0) return;
       setValue('');
       void historyRef.current?.push(trimmed);
-      props.onSubmit(trimmed);
+      onSubmit(trimmed);
     },
-    [props],
+    [onSubmit],
   );
 
   // Slash palette pops up while typing /…
   const parsed = parseSlashInput(value);
+  const isTypingSlashCommandName =
+    parsed !== undefined && !/\s/.test(value.slice(1));
+  const hasPaletteMatches =
+    parsed !== undefined && matchSlashCommands(parsed.name).length > 0;
   const showPalette =
-    parsed !== undefined && !reverseSearchOpen && !props.disabled;
+    parsed !== undefined &&
+    isTypingSlashCommandName &&
+    hasPaletteMatches &&
+    !reverseSearchOpen &&
+    !disabled;
 
   useEffect(() => {
     // Auto-close the reverse-search overlay when the input is disabled —
     // an approval modal taking focus shouldn't trap the user in the
     // search prompt.
-    if (props.disabled && reverseSearchOpen) setReverseSearchOpen(false);
-  }, [props.disabled, reverseSearchOpen]);
+    if (disabled && reverseSearchOpen) setReverseSearchOpen(false);
+  }, [disabled, reverseSearchOpen]);
 
   return (
     <Box flexDirection="column">
@@ -63,7 +72,9 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           query={parsed.name}
           onPick={(cmd) =>
             setValue(
-              `/${cmd.name}${parsed.remainder ? ` ${parsed.remainder}` : ' '}`,
+              `/${cmd.name}${
+                parsed.remainder ? ` ${parsed.remainder.trimStart()}` : ' '
+              }`,
             )
           }
           onCancel={() => {
@@ -83,12 +94,12 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         />
       ) : null}
       <Box borderStyle="round" paddingX={1}>
-        <Text>{props.prompt ?? '>'} </Text>
+        <Text>{prompt ?? '>'} </Text>
         <BaseTextInput
           value={value}
-          focus={!props.disabled && !reverseSearchOpen}
+          focus={!disabled && !reverseSearchOpen}
           onChange={setValue}
-          onSubmit={handleSubmit}
+          onSubmit={showPalette ? () => undefined : handleSubmit}
         />
       </Box>
     </Box>

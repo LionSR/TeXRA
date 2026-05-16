@@ -29,7 +29,7 @@ import { createCliRuntimeHost } from '../../runtime/runtimeHost';
 import { writeTextStderr } from '../../runtime/logSinks';
 import { type ChatResult, type RunChatInit } from '../runChat';
 import { App } from './App';
-import { registerPhase5SlashCommands } from './commands/registerBuiltins';
+import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
 import { clearApprovals } from './state/approvalQueue';
@@ -93,7 +93,7 @@ export async function runChatTui(
 
   const inputHistory = await loadInputHistory();
   // Pre-register the slash commands the input palette uses.
-  registerPhase5SlashCommands();
+  registerBuiltinSlashCommands();
 
   // DA1 sentinel discovery runs *before* Ink mounts so it owns the raw-mode
   // toggle exclusively — interleaving with Ink's own raw-mode lifecycle (set
