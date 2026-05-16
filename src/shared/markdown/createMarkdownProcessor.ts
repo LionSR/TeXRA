@@ -9,17 +9,9 @@ import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 
 import type { MarkdownItInstance } from './createMarkdownRenderer';
 
-const DEFAULT_CACHE_BUDGET: CacheBudget = {
-  maxEntries: 2000,
-  maxEntryChars: 200_000,
-  maxTotalChars: 2_000_000,
-};
-
-export interface CacheBudget {
-  readonly maxEntries: number;
-  readonly maxEntryChars: number;
-  readonly maxTotalChars: number;
-}
+const MAX_CACHE_ENTRIES = 2000;
+const MAX_CACHE_ENTRY_CHARS = 200_000;
+const MAX_CACHE_TOTAL_CHARS = 2_000_000;
 
 export interface LatexReferenceFormatter {
   /**
@@ -32,10 +24,6 @@ export interface LatexReferenceFormatter {
 
 export interface MarkdownProcessorConfig {
   readonly renderer: MarkdownItInstance;
-  /** Override the cache budget; defaults match the legacy webview limits. */
-  readonly cacheBudget?: CacheBudget;
-  /** Disable the LRU entirely (useful for tests). */
-  readonly disableCache?: boolean;
   /**
    * Formatter for `\ref{…}` / `\cref{…}` / `\eqref{…}` placeholders. Defaults
    * to the webview-style `<span class="latex-ref clickable-link">` so existing
@@ -112,18 +100,15 @@ function hashContent(str: string): string {
 export function createMarkdownProcessor(
   config: MarkdownProcessorConfig,
 ): MarkdownProcessor {
-  const budget = config.cacheBudget ?? DEFAULT_CACHE_BUDGET;
   const format = config.formatLatexReference ?? defaultFormatLatexReference;
-  const cache: Map<string, string> | undefined = config.disableCache
-    ? undefined
-    : new Map<string, string>();
+  const cache = new Map<string, string>();
   let cacheChars = 0;
   let hitCount = 0;
   let missCount = 0;
 
   const processor = ((content: string): string => {
-    const key = cache ? hashContent(content) : undefined;
-    if (cache && key !== undefined && cache.has(key)) {
+    const key = hashContent(content);
+    if (cache.has(key)) {
       const cached = cache.get(key);
       if (cached === undefined) return '';
       hitCount += 1;
@@ -142,10 +127,10 @@ export function createMarkdownProcessor(
     const rendered = config.renderer.render(formatted);
     const result = restoreLatexReferences(rendered, refs, format);
 
-    if (cache && key !== undefined && result.length <= budget.maxEntryChars) {
+    if (result.length <= MAX_CACHE_ENTRY_CHARS) {
       while (
-        cache.size >= budget.maxEntries ||
-        cacheChars + result.length > budget.maxTotalChars
+        cache.size >= MAX_CACHE_ENTRIES ||
+        cacheChars + result.length > MAX_CACHE_TOTAL_CHARS
       ) {
         const firstKey = cache.keys().next().value;
         if (firstKey === undefined) break;

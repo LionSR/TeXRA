@@ -12,7 +12,6 @@ export {
 } from './createMarkdownRenderer';
 export {
   createMarkdownProcessor,
-  type CacheBudget,
   type LatexReferenceFormatter,
   type MarkdownProcessor,
   type MarkdownProcessorConfig,

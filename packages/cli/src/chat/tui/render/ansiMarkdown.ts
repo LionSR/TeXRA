@@ -10,7 +10,6 @@
 // consistent between hosts without dragging the HTML wrapper through.
 
 import { highlight, supportsLanguage } from 'cli-highlight';
-import type { RenderRule } from 'markdown-it/lib/renderer.mjs';
 import pico from 'picocolors';
 
 import {
@@ -20,12 +19,7 @@ import {
   type MarkdownProcessor,
 } from '@shared/markdown';
 
-type MdInstance = MarkdownItInstance;
-type Rule = RenderRule;
-type Tokens = Parameters<Rule>[0];
-function rule(impl: (tokens: Tokens, idx: number) => string): Rule {
-  return impl as Rule;
-}
+import type { RenderRule } from 'markdown-it/lib/renderer.mjs';
 
 /** SGR open/close codes wrapped through String.fromCharCode so the ESC byte
  *  is never a literal in source (pre-commit hooks have been known to mangle
@@ -60,18 +54,21 @@ function stripFenceMarkers(raw: string): string {
   return raw.replaceAll(ANSI_FENCE_OPEN, '').replaceAll(ANSI_FENCE_CLOSE, '');
 }
 
-function configureAnsi(md: MdInstance): void {
+function configureAnsi(md: MarkdownItInstance): void {
   const r = md.renderer.rules;
+  let quoteDepth = 0;
 
-  const headingOpen = rule((tokens, idx) => {
+  const quotePrefix = (): string =>
+    quoteDepth > 0 ? pico.dim('│ '.repeat(quoteDepth)) : '';
+
+  const headingOpen: RenderRule = (tokens, idx) => {
     const level = Number(tokens[idx]?.tag?.slice(1) ?? 1);
     const marker = '#'.repeat(level);
     return `\n${pico.bold(pico.cyan(`${marker} `))}`;
-  });
-  const codeInline = rule((tokens, idx) =>
-    pico.cyan(`\`${tokens[idx]?.content ?? ''}\``),
-  );
-  const fence = rule((tokens, idx) => {
+  };
+  const codeInline: RenderRule = (tokens, idx) =>
+    pico.cyan(`\`${tokens[idx]?.content ?? ''}\``);
+  const fence: RenderRule = (tokens, idx) => {
     const token = tokens[idx];
     if (!token) return '';
     const langName = token.info.trim().split(/\s+/)[0] ?? '';
@@ -83,25 +80,28 @@ function configureAnsi(md: MdInstance): void {
         ? raw
         : `${ANSI_FENCE_OPEN}${pico.gray(token.content.replace(/\n+$/, ''))}${ANSI_FENCE_CLOSE}`;
     return `${stripFenceMarkers(body)}\n\n`;
-  });
-  const codeBlock = rule(
-    (tokens, idx) =>
-      `${pico.gray(tokens[idx]?.content.replace(/\n+$/, '') ?? '')}\n\n`,
-  );
-  const listItemOpen = rule((tokens, idx) => {
-    const marker = tokens[idx]?.info ? `${tokens[idx]?.info}.` : '•';
+  };
+  const codeBlock: RenderRule = (tokens, idx) =>
+    `${pico.gray(tokens[idx]?.content.replace(/\n+$/, '') ?? '')}\n\n`;
+  const listItemOpen: RenderRule = (tokens, idx) => {
+    const token = tokens[idx];
+    const marker = token?.info ? `${token.info}${token.markup || '.'}` : '•';
     return `  ${pico.dim(marker)} `;
-  });
-  const textRule = rule((tokens, idx) => tokens[idx]?.content ?? '');
-  const image = rule((tokens, idx) => {
+  };
+  const paragraphOpen: RenderRule = (tokens, idx) => {
+    if (quoteDepth === 0) return '';
+    return tokens[idx - 1]?.type === 'blockquote_open' ? '' : quotePrefix();
+  };
+  const textRule: RenderRule = (tokens, idx) => tokens[idx]?.content ?? '';
+  const image: RenderRule = (tokens, idx) => {
     const alt = tokens[idx]?.content ?? '';
     return pico.dim(`[image: ${alt}]`);
-  });
+  };
 
   r.heading_open = headingOpen;
   r.heading_close = () => '\n';
 
-  r.paragraph_open = () => '';
+  r.paragraph_open = paragraphOpen;
   r.paragraph_close = () => '\n';
 
   r.strong_open = () => sgr(1);
@@ -122,8 +122,16 @@ function configureAnsi(md: MdInstance): void {
   r.list_item_open = listItemOpen;
   r.list_item_close = () => '';
 
-  r.blockquote_open = () => pico.dim('│ ');
-  r.blockquote_close = () => '\n';
+  r.blockquote_open = (tokens, idx) => {
+    quoteDepth += 1;
+    return tokens[idx - 1]?.type === 'blockquote_open'
+      ? pico.dim('│ ')
+      : quotePrefix();
+  };
+  r.blockquote_close = () => {
+    quoteDepth = Math.max(0, quoteDepth - 1);
+    return '\n';
+  };
 
   r.hr = () => `${pico.dim('─'.repeat(40))}\n`;
 
@@ -134,8 +142,8 @@ function configureAnsi(md: MdInstance): void {
   r.link_open = () => `${sgr(4)}${sgr(34)}[`;
   r.link_close = () => `]${sgr(39)}${sgr(24)}`;
 
-  r.softbreak = () => '\n';
-  r.hardbreak = () => '\n';
+  r.softbreak = () => `\n${quotePrefix()}`;
+  r.hardbreak = () => `\n${quotePrefix()}`;
 
   // markdown-it default `text` rule escapes HTML; we want raw text.
   r.text = textRule;

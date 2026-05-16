@@ -12,9 +12,9 @@ export interface MarkdownProps {
 }
 
 export function Markdown(props: MarkdownProps): React.JSX.Element {
-  // Trim trailing newlines so Ink doesn't add a blank line at the bottom of
-  // each conversation entry — the parent `<Box marginBottom={1}>` already
-  // provides separation between entries.
+  // `renderAnsiMarkdown` trims trailing newlines so Ink doesn't add a blank
+  // line at the bottom of each conversation entry; the parent
+  // `<Box marginBottom={1}>` already provides separation between entries.
   const rendered = renderAnsiMarkdown(props.content);
   return <Text>{rendered}</Text>;
 }

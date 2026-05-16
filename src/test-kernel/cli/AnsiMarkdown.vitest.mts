@@ -6,6 +6,7 @@
 // crashing, and (d) hides the fence sentinel from the final output.
 
 import { describe, expect, it } from 'vitest';
+import stripAnsi from 'strip-ansi';
 
 import {
   _ansiMarkdownStatsForTests,
@@ -37,6 +38,25 @@ describe('renderAnsiMarkdown', () => {
     const out = renderAnsiMarkdown('```nosuchlang\nplain body\n```');
     expect(out).toContain('plain body');
     expect(out).not.toContain('ANSI_FENCE');
+  });
+
+  it('prefixes every rendered blockquote line', () => {
+    _resetAnsiMarkdownForTests();
+    const out = renderAnsiMarkdown('> first\n> second\n>\n> third');
+    expect(stripAnsi(out)).toContain('│ first\n│ second\n│ third');
+  });
+
+  it('renders nested blockquote prefixes once per depth', () => {
+    _resetAnsiMarkdownForTests();
+    const out = renderAnsiMarkdown('> outer\n> > inner');
+    expect(stripAnsi(out)).toContain('│ outer\n│ │ inner');
+  });
+
+  it('preserves ordered-list delimiter markup', () => {
+    _resetAnsiMarkdownForTests();
+    const out = renderAnsiMarkdown('1) one\n2) two');
+    expect(stripAnsi(out)).toContain('1) one');
+    expect(stripAnsi(out)).toContain('2) two');
   });
 
   it('memoises identical inputs (second call hits the cache)', () => {
