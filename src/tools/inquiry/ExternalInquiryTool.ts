@@ -34,8 +34,10 @@ import { collectKnownSessionLinks } from './externalInquiryResultFormatter';
 import {
   ensureExternalInquiryThreadMirror,
   getThreadSummary,
+  getOpenTurnDraft,
   listThreadsByStatus,
   markDropped,
+  manifestToTranscript,
   readExternalInquiryThread,
   recordAnswerForOpenTurn,
   recordOpenQuestion,
@@ -361,6 +363,8 @@ export class ExternalInquiryTool extends defineTool({
       suggestSearch: input.suggestSearch ?? undefined,
       attachFiles: input.attachFiles ?? undefined,
       sessionLinks: collectKnownSessionLinks(persisted.manifest),
+      draft: getOpenTurnDraft(persisted.manifest),
+      transcript: manifestToTranscript(persisted.manifest),
       allowBypass: false,
       streamId,
     });

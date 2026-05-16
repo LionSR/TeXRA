@@ -7,16 +7,19 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
 import type { StreamTabId } from '@shared/schemas';
+import { ToolError } from '@tools/result';
 import {
+  getOpenTurnDraft,
   listOpenThreads,
   listOpenThreadsForStream,
   listThreadsByStatus,
   markDropped,
+  manifestToTranscript,
+  persistOpenTurnDraft,
   readExternalInquiryThread,
   recordAnswerForOpenTurn,
   recordOpenQuestion,
 } from '@tools/inquiry/externalInquiryStorage';
-import { ToolError } from '@tools/result';
 
 import type { Platform } from '@platform/platform';
 
@@ -113,6 +116,38 @@ describe('InquiryStorage', () => {
     expect(followUp.manifest.status).toBe('open');
     expect(followUp.manifest.turns).toHaveLength(2);
     expect(followUp.turn.question).toBe('Q2 (follow-up)');
+  });
+
+  it('persists open-turn drafts and exposes transcript turns', async () => {
+    const t = await recordOpenQuestion({
+      parentStreamId: STREAM_A,
+      question: 'Q1',
+    });
+    await recordAnswerForOpenTurn({ threadId: t.threadId, answer: 'A1' });
+    await recordOpenQuestion({
+      threadId: t.threadId,
+      parentStreamId: STREAM_A,
+      question: 'Q2',
+    });
+
+    await persistOpenTurnDraft({
+      threadId: t.threadId,
+      draft: {
+        answer: 'partial answer',
+        sessionLinks: 'https://chat.example/thread',
+      },
+    });
+
+    const manifest = await readExternalInquiryThread(t.threadId);
+    expect(manifest).not.toBeNull();
+    expect(getOpenTurnDraft(manifest!)).toEqual({
+      answer: 'partial answer',
+      sessionLinks: 'https://chat.example/thread',
+    });
+    expect(manifestToTranscript(manifest!)).toMatchObject([
+      { turnIndex: 1, question: 'Q1', answer: 'A1' },
+      { turnIndex: 2, question: 'Q2', answer: undefined },
+    ]);
   });
 
   it('updates parentStreamId on cross-stream follow-up', async () => {

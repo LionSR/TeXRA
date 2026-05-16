@@ -9,6 +9,7 @@ import {
   ExternalInquirySessionLinksSchema,
   ExternalInquiryThreadIdSchema,
   InquiryDraftSchema,
+  type InquiryTranscriptTurn,
   StreamTabIdSchema,
   type ExternalInquiryThreadId,
   type ExternalInquiryThreadSummary,
@@ -448,7 +449,8 @@ export async function recordAnswerForOpenTurn(params: {
     if (existing.status !== 'open') return null;
     if (existing.turns.length === 0) return null;
 
-    const lastTurn = existing.turns[existing.turns.length - 1];
+    const lastTurn = existing.turns.at(-1);
+    if (!lastTurn) return null;
     if (lastTurn.answer) return null;
 
     const timestamp = new Date().toISOString();
@@ -542,7 +544,8 @@ export async function persistOpenTurnDraft(params: {
     if (!existing || existing.status !== 'open' || existing.turns.length === 0)
       return;
 
-    const lastTurn = existing.turns[existing.turns.length - 1];
+    const lastTurn = existing.turns.at(-1);
+    if (!lastTurn) return;
     if (lastTurn.answer) return;
 
     const nextTurn: ExternalInquiryTurnRecord = {
@@ -557,6 +560,29 @@ export async function persistOpenTurnDraft(params: {
 
     await writeThreadManifest(nextManifest);
   });
+}
+
+export function getOpenTurnDraft(
+  manifest: ExternalInquiryThreadManifest,
+): InquiryDraft | undefined {
+  if (manifest.status !== 'open') return undefined;
+  const lastTurn = manifest.turns.at(-1);
+  if (!lastTurn || lastTurn.answer) return undefined;
+  return lastTurn.draft ?? undefined;
+}
+
+export function manifestToTranscript(
+  manifest: ExternalInquiryThreadManifest,
+): InquiryTranscriptTurn[] {
+  return manifest.turns.map((turn) => ({
+    turnIndex: turn.turnIndex,
+    timestamp: turn.timestamp,
+    question: turn.question,
+    context: turn.context ?? undefined,
+    answer: turn.answer ?? undefined,
+    answeredAt: turn.answeredAt ?? undefined,
+    sessionLinks: turn.sessionLinks ?? undefined,
+  }));
 }
 
 // ============================================================================

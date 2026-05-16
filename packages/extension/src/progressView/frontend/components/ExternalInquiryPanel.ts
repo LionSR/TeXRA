@@ -22,12 +22,18 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { postMessage } from '@shared/hostBridge';
+import type {
+  ExternalInquiryPermission,
+  InquiryDraft,
+  InquiryTranscriptTurn,
+} from '@shared/schemas';
 import {
   commonViewStyles,
   designTokens,
   requestPanelStyles,
 } from '@shared/styles';
-import type { ExternalInquiryPermission } from '@shared/schemas';
 import { CopyButtonController } from '@shared/controllers/CopyButtonController';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
@@ -36,18 +42,19 @@ import { ProgressEvents } from '../events';
 
 // ── Draft persistence ──
 
-interface InquiryDraft {
-  answerText: string;
-  sessionLinksText: string;
-}
-
 const DRAFT_CACHE_CAP = 50;
+const DRAFT_SAVE_DELAY_MS = 400;
 const draftCache = new Map<string, InquiryDraft>();
 const resolvedIds = new Set<string>();
 const INQUIRY_SUBMIT_ACTION = 'submit';
 
 function getRequestId(permission: { data: unknown }): string {
   return (permission.data as ExternalInquiryPermission).requestId;
+}
+
+function getThreadId(permission: { data: unknown }): string {
+  const data = permission.data as ExternalInquiryPermission;
+  return data.threadId ?? data.requestId;
 }
 
 function safeHttpUrl(link: string): string | undefined {
@@ -83,35 +90,46 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
 
   private copyController = new CopyButtonController(this);
   private draftRestored = false;
+  private draftSaveTimer: ReturnType<typeof setTimeout> | undefined;
 
   // ── Lifecycle ──
 
   override disconnectedCallback(): void {
-    this.saveDraft();
+    this.flushDraft();
     super.disconnectedCallback();
   }
 
   protected override willUpdate(changed: PropertyValues): void {
     super.willUpdate(changed);
+    if (changed.has('permission')) {
+      this.draftRestored = false;
+    }
     // Restore draft once on first update (avoids the extra render from connectedCallback).
     if (!this.draftRestored) {
       this.draftRestored = true;
-      const draft = draftCache.get(getRequestId(this.permission));
+      const data = this.permission.data as ExternalInquiryPermission;
+      const draft = draftCache.get(getRequestId(this.permission)) ?? data.draft;
       if (draft) {
-        this.answerText = draft.answerText;
-        this.sessionLinksText = draft.sessionLinksText;
+        this.answerText = draft.answer;
+        this.sessionLinksText = draft.sessionLinks;
       }
     }
   }
 
-  private saveDraft(): void {
+  private currentDraft(): InquiryDraft | null {
+    if (!this.answerText && !this.sessionLinksText) return null;
+    return {
+      answer: this.answerText,
+      sessionLinks: this.sessionLinksText,
+    };
+  }
+
+  private saveDraft(options: { persist: boolean }): void {
     const id = getRequestId(this.permission);
     if (resolvedIds.has(id)) return;
-    if (this.answerText || this.sessionLinksText) {
-      draftCache.set(id, {
-        answerText: this.answerText,
-        sessionLinksText: this.sessionLinksText,
-      });
+    const draft = this.currentDraft();
+    if (draft) {
+      draftCache.set(id, draft);
       if (draftCache.size > DRAFT_CACHE_CAP) {
         const oldest = draftCache.keys().next().value;
         if (oldest !== undefined) draftCache.delete(oldest);
@@ -119,6 +137,32 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
     } else {
       draftCache.delete(id);
     }
+    if (options.persist) {
+      postMessage(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION, {
+        action: 'draft',
+        threadId: getThreadId(this.permission),
+        draft,
+      });
+    }
+  }
+
+  private scheduleDraftSave(): void {
+    this.saveDraft({ persist: false });
+    if (this.draftSaveTimer) {
+      clearTimeout(this.draftSaveTimer);
+    }
+    this.draftSaveTimer = setTimeout(() => {
+      this.draftSaveTimer = undefined;
+      this.saveDraft({ persist: true });
+    }, DRAFT_SAVE_DELAY_MS);
+  }
+
+  private flushDraft(): void {
+    if (this.draftSaveTimer) {
+      clearTimeout(this.draftSaveTimer);
+      this.draftSaveTimer = undefined;
+    }
+    this.saveDraft({ persist: true });
   }
 
   override handleKeyboardShortcut(key: string): boolean {
@@ -157,6 +201,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
         <div class="external-inquiry-request__details">
           ${this.renderHeader(data)}
           ${data.context ? this.renderContext(data.context) : nothing}
+          ${this.renderTranscript(data.transcript ?? [])}
           ${this.renderQuestion(data.question)}
           ${data.suggestSearch ? this.renderSearchHint() : nothing}
           ${data.attachFiles?.length
@@ -186,6 +231,63 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
   private renderContext(context: string): TemplateResult {
     return html`
       <div class="external-inquiry-request__context">${context}</div>
+    `;
+  }
+
+  private renderTranscript(
+    transcript: InquiryTranscriptTurn[],
+  ): TemplateResult | typeof nothing {
+    const answeredTurns = transcript.filter((turn) => turn.answer);
+    if (answeredTurns.length === 0) return nothing;
+
+    return html`
+      <details class="external-inquiry-request__transcript">
+        <summary class="external-inquiry-request__transcript-summary">
+          <wa-icon library="texra" name="history" aria-hidden="true"></wa-icon>
+          Conversation transcript (${answeredTurns.length})
+        </summary>
+        <div class="external-inquiry-request__transcript-turns">
+          ${repeat(
+            answeredTurns,
+            (turn) => turn.turnIndex,
+            (turn) => this.renderTranscriptTurn(turn),
+          )}
+        </div>
+      </details>
+    `;
+  }
+
+  private renderTranscriptTurn(turn: InquiryTranscriptTurn): TemplateResult {
+    return html`
+      <section class="external-inquiry-request__transcript-turn">
+        <div class="external-inquiry-request__transcript-turn-header">
+          Turn ${turn.turnIndex}
+        </div>
+        ${turn.context
+          ? html`
+              <div class="external-inquiry-request__transcript-context">
+                ${turn.context}
+              </div>
+            `
+          : nothing}
+        <div class="external-inquiry-request__transcript-label">Q</div>
+        <div class="external-inquiry-request__transcript-text">
+          ${turn.question}
+        </div>
+        <div class="external-inquiry-request__transcript-label">A</div>
+        <div class="external-inquiry-request__transcript-text">
+          ${turn.answer}
+        </div>
+        ${turn.sessionLinks?.length
+          ? html`
+              <div class="external-inquiry-request__transcript-links">
+                ${turn.sessionLinks.map((link) =>
+                  this.renderKnownSessionLink(link),
+                )}
+              </div>
+            `
+          : nothing}
+      </section>
     `;
   }
 
@@ -361,10 +463,12 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel {
 
   private handleAnswerInput(e: Event): void {
     this.answerText = (e.target as HTMLTextAreaElement).value;
+    this.scheduleDraftSave();
   }
 
   private handleSessionLinksInput(e: Event): void {
     this.sessionLinksText = (e.target as HTMLTextAreaElement).value;
+    this.scheduleDraftSave();
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
