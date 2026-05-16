@@ -1,19 +1,37 @@
 // Wrap a runtime host's `emit` so progress payloads patch `cliState` while
 // still flowing through the original emitter. Approvals are intentionally
-// not handled here — Phase 1 keeps them on the legacy adapter.
+// not handled here — `subscribeApprovals.ts` owns the typed-modal pipeline.
 
 import type {
   ProgressEvent,
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
-import { cliState, patchStream, removeStream } from './cliState';
+import {
+  cliState,
+  patchStream,
+  removeStream,
+  setParentStream,
+} from './cliState';
 import type { CliRuntimeHost } from '../../../runtime/runtimeHost';
 
 type Emit = <K extends ProgressEvent>(
   event: K,
   payload: ProgressEventPayloads[K],
 ) => void;
+
+/** Cap on per-process tail bytes held in the signal map — beyond this we
+ *  truncate at the head so the live pane never grows unbounded. Matches the
+ *  PRD "Phase 4 doesn't buffer beyond a small per-line cap" guidance. */
+const PROCESS_TAIL_BYTES_MAX = 8 * 1024;
+
+function tailBytes(prev: string, next: string): string {
+  if (!next) return prev;
+  const joined = `${prev}${next}`;
+  if (joined.length <= PROCESS_TAIL_BYTES_MAX) return joined;
+  return joined.slice(joined.length - PROCESS_TAIL_BYTES_MAX);
+}
 
 export function wrapRuntimeHost(host: CliRuntimeHost): CliRuntimeHost {
   const original = host.emit;
@@ -35,6 +53,11 @@ function applyToState<K extends ProgressEvent>(
       cliState.activeStreamId.set(next ?? undefined);
       return;
     }
+    case 'setParentStream': {
+      const p = payload as ProgressEventPayloads['setParentStream'];
+      setParentStream(p.childStreamId, p.parentStreamId);
+      return;
+    }
     case 'removeStream':
       removeStream((payload as ProgressEventPayloads['removeStream']).streamId);
       return;
@@ -53,18 +76,77 @@ function applyToState<K extends ProgressEvent>(
       patchStream(p.streamId, (s) => ({ ...s, description: p.description }));
       return;
     }
+    case 'updateActiveSubagents': {
+      const p = payload as ProgressEventPayloads['updateActiveSubagents'];
+      patchStream(p.parentStreamId, (s) => ({
+        ...s,
+        activeSubagents: p.children,
+      }));
+      return;
+    }
+    case 'updateActiveProcesses': {
+      const p = payload as ProgressEventPayloads['updateActiveProcesses'];
+      patchStream(p.parentStreamId, (s) => ({
+        ...s,
+        activeProcesses: p.processes,
+      }));
+      return;
+    }
+    case 'updateProcessOutput': {
+      const p = payload as ProgressEventPayloads['updateProcessOutput'];
+      patchStream(p.parentStreamId, (s) => {
+        const prev = s.processOutput.get(p.executionId) ?? {
+          stdout: '',
+          stderr: '',
+        };
+        const next = {
+          stdout: tailBytes(prev.stdout, p.stdout),
+          stderr: tailBytes(prev.stderr, p.stderr),
+        };
+        const map = new Map(s.processOutput);
+        map.set(p.executionId, next);
+        return { ...s, processOutput: map };
+      });
+      return;
+    }
+    case 'updateTodos': {
+      const p = payload as ProgressEventPayloads['updateTodos'];
+      patchStream(p.streamId, (s) => ({ ...s, todos: p.todos }));
+      return;
+    }
+    case 'updatePlan': {
+      const p = payload as ProgressEventPayloads['updatePlan'];
+      patchStream(p.streamId, (s) => ({ ...s, plan: p.plan }));
+      return;
+    }
+    case 'updateToolEditApprovalBypassState': {
+      const p =
+        payload as ProgressEventPayloads['updateToolEditApprovalBypassState'];
+      cliState.bypass.set({
+        ...cliState.bypass.get(),
+        toolEdit: p.bypassActive,
+      });
+      return;
+    }
+    case 'updateSuperYoloBypassState': {
+      const p = payload as ProgressEventPayloads['updateSuperYoloBypassState'];
+      cliState.bypass.set({
+        ...cliState.bypass.get(),
+        superYolo: p.bypassActive,
+      });
+      return;
+    }
     case 'updateQueuedFollowUps': {
-      // `updateQueuedFollowUps` fires for both enqueue AND consume of the
-      // tool-use follow-up queue with no delta payload, so any local counter
-      // would drift one-way. Phase 1 leaves `queuedFollowUps` at its default
-      // (0); Phase 4 wires the StatusBar pill to the real queue length via
-      // `ToolUseFollowUpQueue.getAll(streamId).length` when the multi-agent
-      // surface lands.
+      // The event itself has no delta payload — re-read the queue directly so
+      // the StatusBar pill stays accurate after both enqueue and drain.
+      const p = payload as ProgressEventPayloads['updateQueuedFollowUps'];
+      const count = ToolUseFollowUpQueue.getAll(p.streamId).length;
+      patchStream(p.streamId, (s) =>
+        s.queuedFollowUps === count ? s : { ...s, queuedFollowUps: count },
+      );
       return;
     }
     default:
-      // Phase 1 only consumes the events the header/conversation/input row
-      // surfaces — later phases handle subagents/tools/approvals.
       return;
   }
 }

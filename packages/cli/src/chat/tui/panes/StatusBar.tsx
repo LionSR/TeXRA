@@ -25,12 +25,25 @@ function statusLabel(status: string | undefined): string {
 export function StatusBar(): React.JSX.Element {
   const activeStreamId = useSignal(cliState.activeStreamId);
   const streams = useSignal(cliState.streams);
+  const bypass = useSignal(cliState.bypass);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const queued = slice?.queuedFollowUps ?? 0;
 
   return (
     <Box paddingX={1} justifyContent="space-between">
-      <Text dimColor>{statusLabel(slice?.status)}</Text>
+      <Box>
+        <Text dimColor>{statusLabel(slice?.status)}</Text>
+        {bypass.superYolo ? (
+          <Text color="red" bold>
+            {'  YOLO'}
+          </Text>
+        ) : null}
+        {bypass.toolEdit ? (
+          <Text color="yellow" bold>
+            {'  BYPASS'}
+          </Text>
+        ) : null}
+      </Box>
       {queued > 0 ? <Text dimColor>queued: {queued}</Text> : null}
     </Box>
   );
