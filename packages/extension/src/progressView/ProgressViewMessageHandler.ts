@@ -305,11 +305,24 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         if (data.action === 'draft') {
           await persistOpenTurnDraft({
             threadId: data.threadId,
-            draft: data.draft,
+            draft: data.draft ?? null,
           });
           return;
         }
-        await handleExternalInquiryAction(data);
+        if (data.action === 'submit' && data.answer) {
+          await handleExternalInquiryAction({
+            action: 'submit',
+            threadId: data.threadId,
+            answer: data.answer,
+            sessionLinks: data.sessionLinks,
+          });
+          return;
+        }
+        await handleExternalInquiryAction({
+          action: 'drop',
+          threadId: data.threadId,
+          feedback: data.feedback,
+        });
       },
       [PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION]: (data) =>
         handleUserQuestionAction(data),
