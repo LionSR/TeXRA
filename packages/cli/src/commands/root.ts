@@ -547,8 +547,14 @@ const chatCommand = defineCommand({
     },
     tui: {
       type: 'boolean',
+      default: true,
       description:
-        'Opt into the Ink-based TUI (preview; defaults off until Phase 6).',
+        'Use the Ink-based TUI (default for TTY; pass --no-tui to opt out).',
+    },
+    'legacy-renderer': {
+      type: 'boolean',
+      description:
+        'Use the legacy line-based renderer instead of the Ink TUI (alias for --no-tui).',
     },
   },
   async run(ctx) {
@@ -558,7 +564,13 @@ const chatCommand = defineCommand({
       modelOverride: optString(ctx.args.model),
       toolDisplay: ctx.args['tool-display'],
     };
-    if (ctx.args.tui === true) {
+    // Phase 6: the Ink TUI is the default for capable TTYs. Auto-fallback
+    // to the legacy renderer when the terminal can't render usefully
+    // (`TERM=dumb`, `NO_COLOR` + narrow columns, or non-TTY pipes). Users
+    // can also opt out manually with `--no-tui` / `--legacy-renderer`.
+    const tuiOptOut =
+      ctx.args.tui === false || ctx.args['legacy-renderer'] === true;
+    if (!tuiOptOut && context.tuiCapable) {
       const { runChatTui } = await import('../chat/tui/runChatTui');
       const result = await runChatTui(context, init);
       setExitCode(result.exitCode);
