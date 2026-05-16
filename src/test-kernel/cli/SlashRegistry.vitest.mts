@@ -1,4 +1,4 @@
-// Phase 5 slash command registry + parse helpers.
+// Slash command registry and parse helpers.
 
 import { afterEach, describe, expect, it } from 'vitest';
 

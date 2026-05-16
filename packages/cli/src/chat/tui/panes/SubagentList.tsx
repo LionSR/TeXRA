@@ -2,8 +2,7 @@
 // tails the live stdout/stderr per process so the user can see what each
 // shell call is doing.
 //
-// The leading numeric index is currently a visual cue only — the `1`–`9`
-// jump shortcuts land in Phase 5 alongside the input-focus toggle.
+// The leading numeric index is currently a visual cue only.
 
 import { Box, Text } from 'ink';
 
