@@ -4,6 +4,7 @@ import { ConfirmInput } from '@inkjs/ui';
 import type { AgentProposalPermission } from '@shared/schemas';
 
 import type { ApprovalDecision } from '../state/approvalQueue';
+import { KeyHints } from '../ui/KeyHints';
 
 export interface AgentProposalProps {
   readonly payload: AgentProposalPermission;
@@ -25,10 +26,18 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
         <Text>{props.payload.instruction}</Text>
       </Box>
       <Box>
-        <Text dimColor>y approve · n reject · </Text>
         <ConfirmInput
           onConfirm={() => props.onDecide({ accepted: true })}
           onCancel={() => props.onDecide({ accepted: false })}
+        />
+      </Box>
+      <Box marginTop={1}>
+        <KeyHints
+          hints={[
+            { key: 'y', action: 'approve' },
+            { key: 'n', action: 'reject' },
+          ]}
+          confirmCancel={false}
         />
       </Box>
     </Box>

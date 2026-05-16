@@ -14,10 +14,12 @@ import { currentApproval } from './state/approvalQueue';
 import { cliState } from './state/cliState';
 import { nextFocusBack, nextFocusForward } from './state/focusCycle';
 import { useSignal } from './state/useSignal';
+import type { InputHistory } from './history/inputHistory';
 
 export interface AppProps {
   readonly onSubmit: (line: string) => void;
   readonly inputDisabled?: boolean;
+  readonly history?: InputHistory;
 }
 
 export function App(props: AppProps): React.JSX.Element {
@@ -40,11 +42,8 @@ export function App(props: AppProps): React.JSX.Element {
       activeSlice.plan !== null
     : false;
 
-  // Ctrl-A / Ctrl-B focus cycle — runs at the App layer so the same chord
-  // lands no matter which pane the user just glanced at. The readline-style
-  // start-of-line / back-one-char binding of those chords inside the input
-  // bar lands in Phase 5 alongside the explicit focus-mode toggle; until
-  // then ink-text-input ignores ctrl chords anyway.
+  // Ctrl-A / Ctrl-B focus cycle runs at the App layer so the same chord
+  // lands no matter which pane currently has the user's attention.
   useInput((input, key) => {
     if (!key.ctrl) return;
     if (input === 'a') {
@@ -72,7 +71,11 @@ export function App(props: AppProps): React.JSX.Element {
       </Box>
       <StatusBar />
       <ApprovalModal pending={pending} />
-      <InputBar onSubmit={props.onSubmit} disabled={inputDisabled} />
+      <InputBar
+        onSubmit={props.onSubmit}
+        disabled={inputDisabled}
+        history={props.history}
+      />
     </Box>
   );
 }
