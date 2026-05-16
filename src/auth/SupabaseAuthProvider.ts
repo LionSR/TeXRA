@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { platform } from '@platform/platform';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { SupabaseClient } from './SupabaseClient';
@@ -52,13 +53,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   /** Flag to prevent race conditions between OAuth and magic link handlers */
   private isProcessingCallback = false;
 
-  constructor(private context: vscode.ExtensionContext) {
+  constructor(_context: vscode.ExtensionContext) {
     this.sessionCoordinator = createHostAuthCoordinator({
-      secrets: {
-        get: (key) => Promise.resolve(context.secrets.get(key)),
-        set: (key, value) => Promise.resolve(context.secrets.store(key, value)),
-        delete: (key) => Promise.resolve(context.secrets.delete(key)),
-      },
+      secrets: platform().secrets,
       whenReady: async () => {
         if (!this.uriHandler) {
           throw new Error(AUTH_URI_HANDLER_NOT_INITIALIZED);
