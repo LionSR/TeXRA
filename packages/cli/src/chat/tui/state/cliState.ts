@@ -176,4 +176,5 @@ export function resetCliState(): void {
   cliState.streams.set(new Map());
   cliState.parentStream.set(new Map());
   cliState.activeForm.set(undefined);
+  cliState.slashPaletteOpen.set(false);
 }
