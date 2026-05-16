@@ -113,7 +113,7 @@ const ListSchema = z.object({
     ),
   status: z
     .enum(['open', 'answered', 'dropped', 'any'])
-    .prefault('open')
+    .default('open')
     .describe(
       '"open" → awaiting user answer (default — matches the most common need). ' +
         '"answered" → user has submitted an answer. ' +
@@ -122,7 +122,7 @@ const ListSchema = z.object({
     ),
   scope: z
     .enum(['stream', 'all'])
-    .prefault('stream')
+    .default('stream')
     .describe(
       '"stream" → only threads belonging to this stream; "all" → every stream\'s threads.',
     ),
