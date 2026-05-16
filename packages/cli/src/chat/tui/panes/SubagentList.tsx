@@ -31,14 +31,11 @@ function statusColor(status: string | undefined): string | undefined {
  *  this is bounded work. */
 function lastLines(tail: ProcessOutputTail | undefined): string[] {
   if (!tail) return [];
-  const combined = `${tail.stdout}\n${tail.stderr}`;
-  const lines = combined.split('\n');
-  const trimmed: string[] = [];
-  for (let i = lines.length - 1; i >= 0 && trimmed.length < TAIL_LINES; i--) {
-    const line = lines[i]?.trimEnd();
-    if (line) trimmed.unshift(line);
-  }
-  return trimmed;
+  const nonBlank = `${tail.stdout}\n${tail.stderr}`
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => line.length > 0);
+  return nonBlank.slice(-TAIL_LINES);
 }
 
 function Row({ child, index, tail }: RowProps): React.JSX.Element {
