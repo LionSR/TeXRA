@@ -1,10 +1,11 @@
 // Ink-mounted chat session per docs/prd/cli-tui-ink.
 //
-// This is the new TUI entry that the `--tui` flag mounts; the legacy
-// `runChat.ts` path is still the default until Phase 6. We intentionally
-// share as much as possible with the legacy path — platform init, default
-// resolution, and the agent runtime host — and swap the rendering surface
-// (Ink), approval UI, and follow-up queue.
+// As of Phase 6 this is the default `texra chat` path for interactive TTYs;
+// `runChat.ts` only runs when the user passes `--no-tui` / `--legacy-renderer`
+// or when stdout isn't a TTY. We intentionally share as much as possible
+// with the legacy path — platform init, default resolution, and the agent
+// runtime host — and swap the rendering surface (Ink), approval UI, and
+// follow-up queue.
 
 import { render } from 'ink';
 import PQueue from 'p-queue';
@@ -54,7 +55,7 @@ export async function runChatTui(
 ): Promise<ChatResult> {
   if (context.mode === 'headless') {
     writeTextStderr(
-      'texra chat --tui requires an interactive terminal. Did you mean texra run?',
+      'texra chat requires an interactive terminal. Did you mean texra run? (Pass --legacy-renderer to force the line-based renderer.)',
     );
     return { exitCode: CliExitCode.Usage };
   }

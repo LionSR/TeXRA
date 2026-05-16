@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Ink-based CLI TUI is the default** — `texra chat` now mounts the Ink TUI for interactive (TTY) sessions instead of the line-based renderer. The TUI ships a multi-pane layout (conversation, subagent/process list, todos+plan), structured slash forms (`/model` picker), persistent input history with `Ctrl-R` reverse search, `Ctrl-A`/`Ctrl-B` focus traversal, and shared `<KeyHints>` footers across every modal. Pass `--no-tui` (or `--legacy-renderer`) to opt back into the line-based renderer; non-TTY shells (`texra chat | tee`) automatically fall back to the legacy path.
 - **Non-blocking external inquiries** — the `external_inquiry` tool is renamed to `inquiry` and is now non-blocking and durable. Dispatching a question no longer freezes the agent's cycle waiting for the human round-trip to ChatGPT/Gemini/etc. The cycle continues, and the agent is woken with a continuation message when you submit the answer in the panel — even after closing the tab or reloading the extension. Existing custom agent YAMLs that reference `external_inquiry` continue to work via a compatibility alias.
 
 ## [0.37.8] - 2026-05-01
