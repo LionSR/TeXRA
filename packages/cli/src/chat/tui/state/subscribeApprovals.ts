@@ -34,7 +34,6 @@ import {
   denyMessage,
   immediateDecision,
   markApprovalDenied,
-  type ApprovalDecision as PolicyDecision,
 } from '../../../runtime/approvalAdapter';
 import { assertNever } from '../assertNever';
 import { enqueueApproval, type ApprovalDecision } from './approvalQueue';
@@ -45,13 +44,19 @@ type Emit = <K extends ProgressEvent>(
   event: K,
   payload: ProgressEventPayloads[K],
 ) => void;
-type ApprovalEvent =
-  | 'showBashPermission'
-  | 'showPlanApproval'
-  | 'showAgentProposal'
-  | 'showRetryRequest'
-  | 'showExternalInquiry'
-  | 'showUserQuestion';
+
+const APPROVAL_EVENTS = [
+  'showBashPermission',
+  'showPlanApproval',
+  'showAgentProposal',
+  'showRetryRequest',
+  'showExternalInquiry',
+  'showUserQuestion',
+] as const;
+
+type ApprovalEvent = (typeof APPROVAL_EVENTS)[number];
+
+const APPROVAL_EVENT_SET: ReadonlySet<ProgressEvent> = new Set(APPROVAL_EVENTS);
 
 /**
  * Install the typed approval pipeline. Returns an `unbind` callback that
@@ -81,14 +86,11 @@ export function installTuiApprovals(
   }) as Emit;
 
   setToolEditApprovalHandler(async (request) => {
-    const policy = immediateDecision(context);
-    if (policy) {
-      return policy.accepted
-        ? { accepted: true, appliedContent: request.proposedContent }
-        : { accepted: false, userMessage: policy.userMessage };
+    let decision = immediateDecision(context);
+    if (!decision) {
+      decision = await enqueueApproval({ kind: 'toolEdit', request });
+      markIfRejected(context, decision);
     }
-    const decision = await enqueueApproval({ kind: 'toolEdit', request });
-    markIfRejected(context, decision);
     return decision.accepted
       ? { accepted: true, appliedContent: request.proposedContent }
       : { accepted: false, userMessage: decision.userMessage };
@@ -100,17 +102,8 @@ export function installTuiApprovals(
   };
 }
 
-const APPROVAL_EVENTS = new Set<ApprovalEvent>([
-  'showBashPermission',
-  'showPlanApproval',
-  'showAgentProposal',
-  'showRetryRequest',
-  'showExternalInquiry',
-  'showUserQuestion',
-]);
-
 function isApprovalEvent(event: ProgressEvent): event is ApprovalEvent {
-  return APPROVAL_EVENTS.has(event as ApprovalEvent);
+  return APPROVAL_EVENT_SET.has(event);
 }
 
 function routeApproval(
@@ -122,45 +115,33 @@ function routeApproval(
     case 'showBashPermission':
       routeWithPolicy(
         context,
-        dispatchBash,
+        'bash',
         payload as ProgressEventPayloads['showBashPermission'],
-        (p) => ({
-          kind: 'bash',
-          payload: p,
-        }),
+        dispatchBash,
       );
       return;
     case 'showPlanApproval':
       routeWithPolicy(
         context,
-        dispatchPlan,
+        'plan',
         payload as ProgressEventPayloads['showPlanApproval'],
-        (p) => ({
-          kind: 'plan',
-          payload: p,
-        }),
+        dispatchPlan,
       );
       return;
     case 'showAgentProposal':
       routeWithPolicy(
         context,
-        dispatchProposal,
+        'proposal',
         payload as ProgressEventPayloads['showAgentProposal'],
-        (p) => ({
-          kind: 'proposal',
-          payload: p,
-        }),
+        dispatchProposal,
       );
       return;
     case 'showRetryRequest':
       routeWithPolicy(
         context,
-        dispatchRetry,
+        'retry',
         payload as ProgressEventPayloads['showRetryRequest'],
-        (p) => ({
-          kind: 'retry',
-          payload: p,
-        }),
+        dispatchRetry,
       );
       return;
     case 'showExternalInquiry':
@@ -183,18 +164,24 @@ function routeApproval(
   }
 }
 
-function routeWithPolicy<P>(
+function routeWithPolicy<K extends 'bash' | 'plan' | 'proposal' | 'retry', P>(
   context: CliContext,
-  dispatch: (payload: P, decision: ApprovalDecision) => void,
+  kind: K,
   payload: P,
-  toQueuePayload: (p: P) => Parameters<typeof enqueueApproval>[0],
+  dispatch: (payload: P, decision: ApprovalDecision) => void,
 ): void {
-  const policy: PolicyDecision | undefined = immediateDecision(context);
+  const policy = immediateDecision(context);
   if (policy) {
     dispatch(payload, policy);
     return;
   }
-  void enqueueApproval(toQueuePayload(payload)).then((decision) => {
+  // The Extract<...> cast narrows the queue payload to the kind we picked;
+  // each dispatcher already trusts its payload shape via its own signature.
+  const queuePayload = { kind, payload } as Extract<
+    Parameters<typeof enqueueApproval>[0],
+    { kind: K }
+  >;
+  void enqueueApproval(queuePayload).then((decision) => {
     markIfRejected(context, decision);
     dispatch(payload, decision);
   });
@@ -294,15 +281,20 @@ function handleUserQuestion(
   payload: ProgressEventPayloads['showUserQuestion'],
   context: CliContext,
 ): void {
-  const policy = immediateDecision(context);
-  const feedback = policy
-    ? context.approvalPolicy === 'yolo'
-      ? 'User question requires human input; yolo mode cannot synthesize an answer.'
-      : denyMessage(context.approvalPolicy)
-    : 'User questions are not yet supported in the CLI TUI.';
+  const feedback = userQuestionFeedback(context);
   void handleUserQuestionAction({
     requestId: payload.requestId,
     action: 'skip',
     feedback,
   });
+}
+
+function userQuestionFeedback(context: CliContext): string {
+  if (!immediateDecision(context)) {
+    return 'User questions are not yet supported in the CLI TUI.';
+  }
+  if (context.approvalPolicy === 'yolo') {
+    return 'User question requires human input; yolo mode cannot synthesize an answer.';
+  }
+  return denyMessage(context.approvalPolicy);
 }

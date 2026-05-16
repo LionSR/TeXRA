@@ -87,20 +87,16 @@ function applyToState<K extends ProgressEvent>(
       // doesn't grow unboundedly for the lifetime of the parent stream.
       const live = new Set(p.processes.map((c) => c.executionId));
       patchStream(p.parentStreamId, (s) => {
-        let nextOutput = s.processOutput;
-        if (s.processOutput.size > 0) {
-          let mutated: Map<string, ProcessOutputTail> | undefined;
-          for (const id of s.processOutput.keys()) {
-            if (live.has(id)) continue;
-            if (!mutated) mutated = new Map(s.processOutput);
-            mutated.delete(id);
-          }
-          if (mutated) nextOutput = mutated;
+        let pruned: Map<string, ProcessOutputTail> | undefined;
+        for (const id of s.processOutput.keys()) {
+          if (live.has(id)) continue;
+          pruned ??= new Map(s.processOutput);
+          pruned.delete(id);
         }
         return {
           ...s,
           activeProcesses: p.processes,
-          processOutput: nextOutput,
+          processOutput: pruned ?? s.processOutput,
         };
       });
       return;
