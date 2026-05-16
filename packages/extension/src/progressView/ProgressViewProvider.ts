@@ -412,6 +412,7 @@ export class ProgressViewProvider
       try {
         const manifest = await readExternalInquiryThread(summary.threadId);
         if (!manifest || manifest.status !== 'open') continue;
+        if (!manifest.parentStreamId) continue;
         const lastTurn = manifest.turns.at(-1);
         if (!lastTurn || lastTurn.answer) continue;
         this.externalInquiryHandler.show({
@@ -423,7 +424,7 @@ export class ProgressViewProvider
           attachFiles: lastTurn.attachFiles ?? undefined,
           sessionLinks: collectKnownSessionLinks(manifest),
           allowBypass: false,
-          streamId: manifest.parentStreamId ?? '',
+          streamId: manifest.parentStreamId,
         });
       } catch {
         // Skip threads whose manifest can't be read; surface logs elsewhere.

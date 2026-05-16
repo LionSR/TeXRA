@@ -99,10 +99,3 @@ export const InquiryDraftSchema = z.object({
   sessionLinks: z.string(),
 });
 export type InquiryDraft = z.infer<typeof InquiryDraftSchema>;
-
-// ============================================================================
-// Legacy: kept for backward compat with existing message handlers.
-// ============================================================================
-
-export const EXTERNAL_INQUIRY_ACTIONS = ['submit', 'reject'] as const;
-export type ExternalInquiryAction = (typeof EXTERNAL_INQUIRY_ACTIONS)[number];

@@ -256,39 +256,30 @@ function handleExternalInquiry(
   payload: ProgressEventPayloads['showExternalInquiry'],
   context: CliContext,
 ): void {
+  const threadId = payload.threadId;
+  if (!threadId) return;
+
   const policy = immediateDecision(context);
   if (policy) {
-    // Match the legacy adapter: yolo and policy-denied both surface as
-    // `action: 'skip'`, with the appropriate explanatory feedback.
-    const feedback =
-      context.approvalPolicy === 'yolo'
-        ? 'External inquiry requires human input; yolo mode cannot synthesize an external answer.'
-        : denyMessage(context.approvalPolicy);
-    void handleExternalInquiryAction({
-      requestId: payload.requestId,
-      action: 'skip',
-      feedback,
-    });
+    void handleExternalInquiryAction({ action: 'drop', threadId });
     return;
   }
   void enqueueApproval({ kind: 'externalInquiry', payload }).then(
     (decision) => {
       markIfRejected(context, decision);
-      // User-accept with text → submit answer; everything else (empty
-      // text, reject, modal-cancel) → skip with feedback (matches
-      // `action: 'skip'` from the legacy ask-mode path).
+      // User-accept with text submits an answer; empty text, reject, and
+      // modal-cancel all drop the durable inquiry thread.
       if (decision.accepted && decision.userMessage) {
         void handleExternalInquiryAction({
-          requestId: payload.requestId,
           action: 'submit',
+          threadId,
           answer: decision.userMessage,
         });
         return;
       }
       void handleExternalInquiryAction({
-        requestId: payload.requestId,
-        action: 'skip',
-        feedback: decision.userMessage ?? 'No answer provided.',
+        action: 'drop',
+        threadId,
       });
     },
   );

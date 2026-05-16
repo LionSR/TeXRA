@@ -10,7 +10,6 @@ import type { StreamTabId } from '@shared/schemas';
 import {
   listOpenThreads,
   listOpenThreadsForStream,
-  listRecentClosedThreads,
   listThreadsByStatus,
   markDropped,
   readExternalInquiryThread,
@@ -166,10 +165,11 @@ describe('InquiryStorage', () => {
     });
     expect(allDropped.map((t) => t.threadId)).toEqual([t3.threadId]);
 
-    const closed = await listRecentClosedThreads({});
-    expect(closed.map((t) => t.threadId).sort()).toEqual(
-      [t1.threadId, t3.threadId].sort(),
-    );
+    const answered = await listThreadsByStatus({
+      status: 'answered',
+      scope: 'all',
+    });
+    expect(answered.map((t) => t.threadId)).toEqual([t1.threadId]);
   });
 
   it('parses a legacy manifest (no status/parentStreamId) as answered with null parent', async () => {

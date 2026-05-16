@@ -665,18 +665,3 @@ export async function listOpenThreadsForStream(
 ): Promise<ExternalInquiryThreadSummary[]> {
   return listThreadsByStatus({ status: 'open', scope: 'stream', streamId });
 }
-
-export async function listRecentClosedThreads(params: {
-  limit?: number;
-  since?: string;
-}): Promise<ExternalInquiryThreadSummary[]> {
-  const all = await listAllManifests();
-  const cutoff = params.since ? Date.parse(params.since) : null;
-  const filtered = all
-    .filter((m) => m.status === 'answered' || m.status === 'dropped')
-    .filter((m) => cutoff == null || Date.parse(m.updatedAt) >= cutoff);
-  filtered.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-  const trimmed =
-    params.limit != null ? filtered.slice(0, params.limit) : filtered;
-  return trimmed.map(manifestToSummary);
-}
