@@ -1,15 +1,19 @@
 // Signal-backed state for the CLI TUI. Mirrors the webview's `progressState`
 // shape — same primitives (`@lit-labs/signals`), same shape (one record per
 // stream + an `activeStreamId`) so future feature parity is a port, not a
-// rewrite. Phase 1 only exposes the fields the header + conversation pane +
-// input bar actually consume; later phases extend.
+// rewrite. Phase 4 extends with per-stream subagent/process/todos/plan/
+// process-output fields plus the per-stream bypass-state badges the
+// StatusBar consumes.
 
 import { signal, type Signal } from '@lit-labs/signals';
 
 import type { StreamTabId } from '@shared/schemas';
 import type {
+  ActiveChildInfo,
   ConversationProgress,
+  Plan,
   StreamStatus,
+  TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
 
@@ -28,6 +32,16 @@ export interface SessionMeta {
   readonly cwd: string;
 }
 
+export interface ProcessOutputTail {
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+export interface BypassState {
+  readonly toolEdit: boolean;
+  readonly superYolo: boolean;
+}
+
 export interface StreamSlice {
   readonly streamId: StreamTabId;
   readonly status: StreamStatus | undefined;
@@ -36,6 +50,17 @@ export interface StreamSlice {
   readonly conversation: ConversationProgress | undefined;
   readonly entries: readonly ConversationEntry[];
   readonly queuedFollowUps: number;
+  readonly activeSubagents: readonly ActiveChildInfo[];
+  readonly activeProcesses: readonly ActiveChildInfo[];
+  readonly todos: readonly TodoItem[];
+  readonly plan: Plan | null;
+  /** Tailed stdout/stderr per execution id; latest only — capped at
+   *  `PROCESS_TAIL_CHARS_MAX` in subscribeRuntimeHost. */
+  readonly processOutput: ReadonlyMap<string, ProcessOutputTail>;
+  /** YOLO / BYPASS state is stream-scoped upstream (see
+   *  `permissionSlice.ts` in the extension), so concurrent parent/child
+   *  sessions can show distinct badges. */
+  readonly bypass: BypassState;
 }
 
 const SESSION_META = signal<SessionMeta>({
@@ -48,11 +73,20 @@ const ACTIVE_STREAM_ID = signal<StreamTabId | undefined>(undefined);
 
 const STREAMS = signal<ReadonlyMap<StreamTabId, StreamSlice>>(new Map());
 
+/** child -> parent map populated from `setParentStream`. The focus cycle
+ *  (Ctrl-A / Ctrl-B) walks this when stepping back to the parent. */
+const PARENT_STREAM = signal<ReadonlyMap<StreamTabId, StreamTabId>>(new Map());
+
 export const cliState = {
   sessionMeta: SESSION_META as Signal.State<SessionMeta>,
   activeStreamId: ACTIVE_STREAM_ID as Signal.State<StreamTabId | undefined>,
   streams: STREAMS as Signal.State<ReadonlyMap<StreamTabId, StreamSlice>>,
+  parentStream: PARENT_STREAM as Signal.State<
+    ReadonlyMap<StreamTabId, StreamTabId>
+  >,
 };
+
+export const NO_BYPASS: BypassState = { toolEdit: false, superYolo: false };
 
 function emptySlice(streamId: StreamTabId): StreamSlice {
   return {
@@ -63,6 +97,12 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
     conversation: undefined,
     entries: [],
     queuedFollowUps: 0,
+    activeSubagents: [],
+    activeProcesses: [],
+    todos: [],
+    plan: null,
+    processOutput: new Map(),
+    bypass: NO_BYPASS,
   };
 }
 
@@ -88,6 +128,17 @@ export function patchStream(
   );
 }
 
+export function setParentStream(
+  childStreamId: StreamTabId,
+  parentStreamId: StreamTabId,
+): void {
+  const current = cliState.parentStream.get();
+  if (current.get(childStreamId) === parentStreamId) return;
+  const out = new Map(current);
+  out.set(childStreamId, parentStreamId);
+  cliState.parentStream.set(out);
+}
+
 export function removeStream(streamId: StreamTabId): void {
   const current = cliState.streams.get();
   if (!current.has(streamId)) return;
@@ -97,10 +148,22 @@ export function removeStream(streamId: StreamTabId): void {
   if (cliState.activeStreamId.get() === streamId) {
     cliState.activeStreamId.set(undefined);
   }
+  // Drop any parent-map edges that touched this stream so the focus cycle
+  // never lands on a stale id.
+  const parents = cliState.parentStream.get();
+  if (parents.has(streamId) || [...parents.values()].includes(streamId)) {
+    const nextParents = new Map(parents);
+    nextParents.delete(streamId);
+    for (const [child, parent] of nextParents) {
+      if (parent === streamId) nextParents.delete(child);
+    }
+    cliState.parentStream.set(nextParents);
+  }
 }
 
 export function resetCliState(): void {
   cliState.sessionMeta.set({ agent: '', model: '', cwd: '' });
   cliState.activeStreamId.set(undefined);
   cliState.streams.set(new Map());
+  cliState.parentStream.set(new Map());
 }
