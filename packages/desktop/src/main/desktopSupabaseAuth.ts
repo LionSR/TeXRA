@@ -7,10 +7,7 @@ import {
   toRemoteAgentProfileData,
 } from '@agent/index';
 import { DEFAULT_OAUTH_PROVIDER, getAuthCallbackUri } from '@auth/config';
-import {
-  createSupabaseAuthCoordinator,
-  createSupabaseSessionStorage,
-} from '@auth/SupabaseAuthCoordinator';
+import { createHostAuthCoordinator } from '@auth/createHostAuthCoordinator';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   type SupabaseCallbackResult,
@@ -261,8 +258,8 @@ export function createDesktopSupabaseAuth(
 export function createDesktopAuthCoordinator(
   options: Pick<DesktopSupabaseAuthOptions, 'secrets' | 'log'>,
 ): DesktopAuthCoordinator {
-  return createSupabaseAuthCoordinator({
-    storage: createSupabaseSessionStorage(options.secrets),
+  return createHostAuthCoordinator({
+    secrets: options.secrets,
     log: createSessionLog(options.log),
   });
 }
