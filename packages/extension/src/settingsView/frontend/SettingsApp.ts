@@ -30,6 +30,7 @@ import {
   SETTINGS_TAB,
   SETTINGS_TAB_ORDER,
 } from '@shared/schemas';
+import type { SpendingStatus } from '@shared/schemas/profileViewMessages';
 import {
   registerTeXRAWebAwesomeIcons,
   TEXRA_ICON_LIBRARY,
@@ -252,6 +253,14 @@ export class SettingsApp extends SettingsAppBase {
   private readonly userEmail = signal('');
   private readonly tier = signal('free');
   private readonly apiAccessMode = signal<'included' | 'personal'>('personal');
+  private readonly spendingStatus = signal<SpendingStatus | null>(null);
+  private readonly quotaAutoSwitched = signal(false);
+  // Mutable ref shared with the dispatcher so it can detect the
+  // remaining > 0 → remaining <= 0 transition across two UPDATE_PROFILE
+  // messages without exposing a signal for this purely internal state.
+  private readonly prevSpendRemainingRef: { current: number | null } = {
+    current: null,
+  };
   private readonly allowedModels = signal<string[] | null>([]);
   private readonly providerKeyStatuses = signal<ProviderKeyStatus[]>([]);
   private readonly globalStreamingDefault = signal(true);
@@ -334,6 +343,9 @@ export class SettingsApp extends SettingsAppBase {
       userEmail: this.userEmail,
       tier: this.tier,
       apiAccessMode: this.apiAccessMode,
+      spendingStatus: this.spendingStatus,
+      quotaAutoSwitched: this.quotaAutoSwitched,
+      prevSpendRemainingRef: this.prevSpendRemainingRef,
       allowedModels: this.allowedModels,
       providerKeyStatuses: this.providerKeyStatuses,
       globalStreamingDefault: this.globalStreamingDefault,
@@ -1031,6 +1043,8 @@ export class SettingsApp extends SettingsAppBase {
             <models-tab
               .authenticated=${this.authenticated.get()}
               .apiAccessMode=${this.apiAccessMode.get()}
+              .spendingStatus=${this.spendingStatus.get()}
+              .quotaAutoSwitched=${this.quotaAutoSwitched.get()}
               .allowedModels=${this.allowedModels.get()}
               .providerKeyStatuses=${this.providerKeyStatuses.get()}
               .globalStreamingDefault=${this.globalStreamingDefault.get()}
