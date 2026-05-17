@@ -254,18 +254,23 @@ function buildStoppedFlowResult(
   };
 }
 
-function buildFallbackNotification(config: AgentConfig) {
+function buildFallbackNotification(config: AgentConfig): {
+  agentName: string;
+  modelName: string;
+  inputName: string;
+  outputInfo: string;
+} {
   const primaryInput = config.inputFiles[0];
   const inputName = primaryInput
     ? path.basename(primaryInput)
     : 'selected input';
-  const { outputFiles = [] } = config;
-  const outputInfo =
-    outputFiles.length > 1
-      ? `to ${outputFiles.length} files`
-      : outputFiles[0]
-        ? `to ${path.basename(outputFiles[0])}`
-        : '';
+  const outputFiles = config.outputFiles ?? [];
+  let outputInfo = '';
+  if (outputFiles.length > 1) {
+    outputInfo = `to ${outputFiles.length} files`;
+  } else if (outputFiles[0]) {
+    outputInfo = `to ${path.basename(outputFiles[0])}`;
+  }
   return {
     agentName: config.agent,
     modelName: config.model,
@@ -273,10 +278,6 @@ function buildFallbackNotification(config: AgentConfig) {
     outputInfo,
   };
 }
-
-// ============================================================================
-// Public Entry Points
-// ============================================================================
 
 /** Options for executeAgent. */
 export interface ExecuteAgentOptions {
