@@ -93,7 +93,6 @@ export class VscodeConfigProvider implements ConfigProvider {
     const inspection = configKeys(key)
       .map((item) => inspectKey<T>(item))
       .find((item) => item !== undefined);
-
     return normalizeInspection(inspection, this.get<T>(key));
   }
 
