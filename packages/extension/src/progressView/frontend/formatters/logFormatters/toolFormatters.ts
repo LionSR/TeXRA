@@ -56,7 +56,7 @@ import {
   buildDetailsSummary,
   SPINNER_ICON_NAME,
 } from '../htmlBuilders';
-import { normalizeToolUseData } from '../logDataParsers';
+import { normalizeToolUseData } from '@shared/toolUse';
 import { registerProposalInput } from '../proposalInputStore';
 import { stringifyWithLanguage, extractCodeOnlyInput } from '../parseUtils';
 import {
