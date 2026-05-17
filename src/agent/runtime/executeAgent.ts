@@ -413,6 +413,13 @@ export async function executeAgent(
                 });
                 options.onFollowUpConsumed?.();
               },
+              onModelChanged: (modelHandler, model) => {
+                ctx.config.model = model;
+                ctx.usageMonitor.setModelInfo({
+                  capabilities: modelHandler.capabilities,
+                  config: modelHandler.config,
+                });
+              },
             });
             return {
               category: 'toolUse' as const,
