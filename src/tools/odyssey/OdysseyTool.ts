@@ -61,8 +61,8 @@ export class OdysseyTool extends defineTool({
 Commands:
 - view: Read the current odyssey state (objective, status, history, time elapsed).
 - start: Propose and start a new odyssey toward a stated objective. Only valid when no odyssey is active.
-- pause: Self-pause the odyssey when you cannot proceed without user input. Provide a reason describing what you need from the user.
-- complete: Mark the odyssey complete. Provide a reason describing HOW you verified completion against current external state (filesystem, command output, test results) — never conversation memory.`,
+- pause: Self-pause the odyssey when you genuinely need user input to proceed. Provide a reason describing what you need from the user.
+- complete: Mark the odyssey complete. Only valid when every requirement of the objective is verified satisfied against current external state (filesystem, command output, test results) — never conversation memory or remembered intent. Do not call this merely because the turn feels like a natural ending or because you have something quotable to say; completion is the absence of remaining required work.`,
   schema: OdysseyToolInputSchema,
 }) {
   protected async execute(input: OdysseyToolInput): Promise<ToolResult> {
@@ -128,12 +128,20 @@ Commands:
     objective: string,
   ): Promise<ToolResult> {
     const odyssey = await OdysseyStore.start(streamId, objective);
+    // Front-load the audit discipline into the tool result so it lands
+    // in the very first turn — the continuation prompt only fires from
+    // turn 2 onward, so without this the agent can finish + call
+    // odyssey(complete) on turn 1 with no anti-premature-completion
+    // guidance in context.
     return {
       summary: `Odyssey started: ${odyssey.objective.slice(0, 80)}`,
       output:
-        `Odyssey ${odyssey.odysseyId} is now active. ` +
-        `Continue working toward the objective; call command="complete" ` +
-        `when you have verified the stopping condition against current external state.\n\n` +
+        `Odyssey ${odyssey.odysseyId} is now active.\n\n` +
+        `Discipline (applies from this turn onward):\n` +
+        `- Do not call command="complete" until every requirement of the objective has been verified satisfied against current external state (file contents, command output, test results, runtime behavior). Indirect or remembered evidence does not count.\n` +
+        `- Match verification scope to requirement scope; do not use a narrow check to support a broad claim.\n` +
+        `- Do not redefine success around a smaller or easier task. Do not substitute a narrower, safer, or merely test-passing solution for the requested behavior.\n` +
+        `- Completion is the absence of remaining required work, not a clean stopping point in the conversation. Keep working in scoped checkpoints; self-pause only when you need user input to proceed.\n\n` +
         formatView(odyssey),
     };
   }
