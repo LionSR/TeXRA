@@ -33,6 +33,7 @@ import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool'
 import {
   denyMessage,
   immediateDecision,
+  immediateDecisionForApproval,
   markApprovalDenied,
 } from '../../../runtime/approvalAdapter';
 import { assertNever } from '../assertNever';
@@ -170,7 +171,14 @@ function routeWithPolicy<K extends 'bash' | 'plan' | 'proposal' | 'retry', P>(
   payload: P,
   dispatch: (payload: P, decision: ApprovalDecision) => void,
 ): void {
-  const policy = immediateDecision(context);
+  const policy =
+    kind === 'retry'
+      ? immediateDecisionForApproval(
+          'showRetryRequest',
+          payload as ProgressEventPayloads['showRetryRequest'],
+          context,
+        )
+      : immediateDecision(context);
   if (policy) {
     dispatch(payload, policy);
     return;

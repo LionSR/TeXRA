@@ -94,6 +94,38 @@ export function immediateDecision(
   return { accepted: false, userMessage: denyMessage(context.approvalPolicy) };
 }
 
+/** Retry requests caused by exhausted credentials or auth failures need user
+ *  action (key swap, top-up, re-login). Auto-accepting them under `yolo` just
+ *  burns the 100-retry budget and reports the meaningless "maximum manual
+ *  retry limit" error to the user. Force-deny these regardless of policy. */
+function isUnretryableRetryRequest(
+  event: ApprovalEvent,
+  payload: ProgressEventPayloads[ApprovalEvent],
+): boolean {
+  if (event !== 'showRetryRequest') return false;
+  const details = (payload as ProgressEventPayloads['showRetryRequest'])
+    .errorDetails;
+  if (!details) return false;
+  if (details.isCredentialExhausted) return true;
+  if (details.statusCode === 401 || details.statusCode === 403) return true;
+  return false;
+}
+
+export function immediateDecisionForApproval(
+  event: ApprovalEvent,
+  payload: ProgressEventPayloads[ApprovalEvent],
+  context: CliContext,
+): ApprovalDecision | undefined {
+  if (isUnretryableRetryRequest(event, payload)) {
+    markApprovalDenied(context);
+    return {
+      accepted: false,
+      userMessage: 'Retry skipped: credential exhausted or unauthorized.',
+    };
+  }
+  return immediateDecision(context);
+}
+
 async function askApproval(
   context: CliContext,
   summary: string,
@@ -389,7 +421,23 @@ export function handleCliApprovalEvent<K extends keyof ProgressEventPayloads>(
   if (!isApprovalEvent(event)) return false;
 
   const approvalPayload = payload as ProgressEventPayloads[typeof event];
-  const immediate = immediateDecision(context);
+
+  // Surface the upstream cause of every retry request before any auto-decision.
+  // Without this, non-interactive runs (--print + never/yolo) lose the only
+  // place the relay/provider error appears, leaving users with an opaque
+  // "Node exceeded maximum manual retry limit" after the budget runs out.
+  if (event === 'showRetryRequest') {
+    const data = approvalPayload as ProgressEventPayloads['showRetryRequest'];
+    writeTextStderr(
+      `Retry requested (${data.operation}): ${data.errorMessage ?? 'unknown error'}`,
+    );
+  }
+
+  const immediate = immediateDecisionForApproval(
+    event,
+    approvalPayload,
+    context,
+  );
   if (immediate) {
     dispatchApprovalDecision(event, approvalPayload, immediate);
     return true;
