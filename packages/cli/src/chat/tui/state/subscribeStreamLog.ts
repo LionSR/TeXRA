@@ -23,6 +23,9 @@ const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
 
 // Field-by-field — a stringified signature would allocate the full
 // outputText (potentially 50 KB+ of bash output) on every comparison.
+// Cover every field that `ToolUseRow` reads (notably `input`, which
+// `previewInput` consumes for the header preview, and the feedback
+// fields) so a future input change can't be silently swallowed.
 function toolUseEqual(
   prev: NormalizedToolUse,
   next: NormalizedToolUse,
@@ -33,9 +36,24 @@ function toolUseEqual(
     prev.outputText === next.outputText &&
     prev.errorText === next.errorText &&
     prev.headerSummary === next.headerSummary &&
-    prev.isError === next.isError
+    prev.isError === next.isError &&
+    prev.isUserFeedback === next.isUserFeedback &&
+    prev.userInstructionText === next.userInstructionText &&
+    prev.input === next.input
   );
 }
+
+// `normalizeToolUseData` is dominated by a Zod parse + YAML stringify
+// of `entry.data`. `StreamLog.update` spreads its patch into a fresh
+// `data` object every tick, so reference equality is a reliable signal
+// that nothing has actually changed. Keep the last-seen `data` ref off
+// to the side in a WeakMap rather than on `ConversationEntry` itself —
+// stashing it on the entry would mean either (a) the slice-level
+// `entriesEqual` check ignores `toolUseSource` and the cache refresh
+// never persists, or (b) we trigger a slice update on every tick just
+// to write the new reference. The WeakMap dodges both: the entry stays
+// immutable, and the cache is GC'd when the entry is replaced.
+const toolUseSourceCache = new WeakMap<ConversationEntry, unknown>();
 
 function entriesEqual(
   prev: ConversationEntry,
@@ -60,13 +78,10 @@ function renderLogEntry(
   prev: ConversationEntry | undefined,
 ): ConversationEntry | null {
   if (entry.messageType === MESSAGE_TYPES.TOOL_USE) {
-    // StreamLog.update spreads into a fresh `data` object on every patch
-    // (StreamLog.ts:89-94), so identity equality is a reliable signal
-    // that the entry hasn't changed since the last sync. Skipping the
-    // Zod parse + YAML stringify here matters because syncStreamLog runs
-    // ~every animation frame during streaming and tool output can be
-    // 50 KB+ per completed entry.
-    if (prev?.toolUse && prev.toolUseSource === entry.data) return prev;
+    // Cache hit: same `data` reference as last sync, no re-normalize.
+    if (prev?.toolUse && toolUseSourceCache.get(prev) === entry.data) {
+      return prev;
+    }
 
     const toolUse = normalizeToolUseData(entry.data);
     // Drop malformed tool entries rather than crash. The progress view
@@ -84,16 +99,17 @@ function renderLogEntry(
       text: '',
       finalized: prev?.finalized ?? false,
       toolUse,
-      toolUseSource: entry.data,
     };
     if (prev && entriesEqual(prev, next)) {
       // Same content under a fresh `data` reference: refresh the cache
-      // key on `prev` instead of returning it as-is, otherwise the
-      // identity fast path above keeps missing on every subsequent tick.
-      return prev.toolUseSource === entry.data
-        ? prev
-        : { ...prev, toolUseSource: entry.data };
+      // key on `prev` so the identity fast path hits on the next tick.
+      // Returning `prev` keeps the slice unchanged (no re-render
+      // cascade) — the cache lives outside the entry contract so this
+      // refresh doesn't need a slice update to persist.
+      toolUseSourceCache.set(prev, entry.data);
+      return prev;
     }
+    toolUseSourceCache.set(next, entry.data);
     return next;
   }
 

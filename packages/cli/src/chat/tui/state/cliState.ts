@@ -27,11 +27,6 @@ export interface ConversationEntry {
   readonly finalized: boolean;
   /** Populated only when `role === 'tool'`. */
   readonly toolUse?: NormalizedToolUse;
-  /** Identity of the `StreamLogEntry.data` `toolUse` was derived from.
-   *  Cache key for `renderLogEntry` — when the next sync sees the same
-   *  ref it skips re-normalizing (Zod parse + YAML stringify on the
-   *  streaming hot path). */
-  readonly toolUseSource?: unknown;
   /** Entry was synthesized by the CLI and is not present in StreamLogStore. */
   readonly synthetic?: boolean;
   /** Why the CLI synthesized this entry. */
