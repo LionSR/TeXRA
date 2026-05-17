@@ -18,15 +18,10 @@
  */
 
 import { z } from 'zod';
-import {
-  SpendingStatusSchema,
-  type SpendingStatus,
-} from '@shared/schemas/spendingStatus';
 import { UserTierSchema, type UserTier } from '../sharedConfig';
 
 // Re-export for convenience
 export { UserTierSchema, type UserTier };
-export { SpendingStatusSchema, type SpendingStatus };
 
 /**
  * Schema for user access status including expiration.
