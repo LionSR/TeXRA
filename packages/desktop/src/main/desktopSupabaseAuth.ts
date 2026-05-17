@@ -284,7 +284,7 @@ function clearDesktopServerSideKeyCaches(
   log: DesktopSupabaseAuthOptions['log'],
 ): void {
   try {
-    getServerSideKeyService().clearAllCaches();
+    getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
   } catch (error) {
     log?.debug?.(
       `Desktop server-side key cache clear skipped: ${toErrorMessage(error)}`,
