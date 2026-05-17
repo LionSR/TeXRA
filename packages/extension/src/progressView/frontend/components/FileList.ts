@@ -578,7 +578,7 @@ export class FileList extends LitElement {
     basePath: string,
     previousPath: string | undefined,
   ): TemplateResult | typeof nothing {
-    if (!previousPath) return nothing;
+    if (!previousPath || previousPath === basePath) return nothing;
 
     return renderFileActionButton({
       icon: 'diff-added',
