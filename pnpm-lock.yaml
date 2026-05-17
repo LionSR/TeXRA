@@ -330,9 +330,6 @@ importers:
       '@lit-labs/signals':
         specifier: ^0.3.0
         version: 0.3.0
-      '@texra/core':
-        specifier: workspace:*
-        version: link:../core
       citty:
         specifier: ^0.2.2
         version: 0.2.2
@@ -373,6 +370,9 @@ importers:
       '@babel/preset-typescript':
         specifier: ^7.28.5
         version: 7.28.5(@babel/core@7.29.0)
+      '@texra/core':
+        specifier: workspace:*
+        version: link:../core
       '@types/markdown-it':
         specifier: ^14.1.2
         version: 14.1.2
