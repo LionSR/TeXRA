@@ -13,6 +13,29 @@ import {
   _resetAnsiMarkdownForTests,
   renderAnsiMarkdown,
 } from '../../../packages/cli/src/chat/tui/render/ansiMarkdown';
+import { wrapAnsiToWidth } from '../../../packages/cli/src/chat/tui/render/ansiWrap';
+
+function displayWidthForTest(line: string): number {
+  let width = 0;
+  for (const char of line) {
+    const codePoint = char.codePointAt(0) ?? 0;
+    if (
+      (codePoint >= 0x1100 && codePoint <= 0x11ff) ||
+      (codePoint >= 0x2e80 && codePoint <= 0xa4cf) ||
+      (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
+      (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
+      (codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
+      (codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
+      (codePoint >= 0xff00 && codePoint <= 0xff60) ||
+      (codePoint >= 0x1f300 && codePoint <= 0x1faff)
+    ) {
+      width += 2;
+    } else {
+      width += 1;
+    }
+  }
+  return width;
+}
 
 describe('renderAnsiMarkdown', () => {
   it('renders plain prose with no HTML escapes', () => {
@@ -75,7 +98,7 @@ describe('renderAnsiMarkdown', () => {
       '> # Heading\n>\n> ```ts\n> const x = 1;\n> const y = 2;\n> ```\n>\n> ---',
     );
     const plain = stripAnsi(out);
-    expect(plain).toContain('│ # Heading');
+    expect(plain).toContain('│ Heading');
     expect(plain).toContain('│ const x = 1;');
     expect(plain).toContain('│ const y = 2;');
     expect(plain).toContain('│ ─');
@@ -88,10 +111,93 @@ describe('renderAnsiMarkdown', () => {
     expect(stripAnsi(out)).toContain('2) two');
   });
 
+  it('renders headings without visible Markdown markers', () => {
+    _resetAnsiMarkdownForTests();
+    const out = renderAnsiMarkdown(
+      '## What is a Tensor Network?\n\n### Core objects',
+    );
+    const plain = stripAnsi(out);
+    expect(plain).toContain('What is a Tensor Network?');
+    expect(plain).toContain('Core objects');
+    expect(plain).not.toContain('## What');
+    expect(plain).not.toContain('### Core');
+  });
+
   it('separates consecutive paragraphs visually', () => {
     _resetAnsiMarkdownForTests();
     const out = renderAnsiMarkdown('First paragraph.\n\nSecond paragraph.');
     expect(stripAnsi(out)).toContain('First paragraph.\n\nSecond paragraph.');
+  });
+
+  it('wraps rendered markdown at display-cell boundaries', () => {
+    _resetAnsiMarkdownForTests();
+    const out = renderAnsiMarkdown('你好🙂abcdef', { width: 6 });
+    const lines = stripAnsi(out).split('\n');
+    expect(lines.length).toBeGreaterThan(1);
+    for (const line of lines) {
+      expect(displayWidthForTest(line)).toBeLessThanOrEqual(6);
+    }
+  });
+
+  it('keeps blockquote gutters on wrapped continuation lines', () => {
+    _resetAnsiMarkdownForTests();
+    const out = renderAnsiMarkdown('> abcdef ghijkl mnopqr', { width: 10 });
+    const plain = stripAnsi(out);
+    const lines = plain.split('\n');
+    expect(lines.length).toBeGreaterThan(1);
+    for (const line of lines) {
+      expect(line).toMatch(/^│ /);
+      expect(displayWidthForTest(line)).toBeLessThanOrEqual(10);
+    }
+  });
+
+  it('keeps list indentation on wrapped continuation lines', () => {
+    _resetAnsiMarkdownForTests();
+    const out = renderAnsiMarkdown('- abcdef ghijkl mnopqr', { width: 10 });
+    const plain = stripAnsi(out);
+    const lines = plain.split('\n');
+    expect(lines[0]).toMatch(/^ {2}• /);
+    expect(lines.slice(1).every((line) => line.startsWith('    '))).toBe(true);
+    for (const line of lines) {
+      expect(displayWidthForTest(line)).toBeLessThanOrEqual(10);
+    }
+  });
+
+  it('styles heading text across inline code boundaries', () => {
+    _resetAnsiMarkdownForTests();
+    const out = renderAnsiMarkdown('## Use `git` correctly');
+    const plain = stripAnsi(out);
+    expect(plain).toContain('Use `git` correctly');
+    expect(plain).not.toContain('## Use');
+  });
+
+  it('keeps OSC hyperlinks balanced when wrapping ANSI text', () => {
+    const esc = String.fromCharCode(27);
+    const bel = String.fromCharCode(7);
+    const open = `${esc}]8;;https://example.com${esc}\\`;
+    const close = `${esc}]8;;${esc}\\`;
+    const closeWithBel = `${esc}]8;;${bel}`;
+    const out = wrapAnsiToWidth(`${open}hello world${close}`, 5);
+    const plain = stripAnsi(out);
+    expect(plain.replaceAll('\n', '')).toBe('hello world');
+    for (const line of plain.split('\n')) {
+      expect(displayWidthForTest(line)).toBeLessThanOrEqual(5);
+    }
+    const openCount = out.split(`${esc}]8;;https://example.com`).length - 1;
+    const closeCount =
+      out.split(close).length - 1 + (out.split(closeWithBel).length - 1);
+    expect(openCount).toBe(closeCount);
+    expect(out).toContain(open);
+    expect(out).toContain(close);
+  });
+
+  it('wraps diff lines with the same ANSI-aware width helper', () => {
+    const out = wrapAnsiToWidth('+你好🙂abcdef', 6);
+    const lines = stripAnsi(out).split('\n');
+    expect(lines.length).toBeGreaterThan(1);
+    for (const line of lines) {
+      expect(displayWidthForTest(line)).toBeLessThanOrEqual(6);
+    }
   });
 
   it('memoises identical inputs (second call hits the cache)', () => {

@@ -1,7 +1,7 @@
 // Ink TUI root: header, conversation, optional side column, status, approval
 // modal, and input bar. Tab / Shift-Tab cycles focus across subagent streams.
 
-import { Box, useInput } from 'ink';
+import { Box, useInput, useWindowSize } from 'ink';
 
 import { ApprovalModal } from './modals/ApprovalModal';
 import { ConversationPane } from './panes/ConversationPane';
@@ -14,6 +14,9 @@ import { cliState } from './state/cliState';
 import { nextFocusBack, nextFocusForward } from './state/focusCycle';
 import { useSignal } from './state/useSignal';
 import type { InputHistory } from './history/inputHistory';
+
+const SIDE_COLUMN_WIDTH = 28;
+const MIN_TRANSCRIPT_WIDTH = 20;
 
 export interface AppProps {
   readonly onSubmit: (line: string) => void;
@@ -29,6 +32,7 @@ export function App(props: AppProps): React.JSX.Element {
   const streams = useSignal(cliState.streams);
   const activeForm = useSignal(cliState.activeForm);
   const slashPaletteOpen = useSignal(cliState.slashPaletteOpen);
+  const { columns } = useWindowSize();
   const inputDisabled =
     props.inputDisabled || pending !== undefined || activeForm !== undefined;
 
@@ -41,6 +45,10 @@ export function App(props: AppProps): React.JSX.Element {
       activeSlice.activeProcesses.length > 0 ||
       activeSlice.todos.length > 0 ||
       activeSlice.plan !== null);
+  const transcriptWidth = Math.max(
+    MIN_TRANSCRIPT_WIDTH,
+    columns - (showSideColumn ? SIDE_COLUMN_WIDTH : 0),
+  );
 
   // Tab / Shift-Tab cycles stream focus at the App layer. Stand down while a
   // modal/form is up (they own input) or the slash palette is open (Tab there
@@ -59,10 +67,10 @@ export function App(props: AppProps): React.JSX.Element {
     <Box flexDirection="column">
       <Box flexDirection="row" flexGrow={1}>
         <Box flexDirection="column" flexGrow={1}>
-          <ConversationPane />
+          <ConversationPane width={transcriptWidth} />
         </Box>
         {showSideColumn ? (
-          <Box flexDirection="column" minWidth={28}>
+          <Box flexDirection="column" minWidth={SIDE_COLUMN_WIDTH}>
             <SubagentList />
             <TodosPlanPanel />
           </Box>
