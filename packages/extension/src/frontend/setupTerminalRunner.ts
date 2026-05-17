@@ -27,7 +27,6 @@ const READER_DRAIN_MS = 250;
 export async function runTerminalCommand(
   args: TerminalRunRequest,
 ): Promise<TerminalRunResult> {
-  const { name, command, timeoutMs } = args;
   const terminal = revealTerminal(args);
   const integration = await waitForShellIntegration(
     terminal,
@@ -35,11 +34,11 @@ export async function runTerminalCommand(
   );
 
   if (!integration) {
-    terminal.sendText(command, true);
+    terminal.sendText(args.command, true);
     return { exitCode: undefined, output: '', timedOut: false };
   }
 
-  return captureExecution(integration, command, timeoutMs);
+  return captureExecution(integration, args.command, args.timeoutMs);
 }
 
 /**
