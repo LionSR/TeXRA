@@ -26,9 +26,9 @@ prompts:
       - temperature: low (0.1) for editing/correction tasks, higher (0.5-0.8) for creative/generation tasks.
       - rounds: 1 for simple single-pass tasks, 2 for tasks that benefit from reflection.
     - userRequest is an array with exactly as many entries as rounds (1 or 2).
-    - prefills is OPTIONAL. Omit it unless the agent should skip preamble and force
-      the response to start with a specific token (e.g., - "<documents>").
-      If you do include prefills, the array length MUST equal the number of rounds.
+    - Do NOT emit `prefills`. The field is deprecated --- reasoning models
+      ignore it at runtime, and other models do fine when the userRequest
+      spells out the expected `<documents>...</documents>` wrapper.
     - Fields with defaults can be omitted if the default value is acceptable.
     Respond only with the YAML wrapped in <yaml> tags.
 
@@ -120,8 +120,7 @@ prompts:
     IMPORTANT REMINDERS:
     - The documentTag in prompts must match the settings.documentTag.
     - userRequest must be an array with exactly as many entries as rounds (1 or 2).
-    - Omit prefills by default; only add it (with one entry per round) when the agent should
-      skip preamble and force the response to start with a specific token like "<documents>".
+    - Do NOT emit `prefills` --- the field is deprecated and reasoning models ignore it.
     - Include {{ INSTRUCTION }} somewhere in the prompts so the user's instructions are passed through.
     - Write prompt text in LaTeX style (\begin{itemize}, \textbf{}, etc.), not markdown.
 

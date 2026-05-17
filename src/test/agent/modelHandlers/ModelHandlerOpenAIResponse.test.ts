@@ -1,5 +1,8 @@
 // Standard library imports
 import { strict as assert } from 'assert';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 // Third-party imports
 import {
@@ -9,10 +12,14 @@ import {
 } from 'llm-zoo';
 
 // Local imports - agent
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentCategory, AgentSettingSchema } from '@agent/core/AgentDataclass';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
 
 // Type imports
 import type { AgentLogger } from '@logger/AgentLogger';
+import { pathToLocation } from '@utils/files';
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
 
 type LoggerStub = Partial<AgentLogger> & {
@@ -220,5 +227,49 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.deepEqual(requests[2].input, rebuiltMessages);
     assert.equal(tokenCountCalls, 3);
     assert.equal(requests[2].max_output_tokens, 99990);
+  });
+});
+
+describe('ModelHandlerOpenAIResponse.initializeOutputAndPrefill', () => {
+  it('skips pseudo-prefill instruction when prefill is empty', async () => {
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'openai-response-prefill-empty-'),
+    );
+    const outputPath = path.join(tempDir, 'r0', 'output.xml');
+
+    try {
+      const handler = createHandler();
+      const agentSetting = AgentSettingSchema.parse({
+        agentCategory: AgentCategory.Workflow,
+        documentTag: 'documents',
+        endTag: '</documents>',
+      });
+      const userMessage: ResponseInputItem = {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'revise the document' }],
+      } as ResponseInputItem;
+      const messages: ResponseInputItem[] = [userMessage];
+      const workspaceState = AgentWorkspaceState.create();
+
+      const [isComplete, updatedMessages] =
+        await handler.initializeOutputAndPrefill(
+          {} as AgentConfig,
+          agentSetting,
+          messages,
+          workspaceState,
+          pathToLocation(outputPath),
+          '',
+        );
+
+      assert.equal(isComplete, false);
+      assert.equal(updatedMessages.length, 1);
+      const onlyContent = (updatedMessages[0] as any).content;
+      assert.deepEqual(onlyContent, [
+        { type: 'input_text', text: 'revise the document' },
+      ]);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });
