@@ -90,7 +90,7 @@ export class LaTeXdiffService {
     suffix = '_diff',
     runIndent = true,
     mathMarkup?: MathMarkupOption,
-    options?: { cwd?: string; subtype?: string },
+    options?: { cwd?: string; subtype?: string; outputDirectory?: string },
   ): Promise<LaTeXdiffResult> {
     try {
       const inputFile = inputLocation.absolutePath;
@@ -122,7 +122,9 @@ export class LaTeXdiffService {
       }
 
       const diffFileName = generateDiffFileName(inputFile, editedFile, suffix);
-      const outputPath = path.join(path.dirname(inputFile), diffFileName);
+      const outputDirectory =
+        options?.outputDirectory ?? path.dirname(inputFile);
+      const outputPath = path.join(outputDirectory, diffFileName);
 
       logger.debug(
         this.channel,
@@ -145,6 +147,7 @@ export class LaTeXdiffService {
       }
 
       // Write and process output
+      await flexibleFS.ensureDir(pathToLocation(outputDirectory));
       const outputLocation = pathToLocation(outputPath);
       await flexibleFS.write(outputLocation, result.stdout);
       await this.fileProcessor.processDiffFile(outputLocation);
@@ -287,7 +290,7 @@ export class LaTeXdiffService {
     outputLocation: FileLocation,
     round: number,
     mathMarkup?: MathMarkupOption,
-    options?: { cwd?: string },
+    options?: { cwd?: string; outputDirectory?: string },
   ): Promise<LaTeXdiffResult> {
     try {
       const [baseExists, outputExists] = await Promise.all([
@@ -318,7 +321,7 @@ export class LaTeXdiffService {
     firstLocation: FileLocation,
     secondLocation: FileLocation,
     mathMarkup?: MathMarkupOption,
-    options?: { cwd?: string },
+    options?: { cwd?: string; outputDirectory?: string },
   ): Promise<LaTeXdiffResult> {
     try {
       const [firstExists, secondExists] = await Promise.all([
