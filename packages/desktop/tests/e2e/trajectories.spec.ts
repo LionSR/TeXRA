@@ -106,15 +106,14 @@ async function setSettingsTab(tabIndex: number): Promise<void> {
  */
 test('first launch shows a usable launcher chrome', async () => {
   await setRoute('main');
-  // The chrome brand and command palette button must be reachable from the user.
-  // The brand label is styled uppercase via CSS, but the underlying text
-  // node is "TeXRA". Match case-insensitively so a future style flip won't
-  // destabilise the test.
-  const brand = await launched.page
-    .locator('.desktop-brand')
+  // The workspace directory and command palette button must be reachable.
+  const workspaceDirectory =
+    launched.workspacePath.split(/[\\/]/).at(-1) ?? launched.workspacePath;
+  const directoryLabel = await launched.page
+    .locator('.desktop-workspace-directory')
     .first()
     .innerText();
-  expect(brand.toLowerCase()).toContain('texra');
+  expect(directoryLabel).toContain(workspaceDirectory);
   await expect(launched.page.locator('.desktop-command-button')).toBeVisible();
   await expect(launched.page.locator('.desktop-folder-button')).toHaveCount(0);
   // The main view itself either renders <main-app> or the no-workspace empty
@@ -241,7 +240,9 @@ test('rapid settings-tab switching does not crash the renderer', async () => {
     await setSettingsTab(idx);
   }
   // The chrome must still be alive after the burst.
-  await expect(launched.page.locator('.desktop-brand')).toBeVisible();
+  await expect(
+    launched.page.locator('.desktop-workspace-directory'),
+  ).toBeVisible();
 });
 
 /**
