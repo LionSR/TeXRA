@@ -1,11 +1,9 @@
-// Ink-mounted chat session per docs/prd/cli-tui-ink.
+// `texra chat` entry point — single Ink-based session.
 //
-// As of Phase 6 this is the default `texra chat` path for interactive TTYs;
-// `runChat.ts` only runs when the user passes `--no-tui` / `--legacy-renderer`
-// or when stdout isn't a TTY. We intentionally share as much as possible
-// with the legacy path — platform init, default resolution, and the agent
-// runtime host — and swap the rendering surface (Ink), approval UI, and
-// follow-up queue.
+// The legacy line-based renderer was retired in favour of one canonical
+// path: the Ink TUI runs for every interactive `texra chat` invocation, and
+// non-TTY callers are pointed at `texra run` (which is what they actually
+// want for piping/scripting).
 
 import { render } from 'ink';
 import PQueue from 'p-queue';
@@ -28,7 +26,6 @@ import { CliExitCode } from '../../runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '../../runtime/initPlatform';
 import { createCliRuntimeHost } from '../../runtime/runtimeHost';
 import { writeTextStderr } from '../../runtime/logSinks';
-import { type ChatResult, type RunChatInit } from '../runChat';
 import { App } from './App';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { loadInputHistory } from './history/inputHistory';
@@ -40,6 +37,18 @@ import { wrapRuntimeHost } from './state/subscribeRuntimeHost';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
+import { cleanupTerminalModes } from './terminalCleanup';
+
+export interface ChatResult {
+  exitCode: number;
+}
+
+export interface RunChatInit {
+  /** `--agent` override from the CLI; falls through `resolveChatDefaults`. */
+  readonly agentOverride?: string;
+  /** `--model` override from the CLI; falls through `resolveChatDefaults`. */
+  readonly modelOverride?: string;
+}
 
 interface TuiSession {
   streamId: StreamTabId | undefined;
@@ -49,25 +58,26 @@ interface TuiSession {
   stopRequested: boolean;
 }
 
-export async function runChatTui(
+export async function runChat(
   context: CliContext,
   init: RunChatInit,
 ): Promise<ChatResult> {
-  if (context.mode === 'headless') {
+  // `mode === 'headless'` already covers --print / CI / non-TTY stdin
+  // (see cliContext.cliMode); stdout must also be a TTY for Ink to render,
+  // and `TERM=dumb` strips the cursor controls Ink depends on (Ink would
+  // mount and emit garbled output instead of a usable session).
+  const isHeadless = context.mode === 'headless' || !process.stdout.isTTY;
+  const dumbTerm = process.env.TERM === 'dumb';
+  const clearItermProgress = process.env.TERM_PROGRAM === 'iTerm.app';
+  if (isHeadless || dumbTerm) {
+    // Headless precedence: in CI (headless + TERM=dumb often co-occur) the
+    // actionable advice is "use `texra run`", not "fix your TERM".
     writeTextStderr(
-      'texra chat requires an interactive terminal (TTY stdin). For non-interactive use, try `texra run`.',
+      isHeadless
+        ? 'texra chat requires an interactive terminal (TTY stdin and stdout). For scripting, --print, or piped output, use `texra run`.'
+        : 'texra chat needs a capable terminal — TERM=dumb strips the cursor controls Ink uses. For non-interactive runs, use `texra run`.',
     );
     return { exitCode: CliExitCode.Usage };
-  }
-
-  // Streaming-text fallback per docs/prd/cli-tui-ink/20-implementation §13:
-  // when stdout is piped but stdin is TTY, Ink chrome can't render usefully —
-  // delegate back to the legacy plain renderer so `texra chat --tui | tee` and
-  // similar shapes keep working. Phase 4 lifts this into a dedicated mode
-  // that still flows through the React tree but writes plain ANSI to stdout.
-  if (!process.stdout.isTTY) {
-    const { runChat } = await import('../runChat');
-    return runChat(context, init);
   }
 
   await initCliPlatform({ ...context, quietLogs: true });
@@ -86,10 +96,6 @@ export async function runChatTui(
     helperModel,
     quietLogs: true,
   });
-  // Phase 2 replaces the legacy stderr-prompt approval adapter with the
-  // typed dispatch: events flow into the modal queue, modal calls back
-  // through the original resolvers (see state/subscribeApprovals.ts).
-  // The legacy adapter only stays on the `!--tui` path now.
   await loadAgents();
 
   const inputHistory = await loadInputHistory();
@@ -205,28 +211,66 @@ export async function runChatTui(
     });
   };
 
+  // alternateScreen (Ink 7.0+) parks rendering on the terminal's alt buffer:
+  // stray stderr writes from agent errors or approval prompts can't leak
+  // into main-screen scrollback, and exit restores the user's pre-launch
+  // terminal contents intact (no banner/conversation mixing with the shell
+  // prompt the way main-screen mode did).
   const ink = render(<App onSubmit={handleSubmit} history={inputHistory} />, {
     stdout: process.stdout,
     stderr: process.stderr,
     stdin: process.stdin,
+    alternateScreen: true,
   });
 
-  // Bridge SIGINT to a graceful interrupt (first tap) / process exit
-  // (second tap). We detach the handler before exiting on the second tap so
-  // Node's default termination path runs — re-`process.kill`-ing while the
-  // listener is still installed would re-enter `handleSigint` and loop.
-  let sigintCount = 0;
+  let pendingExitTimer: ReturnType<typeof setTimeout> | undefined;
+  let exitArmed = false;
+  const clearPendingExit = (): void => {
+    if (pendingExitTimer) clearTimeout(pendingExitTimer);
+    pendingExitTimer = undefined;
+    exitArmed = false;
+    cliState.pendingExitHint.set(false);
+  };
+  const removeProcessHandlers = (): void => {
+    process.off('SIGINT', handleSigint);
+    process.off('SIGTERM', handleSigterm);
+    process.off('SIGHUP', handleSighup);
+  };
+  const exitNow = (exitCode: number): void => {
+    removeProcessHandlers();
+    clearPendingExit();
+    ink.unmount();
+    cleanupTerminalModes({ clearItermProgress });
+    process.exit(exitCode);
+  };
+  const armExit = (): void => {
+    exitArmed = true;
+    cliState.pendingExitHint.set(true);
+    if (pendingExitTimer) clearTimeout(pendingExitTimer);
+    pendingExitTimer = setTimeout(clearPendingExit, 800);
+  };
   const handleSigint = (): void => {
-    sigintCount += 1;
-    if (sigintCount >= 2) {
-      process.off('SIGINT', handleSigint);
-      ink.unmount();
-      process.exit(130);
+    if (exitArmed) {
+      exitNow(130);
+      return;
     }
     session.stopRequested = true;
     interruptActive();
+    armExit();
+  };
+  const handleSigterm = (): void => {
+    session.stopRequested = true;
+    interruptActive();
+    exitNow(143);
+  };
+  const handleSighup = (): void => {
+    session.stopRequested = true;
+    interruptActive();
+    exitNow(129);
   };
   process.on('SIGINT', handleSigint);
+  process.on('SIGTERM', handleSigterm);
+  process.on('SIGHUP', handleSighup);
 
   // Auto-prompt when the active stream goes WAITING so the UI clearly
   // signals "your turn." Combined with the StatusBar pill, this replaces
@@ -246,7 +290,8 @@ export async function runChatTui(
   try {
     await ink.waitUntilExit();
   } finally {
-    process.off('SIGINT', handleSigint);
+    removeProcessHandlers();
+    clearPendingExit();
     for (const dispose of disposers) dispose();
     await followUpQueue.onIdle();
     if (session.runPromise && !session.runCompleted) {
@@ -255,6 +300,7 @@ export async function runChatTui(
     }
     await session.runPromise;
     resetCliState();
+    cleanupTerminalModes({ clearItermProgress });
   }
   return { exitCode: session.runExitCode };
 }
