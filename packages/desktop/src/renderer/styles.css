@@ -33,13 +33,17 @@ body {
   background: var(--wa-color-surface-lowered);
 }
 
-.desktop-brand {
+.desktop-workspace-directory {
+  flex: 0 1 40ch;
   margin-right: 12px;
+  min-width: 0;
+  max-width: clamp(12ch, 24vw, 40ch);
   color: var(--wa-color-text-normal);
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Custom elements need an explicit `[hidden]` rule — the user-agent
@@ -211,10 +215,6 @@ wa-button.desktop-rail-settings::part(base) {
   min-width: 0;
   min-height: 0;
   height: 100%;
-}
-
-.desktop-launcher-surface--empty {
-  grid-template-rows: minmax(0, 1fr) auto;
 }
 
 .desktop-launcher-surface > main-app {
@@ -580,35 +580,6 @@ wa-input.desktop-command-palette-input::part(base) {
   flex-wrap: wrap;
   justify-content: center;
   gap: var(--wa-space-s);
-}
-
-.desktop-empty-streams {
-  padding: var(--wa-space-s) var(--wa-space-l);
-  border-top: 1px solid var(--wa-color-surface-border);
-  background: var(--wa-color-surface-lowered);
-}
-
-.desktop-empty-streams-copy {
-  min-width: 0;
-}
-
-.desktop-empty-streams-copy h2 {
-  margin: 0 0 var(--wa-space-2xs);
-  color: var(--wa-color-text-normal);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.desktop-empty-streams-copy p {
-  margin: 0;
-  color: var(--wa-color-text-quiet);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.desktop-empty-streams-copy .desktop-empty-streams-example {
-  margin-top: var(--wa-space-2xs);
-  color: var(--wa-color-text-normal);
 }
 
 .desktop-bootstrap-fallback {

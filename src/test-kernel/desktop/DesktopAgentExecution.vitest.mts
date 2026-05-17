@@ -790,7 +790,6 @@ describe('DesktopProgressBridge', () => {
             instruction: 'Check this draft.',
             inputFiles: ['main.tex', 'appendix.tex'],
             outputFiles: ['main.review.tex'],
-            outputFilesVisible: true,
           }),
         }),
       ]);

@@ -90,7 +90,7 @@ describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () 
     );
   });
 
-  it('renders concise empty-state guidance for first launch and no sessions', () => {
+  it('renders workspace setup without a second first-run panel', () => {
     const rendererMain = readRendererMain();
     const styles = readRendererStyles();
 
@@ -98,13 +98,31 @@ describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () 
     expect(rendererMain).toContain(
       'Run workflow or tool-use agents with the chosen model.',
     );
-    expect(rendererMain).toContain('desktop-empty-streams');
-    expect(rendererMain).toContain('Try: <q>polish the abstract</q>');
+    expect(rendererMain).not.toContain('desktop-empty-streams');
+    expect(rendererMain).not.toContain('Try: <q>polish the abstract</q>');
     expect(rendererMain).toContain('openCommandPalette');
     expect(rendererMain).not.toContain('SETTINGS_TAB.MODELS');
     expect(rendererMain).not.toContain('SETTINGS_TAB.AGENTS');
-    expect(styles).toContain('.desktop-launcher-surface--empty');
-    expect(styles).not.toContain('.desktop-empty-streams-actions');
+    expect(styles).not.toContain('.desktop-launcher-surface--empty');
+    expect(styles).not.toContain('.desktop-empty-streams');
+  });
+
+  it('shows the workspace directory in the chrome instead of a product label', () => {
+    const rendererMain = readRendererMain();
+    const styles = readRendererStyles();
+
+    expect(rendererMain).toContain('getWorkspaceDirectoryLabel');
+    expect(rendererMain).toContain('window.texraDesktop?.workspacePath');
+    expect(rendererMain).toContain(
+      "if (!trimmed) return normalized.startsWith('/') ? '/' : workspacePath;",
+    );
+    expect(rendererMain).toContain('desktop-workspace-directory');
+    expect(rendererMain).not.toContain('desktop-brand');
+    expect(rendererMain).not.toContain(
+      '<span class="desktop-brand">TeXRA</span>',
+    );
+    expect(styles).toContain('.desktop-workspace-directory');
+    expect(styles).not.toContain('.desktop-brand');
   });
 
   it('renders the launcher back action as an icon-only chrome button', () => {
