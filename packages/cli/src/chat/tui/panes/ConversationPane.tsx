@@ -12,7 +12,12 @@
 import { Box, Static, Text } from 'ink';
 
 import { Markdown } from '../render/Markdown';
-import { cliState, type ConversationEntry } from '../state/cliState';
+import { wrapAnsiToWidth } from '../render/ansiWrap';
+import {
+  cliState,
+  registerCliStateResetHook,
+  type ConversationEntry,
+} from '../state/cliState';
 import { useSignal } from '../state/useSignal';
 import { ToolUseRow } from './ToolUseRow';
 import { splitTranscriptEntries } from './transcriptEntries';
@@ -55,14 +60,78 @@ function TranscriptEntry({
   );
 }
 
+// Bounds the live-region row count. Ink redraws the live region on every
+// streaming delta; if it overflows the viewport the cursor-up rewrite
+// overshoots and clobbers Static rows already in scrollback.
+const LIVE_TAIL_ROWS = 12;
+const NEWLINE_CHAR_CODE = 10;
+
+// Incremental newline count keyed by entry id. The live text grows
+// monotonically per delta; without a cache we'd rescan the full prefix
+// every frame and reintroduce the O(text²) cumulative cost the wrap
+// budget is here to avoid. Cleared per session in `resetCliState` via
+// `registerCliStateResetHook` below.
+const newlineCountCache = new Map<
+  string,
+  { length: number; newlines: number }
+>();
+registerCliStateResetHook(() => newlineCountCache.clear());
+
+function countNewlinesUpTo(entryId: string, text: string, upTo: number): number {
+  const cached = newlineCountCache.get(entryId);
+  // Append-only invariant: if `upTo` ≥ cached.length and the cached
+  // prefix is still a prefix of `text`, we can extend. Otherwise (text
+  // shrank or rewrote earlier chars) recount from scratch.
+  const canExtend =
+    cached !== undefined && upTo >= cached.length && cached.length <= text.length;
+  let count = canExtend ? cached.newlines : 0;
+  const start = canExtend ? cached.length : 0;
+  for (let i = start; i < upTo; i += 1) {
+    if (text.charCodeAt(i) === NEWLINE_CHAR_CODE) count += 1;
+  }
+  newlineCountCache.set(entryId, { length: upTo, newlines: count });
+  return count;
+}
+
 function LiveTranscriptEntry({
   entry,
+  width,
 }: {
   readonly entry: ConversationEntry;
+  readonly width?: number;
 }): React.JSX.Element {
+  // Cap by *wrapped* rows, not by `\n` count — an LLM often streams one
+  // long paragraph with no hard newlines, which Ink would still wrap to
+  // many terminal rows. Slice the raw text down to a tail-sized window
+  // before wrapping so per-delta wrap work stays bounded; otherwise the
+  // whole growing buffer is re-wrapped on every keystroke (O(text²)
+  // over the response). Live text is plain (see file header), so
+  // slicing mid-string can't corrupt an ANSI escape.
+  const cols = width ?? 80;
+  const wrapBudget = cols * LIVE_TAIL_ROWS * 2;
+  const slicedChars = Math.max(0, entry.text.length - wrapBudget);
+  const candidate =
+    slicedChars > 0 ? entry.text.slice(slicedChars) : entry.text;
+  const rows = wrapAnsiToWidth(candidate, cols).split('\n');
+  // Estimate rows lost to the raw-char slice: each hard newline counts
+  // one row, remaining chars wrap by width. Approximate (exact would
+  // need wrapping the full buffer).
+  const slicedNewlines = countNewlinesUpTo(entry.id, entry.text, slicedChars);
+  const slicedRows =
+    slicedNewlines + Math.ceil((slicedChars - slicedNewlines) / cols);
+  const needsHint = rows.length + slicedRows > LIVE_TAIL_ROWS;
+  const tailLimit = needsHint ? LIVE_TAIL_ROWS - 1 : LIVE_TAIL_ROWS;
+  const tail = rows.slice(-tailLimit);
+  const hiddenRows = rows.length - tail.length + slicedRows;
   return (
-    <Box>
-      <Text>{entry.text}</Text>
+    <Box flexDirection="column">
+      {hiddenRows > 0 ? (
+        <Text dimColor>
+          ⋯ {hiddenRows} earlier row{hiddenRows === 1 ? '' : 's'} hidden while
+          streaming
+        </Text>
+      ) : null}
+      <Text>{tail.join('\n')}</Text>
     </Box>
   );
 }
@@ -100,7 +169,13 @@ export function ConversationPane(
             return <ToolUseRow key={entry.id} toolUse={entry.toolUse} />;
           }
           if (entry.role === 'assistant') {
-            return <LiveTranscriptEntry key={entry.id} entry={entry} />;
+            return (
+              <LiveTranscriptEntry
+                key={entry.id}
+                entry={entry}
+                width={props.width}
+              />
+            );
           }
           return null;
         })}
