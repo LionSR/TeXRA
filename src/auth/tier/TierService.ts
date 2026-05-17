@@ -14,6 +14,10 @@
  */
 
 import { toErrorMessage } from '@common/errors/errorMessage';
+import {
+  SpendingStatusSchema,
+  type SpendingStatus,
+} from '@shared/schemas/spendingStatus';
 import { SERVER_SIDE_CACHE_TTL_MS, type UserTier } from '../sharedConfig';
 import {
   NOOP_AUTH_SERVICE_LOGGER,
@@ -36,9 +40,20 @@ export class TierService {
   private cache: TierModelConfig | null = null;
   private cacheTimestamp = 0;
   private fetchPromise: Promise<TierModelConfig | null> | null = null;
+  private fetchGeneration = 0;
+  /**
+   * True when the latest cached fetch carried an Authorization header.
+   * A later authenticated call must refresh the cache so userStatus and
+   * spendingStatus are populated; otherwise the 5-min TTL would serve
+   * stale `null`s until expiry.
+   */
+  private cachedWithAuth = false;
 
   /** User's access status including expiration (populated when fetching with auth) */
   private userStatus: UserAccessStatus | null = null;
+
+  /** Latest relay spend snapshot (populated when fetching with auth). */
+  private spendingStatus: SpendingStatus | null = null;
 
   /**
    * Create a new TierService.
@@ -57,7 +72,10 @@ export class TierService {
     this.cache = null;
     this.cacheTimestamp = 0;
     this.fetchPromise = null;
+    this.fetchGeneration += 1;
     this.userStatus = null;
+    this.spendingStatus = null;
+    this.cachedWithAuth = false;
   }
 
   /**
@@ -77,7 +95,8 @@ export class TierService {
    * @param authToken - Optional JWT token to include user access status in response
    */
   private async fetchFromServer(
-    authToken?: string,
+    authToken: string | undefined,
+    generation: number,
   ): Promise<TierModelConfig | null> {
     try {
       const url = `${this.baseUrl}/functions/v1/relay/tier-config`;
@@ -108,13 +127,40 @@ export class TierService {
       }
 
       const data = await response.json();
+      const isCurrentFetch = (): boolean => generation === this.fetchGeneration;
 
-      // Parse user status if present (returned when authenticated)
+      // Parse user-specific blocks. Both are only present when the
+      // request carries auth, so clear them on absence (anonymous fetch)
+      // and on parse failure — a relay-side schema drift should not
+      // silently serve stale values to the quota meter / BYOK switch.
       if (data.userStatus) {
         const statusParsed = UserAccessStatusSchema.safeParse(data.userStatus);
         if (statusParsed.success) {
-          this.userStatus = statusParsed.data;
+          if (isCurrentFetch()) this.userStatus = statusParsed.data;
+        } else {
+          this.logger.error(
+            CHANNEL,
+            `Invalid userStatus payload: ${statusParsed.error.message}`,
+          );
+          if (isCurrentFetch()) this.userStatus = null;
         }
+      } else {
+        if (isCurrentFetch()) this.userStatus = null;
+      }
+
+      if (data.spendingStatus) {
+        const spendParsed = SpendingStatusSchema.safeParse(data.spendingStatus);
+        if (spendParsed.success) {
+          if (isCurrentFetch()) this.spendingStatus = spendParsed.data;
+        } else {
+          this.logger.error(
+            CHANNEL,
+            `Invalid spendingStatus payload: ${spendParsed.error.message}`,
+          );
+          if (isCurrentFetch()) this.spendingStatus = null;
+        }
+      } else {
+        if (isCurrentFetch()) this.spendingStatus = null;
       }
 
       const parsed = TierModelConfigSchema.safeParse(data);
@@ -143,22 +189,36 @@ export class TierService {
    * @param authToken - Optional JWT to get user-specific access status
    */
   async getConfig(authToken?: string): Promise<TierModelConfig | null> {
-    if (this.isCacheValid()) {
+    // Reuse an in-flight or fresh cache only when it matches the
+    // current auth state. A previous anonymous fetch leaves
+    // userStatus/spendingStatus as null; reusing it here would mask
+    // the user's quota for 5 minutes after sign-in.
+    const tokenPresent = Boolean(authToken);
+    if (this.isCacheValid() && this.cachedWithAuth === tokenPresent) {
       return this.fetchPromise;
     }
 
     // Set timestamp BEFORE creating promise to prevent race conditions
     // where concurrent calls see fetchPromise !== null but timestamp is stale
     this.cacheTimestamp = Date.now();
-    this.fetchPromise = this.fetchFromServer(authToken).then((result) => {
-      if (result !== null) {
-        this.cache = result;
-      } else {
-        // Reset timestamp on failure so next call retries
-        this.cacheTimestamp = 0;
-      }
-      return result;
-    });
+    this.cachedWithAuth = tokenPresent;
+    const generation = this.fetchGeneration + 1;
+    this.fetchGeneration = generation;
+    this.fetchPromise = this.fetchFromServer(authToken, generation).then(
+      (result) => {
+        if (generation !== this.fetchGeneration) {
+          return this.cache;
+        }
+        if (result !== null) {
+          this.cache = result;
+        } else {
+          // Reset timestamp on failure so next call retries
+          this.cacheTimestamp = 0;
+          this.cachedWithAuth = false;
+        }
+        return result;
+      },
+    );
 
     return this.fetchPromise;
   }
@@ -256,5 +316,30 @@ export class TierService {
   getExpirationDate(): Date | null {
     const expiresAt = this.userStatus?.accessExpiresAt;
     return expiresAt ? new Date(expiresAt) : null;
+  }
+
+  // ===========================================================================
+  // Relay Spending Methods
+  // ===========================================================================
+
+  /**
+   * Latest known relay spend snapshot for the authenticated user, or null
+   * if /tier-config hasn't been fetched with auth yet. Cached for the
+   * same TTL as the rest of the tier config (5 min) — the BYOK fallback
+   * path tolerates slight staleness because the relay still returns a
+   * 402 if we underestimate.
+   */
+  getSpendingStatus(): SpendingStatus | null {
+    return this.spendingStatus;
+  }
+
+  /**
+   * True when the user has exhausted their monthly relay quota. Returns
+   * false when status is unknown so we don't false-positive on a
+   * transient network failure.
+   */
+  isQuotaExceeded(): boolean {
+    const s = this.spendingStatus;
+    return s !== null && s.remaining <= 0;
   }
 }
