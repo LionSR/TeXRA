@@ -20,8 +20,10 @@ import {
   type AuthServiceLogger,
 } from '../serviceLogger';
 import {
+  SpendingStatusSchema,
   TierModelConfigSchema,
   UserAccessStatusSchema,
+  type SpendingStatus,
   type TierModelConfig,
   type TierModelsConfig,
   type UserAccessStatus,
@@ -39,6 +41,9 @@ export class TierService {
 
   /** User's access status including expiration (populated when fetching with auth) */
   private userStatus: UserAccessStatus | null = null;
+
+  /** Latest relay spend snapshot (populated when fetching with auth). */
+  private spendingStatus: SpendingStatus | null = null;
 
   /**
    * Create a new TierService.
@@ -58,6 +63,7 @@ export class TierService {
     this.cacheTimestamp = 0;
     this.fetchPromise = null;
     this.userStatus = null;
+    this.spendingStatus = null;
   }
 
   /**
@@ -115,6 +121,15 @@ export class TierService {
         if (statusParsed.success) {
           this.userStatus = statusParsed.data;
         }
+      }
+
+      if (data.spendingStatus) {
+        const spendParsed = SpendingStatusSchema.safeParse(data.spendingStatus);
+        if (spendParsed.success) {
+          this.spendingStatus = spendParsed.data;
+        }
+      } else {
+        this.spendingStatus = null;
       }
 
       const parsed = TierModelConfigSchema.safeParse(data);
@@ -256,5 +271,30 @@ export class TierService {
   getExpirationDate(): Date | null {
     const expiresAt = this.userStatus?.accessExpiresAt;
     return expiresAt ? new Date(expiresAt) : null;
+  }
+
+  // ===========================================================================
+  // Relay Spending Methods
+  // ===========================================================================
+
+  /**
+   * Latest known relay spend snapshot for the authenticated user, or null
+   * if /tier-config hasn't been fetched with auth yet. Cached for the
+   * same TTL as the rest of the tier config (5 min) — the BYOK fallback
+   * path tolerates slight staleness because the relay still returns a
+   * 402 if we underestimate.
+   */
+  getSpendingStatus(): SpendingStatus | null {
+    return this.spendingStatus;
+  }
+
+  /**
+   * True when the user has exhausted their monthly relay quota. Returns
+   * false when status is unknown so we don't false-positive on a
+   * transient network failure.
+   */
+  isQuotaExceeded(): boolean {
+    const s = this.spendingStatus;
+    return s !== null && s.remaining <= 0;
   }
 }
