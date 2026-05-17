@@ -36,7 +36,7 @@ import {
   type SdkErrorKind,
 } from '@common/errors/sdkErrorUtils';
 
-type ErrorConstructor = abstract new (...args: unknown[]) => Error;
+type ErrorConstructor = abstract new (...args: any[]) => Error;
 
 interface SdkErrorClassMapping {
   ctor: ErrorConstructor;
