@@ -4,19 +4,10 @@ export interface TerminalOptions {
   env?: Record<string, string | undefined>;
 }
 
-export interface TerminalOutputChunk {
-  stream: 'stdout' | 'stderr';
-  chunk: string;
-}
-
 export interface TerminalRunRequest extends TerminalOptions {
   command: string;
   /** Hard cap on how long to wait for captured execution. */
   timeoutMs: number;
-  /** Cancels a captured command run. */
-  signal?: AbortSignal;
-  /** Streams command output while the process is still running. */
-  onOutput?: (chunk: TerminalOutputChunk) => void;
 }
 
 export interface TerminalRunResult {
@@ -25,7 +16,6 @@ export interface TerminalRunResult {
   /** ANSI-stripped, length-capped tail of command output when available. */
   output: string;
   timedOut: boolean;
-  cancelled?: boolean;
 }
 
 export interface TerminalHandle {
