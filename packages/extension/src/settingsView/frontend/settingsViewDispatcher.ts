@@ -39,7 +39,7 @@ import {
 } from '@shared/schemas';
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
-import type { SpendingStatus } from '@shared/schemas/profileViewMessages';
+import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 
 interface WritableSignal<T> {
   get(): T;
@@ -64,7 +64,6 @@ export interface SettingsMessageHandlerContext {
   apiAccessMode: WritableSignal<'included' | 'personal'>;
   spendingStatus: WritableSignal<SpendingStatus | null>;
   quotaAutoSwitched: WritableSignal<boolean>;
-  prevSpendRemainingRef: { current: number | null };
   allowedModels: WritableSignal<string[] | null>;
   providerKeyStatuses: WritableSignal<ProviderKeyStatus[]>;
   globalStreamingDefault: WritableSignal<boolean>;
@@ -353,25 +352,9 @@ export function dispatchSettingsViewMessage(
       ctx.authenticated.set(data.authenticated);
       ctx.userEmail.set(data.user?.email ?? 'N/A');
       ctx.tier.set(data.tier ?? 'free');
-      // Detect the auto-flip transition: if the previous snapshot had
-      // remaining > 0 and the new payload reports remaining <= 0, AND
-      // the access mode flipped to 'personal' in this same update,
-      // surface "auto-switched" copy so the user knows why.
       const newSpend = data.spendingStatus ?? null;
-      const prevRemaining = ctx.prevSpendRemainingRef.current;
-      const justExhausted =
-        newSpend !== null &&
-        newSpend.remaining <= 0 &&
-        prevRemaining !== null &&
-        prevRemaining > 0;
-      if (justExhausted && data.apiAccessMode === 'personal') {
-        ctx.quotaAutoSwitched.set(true);
-      } else if (data.apiAccessMode === 'included') {
-        // User manually re-enabled relay — clear the auto-switched flag.
-        ctx.quotaAutoSwitched.set(false);
-      }
-      ctx.prevSpendRemainingRef.current = newSpend ? newSpend.remaining : null;
       ctx.spendingStatus.set(newSpend);
+      ctx.quotaAutoSwitched.set(data.quotaAutoSwitched ?? false);
       ctx.apiAccessMode.set(data.apiAccessMode);
       ctx.allowedModels.set(data.allowedModels ?? null);
       ctx.providerKeyStatuses.set(data.providerKeyStatuses ?? []);

@@ -14,6 +14,7 @@ import {
 import { ProviderVscodeSettingDefSchema } from '@shared/constants/providers';
 import { AgentMetadataBaseSchema } from './agent';
 import { commandOnly } from './messageFactories';
+import { SpendingStatusSchema } from './spendingStatus';
 
 // ============================================================
 // Data schemas
@@ -39,19 +40,6 @@ export type RemoteAgent = z.infer<typeof RemoteAgentSchema>;
 
 export const ApiAccessModeSchema = z.enum(['included', 'personal']);
 export type ApiAccessMode = z.infer<typeof ApiAccessModeSchema>;
-
-/**
- * Monthly relay spend snapshot for the authenticated user. Drives the
- * Settings → Models quota meter and any future header/status displays.
- * Mirrors the server's tier-config `spendingStatus` block.
- */
-export const SpendingStatusSchema = z.object({
-  currentSpend: z.number().finite().nonnegative(),
-  limit: z.number().finite().nonnegative(),
-  remaining: z.number().finite(),
-  percentUsed: z.number().finite().nonnegative(),
-});
-export type SpendingStatus = z.infer<typeof SpendingStatusSchema>;
 
 export const TierConstantsSchema = z.object({
   ultra: z.string(),
@@ -109,6 +97,7 @@ export const UpdateProfileMessageSchema = z.object({
   tierConstants: TierConstantsSchema,
   accessExpiresAt: z.string().nullish(),
   spendingStatus: SpendingStatusSchema.nullish(),
+  quotaAutoSwitched: z.boolean().prefault(false),
   providerKeyStatuses: z.array(ProviderKeyStatusSchema).prefault([]),
   globalStreamingDefault: z.boolean().prefault(true),
 });

@@ -11,6 +11,7 @@ export * from './settingsConfiguration';
 export * from './errors';
 export * from './usage';
 export * from './contextManagement';
+export * from './spendingStatus';
 
 // Layer 2: Depends on layer 1 only
 export * from './stream';
