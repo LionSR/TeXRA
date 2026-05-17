@@ -617,7 +617,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
       reservedCacheSlots += 1; // top-level automatic caching
       if (systemPrompt) reservedCacheSlots += 1; // system prompt breakpoint
     }
-    this.enforceCacheControlLimit(messages, reservedCacheSlots);
+
+    // Use 1-hour cache TTL for tool-use requests (which involve long-running
+    // tool execution cycles where 5-minute caches would frequently expire),
+    // and 5-minute TTL for simple non-tool requests.
+    const cacheControl = tools?.length
+      ? LONG_CACHE_CONTROL
+      : SHORT_CACHE_CONTROL;
+
+    this.enforceCacheControlLimit(messages, reservedCacheSlots, cacheControl);
 
     const documentAnalysis = this.analyzeDocumentSources(messages);
     let hasFileReference = documentAnalysis.hasFileSource;
@@ -627,13 +635,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (this.uploadedPdfPageCounts.size > 0) {
       this.pruneTrackedPdfPages(messages);
     }
-
-    // Use 1-hour cache TTL for tool-use requests (which involve long-running
-    // tool execution cycles where 5-minute caches would frequently expire),
-    // and 5-minute TTL for simple non-tool requests.
-    const cacheControl = tools?.length
-      ? LONG_CACHE_CONTROL
-      : SHORT_CACHE_CONTROL;
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const options: MessageCreateParams = {
@@ -1064,6 +1065,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   private enforceCacheControlLimit(
     messages: MessageParam[],
     reservedSlots: number,
+    cacheControl: CacheControlEphemeral,
   ): void {
     if (!this.capabilities.supportsPromptCaching) {
       return;
@@ -1087,11 +1089,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // ContentBlockParam).
         const anyBlock = block as ContentBlockParam | BetaContentBlockParam;
 
-        // Compaction blocks keep their markers — track them for slot limiting
+        // Compaction blocks keep an explicit marker, but it must match the
+        // current request's top-level TTL so Anthropic sees monotone breakpoints.
         if (isCompactionCacheControlBlock(anyBlock)) {
-          if (anyBlock.cache_control) {
-            compactionBlocks.push(anyBlock);
-          }
+          anyBlock.cache_control = cacheControl;
+          compactionBlocks.push(anyBlock);
           continue;
         }
 
