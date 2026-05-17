@@ -27,6 +27,7 @@ import { splitTranscriptEntries } from '../../../packages/cli/src/chat/tui/panes
 import {
   appendAssistantTranscriptIfMissing,
   appendLocalAssistantTranscript,
+  appendLocalErrorTranscript,
   CLI_LOCAL_STREAM_ID,
   clearActiveTranscript,
   getTranscriptStartSeq,
@@ -176,6 +177,43 @@ describe('CLI transcript state', () => {
       'Available commands: /help',
       'Available commands: /help',
     ]);
+  });
+
+  it('adds local runtime errors to the transcript', () => {
+    cliState.activeStreamId.set(root);
+
+    appendLocalErrorTranscript('Model claude-opus-4-7 not found');
+
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      role: 'error',
+      text: 'Model claude-opus-4-7 not found',
+      finalized: true,
+      synthetic: true,
+      syntheticKind: 'local',
+    });
+  });
+
+  it('flushes pending model-response chunks before transcript sync', () => {
+    const previousStore = AgentLogger.getStreamLogStore();
+    const store = new StreamLogStore();
+    AgentLogger.setStreamLogStore(store);
+
+    try {
+      const logger = new AgentLogger(root, true);
+      const stream = logger.createStream(MESSAGE_TYPES.MODEL_RESPONSE);
+      stream.append('A short final answer.');
+
+      syncStreamLog(root);
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual([
+        'A short final answer.',
+      ]);
+    } finally {
+      AgentLogger.setStreamLogStore(previousStore);
+    }
   });
 
   it('keeps repeated local slash-command responses after stream-log syncs', () => {
