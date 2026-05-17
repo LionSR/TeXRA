@@ -192,10 +192,10 @@ export async function runPack(
   model: string,
   inputFile: string,
   agent: string,
-  outputFiles: string[] = [],
+  additionalInputFiles: string[] = [],
 ): Promise<FileOpResult> {
-  if (outputFiles.length > 0) {
-    return runPackMultiple(model, inputFile, agent, outputFiles);
+  if (additionalInputFiles.length > 0) {
+    return runPackMultiple(model, inputFile, agent, additionalInputFiles);
   }
   return runPackSingle(model, inputFile, agent);
 }
