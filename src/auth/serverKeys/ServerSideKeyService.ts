@@ -85,6 +85,8 @@ export interface ClearServerSideKeyCachesOptions {
    * This preserves the spending-status explanation after a quota auto-switch.
    */
   preserveTierCache?: boolean;
+  /** True when included access is being disabled by quota fallback. */
+  quotaAutoSwitch?: boolean;
 }
 
 class NodeEventEmitter<T> implements ServerSideKeyDisposable {
@@ -145,6 +147,7 @@ export class ServerSideKeyService {
    * won't fight that decision by flipping again on the next check.
    */
   private quotaFlipApplied = false;
+  private quotaAutoSwitchActive = false;
 
   // Settings
   private useIncludedModelAccess = true;
@@ -211,7 +214,7 @@ export class ServerSideKeyService {
   }
 
   wasQuotaAutoSwitched(): boolean {
-    return this.quotaFlipApplied && !this.useIncludedModelAccess;
+    return this.quotaAutoSwitchActive && !this.useIncludedModelAccess;
   }
 
   async setUseIncludedModelAccess(
@@ -220,6 +223,11 @@ export class ServerSideKeyService {
   ): Promise<void> {
     const changed = this.useIncludedModelAccess !== value;
     this.useIncludedModelAccess = value;
+    if (value) {
+      this.quotaAutoSwitchActive = false;
+    } else {
+      this.quotaAutoSwitchActive = cacheOptions.quotaAutoSwitch === true;
+    }
 
     if (this.globalState) {
       await this.globalState.update(USE_INCLUDED_ACCESS_KEY, value);
@@ -247,6 +255,7 @@ export class ServerSideKeyService {
     this.userTier = null;
     if (options.resetQuotaFlip === true) {
       this.quotaFlipApplied = false;
+      this.quotaAutoSwitchActive = false;
     }
     this._onCacheCleared.fire(options);
   }
@@ -288,7 +297,7 @@ export class ServerSideKeyService {
    */
   async canUseServerSideKeys(): Promise<boolean> {
     if (!this.getUseIncludedModelAccess()) {
-      this.clearAllCaches({ preserveTierCache: this.quotaFlipApplied });
+      this.clearAllCaches({ preserveTierCache: this.wasQuotaAutoSwitched() });
       return false;
     }
 
@@ -348,6 +357,7 @@ export class ServerSideKeyService {
         // the access result agree by the time the caller resumes.
         await this.setUseIncludedModelAccess(false, {
           preserveTierCache: true,
+          quotaAutoSwitch: true,
         });
         return false;
       }
