@@ -41,6 +41,15 @@ function TranscriptEntry({
     );
   }
 
+  if (entry.role === 'error') {
+    return (
+      <Box marginBottom={1} paddingX={1}>
+        <Text color="red">! </Text>
+        <Text color="red">{entry.text}</Text>
+      </Box>
+    );
+  }
+
   return (
     <Box marginBottom={1}>
       <Markdown content={entry.text} width={width} />
@@ -64,6 +73,30 @@ export interface ConversationPaneProps {
   readonly width?: number;
 }
 
+export function splitTranscriptEntries(
+  entries: readonly ConversationEntry[],
+  status: StreamStatus | undefined,
+): {
+  readonly finalized: ConversationEntry[];
+  readonly live: ConversationEntry | undefined;
+} {
+  const streamIsAppending = isAppending(status);
+  let live: ConversationEntry | undefined;
+  if (streamIsAppending) {
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      const entry = entries[index];
+      if (entry.role !== 'assistant' || entry.finalized) continue;
+      live = entry;
+      break;
+    }
+  }
+  const finalized = entries
+    .filter((entry) => entry !== live)
+    .map((entry) => ({ ...entry, finalized: true }));
+
+  return { finalized, live };
+}
+
 export function ConversationPane(
   props: ConversationPaneProps = {},
 ): React.JSX.Element {
@@ -71,25 +104,10 @@ export function ConversationPane(
   const streams = useSignal(cliState.streams);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const entries = slice?.entries ?? [];
-  const streamIsAppending = isAppending(slice?.status);
-
-  const finalized: ConversationEntry[] = [];
-  let live: ConversationEntry | undefined;
-  for (const entry of entries) {
-    if (
-      streamIsAppending &&
-      entry.role === 'assistant' &&
-      !entry.finalized &&
-      entry === entries.at(-1)
-    ) {
-      live = entry;
-    } else {
-      finalized.push({ ...entry, finalized: true });
-    }
-  }
+  const { finalized, live } = splitTranscriptEntries(entries, slice?.status);
 
   return (
-    <Box flexDirection="column" flexGrow={1}>
+    <Box flexDirection="column">
       <Static items={finalized}>
         {(entry) => (
           <TranscriptEntry key={entry.id} entry={entry} width={props.width} />
