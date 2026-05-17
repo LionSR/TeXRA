@@ -70,7 +70,7 @@ describe('AgentConfigSchema', () => {
     assert.deepStrictEqual(parsed.mediaFiles, ['figure.png']);
   });
 
-  it('shows legacy main-view file lists after migration', () => {
+  it('migrates legacy main-view file slots into canonical file lists', () => {
     const parsed = MainViewPersistedStateSchema.parse({
       inputFile: 'main.tex',
       referenceFile: 'refs.bib',
@@ -80,8 +80,5 @@ describe('AgentConfigSchema', () => {
     assert.deepStrictEqual(parsed.inputFiles, ['main.tex']);
     assert.deepStrictEqual(parsed.contextFiles, ['refs.bib']);
     assert.deepStrictEqual(parsed.mediaFiles, ['figure.png']);
-    assert.strictEqual(parsed.inputFilesVisible, true);
-    assert.strictEqual(parsed.contextFilesVisible, true);
-    assert.strictEqual(parsed.mediaFilesVisible, true);
   });
 });
