@@ -77,13 +77,19 @@ const newlineCountCache = new Map<
 >();
 registerCliStateResetHook(() => newlineCountCache.clear());
 
-function countNewlinesUpTo(entryId: string, text: string, upTo: number): number {
+function countNewlinesUpTo(
+  entryId: string,
+  text: string,
+  upTo: number,
+): number {
   const cached = newlineCountCache.get(entryId);
   // Append-only invariant: if `upTo` ≥ cached.length and the cached
   // prefix is still a prefix of `text`, we can extend. Otherwise (text
   // shrank or rewrote earlier chars) recount from scratch.
   const canExtend =
-    cached !== undefined && upTo >= cached.length && cached.length <= text.length;
+    cached !== undefined &&
+    upTo >= cached.length &&
+    cached.length <= text.length;
   let count = canExtend ? cached.newlines : 0;
   const start = canExtend ? cached.length : 0;
   for (let i = start; i < upTo; i += 1) {
