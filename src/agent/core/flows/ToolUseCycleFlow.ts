@@ -3,13 +3,15 @@ import stableStringify from 'fast-json-stable-stringify';
 import { z } from 'zod';
 
 // Local imports - core flow primitives
-import { isRemoteAgent } from '@agent/index';
 import { BaseNode, BatchNode, Flow, Node } from '@agent/node';
 import { recordCycleMetrics } from '@agent/core/AgentState';
 import {
   BaseCycleFieldsSchema,
-  resetCycleState,
+  defaultDebugMeta,
+  defaultPostCompactionContext,
   getDebugContext,
+  logAndNormalizeUsage,
+  resetCycleState,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
@@ -33,7 +35,6 @@ import type {
   WorkPlanState,
 } from '@agent/core/AgentWorkspaceState';
 import type { ToolResult } from '@agent/core/ToolTypes';
-import { getActiveChildren } from '@agent/runtime/executionRegistry';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - logging
@@ -44,7 +45,6 @@ import {
   formatZodIssuesForDiagnostics,
   type ValidationErrorDiagnostics,
 } from '@tools/result';
-import { formatPostCompactionContext } from '@tools/subagentResults';
 import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { formatContent } from '@utils/text/xmlUtils';
@@ -270,14 +270,10 @@ class ToolUsePrepNode<C> extends BaseNode<
     ]);
     shared.cycleResponseTimeMs = 0;
 
-    const { config } = this.services;
     await maybeSaveDebugObject({
       object: shared.messages,
       objectType: 'messages',
-      context: getDebugContext(this.services, {
-        modelName: config.model,
-        isRemote: isRemoteAgent(config.agent),
-      }),
+      context: getDebugContext(this.services, defaultDebugMeta(this.services)),
       fileOptions: {
         continuationCount: shared.cycleIndex,
         baseName: 'tooluse',
@@ -380,18 +376,11 @@ class ToolUseProcessNode<C> extends BaseNode<
       }
     }
 
-    let normalizedUsage: NormalizedUsage | undefined;
-    if (usage) {
-      normalizedUsage = services.modelHandler.normalizeUsage(
-        usage,
-        prepRes.responseTimeMs ?? 0,
-      );
-      const { inputTokens } = normalizedUsage;
-      const contextWindow = services.modelHandler.getEffectiveContextWindow();
-      if (inputTokens > 0 && contextWindow > 0) {
-        services.logger.logContextState(inputTokens, contextWindow);
-      }
-    }
+    const normalizedUsage = logAndNormalizeUsage(
+      usage,
+      prepRes.responseTimeMs ?? 0,
+      services,
+    );
 
     const endTurn =
       services.modelHandler.isEndTurnStop(stopReason) || !toolCalls?.length;
@@ -891,19 +880,9 @@ export function createToolUseCycleFlow<C>(): Flow<
     storeResponse: (shared, response) => {
       shared.response = response;
     },
-    getPostCompactionContext: (services) => {
-      const { subagents, processes } = getActiveChildren(services.streamId);
-      return formatPostCompactionContext(
-        subagents,
-        processes,
-        services.workspace.workPlan.toSnapshot(),
-      );
-    },
+    getPostCompactionContext: defaultPostCompactionContext,
     getDebugSaveOptions: (shared, services) => ({
-      context: {
-        modelName: services.config.model,
-        isRemote: isRemoteAgent(services.config.agent),
-      },
+      context: defaultDebugMeta(services),
       fileOptions: {
         continuationCount: shared.cycleIndex,
         baseName: 'tooluse_response',
