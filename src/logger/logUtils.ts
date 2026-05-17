@@ -1,4 +1,4 @@
-import { LOG_LEVELS, type LogLevel } from '@shared/schemas';
+import { LOG_LEVELS, type LogLevel, type MessageType } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 import { serializeError } from '@utils/core';
 
@@ -8,7 +8,13 @@ import {
   type LogRecord,
   type LogSink as StructuredLogSink,
 } from './structuredLogger';
-import type { LogUtilsOptions } from './logOptions';
+
+export interface LogUtilsOptions {
+  groupId?: string;
+  messageType?: MessageType;
+  data?: unknown;
+  isAgent?: boolean;
+}
 
 const EMOJI_BY_LEVEL: Record<LogLevel, string> = {
   [LOG_LEVELS.ERROR]: '🔴',
