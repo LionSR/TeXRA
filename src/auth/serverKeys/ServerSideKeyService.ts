@@ -74,6 +74,21 @@ export interface ServerSideKeyServiceInit {
   logger?: AuthServiceLogger;
 }
 
+export interface ClearServerSideKeyCachesOptions {
+  /**
+   * Reset the per-session quota auto-switch guard. Use this only when the
+   * authenticated session changes, not for ordinary toggle/cache updates.
+   */
+  resetQuotaFlip?: boolean;
+  /**
+   * Keep the tier-service cache when clearing the access decision cache.
+   * This preserves the spending-status explanation after a quota auto-switch.
+   */
+  preserveTierCache?: boolean;
+  /** True when included access is being disabled by quota fallback. */
+  quotaAutoSwitch?: boolean;
+}
+
 class NodeEventEmitter<T> implements ServerSideKeyDisposable {
   private readonly emitter = new EventEmitter();
 
@@ -125,15 +140,24 @@ export class ServerSideKeyService {
   // Cache state tracking
   private _isCachePrimed = false;
 
+  /**
+   * One-shot guard so the auto-flip on quota exhaustion runs at most
+   * once per session. After we flip useIncludedModelAccess to false on
+   * detecting an exhausted quota, the user can re-enable manually; we
+   * won't fight that decision by flipping again on the next check.
+   */
+  private quotaFlipApplied = false;
+  private quotaAutoSwitchActive = false;
+
   // Settings
   private useIncludedModelAccess = true;
   private globalState: ServerSideKeyState | null = null;
   private readonly _onDidChangeModelAccess: NodeEventEmitter<boolean>;
-  private readonly _onCacheCleared: NodeEventEmitter<void>;
+  private readonly _onCacheCleared: NodeEventEmitter<ClearServerSideKeyCachesOptions>;
   private readonly _tierServiceClearSubscription: ServerSideKeyDisposable;
 
   readonly onDidChangeModelAccess: ServerSideKeyEvent<boolean>;
-  readonly onCacheCleared: ServerSideKeyEvent<void>;
+  readonly onCacheCleared: ServerSideKeyEvent<ClearServerSideKeyCachesOptions>;
 
   constructor(
     private readonly baseUrl: string,
@@ -142,12 +166,18 @@ export class ServerSideKeyService {
     private readonly logger: AuthServiceLogger = NOOP_AUTH_SERVICE_LOGGER,
   ) {
     this._onDidChangeModelAccess = new NodeEventEmitter<boolean>(this.logger);
-    this._onCacheCleared = new NodeEventEmitter<void>(this.logger);
+    this._onCacheCleared =
+      new NodeEventEmitter<ClearServerSideKeyCachesOptions>(this.logger);
     this.onDidChangeModelAccess = this._onDidChangeModelAccess.event;
     this.onCacheCleared = this._onCacheCleared.event;
-    this._tierServiceClearSubscription = this._onCacheCleared.event(() => {
-      this.tierService.clearCache();
-    });
+    this._tierServiceClearSubscription = this._onCacheCleared.event(
+      (options) => {
+        if (options.preserveTierCache === true) {
+          return;
+        }
+        this.tierService.clearCache();
+      },
+    );
   }
 
   /**
@@ -183,22 +213,32 @@ export class ServerSideKeyService {
     return this.useIncludedModelAccess;
   }
 
-  async setUseIncludedModelAccess(value: boolean): Promise<void> {
+  wasQuotaAutoSwitched(): boolean {
+    return this.quotaAutoSwitchActive && !this.useIncludedModelAccess;
+  }
+
+  async setUseIncludedModelAccess(
+    value: boolean,
+    cacheOptions: ClearServerSideKeyCachesOptions = {},
+  ): Promise<void> {
     const changed = this.useIncludedModelAccess !== value;
     this.useIncludedModelAccess = value;
+    if (value) {
+      this.quotaAutoSwitchActive = false;
+    } else {
+      this.quotaAutoSwitchActive = cacheOptions.quotaAutoSwitch === true;
+    }
 
     if (this.globalState) {
       await this.globalState.update(USE_INCLUDED_ACCESS_KEY, value);
     }
 
     if (changed) {
-      this.clearAllCaches();
-
-      // Pre-fetch tier config (which includes providers) when enabling
-      if (value) {
-        await this.tierService.getConfig();
-      }
-
+      this.clearAllCaches(cacheOptions);
+      // No pre-fetch on enable — the next canUseServerSideKeys() does
+      // its own auth'd fetch in parallel with fetchAccessStatus(), and
+      // an anonymous pre-fetch here would just be discarded by the
+      // cachedWithAuth mismatch in TierService.getConfig.
       this._onDidChangeModelAccess.fire(value);
     }
   }
@@ -207,13 +247,17 @@ export class ServerSideKeyService {
     return this._isCachePrimed;
   }
 
-  clearAllCaches(): void {
+  clearAllCaches(options: ClearServerSideKeyCachesOptions = {}): void {
     this._isCachePrimed = false;
     this.accessResult = false;
     this.accessTimestamp = 0;
     this.accessFetchPromise = null;
     this.userTier = null;
-    this._onCacheCleared.fire(undefined);
+    if (options.resetQuotaFlip === true) {
+      this.quotaFlipApplied = false;
+      this.quotaAutoSwitchActive = false;
+    }
+    this._onCacheCleared.fire(options);
   }
 
   isProviderOnServer(provider: string): boolean {
@@ -253,7 +297,7 @@ export class ServerSideKeyService {
    */
   async canUseServerSideKeys(): Promise<boolean> {
     if (!this.getUseIncludedModelAccess()) {
-      this.clearAllCaches();
+      this.clearAllCaches({ preserveTierCache: this.wasQuotaAutoSwitched() });
       return false;
     }
 
@@ -292,6 +336,30 @@ export class ServerSideKeyService {
       if (hasAccess && providers.length > 0) {
         this.accessTimestamp = Date.now();
         this._isCachePrimed = true;
+      }
+
+      // Auto-flip useIncludedModelAccess to false when the user's
+      // monthly relay quota is exhausted. The toggle change is visible
+      // in Settings → Models so the user isn't surprised by silent
+      // routing changes — they can flip it back if they want to retry
+      // and surface the relay's 402 error directly.
+      if (
+        !this.quotaFlipApplied &&
+        hasAccess &&
+        this.tierService.isQuotaExceeded()
+      ) {
+        this.quotaFlipApplied = true;
+        this.logger.info(
+          CHANNEL,
+          'Relay quota exhausted; switching useIncludedModelAccess off',
+        );
+        // Await so the persisted toggle state, the cleared cache, and
+        // the access result agree by the time the caller resumes.
+        await this.setUseIncludedModelAccess(false, {
+          preserveTierCache: true,
+          quotaAutoSwitch: true,
+        });
+        return false;
       }
 
       return hasAccess && providers.length > 0;

@@ -113,7 +113,7 @@ export async function signInCliSupabase(
     }
 
     const session = await callbackServer.waitForSession();
-    getServerSideKeyService().clearAllCaches();
+    getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
     await getServerSideKeyService().setUseIncludedModelAccess(true);
     return session;
   } finally {
@@ -126,7 +126,7 @@ export async function signOutCliSupabase(): Promise<void> {
   await authCoordinator.clearSession();
   const serverSideKeyService = getServerSideKeyService();
   await serverSideKeyService.setUseIncludedModelAccess(false);
-  serverSideKeyService.clearAllCaches();
+  serverSideKeyService.clearAllCaches({ resetQuotaFlip: true });
 }
 
 export async function getCliAuthProfile(): Promise<CliAuthProfile> {
