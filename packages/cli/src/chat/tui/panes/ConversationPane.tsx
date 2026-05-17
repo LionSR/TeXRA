@@ -12,6 +12,7 @@
 import { Box, Static, Text } from 'ink';
 
 import { Markdown } from '../render/Markdown';
+import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { cliState, type ConversationEntry } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
 import { ToolUseRow } from './ToolUseRow';
@@ -55,31 +56,32 @@ function TranscriptEntry({
   );
 }
 
-// Cap the streaming live region to a short tail. Ink redraws the live
-// region on every text delta by moving the cursor up and rewriting the
-// rows; if the live region grows taller than the terminal viewport the
-// cursor-up overshoots and clobbers Static items that have already been
-// pushed into scrollback (truncating earlier turns when the user scrolls
-// back). The full content is preserved — the assistant entry transitions
-// into Ink's <Static> the moment it finalizes, which writes it to
-// scrollback in one shot. Keep this number small; it bounds the
-// scrollback damage during long streaming responses.
-const LIVE_TAIL_LINES = 12;
+// Bounds the live-region row count. Ink redraws the live region on every
+// streaming delta; if it overflows the viewport the cursor-up rewrite
+// overshoots and clobbers Static rows already in scrollback.
+const LIVE_TAIL_ROWS = 12;
 
 function LiveTranscriptEntry({
   entry,
+  width,
 }: {
   readonly entry: ConversationEntry;
+  readonly width?: number;
 }): React.JSX.Element {
-  const lines = entry.text.split('\n');
-  const hiddenLines = Math.max(0, lines.length - LIVE_TAIL_LINES);
-  const tail = hiddenLines > 0 ? lines.slice(-LIVE_TAIL_LINES) : lines;
+  // Cap by *wrapped* rows, not by `\n` count — an LLM often streams one
+  // long paragraph with no hard newlines, which Ink still wraps to many
+  // terminal rows. wrapAnsiToWidth gives us the rendered row layout so
+  // the cap reflects what Ink actually paints.
+  const wrapped = wrapAnsiToWidth(entry.text, width);
+  const rows = wrapped.split('\n');
+  const hiddenRows = Math.max(0, rows.length - LIVE_TAIL_ROWS);
+  const tail = hiddenRows > 0 ? rows.slice(-LIVE_TAIL_ROWS) : rows;
   return (
     <Box flexDirection="column">
-      {hiddenLines > 0 ? (
+      {hiddenRows > 0 ? (
         <Text dimColor>
-          ⋯ {hiddenLines} earlier line{hiddenLines === 1 ? '' : 's'} hidden
-          while streaming
+          ⋯ {hiddenRows} earlier row{hiddenRows === 1 ? '' : 's'} hidden while
+          streaming
         </Text>
       ) : null}
       <Text>{tail.join('\n')}</Text>
@@ -120,7 +122,13 @@ export function ConversationPane(
             return <ToolUseRow key={entry.id} toolUse={entry.toolUse} />;
           }
           if (entry.role === 'assistant') {
-            return <LiveTranscriptEntry key={entry.id} entry={entry} />;
+            return (
+              <LiveTranscriptEntry
+                key={entry.id}
+                entry={entry}
+                width={props.width}
+              />
+            );
           }
           return null;
         })}
