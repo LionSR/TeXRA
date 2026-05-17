@@ -1,7 +1,28 @@
 {
   "name": "@texra/cli",
   "version": "0.37.8",
-  "private": true,
+  "description": "TeXRA CLI — AI-powered LaTeX research assistant for the terminal.",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "author": "TeXRA.ai",
+  "homepage": "https://texra.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/texra-ai/texra-issues.git"
+  },
+  "bugs": {
+    "url": "https://github.com/texra-ai/texra-issues/issues"
+  },
+  "keywords": [
+    "latex",
+    "tex",
+    "ai",
+    "cli",
+    "llm",
+    "research",
+    "academic",
+    "writing",
+    "texra"
+  ],
   "files": [
     "dist"
   ],
@@ -11,6 +32,9 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -24,7 +48,6 @@
   "dependencies": {
     "@inkjs/ui": "^2.0.0",
     "@lit-labs/signals": "^0.3.0",
-    "@texra/core": "workspace:*",
     "citty": "^0.2.2",
     "cli-highlight": "^2.1.11",
     "diff": "^9.0.0",
@@ -40,6 +63,7 @@
     "@babel/core": "^7.29.0",
     "@babel/preset-react": "^7.28.5",
     "@babel/preset-typescript": "^7.28.5",
+    "@texra/core": "workspace:*",
     "@types/markdown-it": "^14.1.2",
     "@types/react": "^19.2.0",
     "babel-plugin-react-compiler": "^1.0.0",
