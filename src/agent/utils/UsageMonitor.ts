@@ -89,10 +89,14 @@ export class UsageMonitor {
   private activeGroupId: string | undefined;
 
   constructor(
-    private readonly modelInfo: UsageMonitorModelInfo,
+    private modelInfo: UsageMonitorModelInfo,
     private readonly context: UsageMonitorContext,
     private readonly metadata: UsageMonitorMetadata,
   ) {}
+
+  setModelInfo(modelInfo: UsageMonitorModelInfo): void {
+    this.modelInfo = modelInfo;
+  }
 
   /**
    * Set the active group ID for statistics logging.

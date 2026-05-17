@@ -57,6 +57,22 @@ export function getToolUseFlowContext(
   return isToolUseFlowContext(entry) ? entry : undefined;
 }
 
+export type SwitchToolUseModelResult =
+  | { status: 'switched' }
+  | { status: 'no_session' }
+  | { status: 'unchanged' };
+
+export async function switchToolUseModel(
+  streamTabId: StreamTabId,
+  model: string,
+): Promise<SwitchToolUseModelResult> {
+  const context = getToolUseFlowContext(streamTabId);
+  if (!context) return { status: 'no_session' };
+  if (context.model === model) return { status: 'unchanged' };
+  await context.switchModel(model);
+  return { status: 'switched' };
+}
+
 export function cleanupInactiveAgents(activeStreams: Set<StreamTabId>): void {
   for (const streamId of registry.keys()) {
     if (!activeStreams.has(streamId)) {
