@@ -11,9 +11,12 @@ import { useMemo } from 'react';
 
 import { Box, Text } from 'ink';
 
-import type { NormalizedToolUse } from '@shared/schemas';
+import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
 import { isPlainObject } from '@shared/utils/string';
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import {
+  collapseWhitespace,
+  truncateWithEllipsis,
+} from '@utils/text/stringUtils';
 
 const STATUS_DOT = '●';
 const OUTPUT_CORNER = '⎿';
@@ -56,13 +59,9 @@ function previewInput(input: unknown): string {
   }
 }
 
-function collapseWhitespace(text: string): string {
-  return text.replaceAll(/\s+/g, ' ').trim();
-}
-
 function statusColor(toolUse: NormalizedToolUse): 'green' | 'red' | undefined {
   if (toolUse.isError) return 'red';
-  if (toolUse.status === 'completed') return 'green';
+  if (toolUse.status === TOOL_USE_STATUS.COMPLETED) return 'green';
   return undefined;
 }
 
@@ -100,7 +99,9 @@ export function ToolUseRow({
   const errorText = toolUse.isError ? toolUse.errorText || '(error)' : '';
   const showError = toolUse.isError;
   const showNoOutput =
-    toolUse.status === 'completed' && visibleOutput.length === 0 && !showError;
+    toolUse.status === TOOL_USE_STATUS.COMPLETED &&
+    visibleOutput.length === 0 &&
+    !showError;
 
   return (
     <Box flexDirection="column" marginBottom={1}>
