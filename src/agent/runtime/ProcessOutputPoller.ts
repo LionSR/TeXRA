@@ -1,13 +1,9 @@
-// Node imports
 import * as fs from 'fs';
 
-// Third-party imports
 import pMap from 'p-map';
 
-// Local imports - shared
 import type { StreamTabId } from '@shared/schemas';
 
-// Local imports - runtime
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { ProcessExecutionHandle } from './ExecutionHandle';
 
