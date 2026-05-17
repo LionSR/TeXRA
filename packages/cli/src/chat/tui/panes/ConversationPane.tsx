@@ -80,12 +80,15 @@ function LiveTranscriptEntry({
   const slicedChars = Math.max(0, entry.text.length - wrapBudget);
   const candidate =
     slicedChars > 0 ? entry.text.slice(slicedChars) : entry.text;
-  const rows = wrapAnsiToWidth(candidate, width).split('\n');
-  const tail = rows.slice(-LIVE_TAIL_ROWS);
+  const rows = wrapAnsiToWidth(candidate, cols).split('\n');
   // Approximate: rows above the tail in the wrapped window + a width-
   // based estimate of rows lost to the raw-char slice. Exact count would
   // require wrapping the full buffer — the work this avoids.
-  const hiddenRows = rows.length - tail.length + Math.ceil(slicedChars / cols);
+  const slicedRows = Math.ceil(slicedChars / cols);
+  const needsHint = rows.length + slicedRows > LIVE_TAIL_ROWS;
+  const tailLimit = needsHint ? LIVE_TAIL_ROWS - 1 : LIVE_TAIL_ROWS;
+  const tail = rows.slice(-tailLimit);
+  const hiddenRows = rows.length - tail.length + slicedRows;
   return (
     <Box flexDirection="column">
       {hiddenRows > 0 ? (
