@@ -7,7 +7,7 @@
 
 import { signal, type Signal } from '@lit-labs/signals';
 
-import type { StreamTabId } from '@shared/schemas';
+import type { NormalizedToolUse, StreamTabId } from '@shared/schemas';
 import type {
   ActiveChildInfo,
   ConversationProgress,
@@ -20,11 +20,13 @@ import type {
 export interface ConversationEntry {
   /** Same id as the upstream `StreamLogEntry.id` — stable across deltas. */
   readonly id: string;
-  readonly role: 'assistant' | 'error' | 'user';
-  /** Concatenated text for `MODEL_RESPONSE` entries. */
+  readonly role: 'assistant' | 'error' | 'tool' | 'user';
+  /** Concatenated text for `MODEL_RESPONSE` entries. Empty for tool rows. */
   readonly text: string;
   /** True once the stream transitions to `WAITING`/`COMPLETED`. */
   readonly finalized: boolean;
+  /** Populated only when `role === 'tool'`. */
+  readonly toolUse?: NormalizedToolUse;
   /** Entry was synthesized by the CLI and is not present in StreamLogStore. */
   readonly synthetic?: boolean;
   /** Why the CLI synthesized this entry. */
