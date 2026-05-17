@@ -53,6 +53,22 @@ export function registerBuiltinSlashCommands(options?: {
     formComponent: ModelFormAdapter,
   });
   registerSlashCommand({
+    name: 'api',
+    description: 'Switch between included relay and personal API keys',
+  });
+  registerSlashCommand({
+    name: 'auth',
+    description: 'Show TeXRA login status',
+  });
+  registerSlashCommand({
+    name: 'approval',
+    description: 'Switch approval policy',
+  });
+  registerSlashCommand({
+    name: 'yolo',
+    description: 'Approve privileged actions automatically',
+  });
+  registerSlashCommand({
     name: 'status',
     description: 'Open the session status tabs',
   });
