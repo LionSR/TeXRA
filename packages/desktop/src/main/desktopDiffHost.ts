@@ -57,18 +57,10 @@ export function createDesktopDiffHost(
       readFile(proposed.filePath, 'utf8'),
     ]);
 
-    // Prefer the in-app overlay when wired. Falling back to the external
-    // editor is intentional for headless tests + the audit-item-C escape
-    // hatch (`forceExternal`). Wrap the post in try/catch and respect a
-    // `false` return value from `postToRenderer` so we transparently
-    // fall back when the IPC bridge isn't reachable yet (startup race)
-    // or the BrowserWindow has been destroyed (Copilot/Cursor review
-    // on #3815 — silent overlay failure was the only previous failure
-    // mode).
+    // Prefer the in-app overlay when wired. A `false` return value or
+    // a thrown error opts into the external-editor fallback (covers the
+    // startup IPC race, destroyed BrowserWindow, and `forceExternal`).
     if (options.postToRenderer && !options.forceExternal) {
-      // Pick a language hint from the proposed file extension; the
-      // proposed path is the one the user is reviewing for acceptance,
-      // so its extension wins over the (possibly stale) original.
       let posted = false;
       try {
         const result = options.postToRenderer(
@@ -81,8 +73,6 @@ export function createDesktopDiffHost(
             proposedPath: proposed.filePath,
           }),
         );
-        // `void` (the common case) is treated as success; explicit
-        // `false` opts into the external-editor fallback.
         posted = result !== false;
       } catch (error) {
         console.error(
@@ -91,11 +81,9 @@ export function createDesktopDiffHost(
         );
       }
       if (posted) return { original, proposed, title };
-      // fall through to the external-editor flow below.
     }
 
-    // External-editor fallback: keep the previous behaviour — write a
-    // unified patch file to a tmp dir and hand off via `openPath`.
+    // External-editor fallback: write a unified patch file and open it.
     const patch =
       computeUserPatch(originalContent, proposedContent) ??
       `No textual changes for ${path.basename(proposed.filePath)}.\n`;

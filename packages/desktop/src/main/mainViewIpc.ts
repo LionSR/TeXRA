@@ -67,15 +67,12 @@ export function installDesktopMainViewIpc(
     debugMode: options.debugMode,
     getTheme: options.getTheme,
   });
-  const shell =
+  const shell = createDesktopShellIpc(
+    bridge,
     options.shellActions == null
-      ? createDesktopShellIpc(bridge, {
-          onAsyncError: options.onAsyncError,
-        })
-      : createDesktopShellIpc(bridge, {
-          actions: options.shellActions,
-          onAsyncError: options.onAsyncError,
-        });
+      ? { onAsyncError: options.onAsyncError }
+      : { actions: options.shellActions, onAsyncError: options.onAsyncError },
+  );
   const execution = createDesktopExecutionIpc({
     executeAgent: options.executeAgent,
     onAsyncError: options.onAsyncError,

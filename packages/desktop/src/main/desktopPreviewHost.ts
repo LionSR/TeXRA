@@ -96,20 +96,15 @@ export function createDesktopPreviewHost(
     }
   }
 
-  // Try to render the PDF inside the desktop via the wa-dialog overlay.
-  // Returns `true` when the renderer accepted the IPC, `false` when we
-  // should fall back to the external viewer. Mirrors the diff host's
-  // contract: a `false` return value or a thrown error opts into
-  // `shell.openPath`. Bot review on #3815 explicitly required not
-  // silently swallowing IPC failures.
+  // Try to render the PDF in the wa-dialog overlay. Returns `false` (so
+  // the caller falls back to `shell.openPath`) when the renderer rejects
+  // or throws — mirrors the diff host's contract.
   function tryShowPdfInRenderer(pdfPath: string, title: string): boolean {
     if (!options.postToRenderer || options.forceExternal) return false;
     try {
       const result = options.postToRenderer(
         buildDesktopShowPdfMessage({ title, pdfPath }),
       );
-      // `void` (the common case) is treated as success; explicit
-      // `false` opts into the external-viewer fallback.
       return result !== false;
     } catch (error) {
       console.error(
@@ -152,12 +147,9 @@ export function createDesktopPreviewHost(
     }
 
     // Confirm the PDF is on disk before rendering it (the iframe will
-    // happily load nothing and present a blank surface otherwise).
+    // load nothing and present a blank surface otherwise).
     await ensurePathExists(pdfPath);
 
-    // Prefer the in-app overlay (audit item B / trajectory #17).
-    // External-viewer fallback covers headless tests and the
-    // `forceExternal` escape hatch.
     if (tryShowPdfInRenderer(pdfPath, path.basename(pdfPath))) return;
 
     await openPath(pdfPath);

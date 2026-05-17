@@ -40,8 +40,7 @@ export function installDesktopNavigationPolicy(
   webContents: WebContents,
   options: DesktopNavigationPolicyOptions = {},
 ): void {
-  const reportAsyncError =
-    options.onAsyncError ?? ((error) => console.error(error));
+  const reportAsyncError = options.onAsyncError ?? defaultReportError;
 
   webContents.setWindowOpenHandler(({ url }) => {
     routeOrDeny(url, reportAsyncError);
@@ -61,4 +60,8 @@ export function installDesktopNavigationPolicy(
   webContents.on('will-attach-webview', (event) => {
     event.preventDefault();
   });
+}
+
+function defaultReportError(error: unknown): void {
+  console.error(error);
 }
