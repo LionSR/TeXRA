@@ -18,9 +18,6 @@ settings:
   temperature: 0.1 # 0.1 for editing, 0.5-0.8 for creative tasks
   documentTag: documents
   endTag: '</documents>'
-  prefills: # MUST have exactly `rounds` entries
-    - '<scratchpad>'
-    - '<scratchpad>'
 
 prompts:
   systemPrompt: |
@@ -40,8 +37,11 @@ prompts:
 
 ## Critical rules
 
-- `prefills` and `userRequest` MUST both have the same number of entries as
-  `rounds`. Round 1 → one entry each; round 2 → two entries each.
+- `userRequest` MUST have the same number of entries as `rounds`. Round 1
+  → one entry; round 2 → two entries.
+- Do NOT emit `prefills`. The field is deprecated --- reasoning models
+  ignore it at runtime, and other models do fine when the userRequest
+  spells out the expected `<documents>...</documents>` wrapper.
 - Always include `{{ INSTRUCTION }}` somewhere so user instructions pass
   through.
 - System prompts should use LaTeX formatting (`\begin{itemize}`,
@@ -119,9 +119,6 @@ settings:
   agentCategory: workflow
   documentTag: documents
   endTag: '</documents>'
-  prefills:
-    - '<scratchpad>'
-    - '<scratchpad>'
 
 prompts:
   systemPrompt: |
