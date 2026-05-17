@@ -31,7 +31,10 @@ import {
   type CodexMcpToolOutput,
 } from '@tools/codexShared';
 import type { MemoryToolInput } from '@tools/memory/MemoryTool';
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import {
+  collapseWhitespace,
+  truncateWithEllipsis,
+} from '@utils/text/stringUtils';
 
 // Local imports - Lit template utilities
 import {
@@ -128,13 +131,12 @@ function getToolTimeoutMs(
 
 /** Truncate a prompt string for display in collapsed headers. */
 function truncatePrompt(text: string, maxLength: number): string {
-  const oneLine = text.replaceAll(/\s+/g, ' ').trim();
-  return truncateWithEllipsis(oneLine, maxLength);
+  return truncateWithEllipsis(collapseWhitespace(text), maxLength);
 }
 
 /** Truncate tool header text without pulling streamed stdout/stderr into it. */
 function truncateHeaderSummary(text: string, maxLength: number): string {
-  const oneLine = text.replaceAll(/\s+/g, ' ').trim();
+  const oneLine = collapseWhitespace(text);
   const outputMarker = oneLine.search(/\s+<(?:stdout|stderr)>/i);
   const summary =
     outputMarker >= 0 ? oneLine.slice(0, outputMarker).trim() : oneLine;
