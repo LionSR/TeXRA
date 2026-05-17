@@ -113,11 +113,11 @@ export async function lookupApiKeyOrigin(
   return (await resolveApiKey(secrets, provider)).origin;
 }
 
-function apiKeyStatusFromOrigin(origin: ApiKeyOrigin): ApiKeyStatus {
-  if (origin === 'secret') return 'set';
-  if (origin === 'env') return 'env';
-  return 'not-set';
-}
+const STATUS_BY_ORIGIN: Record<ApiKeyOrigin, ApiKeyStatus> = {
+  secret: 'set',
+  env: 'env',
+  none: 'not-set',
+};
 
 /**
  * Resolve key statuses for providers from the canonical API-key origin cache.
@@ -129,7 +129,7 @@ export async function loadApiKeyStatusMap<const Provider extends ApiProvider>(
   const entries = await Promise.all(
     providers.map(async (provider) => [
       provider,
-      apiKeyStatusFromOrigin(await lookupApiKeyOrigin(secrets, provider)),
+      STATUS_BY_ORIGIN[await lookupApiKeyOrigin(secrets, provider)],
     ]),
   );
   return Object.fromEntries(entries) as Record<Provider, ApiKeyStatus>;

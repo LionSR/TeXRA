@@ -61,9 +61,11 @@ function mergeFields(left: LogFields, right: LogFields | undefined): LogFields {
 function cloneGroupStacks(
   stacks: Map<GroupContextKey, string[]> | undefined,
 ): Map<GroupContextKey, string[]> {
-  return new Map(
-    [...(stacks?.entries() ?? [])].map(([key, groups]) => [key, [...groups]]),
-  );
+  const next = new Map<GroupContextKey, string[]>();
+  if (stacks) {
+    for (const [key, groups] of stacks) next.set(key, [...groups]);
+  }
+  return next;
 }
 
 class StructuredLogger implements Logger {
