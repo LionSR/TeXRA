@@ -93,11 +93,14 @@ export function ToolUseRow({
     };
   }, [toolUse]);
 
-  const hasError = toolUse.isError && toolUse.errorText;
-  // When a tool completes with neither output nor error, show "(no output)"
-  // so the row doesn't look stuck. While running, we leave the body blank.
+  // `isError` is the authoritative signal — `errorText` can be empty even
+  // when the upstream payload sets `isError: true` (no `error` string).
+  // Tracking only the text would let the "(no output)" branch fire on a
+  // failed tool, hiding the failure behind a misleading label.
+  const errorText = toolUse.isError ? toolUse.errorText || '(error)' : '';
+  const showError = toolUse.isError;
   const showNoOutput =
-    toolUse.status === 'completed' && visibleOutput.length === 0 && !hasError;
+    toolUse.status === 'completed' && visibleOutput.length === 0 && !showError;
 
   return (
     <Box flexDirection="column" marginBottom={1}>
@@ -123,12 +126,12 @@ export function ToolUseRow({
           ) : null}
         </Box>
       ) : null}
-      {hasError ? (
+      {showError ? (
         <Box flexDirection="row" flexWrap="nowrap" paddingLeft={2}>
           <Text dimColor>{`${OUTPUT_CORNER} `}</Text>
           <Text color="red">
             {truncateWithEllipsis(
-              collapseWhitespace(toolUse.errorText),
+              collapseWhitespace(errorText),
               MAX_ERROR_PREVIEW,
             )}
           </Text>
