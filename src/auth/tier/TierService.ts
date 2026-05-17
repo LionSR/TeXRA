@@ -20,14 +20,16 @@ import {
   type AuthServiceLogger,
 } from '../serviceLogger';
 import {
-  SpendingStatusSchema,
   TierModelConfigSchema,
   UserAccessStatusSchema,
-  type SpendingStatus,
   type TierModelConfig,
   type TierModelsConfig,
   type UserAccessStatus,
 } from './types';
+import {
+  SpendingStatusSchema,
+  type SpendingStatus,
+} from '@shared/schemas/spendingStatus';
 
 const CHANNEL = 'TierService';
 
