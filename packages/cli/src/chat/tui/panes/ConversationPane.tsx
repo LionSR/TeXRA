@@ -69,13 +69,23 @@ function LiveTranscriptEntry({
   readonly width?: number;
 }): React.JSX.Element {
   // Cap by *wrapped* rows, not by `\n` count — an LLM often streams one
-  // long paragraph with no hard newlines, which Ink still wraps to many
-  // terminal rows. wrapAnsiToWidth gives us the rendered row layout so
-  // the cap reflects what Ink actually paints.
-  const wrapped = wrapAnsiToWidth(entry.text, width);
-  const rows = wrapped.split('\n');
-  const hiddenRows = Math.max(0, rows.length - LIVE_TAIL_ROWS);
-  const tail = hiddenRows > 0 ? rows.slice(-LIVE_TAIL_ROWS) : rows;
+  // long paragraph with no hard newlines, which Ink would still wrap to
+  // many terminal rows. Slice the raw text down to a tail-sized window
+  // before wrapping so per-delta wrap work stays bounded; otherwise the
+  // whole growing buffer is re-wrapped on every keystroke (O(text²)
+  // over the response). Live text is plain (see file header), so
+  // slicing mid-string can't corrupt an ANSI escape.
+  const cols = width ?? 80;
+  const wrapBudget = cols * LIVE_TAIL_ROWS * 2;
+  const slicedChars = Math.max(0, entry.text.length - wrapBudget);
+  const candidate =
+    slicedChars > 0 ? entry.text.slice(slicedChars) : entry.text;
+  const rows = wrapAnsiToWidth(candidate, width).split('\n');
+  const tail = rows.slice(-LIVE_TAIL_ROWS);
+  // Approximate: rows above the tail in the wrapped window + a width-
+  // based estimate of rows lost to the raw-char slice. Exact count would
+  // require wrapping the full buffer — the work this avoids.
+  const hiddenRows = rows.length - tail.length + Math.ceil(slicedChars / cols);
   return (
     <Box flexDirection="column">
       {hiddenRows > 0 ? (
