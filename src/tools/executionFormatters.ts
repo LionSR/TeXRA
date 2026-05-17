@@ -10,6 +10,14 @@ import {
   TODO_STATUS,
   type TodoStatus,
 } from '@shared/schemas';
+import { isProcessAgent } from '@shared/streams/agentKind';
+
+export function resolveExecutionDisplayCategory(
+  agent: string | undefined,
+  category: string | undefined,
+): string | undefined {
+  return isProcessAgent(agent) ? 'process' : category;
+}
 
 /** Return paths available for a given agent category. */
 export function getAvailablePaths(
@@ -68,12 +76,14 @@ export function formatProgressLine(
 export function formatListingLine(entry: ExecutionListingEntry): string {
   const ts = entry.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
   const info = getExecutionStatusInfo(entry.id, entry.terminalStatus);
-  const categoryTag = entry.category ? `  ${entry.category}` : '';
+  const category = resolveExecutionDisplayCategory(entry.agent, entry.category);
+  const categoryTag = category ? `  ${category}` : '';
+  const modelTag = category === 'process' ? '' : `  ${entry.model}`;
   const parentSuffix = entry.parentExecutionId
     ? `  parent=${entry.parentExecutionId}`
     : '';
   const descSuffix = entry.description ? `  — ${entry.description}` : '';
-  return `${entry.id}  ${ts}  ${entry.agent}${categoryTag}  ${entry.model}  [${formatStatusInfo(info)}]${parentSuffix}${descSuffix}`;
+  return `${entry.id}  ${ts}  ${entry.agent}${categoryTag}${modelTag}  [${formatStatusInfo(info)}]${parentSuffix}${descSuffix}`;
 }
 
 function getTodoStatusIcon(status: string | undefined): string {

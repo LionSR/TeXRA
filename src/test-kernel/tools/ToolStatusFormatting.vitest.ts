@@ -1,11 +1,17 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
+// Local imports - storage
+import type { ExecutionListingEntry } from '@agent/storage';
+
 // Local imports - schemas
 import { STATUS_DISPLAY, TODO_STATUS } from '@shared/schemas';
 
 // Local imports - tools
-import { formatTodoSection } from '@tools/executionFormatters';
+import {
+  formatListingLine,
+  formatTodoSection,
+} from '@tools/executionFormatters';
 import { formatSubagentProgress } from '@tools/subagentResults';
 
 describe('tool status formatting', () => {
@@ -45,6 +51,23 @@ describe('tool status formatting', () => {
     );
     expect(progress).toContain(
       `  ${STATUS_DISPLAY[TODO_STATUS.PENDING].icon} Write response`,
+    );
+  });
+
+  it('renders bash execution history as a process without a model', () => {
+    const entry: ExecutionListingEntry = {
+      id: '16c0f3f748e4',
+      timestamp: '2026-05-15T23:42:06.000Z',
+      parentExecutionId: 'fcf5150d37c6',
+      agent: 'bash',
+      model: 'gemini31p',
+      agentConfig: null,
+      category: 'toolUse',
+      terminalStatus: 'completed',
+    };
+
+    expect(formatListingLine(entry)).toBe(
+      '16c0f3f748e4  2026-05-15 23:42:06  bash  process  [completed]  parent=fcf5150d37c6',
     );
   });
 });
