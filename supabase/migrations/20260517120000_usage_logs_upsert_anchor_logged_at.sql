@@ -35,6 +35,7 @@ DECLARE
 BEGIN
   WITH parsed AS (
     SELECT
+      row_ordinal,
       (r->>'user_id')::uuid AS user_id,
       (r->>'logged_at')::timestamptz AS logged_at,
       r->>'model' AS model,
@@ -52,13 +53,12 @@ BEGIN
            THEN (r->>'cached_input_tokens')::int END AS cached_input_tokens,
       CASE WHEN r ? 'reasoning_tokens' AND r->>'reasoning_tokens' <> ''
            THEN (r->>'reasoning_tokens')::int END AS reasoning_tokens,
-      CASE WHEN r ? 'used_relay' AND r->>'used_relay' <> ''
-           THEN (r->>'used_relay')::boolean END AS used_relay,
+      COALESCE(NULLIF(r->>'used_relay', '')::boolean, false) AS used_relay,
       NULLIF(r->>'stream_id', '') AS stream_id,
       NULLIF(r->>'extension_version', '') AS extension_version,
       (r->>'batch_id')::uuid AS batch_id,
       NULLIF(r->>'editor_type', '') AS editor_type
-    FROM jsonb_array_elements(p_rows) r
+    FROM jsonb_array_elements(p_rows) WITH ORDINALITY AS input(r, row_ordinal)
   ),
   agg AS (
     SELECT
@@ -87,7 +87,7 @@ BEGIN
       MAX(batch_id::text)::uuid AS batch_id,
       MAX(editor_type) AS editor_type
     FROM parsed
-    GROUP BY user_id, stream_id
+    GROUP BY user_id, stream_id, CASE WHEN stream_id IS NULL THEN row_ordinal END
   )
   INSERT INTO public.usage_logs (
     user_id, logged_at, model, provider, agent_name, agent_category,
@@ -129,6 +129,7 @@ BEGIN
     -- Anchor to FIRST round (LEAST) instead of GREATEST so cross-period
     -- streams don't migrate their cost into the wrong day/month bucket.
     logged_at = LEAST(public.usage_logs.logged_at, EXCLUDED.logged_at),
+    batch_id = COALESCE(EXCLUDED.batch_id, public.usage_logs.batch_id),
     extension_version = COALESCE(EXCLUDED.extension_version, public.usage_logs.extension_version),
     model = COALESCE(public.usage_logs.model, EXCLUDED.model),
     provider = COALESCE(public.usage_logs.provider, EXCLUDED.provider),
