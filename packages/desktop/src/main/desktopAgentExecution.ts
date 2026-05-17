@@ -358,6 +358,11 @@ export class DesktopProgressBridge {
   dispose(): void {
     this.toolEditApprovals.dispose();
     this.unsubscribe();
+    this.clearAllStreamMaps();
+    this.workflowFileActions.clearAllBackups();
+  }
+
+  private clearAllStreamMaps(): void {
     this.agentProposals.clear();
     this.cursors.clear();
     this.taskStates.clear();
@@ -370,10 +375,7 @@ export class DesktopProgressBridge {
     this.creationTimestamps.clear();
     this.conversationProgress.clear();
     this.streamBadges.clear();
-    // Bot review (#3819) caught the omission — `deleteAllStreams()`
-    // already clears `restoredStreams`; `dispose()` should match.
     this.restoredStreams.clear();
-    this.workflowFileActions.clearAllBackups();
   }
 
   private send(message: ProgressViewOutboundMessage): void {
@@ -1040,18 +1042,7 @@ export class DesktopProgressBridge {
     }
 
     await this.streamLogs.clear();
-    this.cursors.clear();
-    this.taskStates.clear();
-    this.outputFiles.clear();
-    this.statuses.clear();
-    this.categories.clear();
-    this.executionIds.clear();
-    this.agentProposals.clear();
-    this.descriptions.clear();
-    this.parentStreams.clear();
-    this.creationTimestamps.clear();
-    this.conversationProgress.clear();
-    this.streamBadges.clear();
+    this.clearAllStreamMaps();
     this.workflowFileActions.clearAllBackups();
     this.activeStream = '';
     this.send({ command: PROGRESS_VIEW_COMMANDS.DELETE_ALL });
@@ -1212,9 +1203,8 @@ export class DesktopProgressBridge {
       runtimeHost: this.runtimeHost,
       openWorkflowOutput: async (result) => {
         const output = result.outputs.at(-1);
-        if (output) {
-          await this.options.openPath?.(output.absolutePath);
-        }
+        if (!output) return;
+        await this.options.openPath?.(output.absolutePath);
       },
     });
   }
@@ -1265,10 +1255,7 @@ export class DesktopProgressBridge {
     );
     const targetExists =
       isNewFile && (await fileExists(targetLocation.absolutePath));
-    let action: string;
-    if (targetExists) action = 'overwrite existing';
-    else if (isNewFile) action = 'create';
-    else action = 'overwrite';
+    const action = getAcceptAction(isNewFile, targetExists);
     const extensionNote = isNewFile
       ? `Extensions differ (${path.extname(baseFile).toLowerCase()} vs ${path.extname(editedFile).toLowerCase()}). `
       : '';
@@ -1389,6 +1376,12 @@ async function fileExists(filePath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function getAcceptAction(isNewFile: boolean, targetExists: boolean): string {
+  if (targetExists) return 'overwrite existing';
+  if (isNewFile) return 'create';
+  return 'overwrite';
 }
 
 export function createDesktopAgentExecution(
