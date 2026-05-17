@@ -131,7 +131,7 @@ describe('FakePlatform kernel invariants', () => {
     const platform = createFakePlatform({}, { fs, log });
 
     platform.log.initialize('TeXRA');
-    platform.log.info('TeXRA', 'ready', { data: { count: 1 } });
+    platform.log.info('TeXRA', 'ready');
 
     expect(platform.fs).toBe(fs);
     expect(log.initializedChannels).toEqual([
@@ -142,7 +142,6 @@ describe('FakePlatform kernel invariants', () => {
         level: 'info',
         channel: 'TeXRA',
         message: 'ready',
-        options: { data: { count: 1 } },
       },
     ]);
   });

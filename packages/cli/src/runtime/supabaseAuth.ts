@@ -55,14 +55,10 @@ let coordinator: SupabaseSessionCoordinator | undefined;
 let activeAuthLog: LogBackend | undefined;
 const deferredAuthLog: LogBackend = {
   initialize: (channel, isAgent) => activeAuthLog?.initialize(channel, isAgent),
-  debug: (channel, message, options) =>
-    activeAuthLog?.debug(channel, message, options),
-  info: (channel, message, options) =>
-    activeAuthLog?.info(channel, message, options),
-  warn: (channel, message, options) =>
-    activeAuthLog?.warn(channel, message, options),
-  error: (channel, message, options) =>
-    activeAuthLog?.error(channel, message, options),
+  debug: (channel, message) => activeAuthLog?.debug(channel, message),
+  info: (channel, message) => activeAuthLog?.info(channel, message),
+  warn: (channel, message) => activeAuthLog?.warn(channel, message),
+  error: (channel, message) => activeAuthLog?.error(channel, message),
 };
 const cliAuthProvider = {
   isAuthenticated: () => SupabaseClient.isAuthenticated(),

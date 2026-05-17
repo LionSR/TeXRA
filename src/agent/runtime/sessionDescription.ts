@@ -15,6 +15,7 @@ import { createHelperModelKit } from '@agent/runtime/helperModel';
 import * as logger from '@agent/core/logger';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
+import { toErrorMessage } from '@common/errors/errorMessage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 const CHANNEL = 'SessionDescription';
@@ -113,8 +114,9 @@ export async function generateSessionDescription(
       logger.info(CHANNEL, `Generated session description for ${executionId}`);
     }
   } catch (err) {
-    logger.warn(CHANNEL, `Failed to generate session description`, {
-      data: err,
-    });
+    logger.warn(
+      CHANNEL,
+      `Failed to generate session description: ${toErrorMessage(err)}`,
+    );
   }
 }

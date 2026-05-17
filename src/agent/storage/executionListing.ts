@@ -14,6 +14,7 @@ import pMap from 'p-map';
 import { type AgentConfig, AgentConfigSchema } from '@agent/core/AgentConfig';
 import * as logger from '@agent/core/logger';
 import { getWorkspaceState } from '@agent/core/stateStore';
+import { toErrorMessage } from '@common/errors/errorMessage';
 import { isFileNotFoundError } from '@common/errors';
 import { isDirectory } from '@common/files/fsEntryType';
 import type { ExecutionId } from '@shared/schemas';
@@ -137,9 +138,10 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
           description: meta.description,
         };
       } catch (error) {
-        logger.warn(CHANNEL, `Skipping corrupt execution ${id}`, {
-          data: error,
-        });
+        logger.warn(
+          CHANNEL,
+          `Skipping corrupt execution ${id}: ${toErrorMessage(error)}`,
+        );
         return null;
       }
     },
@@ -225,9 +227,10 @@ async function migrateIndexJson(): Promise<void> {
   try {
     await StorageFS.delete(INDEX_PATH);
   } catch (error) {
-    logger.warn(CHANNEL, `Failed to delete legacy ${INDEX_PATH}`, {
-      data: error,
-    });
+    logger.warn(
+      CHANNEL,
+      `Failed to delete legacy ${INDEX_PATH}: ${toErrorMessage(error)}`,
+    );
   }
 }
 
@@ -242,9 +245,10 @@ async function migrateWorkspaceState(): Promise<void> {
   try {
     await getWorkspaceState().update(storageKey, []);
   } catch (error) {
-    logger.warn(CHANNEL, `Failed to clear workspace state key`, {
-      data: error,
-    });
+    logger.warn(
+      CHANNEL,
+      `Failed to clear workspace state key: ${toErrorMessage(error)}`,
+    );
   }
 }
 
