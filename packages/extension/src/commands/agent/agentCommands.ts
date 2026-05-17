@@ -2,15 +2,16 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import {
-  getInterruptible,
-  getToolUseFlowContext,
-} from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   detachActiveChildren,
   interruptActiveChildren,
 } from '@agent/runtime/executionRegistry';
+import { notifyFollowUpSent } from '@agent/toolUse/ToolUseFollowUp';
+import {
+  getInterruptible,
+  getToolUseFlowContext,
+} from '@agent/toolUse/ToolUseAgentRegistry';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { STREAM_STATUS } from '@shared/schemas';
@@ -46,8 +47,9 @@ export async function compactResponse(streamId: StreamTabId): Promise<void> {
     return;
   }
 
-  flowContext.modelHandler.requestCompaction();
+  flowContext.requestImmediateCompaction();
+  notifyFollowUpSent(streamId, flowContext.runtimeHost);
   await vscode.window.showInformationMessage(
-    'Context compaction requested. The conversation will be compacted on the next API call.',
+    'Context compaction requested. The agent will process it on the next model call.',
   );
 }
