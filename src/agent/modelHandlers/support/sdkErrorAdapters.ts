@@ -36,6 +36,14 @@ import {
   type SdkErrorKind,
 } from '@common/errors/sdkErrorUtils';
 
+type ErrorConstructor = abstract new (...args: unknown[]) => Error;
+
+interface SdkErrorClassMapping {
+  ctor: ErrorConstructor;
+  kind: SdkErrorKind;
+  includeStatusCode?: boolean;
+}
+
 function tagSdkError(
   err: unknown,
   provider: string,
@@ -49,40 +57,60 @@ function tagSdkError(
   });
 }
 
+function matchMappedSdkError(
+  err: unknown,
+  provider: string,
+  mappings: readonly SdkErrorClassMapping[],
+  apiErrorCtor?: ErrorConstructor,
+): void {
+  for (const { ctor, kind, includeStatusCode } of mappings) {
+    if (err instanceof ctor) {
+      const statusCode = includeStatusCode
+        ? (err as { status?: number }).status
+        : undefined;
+      tagSdkError(err, provider, kind, statusCode);
+      return;
+    }
+  }
+
+  if (apiErrorCtor && err instanceof apiErrorCtor) {
+    const statusCode = (err as { status?: number }).status;
+    tagSdkError(err, provider, sdkErrorKindFromStatusCode(statusCode), statusCode);
+  }
+}
+
+const ANTHROPIC_SDK_ERROR_MAPPINGS: readonly SdkErrorClassMapping[] = [
+  { ctor: AnthropicAPIConnectionTimeoutError, kind: 'connection_timeout' },
+  { ctor: AnthropicAPIConnectionError, kind: 'connection' },
+  { ctor: AnthropicAPIUserAbortError, kind: 'user_abort' },
+  { ctor: AnthropicBadRequestError, kind: 'bad_request', includeStatusCode: true },
+  { ctor: AnthropicAuthenticationError, kind: 'authentication', includeStatusCode: true },
+  { ctor: AnthropicPermissionDeniedError, kind: 'permission_denied', includeStatusCode: true },
+  { ctor: AnthropicNotFoundError, kind: 'not_found', includeStatusCode: true },
+  { ctor: AnthropicConflictError, kind: 'conflict', includeStatusCode: true },
+  {
+    ctor: AnthropicUnprocessableEntityError,
+    kind: 'unprocessable_entity',
+    includeStatusCode: true,
+  },
+  { ctor: AnthropicRateLimitError, kind: 'rate_limit', includeStatusCode: true },
+  {
+    ctor: AnthropicInternalServerError,
+    kind: 'internal_server',
+    includeStatusCode: true,
+  },
+];
+
 export function tagAnthropicSdkError(
   err: unknown,
   provider = 'anthropic',
 ): void {
-  if (err instanceof AnthropicAPIConnectionTimeoutError) {
-    tagSdkError(err, provider, 'connection_timeout');
-  } else if (err instanceof AnthropicAPIConnectionError) {
-    tagSdkError(err, provider, 'connection');
-  } else if (err instanceof AnthropicAPIUserAbortError) {
-    tagSdkError(err, provider, 'user_abort');
-  } else if (err instanceof AnthropicBadRequestError) {
-    tagSdkError(err, provider, 'bad_request', err.status);
-  } else if (err instanceof AnthropicAuthenticationError) {
-    tagSdkError(err, provider, 'authentication', err.status);
-  } else if (err instanceof AnthropicPermissionDeniedError) {
-    tagSdkError(err, provider, 'permission_denied', err.status);
-  } else if (err instanceof AnthropicNotFoundError) {
-    tagSdkError(err, provider, 'not_found', err.status);
-  } else if (err instanceof AnthropicConflictError) {
-    tagSdkError(err, provider, 'conflict', err.status);
-  } else if (err instanceof AnthropicUnprocessableEntityError) {
-    tagSdkError(err, provider, 'unprocessable_entity', err.status);
-  } else if (err instanceof AnthropicRateLimitError) {
-    tagSdkError(err, provider, 'rate_limit', err.status);
-  } else if (err instanceof AnthropicInternalServerError) {
-    tagSdkError(err, provider, 'internal_server', err.status);
-  } else if (err instanceof AnthropicAPIError) {
-    tagSdkError(
-      err,
-      provider,
-      sdkErrorKindFromStatusCode(err.status),
-      err.status,
-    );
-  }
+  matchMappedSdkError(
+    err,
+    provider,
+    ANTHROPIC_SDK_ERROR_MAPPINGS,
+    AnthropicAPIError,
+  );
 }
 
 export function tagGoogleSdkError(err: unknown, provider = 'google'): void {
@@ -116,35 +144,24 @@ export async function withSdkErrorTag<T>(
   }
 }
 
+const OPENAI_SDK_ERROR_MAPPINGS: readonly SdkErrorClassMapping[] = [
+  { ctor: OpenAIAPIConnectionTimeoutError, kind: 'connection_timeout' },
+  { ctor: OpenAIAPIConnectionError, kind: 'connection' },
+  { ctor: OpenAIAPIUserAbortError, kind: 'user_abort' },
+  { ctor: OpenAIBadRequestError, kind: 'bad_request', includeStatusCode: true },
+  { ctor: OpenAIAuthenticationError, kind: 'authentication', includeStatusCode: true },
+  { ctor: OpenAIPermissionDeniedError, kind: 'permission_denied', includeStatusCode: true },
+  { ctor: OpenAINotFoundError, kind: 'not_found', includeStatusCode: true },
+  { ctor: OpenAIConflictError, kind: 'conflict', includeStatusCode: true },
+  {
+    ctor: OpenAIUnprocessableEntityError,
+    kind: 'unprocessable_entity',
+    includeStatusCode: true,
+  },
+  { ctor: OpenAIRateLimitError, kind: 'rate_limit', includeStatusCode: true },
+  { ctor: OpenAIInternalServerError, kind: 'internal_server', includeStatusCode: true },
+];
+
 export function tagOpenAISdkError(err: unknown, provider = 'openai'): void {
-  if (err instanceof OpenAIAPIConnectionTimeoutError) {
-    tagSdkError(err, provider, 'connection_timeout');
-  } else if (err instanceof OpenAIAPIConnectionError) {
-    tagSdkError(err, provider, 'connection');
-  } else if (err instanceof OpenAIAPIUserAbortError) {
-    tagSdkError(err, provider, 'user_abort');
-  } else if (err instanceof OpenAIBadRequestError) {
-    tagSdkError(err, provider, 'bad_request', err.status);
-  } else if (err instanceof OpenAIAuthenticationError) {
-    tagSdkError(err, provider, 'authentication', err.status);
-  } else if (err instanceof OpenAIPermissionDeniedError) {
-    tagSdkError(err, provider, 'permission_denied', err.status);
-  } else if (err instanceof OpenAINotFoundError) {
-    tagSdkError(err, provider, 'not_found', err.status);
-  } else if (err instanceof OpenAIConflictError) {
-    tagSdkError(err, provider, 'conflict', err.status);
-  } else if (err instanceof OpenAIUnprocessableEntityError) {
-    tagSdkError(err, provider, 'unprocessable_entity', err.status);
-  } else if (err instanceof OpenAIRateLimitError) {
-    tagSdkError(err, provider, 'rate_limit', err.status);
-  } else if (err instanceof OpenAIInternalServerError) {
-    tagSdkError(err, provider, 'internal_server', err.status);
-  } else if (err instanceof OpenAIAPIError) {
-    tagSdkError(
-      err,
-      provider,
-      sdkErrorKindFromStatusCode(err.status),
-      err.status,
-    );
-  }
+  matchMappedSdkError(err, provider, OPENAI_SDK_ERROR_MAPPINGS, OpenAIAPIError);
 }
