@@ -89,6 +89,13 @@ export interface ActiveSlashForm {
 }
 const ACTIVE_FORM = signal<ActiveSlashForm | undefined>(undefined);
 
+/** True while the slash-command palette is mounted in the InputBar. App-level
+ *  Tab handlers gate on this so palette-Tab (accept selection) doesn't double
+ *  with stream-focus Tab. */
+const SLASH_PALETTE_OPEN = signal<boolean>(false);
+
+const PENDING_EXIT_HINT = signal<boolean>(false);
+
 export const cliState = {
   sessionMeta: SESSION_META as Signal.State<SessionMeta>,
   activeStreamId: ACTIVE_STREAM_ID as Signal.State<StreamTabId | undefined>,
@@ -97,6 +104,8 @@ export const cliState = {
     ReadonlyMap<StreamTabId, StreamTabId>
   >,
   activeForm: ACTIVE_FORM as Signal.State<ActiveSlashForm | undefined>,
+  slashPaletteOpen: SLASH_PALETTE_OPEN as Signal.State<boolean>,
+  pendingExitHint: PENDING_EXIT_HINT as Signal.State<boolean>,
 };
 
 export const NO_BYPASS: BypassState = { toolEdit: false, superYolo: false };
@@ -170,4 +179,6 @@ export function resetCliState(): void {
   cliState.streams.set(new Map());
   cliState.parentStream.set(new Map());
   cliState.activeForm.set(undefined);
+  cliState.slashPaletteOpen.set(false);
+  cliState.pendingExitHint.set(false);
 }
