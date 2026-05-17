@@ -25,7 +25,6 @@ import {
   type SingleFiles,
   type FileOptions,
   type MultiFiles,
-  type MultiFilesVisible,
   type CheckboxValues,
   type ActionDetail,
   type AgentChangeDetail,
@@ -87,7 +86,6 @@ import {
   DEFAULT_SINGLE_FILES,
   DEFAULT_FILE_OPTIONS,
   DEFAULT_MULTI_FILES,
-  DEFAULT_MULTI_FILES_VISIBLE,
   DEFAULT_CHECKBOX_VALUES,
   FILE_UPDATE_COMMANDS,
   MULTI_FILE_COMMAND_TO_KEY,
@@ -153,9 +151,6 @@ export class MainApp extends MainAppBase {
     ...DEFAULT_FILE_OPTIONS,
   });
   private readonly multiFiles = signal<MultiFiles>({ ...DEFAULT_MULTI_FILES });
-  private readonly multiFilesVisible = signal<MultiFilesVisible>({
-    ...DEFAULT_MULTI_FILES_VISIBLE,
-  });
   private readonly outputFilesActive = signal(DEFAULT_STATE.outputFilesActive);
   private readonly latexdiffsVisible = signal(DEFAULT_STATE.latexdiffsVisible);
   private readonly checkboxValues = signal<CheckboxValues>({
@@ -198,7 +193,6 @@ export class MainApp extends MainAppBase {
       singleFiles: this.singleFiles.get(),
       fileOptions: this.fileOptions.get(),
       multiFiles: this.multiFiles.get(),
-      multiFilesVisible: this.multiFilesVisible.get(),
       outputFilesActive: this.outputFilesActive.get(),
     }),
   );
@@ -384,7 +378,6 @@ export class MainApp extends MainAppBase {
 
     const sf = this.singleFiles.get();
     const mf = this.multiFiles.get();
-    const mv = this.multiFilesVisible.get();
     const cv = this.checkboxValues.get();
 
     const persisted: MainViewPersistedState = {
@@ -402,10 +395,6 @@ export class MainApp extends MainAppBase {
       contextFiles: mf.contextFiles,
       mediaFiles: mf.mediaFiles,
       outputFiles: [],
-      inputFilesVisible: mv.inputFiles,
-      contextFilesVisible: mv.contextFiles,
-      mediaFilesVisible: mv.mediaFiles,
-      outputFilesVisible: false,
       outputFilesActive: false,
       latexdiffsVisible: this.latexdiffsVisible.get(),
       autoExtractFigure: cv.autoExtractFigure,
@@ -439,12 +428,6 @@ export class MainApp extends MainAppBase {
       contextFiles: state.contextFiles,
       mediaFiles: state.mediaFiles,
       outputFiles: [],
-    });
-    this.multiFilesVisible.set({
-      inputFiles: state.inputFilesVisible,
-      contextFiles: state.contextFilesVisible,
-      mediaFiles: state.mediaFilesVisible,
-      outputFiles: false,
     });
     this.outputFilesActive.set(false);
     this.latexdiffsVisible.set(state.latexdiffsVisible);
@@ -649,10 +632,6 @@ export class MainApp extends MainAppBase {
     if (!listId) return;
 
     this.multiFiles.set({ ...this.multiFiles.get(), [listId]: files });
-    this.multiFilesVisible.set({
-      ...this.multiFilesVisible.get(),
-      [listId]: files.length > 0,
-    });
     if (listId === ELEMENT_IDS.OUTPUT_FILES) {
       this.outputFilesActive.set(false);
     }
@@ -669,10 +648,6 @@ export class MainApp extends MainAppBase {
     this.multiFiles.set({
       ...mf,
       mediaFiles: [...existing, file],
-    });
-    this.multiFilesVisible.set({
-      ...this.multiFilesVisible.get(),
-      mediaFiles: true,
     });
     this.saveState();
   }
@@ -711,10 +686,6 @@ export class MainApp extends MainAppBase {
       const mf = this.multiFiles.get();
       const existing = mf[listId] ?? [];
       const next = [filePath, ...existing.filter((f) => f !== filePath)];
-      this.multiFilesVisible.set({
-        ...this.multiFilesVisible.get(),
-        [listId]: true,
-      });
       this.updateMultiFiles(listId, next);
       return;
     }
@@ -768,10 +739,6 @@ export class MainApp extends MainAppBase {
     const existing = mf[listId] ?? [];
     const merged = this.mergeUnique(existing, filesToAdd);
     this.multiFiles.set({ ...mf, [listId]: merged });
-    this.multiFilesVisible.set({
-      ...this.multiFilesVisible.get(),
-      [listId]: true,
-    });
     this.saveState();
   }
 
@@ -888,17 +855,6 @@ export class MainApp extends MainAppBase {
         }),
       ) as MultiFiles,
     );
-
-    this.multiFilesVisible.set(
-      Object.fromEntries(
-        MULTIPLE_DOCUMENT_FILE_TYPES.map((type) => {
-          const key = `${type}Files` as keyof MultiFilesVisible;
-          const visible =
-            state[`${key}Visible` as keyof MainViewPersistedState];
-          return [key, Boolean(visible)];
-        }),
-      ) as MultiFilesVisible,
-    );
   }
 
   private clearForNewSession(): void {
@@ -916,12 +872,6 @@ export class MainApp extends MainAppBase {
         contextFiles: [],
         mediaFiles: [],
         outputFiles: [],
-      });
-      this.multiFilesVisible.set({
-        inputFiles: false,
-        contextFiles: false,
-        mediaFiles: false,
-        outputFiles: false,
       });
       if (defaults.checkboxOverrides) {
         this.checkboxValues.set({
@@ -944,27 +894,11 @@ export class MainApp extends MainAppBase {
     return MULTI_FILE_COMMAND_TO_KEY[command];
   }
 
-  private toggleListVisibility(listId: keyof MultiFiles): void {
-    const visible = !this.multiFilesVisible.get()[listId];
-    this.multiFilesVisible.set({
-      ...this.multiFilesVisible.get(),
-      [listId]: visible,
-    });
-    if (listId === ELEMENT_IDS.OUTPUT_FILES) {
-      this.outputFilesActive.set(false);
-    }
-    this.saveState();
-  }
-
   private handleRemoveFile(listId: keyof MultiFiles, file: string): void {
     const files = (this.multiFiles.get()[listId] ?? []).filter(
       (f: string) => f !== file,
     );
     if (files.length === 0) {
-      this.multiFilesVisible.set({
-        ...this.multiFilesVisible.get(),
-        [listId]: false,
-      });
       if (listId === ELEMENT_IDS.OUTPUT_FILES) {
         this.outputFilesActive.set(false);
       }
@@ -1021,10 +955,6 @@ export class MainApp extends MainAppBase {
 
   private handleEmptyFiles(type: MultipleDocumentFileType): void {
     const listId = `${type}Files`;
-    this.multiFilesVisible.set({
-      ...this.multiFilesVisible.get(),
-      [listId]: false,
-    });
     if (type === 'output') {
       this.outputFilesActive.set(false);
     }
@@ -1052,10 +982,6 @@ export class MainApp extends MainAppBase {
     this.refreshInstructionPlaceholder(false);
     if (parsed === SESSION_TYPES.TOOL_USE) {
       this.outputFilesActive.set(false);
-      this.multiFilesVisible.set({
-        ...this.multiFilesVisible.get(),
-        outputFiles: false,
-      });
       this.updateMultiFiles('outputFiles', []);
     }
     this.saveState();
@@ -1442,12 +1368,6 @@ export class MainApp extends MainAppBase {
 
   private handleLatexdiffEmptyFile(e: CustomEvent<FileActionDetail>): void {
     this.handleEmptyFile(e.detail.type);
-  }
-
-  private handleComponentToggleList(
-    e: CustomEvent<MultipleFilesActionDetail>,
-  ): void {
-    this.toggleListVisibility(e.detail.listId as keyof MultiFiles);
   }
 
   private handleComponentAddOpenedFiles(
@@ -1888,7 +1808,6 @@ export class MainApp extends MainAppBase {
                       (config) => html`
                         <file-select-group
                           .config=${config}
-                          @toggle-list=${this.handleComponentToggleList}
                           @add-opened-files=${this
                             .handleComponentAddOpenedFiles}
                           @empty-files=${this.handleComponentEmptyFiles}
