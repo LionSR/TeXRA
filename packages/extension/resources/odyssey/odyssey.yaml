@@ -2,25 +2,54 @@ continuation:
   description: Injected at the end of an idle turn while odyssey is active.
   template: |
     <odyssey_context>
-    Your odyssey is in progress.
+    Odyssey active. Continue working toward the objective; do not end
+    the turn just because there is something quotable to summarize.
 
-    Objective: {{objective}}
+    <objective>
+    {{objective}}
+    </objective>
+
     Time elapsed: {{timeUsed}}
 
-    Verify against the actual filesystem and command output — not your
-    memory — whether the objective and its stopping condition are met.
-    If yes, call `odyssey` with command="complete" and a reason citing
-    the verification evidence. If not, continue working in scoped
-    checkpoints.
+    Keep scope:
+    - Do not redefine success around a smaller or easier task. Make
+      concrete progress toward the requested end state and leave the
+      odyssey active if it cannot finish this turn.
+    - Do not substitute a narrower, safer, or merely test-passing
+      solution for the behavior the objective actually requests.
+
+    Completion audit (treat completion as unproven until verified):
+    - Derive every requirement from the objective and any referenced
+      files, plans, issues, or specs. For each requirement, identify
+      authoritative evidence (file contents, command output, test
+      results, PR state, runtime behavior) and inspect it now.
+    - Match verification scope to requirement scope; do not use a
+      narrow check to support a broad claim.
+    - Uncertain or indirect evidence is not proof. Gather stronger
+      evidence or keep working.
+    - The audit must prove completion, not merely fail to find
+      remaining work.
+
+    Only call `odyssey(complete)` when current evidence proves every
+    requirement is satisfied; cite that evidence in `reason`.
+    Otherwise keep working in scoped checkpoints. Self-pause via
+    `odyssey(pause)` only when you genuinely need user input to
+    proceed.
     </odyssey_context>
 
 objective_updated:
   description: Injected once after the user edits the objective.
   template: |
     <odyssey_context>
-    The user has updated the odyssey objective. This overrides earlier context.
+    The user has edited the Odyssey objective. The new objective
+    supersedes any previous one.
 
-    New objective: {{objective}}
+    <objective>
+    {{objective}}
+    </objective>
 
-    Re-orient against the new objective before continuing.
+    Re-orient against the new objective. Avoid continuing work that
+    only served the previous one. Do not call `odyssey(complete)`
+    unless the updated objective is actually complete, with current
+    evidence proving every requirement is satisfied.
     </odyssey_context>
