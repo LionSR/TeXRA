@@ -125,6 +125,14 @@ export class ServerSideKeyService {
   // Cache state tracking
   private _isCachePrimed = false;
 
+  /**
+   * One-shot guard so the auto-flip on quota exhaustion runs at most
+   * once per session. After we flip useIncludedModelAccess to false on
+   * detecting an exhausted quota, the user can re-enable manually; we
+   * won't fight that decision by flipping again on the next check.
+   */
+  private quotaFlipApplied = false;
+
   // Settings
   private useIncludedModelAccess = true;
   private globalState: ServerSideKeyState | null = null;
@@ -213,6 +221,9 @@ export class ServerSideKeyService {
     this.accessTimestamp = 0;
     this.accessFetchPromise = null;
     this.userTier = null;
+    // Clearing caches happens on sign-in/out or toggle change. A fresh
+    // session deserves a fresh quota-flip evaluation.
+    this.quotaFlipApplied = false;
     this._onCacheCleared.fire(undefined);
   }
 
@@ -292,6 +303,28 @@ export class ServerSideKeyService {
       if (hasAccess && providers.length > 0) {
         this.accessTimestamp = Date.now();
         this._isCachePrimed = true;
+      }
+
+      // Auto-flip useIncludedModelAccess to false when the user's
+      // monthly relay quota is exhausted. The toggle change is visible
+      // in Settings → Models so the user isn't surprised by silent
+      // routing changes — they can flip it back if they want to retry
+      // and surface the relay's 402 error directly.
+      if (
+        !this.quotaFlipApplied &&
+        hasAccess &&
+        this.tierService.isQuotaExceeded()
+      ) {
+        this.quotaFlipApplied = true;
+        this.logger.info(
+          CHANNEL,
+          'Relay quota exhausted; switching useIncludedModelAccess off',
+        );
+        // Fire-and-forget — we don't want to block the access check on
+        // state persistence. setUseIncludedModelAccess clears caches as
+        // a side-effect so the toggle change takes effect immediately.
+        void this.setUseIncludedModelAccess(false);
+        return false;
       }
 
       return hasAccess && providers.length > 0;
