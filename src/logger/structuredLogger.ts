@@ -20,6 +20,7 @@ export interface LogRecord {
 export interface LogSink {
   write(record: LogRecord): void;
   flush?(): Promise<void>;
+  close?(): Promise<void>;
 }
 
 export interface Logger {
