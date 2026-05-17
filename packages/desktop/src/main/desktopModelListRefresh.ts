@@ -8,17 +8,16 @@ export interface DesktopModelListRefreshOptions {
   onError?: (error: unknown) => void;
 }
 
-export function refreshDesktopModelListStateIfNeeded({
+export async function refreshDesktopModelListStateIfNeeded({
   globalState = platform().globalState,
   onError,
 }: DesktopModelListRefreshOptions = {}): Promise<void> {
-  return refreshModelListStateIfNeeded(globalState)
-    .then((result) => {
-      if (result.added.length > 0 || result.removed.length > 0) {
-        invalidateModelOptionsCache();
-      }
-    })
-    .catch((error: unknown) => {
-      onError?.(error);
-    });
+  try {
+    const result = await refreshModelListStateIfNeeded(globalState);
+    if (result.added.length > 0 || result.removed.length > 0) {
+      invalidateModelOptionsCache();
+    }
+  } catch (error) {
+    onError?.(error);
+  }
 }

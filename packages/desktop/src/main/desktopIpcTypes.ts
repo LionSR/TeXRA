@@ -25,10 +25,9 @@ export function isDesktopCommandMessage(
 export function createDesktopErrorReporter(
   onError?: (error: unknown) => void,
 ): (error: unknown) => void {
-  return (
-    onError ??
-    ((error) => {
-      console.error(error);
-    })
-  );
+  return onError ?? defaultReportError;
+}
+
+function defaultReportError(error: unknown): void {
+  console.error(error);
 }
