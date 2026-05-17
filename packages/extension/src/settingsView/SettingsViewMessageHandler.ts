@@ -36,6 +36,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { FREE_TIER, ULTRA_TIER, MAX_TIER } from '@auth/config';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
+import { getTierService } from '@auth/tier';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import {
   formatChatAsMarkdown,
@@ -905,6 +906,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       : [];
 
     const accessExpiresAt = serverSideKeyService.getAccessExpirationDate();
+    const spendingStatus = getTierService().getSpendingStatus();
 
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
@@ -923,6 +925,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         max: MAX_TIER,
       },
       accessExpiresAt: accessExpiresAt?.toISOString() ?? null,
+      spendingStatus,
       providerKeyStatuses,
       globalStreamingDefault,
     });
