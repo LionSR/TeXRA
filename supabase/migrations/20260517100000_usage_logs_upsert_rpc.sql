@@ -1,8 +1,15 @@
 -- Migration: RPC for the log-usage edge function to upsert one row per
--- (user_id, stream_id). Version-aware so we don't break the small
--- residue of pre-0.35.4 clients that still send cumulative totals.
+-- (user_id, stream_id). Pre-aggregates the input batch by stream first
+-- (so a single batch with N rounds for the same stream doesn't trigger
+-- Postgres' "ON CONFLICT DO UPDATE command cannot affect row a second
+-- time" error), then UPSERTs against the existing canonical row.
 --
--- Apply this before 20260517_usage_logs_aggregate_per_stream.sql, and
+-- Version-aware so we don't break the small residue of pre-0.35.4
+-- clients that still send cumulative totals. Treats NULL
+-- extension_version as old/cumulative (matches the one-time backfill in
+-- 20260517100100_usage_logs_aggregate_per_stream.sql).
+--
+-- Apply before 20260517100100_usage_logs_aggregate_per_stream.sql, and
 -- deploy the matching log-usage edge function (which calls this RPC)
 -- before the aggregation migration takes effect.
 
@@ -41,6 +48,39 @@ BEGIN
       (r->>'batch_id')::uuid AS batch_id,
       NULLIF(r->>'editor_type', '') AS editor_type
     FROM jsonb_array_elements(p_rows) r
+  ),
+  -- Pre-aggregate per (user_id, stream_id) so we hit each conflict
+  -- target at most once. Within a single client batch all rows share
+  -- the same extension_version, so the per-group BOOL_OR cleanly
+  -- selects SUM (delta) or MAX (cumulative).
+  agg AS (
+    SELECT
+      user_id, stream_id,
+      MAX(logged_at) AS logged_at,
+      MAX(model) AS model,
+      MAX(provider) AS provider,
+      MAX(agent_name) AS agent_name,
+      MAX(agent_category) AS agent_category,
+      BOOL_OR(is_multiple_output) AS is_multiple_output,
+      CASE WHEN BOOL_OR(extension_version IS NOT NULL AND extension_version >= '0.35.4')
+           THEN SUM(input_tokens)::int ELSE MAX(input_tokens) END AS input_tokens,
+      CASE WHEN BOOL_OR(extension_version IS NOT NULL AND extension_version >= '0.35.4')
+           THEN SUM(output_tokens)::int ELSE MAX(output_tokens) END AS output_tokens,
+      CASE WHEN BOOL_OR(extension_version IS NOT NULL AND extension_version >= '0.35.4')
+           THEN SUM(cost)::numeric ELSE MAX(cost) END AS cost,
+      CASE WHEN BOOL_OR(extension_version IS NOT NULL AND extension_version >= '0.35.4')
+           THEN SUM(COALESCE(cached_input_tokens, 0))::int
+           ELSE MAX(cached_input_tokens) END AS cached_input_tokens,
+      CASE WHEN BOOL_OR(extension_version IS NOT NULL AND extension_version >= '0.35.4')
+           THEN SUM(COALESCE(reasoning_tokens, 0))::int
+           ELSE MAX(reasoning_tokens) END AS reasoning_tokens,
+      MAX(response_time_ms) AS response_time_ms,
+      BOOL_OR(used_relay) AS used_relay,
+      MAX(extension_version) AS extension_version,
+      MAX(batch_id::text)::uuid AS batch_id,
+      MAX(editor_type) AS editor_type
+    FROM parsed
+    GROUP BY user_id, stream_id
   )
   INSERT INTO public.usage_logs (
     user_id, logged_at, model, provider, agent_name, agent_category,
@@ -53,29 +93,29 @@ BEGIN
     is_multiple_output, input_tokens, output_tokens, cost,
     response_time_ms, cached_input_tokens, reasoning_tokens,
     used_relay, stream_id, extension_version, batch_id, editor_type
-  FROM parsed
+  FROM agg
   ON CONFLICT (user_id, stream_id) WHERE stream_id IS NOT NULL DO UPDATE SET
-    -- Clients >= 0.35.4 send per-round deltas (SUM); older clients send
-    -- cumulative totals so the LAST row wins (GREATEST). response_time_ms
-    -- is always cumulative on the wire — MAX regardless of version.
+    -- Clients >= 0.35.4 send per-round deltas (SUM); older/NULL-version
+    -- clients send cumulative totals so the LAST row wins (GREATEST).
+    -- response_time_ms is always cumulative on the wire — MAX always.
     input_tokens = CASE
-      WHEN COALESCE(EXCLUDED.extension_version, '9.9.9') >= '0.35.4'
+      WHEN EXCLUDED.extension_version IS NOT NULL AND EXCLUDED.extension_version >= '0.35.4'
       THEN public.usage_logs.input_tokens + EXCLUDED.input_tokens
       ELSE GREATEST(public.usage_logs.input_tokens, EXCLUDED.input_tokens) END,
     output_tokens = CASE
-      WHEN COALESCE(EXCLUDED.extension_version, '9.9.9') >= '0.35.4'
+      WHEN EXCLUDED.extension_version IS NOT NULL AND EXCLUDED.extension_version >= '0.35.4'
       THEN public.usage_logs.output_tokens + EXCLUDED.output_tokens
       ELSE GREATEST(public.usage_logs.output_tokens, EXCLUDED.output_tokens) END,
     cost = CASE
-      WHEN COALESCE(EXCLUDED.extension_version, '9.9.9') >= '0.35.4'
+      WHEN EXCLUDED.extension_version IS NOT NULL AND EXCLUDED.extension_version >= '0.35.4'
       THEN public.usage_logs.cost + EXCLUDED.cost
       ELSE GREATEST(public.usage_logs.cost, EXCLUDED.cost) END,
     cached_input_tokens = CASE
-      WHEN COALESCE(EXCLUDED.extension_version, '9.9.9') >= '0.35.4'
+      WHEN EXCLUDED.extension_version IS NOT NULL AND EXCLUDED.extension_version >= '0.35.4'
       THEN COALESCE(public.usage_logs.cached_input_tokens, 0) + COALESCE(EXCLUDED.cached_input_tokens, 0)
       ELSE GREATEST(COALESCE(public.usage_logs.cached_input_tokens, 0), COALESCE(EXCLUDED.cached_input_tokens, 0)) END,
     reasoning_tokens = CASE
-      WHEN COALESCE(EXCLUDED.extension_version, '9.9.9') >= '0.35.4'
+      WHEN EXCLUDED.extension_version IS NOT NULL AND EXCLUDED.extension_version >= '0.35.4'
       THEN COALESCE(public.usage_logs.reasoning_tokens, 0) + COALESCE(EXCLUDED.reasoning_tokens, 0)
       ELSE GREATEST(COALESCE(public.usage_logs.reasoning_tokens, 0), COALESCE(EXCLUDED.reasoning_tokens, 0)) END,
     response_time_ms = GREATEST(
@@ -84,9 +124,9 @@ BEGIN
     used_relay = COALESCE(public.usage_logs.used_relay, false) OR COALESCE(EXCLUDED.used_relay, false),
     logged_at = GREATEST(public.usage_logs.logged_at, EXCLUDED.logged_at),
     extension_version = COALESCE(EXCLUDED.extension_version, public.usage_logs.extension_version),
-    -- Static metadata: keep first-set values, but allow late-arriving
-    -- fields (model, agent_name, etc.) to populate if the canonical row
-    -- happened to be missing them from a pre-aggregation backfill.
+    -- Static metadata: keep first-set values; fall back to incoming if
+    -- existing is null (e.g. canonical row from a pre-aggregation
+    -- backfill that happened to lack the column).
     model = COALESCE(public.usage_logs.model, EXCLUDED.model),
     provider = COALESCE(public.usage_logs.provider, EXCLUDED.provider),
     agent_name = COALESCE(public.usage_logs.agent_name, EXCLUDED.agent_name),
@@ -99,5 +139,5 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.usage_logs_upsert(jsonb) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.usage_logs_upsert(jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.usage_logs_upsert(jsonb) TO service_role;

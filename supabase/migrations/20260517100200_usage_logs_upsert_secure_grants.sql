@@ -1,8 +1,8 @@
--- Lock down access introduced by 20260517_usage_logs_upsert_rpc.sql.
--- Belt-and-suspenders on top of the REVOKE in the original migration,
--- since Supabase auto-grants EXECUTE to anon/authenticated on public
--- functions and the linter (0028/0029) flags SECURITY DEFINER RPCs that
--- end up exposed via /rest/v1/rpc.
+-- The REVOKE/GRANT for usage_logs_upsert is also baked into the RPC
+-- migration (20260517100000) since Supabase auto-grants EXECUTE to
+-- anon/authenticated on public functions. We repeat it here as a
+-- belt-and-suspenders safety in case the function gets recreated by
+-- another tool without the grants block. Idempotent.
 REVOKE EXECUTE ON FUNCTION public.usage_logs_upsert(jsonb)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.usage_logs_upsert(jsonb) TO service_role;
