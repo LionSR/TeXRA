@@ -1061,7 +1061,9 @@ function completeSetupTerminalOverlay(
   payload: DesktopSetupTerminalCompleteMessage,
 ): void {
   if (payload.runId !== setupTerminalActiveRunId) return;
-  setupTerminalOutputText = payload.output || setupTerminalOutputText;
+  if (payload.output.length > setupTerminalOutputText.length) {
+    setupTerminalOutputText = payload.output;
+  }
   if (setupTerminalOutputElement) {
     setupTerminalOutputElement.textContent = setupTerminalOutputText;
     setupTerminalOutputElement.scrollTop =
