@@ -77,9 +77,13 @@ export interface ToolUseFlowContext {
   readonly modelHandler: ToolUseServices['modelHandler'];
   readonly runtimeHost: ToolUseServices['runtimeHost'];
   interrupt(): void;
+  requestImmediateCompaction(): void;
 }
 
 export type ToolUseFlowSetupCallback = (context: ToolUseFlowContext) => void;
+
+const IMMEDIATE_COMPACTION_FOLLOW_UP =
+  'The user requested immediate context compaction. Do not start a new task; continue only far enough for the runtime to process any available context compaction, and do not claim that compaction has completed.';
 
 function resolveTools(
   tools: AgentToolUseSetting['tools'],
@@ -181,6 +185,14 @@ export async function runToolUseFlow<C = unknown>(
       clearRetryRequest(streamId);
       clearPlanApprovalForStream(streamId);
       sessionLifecycle.interrupt();
+    },
+    requestImmediateCompaction(): void {
+      input.modelHandler.requestCompaction();
+      if (!sessionLifecycle.hasQueuedFollowUp()) {
+        sessionLifecycle.appendSyntheticFollowUp(
+          IMMEDIATE_COMPACTION_FOLLOW_UP,
+        );
+      }
     },
   };
 
