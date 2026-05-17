@@ -141,7 +141,9 @@ export async function executeCommand(
     signal = options.signal;
 
     const stopSubprocess = (force = false) => {
-      commandCancelled = commandCancelled || !force;
+      if (!force) {
+        commandCancelled = true;
+      }
       const pid = subprocess?.pid;
       if (pid) {
         signalProcessGroup(pid, force ? 'SIGKILL' : 'SIGTERM');

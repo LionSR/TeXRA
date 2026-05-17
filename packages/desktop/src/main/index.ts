@@ -197,6 +197,16 @@ async function showSetupCommandResult(
   }
 }
 
+function setupCommandExceptionResult(error: unknown): TerminalRunResult {
+  const message = error instanceof Error ? error.message : String(error);
+  const name = error instanceof Error ? error.name : 'Error';
+  return {
+    exitCode: undefined,
+    output: `${name}: ${message}`,
+    timedOut: false,
+  };
+}
+
 async function showSetupCommandOpenedInTerminal(
   window: BrowserWindow,
   command: string,
@@ -308,19 +318,25 @@ function createWindow(options: {
       }),
     );
 
-    const result = await setupTerminalRunner.runCommand({
-      name: 'TeXRA Setup',
-      command,
-      cwd: setupCommandCwd,
-      timeoutMs: SETUP_COMMAND_TIMEOUT_MS,
-      signal: abortController.signal,
-      onOutput: ({ stream, chunk }) => {
-        postSetupTerminalMessage(
-          buildDesktopSetupTerminalAppendMessage({ runId, stream, chunk }),
-        );
-      },
-    });
-    activeSetupCommands.delete(runId);
+    let result: TerminalRunResult;
+    try {
+      result = await setupTerminalRunner.runCommand({
+        name: 'TeXRA Setup',
+        command,
+        cwd: setupCommandCwd,
+        timeoutMs: SETUP_COMMAND_TIMEOUT_MS,
+        signal: abortController.signal,
+        onOutput: ({ stream, chunk }) => {
+          postSetupTerminalMessage(
+            buildDesktopSetupTerminalAppendMessage({ runId, stream, chunk }),
+          );
+        },
+      });
+    } catch (error: unknown) {
+      result = setupCommandExceptionResult(error);
+    } finally {
+      activeSetupCommands.delete(runId);
+    }
 
     const status = result.cancelled
       ? 'cancelled'
