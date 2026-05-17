@@ -570,15 +570,6 @@ export class FileList extends LitElement {
         file: filePath,
         base: basePath,
       })}
-      ${renderFileActionButton({
-        icon: 'diff-single',
-        label: 'LaTeXdiff',
-        title: 'LaTeXdiff',
-        className: 'diff-btn',
-        command: PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE,
-        file: filePath,
-        base: basePath,
-      })}
     `;
   }
 

@@ -17,6 +17,7 @@ import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_CONFIG_RANGES,
 } from '@shared/constants/latex';
+import type { ExecutionId } from '@shared/schemas';
 import {
   createExternalLocation,
   createRunStorageLocation,
@@ -29,6 +30,12 @@ import { checkToolInstalled } from '@utils/system';
 import { getComparablePath } from '@utils/files/taskRunStorage';
 
 import type { RoundFileMapping } from './types';
+
+interface DiffOutputDirectory {
+  absolutePath: string;
+  relativePath: string;
+  executionId: ExecutionId;
+}
 
 export class LatexDiffManager {
   private readonly latexdiffService: LaTeXdiffService;
@@ -135,6 +142,8 @@ export class LatexDiffManager {
     // Ensure round-dir has symlinks to all mirrored deps so latexdiff's
     // relative \input{} resolution works when its cwd is runDir/r{round}.
     await this.fileService.ensureMirroredInRoundDir(currRound);
+    await this.fileService.ensureMirroredInDiffRoundDir(currRound);
+    const diffDirectory = this.getDiffOutputDirectory(currRound);
 
     const outputByPath = new Map(
       outputFiles.map((f) => [getComparablePath(f.location), f]),
@@ -166,9 +175,10 @@ export class LatexDiffManager {
               revised,
               currRound,
               undefined,
-              { cwd },
+              { cwd, outputDirectory: diffDirectory?.absolutePath },
             ),
           label: 'round-diff',
+          diffDirectory,
         });
         if (result) aggregated.push(result);
       }
@@ -201,9 +211,11 @@ export class LatexDiffManager {
               undefined,
               {
                 cwd,
+                outputDirectory: diffDirectory?.absolutePath,
               },
             ),
           label: 'between-rounds-diff',
+          diffDirectory,
         });
         if (result) aggregated.push(result);
       }
@@ -250,6 +262,7 @@ export class LatexDiffManager {
       cwd: string,
     ) => Promise<LaTeXdiffResult>;
     label: string;
+    diffDirectory: DiffOutputDirectory | null;
   }): Promise<DiffResult | null> {
     const {
       outputPath,
@@ -259,6 +272,7 @@ export class LatexDiffManager {
       baseRound,
       runDiff,
       label,
+      diffDirectory,
     } = params;
 
     const revisedFile = outputByPath.get(outputPath);
@@ -279,6 +293,7 @@ export class LatexDiffManager {
     const diffLocation = await this.compileDiffIfSuccessful(
       result,
       baseLocation,
+      diffDirectory,
     );
 
     const revisedWithLineage: OutputFileInfo = {
@@ -303,19 +318,16 @@ export class LatexDiffManager {
   private async compileDiffIfSuccessful(
     result: LaTeXdiffResult,
     referenceLocation: FileLocation,
+    diffDirectory: DiffOutputDirectory | null,
   ): Promise<FileLocation | null> {
     if (!result.success || !result.diffFileName) {
       return null;
     }
 
-    // LaTeXdiffService writes the diff next to the reference's absolutePath.
-    // We must therefore describe the diff with a FileLocation of the same
-    // kind as `referenceLocation`, otherwise rewrite runs (base = workspace
-    // original) would try to compile a diff that lives in run storage — a
-    // file that was never written there.
-    const diffLocation = this.buildSiblingDiffLocation(
+    const diffLocation = this.buildDiffLocation(
       referenceLocation,
       result.diffFileName,
+      diffDirectory,
     );
 
     const buildDir = path.join(
@@ -341,16 +353,25 @@ export class LatexDiffManager {
   }
 
   /**
-   * Describe the diff file that LaTeXdiffService wrote next to
-   * `reference.absolutePath`. The returned FileLocation must share the
-   * reference's kind — otherwise rewrite runs (base = workspace original)
-   * would try to compile a diff that lives in run storage while the file
-   * was actually written into the workspace.
+   * Describe the diff file that LaTeXdiffService wrote. Workflow runs pass a
+   * run-storage output directory so the generated `.tex` and build artifacts
+   * stay out of the user's workspace. Older callers that do not have run
+   * storage keep the historical sibling placement.
    */
-  private buildSiblingDiffLocation(
+  private buildDiffLocation(
     reference: FileLocation,
     diffFileName: string,
+    diffDirectory: DiffOutputDirectory | null,
   ): FileLocation {
+    if (diffDirectory) {
+      const absolutePath = path.join(diffDirectory.absolutePath, diffFileName);
+      return createRunStorageLocation(
+        absolutePath,
+        path.join(diffDirectory.relativePath, diffFileName),
+        diffDirectory.executionId,
+      );
+    }
+
     const siblingAbsolute = path.join(
       path.dirname(reference.absolutePath),
       diffFileName,
@@ -371,5 +392,19 @@ export class LatexDiffManager {
       );
     }
     return createExternalLocation(siblingAbsolute);
+  }
+
+  private getDiffOutputDirectory(round: number): DiffOutputDirectory | null {
+    const { executionId, runDirectory } = this.fileService.metadata;
+    if (!executionId || !runDirectory) {
+      return null;
+    }
+
+    const relativePath = path.join('diff', `r${round}`);
+    return {
+      absolutePath: path.join(runDirectory, relativePath),
+      relativePath,
+      executionId,
+    };
   }
 }
