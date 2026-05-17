@@ -89,6 +89,10 @@ export async function runChat(
 
   cliState.sessionMeta.set({ agent, model, cwd: context.cwd });
 
+  const currentSessionContext = (helperModel: string): CliContext => ({
+    ...context,
+    helperModel,
+    quietLogs: true,
   });
   await loadAgents();
 

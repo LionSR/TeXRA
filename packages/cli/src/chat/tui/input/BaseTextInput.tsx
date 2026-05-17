@@ -4,7 +4,7 @@
 // usePaste auto-enables bracketed paste mode so multi-line pastes arrive as
 // a single string and never trigger `onSubmit` on the first embedded `\n`.
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Text, useInput, usePaste } from 'ink';
 
 export interface BaseTextInputProps {
@@ -40,6 +40,19 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     value.length,
   );
 
+  // Track the last value we ourselves emitted via onChange. If the prop's
+  // `value` diverges from this, the parent swapped the text out from under
+  // us (slash-palette accept, reverse-search recall, programmatic clear) —
+  // snap the caret to the end so the next keystroke lands at the intuitive
+  // spot, not whatever cursor index happened to be valid before.
+  const lastEmittedValueRef = useRef<string>(value);
+  useEffect(() => {
+    if (lastEmittedValueRef.current === value) return;
+    lastEmittedValueRef.current = value;
+    if (!isControlled) setInternalCursor(value.length);
+    onCursorChange?.(value.length);
+  }, [value, isControlled, onCursorChange]);
+
   const moveCursor = useCallback(
     (next: number) => {
       const c = clamp(next, value.length);
@@ -52,6 +65,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
   const replaceText = useCallback(
     (nextValue: string, nextCursor: number) => {
       const c = clamp(nextCursor, nextValue.length);
+      lastEmittedValueRef.current = nextValue;
       onChange(nextValue);
       if (!isControlled) setInternalCursor(c);
       onCursorChange?.(c);
