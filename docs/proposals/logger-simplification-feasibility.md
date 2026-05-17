@@ -26,19 +26,19 @@ Realistic plan: do Phase 1 (sink-chain flattening, ~600 LOC) now, Phase 2
 
 ### Layer inventory
 
-| Module                         | Lines | Direct importers | Notes |
-|--------------------------------|------:|------------------|-------|
-| `AgentLogger.ts`               |   606 | 43               | Main facade. 26 instantiations across tools, agents, UI |
-| `StreamLogStore.ts`            |   872 | 4 direct         | Lazy-load, eviction, summary cache, dirty tracking |
-| `StreamLog.ts`                 |   151 | (via store)      | Entry array + seqNo + dirty index |
-| `logUtils.ts`                  |   183 | 25               | Legacy channel-keyed logger; independent facade |
-| `structuredLogger.ts`          |   184 | 2 (only logUtils)| Async-local groups, `LogSink` interface |
-| `filterUtils.ts`               |    20 | 1                | `shouldEmit()` |
-| `logOptions.ts`                |    11 | 3 (type-only)    | `LogOptions` interface |
-| `ProgressEventBus.ts`          |   309 | many             | **Different concern** (status events, not logs) |
-| `platform/interfaces/log.ts`   |    17 | —                | `LogBackend` interface |
-| `platform/defaults/consoleLog` |    26 | —                | The **only** `LogBackend` impl |
-| **Total logger surface**       | ~2,070 |                  | (excluding ProgressEventBus) |
+| Module                         |  Lines | Direct importers  | Notes                                                   |
+| ------------------------------ | -----: | ----------------- | ------------------------------------------------------- |
+| `AgentLogger.ts`               |    606 | 43                | Main facade. 26 instantiations across tools, agents, UI |
+| `StreamLogStore.ts`            |    872 | 4 direct          | Lazy-load, eviction, summary cache, dirty tracking      |
+| `StreamLog.ts`                 |    151 | (via store)       | Entry array + seqNo + dirty index                       |
+| `logUtils.ts`                  |    183 | 25                | Legacy channel-keyed logger; independent facade         |
+| `structuredLogger.ts`          |    184 | 2 (only logUtils) | Async-local groups, `LogSink` interface                 |
+| `filterUtils.ts`               |     20 | 1                 | `shouldEmit()`                                          |
+| `logOptions.ts`                |     11 | 3 (type-only)     | `LogOptions` interface                                  |
+| `ProgressEventBus.ts`          |    309 | many              | **Different concern** (status events, not logs)         |
+| `platform/interfaces/log.ts`   |     17 | —                 | `LogBackend` interface                                  |
+| `platform/defaults/consoleLog` |     26 | —                 | The **only** `LogBackend` impl                          |
+| **Total logger surface**       | ~2,070 |                   | (excluding ProgressEventBus)                            |
 
 ### Actual call graph
 
@@ -82,7 +82,7 @@ Key design choices:
 
 - **One `Entry` discriminated union** (~14 variants: user, assistant,
   tool, summary, snapshot, attribution, …). One schema, one append path.
-- **No subscribe/stream layer between storage and UI.** React state *is*
+- **No subscribe/stream layer between storage and UI.** React state _is_
   the queue; disk is write-only during a session.
 - **JSONL append-only.** No in-place mutation of past entries.
 - **Domain-split logging:** errors (`log.ts`, 362 L), conversation
@@ -151,6 +151,7 @@ summary mtime. This is ~150 LOC worth keeping.
 ### Phase 1 — Flatten the sink chain (low risk, ~600 LOC)
 
 **Delete:**
+
 - `src/logger/structuredLogger.ts` (184 L) — only used by `logUtils`
 - `src/platform/interfaces/log.ts` (17 L) — one impl
 - `src/platform/defaults/consoleLog.ts` (26 L) — fold into a sink
@@ -158,6 +159,7 @@ summary mtime. This is ~150 LOC worth keeping.
 - `src/logger/logOptions.ts` (11 L) — inline (type-only, 3 callers)
 
 **Reshape:**
+
 - Define a tiny `LogSink` interface (`write(entry)`) directly in
   `AgentLogger` or a new `logSinks.ts` (~40 L).
 - `AgentLogger` writes to an array of sinks: `consoleSink`,
@@ -181,11 +183,13 @@ external callers. `LogBackend` has one impl. Tests under
 **Idea:** Replace per-stream KVStore JSON arrays with per-stream JSONL.
 
 **Pros:**
+
 - Append is a single `fs.appendFile`, no read-modify-write
 - Crash safety: partial writes only lose the last entry, not the file
 - Easier to tail/inspect from outside the app
 
 **Cons:**
+
 - Have to rewrite KVStore-backed code paths and a chunk of
   `StreamLogStoreLoad.vitest.ts`
 - **In-place updates need a coalesce step**: either compact-on-flush
@@ -203,6 +207,7 @@ Would let us inline `StreamLog` into `StreamLogStore` and remove
 `drainDirtyUpdates()`, `getRange()` complexity. Saves maybe ~200 LOC.
 
 **Costs:**
+
 - CLI render perf regresses (50× more entries per response on streaming)
 - `subscribeStreamLog.ts` and `logSlice` both need rewrites
 - ~150 LOC of tests rewritten
@@ -215,12 +220,12 @@ append broke the UI; reverting would re-introduce the original problem.
 
 ## 5. Recommended plan
 
-| Phase | Scope                                  | LOC removed | Risk   | Do it? |
-|------:|----------------------------------------|------------:|--------|--------|
-| 1     | Flatten sink chain, inline micros      |       ~600 | Low    | Yes    |
-| 1b    | Decide logUtils fate (merge vs keep)   |       ~100 | Low    | Yes    |
-| 2     | JSONL persistence                      |       ~150 | Medium | Defer  |
-| 3     | Drop dirty tracking / pure append      |       ~200 | High   | No     |
+| Phase | Scope                                | LOC removed | Risk   | Do it? |
+| ----: | ------------------------------------ | ----------: | ------ | ------ |
+|     1 | Flatten sink chain, inline micros    |        ~600 | Low    | Yes    |
+|    1b | Decide logUtils fate (merge vs keep) |        ~100 | Low    | Yes    |
+|     2 | JSONL persistence                    |        ~150 | Medium | Defer  |
+|     3 | Drop dirty tracking / pure append    |        ~200 | High   | No     |
 
 **Expected outcome of Phase 1+1b:** ~2,070 LOC → ~1,370 LOC, four layers
 collapsed to two, no behavior change for callers or users. `AgentLogger`
