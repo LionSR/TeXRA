@@ -74,6 +74,14 @@ export interface ServerSideKeyServiceInit {
   logger?: AuthServiceLogger;
 }
 
+export interface ClearServerSideKeyCachesOptions {
+  /**
+   * Reset the per-session quota auto-switch guard. Use this only when the
+   * authenticated session changes, not for ordinary toggle/cache updates.
+   */
+  resetQuotaFlip?: boolean;
+}
+
 class NodeEventEmitter<T> implements ServerSideKeyDisposable {
   private readonly emitter = new EventEmitter();
 
@@ -191,6 +199,10 @@ export class ServerSideKeyService {
     return this.useIncludedModelAccess;
   }
 
+  wasQuotaAutoSwitched(): boolean {
+    return this.quotaFlipApplied && !this.useIncludedModelAccess;
+  }
+
   async setUseIncludedModelAccess(value: boolean): Promise<void> {
     const changed = this.useIncludedModelAccess !== value;
     this.useIncludedModelAccess = value;
@@ -215,15 +227,15 @@ export class ServerSideKeyService {
     return this._isCachePrimed;
   }
 
-  clearAllCaches(): void {
+  clearAllCaches(options: ClearServerSideKeyCachesOptions = {}): void {
     this._isCachePrimed = false;
     this.accessResult = false;
     this.accessTimestamp = 0;
     this.accessFetchPromise = null;
     this.userTier = null;
-    // Clearing caches happens on sign-in/out or toggle change. A fresh
-    // session deserves a fresh quota-flip evaluation.
-    this.quotaFlipApplied = false;
+    if (options.resetQuotaFlip === true) {
+      this.quotaFlipApplied = false;
+    }
     this._onCacheCleared.fire(undefined);
   }
 

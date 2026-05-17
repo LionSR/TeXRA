@@ -15,7 +15,7 @@ import type {
   NumberVscodeSetting,
   ProviderKeyStatus,
 } from '@shared/schemas/settingsViewMessages';
-import type { SpendingStatus } from '@shared/schemas/profileViewMessages';
+import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/ApiAccessSection';
