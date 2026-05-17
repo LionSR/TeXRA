@@ -229,9 +229,18 @@ type CacheControlCompactionBlock = Extract<
   { type: 'compaction' }
 >;
 
-const EPHEMERAL_CACHE_CONTROL: CacheControlEphemeral = {
+const SHORT_CACHE_CONTROL: CacheControlEphemeral = {
   type: 'ephemeral',
 };
+
+const LONG_CACHE_CONTROL: CacheControlEphemeral = {
+  type: 'ephemeral',
+  ttl: '1h',
+};
+
+// Cache creation cost multipliers relative to base input price, by TTL.
+const CACHE_CREATION_COST_MULTIPLIER_5M = 1.25;
+const CACHE_CREATION_COST_MULTIPLIER_1H = 2.0;
 
 // Anthropic allows up to 4 cache breakpoint slots total. Top-level automatic
 // caching uses one slot, and the system prompt uses another when present.
@@ -589,6 +598,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.pruneTrackedPdfPages(messages);
     }
 
+    // Use 1-hour cache TTL for tool-use requests (which involve long-running
+    // tool execution cycles where 5-minute caches would frequently expire),
+    // and 5-minute TTL for simple non-tool requests.
+    const cacheControl = tools?.length
+      ? LONG_CACHE_CONTROL
+      : SHORT_CACHE_CONTROL;
+
     // Phase 1: BUILD - Construct provider-specific request parameters
     const options: MessageCreateParams = {
       model: this.config.fullName,
@@ -605,7 +621,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
               {
                 type: 'text' as const,
                 text: systemPrompt,
-                cache_control: EPHEMERAL_CACHE_CONTROL,
+                cache_control: cacheControl,
               },
             ]
           : systemPrompt,
@@ -613,7 +629,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // breakpoint to the last cacheable block, moving it forward as conversations
       // grow. This replaces manual per-block cache_control assignment.
       ...(supportsCache && {
-        cache_control: EPHEMERAL_CACHE_CONTROL,
+        cache_control: cacheControl,
       }),
     };
 
@@ -1765,8 +1781,37 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     if (this.capabilities.supportsPromptCaching) {
       if (usageTotals.cacheCreationTokens > 0) {
-        basePrice +=
-          (usageTotals.cacheCreationTokens * inputPrice * 1.25) / 1e6;
+        const pricedBreakdownTokens =
+          usageTotals.cacheCreation5mTokens + usageTotals.cacheCreation1hTokens;
+
+        if (pricedBreakdownTokens > 0) {
+          basePrice +=
+            (usageTotals.cacheCreation5mTokens *
+              inputPrice *
+              CACHE_CREATION_COST_MULTIPLIER_5M) /
+            1e6;
+          basePrice +=
+            (usageTotals.cacheCreation1hTokens *
+              inputPrice *
+              CACHE_CREATION_COST_MULTIPLIER_1H) /
+            1e6;
+
+          const unclassifiedCacheCreationTokens = Math.max(
+            usageTotals.cacheCreationTokens - pricedBreakdownTokens,
+            0,
+          );
+          basePrice +=
+            (unclassifiedCacheCreationTokens *
+              inputPrice *
+              CACHE_CREATION_COST_MULTIPLIER_5M) /
+            1e6;
+        } else {
+          basePrice +=
+            (usageTotals.cacheCreationTokens *
+              inputPrice *
+              CACHE_CREATION_COST_MULTIPLIER_5M) /
+            1e6;
+        }
       }
       if (usageTotals.cacheReadTokens > 0) {
         basePrice +=
@@ -1829,6 +1874,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
     outputTokens: number;
     cacheReadTokens: number;
     cacheCreationTokens: number;
+    cacheCreation5mTokens: number;
+    cacheCreation1hTokens: number;
   } {
     const usageWithIterations = responseUsage as AnthropicUsage & {
       iterations?: BetaUsage['iterations'];
@@ -1839,12 +1886,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
       let outputTokens = 0;
       let cacheReadTokens = 0;
       let cacheCreationTokens = 0;
+      let cacheCreation5mTokens = 0;
+      let cacheCreation1hTokens = 0;
 
       for (const iteration of iterations) {
         baseInputTokens += iteration.input_tokens;
         outputTokens += iteration.output_tokens;
         cacheReadTokens += iteration.cache_read_input_tokens;
         cacheCreationTokens += iteration.cache_creation_input_tokens;
+        cacheCreation5mTokens +=
+          iteration.cache_creation?.ephemeral_5m_input_tokens ?? 0;
+        cacheCreation1hTokens +=
+          iteration.cache_creation?.ephemeral_1h_input_tokens ?? 0;
       }
 
       return {
@@ -1852,6 +1905,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
         outputTokens,
         cacheReadTokens,
         cacheCreationTokens,
+        cacheCreation5mTokens,
+        cacheCreation1hTokens,
       };
     }
 
@@ -1860,6 +1915,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       outputTokens: responseUsage.output_tokens ?? 0,
       cacheReadTokens: responseUsage.cache_read_input_tokens ?? 0,
       cacheCreationTokens: responseUsage.cache_creation_input_tokens ?? 0,
+      cacheCreation5mTokens:
+        responseUsage.cache_creation?.ephemeral_5m_input_tokens ?? 0,
+      cacheCreation1hTokens:
+        responseUsage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
     };
   }
 
@@ -2212,7 +2271,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     return assistantContent.map((block) =>
       block.type === 'compaction'
-        ? { ...block, cache_control: EPHEMERAL_CACHE_CONTROL }
+        ? { ...block, cache_control: LONG_CACHE_CONTROL }
         : block,
     );
   }
