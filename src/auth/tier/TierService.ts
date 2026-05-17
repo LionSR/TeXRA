@@ -14,6 +14,10 @@
  */
 
 import { toErrorMessage } from '@common/errors/errorMessage';
+import {
+  SpendingStatusSchema,
+  type SpendingStatus,
+} from '@shared/schemas/spendingStatus';
 import { SERVER_SIDE_CACHE_TTL_MS, type UserTier } from '../sharedConfig';
 import {
   NOOP_AUTH_SERVICE_LOGGER,
@@ -26,10 +30,6 @@ import {
   type TierModelsConfig,
   type UserAccessStatus,
 } from './types';
-import {
-  SpendingStatusSchema,
-  type SpendingStatus,
-} from '@shared/schemas/spendingStatus';
 
 const CHANNEL = 'TierService';
 
@@ -40,6 +40,7 @@ export class TierService {
   private cache: TierModelConfig | null = null;
   private cacheTimestamp = 0;
   private fetchPromise: Promise<TierModelConfig | null> | null = null;
+  private fetchGeneration = 0;
   /**
    * True when the latest cached fetch carried an Authorization header.
    * A later authenticated call must refresh the cache so userStatus and
@@ -71,6 +72,7 @@ export class TierService {
     this.cache = null;
     this.cacheTimestamp = 0;
     this.fetchPromise = null;
+    this.fetchGeneration += 1;
     this.userStatus = null;
     this.spendingStatus = null;
     this.cachedWithAuth = false;
@@ -93,7 +95,8 @@ export class TierService {
    * @param authToken - Optional JWT token to include user access status in response
    */
   private async fetchFromServer(
-    authToken?: string,
+    authToken: string | undefined,
+    generation: number,
   ): Promise<TierModelConfig | null> {
     try {
       const url = `${this.baseUrl}/functions/v1/relay/tier-config`;
@@ -124,6 +127,7 @@ export class TierService {
       }
 
       const data = await response.json();
+      const isCurrentFetch = (): boolean => generation === this.fetchGeneration;
 
       // Parse user-specific blocks. Both are only present when the
       // request carries auth, so clear them on absence (anonymous fetch)
@@ -132,31 +136,31 @@ export class TierService {
       if (data.userStatus) {
         const statusParsed = UserAccessStatusSchema.safeParse(data.userStatus);
         if (statusParsed.success) {
-          this.userStatus = statusParsed.data;
+          if (isCurrentFetch()) this.userStatus = statusParsed.data;
         } else {
           this.logger.error(
             CHANNEL,
             `Invalid userStatus payload: ${statusParsed.error.message}`,
           );
-          this.userStatus = null;
+          if (isCurrentFetch()) this.userStatus = null;
         }
       } else {
-        this.userStatus = null;
+        if (isCurrentFetch()) this.userStatus = null;
       }
 
       if (data.spendingStatus) {
         const spendParsed = SpendingStatusSchema.safeParse(data.spendingStatus);
         if (spendParsed.success) {
-          this.spendingStatus = spendParsed.data;
+          if (isCurrentFetch()) this.spendingStatus = spendParsed.data;
         } else {
           this.logger.error(
             CHANNEL,
             `Invalid spendingStatus payload: ${spendParsed.error.message}`,
           );
-          this.spendingStatus = null;
+          if (isCurrentFetch()) this.spendingStatus = null;
         }
       } else {
-        this.spendingStatus = null;
+        if (isCurrentFetch()) this.spendingStatus = null;
       }
 
       const parsed = TierModelConfigSchema.safeParse(data);
@@ -198,16 +202,23 @@ export class TierService {
     // where concurrent calls see fetchPromise !== null but timestamp is stale
     this.cacheTimestamp = Date.now();
     this.cachedWithAuth = tokenPresent;
-    this.fetchPromise = this.fetchFromServer(authToken).then((result) => {
-      if (result !== null) {
-        this.cache = result;
-      } else {
-        // Reset timestamp on failure so next call retries
-        this.cacheTimestamp = 0;
-        this.cachedWithAuth = false;
-      }
-      return result;
-    });
+    const generation = this.fetchGeneration + 1;
+    this.fetchGeneration = generation;
+    this.fetchPromise = this.fetchFromServer(authToken, generation).then(
+      (result) => {
+        if (generation !== this.fetchGeneration) {
+          return this.cache;
+        }
+        if (result !== null) {
+          this.cache = result;
+        } else {
+          // Reset timestamp on failure so next call retries
+          this.cacheTimestamp = 0;
+          this.cachedWithAuth = false;
+        }
+        return result;
+      },
+    );
 
     return this.fetchPromise;
   }
