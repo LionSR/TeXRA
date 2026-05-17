@@ -6,7 +6,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/drawer/drawer.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import { html, nothing, render, type TemplateResult } from 'lit';
+import { html, render, type TemplateResult } from 'lit';
 import { create as mutate } from 'mutative';
 import { COMMON_COMMANDS } from '@common/webview/commands';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
@@ -231,20 +231,6 @@ function emptyWorkspaceTemplate(): TemplateResult {
   `;
 }
 
-function emptyStreamsTemplate(): TemplateResult {
-  return html`
-    <section class="desktop-empty-streams" aria-label="First run suggestions">
-      <div class="desktop-empty-streams-copy">
-        <h2>Start from the launcher</h2>
-        <p>Choose files and an agent above before the first run.</p>
-        <p class="desktop-empty-streams-example">
-          Try: <q>polish the abstract</q>
-        </p>
-      </div>
-    </section>
-  `;
-}
-
 // =============================================================================
 // Progress message + event wiring (without mounting <progress-app>)
 // =============================================================================
@@ -305,15 +291,27 @@ const CHROME_ICON_BUTTONS: ReadonlyArray<ChromeIconButtonSpec> = [
   { key: 'logs', icon: 'file-lines', label: 'Logs', onClick: openLogsDrawer },
 ] as const;
 
+function getWorkspaceDirectoryLabel(workspacePath: string | undefined): string {
+  if (!workspacePath) return 'No folder';
+
+  const normalized = workspacePath.replaceAll('\\', '/');
+  const trimmed = normalized.replace(/\/+$/, '');
+  if (!trimmed) return normalized.startsWith('/') ? '/' : workspacePath;
+  return trimmed.split('/').at(-1) || trimmed;
+}
+
 function shellTemplate(): TemplateResult {
   const activeId = activeStreamId$.get();
   const hasStreams = hasAnyStreams$.get();
   const showConversation = activeId != null && hasStreams;
-  const showLauncherEmptyState = hasWorkspace && !hasStreams;
+  const workspacePath = window.texraDesktop?.workspacePath;
+  const workspaceDirectoryLabel = getWorkspaceDirectoryLabel(workspacePath);
   return html`
     <section class="desktop-shell">
       <nav class="desktop-nav" aria-label="Desktop chrome">
-        <span class="desktop-brand">TeXRA</span>
+        <span class="desktop-workspace-directory" title=${workspacePath ?? ''}>
+          ${workspaceDirectoryLabel}
+        </span>
         <wa-button
           class="desktop-icon-button"
           appearance="plain"
@@ -392,13 +390,8 @@ function shellTemplate(): TemplateResult {
           >
             ${hasWorkspace
               ? html`
-                  <section
-                    class=${showLauncherEmptyState
-                      ? 'desktop-launcher-surface desktop-launcher-surface--empty'
-                      : 'desktop-launcher-surface'}
-                  >
+                  <section class="desktop-launcher-surface">
                     ${mainView}
-                    ${showLauncherEmptyState ? emptyStreamsTemplate() : nothing}
                   </section>
                 `
               : noWorkspacePlaceholder}

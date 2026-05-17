@@ -40,9 +40,6 @@ export const MainViewEvents = {
 
   emptyFile: (detail: FileActionDetail) => createEvent('empty-file', detail),
 
-  toggleList: (detail: MultipleFilesActionDetail) =>
-    createEvent('toggle-list', detail),
-
   addOpenedFiles: (detail: MultipleFilesTypeActionDetail) =>
     createEvent('add-opened-files', detail),
 

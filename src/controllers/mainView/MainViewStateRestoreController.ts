@@ -21,7 +21,6 @@ export function buildMainViewState(
   const { agentConfig } = taskState;
   const isToolUse = isToolUseTaskState(taskState);
   const isWorkflow = isWorkflowTaskState(taskState);
-  const activeFiles = isWorkflow ? taskState.activeFiles : undefined;
   const toolConfig = agentConfig.toolConfig ?? {};
 
   // Resolve agent name to full key (e.g., "criticize" -> "builtIn:criticize").
@@ -44,11 +43,7 @@ export function buildMainViewState(
     contextFiles: agentConfig.contextFiles,
     mediaFiles: agentConfig.mediaFiles,
     outputFiles: agentConfig.outputFiles,
-    inputFilesVisible: activeFiles?.input,
-    contextFilesVisible: activeFiles?.context,
-    mediaFilesVisible: activeFiles?.media,
-    outputFilesVisible: activeFiles?.output,
-    outputFilesActive: activeFiles?.output,
+    outputFilesActive: isWorkflow ? taskState.activeFiles?.output : undefined,
     autoExtractFigure: toolConfig.autoExtractFigure,
     autoExtractTikzFigure: toolConfig.autoExtractTikzFigure,
     autoCompileInputPdf: toolConfig.autoCompileInputPdf,
