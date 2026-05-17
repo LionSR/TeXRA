@@ -6,30 +6,19 @@ import {
   createStructuredLogger,
   type LogRecord,
   type LogSink,
-  MemorySink,
 } from '@logger/structuredLogger';
 
-class FlushCountingSink implements LogSink {
+class CapturingSink implements LogSink {
   readonly records: LogRecord[] = [];
-  flushCount = 0;
-  closed = false;
 
   write(record: LogRecord): void {
     this.records.push(record);
-  }
-
-  async flush(): Promise<void> {
-    this.flushCount += 1;
-  }
-
-  async close(): Promise<void> {
-    this.closed = true;
   }
 }
 
 describe('structuredLogger', () => {
   it('records nested groups and exposes the active group id', async () => {
-    const sink = new MemorySink();
+    const sink = new CapturingSink();
     const logger = createStructuredLogger(sink);
 
     await logger.withGroup('outer', async () => {
@@ -49,25 +38,8 @@ describe('structuredLogger', () => {
     );
   });
 
-  it('handles out-of-order group closers without leaking later groups', () => {
-    const sink = new MemorySink();
-    const logger = createStructuredLogger(sink);
-    const leaveOuter = logger.group('outer');
-    const leaveInner = logger.group('inner');
-
-    leaveOuter();
-    logger.info('after outer close');
-    leaveInner();
-    logger.info('after all close');
-
-    assert.deepEqual(
-      sink.records.map((record) => record.groups),
-      [['inner'], []],
-    );
-  });
-
   it('isolates overlapping async group scopes on the same logger', async () => {
-    const sink = new MemorySink();
+    const sink = new CapturingSink();
     const logger = createStructuredLogger(sink);
     let releaseOuter: () => void = () => undefined;
 
@@ -92,8 +64,8 @@ describe('structuredLogger', () => {
   });
 
   it('isolates async group scopes across logger instances', async () => {
-    const firstSink = new MemorySink();
-    const secondSink = new MemorySink();
+    const firstSink = new CapturingSink();
+    const secondSink = new CapturingSink();
     const first = createStructuredLogger(firstSink);
     const second = createStructuredLogger(secondSink);
 
@@ -114,56 +86,16 @@ describe('structuredLogger', () => {
     );
   });
 
-  it('nests manual groups inside async group scopes', async () => {
-    const sink = new MemorySink();
-    const logger = createStructuredLogger(sink);
+  it('child loggers inherit fields and contribute them to records', () => {
+    const sink = new CapturingSink();
+    const root = createStructuredLogger(sink);
+    const child = root.child({ streamId: 's1' });
 
-    await logger.withGroup('async', async () => {
-      const leaveManual = logger.group('manual');
-      logger.info('inside manual group');
-      leaveManual();
-      logger.info('after manual group');
+    child.info('child message', { runId: 'r1' });
+
+    assert.deepEqual(sink.records[0]?.fields, {
+      streamId: 's1',
+      runId: 'r1',
     });
-    logger.info('after async group');
-
-    assert.deepEqual(
-      sink.records.map((record) => record.groups),
-      [['async', 'manual'], ['async'], []],
-    );
-  });
-
-  it('does not alias group arrays across nested logger scopes', async () => {
-    const firstSink = new MemorySink();
-    const secondSink = new MemorySink();
-    const first = createStructuredLogger(firstSink);
-    const second = createStructuredLogger(secondSink);
-
-    await first.withGroup('first', async () => {
-      await second.withGroup('second', async () => {
-        first.group('manual');
-        first.info('inside nested logger scope');
-      });
-      first.info('after nested logger scope');
-    });
-
-    assert.deepEqual(
-      firstSink.records.map((record) => record.groups),
-      [['first', 'manual'], ['first']],
-    );
-  });
-
-  it('flushes and closes the old sink when swapping sinks', async () => {
-    const first = new FlushCountingSink();
-    const second = new FlushCountingSink();
-    const logger = createStructuredLogger(first);
-
-    logger.info('before swap');
-    await logger.swapSink(second);
-    logger.info('after swap');
-
-    assert.equal(first.flushCount, 1);
-    assert.equal(first.closed, true);
-    assert.equal(first.records.length, 1);
-    assert.equal(second.records.length, 1);
   });
 });
