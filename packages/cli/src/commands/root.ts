@@ -35,6 +35,10 @@ import {
 } from '../runtime/approvalAdapter';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { getCliModelAccessList } from '../runtime/modelAccess';
+import {
+  fetchRelayUsageSummary,
+  type RelayUsageSummary,
+} from '../runtime/relayUsage';
 import { createCliRuntimeHost } from '../runtime/runtimeHost';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
@@ -391,9 +395,75 @@ const authStatusCommand = defineCommand({
   },
 });
 
+const usageCommand = defineCommand({
+  meta: { name: 'usage', description: 'Show relay usage for this account' },
+  args: {
+    ...GLOBAL_ARGS,
+    month: {
+      type: 'string',
+      description: 'UTC month to show, formatted as YYYY-MM',
+    },
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
+    let summary: RelayUsageSummary;
+    try {
+      await initCliPlatform({ ...context, quietLogs: true });
+      const profile = await getCliAuthProfile();
+      if (!profile.authenticated) {
+        writeTextStderr('Not signed in. Run `texra login` first.');
+        setExitCode(CliExitCode.ModelOrNetworkError);
+        return;
+      }
+      summary = await fetchRelayUsageSummary({
+        tier: profile.tier ?? 'free',
+        month: optString(ctx.args.month),
+      });
+    } catch (error) {
+      writeTextStderr(toErrorMessage(error));
+      setExitCode(CliExitCode.ModelOrNetworkError);
+      return;
+    }
+
+    writeRelayUsageSummary(context, summary);
+    setExitCode(CliExitCode.Success);
+  },
+});
+
+function writeRelayUsageSummary(
+  context: CliContext,
+  summary: RelayUsageSummary,
+): void {
+  if (context.outputFormat === 'json') {
+    writeTextStdout(JSON.stringify(summary, null, 2));
+    return;
+  }
+
+  if (context.outputFormat === 'ndjson') {
+    writeNdjsonStdout({
+      kind: 'relay-usage',
+      ts: new Date().toISOString(),
+      ...summary,
+    });
+    return;
+  }
+
+  const month = summary.periodStart.slice(0, 7);
+  writeTextStdout(
+    [
+      `Relay usage for ${month} (${summary.tier})`,
+      `Spend: $${summary.costUsd.toFixed(2)} / $${summary.limitUsd.toFixed(2)} (${summary.usagePercent.toFixed(1)}%)`,
+      `Remaining: $${summary.remainingUsd.toFixed(2)}`,
+      `Requests: ${summary.requestCount}`,
+      `Tokens: ${summary.inputTokens} input (${summary.cachedTokens} cached), ${summary.outputTokens} output, ${summary.reasoningTokens} reasoning`,
+      `Models: ${summary.modelsUsed}; providers: ${summary.providersUsed}`,
+    ].join('\n'),
+  );
+}
+
 const authCommand = defineCommand({
   meta: { name: 'auth', description: 'Authentication commands' },
-  subCommands: { status: authStatusCommand },
+  subCommands: { status: authStatusCommand, usage: usageCommand },
 });
 
 const runWorkflowCommand = defineCommand({
@@ -631,6 +701,7 @@ const rootCommand = defineCommand({
     models: modelsCommand,
     login: loginCommand,
     logout: logoutCommand,
+    usage: usageCommand,
     auth: authCommand,
     version: versionCommand,
     help: helpCommand,
