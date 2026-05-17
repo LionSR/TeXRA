@@ -101,6 +101,46 @@ describe('CLI transcript state', () => {
     }
   });
 
+  // Regression: a sync tick that fires after `finalizeAssistantTranscriptEntries`
+  // must not roll the entry back to `finalized: false`. Cursor Bugbot flagged
+  // this when `entriesEqual` started comparing `finalized` — without this
+  // guard, the de-finalized entry would land in neither bucket of
+  // `splitTranscriptEntries` once status flipped to WAITING and silently
+  // disappear from the transcript.
+  it('preserves the finalized flag through a post-finalize sync tick', () => {
+    const previousStore = AgentLogger.getStreamLogStore();
+    const store = new StreamLogStore();
+    AgentLogger.setStreamLogStore(store);
+
+    try {
+      const logger = new AgentLogger(root, true);
+      logger.info('streaming assistant chunk', {
+        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+      });
+      syncStreamLog(root);
+
+      // Stream-level finalize promotes the deferred-finalization entries.
+      patchStream(root, (slice) => ({
+        ...slice,
+        entries: slice.entries.map((entry) =>
+          entry.role === 'assistant' ? { ...entry, finalized: true } : entry,
+        ),
+      }));
+
+      // A second sync after finalize must not regress the flag.
+      syncStreamLog(root);
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({
+        role: 'assistant',
+        finalized: true,
+      });
+    } finally {
+      AgentLogger.setStreamLogStore(previousStore);
+    }
+  });
+
   it('adds a final assistant response only when the stream log did not render it', () => {
     appendAssistantTranscriptIfMissing(root, 'The answer is 2.', 'final');
     appendAssistantTranscriptIfMissing(root, 'The answer is 2.', 'final');
@@ -248,7 +288,7 @@ describe('CLI transcript state', () => {
   });
 
   it('keeps a model response live when local output follows it', () => {
-    const { finalized, live } = splitTranscriptEntries(
+    const { finalized, pending } = splitTranscriptEntries(
       [
         {
           id: 'model-response',
@@ -269,7 +309,7 @@ describe('CLI transcript state', () => {
       STREAM_STATUS.RUNNING,
     );
 
-    expect(live?.id).toBe('model-response');
+    expect(pending.map((entry) => entry.id)).toEqual(['model-response']);
     expect(finalized.map((entry) => entry.id)).toEqual(['local-help']);
   });
 
