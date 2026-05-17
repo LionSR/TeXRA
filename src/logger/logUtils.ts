@@ -1,4 +1,4 @@
-import { type LogLevel } from '@shared/schemas';
+import { LOG_LEVELS, type LogLevel } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 import { serializeError } from '@utils/core';
 
@@ -8,8 +8,14 @@ import {
   type LogRecord,
   type LogSink as StructuredLogSink,
 } from './structuredLogger';
-import { getColorForLevel } from './utils';
 import type { LogUtilsOptions } from './logOptions';
+
+const EMOJI_BY_LEVEL: Record<LogLevel, string> = {
+  [LOG_LEVELS.ERROR]: '🔴',
+  [LOG_LEVELS.WARN]: '🟡',
+  [LOG_LEVELS.INFO]: '🟢',
+  [LOG_LEVELS.DEBUG]: '🔍',
+};
 
 interface OutputSink {
   appendLine(message: string): void;
@@ -59,39 +65,27 @@ function ensureChannel(channel: string, isAgent: boolean): OutputSink {
   return output;
 }
 
-class LegacyOutputChannelSink implements StructuredLogSink {
-  constructor(
-    private readonly output: OutputSink,
-    private readonly channel: string,
-    private readonly isAgent: boolean,
-  ) {}
-
-  write(record: LogRecord): void {
-    writeLine(this.output, this.channel, this.isAgent, record);
-  }
-}
-
-function writeLine(
+function createLegacySink(
   output: OutputSink,
-  streamId: string,
+  channel: string,
   isAgent: boolean,
-  record: LogRecord,
-): void {
-  const prefix = isAgent ? '' : `[${streamId}] `;
-  output.appendLine(
-    `${getColorForLevel(record.level)} [${getTimestamp()}] ${prefix}${record.message}`,
-  );
+): StructuredLogSink {
+  const prefix = isAgent ? '' : `[${channel}] `;
+  return {
+    write(record: LogRecord): void {
+      output.appendLine(
+        `${EMOJI_BY_LEVEL[record.level]} [${getTimestamp()}] ${prefix}${record.message}`,
+      );
 
-  const includeStructuredData = getConfig<boolean>(
-    'texra.logger.debugMode',
-    false,
-  );
-  const data = record.fields.data;
-  if (!includeStructuredData || data === null || data === undefined) return;
+      const data = record.fields.data;
+      if (data === null || data === undefined) return;
+      if (!getConfig<boolean>('texra.logger.debugMode', false)) return;
 
-  const payload =
-    typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-  output.appendLine(payload);
+      output.appendLine(
+        typeof data === 'string' ? data : JSON.stringify(data, null, 2),
+      );
+    },
+  };
 }
 
 function ensureLegacyLogger(channel: string, isAgent: boolean): Logger {
@@ -101,26 +95,25 @@ function ensureLegacyLogger(channel: string, isAgent: boolean): Logger {
 
   const output = ensureChannel(channel, isAgent);
   const logger = createStructuredLogger(
-    new LegacyOutputChannelSink(output, channel, isAgent),
+    createLegacySink(output, channel, isAgent),
   ).child({ streamId: channel, isAgent });
   legacyLoggers.set(key, logger);
   return logger;
 }
 
-function logWithGroup(
-  channel: string,
+function logAt(
   level: LogLevel,
+  channel: string,
   message: string,
-  options: LogUtilsOptions = {},
+  options: LogUtilsOptions,
 ): void {
-  const isAgent = options.isAgent ?? false;
-  const resolvedData =
-    options.data instanceof Error ? serializeError(options.data) : options.data;
-  const legacyLogger = ensureLegacyLogger(channel, isAgent);
-  const activeGroupId = legacyLogger.activeGroupId();
+  const legacyLogger = ensureLegacyLogger(channel, options.isAgent ?? false);
   legacyLogger[level](message, {
-    groupId: options.groupId ?? activeGroupId,
-    data: resolvedData,
+    groupId: options.groupId ?? legacyLogger.activeGroupId(),
+    data:
+      options.data instanceof Error
+        ? serializeError(options.data)
+        : options.data,
   });
 }
 
@@ -132,12 +125,9 @@ export function setOutputChannelFactory(
   factory: OutputChannelFactory | null,
 ): void {
   const sinks = new Set<OutputSink>(channels.values());
-  if (mainOutputChannel) {
-    sinks.add(mainOutputChannel);
-  }
-  for (const sink of sinks) {
-    sink.dispose?.();
-  }
+  if (mainOutputChannel) sinks.add(mainOutputChannel);
+  for (const sink of sinks) sink.dispose?.();
+
   outputChannelFactory = factory;
   channels.clear();
   legacyLoggers.clear();
@@ -165,7 +155,7 @@ export function debug(
   message: string,
   options: LogUtilsOptions = {},
 ): void {
-  logWithGroup(channel, 'debug', message, options);
+  logAt('debug', channel, message, options);
 }
 
 export function info(
@@ -173,7 +163,7 @@ export function info(
   message: string,
   options: LogUtilsOptions = {},
 ): void {
-  logWithGroup(channel, 'info', message, options);
+  logAt('info', channel, message, options);
 }
 
 export function warn(
@@ -181,7 +171,7 @@ export function warn(
   message: string,
   options: LogUtilsOptions = {},
 ): void {
-  logWithGroup(channel, 'warn', message, options);
+  logAt('warn', channel, message, options);
 }
 
 export function error(
@@ -189,5 +179,5 @@ export function error(
   message: string,
   options: LogUtilsOptions = {},
 ): void {
-  logWithGroup(channel, 'error', message, options);
+  logAt('error', channel, message, options);
 }

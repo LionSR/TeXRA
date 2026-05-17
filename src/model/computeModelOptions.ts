@@ -1,23 +1,11 @@
-// Third-party imports
 import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
-// Local imports - platform
-import { platform } from '@platform/platform';
-
-// Local imports - auth
 import { getServerSideKeyService } from '@auth/serverKeys';
-
-// Local imports - state
-// Local imports - shared schemas
-import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
-
-// Local imports - shared constants
+import { platform } from '@platform/platform';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
-
-// Local imports - config
+import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
-// Local imports - sibling
 import { apiKeyExists, isApiProvider } from './apiProviders';
 import {
   buildModelHint,
@@ -35,6 +23,42 @@ interface ModelAvailabilityStatus {
   available: boolean;
   requiresKey: boolean;
 }
+
+const AVAILABILITY_STATUS: Record<
+  ModelAvailabilityKind,
+  ModelAvailabilityStatus
+> = {
+  'openrouter-key': {
+    kind: 'openrouter-key',
+    label: 'OpenRouter key',
+    available: true,
+    requiresKey: false,
+  },
+  'provider-key': {
+    kind: 'provider-key',
+    label: 'API key set',
+    available: true,
+    requiresKey: false,
+  },
+  'included-access': {
+    kind: 'included-access',
+    label: 'Included access',
+    available: true,
+    requiresKey: false,
+  },
+  'missing-key': {
+    kind: 'missing-key',
+    label: 'Missing API key',
+    available: false,
+    requiresKey: true,
+  },
+  'not-included': {
+    kind: 'not-included',
+    label: 'Not included',
+    available: false,
+    requiresKey: false,
+  },
+};
 
 /** Check whether a model is available through a personal provider or OpenRouter key. */
 async function getPersonalAccessKindForModel(
@@ -75,7 +99,7 @@ function canUseIncludedAccessForModel(
   model: string,
   config: ModelConfig,
   ctx: ModelAvailabilityContext,
-) {
+): boolean {
   return (
     ctx.hasServerAccess &&
     ctx.serverSideKeyService.isProviderOnServer(config.provider) &&
@@ -92,71 +116,30 @@ async function resolveModelAvailability(
   // OpenRouter routing is intentionally outside included access; a configured
   // OpenRouter key is the only ready state for these calls.
   if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
-    if (ctx.hasOpenRouter) {
-      return {
-        kind: 'openrouter-key',
-        label: 'OpenRouter key',
-        available: true,
-        requiresKey: false,
-      };
-    }
-    return {
-      kind: 'missing-key',
-      label: 'Missing API key',
-      available: false,
-      requiresKey: true,
-    };
+    return ctx.hasOpenRouter
+      ? AVAILABILITY_STATUS['openrouter-key']
+      : AVAILABILITY_STATUS['missing-key'];
   }
 
   if (canUseIncludedAccessForModel(model, config, ctx)) {
-    return {
-      kind: 'included-access',
-      label: 'Included access',
-      available: true,
-      requiresKey: false,
-    };
+    return AVAILABILITY_STATUS['included-access'];
   }
 
-  // Fall back to personal API keys when:
-  // - User explicitly chose "Use My Own Keys", OR
-  // - User has default "Use Included Access" but isn't actually authenticated with server access
-  //   (avoids showing all models as disabled for unauthenticated users)
-  if (!ctx.useIncludedAccess || !ctx.hasServerAccess) {
-    const personalAccess = await getPersonalAccessKindForModel(
-      config,
-      ctx.hasOpenRouter,
-      ctx.useOpenRouter,
-    );
-    if (personalAccess === 'provider-key') {
-      return {
-        kind: 'provider-key',
-        label: 'API key set',
-        available: true,
-        requiresKey: false,
-      };
-    }
-    if (personalAccess === 'openrouter-key') {
-      return {
-        kind: 'openrouter-key',
-        label: 'OpenRouter key',
-        available: true,
-        requiresKey: false,
-      };
-    }
-    return {
-      kind: 'missing-key',
-      label: 'Missing API key',
-      available: false,
-      requiresKey: true,
-    };
+  // Fall back to personal API keys when the user opted out of included access
+  // OR they aren't authenticated for it (avoids showing every model as
+  // disabled for unauthenticated users with the default setting).
+  if (ctx.useIncludedAccess && ctx.hasServerAccess) {
+    return AVAILABILITY_STATUS['not-included'];
   }
 
-  return {
-    kind: 'not-included',
-    label: 'Not included',
-    available: false,
-    requiresKey: false,
-  };
+  const personalAccess = await getPersonalAccessKindForModel(
+    config,
+    ctx.hasOpenRouter,
+    ctx.useOpenRouter,
+  );
+  return personalAccess
+    ? AVAILABILITY_STATUS[personalAccess]
+    : AVAILABILITY_STATUS['missing-key'];
 }
 
 async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
