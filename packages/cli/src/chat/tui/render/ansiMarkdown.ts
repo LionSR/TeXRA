@@ -19,6 +19,8 @@ import {
   type MarkdownProcessor,
 } from '@shared/markdown';
 
+import { wrapAnsiToWidth } from './ansiWrap';
+
 import type { RenderRule } from 'markdown-it/lib/renderer.mjs';
 
 /** SGR open/close codes wrapped through String.fromCharCode so the ESC byte
@@ -42,6 +44,7 @@ function highlightForTui(code: string, lang: string): string {
 function configureAnsi(md: MarkdownItInstance): void {
   const r = md.renderer.rules;
   let quoteDepth = 0;
+  let headingDepth = 0;
 
   const quotePrefix = (): string =>
     quoteDepth > 0 ? pico.dim('│ '.repeat(quoteDepth)) : '';
@@ -70,12 +73,14 @@ function configureAnsi(md: MarkdownItInstance): void {
   };
 
   r.heading_open = (tokens, idx) => {
-    const level = Number(tokens[idx]?.tag?.slice(1) ?? 1);
-    const marker = '#'.repeat(level);
+    headingDepth += 1;
     const start = quoteDepth === 0 ? '\n' : quoteBlockStart(tokens, idx);
-    return `${start}${pico.bold(pico.cyan(`${marker} `))}`;
+    return start;
   };
-  r.heading_close = () => '\n';
+  r.heading_close = () => {
+    headingDepth = Math.max(0, headingDepth - 1);
+    return '\n';
+  };
 
   r.paragraph_open = (tokens, idx) => {
     if (quoteDepth === 0) return '';
@@ -103,8 +108,13 @@ function configureAnsi(md: MarkdownItInstance): void {
   r.s_open = () => sgr(9);
   r.s_close = () => sgr(29);
 
-  r.code_inline = (tokens, idx) =>
-    pico.cyan(`\`${tokens[idx]?.content ?? ''}\``);
+  const styleHeadingText = (text: string): string =>
+    headingDepth > 0 ? pico.bold(pico.cyan(text)) : text;
+
+  r.code_inline = (tokens, idx) => {
+    const code = `\`${tokens[idx]?.content ?? ''}\``;
+    return headingDepth > 0 ? styleHeadingText(code) : pico.cyan(code);
+  };
   r.fence = (tokens, idx) => {
     const token = tokens[idx];
     if (!token) return '';
@@ -167,16 +177,18 @@ function configureAnsi(md: MarkdownItInstance): void {
   r.hardbreak = () => `\n${quotePrefix()}`;
 
   // markdown-it default `text` rule escapes HTML; we want raw text.
-  r.text = (tokens, idx) => tokens[idx]?.content ?? '';
+  r.text = (tokens, idx) => styleHeadingText(tokens[idx]?.content ?? '');
   r.image = (tokens, idx) => pico.dim(`[image: ${tokens[idx]?.content ?? ''}]`);
 
   const render = md.renderer.render.bind(md.renderer);
   md.renderer.render = (tokens, options, env) => {
     quoteDepth = 0;
+    headingDepth = 0;
     try {
       return render(tokens, options, env);
     } finally {
       quoteDepth = 0;
+      headingDepth = 0;
     }
   };
 }
@@ -187,12 +199,19 @@ function formatAnsiLatexReference(refType: string, label: string): string {
 
 let cachedProcessor: MarkdownProcessor | null = null;
 
+export interface RenderAnsiMarkdownOptions {
+  readonly width?: number;
+}
+
 /**
  * Render markdown to an ANSI-coloured string suitable for an Ink `<Text>`.
  * Uses a per-host LRU cache so streaming deltas don't re-render the entire
  * message body each frame.
  */
-export function renderAnsiMarkdown(content: string): string {
+export function renderAnsiMarkdown(
+  content: string,
+  options: RenderAnsiMarkdownOptions = {},
+): string {
   if (!cachedProcessor) {
     const renderer = createMarkdownRenderer({
       highlight: highlightForTui,
@@ -203,7 +222,9 @@ export function renderAnsiMarkdown(content: string): string {
       formatLatexReference: formatAnsiLatexReference,
     });
   }
-  return cachedProcessor(content).trimEnd();
+  return wrapAnsiToWidth(cachedProcessor(content), options.width, {
+    preserveMarkdownPrefix: true,
+  }).trimEnd();
 }
 
 /** Test seam: drop the cached processor so tests can re-init cleanly. */
