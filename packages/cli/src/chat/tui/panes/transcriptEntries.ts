@@ -26,12 +26,23 @@ export function splitTranscriptEntries(
   status: StreamStatus | undefined,
 ): {
   readonly finalized: ConversationEntry[];
+  /** Tool calls still running. Re-rendered on every store sync so the
+   *  status dot transitions in place; promoted to `finalized` once the
+   *  underlying entry flips `finalized: true`. */
+  readonly pendingTools: ConversationEntry[];
   readonly live: ConversationEntry | undefined;
 } {
   const live = isAppending(status)
     ? findLiveAssistantEntry(entries)
     : undefined;
-  const finalized = entries.filter((entry) => entry.finalized);
-
-  return { finalized, live };
+  const finalized: ConversationEntry[] = [];
+  const pendingTools: ConversationEntry[] = [];
+  for (const entry of entries) {
+    if (entry.finalized) {
+      finalized.push(entry);
+      continue;
+    }
+    if (entry.role === 'tool') pendingTools.push(entry);
+  }
+  return { finalized, pendingTools, live };
 }

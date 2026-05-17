@@ -14,6 +14,7 @@ import { Box, Static, Text } from 'ink';
 import { Markdown } from '../render/Markdown';
 import { cliState, type ConversationEntry } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
+import { ToolUseRow } from './ToolUseRow';
 import { splitTranscriptEntries } from './transcriptEntries';
 
 export { splitTranscriptEntries } from './transcriptEntries';
@@ -41,6 +42,10 @@ function TranscriptEntry({
         <Text color="red">{entry.text}</Text>
       </Box>
     );
+  }
+
+  if (entry.role === 'tool' && entry.toolUse) {
+    return <ToolUseRow toolUse={entry.toolUse} />;
   }
 
   return (
@@ -73,7 +78,10 @@ export function ConversationPane(
   const streams = useSignal(cliState.streams);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const entries = slice?.entries ?? [];
-  const { finalized, live } = splitTranscriptEntries(entries, slice?.status);
+  const { finalized, pendingTools, live } = splitTranscriptEntries(
+    entries,
+    slice?.status,
+  );
 
   return (
     <Box flexDirection="column">
@@ -82,6 +90,14 @@ export function ConversationPane(
           <TranscriptEntry key={entry.id} entry={entry} width={props.width} />
         )}
       </Static>
+      {/* Tool calls still in `in_progress` re-render in place so the
+       *  status dot can transition to green/red when the result arrives.
+       *  Putting them in <Static> would freeze them at the running state. */}
+      {pendingTools.map((entry) =>
+        entry.toolUse ? (
+          <ToolUseRow key={entry.id} toolUse={entry.toolUse} />
+        ) : null,
+      )}
       {/* Reserve a single line for the live region even when nothing is
        * streaming. Ink renders Static items into scrollback above the
        * live area, so toggling live presence between renders made the

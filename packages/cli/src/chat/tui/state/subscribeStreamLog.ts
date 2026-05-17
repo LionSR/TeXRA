@@ -1,12 +1,15 @@
-// Mirror StreamLogStore user/model entries into `cliState.streams[].entries`.
-// Tool/approval entries land in side panels and modals.
+// Mirror StreamLogStore user/model/tool entries into
+// `cliState.streams[].entries`. Approval/permission entries land in side
+// panels and modals; tool rows render inline alongside assistant prose.
 
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   MESSAGE_TYPES,
+  type NormalizedToolUse,
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
+import { normalizeToolUseData } from '@shared/toolUse';
 
 import { cliState, patchStream, type ConversationEntry } from './cliState';
 import { getTranscriptStartSeq } from './transcript';
@@ -14,8 +17,78 @@ import { getTranscriptStartSeq } from './transcript';
 const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.ERROR,
   MESSAGE_TYPES.MODEL_RESPONSE,
+  MESSAGE_TYPES.TOOL_USE,
   MESSAGE_TYPES.USER_MESSAGE,
 ]);
+
+/** Signature of a tool entry's renderable fields. The store updates the
+ *  TOOL_USE entry in place (`status: 'in_progress'` → `'completed'`,
+ *  `output`/`error` filled later), so a text-only equality check would
+ *  miss those transitions. */
+function toolUseSignature(toolUse: NormalizedToolUse): string {
+  return [
+    toolUse.status ?? '',
+    toolUse.toolName,
+    toolUse.outputText,
+    toolUse.errorText,
+    toolUse.headerSummary,
+    toolUse.isError ? '1' : '0',
+  ].join(' ');
+}
+
+function entriesEqual(
+  prev: ConversationEntry,
+  next: ConversationEntry,
+): boolean {
+  if (
+    prev.role !== next.role ||
+    prev.text !== next.text ||
+    prev.finalized !== next.finalized
+  ) {
+    return false;
+  }
+  if (prev.role === 'tool') {
+    if (!prev.toolUse || !next.toolUse) return prev.toolUse === next.toolUse;
+    return toolUseSignature(prev.toolUse) === toolUseSignature(next.toolUse);
+  }
+  return true;
+}
+
+function renderLogEntry(
+  entry: StreamLogEntry,
+  prev: ConversationEntry | undefined,
+): ConversationEntry | null {
+  if (entry.messageType === MESSAGE_TYPES.TOOL_USE) {
+    const toolUse = normalizeToolUseData(entry.data);
+    // Drop malformed tool entries rather than crash. The progress view
+    // does the same — a bad payload shouldn't take down the transcript.
+    if (!toolUse) return null;
+    const finalized = toolUse.status === 'completed';
+    const next: ConversationEntry = {
+      id: entry.id,
+      role: 'tool',
+      text: '',
+      finalized,
+      toolUse,
+    };
+    return prev && entriesEqual(prev, next) ? prev : next;
+  }
+
+  const text = entry.text ?? '';
+  const role: ConversationEntry['role'] =
+    entry.messageType === MESSAGE_TYPES.USER_MESSAGE
+      ? 'user'
+      : entry.messageType === MESSAGE_TYPES.ERROR
+        ? 'error'
+        : 'assistant';
+  const next: ConversationEntry = {
+    id: entry.id,
+    role,
+    text,
+    finalized: role !== 'assistant',
+  };
+  return prev && entriesEqual(prev, next) ? prev : next;
+}
 
 // Coalesce bursts into a single render without visibly delaying the
 // first paint. 200ms looks like a hang on short replies (an entire reply
@@ -69,21 +142,13 @@ export function syncStreamLog(streamId: StreamTabId): void {
   patchStream(streamId, (slice) => {
     const existing = new Map(slice.entries.map((e) => [e.id, e]));
     const syntheticEntries = slice.entries.filter((entry) => entry.synthetic);
-    const logEntries = responses.map((entry: StreamLogEntry) => {
-      const text = entry.text ?? '';
-      const role: ConversationEntry['role'] =
-        entry.messageType === MESSAGE_TYPES.USER_MESSAGE
-          ? 'user'
-          : entry.messageType === MESSAGE_TYPES.ERROR
-            ? 'error'
-            : 'assistant';
-      const prev = existing.get(entry.id);
-      const rendered =
-        prev && prev.text === text && prev.role === role
-          ? prev
-          : { id: entry.id, role, text, finalized: role !== 'assistant' };
-      return { entry, rendered };
-    });
+    const logEntries: { entry: StreamLogEntry; rendered: ConversationEntry }[] =
+      [];
+    for (const entry of responses) {
+      const rendered = renderLogEntry(entry, existing.get(entry.id));
+      if (!rendered) continue;
+      logEntries.push({ entry, rendered });
+    }
     const logCandidates: TranscriptCandidate[] = logEntries.map(
       ({ entry, rendered }) => ({
         rendered,
@@ -124,9 +189,7 @@ export function syncStreamLog(streamId: StreamTabId): void {
         return (
           !candidate ||
           entry.id !== candidate.id ||
-          entry.role !== candidate.role ||
-          entry.text !== candidate.text ||
-          entry.finalized !== candidate.finalized
+          !entriesEqual(entry, candidate)
         );
       });
     if (!changed) return slice;
