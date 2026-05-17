@@ -222,7 +222,7 @@ export class BashTool extends defineTool({
       syntheticConfig,
       'bash',
       parentExecutionId,
-      'toolUse',
+      'process',
     );
 
     const { childStreamId, logger } = createChildStream(
