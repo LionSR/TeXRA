@@ -907,6 +907,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     const accessExpiresAt = serverSideKeyService.getAccessExpirationDate();
     const spendingStatus = getTierService().getSpendingStatus();
+    const quotaAutoSwitched = serverSideKeyService.wasQuotaAutoSwitched();
 
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
@@ -926,6 +927,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       },
       accessExpiresAt: accessExpiresAt?.toISOString() ?? null,
       spendingStatus,
+      quotaAutoSwitched,
       providerKeyStatuses,
       globalStreamingDefault,
     });

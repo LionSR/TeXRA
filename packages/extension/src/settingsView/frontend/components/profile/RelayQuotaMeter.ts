@@ -4,7 +4,7 @@ import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { designTokens } from '@shared/styles';
-import type { SpendingStatus } from '@shared/schemas/profileViewMessages';
+import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 
 import { profileViewStyles } from './styles';
 
@@ -95,6 +95,7 @@ export class RelayQuotaMeter extends LitElement {
     if (!s) return nothing;
 
     const percent = Math.min(100, Math.max(0, s.percentUsed));
+    const remainingPercent = Math.max(0, Math.round(100 - percent));
     const state =
       s.remaining <= 0 ? 'exhausted' : percent >= 80 ? 'warning' : 'ok';
 
@@ -104,7 +105,7 @@ export class RelayQuotaMeter extends LitElement {
           ? "Monthly relay quota reached — switched you to your own API keys. Toggle 'Use Included Access' back on to retry the relay."
           : 'Monthly relay quota reached. Switch to your own API keys to keep going.'
         : state === 'warning'
-          ? `${100 - percent}% of your monthly relay quota left.`
+          ? `${remainingPercent}% of your monthly relay quota left.`
           : null;
 
     return html`
