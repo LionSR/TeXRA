@@ -3,7 +3,10 @@ import { z } from 'zod';
 
 // Local imports - shared schemas
 import type { TokenUsageStats, ToolUseLog } from '@shared/schemas';
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import {
+  collapseWhitespace,
+  truncateWithEllipsis,
+} from '@utils/text/stringUtils';
 import type {
   CommandExecutionItem,
   FileChangeItem,
@@ -88,8 +91,7 @@ export const CodexTurnToolInputSchema = z.object({
 export type CodexTurnToolInput = z.infer<typeof CodexTurnToolInputSchema>;
 
 function truncateSummary(text: string, maxLength: number): string {
-  const oneLine = text.replaceAll(/\s+/g, ' ').trim();
-  return truncateWithEllipsis(oneLine, maxLength);
+  return truncateWithEllipsis(collapseWhitespace(text), maxLength);
 }
 
 function getPathBasename(filePath: string): string {
