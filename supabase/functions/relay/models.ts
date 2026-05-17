@@ -120,12 +120,11 @@ export const TIER_CONFIG: TierModelConfig = {
  * Monthly spending limits by tier (in USD).
  *
  * These limits apply to relay usage only. Users can always use their own
- * API keys without any limits. Current values reflect the sponsor-credit
- * promotion: free and Max tiers are bumped while the donated credits last.
+ * API keys without any limits.
  */
 export const TIER_SPENDING_LIMITS: TierSpendingLimits = {
-  free: 20, // $20/month - promo (bumped from $10)
-  Max: 100, // $100/month - promo (bumped from $50)
+  free: 10, // $10/month
+  Max: 50, // $50/month
   Ultra: 300, // $300/month - sponsor access
 };
 
