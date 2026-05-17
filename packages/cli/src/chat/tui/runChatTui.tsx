@@ -19,6 +19,7 @@ import {
   getInterruptible,
   switchToolUseModel,
 } from '@agent/toolUse/ToolUseAgentRegistry';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
@@ -29,6 +30,11 @@ import { CliExitCode } from '../../runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '../../runtime/initPlatform';
 import { createCliRuntimeHost } from '../../runtime/runtimeHost';
 import { writeTextStderr } from '../../runtime/logSinks';
+import { getCliAuthProfile } from '../../runtime/supabaseAuth';
+import {
+  CLI_APPROVAL_POLICIES,
+  type CliApprovalPolicy,
+} from '../../runtime/approvalPolicy';
 import { App } from './App';
 import { printHeaderBanner } from './panes/HeaderBanner';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
@@ -76,6 +82,8 @@ interface SlashCommandContext {
   readonly initialModel: string;
   readonly interruptActive: () => void;
   readonly requestInputExit: () => void;
+  readonly getApprovalPolicy: () => CliApprovalPolicy;
+  readonly setApprovalPolicy: (policy: CliApprovalPolicy) => void;
   readonly runSessionMutation?: <T>(task: () => Promise<T>) => Promise<T>;
 }
 
@@ -134,6 +142,122 @@ async function applyCliModelSelection(
   }
 }
 
+function getCliApiMode(): 'included' | 'personal' {
+  return getServerSideKeyService().getUseIncludedModelAccess()
+    ? 'included'
+    : 'personal';
+}
+
+function formatApiMode(mode: 'included' | 'personal'): string {
+  return mode === 'included' ? 'included relay' : 'personal API keys';
+}
+
+async function applyCliApiModeSelection(mode: string): Promise<void> {
+  const normalized = mode.trim().toLowerCase();
+  const serverSideKeys = getServerSideKeyService();
+
+  if (!normalized || normalized === 'status') {
+    appendLocalAssistantTranscript(
+      [
+        `api: ${formatApiMode(getCliApiMode())}`,
+        'Usage: /api personal | /api included',
+      ].join('\n'),
+    );
+    return;
+  }
+
+  if (['personal', 'byok', 'key', 'keys'].includes(normalized)) {
+    await serverSideKeys.setUseIncludedModelAccess(false);
+    appendLocalAssistantTranscript('API mode set to personal API keys.');
+    return;
+  }
+
+  if (['included', 'relay', 'texra'].includes(normalized)) {
+    await serverSideKeys.setUseIncludedModelAccess(true);
+    appendLocalAssistantTranscript('API mode set to included relay.');
+    return;
+  }
+
+  appendLocalAssistantTranscript('Usage: /api personal | /api included');
+}
+
+async function showCliAuthStatus(): Promise<void> {
+  const profile = await getCliAuthProfile();
+  const lines = [
+    `api: ${formatApiMode(getCliApiMode())}`,
+    profile.authenticated
+      ? `auth: signed in${profile.accountLabel ? ` as ${profile.accountLabel}` : ''}`
+      : 'auth: signed out',
+  ];
+  if (profile.tier) lines.push(`tier: ${profile.tier}`);
+  appendLocalAssistantTranscript(lines.join('\n'));
+}
+
+function formatApprovalPolicy(policy: CliApprovalPolicy): string {
+  switch (policy) {
+    case 'ask':
+      return 'ask before privileged actions';
+    case 'never':
+      return 'deny privileged actions';
+    case 'yolo':
+      return 'approve privileged actions';
+  }
+}
+
+function parseApprovalPolicy(input: string): CliApprovalPolicy | undefined {
+  const normalized = input.trim().toLowerCase();
+  if ((CLI_APPROVAL_POLICIES as readonly string[]).includes(normalized)) {
+    return normalized as CliApprovalPolicy;
+  }
+  switch (normalized) {
+    case 'default':
+    case 'interactive':
+    case 'on':
+      return 'ask';
+    case 'off':
+    case 'deny':
+      return 'never';
+    case 'auto':
+    case 'full':
+    case 'danger':
+      return 'yolo';
+    default:
+      return undefined;
+  }
+}
+
+const APPROVAL_USAGE =
+  'Usage: /approval ask | /approval never | /approval yolo';
+const YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
+
+function applyCliApprovalPolicySelection(
+  input: string,
+  context: SlashCommandContext,
+  usage = APPROVAL_USAGE,
+): void {
+  const normalized = input.trim().toLowerCase();
+  if (!normalized || normalized === 'status') {
+    appendLocalAssistantTranscript(
+      [
+        `approval: ${formatApprovalPolicy(context.getApprovalPolicy())}`,
+        usage,
+      ].join('\n'),
+    );
+    return;
+  }
+
+  const policy = parseApprovalPolicy(normalized);
+  if (!policy) {
+    appendLocalAssistantTranscript(usage);
+    return;
+  }
+
+  context.setApprovalPolicy(policy);
+  appendLocalAssistantTranscript(
+    `Approval mode set to ${formatApprovalPolicy(policy)}.`,
+  );
+}
+
 async function handleTuiSlashCommand(
   line: string,
   context: SlashCommandContext,
@@ -178,6 +302,26 @@ async function handleTuiSlashCommand(
     case 'model':
       await applyCliModelSelection(rest, context);
       return true;
+    case 'api':
+      try {
+        await applyCliApiModeSelection(rest);
+      } catch (error: unknown) {
+        appendLocalAssistantTranscript(toErrorMessage(error));
+      }
+      return true;
+    case 'auth':
+      try {
+        await showCliAuthStatus();
+      } catch (error: unknown) {
+        appendLocalAssistantTranscript(toErrorMessage(error));
+      }
+      return true;
+    case 'approval':
+      applyCliApprovalPolicySelection(rest, context);
+      return true;
+    case 'yolo':
+      applyCliApprovalPolicySelection(rest || 'yolo', context, YOLO_USAGE);
+      return true;
     case 'status': {
       const meta = cliState.sessionMeta.get();
       const activeStreamId = cliState.activeStreamId.get();
@@ -188,6 +332,8 @@ async function handleTuiSlashCommand(
         [
           `agent: ${meta.agent || context.initialAgent}`,
           `model: ${meta.model || context.initialModel}`,
+          `api: ${formatApiMode(getCliApiMode())}`,
+          `approval: ${formatApprovalPolicy(context.getApprovalPolicy())}`,
           `status: ${slice?.status ?? 'not started'}`,
         ].join('\n'),
       );
@@ -245,11 +391,19 @@ export async function runChat(
 
   cliState.sessionMeta.set({ agent, model, cwd: context.cwd });
 
+  let activeApprovalPolicy = context.approvalPolicy;
   const currentSessionContext = (helperModel: string): CliContext => ({
     ...context,
+    get approvalPolicy(): CliApprovalPolicy {
+      return activeApprovalPolicy;
+    },
     helperModel,
     quietLogs: true,
   });
+  const getApprovalPolicy = (): CliApprovalPolicy => activeApprovalPolicy;
+  const setApprovalPolicy = (policy: CliApprovalPolicy): void => {
+    activeApprovalPolicy = policy;
+  };
   await loadAgents();
 
   const inputHistory = await loadInputHistory();
@@ -297,6 +451,8 @@ export async function runChat(
         initialModel: model,
         interruptActive,
         requestInputExit: () => requestInputExit?.(),
+        getApprovalPolicy,
+        setApprovalPolicy,
         runSessionMutation,
       }),
   });
@@ -382,6 +538,8 @@ export async function runChat(
         initialModel: model,
         interruptActive,
         requestInputExit: () => requestInputExit?.(),
+        getApprovalPolicy,
+        setApprovalPolicy,
         runSessionMutation,
       })
     ) {
