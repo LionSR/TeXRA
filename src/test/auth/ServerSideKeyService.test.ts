@@ -2,7 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports - auth
-import { FREE_TIER, ULTRA_TIER, type UserTier } from '@auth/config';
+import { FREE_TIER, type UserTier } from '@auth/config';
 import type { AuthServiceLogger } from '@auth/serviceLogger';
 import {
   ServerSideKeyService,
@@ -39,9 +39,7 @@ interface FakeTierService {
   service: TierService;
 }
 
-function createTierService(
-  options: { providers?: string[]; quotaExceeded?: boolean } = {},
-): FakeTierService {
+function createTierService(): FakeTierService {
   const fake = {
     clearCacheCalls: 0,
     getConfigCalls: 0,
@@ -50,33 +48,16 @@ function createTierService(
     },
     async getConfig() {
       this.getConfigCalls += 1;
-      return {
-        providers: options.providers ?? [],
-        tiers: {
-          free: { models: [] },
-          Max: { models: [] },
-          Ultra: { models: '*' },
-        },
-      };
+      return null;
     },
     getConfigSync() {
-      return {
-        providers: options.providers ?? [],
-        tiers: {
-          free: { models: [] },
-          Max: { models: [] },
-          Ultra: { models: '*' },
-        },
-      };
+      return null;
     },
     getProviders() {
-      return options.providers ?? [];
+      return [];
     },
     isAccessExpired() {
       return false;
-    },
-    isQuotaExceeded() {
-      return options.quotaExceeded ?? false;
     },
     isModelAvailable() {
       return false;
@@ -103,28 +84,21 @@ function createTierService(
   };
 }
 
-function createAuthProvider(
-  options: {
-    authenticated?: boolean;
-    tier?: UserTier;
-    accessToken?: string | null;
-  } = {},
-): AuthProvider {
+function createAuthProvider(): AuthProvider {
   return {
-    isAuthenticated: async () => options.authenticated ?? false,
-    getUserTier: async (): Promise<UserTier> => options.tier ?? FREE_TIER,
-    getAccessToken: async () => options.accessToken ?? null,
+    isAuthenticated: async () => false,
+    getUserTier: async (): Promise<UserTier> => FREE_TIER,
+    getAccessToken: async () => null,
   };
 }
 
 function createService(
   tierService: TierService,
   logger?: AuthServiceLogger,
-  authProvider: AuthProvider = createAuthProvider(),
 ): ServerSideKeyService {
   return new ServerSideKeyService(
     'https://example.test',
-    authProvider,
+    createAuthProvider(),
     tierService,
     logger,
   );
@@ -157,7 +131,7 @@ describe('ServerSideKeyService', () => {
     assert.equal(state.get(USE_INCLUDED_ACCESS_KEY, false), true);
     assert.deepEqual(changes, [true]);
     assert.equal(tier.clearCacheCalls, 1);
-    assert.equal(tier.getConfigCalls, 1);
+    assert.equal(tier.getConfigCalls, 0);
   });
 
   it('supports host subscription disposal without VS Code types', async () => {
@@ -213,36 +187,5 @@ describe('ServerSideKeyService', () => {
         message: 'Event listener failed: listener failed',
       },
     ]);
-  });
-
-  it('does not repeat the quota auto-switch after manual re-enable', async () => {
-    const tier = createTierService({
-      providers: ['openai'],
-      quotaExceeded: true,
-    });
-    const state = new MemoryState({ [USE_INCLUDED_ACCESS_KEY]: true });
-    const service = createService(
-      tier.service,
-      undefined,
-      createAuthProvider({
-        authenticated: true,
-        tier: ULTRA_TIER,
-        accessToken: 'token',
-      }),
-    );
-
-    service.initialize({ state });
-
-    assert.equal(await service.canUseServerSideKeys(), false);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(service.getUseIncludedModelAccess(), false);
-    assert.equal(service.wasQuotaAutoSwitched(), true);
-
-    await service.setUseIncludedModelAccess(true);
-
-    assert.equal(service.getUseIncludedModelAccess(), true);
-    assert.equal(service.wasQuotaAutoSwitched(), false);
-    assert.equal(await service.canUseServerSideKeys(), true);
-    assert.equal(service.getUseIncludedModelAccess(), true);
   });
 });

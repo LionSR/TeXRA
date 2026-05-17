@@ -32,11 +32,19 @@ class MemoryState implements ServerSideKeyState {
   }
 }
 
+interface FakeTierService {
+  clearCacheCalls: number;
+  service: TierService;
+}
+
 function createTierService(
   options: { providers?: string[]; quotaExceeded?: boolean } = {},
-): TierService {
-  return {
-    clearCache() {},
+): FakeTierService {
+  const fake = {
+    clearCacheCalls: 0,
+    clearCache() {
+      this.clearCacheCalls += 1;
+    },
     async getConfig() {
       return {
         providers: options.providers ?? [],
@@ -78,7 +86,14 @@ function createTierService(
     getExpirationDate() {
       return null;
     },
-  } as unknown as TierService;
+  };
+
+  return {
+    get clearCacheCalls() {
+      return fake.clearCacheCalls;
+    },
+    service: fake as unknown as TierService,
+  };
 }
 
 function createAuthProvider(
@@ -108,7 +123,7 @@ describe('ServerSideKeyService quota fallback', () => {
       createTierService({
         providers: ['openai'],
         quotaExceeded: true,
-      }),
+      }).service,
     );
 
     service.initialize({ state });
@@ -124,5 +139,32 @@ describe('ServerSideKeyService quota fallback', () => {
     expect(service.wasQuotaAutoSwitched()).toBe(false);
     expect(await service.canUseServerSideKeys()).toBe(true);
     expect(service.getUseIncludedModelAccess()).toBe(true);
+  });
+
+  it('preserves the spending-status cache after quota auto-switch', async () => {
+    const state = new MemoryState({ [USE_INCLUDED_ACCESS_KEY]: true });
+    const tier = createTierService({
+      providers: ['openai'],
+      quotaExceeded: true,
+    });
+    const service = new ServerSideKeyService(
+      'https://example.test',
+      createAuthProvider({
+        authenticated: true,
+        tier: ULTRA_TIER,
+        accessToken: 'token',
+      }),
+      tier.service,
+    );
+
+    service.initialize({ state });
+
+    expect(await service.canUseServerSideKeys()).toBe(false);
+    expect(service.getUseIncludedModelAccess()).toBe(false);
+    expect(service.wasQuotaAutoSwitched()).toBe(true);
+    expect(tier.clearCacheCalls).toBe(0);
+
+    expect(await service.canUseServerSideKeys()).toBe(false);
+    expect(tier.clearCacheCalls).toBe(0);
   });
 });
