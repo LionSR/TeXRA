@@ -139,6 +139,11 @@ describe('ServerSideKeyService quota fallback', () => {
     expect(service.wasQuotaAutoSwitched()).toBe(false);
     expect(await service.canUseServerSideKeys()).toBe(true);
     expect(service.getUseIncludedModelAccess()).toBe(true);
+
+    await service.setUseIncludedModelAccess(false);
+
+    expect(service.getUseIncludedModelAccess()).toBe(false);
+    expect(service.wasQuotaAutoSwitched()).toBe(false);
   });
 
   it('preserves the spending-status cache after quota auto-switch', async () => {
