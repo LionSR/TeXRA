@@ -14,7 +14,6 @@ import {
   type SingleFiles,
   type FileOptions,
   type MultiFiles,
-  type MultiFilesVisible,
 } from '@shared/schemas';
 
 import {
@@ -49,14 +48,6 @@ export const DEFAULT_MULTI_FILES: MultiFiles = {
   contextFiles: [],
   mediaFiles: [],
   outputFiles: [],
-};
-
-/** Default multi-files visibility state (typed) */
-export const DEFAULT_MULTI_FILES_VISIBLE: MultiFilesVisible = {
-  inputFiles: false,
-  contextFiles: false,
-  mediaFiles: false,
-  outputFiles: false,
 };
 
 /** Default checkbox values (typed) */
@@ -125,7 +116,6 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
     type: 'input',
     label: 'Input',
     icon: 'file-code',
-    toggleTitle: 'Show or hide additional input files',
     addOpenedLabel: 'Add opened files as input',
     emptyListLabel: 'Clear all input files',
     selectListLabel: 'Add input files',
@@ -137,7 +127,6 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
     type: 'context',
     label: 'Context',
     icon: 'book',
-    toggleTitle: 'Show or hide additional context files',
     addOpenedLabel: 'Add opened files as context',
     emptyListLabel: 'Clear all context files',
     selectListLabel: 'Add context files',
@@ -149,7 +138,6 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
     type: 'media',
     label: 'Media',
     icon: 'device-camera-video',
-    toggleTitle: 'Show or hide additional media files',
     addOpenedLabel: 'Add opened files as media',
     emptyListLabel: 'Clear all media files',
     selectListLabel: 'Add media files',

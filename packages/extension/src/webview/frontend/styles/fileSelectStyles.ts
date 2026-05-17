@@ -29,10 +29,6 @@ export const fileSelectLayoutStyles = css`
     margin-bottom: var(--wa-space-3xs);
   }
 
-  .file-select:has(.optional-label) {
-    margin-bottom: var(--wa-space-3xs);
-  }
-
   .file-select-header {
     display: flex;
     justify-content: space-between;
@@ -42,14 +38,6 @@ export const fileSelectLayoutStyles = css`
     line-height: var(--line-height-normal);
     gap: var(--wa-space-2xs);
     min-height: 22px;
-  }
-
-  /* When the inline wa-select collapses (no current file, list closed),
-     drop the header's bottom margin so the slot becomes a single 22px row
-     instead of leaving a wasted gap above the next slot. */
-  .file-select:not([data-expanded='true']):not([data-has-current='true'])
-    .file-select-header {
-    margin-bottom: 0;
   }
 
   .file-select-header > wa-button {
@@ -129,14 +117,6 @@ export const fileSelectLayoutStyles = css`
   .file-select wa-select {
     width: 100%;
   }
-
-  /* Hide the inline wa-select when there's no current selection AND the list
-     isn't expanded — saves a wasted row showing "None". The select still
-     surfaces as soon as the user expands, picks a current file, or starts
-     filtering. The list-management buttons (add-opened, clear-list, add)
-     stay visible at all times so they remain reachable in one click — the
-     user complained that hiding them behind the chevron made the launcher
-     feel "minimized too much". */
 `;
 
 /** Toggle icon and optional label styles. */
@@ -170,11 +150,6 @@ export const toggleStyles = css`
     outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
-  }
-
-  .file-select[data-expanded='true'] .optional-label,
-  .file-select[data-expanded='true'] .toggle-icon {
-    color: var(--wa-color-text-normal);
   }
 `;
 
