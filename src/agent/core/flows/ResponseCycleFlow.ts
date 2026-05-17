@@ -281,7 +281,7 @@ class ResponseProcessNode<C> extends BaseNode<
       const normalizedUsage = logAndNormalizeUsage(
         responseUsage,
         prepRes.responseTimeMs ?? 0,
-        { modelHandler, logger },
+        this.services,
       );
 
       const repetitionResult = checkForMassiveRepetition(
