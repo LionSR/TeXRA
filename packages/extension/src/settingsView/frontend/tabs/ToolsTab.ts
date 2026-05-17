@@ -47,7 +47,7 @@ const CATEGORY_META: Record<ToolCategory, CategoryMeta> = {
   system: { label: 'System Dependencies', icon: 'gear' },
   // ai-agents lives on its own tab (AIAgentsTab); keep the meta entry so the
   // Record stays exhaustive and the type checker enforces it.
-  'ai-agents': { label: 'AI Agents', icon: 'robot' },
+  'ai-agents': { label: 'Integrations', icon: 'robot' },
 };
 
 /** Canonical category display order. The 'ai-agents' category is rendered by

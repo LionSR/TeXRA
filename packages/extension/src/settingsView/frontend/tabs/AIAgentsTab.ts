@@ -318,9 +318,7 @@ export class AIAgentsTab extends LitElement {
         </div>
 
         ${items.length === 0
-          ? html`<div class="ai-agents-empty">
-              No AI agent integrations registered.
-            </div>`
+          ? html`<div class="ai-agents-empty">No integrations registered.</div>`
           : html`
               <div class="category-section">
                 ${repeat(
