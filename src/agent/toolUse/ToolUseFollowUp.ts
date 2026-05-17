@@ -12,6 +12,7 @@
 
 import { getActiveChildren } from '@agent/runtime/executionRegistry';
 import { getToolUseFlowContext } from '@agent/toolUse/ToolUseAgentRegistry';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { AgentLogger } from '@logger/AgentLogger';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
@@ -40,7 +41,10 @@ export function onFollowUpSent(
   };
 }
 
-function notifyFollowUpSent(streamId: StreamTabId): void {
+export function notifyFollowUpSent(
+  streamId: StreamTabId,
+  runtimeHost?: AgentRuntimeHost,
+): void {
   for (const observer of followUpSentObservers) {
     try {
       observer(streamId);
@@ -50,6 +54,7 @@ function notifyFollowUpSent(streamId: StreamTabId): void {
       );
     }
   }
+  runtimeHost?.emit('followUpSent', { streamId });
 }
 
 /**
@@ -70,9 +75,7 @@ export async function sendFollowUp(
   const flowContext = getToolUseFlowContext(streamId);
   if (flowContext) {
     flowContext.session.appendFollowUp(text);
-    notifyFollowUpSent(streamId);
-    // Notify blocking tools (e.g. ExecutionsTool wait) so they can abort early
-    flowContext.runtimeHost.emit('followUpSent', { streamId });
+    notifyFollowUpSent(streamId, flowContext.runtimeHost);
     return { status: 'sent' };
   }
 

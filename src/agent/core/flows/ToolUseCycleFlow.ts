@@ -211,23 +211,33 @@ class ToolUsePrepNode<C> extends BaseNode<
   CycleParams,
   ToolUseCycleServices<C>
 > {
-  async prep(
-    _shared: ToolUseCycleShared,
-  ): Promise<{ interrupted: boolean; queuedFollowUp: string | null }> {
+  async prep(_shared: ToolUseCycleShared): Promise<{
+    interrupted: boolean;
+    queuedFollowUp: string | null;
+    synthetic: boolean;
+  }> {
     const interrupted = this.services.checkInterruption();
 
     if (!this.services.session?.hasQueuedFollowUp()) {
-      return { interrupted, queuedFollowUp: null };
+      return { interrupted, queuedFollowUp: null, synthetic: false };
     }
 
     // Drain without waiting (we know there's something queued)
-    const items = await this.services.session.waitForFollowUp(() => false);
-    return { interrupted, queuedFollowUp: items?.join('\n\n') ?? null };
+    const batch = await this.services.session.waitForFollowUp(() => false);
+    return {
+      interrupted,
+      queuedFollowUp: batch?.items.join('\n\n') ?? null,
+      synthetic: batch?.synthetic ?? false,
+    };
   }
 
   async post(
     shared: ToolUseCycleShared,
-    prepRes: { interrupted: boolean; queuedFollowUp: string | null },
+    prepRes: {
+      interrupted: boolean;
+      queuedFollowUp: string | null;
+      synthetic: boolean;
+    },
   ): Promise<string | undefined> {
     if (prepRes.interrupted) {
       shared.shouldStop = true;
@@ -239,13 +249,17 @@ class ToolUsePrepNode<C> extends BaseNode<
     // This ensures user's message typed during tool execution is seen
     // before the model starts thinking/responding
     if (prepRes.queuedFollowUp) {
-      this.services.logger.userMessage(prepRes.queuedFollowUp);
+      if (!prepRes.synthetic) {
+        this.services.logger.userMessage(prepRes.queuedFollowUp);
+      }
       shared.messages =
         await this.services.modelHandler.createUserFollowUpMessages(
           shared.messages,
           prepRes.queuedFollowUp,
         );
-      this.services.onFollowUpConsumed?.();
+      if (!prepRes.synthetic) {
+        this.services.onFollowUpConsumed?.();
+      }
     }
 
     resetCycleState(shared, [

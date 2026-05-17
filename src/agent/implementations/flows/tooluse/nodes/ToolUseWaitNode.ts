@@ -92,12 +92,16 @@ export class ToolUseWaitNode<C> extends Node<
       });
     }
 
-    const items = await session.waitForFollowUp(checkInterruption);
-    if (!items || checkInterruption()) {
+    const batch = await session.waitForFollowUp(checkInterruption);
+    if (!batch || checkInterruption()) {
       return { kind: 'stop' };
     }
 
-    return { kind: 'continue', followUp: items.join('\n\n') };
+    return {
+      kind: 'continue',
+      followUp: batch.items.join('\n\n'),
+      synthetic: batch.synthetic,
+    };
   }
 
   async execFallback(

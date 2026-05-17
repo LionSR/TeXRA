@@ -5,11 +5,29 @@
  * toolUse modules, allowing it to be imported without circular dependency issues.
  */
 
+interface FollowUpQueueItem {
+  readonly text: string;
+  readonly synthetic: boolean;
+}
+
+export interface FollowUpQueueBatch {
+  readonly items: string[];
+  readonly synthetic: boolean;
+}
+
 export class FollowUpQueue {
-  private readonly queued: string[] = [];
-  private resolver: ((value: string | null) => void) | null = null;
+  private readonly queued: FollowUpQueueItem[] = [];
+  private resolver: ((value: FollowUpQueueItem | null) => void) | null = null;
 
   enqueue(value: string): void {
+    this.enqueueItem({ text: value, synthetic: false });
+  }
+
+  enqueueSynthetic(value: string): void {
+    this.enqueueItem({ text: value, synthetic: true });
+  }
+
+  private enqueueItem(value: FollowUpQueueItem): void {
     if (this.resolver) {
       const resolve = this.resolver;
       this.resolver = null;
@@ -24,31 +42,49 @@ export class FollowUpQueue {
   }
 
   drain(): string[] {
-    return this.queued.splice(0);
+    return this.queued
+      .splice(0)
+      .filter((item) => !item.synthetic)
+      .map((item) => item.text);
   }
 
-  waitForNext(checkInterruption: () => boolean): Promise<string | null> {
+  waitForNext(
+    checkInterruption: () => boolean,
+  ): Promise<FollowUpQueueItem | null> {
     if (this.queued.length > 0) {
       return Promise.resolve(this.queued.shift()!);
     }
     if (checkInterruption()) {
       return Promise.resolve(null);
     }
-    return new Promise<string | null>((resolve) => {
+    return new Promise<FollowUpQueueItem | null>((resolve) => {
       this.resolver = resolve;
     });
   }
 
   /**
-   * Wait for at least one item, then drain all available.
+   * Wait for at least one item, then drain one batch.
+   * Synthetic items are returned as a single-item batch; visible batches stop
+   * at the next synthetic boundary so hidden maintenance turns do not merge
+   * with user text.
    * Returns null if interrupted.
    */
   async waitAndDrainAll(
     checkInterruption: () => boolean,
-  ): Promise<string[] | null> {
+  ): Promise<FollowUpQueueBatch | null> {
     const first = await this.waitForNext(checkInterruption);
     if (first === null) return null;
-    return [first, ...this.drain()];
+    if (first.synthetic) {
+      return { items: [first.text], synthetic: true };
+    }
+
+    const items = [first.text];
+    while (true) {
+      const next = this.queued[0];
+      if (!next || next.synthetic) break;
+      items.push(this.queued.shift()!.text);
+    }
+    return { items, synthetic: false };
   }
 
   cancelWait(): void {
@@ -64,6 +100,8 @@ export class FollowUpQueue {
 
   /** Get a copy of all queued items for display purposes. */
   getAll(): string[] {
-    return [...this.queued];
+    return this.queued
+      .filter((item) => !item.synthetic)
+      .map((item) => item.text);
   }
 }
