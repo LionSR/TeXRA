@@ -9,7 +9,7 @@ import { AbsoluteFS } from '@utils/files';
 const nunjucksEnv = nunjucks.configure({ autoescape: false });
 
 let extensionPath: string | null = null;
-let cachedTemplate: string | null = null;
+let templatePromise: Promise<string> | null = null;
 
 const PolishYamlSchema = z.object({
   prompts: z.object({ userRequest: z.string() }),
@@ -23,8 +23,8 @@ export function initializePolishModel(extPath: string): void {
   extensionPath = extPath;
 }
 
-async function loadPromptTemplate(): Promise<string> {
-  if (cachedTemplate) return cachedTemplate;
+function loadPromptTemplate(): Promise<string> {
+  if (templatePromise) return templatePromise;
   if (!extensionPath) {
     throw new Error(
       'Polish model not initialized. Call initializePolishModel() first.',
@@ -36,10 +36,11 @@ async function loadPromptTemplate(): Promise<string> {
     'templates',
     'instructionPolish.yaml',
   );
-  const content = await AbsoluteFS.read(yamlPath);
-  const parsed = PolishYamlSchema.parse(yaml.parse(content));
-  cachedTemplate = parsed.prompts.userRequest;
-  return cachedTemplate;
+  templatePromise = (async () => {
+    const content = await AbsoluteFS.read(yamlPath);
+    return PolishYamlSchema.parse(yaml.parse(content)).prompts.userRequest;
+  })();
+  return templatePromise;
 }
 
 /**
