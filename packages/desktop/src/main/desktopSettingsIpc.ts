@@ -230,11 +230,7 @@ export function createDesktopSettingsIpc(
 ): DesktopSettingsIpc {
   const workspaceState = options.workspaceState ?? platform().workspaceState;
   const globalState = options.globalState ?? platform().globalState;
-  const onError =
-    options.onError ??
-    ((error) => {
-      console.error(error);
-    });
+  const onError = options.onError ?? defaultOnError;
   const loadAgentRegistry = options.loadAgents ?? loadAgents;
   const loadAgentOptionsData =
     options.loadAgentOptionsData ?? computeAgentOptionsData;
@@ -359,7 +355,7 @@ export function createDesktopSettingsIpc(
     loadMemoryItems,
     loadMemoryPreview,
     isMemoryEnabled: () =>
-      globalState.get<boolean>(GlobalStateKey.MEMORY_ENABLED, true) ?? true,
+      globalState.get<boolean>(GlobalStateKey.MEMORY_ENABLED, true),
     setMemoryEnabled: async (enabled) => {
       await globalState.update(GlobalStateKey.MEMORY_ENABLED, enabled);
     },
@@ -718,37 +714,37 @@ export function createDesktopSettingsIpc(
         workspaceState.get<string>(
           WorkspaceStateKey.CODEX_SANDBOX_MODE,
           'workspace-write',
-        ) ?? 'workspace-write',
+        ),
       ),
       codexReasoningEffort: parseCodexReasoningEffort(
         workspaceState.get<string>(
           WorkspaceStateKey.CODEX_REASONING_EFFORT,
           'high',
-        ) ?? 'high',
+        ),
       ),
       codexApprovalPolicy: parseCodexApprovalPolicy(
         workspaceState.get<string>(
           WorkspaceStateKey.CODEX_APPROVAL_POLICY,
           'never',
-        ) ?? 'never',
+        ),
       ),
       claudeAgentModel: parseClaudeAgentModel(
         workspaceState.get<string>(
           WorkspaceStateKey.CLAUDE_AGENT_MODEL,
           CLAUDE_AGENT_DEFAULT_MODEL,
-        ) ?? CLAUDE_AGENT_DEFAULT_MODEL,
+        ),
       ),
       claudeAgentPermissionMode: parseClaudeAgentPermissionMode(
         workspaceState.get<string>(
           WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
           'acceptEdits',
-        ) ?? 'acceptEdits',
+        ),
       ),
       claudeAgentEffort: parseClaudeAgentEffort(
         workspaceState.get<string>(
           WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
           'high',
-        ) ?? 'high',
+        ),
       ),
     });
   }
@@ -1538,4 +1534,8 @@ export function createDesktopSettingsIpc(
       }
     },
   };
+}
+
+function defaultOnError(error: unknown): void {
+  console.error(error);
 }
