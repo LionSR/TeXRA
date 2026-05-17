@@ -40,9 +40,9 @@ const PackConfigSchema = BasePackSchema.extend({
 
 const PackMultipleSchema = BasePackSchema.extend({
   inputFile: z.string().prefault(''),
-  outputFiles: z.array(z.string()).prefault([]),
-}).refine((d) => d.inputFile || d.outputFiles.length > 0, {
-  error: 'inputFile or outputFiles required',
+  inputFiles: z.array(z.string()).prefault([]),
+}).refine((d) => d.inputFile || d.inputFiles.length > 0, {
+  error: 'inputFile or inputFiles required',
 });
 
 function showPackResult(result: FileOpResult, inputFile: string): void {
@@ -177,20 +177,20 @@ async function handlePackMultiple(
   inputFile: string,
   agent: string,
   model: string,
-  outputFiles: string[] = [],
+  inputFiles: string[] = [],
 ): Promise<void> {
   return executePackOperation(
     PackMultipleSchema,
-    { inputFile, agent, model, outputFiles },
+    { inputFile, agent, model, inputFiles },
     'params',
     (data) =>
-      runPackMultiple(data.model, data.inputFile, data.agent, data.outputFiles),
+      runPackMultiple(data.model, data.inputFile, data.agent, data.inputFiles),
     (data) => ({
       streamConfig: {
         agent: data.agent,
         model: data.model,
         inputFile: data.inputFile,
-        outputFiles: data.outputFiles,
+        outputFiles: data.inputFiles,
       },
     }),
   );
