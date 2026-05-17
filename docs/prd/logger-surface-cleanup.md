@@ -33,7 +33,7 @@ in value:
 - `filterUtils.ts` (20 L) — one function (`getEmitFilter`), one
   production caller (`AgentLogger`).
 - `logOptions.ts` (11 L) — two interfaces, three callers, with
-  `LogUtilsOptions` *also* defined separately in
+  `LogUtilsOptions` _also_ defined separately in
   `platform/interfaces/log.ts` (different shape, same name).
 - `structuredLogger.ts` (184 L) — three features (`MemorySink`,
   `swapSink()`, sync `group()`) exist only to satisfy their own test
@@ -98,35 +98,35 @@ contributor opening `src/logger/`.
 
 ### Module inventory (verified)
 
-| Module | Lines | Production importers | Notes |
-|---|---:|---:|---|
-| `src/logger/AgentLogger.ts` | 606 | 72 | Main facade |
-| `src/logger/StreamLogStore.ts` | 872 | 4 (+ tests) | Untouched here |
-| `src/logger/StreamLog.ts` | 151 | via store | Untouched here |
-| `src/logger/logUtils.ts` | 183 | 71 | Channel-keyed text logger + group ctx |
-| `src/logger/structuredLogger.ts` | 184 | 3 (`logUtils`, CLI `logSinks`, CLI `runtimeHost`) | Stays; trim dead features |
-| `src/logger/filterUtils.ts` | 20 | 1 (`AgentLogger`) | Delete |
-| `src/logger/logOptions.ts` | 11 | 3 (`AgentLogger`, `logUtils`, `SettingsHandlerContext`) | Delete |
-| `src/logger/index.ts` | 17 | 0 barrel consumers found | Prune dead re-exports |
-| `src/agent/core/logger.ts` | 53 | 27 | Out of scope |
-| `src/platform/interfaces/log.ts` | 17 | type-only | Rename/inline `LogUtilsOptions` |
-| `src/platform/defaults/consoleLog.ts` | 26 | 2 (`desktop`, `@agent/core/logger`) | Out of scope |
+| Module                                | Lines |                                    Production importers | Notes                                 |
+| ------------------------------------- | ----: | ------------------------------------------------------: | ------------------------------------- |
+| `src/logger/AgentLogger.ts`           |   606 |                                                      72 | Main facade                           |
+| `src/logger/StreamLogStore.ts`        |   872 |                                             4 (+ tests) | Untouched here                        |
+| `src/logger/StreamLog.ts`             |   151 |                                               via store | Untouched here                        |
+| `src/logger/logUtils.ts`              |   183 |                                                      71 | Channel-keyed text logger + group ctx |
+| `src/logger/structuredLogger.ts`      |   184 |       3 (`logUtils`, CLI `logSinks`, CLI `runtimeHost`) | Stays; trim dead features             |
+| `src/logger/filterUtils.ts`           |    20 |                                       1 (`AgentLogger`) | Delete                                |
+| `src/logger/logOptions.ts`            |    11 | 3 (`AgentLogger`, `logUtils`, `SettingsHandlerContext`) | Delete                                |
+| `src/logger/index.ts`                 |    17 |                                0 barrel consumers found | Prune dead re-exports                 |
+| `src/agent/core/logger.ts`            |    53 |                                                      27 | Out of scope                          |
+| `src/platform/interfaces/log.ts`      |    17 |                                               type-only | Rename/inline `LogUtilsOptions`       |
+| `src/platform/defaults/consoleLog.ts` |    26 |                     2 (`desktop`, `@agent/core/logger`) | Out of scope                          |
 
 ### What `structuredLogger.ts` actually exports vs. what's used
 
-| Export | External consumers | Decision |
-|---|---|---|
-| `LogSink` interface | CLI logSinks + logUtils | **Keep** |
-| `LogRecord` interface | CLI logSinks + logUtils | **Keep** |
-| `Logger` interface | CLI runtimeHost + logUtils | **Keep** |
-| `LogFields` interface | (only internal + type re-export) | Keep (used by `Logger.debug/info/...`) |
-| `createStructuredLogger(sink)` | CLI runtimeHost + logUtils | **Keep** |
-| `Logger.withGroup(label, fn)` | logUtils only | **Keep** |
-| `Logger.activeGroupId()` | logUtils only | **Keep** |
-| `Logger.child(fields)` | logUtils only | **Keep** |
-| `Logger.group(label)` (sync, returns leave fn) | — none — | **Delete** |
-| `Logger.swapSink(next)` | — none (only its own test) — | **Delete** |
-| `MemorySink` class | — none (only its own test) — | **Delete** |
+| Export                                         | External consumers               | Decision                               |
+| ---------------------------------------------- | -------------------------------- | -------------------------------------- |
+| `LogSink` interface                            | CLI logSinks + logUtils          | **Keep**                               |
+| `LogRecord` interface                          | CLI logSinks + logUtils          | **Keep**                               |
+| `Logger` interface                             | CLI runtimeHost + logUtils       | **Keep**                               |
+| `LogFields` interface                          | (only internal + type re-export) | Keep (used by `Logger.debug/info/...`) |
+| `createStructuredLogger(sink)`                 | CLI runtimeHost + logUtils       | **Keep**                               |
+| `Logger.withGroup(label, fn)`                  | logUtils only                    | **Keep**                               |
+| `Logger.activeGroupId()`                       | logUtils only                    | **Keep**                               |
+| `Logger.child(fields)`                         | logUtils only                    | **Keep**                               |
+| `Logger.group(label)` (sync, returns leave fn) | — none —                         | **Delete**                             |
+| `Logger.swapSink(next)`                        | — none (only its own test) —     | **Delete**                             |
+| `MemorySink` class                             | — none (only its own test) —     | **Delete**                             |
 
 `grep` evidence: `swapSink` appears in `structuredLogger.ts` and
 `structuredLogger.test.ts` only. `MemorySink` likewise. No production
@@ -138,12 +138,23 @@ The name is defined twice with different shapes:
 
 - `src/logger/logOptions.ts`:
   ```ts
-  interface LogOptions { groupId?; messageType?; data?; }
-  interface LogUtilsOptions extends LogOptions { isAgent?; }
+  interface LogOptions {
+    groupId?;
+    messageType?;
+    data?;
+  }
+  interface LogUtilsOptions extends LogOptions {
+    isAgent?;
+  }
   ```
 - `src/platform/interfaces/log.ts`:
   ```ts
-  interface LogUtilsOptions { isAgent?; data?; groupId?; messageType?: string; }
+  interface LogUtilsOptions {
+    isAgent?;
+    data?;
+    groupId?;
+    messageType?: string;
+  }
   ```
 
 Subtle difference: the platform copy types `messageType` as plain
@@ -153,18 +164,18 @@ Today no code triggers the divergence because no `LogBackend` impl reads
 
 ### `LogBackend` options-field usage audit
 
-| Impl | Path | Reads `options.*`? |
-|---|---|---|
-| `consoleLog` | `src/platform/defaults/consoleLog.ts` | No — ignores `options` entirely |
-| `cliPlatformLog` | `packages/cli/src/runtime/initPlatform.ts:53-60` | No |
-| `deferredAuthLog` | `packages/cli/src/runtime/supabaseAuth.ts:55-66` | Passes through, doesn't read |
-| `RecordingLogBackend` | `src/test/support/FakePlatform.ts:281-315` | Records `options` for inspection |
-| `@agent/core/logger.ts` | facade, not impl | Forwards `options` |
+| Impl                    | Path                                             | Reads `options.*`?               |
+| ----------------------- | ------------------------------------------------ | -------------------------------- |
+| `consoleLog`            | `src/platform/defaults/consoleLog.ts`            | No — ignores `options` entirely  |
+| `cliPlatformLog`        | `packages/cli/src/runtime/initPlatform.ts:53-60` | No                               |
+| `deferredAuthLog`       | `packages/cli/src/runtime/supabaseAuth.ts:55-66` | Passes through, doesn't read     |
+| `RecordingLogBackend`   | `src/test/support/FakePlatform.ts:281-315`       | Records `options` for inspection |
+| `@agent/core/logger.ts` | facade, not impl                                 | Forwards `options`               |
 
 Asserting tests: `grep "options\." src/test/platform/FakePlatform.test.ts src/test-kernel/platform/FakePlatform.invariants.vitest.ts` returns nothing — no test asserts on the recorded options fields.
 
 Therefore `isAgent / groupId / messageType / data` on `LogBackend`'s
-options type are dead weight at runtime *and* in tests. Drop them.
+options type are dead weight at runtime _and_ in tests. Drop them.
 
 ## Proposed End State
 
@@ -190,26 +201,26 @@ Small enough to land in one PR. Phasing is review ergonomics.
 
 ### Phase 4a — inline + dedup (low risk, ~30 LOC removed)
 
-| Action | Files |
-|---|---|
-| Inline `getEmitFilter` into `AgentLogger.ts` as a private function. | `AgentLogger.ts` |
-| Delete `filterUtils.ts` and `filterUtils.test.ts`. | (deletions) |
-| Inline `LogOptions` into `AgentLogger.ts`. | `AgentLogger.ts` |
-| Inline `LogUtilsOptions` (logger-side) into `logUtils.ts`. | `logUtils.ts` |
+| Action                                                                                                                                                            | Files                       |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| Inline `getEmitFilter` into `AgentLogger.ts` as a private function.                                                                                               | `AgentLogger.ts`            |
+| Delete `filterUtils.ts` and `filterUtils.test.ts`.                                                                                                                | (deletions)                 |
+| Inline `LogOptions` into `AgentLogger.ts`.                                                                                                                        | `AgentLogger.ts`            |
+| Inline `LogUtilsOptions` (logger-side) into `logUtils.ts`.                                                                                                        | `logUtils.ts`               |
 | Update `packages/extension/src/settingsView/handlers/SettingsHandlerContext.ts:7` to import `LogUtilsOptions` from `@logger/logUtils` (the surviving definition). | `SettingsHandlerContext.ts` |
-| Delete `logOptions.ts`. | (deletion) |
-| Drop dead barrel re-exports from `src/logger/index.ts`: `createStructuredLogger`, `Logger`, `LogFields`, `LogRecord`, `LogSink`. | `index.ts` |
+| Delete `logOptions.ts`.                                                                                                                                           | (deletion)                  |
+| Drop dead barrel re-exports from `src/logger/index.ts`: `createStructuredLogger`, `Logger`, `LogFields`, `LogRecord`, `LogSink`.                                  | `index.ts`                  |
 
 **Risk:** trivial. No external API changes. `SettingsHandlerContext.ts`
 still gets the same type, just from a different module.
 
 ### Phase 4b — slim `structuredLogger.ts` (low risk, ~40 LOC removed)
 
-| Action | Files |
-|---|---|
-| Delete `MemorySink` class. | `structuredLogger.ts` |
-| Delete `swapSink(next)` method and its `LogSink.flush?/close?` callers. (Keep `LogSink` interface; `flush?` is fine.) | `structuredLogger.ts` |
-| Delete sync `Logger.group(label)` method and its `enterGroup`/`flushOnPop` plumbing. | `structuredLogger.ts` |
+| Action                                                                                                                                                                                                               | Files                      |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| Delete `MemorySink` class.                                                                                                                                                                                           | `structuredLogger.ts`      |
+| Delete `swapSink(next)` method and its `LogSink.flush?/close?` callers. (Keep `LogSink` interface; `flush?` is fine.)                                                                                                | `structuredLogger.ts`      |
+| Delete sync `Logger.group(label)` method and its `enterGroup`/`flushOnPop` plumbing.                                                                                                                                 | `structuredLogger.ts`      |
 | Trim `structuredLogger.test.ts` to cover only `withGroup` / `activeGroupId` / `child` / `createStructuredLogger`. The "swapSink flushes", "manual group inside async", and "out-of-order closers" cases become dead. | `structuredLogger.test.ts` |
 
 **Risk:** low. No production caller of any of the three deleted
@@ -218,12 +229,12 @@ features. The trimmed test still covers the four behaviors
 
 ### Phase 4c — `LogBackend` options-shape cleanup (low risk, ~10 LOC removed)
 
-| Action | Files |
-|---|---|
-| Replace `LogUtilsOptions` in `src/platform/interfaces/log.ts` with a `LogBackendOptions` type containing only what real impls might use. Concretely: drop the type entirely and make `LogBackend.{debug,info,warn,error}` take `(channel: string, message: string)` only. | `platform/interfaces/log.ts` |
-| Remove the unused `options` param from every `LogBackend` impl: `consoleLog`, `cliPlatformLog`, `deferredAuthLog`, `RecordingLogBackend`. | `consoleLog.ts`, `cli/initPlatform.ts`, `cli/supabaseAuth.ts`, `test/support/FakePlatform.ts` |
-| Update `@agent/core/logger.ts` to drop the `options` param from its facade functions. | `agent/core/logger.ts` |
-| Update the ~27 importer call sites that pass a `LogUtilsOptions`. (Spot check: most pass `{ data: ... }`. The `data` field was never logged by any impl — only recorded by `RecordingLogBackend`. If a caller's diagnostic intent was "include this object in the log line," the call site is already broken — surface that as a follow-up rather than re-adding the field.) | callers |
+| Action                                                                                                                                                                                                                                                                                                                                                                       | Files                                                                                         |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Replace `LogUtilsOptions` in `src/platform/interfaces/log.ts` with a `LogBackendOptions` type containing only what real impls might use. Concretely: drop the type entirely and make `LogBackend.{debug,info,warn,error}` take `(channel: string, message: string)` only.                                                                                                    | `platform/interfaces/log.ts`                                                                  |
+| Remove the unused `options` param from every `LogBackend` impl: `consoleLog`, `cliPlatformLog`, `deferredAuthLog`, `RecordingLogBackend`.                                                                                                                                                                                                                                    | `consoleLog.ts`, `cli/initPlatform.ts`, `cli/supabaseAuth.ts`, `test/support/FakePlatform.ts` |
+| Update `@agent/core/logger.ts` to drop the `options` param from its facade functions.                                                                                                                                                                                                                                                                                        | `agent/core/logger.ts`                                                                        |
+| Update the ~27 importer call sites that pass a `LogUtilsOptions`. (Spot check: most pass `{ data: ... }`. The `data` field was never logged by any impl — only recorded by `RecordingLogBackend`. If a caller's diagnostic intent was "include this object in the log line," the call site is already broken — surface that as a follow-up rather than re-adding the field.) | callers                                                                                       |
 
 **Risk:** medium. Touches ~27 importer call sites. Each is a
 mechanical drop of the second argument. Type checker will surface every
@@ -248,19 +259,19 @@ problem. Recommend the full cleanup unless we discover hidden usage.
 
 ## Estimated impact
 
-| Item | Before | After | Delta |
-|---|---:|---:|---:|
-| `AgentLogger.ts` | 606 | ~615 | +9 |
-| `logUtils.ts` | 183 | ~188 | +5 |
-| `structuredLogger.ts` | 184 | ~140 | −44 |
-| `filterUtils.ts` | 20 | 0 | −20 |
-| `logOptions.ts` | 11 | 0 | −11 |
-| `logger/index.ts` | 17 | ~10 | −7 |
-| `platform/interfaces/log.ts` | 17 | ~10 | −7 |
-| Test changes (4 files) | — | — | ~−180 (delete cases for removed features) |
-| Per-caller `options` arg drops (4c) | — | — | small per-line cleanup ×27 |
-| **Net source** | | | **~−75** |
-| **Net incl. tests** | | | **~−250** |
+| Item                                | Before | After |                                     Delta |
+| ----------------------------------- | -----: | ----: | ----------------------------------------: |
+| `AgentLogger.ts`                    |    606 |  ~615 |                                        +9 |
+| `logUtils.ts`                       |    183 |  ~188 |                                        +5 |
+| `structuredLogger.ts`               |    184 |  ~140 |                                       −44 |
+| `filterUtils.ts`                    |     20 |     0 |                                       −20 |
+| `logOptions.ts`                     |     11 |     0 |                                       −11 |
+| `logger/index.ts`                   |     17 |   ~10 |                                        −7 |
+| `platform/interfaces/log.ts`        |     17 |   ~10 |                                        −7 |
+| Test changes (4 files)              |      — |     — | ~−180 (delete cases for removed features) |
+| Per-caller `options` arg drops (4c) |      — |     — |                small per-line cleanup ×27 |
+| **Net source**                      |        |       |                                  **~−75** |
+| **Net incl. tests**                 |        |       |                                 **~−250** |
 
 Realistic, not aspirational. Smaller than the earlier note's "−500"
 because `structuredLogger.ts` stays.
@@ -301,7 +312,7 @@ because `structuredLogger.ts` stays.
 6. Manual smoke: identical transcript and OutputChannel output for a
    representative agent run.
 
-## What this PRD does *not* claim
+## What this PRD does _not_ claim
 
 - It does not promise the logger becomes "Claude Code-simple." TeXRA
   has multi-stream concurrency, history browsing, in-place streaming
