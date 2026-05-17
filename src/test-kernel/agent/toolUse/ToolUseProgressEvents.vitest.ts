@@ -3,10 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { ToolUseCycleNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseCycleNode';
-import type { CyclePrepResult } from '@agent/implementations/flows/tooluse/nodes/types';
+import type {
+  CyclePrepResult,
+  ToolUseRunShared,
+} from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
-import type { Plan, TodoItem } from '@shared/schemas';
+import { MESSAGE_TYPES, type Plan, type TodoItem } from '@shared/schemas';
 import { createRecordingHost } from '../progressTestUtils';
 
 const todo: TodoItem = {
@@ -74,5 +78,30 @@ describe('tool-use progress events', () => {
         },
       },
     ]);
+  });
+
+  it('logs failed cycle outcomes as transcript errors', async () => {
+    const workspaceState = AgentWorkspaceState.create();
+    const prepRes = createPrepResult(workspaceState);
+    const shared: Partial<ToolUseRunShared> = {};
+    const error = vi.fn();
+    const node = new ToolUseCycleNode().setServices({
+      logger: { error },
+    } as unknown as ToolUseServices);
+
+    const transition = await node.post(shared as ToolUseRunShared, prepRes, {
+      outcome: 'failed',
+      message: 'Model claude-opus-4-7 not found',
+      userRetryable: false,
+    });
+
+    expect(transition).toBe(FlowTransition.DEFAULT);
+    expect(shared.lastError).toEqual({
+      message: 'Model claude-opus-4-7 not found',
+      userRetryable: false,
+    });
+    expect(error).toHaveBeenCalledWith('Model claude-opus-4-7 not found', {
+      messageType: MESSAGE_TYPES.ERROR,
+    });
   });
 });
