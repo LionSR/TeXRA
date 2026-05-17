@@ -21,11 +21,24 @@ const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.USER_MESSAGE,
 ]);
 
-// Field-by-field — a stringified signature would allocate the full
-// outputText (potentially 50 KB+ of bash output) on every comparison.
-// Cover every field that `ToolUseRow` reads (notably `input`, which
-// `previewInput` consumes for the header preview, and the feedback
-// fields) so a future input change can't be silently swallowed.
+/** Tool inputs are typed `unknown` (model-supplied JSON) and reach us
+ *  via Zod passthrough, so a `===` compare would defeat the cache the
+ *  moment any upstream code reconstructs `data` (deserialization,
+ *  structured clone, future log replay). Inputs are small — tool call
+ *  args, not output — so a JSON serialization is cheap. */
+function inputEqual(prev: unknown, next: unknown): boolean {
+  if (prev === next) return true;
+  try {
+    return JSON.stringify(prev) === JSON.stringify(next);
+  } catch {
+    return false;
+  }
+}
+
+// Field-by-field — a stringified signature over the whole NormalizedToolUse
+// would allocate the full outputText (potentially 50 KB+ of bash output) on
+// every comparison. Cover every field ToolUseRow reads so future changes
+// can't be silently swallowed.
 function toolUseEqual(
   prev: NormalizedToolUse,
   next: NormalizedToolUse,
@@ -39,7 +52,7 @@ function toolUseEqual(
     prev.isError === next.isError &&
     prev.isUserFeedback === next.isUserFeedback &&
     prev.userInstructionText === next.userInstructionText &&
-    prev.input === next.input
+    inputEqual(prev.input, next.input)
   );
 }
 
