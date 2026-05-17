@@ -451,12 +451,32 @@ export class TaskRunFileService {
    *     revised content.
    */
   public async ensureMirroredInRoundDir(round: number): Promise<void> {
+    await this.ensureMirroredInRunSubdir(`r${round}`, {
+      protectPrimaryOutput: true,
+    });
+  }
+
+  /**
+   * Ensure mirrored workspace dependencies are also reachable from
+   * `<runDir>/diff/r{round}/...`, where workflow latexdiff sources and build
+   * artifacts live.
+   */
+  public async ensureMirroredInDiffRoundDir(round: number): Promise<void> {
+    await this.ensureMirroredInRunSubdir(path.join('diff', `r${round}`), {
+      protectPrimaryOutput: false,
+    });
+  }
+
+  private async ensureMirroredInRunSubdir(
+    relativeDirectory: string,
+    options: { protectPrimaryOutput: boolean },
+  ): Promise<void> {
     const executionId = this.metadata.executionId;
     if (!executionId || this.mirroredDependencies.size === 0) {
       return;
     }
 
-    const roundSegment = `r${round}`;
+    const destinationSegment = relativeDirectory;
     const runDir = getRunDir(executionId);
 
     await Promise.all(
@@ -468,10 +488,14 @@ export class TaskRunFileService {
         // round's result. Skip these — the dependency is still reachable at
         // `r{round}/../<relativePath>`, i.e. `<runDir>/<relativePath>`.
         const { dir: depDir, name: depName } = path.parse(relativePath);
-        if (depDir === '' && depName === WORKFLOW_OUTPUT_BASENAME) {
+        if (
+          options.protectPrimaryOutput &&
+          depDir === '' &&
+          depName === WORKFLOW_OUTPUT_BASENAME
+        ) {
           logger.debug(
             CHANNEL,
-            `Skipping round-dir mirror of ${relativePath}: would clobber primary output in ${roundSegment}`,
+            `Skipping run-dir mirror of ${relativePath}: would clobber primary output in ${destinationSegment}`,
           );
           return;
         }
@@ -479,7 +503,7 @@ export class TaskRunFileService {
         const sourceAbsolute = path.join(runDir, relativePath);
         const destinationAbsolute = path.join(
           runDir,
-          roundSegment,
+          destinationSegment,
           relativePath,
         );
 
@@ -493,7 +517,7 @@ export class TaskRunFileService {
           if (!stat.isSymbolicLink()) {
             logger.debug(
               CHANNEL,
-              `Skipping round-dir mirror of ${relativePath}: destination in ${roundSegment} is an existing real file (likely an extracted output)`,
+              `Skipping run-dir mirror of ${relativePath}: destination in ${destinationSegment} is an existing real file`,
             );
             return;
           }
@@ -516,7 +540,7 @@ export class TaskRunFileService {
         } catch (error) {
           logger.debug(
             CHANNEL,
-            `Unable to mirror ${relativePath} into ${roundSegment}: ${toErrorMessage(error)}`,
+            `Unable to mirror ${relativePath} into ${destinationSegment}: ${toErrorMessage(error)}`,
           );
         }
       }),
