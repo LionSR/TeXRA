@@ -6,9 +6,6 @@ settings:
   isRewrite: False
   defaultOutputFiles:
     - poster.tex
-  prefills:
-    - 'Here is the Beamer poster. <documents>'
-    - ''
   requiredFilesInternal:
     TEMPLATE_POSTER: template_poster.tex
     TEMPLATE_POSTER_STYLE: beamercolorthemempi.sty

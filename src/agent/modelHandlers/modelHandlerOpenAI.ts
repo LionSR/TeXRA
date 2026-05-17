@@ -1125,6 +1125,12 @@ export class ModelHandlerOpenAI<
     let endTurn = false;
 
     if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
+      if (prefill.length === 0) {
+        this.logger.debug(
+          'No prefill provided; skipping pseudo-prefill instruction',
+        );
+        return [endTurn, messages];
+      }
       const pseudoPrefillMsg = `Organize your response with xml tags. Start your response with:\n${prefill}`;
       const lastMessage = messages.at(-1);
       if (lastMessage && Array.isArray(lastMessage.content)) {
