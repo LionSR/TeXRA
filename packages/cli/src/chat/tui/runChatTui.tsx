@@ -15,7 +15,10 @@ import { interruptActiveChildren } from '@agent/runtime/executionRegistry';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
-import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
+import {
+  getInterruptible,
+  switchToolUseModel,
+} from '@agent/toolUse/ToolUseAgentRegistry';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
@@ -73,6 +76,62 @@ interface SlashCommandContext {
   readonly initialModel: string;
   readonly interruptActive: () => void;
   readonly requestInputExit: () => void;
+  readonly runSessionMutation?: <T>(task: () => Promise<T>) => Promise<T>;
+}
+
+async function applyCliModelSelection(
+  model: string,
+  context: SlashCommandContext,
+): Promise<void> {
+  const nextModel = model.trim();
+  if (!nextModel) {
+    appendLocalAssistantTranscript('Usage: /model <name>');
+    return;
+  }
+
+  try {
+    if (!context.session.runPromise) {
+      await setCliHelperModel(nextModel);
+      cliState.sessionMeta.set({
+        ...cliState.sessionMeta.get(),
+        model: nextModel,
+      });
+      appendLocalAssistantTranscript(`Model set to ${nextModel}.`);
+      return;
+    }
+
+    const switchActiveModel = async (): Promise<void> => {
+      const streamId = context.session.streamId;
+      const status = streamId ? StreamStatusService.get(streamId) : undefined;
+      if (!streamId || status !== STREAM_STATUS.WAITING) {
+        appendLocalAssistantTranscript(
+          'The model can be changed while the chat is waiting for your next message.',
+        );
+        return;
+      }
+      const result = await switchToolUseModel(streamId, nextModel);
+      if (result.status === 'no_session') {
+        appendLocalAssistantTranscript(
+          'The active chat is no longer available. Start a new chat to use that model.',
+        );
+        return;
+      }
+      await setCliHelperModel(nextModel);
+      cliState.sessionMeta.set({
+        ...cliState.sessionMeta.get(),
+        model: nextModel,
+      });
+      appendLocalAssistantTranscript(`Model set to ${nextModel}.`);
+    };
+
+    if (context.runSessionMutation) {
+      await context.runSessionMutation(switchActiveModel);
+    } else {
+      await switchActiveModel();
+    }
+  } catch (error: unknown) {
+    appendLocalAssistantTranscript(toErrorMessage(error));
+  }
 }
 
 async function handleTuiSlashCommand(
@@ -117,24 +176,7 @@ async function handleTuiSlashCommand(
       }
       return true;
     case 'model':
-      if (context.session.runPromise) {
-        appendLocalAssistantTranscript(
-          'The model is fixed for this chat session. Start a new chat to use a different model.',
-        );
-      } else if (rest) {
-        try {
-          await setCliHelperModel(rest);
-          cliState.sessionMeta.set({
-            ...cliState.sessionMeta.get(),
-            model: rest,
-          });
-          appendLocalAssistantTranscript(`Model set to ${rest}.`);
-        } catch (error: unknown) {
-          appendLocalAssistantTranscript(toErrorMessage(error));
-        }
-      } else {
-        appendLocalAssistantTranscript('Usage: /model <name>');
-      }
+      await applyCliModelSelection(rest, context);
       return true;
     case 'status': {
       const meta = cliState.sessionMeta.get();
@@ -211,8 +253,6 @@ export async function runChat(
   await loadAgents();
 
   const inputHistory = await loadInputHistory();
-  // Pre-register the slash commands the input palette uses.
-  registerBuiltinSlashCommands();
 
   // DA1 sentinel discovery runs *before* Ink mounts so it owns the raw-mode
   // toggle exclusively — interleaving with Ink's own raw-mode lifecycle (set
@@ -237,6 +277,8 @@ export async function runChat(
   };
 
   const followUpQueue = new PQueue({ concurrency: 1 });
+  const runSessionMutation = async <T,>(task: () => Promise<T>): Promise<T> =>
+    followUpQueue.add(task);
   let requestInputExit: (() => void) | undefined;
 
   const interruptActive = (): void => {
@@ -245,6 +287,19 @@ export async function runChat(
     interruptActiveChildren(session.streamId);
     getInterruptible(session.streamId)?.interrupt();
   };
+
+  // Pre-register the slash commands the input palette uses.
+  registerBuiltinSlashCommands({
+    onModelSelect: (nextModel) =>
+      applyCliModelSelection(nextModel, {
+        session,
+        initialAgent: agent,
+        initialModel: model,
+        interruptActive,
+        requestInputExit: () => requestInputExit?.(),
+        runSessionMutation,
+      }),
+  });
 
   const startSession = (instruction: string): void => {
     const meta = cliState.sessionMeta.get();
@@ -327,6 +382,7 @@ export async function runChat(
         initialModel: model,
         interruptActive,
         requestInputExit: () => requestInputExit?.(),
+        runSessionMutation,
       })
     ) {
       return;
