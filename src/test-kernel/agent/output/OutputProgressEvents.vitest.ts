@@ -81,6 +81,7 @@ describe('output progress events', () => {
           endTurn: false,
         },
         compileFailures: [],
+        compiledArtifacts: [],
         emitCompileFailures: false,
       },
     );
