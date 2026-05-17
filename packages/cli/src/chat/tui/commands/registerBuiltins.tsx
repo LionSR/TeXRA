@@ -1,37 +1,39 @@
 // Registers the slash commands the input palette surfaces.
-//
-// Idempotent at the call-site granularity: the module-scope `installed`
-// flag short-circuits repeat invocations, so registrations that were
-// individually unregistered won't reappear without a process restart.
 
 import { ModelForm } from '../forms/ModelForm';
 import { cliState } from '../state/cliState';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 
-/** Adapter: wires the `/model` form's `(value)=>void` API into the generic
- *  `SlashFormProps<unknown>` shape the registry expects. */
-function ModelFormAdapter(props: SlashFormProps): React.JSX.Element {
-  const current = cliState.sessionMeta.get().model;
-  return (
-    <ModelForm
-      currentModel={current}
-      onSelect={(value) => {
-        cliState.sessionMeta.set({
-          ...cliState.sessionMeta.get(),
-          model: value,
-        });
-        props.onDone(value);
-      }}
-      onCancel={() => props.onDone(undefined)}
-    />
-  );
-}
+type ModelSelectHandler = (value: string) => void | Promise<void>;
 
-let installed = false;
+const defaultModelSelect: ModelSelectHandler = (value) => {
+  cliState.sessionMeta.set({
+    ...cliState.sessionMeta.get(),
+    model: value,
+  });
+};
 
-export function registerBuiltinSlashCommands(): void {
-  if (installed) return;
-  installed = true;
+export function registerBuiltinSlashCommands(options?: {
+  onModelSelect?: ModelSelectHandler;
+}): void {
+  const onModelSelect = options?.onModelSelect ?? defaultModelSelect;
+
+  /** Adapter: wires the `/model` form's `(value)=>void` API into the generic
+   *  `SlashFormProps<unknown>` shape the registry expects. */
+  function ModelFormAdapter(props: SlashFormProps): React.JSX.Element {
+    const current = cliState.sessionMeta.get().model;
+    return (
+      <ModelForm
+        currentModel={current}
+        onSelect={(value) => {
+          void Promise.resolve(onModelSelect(value)).finally(() =>
+            props.onDone(value),
+          );
+        }}
+        onCancel={() => props.onDone(undefined)}
+      />
+    );
+  }
 
   registerSlashCommand({
     name: 'help',
