@@ -93,11 +93,17 @@ export async function executeCommand(
     onPid?: (pid: number) => void;
     /** Set to false to skip buffering stdout/stderr in memory (use with onStdout/onStderr). */
     buffer?: boolean;
+    /** Cancels the subprocess and its process group when possible. */
+    signal?: AbortSignal;
   } = {},
 ): Promise<ExecResult> {
   // Hoisted so the finally block can clear them on both success and error paths.
   let shellTimeoutId: ReturnType<typeof setTimeout> | undefined;
   let forceKillTimeoutId: ReturnType<typeof setTimeout> | undefined;
+  let abortListener: (() => void) | undefined;
+  let signal: AbortSignal | undefined;
+  let subprocess: ResultPromise | undefined;
+  let commandCancelled = false;
 
   try {
     const workspacePath = options.cwd ?? WorkspaceFS.getPath();
@@ -131,8 +137,25 @@ export async function executeCommand(
 
     const logChannel = options.channel ?? CHANNEL;
 
-    let subprocess: ResultPromise;
     let shellTimedOut = false;
+    signal = options.signal;
+
+    const stopSubprocess = (force = false) => {
+      if (!force) {
+        commandCancelled = true;
+      }
+      const pid = subprocess?.pid;
+      if (pid) {
+        signalProcessGroup(pid, force ? 'SIGKILL' : 'SIGTERM');
+      }
+      if (!force && forceKillTimeoutId === undefined) {
+        forceKillTimeoutId = setTimeout(() => {
+          stopSubprocess(true);
+          subprocess?.stdout?.destroy();
+          subprocess?.stderr?.destroy();
+        }, FORCE_KILL_DELAY_MS);
+      }
+    };
 
     if (Array.isArray(command)) {
       const [cmd, ...args] = command;
@@ -175,21 +198,36 @@ export async function executeCommand(
       if (subprocess.pid && options.onPid) options.onPid(subprocess.pid);
 
       if (_shellTimeout) {
+        const shellSubprocess = subprocess;
         shellTimeoutId = setTimeout(() => {
           shellTimedOut = true;
-          const pid = subprocess.pid;
+          const pid = shellSubprocess.pid;
           if (!pid) return;
 
           signalProcessGroup(pid, 'SIGTERM');
 
           // Force-kill after FORCE_KILL_DELAY_MS if SIGTERM didn't work,
           // and destroy streams as a last resort to unblock `await subprocess`.
-          forceKillTimeoutId = setTimeout(() => {
-            signalProcessGroup(pid, 'SIGKILL');
-            subprocess.stdout?.destroy();
-            subprocess.stderr?.destroy();
-          }, FORCE_KILL_DELAY_MS);
+          if (forceKillTimeoutId === undefined) {
+            forceKillTimeoutId = setTimeout(() => {
+              signalProcessGroup(pid, 'SIGKILL');
+              shellSubprocess.stdout?.destroy();
+              shellSubprocess.stderr?.destroy();
+            }, FORCE_KILL_DELAY_MS);
+          }
         }, _shellTimeout);
+      }
+    }
+
+    if (signal) {
+      abortListener = () => {
+        commandCancelled = true;
+        stopSubprocess();
+      };
+      if (signal.aborted) {
+        abortListener();
+      } else {
+        signal.addEventListener('abort', abortListener, { once: true });
       }
     }
 
@@ -209,7 +247,7 @@ export async function executeCommand(
 
     const stdout = (result.stdout as string) ?? '';
     const stderr = (result.stderr as string) ?? '';
-    const exitCode = result.exitCode ?? 1;
+    const exitCode = result.exitCode ?? (commandCancelled ? 130 : 1);
     const timedOut = (result.timedOut ?? false) || shellTimedOut;
 
     const normalizedStdout = normalizeOutput(stdout);
@@ -224,13 +262,23 @@ export async function executeCommand(
     }
 
     return {
-      success: exitCode === 0 && !timedOut,
+      success: exitCode === 0 && !timedOut && !commandCancelled,
       stdout: normalizedStdout,
       stderr: normalizedStderr,
       timedOut,
       exitCode,
     };
   } catch (err) {
+    if (commandCancelled) {
+      return {
+        success: false,
+        stdout: null,
+        stderr: 'Command cancelled',
+        timedOut: false,
+        exitCode: 130,
+      };
+    }
+
     logger.error(
       options.channel ?? CHANNEL,
       `Error executing command: ${toErrorMessage(err)}`,
@@ -249,5 +297,8 @@ export async function executeCommand(
   } finally {
     if (shellTimeoutId !== undefined) clearTimeout(shellTimeoutId);
     if (forceKillTimeoutId !== undefined) clearTimeout(forceKillTimeoutId);
+    if (signal && abortListener) {
+      signal.removeEventListener('abort', abortListener);
+    }
   }
 }

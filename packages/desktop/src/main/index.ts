@@ -52,6 +52,12 @@ import {
 } from './desktopSetupTerminal.js';
 import { createDesktopTerminalRunner } from './desktopTerminalRunner.js';
 import {
+  DesktopSetupTerminalCancelMessageSchema,
+  buildDesktopSetupTerminalAppendMessage,
+  buildDesktopSetupTerminalCompleteMessage,
+  buildDesktopSetupTerminalShowMessage,
+} from '../desktopSetupTerminalMessages.js';
+import {
   createDesktopAuthCallbackState,
   createDesktopAuthCoordinator,
   createDesktopSupabaseAuth,
@@ -191,6 +197,16 @@ async function showSetupCommandResult(
   }
 }
 
+function setupCommandExceptionResult(error: unknown): TerminalRunResult {
+  const message = error instanceof Error ? error.message : String(error);
+  const name = error instanceof Error ? error.name : 'Error';
+  return {
+    exitCode: undefined,
+    output: `${name}: ${message}`,
+    timedOut: false,
+  };
+}
+
 async function showSetupCommandOpenedInTerminal(
   window: BrowserWindow,
   command: string,
@@ -280,8 +296,80 @@ function createWindow(options: {
   const setupTerminalRunner = createDesktopTerminalRunner({
     cwd: setupCommandCwd,
   });
+  let setupCommandCounter = 0;
+  const activeSetupCommands = new Map<string, AbortController>();
+  const postSetupTerminalMessage = (message: unknown): boolean => {
+    const ipc = ipcRef.current;
+    if (!ipc) return false;
+    if (window.isDestroyed() || window.webContents.isDestroyed()) return false;
+    ipc.postToRenderer(message);
+    return true;
+  };
+  const runSetupCommandInOverlay = async (command: string) => {
+    const runId = `setup-${Date.now()}-${++setupCommandCounter}`;
+    const abortController = new AbortController();
+    activeSetupCommands.set(runId, abortController);
+    const rendererReady = postSetupTerminalMessage(
+      buildDesktopSetupTerminalShowMessage({
+        runId,
+        title: 'TeXRA Setup',
+        shellCommand: command,
+        cwd: setupCommandCwd,
+      }),
+    );
+
+    let result: TerminalRunResult;
+    try {
+      result = await setupTerminalRunner.runCommand({
+        name: 'TeXRA Setup',
+        command,
+        cwd: setupCommandCwd,
+        timeoutMs: SETUP_COMMAND_TIMEOUT_MS,
+        signal: abortController.signal,
+        onOutput: ({ stream, chunk }) => {
+          postSetupTerminalMessage(
+            buildDesktopSetupTerminalAppendMessage({ runId, stream, chunk }),
+          );
+        },
+      });
+    } catch (error: unknown) {
+      result = setupCommandExceptionResult(error);
+    } finally {
+      activeSetupCommands.delete(runId);
+    }
+
+    const status = result.cancelled
+      ? 'cancelled'
+      : result.timedOut
+        ? 'timed-out'
+        : result.exitCode === 0
+          ? 'succeeded'
+          : 'failed';
+    postSetupTerminalMessage(
+      buildDesktopSetupTerminalCompleteMessage({
+        runId,
+        status,
+        exitCode: result.exitCode ?? null,
+        output: result.output,
+      }),
+    );
+    if (!rendererReady) {
+      await showSetupCommandResult(window, command, result);
+    }
+  };
+  const setupTerminalIpc = {
+    handleMessage(message: { command: string } & Record<string, unknown>) {
+      const parsed = DesktopSetupTerminalCancelMessageSchema.safeParse(message);
+      if (!parsed.success) return false;
+      activeSetupCommands.get(parsed.data.runId)?.abort();
+      return true;
+    },
+  };
   const runSetupCommand = async (command: string) => {
-    if (process.platform === 'darwin') {
+    if (
+      process.platform === 'darwin' &&
+      setupCommandNeedsInteractiveTerminal(command)
+    ) {
       try {
         await openMacTerminalCommand(command, setupCommandCwd);
         await showSetupCommandOpenedInTerminal(window, command);
@@ -296,13 +384,7 @@ function createWindow(options: {
       return;
     }
 
-    const result = await setupTerminalRunner.runCommand({
-      name: 'TeXRA Setup',
-      command,
-      cwd: setupCommandCwd,
-      timeoutMs: SETUP_COMMAND_TIMEOUT_MS,
-    });
-    await showSetupCommandResult(window, command, result);
+    await runSetupCommandInOverlay(command);
   };
   const previewHost = createDesktopPreviewHost({
     shell,
@@ -566,6 +648,7 @@ function createWindow(options: {
     settings: settingsIpc,
     progress: progressIpc,
     onboarding: onboardingIpc,
+    setupTerminal: setupTerminalIpc,
     logs: {
       readLog: () =>
         readDesktopLogSnapshot({ workspacePath: options.workspacePath }),
