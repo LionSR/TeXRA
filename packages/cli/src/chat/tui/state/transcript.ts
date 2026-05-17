@@ -53,6 +53,17 @@ export function appendAssistantTranscriptIfMissing(
 }
 
 export function appendLocalAssistantTranscript(text: string): void {
+  appendLocalTranscriptEntry('assistant', text);
+}
+
+export function appendLocalErrorTranscript(text: string): void {
+  appendLocalTranscriptEntry('error', text);
+}
+
+function appendLocalTranscriptEntry(
+  role: 'assistant' | 'error',
+  text: string,
+): void {
   const normalized = normalizeTranscriptText(text);
   if (!normalized) return;
 
@@ -64,7 +75,7 @@ export function appendLocalAssistantTranscript(text: string): void {
   patchStream(streamId, (slice) => {
     const entry: ConversationEntry = {
       id: `local:${localEntrySeq++}:${streamId}:${slice.entries.length}`,
-      role: 'assistant',
+      role,
       text: normalized,
       finalized: true,
       synthetic: true,

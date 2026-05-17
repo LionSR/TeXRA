@@ -17,7 +17,11 @@ const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.USER_MESSAGE,
 ]);
 
-const STREAM_SYNC_THROTTLE_MS = 200;
+// Coalesce bursts into a single render without visibly delaying the
+// first paint. 200ms looks like a hang on short replies (an entire reply
+// can land before the first sync fires); one animation frame is enough
+// to batch chunks and keeps the transcript feeling live.
+const STREAM_SYNC_THROTTLE_MS = 16;
 
 type TranscriptCandidate = {
   readonly rendered: ConversationEntry;
@@ -46,6 +50,12 @@ export function subscribeStreamLog(): () => void {
 }
 
 export function syncStreamLog(streamId: StreamTabId): void {
+  // AgentLogger throttles MODEL_RESPONSE chunks into the store via a 50ms
+  // timer. If we read before that timer fires (e.g. the stream finalized
+  // between two TUI sync ticks), the assistant text is still sitting in
+  // an in-memory buffer and never reaches the transcript. Force any
+  // pending flushers to materialize before we read.
+  AgentLogger.flushPendingStreamUpdates();
   const store = AgentLogger.getStreamLogStore();
   const log = store.get(streamId);
   if (!log) return;
