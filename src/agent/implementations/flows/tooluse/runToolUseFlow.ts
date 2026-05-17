@@ -1,4 +1,7 @@
+import { MODEL_CONFIGS } from 'llm-zoo';
+
 import { getExecutionStore } from '@agent/storage';
+import { createModelHandler } from '@agent/runtime/ModelFactory';
 import {
   registerInterruptible,
   unregisterInterruptible,
@@ -63,6 +66,11 @@ export interface RunToolUseFlowInput<
   ) => void | Promise<void>;
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
+  /** Fires after a running tool-use chat changes its model. */
+  onModelChanged?: (
+    modelHandler: ToolUseServices['modelHandler'],
+    model: string,
+  ) => void;
 }
 
 export interface RunToolUseFlowResult {
@@ -76,8 +84,10 @@ export interface ToolUseFlowContext {
   readonly session: ToolUseSessionLifecycle;
   readonly modelHandler: ToolUseServices['modelHandler'];
   readonly runtimeHost: ToolUseServices['runtimeHost'];
+  readonly model: string;
   interrupt(): void;
   requestImmediateCompaction(): void;
+  switchModel(model: string): Promise<void>;
 }
 
 export type ToolUseFlowSetupCallback = (context: ToolUseFlowContext) => void;
@@ -175,11 +185,53 @@ export async function runToolUseFlow<C = unknown>(
     delegationConfig,
     delegationTrimmed,
   };
+  const mutableServices = services as ToolUseServices<C> & {
+    modelHandler: ToolUseServices<C>['modelHandler'];
+    config: ToolUseServices<C>['config'];
+  };
+  const switchedHandlers = new Set<ToolUseServices<C>['modelHandler']>();
+
+  const switchModel = async (model: string): Promise<void> => {
+    const nextConfig = MODEL_CONFIGS[model];
+    if (!nextConfig) {
+      throw new Error(`Model ${model} not found in MODEL_CONFIGS`);
+    }
+    if (mutableServices.config.model === model) return;
+
+    const previousHandler = mutableServices.modelHandler;
+    const nextHandler = (await createModelHandler(
+      nextConfig,
+    )) as ToolUseServices<C>['modelHandler'];
+    if (nextHandler.constructor !== previousHandler.constructor) {
+      nextHandler.dispose();
+      throw new Error(
+        'Cannot switch this conversation to a model with a different conversation format. Start a new chat to use that model.',
+      );
+    }
+    nextHandler.setAgentCategory(setting.agentCategory);
+    nextHandler.setLogger(logger);
+
+    mutableServices.modelHandler = nextHandler;
+    mutableServices.config = { ...mutableServices.config, model };
+    mutableServices.userVarChannels.transient.MODEL = model;
+
+    switchedHandlers.add(nextHandler);
+    if (previousHandler !== input.modelHandler) {
+      previousHandler.dispose();
+      switchedHandlers.delete(previousHandler);
+    }
+    input.onModelChanged?.(nextHandler, model);
+  };
 
   const flowContext: ToolUseFlowContext = {
     session: sessionLifecycle,
-    modelHandler: input.modelHandler,
+    get modelHandler() {
+      return mutableServices.modelHandler;
+    },
     runtimeHost,
+    get model() {
+      return mutableServices.config.model;
+    },
     interrupt(): void {
       onInterrupt?.();
       clearRetryRequest(streamId);
@@ -187,16 +239,19 @@ export async function runToolUseFlow<C = unknown>(
       sessionLifecycle.interrupt();
     },
     requestImmediateCompaction(): void {
-      input.modelHandler.requestCompaction();
+      mutableServices.modelHandler.requestCompaction();
       if (!sessionLifecycle.hasQueuedFollowUp()) {
         sessionLifecycle.appendSyntheticFollowUp(
           IMMEDIATE_COMPACTION_FOLLOW_UP,
         );
       }
     },
+    switchModel,
   };
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
+  let lastResponse: string | undefined;
+  let touchedFiles: string[] | undefined;
 
   let shared: ToolUseRunShared = {
     messages: [],
@@ -261,6 +316,13 @@ export async function runToolUseFlow<C = unknown>(
         ? EXECUTION_STATUS.INTERRUPTED
         : EXECUTION_STATUS.COMPLETED;
       status = executionToEndStatus(execStatus) as EndGroupStatus;
+      lastResponse = findLastAssistantText(shared.messages, (m) =>
+        mutableServices.modelHandler.extractAssistantText(m),
+      );
+      const extractedTouchedFiles = extractTouchedFiles(shared.stateSlices);
+      touchedFiles = extractedTouchedFiles.length
+        ? extractedTouchedFiles
+        : undefined;
     }
   } catch (error) {
     status = END_GROUP_STATUS.ERROR;
@@ -279,16 +341,14 @@ export async function runToolUseFlow<C = unknown>(
     sessionLifecycle.dispose();
     clearPlanApprovalForStream(streamId);
     unregisterInterruptible(streamId);
+    for (const handler of switchedHandlers) {
+      handler.dispose();
+    }
   }
-
-  const lastResponse = findLastAssistantText(shared.messages, (m) =>
-    input.modelHandler.extractAssistantText(m),
-  );
-  const touchedFiles = extractTouchedFiles(shared.stateSlices);
 
   return {
     status,
     lastResponse,
-    touchedFiles: touchedFiles.length ? touchedFiles : undefined,
+    touchedFiles,
   };
 }
