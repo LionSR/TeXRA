@@ -20,11 +20,17 @@ import type {
 export interface ConversationEntry {
   /** Same id as the upstream `StreamLogEntry.id` — stable across deltas. */
   readonly id: string;
-  readonly role: 'assistant' | 'user';
+  readonly role: 'assistant' | 'error' | 'user';
   /** Concatenated text for `MODEL_RESPONSE` entries. */
   readonly text: string;
   /** True once the stream transitions to `WAITING`/`COMPLETED`. */
   readonly finalized: boolean;
+  /** Entry was synthesized by the CLI and is not present in StreamLogStore. */
+  readonly synthetic?: boolean;
+  /** Why the CLI synthesized this entry. */
+  readonly syntheticKind?: 'final' | 'local';
+  /** StreamLog head at the moment a synthetic entry was appended. */
+  readonly syntheticAfterSeq?: number;
 }
 
 export interface SessionMeta {
@@ -95,6 +101,8 @@ const ACTIVE_FORM = signal<ActiveSlashForm | undefined>(undefined);
 const SLASH_PALETTE_OPEN = signal<boolean>(false);
 
 const PENDING_EXIT_HINT = signal<boolean>(false);
+
+const RESET_HOOKS = new Set<() => void>();
 
 export const cliState = {
   sessionMeta: SESSION_META as Signal.State<SessionMeta>,
@@ -181,4 +189,9 @@ export function resetCliState(): void {
   cliState.activeForm.set(undefined);
   cliState.slashPaletteOpen.set(false);
   cliState.pendingExitHint.set(false);
+  for (const resetHook of RESET_HOOKS) resetHook();
+}
+
+export function registerCliStateResetHook(resetHook: () => void): void {
+  RESET_HOOKS.add(resetHook);
 }
