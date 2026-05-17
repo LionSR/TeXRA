@@ -133,6 +133,8 @@ export class AgentLogger {
   }
 
   static flushPendingStreamUpdates(): void {
+    // Snapshot to allow each flusher to remove itself from the registry as
+    // it drains without invalidating iteration.
     for (const flush of [...AgentLogger.pendingStreamFlushers]) {
       flush();
     }
@@ -293,21 +295,12 @@ export class AgentLogger {
     contextWindow: number,
     groupId?: string,
   ): void {
-    this.emitContextState(inputTokens, contextWindow, groupId);
-  }
-
-  emitContextState(
-    inputTokens: number,
-    contextWindow: number,
-    groupId?: string,
-  ): void {
     const utilizationPercent = (inputTokens / contextWindow) * 100;
-    const resolvedGroupId = groupId ?? this.resolveActiveGroupId();
     this.log(
       'info',
       `Context: ${inputTokens}/${contextWindow} tokens (${utilizationPercent.toFixed(1)}%)`,
       {
-        groupId: resolvedGroupId,
+        groupId: groupId ?? this.resolveActiveGroupId(),
         messageType: MESSAGE_TYPES.CONTEXT_STATE,
         data: { inputTokens, contextWindow, utilizationPercent },
       },
@@ -422,10 +415,6 @@ export class AgentLogger {
   }
 
   logWebSearch(data: unknown, groupId?: string): void {
-    this.emitWebSearch(data, groupId);
-  }
-
-  emitWebSearch(data: unknown, groupId?: string): void {
     this.appendToStore('info', MESSAGE_TYPES.WEB_SEARCH, {
       id: randomUUID(),
       timestamp: Date.now(),
