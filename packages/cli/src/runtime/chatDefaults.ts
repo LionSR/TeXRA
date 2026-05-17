@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { MODEL_CONFIGS } from 'llm-zoo';
+
 import { listExecutions } from '@agent/storage';
 import { DEFAULT_AGENT_MODEL } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
@@ -37,7 +39,10 @@ function pickDefaults(parsed: unknown): PartialDefaults {
   const out: { -readonly [K in keyof PartialDefaults]: PartialDefaults[K] } =
     {};
   if (isNonEmptyString(record.agent)) out.agent = record.agent.trim();
-  if (isNonEmptyString(record.model)) out.model = record.model.trim();
+  if (isNonEmptyString(record.model)) {
+    const model = record.model.trim();
+    if (MODEL_CONFIGS[model]) out.model = model;
+  }
   return out;
 }
 
@@ -73,10 +78,10 @@ async function loadHistoryDefaults(): Promise<PartialDefaults> {
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
       )[0];
     if (!mostRecent?.agentConfig) return {};
-    return {
+    return pickDefaults({
       agent: mostRecent.agentConfig.agent,
       model: mostRecent.agentConfig.model,
-    };
+    });
   } catch {
     return {};
   }
