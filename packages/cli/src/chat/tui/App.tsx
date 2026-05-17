@@ -1,5 +1,5 @@
-// Ink TUI root. Phase 1 skeleton + Phase 2 approval-modal overlay + Phase 4
-// SubagentList / TodosPlanPanel side panels and Ctrl-A / Ctrl-B focus cycle.
+// Ink TUI root: header, conversation, optional side column, status, approval
+// modal, and input bar. Tab / Shift-Tab cycles focus across subagent streams.
 
 import { Box, useInput } from 'ink';
 
@@ -28,6 +28,7 @@ export function App(props: AppProps): React.JSX.Element {
   const activeStreamId = useSignal(cliState.activeStreamId);
   const streams = useSignal(cliState.streams);
   const activeForm = useSignal(cliState.activeForm);
+  const slashPaletteOpen = useSignal(cliState.slashPaletteOpen);
   const inputDisabled =
     props.inputDisabled || pending !== undefined || activeForm !== undefined;
 
@@ -41,18 +42,18 @@ export function App(props: AppProps): React.JSX.Element {
       activeSlice.todos.length > 0 ||
       activeSlice.plan !== null);
 
-  // Ctrl-A / Ctrl-B focus cycle runs at the App layer so the same chord
-  // lands no matter which pane currently has the user's attention.
-  useInput((input, key) => {
-    if (!key.ctrl) return;
-    if (input === 'a') {
-      const next = nextFocusForward();
+  // Tab / Shift-Tab cycles stream focus at the App layer. Stand down while a
+  // modal/form is up (they own input) or the slash palette is open (Tab there
+  // means "accept selection") — Ink broadcasts useInput, so both handlers
+  // would otherwise fire on the same chord.
+  useInput(
+    (_input, key) => {
+      if (!key.tab) return;
+      const next = key.shift ? nextFocusBack() : nextFocusForward();
       if (next) cliState.activeStreamId.set(next);
-    } else if (input === 'b') {
-      const next = nextFocusBack();
-      if (next) cliState.activeStreamId.set(next);
-    }
-  });
+    },
+    { isActive: !inputDisabled && !slashPaletteOpen },
+  );
 
   return (
     <Box flexDirection="column">
