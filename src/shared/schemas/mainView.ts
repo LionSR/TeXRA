@@ -123,70 +123,13 @@ const MainViewPersistedStateBaseSchema = UIFileFieldsSchema.merge(
   workflowInstruction: z.string().prefault(''),
   toolUseInstruction: z.string().prefault(''),
   baseFile: z.string().prefault(''),
-  inputFilesVisible: z.boolean().prefault(false),
-  contextFilesVisible: z.boolean().prefault(false),
-  mediaFilesVisible: z.boolean().prefault(false),
-  outputFilesVisible: z.boolean().prefault(false),
   outputFilesActive: z.boolean().prefault(false),
   latexdiffsVisible: z.boolean().prefault(false),
   openedFiles: z.array(z.string()).nullish(),
 });
 
-// Layer the visibility-key migration on top of the shared file-field
-// migration so MainView and AgentConfig stay in sync without duplicating
-// the file-slot logic.
-function migrateLegacyMainViewState(input: unknown): unknown {
-  const original =
-    typeof input === 'object' && input !== null && !Array.isArray(input)
-      ? (input as Record<string, unknown>)
-      : {};
-  const migrated = migrateLegacyContextFileFields(input);
-  if (
-    typeof migrated !== 'object' ||
-    migrated === null ||
-    Array.isArray(migrated)
-  ) {
-    return migrated;
-  }
-  const obj = migrated as Record<string, unknown>;
-  for (const [single, multi, visible] of [
-    ['inputFile', 'inputFiles', 'inputFilesVisible'],
-    ['contextFile', 'contextFiles', 'contextFilesVisible'],
-    ['mediaFile', 'mediaFiles', 'mediaFilesVisible'],
-  ] as const) {
-    if (
-      obj[visible] === undefined &&
-      original[single] !== undefined &&
-      Array.isArray(obj[multi]) &&
-      obj[multi].length > 0
-    ) {
-      obj[visible] = true;
-    }
-  }
-  if (
-    obj.contextFilesVisible === undefined &&
-    (original.referenceFile !== undefined ||
-      original.referenceFiles !== undefined ||
-      original.auxiliaryFile !== undefined ||
-      original.auxiliaryFiles !== undefined) &&
-    Array.isArray(obj.contextFiles) &&
-    obj.contextFiles.length > 0
-  ) {
-    obj.contextFilesVisible = true;
-  }
-  if (
-    obj.contextFilesVisible === undefined &&
-    (obj.referenceFilesVisible || obj.auxiliaryFilesVisible)
-  ) {
-    obj.contextFilesVisible = true;
-  }
-  delete obj.referenceFilesVisible;
-  delete obj.auxiliaryFilesVisible;
-  return obj;
-}
-
 export const MainViewPersistedStateSchema = z.preprocess(
-  migrateLegacyMainViewState,
+  migrateLegacyContextFileFields,
   MainViewPersistedStateBaseSchema,
 );
 export type MainViewPersistedState = z.infer<
@@ -229,7 +172,6 @@ export const FileSelectConfigSchema = z.object({
   type: DocumentFileTypeSchema,
   label: z.string(),
   icon: z.string(),
-  toggleTitle: z.string(),
   addOpenedLabel: z.string(),
   emptyListLabel: z.string(),
   selectListLabel: z.string(),
@@ -263,21 +205,12 @@ export const MultiFilesSchema = z.object({
 });
 export type MultiFiles = z.infer<typeof MultiFilesSchema>;
 
-export const MultiFilesVisibleSchema = z.object({
-  inputFiles: z.boolean(),
-  contextFiles: z.boolean(),
-  mediaFiles: z.boolean(),
-  outputFiles: z.boolean(),
-});
-export type MultiFilesVisible = z.infer<typeof MultiFilesVisibleSchema>;
-
 export const FileStateContextSchema = z.object({
   sessionType: SessionTypeSchema,
   checkboxValues: CheckboxValuesSchema,
   singleFiles: SingleFilesSchema,
   fileOptions: FileOptionsSchema,
   multiFiles: MultiFilesSchema,
-  multiFilesVisible: MultiFilesVisibleSchema,
   outputFilesActive: z.boolean(),
 });
 export type FileStateContextValue = z.infer<typeof FileStateContextSchema>;
