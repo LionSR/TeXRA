@@ -135,7 +135,7 @@ describe('FakePlatform', () => {
     const platform = createFakePlatform({}, { fs, log });
 
     platform.log.initialize('TeXRA');
-    platform.log.info('TeXRA', 'ready', { data: { count: 1 } });
+    platform.log.info('TeXRA', 'ready');
 
     assert.equal(platform.fs, fs);
     assert.deepEqual(log.initializedChannels, [
@@ -146,7 +146,6 @@ describe('FakePlatform', () => {
         level: 'info',
         channel: 'TeXRA',
         message: 'ready',
-        options: { data: { count: 1 } },
       },
     ]);
   });

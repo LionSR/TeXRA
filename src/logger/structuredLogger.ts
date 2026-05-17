@@ -1,7 +1,5 @@
-// Standard library imports
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-// Local imports - shared schemas
 import type { LogLevel, StreamTabId } from '@shared/schemas';
 
 export interface LogFields {
@@ -22,7 +20,6 @@ export interface LogRecord {
 export interface LogSink {
   write(record: LogRecord): void;
   flush?(): Promise<void>;
-  close?(): Promise<void>;
 }
 
 export interface Logger {
@@ -31,14 +28,8 @@ export interface Logger {
   warn(message: string, fields?: LogFields): void;
   error(message: string, fields?: LogFields): void;
   activeGroupId(): string | undefined;
-  group(label: string): () => void;
   withGroup<T>(label: string, fn: () => Promise<T> | T): Promise<T>;
   child(fields: LogFields): Logger;
-  swapSink(next: LogSink): Promise<void>;
-}
-
-interface SinkRef {
-  current: LogSink;
 }
 
 type GroupContextKey = symbol;
@@ -49,7 +40,7 @@ const activeGroupStacks = new AsyncLocalStorage<
 
 export function createStructuredLogger(sink: LogSink): Logger {
   return new StructuredLogger({
-    sinkRef: { current: sink },
+    sink,
     groupContextKey: Symbol('structuredLoggerGroupContext'),
   });
 }
@@ -69,18 +60,13 @@ function cloneGroupStacks(
 }
 
 class StructuredLogger implements Logger {
-  private readonly groupStack: string[];
-
   constructor(
     private readonly context: {
-      readonly sinkRef: SinkRef;
+      readonly sink: LogSink;
       readonly groupContextKey: GroupContextKey;
     },
     private readonly fields: LogFields = {},
-    groupStack: string[] = [],
-  ) {
-    this.groupStack = groupStack;
-  }
+  ) {}
 
   debug(message: string, fields?: LogFields): void {
     this.write('debug', message, fields);
@@ -102,10 +88,6 @@ class StructuredLogger implements Logger {
     return this.currentGroups().at(-1);
   }
 
-  group(label: string): () => void {
-    return this.enterGroup(label, true);
-  }
-
   async withGroup<T>(label: string, fn: () => Promise<T> | T): Promise<T> {
     const parentGroups = this.currentGroups();
     const parentStacks = activeGroupStacks.getStore();
@@ -114,51 +96,16 @@ class StructuredLogger implements Logger {
     try {
       return await activeGroupStacks.run(nextStacks, fn);
     } finally {
-      await this.context.sinkRef.current.flush?.();
+      await this.context.sink.flush?.();
     }
   }
 
-  private enterGroup(label: string, flushOnPop: boolean): () => void {
-    const activeStack = activeGroupStacks
-      .getStore()
-      ?.get(this.context.groupContextKey);
-    const groups = activeStack ?? this.groupStack;
-    const index = groups.length;
-    groups.push(label);
-    let popped = false;
-    return () => {
-      if (popped) return;
-      popped = true;
-      if (groups[index] === label) {
-        groups.splice(index, 1);
-      } else {
-        const currentIndex = groups.lastIndexOf(label);
-        if (currentIndex >= 0) groups.splice(currentIndex, 1);
-      }
-      if (flushOnPop) {
-        const flush = this.context.sinkRef.current.flush?.();
-        if (flush) void flush.catch(() => undefined);
-      }
-    };
-  }
-
   child(fields: LogFields): Logger {
-    return new StructuredLogger(
-      this.context,
-      mergeFields(this.fields, fields),
-      this.groupStack,
-    );
-  }
-
-  async swapSink(next: LogSink): Promise<void> {
-    const previous = this.context.sinkRef.current;
-    await previous.flush?.();
-    await previous.close?.();
-    this.context.sinkRef.current = next;
+    return new StructuredLogger(this.context, mergeFields(this.fields, fields));
   }
 
   private write(level: LogLevel, message: string, fields?: LogFields): void {
-    this.context.sinkRef.current.write({
+    this.context.sink.write({
       ts: new Date().toISOString(),
       level,
       message,
@@ -169,16 +116,7 @@ class StructuredLogger implements Logger {
 
   private currentGroups(): readonly string[] {
     return (
-      activeGroupStacks.getStore()?.get(this.context.groupContextKey) ??
-      this.groupStack
+      activeGroupStacks.getStore()?.get(this.context.groupContextKey) ?? []
     );
-  }
-}
-
-export class MemorySink implements LogSink {
-  readonly records: LogRecord[] = [];
-
-  write(record: LogRecord): void {
-    this.records.push(record);
   }
 }

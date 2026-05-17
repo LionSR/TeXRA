@@ -4,7 +4,7 @@
  * Provides the minimal surface that handler implementations need
  * from the main SettingsViewMessageHandler.
  */
-import type { LogUtilsOptions } from '@logger/logOptions';
+import type { LogUtilsOptions } from '@logger/logUtils';
 
 import type * as vscode from 'vscode';
 
