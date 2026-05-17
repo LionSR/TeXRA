@@ -13,7 +13,11 @@ import { Box, Static, Text } from 'ink';
 
 import { Markdown } from '../render/Markdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
-import { cliState, type ConversationEntry } from '../state/cliState';
+import {
+  cliState,
+  registerCliStateResetHook,
+  type ConversationEntry,
+} from '../state/cliState';
 import { useSignal } from '../state/useSignal';
 import { ToolUseRow } from './ToolUseRow';
 import { splitTranscriptEntries } from './transcriptEntries';
@@ -60,6 +64,34 @@ function TranscriptEntry({
 // streaming delta; if it overflows the viewport the cursor-up rewrite
 // overshoots and clobbers Static rows already in scrollback.
 const LIVE_TAIL_ROWS = 12;
+const NEWLINE_CHAR_CODE = 10;
+
+// Incremental newline count keyed by entry id. The live text grows
+// monotonically per delta; without a cache we'd rescan the full prefix
+// every frame and reintroduce the O(text²) cumulative cost the wrap
+// budget is here to avoid. Cleared per session in `resetCliState` via
+// `registerCliStateResetHook` below.
+const newlineCountCache = new Map<
+  string,
+  { length: number; newlines: number }
+>();
+registerCliStateResetHook(() => newlineCountCache.clear());
+
+function countNewlinesUpTo(entryId: string, text: string, upTo: number): number {
+  const cached = newlineCountCache.get(entryId);
+  // Append-only invariant: if `upTo` ≥ cached.length and the cached
+  // prefix is still a prefix of `text`, we can extend. Otherwise (text
+  // shrank or rewrote earlier chars) recount from scratch.
+  const canExtend =
+    cached !== undefined && upTo >= cached.length && cached.length <= text.length;
+  let count = canExtend ? cached.newlines : 0;
+  const start = canExtend ? cached.length : 0;
+  for (let i = start; i < upTo; i += 1) {
+    if (text.charCodeAt(i) === NEWLINE_CHAR_CODE) count += 1;
+  }
+  newlineCountCache.set(entryId, { length: upTo, newlines: count });
+  return count;
+}
 
 function LiveTranscriptEntry({
   entry,
@@ -78,18 +110,13 @@ function LiveTranscriptEntry({
   const cols = width ?? 80;
   const wrapBudget = cols * LIVE_TAIL_ROWS * 2;
   const slicedChars = Math.max(0, entry.text.length - wrapBudget);
-  const slicedPrefix = slicedChars > 0 ? entry.text.slice(0, slicedChars) : '';
   const candidate =
     slicedChars > 0 ? entry.text.slice(slicedChars) : entry.text;
   const rows = wrapAnsiToWidth(candidate, cols).split('\n');
-  // Estimate rows lost to the raw-char slice: each hard newline in the
-  // sliced prefix adds a row regardless of width, plus a width-based
-  // estimate for the remaining non-newline characters. An exact count
-  // would require wrapping the full buffer — the work this avoids.
-  let slicedNewlines = 0;
-  for (let i = 0; i < slicedPrefix.length; i += 1) {
-    if (slicedPrefix.charCodeAt(i) === 10) slicedNewlines += 1;
-  }
+  // Estimate rows lost to the raw-char slice: each hard newline counts
+  // one row, remaining chars wrap by width. Approximate (exact would
+  // need wrapping the full buffer).
+  const slicedNewlines = countNewlinesUpTo(entry.id, entry.text, slicedChars);
   const slicedRows =
     slicedNewlines + Math.ceil((slicedChars - slicedNewlines) / cols);
   const needsHint = rows.length + slicedRows > LIVE_TAIL_ROWS;
