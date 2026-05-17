@@ -1,7 +1,10 @@
 // Shared constants and helpers for the Claude Agent tool.
 
 import type { TokenUsageStats, ToolUseLog } from '@shared/schemas';
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import {
+  collapseWhitespace,
+  truncateWithEllipsis,
+} from '@utils/text/stringUtils';
 
 export const CLAUDE_AGENT_NAME = 'claude_agent';
 export const CLAUDE_AGENT_DISPLAY_MODEL = 'claude';
@@ -90,8 +93,7 @@ export function buildClaudeUsageStats(usage: {
 }
 
 function truncateSummary(text: string, maxLength: number): string {
-  const oneLine = text.replaceAll(/\s+/g, ' ').trim();
-  return truncateWithEllipsis(oneLine, maxLength);
+  return truncateWithEllipsis(collapseWhitespace(text), maxLength);
 }
 
 /**

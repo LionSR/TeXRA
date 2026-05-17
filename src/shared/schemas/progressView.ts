@@ -71,7 +71,15 @@ export const MissingOutputsPayloadSchema = z.object({
   documentTag: z.string().nullable().prefault(null),
 });
 
-const ToolUseStatusSchema = z.enum(['in_progress', 'completed']);
+export const TOOL_USE_STATUS = {
+  IN_PROGRESS: 'in_progress',
+  COMPLETED: 'completed',
+} as const;
+
+const ToolUseStatusSchema = z.enum([
+  TOOL_USE_STATUS.IN_PROGRESS,
+  TOOL_USE_STATUS.COMPLETED,
+]);
 
 export const ToolUseLogSchema = z.object({
   toolName: z.string().optional(),
