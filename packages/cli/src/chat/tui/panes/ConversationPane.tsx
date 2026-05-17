@@ -11,19 +11,12 @@
 
 import { Box, Static, Text } from 'ink';
 
-import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
-
 import { Markdown } from '../render/Markdown';
 import { cliState, type ConversationEntry } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
+import { splitTranscriptEntries } from './transcriptEntries';
 
-function isAppending(status: StreamStatus | undefined): boolean {
-  return (
-    status === STREAM_STATUS.INITIALIZING ||
-    status === STREAM_STATUS.RUNNING ||
-    status === STREAM_STATUS.RESUMING
-  );
-}
+export { splitTranscriptEntries } from './transcriptEntries';
 
 function TranscriptEntry({
   entry,
@@ -71,30 +64,6 @@ function LiveTranscriptEntry({
 
 export interface ConversationPaneProps {
   readonly width?: number;
-}
-
-export function splitTranscriptEntries(
-  entries: readonly ConversationEntry[],
-  status: StreamStatus | undefined,
-): {
-  readonly finalized: ConversationEntry[];
-  readonly live: ConversationEntry | undefined;
-} {
-  const streamIsAppending = isAppending(status);
-  let live: ConversationEntry | undefined;
-  if (streamIsAppending) {
-    for (let index = entries.length - 1; index >= 0; index -= 1) {
-      const entry = entries[index];
-      if (entry.role !== 'assistant' || entry.finalized) continue;
-      live = entry;
-      break;
-    }
-  }
-  const finalized = entries
-    .filter((entry) => entry !== live)
-    .map((entry) => ({ ...entry, finalized: true }));
-
-  return { finalized, live };
 }
 
 export function ConversationPane(
