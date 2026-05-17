@@ -190,25 +190,24 @@ export function installDesktopProtocolCallbackLifecycle(
 }
 
 function normalizeProtocolPath(url: URL): string {
-  const rawPath =
-    url.pathname && url.pathname !== '/'
-      ? url.pathname
-      : url.hostname
-        ? `/${url.hostname}`
-        : '';
+  const rawPath = getRawProtocolPath(url);
   return rawPath.length > 1 && rawPath.endsWith('/')
     ? rawPath.slice(0, -1)
     : rawPath;
 }
 
+function getRawProtocolPath(url: URL): string {
+  if (url.pathname && url.pathname !== '/') return url.pathname;
+  if (url.hostname) return `/${url.hostname}`;
+  return '';
+}
+
 function registerProtocolClient(options: InstallDesktopProtocolOptions): void {
-  const { app } = options;
-  const didRegister =
-    app.isPackaged || !options.execPath || !options.devAppArg
-      ? app.setAsDefaultProtocolClient(TEXRA_PROTOCOL)
-      : app.setAsDefaultProtocolClient(TEXRA_PROTOCOL, options.execPath, [
-          options.devAppArg,
-        ]);
+  const { app, execPath, devAppArg } = options;
+  const useDevArgs = !app.isPackaged && execPath && devAppArg;
+  const didRegister = useDevArgs
+    ? app.setAsDefaultProtocolClient(TEXRA_PROTOCOL, execPath, [devAppArg])
+    : app.setAsDefaultProtocolClient(TEXRA_PROTOCOL);
 
   if (!didRegister) {
     options.log?.warn?.(`Failed to register ${TEXRA_PROTOCOL}:// handler`);
