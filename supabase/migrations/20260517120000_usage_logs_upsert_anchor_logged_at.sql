@@ -142,3 +142,7 @@ BEGIN
   RETURN affected;
 END;
 $$;
+
+-- Keep the SECURITY DEFINER RPC callable only by the relay edge function.
+REVOKE ALL ON FUNCTION public.usage_logs_upsert(jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.usage_logs_upsert(jsonb) TO service_role;
