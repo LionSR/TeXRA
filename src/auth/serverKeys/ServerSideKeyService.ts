@@ -80,6 +80,11 @@ export interface ClearServerSideKeyCachesOptions {
    * authenticated session changes, not for ordinary toggle/cache updates.
    */
   resetQuotaFlip?: boolean;
+  /**
+   * Keep the tier-service cache when clearing the access decision cache.
+   * This preserves the spending-status explanation after a quota auto-switch.
+   */
+  preserveTierCache?: boolean;
 }
 
 class NodeEventEmitter<T> implements ServerSideKeyDisposable {
@@ -145,11 +150,11 @@ export class ServerSideKeyService {
   private useIncludedModelAccess = true;
   private globalState: ServerSideKeyState | null = null;
   private readonly _onDidChangeModelAccess: NodeEventEmitter<boolean>;
-  private readonly _onCacheCleared: NodeEventEmitter<void>;
+  private readonly _onCacheCleared: NodeEventEmitter<ClearServerSideKeyCachesOptions>;
   private readonly _tierServiceClearSubscription: ServerSideKeyDisposable;
 
   readonly onDidChangeModelAccess: ServerSideKeyEvent<boolean>;
-  readonly onCacheCleared: ServerSideKeyEvent<void>;
+  readonly onCacheCleared: ServerSideKeyEvent<ClearServerSideKeyCachesOptions>;
 
   constructor(
     private readonly baseUrl: string,
@@ -158,12 +163,18 @@ export class ServerSideKeyService {
     private readonly logger: AuthServiceLogger = NOOP_AUTH_SERVICE_LOGGER,
   ) {
     this._onDidChangeModelAccess = new NodeEventEmitter<boolean>(this.logger);
-    this._onCacheCleared = new NodeEventEmitter<void>(this.logger);
+    this._onCacheCleared =
+      new NodeEventEmitter<ClearServerSideKeyCachesOptions>(this.logger);
     this.onDidChangeModelAccess = this._onDidChangeModelAccess.event;
     this.onCacheCleared = this._onCacheCleared.event;
-    this._tierServiceClearSubscription = this._onCacheCleared.event(() => {
-      this.tierService.clearCache();
-    });
+    this._tierServiceClearSubscription = this._onCacheCleared.event(
+      (options) => {
+        if (options.preserveTierCache === true) {
+          return;
+        }
+        this.tierService.clearCache();
+      },
+    );
   }
 
   /**
@@ -203,7 +214,10 @@ export class ServerSideKeyService {
     return this.quotaFlipApplied && !this.useIncludedModelAccess;
   }
 
-  async setUseIncludedModelAccess(value: boolean): Promise<void> {
+  async setUseIncludedModelAccess(
+    value: boolean,
+    cacheOptions: ClearServerSideKeyCachesOptions = {},
+  ): Promise<void> {
     const changed = this.useIncludedModelAccess !== value;
     this.useIncludedModelAccess = value;
 
@@ -212,7 +226,7 @@ export class ServerSideKeyService {
     }
 
     if (changed) {
-      this.clearAllCaches();
+      this.clearAllCaches(cacheOptions);
       // No pre-fetch on enable — the next canUseServerSideKeys() does
       // its own auth'd fetch in parallel with fetchAccessStatus(), and
       // an anonymous pre-fetch here would just be discarded by the
@@ -234,7 +248,7 @@ export class ServerSideKeyService {
     if (options.resetQuotaFlip === true) {
       this.quotaFlipApplied = false;
     }
-    this._onCacheCleared.fire(undefined);
+    this._onCacheCleared.fire(options);
   }
 
   isProviderOnServer(provider: string): boolean {
@@ -274,7 +288,7 @@ export class ServerSideKeyService {
    */
   async canUseServerSideKeys(): Promise<boolean> {
     if (!this.getUseIncludedModelAccess()) {
-      this.clearAllCaches();
+      this.clearAllCaches({ preserveTierCache: this.quotaFlipApplied });
       return false;
     }
 
@@ -332,7 +346,9 @@ export class ServerSideKeyService {
         );
         // Await so the persisted toggle state, the cleared cache, and
         // the access result agree by the time the caller resumes.
-        await this.setUseIncludedModelAccess(false);
+        await this.setUseIncludedModelAccess(false, {
+          preserveTierCache: true,
+        });
         return false;
       }
 
