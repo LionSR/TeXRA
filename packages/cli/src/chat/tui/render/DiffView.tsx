@@ -7,6 +7,8 @@
 import { Box, Text } from 'ink';
 import { structuredPatch, type StructuredPatchHunk } from 'diff';
 
+import { wrapAnsiToWidth } from './ansiWrap';
+
 export type Hunk = StructuredPatchHunk;
 
 export interface DiffStats {
@@ -16,6 +18,8 @@ export interface DiffStats {
 }
 
 const NO_NEWLINE_MARKER = '\\';
+const MIN_DIFF_WIDTH = 20;
+const DEFAULT_DIFF_WIDTH = 74;
 
 /** Compute hunks once; callers reuse for both stats and the renderer. */
 export function buildHunks(
@@ -45,10 +49,12 @@ export interface DiffViewProps {
   readonly hunks: readonly Hunk[];
   /** Maximum context lines per hunk before truncating; 0 = no truncation. */
   readonly maxHunkLines?: number;
+  readonly width?: number;
 }
 
 export function DiffView(props: DiffViewProps): React.JSX.Element {
   const max = props.maxHunkLines ?? 0;
+  const width = Math.max(MIN_DIFF_WIDTH, props.width ?? DEFAULT_DIFF_WIDTH);
 
   return (
     <Box flexDirection="column">
@@ -63,9 +69,9 @@ export function DiffView(props: DiffViewProps): React.JSX.Element {
         const hunkHeader = `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`;
         return (
           <Box key={`${hi}-${hunk.oldStart}`} flexDirection="column">
-            <Text dimColor>{hunkHeader}</Text>
+            <Text dimColor>{wrapAnsiToWidth(hunkHeader, width)}</Text>
             {visible.map((line, li) => (
-              <DiffLine key={li} line={line} />
+              <DiffLine key={li} line={line} width={width} />
             ))}
             {remaining > 0 ? (
               <Text dimColor>… {remaining} more lines</Text>
@@ -77,9 +83,16 @@ export function DiffView(props: DiffViewProps): React.JSX.Element {
   );
 }
 
-function DiffLine({ line }: { line: string }): React.JSX.Element {
+function DiffLine({
+  line,
+  width,
+}: {
+  readonly line: string;
+  readonly width: number;
+}): React.JSX.Element {
+  const wrapped = wrapAnsiToWidth(line, width);
   const marker = line[0];
-  if (marker === '+') return <Text color="green">{line}</Text>;
-  if (marker === '-') return <Text color="red">{line}</Text>;
-  return <Text dimColor>{line}</Text>;
+  if (marker === '+') return <Text color="green">{wrapped}</Text>;
+  if (marker === '-') return <Text color="red">{wrapped}</Text>;
+  return <Text dimColor>{wrapped}</Text>;
 }

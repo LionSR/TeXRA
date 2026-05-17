@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Box, Text } from 'ink';
+import { Box, Text, useWindowSize } from 'ink';
 
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
@@ -7,12 +7,18 @@ import { ConfirmCard } from './ConfirmCard';
 import { buildHunks, DiffView, statsFromHunks } from '../render/DiffView';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
+const EDIT_DIFF_PADDING = 6;
+const MIN_EDIT_DIFF_WIDTH = 20;
+
 export interface EditApprovalProps {
   readonly request: ToolEditApprovalRequest;
   readonly onDecide: (decision: ApprovalDecision) => void;
 }
 
 export function EditApproval(props: EditApprovalProps): React.JSX.Element {
+  const { columns } = useWindowSize();
+  const diffWidth = Math.max(MIN_EDIT_DIFF_WIDTH, columns - EDIT_DIFF_PADDING);
+
   // Single diff pass shared between the summary line and the inline view.
   const hunks = useMemo(
     () =>
@@ -41,7 +47,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
         {props.request.sourceTool}
       </Text>
       <Box marginY={1} flexDirection="column">
-        <DiffView hunks={hunks} maxHunkLines={30} />
+        <DiffView hunks={hunks} maxHunkLines={30} width={diffWidth} />
       </Box>
     </ConfirmCard>
   );
