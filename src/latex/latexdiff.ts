@@ -7,7 +7,6 @@ import * as logger from '@agent/core/logger';
 import { tryGetWorkspaceState } from '@agent/core/stateStore';
 import { formatError, toErrorMessage } from '@common/errors';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
-import { MESSAGE_TYPES } from '@shared/schemas';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { flexibleFS, pathToLocation, type FileLocation } from '@utils/files';
 import { executeCommand } from '@utils/system';
@@ -81,9 +80,7 @@ export class LaTeXdiffService {
 
   private logDiffError(context: string, err: unknown): LaTeXdiffResult {
     const message = formatError(context, err);
-    logger.error(this.channel, message, {
-      messageType: MESSAGE_TYPES.INTERNAL,
-    });
+    logger.error(this.channel, message);
     return { success: false, message };
   }
 
@@ -166,7 +163,6 @@ export class LaTeXdiffService {
       logger.debug(
         this.channel,
         `Latexdiff failed: ${inputLocation.absolutePath} -> ${editedLocation.absolutePath}`,
-        { messageType: MESSAGE_TYPES.INTERNAL },
       );
       return this.logDiffError('Error running LaTeX diff', err);
     }
@@ -277,9 +273,7 @@ export class LaTeXdiffService {
       };
     } catch (err) {
       const message = formatError('Error in runDiffVcMultiple', err);
-      logger.error(this.channel, message, {
-        messageType: MESSAGE_TYPES.INTERNAL,
-      });
+      logger.error(this.channel, message);
       return {
         success: false,
         results: { success: [], failed: [] },

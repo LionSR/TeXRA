@@ -15,18 +15,36 @@ import {
   type StreamLogEntry,
   type ToolUseLog,
 } from '@shared/schemas';
+import { getConfig } from '@utils/config';
 import { serializeError } from '@utils/core';
 
-import { getEmitFilter } from './filterUtils';
 import * as logger from './logUtils';
 import {
   getDefaultStreamLogStore,
   setDefaultStreamLogStore,
   type StreamLogStore,
 } from './StreamLogStore';
-import type { LogOptions } from './logOptions';
 
 const STREAM_UPDATE_THROTTLE_MS = 50;
+
+interface LogOptions {
+  groupId?: string;
+  messageType?: MessageType;
+  data?: unknown;
+}
+
+function getEmitFilter(options: {
+  level: LogLevel;
+  messageType: MessageType;
+}): { shouldEmit: boolean; debugMode: boolean } {
+  const debugMode = getConfig<boolean>('texra.logger.debugMode', false);
+  return {
+    shouldEmit:
+      options.messageType !== MESSAGE_TYPES.INTERNAL &&
+      (options.level !== 'debug' || debugMode),
+    debugMode,
+  };
+}
 
 export interface LoggerScopeOptions {
   parentGroupId?: string;
