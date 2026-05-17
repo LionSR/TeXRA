@@ -642,31 +642,9 @@ const chatCommand = defineCommand({
     ...GLOBAL_ARGS,
     agent: { type: 'string', description: 'Tool-use agent for the session' },
     model: { type: 'string', alias: 'm', description: 'Model for the session' },
-    'tool-display': {
-      type: 'enum',
-      options: ['grouped', 'minimal', 'hidden'],
-      description: 'Deprecated: accepted for compatibility and ignored',
-    },
-    tui: {
-      type: 'boolean',
-      description: 'Deprecated: chat always uses the Ink TUI',
-    },
-    'legacy-renderer': {
-      type: 'boolean',
-      description: 'Deprecated: the legacy renderer was retired',
-    },
   },
   async run(ctx) {
     const context = await contextFromArgs(ctx.args);
-    if (
-      ctx.args.tui !== undefined ||
-      ctx.args['legacy-renderer'] !== undefined ||
-      ctx.args['tool-display'] !== undefined
-    ) {
-      writeTextStderr(
-        'texra chat: --tui/--no-tui, --legacy-renderer, and --tool-display are deprecated and ignored; chat now always uses the Ink TUI.',
-      );
-    }
     const { runChat } = await import('../chat/tui/runChatTui');
     const result = await runChat(context, {
       agentOverride: optString(ctx.args.agent),
@@ -877,7 +855,9 @@ export async function runCli(
   }
   if (
     rawArgs.length === 1 &&
-    (rawArgs[0] === '--version' || rawArgs[0] === '-v')
+    (rawArgs[0] === '--version' ||
+      rawArgs[0] === '-v' ||
+      rawArgs[0] === '-V')
   ) {
     writeTextStdout(await readCliVersion());
     return { exitCode: CliExitCode.Success };
