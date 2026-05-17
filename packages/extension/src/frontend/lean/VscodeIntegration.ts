@@ -26,9 +26,7 @@ import type {
 } from '@tools/lean/leanTypes';
 import { WorkspaceFS } from '@utils/files';
 
-// ============================================================================
-// Types
-// ============================================================================
+type LspHover = import('vscode-languageserver-protocol').Hover;
 
 /**
  * Duck-typed FileUri compatible with the Lean 4 extension's ExtUri.
@@ -90,10 +88,6 @@ interface Lean4ExtensionApi {
   lean4EnabledFeatures: Promise<Lean4EnabledFeatures>;
 }
 
-// ============================================================================
-// Helpers to convert vscode.Diagnostic → LeanDiagnostic
-// ============================================================================
-
 function toLeanDiagnostic(d: vscode.Diagnostic): LeanDiagnostic {
   return {
     severity: d.severity,
@@ -109,14 +103,6 @@ function toLeanDiagnostic(d: vscode.Diagnostic): LeanDiagnostic {
   };
 }
 
-function toLeanDiagnostics(diagnostics: vscode.Diagnostic[]): LeanDiagnostic[] {
-  return diagnostics.map(toLeanDiagnostic);
-}
-
-// ============================================================================
-// Diagnostics
-// ============================================================================
-
 /**
  * Get diagnostics for a Lean file using VS Code's diagnostics API.
  * This returns diagnostics from the Lean 4 extension's LSP.
@@ -125,11 +111,11 @@ export function getDiagnostics(filePath: string): LeanDiagnostic[] {
   const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
   const directLookup = vscode.languages.getDiagnostics(uri);
   if (directLookup.length > 0) {
-    return toLeanDiagnostics(directLookup);
+    return directLookup.map(toLeanDiagnostic);
   }
 
   // Fallback: search by path in case URI format differs
-  return toLeanDiagnostics(findDiagnosticsByPath(uri.fsPath));
+  return findDiagnosticsByPath(uri.fsPath).map(toLeanDiagnostic);
 }
 
 /** Find diagnostics by matching file path (case-insensitive). */
@@ -161,10 +147,6 @@ export async function executeFileCommand(
     return false;
   }
 }
-
-// ============================================================================
-// LSP Requests (via Lean 4 Extension API)
-// ============================================================================
 
 const LEAN4_EXTENSION_ID = 'leanprover.lean4';
 
@@ -314,18 +296,14 @@ export async function getHoverInfo(
   filePath: string,
   line: number,
   column: number,
-): Promise<LspResult<import('vscode-languageserver-protocol').Hover>> {
-  return sendPositionRequest<import('vscode-languageserver-protocol').Hover>(
+): Promise<LspResult<LspHover>> {
+  return sendPositionRequest<LspHover>(
     filePath,
     line,
     column,
     'textDocument/hover',
   );
 }
-
-// ============================================================================
-// VS Code Wrappers
-// ============================================================================
 
 /**
  * Open a Lean file, wait for diagnostics, and return them.

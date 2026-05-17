@@ -37,11 +37,6 @@ export class SecretManager {
     await this.storage.delete(key);
   }
 
-  /**
-   * Backed by the canonical `API_PROVIDERS` constant in `@model/apiProviders`
-   * (which is itself the typed alias for `@shared/constants/apiKeyProviders`).
-   * Kept here for callers that already use `SecretManager.API_PROVIDERS`.
-   */
   public static readonly API_PROVIDERS = API_PROVIDERS;
 
   public static readonly GITHUB_TOKEN_KEY = 'github.token';
