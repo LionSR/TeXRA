@@ -56,7 +56,7 @@ function LiveTranscriptEntry({
   readonly entry: ConversationEntry;
 }): React.JSX.Element {
   return (
-    <Box marginBottom={1}>
+    <Box>
       <Text>{entry.text}</Text>
     </Box>
   );
@@ -82,7 +82,14 @@ export function ConversationPane(
           <TranscriptEntry key={entry.id} entry={entry} width={props.width} />
         )}
       </Static>
-      {live ? <LiveTranscriptEntry entry={live} /> : null}
+      {/* Reserve a single line for the live region even when nothing is
+        * streaming. Ink renders Static items into scrollback above the
+        * live area, so toggling live presence between renders made the
+        * input bar appear to "shift down" by a line. A stable footer
+        * keeps the layout pinned. */}
+      <Box minHeight={1}>
+        {live ? <LiveTranscriptEntry entry={live} /> : null}
+      </Box>
     </Box>
   );
 }
