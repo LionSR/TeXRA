@@ -46,10 +46,10 @@ export type UserAccessStatus = z.infer<typeof UserAccessStatusSchema>;
  * USD and reflect the calendar month so far (UTC).
  */
 export const SpendingStatusSchema = z.object({
-  currentSpend: z.number(),
-  limit: z.number(),
-  remaining: z.number(),
-  percentUsed: z.number(),
+  currentSpend: z.number().finite().nonnegative(),
+  limit: z.number().finite().nonnegative(),
+  remaining: z.number().finite(),
+  percentUsed: z.number().finite().nonnegative(),
 });
 export type SpendingStatus = z.infer<typeof SpendingStatusSchema>;
 
