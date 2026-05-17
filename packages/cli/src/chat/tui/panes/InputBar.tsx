@@ -127,7 +127,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           onCancel={() => setReverseSearchOpen(false)}
         />
       ) : null}
-      <Box paddingX={1}>
+      <Box borderStyle="round" borderColor="gray" paddingX={1}>
         <Text color="cyan">{prompt ?? '›'} </Text>
         <BaseTextInput
           value={value}

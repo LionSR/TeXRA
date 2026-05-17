@@ -45,12 +45,6 @@ export function StatusBar(): React.JSX.Element {
         ) : (
           <Text dimColor>{statusLabel(slice?.status)}</Text>
         )}
-        {slice?.description ? (
-          <>
-            <Text dimColor>·</Text>
-            <Text dimColor>{slice.description}</Text>
-          </>
-        ) : null}
         {bypass.superYolo ? <Badge color="red">YOLO</Badge> : null}
         {bypass.toolEdit ? <Badge color="yellow">BYPASS</Badge> : null}
       </Box>
