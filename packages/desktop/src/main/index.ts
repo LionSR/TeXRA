@@ -56,7 +56,6 @@ import {
   buildDesktopSetupTerminalAppendMessage,
   buildDesktopSetupTerminalCompleteMessage,
   buildDesktopSetupTerminalShowMessage,
-  type DesktopSetupTerminalStatus,
 } from '../desktopSetupTerminalMessages.js';
 import {
   createDesktopAuthCallbackState,
@@ -323,7 +322,7 @@ function createWindow(options: {
     });
     activeSetupCommands.delete(runId);
 
-    const status: DesktopSetupTerminalStatus = result.cancelled
+    const status = result.cancelled
       ? 'cancelled'
       : result.timedOut
         ? 'timed-out'
