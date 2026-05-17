@@ -35,12 +35,13 @@ import { clearApprovals } from './state/approvalQueue';
 import { cliState, resetCliState } from './state/cliState';
 import { installTuiApprovals } from './state/subscribeApprovals';
 import { wrapRuntimeHost } from './state/subscribeRuntimeHost';
-import { subscribeStreamLog } from './state/subscribeStreamLog';
+import { subscribeStreamLog, syncStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 import {
   appendAssistantTranscriptIfMissing,
   appendLocalAssistantTranscript,
+  appendLocalErrorTranscript,
   clearActiveTranscript,
   moveLocalTranscriptToStream,
 } from './state/transcript';
@@ -282,6 +283,11 @@ export async function runChat(
         } else {
           session.runExitCode = CliExitCode.AgentError;
         }
+        // Pull any final MODEL_RESPONSE chunks out of the AgentLogger
+        // buffer before falling back to `result.lastResponse`. Without
+        // this, a reply that finalized between sync ticks would never
+        // hit the transcript.
+        if (result.streamId) syncStreamLog(result.streamId);
         if (result.category === AgentCategory.ToolUse) {
           appendAssistantTranscriptIfMissing(
             result.streamId,
@@ -293,7 +299,10 @@ export async function runChat(
       })
       .catch((error: unknown) => {
         if (!session.stopRequested) {
-          writeTextStderr(toErrorMessage(error));
+          // Ink owns stdout while the TUI is mounted, so writing to
+          // stderr disappears under the alternate screen. Surface the
+          // failure inline so the user sees why the agent stopped.
+          appendLocalErrorTranscript(toErrorMessage(error));
         }
         session.runExitCode = session.stopRequested
           ? CliExitCode.Success
