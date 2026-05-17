@@ -92,7 +92,7 @@ async function handleCleanMultiple(
   inputFile: string,
   agent: string,
   model: string,
-  outputFiles: string[] = [],
+  inputFiles: string[] = [],
 ): Promise<void> {
   const data = await parseWithErrorDisplay(
     CHANNEL,
@@ -102,13 +102,13 @@ async function handleCleanMultiple(
   );
   if (!data) return;
 
-  logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
+  logger.debug(CHANNEL, `Additional files: ${inputFiles.join(', ')}`);
 
   const result = await runCleanMultiple(
     data.model,
     data.inputFile,
     data.agent,
-    outputFiles,
+    inputFiles,
   );
   showCleanResult(result, data.inputFile);
   emitClearMissingOutputs({
@@ -116,7 +116,7 @@ async function handleCleanMultiple(
       agent: data.agent,
       model: data.model,
       inputFile: data.inputFile,
-      outputFiles,
+      outputFiles: inputFiles,
     },
   });
 }

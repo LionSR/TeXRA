@@ -886,13 +886,13 @@ const CleanSingleMessageSchema = z.object({
 const PackMultipleMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.PACK_MULTIPLE),
   ...singleOperationFields,
-  outputFiles: z.array(z.string()).optional(),
+  inputFiles: z.array(z.string()).optional(),
 });
 
 const CleanMultipleMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE),
   ...singleOperationFields,
-  outputFiles: z.array(z.string()).optional(),
+  inputFiles: z.array(z.string()).optional(),
 });
 
 const HousekeepingMessages = [
