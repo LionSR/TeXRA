@@ -58,4 +58,9 @@ export function registerBuiltinSlashCommands(): void {
     name: 'resume',
     description: 'Resume a previous session',
   });
+  registerSlashCommand({
+    name: 'exit',
+    description: 'Exit the CLI session',
+    aliases: ['quit'],
+  });
 }

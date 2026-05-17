@@ -1,5 +1,5 @@
-// Ink TUI root: header, conversation, optional side column, status, approval
-// modal, and input bar. Tab / Shift-Tab cycles focus across subagent streams.
+// Ink TUI root: conversation, optional side column, status, approval modal,
+// and input bar. Tab / Shift-Tab cycles focus across subagent streams.
 
 import { Box, useInput, useWindowSize } from 'ink';
 
@@ -65,8 +65,8 @@ export function App(props: AppProps): React.JSX.Element {
 
   return (
     <Box flexDirection="column">
-      <Box flexDirection="row" flexGrow={1}>
-        <Box flexDirection="column" flexGrow={1}>
+      <Box flexDirection="row">
+        <Box flexDirection="column">
           <ConversationPane width={transcriptWidth} />
         </Box>
         {showSideColumn ? (
