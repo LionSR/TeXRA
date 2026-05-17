@@ -22,7 +22,6 @@ export async function showInstructionWithSuppress(
 ): Promise<void> {
   const stateKey = `${INSTRUCTION_PREFIX}${key}`;
 
-  // Check if user previously dismissed this instruction
   if (showSuppress && globalSM.get<boolean>(stateKey)) {
     return;
   }

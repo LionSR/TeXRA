@@ -68,12 +68,6 @@ function buildDiagnostic(
   return diag;
 }
 
-function keepToolDiagnostics(
-  diagnostics: readonly vscode.Diagnostic[],
-): vscode.Diagnostic[] {
-  return diagnostics.filter((diag) => diag.code === CODE_TOOL);
-}
-
 async function refreshFileDiagnostics(file: OutputFileInfo): Promise<void> {
   const activeCollection = collection;
   if (!activeCollection) return;
@@ -95,8 +89,8 @@ async function refreshFileDiagnostics(file: OutputFileInfo): Promise<void> {
 
   const annotations = parseCriticismAnnotations(text);
   const uri = vscode.Uri.file(absolutePath);
-  const manualDiagnostics = keepToolDiagnostics(
-    activeCollection.get(uri) ?? [],
+  const manualDiagnostics = (activeCollection.get(uri) ?? []).filter(
+    (diag) => diag.code === CODE_TOOL,
   );
 
   if (annotations.length === 0) {

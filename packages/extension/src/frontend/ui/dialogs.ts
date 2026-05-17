@@ -85,7 +85,6 @@ export interface FileSelectionResult {
 export async function selectFileFromWorkspace(
   options: FileDialogOptions,
 ): Promise<FileSelectionResult | null> {
-  // selectFile handles workspace check internally via computeDefaultUri
   const relativePath = await selectFile(options);
   if (!relativePath) return null;
 

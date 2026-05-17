@@ -41,11 +41,8 @@ export class VscodeFileSystem implements FileSystemProvider {
   }
 
   async readDirectory(target: string): Promise<[string, number][]> {
-    const entries = await vscode.workspace.fs.readDirectory(
-      vscode.Uri.file(target),
-    );
-    // vscode.FileType values are numerically compatible with our FileType
-    return entries;
+    // vscode.FileType values are numerically compatible with our FileType.
+    return vscode.workspace.fs.readDirectory(vscode.Uri.file(target));
   }
 
   async copy(

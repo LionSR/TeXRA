@@ -62,10 +62,10 @@ async function handleShowAgentConfigBanner(
   });
 }
 
-function handleRequestShowError(
-  payload: ProgressEventPayloads['requestShowError'],
-): void {
-  vscode.window.showErrorMessage(payload.message);
+function handleRequestShowError({
+  message,
+}: ProgressEventPayloads['requestShowError']): void {
+  void vscode.window.showErrorMessage(message);
 }
 
 async function handleRequestEnsureProgressView(
