@@ -38,6 +38,13 @@ export class TierService {
   private cache: TierModelConfig | null = null;
   private cacheTimestamp = 0;
   private fetchPromise: Promise<TierModelConfig | null> | null = null;
+  /**
+   * True when the latest cached fetch carried an Authorization header.
+   * A later authenticated call must refresh the cache so userStatus and
+   * spendingStatus are populated; otherwise the 5-min TTL would serve
+   * stale `null`s until expiry.
+   */
+  private cachedWithAuth = false;
 
   /** User's access status including expiration (populated when fetching with auth) */
   private userStatus: UserAccessStatus | null = null;
@@ -64,6 +71,7 @@ export class TierService {
     this.fetchPromise = null;
     this.userStatus = null;
     this.spendingStatus = null;
+    this.cachedWithAuth = false;
   }
 
   /**
@@ -115,18 +123,35 @@ export class TierService {
 
       const data = await response.json();
 
-      // Parse user status if present (returned when authenticated)
+      // Parse user-specific blocks. Both are only present when the
+      // request carries auth, so clear them on absence (anonymous fetch)
+      // and on parse failure — a relay-side schema drift should not
+      // silently serve stale values to the quota meter / BYOK switch.
       if (data.userStatus) {
         const statusParsed = UserAccessStatusSchema.safeParse(data.userStatus);
         if (statusParsed.success) {
           this.userStatus = statusParsed.data;
+        } else {
+          this.logger.error(
+            CHANNEL,
+            `Invalid userStatus payload: ${statusParsed.error.message}`,
+          );
+          this.userStatus = null;
         }
+      } else {
+        this.userStatus = null;
       }
 
       if (data.spendingStatus) {
         const spendParsed = SpendingStatusSchema.safeParse(data.spendingStatus);
         if (spendParsed.success) {
           this.spendingStatus = spendParsed.data;
+        } else {
+          this.logger.error(
+            CHANNEL,
+            `Invalid spendingStatus payload: ${spendParsed.error.message}`,
+          );
+          this.spendingStatus = null;
         }
       } else {
         this.spendingStatus = null;
@@ -158,19 +183,26 @@ export class TierService {
    * @param authToken - Optional JWT to get user-specific access status
    */
   async getConfig(authToken?: string): Promise<TierModelConfig | null> {
-    if (this.isCacheValid()) {
+    // Reuse an in-flight or fresh cache only when it matches the
+    // current auth state. A previous anonymous fetch leaves
+    // userStatus/spendingStatus as null; reusing it here would mask
+    // the user's quota for 5 minutes after sign-in.
+    const tokenPresent = Boolean(authToken);
+    if (this.isCacheValid() && this.cachedWithAuth === tokenPresent) {
       return this.fetchPromise;
     }
 
     // Set timestamp BEFORE creating promise to prevent race conditions
     // where concurrent calls see fetchPromise !== null but timestamp is stale
     this.cacheTimestamp = Date.now();
+    this.cachedWithAuth = tokenPresent;
     this.fetchPromise = this.fetchFromServer(authToken).then((result) => {
       if (result !== null) {
         this.cache = result;
       } else {
         // Reset timestamp on failure so next call retries
         this.cacheTimestamp = 0;
+        this.cachedWithAuth = false;
       }
       return result;
     });
