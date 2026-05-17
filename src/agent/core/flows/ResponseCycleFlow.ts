@@ -2,13 +2,15 @@ import { dirname } from 'path';
 
 import { z } from 'zod';
 
-import { isRemoteAgent } from '@agent/index';
 import { BaseNode, Flow } from '@agent/node';
 import { recordRound } from '@agent/core/AgentState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   BaseCycleFieldsSchema,
+  defaultDebugMeta,
+  defaultPostCompactionContext,
   getDebugContext,
+  logAndNormalizeUsage,
   resetCycleState,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
@@ -21,12 +23,10 @@ import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
-import { getActiveChildren } from '@agent/runtime/executionRegistry';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@agent/core/constants';
 import { bestConnectionMethod } from '@latex';
 import replacementEngine from '@replacement/engine';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
-import { formatPostCompactionContext } from '@tools/subagentResults';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
 import { getSystemPromptWithRules } from '@utils/prompt';
 import { extractScratchpad } from '@utils/text/xmlUtils';
@@ -135,7 +135,7 @@ class ResponsePrepNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    const { config, round } = this.services;
+    const { round } = this.services;
     shared.outputExists = prepRes.exists;
     shared.systemPrompt = prepRes.systemPrompt;
     resetCycleState(shared, ['responseObject', 'processedResponse']);
@@ -143,10 +143,7 @@ class ResponsePrepNode<C> extends BaseNode<
     await maybeSaveDebugObject({
       object: shared.messages,
       objectType: 'messages',
-      context: getDebugContext(this.services, {
-        modelName: config.model,
-        isRemote: isRemoteAgent(config.agent),
-      }),
+      context: getDebugContext(this.services, defaultDebugMeta(this.services)),
       fileOptions: {
         continuationCount: round.continuationCount,
         baseName: 'response',
@@ -180,7 +177,7 @@ interface ProcessResult {
   thinkingContent?: string | null;
   useStreaming: boolean;
   responseUsage: ProviderUsage;
-  normalizedUsage: NormalizedUsage;
+  normalizedUsage?: NormalizedUsage;
   repetitionDetected: boolean;
   updatedLastResponse?: string;
   updatedAccumulatedOutput?: string;
@@ -281,16 +278,11 @@ class ResponseProcessNode<C> extends BaseNode<
         });
       }
 
-      const normalizedUsage = modelHandler.normalizeUsage(
+      const normalizedUsage = logAndNormalizeUsage(
         responseUsage,
         prepRes.responseTimeMs ?? 0,
+        { modelHandler, logger },
       );
-
-      const { inputTokens } = normalizedUsage;
-      const contextWindow = modelHandler.getEffectiveContextWindow();
-      if (inputTokens > 0 && contextWindow > 0) {
-        logger.logContextState(inputTokens, contextWindow);
-      }
 
       const repetitionResult = checkForMassiveRepetition(
         prepRes.lastResponse,
@@ -638,19 +630,9 @@ export function createResponseCycleFlow<C>(): Flow<
     storeResponse: (shared, response) => {
       shared.responseObject = response;
     },
-    getPostCompactionContext: (services) => {
-      const { subagents, processes } = getActiveChildren(services.streamId);
-      return formatPostCompactionContext(
-        subagents,
-        processes,
-        services.workspace.workPlan.toSnapshot(),
-      );
-    },
+    getPostCompactionContext: defaultPostCompactionContext,
     getDebugSaveOptions: (shared, services) => ({
-      context: {
-        modelName: services.config.model,
-        isRemote: isRemoteAgent(services.config.agent),
-      },
+      context: defaultDebugMeta(services),
       fileOptions: {
         continuationCount: services.round.continuationCount,
         baseName: 'response',
