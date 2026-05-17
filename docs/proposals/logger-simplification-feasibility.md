@@ -2,22 +2,23 @@
 
 **Status:** Proposal / analysis. Not approved.
 **Date:** 2026-05-17
-**Reference:** Claude Code (`~/Library/Mobile Documents/com~apple~CloudDocs/Downloads/claude-code-main`)
+**Reference:** Claude Code (`https://github.com/anthropics/claude-code`)
 
 ## TL;DR
 
-About **800–1,200 lines** of logger code can be removed without losing
-capability. The reduction comes from collapsing a four-step sink chain
-(`AgentLogger → logUtils → structuredLogger → LogBackend → consoleLog`),
-inlining 30-line micro-modules, and dropping the `platform/log` indirection
-that has exactly one implementation. **The remaining ~1,200 lines
-(`StreamLogStore` + `AgentLogger` core) are mostly load-bearing** — TeXRA's
+About **600–900 lines** of logger code can likely be removed without
+losing capability. The reduction comes from collapsing duplicated sink
+plumbing around `AgentLogger`, `logUtils`, `structuredLogger`, and
+host-specific `LogBackend` adapters, while preserving the CLI's
+structured-log path and the extension/desktop platform bindings. **The
+remaining ~1,200 lines (`StreamLogStore` + `AgentLogger` core) are
+mostly load-bearing** — TeXRA's
 multi-stream, history-browsable, in-place-streamed log model is genuinely
 more complex than Claude Code's single-session JSONL append. Trying to copy
 Claude Code wholesale would break the History browser, multi-agent merge
 flows, and CLI throttling.
 
-Realistic plan: do Phase 1 (sink-chain flattening, ~600 LOC) now, Phase 2
+Realistic plan: do Phase 1 (sink-chain flattening, ~500 LOC) now, Phase 2
 (persistence format) only if disk format pain shows up, skip Phase 3.
 
 ---
@@ -26,19 +27,19 @@ Realistic plan: do Phase 1 (sink-chain flattening, ~600 LOC) now, Phase 2
 
 ### Layer inventory
 
-| Module                         |  Lines | Direct importers  | Notes                                                   |
-| ------------------------------ | -----: | ----------------- | ------------------------------------------------------- |
-| `AgentLogger.ts`               |    606 | 43                | Main facade. 26 instantiations across tools, agents, UI |
-| `StreamLogStore.ts`            |    872 | 4 direct          | Lazy-load, eviction, summary cache, dirty tracking      |
-| `StreamLog.ts`                 |    151 | (via store)       | Entry array + seqNo + dirty index                       |
-| `logUtils.ts`                  |    183 | 25                | Legacy channel-keyed logger; independent facade         |
-| `structuredLogger.ts`          |    184 | 2 (only logUtils) | Async-local groups, `LogSink` interface                 |
-| `filterUtils.ts`               |     20 | 1                 | `shouldEmit()`                                          |
-| `logOptions.ts`                |     11 | 3 (type-only)     | `LogOptions` interface                                  |
-| `ProgressEventBus.ts`          |    309 | many              | **Different concern** (status events, not logs)         |
-| `platform/interfaces/log.ts`   |     17 | —                 | `LogBackend` interface                                  |
-| `platform/defaults/consoleLog` |     26 | —                 | The **only** `LogBackend` impl                          |
-| **Total logger surface**       | ~2,070 |                   | (excluding ProgressEventBus)                            |
+| Module                         |  Lines | Users       | Notes                                     |
+| ------------------------------ | -----: | ----------- | ----------------------------------------- |
+| `AgentLogger.ts`               |    606 | 43          | Main facade for tools, agents, and UI     |
+| `StreamLogStore.ts`            |    872 | 4 direct    | Lazy-load, eviction, summaries, dirty set |
+| `StreamLog.ts`                 |    151 | via store   | Entry array + seqNo + dirty index         |
+| `logUtils.ts`                  |    183 | 25          | Legacy channel-keyed sibling facade       |
+| `structuredLogger.ts`          |    184 | 4           | Async groups, `LogSink`; logUtils + CLI   |
+| `filterUtils.ts`               |     20 | 1           | `shouldEmit()`                            |
+| `logOptions.ts`                |     11 | 3 type-only | `LogOptions` interface                    |
+| `ProgressEventBus.ts`          |    309 | many        | **Different concern**: status events      |
+| `platform/interfaces/log.ts`   |     17 | several     | Extension/CLI/desktop `LogBackend`        |
+| `platform/defaults/consoleLog` |     26 | 2           | Desktop backend + pre-platform fallback   |
+| **Total logger surface**       | ~2,070 |             | Excluding `ProgressEventBus`              |
 
 ### Actual call graph
 
@@ -49,6 +50,14 @@ agent code ──→ AgentLogger ──→ logUtils ──→ structuredLogger �
 
 housekeeping ──→ logUtils ──→ structuredLogger ──→ LogBackend ──→ consoleLog
    (latexdiff, pack, clean — bypasses AgentLogger entirely)
+
+CLI runtime ──→ structuredLogger ──→ StderrTextSink / NdjsonStdoutSink
+
+host platform:
+   extension initPlatform ──→ logUtils-backed LogBackend
+   CLI initPlatform       ──→ cliPlatformLog
+   desktop initPlatform   ──→ consoleLog
+   pre-platform fallback  ──→ consoleLog
 
 UI side:
    StreamLogStore.onChange ──→ WebviewBridge (ext)         ──→ logSlice
@@ -61,7 +70,14 @@ Two surprises from the deeper read:
    delegate to `structuredLogger`. Housekeeping modules (`latexdiff`,
    `pack`, `clean`, `indent` — 6 sites) use `logUtils` directly and never
    touch `StreamLogStore`.
-2. **`ProgressEventBus` and `StreamLogStore.onChange` are not redundant.**
+2. **The CLI uses `structuredLogger` directly.** `runtimeHost.ts`
+   constructs one with stderr or ndjson sinks from `logSinks.ts`, so
+   deleting `structuredLogger.ts` requires an explicit CLI migration.
+3. **`LogBackend` is not a single-implementation abstraction.** The
+   extension passes a `logUtils` backend, the CLI passes `cliPlatformLog`,
+   desktop passes `consoleLog`, and `src/agent/core/logger.ts` uses
+   `consoleLog` before platform initialization.
+4. **`ProgressEventBus` and `StreamLogStore.onChange` are not redundant.**
    The bus carries `odysseyStateChanged`, `inquiryThreadUpdated`,
    `resolveExternalInquiry` — three events, no log overlap. My first pass
    was wrong; do **not** merge them.
@@ -148,13 +164,16 @@ summary mtime. This is ~150 LOC worth keeping.
 
 ## 4. What can actually be cut
 
-### Phase 1 — Flatten the sink chain (low risk, ~600 LOC)
+### Phase 1 — Flatten the sink chain (moderate-low risk, ~500 LOC)
 
 **Delete:**
 
-- `src/logger/structuredLogger.ts` (184 L) — only used by `logUtils`
-- `src/platform/interfaces/log.ts` (17 L) — one impl
-- `src/platform/defaults/consoleLog.ts` (26 L) — fold into a sink
+- `src/logger/structuredLogger.ts` (184 L) — after moving the CLI's
+  stderr/ndjson sinks behind the replacement sink interface
+- `src/platform/interfaces/log.ts` (17 L) — only after replacing the
+  extension, CLI, desktop, and pre-platform fallback bindings
+- `src/platform/defaults/consoleLog.ts` (26 L) — fold into the shared
+  host sink implementation
 - `src/logger/filterUtils.ts` (20 L) — inline into `AgentLogger`
 - `src/logger/logOptions.ts` (11 L) — inline (type-only, 3 callers)
 
@@ -170,13 +189,17 @@ summary mtime. This is ~150 LOC worth keeping.
   housekeeping switches to `AgentLogger` with a fixed scope. Option (a)
   keeps the housekeeping diff small.
 
-**Net effect:** ~600 LOC removed, four layers → two, single mental model
-for "where does a log line go."
+**Net effect:** ~500 LOC removed, four layers → two, single mental model
+for "where does a log line go," provided the CLI and host-platform paths
+are migrated in the same PR.
 
-**Risk:** Low. `structuredLogger` has 2 importers. `consoleLog` has zero
-external callers. `LogBackend` has one impl. Tests under
-`src/test/logger/` would need updates but the API surface for callers
-(43 AgentLogger importers, 25 logUtils importers) stays the same.
+**Risk:** Moderate-low. The user-facing behavior can stay unchanged, but
+the migration must include `packages/cli/src/runtime/runtimeHost.ts`,
+`packages/cli/src/runtime/logSinks.ts`, extension `initPlatform`,
+desktop `initPlatform`, and the pre-platform fallback in
+`src/agent/core/logger.ts`. Tests under `src/test/logger/` would need
+updates; the API surface for ordinary callers (43 AgentLogger importers,
+25 logUtils importers) can still remain stable.
 
 ### Phase 2 — Persistence format swap (medium risk, ~150 LOC)
 
@@ -220,14 +243,14 @@ append broke the UI; reverting would re-introduce the original problem.
 
 ## 5. Recommended plan
 
-| Phase | Scope                                | LOC removed | Risk   | Do it? |
-| ----: | ------------------------------------ | ----------: | ------ | ------ |
-|     1 | Flatten sink chain, inline micros    |        ~600 | Low    | Yes    |
-|    1b | Decide logUtils fate (merge vs keep) |        ~100 | Low    | Yes    |
-|     2 | JSONL persistence                    |        ~150 | Medium | Defer  |
-|     3 | Drop dirty tracking / pure append    |        ~200 | High   | No     |
+| Phase | Scope                                | LOC removed | Risk       | Do it? |
+| ----: | ------------------------------------ | ----------: | ---------- | ------ |
+|     1 | Flatten sink chain, inline micros    |        ~500 | Medium-low | Yes    |
+|    1b | Decide logUtils fate (merge vs keep) |        ~100 | Low        | Yes    |
+|     2 | JSONL persistence                    |        ~150 | Medium     | Defer  |
+|     3 | Drop dirty tracking / pure append    |        ~200 | High       | No     |
 
-**Expected outcome of Phase 1+1b:** ~2,070 LOC → ~1,370 LOC, four layers
+**Expected outcome of Phase 1+1b:** ~2,070 LOC → ~1,500 LOC, four layers
 collapsed to two, no behavior change for callers or users. `AgentLogger`
 and `StreamLogStore` stay at their current size because they're doing
 real work (multi-stream, lazy load, eviction, dirty tracking, summary
@@ -240,9 +263,9 @@ over-abstraction.
    facade, housekeeping switches to `AgentLogger.scoped('housekeeping')`),
    or **keep `logUtils` as a sibling** sharing sinks. Folding is cleaner
    but touches 25 housekeeping call sites; keeping is a smaller diff.
-2. Sketch the new `LogSink` interface and the three concrete sinks
-   (console, VS Code OutputChannel, StreamLogStore). Wire from
-   `extension.ts` exactly once via `initPlatform`.
+2. Sketch the new `LogSink` interface and concrete sinks for console,
+   VS Code OutputChannel, StreamLogStore, CLI stderr, and CLI ndjson.
+   Wire host bindings from extension, CLI, and desktop composition roots.
 3. Land a no-op refactor PR: same behavior, fewer files, fewer imports.
    Tests under `src/test/logger/` get updated in the same PR.
 
