@@ -1,4 +1,4 @@
-// Banner printed at the very top of a chat session.
+// Banner rendered at the very top of a chat session.
 //
 // Ink only supports one `<Static>` per app (the ConversationPane already
 // owns it for the transcript), so we can't render the banner through Ink
@@ -54,7 +54,7 @@ interface LogoRow {
 
 // Visible width = sum of raw segment lengths (all glyphs in the logo
 // are single-cell BMP characters, so `.length` matches column count).
-// Reported alongside the ANSI-painted text so `printHeaderBanner` can
+// Reported alongside the ANSI-painted text so `renderHeaderBanner` can
 // right-pad rows to a uniform width without trying to strip the ANSI.
 function row(...segments: Segment[]): LogoRow {
   return {
@@ -103,7 +103,7 @@ export interface HeaderBannerInfo {
   readonly cwd: string;
 }
 
-export function printHeaderBanner(info: HeaderBannerInfo): void {
+export function renderHeaderBanner(info: HeaderBannerInfo): string {
   const rightLines = [
     `${pc.bold('TeXRA')} ${pc.dim(`v${info.version}`)}`,
     `${pc.cyan(info.agent || 'chat')} ${pc.dim('·')} ${info.model || '—'}`,
@@ -116,5 +116,5 @@ export function printHeaderBanner(info: HeaderBannerInfo): void {
     const pad = ' '.repeat(maxLogoWidth - r.width);
     return `${r.text}${pad}${gutter}${rightLines[idx] ?? ''}`;
   });
-  process.stdout.write(`\n${lines.join('\n')}\n\n`);
+  return `\n${lines.join('\n')}\n\n`;
 }
