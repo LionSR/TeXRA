@@ -15,6 +15,9 @@ All notable changes to this project will be documented in this file.
 - **Odyssey mode** — let an agent run a long task to completion on its own. A budget auto-pauses the run for your approval before going further, and a dedicated panel shows progress so you can step in any time.
 - **Integrations settings tab** — a new **Settings → Integrations** tab groups external agent integrations (Codex CLI, Claude Code Agent, external chat handoff) in one place, with reasoning-effort and adaptive-thinking controls for Claude Code Agent.
 - **Ask-user-question tool** — agents can now ask you a multiple-choice question mid-run instead of guessing.
+- **Ink-based CLI TUI is the default** — `texra chat` now uses the Ink TUI for interactive sessions, with a
+  multi-pane layout, structured slash forms, persistent input history, and shared key hints. Deprecated renderer flags
+  are still accepted for compatibility.
 - **Non-blocking inquiries** — when an agent sends you to ChatGPT/Gemini/etc. for outside help (now called **Inquiry**), the run no longer freezes waiting for your reply. The agent keeps working and is woken with a follow-up when you submit the answer — even after closing the tab or reloading. Inquiry threads appear in **Background tasks** with full transcripts and saved drafts per thread.
 - **Open PDF from an agent** — agents can open a finished PDF in your viewer.
 - **LaTeXdiff focuses on changed pages** — generated diff PDFs now show only the pages that actually changed.
@@ -34,6 +37,8 @@ All notable changes to this project will be documented in this file.
 
 - **Recover from retryable tool errors** — when a tool call fails with a resumable error, you can now send a follow-up to nudge the agent past it instead of being stuck.
 - **LaTeXdiff doesn't litter your workspace** — intermediate sources stay in run storage instead of appearing next to your files.
+- **CLI workflow output paths** — `texra run` now prints the final workflow output path from run storage, so
+  multi-round workflow output remains unambiguous.
 - **Cleaner progress summaries** — long bash output no longer floods the rolling summary at the top of a run.
 - **Current DeepSeek V4 pricing** — V4 Flash and Pro now use DeepSeek's current cache-hit and discounted rates.
 - **Codicon font packaging** — toolbar and settings icons render correctly in installed builds instead of fallback squares.
