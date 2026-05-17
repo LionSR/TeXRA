@@ -60,6 +60,7 @@ import {
 } from '@shared/schemas/progressView';
 import type { DesktopThemeKind } from '@shared/constants/desktopTheme';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { copyTextToClipboard } from '@shared/utils/clipboard';
 import {
   applyHostBodyTheme,
   getWindowTargetOrigin,
@@ -970,11 +971,11 @@ function ensureSetupTerminalDialog(): WaDialog {
   actions.classList.add('desktop-setup-terminal-actions');
   const copyCommand = createSetupTerminalButton('copy', 'Copy command');
   copyCommand.addEventListener('click', () => {
-    void copyText(setupTerminalCommandText);
+    void copyTextToClipboard(setupTerminalCommandText);
   });
   const copyOutput = createSetupTerminalButton('copy', 'Copy output');
   copyOutput.addEventListener('click', () => {
-    void copyText(setupTerminalOutputText);
+    void copyTextToClipboard(setupTerminalOutputText);
   });
   setupTerminalCopyOutputButton = copyOutput;
   const cancel = createSetupTerminalButton('xmark', 'Cancel');
@@ -1013,11 +1014,6 @@ function createSetupTerminalButton(
   button.setAttribute('aria-label', label);
   render(html`${waIcon(icon)}<span>${label}</span>`, button);
   return button;
-}
-
-async function copyText(text: string): Promise<void> {
-  if (!text) return;
-  await navigator.clipboard?.writeText(text);
 }
 
 function openSetupTerminalOverlay(
