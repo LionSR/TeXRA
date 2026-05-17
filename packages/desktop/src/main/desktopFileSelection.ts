@@ -89,11 +89,7 @@ export function createDesktopFileSelection(
 ): DesktopFileSelection {
   const getWorkspacePath =
     options.getWorkspacePath ?? (() => platform().workspace.getWorkspacePath());
-  const onError =
-    options.onError ??
-    ((error) => {
-      console.error(error);
-    });
+  const onError = options.onError ?? defaultOnError;
 
   function runAsync(work: Promise<void>): void {
     void work.catch(onError);
@@ -102,12 +98,12 @@ export function createDesktopFileSelection(
   function postFileList(
     fileType: keyof typeof SET_COMMAND_BY_FILE_TYPE,
     files: string[],
-    additionalPayload: Record<string, unknown> = {},
+    preserveBaseFile = false,
   ) {
     options.postToRenderer({
       command: SET_COMMAND_BY_FILE_TYPE[fileType],
       files,
-      ...additionalPayload,
+      ...(preserveBaseFile && { preserveBaseFile: true }),
     });
   }
 
@@ -127,16 +123,10 @@ export function createDesktopFileSelection(
 
   async function requestSingleFileList(
     fileType: keyof typeof SET_COMMAND_BY_FILE_TYPE,
-    listOptions: { preserveBaseFile?: boolean } = {},
+    preserveBaseFile = false,
   ) {
-    const files = await list(
-      fileType === 'base' ? 'input' : (fileType as ListableFileType),
-    );
-    postFileList(
-      fileType,
-      files,
-      listOptions.preserveBaseFile ? { preserveBaseFile: true } : {},
-    );
+    const files = await list(fileType === 'base' ? 'input' : fileType);
+    postFileList(fileType, files, preserveBaseFile);
   }
 
   // Multi-list categories (input/context/media) are user-owned and only
@@ -144,7 +134,7 @@ export function createDesktopFileSelection(
   // the still-single-slot base-file dropdown and the empty-workspace banner.
   async function refreshDiskBackedDropdowns() {
     const inputFiles = await list('input');
-    postFileList('base', inputFiles, { preserveBaseFile: true });
+    postFileList('base', inputFiles, true);
     options.postToRenderer({
       command:
         inputFiles.length === 0
@@ -233,9 +223,7 @@ export function createDesktopFileSelection(
         return true;
       case MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE:
         runAsync(
-          requestSingleFileList('base', {
-            preserveBaseFile: message.preserveBaseFile === true,
-          }),
+          requestSingleFileList('base', message.preserveBaseFile === true),
         );
         return true;
       case MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES:
@@ -254,4 +242,8 @@ export function createDesktopFileSelection(
   }
 
   return { handleMessage };
+}
+
+function defaultOnError(error: unknown): void {
+  console.error(error);
 }

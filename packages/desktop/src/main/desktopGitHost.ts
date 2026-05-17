@@ -100,13 +100,9 @@ export function createDesktopGitHost(
       if (!workspace) {
         return { commits: [], isGitRepo: false };
       }
-      // Bot review (#3817) flagged that the prior `existsSync('.git')` probe
-      // wrongly reports `false` when the user opens a subdirectory inside a
-      // repo (`.git` only exists at the repo root). Use `git rev-parse
-      // --is-inside-work-tree` instead — that's also what handles the
-      // `.git`-as-pointer-file case for worktrees and submodules. The cost
-      // is one extra `git` invocation up front but the call is fast (<10ms
-      // typical) so we eat it for correctness.
+      // Use `git rev-parse --is-inside-work-tree` instead of `existsSync('.git')`
+      // — the latter wrongly reports `false` from subdirectories and misses
+      // worktrees/submodules where `.git` is a pointer file (bot review #3817).
       try {
         const { stdout } = await execFileAsync(
           'git',
@@ -117,10 +113,8 @@ export function createDesktopGitHost(
           return { commits: [], isGitRepo: false };
         }
       } catch {
-        // `git` missing from PATH, not a repo, or rev-parse failed for any
-        // other reason — treat as "not a repo". Avoid surfacing this via
-        // `onError` because it's the steady-state for any non-git workspace
-        // and would spam logs.
+        // Missing git, not a repo, etc. Don't surface via `onError` — this
+        // is the steady-state for any non-git workspace.
         return { commits: [], isGitRepo: false };
       }
 
@@ -128,10 +122,7 @@ export function createDesktopGitHost(
         const { stdout } = await execFileAsync(
           'git',
           [
-            // `--no-pager` is portable across platforms (no dependency on
-            // `cat` being on PATH, which broke on Windows per #3817).
-            // `execFile` already runs git non-tty so a pager wouldn't
-            // normally engage, but we pin it explicitly anyway.
+            // `--no-pager` is portable; Windows lacks `cat` on PATH (#3817).
             '--no-pager',
             'log',
             '-n',
@@ -146,11 +137,8 @@ export function createDesktopGitHost(
         );
         return { commits: parseCommitLog(stdout), isGitRepo: true };
       } catch (error) {
-        // `git` missing from PATH, not a repo, or any other failure -> empty
-        // list. We still report `isGitRepo: true` because the rev-parse
-        // probe already passed; surfacing "no commits yet" is more accurate
-        // than pretending the user is outside a repo and would otherwise
-        // mask legitimate empty-repo states.
+        // rev-parse already passed, so we know it's a repo — report
+        // isGitRepo:true with an empty list so empty-repo states stay honest.
         options.onError?.(error);
         return { commits: [], isGitRepo: true };
       }
