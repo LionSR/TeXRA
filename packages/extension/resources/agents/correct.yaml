@@ -6,8 +6,6 @@ settings:
   documentTag: documents
   endTag: </documents>
   rounds: 1
-  prefills:
-    - "Here are the revised \\LaTeX documents. <documents>"
 
 prompts:
   systemPrompt: |
