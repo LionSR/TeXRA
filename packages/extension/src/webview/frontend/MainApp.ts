@@ -1291,9 +1291,8 @@ export class MainApp extends MainAppBase {
     const useMultiple = additionalInputFiles.length > 0;
     const command = this.getPackCleanCommand(action, useMultiple);
 
-    // Pack/clean's downstream `outputFiles` field is repurposed post-W4 as
-    // "additional input files to bundle with primaryInput" — there is no
-    // separate output-files picker anymore.
+    // Post-W4 there is no separate output-files picker. Pack/Clean operate on
+    // the selected input files and derived generated artifacts.
     postMessage(command, {
       inputFile: primaryInput,
       agent:
@@ -1301,7 +1300,7 @@ export class MainApp extends MainAppBase {
           ? this.toolUseAgent.get()
           : this.workflowAgent.get(),
       model: this.model.get(),
-      outputFiles: useMultiple ? additionalInputFiles : undefined,
+      inputFiles: useMultiple ? additionalInputFiles : undefined,
     });
 
     const actionLabel = capitalize(action);
