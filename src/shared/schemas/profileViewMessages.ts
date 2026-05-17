@@ -14,6 +14,7 @@ import {
 import { ProviderVscodeSettingDefSchema } from '@shared/constants/providers';
 import { AgentMetadataBaseSchema } from './agent';
 import { commandOnly } from './messageFactories';
+import { SpendingStatusSchema } from './spendingStatus';
 
 // ============================================================
 // Data schemas
@@ -95,6 +96,8 @@ export const UpdateProfileMessageSchema = z.object({
   allowedModels: z.array(z.string()).nullable(),
   tierConstants: TierConstantsSchema,
   accessExpiresAt: z.string().nullish(),
+  spendingStatus: SpendingStatusSchema.nullish(),
+  quotaAutoSwitched: z.boolean().prefault(false),
   providerKeyStatuses: z.array(ProviderKeyStatusSchema).prefault([]),
   globalStreamingDefault: z.boolean().prefault(true),
 });
