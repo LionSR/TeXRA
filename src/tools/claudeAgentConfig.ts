@@ -18,11 +18,11 @@ import {
 } from './claudeAgentShared';
 
 // ============================================================================
-// Model — defaults to Opus 4.7; users can override per-call or via workspace state
+// Model — defaults to Sonnet 4.6; users can override per-call or via workspace state
 // ============================================================================
 
 /** Default Claude model passed to the Agent SDK. */
-export const CLAUDE_AGENT_DEFAULT_MODEL: ClaudeAgentModel = 'claude-opus-4-7';
+export const CLAUDE_AGENT_DEFAULT_MODEL: ClaudeAgentModel = 'claude-sonnet-4-6';
 
 export function parseClaudeAgentModel(raw: string): ClaudeAgentModel {
   return (CLAUDE_AGENT_MODELS as readonly string[]).includes(raw)

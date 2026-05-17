@@ -289,7 +289,7 @@ export class SettingsApp extends SettingsAppBase {
   private readonly codexReasoningEffort = signal<string>('high');
   private readonly codexApprovalPolicy = signal<string>('never');
   private readonly claudeAgentModel =
-    signal<ClaudeAgentModel>('claude-opus-4-7');
+    signal<ClaudeAgentModel>('claude-sonnet-4-6');
   private readonly claudeAgentPermissionMode =
     signal<ClaudeAgentPermissionMode>('acceptEdits');
   private readonly claudeAgentEffort = signal<ClaudeAgentEffort>('high');

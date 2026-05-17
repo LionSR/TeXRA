@@ -28,11 +28,11 @@ export type ClaudeAgentEffort = (typeof CLAUDE_AGENT_EFFORT_LEVELS)[number];
 /** Canonical Claude model IDs surfaced by the settings dropdown.
  * The SDK accepts arbitrary model strings; this list is what we expose in the
  * UI. Keep it in sync with `ClaudeAgentModelSchema` in settingsViewMessages.ts.
- * Opus and Sonnet use the alias form; Haiku 4.5 ships with a dated snapshot
+ * Sonnet and Opus use the alias form; Haiku 4.5 ships with a dated snapshot
  * suffix (its only published identifier at time of writing). */
 export const CLAUDE_AGENT_MODELS = [
-  'claude-opus-4-7',
   'claude-sonnet-4-6',
+  'claude-opus-4-7',
   'claude-haiku-4-5-20251001',
 ] as const;
 export type ClaudeAgentModel = (typeof CLAUDE_AGENT_MODELS)[number];
