@@ -37,7 +37,10 @@ function extractOutputContent(candidate: unknown): unknown {
 
 function formatOutputText(content: unknown): string {
   if (typeof content === 'string') return content;
-  if (content === undefined) return '';
+  // `null` must short-circuit alongside `undefined`. yaml.stringify(null)
+  // renders the literal string "null", which would surface a spurious
+  // output section for tools that return `output: null`.
+  if (content === undefined || content === null) return '';
   if (isPlainObject(content) && Object.keys(content).length === 0) return '';
   try {
     const yamlString = yaml.stringify(content);
