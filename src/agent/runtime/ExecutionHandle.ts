@@ -2,8 +2,7 @@
  * Polymorphic execution handles.
  *
  * Replaces data-oriented maps with handles that know how to report status,
- * interrupt/kill, and describe themselves. Eliminates the multi-registry
- * cascade in getExecutionStatusInfo and handleKill.
+ * interrupt/kill, and describe themselves.
  */
 
 import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
@@ -16,11 +15,6 @@ import {
 } from '@shared/schemas';
 import { formatDuration } from '@utils/core';
 
-// ============================================================================
-// Status types
-// ============================================================================
-
-/** Resolved status for display purposes. */
 export interface ExecutionStatusInfo {
   status: string;
   elapsed: string | null;
@@ -41,10 +35,6 @@ const PROCESSING_STATUSES: ReadonlySet<string> = new Set([
   STREAM_STATUS.RESUMING,
 ]);
 
-// ============================================================================
-// Handle interface
-// ============================================================================
-
 export interface ExecutionHandle {
   readonly executionId: string;
   readonly parentStreamId: StreamTabId;
@@ -53,27 +43,18 @@ export interface ExecutionHandle {
   readonly startedAt: number;
   readonly runtimeHost: AgentRuntimeHost;
 
-  /** Get current status without probing multiple registries. */
   getStatus(): ExecutionStatusInfo;
 
-  /** Interrupt or kill. Returns true if successful. */
+  /** Interrupt or kill. Returns true if the call had an effect. */
   terminate(): boolean;
 
-  /** Round progress (if applicable). */
   getProgress(): { currentRound?: number; totalRounds?: number };
 
-  /** Update round progress. */
   updateProgress(update: { currentRound?: number; totalRounds?: number }): void;
 }
 
-// ============================================================================
-// AgentExecutionHandle — for workflow and toolUse subagents
-// ============================================================================
-
 /**
  * Handle for agent-based executions (workflow or toolUse subagents).
- * Absorbs the per-entry role of the former subagentLineage module.
- *
  * When `parentStreamId` differs from `childStreamId`, the handle represents
  * a subagent whose parent is an orchestrator.
  */
@@ -139,13 +120,9 @@ export class AgentExecutionHandle implements ExecutionHandle {
   }
 }
 
-// ============================================================================
-// ProcessExecutionHandle — for background bash
-// ============================================================================
-
 /**
  * Handle for background bash processes.
- * No childStreamId — processes don't have their own stream.
+ * No `childStreamId` — processes don't have their own stream.
  */
 export class ProcessExecutionHandle implements ExecutionHandle {
   readonly category = 'process' as const;
@@ -166,7 +143,6 @@ export class ProcessExecutionHandle implements ExecutionHandle {
   ) {}
 
   getStatus(): ExecutionStatusInfo {
-    // If handle exists in registry → running
     return {
       status: STREAM_STATUS.RUNNING,
       elapsed: formatDuration(Date.now() - this.startedAt),
@@ -182,13 +158,9 @@ export class ProcessExecutionHandle implements ExecutionHandle {
   }
 
   updateProgress(): void {
-    // Processes don't have round progress
+    // Processes don't have round progress.
   }
 }
-
-// ============================================================================
-// Subagent lineage helpers
-// ============================================================================
 
 /** True when the handle is a child of parentStreamId (not the parent itself). */
 function isChildOf(
@@ -205,9 +177,9 @@ function isChildOf(
 }
 
 /**
- * Interrupt all active subagents of a parent stream.
- * Called before interrupting the parent so subagents stop
- * promptly instead of running to completion.
+ * Interrupt all active subagents of a parent stream. Called before
+ * interrupting the parent so subagents stop promptly instead of running to
+ * completion.
  */
 export function interruptActiveChildren(
   parentStreamId: StreamTabId,
@@ -220,7 +192,7 @@ export function interruptActiveChildren(
   }
 }
 
-/** Collect {executionId, agentName} for handles matching a class under a parent stream. */
+/** Collect {executionId, agentName, ...} for handles matching a class under a parent stream. */
 export function collectChildSummary(
   parentStreamId: StreamTabId,
   handles: Iterable<ExecutionHandle>,

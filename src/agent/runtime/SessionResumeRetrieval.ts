@@ -33,45 +33,25 @@ import {
 
 const logger = new AgentLogger('SessionResumeRetrieval');
 
-// =============================================================================
-// Types - Zod schemas as single source of truth
-// =============================================================================
-
-/**
- * Schema for tool-use session resume data.
- * Contains full snapshot with messages, state slices, etc.
- */
+/** Tool-use session resume data: full snapshot with messages, state slices. */
 const ToolUseResumeDataSchema = z.object({
   type: z.literal('toolUse'),
   snapshot: ToolUseSessionSnapshotSchema,
 });
 
-/**
- * Schema for workflow session resume data.
- * Contains minimal data - flow reads persisted state via executionId.
- */
+/** Workflow session resume data: minimal — flow reads persisted state via executionId. */
 const WorkflowResumeDataSchema = z.object({
   type: z.literal('workflow'),
   agentConfig: AgentConfigSchema,
   executionId: ExecutionIdSchema,
 });
 
-/** Resume data for tool-use sessions - derived from schema. */
 type ToolUseResumeData = z.infer<typeof ToolUseResumeDataSchema>;
-
-/** Resume data for workflow sessions - derived from schema. */
 type WorkflowResumeData = z.infer<typeof WorkflowResumeDataSchema>;
 
-/** Discriminated union of session resume data. */
 export type SessionResumeData = ToolUseResumeData | WorkflowResumeData;
 
-// =============================================================================
-// Schema for Tool-Use Flow Record Validation
-// =============================================================================
-
-/**
- * State slices schema (shared between flat and legacy formats).
- */
+/** State slices schema (shared between flat and legacy formats). */
 const StateSlicesSchema = z.object({
   runStateSnapshot: AgentRunStateSnapshotSchema,
   workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
@@ -118,10 +98,6 @@ const WorkflowFlowRecordStateSchema = z.object({
   totalRounds: z.int().nonnegative(),
 });
 
-// =============================================================================
-// Public API
-// =============================================================================
-
 /**
  * Retrieve resume data for a WAITING session.
  *
@@ -151,14 +127,7 @@ export async function retrieveSessionResumeData(
   return null;
 }
 
-// =============================================================================
-// Internal Helpers
-// =============================================================================
-
-/**
- * Read flow record from execution store.
- * Returns the flow record if found and valid, null otherwise.
- */
+/** Read a flow record from the execution store. Returns null if absent or invalid. */
 async function readFlowRecord(
   executionId: ExecutionId,
   agentType: 'tool-use' | 'workflow',

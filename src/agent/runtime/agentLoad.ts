@@ -1,11 +1,8 @@
-// Standard library imports
 import * as path from 'path';
 
-// Third-party imports
 import deepmerge from 'deepmerge';
 import * as yaml from 'yaml';
 
-// Local imports - agent components
 import {
   resolveAgent,
   type AgentSource,
@@ -23,8 +20,6 @@ import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import * as logger from '@agent/core/logger';
 import { toErrorMessage } from '@common/errors';
 import { resolveToolDefinitions } from '@tools/registry';
-
-// Internal imports
 import { AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'agentLoad';

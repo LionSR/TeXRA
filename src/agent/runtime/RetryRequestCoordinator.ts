@@ -1,12 +1,11 @@
 /**
- * RetryRequestCoordinator - Promise-based coordinator for manual retry handling.
+ * Promise-based coordinator for manual retry handling.
  *
- * Flow:
- * 1. Agent calls `waitForUserAction()` - returns Promise, emits 'showRetryRequest'
- * 2. User clicks retry → `triggerRetry()` → resolves Promise with 'retry'
- * 3. Or: User cancels → `cancelRetry()` → resolves Promise with 'cancel'
- * 4. Or: Timeout → auto-resolves Promise with 'timeout'
- * 5. On resolution → emits 'resolveRetryRequest' to dismiss UI
+ * 1. Agent calls `waitForRetry()` → returns Promise, emits 'showRetryRequest'.
+ * 2. User clicks retry → `triggerRetry()` → resolves Promise with 'retry'.
+ *    Or:    User cancels → `cancelRetry()` → resolves Promise with 'cancel'.
+ *    Or:    Timeout → auto-resolves Promise with 'timeout'.
+ * 3. On resolution → emits 'resolveRetryRequest' to dismiss UI.
  */
 
 import { getDefaultAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -17,34 +16,26 @@ import {
   type CoordinatorConfig,
 } from './BasePromiseCoordinator';
 
-/**
- * Result of a retry request. Discriminated union for type-safe handling.
- * Includes optional feedback for user guidance on retry.
- */
 export type RetryResult =
   | { action: 'retry'; feedback?: string }
   | { action: 'cancel' }
   | { action: 'timeout' };
 
-/**
- * Options for initiating a retry request.
- */
 export interface RetryRequestOptions {
-  /** Name of the operation that failed (e.g., "Model invocation") */
+  /** Name of the operation that failed (e.g. "Model invocation"). */
   operation: string;
-  /** Error message to display to user */
+  /** Error message to display to the user. */
   errorMessage?: string;
-  /** Model name for context */
+  /** Model name for context. */
   model?: string;
-  /** Logger for debug messages */
+  /** Logger for debug messages. */
   logger: AgentLogger;
-  /** Timeout in milliseconds (defaults to wait indefinitely) */
+  /** Timeout in milliseconds (default: wait indefinitely). */
   timeoutMs?: number;
-  /** Structured error details for expandable display */
+  /** Structured error details for expandable display. */
   errorDetails?: ProviderErrorPartial;
 }
 
-/** Payload for show event */
 interface RetryShowPayload extends Record<string, unknown> {
   streamId: string;
   operation: string;
@@ -53,10 +44,6 @@ interface RetryShowPayload extends Record<string, unknown> {
   errorDetails?: ProviderErrorPartial;
 }
 
-/**
- * Manages pending retry requests.
- * Extends BasePromiseCoordinator with retry-specific behavior.
- */
 export class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
   RetryResult,
   RetryShowPayload
@@ -67,26 +54,20 @@ export class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
     idFieldName: 'streamId',
   };
 
-  /** Track logger per request for debug messages */
+  /** Per-stream logger captured during waitForRetry, consulted by trigger/cancel. */
   private readonly loggers = new Map<string, AgentLogger>();
 
   protected getDefaultCancelResult(): RetryResult {
     return { action: 'cancel' };
   }
 
-  /**
-   * Wait for user action on a retry request.
-   */
   waitForRetry(
     streamId: string,
     options: RetryRequestOptions,
   ): Promise<RetryResult> {
     const { logger, operation, errorMessage, model, timeoutMs, errorDetails } =
       options;
-
-    // Store logger for this request
     this.loggers.set(streamId, logger);
-
     logger.debug(
       `Waiting for manual retry: ${errorMessage ?? 'unknown error'}`,
     );
@@ -108,35 +89,20 @@ export class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
     );
   }
 
-  /**
-   * Trigger a retry for a stream. Called when user clicks the retry button.
-   * @param streamId - The stream to retry
-   * @param feedback - Optional feedback from user
-   * @returns true if retry was triggered, false if no pending request
-   */
+  /** Resolve with 'retry'. Returns true if a pending request was resolved. */
   triggerRetry(streamId: string, feedback?: string): boolean {
-    const logger = this.loggers.get(streamId);
-    logger?.debug('Retry requested');
+    this.loggers.get(streamId)?.debug('Retry requested');
     this.loggers.delete(streamId);
     return this.resolveRequest(streamId, { action: 'retry', feedback });
   }
 
-  /**
-   * Cancel a retry for a stream. Called when user clicks the cancel button.
-   * @param streamId - The stream to cancel
-   * @returns true if cancelled, false if no pending request
-   */
+  /** Resolve with 'cancel'. Returns true if a pending request was resolved. */
   cancelRetry(streamId: string): boolean {
-    const logger = this.loggers.get(streamId);
-    logger?.debug('Retry cancelled');
+    this.loggers.get(streamId)?.debug('Retry cancelled');
     this.loggers.delete(streamId);
     return this.resolveRequest(streamId, { action: 'cancel' });
   }
 
-  /**
-   * Clear a pending retry request.
-   * Overrides base to clean up logger.
-   */
   override clearRequest(streamId: string): void {
     this.loggers.delete(streamId);
     super.clearRequest(streamId);
