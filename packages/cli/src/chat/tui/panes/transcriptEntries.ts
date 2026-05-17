@@ -26,23 +26,35 @@ export function splitTranscriptEntries(
   status: StreamStatus | undefined,
 ): {
   readonly finalized: ConversationEntry[];
-  /** Tool calls still running. Re-rendered on every store sync so the
-   *  status dot transitions in place; promoted to `finalized` once the
-   *  underlying entry flips `finalized: true`. */
-  readonly pendingTools: ConversationEntry[];
+  /** Non-finalized entries in original stream order. The renderer must
+   *  walk this list (rather than rendering tool rows and the live
+   *  assistant as separate buckets) so that text emitted before a tool
+   *  call appears above the tool row instead of below it. Tool entries
+   *  defer finalization until the stream itself finalizes — promoting
+   *  them earlier would let a fast tool jump ahead of still-streaming
+   *  assistant text in `<Static>` scrollback, where insertion order is
+   *  fixed. */
+  readonly pending: ConversationEntry[];
+  /** Kept for callers (and tests) that only care about the streaming
+   *  assistant entry. Derived from `entries`. */
   readonly live: ConversationEntry | undefined;
 } {
-  const live = isAppending(status)
-    ? findLiveAssistantEntry(entries)
-    : undefined;
+  const showLiveAssistant = isAppending(status);
   const finalized: ConversationEntry[] = [];
-  const pendingTools: ConversationEntry[] = [];
+  const pending: ConversationEntry[] = [];
   for (const entry of entries) {
     if (entry.finalized) {
       finalized.push(entry);
       continue;
     }
-    if (entry.role === 'tool') pendingTools.push(entry);
+    if (entry.role === 'tool') {
+      pending.push(entry);
+      continue;
+    }
+    if (entry.role === 'assistant' && showLiveAssistant) {
+      pending.push(entry);
+    }
   }
-  return { finalized, pendingTools, live };
+  const live = showLiveAssistant ? findLiveAssistantEntry(entries) : undefined;
+  return { finalized, pending, live };
 }

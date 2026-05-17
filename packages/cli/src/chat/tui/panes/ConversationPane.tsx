@@ -78,10 +78,7 @@ export function ConversationPane(
   const streams = useSignal(cliState.streams);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const entries = slice?.entries ?? [];
-  const { finalized, pendingTools, live } = splitTranscriptEntries(
-    entries,
-    slice?.status,
-  );
+  const { finalized, pending } = splitTranscriptEntries(entries, slice?.status);
 
   return (
     <Box flexDirection="column">
@@ -90,21 +87,23 @@ export function ConversationPane(
           <TranscriptEntry key={entry.id} entry={entry} width={props.width} />
         )}
       </Static>
-      {/* Tool calls still in `in_progress` re-render in place so the
-       *  status dot can transition to green/red when the result arrives.
-       *  Putting them in <Static> would freeze them at the running state. */}
-      {pendingTools.map((entry) =>
-        entry.toolUse ? (
-          <ToolUseRow key={entry.id} toolUse={entry.toolUse} />
-        ) : null,
-      )}
-      {/* Reserve a single line for the live region even when nothing is
-       * streaming. Ink renders Static items into scrollback above the
-       * live area, so toggling live presence between renders made the
-       * input bar appear to "shift down" by a line. A stable footer
-       * keeps the layout pinned. */}
-      <Box minHeight={1}>
-        {live ? <LiveTranscriptEntry entry={live} /> : null}
+      {/* `pending` interleaves the in-flight assistant entry with tool
+       *  rows in stream order — rendering them as separate buckets would
+       *  flip the visible order when the model emits text before a tool
+       *  call. <Static> can't carry these because they still mutate
+       *  (assistant text streaming, tool dot transitioning). The
+       *  minHeight=1 keeps the input bar pinned when the bucket is
+       *  empty. */}
+      <Box flexDirection="column" minHeight={1}>
+        {pending.map((entry) => {
+          if (entry.role === 'tool' && entry.toolUse) {
+            return <ToolUseRow key={entry.id} toolUse={entry.toolUse} />;
+          }
+          if (entry.role === 'assistant') {
+            return <LiveTranscriptEntry key={entry.id} entry={entry} />;
+          }
+          return null;
+        })}
       </Box>
     </Box>
   );

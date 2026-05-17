@@ -72,11 +72,16 @@ function renderLogEntry(
     // Drop malformed tool entries rather than crash. The progress view
     // does the same — a bad payload shouldn't take down the transcript.
     if (!toolUse) return null;
+    // Defer finalization to `finalizeAssistantTranscriptEntries`. A
+    // fast-completing tool would otherwise jump into `<Static>`
+    // scrollback while preceding assistant text from the same turn is
+    // still streaming, reversing the visible order (Static items are
+    // append-only).
     const next: ConversationEntry = {
       id: entry.id,
       role: 'tool',
       text: '',
-      finalized: toolUse.status === 'completed',
+      finalized: false,
       toolUse,
       toolUseSource: entry.data,
     };
