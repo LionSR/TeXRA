@@ -855,9 +855,7 @@ export async function runCli(
   }
   if (
     rawArgs.length === 1 &&
-    (rawArgs[0] === '--version' ||
-      rawArgs[0] === '-v' ||
-      rawArgs[0] === '-V')
+    (rawArgs[0] === '--version' || rawArgs[0] === '-v' || rawArgs[0] === '-V')
   ) {
     writeTextStdout(await readCliVersion());
     return { exitCode: CliExitCode.Success };
