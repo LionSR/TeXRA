@@ -7,7 +7,7 @@ export const DESKTOP_SETUP_TERMINAL_COMMANDS = {
   CANCEL: 'desktop:setupTerminalCancel',
 } as const;
 
-export const DesktopSetupTerminalStatusSchema = z.enum([
+const DesktopSetupTerminalStatusSchema = z.enum([
   'running',
   'succeeded',
   'failed',
@@ -19,12 +19,8 @@ export type DesktopSetupTerminalStatus = z.infer<
   typeof DesktopSetupTerminalStatusSchema
 >;
 
-const DesktopSetupTerminalFinalStatusSchema = z.enum([
-  'succeeded',
-  'failed',
-  'timed-out',
-  'cancelled',
-]);
+const DesktopSetupTerminalFinalStatusSchema =
+  DesktopSetupTerminalStatusSchema.exclude(['running']);
 
 const DesktopSetupTerminalBaseSchema = z.object({
   runId: z.string().min(1),
