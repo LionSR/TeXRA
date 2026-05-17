@@ -110,6 +110,14 @@ function betasFrom(call: unknown): string[] {
   return ((call as { betas?: string[] }).betas ?? []) as string[];
 }
 
+function firstCompactionCacheControlFrom(call: unknown): unknown {
+  const [firstMessage] = (call as { messages: MessageParam[] }).messages;
+  if (!Array.isArray(firstMessage.content)) {
+    return undefined;
+  }
+  return (firstMessage.content[0] as { cache_control?: unknown }).cache_control;
+}
+
 describe('Anthropic extended cache TTL beta', () => {
   it('adds the beta to create and token-count requests when tool-use uses a 1h cache TTL', async () => {
     const { client, createCalls, countCalls } = createClient();
@@ -138,7 +146,38 @@ describe('Anthropic extended cache TTL beta', () => {
     expect(betasFrom(countCalls[0])).not.toContain(EXTENDED_CACHE_TTL_BETA);
   });
 
-  it('adds the beta when a retained compaction block carries a 1h cache marker', async () => {
+  it('adds the beta when a retained compaction block uses a long-TTL request', async () => {
+    const { client, createCalls, countCalls } = createClient();
+    const messages: MessageParam[] = [
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'compaction',
+            content: '<summary>state</summary>',
+            cache_control: { type: 'ephemeral', ttl: '1h' },
+          },
+        ] as any,
+      },
+      ...structuredClone(USER_MESSAGES),
+    ];
+
+    await createHandler().createResponse({
+      client,
+      messages,
+      temperature: 0,
+      tools: [TOOL],
+    });
+
+    expect(betasFrom(createCalls[0])).toContain(EXTENDED_CACHE_TTL_BETA);
+    expect(betasFrom(countCalls[0])).toContain(EXTENDED_CACHE_TTL_BETA);
+    expect(firstCompactionCacheControlFrom(createCalls[0])).toEqual({
+      type: 'ephemeral',
+      ttl: '1h',
+    });
+  });
+
+  it('normalizes retained compaction blocks to a short TTL for non-tool requests', async () => {
     const { client, createCalls, countCalls } = createClient();
     const messages: MessageParam[] = [
       {
@@ -160,7 +199,13 @@ describe('Anthropic extended cache TTL beta', () => {
       temperature: 0,
     });
 
-    expect(betasFrom(createCalls[0])).toContain(EXTENDED_CACHE_TTL_BETA);
-    expect(betasFrom(countCalls[0])).toContain(EXTENDED_CACHE_TTL_BETA);
+    expect(firstCompactionCacheControlFrom(createCalls[0])).toEqual({
+      type: 'ephemeral',
+    });
+    expect(firstCompactionCacheControlFrom(countCalls[0])).toEqual({
+      type: 'ephemeral',
+    });
+    expect(betasFrom(createCalls[0])).not.toContain(EXTENDED_CACHE_TTL_BETA);
+    expect(betasFrom(countCalls[0])).not.toContain(EXTENDED_CACHE_TTL_BETA);
   });
 });
