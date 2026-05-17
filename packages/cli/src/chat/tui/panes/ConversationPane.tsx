@@ -27,8 +27,10 @@ function isAppending(status: StreamStatus | undefined): boolean {
 
 function TranscriptEntry({
   entry,
+  width,
 }: {
   readonly entry: ConversationEntry;
+  readonly width?: number;
 }): React.JSX.Element {
   if (entry.role === 'user') {
     return (
@@ -41,7 +43,7 @@ function TranscriptEntry({
 
   return (
     <Box marginBottom={1}>
-      <Markdown content={entry.text} />
+      <Markdown content={entry.text} width={width} />
     </Box>
   );
 }
@@ -58,7 +60,13 @@ function LiveTranscriptEntry({
   );
 }
 
-export function ConversationPane(): React.JSX.Element {
+export interface ConversationPaneProps {
+  readonly width?: number;
+}
+
+export function ConversationPane(
+  props: ConversationPaneProps = {},
+): React.JSX.Element {
   const activeStreamId = useSignal(cliState.activeStreamId);
   const streams = useSignal(cliState.streams);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
@@ -83,7 +91,9 @@ export function ConversationPane(): React.JSX.Element {
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Static items={finalized}>
-        {(entry) => <TranscriptEntry key={entry.id} entry={entry} />}
+        {(entry) => (
+          <TranscriptEntry key={entry.id} entry={entry} width={props.width} />
+        )}
       </Static>
       {live ? <LiveTranscriptEntry entry={live} /> : null}
     </Box>
