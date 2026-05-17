@@ -2,7 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
 ## [0.37.8] - 2026-05-17
+
+### Breaking Changes
+
+- **Legacy session and config migration shims removed** — TeXRA no longer rewrites legacy fields (`agentType`,
+  `maxRounds`, `xmlStructureMode`, `isMultipleOutput`, `session.agentCategory`, and similar) when loading saved
+  sessions or agent settings. Sessions and configurations created by very old versions of the extension may no longer
+  load and must be recreated.
 
 ### Features
 
