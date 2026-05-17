@@ -2,7 +2,13 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import type { StreamTabId } from '@shared/schemas';
+import { AgentLogger } from '@logger/AgentLogger';
+import { StreamLogStore } from '@logger/StreamLogStore';
+import {
+  MESSAGE_TYPES,
+  STREAM_STATUS,
+  type StreamTabId,
+} from '@shared/schemas';
 
 import {
   cliState,
@@ -15,7 +21,17 @@ import {
   nextFocusBack,
   nextFocusForward,
 } from '../../../packages/cli/src/chat/tui/state/focusCycle';
+import { syncStreamLog } from '../../../packages/cli/src/chat/tui/state/subscribeStreamLog';
 import { wrapRuntimeHost } from '../../../packages/cli/src/chat/tui/state/subscribeRuntimeHost';
+import { splitTranscriptEntries } from '../../../packages/cli/src/chat/tui/panes/ConversationPane';
+import {
+  appendAssistantTranscriptIfMissing,
+  appendLocalAssistantTranscript,
+  CLI_LOCAL_STREAM_ID,
+  clearActiveTranscript,
+  getTranscriptStartSeq,
+  moveLocalTranscriptToStream,
+} from '../../../packages/cli/src/chat/tui/state/transcript';
 import type { CliRuntimeHost } from '../../../packages/cli/src/runtime/runtimeHost';
 
 const root = 'root' as StreamTabId;
@@ -55,6 +71,288 @@ describe('cliState Phase 4 fields', () => {
     patchStream(root, (s) => ({ ...s, status: 'running' }));
     removeStream(root);
     expect(cliState.parentStream.get().has(child2)).toBe(false);
+  });
+});
+
+describe('CLI transcript state', () => {
+  it('mirrors error log entries into the transcript', () => {
+    const previousStore = AgentLogger.getStreamLogStore();
+    const store = new StreamLogStore();
+    AgentLogger.setStreamLogStore(store);
+
+    try {
+      const logger = new AgentLogger(root, true);
+      logger.error('Model request failed', {
+        messageType: MESSAGE_TYPES.ERROR,
+      });
+
+      syncStreamLog(root);
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({
+        role: 'error',
+        text: 'Model request failed',
+        finalized: true,
+      });
+    } finally {
+      AgentLogger.setStreamLogStore(previousStore);
+    }
+  });
+
+  it('adds a final assistant response only when the stream log did not render it', () => {
+    appendAssistantTranscriptIfMissing(root, 'The answer is 2.', 'final');
+    appendAssistantTranscriptIfMissing(root, 'The answer is 2.', 'final');
+
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      role: 'assistant',
+      text: 'The answer is 2.',
+      finalized: true,
+    });
+  });
+
+  it('keeps repeated final responses from distinct turns visible', () => {
+    const previousStore = AgentLogger.getStreamLogStore();
+    const store = new StreamLogStore();
+    AgentLogger.setStreamLogStore(store);
+
+    try {
+      const logger = new AgentLogger(root, true);
+      logger.info('first prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+      syncStreamLog(root);
+      appendAssistantTranscriptIfMissing(root, 'Done.', 'final:first');
+
+      logger.info('second prompt', {
+        messageType: MESSAGE_TYPES.USER_MESSAGE,
+      });
+      syncStreamLog(root);
+      appendAssistantTranscriptIfMissing(root, 'Done.', 'final:second');
+
+      logger.info('third prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+      syncStreamLog(root);
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual([
+        'first prompt',
+        'Done.',
+        'second prompt',
+        'Done.',
+        'third prompt',
+      ]);
+    } finally {
+      AgentLogger.setStreamLogStore(previousStore);
+    }
+  });
+
+  it('does not duplicate a final response already present in the stream log', () => {
+    const previousStore = AgentLogger.getStreamLogStore();
+    const store = new StreamLogStore();
+    AgentLogger.setStreamLogStore(store);
+
+    try {
+      const logger = new AgentLogger(root, true);
+      logger.info('Done.', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
+      syncStreamLog(root);
+      appendAssistantTranscriptIfMissing(root, 'Done.', 'final:first');
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual(['Done.']);
+      expect(entries[0]?.synthetic).toBeUndefined();
+    } finally {
+      AgentLogger.setStreamLogStore(previousStore);
+    }
+  });
+
+  it('keeps repeated local slash-command responses visible', () => {
+    cliState.activeStreamId.set(root);
+
+    appendLocalAssistantTranscript('Available commands: /help');
+    appendLocalAssistantTranscript('Available commands: /help');
+
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => entry.text)).toEqual([
+      'Available commands: /help',
+      'Available commands: /help',
+    ]);
+  });
+
+  it('keeps repeated local slash-command responses after stream-log syncs', () => {
+    const previousStore = AgentLogger.getStreamLogStore();
+    const store = new StreamLogStore();
+    AgentLogger.setStreamLogStore(store);
+
+    try {
+      const logger = new AgentLogger(root, true);
+      logger.info('prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+      syncStreamLog(root);
+      cliState.activeStreamId.set(root);
+
+      appendLocalAssistantTranscript('Available commands: /help');
+      logger.info('partial response', {
+        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+      });
+      syncStreamLog(root);
+
+      appendLocalAssistantTranscript('Available commands: /help');
+      syncStreamLog(root);
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(
+        entries
+          .filter((entry) => entry.syntheticKind === 'local')
+          .map((entry) => entry.text),
+      ).toEqual(['Available commands: /help', 'Available commands: /help']);
+    } finally {
+      AgentLogger.setStreamLogStore(previousStore);
+    }
+  });
+
+  it('keeps a model response live when local output follows it', () => {
+    const { finalized, live } = splitTranscriptEntries(
+      [
+        {
+          id: 'model-response',
+          role: 'assistant',
+          text: 'partial',
+          finalized: false,
+        },
+        {
+          id: 'local-help',
+          role: 'assistant',
+          text: 'Available commands: /help',
+          finalized: true,
+          synthetic: true,
+          syntheticKind: 'local',
+          syntheticAfterSeq: 1,
+        },
+      ],
+      STREAM_STATUS.RUNNING,
+    );
+
+    expect(live?.id).toBe('model-response');
+    expect(finalized.map((entry) => entry.id)).toEqual(['local-help']);
+  });
+
+  it('moves pre-session local slash-command output onto the resolved stream', () => {
+    appendLocalAssistantTranscript('Available commands: /help');
+
+    expect(
+      cliState.streams.get().get(CLI_LOCAL_STREAM_ID)?.entries,
+    ).toHaveLength(1);
+
+    moveLocalTranscriptToStream(root);
+
+    expect(cliState.streams.get().has(CLI_LOCAL_STREAM_ID)).toBe(false);
+    expect(cliState.activeStreamId.get()).toBe(root);
+    expect(
+      cliState.streams
+        .get()
+        .get(root)
+        ?.entries.map((entry) => entry.text),
+    ).toEqual(['Available commands: /help']);
+  });
+
+  it('preserves synthetic final responses across later log syncs', () => {
+    const previousStore = AgentLogger.getStreamLogStore();
+    const store = new StreamLogStore();
+    AgentLogger.setStreamLogStore(store);
+
+    try {
+      const logger = new AgentLogger(root, true);
+      logger.info('1+1', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+      syncStreamLog(root);
+      appendAssistantTranscriptIfMissing(root, 'The answer is 2.', 'final');
+
+      logger.info('next prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+      syncStreamLog(root);
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual([
+        '1+1',
+        'The answer is 2.',
+        'next prompt',
+      ]);
+    } finally {
+      AgentLogger.setStreamLogStore(previousStore);
+    }
+  });
+
+  it('orders multiple synthetic responses relative to their stream-log anchors', () => {
+    const previousStore = AgentLogger.getStreamLogStore();
+    const store = new StreamLogStore();
+    AgentLogger.setStreamLogStore(store);
+
+    try {
+      const logger = new AgentLogger(root, true);
+      logger.info('first prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+      syncStreamLog(root);
+      appendAssistantTranscriptIfMissing(root, 'first answer', 'final-1');
+
+      logger.info('second prompt', {
+        messageType: MESSAGE_TYPES.USER_MESSAGE,
+      });
+      syncStreamLog(root);
+      appendAssistantTranscriptIfMissing(root, 'second answer', 'final-2');
+
+      logger.info('third prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+      syncStreamLog(root);
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual([
+        'first prompt',
+        'first answer',
+        'second prompt',
+        'second answer',
+        'third prompt',
+      ]);
+    } finally {
+      AgentLogger.setStreamLogStore(previousStore);
+    }
+  });
+
+  it('does not replay cleared log entries on later syncs', () => {
+    const previousStore = AgentLogger.getStreamLogStore();
+    const store = new StreamLogStore();
+    AgentLogger.setStreamLogStore(store);
+
+    try {
+      const logger = new AgentLogger(root, true);
+      logger.info('old prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+      syncStreamLog(root);
+      cliState.activeStreamId.set(root);
+      clearActiveTranscript();
+
+      logger.info('new prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+      syncStreamLog(root);
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual(['new prompt']);
+    } finally {
+      AgentLogger.setStreamLogStore(previousStore);
+    }
+  });
+
+  it('resets cleared transcript cursors with cli state', () => {
+    const previousStore = AgentLogger.getStreamLogStore();
+    const store = new StreamLogStore();
+    AgentLogger.setStreamLogStore(store);
+
+    try {
+      const logger = new AgentLogger(root, true);
+      logger.info('old prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+      syncStreamLog(root);
+      cliState.activeStreamId.set(root);
+      clearActiveTranscript();
+      expect(getTranscriptStartSeq(root)).toBeGreaterThan(0);
+
+      resetCliState();
+
+      expect(getTranscriptStartSeq(root)).toBe(0);
+    } finally {
+      AgentLogger.setStreamLogStore(previousStore);
+    }
   });
 });
 

@@ -28,6 +28,7 @@ import { createCliRuntimeHost } from '../../runtime/runtimeHost';
 import { writeTextStderr } from '../../runtime/logSinks';
 import { App } from './App';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
+import { listSlashCommands, parseSlashInput } from './commands/slashRegistry';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
 import { clearApprovals } from './state/approvalQueue';
@@ -37,6 +38,12 @@ import { wrapRuntimeHost } from './state/subscribeRuntimeHost';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
+import {
+  appendAssistantTranscriptIfMissing,
+  appendLocalAssistantTranscript,
+  clearActiveTranscript,
+  moveLocalTranscriptToStream,
+} from './state/transcript';
 import { cleanupTerminalModes } from './terminalCleanup';
 
 export interface ChatResult {
@@ -56,6 +63,109 @@ interface TuiSession {
   runExitCode: CliExitCode;
   runCompleted: boolean;
   stopRequested: boolean;
+}
+
+interface SlashCommandContext {
+  readonly session: TuiSession;
+  readonly initialAgent: string;
+  readonly initialModel: string;
+  readonly interruptActive: () => void;
+  readonly requestInputExit: () => void;
+}
+
+async function handleTuiSlashCommand(
+  line: string,
+  context: SlashCommandContext,
+): Promise<boolean> {
+  const parsed = parseSlashInput(line);
+  if (!parsed) return false;
+
+  const command = parsed.name.toLowerCase();
+  const rest = parsed.remainder.trim();
+  switch (command) {
+    case 'help': {
+      const commands = listSlashCommands()
+        .map((cmd) => `/${cmd.name} - ${cmd.description}`)
+        .join('\n');
+      appendLocalAssistantTranscript(commands);
+      return true;
+    }
+    case 'clear':
+      clearActiveTranscript();
+      return true;
+    case 'exit':
+    case 'quit':
+      context.session.stopRequested = true;
+      context.interruptActive();
+      context.requestInputExit();
+      return true;
+    case 'agent':
+      if (context.session.runPromise) {
+        appendLocalAssistantTranscript(
+          'The agent is fixed for this chat session. Start a new chat to use a different agent.',
+        );
+      } else if (rest) {
+        cliState.sessionMeta.set({
+          ...cliState.sessionMeta.get(),
+          agent: rest,
+        });
+        appendLocalAssistantTranscript(`Agent set to ${rest}.`);
+      } else {
+        appendLocalAssistantTranscript('Usage: /agent <name>');
+      }
+      return true;
+    case 'model':
+      if (context.session.runPromise) {
+        appendLocalAssistantTranscript(
+          'The model is fixed for this chat session. Start a new chat to use a different model.',
+        );
+      } else if (rest) {
+        try {
+          await setCliHelperModel(rest);
+          cliState.sessionMeta.set({
+            ...cliState.sessionMeta.get(),
+            model: rest,
+          });
+          appendLocalAssistantTranscript(`Model set to ${rest}.`);
+        } catch (error: unknown) {
+          appendLocalAssistantTranscript(toErrorMessage(error));
+        }
+      } else {
+        appendLocalAssistantTranscript('Usage: /model <name>');
+      }
+      return true;
+    case 'status': {
+      const meta = cliState.sessionMeta.get();
+      const activeStreamId = cliState.activeStreamId.get();
+      const slice = activeStreamId
+        ? cliState.streams.get().get(activeStreamId)
+        : undefined;
+      appendLocalAssistantTranscript(
+        [
+          `agent: ${meta.agent || context.initialAgent}`,
+          `model: ${meta.model || context.initialModel}`,
+          `status: ${slice?.status ?? 'not started'}`,
+        ].join('\n'),
+      );
+      return true;
+    }
+    default: {
+      const registered = listSlashCommands().find(
+        (cmd) =>
+          cmd.name.toLowerCase() === command ||
+          cmd.aliases?.some((alias) => alias.toLowerCase() === command) ===
+            true,
+      );
+      if (registered) {
+        appendLocalAssistantTranscript(
+          `/${parsed.name} is registered but is not available in this CLI view yet.`,
+        );
+      } else {
+        appendLocalAssistantTranscript(`Unknown command: /${parsed.name}`);
+      }
+      return true;
+    }
+  }
 }
 
 export async function runChat(
@@ -125,6 +235,7 @@ export async function runChat(
   };
 
   const followUpQueue = new PQueue({ concurrency: 1 });
+  let requestInputExit: (() => void) | undefined;
 
   const interruptActive = (): void => {
     clearApprovals();
@@ -157,6 +268,7 @@ export async function runChat(
           enforceCategory: true,
           onStreamResolved: (resolvedStreamId) => {
             session.streamId = resolvedStreamId;
+            moveLocalTranscriptToStream(resolvedStreamId);
             cliState.activeStreamId.set(resolvedStreamId);
             if (session.stopRequested) interruptActive();
           },
@@ -169,6 +281,13 @@ export async function runChat(
           session.runExitCode = CliExitCode.ApprovalDenied;
         } else {
           session.runExitCode = CliExitCode.AgentError;
+        }
+        if (result.category === AgentCategory.ToolUse) {
+          appendAssistantTranscriptIfMissing(
+            result.streamId,
+            result.lastResponse,
+            `final:${result.executionId}`,
+          );
         }
         notify({ kind: 'agentFinished' });
       })
@@ -187,6 +306,21 @@ export async function runChat(
   };
 
   const handleSubmit = (line: string): void => {
+    void handleSubmittedLine(line);
+  };
+
+  const handleSubmittedLine = async (line: string): Promise<void> => {
+    if (
+      await handleTuiSlashCommand(line, {
+        session,
+        initialAgent: agent,
+        initialModel: model,
+        interruptActive,
+        requestInputExit: () => requestInputExit?.(),
+      })
+    ) {
+      return;
+    }
     if (!session.runPromise) {
       startSession(line);
       return;
@@ -211,16 +345,10 @@ export async function runChat(
     });
   };
 
-  // alternateScreen (Ink 7.0+) parks rendering on the terminal's alt buffer:
-  // stray stderr writes from agent errors or approval prompts can't leak
-  // into main-screen scrollback, and exit restores the user's pre-launch
-  // terminal contents intact (no banner/conversation mixing with the shell
-  // prompt the way main-screen mode did).
   const ink = render(<App onSubmit={handleSubmit} history={inputHistory} />, {
     stdout: process.stdout,
     stderr: process.stderr,
     stdin: process.stdin,
-    alternateScreen: true,
   });
 
   let pendingExitTimer: ReturnType<typeof setTimeout> | undefined;
@@ -267,6 +395,11 @@ export async function runChat(
     session.stopRequested = true;
     interruptActive();
     exitNow(129);
+  };
+  requestInputExit = () => {
+    removeProcessHandlers();
+    clearPendingExit();
+    ink.unmount();
   };
   process.on('SIGINT', handleSigint);
   process.on('SIGTERM', handleSigterm);
