@@ -451,6 +451,7 @@ export type LatexFormatterValue = (typeof LATEX_FORMATTER_VALUES)[number];
 export const LATEX_CONFIG_DEFAULTS = {
   workflowAutoCompile: true,
   workflowAutoCompileTimeoutMs: 120000,
+  workflowAutoOpenPdf: true,
   latexdiffBetweenRounds: false,
   latexdiffTimeoutMs: 10000,
   latexdiffMathMarkup: 'coarse' as LatexdiffMathMarkupValue,
@@ -473,6 +474,7 @@ export const LATEX_FIELD_TO_KEY = {
   workflowAutoCompile: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
   workflowAutoCompileTimeoutMs:
     WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+  workflowAutoOpenPdf: WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
   latexdiffBetweenRounds: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
   latexdiffTimeoutMs: WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
   latexdiffMathMarkup: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,

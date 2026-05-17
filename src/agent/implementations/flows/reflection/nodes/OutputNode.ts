@@ -1,5 +1,6 @@
 import { Node } from '@agent/node';
 import type { RoundFileMapping } from '@agent/output/types';
+import type { CompiledPdfArtifact } from '@agent/output/compiledPdfArtifacts';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import {
   hasCompileFailures,
@@ -18,8 +19,11 @@ import {
   type RoundSummary,
 } from '@agent/output/roundSummary';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { getWorkspaceState } from '@agent/core/stateStore';
 import { toErrorMessage } from '@common/errors';
+import { WorkspaceStateKey } from '@common/state/stateKeys';
 import type { CompileFailure, RoundOutput } from '@shared/schemas';
+import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import type { AgentFileLocation, FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
 
@@ -39,6 +43,7 @@ interface OutputExecResult {
   roundOutput: RoundOutput;
   summary: RoundSummary;
   compileFailures: CompileFailure[];
+  compiledArtifacts: CompiledPdfArtifact[];
   emitCompileFailures: boolean;
 }
 
@@ -88,6 +93,7 @@ export class OutputNode<C = unknown> extends Node<
 
     let mapping: RoundFileMapping | undefined;
     let compileFailures: CompileFailure[] = [];
+    const compiledArtifacts: CompiledPdfArtifact[] = [];
     let emitCompileFailures = false;
 
     // Only process if turn ended (model completed response)
@@ -122,13 +128,15 @@ export class OutputNode<C = unknown> extends Node<
 
         await tryOperation(
           'Latexdiff',
-          () =>
-            this.handleLatexdiff(
+          async () => {
+            const diffArtifacts = await this.handleLatexdiff(
               currentRound,
               diffBaseFiles,
               mapping!,
               diffManager,
-            ),
+            );
+            compiledArtifacts.push(...diffArtifacts);
+          },
           logger,
         );
 
@@ -139,10 +147,12 @@ export class OutputNode<C = unknown> extends Node<
               outputState,
               currentRound,
             );
-            compileFailures = await runCompileCheck(
+            const compileResult = await runCompileCheck(
               this.services,
               currentRound,
             );
+            compileFailures = compileResult.failures;
+            compiledArtifacts.push(...compileResult.artifacts);
             setCompileFailures(outputState, currentRound, compileFailures);
             emitCompileFailures =
               compileFailures.length > 0 || hadCompileFailures;
@@ -174,7 +184,13 @@ export class OutputNode<C = unknown> extends Node<
       { isRewrite: setting.isRewrite },
     );
 
-    return { roundOutput, summary, compileFailures, emitCompileFailures };
+    return {
+      roundOutput,
+      summary,
+      compileFailures,
+      compiledArtifacts,
+      emitCompileFailures,
+    };
   }
 
   async execFallback(
@@ -221,6 +237,7 @@ export class OutputNode<C = unknown> extends Node<
       },
       summary,
       compileFailures: [],
+      compiledArtifacts: [],
       emitCompileFailures: false,
     };
   }
@@ -250,6 +267,24 @@ export class OutputNode<C = unknown> extends Node<
     // Open files that haven't been opened yet
     for (const location of summary.filesToOpen) {
       runtimeHost.emit('requestOpenFile', { location, preserveFocus: true });
+    }
+
+    if (endTurn && shouldAutoOpenPdfOrLog()) {
+      if (execRes.compileFailures.length > 0) {
+        for (const failure of execRes.compileFailures) {
+          runtimeHost.emit('requestOpenFile', {
+            location: failure.log,
+            preserveFocus: true,
+          });
+        }
+      } else {
+        for (const artifact of execRes.compiledArtifacts) {
+          runtimeHost.emit('requestOpenFile', {
+            location: artifact.latestPdf,
+            preserveFocus: true,
+          });
+        }
+      }
     }
 
     // Validate expected outputs if turn ended
@@ -292,17 +327,24 @@ export class OutputNode<C = unknown> extends Node<
     baseFiles: FileLocation[],
     mapping: RoundFileMapping,
     diffManager: LatexDiffManager,
-  ): Promise<void> {
+  ): Promise<CompiledPdfArtifact[]> {
     const { logger } = this.services;
 
     const existingBase = await Promise.all(
-      baseFiles.map((f) => flexibleFS.exists(f)),
+      baseFiles.map((base) => flexibleFS.exists(base)),
     );
     if (!existingBase.some(Boolean)) {
       logger.debug('No base files found for latexdiff');
-      return;
+      return [];
     }
 
-    await diffManager.handleLatexdiffofOutput(currentRound, mapping);
+    return diffManager.handleLatexdiffofOutput(currentRound, mapping);
   }
+}
+
+function shouldAutoOpenPdfOrLog(): boolean {
+  return getWorkspaceState().get<boolean>(
+    WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
+    LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf,
+  );
 }
