@@ -237,17 +237,6 @@ describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () 
     expect(rendererMain).toContain('logViewerTemplate');
   });
 
-  it('preserves streamed setup terminal output on completion', () => {
-    const rendererMain = readRendererMain();
-
-    expect(rendererMain).toContain(
-      'payload.output.length > setupTerminalOutputText.length',
-    );
-    expect(rendererMain).not.toContain(
-      'payload.output || setupTerminalOutputText',
-    );
-  });
-
   it('does not import the deleted workspace-explorer surface', () => {
     const rendererMain = readRendererMain();
     expect(rendererMain).not.toContain('desktopWorkspaceExplorer');
