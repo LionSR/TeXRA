@@ -67,11 +67,11 @@ function applyToState<K extends ProgressEvent>(
       patchStream(p.streamId, (s) => ({ ...s, conversation: p.progress }));
       return;
     }
-    case 'updateStreamDescription': {
-      const p = payload as ProgressEventPayloads['updateStreamDescription'];
-      patchStream(p.streamId, (s) => ({ ...s, description: p.description }));
+    case 'updateStreamDescription':
+      // The CLI TUI dropped its status-bar description display, so this
+      // event has no consumer here. Ignored to avoid an unused per-turn
+      // write. The progress view (VS Code / desktop) still handles it.
       return;
-    }
     case 'updateActiveSubagents': {
       const p = payload as ProgressEventPayloads['updateActiveSubagents'];
       patchStream(p.parentStreamId, (s) => ({
