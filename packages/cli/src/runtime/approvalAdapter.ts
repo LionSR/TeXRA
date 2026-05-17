@@ -111,7 +111,7 @@ function isUnretryableRetryRequest(
   return false;
 }
 
-function immediateDecisionForApproval(
+export function immediateDecisionForApproval(
   event: ApprovalEvent,
   payload: ProgressEventPayloads[ApprovalEvent],
   context: CliContext,
