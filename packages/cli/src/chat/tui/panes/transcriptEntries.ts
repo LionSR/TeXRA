@@ -10,17 +10,6 @@ function isAppending(status: StreamStatus | undefined): boolean {
   );
 }
 
-function findLiveAssistantEntry(
-  entries: readonly ConversationEntry[],
-): ConversationEntry | undefined {
-  for (let index = entries.length - 1; index >= 0; index -= 1) {
-    const entry = entries[index];
-    if (entry.role !== 'assistant' || entry.finalized) continue;
-    return entry;
-  }
-  return undefined;
-}
-
 export function splitTranscriptEntries(
   entries: readonly ConversationEntry[],
   status: StreamStatus | undefined,
@@ -35,9 +24,6 @@ export function splitTranscriptEntries(
    *  assistant text in `<Static>` scrollback, where insertion order is
    *  fixed. */
   readonly pending: ConversationEntry[];
-  /** Kept for callers (and tests) that only care about the streaming
-   *  assistant entry. Derived from `entries`. */
-  readonly live: ConversationEntry | undefined;
 } {
   const showLiveAssistant = isAppending(status);
   const finalized: ConversationEntry[] = [];
@@ -55,6 +41,5 @@ export function splitTranscriptEntries(
       pending.push(entry);
     }
   }
-  const live = showLiveAssistant ? findLiveAssistantEntry(entries) : undefined;
-  return { finalized, pending, live };
+  return { finalized, pending };
 }

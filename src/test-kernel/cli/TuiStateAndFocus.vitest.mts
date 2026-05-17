@@ -288,7 +288,7 @@ describe('CLI transcript state', () => {
   });
 
   it('keeps a model response live when local output follows it', () => {
-    const { finalized, live } = splitTranscriptEntries(
+    const { finalized, pending } = splitTranscriptEntries(
       [
         {
           id: 'model-response',
@@ -309,7 +309,7 @@ describe('CLI transcript state', () => {
       STREAM_STATUS.RUNNING,
     );
 
-    expect(live?.id).toBe('model-response');
+    expect(pending.map((entry) => entry.id)).toEqual(['model-response']);
     expect(finalized.map((entry) => entry.id)).toEqual(['local-help']);
   });
 

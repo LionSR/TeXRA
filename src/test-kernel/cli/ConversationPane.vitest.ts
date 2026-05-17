@@ -60,14 +60,14 @@ describe('CLI conversation transcript splitting', () => {
       STREAM_STATUS.RUNNING,
     );
     expect(running.finalized).toEqual([user]);
-    expect(running.live).toBe(assistant);
+    expect(running.pending).toEqual([assistant]);
 
     const waitingBeforeFinalize = splitTranscriptEntries(
       [user, assistant],
       STREAM_STATUS.WAITING,
     );
     expect(waitingBeforeFinalize.finalized).toEqual([user]);
-    expect(waitingBeforeFinalize.live).toBeUndefined();
+    expect(waitingBeforeFinalize.pending).toEqual([]);
   });
 
   it('freezes assistant entries before they enter static scrollback', () => {
@@ -89,7 +89,7 @@ describe('CLI conversation transcript splitting', () => {
       STREAM_STATUS.WAITING,
     );
     expect(split.finalized.map((item) => item.id)).toEqual(['u1', 'a1']);
-    expect(split.live).toBeUndefined();
+    expect(split.pending).toEqual([]);
   });
 
   // Regression: pending tool rows must render after preceding live
@@ -109,7 +109,6 @@ describe('CLI conversation transcript splitting', () => {
 
     expect(split.finalized.map((e) => e.id)).toEqual(['u1']);
     expect(split.pending.map((e) => e.id)).toEqual(['a1', 't1']);
-    expect(split.live?.id).toBe('a1');
   });
 
   // Regression: tool rows must not finalize on their own — the stream-
