@@ -447,6 +447,140 @@ wa-button.desktop-pdf-close::part(base) {
 }
 
 /* =====================================================================
+   Setup command terminal overlay (wa-dialog)
+   --------------------------------------------------------------------- */
+
+wa-dialog.desktop-setup-terminal-overlay {
+  --width: min(920px, calc(100vw - 48px));
+}
+
+wa-dialog.desktop-setup-terminal-overlay::part(dialog) {
+  width: min(920px, calc(100vw - 48px));
+  max-height: calc(100vh - 64px);
+  border-radius: var(--wa-border-radius-m, 3px);
+}
+
+wa-dialog.desktop-setup-terminal-overlay::part(body) {
+  padding: 0;
+  overflow: hidden;
+}
+
+wa-dialog.desktop-setup-terminal-overlay .desktop-setup-terminal-body {
+  display: grid;
+  grid-template-rows: auto auto minmax(180px, 48vh) auto;
+  min-height: 0;
+  background: var(--wa-color-surface-default);
+  color: var(--wa-color-text-normal);
+}
+
+wa-dialog.desktop-setup-terminal-overlay .desktop-setup-terminal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--wa-space-m);
+  padding: var(--wa-space-m) var(--wa-space-l);
+  border-bottom: 1px solid var(--wa-color-surface-border);
+  background: var(--wa-color-surface-raised);
+}
+
+wa-dialog.desktop-setup-terminal-overlay .desktop-setup-terminal-heading {
+  min-width: 0;
+}
+
+wa-dialog.desktop-setup-terminal-overlay .desktop-setup-terminal-title {
+  margin: 0;
+  font-size: var(--wa-font-size-l);
+  font-weight: var(--wa-font-weight-semibold);
+}
+
+wa-dialog.desktop-setup-terminal-overlay .desktop-setup-terminal-subtitle {
+  margin: var(--wa-space-2xs) 0 0;
+  overflow: hidden;
+  color: var(--wa-color-text-quiet);
+  font-family: var(--wa-font-family-code, monospace);
+  font-size: var(--wa-font-size-s);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+wa-dialog.desktop-setup-terminal-overlay .desktop-setup-terminal-status {
+  flex: 0 0 auto;
+  border: 1px solid var(--wa-color-surface-border);
+  border-radius: var(--wa-border-radius-m, 3px);
+  padding: 2px 8px;
+  color: var(--wa-color-text-normal);
+  background: var(--wa-color-neutral-fill-quiet);
+  font-size: var(--wa-font-size-s);
+}
+
+wa-dialog.desktop-setup-terminal-overlay
+  .desktop-setup-terminal-status[data-status='succeeded'] {
+  border-color: var(--wa-color-success-border-quiet);
+  color: var(--wa-color-success-on-quiet);
+  background: var(--wa-color-success-fill-quiet);
+}
+
+wa-dialog.desktop-setup-terminal-overlay
+  .desktop-setup-terminal-status[data-status='failed'],
+wa-dialog.desktop-setup-terminal-overlay
+  .desktop-setup-terminal-status[data-status='timed-out'] {
+  border-color: var(--wa-color-danger-border-quiet);
+  color: var(--wa-color-danger-on-quiet);
+  background: var(--wa-color-danger-fill-quiet);
+}
+
+wa-dialog.desktop-setup-terminal-overlay
+  .desktop-setup-terminal-status[data-status='cancelled'] {
+  border-color: var(--wa-color-warning-border-quiet);
+  color: var(--wa-color-warning-on-quiet);
+  background: var(--wa-color-warning-fill-quiet);
+}
+
+wa-dialog.desktop-setup-terminal-overlay .desktop-setup-terminal-command {
+  display: block;
+  overflow: auto;
+  padding: var(--wa-space-s) var(--wa-space-l);
+  border-bottom: 1px solid var(--wa-color-surface-border);
+  background: var(--wa-color-surface-lowered);
+  color: var(--wa-color-text-normal);
+  font-family: var(--wa-font-family-code, monospace);
+  font-size: var(--wa-font-size-s);
+  white-space: pre-wrap;
+}
+
+wa-dialog.desktop-setup-terminal-overlay .desktop-setup-terminal-output {
+  margin: 0;
+  overflow: auto;
+  padding: var(--wa-space-m) var(--wa-space-l);
+  background: var(--wa-color-surface-default);
+  color: var(--wa-color-text-normal);
+  font-family: var(--wa-font-family-code, monospace);
+  font-size: var(--wa-font-size-s);
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+wa-dialog.desktop-setup-terminal-overlay .desktop-setup-terminal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--wa-space-xs);
+  padding: var(--wa-space-s) var(--wa-space-l);
+  border-top: 1px solid var(--wa-color-surface-border);
+  background: var(--wa-color-surface-raised);
+}
+
+wa-button.desktop-setup-terminal-button::part(base) {
+  min-height: 30px;
+  border-radius: var(--wa-border-radius-m, 3px);
+}
+
+wa-button.desktop-setup-terminal-button::part(label) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wa-space-2xs);
+}
+
+/* =====================================================================
    Logs drawer (wa-drawer)
    --------------------------------------------------------------------- */
 
