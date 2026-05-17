@@ -78,13 +78,20 @@ function LiveTranscriptEntry({
   const cols = width ?? 80;
   const wrapBudget = cols * LIVE_TAIL_ROWS * 2;
   const slicedChars = Math.max(0, entry.text.length - wrapBudget);
+  const slicedPrefix = slicedChars > 0 ? entry.text.slice(0, slicedChars) : '';
   const candidate =
     slicedChars > 0 ? entry.text.slice(slicedChars) : entry.text;
   const rows = wrapAnsiToWidth(candidate, cols).split('\n');
-  // Approximate: rows above the tail in the wrapped window + a width-
-  // based estimate of rows lost to the raw-char slice. Exact count would
-  // require wrapping the full buffer — the work this avoids.
-  const slicedRows = Math.ceil(slicedChars / cols);
+  // Estimate rows lost to the raw-char slice: each hard newline in the
+  // sliced prefix adds a row regardless of width, plus a width-based
+  // estimate for the remaining non-newline characters. An exact count
+  // would require wrapping the full buffer — the work this avoids.
+  let slicedNewlines = 0;
+  for (let i = 0; i < slicedPrefix.length; i += 1) {
+    if (slicedPrefix.charCodeAt(i) === 10) slicedNewlines += 1;
+  }
+  const slicedRows =
+    slicedNewlines + Math.ceil((slicedChars - slicedNewlines) / cols);
   const needsHint = rows.length + slicedRows > LIVE_TAIL_ROWS;
   const tailLimit = needsHint ? LIVE_TAIL_ROWS - 1 : LIVE_TAIL_ROWS;
   const tail = rows.slice(-tailLimit);
