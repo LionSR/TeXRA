@@ -8,10 +8,36 @@ import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 
 import { profileViewStyles } from './styles';
 
+const WARNING_THRESHOLD_PCT = 80;
+
 function formatUsd(value: number): string {
   if (!Number.isFinite(value)) return '$0.00';
   if (value >= 100) return `$${value.toFixed(0)}`;
   return `$${value.toFixed(2)}`;
+}
+
+type QuotaState = 'ok' | 'warning' | 'exhausted';
+
+function quotaState(status: SpendingStatus): QuotaState {
+  if (status.remaining <= 0) return 'exhausted';
+  if (status.percentUsed >= WARNING_THRESHOLD_PCT) return 'warning';
+  return 'ok';
+}
+
+function quotaNote(
+  state: QuotaState,
+  autoSwitched: boolean,
+  remainingPercent: number,
+): string | null {
+  if (state === 'exhausted') {
+    return autoSwitched
+      ? "Monthly relay quota reached — switched you to your own API keys. Toggle 'Use Included Access' back on to retry the relay."
+      : 'Monthly relay quota reached. Switch to your own API keys to keep going.';
+  }
+  if (state === 'warning') {
+    return `${remainingPercent}% of your monthly relay quota left.`;
+  }
+  return null;
 }
 
 @customElement('relay-quota-meter')
@@ -24,58 +50,58 @@ export class RelayQuotaMeter extends LitElement {
         display: block;
       }
       .quota-meter {
-        margin: 0 0 var(--wa-space-m, 12px);
-        padding: var(--wa-space-m, 12px) var(--wa-space-l, 16px);
-        border: 1px solid var(--wa-color-neutral-border-quiet, #ddd);
-        border-radius: var(--wa-border-radius-m, 6px);
-        background: var(--wa-color-neutral-background-quiet, #f7f7f7);
+        margin: 0 0 var(--wa-space-m);
+        padding: var(--wa-space-m) var(--wa-space-l);
+        border: 1px solid var(--wa-color-neutral-border-quiet);
+        border-radius: var(--wa-border-radius-m);
+        background: var(--wa-color-neutral-background-quiet);
       }
       .quota-meter[data-state='exhausted'] {
-        border-color: var(--wa-color-danger-border-quiet, #e8b4b4);
-        background: var(--wa-color-danger-background-quiet, #fdecec);
+        border-color: var(--wa-color-danger-border-quiet);
+        background: var(--wa-color-danger-background-quiet);
       }
       .quota-meter[data-state='warning'] {
-        border-color: var(--wa-color-warning-border-quiet, #e8d4a8);
-        background: var(--wa-color-warning-background-quiet, #fdf6e3);
+        border-color: var(--wa-color-warning-border-quiet);
+        background: var(--wa-color-warning-background-quiet);
       }
       .quota-row {
         display: flex;
         justify-content: space-between;
         align-items: baseline;
-        gap: var(--wa-space-m, 12px);
-        margin-bottom: var(--wa-space-xs, 4px);
+        gap: var(--wa-space-m);
+        margin-bottom: var(--wa-space-xs);
       }
       .quota-label {
         font-weight: 600;
-        font-size: var(--wa-font-size-s, 0.875rem);
+        font-size: var(--wa-font-size-s);
       }
       .quota-amount {
         font-variant-numeric: tabular-nums;
-        font-size: var(--wa-font-size-s, 0.875rem);
-        color: var(--wa-color-neutral-text-quiet, #555);
+        font-size: var(--wa-font-size-s);
+        color: var(--wa-color-neutral-text-quiet);
       }
       .quota-bar {
         position: relative;
         height: 6px;
-        background: var(--wa-color-neutral-border-quiet, #e0e0e0);
+        background: var(--wa-color-neutral-border-quiet);
         border-radius: 3px;
         overflow: hidden;
       }
       .quota-bar-fill {
         height: 100%;
-        background: var(--wa-color-brand-fill-loud, #4080ff);
+        background: var(--wa-color-brand-fill-loud);
         transition: width 200ms ease-out;
       }
       .quota-meter[data-state='warning'] .quota-bar-fill {
-        background: var(--wa-color-warning-fill-loud, #d49b1a);
+        background: var(--wa-color-warning-fill-loud);
       }
       .quota-meter[data-state='exhausted'] .quota-bar-fill {
-        background: var(--wa-color-danger-fill-loud, #d44a4a);
+        background: var(--wa-color-danger-fill-loud);
       }
       .quota-note {
-        margin-top: var(--wa-space-xs, 4px);
-        font-size: var(--wa-font-size-xs, 0.75rem);
-        color: var(--wa-color-neutral-text-quiet, #666);
+        margin-top: var(--wa-space-xs);
+        font-size: var(--wa-font-size-xs);
+        color: var(--wa-color-neutral-text-quiet);
       }
     `,
   ];
@@ -85,8 +111,7 @@ export class RelayQuotaMeter extends LitElement {
 
   /**
    * True when the included-access toggle was auto-flipped off because
-   * the quota was exhausted. Used to surface the cause near the meter
-   * so users know why they were moved to BYOK.
+   * the quota was exhausted. Drives the explanatory copy near the meter.
    */
   @property({ type: Boolean }) autoSwitched = false;
 
@@ -96,17 +121,8 @@ export class RelayQuotaMeter extends LitElement {
 
     const percent = Math.min(100, Math.max(0, s.percentUsed));
     const remainingPercent = Math.max(0, Math.round(100 - percent));
-    const state =
-      s.remaining <= 0 ? 'exhausted' : percent >= 80 ? 'warning' : 'ok';
-
-    const note =
-      state === 'exhausted'
-        ? this.autoSwitched
-          ? "Monthly relay quota reached — switched you to your own API keys. Toggle 'Use Included Access' back on to retry the relay."
-          : 'Monthly relay quota reached. Switch to your own API keys to keep going.'
-        : state === 'warning'
-          ? `${remainingPercent}% of your monthly relay quota left.`
-          : null;
+    const state = quotaState(s);
+    const note = quotaNote(state, this.autoSwitched, remainingPercent);
 
     return html`
       <div class="quota-meter" data-state=${state}>
