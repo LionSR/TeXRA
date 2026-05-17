@@ -77,23 +77,14 @@ export class FileSelectGroup extends LitElement {
       ),
   );
 
-  /** Track previous expanded state to detect visibility changes */
-  private wasExpanded = false;
-
   protected override updated(changedProps: Map<string, unknown>): void {
-    const isExpanded = this.currentListVisible;
-    if (changedProps.has('config') || (isExpanded && !this.wasExpanded)) {
+    if (changedProps.has('config')) {
       this.sortableController.reinitialize();
     }
-    this.wasExpanded = isExpanded;
   }
 
   private get listId(): string {
     return `${this.config.type}Files`;
-  }
-
-  private handleToggleList(): void {
-    this.dispatchEvent(MainViewEvents.toggleList({ listId: this.listId }));
   }
 
   private handleAddOpenedFiles(): void {
@@ -172,12 +163,6 @@ export class FileSelectGroup extends LitElement {
     const key =
       `${this.config.type}Files` as keyof FileStateContextValue['multiFiles'];
     return this.fileState?.multiFiles[key] ?? [];
-  }
-
-  private get currentListVisible(): boolean {
-    const key =
-      `${this.config.type}Files` as keyof FileStateContextValue['multiFilesVisible'];
-    return this.fileState?.multiFilesVisible[key] ?? false;
   }
 
   private get isFileInputDisabled(): boolean {
@@ -341,8 +326,6 @@ export class FileSelectGroup extends LitElement {
 
   override render(): TemplateResult {
     const { config } = this;
-    const toggleId = `toggle${config.type[0].toUpperCase()}${config.type.slice(1)}Files`;
-    const chevronName = this.currentListVisible ? 'chevron-up' : 'chevron-down';
 
     return html`
       <div
@@ -350,7 +333,6 @@ export class FileSelectGroup extends LitElement {
           'file-select': true,
           'drop-active': this.isDragActive,
         })}
-        data-expanded=${String(this.currentListVisible)}
         @dragenter=${this.handleDragEnter}
         @dragover=${this.handleDragOver}
         @dragleave=${this.handleDragLeave}
@@ -375,16 +357,6 @@ export class FileSelectGroup extends LitElement {
               : nothing}
           </div>
           <div class="file-select-actions">
-            <button
-              id=${toggleId}
-              class="toggle-icon"
-              title=${config.toggleTitle}
-              type="button"
-              aria-label=${config.toggleTitle}
-              @click=${this.handleToggleList}
-            >
-              ${waIcon(chevronName)}
-            </button>
             ${renderIconActionButton({
               id: `addOpened${config.type[0].toUpperCase()}${config.type.slice(
                 1,
@@ -414,20 +386,13 @@ export class FileSelectGroup extends LitElement {
             })}
           </div>
         </div>
-        ${this.currentListVisible
-          ? html`
-              <div
-                id="${this.listId}Container"
-                class="multiple-files-container"
-              >
-                <div class="multiple-files-content">
-                  <div id=${this.listId} class="multiple-files-list">
-                    ${this.renderFileList()}
-                  </div>
-                </div>
-              </div>
-            `
-          : nothing}
+        <div id="${this.listId}Container" class="multiple-files-container">
+          <div class="multiple-files-content">
+            <div id=${this.listId} class="multiple-files-list">
+              ${this.renderFileList()}
+            </div>
+          </div>
+        </div>
       </div>
     `;
   }
