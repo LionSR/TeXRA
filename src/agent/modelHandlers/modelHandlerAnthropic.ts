@@ -190,6 +190,7 @@ const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
 const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
 const COMPACTION_BETA: AnthropicBeta = 'compact-2026-01-12';
+const EXTENDED_CACHE_TTL_BETA: AnthropicBeta = 'extended-cache-ttl-2025-04-11';
 
 const OPUS_46_FULLNAME = 'claude-opus-4-6';
 const OPUS_47_FULLNAME = 'claude-opus-4-7';
@@ -237,6 +238,14 @@ const LONG_CACHE_CONTROL: CacheControlEphemeral = {
   type: 'ephemeral',
   ttl: '1h',
 };
+
+function isLongCacheControl(cacheControl: unknown): boolean {
+  if (!cacheControl || typeof cacheControl !== 'object') {
+    return false;
+  }
+  const marker = cacheControl as Partial<CacheControlEphemeral>;
+  return marker.type === 'ephemeral' && marker.ttl === '1h';
+}
 
 // Cache creation cost multipliers relative to base input price, by TTL.
 const CACHE_CREATION_COST_MULTIPLIER_5M = 1.25;
@@ -393,6 +402,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
   }
 
+  private hasLongCacheControlMarker(messages: MessageParam[]): boolean {
+    return messages.some((message) => {
+      if (!Array.isArray(message.content)) {
+        return false;
+      }
+      return message.content.some((block) =>
+        isLongCacheControl(
+          (block as { cache_control?: unknown }).cache_control,
+        ),
+      );
+    });
+  }
+
   /**
    * Sets up context management configuration for Anthropic's server-side editing.
    * Must be called before token counting so estimate options match create options.
@@ -534,11 +556,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Strip betas that only apply to message creation (e.g., output length)
     // while keeping context headers needed for accurate token counting.
-    const countTokenBetas = options?.betas?.filter(
-      (beta) => beta === CONTEXT_MANAGEMENT_BETA || beta === COMPACTION_BETA,
+    const countTokenBetas = new Set(
+      options?.betas?.filter(
+        (beta) =>
+          beta === CONTEXT_MANAGEMENT_BETA ||
+          beta === COMPACTION_BETA ||
+          beta === EXTENDED_CACHE_TTL_BETA,
+      ),
     );
-    if (countTokenBetas?.length) {
-      countTokensParams.betas = countTokenBetas;
+    if (this.hasLongCacheControlMarker(messages)) {
+      countTokenBetas.add(EXTENDED_CACHE_TTL_BETA);
+    }
+    if (countTokenBetas.size > 0) {
+      countTokensParams.betas = [...countTokenBetas];
     }
 
     const responseTokenCount =
@@ -632,6 +662,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
         cache_control: cacheControl,
       }),
     };
+
+    if (
+      supportsCache &&
+      (isLongCacheControl(cacheControl) ||
+        this.hasLongCacheControlMarker(messages))
+    ) {
+      this.ensureBeta(options, EXTENDED_CACHE_TTL_BETA);
+    }
 
     if (tools?.length) {
       options.tools = toAnthropicTools(tools, {
