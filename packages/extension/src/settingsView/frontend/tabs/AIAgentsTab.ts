@@ -68,8 +68,8 @@ const CLAUDE_MODEL_OPTIONS: readonly {
   value: ClaudeAgentModel;
   label: string;
 }[] = [
-  { value: 'claude-opus-4-7', label: 'Opus 4.7' },
   { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
+  { value: 'claude-opus-4-7', label: 'Opus 4.7' },
   { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
 ] as const;
 
@@ -163,7 +163,7 @@ export class AIAgentsTab extends LitElement {
   @property({ type: String }) codexReasoningEffort = 'high';
   @property({ type: String }) codexApprovalPolicy = 'never';
   @property({ type: String }) claudeAgentModel: ClaudeAgentModel =
-    'claude-opus-4-7';
+    'claude-sonnet-4-6';
   @property({ type: String })
   claudeAgentPermissionMode: ClaudeAgentPermissionMode = 'acceptEdits';
   @property({ type: String }) claudeAgentEffort: ClaudeAgentEffort = 'high';

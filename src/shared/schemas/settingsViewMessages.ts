@@ -365,8 +365,8 @@ export type CodexApprovalPolicy = z.infer<typeof CodexApprovalPolicySchema>;
 /** Claude Agent model options surfaced in the picker. The SDK accepts any
  * string, but the dropdown is fixed to the canonical Anthropic families. */
 export const ClaudeAgentModelSchema = z.enum([
-  'claude-opus-4-7',
   'claude-sonnet-4-6',
+  'claude-opus-4-7',
   'claude-haiku-4-5-20251001',
 ]);
 export type ClaudeAgentModel = z.infer<typeof ClaudeAgentModelSchema>;
