@@ -28,7 +28,8 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   historyRef.current = history;
 
   // Listen for Ctrl-R *outside* the text input — Ink emits the keystroke
-  // to every `useInput` consumer, but ink-text-input ignores ctrl chords.
+  // to every `useInput` consumer, and BaseTextInput drops unhandled ctrl
+  // chords so this handler still fires.
   useInput((input, key) => {
     if (disabled) return;
     if (key.ctrl && input.toLowerCase() === 'r' && historyRef.current) {
@@ -74,6 +75,13 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     // search prompt.
     if (disabled && reverseSearchOpen) setReverseSearchOpen(false);
   }, [disabled, reverseSearchOpen]);
+
+  // Surface palette visibility so the App-level Tab handler (focus cycle)
+  // can stand down while the palette owns Tab for "accept selection".
+  useEffect(() => {
+    cliState.slashPaletteOpen.set(showPalette);
+    return () => cliState.slashPaletteOpen.set(false);
+  }, [showPalette]);
 
   return (
     <Box flexDirection="column">

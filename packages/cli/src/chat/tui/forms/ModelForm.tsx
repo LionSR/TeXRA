@@ -5,6 +5,7 @@
 // by the caller (see `commands/registerBuiltins.tsx`).
 
 import { Box, Text, useInput } from 'ink';
+import { Spinner } from '@inkjs/ui';
 import { useEffect, useState } from 'react';
 
 import { Select } from '../ui/Select';
@@ -80,7 +81,7 @@ export function ModelForm(props: ModelFormProps): React.JSX.Element {
   if (loading) {
     return (
       <ModelFrame color="cyan" title="/model">
-        <Text dimColor>Loading model registry…</Text>
+        <Spinner label="Loading model registry…" />
       </ModelFrame>
     );
   }
