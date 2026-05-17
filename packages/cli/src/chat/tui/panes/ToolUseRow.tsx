@@ -7,15 +7,30 @@
 // progress view; the CLI sticks to a universal renderer that works for
 // every tool without dispatch tables.
 
+import { useMemo } from 'react';
+
 import { Box, Text } from 'ink';
 
 import type { NormalizedToolUse } from '@shared/schemas';
 import { isPlainObject } from '@shared/utils/string';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 const STATUS_DOT = '●';
 const OUTPUT_CORNER = '⎿';
 const MAX_OUTPUT_LINES = 3;
 const MAX_HEADER_PREVIEW = 80;
+const MAX_ERROR_PREVIEW = 240;
+
+// Tool inputs vary in shape; show whichever of these "primary" fields
+// exists first. Order matters — earlier keys win.
+const PRIMARY_INPUT_KEYS = [
+  'command',
+  'code',
+  'path',
+  'file_path',
+  'query',
+  'url',
+] as const;
 
 function displayToolName(toolName: string): string {
   // Drop provider/handler prefixes like `claude:Bash` or `mcp:slack:send`
@@ -29,21 +44,9 @@ function previewInput(input: unknown): string {
   if (typeof input === 'string') return input;
   if (input === undefined || input === null) return '';
   if (isPlainObject(input)) {
-    // Heuristic: most tools have a primary "what" field. Show that
-    // first; otherwise fall back to a compact JSON dump.
-    const primary =
-      (typeof input.command === 'string' && input.command) ||
-      (typeof input.code === 'string' && input.code) ||
-      (typeof input.path === 'string' && input.path) ||
-      (typeof input.file_path === 'string' && input.file_path) ||
-      (typeof input.query === 'string' && input.query) ||
-      (typeof input.url === 'string' && input.url) ||
-      '';
-    if (primary) return primary;
-    try {
-      return JSON.stringify(input);
-    } catch {
-      return '';
+    for (const key of PRIMARY_INPUT_KEYS) {
+      const value = input[key];
+      if (typeof value === 'string' && value) return value;
     }
   }
   try {
@@ -53,10 +56,8 @@ function previewInput(input: unknown): string {
   }
 }
 
-function truncateOneLine(text: string, max: number): string {
-  const oneLine = text.replaceAll(/\s+/g, ' ').trim();
-  if (oneLine.length <= max) return oneLine;
-  return `${oneLine.slice(0, max - 1)}…`;
+function collapseWhitespace(text: string): string {
+  return text.replaceAll(/\s+/g, ' ').trim();
 }
 
 function statusColor(toolUse: NormalizedToolUse): 'green' | 'red' | undefined {
@@ -73,21 +74,30 @@ export function ToolUseRow({
   const color = statusColor(toolUse);
   const name = displayToolName(toolUse.toolName) || 'tool';
 
-  const previewSource =
-    toolUse.headerSummary || previewInput(toolUse.input) || '';
-  const preview = previewSource
-    ? truncateOneLine(previewSource, MAX_HEADER_PREVIEW)
-    : '';
+  // Memoize by toolUse identity. subscribeStreamLog's data-ref cache
+  // keeps `toolUse` stable across re-renders when nothing changed, so
+  // the heavy work (split, slice, JSON.stringify in previewInput) only
+  // runs when there's a real update.
+  const { preview, visibleOutput, hiddenCount } = useMemo(() => {
+    const sourceText =
+      toolUse.headerSummary || previewInput(toolUse.input) || '';
+    const previewText = sourceText
+      ? truncateWithEllipsis(collapseWhitespace(sourceText), MAX_HEADER_PREVIEW)
+      : '';
+    const lines = toolUse.outputText ? toolUse.outputText.split('\n') : [];
+    const visible = lines.slice(0, MAX_OUTPUT_LINES);
+    return {
+      preview: previewText,
+      visibleOutput: visible,
+      hiddenCount: Math.max(0, lines.length - visible.length),
+    };
+  }, [toolUse]);
 
-  const outputLines = toolUse.outputText ? toolUse.outputText.split('\n') : [];
-  const visibleOutput = outputLines.slice(0, MAX_OUTPUT_LINES);
-  const hiddenCount = Math.max(0, outputLines.length - visibleOutput.length);
-
-  const completed = toolUse.status === 'completed';
   const hasError = toolUse.isError && toolUse.errorText;
   // When a tool completes with neither output nor error, show "(no output)"
   // so the row doesn't look stuck. While running, we leave the body blank.
-  const showNoOutput = completed && outputLines.length === 0 && !hasError;
+  const showNoOutput =
+    toolUse.status === 'completed' && visibleOutput.length === 0 && !hasError;
 
   return (
     <Box flexDirection="column" marginBottom={1}>
@@ -116,7 +126,12 @@ export function ToolUseRow({
       {hasError ? (
         <Box flexDirection="row" flexWrap="nowrap" paddingLeft={2}>
           <Text dimColor>{`${OUTPUT_CORNER} `}</Text>
-          <Text color="red">{truncateOneLine(toolUse.errorText, 240)}</Text>
+          <Text color="red">
+            {truncateWithEllipsis(
+              collapseWhitespace(toolUse.errorText),
+              MAX_ERROR_PREVIEW,
+            )}
+          </Text>
         </Box>
       ) : null}
       {showNoOutput ? (

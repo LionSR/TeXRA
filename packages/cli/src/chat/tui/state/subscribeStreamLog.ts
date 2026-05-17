@@ -21,19 +21,20 @@ const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.USER_MESSAGE,
 ]);
 
-/** Signature of a tool entry's renderable fields. The store updates the
- *  TOOL_USE entry in place (`status: 'in_progress'` → `'completed'`,
- *  `output`/`error` filled later), so a text-only equality check would
- *  miss those transitions. */
-function toolUseSignature(toolUse: NormalizedToolUse): string {
-  return [
-    toolUse.status ?? '',
-    toolUse.toolName,
-    toolUse.outputText,
-    toolUse.errorText,
-    toolUse.headerSummary,
-    toolUse.isError ? '1' : '0',
-  ].join(' ');
+// Field-by-field — a stringified signature would allocate the full
+// outputText (potentially 50 KB+ of bash output) on every comparison.
+function toolUseEqual(
+  prev: NormalizedToolUse,
+  next: NormalizedToolUse,
+): boolean {
+  return (
+    prev.status === next.status &&
+    prev.toolName === next.toolName &&
+    prev.outputText === next.outputText &&
+    prev.errorText === next.errorText &&
+    prev.headerSummary === next.headerSummary &&
+    prev.isError === next.isError
+  );
 }
 
 function entriesEqual(
@@ -49,7 +50,7 @@ function entriesEqual(
   }
   if (prev.role === 'tool') {
     if (!prev.toolUse || !next.toolUse) return prev.toolUse === next.toolUse;
-    return toolUseSignature(prev.toolUse) === toolUseSignature(next.toolUse);
+    return toolUseEqual(prev.toolUse, next.toolUse);
   }
   return true;
 }
@@ -59,17 +60,25 @@ function renderLogEntry(
   prev: ConversationEntry | undefined,
 ): ConversationEntry | null {
   if (entry.messageType === MESSAGE_TYPES.TOOL_USE) {
+    // StreamLog.update spreads into a fresh `data` object on every patch
+    // (StreamLog.ts:89-94), so identity equality is a reliable signal
+    // that the entry hasn't changed since the last sync. Skipping the
+    // Zod parse + YAML stringify here matters because syncStreamLog runs
+    // ~every animation frame during streaming and tool output can be
+    // 50 KB+ per completed entry.
+    if (prev?.toolUse && prev.toolUseSource === entry.data) return prev;
+
     const toolUse = normalizeToolUseData(entry.data);
     // Drop malformed tool entries rather than crash. The progress view
     // does the same — a bad payload shouldn't take down the transcript.
     if (!toolUse) return null;
-    const finalized = toolUse.status === 'completed';
     const next: ConversationEntry = {
       id: entry.id,
       role: 'tool',
       text: '',
-      finalized,
+      finalized: toolUse.status === 'completed',
       toolUse,
+      toolUseSource: entry.data,
     };
     return prev && entriesEqual(prev, next) ? prev : next;
   }
