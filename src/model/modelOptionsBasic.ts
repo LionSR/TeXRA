@@ -69,16 +69,19 @@ export function formatCost(
   return `$${inputPrice.toFixed(3)}/$${outputPrice.toFixed(3)}`;
 }
 
-const prefixHint = (prefix: string, base: string): string =>
-  base ? `${prefix} | ${base}` : prefix;
+function prefixHint(prefix: string, base: string): string {
+  return base ? `${prefix} | ${base}` : prefix;
+}
 
 /** Build the model tooltip string from static model metadata. */
 export function buildModelHint(config: ModelConfig): string {
   const base = hint(config);
-  if (isExpensiveModel(config.provider, config.name))
+  if (isExpensiveModel(config.provider, config.name)) {
     return prefixHint(EXPENSIVE_MODEL_HINT, base);
-  if (isFastFirstResponseModel(config.inputPrice))
+  }
+  if (isFastFirstResponseModel(config.inputPrice)) {
     return prefixHint(FAST_FIRST_RESPONSE_HINT, base);
+  }
   return base;
 }
 
