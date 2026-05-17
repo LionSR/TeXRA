@@ -55,14 +55,34 @@ function TranscriptEntry({
   );
 }
 
+// Cap the streaming live region to a short tail. Ink redraws the live
+// region on every text delta by moving the cursor up and rewriting the
+// rows; if the live region grows taller than the terminal viewport the
+// cursor-up overshoots and clobbers Static items that have already been
+// pushed into scrollback (truncating earlier turns when the user scrolls
+// back). The full content is preserved — the assistant entry transitions
+// into Ink's <Static> the moment it finalizes, which writes it to
+// scrollback in one shot. Keep this number small; it bounds the
+// scrollback damage during long streaming responses.
+const LIVE_TAIL_LINES = 12;
+
 function LiveTranscriptEntry({
   entry,
 }: {
   readonly entry: ConversationEntry;
 }): React.JSX.Element {
+  const lines = entry.text.split('\n');
+  const hiddenLines = Math.max(0, lines.length - LIVE_TAIL_LINES);
+  const tail = hiddenLines > 0 ? lines.slice(-LIVE_TAIL_LINES) : lines;
   return (
-    <Box>
-      <Text>{entry.text}</Text>
+    <Box flexDirection="column">
+      {hiddenLines > 0 ? (
+        <Text dimColor>
+          ⋯ {hiddenLines} earlier line{hiddenLines === 1 ? '' : 's'} hidden
+          while streaming
+        </Text>
+      ) : null}
+      <Text>{tail.join('\n')}</Text>
     </Box>
   );
 }
