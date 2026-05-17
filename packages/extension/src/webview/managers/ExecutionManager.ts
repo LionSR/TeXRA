@@ -17,6 +17,7 @@ interface CommandMessage {
   editedFile?: string;
   agent?: string;
   model?: string;
+  inputFiles?: string[];
   outputFiles?: string[];
 }
 
@@ -72,18 +73,18 @@ export class ExecutionManager {
   }
 
   handleMultipleOperation(message: CommandMessage): void {
-    const outputFiles = message.outputFiles ?? [];
+    const inputFiles = message.inputFiles ?? [];
     const label = message.command.startsWith('pack') ? 'Packing' : 'Cleaning';
     logger.info(
       CHANNEL,
-      `${label} multiple files: ${message.inputFile}, ${outputFiles.join(', ')}`,
+      `${label} multiple files: ${message.inputFile}, ${inputFiles.join(', ')}`,
     );
     void vscode.commands.executeCommand(
       `texra.${message.command}`,
       message.inputFile,
       message.agent,
       message.model,
-      outputFiles,
+      inputFiles,
     );
   }
 }
