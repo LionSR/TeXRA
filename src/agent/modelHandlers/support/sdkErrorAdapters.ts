@@ -75,7 +75,12 @@ function matchMappedSdkError(
 
   if (apiErrorCtor && err instanceof apiErrorCtor) {
     const statusCode = (err as { status?: number }).status;
-    tagSdkError(err, provider, sdkErrorKindFromStatusCode(statusCode), statusCode);
+    tagSdkError(
+      err,
+      provider,
+      sdkErrorKindFromStatusCode(statusCode),
+      statusCode,
+    );
   }
 }
 
@@ -83,9 +88,21 @@ const ANTHROPIC_SDK_ERROR_MAPPINGS: readonly SdkErrorClassMapping[] = [
   { ctor: AnthropicAPIConnectionTimeoutError, kind: 'connection_timeout' },
   { ctor: AnthropicAPIConnectionError, kind: 'connection' },
   { ctor: AnthropicAPIUserAbortError, kind: 'user_abort' },
-  { ctor: AnthropicBadRequestError, kind: 'bad_request', includeStatusCode: true },
-  { ctor: AnthropicAuthenticationError, kind: 'authentication', includeStatusCode: true },
-  { ctor: AnthropicPermissionDeniedError, kind: 'permission_denied', includeStatusCode: true },
+  {
+    ctor: AnthropicBadRequestError,
+    kind: 'bad_request',
+    includeStatusCode: true,
+  },
+  {
+    ctor: AnthropicAuthenticationError,
+    kind: 'authentication',
+    includeStatusCode: true,
+  },
+  {
+    ctor: AnthropicPermissionDeniedError,
+    kind: 'permission_denied',
+    includeStatusCode: true,
+  },
   { ctor: AnthropicNotFoundError, kind: 'not_found', includeStatusCode: true },
   { ctor: AnthropicConflictError, kind: 'conflict', includeStatusCode: true },
   {
@@ -93,7 +110,11 @@ const ANTHROPIC_SDK_ERROR_MAPPINGS: readonly SdkErrorClassMapping[] = [
     kind: 'unprocessable_entity',
     includeStatusCode: true,
   },
-  { ctor: AnthropicRateLimitError, kind: 'rate_limit', includeStatusCode: true },
+  {
+    ctor: AnthropicRateLimitError,
+    kind: 'rate_limit',
+    includeStatusCode: true,
+  },
   {
     ctor: AnthropicInternalServerError,
     kind: 'internal_server',
@@ -149,8 +170,16 @@ const OPENAI_SDK_ERROR_MAPPINGS: readonly SdkErrorClassMapping[] = [
   { ctor: OpenAIAPIConnectionError, kind: 'connection' },
   { ctor: OpenAIAPIUserAbortError, kind: 'user_abort' },
   { ctor: OpenAIBadRequestError, kind: 'bad_request', includeStatusCode: true },
-  { ctor: OpenAIAuthenticationError, kind: 'authentication', includeStatusCode: true },
-  { ctor: OpenAIPermissionDeniedError, kind: 'permission_denied', includeStatusCode: true },
+  {
+    ctor: OpenAIAuthenticationError,
+    kind: 'authentication',
+    includeStatusCode: true,
+  },
+  {
+    ctor: OpenAIPermissionDeniedError,
+    kind: 'permission_denied',
+    includeStatusCode: true,
+  },
   { ctor: OpenAINotFoundError, kind: 'not_found', includeStatusCode: true },
   { ctor: OpenAIConflictError, kind: 'conflict', includeStatusCode: true },
   {
@@ -159,7 +188,11 @@ const OPENAI_SDK_ERROR_MAPPINGS: readonly SdkErrorClassMapping[] = [
     includeStatusCode: true,
   },
   { ctor: OpenAIRateLimitError, kind: 'rate_limit', includeStatusCode: true },
-  { ctor: OpenAIInternalServerError, kind: 'internal_server', includeStatusCode: true },
+  {
+    ctor: OpenAIInternalServerError,
+    kind: 'internal_server',
+    includeStatusCode: true,
+  },
 ];
 
 export function tagOpenAISdkError(err: unknown, provider = 'openai'): void {
