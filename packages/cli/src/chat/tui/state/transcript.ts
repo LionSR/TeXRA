@@ -91,6 +91,20 @@ export function moveLocalTranscriptToStream(streamId: StreamTabId): void {
   removeStream(CLI_LOCAL_STREAM_ID);
 }
 
+export function finalizeAssistantTranscriptEntries(
+  streamId: StreamTabId,
+): void {
+  patchStream(streamId, (slice) => {
+    let changed = false;
+    const entries = slice.entries.map((entry) => {
+      if (entry.role !== 'assistant' || entry.finalized) return entry;
+      changed = true;
+      return { ...entry, finalized: true };
+    });
+    return changed ? { ...slice, entries } : slice;
+  });
+}
+
 export function clearActiveTranscript(): void {
   const activeStreamId = cliState.activeStreamId.get();
   if (!activeStreamId) {
