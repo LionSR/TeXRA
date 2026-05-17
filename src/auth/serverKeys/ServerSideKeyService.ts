@@ -213,12 +213,10 @@ export class ServerSideKeyService {
 
     if (changed) {
       this.clearAllCaches();
-
-      // Pre-fetch tier config (which includes providers) when enabling
-      if (value) {
-        await this.tierService.getConfig();
-      }
-
+      // No pre-fetch on enable — the next canUseServerSideKeys() does
+      // its own auth'd fetch in parallel with fetchAccessStatus(), and
+      // an anonymous pre-fetch here would just be discarded by the
+      // cachedWithAuth mismatch in TierService.getConfig.
       this._onDidChangeModelAccess.fire(value);
     }
   }
@@ -332,10 +330,9 @@ export class ServerSideKeyService {
           CHANNEL,
           'Relay quota exhausted; switching useIncludedModelAccess off',
         );
-        // Fire-and-forget — we don't want to block the access check on
-        // state persistence. setUseIncludedModelAccess clears caches as
-        // a side-effect so the toggle change takes effect immediately.
-        void this.setUseIncludedModelAccess(false);
+        // Await so the persisted toggle state, the cleared cache, and
+        // the access result agree by the time the caller resumes.
+        await this.setUseIncludedModelAccess(false);
         return false;
       }
 
