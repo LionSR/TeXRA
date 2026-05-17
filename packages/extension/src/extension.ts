@@ -83,6 +83,7 @@ import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { interruptAllCodexSessions } from '@tools/codex';
 import { interruptAllClaudeAgentSessions } from '@tools/claudeAgent';
 import { setExtensionChecker } from '@tools/externalToolDefs';
+import { setOpenPdfOpener } from '@tools/OpenPdfTool';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup';
 import {
@@ -355,6 +356,16 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeNativeToolEditApproval(context, extensionAgentRuntimeHost);
   setLeanVscodeServices(leanVscodeIntegration);
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
+  setOpenPdfOpener(async ({ location, preserveFocus }) => {
+    await vscode.commands.executeCommand(
+      'vscode.open',
+      vscode.Uri.file(location.absolutePath),
+      {
+        viewColumn: vscode.ViewColumn.Beside,
+        preserveFocus,
+      } satisfies vscode.TextDocumentShowOptions,
+    );
+  });
   setToolMissingHandler(async (message, openDocsCommand) => {
     const actions = openDocsCommand ? ['View Installation Guide'] : [];
     const choice = await vscode.window.showErrorMessage(message, ...actions);
