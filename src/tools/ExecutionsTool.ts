@@ -58,6 +58,7 @@ import {
   formatTodoSection,
   getAvailablePaths,
   getExecutionStatusInfo,
+  resolveExecutionDisplayCategory,
 } from './executionFormatters';
 import { ToolError, type ToolResult } from './result';
 import { defineTool } from './core/define';
@@ -86,6 +87,9 @@ const WORKFLOW_ONLY_FIELDS = new Set([
 
 /** Config fields only relevant to toolUse agents — hidden for workflow. */
 const TOOL_USE_ONLY_FIELDS = new Set(['toolConfig']);
+
+/** Synthetic process configs carry agent-only defaults that are not meaningful. */
+const PROCESS_HIDDEN_FIELDS = new Set(['model', 'agentCategory', 'toolConfig']);
 
 /**
  * Listen for follow-up messages on the current stream and abort the given
@@ -503,13 +507,18 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       };
     }
 
-    const category = meta?.category ?? config?.agentCategory;
+    const category = resolveExecutionDisplayCategory(
+      config?.agent,
+      meta?.category ?? config?.agentCategory,
+    );
     const info = getExecutionStatusInfo(executionId, meta?.terminalStatus);
     const lines = [
       `Execution: ${executionId}`,
       `Agent: ${config?.agent ?? 'unknown'}`,
       ...(category ? [`Category: ${category}`] : []),
-      `Model: ${config?.model ?? 'default'}`,
+      ...(category === 'process'
+        ? []
+        : [`Model: ${config?.model ?? 'default'}`]),
       `Timestamp: ${meta?.timestamp ?? 'unknown'}`,
       `Status: ${formatStatusInfo(info)}`,
     ];
@@ -727,12 +736,17 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     }
 
     // Filter out fields irrelevant to this agent's category
-    const { agentCategory } = config;
-    if (agentCategory) {
+    const category = resolveExecutionDisplayCategory(
+      config.agent,
+      config.agentCategory,
+    );
+    if (category) {
       const excludeSet =
-        agentCategory === 'toolUse'
-          ? WORKFLOW_ONLY_FIELDS
-          : TOOL_USE_ONLY_FIELDS;
+        category === 'process'
+          ? PROCESS_HIDDEN_FIELDS
+          : category === 'toolUse'
+            ? WORKFLOW_ONLY_FIELDS
+            : TOOL_USE_ONLY_FIELDS;
       const filtered = Object.fromEntries(
         Object.entries(config).filter(([key]) => !excludeSet.has(key)),
       );
