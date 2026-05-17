@@ -1,4 +1,3 @@
-// Local imports - runtime
 import {
   proposalCoordinator,
   type ProposalRequestOptions,

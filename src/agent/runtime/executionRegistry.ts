@@ -1,8 +1,8 @@
 /**
  * Handle-based execution registry.
  *
- * Manages ExecutionHandle instances, providing registration, lookup,
- * change notification, and subagent lineage tracking in a single module.
+ * Manages ExecutionHandle instances and provides registration, lookup, change
+ * notification, and subagent lineage tracking in a single module.
  */
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -31,45 +31,36 @@ export {
 
 const registry = new Map<string, ExecutionHandle>();
 const changeCallbacks = new Map<string, Array<() => void>>();
-// Persistent listeners — stay attached across notifications (unlike one-shot
+// Persistent listeners stay attached across notifications (unlike one-shot
 // waiters in `changeCallbacks`). Used by the executions subscribe action.
 const persistentListeners = new Map<
   string,
   Set<(handle: ExecutionHandle | undefined) => void>
 >();
 
-// Notify waiters and refresh UI badges when stream status changes (e.g. RUNNING → WAITING).
-// Without this, waitForExecutionChange only resolves on progress/kill/untrack,
-// and the background tasks panel would show stale running/waiting badges.
+// Notify waiters and refresh UI badges when stream status changes
+// (e.g. RUNNING → WAITING). Without this, waitForExecutionChange only resolves
+// on progress/kill/untrack, and the background-tasks panel shows stale badges.
 StreamStatusService.onDidChange(({ streamId }) => {
   for (const [executionId, handle] of registry) {
     if (
       handle instanceof AgentExecutionHandle &&
       handle.childStreamId === streamId
     ) {
-      const runtimeHost = handle.runtimeHost;
       notifyWaiters(executionId);
-      // Re-emit badge update so the parent's background tasks panel
-      // reflects the new status (e.g. running → waiting).
       if (handle.parentStreamId !== handle.childStreamId) {
-        emitActiveSubagentsUpdate(handle.parentStreamId, runtimeHost);
+        emitActiveSubagentsUpdate(handle.parentStreamId, handle.runtimeHost);
       }
       break;
     }
   }
 });
 
-// ============================================================================
-// Core registry operations
-// ============================================================================
-
 /** Register an execution handle. */
 export function trackExecution(handle: ExecutionHandle): void {
   registry.set(handle.executionId, handle);
-  const runtimeHost = handle.runtimeHost;
+  const { runtimeHost } = handle;
 
-  // Emit subagent UI update and parent linkage only for actual subagents
-  // (where parentStreamId differs from childStreamId)
   if (handle instanceof AgentExecutionHandle) {
     if (handle.parentStreamId !== handle.childStreamId) {
       emitActiveSubagentsUpdate(handle.parentStreamId, runtimeHost);
@@ -78,10 +69,7 @@ export function trackExecution(handle: ExecutionHandle): void {
         parentStreamId: handle.parentStreamId,
       });
     }
-  }
-
-  // Emit process badge update for background bash processes
-  if (handle instanceof ProcessExecutionHandle) {
+  } else if (handle instanceof ProcessExecutionHandle) {
     registerProcessOutput(handle, runtimeHost);
     emitActiveProcessesUpdate(handle.parentStreamId, runtimeHost);
   }
@@ -93,20 +81,19 @@ export function untrackExecution(executionId: string): void {
   registry.delete(executionId);
   notifyWaiters(executionId);
   if (!handle) return;
-  const runtimeHost = handle.runtimeHost;
+  const { runtimeHost } = handle;
 
-  // Emit subagent UI update on removal (only for actual subagents)
   if (
     handle instanceof AgentExecutionHandle &&
     handle.parentStreamId !== handle.childStreamId
   ) {
     emitActiveSubagentsUpdate(handle.parentStreamId, runtimeHost);
+    return;
   }
 
-  // Emit process badge update on removal and flush final output.
-  // The final read must complete before the badge update, because the
-  // badge handler prunes output entries for processes no longer active.
   if (handle instanceof ProcessExecutionHandle) {
+    // The final read must complete before the badge update, because the
+    // badge handler prunes output entries for processes no longer active.
     const finalize = (): void => {
       unregisterProcessOutput(executionId);
       emitActiveProcessesUpdate(handle.parentStreamId, runtimeHost);
@@ -119,12 +106,11 @@ export function untrackExecution(executionId: string): void {
   }
 }
 
-/** Get a handle by execution ID. */
 export function getHandle(executionId: string): ExecutionHandle | undefined {
   return registry.get(executionId);
 }
 
-/** Terminate an execution via its handle. Returns true if successful. */
+/** Terminate an execution via its handle. Returns true on success. */
 export function killExecution(executionId: string): boolean {
   const handle = registry.get(executionId);
   if (!handle) return false;
@@ -135,15 +121,14 @@ export function killExecution(executionId: string): boolean {
   return result;
 }
 
-/** All currently tracked (active) execution IDs. */
 export function getActiveExecutionIds(): string[] {
   return [...registry.keys()];
 }
 
 /**
- * Kill only background OS processes (bash, codex) without touching agent stream status.
- * Agent executions are left in RUNNING so the restart recovery logic can restore
- * them to WAITING (resumable) if a flow record exists.
+ * Kill only background OS processes (bash, codex) without touching agent
+ * stream status. Agent executions are left in RUNNING so restart recovery can
+ * restore them to WAITING (resumable) if a flow record exists.
  */
 export function killBackgroundProcesses(): void {
   for (const [executionId, handle] of registry) {
@@ -153,7 +138,6 @@ export function killBackgroundProcesses(): void {
   }
 }
 
-/** Delegate progress update to the handle. */
 export function updateExecutionProgress(
   executionId: string,
   update: { currentRound?: number; totalRounds?: number },
@@ -163,10 +147,6 @@ export function updateExecutionProgress(
   handle.updateProgress(update);
   notifyWaiters(executionId);
 }
-
-// ============================================================================
-// Blocking wait
-// ============================================================================
 
 /**
  * Wait for any change on an execution: status transition, progress update,
@@ -192,8 +172,7 @@ export function waitForExecutionChange(
 
 /**
  * Wait for any of the given executions to change.
- * Resolves with the execution ID that changed first (or '' on abort).
- * Pass an AbortSignal to clean up callbacks if the caller times out.
+ * Resolves with the execution id that changed first (or '' on abort).
  */
 export function waitForAnyExecutionChange(
   executionIds: string[],
@@ -232,15 +211,7 @@ export function waitForAnyExecutionChange(
   });
 }
 
-// ============================================================================
-// Subagent lineage
-// ============================================================================
-
-/**
- * Interrupt all active subagents of a parent stream.
- * Called before interrupting the parent so subagents stop
- * promptly instead of running to completion.
- */
+/** Interrupt all active subagents of a parent stream. */
 export function interruptActiveChildren(parentStreamId: StreamTabId): void {
   interruptChildren(parentStreamId, registry.values());
 }
@@ -248,7 +219,8 @@ export function interruptActiveChildren(parentStreamId: StreamTabId): void {
 /**
  * Detach all active subagents from a parent, promoting them to top-level.
  * Subagents continue running independently and deliver results via the
- * follow-up queue. Called when stopping an orchestrator without killing children.
+ * follow-up queue. Called when stopping an orchestrator without killing
+ * children.
  */
 export function detachActiveChildren(
   parentStreamId: StreamTabId,
@@ -287,35 +259,31 @@ export function getActiveChildren(parentStreamId: StreamTabId): {
   };
 }
 
-/** Emit the current active subagent list for a parent to the progress UI. */
 function emitActiveSubagentsUpdate(
   parentStreamId: StreamTabId,
   runtimeHost: AgentRuntimeHost,
 ): void {
-  const children = collectChildSummary(
-    parentStreamId,
-    registry.values(),
-    AgentExecutionHandle,
-  );
   runtimeHost.emit('updateActiveSubagents', {
     parentStreamId,
-    children,
+    children: collectChildSummary(
+      parentStreamId,
+      registry.values(),
+      AgentExecutionHandle,
+    ),
   });
 }
 
-/** Emit the current active processes list for a parent to the progress UI. */
 function emitActiveProcessesUpdate(
   parentStreamId: StreamTabId,
   runtimeHost: AgentRuntimeHost,
 ): void {
-  const processes = collectChildSummary(
-    parentStreamId,
-    registry.values(),
-    ProcessExecutionHandle,
-  );
   runtimeHost.emit('updateActiveProcesses', {
     parentStreamId,
-    processes,
+    processes: collectChildSummary(
+      parentStreamId,
+      registry.values(),
+      ProcessExecutionHandle,
+    ),
   });
 }
 
@@ -342,8 +310,7 @@ function notifyWaiters(executionId: string): void {
   if (!listeners && !callbacks) return;
 
   // Persistent listeners fire first and stay attached so subscribers keep
-  // receiving every transition (status, progress, untrack) until they
-  // dispose themselves.
+  // receiving every transition until they dispose themselves.
   if (listeners) {
     const handle = registry.get(executionId);
     // Iterate a snapshot so a listener disposing itself mid-fire is safe.
@@ -356,20 +323,18 @@ function notifyWaiters(executionId: string): void {
   }
 
   // Backstop against listener leaks: if the execution is no longer tracked,
-  // any still-registered persistent listener is firing into the void. The
-  // binder's listener self-disposes on untrack, but a third-party caller
-  // that forgets the disposer would otherwise leak indefinitely.
+  // any still-registered persistent listener is firing into the void.
   if (!registry.has(executionId)) {
     persistentListeners.delete(executionId);
   }
 }
 
 /**
- * Add a persistent listener invoked on every change to `executionId`
- * (status transition, progress update, kill, untrack). Returns a disposer.
+ * Add a persistent listener invoked on every change to `executionId` (status
+ * transition, progress update, kill, untrack). Returns a disposer.
  *
- * The callback receives the current `ExecutionHandle`, or `undefined` once
- * the execution has been untracked (terminal event).
+ * The callback receives the current `ExecutionHandle`, or `undefined` once the
+ * execution has been untracked (terminal event).
  */
 export function addExecutionListener(
   executionId: string,

@@ -1,11 +1,8 @@
-// Third-party imports
 import { AsyncLocalStorage } from 'async_hooks';
 
-// Local imports - shared schemas
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 
-// Local imports - runtime
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentProposalCoordinator } from './AgentProposalCoordinator';
 import type { PlanApprovalCoordinator } from './PlanApprovalCoordinator';

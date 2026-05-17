@@ -374,8 +374,7 @@ function compensateFailedActivation(args: {
 export async function buildAgentLaunchContext(
   input: AgentLaunchInput,
 ): Promise<AgentLaunchContext> {
-  const { configPayload } = input;
-  const { runtimeHost } = input;
+  const { configPayload, runtimeHost } = input;
   const executionId = input.executionId ?? generateExecutionId();
   if (
     !input.streamTabIdOverride &&
