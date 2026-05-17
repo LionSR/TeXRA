@@ -14,7 +14,7 @@ import type {
   ConfigTarget,
 } from '@platform/interfaces/config';
 import type { Disposable } from '@platform/interfaces/disposable';
-import type { LogBackend, LogUtilsOptions } from '@platform/interfaces/log';
+import type { LogBackend } from '@platform/interfaces/log';
 import type { StateStore } from '@platform/interfaces/state';
 import type { StorageProvider } from '@platform/interfaces/storage';
 import type { WorkspaceProvider } from '@platform/interfaces/workspace';
@@ -40,7 +40,6 @@ export interface RecordingLogEntry {
   level: RecordingLogLevel;
   channel: string;
   message: string;
-  options?: LogUtilsOptions;
 }
 
 function fakeFsError(code: string, message: string): Error {
@@ -288,29 +287,28 @@ export class RecordingLogBackend implements LogBackend {
     this.initializedChannels.push({ channel, isAgent });
   }
 
-  debug(channel: string, message: string, options?: LogUtilsOptions): void {
-    this.record('debug', channel, message, options);
+  debug(channel: string, message: string): void {
+    this.record('debug', channel, message);
   }
 
-  info(channel: string, message: string, options?: LogUtilsOptions): void {
-    this.record('info', channel, message, options);
+  info(channel: string, message: string): void {
+    this.record('info', channel, message);
   }
 
-  warn(channel: string, message: string, options?: LogUtilsOptions): void {
-    this.record('warn', channel, message, options);
+  warn(channel: string, message: string): void {
+    this.record('warn', channel, message);
   }
 
-  error(channel: string, message: string, options?: LogUtilsOptions): void {
-    this.record('error', channel, message, options);
+  error(channel: string, message: string): void {
+    this.record('error', channel, message);
   }
 
   private record(
     level: RecordingLogLevel,
     channel: string,
     message: string,
-    options?: LogUtilsOptions,
   ): void {
-    this.entries.push({ level, channel, message, options });
+    this.entries.push({ level, channel, message });
   }
 }
 
