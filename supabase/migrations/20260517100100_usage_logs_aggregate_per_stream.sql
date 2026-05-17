@@ -22,14 +22,15 @@ LOCK TABLE public.usage_logs IN EXCLUSIVE MODE;
 -- version rows carry cumulative totals (take the highest-cost row).
 CREATE TEMP TABLE _stream_class ON COMMIT DROP AS
 SELECT user_id, stream_id,
-  BOOL_OR(extension_version IS NOT NULL AND extension_version >= '0.35.4') AS has_new
+  BOOL_OR(public.is_relay_delta_client(extension_version)) AS has_new
 FROM public.usage_logs
 WHERE stream_id IS NOT NULL
 GROUP BY user_id, stream_id;
 
--- The row we keep per stream — most recent new-version row, otherwise the
--- highest-cost old-version row. We UPDATE this row in place so the
--- existing primary key id stays stable for any external references.
+-- The row we keep per stream — first new-version row (so the collapsed run
+-- stays in its starting time bucket), otherwise the highest-cost old-version
+-- row. We UPDATE this row in place so the existing primary key id stays stable
+-- for any external references.
 CREATE TEMP TABLE _compact_keep ON COMMIT DROP AS
 WITH joined AS (
   SELECT ul.*, sc.has_new
@@ -41,7 +42,7 @@ ranked AS (
     ROW_NUMBER() OVER (
       PARTITION BY user_id, stream_id
       ORDER BY
-        CASE WHEN has_new AND extension_version >= '0.35.4' THEN logged_at END DESC NULLS LAST,
+        CASE WHEN has_new AND public.is_relay_delta_client(extension_version) THEN logged_at END ASC NULLS LAST,
         CASE WHEN NOT has_new THEN COALESCE(cost, 0) END DESC NULLS LAST,
         CASE WHEN NOT has_new THEN COALESCE(input_tokens, 0) END DESC NULLS LAST,
         logged_at DESC NULLS LAST,
@@ -68,7 +69,7 @@ WITH new_per_stream AS (
     SUM(cost)::numeric AS cost,
     BOOL_OR(COALESCE(used_relay, false)) AS any_relay
   FROM public.usage_logs
-  WHERE extension_version IS NOT NULL AND extension_version >= '0.35.4'
+  WHERE public.is_relay_delta_client(extension_version)
     AND stream_id IS NOT NULL
   GROUP BY user_id, stream_id
 ),
@@ -82,7 +83,7 @@ old_per_stream AS (
     cost,
     COALESCE(used_relay, false) AS used_relay
   FROM public.usage_logs
-  WHERE (extension_version IS NULL OR extension_version < '0.35.4')
+  WHERE NOT public.is_relay_delta_client(extension_version)
     AND stream_id IS NOT NULL
   ORDER BY user_id, stream_id,
     COALESCE(cost, 0) DESC, COALESCE(input_tokens, 0) DESC,

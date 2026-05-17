@@ -24,6 +24,7 @@ DECLARE
 BEGIN
   WITH parsed AS (
     SELECT
+      row_ordinal,
       (r->>'user_id')::uuid AS user_id,
       (r->>'logged_at')::timestamptz AS logged_at,
       r->>'model' AS model,
@@ -41,37 +42,36 @@ BEGIN
            THEN (r->>'cached_input_tokens')::int END AS cached_input_tokens,
       CASE WHEN r ? 'reasoning_tokens' AND r->>'reasoning_tokens' <> ''
            THEN (r->>'reasoning_tokens')::int END AS reasoning_tokens,
-      CASE WHEN r ? 'used_relay' AND r->>'used_relay' <> ''
-           THEN (r->>'used_relay')::boolean END AS used_relay,
+      COALESCE(NULLIF(r->>'used_relay', '')::boolean, false) AS used_relay,
       NULLIF(r->>'stream_id', '') AS stream_id,
       NULLIF(r->>'extension_version', '') AS extension_version,
       (r->>'batch_id')::uuid AS batch_id,
       NULLIF(r->>'editor_type', '') AS editor_type
-    FROM jsonb_array_elements(p_rows) r
+    FROM jsonb_array_elements(p_rows) WITH ORDINALITY AS input(r, row_ordinal)
   ),
-  -- Pre-aggregate per (user_id, stream_id) so we hit each conflict
-  -- target at most once. Within a single client batch all rows share
-  -- the same extension_version, so the per-group BOOL_OR cleanly
-  -- selects SUM (delta) or MAX (cumulative).
+  -- Pre-aggregate per non-null (user_id, stream_id) so we hit each
+  -- conflict target at most once. Streamless rows are not covered by
+  -- the partial unique index, so keep them separate to preserve their
+  -- original per-entry metadata.
   agg AS (
     SELECT
       user_id, stream_id,
-      MAX(logged_at) AS logged_at,
+      MIN(logged_at) AS logged_at,
       MAX(model) AS model,
       MAX(provider) AS provider,
       MAX(agent_name) AS agent_name,
       MAX(agent_category) AS agent_category,
       BOOL_OR(is_multiple_output) AS is_multiple_output,
-      CASE WHEN BOOL_OR(extension_version IS NOT NULL AND extension_version >= '0.35.4')
+      CASE WHEN BOOL_OR(public.is_relay_delta_client(extension_version))
            THEN SUM(input_tokens)::int ELSE MAX(input_tokens) END AS input_tokens,
-      CASE WHEN BOOL_OR(extension_version IS NOT NULL AND extension_version >= '0.35.4')
+      CASE WHEN BOOL_OR(public.is_relay_delta_client(extension_version))
            THEN SUM(output_tokens)::int ELSE MAX(output_tokens) END AS output_tokens,
-      CASE WHEN BOOL_OR(extension_version IS NOT NULL AND extension_version >= '0.35.4')
+      CASE WHEN BOOL_OR(public.is_relay_delta_client(extension_version))
            THEN SUM(cost)::numeric ELSE MAX(cost) END AS cost,
-      CASE WHEN BOOL_OR(extension_version IS NOT NULL AND extension_version >= '0.35.4')
+      CASE WHEN BOOL_OR(public.is_relay_delta_client(extension_version))
            THEN SUM(COALESCE(cached_input_tokens, 0))::int
            ELSE MAX(cached_input_tokens) END AS cached_input_tokens,
-      CASE WHEN BOOL_OR(extension_version IS NOT NULL AND extension_version >= '0.35.4')
+      CASE WHEN BOOL_OR(public.is_relay_delta_client(extension_version))
            THEN SUM(COALESCE(reasoning_tokens, 0))::int
            ELSE MAX(reasoning_tokens) END AS reasoning_tokens,
       MAX(response_time_ms) AS response_time_ms,
@@ -80,7 +80,7 @@ BEGIN
       MAX(batch_id::text)::uuid AS batch_id,
       MAX(editor_type) AS editor_type
     FROM parsed
-    GROUP BY user_id, stream_id
+    GROUP BY user_id, stream_id, CASE WHEN stream_id IS NULL THEN row_ordinal END
   )
   INSERT INTO public.usage_logs (
     user_id, logged_at, model, provider, agent_name, agent_category,
@@ -99,30 +99,31 @@ BEGIN
     -- clients send cumulative totals so the LAST row wins (GREATEST).
     -- response_time_ms is always cumulative on the wire — MAX always.
     input_tokens = CASE
-      WHEN EXCLUDED.extension_version IS NOT NULL AND EXCLUDED.extension_version >= '0.35.4'
+      WHEN public.is_relay_delta_client(EXCLUDED.extension_version)
       THEN public.usage_logs.input_tokens + EXCLUDED.input_tokens
       ELSE GREATEST(public.usage_logs.input_tokens, EXCLUDED.input_tokens) END,
     output_tokens = CASE
-      WHEN EXCLUDED.extension_version IS NOT NULL AND EXCLUDED.extension_version >= '0.35.4'
+      WHEN public.is_relay_delta_client(EXCLUDED.extension_version)
       THEN public.usage_logs.output_tokens + EXCLUDED.output_tokens
       ELSE GREATEST(public.usage_logs.output_tokens, EXCLUDED.output_tokens) END,
     cost = CASE
-      WHEN EXCLUDED.extension_version IS NOT NULL AND EXCLUDED.extension_version >= '0.35.4'
+      WHEN public.is_relay_delta_client(EXCLUDED.extension_version)
       THEN public.usage_logs.cost + EXCLUDED.cost
       ELSE GREATEST(public.usage_logs.cost, EXCLUDED.cost) END,
     cached_input_tokens = CASE
-      WHEN EXCLUDED.extension_version IS NOT NULL AND EXCLUDED.extension_version >= '0.35.4'
+      WHEN public.is_relay_delta_client(EXCLUDED.extension_version)
       THEN COALESCE(public.usage_logs.cached_input_tokens, 0) + COALESCE(EXCLUDED.cached_input_tokens, 0)
       ELSE GREATEST(COALESCE(public.usage_logs.cached_input_tokens, 0), COALESCE(EXCLUDED.cached_input_tokens, 0)) END,
     reasoning_tokens = CASE
-      WHEN EXCLUDED.extension_version IS NOT NULL AND EXCLUDED.extension_version >= '0.35.4'
+      WHEN public.is_relay_delta_client(EXCLUDED.extension_version)
       THEN COALESCE(public.usage_logs.reasoning_tokens, 0) + COALESCE(EXCLUDED.reasoning_tokens, 0)
       ELSE GREATEST(COALESCE(public.usage_logs.reasoning_tokens, 0), COALESCE(EXCLUDED.reasoning_tokens, 0)) END,
     response_time_ms = GREATEST(
       COALESCE(public.usage_logs.response_time_ms, 0),
       COALESCE(EXCLUDED.response_time_ms, 0)),
     used_relay = COALESCE(public.usage_logs.used_relay, false) OR COALESCE(EXCLUDED.used_relay, false),
-    logged_at = GREATEST(public.usage_logs.logged_at, EXCLUDED.logged_at),
+    logged_at = LEAST(public.usage_logs.logged_at, EXCLUDED.logged_at),
+    batch_id = COALESCE(EXCLUDED.batch_id, public.usage_logs.batch_id),
     extension_version = COALESCE(EXCLUDED.extension_version, public.usage_logs.extension_version),
     -- Static metadata: keep first-set values; fall back to incoming if
     -- existing is null (e.g. canonical row from a pre-aggregation

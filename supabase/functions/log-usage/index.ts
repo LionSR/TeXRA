@@ -262,7 +262,7 @@ Deno.serve(async (req: Request) => {
       response_time_ms: entry.responseTimeMs ?? null,
       cached_input_tokens: entry.cachedInputTokens ?? null,
       reasoning_tokens: entry.reasoningTokens ?? null,
-      used_relay: entry.usedRelay ?? null,
+      used_relay: entry.usedRelay ?? false,
       stream_id: entry.streamId ?? null,
       extension_version: entry.extensionVersion ?? null,
       editor_type: entry.editorType ?? null,
