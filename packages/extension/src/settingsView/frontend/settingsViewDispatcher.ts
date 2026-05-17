@@ -39,6 +39,7 @@ import {
 } from '@shared/schemas';
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
+import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 
 interface WritableSignal<T> {
   get(): T;
@@ -61,6 +62,8 @@ export interface SettingsMessageHandlerContext {
   userEmail: WritableSignal<string>;
   tier: WritableSignal<string>;
   apiAccessMode: WritableSignal<'included' | 'personal'>;
+  spendingStatus: WritableSignal<SpendingStatus | null>;
+  quotaAutoSwitched: WritableSignal<boolean>;
   allowedModels: WritableSignal<string[] | null>;
   providerKeyStatuses: WritableSignal<ProviderKeyStatus[]>;
   globalStreamingDefault: WritableSignal<boolean>;
@@ -103,6 +106,20 @@ export interface SettingsMessageHandlerContext {
   odysseyItems: WritableSignal<readonly Odyssey[]>;
   clearHistorySearch(): void;
   logSchemaError(message: string, error: unknown): void;
+}
+
+function spendingStatusEqual(
+  a: SpendingStatus | null,
+  b: SpendingStatus | null,
+): boolean {
+  if (a === b) return true;
+  if (a === null || b === null) return false;
+  return (
+    a.currentSpend === b.currentSpend &&
+    a.limit === b.limit &&
+    a.remaining === b.remaining &&
+    a.percentUsed === b.percentUsed
+  );
 }
 
 function parseMessage<T>(
@@ -349,6 +366,15 @@ export function dispatchSettingsViewMessage(
       ctx.authenticated.set(data.authenticated);
       ctx.userEmail.set(data.user?.email ?? 'N/A');
       ctx.tier.set(data.tier ?? 'free');
+      const newSpend = data.spendingStatus ?? null;
+      // Skip the signal update when the snapshot is value-equal so the
+      // Lit re-render isn't triggered on every UPDATE_PROFILE just
+      // because the JSON parse produced a fresh object reference.
+      const prevSpend = ctx.spendingStatus.get();
+      if (!spendingStatusEqual(prevSpend, newSpend)) {
+        ctx.spendingStatus.set(newSpend);
+      }
+      ctx.quotaAutoSwitched.set(data.quotaAutoSwitched ?? false);
       ctx.apiAccessMode.set(data.apiAccessMode);
       ctx.allowedModels.set(data.allowedModels ?? null);
       ctx.providerKeyStatuses.set(data.providerKeyStatuses ?? []);

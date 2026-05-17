@@ -81,7 +81,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   ): Promise<void> {
     await this.sessionCoordinator.storeSession(session);
     if (notify) {
-      getServerSideKeyService().clearAllCaches();
+      getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
       this._onDidChangeSessions.fire({
         added: [this.toVSCodeSession(session)],
         removed: [],
@@ -472,7 +472,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       await SupabaseClient.getClient().auth.signOut();
       await this.sessionCoordinator.clearSession();
       // Clear server-side key cache when session is removed (handles automatic invalidation)
-      getServerSideKeyService().clearAllCaches();
+      getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
       this._onDidChangeSessions.fire({
         added: [],
         removed: [
