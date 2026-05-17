@@ -1,12 +1,15 @@
-// Mirror StreamLogStore user/model entries into `cliState.streams[].entries`.
-// Tool/approval entries land in side panels and modals.
+// Mirror StreamLogStore user/model/tool entries into
+// `cliState.streams[].entries`. Approval/permission entries land in side
+// panels and modals; tool rows render inline alongside assistant prose.
 
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   MESSAGE_TYPES,
+  type NormalizedToolUse,
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
+import { normalizeToolUseData } from '@shared/toolUse';
 
 import { cliState, patchStream, type ConversationEntry } from './cliState';
 import { getTranscriptStartSeq } from './transcript';
@@ -14,8 +17,135 @@ import { getTranscriptStartSeq } from './transcript';
 const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.ERROR,
   MESSAGE_TYPES.MODEL_RESPONSE,
+  MESSAGE_TYPES.TOOL_USE,
   MESSAGE_TYPES.USER_MESSAGE,
 ]);
+
+/** Tool inputs are typed `unknown` (model-supplied JSON) and reach us
+ *  via Zod passthrough, so a `===` compare would defeat the cache the
+ *  moment any upstream code reconstructs `data` (deserialization,
+ *  structured clone, future log replay). Inputs are small — tool call
+ *  args, not output — so a JSON serialization is cheap. */
+function inputEqual(prev: unknown, next: unknown): boolean {
+  if (prev === next) return true;
+  try {
+    return JSON.stringify(prev) === JSON.stringify(next);
+  } catch {
+    return false;
+  }
+}
+
+// Field-by-field — a stringified signature over the whole NormalizedToolUse
+// would allocate the full outputText (potentially 50 KB+ of bash output) on
+// every comparison. Cover every field ToolUseRow reads so future changes
+// can't be silently swallowed.
+function toolUseEqual(
+  prev: NormalizedToolUse,
+  next: NormalizedToolUse,
+): boolean {
+  return (
+    prev.status === next.status &&
+    prev.toolName === next.toolName &&
+    prev.outputText === next.outputText &&
+    prev.errorText === next.errorText &&
+    prev.headerSummary === next.headerSummary &&
+    prev.isError === next.isError &&
+    prev.isUserFeedback === next.isUserFeedback &&
+    prev.userInstructionText === next.userInstructionText &&
+    inputEqual(prev.input, next.input)
+  );
+}
+
+// `normalizeToolUseData` is dominated by a Zod parse + YAML stringify
+// of `entry.data`. `StreamLog.update` spreads its patch into a fresh
+// `data` object every tick, so reference equality is a reliable signal
+// that nothing has actually changed. Keep the last-seen `data` ref off
+// to the side in a WeakMap rather than on `ConversationEntry` itself —
+// stashing it on the entry would mean either (a) the slice-level
+// `entriesEqual` check ignores `toolUseSource` and the cache refresh
+// never persists, or (b) we trigger a slice update on every tick just
+// to write the new reference. The WeakMap dodges both: the entry stays
+// immutable, and the cache is GC'd when the entry is replaced.
+const toolUseSourceCache = new WeakMap<ConversationEntry, unknown>();
+
+function entriesEqual(
+  prev: ConversationEntry,
+  next: ConversationEntry,
+): boolean {
+  if (
+    prev.role !== next.role ||
+    prev.text !== next.text ||
+    prev.finalized !== next.finalized
+  ) {
+    return false;
+  }
+  if (prev.role === 'tool') {
+    if (!prev.toolUse || !next.toolUse) return prev.toolUse === next.toolUse;
+    return toolUseEqual(prev.toolUse, next.toolUse);
+  }
+  return true;
+}
+
+function renderLogEntry(
+  entry: StreamLogEntry,
+  prev: ConversationEntry | undefined,
+): ConversationEntry | null {
+  if (entry.messageType === MESSAGE_TYPES.TOOL_USE) {
+    // Cache hit: same `data` reference as last sync, no re-normalize.
+    if (prev?.toolUse && toolUseSourceCache.get(prev) === entry.data) {
+      return prev;
+    }
+
+    const toolUse = normalizeToolUseData(entry.data);
+    // Drop malformed tool entries rather than crash. The progress view
+    // does the same — a bad payload shouldn't take down the transcript.
+    if (!toolUse) return null;
+    // Defer finalization to `finalizeAssistantTranscriptEntries`. A
+    // fast-completing tool would otherwise jump into `<Static>`
+    // scrollback while preceding assistant text from the same turn is
+    // still streaming, reversing the visible order (Static items are
+    // append-only). Inherit the prior flag so a sync tick that fires
+    // after the finalize step doesn't roll the entry back to false.
+    const next: ConversationEntry = {
+      id: entry.id,
+      role: 'tool',
+      text: '',
+      finalized: prev?.finalized ?? false,
+      toolUse,
+    };
+    if (prev && entriesEqual(prev, next)) {
+      // Same content under a fresh `data` reference: refresh the cache
+      // key on `prev` so the identity fast path hits on the next tick.
+      // Returning `prev` keeps the slice unchanged (no re-render
+      // cascade) — the cache lives outside the entry contract so this
+      // refresh doesn't need a slice update to persist.
+      toolUseSourceCache.set(prev, entry.data);
+      return prev;
+    }
+    toolUseSourceCache.set(next, entry.data);
+    return next;
+  }
+
+  const text = entry.text ?? '';
+  const role: ConversationEntry['role'] =
+    entry.messageType === MESSAGE_TYPES.USER_MESSAGE
+      ? 'user'
+      : entry.messageType === MESSAGE_TYPES.ERROR
+        ? 'error'
+        : 'assistant';
+  // Assistant entries defer finalization (see comment above); inherit
+  // from `prev` so re-syncs after finalize don't de-finalize and drop
+  // the entry from `splitTranscriptEntries` once status flips to
+  // WAITING.
+  const finalized = role === 'assistant' ? (prev?.finalized ?? false) : true;
+  const next: ConversationEntry = {
+    id: entry.id,
+    role,
+    text,
+    finalized,
+  };
+  return prev && entriesEqual(prev, next) ? prev : next;
+}
 
 // Coalesce bursts into a single render without visibly delaying the
 // first paint. 200ms looks like a hang on short replies (an entire reply
@@ -69,21 +199,13 @@ export function syncStreamLog(streamId: StreamTabId): void {
   patchStream(streamId, (slice) => {
     const existing = new Map(slice.entries.map((e) => [e.id, e]));
     const syntheticEntries = slice.entries.filter((entry) => entry.synthetic);
-    const logEntries = responses.map((entry: StreamLogEntry) => {
-      const text = entry.text ?? '';
-      const role: ConversationEntry['role'] =
-        entry.messageType === MESSAGE_TYPES.USER_MESSAGE
-          ? 'user'
-          : entry.messageType === MESSAGE_TYPES.ERROR
-            ? 'error'
-            : 'assistant';
-      const prev = existing.get(entry.id);
-      const rendered =
-        prev && prev.text === text && prev.role === role
-          ? prev
-          : { id: entry.id, role, text, finalized: role !== 'assistant' };
-      return { entry, rendered };
-    });
+    const logEntries: { entry: StreamLogEntry; rendered: ConversationEntry }[] =
+      [];
+    for (const entry of responses) {
+      const rendered = renderLogEntry(entry, existing.get(entry.id));
+      if (!rendered) continue;
+      logEntries.push({ entry, rendered });
+    }
     const logCandidates: TranscriptCandidate[] = logEntries.map(
       ({ entry, rendered }) => ({
         rendered,
@@ -124,9 +246,7 @@ export function syncStreamLog(streamId: StreamTabId): void {
         return (
           !candidate ||
           entry.id !== candidate.id ||
-          entry.role !== candidate.role ||
-          entry.text !== candidate.text ||
-          entry.finalized !== candidate.finalized
+          !entriesEqual(entry, candidate)
         );
       });
     if (!changed) return slice;
