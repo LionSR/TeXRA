@@ -60,7 +60,6 @@ import {
 } from '@shared/schemas/progressView';
 import type { DesktopThemeKind } from '@shared/constants/desktopTheme';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { copyTextToClipboard } from '@shared/utils/clipboard';
 import {
   applyHostBodyTheme,
   getWindowTargetOrigin,
@@ -104,16 +103,6 @@ import {
   type DesktopShowPdfMessage,
   type DesktopClosePdfMessage,
 } from '../desktopPdfMessages';
-import {
-  buildDesktopSetupTerminalCancelMessage,
-  DesktopSetupTerminalShowMessageSchema,
-  DesktopSetupTerminalAppendMessageSchema,
-  DesktopSetupTerminalCompleteMessageSchema,
-  type DesktopSetupTerminalShowMessage,
-  type DesktopSetupTerminalAppendMessage,
-  type DesktopSetupTerminalCompleteMessage,
-  type DesktopSetupTerminalStatus,
-} from '../desktopSetupTerminalMessages';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
 import { createFirstRunWalkthrough } from './desktopOnboarding';
 import { getRendererPlatform } from './rendererPlatform';
@@ -912,193 +901,6 @@ function closePdfOverlay(): void {
 }
 
 // =============================================================================
-// Setup command terminal overlay
-// =============================================================================
-
-const SETUP_TERMINAL_OUTPUT_LIMIT = 200_000;
-
-let setupTerminalDialog: WaDialog | null = null;
-let setupTerminalTitleElement: HTMLElement | null = null;
-let setupTerminalSubtitleElement: HTMLElement | null = null;
-let setupTerminalStatusElement: HTMLElement | null = null;
-let setupTerminalCommandElement: HTMLElement | null = null;
-let setupTerminalOutputElement: HTMLPreElement | null = null;
-let setupTerminalCancelButton: HTMLElement | null = null;
-let setupTerminalCopyOutputButton: HTMLElement | null = null;
-let setupTerminalActiveRunId: string | null = null;
-let setupTerminalCommandText = '';
-let setupTerminalOutputText = '';
-
-function ensureSetupTerminalDialog(): WaDialog {
-  if (setupTerminalDialog) return setupTerminalDialog;
-  const dialog = document.createElement('wa-dialog') as WaDialog;
-  dialog.classList.add('desktop-setup-terminal-overlay');
-  dialog.withoutHeader = true;
-  dialog.lightDismiss = false;
-  dialog.setAttribute('aria-label', 'Setup command output');
-
-  const body = document.createElement('section');
-  body.classList.add('desktop-setup-terminal-body');
-
-  const header = document.createElement('header');
-  header.classList.add('desktop-setup-terminal-header');
-  const headerText = document.createElement('div');
-  headerText.classList.add('desktop-setup-terminal-heading');
-  const titleEl = document.createElement('h2');
-  titleEl.classList.add('desktop-setup-terminal-title');
-  titleEl.textContent = 'Setup';
-  setupTerminalTitleElement = titleEl;
-  const subtitleEl = document.createElement('p');
-  subtitleEl.classList.add('desktop-setup-terminal-subtitle');
-  setupTerminalSubtitleElement = subtitleEl;
-  headerText.append(titleEl, subtitleEl);
-
-  const statusEl = document.createElement('span');
-  statusEl.classList.add('desktop-setup-terminal-status');
-  setupTerminalStatusElement = statusEl;
-  header.append(headerText, statusEl);
-
-  const commandEl = document.createElement('code');
-  commandEl.classList.add('desktop-setup-terminal-command');
-  setupTerminalCommandElement = commandEl;
-
-  const outputEl = document.createElement('pre');
-  outputEl.classList.add('desktop-setup-terminal-output');
-  outputEl.textContent = '';
-  setupTerminalOutputElement = outputEl;
-
-  const actions = document.createElement('footer');
-  actions.classList.add('desktop-setup-terminal-actions');
-  const copyCommand = createSetupTerminalButton('copy', 'Copy command');
-  copyCommand.addEventListener('click', () => {
-    void copyTextToClipboard(setupTerminalCommandText);
-  });
-  const copyOutput = createSetupTerminalButton('copy', 'Copy output');
-  copyOutput.addEventListener('click', () => {
-    void copyTextToClipboard(setupTerminalOutputText);
-  });
-  setupTerminalCopyOutputButton = copyOutput;
-  const cancel = createSetupTerminalButton('xmark', 'Cancel');
-  cancel.addEventListener('click', () => {
-    if (setupTerminalActiveRunId) {
-      const { command, ...payload } = buildDesktopSetupTerminalCancelMessage(
-        setupTerminalActiveRunId,
-      );
-      postMessage(command, payload);
-      setSetupTerminalStatus('cancelled');
-    }
-  });
-  setupTerminalCancelButton = cancel;
-  const close = createSetupTerminalButton('xmark', 'Close');
-  close.addEventListener('click', () => {
-    dialog.open = false;
-  });
-  actions.append(copyCommand, copyOutput, cancel, close);
-
-  body.append(header, commandEl, outputEl, actions);
-  dialog.append(body);
-  appRoot.append(dialog);
-  setupTerminalDialog = dialog;
-  return dialog;
-}
-
-function createSetupTerminalButton(
-  icon: TeXRAIconName,
-  label: string,
-): HTMLElement {
-  const button = document.createElement('wa-button');
-  button.classList.add('desktop-setup-terminal-button');
-  button.setAttribute('appearance', 'outlined');
-  button.setAttribute('size', 'small');
-  button.setAttribute('title', label);
-  button.setAttribute('aria-label', label);
-  render(html`${waIcon(icon)}<span>${label}</span>`, button);
-  return button;
-}
-
-function openSetupTerminalOverlay(
-  payload: DesktopSetupTerminalShowMessage,
-): void {
-  const dialog = ensureSetupTerminalDialog();
-  setupTerminalActiveRunId = payload.runId;
-  setupTerminalCommandText = payload.shellCommand;
-  setupTerminalOutputText = '';
-  if (setupTerminalTitleElement) {
-    setupTerminalTitleElement.textContent = payload.title;
-  }
-  if (setupTerminalSubtitleElement) {
-    setupTerminalSubtitleElement.textContent = payload.cwd;
-  }
-  if (setupTerminalCommandElement) {
-    setupTerminalCommandElement.textContent = payload.shellCommand;
-  }
-  if (setupTerminalOutputElement) setupTerminalOutputElement.textContent = '';
-  setSetupTerminalStatus('running');
-  dialog.open = true;
-}
-
-function appendSetupTerminalOutput(
-  payload: DesktopSetupTerminalAppendMessage,
-): void {
-  if (payload.runId !== setupTerminalActiveRunId) return;
-  setupTerminalOutputText += payload.chunk;
-  if (setupTerminalOutputText.length > SETUP_TERMINAL_OUTPUT_LIMIT) {
-    setupTerminalOutputText = setupTerminalOutputText.slice(
-      -SETUP_TERMINAL_OUTPUT_LIMIT,
-    );
-  }
-  if (!setupTerminalOutputElement) return;
-  setupTerminalOutputElement.textContent = setupTerminalOutputText;
-  setupTerminalOutputElement.scrollTop =
-    setupTerminalOutputElement.scrollHeight;
-  setupTerminalCopyOutputButton?.toggleAttribute('disabled', false);
-}
-
-function completeSetupTerminalOverlay(
-  payload: DesktopSetupTerminalCompleteMessage,
-): void {
-  if (payload.runId !== setupTerminalActiveRunId) return;
-  if (payload.output.length > setupTerminalOutputText.length) {
-    setupTerminalOutputText = payload.output;
-  }
-  if (setupTerminalOutputElement) {
-    setupTerminalOutputElement.textContent = setupTerminalOutputText;
-    setupTerminalOutputElement.scrollTop =
-      setupTerminalOutputElement.scrollHeight;
-  }
-  setSetupTerminalStatus(payload.status);
-  setupTerminalActiveRunId = null;
-}
-
-function setSetupTerminalStatus(status: DesktopSetupTerminalStatus): void {
-  if (setupTerminalStatusElement) {
-    setupTerminalStatusElement.textContent = formatSetupTerminalStatus(status);
-    setupTerminalStatusElement.dataset.status = status;
-  }
-  const running = status === 'running';
-  setupTerminalCancelButton?.toggleAttribute('disabled', !running);
-  setupTerminalCopyOutputButton?.toggleAttribute(
-    'disabled',
-    setupTerminalOutputText.length === 0,
-  );
-}
-
-function formatSetupTerminalStatus(status: DesktopSetupTerminalStatus): string {
-  switch (status) {
-    case 'running':
-      return 'Running';
-    case 'succeeded':
-      return 'Finished';
-    case 'failed':
-      return 'Failed';
-    case 'timed-out':
-      return 'Timed out';
-    case 'cancelled':
-      return 'Cancelled';
-  }
-}
-
-// =============================================================================
 // Onboarding + command palette
 // =============================================================================
 
@@ -1274,24 +1076,6 @@ window.addEventListener('message', (event) => {
   }
   if (isDesktopClosePdfMessage(event.data)) {
     closePdfOverlay();
-    return;
-  }
-  const setupTerminalShowParsed =
-    DesktopSetupTerminalShowMessageSchema.safeParse(event.data);
-  if (setupTerminalShowParsed.success) {
-    openSetupTerminalOverlay(setupTerminalShowParsed.data);
-    return;
-  }
-  const setupTerminalAppendParsed =
-    DesktopSetupTerminalAppendMessageSchema.safeParse(event.data);
-  if (setupTerminalAppendParsed.success) {
-    appendSetupTerminalOutput(setupTerminalAppendParsed.data);
-    return;
-  }
-  const setupTerminalCompleteParsed =
-    DesktopSetupTerminalCompleteMessageSchema.safeParse(event.data);
-  if (setupTerminalCompleteParsed.success) {
-    completeSetupTerminalOverlay(setupTerminalCompleteParsed.data);
     return;
   }
   // Progress view messages: dispatch directly into the shared messageDispatcher

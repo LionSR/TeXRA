@@ -21,12 +21,11 @@ export function createDesktopTerminalRunner(
   return {
     async runCommand(request: TerminalRunRequest) {
       let output = '';
-      const appendOutput = (stream: 'stdout' | 'stderr', chunk: string) => {
+      const appendOutput = (chunk: string) => {
         output += chunk;
         if (output.length > RAW_OUTPUT_MAX_CHARS) {
           output = output.slice(-RAW_OUTPUT_MAX_CHARS);
         }
-        request.onOutput?.({ stream, chunk });
       };
       const result = await executeCommand(request.command, {
         cwd: request.cwd ?? options.cwd,
@@ -35,9 +34,8 @@ export function createDesktopTerminalRunner(
         channel: request.name,
         truncate: true,
         buffer: false,
-        signal: request.signal,
-        onStdout: (chunk) => appendOutput('stdout', chunk),
-        onStderr: (chunk) => appendOutput('stderr', chunk),
+        onStdout: appendOutput,
+        onStderr: appendOutput,
       });
       const bufferedOutput = [result.stdout, result.stderr]
         .filter(Boolean)
@@ -47,7 +45,6 @@ export function createDesktopTerminalRunner(
         exitCode: result.exitCode,
         output: tail(output || bufferedOutput),
         timedOut: result.timedOut ?? false,
-        cancelled: request.signal?.aborted ?? false,
       };
     },
   };
