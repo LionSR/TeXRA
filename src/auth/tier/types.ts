@@ -18,10 +18,15 @@
  */
 
 import { z } from 'zod';
+import {
+  SpendingStatusSchema,
+  type SpendingStatus,
+} from '@shared/schemas/spendingStatus';
 import { UserTierSchema, type UserTier } from '../sharedConfig';
 
 // Re-export for convenience
 export { UserTierSchema, type UserTier };
+export { SpendingStatusSchema, type SpendingStatus };
 
 /**
  * Schema for user access status including expiration.
@@ -38,20 +43,6 @@ export const UserAccessStatusSchema = z.object({
   daysRemaining: z.number().nullable(),
 });
 export type UserAccessStatus = z.infer<typeof UserAccessStatusSchema>;
-
-/**
- * Monthly relay spending status for the authenticated user, returned by
- * /tier-config when the request carries a JWT. Used to drive both the
- * UI quota meter and the over-limit BYOK fallback. Spend values are in
- * USD and reflect the calendar month so far (UTC).
- */
-export const SpendingStatusSchema = z.object({
-  currentSpend: z.number().finite().nonnegative(),
-  limit: z.number().finite().nonnegative(),
-  remaining: z.number().finite(),
-  percentUsed: z.number().finite().nonnegative(),
-});
-export type SpendingStatus = z.infer<typeof SpendingStatusSchema>;
 
 /**
  * Schema for a single tier's model access configuration.
