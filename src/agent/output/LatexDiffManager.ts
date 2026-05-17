@@ -10,6 +10,7 @@ import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import {
   type DiffResult,
+  type ExecutionId,
   MESSAGE_TYPES,
   type OutputFileInfo,
 } from '@shared/schemas';
@@ -17,7 +18,6 @@ import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_CONFIG_RANGES,
 } from '@shared/constants/latex';
-import type { ExecutionId } from '@shared/schemas';
 import {
   createExternalLocation,
   createRunStorageLocation,
@@ -29,6 +29,10 @@ import {
 import { checkToolInstalled } from '@utils/system';
 import { getComparablePath } from '@utils/files/taskRunStorage';
 
+import {
+  publishCompiledPdfArtifact,
+  type CompiledPdfArtifact,
+} from './compiledPdfArtifacts';
 import type { RoundFileMapping } from './types';
 
 interface DiffOutputDirectory {
@@ -108,27 +112,28 @@ export class LatexDiffManager {
     currRound: number,
     mapping: RoundFileMapping,
     stage?: AgentLogStage,
-  ): Promise<void> {
+  ): Promise<CompiledPdfArtifact[]> {
     const execute = () => this.performLatexdiffOperations(currRound, mapping);
     try {
-      await (stage ? stage.within(execute) : execute());
+      return await (stage ? stage.within(execute) : execute());
     } catch (err) {
       this.logger.error(
         `Error during latexdiff processing: ${toErrorMessage(err)}`,
         { messageType: MESSAGE_TYPES.INTERNAL },
       );
+      return [];
     }
   }
 
   private async performLatexdiffOperations(
     currRound: number,
     mapping: RoundFileMapping,
-  ): Promise<void> {
+  ): Promise<CompiledPdfArtifact[]> {
     if (!(await checkToolInstalled('latexdiff'))) {
       this.logger.warn(
         'Skipping latexdiff operations - latexdiff not installed',
       );
-      return;
+      return [];
     }
 
     const outputFiles = this.getOutputFiles()[currRound] ?? [];
@@ -136,7 +141,7 @@ export class LatexDiffManager {
       this.logger.warn(
         `No output files found for round ${currRound}, skipping latexdiff operations`,
       );
-      return;
+      return [];
     }
 
     // Ensure round-dir has symlinks to all mirrored deps so latexdiff's
@@ -157,6 +162,7 @@ export class LatexDiffManager {
     );
 
     const aggregated: DiffResult[] = [];
+    const artifacts: CompiledPdfArtifact[] = [];
 
     if (this.agentSetting.isRewrite) {
       const basePairs = [...mapping.baseToOutput.entries()];
@@ -178,9 +184,13 @@ export class LatexDiffManager {
               { cwd, outputDirectory: diffDirectory?.absolutePath },
             ),
           label: 'round-diff',
+          pdfStemSuffix: '-diff',
           diffDirectory,
         });
-        if (result) aggregated.push(result);
+        if (result) {
+          aggregated.push(result.diffResult);
+          if (result.artifact) artifacts.push(result.artifact);
+        }
       }
     }
 
@@ -215,9 +225,13 @@ export class LatexDiffManager {
               },
             ),
           label: 'between-rounds-diff',
+          pdfStemSuffix: '-round-diff',
           diffDirectory,
         });
-        if (result) aggregated.push(result);
+        if (result) {
+          aggregated.push(result.diffResult);
+          if (result.artifact) artifacts.push(result.artifact);
+        }
       }
     } else if (!generateBetweenRoundDiffs) {
       this.logger.debug(
@@ -230,6 +244,8 @@ export class LatexDiffManager {
     } else {
       this.logger.debug('No latexdiff results to report');
     }
+
+    return artifacts;
   }
 
   private logPairMatches(
@@ -262,8 +278,12 @@ export class LatexDiffManager {
       cwd: string,
     ) => Promise<LaTeXdiffResult>;
     label: string;
+    pdfStemSuffix: string;
     diffDirectory: DiffOutputDirectory | null;
-  }): Promise<DiffResult | null> {
+  }): Promise<{
+    diffResult: DiffResult;
+    artifact: CompiledPdfArtifact | null;
+  } | null> {
     const {
       outputPath,
       baseLocation,
@@ -272,6 +292,7 @@ export class LatexDiffManager {
       baseRound,
       runDiff,
       label,
+      pdfStemSuffix,
       diffDirectory,
     } = params;
 
@@ -290,11 +311,15 @@ export class LatexDiffManager {
     const result = await runDiff(baseLocation, revisedFile.location, cwd);
     this.logLatexdiffResult(result, label);
 
-    const diffLocation = await this.compileDiffIfSuccessful(
+    const compiled = await this.compileDiffIfSuccessful(
       result,
       baseLocation,
       diffDirectory,
+      revisedFile.round,
+      revisedFile.location,
+      pdfStemSuffix,
     );
+    const diffLocation = compiled?.diffLocation ?? null;
 
     const revisedWithLineage: OutputFileInfo = {
       ...revisedFile,
@@ -306,12 +331,15 @@ export class LatexDiffManager {
     };
 
     return {
-      baseLocation,
-      baseRound,
-      revised: revisedWithLineage,
-      diffLocation,
-      status: result.success ? 'success' : 'error',
-      message: result.success ? undefined : result.message,
+      diffResult: {
+        baseLocation,
+        baseRound,
+        revised: revisedWithLineage,
+        diffLocation,
+        status: result.success ? 'success' : 'error',
+        message: result.success ? undefined : result.message,
+      },
+      artifact: compiled?.artifact ?? null,
     };
   }
 
@@ -319,7 +347,13 @@ export class LatexDiffManager {
     result: LaTeXdiffResult,
     referenceLocation: FileLocation,
     diffDirectory: DiffOutputDirectory | null,
-  ): Promise<FileLocation | null> {
+    round: number,
+    sourceLocation: FileLocation,
+    pdfStemSuffix: string,
+  ): Promise<{
+    diffLocation: FileLocation;
+    artifact: CompiledPdfArtifact | null;
+  } | null> {
     if (!result.success || !result.diffFileName) {
       return null;
     }
@@ -343,13 +377,35 @@ export class LatexDiffManager {
         LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
       ),
     );
-    await compileLatex2Pdf(diffLocation, {
+    const ok = await compileLatex2Pdf(diffLocation, {
       channel: this.streamId,
       outputDirectory: buildDir,
       timeout: timeoutMs,
     });
 
-    return diffLocation;
+    if (!ok) {
+      return { diffLocation, artifact: null };
+    }
+
+    const { executionId, runDirectory } = this.fileService.metadata;
+    const compiledPdfPath = path.join(
+      buildDir,
+      `${path.basename(diffLocation.absolutePath).replace(/\.tex$/i, '')}.pdf`,
+    );
+    const artifact =
+      executionId && runDirectory
+        ? await publishCompiledPdfArtifact({
+            runDirectory,
+            executionId,
+            round,
+            displayName: path.basename(diffLocation.absolutePath),
+            source: sourceLocation,
+            compiledPdfPath,
+            pdfStemSuffix,
+          })
+        : null;
+
+    return { diffLocation, artifact };
   }
 
   /**
