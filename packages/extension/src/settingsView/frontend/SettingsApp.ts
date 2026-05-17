@@ -978,7 +978,7 @@ export class SettingsApp extends SettingsAppBase {
               name="robot"
               variant="solid"
             ></wa-icon>
-            AI Agents</wa-tab
+            Integrations</wa-tab
           >
           <wa-tab panel="git"
             ><wa-icon
