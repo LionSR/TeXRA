@@ -66,3 +66,15 @@ export function truncateWithEllipsis(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
   return `${text.slice(0, maxLen - 1)}…`;
 }
+
+/**
+ * Collapse every whitespace run (including newlines) to a single space
+ * and trim. Used by header-preview renderers that need a one-line summary
+ * of multi-line content.
+ *
+ * @example
+ * collapseWhitespace('foo\n  bar\t baz ') // 'foo bar baz'
+ */
+export function collapseWhitespace(text: string): string {
+  return text.replaceAll(/\s+/g, ' ').trim();
+}
