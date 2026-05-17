@@ -76,7 +76,6 @@ export function App(props: AppProps): React.JSX.Element {
           </Box>
         ) : null}
       </Box>
-      <StatusBar />
       <ApprovalModal pending={pending} />
       {activeForm
         ? activeForm.render(() => cliState.activeForm.set(undefined))
@@ -86,6 +85,7 @@ export function App(props: AppProps): React.JSX.Element {
         disabled={inputDisabled}
         history={props.history}
       />
+      <StatusBar />
     </Box>
   );
 }
