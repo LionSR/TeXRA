@@ -14,10 +14,16 @@ interface DesktopTerminalRunnerModule {
       cwd?: string;
       env?: Record<string, string | undefined>;
       timeoutMs: number;
+      signal?: AbortSignal;
+      onOutput?: (chunk: {
+        stream: 'stdout' | 'stderr';
+        chunk: string;
+      }) => void;
     }): Promise<{
       exitCode: number | undefined;
       output: string;
       timedOut: boolean;
+      cancelled?: boolean;
     }>;
   };
 }
@@ -94,5 +100,49 @@ describe('desktop terminal runner', () => {
     expect(result.exitCode).toBe(0);
     expect(result.output.length).toBeLessThanOrEqual(12_000);
     expect(result.output.endsWith('tail')).toBe(true);
+  });
+
+  it('streams stdout and stderr chunks before completion', async () => {
+    const { createDesktopTerminalRunner } = await loadDesktopTerminalRunner();
+    const cwd = await mkdtemp(join(tmpdir(), 'texra-terminal-runner-'));
+    const runner = createDesktopTerminalRunner({ cwd });
+    const chunks: Array<{ stream: 'stdout' | 'stderr'; chunk: string }> = [];
+
+    const result = await runner.runCommand({
+      name: 'TeXRA Setup Stream Test',
+      command: nodeCommand(
+        "process.stdout.write('out'); process.stderr.write('err')",
+      ),
+      timeoutMs: 5_000,
+      onOutput: (chunk) => chunks.push(chunk),
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(chunks).toEqual(
+      expect.arrayContaining([
+        { stream: 'stdout', chunk: 'out' },
+        { stream: 'stderr', chunk: 'err' },
+      ]),
+    );
+  });
+
+  it('cancels a running command with the supplied abort signal', async () => {
+    const { createDesktopTerminalRunner } = await loadDesktopTerminalRunner();
+    const cwd = await mkdtemp(join(tmpdir(), 'texra-terminal-runner-'));
+    const runner = createDesktopTerminalRunner({ cwd });
+    const controller = new AbortController();
+
+    const run = runner.runCommand({
+      name: 'TeXRA Setup Cancel Test',
+      command: nodeCommand('setTimeout(() => {}, 60_000)'),
+      timeoutMs: 60_000,
+      signal: controller.signal,
+    });
+    controller.abort();
+
+    const result = await run;
+    expect(result.cancelled).toBe(true);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.timedOut).toBe(false);
   });
 });

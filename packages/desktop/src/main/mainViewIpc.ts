@@ -32,6 +32,7 @@ export interface DesktopMainViewIpcOptions {
   settings?: DesktopSettingsIpc;
   progress?: DesktopProgressIpc;
   onboarding?: DesktopMessageHandler;
+  setupTerminal?: DesktopMessageHandler;
   logs?: DesktopLogIpcOptions;
   shellActions?: DesktopShellActions;
   modelListRefresh?: PromiseLike<void>;
@@ -94,6 +95,7 @@ export function installDesktopMainViewIpc(
     options.settings,
     options.progress,
     options.onboarding,
+    options.setupTerminal,
     viewState,
     logs,
     shell,
