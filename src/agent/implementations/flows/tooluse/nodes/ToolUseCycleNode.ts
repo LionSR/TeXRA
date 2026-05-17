@@ -7,6 +7,7 @@ import {
 } from '@agent/core/flows/ToolUseCycleFlow';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { formatProviderHttpError } from '@common/errors';
+import { MESSAGE_TYPES } from '@shared/schemas';
 
 import {
   type ToolUseRunShared,
@@ -179,6 +180,13 @@ export class ToolUseCycleNode<C> extends Node<
           message: execRes.message,
           userRetryable: execRes.userRetryable ?? false,
         };
+        // Surface the failure in the transcript. Without this the WaitNode
+        // resets lastError when the user sends a follow-up (see
+        // ToolUseWaitNode.post), so a recurring failure (e.g. missing API
+        // key) leaves the agent stuck in "idle" with no visible reason.
+        this.services.logger.error(execRes.message, {
+          messageType: MESSAGE_TYPES.ERROR,
+        });
         break;
       case 'cancelled':
         shared.userCancelledRetry = true;
