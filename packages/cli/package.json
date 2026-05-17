@@ -9,6 +9,9 @@
   "bin": {
     "texra": "./dist/bin/texra.js"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:architecture": "node scripts/check-host-imports.mjs",

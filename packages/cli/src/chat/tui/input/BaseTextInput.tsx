@@ -7,6 +7,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Text, useInput, usePaste } from 'ink';
 
+import {
+  clampCursor,
+  deleteAtCursor,
+  deleteBeforeCursor,
+  deletePreviousWord,
+  deleteToEnd,
+  deleteToStart,
+  insertText,
+  type TextEdit,
+} from './textInputEditing';
+
 export interface BaseTextInputProps {
   readonly value: string;
   readonly placeholder?: string;
@@ -17,10 +28,6 @@ export interface BaseTextInputProps {
   readonly onCursorChange?: (cursor: number) => void;
   readonly onSubmit: (value: string) => void;
   readonly onChange: (value: string) => void;
-}
-
-function clamp(n: number, max: number): number {
-  return Math.max(0, Math.min(n, max));
 }
 
 export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
@@ -35,7 +42,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
 
   const isControlled = props.cursor !== undefined;
   const [internalCursor, setInternalCursor] = useState<number>(value.length);
-  const cursor = clamp(
+  const cursor = clampCursor(
     isControlled ? (props.cursor as number) : internalCursor,
     value.length,
   );
@@ -55,7 +62,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
 
   const moveCursor = useCallback(
     (next: number) => {
-      const c = clamp(next, value.length);
+      const c = clampCursor(next, value.length);
       if (!isControlled) setInternalCursor(c);
       onCursorChange?.(c);
     },
@@ -64,13 +71,18 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
 
   const replaceText = useCallback(
     (nextValue: string, nextCursor: number) => {
-      const c = clamp(nextCursor, nextValue.length);
+      const c = clampCursor(nextCursor, nextValue.length);
       lastEmittedValueRef.current = nextValue;
       onChange(nextValue);
       if (!isControlled) setInternalCursor(c);
       onCursorChange?.(c);
     },
     [isControlled, onChange, onCursorChange],
+  );
+
+  const applyEdit = useCallback(
+    (edit: TextEdit) => replaceText(edit.value, edit.cursor),
+    [replaceText],
   );
 
   useInput(
@@ -81,23 +93,15 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
       }
       if (key.ctrl && input === 'j') {
         // Ctrl-J → literal newline (kills the legacy `/multi` ceremony).
-        replaceText(
-          value.slice(0, cursor) + '\n' + value.slice(cursor),
-          cursor + 1,
-        );
+        applyEdit(insertText(value, cursor, '\n'));
         return;
       }
       if (key.backspace) {
-        if (cursor === 0) return;
-        replaceText(
-          value.slice(0, cursor - 1) + value.slice(cursor),
-          cursor - 1,
-        );
+        applyEdit(deleteBeforeCursor(value, cursor));
         return;
       }
       if (key.delete) {
-        if (cursor >= value.length) return;
-        replaceText(value.slice(0, cursor) + value.slice(cursor + 1), cursor);
+        applyEdit(deleteAtCursor(value, cursor));
         return;
       }
       if (key.leftArrow) {
@@ -117,25 +121,20 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         return;
       }
       if (key.ctrl && input === 'u') {
-        replaceText(value.slice(cursor), 0);
+        applyEdit(deleteToStart(value, cursor));
         return;
       }
       if (key.ctrl && input === 'k') {
-        replaceText(value.slice(0, cursor), cursor);
+        applyEdit(deleteToEnd(value, cursor));
         return;
       }
       if (key.ctrl && input === 'w') {
-        const left = value.slice(0, cursor);
-        const trimmed = left.replace(/\S*\s*$/, '');
-        replaceText(trimmed + value.slice(cursor), trimmed.length);
+        applyEdit(deletePreviousWord(value, cursor));
         return;
       }
       // Drop unhandled control/meta combos; pass printable input through.
       if (key.ctrl || key.meta || !input) return;
-      replaceText(
-        value.slice(0, cursor) + input + value.slice(cursor),
-        cursor + input.length,
-      );
+      applyEdit(insertText(value, cursor, input));
     },
     { isActive: focus },
   );
@@ -144,10 +143,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
   // so newlines in the paste are preserved literally instead of firing Enter.
   usePaste(
     (text) => {
-      replaceText(
-        value.slice(0, cursor) + text + value.slice(cursor),
-        cursor + text.length,
-      );
+      applyEdit(insertText(value, cursor, text));
     },
     { isActive: focus },
   );

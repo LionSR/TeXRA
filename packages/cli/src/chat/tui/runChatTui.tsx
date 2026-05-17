@@ -37,6 +37,7 @@ import { wrapRuntimeHost } from './state/subscribeRuntimeHost';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
+import { cleanupTerminalModes } from './terminalCleanup';
 
 export interface ChatResult {
   exitCode: number;
@@ -67,12 +68,13 @@ export async function runChat(
   // mount and emit garbled output instead of a usable session).
   const isHeadless = context.mode === 'headless' || !process.stdout.isTTY;
   const dumbTerm = process.env.TERM === 'dumb';
+  const clearItermProgress = process.env.TERM_PROGRAM === 'iTerm.app';
   if (isHeadless || dumbTerm) {
     // Headless precedence: in CI (headless + TERM=dumb often co-occur) the
     // actionable advice is "use `texra run`", not "fix your TERM".
     writeTextStderr(
       isHeadless
-        ? 'texra chat requires an interactive terminal (TTY stdin and stdout). For non-interactive runs, use `texra run`.'
+        ? 'texra chat requires an interactive terminal (TTY stdin and stdout). For scripting, --print, or piped output, use `texra run`.'
         : 'texra chat needs a capable terminal — TERM=dumb strips the cursor controls Ink uses. For non-interactive runs, use `texra run`.',
     );
     return { exitCode: CliExitCode.Usage };
@@ -221,22 +223,54 @@ export async function runChat(
     alternateScreen: true,
   });
 
-  // Bridge SIGINT to a graceful interrupt (first tap) / process exit
-  // (second tap). We detach the handler before exiting on the second tap so
-  // Node's default termination path runs — re-`process.kill`-ing while the
-  // listener is still installed would re-enter `handleSigint` and loop.
-  let sigintCount = 0;
+  let pendingExitTimer: ReturnType<typeof setTimeout> | undefined;
+  let exitArmed = false;
+  const clearPendingExit = (): void => {
+    if (pendingExitTimer) clearTimeout(pendingExitTimer);
+    pendingExitTimer = undefined;
+    exitArmed = false;
+    cliState.pendingExitHint.set(false);
+  };
+  const removeProcessHandlers = (): void => {
+    process.off('SIGINT', handleSigint);
+    process.off('SIGTERM', handleSigterm);
+    process.off('SIGHUP', handleSighup);
+  };
+  const exitNow = (exitCode: number): void => {
+    removeProcessHandlers();
+    clearPendingExit();
+    ink.unmount();
+    cleanupTerminalModes({ clearItermProgress });
+    process.exit(exitCode);
+  };
+  const armExit = (): void => {
+    exitArmed = true;
+    cliState.pendingExitHint.set(true);
+    if (pendingExitTimer) clearTimeout(pendingExitTimer);
+    pendingExitTimer = setTimeout(clearPendingExit, 800);
+  };
   const handleSigint = (): void => {
-    sigintCount += 1;
-    if (sigintCount >= 2) {
-      process.off('SIGINT', handleSigint);
-      ink.unmount();
-      process.exit(130);
+    if (exitArmed) {
+      exitNow(130);
+      return;
     }
     session.stopRequested = true;
     interruptActive();
+    armExit();
+  };
+  const handleSigterm = (): void => {
+    session.stopRequested = true;
+    interruptActive();
+    exitNow(143);
+  };
+  const handleSighup = (): void => {
+    session.stopRequested = true;
+    interruptActive();
+    exitNow(129);
   };
   process.on('SIGINT', handleSigint);
+  process.on('SIGTERM', handleSigterm);
+  process.on('SIGHUP', handleSighup);
 
   // Auto-prompt when the active stream goes WAITING so the UI clearly
   // signals "your turn." Combined with the StatusBar pill, this replaces
@@ -256,7 +290,8 @@ export async function runChat(
   try {
     await ink.waitUntilExit();
   } finally {
-    process.off('SIGINT', handleSigint);
+    removeProcessHandlers();
+    clearPendingExit();
     for (const dispose of disposers) dispose();
     await followUpQueue.onIdle();
     if (session.runPromise && !session.runCompleted) {
@@ -265,6 +300,7 @@ export async function runChat(
     }
     await session.runPromise;
     resetCliState();
+    cleanupTerminalModes({ clearItermProgress });
   }
   return { exitCode: session.runExitCode };
 }
