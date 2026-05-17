@@ -223,6 +223,16 @@ const loginCommand = defineCommand({
       type: 'boolean',
       description: 'Print the sign-in URL instead of opening a browser',
     },
+    'select-account': {
+      type: 'boolean',
+      description:
+        'Ask the OAuth provider to show account selection when supported',
+    },
+    'login-hint': {
+      type: 'string',
+      description:
+        'Suggest a specific provider account, such as a GitHub username or Google email',
+    },
   },
   async run(ctx) {
     const context = await contextFromArgs(ctx.args);
@@ -233,6 +243,8 @@ const loginCommand = defineCommand({
       await runLogin(context, {
         provider,
         noBrowser: ctx.args['no-browser'] === true,
+        selectAccount: ctx.args['select-account'] === true,
+        loginHint: optString(ctx.args['login-hint']),
       }),
     );
   },
@@ -250,6 +262,8 @@ export function resolveLoginProvider(
 interface LoginInit {
   readonly provider: string;
   readonly noBrowser: boolean;
+  readonly selectAccount: boolean;
+  readonly loginHint?: string;
 }
 
 async function runLogin(context: CliContext, init: LoginInit): Promise<number> {
@@ -268,6 +282,8 @@ async function runLogin(context: CliContext, init: LoginInit): Promise<number> {
     session = await signInCliSupabase({
       provider: init.provider,
       openBrowser: !init.noBrowser,
+      selectAccount: init.selectAccount,
+      loginHint: init.loginHint,
       manualBrowserHint: 'texra login --no-browser',
       onAuthUrl: (url) => {
         if (init.noBrowser) {
@@ -689,6 +705,40 @@ export function reorderGlobalFlags(rawArgs: readonly string[]): string[] {
   return [...rawArgs.slice(i), ...leadingGlobals];
 }
 
+export function normalizeRootShortcuts(rawArgs: readonly string[]): string[] {
+  const leadingGlobals: string[] = [];
+  let i = 0;
+  while (i < rawArgs.length) {
+    const arg = rawArgs[i];
+    if (arg === undefined) break;
+    if (!arg.startsWith('-')) break;
+    if (arg === '--') break;
+    const inline = arg.includes('=');
+    const baseFlag = inline ? arg.slice(0, arg.indexOf('=')) : arg;
+    if (GLOBAL_BOOL_FLAGS.has(baseFlag)) {
+      leadingGlobals.push(arg);
+      i += 1;
+      continue;
+    }
+    if (GLOBAL_VALUE_FLAGS.has(baseFlag)) {
+      leadingGlobals.push(arg);
+      i += 1;
+      if (!inline) {
+        const value = rawArgs[i];
+        if (value !== undefined) {
+          leadingGlobals.push(value);
+          i += 1;
+        }
+      }
+      continue;
+    }
+    break;
+  }
+
+  if (rawArgs[i] !== '--logout') return [...rawArgs];
+  return ['logout', ...leadingGlobals, ...rawArgs.slice(i + 1)];
+}
+
 function isCliError(error: unknown): error is Error & { code?: string } {
   return (
     error instanceof Error &&
@@ -745,7 +795,9 @@ export async function runCli(
   argv?: readonly string[],
 ): Promise<{ exitCode: number }> {
   pendingExitCode = CliExitCode.Success;
-  const rawArgs = reorderGlobalFlags(argv ? [...argv] : readCliArgv());
+  const rawArgs = reorderGlobalFlags(
+    normalizeRootShortcuts(argv ? [...argv] : readCliArgv()),
+  );
 
   // `--help` / `-h` anywhere prints usage for the deepest matched subcommand
   // (e.g. `texra agents list --help` → list-level usage), mirroring citty's

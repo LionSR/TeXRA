@@ -24,7 +24,6 @@ function statusLabel(status: string | undefined): string {
 }
 
 export function StatusBar(): React.JSX.Element {
-  const meta = useSignal(cliState.sessionMeta);
   const activeStreamId = useSignal(cliState.activeStreamId);
   const streams = useSignal(cliState.streams);
   const pendingExitHint = useSignal(cliState.pendingExitHint);
@@ -36,10 +35,6 @@ export function StatusBar(): React.JSX.Element {
     <Box paddingX={1} justifyContent="space-between">
       <Box gap={1}>
         <Text color="cyan">◆</Text>
-        <Text>{meta.agent || 'chat'}</Text>
-        <Text dimColor>·</Text>
-        <Text>{meta.model || '—'}</Text>
-        <Text dimColor>·</Text>
         {pendingExitHint ? (
           <Text color="yellow">Press Ctrl-C again to exit</Text>
         ) : (
