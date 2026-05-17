@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { DEFAULT_AGENT_MODEL } from '@agent/core/AgentConfig';
@@ -6,6 +10,18 @@ import {
   BUILTIN_DEFAULT_CHAT_MODEL,
   resolveChatDefaults,
 } from '../../../packages/cli/src/runtime/chatDefaults';
+
+vi.mock('@agent/storage', () => ({
+  listExecutions: vi.fn(async () => []),
+}));
+
+vi.mock('@utils/files/storageFS', () => ({
+  GlobalStorageFS: {
+    readJson: vi.fn(async () => {
+      throw new Error('no user defaults');
+    }),
+  },
+}));
 
 describe('CLI chat defaults', () => {
   it('uses the shared agent model as the built-in chat model', async () => {
@@ -18,6 +34,23 @@ describe('CLI chat defaults', () => {
       agent: 'chat',
       model: DEFAULT_AGENT_MODEL,
       source: 'builtin',
+    });
+  });
+
+  it('ignores non-llm-zoo model ids in workspace defaults', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-defaults-'));
+    await mkdir(join(workspace, '.texra'), { recursive: true });
+    await writeFile(
+      join(workspace, '.texra', 'config.json'),
+      JSON.stringify({ agent: 'chat', model: 'claude-opus-4-7' }),
+    );
+
+    await expect(
+      resolveChatDefaults({ cwd: workspace }),
+    ).resolves.toMatchObject({
+      agent: 'chat',
+      model: DEFAULT_AGENT_MODEL,
+      source: 'mixed',
     });
   });
 });
