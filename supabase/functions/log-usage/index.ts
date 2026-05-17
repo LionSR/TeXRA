@@ -2,7 +2,8 @@
  * Log Usage Edge Function - Records API usage for analytics and rate limiting.
  *
  * Receives batched usage entries from the TeXRA extension and stores them
- * in the usage_logs table. Also returns quota information for future rate limiting.
+ * via the public.usage_logs_upsert RPC, which aggregates per-stream so the
+ * table grows by run rather than by round.
  *
  * Authentication: JWT token in Authorization header (Bearer {jwt})
  *
@@ -10,8 +11,8 @@
  * - POST /log-usage - Log a batch of usage entries
  *
  * Database Requirements:
- * - Table: usage_logs (see migrations/20241219_create_usage_logs.sql)
- * - RLS: Only SELECT policy for users, inserts use service role key
+ * - Table: usage_logs with unique index on (user_id, stream_id) where stream_id IS NOT NULL
+ * - RPC: usage_logs_upsert (service role only)
  */
 
 import { createClient } from 'jsr:@supabase/supabase-js@2.104.1';
@@ -21,7 +22,7 @@ import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 // Constants
 // =============================================================================
 
-const LOG_USAGE_VERSION = '1.0.2';
+const LOG_USAGE_VERSION = '1.1.0';
 
 // =============================================================================
 // Types
@@ -225,11 +226,9 @@ Deno.serve(async (req: Request) => {
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
     // Check for duplicate batch (idempotency for client retries).
-    // Note: This has a small TOCTOU race window where concurrent retries could
-    // both pass the check. We accept this for analytics data because:
-    // - Race window is tiny (concurrent network retries are rare)
-    // - Duplicates can be filtered on read with DISTINCT ON (batch_id)
-    // - Advisory locks/separate tables add complexity with minimal benefit
+    // After per-stream compaction the canonical row keeps only one batch_id
+    // out of the inputs that produced it, so this is best-effort: it catches
+    // the common case of an immediate retry of an in-flight request.
     const { data: existingBatch } = await adminClient
       .from('usage_logs')
       .select('id')
@@ -254,28 +253,30 @@ Deno.serve(async (req: Request) => {
       logged_at: entry.timestamp,
       model: entry.model,
       provider: entry.provider,
-      agent_name: entry.agentName,
-      agent_category: entry.agentCategory,
-      is_multiple_output: entry.isMultipleOutput,
+      agent_name: entry.agentName ?? null,
+      agent_category: entry.agentCategory ?? null,
+      is_multiple_output: entry.isMultipleOutput ?? null,
       input_tokens: entry.inputTokens,
       output_tokens: entry.outputTokens,
       cost: entry.cost,
-      response_time_ms: entry.responseTimeMs,
-      cached_input_tokens: entry.cachedInputTokens,
-      reasoning_tokens: entry.reasoningTokens,
-      used_relay: entry.usedRelay,
-      stream_id: entry.streamId,
-      extension_version: entry.extensionVersion,
-      editor_type: entry.editorType,
+      response_time_ms: entry.responseTimeMs ?? null,
+      cached_input_tokens: entry.cachedInputTokens ?? null,
+      reasoning_tokens: entry.reasoningTokens ?? null,
+      used_relay: entry.usedRelay ?? null,
+      stream_id: entry.streamId ?? null,
+      extension_version: entry.extensionVersion ?? null,
+      editor_type: entry.editorType ?? null,
       batch_id: batch.batchId,
     }));
 
-    const { error: insertError } = await adminClient
-      .from('usage_logs')
-      .insert(rows);
+    // Server-side aggregation: rows with the same (user_id, stream_id) update
+    // the canonical row instead of producing per-round duplicates.
+    const { error: rpcError } = await adminClient.rpc('usage_logs_upsert', {
+      p_rows: rows,
+    });
 
-    if (insertError) {
-      console.error('[LOG_USAGE] Insert error:', insertError.message);
+    if (rpcError) {
+      console.error('[LOG_USAGE] Upsert error:', rpcError.message);
       return errorResponse(req, 'Failed to store usage logs', 500);
     }
 
