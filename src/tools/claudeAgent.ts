@@ -561,7 +561,7 @@ function startClaudeAgentLoop(params: {
         );
         if (!messages || session.isInterrupted()) break;
 
-        const prompt = messages.join('\n\n');
+        const prompt = messages.items.join('\n\n');
         StreamStatusService.set(childStreamId, STREAM_STATUS.RUNNING, {
           runtimeHost,
         });
