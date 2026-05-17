@@ -40,6 +40,20 @@ export const UserAccessStatusSchema = z.object({
 export type UserAccessStatus = z.infer<typeof UserAccessStatusSchema>;
 
 /**
+ * Monthly relay spending status for the authenticated user, returned by
+ * /tier-config when the request carries a JWT. Used to drive both the
+ * UI quota meter and the over-limit BYOK fallback. Spend values are in
+ * USD and reflect the calendar month so far (UTC).
+ */
+export const SpendingStatusSchema = z.object({
+  currentSpend: z.number(),
+  limit: z.number(),
+  remaining: z.number(),
+  percentUsed: z.number(),
+});
+export type SpendingStatus = z.infer<typeof SpendingStatusSchema>;
+
+/**
  * Schema for a single tier's model access configuration.
  * - models: Either "*" for all models, or an array of specific model names
  */
