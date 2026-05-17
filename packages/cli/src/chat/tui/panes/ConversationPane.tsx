@@ -83,10 +83,10 @@ export function ConversationPane(
         )}
       </Static>
       {/* Reserve a single line for the live region even when nothing is
-        * streaming. Ink renders Static items into scrollback above the
-        * live area, so toggling live presence between renders made the
-        * input bar appear to "shift down" by a line. A stable footer
-        * keeps the layout pinned. */}
+       * streaming. Ink renders Static items into scrollback above the
+       * live area, so toggling live presence between renders made the
+       * input bar appear to "shift down" by a line. A stable footer
+       * keeps the layout pinned. */}
       <Box minHeight={1}>
         {live ? <LiveTranscriptEntry entry={live} /> : null}
       </Box>
