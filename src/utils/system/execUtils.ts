@@ -206,11 +206,13 @@ export async function executeCommand(
 
           // Force-kill after FORCE_KILL_DELAY_MS if SIGTERM didn't work,
           // and destroy streams as a last resort to unblock `await subprocess`.
-          forceKillTimeoutId = setTimeout(() => {
-            signalProcessGroup(pid, 'SIGKILL');
-            shellSubprocess.stdout?.destroy();
-            shellSubprocess.stderr?.destroy();
-          }, FORCE_KILL_DELAY_MS);
+          if (forceKillTimeoutId === undefined) {
+            forceKillTimeoutId = setTimeout(() => {
+              signalProcessGroup(pid, 'SIGKILL');
+              shellSubprocess.stdout?.destroy();
+              shellSubprocess.stderr?.destroy();
+            }, FORCE_KILL_DELAY_MS);
+          }
         }, _shellTimeout);
       }
     }

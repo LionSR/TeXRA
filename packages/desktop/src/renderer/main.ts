@@ -104,7 +104,7 @@ import {
   type DesktopClosePdfMessage,
 } from '../desktopPdfMessages';
 import {
-  DESKTOP_SETUP_TERMINAL_COMMANDS,
+  buildDesktopSetupTerminalCancelMessage,
   DesktopSetupTerminalShowMessageSchema,
   DesktopSetupTerminalAppendMessageSchema,
   DesktopSetupTerminalCompleteMessageSchema,
@@ -980,9 +980,10 @@ function ensureSetupTerminalDialog(): WaDialog {
   const cancel = createSetupTerminalButton('xmark', 'Cancel');
   cancel.addEventListener('click', () => {
     if (setupTerminalActiveRunId) {
-      postMessage(DESKTOP_SETUP_TERMINAL_COMMANDS.CANCEL, {
-        runId: setupTerminalActiveRunId,
-      });
+      const { command, ...payload } = buildDesktopSetupTerminalCancelMessage(
+        setupTerminalActiveRunId,
+      );
+      postMessage(command, payload);
       setSetupTerminalStatus('cancelled');
     }
   });
