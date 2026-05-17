@@ -830,6 +830,14 @@ export class LaTeXTab extends LitElement {
         min: LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min,
       })}
       ${this.renderBooleanSetting({
+        field: 'workflowAutoOpenPdf',
+        label: 'Open compiled PDF or log',
+        description:
+          'After auto-compile finishes, open the latest PDF on success or the truncated LaTeX log on failure.',
+        defaultValue: LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf,
+        currentValue: cv.workflowAutoOpenPdf,
+      })}
+      ${this.renderBooleanSetting({
         field: 'latexdiffBetweenRounds',
         label: 'Generate diffs between consecutive rounds',
         description:
@@ -886,6 +894,7 @@ export class LaTeXTab extends LitElement {
   private renderBooleanSetting(opts: {
     field:
       | 'workflowAutoCompile'
+      | 'workflowAutoOpenPdf'
       | 'latexdiffBetweenRounds'
       | 'latexdiffChangesOnly';
     label: string;

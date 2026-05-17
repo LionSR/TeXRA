@@ -110,7 +110,6 @@ export class ProgressWorkflowFileActionsController {
       return;
     }
 
-    await this.deps.host.latexdiffFile(previousFile, file);
     await this.deps.host.compareFiles(previousFile, file);
   }
 
