@@ -19,6 +19,10 @@ import {
   type TaskRunFileService,
 } from '@utils/files';
 
+import {
+  publishCompiledPdfArtifact,
+  type CompiledPdfArtifact,
+} from './compiledPdfArtifacts';
 import { getOutputFilesByRound, type OutputState } from './outputState';
 
 export interface CompileCheckContext {
@@ -30,6 +34,11 @@ export interface CompileCheckContext {
 
 const LOG_TAIL_LINES = 200;
 const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min;
+
+export interface CompileCheckResult {
+  failures: CompileFailure[];
+  artifacts: CompiledPdfArtifact[];
+}
 
 /**
  * Return a human-readable display name for an output file in compile messages.
@@ -57,26 +66,26 @@ function getCompileDisplayName(file: OutputFileInfo): string {
 export async function runCompileCheck(
   ctx: CompileCheckContext,
   currentRound: number,
-): Promise<CompileFailure[]> {
+): Promise<CompileCheckResult> {
   if (
     !getWorkspaceState().get<boolean>(
       WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
       LATEX_CONFIG_DEFAULTS.workflowAutoCompile,
     )
   ) {
-    return [];
+    return { failures: [], artifacts: [] };
   }
 
   const runDirectory = ctx.fileService.metadata.runDirectory;
   if (!runDirectory) {
     ctx.logger.debug('Compile check skipped: no run directory');
-    return [];
+    return { failures: [], artifacts: [] };
   }
 
   const texOutputs = (
     getOutputFilesByRound(ctx.outputState)[currentRound] ?? []
   ).filter((f) => f.location.absolutePath.toLowerCase().endsWith('.tex'));
-  if (texOutputs.length === 0) return [];
+  if (texOutputs.length === 0) return { failures: [], artifacts: [] };
 
   // Skip gracefully when no LaTeX toolchain is installed so the run doesn't
   // leave stray `compile/<name>.log` artifacts that the orchestrator would
@@ -85,7 +94,7 @@ export async function runCompileCheck(
     ctx.logger.debug(
       'Compile check skipped: neither latexmk nor pdflatex is installed',
     );
-    return [];
+    return { failures: [], artifacts: [] };
   }
 
   const timeoutMs = Math.max(
@@ -100,11 +109,12 @@ export async function runCompileCheck(
   // the build succeeded.
   const compileRoot = path.join(runDirectory, 'compile');
   const failures: CompileFailure[] = [];
+  const artifacts: CompiledPdfArtifact[] = [];
 
   for (const outputFile of texOutputs) {
     const displayName = getCompileDisplayName(outputFile);
     try {
-      const failure = await compileOne(
+      const result = await compileOne(
         ctx,
         outputFile,
         currentRound,
@@ -115,7 +125,8 @@ export async function runCompileCheck(
           timeoutMs,
         },
       );
-      if (failure) failures.push(failure);
+      if (result.failure) failures.push(result.failure);
+      if (result.artifact) artifacts.push(result.artifact);
     } catch (err) {
       ctx.logger.warn(
         `Compile check: ${displayName} skipped — ${toErrorMessage(err)}`,
@@ -123,7 +134,7 @@ export async function runCompileCheck(
     }
   }
 
-  return failures;
+  return { failures, artifacts };
 }
 
 interface PerFileOptions {
@@ -138,7 +149,10 @@ async function compileOne(
   currentRound: number,
   displayName: string,
   opts: PerFileOptions,
-): Promise<CompileFailure | null> {
+): Promise<{
+  failure: CompileFailure | null;
+  artifact: CompiledPdfArtifact | null;
+}> {
   // compiledBasename is the actual on-disk filename LaTeX engines use when
   // naming their .log; it may differ from displayName when file.source is set.
   const compiledBasename = path.basename(outputFile.location.absolutePath);
@@ -174,7 +188,7 @@ async function compileOne(
     ctx.logger.debug(
       `Compile check: ${displayName} has no \\documentclass, skipping`,
     );
-    return null;
+    return { failure: null, artifact: null };
   }
 
   // execa's timeout option kills the child process on expiry, so we don't
@@ -187,7 +201,28 @@ async function compileOne(
 
   if (ok) {
     ctx.logger.debug(`Compile check: ${displayName} built successfully`);
-    return null;
+    const executionId = ctx.fileService.metadata.executionId;
+    const compiledPdfPath = path.join(
+      buildDir,
+      `${compiledBasename.replace(/\.tex$/i, '')}.pdf`,
+    );
+    const artifact = executionId
+      ? await publishCompiledPdfArtifact({
+          runDirectory: opts.runDirectory,
+          executionId,
+          round: currentRound,
+          displayName,
+          source: outputFile.location,
+          compiledPdfPath,
+        })
+      : null;
+
+    if (artifact) {
+      ctx.logger.debug(
+        `Compile check: ${displayName} PDF persisted at ${artifact.latestPdf.relativePath}`,
+      );
+    }
+    return { failure: null, artifact };
   }
 
   const tail = await readLogTail(buildDir, compiledBasename);
@@ -208,11 +243,14 @@ async function compileOne(
       )
     : logDest;
   return {
-    round: currentRound,
-    displayName,
-    output: outputFile.location,
-    log: logLocation,
-    logRelativePath,
+    failure: {
+      round: currentRound,
+      displayName,
+      output: outputFile.location,
+      log: logLocation,
+      logRelativePath,
+    },
+    artifact: null,
   };
 }
 
