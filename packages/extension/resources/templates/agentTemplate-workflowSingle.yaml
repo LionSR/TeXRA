@@ -10,10 +10,10 @@ settings:
   isRewrite: true
   documentTag: documents
   endTag: </documents>
-  # Optional: `prefills` can force the assistant turn to start with a specific
-  # token (e.g., - "<documents>") for agents that should skip preamble
-  # and jump straight to output. Most workflow agents do not need this --- modern
-  # thinking-capable models reason natively before producing the final output.
+  # `prefills` is deprecated and almost never needed. Reasoning-capable
+  # models ignore it at runtime, and other models do fine when the
+  # userRequest spells out the expected `<documents>...</documents>`
+  # wrapper. Omit it.
 
 # --- Agent Prompts ---
 prompts:
