@@ -2,9 +2,9 @@
 //
 // Ink only supports one `<Static>` per app (the ConversationPane already
 // owns it for the transcript), so we can't render the banner through Ink
-// — a second Static would be silently dropped. Instead we write the
-// banner directly to stdout *before* Ink mounts, which places it in the
-// real terminal scrollback above the live region.
+// — a second Static would be silently dropped. Instead this module returns
+// the formatted banner string; the CLI boundary writes it to stdout before
+// Ink mounts, placing it in the real terminal scrollback above the live region.
 //
 // The pixel art is a rounded brain mascot with ∫ and Σ in the two
 // hemispheres and a small smile underneath. Kept to four rows so it

@@ -731,6 +731,46 @@ const GLOBAL_BOOL_FLAGS = new Set<string>(
   }),
 );
 
+interface LeadingGlobalFlags {
+  readonly leadingGlobals: readonly string[];
+  readonly restIndex: number;
+  readonly stoppedOnUnknownFlag: boolean;
+}
+
+function collectLeadingGlobalFlags(
+  rawArgs: readonly string[],
+): LeadingGlobalFlags {
+  const leadingGlobals: string[] = [];
+  let i = 0;
+  while (i < rawArgs.length) {
+    const arg = rawArgs[i];
+    if (arg === undefined) break;
+    if (!arg.startsWith('-')) break;
+    if (arg === '--') break;
+    const inline = arg.includes('=');
+    const baseFlag = inline ? arg.slice(0, arg.indexOf('=')) : arg;
+    if (GLOBAL_BOOL_FLAGS.has(baseFlag)) {
+      leadingGlobals.push(arg);
+      i += 1;
+      continue;
+    }
+    if (GLOBAL_VALUE_FLAGS.has(baseFlag)) {
+      leadingGlobals.push(arg);
+      i += 1;
+      if (!inline) {
+        const value = rawArgs[i];
+        if (value !== undefined) {
+          leadingGlobals.push(value);
+          i += 1;
+        }
+      }
+      continue;
+    }
+    return { leadingGlobals, restIndex: i, stoppedOnUnknownFlag: true };
+  }
+  return { leadingGlobals, restIndex: i, stoppedOnUnknownFlag: false };
+}
+
 /**
  * Citty's runCommand consumes args at the root and passes only `rawArgs.slice(
  * subCommandIndex + 1)` to the matched subcommand. That means global flags
@@ -740,74 +780,23 @@ const GLOBAL_BOOL_FLAGS = new Set<string>(
  * subcommand's slice. No-op when there is no subcommand or no leading globals.
  */
 export function reorderGlobalFlags(rawArgs: readonly string[]): string[] {
-  const leadingGlobals: string[] = [];
-  let i = 0;
-  while (i < rawArgs.length) {
-    const arg = rawArgs[i];
-    if (arg === undefined) break;
-    if (!arg.startsWith('-')) break;
-    if (arg === '--') break;
-    const inline = arg.includes('=');
-    const baseFlag = inline ? arg.slice(0, arg.indexOf('=')) : arg;
-    if (GLOBAL_BOOL_FLAGS.has(baseFlag)) {
-      leadingGlobals.push(arg);
-      i += 1;
-      continue;
-    }
-    if (GLOBAL_VALUE_FLAGS.has(baseFlag)) {
-      leadingGlobals.push(arg);
-      i += 1;
-      if (!inline) {
-        const value = rawArgs[i];
-        if (value !== undefined) {
-          leadingGlobals.push(value);
-          i += 1;
-        }
-      }
-      continue;
-    }
-    // Unknown leading flag — leave the rest intact so runMain can surface
+  const { leadingGlobals, restIndex, stoppedOnUnknownFlag } =
+    collectLeadingGlobalFlags(rawArgs);
+  if (stoppedOnUnknownFlag) {
+    // Unknown leading flag: leave the rest intact so runMain can surface
     // `--help`, `--version`, or an unknown-flag error.
     return [...rawArgs];
   }
-  if (i >= rawArgs.length || leadingGlobals.length === 0) {
+  if (restIndex >= rawArgs.length || leadingGlobals.length === 0) {
     return [...rawArgs];
   }
-  return [...rawArgs.slice(i), ...leadingGlobals];
+  return [...rawArgs.slice(restIndex), ...leadingGlobals];
 }
 
 export function normalizeRootShortcuts(rawArgs: readonly string[]): string[] {
-  const leadingGlobals: string[] = [];
-  let i = 0;
-  while (i < rawArgs.length) {
-    const arg = rawArgs[i];
-    if (arg === undefined) break;
-    if (!arg.startsWith('-')) break;
-    if (arg === '--') break;
-    const inline = arg.includes('=');
-    const baseFlag = inline ? arg.slice(0, arg.indexOf('=')) : arg;
-    if (GLOBAL_BOOL_FLAGS.has(baseFlag)) {
-      leadingGlobals.push(arg);
-      i += 1;
-      continue;
-    }
-    if (GLOBAL_VALUE_FLAGS.has(baseFlag)) {
-      leadingGlobals.push(arg);
-      i += 1;
-      if (!inline) {
-        const value = rawArgs[i];
-        if (value !== undefined) {
-          leadingGlobals.push(value);
-          i += 1;
-        }
-      }
-      continue;
-    }
-    break;
-  }
-
-  if (rawArgs[i] !== '--logout') return [...rawArgs];
-  return ['logout', ...leadingGlobals, ...rawArgs.slice(i + 1)];
+  const { leadingGlobals, restIndex } = collectLeadingGlobalFlags(rawArgs);
+  if (rawArgs[restIndex] !== '--logout') return [...rawArgs];
+  return ['logout', ...leadingGlobals, ...rawArgs.slice(restIndex + 1)];
 }
 
 function isCliError(error: unknown): error is Error & { code?: string } {
