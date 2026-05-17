@@ -76,16 +76,25 @@ function renderLogEntry(
     // fast-completing tool would otherwise jump into `<Static>`
     // scrollback while preceding assistant text from the same turn is
     // still streaming, reversing the visible order (Static items are
-    // append-only).
+    // append-only). Inherit the prior flag so a sync tick that fires
+    // after the finalize step doesn't roll the entry back to false.
     const next: ConversationEntry = {
       id: entry.id,
       role: 'tool',
       text: '',
-      finalized: false,
+      finalized: prev?.finalized ?? false,
       toolUse,
       toolUseSource: entry.data,
     };
-    return prev && entriesEqual(prev, next) ? prev : next;
+    if (prev && entriesEqual(prev, next)) {
+      // Same content under a fresh `data` reference: refresh the cache
+      // key on `prev` instead of returning it as-is, otherwise the
+      // identity fast path above keeps missing on every subsequent tick.
+      return prev.toolUseSource === entry.data
+        ? prev
+        : { ...prev, toolUseSource: entry.data };
+    }
+    return next;
   }
 
   const text = entry.text ?? '';
@@ -95,11 +104,16 @@ function renderLogEntry(
       : entry.messageType === MESSAGE_TYPES.ERROR
         ? 'error'
         : 'assistant';
+  // Assistant entries defer finalization (see comment above); inherit
+  // from `prev` so re-syncs after finalize don't de-finalize and drop
+  // the entry from `splitTranscriptEntries` once status flips to
+  // WAITING.
+  const finalized = role === 'assistant' ? (prev?.finalized ?? false) : true;
   const next: ConversationEntry = {
     id: entry.id,
     role,
     text,
-    finalized: role !== 'assistant',
+    finalized,
   };
   return prev && entriesEqual(prev, next) ? prev : next;
 }
