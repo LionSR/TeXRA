@@ -131,7 +131,7 @@ describe('ServerSideKeyService', () => {
     assert.equal(state.get(USE_INCLUDED_ACCESS_KEY, false), true);
     assert.deepEqual(changes, [true]);
     assert.equal(tier.clearCacheCalls, 1);
-    assert.equal(tier.getConfigCalls, 1);
+    assert.equal(tier.getConfigCalls, 0);
   });
 
   it('supports host subscription disposal without VS Code types', async () => {

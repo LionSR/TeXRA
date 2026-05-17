@@ -15,9 +15,11 @@ import type {
   NumberVscodeSetting,
   ProviderKeyStatus,
 } from '@shared/schemas/settingsViewMessages';
+import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/ApiAccessSection';
+import '../components/profile/RelayQuotaMeter';
 import '../components/profile/ProviderKeyList';
 import '../components/profile/ModelSelectionList';
 import '../components/profile/ReliabilitySettingsSection';
@@ -39,6 +41,8 @@ export class ModelsTab extends LitElement {
   @property({ attribute: false }) authenticated = false;
   @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
     'personal';
+  @property({ attribute: false }) spendingStatus: SpendingStatus | null = null;
+  @property({ type: Boolean }) quotaAutoSwitched = false;
   @property({ attribute: false }) allowedModels: string[] | null = [];
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
   @property({ attribute: false }) globalStreamingDefault = true;
@@ -111,9 +115,17 @@ export class ModelsTab extends LitElement {
         ></api-access-section>`
       : nothing;
 
+    const quotaMeter =
+      this.authenticated && this.spendingStatus
+        ? html`<relay-quota-meter
+            .status=${this.spendingStatus}
+            .autoSwitched=${this.quotaAutoSwitched}
+          ></relay-quota-meter>`
+        : nothing;
+
     return html`
       <div class="models-container tab-content-container">
-        ${this.renderTabHint()} ${apiAccessSection}
+        ${this.renderTabHint()} ${apiAccessSection} ${quotaMeter}
         <provider-key-list
           .providerKeyStatuses=${this.providerKeyStatuses}
           .apiAccessMode=${this.apiAccessMode}
