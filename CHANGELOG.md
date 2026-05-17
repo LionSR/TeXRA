@@ -2,32 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.37.8] - 2026-05-17
 
 ### Features
 
-- **Ink-based CLI TUI is the default** — `texra chat` now mounts the Ink TUI for interactive (TTY) sessions instead of the line-based renderer. The TUI ships a multi-pane layout (conversation, subagent/process list, todos+plan), structured slash forms (`/model` picker), persistent input history with `Ctrl-R` reverse search, `Ctrl-A`/`Ctrl-B` focus traversal, and shared `<KeyHints>` footers across every modal. Deprecated renderer flags (`--tui`, `--no-tui`, `--legacy-renderer`, and `--tool-display`) are accepted for compatibility and ignored with a warning. Non-TTY shells (`texra chat | tee`) now get a usage message pointing to `texra run`, the supported non-interactive path.
-- **Non-blocking external inquiries** — the `external_inquiry` tool is renamed to `inquiry` and is now non-blocking and durable. Dispatching a question no longer freezes the agent's cycle waiting for the human round-trip to ChatGPT/Gemini/etc. The cycle continues, and the agent is woken with a continuation message when you submit the answer in the panel — even after closing the tab or reloading the extension. Existing custom agent YAMLs that reference `external_inquiry` continue to work via a compatibility alias.
-
-### Bug Fixes
-
-- **CLI workflow output paths** — `texra run` now prints the final workflow output path from run storage. If `--output` is provided, that file is still copied to the requested destination, but stdout identifies the generated run artifact so multi-round workflow output remains unambiguous.
-
-## [0.37.8] - 2026-05-01
-
-### Breaking Changes
-
-- **Legacy session and config migration shims removed** — TeXRA no longer rewrites legacy fields (`agentType`, `maxRounds`, `xmlStructureMode`, `isMultipleOutput`, `session.agentCategory`, and similar) when loading saved sessions or agent settings. Sessions and configurations created by very old versions of the extension may no longer load and must be recreated.
+- **Odyssey mode** — let an agent run a long task to completion on its own. A budget auto-pauses the run for your approval before going further, and a dedicated panel shows progress so you can step in any time.
+- **Integrations settings tab** — a new **Settings → Integrations** tab groups external agent integrations (Codex CLI, Claude Code Agent, external chat handoff) in one place, with reasoning-effort and adaptive-thinking controls for Claude Code Agent.
+- **Ask-user-question tool** — agents can now ask you a multiple-choice question mid-run instead of guessing.
+- **Non-blocking inquiries** — when an agent sends you to ChatGPT/Gemini/etc. for outside help (now called **Inquiry**), the run no longer freezes waiting for your reply. The agent keeps working and is woken with a follow-up when you submit the answer — even after closing the tab or reloading. Inquiry threads appear in **Background tasks** with full transcripts and saved drafts per thread.
+- **Open PDF from an agent** — agents can open a finished PDF in your viewer.
+- **LaTeXdiff focuses on changed pages** — generated diff PDFs now show only the pages that actually changed.
+- **Worktree chip on stream tabs** — when an agent runs in a git worktree, its stream tab shows the branch name and a dirty-status indicator.
 
 ### Improvements
 
-- **Progress view first-run state** — when there are no runs yet, the progress view now shows direct actions to open the Launcher or Dashboard instead of an empty board.
-- **Internal rename pass to remove same-name collisions** — renamed several internal types/constants that previously shared a name with an unrelated concept (OS platform string vs. host platform interface; document file categories vs. the VS Code-style file-type bitmask; the LitElement history-item component vs. the schema-derived history entry; the debug saver's `FileOptions` vs. the agent file-options schema; per-item web-search result vs. the wrapper response), and consolidated duplicate definitions of `AgentCategory`, `Disposable`, `LatexConfigField`, and the API provider list down to single sources of truth. No user-visible behavior change.
+- **General performance and reliability improvements.**
+- **Bash runs in Executions** — shell commands run by an agent now show up as their own process with a dedicated stream tab instead of being folded into the calling agent's output.
+- **Single-slot workflow output keeps the original filename** — edit-style workflows write back to the input file's name instead of generating a duplicate under a generic name.
+- **Pack and Clean show what each input is for** — input slots in the launcher are labeled instead of unnamed.
+- **Settings polish** — more compact retry details and dropdowns, longer memory previews, reliability controls now live on the Models tab, and agent proposal instructions render as markdown.
+- **Long shell commands wrap** — tool-use titles no longer truncate long commands with an ellipsis.
+- **Progress view first-run state** — with no runs yet, the progress view shows direct actions to open the Launcher or Dashboard instead of an empty board.
 
 ### Bug Fixes
 
-- **Current DeepSeek V4 pricing** — DeepSeek V4 Flash and Pro now use DeepSeek's current cache-hit pricing, and V4 Pro reflects the active discounted input and output rates.
-- **Codicon font packaging** — installed VSIX builds now include the webview icon font assets, so toolbar and settings icons render as icons instead of fallback squares.
+- **Recover from retryable tool errors** — when a tool call fails with a resumable error, you can now send a follow-up to nudge the agent past it instead of being stuck.
+- **LaTeXdiff doesn't litter your workspace** — intermediate sources stay in run storage instead of appearing next to your files.
+- **Cleaner progress summaries** — long bash output no longer floods the rolling summary at the top of a run.
+- **Current DeepSeek V4 pricing** — V4 Flash and Pro now use DeepSeek's current cache-hit and discounted rates.
+- **Codicon font packaging** — toolbar and settings icons render correctly in installed builds instead of fallback squares.
 
 ## [0.37.7] - 2026-05-01
 
