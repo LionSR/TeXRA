@@ -326,12 +326,26 @@ export class FakeFileSystemProvider implements FileSystemProvider {
     return fileStat(this.requireRecord(target));
   }
 
+  async realPath(target: string): Promise<string> {
+    this.requireRecord(target);
+    return normalizePath(target);
+  }
+
   async readFile(target: string): Promise<Uint8Array> {
     const record = this.requireRecord(target);
     if (record.type !== FileType.File) {
       throw fakeFsError('EISDIR', `Path is a directory: ${target}`);
     }
     return cloneBytes(record.content);
+  }
+
+  async readFileChunk(
+    target: string,
+    offset: number,
+    length: number,
+  ): Promise<Uint8Array> {
+    const content = await this.readFile(target);
+    return content.subarray(offset, offset + length);
   }
 
   async writeFile(target: string, content: Uint8Array): Promise<void> {
@@ -395,7 +409,7 @@ export class FakeFileSystemProvider implements FileSystemProvider {
   async copy(
     source: string,
     dest: string,
-    options?: { overwrite?: boolean },
+    options?: { overwrite?: boolean; dereference?: boolean },
   ): Promise<void> {
     const normalizedSource = normalizePath(source);
     const normalizedDest = normalizePath(dest);

@@ -9,9 +9,9 @@
 
 // Standard library imports
 import * as path from 'path';
-import { promises as fs } from 'fs';
 
 // Local imports
+import { platform } from '@platform/platform';
 import { flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
@@ -56,7 +56,7 @@ async function resolveTexInputPath(
  * Extract file dependencies (\input, \include, \bibliography, \addbibresource)
  * from a LaTeX file. Returns absolute paths to existing files.
  *
- * Uses fs.realpath to follow symlinks so that when the input file lives in
+ * Uses the platform realpath operation to follow symlinks so that when the input file lives in
  * run storage (as a symlink to the workspace), dependencies are resolved
  * relative to the original workspace location where they actually exist.
  */
@@ -64,7 +64,7 @@ export async function extractLatexFileDependencies(
   latexFileLocation: FileLocation,
 ): Promise<string[]> {
   // Follow symlinks so run-storage paths resolve against the workspace
-  const realPath = await fs.realpath(latexFileLocation.absolutePath);
+  const realPath = await platform().fs.realPath(latexFileLocation.absolutePath);
   const latexDir = path.dirname(realPath);
 
   const content = await flexibleFS.read(latexFileLocation);

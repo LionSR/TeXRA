@@ -16,8 +16,8 @@
 
 import { createRequire } from 'module';
 import * as path from 'path';
-import { existsSync } from 'fs';
 
+import { platform } from '@platform/platform';
 import { executeCommandSync } from '@utils/system/execUtils';
 
 type CodexConstructor = new (options?: any) => any;
@@ -112,15 +112,15 @@ let cachedBinaryPath: string | undefined;
  * The caller should pass the result as `codexPathOverride` to the Codex
  * constructor.
  */
-export function findCodexBinaryPath(): string | undefined {
+export async function findCodexBinaryPath(): Promise<string | undefined> {
   if (cachedBinaryPath !== undefined) return cachedBinaryPath;
 
-  const result = findCodexBinaryPathUncached();
+  const result = await findCodexBinaryPathUncached();
   if (result) cachedBinaryPath = result;
   return result;
 }
 
-function findCodexBinaryPathUncached(): string | undefined {
+async function findCodexBinaryPathUncached(): Promise<string | undefined> {
   const info = PLATFORM_INFO[`${process.platform}-${process.arch}`];
   if (!info) return undefined;
 
@@ -134,14 +134,14 @@ function findCodexBinaryPathUncached(): string | undefined {
     const result =
       resourcesPath == null
         ? undefined
-        : findCodexBinaryInElectronResources(resourcesPath);
+        : await findCodexBinaryInElectronResources(resourcesPath);
     if (result) return result;
   }
 
   // Strategy 2: resolve from local project's node_modules
   // Preferred in VS Code extension development — matches package.json.
   {
-    const result = resolveCodexBinary(
+    const result = await resolveCodexBinary(
       path.join(__dirname, '..'),
       info,
       binaryName,
@@ -164,7 +164,7 @@ function findCodexBinaryPathUncached(): string | undefined {
       ];
 
       for (const codexPkgDir of roots) {
-        const result = resolveCodexBinary(codexPkgDir, info, binaryName);
+        const result = await resolveCodexBinary(codexPkgDir, info, binaryName);
         if (result) return result;
       }
     }
@@ -188,7 +188,7 @@ function findCodexBinaryPathUncached(): string | undefined {
       if (!p) continue;
       // The SDK spawns the binary directly, so skip shell-only npm shims.
       if (process.platform === 'win32' && /\.(cmd|ps1)$/i.test(p)) continue;
-      if (existsSync(p)) return p;
+      if (await pathExists(p)) return p;
     }
   }
 
@@ -203,9 +203,9 @@ function findCodexBinaryPathUncached(): string | undefined {
  *
  *   resources/app.asar.unpacked/node_modules/@openai/<platform-package>/...
  */
-export function findCodexBinaryInElectronResources(
+export async function findCodexBinaryInElectronResources(
   resourcesPath: string,
-): string | undefined {
+): Promise<string | undefined> {
   const info = PLATFORM_INFO[`${process.platform}-${process.arch}`];
   if (!info) return undefined;
 
@@ -239,15 +239,15 @@ function getPackagedElectronResourcesPath(): string | undefined {
  * Works for both a direct `@openai/codex` package dir and any ancestor
  * that Node module resolution can traverse from.
  */
-function resolveCodexBinary(
+async function resolveCodexBinary(
   baseDir: string,
   platformInfo: PlatformInfo,
   binaryName: string,
-): string | undefined {
+): Promise<string | undefined> {
   try {
     const req = createRequire(path.join(baseDir, 'package.json'));
     const platformPkgJson = req.resolve(`${platformInfo.pkg}/package.json`);
-    const binary = resolveCodexBinaryFromPlatformPackage(
+    const binary = await resolveCodexBinaryFromPlatformPackage(
       path.dirname(platformPkgJson),
       platformInfo,
       binaryName,
@@ -259,11 +259,11 @@ function resolveCodexBinary(
   return undefined;
 }
 
-function resolveCodexBinaryFromPlatformPackage(
+async function resolveCodexBinaryFromPlatformPackage(
   platformPkgDir: string,
   platformInfo: PlatformInfo,
   binaryName: string,
-): string | undefined {
+): Promise<string | undefined> {
   const binary = path.join(
     platformPkgDir,
     'vendor',
@@ -271,5 +271,12 @@ function resolveCodexBinaryFromPlatformPackage(
     'codex',
     binaryName,
   );
-  return existsSync(binary) ? binary : undefined;
+  return (await pathExists(binary)) ? binary : undefined;
+}
+
+async function pathExists(target: string): Promise<boolean> {
+  return platform()
+    .fs.stat(target)
+    .then(() => true)
+    .catch(() => false);
 }

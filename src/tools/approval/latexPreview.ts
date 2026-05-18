@@ -4,11 +4,11 @@
  */
 
 import { randomUUID } from 'crypto';
-import fs from 'fs/promises';
 import path from 'path';
 
 import { sync as globSync } from 'glob';
 
+import { platform } from '@platform/platform';
 import { getConfig } from '@agent/core/config';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
@@ -60,7 +60,9 @@ const latexdiffService = new LaTeXdiffService('ToolEditApproval');
 
 /** Silently attempt to delete a file, ignoring errors */
 async function silentUnlink(filePath: string): Promise<void> {
-  await fs.unlink(filePath).catch(() => {});
+  await platform()
+    .fs.delete(filePath)
+    .catch(() => {});
 }
 
 /** Clean up LaTeX auxiliary files for a given base path */
@@ -113,7 +115,10 @@ async function readFileWithFallback(
   uri: { fsPath: string },
   fallback: string,
 ): Promise<string> {
-  return fs.readFile(uri.fsPath, 'utf8').catch(() => fallback);
+  return platform()
+    .fs.readFile(uri.fsPath)
+    .then((bytes) => Buffer.from(bytes).toString('utf8'))
+    .catch(() => fallback);
 }
 
 /**
@@ -143,7 +148,7 @@ async function createTempFileWithCleanup(
   let tempDir: string;
   if (location === 'workspaceTemp') {
     tempDir = path.join(workspacePath, TEXRA_TEMP_DIR);
-    await fs.mkdir(tempDir, { recursive: true });
+    await platform().fs.createDirectory(tempDir);
   } else {
     const resolvedPath = path.isAbsolute(originalPath)
       ? originalPath
@@ -152,13 +157,15 @@ async function createTempFileWithCleanup(
   }
 
   const tempPath = path.join(tempDir, tempFileName);
-  await fs.writeFile(tempPath, content, 'utf8');
+  await platform().fs.writeFile(tempPath, Buffer.from(content, 'utf8'));
 
   registerCleanup(entry, async () => {
     await silentUnlink(tempPath);
     await cleanupLatexAuxFiles(tempPath);
     if (location === 'workspaceTemp') {
-      await fs.rmdir(tempDir).catch(() => {});
+      await platform()
+        .fs.delete(tempDir)
+        .catch(() => {});
     }
   });
 

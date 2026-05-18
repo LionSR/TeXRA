@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 // Third-party imports
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports - agent output
 import { publishCompiledPdfArtifact } from '@agent/output/compiledPdfArtifacts';
@@ -14,6 +14,16 @@ import { createExternalLocation, createRunStorageLocation } from '@utils/files';
 
 describe('compiled PDF artifacts', () => {
   const tempDirs: string[] = [];
+
+  beforeEach(async () => {
+    const [{ initPlatform }, { nodeFilesystem }, { createFakePlatform }] =
+      await Promise.all([
+        import('@platform/platform'),
+        import('@platform/defaults/nodeFilesystem'),
+        import('@test/support/FakePlatform'),
+      ]);
+    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
+  });
 
   async function makeTempDir(): Promise<string> {
     const dir = await mkdtemp(path.join(os.tmpdir(), 'texra-pdf-artifact-'));
