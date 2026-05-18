@@ -20,6 +20,7 @@ describe('slashRegistry', () => {
     registerBuiltinSlashCommands();
     expect(listSlashCommands().map((cmd) => cmd.name)).toEqual(
       expect.arrayContaining([
+        'agent',
         'model',
         'api',
         'auth',
@@ -33,6 +34,12 @@ describe('slashRegistry', () => {
     ).toMatchObject({
       description: 'List available models',
     });
+    expect(listSlashCommands().find((cmd) => cmd.name === 'agent')).toEqual(
+      expect.objectContaining({
+        description: 'List or choose the root agent',
+        formComponent: expect.any(Function),
+      }),
+    );
   });
 
   it('matches by name prefix case-insensitively', () => {
@@ -65,6 +72,14 @@ describe('slashRegistry', () => {
 describe('parseSlashInput', () => {
   it('returns undefined for non-slash input', () => {
     expect(parseSlashInput('hello world')).toBeUndefined();
+  });
+
+  it('accepts the historical clear spelling without treating TeX as commands', () => {
+    expect(parseSlashInput('\\clear')).toEqual({
+      name: 'clear',
+      remainder: '',
+    });
+    expect(parseSlashInput('\\alpha + \\beta')).toBeUndefined();
   });
 
   it('splits the command name from its remainder', () => {
