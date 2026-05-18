@@ -91,6 +91,22 @@ ON CONFLICT (name) DO UPDATE SET
 
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
 VALUES (
+  'firstread',
+  'First-read pass --- naive linear physicist reading the paper top-to-bottom for the first time. Emits inline \criticize{message}{severity}{confidence} annotations at every reader stop (undefined terms, forward references, unclear citations, missing baselines, logical-coverage gaps, unsupported claims, unparseable or nonsensical prose, AI-jargon, oversold tone, duplicates, process claims to verify, and domain claims needing support). Every annotation pairs the stop with a concrete fix. Output is a self-contained compile-ready LaTeX document.',
+  'researcher/firstread.yaml',
+  ARRAY['public'],
+  'workflow',
+  NULL
+)
+ON CONFLICT (name) DO UPDATE SET
+  description    = EXCLUDED.description,
+  storage_path   = EXCLUDED.storage_path,
+  visibility     = EXCLUDED.visibility,
+  agent_category = EXCLUDED.agent_category,
+  tools          = EXCLUDED.tools;
+
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category, tools)
+VALUES (
   'generic',
   'General-purpose LaTeX document editor. Flexibly processes research papers following academic standards and user instructions. Detects and uses existing comment styles (\todo, \comment, %).',
   'public/generic.yaml',
