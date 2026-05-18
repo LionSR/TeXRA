@@ -25,6 +25,8 @@ export interface CliContext {
   readonly approvalPolicy: CliApprovalPolicy;
   readonly helperModel?: string;
   readonly quietLogs?: boolean;
+  readonly renderRunProgress?: boolean;
+  readonly stderrIsTty?: boolean;
   readonly colorEnabled: boolean;
   readonly version: string;
   readonly resourcesPath: string;
@@ -112,6 +114,7 @@ function resolveResourcesPath(): string {
 
 export interface CliGlobalArgs {
   readonly print?: boolean;
+  readonly quiet?: boolean;
   readonly cwd?: string;
   readonly outputFormat: CliOutputFormat;
   readonly approvalPolicy: CliApprovalPolicy;
@@ -144,6 +147,8 @@ export async function buildCliContext(
     mode: cliMode(init.globalArgs, ambient),
     outputFormat: init.globalArgs.outputFormat,
     approvalPolicy: init.globalArgs.approvalPolicy,
+    quietLogs: init.globalArgs.quiet === true,
+    stderrIsTty: ambient.stderrIsTty,
     colorEnabled: ambient.colorEnabled,
     version: await readCliVersion(),
     resourcesPath: resolveResourcesPath(),
