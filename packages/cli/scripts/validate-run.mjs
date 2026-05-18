@@ -130,10 +130,11 @@ function validateRunCommand() {
       validationFlagPath,
     });
     assertSuccess(text, 'texra run text');
+    const copiedOutputPath = path.join(cwd, 'paper.polished.tex');
     const outputPathPattern = /^r\d+\/paper\.polished\.tex$/;
     assert(
-      outputPathPattern.test(text.stdout.trim()),
-      'text run output should print the run-storage output path',
+      text.stdout.trim() === copiedOutputPath,
+      'text run output should print the filesystem copy path when --output is used',
     );
 
     const json = run(
@@ -155,6 +156,15 @@ function validateRunCommand() {
     assert(
       finalOutput.location === 'runStorage',
       'JSON run output should identify extracted output as run storage',
+    );
+    assert(
+      jsonResult.runDirectory ===
+        path.dirname(path.dirname(finalOutput.absolutePath)),
+      'JSON run output should report the execution run directory',
+    );
+    assert(
+      jsonResult.copiedOutput === copiedOutputPath,
+      'JSON run output should report the filesystem copy path',
     );
     assert(
       readFileSync(finalOutput.absolutePath, 'utf8').includes(
