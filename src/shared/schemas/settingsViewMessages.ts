@@ -362,7 +362,7 @@ export const CodexApprovalPolicySchema = z.enum([
 ]);
 export type CodexApprovalPolicy = z.infer<typeof CodexApprovalPolicySchema>;
 
-/** Claude Agent model options surfaced in the picker. The SDK accepts any
+/** Claude Code CLI model options surfaced in the picker. The SDK accepts any
  * string, but the dropdown is fixed to the canonical Anthropic families. */
 export const ClaudeAgentModelSchema = z.enum([
   'claude-sonnet-4-6',
@@ -371,7 +371,7 @@ export const ClaudeAgentModelSchema = z.enum([
 ]);
 export type ClaudeAgentModel = z.infer<typeof ClaudeAgentModelSchema>;
 
-/** Claude Agent permission modes (mirrors CLAUDE_AGENT_PERMISSION_MODES). */
+/** Claude Code CLI permission modes (mirrors CLAUDE_AGENT_PERMISSION_MODES). */
 export const ClaudeAgentPermissionModeSchema = z.enum([
   'default',
   'acceptEdits',
@@ -382,7 +382,7 @@ export type ClaudeAgentPermissionMode = z.infer<
   typeof ClaudeAgentPermissionModeSchema
 >;
 
-/** Claude Agent effort levels (mirrors CLAUDE_AGENT_EFFORT_LEVELS). */
+/** Claude Code CLI effort levels (mirrors CLAUDE_AGENT_EFFORT_LEVELS). */
 export const ClaudeAgentEffortSchema = z.enum([
   'low',
   'medium',

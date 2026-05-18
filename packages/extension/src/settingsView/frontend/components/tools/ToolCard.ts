@@ -1,8 +1,8 @@
 /** Single tool group with status, description, and optional installation guide. */
 
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
@@ -17,7 +17,7 @@ import type {
   ToolCommandKind,
   ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
-import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 @customElement('tool-card')
 export class ToolCard extends LitElement {
@@ -233,7 +233,7 @@ export class ToolCard extends LitElement {
   }
 
   private handleToggle(e: Event): void {
-    const target = e.currentTarget as WaCheckbox | null;
+    const target = e.currentTarget as WaSwitch | null;
     this.dispatchEvent(
       createEvent('tool-toggle', {
         toolId: this.item.id,
@@ -263,24 +263,27 @@ export class ToolCard extends LitElement {
     },
   };
 
-  private renderBadge(): TemplateResult {
+  private renderAvailableStatusIcon(): TemplateResult {
+    const config = ToolCard.STATUS_CONFIG.available;
+    const label = this.item.statusLabel ?? config.label;
+
+    return html`
+      <span
+        class="tool-status-icon"
+        role="img"
+        aria-label=${label}
+        title=${label}
+      >
+        <wa-icon library="texra" name=${config.icon}></wa-icon>
+      </span>
+    `;
+  }
+
+  private renderStatusBadge(): TemplateResult {
     const { status } = this.item;
     const config =
       ToolCard.STATUS_CONFIG[status] ?? ToolCard.STATUS_CONFIG.unknown;
     const label = this.item.statusLabel ?? config.label;
-
-    if (status === 'available') {
-      return html`
-        <span
-          class="tool-status-icon"
-          role="img"
-          aria-label=${label}
-          title=${label}
-        >
-          <wa-icon library="texra" name=${config.icon}></wa-icon>
-        </span>
-      `;
-    }
 
     return html`
       <wa-tag
@@ -423,7 +426,7 @@ export class ToolCard extends LitElement {
   private renderToggle(): TemplateResult | typeof nothing {
     if (!this.item.toggleable) return nothing;
     return html`
-      <wa-checkbox
+      <wa-switch
         class="tool-toggle"
         title="${this.item.enabled !== false ? 'Disable' : 'Enable'} ${this.item
           .name} for agent runs"
@@ -433,7 +436,7 @@ export class ToolCard extends LitElement {
         @change=${this.handleToggle}
       >
         Use in runs
-      </wa-checkbox>
+      </wa-switch>
     `;
   }
 
@@ -452,8 +455,14 @@ export class ToolCard extends LitElement {
       <div class="tool-card">
         <div class="tool-header">
           <div class="tool-title-group">
+            ${this.item.status === 'available'
+              ? this.renderAvailableStatusIcon()
+              : nothing}
             <span class="tool-name">${this.item.name}</span>
-            ${this.renderBadge()} ${this.renderAuthNote()}
+            ${this.item.status === 'available'
+              ? this.renderAvailableStatusIcon()
+              : this.renderStatusBadge()}
+            ${this.renderAuthNote()}
           </div>
           ${this.renderToggle()}
         </div>

@@ -31,12 +31,12 @@ import {
   setCliApiMode,
   type CliApiMode,
 } from '../../runtime/apiAccessMode';
+import { loadCliApiStatusLines } from '../../runtime/apiStatus';
 import { resolveChatDefaults } from '../../runtime/chatDefaults';
 import { CliExitCode } from '../../runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '../../runtime/initPlatform';
 import { createCliRuntimeHost } from '../../runtime/runtimeHost';
 import { writeTextStderr } from '../../runtime/logSinks';
-import { getCliAuthProfile } from '../../runtime/supabaseAuth';
 import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
@@ -193,11 +193,9 @@ async function applyCliApiModeSelection(
   const normalized = mode.trim().toLowerCase();
 
   if (!normalized || normalized === 'status') {
+    const lines = await loadCliApiStatusLines();
     appendLocalAssistantTranscript(
-      [
-        `api: ${formatCliApiMode(getCliApiMode())}`,
-        'Usage: /api personal | /api included',
-      ].join('\n'),
+      [...lines, 'Usage: /api personal | /api included'].join('\n'),
     );
     return;
   }
@@ -247,15 +245,7 @@ function openCliApiModeForm(
 }
 
 async function showCliAuthStatus(): Promise<void> {
-  const profile = await getCliAuthProfile();
-  const lines = [
-    `api: ${formatCliApiMode(getCliApiMode())}`,
-    profile.authenticated
-      ? `auth: signed in${profile.accountLabel ? ` as ${profile.accountLabel}` : ''}`
-      : 'auth: signed out',
-  ];
-  if (profile.tier) lines.push(`tier: ${profile.tier}`);
-  appendLocalAssistantTranscript(lines.join('\n'));
+  appendLocalAssistantTranscript((await loadCliApiStatusLines()).join('\n'));
 }
 
 function formatApprovalPolicy(policy: CliApprovalPolicy): string {
