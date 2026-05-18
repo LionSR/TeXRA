@@ -240,6 +240,12 @@ export class LaTeXTab extends LitElement {
         color: var(--wa-color-testing-failed, #f48771);
       }
 
+      /* Using-default state for non-boolean settings (number/enum). Not a
+         problem — just hasn't been overridden. Render neutral, not red. */
+      .setting-status-icon.is-default {
+        color: var(--color-text-secondary);
+      }
+
       .dependency-info {
         flex: 1;
         min-width: 0;
@@ -498,9 +504,7 @@ export class LaTeXTab extends LitElement {
             )}
           </div>
           ${installed
-            ? html`<wa-tag class="setting-badge" variant="success" size="small"
-                >Installed</wa-tag
-              >`
+            ? nothing
             : dep.actionEvent
               ? html`
                   <button
@@ -915,13 +919,14 @@ export class LaTeXTab extends LitElement {
           <div class="setting-name">${opts.label}</div>
           <div class="setting-description">${opts.description}</div>
         </div>
-        <button
-          class="tab-action-btn"
-          @click=${() => this.dispatchSetConfigValue(opts.field, !effective)}
+        <wa-switch
+          ?checked=${effective}
+          @change=${(e: Event) => {
+            const checked = (e.target as WaSwitch).checked;
+            this.dispatchSetConfigValue(opts.field, checked);
+          }}
           title="Toggle"
-        >
-          ${effective ? 'On' : 'Off'}
-        </button>
+        ></wa-switch>
         ${isCustom
           ? html`<button
               class="tab-action-btn"
@@ -933,6 +938,20 @@ export class LaTeXTab extends LitElement {
           : nothing}
       </div>
     `;
+  }
+
+  /**
+   * Icon for non-boolean settings (number/enum): an "edit" pencil when the
+   * value has been customized, a neutral gear when it's still the default.
+   * Red is reserved for booleans that are Off, where it carries meaning.
+   */
+  private renderSettingStatusIcon(isCustom: boolean): TemplateResult {
+    return html`<wa-icon
+      library="texra"
+      name=${isCustom ? 'edit' : 'gear'}
+      class="setting-status-icon ${isCustom ? 'is-set' : 'is-default'}"
+      title=${isCustom ? 'Customized' : 'Using default'}
+    ></wa-icon>`;
   }
 
   private renderNumberSetting(opts: {
@@ -948,11 +967,7 @@ export class LaTeXTab extends LitElement {
     const isCustom = opts.currentValue !== undefined;
     return html`
       <div class="setting-card">
-        <wa-icon
-          library="texra"
-          name=${isCustom ? 'edit' : 'circle-outline'}
-          class="setting-status-icon ${isCustom ? 'is-set' : 'not-set'}"
-        ></wa-icon>
+        ${this.renderSettingStatusIcon(isCustom)}
         <div class="setting-info">
           <div class="setting-name">${opts.label}</div>
           <div class="setting-description">${opts.description}</div>
@@ -1007,11 +1022,7 @@ export class LaTeXTab extends LitElement {
     const isCustom = opts.currentValue !== undefined;
     return html`
       <div class="setting-card">
-        <wa-icon
-          library="texra"
-          name=${isCustom ? 'edit' : 'circle-outline'}
-          class="setting-status-icon ${isCustom ? 'is-set' : 'not-set'}"
-        ></wa-icon>
+        ${this.renderSettingStatusIcon(isCustom)}
         <div class="setting-info">
           <div class="setting-name">${opts.label}</div>
           <div class="setting-description">${opts.description}</div>

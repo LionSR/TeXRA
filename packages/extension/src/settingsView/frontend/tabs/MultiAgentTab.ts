@@ -9,7 +9,7 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - shared utils
@@ -25,7 +25,7 @@ import {
   clampNestedDelegationDepth,
 } from '@shared/constants/delegationPolicy';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
-import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 @customElement('multi-agent-tab')
 export class MultiAgentTab extends LitElement {
@@ -232,7 +232,7 @@ export class MultiAgentTab extends LitElement {
   @state() private activePresetId: string | null = null;
 
   private emitToggle(eventName: string, event: Event): void {
-    const target = event.target as WaCheckbox | null;
+    const target = event.target as WaSwitch | null;
     this.dispatchEvent(
       createEvent(eventName, { enabled: Boolean(target?.checked) }),
     );
@@ -417,13 +417,13 @@ export class MultiAgentTab extends LitElement {
         </p>
 
         <div class="setting-block">
-          <wa-checkbox
+          <wa-switch
             ?checked=${this.allowOrchestratorKill}
             @change=${(e: Event) =>
               this.emitToggle('allow-orchestrator-kill-toggle', e)}
           >
             Let orchestrator stop agents early
-          </wa-checkbox>
+          </wa-switch>
           <p class="text-secondary setting-description">
             The orchestrator can cancel agents that are stuck or no longer
             needed. Turn this off if you want every agent to finish no matter
@@ -432,13 +432,13 @@ export class MultiAgentTab extends LitElement {
         </div>
 
         <div class="setting-block">
-          <wa-checkbox
+          <wa-switch
             ?checked=${this.detachSubagentsOnStop}
             @change=${(e: Event) =>
               this.emitToggle('detach-subagents-on-stop-toggle', e)}
           >
             Keep agents running if I stop the orchestrator
-          </wa-checkbox>
+          </wa-switch>
           <p class="text-secondary setting-description">
             Normally everything stops when you stop the orchestrator. Turn this
             on to let agents that are mid-task finish on their own.
@@ -446,13 +446,13 @@ export class MultiAgentTab extends LitElement {
         </div>
 
         <div class="setting-block">
-          <wa-checkbox
+          <wa-switch
             ?checked=${this.worktreeSupport}
             @change=${(e: Event) =>
               this.emitToggle('worktree-support-toggle', e)}
           >
             Allow agents to work in git worktrees
-          </wa-checkbox>
+          </wa-switch>
           <p class="text-secondary setting-description">
             When enabled, delegated agents can operate in git worktrees outside
             the main workspace. All tool calls within the subagent automatically

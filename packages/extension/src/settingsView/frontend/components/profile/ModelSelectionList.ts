@@ -13,6 +13,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 // Local imports - shared constants
 import {
@@ -36,6 +37,7 @@ import { ModelSelectionEvents, ProviderKeyEvents } from './events';
 import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 /** Display labels for reasoning level options. */
 const REASONING_LEVEL_LABELS: Record<ReasoningLevel, string> = {
@@ -394,17 +396,17 @@ export class ModelSelectionList extends LitElement {
         <h2>Model Selection</h2>
         ${this.renderHelperModelDropdown()}
         <div class="short-names-toggle">
-          <wa-checkbox
+          <wa-switch
             ?checked=${this.preferShortModelNames}
             @change=${(e: Event) => {
-              const enabled = (e.target as WaCheckbox).checked;
+              const enabled = (e.target as WaSwitch).checked;
               this.dispatchEvent(
                 ModelSelectionEvents.setPreferShortModelNames({ enabled }),
               );
             }}
           >
             Use short model names
-          </wa-checkbox>
+          </wa-switch>
           <span class="short-names-description">
             Send unpinned names (e.g. gpt-5.5 instead of gpt-5.5-2026-04-15)
           </span>
