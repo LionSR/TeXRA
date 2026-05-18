@@ -59,8 +59,13 @@ export function matchSlashCommands(prefix: string): readonly SlashCommand[] {
 export function parseSlashInput(
   text: string,
 ): { name: string; remainder: string } | undefined {
-  if (!text.startsWith('/')) return undefined;
-  const body = text.slice(1);
+  const prefix = text.startsWith('/') ? '/' : '';
+  if (!prefix) {
+    const trimmed = text.trim();
+    if (trimmed === '\\clear') return { name: 'clear', remainder: '' };
+    return undefined;
+  }
+  const body = text.slice(prefix.length);
   const ws = body.search(/\s/);
   if (ws === -1) return { name: body, remainder: '' };
   return { name: body.slice(0, ws), remainder: body.slice(ws + 1) };

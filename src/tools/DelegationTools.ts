@@ -352,6 +352,18 @@ async function executeSubagent(
     ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
   }
 
+  function deliverSubagentError(err: unknown): void {
+    if (deliveryState.hasDelivered) return;
+    deliveryState.hasDelivered = true;
+    const wallTimeMs = Date.now() - startedAt;
+    const msg = formatSubagentError(executionId, agentName, err, {
+      wallTimeMs,
+      workingDirectory: configPayload.workingDirectory ?? undefined,
+    });
+    void getExecutionStore(executionId).writeReport(msg);
+    ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+  }
+
   const promise = executeAgent(configPayload, executionId, {
     runtimeHost,
     isSubagent: true,
@@ -427,16 +439,13 @@ async function executeSubagent(
       void getExecutionStore(executionId).writeReport(msg);
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
     },
+    onError: (err) => {
+      deliverSubagentError(err);
+    },
   });
   promise
     .catch((err: unknown) => {
-      const wallTimeMs = Date.now() - startedAt;
-      const msg = formatSubagentError(executionId, agentName, err, {
-        wallTimeMs,
-        workingDirectory: configPayload.workingDirectory ?? undefined,
-      });
-      void getExecutionStore(executionId).writeReport(msg);
-      ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+      deliverSubagentError(err);
     })
     .finally(() => {
       activeSubagentDelivery.delete(executionId);

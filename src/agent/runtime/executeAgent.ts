@@ -137,6 +137,7 @@ async function runFlowWithLifecycle(
     category?: 'workflow' | 'toolUse';
     parentStreamId?: StreamTabId;
     onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
+    onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
   },
 ): Promise<AgentFlowResult> {
   const category = options?.category ?? 'workflow';
@@ -177,8 +178,10 @@ async function runFlowWithLifecycle(
     untrackExecution(ctx.executionId);
     const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
-    // Log error BEFORE ending the group so it gets the correct groupId
-    if (kind !== 'abort') {
+    // Root-agent failures are surfaced in the stream log. Subagent failures
+    // are delivered to the orchestrator below, so avoid adding a second
+    // wrapper error that makes a child failure look like the parent failed.
+    if (kind !== 'abort' && !options?.isSubagent) {
       await ctx.logger.logError(errorMsg, err, {
         operation: `execute ${agentName}`,
       });
@@ -222,12 +225,48 @@ async function runFlowWithLifecycle(
       return buildStoppedFlowResult(category, ctx.executionId, streamId);
     }
 
+    if (options?.isSubagent) {
+      const result = buildErrorFlowResult(category, ctx.executionId, streamId);
+      try {
+        await options.onError?.(err, result);
+      } catch (deliveryError) {
+        logger.warn(
+          `Failed to deliver subagent error for ${agentName}: ${getSdkErrorMessage(deliveryError)}`,
+        );
+      }
+      return result;
+    }
+
     throw new AgentError(errorMsg, { cause: err });
   } finally {
     // Release long-lived resources (e.g., WebSocket connections, keepalive intervals)
     // to prevent leaks when handler instances are discarded after execution.
     ctx.modelHandler.dispose();
   }
+}
+
+function buildErrorFlowResult(
+  category: 'workflow' | 'toolUse',
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+): AgentFlowResult {
+  if (category === 'toolUse') {
+    return {
+      category,
+      status: END_GROUP_STATUS.ERROR,
+      executionId,
+      streamId,
+    };
+  }
+
+  return {
+    category,
+    status: END_GROUP_STATUS.ERROR,
+    executionId,
+    streamId,
+    outputs: [],
+    compileFailures: [],
+  };
 }
 
 function buildStoppedFlowResult(
@@ -313,6 +352,8 @@ export interface ExecuteAgentOptions {
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Fires after flow completes but BEFORE untrackExecution, so follow-ups are enqueued before waiters resolve. */
   onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
+  /** Fires when a subagent fails and should report the failure to its orchestrator. */
+  onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
 }
 
 export async function executeAgent(
@@ -463,6 +504,7 @@ export async function executeAgent(
             : 'workflow',
         parentStreamId: options.parentStreamId,
         onCompleted: options.onCompleted,
+        onError: options.onError,
       },
     );
   });

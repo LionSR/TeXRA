@@ -48,6 +48,7 @@ import {
   readCliHistoryConfig,
 } from '../../runtime/history';
 import { App } from './App';
+import { AgentListForm } from './forms/AgentListForm';
 import { ApiModeForm } from './forms/ApiModeForm';
 import { ModelListForm } from './forms/ModelListForm';
 import { renderHeaderBanner } from './panes/HeaderBanner';
@@ -99,6 +100,43 @@ interface SlashCommandContext {
   readonly getApprovalPolicy: () => CliApprovalPolicy;
   readonly setApprovalPolicy: (policy: CliApprovalPolicy) => void;
   readonly startStoredExecution: (config: AgentConfigPayload) => void;
+}
+
+function applyInitialCliAgentSelection(
+  agentName: string,
+  context: SlashCommandContext,
+): void {
+  if (context.session.runPromise) {
+    appendLocalAssistantTranscript(
+      'Agent changes are only available before the first message. Start a new chat with texra --agent=<name> to choose a different root agent.',
+    );
+    return;
+  }
+
+  const nextAgent = agentName.trim();
+  cliState.sessionMeta.set({
+    ...cliState.sessionMeta.get(),
+    agent: nextAgent,
+  });
+  appendLocalAssistantTranscript(`Root agent set to ${nextAgent}.`);
+}
+
+function openCliAgentListForm(context: SlashCommandContext): void {
+  const selectable = !context.session.runPromise;
+  cliState.activeForm.set({
+    commandName: 'agent',
+    render: (close) => (
+      <AgentListForm
+        currentAgent={cliState.sessionMeta.get().agent}
+        selectable={selectable}
+        onSelect={(value) => {
+          applyInitialCliAgentSelection(value, context);
+          close();
+        }}
+        onClose={close}
+      />
+    ),
+  });
 }
 
 async function applyInitialCliModelSelection(
@@ -305,18 +343,14 @@ async function handleTuiSlashCommand(
       context.requestInputExit();
       return true;
     case 'agent':
-      if (context.session.runPromise) {
+      if (context.session.runPromise && rest) {
         appendLocalAssistantTranscript(
           'The agent is fixed for this chat session. Start a new chat to use a different agent.',
         );
       } else if (rest) {
-        cliState.sessionMeta.set({
-          ...cliState.sessionMeta.get(),
-          agent: rest,
-        });
-        appendLocalAssistantTranscript(`Agent set to ${rest}.`);
+        applyInitialCliAgentSelection(rest, context);
       } else {
-        appendLocalAssistantTranscript('Usage: /agent <name>');
+        openCliAgentListForm(context);
       }
       return true;
     case 'model':
@@ -574,6 +608,18 @@ export async function runChat(
 
   // Pre-register the slash commands the input palette uses.
   registerBuiltinSlashCommands({
+    canSelectAgent: () => !session.runPromise,
+    onAgentSelect: (nextAgent) =>
+      applyInitialCliAgentSelection(nextAgent, {
+        session,
+        initialAgent: agent,
+        initialModel: model,
+        interruptActive,
+        requestInputExit: () => requestInputExit?.(),
+        getApprovalPolicy,
+        setApprovalPolicy,
+        startStoredExecution: (config) => startAgentRun(config),
+      }),
     canSelectModel: () => !session.runPromise,
     onModelSelect: (nextModel) =>
       applyInitialCliModelSelection(nextModel, {
