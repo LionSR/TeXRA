@@ -6,7 +6,7 @@ import { SUPABASE_CONFIG, getRelaySpendingLimit } from '@auth/sharedConfig';
 const USAGE_PAGE_SIZE = 1000;
 
 const RelayUsageRowSchema = z.object({
-  logged_at: z.iso.datetime(),
+  logged_at: z.iso.datetime({ offset: true }),
   model: z.string(),
   provider: z.string(),
   input_tokens: z.int().nonnegative().catch(0),
@@ -17,6 +17,10 @@ const RelayUsageRowSchema = z.object({
 });
 
 export type RelayUsageRow = z.infer<typeof RelayUsageRowSchema>;
+
+export function parseRelayUsageRows(data: unknown): RelayUsageRow[] {
+  return z.array(RelayUsageRowSchema).parse(data);
+}
 
 export interface RelayUsageSummary {
   readonly periodStart: string;
@@ -176,7 +180,7 @@ async function fetchRelayUsageRows(input: {
       throw new Error(`Relay usage query failed: HTTP ${response.status}`);
     }
 
-    const data = z.array(RelayUsageRowSchema).parse(await response.json());
+    const data = parseRelayUsageRows(await response.json());
     rows.push(...data);
     if (data.length < USAGE_PAGE_SIZE) return rows;
   }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   currentUtcMonthRange,
+  parseRelayUsageRows,
   parseUtcMonth,
   summarizeRelayUsage,
   type RelayUsageRow,
@@ -36,6 +37,24 @@ describe('CLI relay usage ranges', () => {
 });
 
 describe('CLI relay usage summary', () => {
+  it('accepts Supabase timestamptz offsets in usage rows', () => {
+    const rows = parseRelayUsageRows([
+      {
+        logged_at: '2026-05-17T12:00:00+00:00',
+        model: 'gpt-5.4',
+        provider: 'openai',
+        input_tokens: 10,
+        output_tokens: 4,
+        cached_input_tokens: null,
+        reasoning_tokens: null,
+        cost: '1.25',
+      },
+    ]);
+
+    expect(rows[0]?.logged_at).toBe('2026-05-17T12:00:00+00:00');
+    expect(rows[0]?.cost).toBe(1.25);
+  });
+
   it('aggregates spend, tokens, and distinct surfaces', () => {
     const summary = summarizeRelayUsage(
       [
