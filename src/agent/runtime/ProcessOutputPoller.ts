@@ -1,7 +1,6 @@
-import * as fs from 'fs';
-
 import pMap from 'p-map';
 
+import { platform } from '@platform/platform';
 import type { StreamTabId } from '@shared/schemas';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -143,21 +142,17 @@ async function readTail(
   path: string,
   byteOffset: number,
 ): Promise<{ text: string; newOffset: number }> {
-  const fh = await fs.promises.open(path, 'r');
-  try {
-    const { size } = await fh.stat();
-    if (size <= byteOffset) return { text: '', newOffset: byteOffset };
-    const toRead = Math.min(size - byteOffset, MAX_READ_PER_POLL);
-    const buf = Buffer.alloc(toRead);
-    const { bytesRead } = await fh.read(buf, 0, toRead, byteOffset);
-    const safeEnd = lastCompleteUtf8(buf, bytesRead);
-    return {
-      text: buf.toString('utf-8', 0, safeEnd),
-      newOffset: byteOffset + safeEnd,
-    };
-  } finally {
-    await fh.close();
-  }
+  const { size } = await platform().fs.stat(path);
+  if (size <= byteOffset) return { text: '', newOffset: byteOffset };
+
+  const toRead = Math.min(size - byteOffset, MAX_READ_PER_POLL);
+  const bytes = await platform().fs.readFileChunk(path, byteOffset, toRead);
+  const buf = Buffer.from(bytes);
+  const safeEnd = lastCompleteUtf8(buf, buf.length);
+  return {
+    text: buf.toString('utf-8', 0, safeEnd),
+    newOffset: byteOffset + safeEnd,
+  };
 }
 
 async function readIncremental(
