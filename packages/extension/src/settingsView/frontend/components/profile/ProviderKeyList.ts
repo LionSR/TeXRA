@@ -7,11 +7,15 @@ import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
 import { badgeStyles, commonViewStyles, designTokens } from '@shared/styles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
+import {
+  renderSetStatusIcon,
+  statusCheckIconStyles,
+} from '@shared/wa/statusIcons';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
+import '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 // Local imports - profile view styles and events
 import type {
@@ -22,21 +26,14 @@ import { profileViewStyles } from './styles';
 import { ProviderKeyEvents } from './events';
 import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
-import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
-const STATUS_LABELS: Record<ProviderKeyStatus['status'], string> = {
-  set: 'Set',
-  env: 'Env',
-  'not-set': 'Not Set',
-};
-
-const STATUS_VARIANTS: Record<
-  ProviderKeyStatus['status'],
-  'brand' | 'neutral' | 'success' | 'warning' | 'danger'
+const STATUS_LABELS: Record<
+  Exclude<ProviderKeyStatus['status'], 'set'>,
+  string
 > = {
-  set: 'success',
-  env: 'neutral',
-  'not-set': 'neutral',
+  env: 'Env',
+  'not-set': 'Not set',
 };
 
 @customElement('provider-key-list')
@@ -45,6 +42,7 @@ export class ProviderKeyList extends LitElement {
     designTokens,
     commonViewStyles,
     ...badgeStyles,
+    statusCheckIconStyles,
     profileViewStyles,
   ];
 
@@ -58,6 +56,17 @@ export class ProviderKeyList extends LitElement {
   private toggleExpanded(provider: string): void {
     this.expandedProvider =
       this.expandedProvider === provider ? null : provider;
+  }
+
+  private renderKeyStatus(status: ProviderKeyStatus['status']): TemplateResult {
+    return renderSetStatusIcon({
+      status,
+      title: 'Key set',
+      fallbacks: {
+        env: { label: STATUS_LABELS.env },
+        'not-set': { label: STATUS_LABELS['not-set'] },
+      },
+    });
   }
 
   private renderActions(entry: ProviderKeyStatus): TemplateResult {
@@ -97,10 +106,10 @@ export class ProviderKeyList extends LitElement {
   private renderDetailRow(entry: ProviderKeyStatus): TemplateResult {
     const streamingToggle = html`
       <div class="provider-setting">
-        <wa-checkbox
+        <wa-switch
           ?checked=${entry.streaming}
           @change=${(e: Event) => {
-            const checked = (e.target as WaCheckbox).checked;
+            const checked = (e.target as WaSwitch).checked;
             this.dispatchEvent(
               ProviderKeyEvents.setStreaming({
                 provider: entry.provider,
@@ -110,7 +119,7 @@ export class ProviderKeyList extends LitElement {
           }}
         >
           Streaming
-        </wa-checkbox>
+        </wa-switch>
       </div>
     `;
 
@@ -172,10 +181,10 @@ export class ProviderKeyList extends LitElement {
 
     return html`
       <div class="provider-setting provider-setting--block">
-        <wa-checkbox
+        <wa-switch
           ?checked=${setting.value}
           @change=${(e: Event) => {
-            const checked = (e.target as WaCheckbox).checked;
+            const checked = (e.target as WaSwitch).checked;
             this.dispatchEvent(
               ProviderKeyEvents.setVscodeSetting({
                 key: setting.key,
@@ -185,7 +194,7 @@ export class ProviderKeyList extends LitElement {
           }}
         >
           ${setting.label}
-        </wa-checkbox>
+        </wa-switch>
         <span class="provider-setting-description">${setting.description}</span>
         ${warning}
       </div>
@@ -213,14 +222,7 @@ export class ProviderKeyList extends LitElement {
             <span class="provider-name">${entry.displayName}</span>
           </div>
         </td>
-        <td>
-          <wa-tag
-            class="key-status-badge"
-            variant=${STATUS_VARIANTS[entry.status]}
-            size="small"
-            >${STATUS_LABELS[entry.status]}</wa-tag
-          >
-        </td>
+        <td>${this.renderKeyStatus(entry.status)}</td>
         <td>${this.renderActions(entry)}</td>
       </tr>
     `;
@@ -234,17 +236,17 @@ export class ProviderKeyList extends LitElement {
   private renderGlobalStreamingToggle(): TemplateResult {
     return html`
       <div class="global-streaming-toggle">
-        <wa-checkbox
+        <wa-switch
           ?checked=${this.globalStreamingDefault}
           @change=${(e: Event) => {
-            const checked = (e.target as WaCheckbox).checked;
+            const checked = (e.target as WaSwitch).checked;
             this.dispatchEvent(
               ProviderKeyEvents.setGlobalStreaming({ enabled: checked }),
             );
           }}
         >
           Enable streaming
-        </wa-checkbox>
+        </wa-switch>
         <span class="global-streaming-description"
           >Global default for all providers</span
         >

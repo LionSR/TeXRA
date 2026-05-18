@@ -26,7 +26,7 @@ async function loadBuildClaudeAgentEnv(): Promise<
   return (await import('@tools/claudeAgentConfig')).buildClaudeAgentEnv;
 }
 
-describe('Claude Agent configuration', () => {
+describe('Claude Code CLI configuration', () => {
   beforeEach(() => {
     secretStore = new Map();
     vi.resetModules();

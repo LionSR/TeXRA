@@ -202,7 +202,7 @@ export const profileViewStyles: CSSResult = css`
     border-radius: var(--border-radius);
   }
 
-  .global-streaming-toggle wa-checkbox {
+  .global-streaming-toggle wa-switch {
     font-weight: var(--font-weight-medium);
   }
 
@@ -254,7 +254,7 @@ export const profileViewStyles: CSSResult = css`
     min-width: 120px;
   }
 
-  .provider-setting wa-checkbox {
+  .provider-setting wa-switch {
     font-size: var(--font-size-sm);
     min-width: 120px;
   }

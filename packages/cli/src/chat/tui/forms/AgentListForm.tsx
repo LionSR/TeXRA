@@ -1,5 +1,5 @@
-// `/agent` form. It lists the visible tool-use agents and, before the first
-// message, can choose the root agent for the chat.
+// `/agent` form. It lists visible tool-use agents and workflows. Before the
+// first message, tool-use agents can be chosen as the root chat agent.
 
 import { Box, Text, useInput } from 'ink';
 import { Spinner } from '@inkjs/ui';
@@ -16,6 +16,11 @@ export interface AgentListFormProps {
   readonly selectable?: boolean;
   readonly onSelect?: (value: string) => void;
   readonly onClose: () => void;
+}
+
+interface AgentGroups {
+  readonly toolUse: readonly AgentOptionData[];
+  readonly workflow: readonly AgentOptionData[];
 }
 
 interface AgentFrameProps {
@@ -57,7 +62,10 @@ function agentDescription(agent: AgentOptionData): string {
 }
 
 export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
-  const [agents, setAgents] = useState<readonly AgentOptionData[]>([]);
+  const [agents, setAgents] = useState<AgentGroups>({
+    toolUse: [],
+    workflow: [],
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>(undefined);
 
@@ -72,7 +80,10 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     void computeAgentOptionsData()
       .then((options) => {
         if (cancelled) return;
-        setAgents(options.toolUse);
+        setAgents({
+          toolUse: options.toolUse,
+          workflow: options.workflow,
+        });
         setLoading(false);
       })
       .catch((err: unknown) => {
@@ -102,9 +113,13 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   }
 
   const selectable = props.selectable === true;
-  const items = agents.map((agent) => ({
+  const items = agents.toolUse.map((agent) => ({
     value: agent.label,
     label: agent.label,
+    description: agentDescription(agent),
+  }));
+  const workflowRows = agents.workflow.map((agent) => ({
+    name: agent.label,
     description: agentDescription(agent),
   }));
 
@@ -120,10 +135,11 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
       </Text>
       <Text dimColor>
         {selectable
-          ? 'Choose the root agent for the first message.'
-          : 'Available agents. Start a new chat with texra --agent=<name> to choose the root agent.'}
+          ? 'Choose the root tool-use agent for the first message.'
+          : 'Available agents. Start a new chat with texra --agent=<name> to choose the root tool-use agent.'}
       </Text>
       <Box marginTop={1} flexDirection="column">
+        <Text bold>Tool-use agents</Text>
         <Select
           items={items}
           activeValue={props.currentAgent}
@@ -137,6 +153,21 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
           onCancel={props.onClose}
         />
       </Box>
+      {workflowRows.length > 0 ? (
+        <Box marginTop={1} flexDirection="column">
+          <Text bold>Workflows</Text>
+          {workflowRows.map((workflow) => (
+            <Text key={workflow.name}>
+              {'  '}
+              {workflow.name}
+              <Text dimColor>{` — ${workflow.description}`}</Text>
+            </Text>
+          ))}
+          <Text dimColor>
+            {'Run a workflow with texra run <name> --input=<file>.'}
+          </Text>
+        </Box>
+      ) : null}
       <Box marginTop={1}>
         {selectable ? (
           <KeyHints
