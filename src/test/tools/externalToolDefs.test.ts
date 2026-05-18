@@ -17,4 +17,14 @@ describe('external tool definitions', () => {
       'zotero_export',
     ]);
   });
+
+  it('shows TeXRA CLI as a detected but inactive integration', () => {
+    const texraCli = findExternalToolDef('texra-cli');
+
+    assert.ok(texraCli, 'TeXRA CLI tool definition should exist');
+    assert.strictEqual(texraCli.category, 'ai-agents');
+    assert.strictEqual(texraCli.comingSoon, true);
+    assert.strictEqual(texraCli.toggleable, undefined);
+    assert.deepStrictEqual(texraCli.tools, []);
+  });
 });
