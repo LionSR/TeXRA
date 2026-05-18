@@ -81,6 +81,42 @@ describe('CLI doctor', () => {
     expect(text).toContain('SKIP Config: No workspace CLI config file found.');
   });
 
+  it('reports loaded workspace config warnings', async () => {
+    const report = await buildDoctorReport(
+      {
+        ...context,
+        configFilePath: '/workspace/.texra/config.json',
+        configWarnings: ['Ignoring invalid model.'],
+      },
+      {
+        nodeVersion: '24.0.0',
+        authProfile: async () => ({ authenticated: true }),
+        modelAccessList: async () =>
+          [
+            {
+              available: true,
+              status: 'available',
+              model: { value: 'deepseekT', label: 'DeepSeek T' },
+            },
+          ] as never,
+        latexToolchain: async () => ({
+          ...latexProbe,
+          tools: latexProbe.tools.map((tool) => ({
+            ...tool,
+            installed: true,
+          })),
+        }),
+        pathStat: async () => directory,
+        pathAccess: async () => undefined,
+      },
+    );
+
+    expect(
+      report.checks.map((check) => [check.id, check.status]),
+    ).toContainEqual(['config', 'warn']);
+    expect(formatDoctorText(report)).toContain('Ignoring invalid model.');
+  });
+
   it('emits stable ndjson record kinds', async () => {
     const report = await buildDoctorReport(context, {
       nodeVersion: '24.0.0',

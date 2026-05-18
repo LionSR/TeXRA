@@ -5,12 +5,19 @@ import { fileURLToPath } from 'node:url';
 
 import { isNonEmptyString } from '@utils/core/stringCore';
 
-import { type CliApprovalPolicy } from './approvalPolicy';
+import {
+  CLI_APPROVAL_POLICIES,
+  type CliApprovalPolicy,
+} from './approvalPolicy';
+import {
+  CLI_OUTPUT_FORMATS,
+  isKnownCliModel,
+  loadWorkspaceCliConfig,
+  type CliConfigValues,
+  type CliOutputFormat,
+} from './cliConfig';
 
 export type CliMode = 'headless' | 'interactive';
-
-export const CLI_OUTPUT_FORMATS = ['text', 'json', 'ndjson'] as const;
-export type CliOutputFormat = (typeof CLI_OUTPUT_FORMATS)[number];
 
 export interface CliPromptRequest {
   readonly kind: 'approval' | 'externalInquiry';
@@ -30,6 +37,11 @@ export interface CliContext {
   readonly colorEnabled: boolean;
   readonly version: string;
   readonly resourcesPath: string;
+  readonly cliConfig?: CliConfigValues;
+  readonly configFilePath?: string;
+  readonly configWarnings?: readonly string[];
+  readonly envAgent?: string;
+  readonly envModel?: string;
   readonly approvalPrompt?: (request: CliPromptRequest) => Promise<string>;
 }
 
@@ -116,8 +128,8 @@ export interface CliGlobalArgs {
   readonly print?: boolean;
   readonly quiet?: boolean;
   readonly cwd?: string;
-  readonly outputFormat: CliOutputFormat;
-  readonly approvalPolicy: CliApprovalPolicy;
+  readonly outputFormat?: CliOutputFormat;
+  readonly approvalPolicy?: CliApprovalPolicy;
 }
 
 function cliMode(globalArgs: CliGlobalArgs, ambient: CliAmbientState): CliMode {
@@ -133,24 +145,90 @@ function cliMode(globalArgs: CliGlobalArgs, ambient: CliAmbientState): CliMode {
 export interface BuildCliContextInit {
   readonly globalArgs: CliGlobalArgs;
   readonly ambient?: CliAmbientState;
+  readonly env?: Record<string, string | undefined>;
+}
+
+function envValue(
+  env: Record<string, string | undefined>,
+  key: string,
+): string | undefined {
+  const value = env[key]?.trim();
+  return isNonEmptyString(value) ? value : undefined;
+}
+
+function pickEnum<T extends string>(
+  candidates: readonly (string | undefined)[],
+  allowed: readonly T[],
+  fallback: T,
+  warnings: string[],
+  label: string,
+): T {
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    if ((allowed as readonly string[]).includes(candidate))
+      return candidate as T;
+    warnings.push(`Ignoring invalid ${label} "${candidate}".`);
+  }
+  return fallback;
+}
+
+function pickEnvModel(
+  env: Record<string, string | undefined>,
+  warnings: string[],
+): string | undefined {
+  const model = envValue(env, 'TEXRA_MODEL');
+  if (!model) return undefined;
+  if (isKnownCliModel(model)) return model;
+  warnings.push(`Ignoring invalid TEXRA_MODEL "${model}".`);
+  return undefined;
 }
 
 export async function buildCliContext(
   init: BuildCliContextInit,
 ): Promise<CliContext> {
   const ambient = init.ambient ?? readCliAmbientState();
+  const env = init.env ?? process.env;
   const cwdFlag = init.globalArgs.cwd;
+  const cwd = isNonEmptyString(cwdFlag)
+    ? path.resolve(cwdFlag.trim())
+    : process.cwd();
+  const loadedConfig = await loadWorkspaceCliConfig(cwd);
+  const configWarnings = [...loadedConfig.warnings];
+  const envModel = pickEnvModel(env, configWarnings);
   return {
-    cwd: isNonEmptyString(cwdFlag)
-      ? path.resolve(cwdFlag.trim())
-      : process.cwd(),
+    cwd,
     mode: cliMode(init.globalArgs, ambient),
-    outputFormat: init.globalArgs.outputFormat,
-    approvalPolicy: init.globalArgs.approvalPolicy,
+    outputFormat: pickEnum(
+      [
+        init.globalArgs.outputFormat,
+        envValue(env, 'TEXRA_OUTPUT_FORMAT'),
+        loadedConfig.values.outputFormat,
+      ],
+      CLI_OUTPUT_FORMATS,
+      'text',
+      configWarnings,
+      'TEXRA_OUTPUT_FORMAT',
+    ),
+    approvalPolicy: pickEnum(
+      [
+        init.globalArgs.approvalPolicy,
+        envValue(env, 'TEXRA_APPROVAL_POLICY'),
+        loadedConfig.values.approvalPolicy,
+      ],
+      CLI_APPROVAL_POLICIES,
+      'never',
+      configWarnings,
+      'TEXRA_APPROVAL_POLICY',
+    ),
     quietLogs: init.globalArgs.quiet === true,
     stderrIsTty: ambient.stderrIsTty,
     colorEnabled: ambient.colorEnabled,
     version: await readCliVersion(),
     resourcesPath: resolveResourcesPath(),
+    cliConfig: loadedConfig.values,
+    configFilePath: loadedConfig.path,
+    configWarnings,
+    envAgent: envValue(env, 'TEXRA_AGENT'),
+    envModel,
   };
 }
