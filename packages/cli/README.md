@@ -1,6 +1,17 @@
-# TeXRA CLI package
+# TeXRA CLI
 
-This package contains the scaffold for the standalone `texra` command.
+This package provides the standalone `texra` command.
+
+## Install from npm
+
+```sh
+npm install -g @texra/cli
+texra --help
+```
+
+The published command is a self-contained esbuild bundle. Runtime libraries are
+inlined into `dist/bin/texra.js`, so npm only needs to install the generated
+binary and packaged resources.
 
 ## Package locally
 
@@ -16,13 +27,11 @@ The build writes the manifest-declared executable to:
 packages/cli/dist/bin/texra.js
 ```
 
-The `package.json` `bin` entry maps `texra` to that generated file. The package
-is still marked `private: true`, so publication is not ready yet.
+The `package.json` `bin` entry maps `texra` to that generated file. Packaging
+runs the build through `prepack`, so `npm pack` and `npm publish` rebuild the
+binary before producing a tarball.
 
-## Install locally
-
-The CLI is not published as an npm package yet. Install it from a repository
-checkout:
+## Install locally from a checkout
 
 ```sh
 corepack pnpm install
@@ -40,10 +49,10 @@ inlines everything except `fsevents`), so the symlink is all that is needed.
 Rebuild after changing CLI or shared runtime code — the symlink target stays
 valid.
 
-> `pnpm link --global` is not used here because the CLI's `package.json` lists
-> `@texra/core` as a `workspace:*` dependency. pnpm refuses to resolve that spec
-> when linking the package as a standalone target, so the link step fails even
-> though the runtime binary does not need the dep (it is already bundled).
+> `pnpm link --global` is not used here because package-manager link commands
+> can expose workspace dependencies differently from the published bundle. The
+> generated binary is the published artifact, so the symlink points directly at
+> that file.
 
 To remove the linked command:
 
