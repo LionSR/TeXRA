@@ -16,6 +16,7 @@ import {
   setParentStream,
   type ProcessOutputTail,
 } from './cliState';
+import { appendCompletedProcessEntries } from './completedProcessTranscript';
 import type { CliRuntimeHost } from '../../../runtime/runtimeHost';
 
 type Emit = <K extends ProgressEvent>(
@@ -93,9 +94,15 @@ function applyToState<K extends ProgressEvent>(
           pruned ??= new Map(s.processOutput);
           pruned.delete(id);
         }
+        const entries = appendCompletedProcessEntries(
+          p.parentStreamId,
+          s,
+          live,
+        );
         return {
           ...s,
           activeProcesses: p.processes,
+          entries,
           processOutput: pruned ?? s.processOutput,
         };
       });
