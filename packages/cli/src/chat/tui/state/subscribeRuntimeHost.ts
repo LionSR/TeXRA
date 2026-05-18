@@ -62,9 +62,18 @@ function applyToState<K extends ProgressEvent>(
 ): void {
   switch (event) {
     case 'setActiveStream': {
-      const next = (payload as ProgressEventPayloads['setActiveStream'])
-        .streamId;
-      cliState.activeStreamId.set(next ?? undefined);
+      const p = payload as ProgressEventPayloads['setActiveStream'];
+      const next = p.streamId;
+      if (!next) {
+        cliState.activeStreamId.set(undefined);
+        return;
+      }
+      // Register background child streams without stealing focus from the
+      // parent page. This mirrors the extension progress view contract.
+      patchStream(next, (s) => ({ ...s }));
+      if (p.suppressViewSwitch !== true) {
+        cliState.activeStreamId.set(next);
+      }
       return;
     }
     case 'setParentStream': {
