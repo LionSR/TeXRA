@@ -94,9 +94,12 @@ node packages/cli/dist/bin/texra.js run firstread --input Draft0.tex --input app
 node packages/cli/dist/bin/texra.js run logic --input 'paper/**/*.tex' --output-dir logic-pass
 ```
 
-For workflow agents, text output prints the final generated path in run storage
-such as `r1/paper.polished.tex`. If `--output` is provided, TeXRA also copies
-that final artifact to the requested destination.
+Workflow agents always write generated files into the execution's run-storage
+directory first. Text output prints a filesystem path: the copied path when
+`--output` or `--output-dir` is used, otherwise the final generated file in run
+storage. JSON and NDJSON include `runDirectory`, keep `outputs[]` as the
+run-storage source of truth, and include `copiedOutput` or `copiedOutputs` when
+a filesystem copy was written.
 
 Machine-readable output modes:
 
