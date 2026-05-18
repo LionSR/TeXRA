@@ -1,8 +1,8 @@
 /**
  * Resolve git worktree context (branch, dirty status) for a working directory.
  *
- * Host-neutral: shells out via `execFile` so the same resolver is usable from
- * the VS Code extension host and the Electron desktop main process. PR
+ * Host-neutral: shells out via the shared command runner so the same resolver
+ * is usable from the VS Code extension host and the Electron desktop main process. PR
  * enrichment is intentionally out of scope for this module — that will layer
  * on top once the chip is in the UI.
  *
@@ -11,12 +11,9 @@
  * triggered separately by callers (e.g. on stream creation).
  */
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-
 import type { WorktreeInfo } from '@shared/schemas';
 
-const execFileAsync = promisify(execFile);
+import { executeCommand } from '@utils/system/execUtils';
 
 const GIT_TIMEOUT_MS = 5_000;
 const CACHE_TTL_MS = 10_000;
@@ -73,27 +70,20 @@ async function probeWorktree(workingDirectory: string): Promise<WorktreeInfo> {
 }
 
 async function readBranch(cwd: string): Promise<string | undefined> {
-  try {
-    const { stdout } = await execFileAsync(
-      'git',
-      ['rev-parse', '--abbrev-ref', 'HEAD'],
-      { cwd, timeout: GIT_TIMEOUT_MS },
-    );
-    const name = stdout.trim();
-    return name && name !== 'HEAD' ? name : undefined;
-  } catch {
-    return undefined;
-  }
+  const result = await executeCommand(
+    ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+    { cwd, timeout: GIT_TIMEOUT_MS, channel: 'worktreeInfo' },
+  );
+  if (!result.success) return undefined;
+  const name = result.stdout?.trim();
+  return name && name !== 'HEAD' ? name : undefined;
 }
 
 async function readDirty(cwd: string): Promise<boolean | undefined> {
-  try {
-    const { stdout } = await execFileAsync('git', ['status', '--porcelain'], {
-      cwd,
-      timeout: GIT_TIMEOUT_MS,
-    });
-    return stdout.trim().length > 0;
-  } catch {
-    return undefined;
-  }
+  const result = await executeCommand(['git', 'status', '--porcelain'], {
+    cwd,
+    timeout: GIT_TIMEOUT_MS,
+    channel: 'worktreeInfo',
+  });
+  return result.success ? (result.stdout ?? '').trim().length > 0 : undefined;
 }

@@ -14,10 +14,11 @@
  *    are cached for the session.
  */
 
-import { execSync } from 'child_process';
 import { createRequire } from 'module';
 import * as path from 'path';
 import { existsSync } from 'fs';
+
+import { executeCommandSync } from '@utils/system/execUtils';
 
 type CodexConstructor = new (options?: any) => any;
 type PlatformInfo = { pkg: string; triple: string };
@@ -150,47 +151,45 @@ function findCodexBinaryPathUncached(): string | undefined {
 
   // Strategy 3: resolve from global npm prefix
   // Preferred over PATH because the npm-installed binary matches the SDK.
-  try {
-    const prefix = execSync('npm prefix -g', {
-      encoding: 'utf8',
+  {
+    const prefixResult = executeCommandSync(['npm', 'prefix', '-g'], {
       timeout: 5000,
-    }).trim();
+    });
+    const prefix = prefixResult.success ? prefixResult.stdout : undefined;
 
-    const roots = [
-      path.join(prefix, 'lib', 'node_modules', '@openai', 'codex'),
-      path.join(prefix, 'node_modules', '@openai', 'codex'),
-    ];
+    if (prefix) {
+      const roots = [
+        path.join(prefix, 'lib', 'node_modules', '@openai', 'codex'),
+        path.join(prefix, 'node_modules', '@openai', 'codex'),
+      ];
 
-    for (const codexPkgDir of roots) {
-      const result = resolveCodexBinary(codexPkgDir, info, binaryName);
-      if (result) return result;
+      for (const codexPkgDir of roots) {
+        const result = resolveCodexBinary(codexPkgDir, info, binaryName);
+        if (result) return result;
+      }
     }
-  } catch {
-    // npm prefix -g failed
   }
 
   // Strategy 4: PATH lookup (Homebrew, manual install, etc.)
   // Fallback — may find an older version that doesn't match the SDK.
-  try {
-    const whichCmd =
-      process.platform === 'win32' ? 'where codex' : 'which codex';
-    const pathHits = execSync(whichCmd, {
-      encoding: 'utf8',
-      timeout: 5000,
-    })
-      .trim()
-      .split(/\r?\n/);
+  {
+    const lookupResult = executeCommandSync(
+      [process.platform === 'win32' ? 'where' : 'which', 'codex'],
+      {
+        timeout: 5000,
+      },
+    );
+    const pathHits = lookupResult.success
+      ? (lookupResult.stdout ?? '').split(/\r?\n/)
+      : [];
 
-    // On Windows, skip .cmd/.ps1 shims (npm wrappers) — the SDK spawns
-    // the binary directly without shell:true, so shims aren't executable.
     for (const hit of pathHits) {
       const p = hit.trim();
       if (!p) continue;
+      // The SDK spawns the binary directly, so skip shell-only npm shims.
       if (process.platform === 'win32' && /\.(cmd|ps1)$/i.test(p)) continue;
       if (existsSync(p)) return p;
     }
-  } catch {
-    // codex not on PATH
   }
 
   return undefined;
