@@ -1,19 +1,23 @@
 // Pure state helpers for App-level child execution shortcuts and pickers.
 
 // Local imports - shared schemas
-import type { StreamTabId } from '@shared/schemas';
+import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 
 // Local imports - CLI state
 import { orderedDescendantsFromSlice } from './focusCycle';
 import type { ProcessOutputTail, StreamSlice } from './cliState';
 
-export type ChildControlMode = 'processes' | 'subagents';
+export type ChildControlMode = 'subagents' | 'tasks';
 
 export interface ChildControlItem {
   readonly executionId: string;
   readonly childStreamId?: StreamTabId;
+  readonly kind: 'process' | 'subagent';
   readonly label: string;
+  readonly command: string;
   readonly description: string;
+  readonly status?: string;
+  readonly elapsed?: string | null;
   readonly tailLines: readonly string[];
 }
 
@@ -46,6 +50,76 @@ function childLabel(child: {
   return child.agentName || child.toolName || child.executionId;
 }
 
+function streamDescription(
+  child: Pick<ActiveChildInfo, 'childStreamId'>,
+  streamsById: ReadonlyMap<StreamTabId, Pick<StreamSlice, 'description'>>,
+): string | undefined {
+  return child.childStreamId
+    ? streamsById.get(child.childStreamId)?.description
+    : undefined;
+}
+
+function streamTranscriptLines(
+  child: Pick<ActiveChildInfo, 'childStreamId'>,
+  streamsById: ReadonlyMap<StreamTabId, Pick<StreamSlice, 'entries'>>,
+): readonly string[] {
+  if (!child.childStreamId) return [];
+  const stream = streamsById.get(child.childStreamId);
+  if (!stream) return [];
+  return stream.entries.flatMap((entry) =>
+    entry.text
+      .split('\n')
+      .map((line) => line.trimEnd())
+      .filter((line) => line.length > 0),
+  );
+}
+
+function buildSubagentItem(
+  child: ActiveChildInfo,
+  streamsById: ReadonlyMap<
+    StreamTabId,
+    Pick<StreamSlice, 'description' | 'entries'>
+  >,
+): ChildControlItem {
+  const label = childLabel(child);
+  const command = streamDescription(child, streamsById) ?? label;
+  return {
+    executionId: child.executionId,
+    childStreamId: child.childStreamId,
+    kind: 'subagent',
+    label,
+    command,
+    description: compactParts([child.status, child.elapsed ?? undefined]),
+    status: child.status,
+    elapsed: child.elapsed,
+    tailLines: streamTranscriptLines(child, streamsById),
+  };
+}
+
+function buildProcessItem(
+  child: ActiveChildInfo,
+  tail: ProcessOutputTail | undefined,
+): ChildControlItem {
+  const tailLines = processTailLines(tail);
+  const lastLine = tailLines.at(-1);
+  const label = childLabel(child);
+  return {
+    executionId: child.executionId,
+    childStreamId: child.childStreamId,
+    kind: 'process',
+    label,
+    command: label,
+    description: compactParts([
+      child.status,
+      child.elapsed ?? undefined,
+      lastLine,
+    ]),
+    status: child.status,
+    elapsed: child.elapsed,
+    tailLines,
+  };
+}
+
 export function processTailLines(
   tail: ProcessOutputTail | undefined,
 ): readonly string[] {
@@ -62,34 +136,25 @@ export function buildChildControlItems(
     'activeProcesses' | 'activeSubagents' | 'processOutput'
   >,
   mode: ChildControlMode,
+  streamsById: ReadonlyMap<
+    StreamTabId,
+    Pick<StreamSlice, 'description' | 'entries'>
+  > = new Map(),
 ): readonly ChildControlItem[] {
   if (mode === 'subagents') {
-    return slice.activeSubagents.map((child) => ({
-      executionId: child.executionId,
-      childStreamId: child.childStreamId,
-      label: childLabel(child),
-      description: compactParts([child.status, child.elapsed ?? undefined]),
-      tailLines: [],
-    }));
+    return slice.activeSubagents.map((child) =>
+      buildSubagentItem(child, streamsById),
+    );
   }
 
-  return slice.activeProcesses.map((child) => {
-    const tailLines = processTailLines(
-      slice.processOutput.get(child.executionId),
-    );
-    const lastLine = tailLines.at(-1);
-    return {
-      executionId: child.executionId,
-      childStreamId: child.childStreamId,
-      label: childLabel(child),
-      description: compactParts([
-        child.status,
-        child.elapsed ?? undefined,
-        lastLine,
-      ]),
-      tailLines,
-    };
-  });
+  return [
+    ...slice.activeSubagents.map((child) =>
+      buildSubagentItem(child, streamsById),
+    ),
+    ...slice.activeProcesses.map((child) =>
+      buildProcessItem(child, slice.processOutput.get(child.executionId)),
+    ),
+  ];
 }
 
 export function numericFocusTarget(

@@ -21,6 +21,17 @@ const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.USER_MESSAGE,
 ]);
 
+const CHILD_STREAM_LOG_MESSAGE_TYPES = new Set<string>([
+  ...TRANSCRIPT_MESSAGE_TYPES,
+  MESSAGE_TYPES.DEFAULT,
+]);
+
+function transcriptMessageTypesForStream(streamId: StreamTabId): Set<string> {
+  return /^(bash@tool|claude@agent-sdk|codex@codex-sdk)#/.test(streamId)
+    ? CHILD_STREAM_LOG_MESSAGE_TYPES
+    : TRANSCRIPT_MESSAGE_TYPES;
+}
+
 /** Tool inputs are typed `unknown` (model-supplied JSON) and reach us
  *  via Zod passthrough, so a `===` compare would defeat the cache the
  *  moment any upstream code reconstructs `data` (deserialization,
@@ -194,10 +205,11 @@ export function syncStreamLog(streamId: StreamTabId): void {
   const log = store.get(streamId);
   if (!log) return;
 
+  const transcriptMessageTypes = transcriptMessageTypesForStream(streamId);
   const responses = log
     .getRange(0)
     .filter((entry: StreamLogEntry) =>
-      TRANSCRIPT_MESSAGE_TYPES.has(entry.messageType ?? ''),
+      transcriptMessageTypes.has(entry.messageType ?? ''),
     );
 
   patchStream(streamId, (slice) => {
