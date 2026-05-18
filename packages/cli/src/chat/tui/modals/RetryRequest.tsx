@@ -2,6 +2,7 @@ import { Box, Text } from 'ink';
 
 import type { RetryPermission } from '@shared/schemas';
 
+import { isCliApiSwitchableRetry } from '../../../runtime/approvalAdapter';
 import { ConfirmCard } from './ConfirmCard';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
@@ -12,9 +13,7 @@ export interface RetryRequestProps {
 
 export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const subject = props.payload.errorMessage ?? props.payload.operation;
-  const canSwitchToPersonalKey =
-    props.payload.errorDetails?.isRelayError === true &&
-    props.payload.errorDetails?.isCredentialExhausted === true;
+  const canSwitchToPersonalKey = isCliApiSwitchableRetry(props.payload);
   return (
     <ConfirmCard
       borderStyle="single"
