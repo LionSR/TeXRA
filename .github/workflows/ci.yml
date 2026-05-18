@@ -381,8 +381,8 @@ jobs:
           set -euo pipefail
 
           if [ -z "${GH_TOKEN:-}" ]; then
-            echo 'Missing DESKTOP_RELEASES_TOKEN secret for publishing desktop updates.'
-            exit 1
+            echo 'DESKTOP_RELEASES_TOKEN is not configured; skipping desktop update publication.'
+            exit 0
           fi
 
           actual_repo="$(gh repo view "$DESKTOP_RELEASE_REPO" --json nameWithOwner --jq .nameWithOwner)"
