@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 import { test, expect } from '@playwright/test';
 
@@ -31,7 +31,15 @@ It verifies that the same workspace storage is read after relaunch.
 // specifiers during test discovery.
 function workspaceStorageId(workspacePath: string | undefined): string {
   const source = workspacePath?.trim() || 'no-workspace';
-  return createHash('sha256').update(source).digest('hex').slice(0, 16);
+  const hash = createHash('sha256').update(source).digest('hex').slice(0, 8);
+  const stem =
+    source === 'no-workspace'
+      ? 'no-workspace'
+      : basename(source)
+          .replaceAll(/[^A-Za-z0-9._-]/g, '-')
+          .replaceAll(/-+/g, '-')
+          .replaceAll(/^-|-$/g, '') || 'workspace';
+  return `${stem}-${hash}`;
 }
 
 function writeMemoryEntry(input: {
