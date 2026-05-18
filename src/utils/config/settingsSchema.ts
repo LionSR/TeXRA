@@ -173,10 +173,7 @@ export const TEXRA_SETTINGS = {
   // -- CLI runtime ---------------------------------------------------------
   'texra.agent': entry(z.string().trim().min(1).optional(), undefined),
   'texra.model': entry(z.string().trim().min(1).optional(), undefined),
-  'texra.outputFormat': entry(
-    z.enum(CLI_OUTPUT_FORMATS).optional(),
-    undefined,
-  ),
+  'texra.outputFormat': entry(z.enum(CLI_OUTPUT_FORMATS).optional(), undefined),
   'texra.approvalPolicy': entry(
     z.enum(CLI_APPROVAL_POLICIES).optional(),
     undefined,

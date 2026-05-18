@@ -5,10 +5,7 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import { isNonEmptyString } from '@utils/core/stringCore';
 import { getConfig } from '@utils/config/configUtils';
 import { GlobalStorageFS } from '@utils/files/storageFS';
-import {
-  CLI_BUILTIN_DEFAULT_MODEL,
-  type CliConfigValues,
-} from './cliConfig';
+import { CLI_BUILTIN_DEFAULT_MODEL, type CliConfigValues } from './cliConfig';
 
 export const BUILTIN_DEFAULT_CHAT_AGENT = 'chat';
 export const BUILTIN_DEFAULT_CHAT_MODEL = CLI_BUILTIN_DEFAULT_MODEL;
@@ -137,10 +134,8 @@ export async function resolveChatDefaults(
   const [workspace, user, history] = await Promise.all([
     init.workspaceConfig
       ? Promise.resolve({
-          agent:
-            init.workspaceConfig.chat?.agent ?? init.workspaceConfig.agent,
-          model:
-            init.workspaceConfig.chat?.model ?? init.workspaceConfig.model,
+          agent: init.workspaceConfig.chat?.agent ?? init.workspaceConfig.agent,
+          model: init.workspaceConfig.chat?.model ?? init.workspaceConfig.model,
         })
       : loadWorkspaceDefaults(init.cwd),
     loadUserDefaults(),

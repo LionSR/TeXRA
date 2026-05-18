@@ -84,7 +84,10 @@ function warnUnknownKeys(
   prefix = '',
 ): void {
   for (const key of Object.keys(record)) {
-    if (!allowed.has(key) && !isKnownConfigKey(prefix ? `${prefix}${key}` : key)) {
+    if (
+      !allowed.has(key) &&
+      !isKnownConfigKey(prefix ? `${prefix}${key}` : key)
+    ) {
       warnings.push(`Ignoring unknown ${filePath} key "${prefix}${key}".`);
     }
   }
