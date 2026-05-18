@@ -14,7 +14,7 @@ import {
   cleanupAllApprovals,
   setToolEditApprovalHandler,
 } from '@tools/approval';
-import { flexibleFS, StorageFS, WorkspaceFS } from '@utils/files';
+import { AbsoluteFS, flexibleFS, StorageFS, WorkspaceFS } from '@utils/files';
 import { createRecordingHost } from '../progressTestUtils';
 
 const executionId = 'abcdef' as ExecutionId;
@@ -30,6 +30,8 @@ describe('accept_run_files progress events', () => {
   let originalWorkspaceRead: typeof WorkspaceFS.read;
   let originalWorkspaceWrite: typeof WorkspaceFS.write;
   let originalWorkspaceDelete: typeof WorkspaceFS.delete;
+  let originalAbsoluteIsFile: typeof AbsoluteFS.isFile;
+  let originalAbsoluteRead: typeof AbsoluteFS.read;
   let originalFlexibleRead: typeof flexibleFS.read;
 
   beforeEach(() => {
@@ -40,6 +42,8 @@ describe('accept_run_files progress events', () => {
     originalWorkspaceRead = WorkspaceFS.read;
     originalWorkspaceWrite = WorkspaceFS.write;
     originalWorkspaceDelete = WorkspaceFS.delete;
+    originalAbsoluteIsFile = AbsoluteFS.isFile;
+    originalAbsoluteRead = AbsoluteFS.read;
     originalFlexibleRead = flexibleFS.read;
     cleanupAllApprovals();
   });
@@ -52,6 +56,8 @@ describe('accept_run_files progress events', () => {
     WorkspaceFS.read = originalWorkspaceRead;
     WorkspaceFS.write = originalWorkspaceWrite;
     WorkspaceFS.delete = originalWorkspaceDelete;
+    AbsoluteFS.isFile = originalAbsoluteIsFile;
+    AbsoluteFS.read = originalAbsoluteRead;
     flexibleFS.read = originalFlexibleRead;
     setToolEditApprovalHandler();
     cleanupAllApprovals();
@@ -125,5 +131,124 @@ describe('accept_run_files progress events', () => {
     expect(result.isError).toBe(true);
     expect(result.error).toContain('requires a tool runtime host');
     expect(writes).toBe(0);
+  });
+
+  it('uses the pre-run snapshot for same-path workspace outputs', async () => {
+    const previousDefault = getDefaultAgentRuntimeHost();
+    const fallback = createRecordingHost();
+    const tool = new AcceptRunFilesTool();
+    let approvalOriginal = '';
+    let approvalProposed = '';
+    let writes = 0;
+
+    try {
+      setDefaultAgentRuntimeHost(fallback.host);
+      StorageFS.exists = async (target) =>
+        target === `executions/${executionId}`;
+      StorageFS.fullPath = (target) => `${storagePath}/${target}`;
+      WorkspaceFS.locatePath = (target) => ({
+        kind: 'workspace',
+        absolutePath: `${workspacePath}/${target}`,
+        relativePath: target,
+      });
+      WorkspaceFS.exists = async () => true;
+      WorkspaceFS.read = async () => 'new content';
+      WorkspaceFS.write = async () => {
+        writes++;
+      };
+      WorkspaceFS.delete = async () => undefined;
+      AbsoluteFS.isFile = async (target) =>
+        target ===
+        `${storagePath}/executions/${executionId}/original/draft.tex`;
+      AbsoluteFS.read = async () => 'old content';
+      flexibleFS.read = async () => 'new content';
+      setToolEditApprovalHandler(async (request) => {
+        approvalOriginal = request.originalContent;
+        approvalProposed = request.proposedContent;
+        return { accepted: true };
+      });
+
+      const result = await withRunContext(
+        createRunContext({
+          runtimeHost: fallback.host,
+          streamId,
+          executionId,
+        }),
+        () =>
+          withToolFileInteractionContext({ tracker: {} as never }, () =>
+            tool.call({
+              execution_id: executionId,
+              files: [{ path: 'draft.tex', original: 'draft.tex' }],
+            }),
+          ),
+      );
+
+      expect(result.isError).toBeUndefined();
+      expect(approvalOriginal).toBe('old content');
+      expect(approvalProposed).toBe('new content');
+      expect(result.edits?.[0]?.lineChanges).toEqual({
+        added: 1,
+        removed: 1,
+      });
+      expect(writes).toBe(0);
+    } finally {
+      setDefaultAgentRuntimeHost(previousDefault);
+    }
+  });
+
+  it('reports unchanged same-path fallbacks without approval', async () => {
+    const previousDefault = getDefaultAgentRuntimeHost();
+    const fallback = createRecordingHost();
+    const tool = new AcceptRunFilesTool();
+    let approvals = 0;
+    let writes = 0;
+
+    try {
+      setDefaultAgentRuntimeHost(fallback.host);
+      StorageFS.exists = async (target) =>
+        target === `executions/${executionId}`;
+      StorageFS.fullPath = (target) => `${storagePath}/${target}`;
+      WorkspaceFS.locatePath = (target) => ({
+        kind: 'workspace',
+        absolutePath: `${workspacePath}/${target}`,
+        relativePath: target,
+      });
+      WorkspaceFS.exists = async () => true;
+      WorkspaceFS.read = async () => 'same content';
+      WorkspaceFS.write = async () => {
+        writes++;
+      };
+      WorkspaceFS.delete = async () => undefined;
+      AbsoluteFS.isFile = async () => false;
+      flexibleFS.read = async () => 'same content';
+      setToolEditApprovalHandler(async () => {
+        approvals++;
+        return { accepted: true };
+      });
+
+      const result = await withRunContext(
+        createRunContext({
+          runtimeHost: fallback.host,
+          streamId,
+          executionId,
+        }),
+        () =>
+          withToolFileInteractionContext({ tracker: {} as never }, () =>
+            tool.call({
+              execution_id: executionId,
+              files: [{ path: 'draft.tex', original: 'draft.tex' }],
+            }),
+          ),
+      );
+
+      expect(result.isError).toBeUndefined();
+      expect(result.output).toContain('No changes to accept');
+      expect(result.output).toContain('unchanged: draft.tex');
+      expect(approvals).toBe(0);
+      expect(writes).toBe(0);
+      expect(fallback.events).toEqual([]);
+    } finally {
+      setDefaultAgentRuntimeHost(previousDefault);
+    }
   });
 });
