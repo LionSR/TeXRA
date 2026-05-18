@@ -1,0 +1,232 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`CLI shell completion > generates bash completion 1`] = `
+"# bash completion for texra
+_texra_completion_dynamic() {
+  [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" != "0" ]]
+}
+
+_texra_agents() {
+  _texra_completion_dynamic || return 0
+  texra agents list --quiet 2>/dev/null | awk '{print $2}'
+}
+
+_texra_models() {
+  _texra_completion_dynamic || return 0
+  texra models list --quiet 2>/dev/null | awk '{print $1}'
+}
+
+_texra_completion_path() {
+  local i=1 path="" token next
+  while (( i < COMP_CWORD )); do
+    token="\${COMP_WORDS[i]}"
+    case "$token" in
+      --output-format|--approval-policy|--cwd|--agent|--model|-m|--input|-i|--output|--instruction|--provider|--month|--login-hint)
+        ((i+=2)); continue ;;
+      --*=*|-*) ((i++)); continue ;;
+    esac
+    next="$token"
+    [[ -n "$path" ]] && next="$path $token"
+    case " chat run agents agents list models models list login logout usage auth auth status auth usage doctor completion version help " in
+      *" $next "*) path="$next"; ((i++)); continue ;;
+    esac
+    break
+  done
+  printf '%s' "$path"
+}
+
+_texra() {
+  local cur prev path subcommands flags
+  COMPREPLY=()
+  cur="\${COMP_WORDS[COMP_CWORD]}"
+  prev="\${COMP_WORDS[COMP_CWORD-1]}"
+
+  case "$prev" in
+    --output-format) COMPREPLY=( $(compgen -W 'text json ndjson' -- "$cur") ); return ;;
+    --approval-policy) COMPREPLY=( $(compgen -W 'never ask yolo' -- "$cur") ); return ;;
+    --model|-m) COMPREPLY=( $(compgen -W "$(_texra_models)" -- "$cur") ); return ;;
+    --agent) COMPREPLY=( $(compgen -W "$(_texra_agents)" -- "$cur") ); return ;;
+  esac
+
+  path="$(_texra_completion_path)"
+  case "$path" in
+    '') subcommands='chat run agents models login logout usage auth doctor completion version help'; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
+    'chat') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy --agent --model -m' ;;
+    'run') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy --input -i --output --model -m --instruction' ;;
+    'agents') subcommands='list'; flags='' ;;
+    'agents list') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
+    'models') subcommands='list'; flags='' ;;
+    'models list') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
+    'login') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy --provider --no-browser --select-account --login-hint' ;;
+    'logout') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
+    'usage') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy --month' ;;
+    'auth') subcommands='status usage'; flags='' ;;
+    'auth status') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
+    'auth usage') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy --month' ;;
+    'doctor') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
+    'completion') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
+    'version') subcommands=''; flags='' ;;
+    'help') subcommands=''; flags='' ;;
+    *) subcommands='chat run agents models login logout usage auth doctor completion version help'; flags='' ;;
+  esac
+
+  if [[ "$path" == 'run' && "$cur" != -* ]]; then
+    COMPREPLY=( $(compgen -W "$(_texra_agents)" -- "$cur") )
+    return
+  fi
+
+  if [[ "$path" == 'completion' && "$cur" != -* ]]; then
+    COMPREPLY=( $(compgen -W 'bash zsh fish' -- "$cur") )
+    return
+  fi
+
+  if [[ "$cur" == -* ]]; then
+    COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+  else
+    COMPREPLY=( $(compgen -W "$subcommands $flags" -- "$cur") )
+  fi
+}
+
+complete -F _texra texra
+"
+`;
+
+exports[`CLI shell completion > generates fish completion 1`] = `
+"# fish completion for texra
+complete -c texra -n '__fish_use_subcommand' -a 'chat'
+complete -c texra -n '__fish_use_subcommand' -a 'run'
+complete -c texra -n '__fish_use_subcommand' -a 'agents'
+complete -c texra -n '__fish_use_subcommand' -a 'models'
+complete -c texra -n '__fish_use_subcommand' -a 'login'
+complete -c texra -n '__fish_use_subcommand' -a 'logout'
+complete -c texra -n '__fish_use_subcommand' -a 'usage'
+complete -c texra -n '__fish_use_subcommand' -a 'auth'
+complete -c texra -n '__fish_use_subcommand' -a 'doctor'
+complete -c texra -n '__fish_use_subcommand' -a 'completion'
+complete -c texra -n '__fish_use_subcommand' -a 'version'
+complete -c texra -n '__fish_use_subcommand' -a 'help'
+complete -c texra -n '__fish_use_subcommand' -l 'print' -s 'p'
+complete -c texra -n '__fish_use_subcommand' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_use_subcommand' -l 'cwd' -r
+complete -c texra -n '__fish_use_subcommand' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_use_subcommand' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from chat' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from chat' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from chat' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from chat' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from chat' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from chat' -l 'agent' -r
+complete -c texra -n '__fish_seen_subcommand_from chat' -l 'model' -s 'm' -r
+complete -c texra -n '__fish_seen_subcommand_from run' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from run' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from run' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from run' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from run' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from run' -l 'input' -s 'i' -r
+complete -c texra -n '__fish_seen_subcommand_from run' -l 'output' -r
+complete -c texra -n '__fish_seen_subcommand_from run' -l 'model' -s 'm' -r
+complete -c texra -n '__fish_seen_subcommand_from run' -l 'instruction' -r
+complete -c texra -n '__fish_seen_subcommand_from agents' -a 'list'
+complete -c texra -n '__fish_seen_subcommand_from list' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from list' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from list' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from list' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from list' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from models' -a 'list'
+complete -c texra -n '__fish_seen_subcommand_from list' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from list' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from list' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from list' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from list' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from login' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from login' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from login' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from login' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from login' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from login' -l 'provider' -r
+complete -c texra -n '__fish_seen_subcommand_from login' -l 'no-browser'
+complete -c texra -n '__fish_seen_subcommand_from login' -l 'select-account'
+complete -c texra -n '__fish_seen_subcommand_from login' -l 'login-hint' -r
+complete -c texra -n '__fish_seen_subcommand_from logout' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from logout' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from logout' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from logout' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from logout' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from usage' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from usage' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from usage' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from usage' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from usage' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from usage' -l 'month' -r
+complete -c texra -n '__fish_seen_subcommand_from auth' -a 'status'
+complete -c texra -n '__fish_seen_subcommand_from auth' -a 'usage'
+complete -c texra -n '__fish_seen_subcommand_from status' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from status' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from status' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from status' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from status' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from usage' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from usage' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from usage' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from usage' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from usage' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from usage' -l 'month' -r
+complete -c texra -n '__fish_seen_subcommand_from doctor' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from doctor' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from doctor' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from doctor' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from doctor' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from completion' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from completion' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from completion' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from completion' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from completion' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
+complete -c texra -n '__fish_seen_subcommand_from run' -a '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet 2>/dev/null | awk "{print \\$2}")'
+complete -c texra -l model -s m -r -a '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra models list --quiet 2>/dev/null | awk "{print \\$1}")'
+complete -c texra -l agent -r -a '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet 2>/dev/null | awk "{print \\$2}")'
+"
+`;
+
+exports[`CLI shell completion > generates zsh completion 1`] = `
+"#compdef texra
+
+_texra_agents() {
+  [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" == "0" ]] && return
+  texra agents list --quiet 2>/dev/null | awk '{print $2}'
+}
+
+_texra_models() {
+  [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" == "0" ]] && return
+  texra models list --quiet 2>/dev/null | awk '{print $1}'
+}
+
+_texra() {
+  local path
+  path="\${words[2]}"
+  [[ -n "\${words[3]}" && "\${words[3]}" != -* ]] && path="$path \${words[3]}"
+
+  case "$path" in
+    'chat') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--agent[Tool-use agent for the session]:value:' '--model[Model for the session]:value:' '-m[Model for the session]:value:' ;;
+    'run') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--input[Input file passed to the workflow agent]:value:' '-i[Input file passed to the workflow agent]:value:' '--output[Output file path]:value:' '--model[Model for the agent]:value:' '-m[Model for the agent]:value:' '--instruction[Instruction passed to the workflow agent]:value:' '1:agent:($(_texra_agents))' ;;
+    'agents') _values 'subcommands' 'list'; true ;;
+    'agents list') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'models') _values 'subcommands' 'list'; true ;;
+    'models list') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'login') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--provider[OAuth provider: github or google (alternative to positional)]:value:' '--no-browser[Print the sign-in URL instead of opening a browser]' '--select-account[Ask the OAuth provider to show account selection when supported]' '--login-hint[Suggest a specific provider account, such as a GitHub username or Google email]:value:' ;;
+    'logout') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'usage') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--month[UTC month to show, formatted as YYYY-MM]:value:' ;;
+    'auth') _values 'subcommands' 'status' 'usage'; true ;;
+    'auth status') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'auth usage') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--month[UTC month to show, formatted as YYYY-MM]:value:' ;;
+    'doctor') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'completion') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '1:shell:(bash zsh fish)' ;;
+    'version') true; true ;;
+    'help') true; true ;;
+    *) _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '1:command:(chat run agents models login logout usage auth doctor completion version help)' ;;
+  esac
+}
+
+_texra "$@"
+"
+`;
