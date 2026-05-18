@@ -6,83 +6,13 @@
 // the formatted banner string; the CLI boundary writes it to stdout before
 // Ink mounts, placing it in the real terminal scrollback above the live region.
 //
-// The pixel art is a rounded brain mascot with ∫ and Σ in the two
-// hemispheres and a small smile underneath. Kept to four rows so it
-// doesn't dominate the screen on tall sessions.
+// Keep this deliberately plain: the TUI should start with useful session
+// information, not a large decorative logo.
 
 import os from 'node:os';
 import path from 'node:path';
 
 import pc from 'picocolors';
-
-type Color = 'magenta' | 'cyan' | 'yellow' | 'white' | 'dim';
-interface Segment {
-  readonly text: string;
-  readonly color?: Color;
-  readonly bold?: boolean;
-}
-
-function paint(seg: Segment): string {
-  let out = seg.text;
-  switch (seg.color) {
-    case 'magenta':
-      out = pc.magenta(out);
-      break;
-    case 'cyan':
-      out = pc.cyan(out);
-      break;
-    case 'yellow':
-      out = pc.yellow(out);
-      break;
-    case 'white':
-      out = pc.white(out);
-      break;
-    case 'dim':
-      out = pc.dim(out);
-      break;
-    case undefined:
-      break;
-  }
-  if (seg.bold) out = pc.bold(out);
-  return out;
-}
-
-interface LogoRow {
-  readonly text: string;
-  readonly width: number;
-}
-
-// Visible width = sum of raw segment lengths (all glyphs in the logo
-// are single-cell BMP characters, so `.length` matches column count).
-// Reported alongside the ANSI-painted text so `renderHeaderBanner` can
-// right-pad rows to a uniform width without trying to strip the ANSI.
-function row(...segments: Segment[]): LogoRow {
-  return {
-    text: segments.map(paint).join(''),
-    width: segments.reduce((sum, s) => sum + s.text.length, 0),
-  };
-}
-
-// 4-row brain mascot, oval/circular silhouette: narrow crown,
-// widest in the middle, narrow chin. ∫ and Σ read as two "eyes"
-// in the hemispheres, a centered fissure (│) splits the lobes,
-// and a tiny yellow smile (◡) sits underneath.
-const LOGO_ROWS: readonly LogoRow[] = [
-  row({ text: '   ╭─╮', color: 'magenta' }),
-  row(
-    { text: '  ╱', color: 'magenta' },
-    { text: '∫', color: 'white', bold: true },
-    { text: '│', color: 'magenta' },
-    { text: 'Σ', color: 'white', bold: true },
-    { text: '╲', color: 'magenta' },
-  ),
-  row(
-    { text: '  ╲ ', color: 'magenta' },
-    { text: '◡', color: 'yellow' },
-    { text: ' ╱', color: 'magenta' },
-  ),
-  row({ text: '   ╰─╯', color: 'magenta' }),
-];
 
 function shortenCwd(cwd: string): string {
   const home = os.homedir();
@@ -104,17 +34,10 @@ export interface HeaderBannerInfo {
 }
 
 export function renderHeaderBanner(info: HeaderBannerInfo): string {
-  const rightLines = [
-    `${pc.bold('TeXRA')} ${pc.dim(`v${info.version}`)}`,
+  const lines = [
+    `${pc.bold(pc.cyan('TeXRA'))} ${pc.dim(`v${info.version}`)}`,
     `${pc.cyan(info.agent || 'chat')} ${pc.dim('·')} ${info.model || '—'}`,
     pc.dim(shortenCwd(info.cwd)),
-    '',
   ];
-  const gutter = '   ';
-  const maxLogoWidth = Math.max(...LOGO_ROWS.map((r) => r.width));
-  const lines = LOGO_ROWS.map((r, idx) => {
-    const pad = ' '.repeat(maxLogoWidth - r.width);
-    return `${r.text}${pad}${gutter}${rightLines[idx] ?? ''}`;
-  });
   return `\n${lines.join('\n')}\n\n`;
 }
