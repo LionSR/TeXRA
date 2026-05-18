@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  collectStringFlagValues,
   normalizeRootShortcuts,
   reorderGlobalFlags,
   resolveLoginProvider,
@@ -50,6 +51,23 @@ describe('CLI root argument routing', () => {
       '--unknown',
       'auth',
     ]);
+  });
+
+  it('collects repeated run context flags from raw args', () => {
+    expect(
+      collectStringFlagValues(
+        [
+          'firstread',
+          '-i',
+          'appendix.tex',
+          '-c',
+          'paper.tex',
+          '--context=bib.tex',
+        ],
+        'context',
+        'c',
+      ),
+    ).toEqual(['paper.tex', 'bib.tex']);
   });
 });
 
