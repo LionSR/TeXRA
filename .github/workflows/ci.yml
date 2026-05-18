@@ -346,7 +346,7 @@ jobs:
 
   publish-desktop-release-artifacts:
     name: publish desktop release artifacts
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.DESKTOP_RELEASES_TOKEN != ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs:
