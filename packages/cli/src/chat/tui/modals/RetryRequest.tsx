@@ -12,6 +12,9 @@ export interface RetryRequestProps {
 
 export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const subject = props.payload.errorMessage ?? props.payload.operation;
+  const canSwitchToPersonalKey =
+    props.payload.errorDetails?.isRelayError === true &&
+    props.payload.errorDetails?.isCredentialExhausted === true;
   return (
     <ConfirmCard
       borderStyle="single"
@@ -19,11 +22,27 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
       title="Retry the failed call?"
       approveLabel="retry"
       rejectLabel="give up"
+      extraActions={
+        canSwitchToPersonalKey
+          ? [
+              {
+                key: 'k',
+                label: 'use API key and retry',
+                decision: { accepted: true, apiMode: 'personal' },
+              },
+            ]
+          : []
+      }
       onDecide={props.onDecide}
     >
       <Box marginY={1}>
         <Text dimColor>{subject}</Text>
       </Box>
+      {canSwitchToPersonalKey ? (
+        <Text color="cyan">
+          Press k to switch to personal API keys before retrying.
+        </Text>
+      ) : null}
     </ConfirmCard>
   );
 }

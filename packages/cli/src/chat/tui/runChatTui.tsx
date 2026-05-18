@@ -19,12 +19,18 @@ import {
   getInterruptible,
   switchToolUseModel,
 } from '@agent/toolUse/ToolUseAgentRegistry';
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 import { type CliContext, readCliVersion } from '../../runtime/cliContext';
 import { hasCliApprovalDenied } from '../../runtime/approvalAdapter';
+import {
+  formatCliApiMode,
+  getCliApiMode,
+  parseCliApiMode,
+  setCliApiMode,
+  type CliApiMode,
+} from '../../runtime/apiAccessMode';
 import { resolveChatDefaults } from '../../runtime/chatDefaults';
 import { CliExitCode } from '../../runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '../../runtime/initPlatform';
@@ -142,39 +148,31 @@ async function applyCliModelSelection(
   }
 }
 
-function getCliApiMode(): 'included' | 'personal' {
-  return getServerSideKeyService().getUseIncludedModelAccess()
-    ? 'included'
-    : 'personal';
-}
-
-function formatApiMode(mode: 'included' | 'personal'): string {
-  return mode === 'included' ? 'included relay' : 'personal API keys';
-}
-
-async function applyCliApiModeSelection(mode: string): Promise<void> {
+async function applyCliApiModeSelection(
+  mode: string | CliApiMode,
+): Promise<void> {
   const normalized = mode.trim().toLowerCase();
-  const serverSideKeys = getServerSideKeyService();
 
   if (!normalized || normalized === 'status') {
     appendLocalAssistantTranscript(
       [
-        `api: ${formatApiMode(getCliApiMode())}`,
+        `api: ${formatCliApiMode(getCliApiMode())}`,
         'Usage: /api personal | /api included',
       ].join('\n'),
     );
     return;
   }
 
-  if (['personal', 'byok', 'key', 'keys'].includes(normalized)) {
-    await serverSideKeys.setUseIncludedModelAccess(false);
-    appendLocalAssistantTranscript('API mode set to personal API keys.');
-    return;
-  }
-
-  if (['included', 'relay', 'texra'].includes(normalized)) {
-    await serverSideKeys.setUseIncludedModelAccess(true);
-    appendLocalAssistantTranscript('API mode set to included relay.');
+  const apiMode = parseCliApiMode(normalized);
+  if (apiMode) {
+    await setCliApiMode(apiMode);
+    cliState.sessionMeta.set({
+      ...cliState.sessionMeta.get(),
+      apiMode,
+    });
+    appendLocalAssistantTranscript(
+      `API mode set to ${formatCliApiMode(apiMode)}.`,
+    );
     return;
   }
 
@@ -184,7 +182,7 @@ async function applyCliApiModeSelection(mode: string): Promise<void> {
 async function showCliAuthStatus(): Promise<void> {
   const profile = await getCliAuthProfile();
   const lines = [
-    `api: ${formatApiMode(getCliApiMode())}`,
+    `api: ${formatCliApiMode(getCliApiMode())}`,
     profile.authenticated
       ? `auth: signed in${profile.accountLabel ? ` as ${profile.accountLabel}` : ''}`
       : 'auth: signed out',
@@ -332,7 +330,7 @@ async function handleTuiSlashCommand(
         [
           `agent: ${meta.agent || context.initialAgent}`,
           `model: ${meta.model || context.initialModel}`,
-          `api: ${formatApiMode(getCliApiMode())}`,
+          `api: ${formatCliApiMode(getCliApiMode())}`,
           `approval: ${formatApprovalPolicy(context.getApprovalPolicy())}`,
           `status: ${slice?.status ?? 'not started'}`,
         ].join('\n'),
@@ -389,7 +387,12 @@ export async function runChat(
   const { agent, model } = defaults;
   await setCliHelperModel(model);
 
-  cliState.sessionMeta.set({ agent, model, cwd: context.cwd });
+  cliState.sessionMeta.set({
+    agent,
+    model,
+    cwd: context.cwd,
+    apiMode: getCliApiMode(),
+  });
 
   let activeApprovalPolicy = context.approvalPolicy;
   const currentSessionContext = (helperModel: string): CliContext => ({
@@ -455,6 +458,7 @@ export async function runChat(
         setApprovalPolicy,
         runSessionMutation,
       }),
+    onApiModeSelect: (nextMode) => applyCliApiModeSelection(nextMode),
   });
 
   const startSession = (instruction: string): void => {
