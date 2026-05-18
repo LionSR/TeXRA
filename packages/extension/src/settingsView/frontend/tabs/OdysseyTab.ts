@@ -8,7 +8,7 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import {
   formatOdysseyTime,
   isOdysseyInFlight,
-  odysseyElapsedMs,
+  odysseyDurationMs,
 } from '@shared/schemas';
 import type { Odyssey, OdysseyStatus } from '@shared/schemas';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
@@ -159,8 +159,8 @@ export class OdysseyTab extends LitElement {
     const metaParts: MetaPart[] = [
       html`<span class="stream-id">${item.streamId}</span>`,
       html`<span
-        title="Wall-clock time since the odyssey was started (includes idle time between agent turns)"
-        >started ${formatOdysseyTime(odysseyElapsedMs(item))} ago</span
+        title="Wall-clock duration from Odyssey start to completion, or to now while it is active"
+        >duration ${formatOdysseyTime(odysseyDurationMs(item))}</span
       >`,
     ];
     if (item.continuationCount > 0) {
