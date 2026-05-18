@@ -36,7 +36,7 @@ import {
   type CliApprovalPolicy,
 } from '../../runtime/approvalPolicy';
 import { App } from './App';
-import { printHeaderBanner } from './panes/HeaderBanner';
+import { renderHeaderBanner } from './panes/HeaderBanner';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { listSlashCommands, parseSlashInput } from './commands/slashRegistry';
 import { loadInputHistory } from './history/inputHistory';
@@ -570,7 +570,9 @@ export async function runChat(
   };
 
   const version = await readCliVersion();
-  printHeaderBanner({ version, agent, model, cwd: context.cwd });
+  process.stdout.write(
+    renderHeaderBanner({ version, agent, model, cwd: context.cwd }),
+  );
   const ink = render(<App onSubmit={handleSubmit} history={inputHistory} />, {
     stdout: process.stdout,
     stderr: process.stderr,
