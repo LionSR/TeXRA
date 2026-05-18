@@ -41,6 +41,7 @@ export interface CliAuthProfile {
   authenticated: boolean;
   accountLabel?: string;
   tier?: string;
+  expiresAt?: string;
 }
 
 export interface CliLoginOptions {
@@ -169,6 +170,18 @@ export async function getCliAuthProfile(): Promise<CliAuthProfile> {
     authenticated: true,
     accountLabel: session?.account.label,
     tier,
+    expiresAt: session ? new Date(session.expiresAt).toISOString() : undefined,
+  };
+}
+
+export async function getCliStoredAuthProfile(): Promise<CliAuthProfile> {
+  initializeCliSupabaseAuth();
+  const session = await getCliSupabaseAuthCoordinator().loadSession();
+  if (!session) return { authenticated: false };
+  return {
+    authenticated: true,
+    accountLabel: session.account.label,
+    expiresAt: new Date(session.expiresAt).toISOString(),
   };
 }
 
