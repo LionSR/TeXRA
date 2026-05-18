@@ -43,17 +43,24 @@ export function getExtractedDocOutputFileName(
   source: string,
   roundDir: string,
 ): string {
-  const parsed = path.parse(source);
+  const sourcePath = source.replaceAll('\\', '/');
+  const parsed = path.posix.parse(sourcePath);
+  const isAbsoluteSource =
+    path.posix.isAbsolute(sourcePath) || /^[A-Za-z]:\//.test(sourcePath);
   const extension = parsed.ext.replace('.', '') || 'tex';
-  // Strip absolute prefixes, drive-letter segments, and traversal segments
-  // so a malicious or malformed source cannot escape roundDir via
-  // path.join's absolute-override or parent-directory semantics.
-  const safeDir = parsed.dir
-    .split(/[\\/]+/)
-    .filter(
-      (seg) => seg && seg !== '..' && seg !== '.' && !/^[A-Za-z]:$/.test(seg),
-    )
-    .join(path.sep);
+  // Relative document names may intentionally carry subdirectories
+  // (`chapters/main.tex`). Absolute document names are host paths, not workflow
+  // names, so keep only their basename. In both cases strip traversal segments
+  // so the output remains inside roundDir.
+  const safeDir = isAbsoluteSource
+    ? ''
+    : parsed.dir
+        .split('/')
+        .filter(
+          (seg) =>
+            seg && seg !== '..' && seg !== '.' && !/^[A-Za-z]:$/.test(seg),
+        )
+        .join(path.sep);
   // Avoid the fallback `output` because the primary round output is already
   // `r{round}/output.{ext}`; a collision would overwrite it.
   const rawName = path.basename(parsed.name) || 'extracted';
