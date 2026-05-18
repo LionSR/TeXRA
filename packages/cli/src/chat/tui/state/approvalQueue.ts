@@ -16,6 +16,8 @@ import type {
   ExternalInquiryPermission,
   PlanApprovalPermission,
   RetryPermission,
+  UserQuestionAnswers,
+  UserQuestionPermission,
 } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
@@ -25,7 +27,8 @@ export type ApprovalPayload =
   | { kind: 'plan'; payload: PlanApprovalPermission }
   | { kind: 'proposal'; payload: AgentProposalPermission }
   | { kind: 'retry'; payload: RetryPermission }
-  | { kind: 'externalInquiry'; payload: ExternalInquiryPermission };
+  | { kind: 'externalInquiry'; payload: ExternalInquiryPermission }
+  | { kind: 'userQuestion'; payload: UserQuestionPermission };
 
 export interface ApprovalDecision {
   readonly accepted: boolean;
@@ -35,6 +38,8 @@ export interface ApprovalDecision {
    * accept, it's the answer the agent gets back.
    */
   readonly userMessage?: string;
+  /** Structured answers for an AskUserQuestion request. */
+  readonly userQuestionAnswers?: UserQuestionAnswers;
 }
 
 export interface PendingApproval {
