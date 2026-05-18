@@ -7,15 +7,17 @@
 
 import { signal, type Signal } from '@lit-labs/signals';
 
-import type { NormalizedToolUse, StreamTabId } from '@shared/schemas';
 import type {
   ActiveChildInfo,
   ConversationProgress,
+  NormalizedToolUse,
   Plan,
   StreamStatus,
+  StreamTabId,
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
+import type { CliApiMode } from '../../../runtime/apiAccessMode';
 
 export interface ConversationEntry {
   /** Same id as the upstream `StreamLogEntry.id` — stable across deltas. */
@@ -50,6 +52,7 @@ export interface SessionMeta {
   readonly agent: string;
   readonly model: string;
   readonly cwd: string;
+  readonly apiMode: CliApiMode;
 }
 
 export interface ProcessOutputTail {
@@ -86,6 +89,7 @@ const SESSION_META = signal<SessionMeta>({
   agent: '',
   model: '',
   cwd: '',
+  apiMode: 'personal',
 });
 
 const ACTIVE_STREAM_ID = signal<StreamTabId | undefined>(undefined);
@@ -193,7 +197,12 @@ export function removeStream(streamId: StreamTabId): void {
 }
 
 export function resetCliState(): void {
-  cliState.sessionMeta.set({ agent: '', model: '', cwd: '' });
+  cliState.sessionMeta.set({
+    agent: '',
+    model: '',
+    cwd: '',
+    apiMode: 'personal',
+  });
   cliState.activeStreamId.set(undefined);
   cliState.streams.set(new Map());
   cliState.parentStream.set(new Map());
