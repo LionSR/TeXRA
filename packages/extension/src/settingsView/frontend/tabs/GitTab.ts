@@ -230,26 +230,14 @@ export class GitTab extends LitElement {
   }
 
   private renderTokenStatusBadge(): TemplateResult {
-    switch (this.githubTokenStatus) {
-      case 'secret':
-        return renderSetStatusIcon({
-          isSet: true,
-          fallbackLabel: '',
-          title: 'Token set',
-        });
-      case 'env':
-        return renderSetStatusIcon({
-          isSet: false,
-          fallbackLabel: 'Env',
-          fallbackVariant: 'neutral',
-        });
-      default:
-        return renderSetStatusIcon({
-          isSet: false,
-          fallbackLabel: 'Not set',
-          fallbackVariant: 'warning',
-        });
-    }
+    return renderSetStatusIcon({
+      status: this.githubTokenStatus,
+      title: 'Token set',
+      fallbacks: {
+        env: { label: 'Env', variant: 'neutral' },
+        none: { label: 'Not set', variant: 'warning' },
+      },
+    });
   }
 
   override render(): TemplateResult {

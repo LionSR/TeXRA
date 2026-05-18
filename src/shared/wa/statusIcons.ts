@@ -3,31 +3,36 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { css, html, type CSSResult, type TemplateResult } from 'lit';
 
-type TagVariant = 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
+export type WaTagVariant =
+  | 'brand'
+  | 'neutral'
+  | 'success'
+  | 'warning'
+  | 'danger';
 
-export interface SetStatusIconOptions {
-  /** Whether the underlying value is "set" (renders as a green check). */
-  readonly isSet: boolean;
-  /** Label shown in the fallback wa-tag when `isSet` is false. */
-  readonly fallbackLabel: string;
-  /** Variant applied to the fallback wa-tag. */
-  readonly fallbackVariant?: TagVariant;
-  /** Tooltip text for the green check when `isSet` is true. */
+export interface SetStatusFallback {
+  readonly label: string;
+  readonly variant?: WaTagVariant;
+}
+
+export interface SetStatusIconOptions<Status extends string> {
+  readonly status: Status;
+  readonly fallbacks: Partial<Record<Status, SetStatusFallback>>;
+  /** Tooltip text for the green check rendered when `status` is not in `fallbacks`. */
   readonly title?: string;
 }
 
 /**
- * Render a green-check wa-icon when the underlying value is set, or a labeled
- * wa-tag otherwise. Used by provider API keys, GitHub tokens, and similar
- * "is configured" indicators across the settings UI.
+ * Render a green-check wa-icon when `status` has no entry in `fallbacks`, or a
+ * labeled wa-tag using the matching fallback otherwise.
  */
-export function renderSetStatusIcon({
-  isSet,
-  fallbackLabel,
-  fallbackVariant = 'neutral',
+export function renderSetStatusIcon<Status extends string>({
+  status,
+  fallbacks,
   title,
-}: SetStatusIconOptions): TemplateResult {
-  if (isSet) {
+}: SetStatusIconOptions<Status>): TemplateResult {
+  const fallback = fallbacks[status];
+  if (!fallback) {
     return html`<wa-icon
       library="texra"
       name="check"
@@ -35,16 +40,11 @@ export function renderSetStatusIcon({
       title=${title ?? 'Set'}
     ></wa-icon>`;
   }
-  return html`<wa-tag variant=${fallbackVariant} size="small"
-    >${fallbackLabel}</wa-tag
+  return html`<wa-tag variant=${fallback.variant ?? 'neutral'} size="small"
+    >${fallback.label}</wa-tag
   >`;
 }
 
-/**
- * Single source of truth for the green-check status icon styling. Consumed by
- * any view that renders `renderSetStatusIcon` or the `status-check-icon`
- * class directly.
- */
 export const statusCheckIconStyles: CSSResult = css`
   .status-check-icon {
     color: var(--wa-color-success-fill-loud);

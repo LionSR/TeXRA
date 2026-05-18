@@ -28,16 +28,12 @@ import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 
-type FallbackStatus = Exclude<ProviderKeyStatus['status'], 'set'>;
-
-const STATUS_LABELS: Record<FallbackStatus, string> = {
+const STATUS_LABELS: Record<
+  Exclude<ProviderKeyStatus['status'], 'set'>,
+  string
+> = {
   env: 'Env',
-  'not-set': 'Not Set',
-};
-
-const STATUS_VARIANTS: Record<FallbackStatus, 'neutral'> = {
-  env: 'neutral',
-  'not-set': 'neutral',
+  'not-set': 'Not set',
 };
 
 @customElement('provider-key-list')
@@ -63,17 +59,13 @@ export class ProviderKeyList extends LitElement {
   }
 
   private renderKeyStatus(status: ProviderKeyStatus['status']): TemplateResult {
-    if (status === 'set') {
-      return renderSetStatusIcon({
-        isSet: true,
-        fallbackLabel: '',
-        title: 'Key set',
-      });
-    }
     return renderSetStatusIcon({
-      isSet: false,
-      fallbackLabel: STATUS_LABELS[status],
-      fallbackVariant: STATUS_VARIANTS[status],
+      status,
+      title: 'Key set',
+      fallbacks: {
+        env: { label: STATUS_LABELS.env },
+        'not-set': { label: STATUS_LABELS['not-set'] },
+      },
     });
   }
 

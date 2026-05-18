@@ -3,20 +3,13 @@ import { css, html, nothing, type CSSResult, type TemplateResult } from 'lit';
 
 export type MetaPart = string | TemplateResult;
 
-/**
- * Render a compact one-line metadata strip with parts joined by " · ".
- * Used by Memory and History rows so both tabs feel like the same product.
- */
+/** Render a compact one-line metadata strip with parts joined by " · ". */
 export function renderDotMeta(parts: readonly MetaPart[]): TemplateResult {
   return html`${parts.map(
     (part, i) => html`${i > 0 ? html` · ` : nothing}${part}`,
   )}`;
 }
 
-/**
- * Single source of truth for the dot-joined meta strip styling. Apply the
- * `meta-strip` class to the container that renders `renderDotMeta` output.
- */
 export const metaStripStyles: CSSResult = css`
   .meta-strip {
     font-size: var(--font-size-sm);
