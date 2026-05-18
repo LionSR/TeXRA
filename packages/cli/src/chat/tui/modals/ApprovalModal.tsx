@@ -10,6 +10,7 @@ import { EditApproval } from './EditApproval';
 import { ExternalInquiry } from './ExternalInquiry';
 import { PlanApproval } from './PlanApproval';
 import { RetryRequest } from './RetryRequest';
+import { UserQuestion } from './UserQuestion';
 import { assertNever } from '../assertNever';
 import type { PendingApproval } from '../state/approvalQueue';
 
@@ -35,6 +36,8 @@ export function ApprovalModal(
       return <RetryRequest payload={payload.payload} onDecide={decide} />;
     case 'externalInquiry':
       return <ExternalInquiry payload={payload.payload} onDecide={decide} />;
+    case 'userQuestion':
+      return <UserQuestion payload={payload.payload} onDecide={decide} />;
   }
   return assertNever(payload, 'Unhandled approval payload');
 }
