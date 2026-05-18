@@ -38,13 +38,17 @@ import {
 
 // Local imports - utils
 import {
+  AbsoluteFS,
   StorageFS,
   WorkspaceFS,
   flexibleFS,
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files';
-import { resolveStoragePath } from '@utils/files/taskRunStorage';
+import {
+  getOriginalSnapshotPath,
+  resolveStoragePath,
+} from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 
 // ============================================================================
@@ -171,12 +175,23 @@ Optional:
             : { content: rawContent, count: 0 };
         const destExists = await WorkspaceFS.exists(dest.relativePath);
 
-        // Determine original content for diff display
+        // Determine original content for diff display. In-place workflow
+        // outputs can make source and destination the same workspace file, so
+        // the pre-run snapshot is the only reliable "before" image.
+        const snapshotPath = getOriginalSnapshotPath(
+          executionId,
+          dest.relativePath,
+        );
+        const snapshotContent = (await AbsoluteFS.isFile(snapshotPath))
+          ? await AbsoluteFS.read(snapshotPath)
+          : undefined;
         const isSameFile =
           sourceLocation.kind === 'workspace' &&
           sourceAbsolute === dest.absolutePath;
         let originalContent: string;
-        if (isSameFile) {
+        if (snapshotContent !== undefined) {
+          originalContent = snapshotContent;
+        } else if (isSameFile) {
           originalContent = rawContent;
         } else if (destExists) {
           originalContent = await WorkspaceFS.read(dest.relativePath);
@@ -205,6 +220,8 @@ Optional:
       destAbsolutePath: string;
     }[] = [];
     let rejected = 0;
+    let unchanged = 0;
+    let firstRejectedPath: string | undefined;
     const rejectionMessages: string[] = [];
 
     let totalStripped = 0;
@@ -212,6 +229,12 @@ Optional:
     for (const entry of prepared) {
       const mappingNote =
         entry.path !== entry.original ? ` (from ${entry.path})` : '';
+
+      if (entry.originalContent === entry.proposedContent) {
+        unchanged++;
+        results.push(`unchanged: ${entry.original}${mappingNote}`);
+        continue;
+      }
 
       const approval = await requestToolEditApproval({
         path: entry.original,
@@ -222,6 +245,7 @@ Optional:
 
       if (!approval.accepted) {
         rejected++;
+        firstRejectedPath ??= entry.original;
         if (approval.userMessage) rejectionMessages.push(approval.userMessage);
         results.push(`rejected: ${entry.original}${mappingNote}`);
         continue;
@@ -260,10 +284,21 @@ Optional:
       });
     }
 
-    // Single rejection → return rejection result
-    if (rejected === files.length) {
+    const changed = files.length - unchanged;
+
+    if (changed === 0) {
+      const summary = `No changes to accept from run ${executionId}`;
+      return {
+        summary,
+        output: `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`,
+        edits,
+      };
+    }
+
+    // All changed files rejected → return rejection result
+    if (rejected === changed && acceptedEntries.length === 0) {
       return buildApprovalRejectedResult(
-        prepared[0].original,
+        firstRejectedPath ?? prepared[0].original,
         'accept_run_files',
         rejectionMessages.join('\n'),
       );
@@ -275,12 +310,16 @@ Optional:
       results.push(`cleaned: ${f}`);
     }
 
-    const accepted = files.length - rejected;
+    const accepted = acceptedEntries.length;
     const strippedSuffix =
       totalStripped > 0
         ? ` (stripped ${formatResultCount(totalStripped, '\\criticize annotation')})`
         : '';
-    const summary = `Accepted ${accepted}/${files.length} ${pluralize(files.length, 'file')} from run ${executionId}${strippedSuffix}`;
+    const unchangedSuffix =
+      unchanged > 0
+        ? ` (${formatResultCount(unchanged, 'unchanged file')})`
+        : '';
+    const summary = `Accepted ${accepted}/${changed} changed ${pluralize(changed, 'file')} from run ${executionId}${strippedSuffix}${unchangedSuffix}`;
     return {
       summary,
       output: `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`,

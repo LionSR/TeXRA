@@ -93,7 +93,9 @@ export function buildChildControlItems(
 }
 
 export function numericFocusTarget(
-  slice: Pick<StreamSlice, 'activeProcesses' | 'activeSubagents'> | undefined,
+  slice:
+    | Pick<StreamSlice, 'activeProcesses' | 'activeSubagents' | 'childStreams'>
+    | undefined,
   zeroBasedIndex: number,
 ): StreamTabId | undefined {
   if (!slice || zeroBasedIndex < 0) return undefined;

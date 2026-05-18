@@ -31,6 +31,7 @@ function slice(
     queuedFollowUps: 0,
     activeSubagents: [],
     activeProcesses: [],
+    childStreams: [],
     todos: [],
     plan: null,
     processOutput: new Map(),
