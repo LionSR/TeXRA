@@ -26,6 +26,45 @@ export function getOutputFileName(extension: string, round: number): string {
   return workflowOutputPath({ ext: extension, round });
 }
 
+function getSafeDocumentPathParts(source: string): {
+  dir: string;
+  name: string;
+  ext: string;
+} {
+  const sourcePath = source.replaceAll('\\', '/');
+  const parsed = path.posix.parse(sourcePath);
+  const isAbsoluteSource =
+    path.posix.isAbsolute(sourcePath) || /^[A-Za-z]:\//.test(sourcePath);
+  const dir = isAbsoluteSource
+    ? ''
+    : parsed.dir
+        .split('/')
+        .filter(
+          (seg) =>
+            seg && seg !== '..' && seg !== '.' && !/^[A-Za-z]:$/.test(seg),
+        )
+        .join(path.sep);
+
+  return {
+    dir,
+    name: path.basename(parsed.name) || 'extracted',
+    ext: parsed.ext || '.tex',
+  };
+}
+
+/**
+ * Convert a model-produced document name to a portable relative path.
+ *
+ * Relative document names may intentionally carry subdirectories
+ * (`chapters/main.tex`). Absolute document names are host paths, not workflow
+ * names, so keep only their basename. In both cases strip traversal segments
+ * so copied or extracted outputs remain inside the caller-chosen root.
+ */
+export function getSafeDocumentRelativePath(source: string): string {
+  const safe = getSafeDocumentPathParts(source);
+  return path.join(safe.dir, `${safe.name}${safe.ext}`);
+}
+
 /**
  * Generates an output path for an extracted document from multi-document XML
  * output. The extracted doc is placed under the round directory, preserving
@@ -43,34 +82,16 @@ export function getExtractedDocOutputFileName(
   source: string,
   roundDir: string,
 ): string {
-  const sourcePath = source.replaceAll('\\', '/');
-  const parsed = path.posix.parse(sourcePath);
-  const isAbsoluteSource =
-    path.posix.isAbsolute(sourcePath) || /^[A-Za-z]:\//.test(sourcePath);
-  const extension = parsed.ext.replace('.', '') || 'tex';
-  // Relative document names may intentionally carry subdirectories
-  // (`chapters/main.tex`). Absolute document names are host paths, not workflow
-  // names, so keep only their basename. In both cases strip traversal segments
-  // so the output remains inside roundDir.
-  const safeDir = isAbsoluteSource
-    ? ''
-    : parsed.dir
-        .split('/')
-        .filter(
-          (seg) =>
-            seg && seg !== '..' && seg !== '.' && !/^[A-Za-z]:$/.test(seg),
-        )
-        .join(path.sep);
+  const safe = getSafeDocumentPathParts(source);
   // Avoid the fallback `output` because the primary round output is already
   // `r{round}/output.{ext}`; a collision would overwrite it.
-  const rawName = path.basename(parsed.name) || 'extracted';
   // Guard against an LLM-supplied source like `output.tex` landing directly
   // in roundDir and overwriting the primary output.
   const safeName =
-    safeDir === '' && rawName === WORKFLOW_OUTPUT_BASENAME
+    safe.dir === '' && safe.name === WORKFLOW_OUTPUT_BASENAME
       ? `${WORKFLOW_OUTPUT_BASENAME}_extracted`
-      : rawName;
-  return path.join(roundDir, safeDir, `${safeName}.${extension}`);
+      : safe.name;
+  return path.join(roundDir, safe.dir, `${safeName}${safe.ext}`);
 }
 
 /**

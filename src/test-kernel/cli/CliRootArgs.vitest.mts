@@ -1,7 +1,12 @@
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
   collectStringFlagValues,
+  expandWorkflowInputSpecs,
   normalizeRootShortcuts,
   reorderGlobalFlags,
   resolveLoginProvider,
@@ -68,6 +73,47 @@ describe('CLI root argument routing', () => {
         'c',
       ),
     ).toEqual(['paper.tex', 'bib.tex']);
+  });
+
+  it('collects repeated run input flags from raw args', () => {
+    expect(
+      collectStringFlagValues(
+        ['firstread', '--input=Draft0.tex', '-i', 'appendices.tex'],
+        'input',
+        'i',
+      ),
+    ).toEqual(['Draft0.tex', 'appendices.tex']);
+  });
+
+  it('expands workflow input directories and globs relative to cwd', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-inputs-'));
+    try {
+      await fs.mkdir(path.join(root, 'paper', 'sections'), {
+        recursive: true,
+      });
+      await fs.writeFile(path.join(root, 'paper', 'Draft0.tex'), 'draft');
+      await fs.writeFile(
+        path.join(root, 'paper', 'sections', 'appendix.tex'),
+        'appendix',
+      );
+      await fs.writeFile(path.join(root, 'paper', 'notes.md'), 'notes');
+
+      await expect(expandWorkflowInputSpecs(['paper'], root)).resolves.toEqual([
+        'paper/Draft0.tex',
+        'paper/sections/appendix.tex',
+      ]);
+      await expect(
+        expandWorkflowInputSpecs(['paper/**/*.tex'], root),
+      ).resolves.toEqual(['paper/Draft0.tex', 'paper/sections/appendix.tex']);
+      await expect(
+        expandWorkflowInputSpecs(
+          [path.join(root, 'paper', 'sections', 'appendix.tex')],
+          root,
+        ),
+      ).resolves.toEqual(['paper/sections/appendix.tex']);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 });
 

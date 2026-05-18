@@ -2,14 +2,17 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { defineCommand, runCommand, showUsage, type CommandDef } from 'citty';
+import { glob, hasMagic } from 'glob';
 
 import { getAgent, getVisibleAgents, loadAgents } from '@agent/index';
 import { writeTerminalStatus } from '@agent/storage';
+import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import type { OutputFileSummary } from '@agent/runtime/AgentFlowResult';
 import { runValidatedExecutionRequest } from '@agent/runtime/runExecutionRequest';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { isOAuthProvider } from '@auth/sharedConfig';
@@ -765,6 +768,10 @@ const runWorkflowCommand = defineCommand({
       description: 'Read-only context file passed to the workflow agent',
     },
     output: { type: 'string', description: 'Output file path' },
+    'output-dir': {
+      type: 'string',
+      description: 'Directory to copy multi-input workflow outputs into',
+    },
     model: {
       type: 'string',
       alias: 'm',
@@ -780,9 +787,10 @@ const runWorkflowCommand = defineCommand({
     setExitCode(
       await runWorkflowAgent(context, {
         agent: ctx.args.agent,
-        input: ctx.args.input,
+        inputFiles: collectStringFlagValues(ctx.rawArgs, 'input', 'i'),
         contextFiles: collectStringFlagValues(ctx.rawArgs, 'context', 'c'),
         output: optString(ctx.args.output),
+        outputDir: optString(ctx.args['output-dir']),
         model: optString(ctx.args.model),
         instruction: optString(ctx.args.instruction) ?? '',
       }),
@@ -796,19 +804,108 @@ type ExecuteAgentResult = Awaited<
 type CliRunResult = ExecuteAgentResult & {
   terminalStatus: ExecutionStatus;
   copiedOutput?: string;
+  copiedOutputs?: string[];
 };
 
 interface WorkflowRunInit {
   readonly agent: string;
-  readonly input: string;
+  readonly inputFiles: string[];
   readonly contextFiles: string[];
   readonly output?: string;
+  readonly outputDir?: string;
   readonly model?: string;
   readonly instruction: string;
 }
 
+function normalizeCliInputPath(candidate: string, cwd: string): string {
+  const absolutePath = path.isAbsolute(candidate)
+    ? path.resolve(candidate)
+    : path.resolve(cwd, candidate);
+  const relativePath = path.relative(cwd, absolutePath);
+  if (
+    relativePath &&
+    !relativePath.startsWith('..') &&
+    !path.isAbsolute(relativePath)
+  ) {
+    return relativePath.replaceAll(path.sep, '/');
+  }
+  return absolutePath;
+}
+
+async function expandWorkflowInputSpec(
+  inputSpec: string,
+  cwd: string,
+): Promise<string[]> {
+  const trimmed = inputSpec.trim();
+  if (!trimmed) return [];
+
+  if (hasMagic(trimmed)) {
+    const matches = path.isAbsolute(trimmed)
+      ? await glob(trimmed.replaceAll('\\', '/'), {
+          absolute: true,
+          nodir: true,
+        })
+      : await glob(trimmed.replaceAll('\\', '/'), {
+          cwd,
+          absolute: false,
+          nodir: true,
+        });
+    if (matches.length === 0) {
+      throw new CliUsageError(`No input files matched: ${trimmed}`);
+    }
+    return matches.sort().map((match) => normalizeCliInputPath(match, cwd));
+  }
+
+  const absolutePath = path.isAbsolute(trimmed)
+    ? path.resolve(trimmed)
+    : path.resolve(cwd, trimmed);
+  const stats = await fs.stat(absolutePath).catch(() => null);
+  if (stats?.isDirectory()) {
+    const matches = await glob('**/*.tex', {
+      cwd: absolutePath,
+      absolute: true,
+      nodir: true,
+    });
+    if (matches.length === 0) {
+      throw new CliUsageError(
+        `No .tex input files found in directory: ${trimmed}`,
+      );
+    }
+    return matches.sort().map((match) => normalizeCliInputPath(match, cwd));
+  }
+
+  return [normalizeCliInputPath(trimmed, cwd)];
+}
+
+export async function expandWorkflowInputSpecs(
+  inputSpecs: readonly string[],
+  cwd: string,
+): Promise<string[]> {
+  const expanded = (
+    await Promise.all(
+      inputSpecs.map((spec) => expandWorkflowInputSpec(spec, cwd)),
+    )
+  ).flat();
+  const unique = [...new Set(expanded)];
+  if (unique.length === 0) {
+    throw new CliUsageError('At least one workflow input file is required.');
+  }
+  return unique;
+}
+
+function outputCopyRelativePath(output: OutputFileSummary) {
+  const relativePath =
+    output.relativePath || path.basename(output.absolutePath);
+  const parts = relativePath.replaceAll('\\', '/').split('/');
+  const withoutRoundDir = /^r\d+$/.test(parts[0] ?? '')
+    ? parts.slice(1)
+    : parts;
+  return getSafeDocumentRelativePath(withoutRoundDir.join('/'));
+}
+
 async function resolveWorkflowOutput(
   outputFile: string | undefined,
+  outputDir: string | undefined,
   result: ExecuteAgentResult,
   context: CliContext,
 ): Promise<{
@@ -819,6 +916,25 @@ async function resolveWorkflowOutput(
     ...result,
     terminalStatus: cliTerminalStatus(result),
   };
+  if (outputDir && result.category === AgentCategory.Workflow) {
+    const targetRoot = path.isAbsolute(outputDir)
+      ? outputDir
+      : path.join(context.cwd, outputDir);
+    const copiedOutputs: string[] = [];
+    for (const output of result.outputs) {
+      const targetPath = path.join(targetRoot, outputCopyRelativePath(output));
+      await fs.mkdir(path.dirname(targetPath), { recursive: true });
+      await fs.copyFile(output.absolutePath, targetPath);
+      copiedOutputs.push(targetPath);
+    }
+
+    const displayResult: CliRunResult = {
+      ...baseResult,
+      copiedOutputs,
+    };
+    return { copiedOutput: undefined, displayResult };
+  }
+
   if (!outputFile || result.category !== AgentCategory.Workflow) {
     return { copiedOutput: undefined, displayResult: baseResult };
   }
@@ -865,6 +981,19 @@ async function runWorkflowAgent(
     quietLogs: true,
     renderRunProgress,
   };
+  if (init.output && init.outputDir) {
+    throw new CliUsageError('Use either --output or --output-dir, not both.');
+  }
+  const inputFiles = await expandWorkflowInputSpecs(
+    init.inputFiles,
+    runContext.cwd,
+  );
+  if (init.output && inputFiles.length > 1) {
+    throw new CliUsageError(
+      'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.',
+    );
+  }
+
   await initCliPlatform(runContext);
   installCliApprovalHandlers(runContext);
   await loadAgents({ includeRemote: false });
@@ -882,7 +1011,7 @@ async function runWorkflowAgent(
   const config: AgentConfigPayload = {
     agent: init.agent,
     model,
-    inputFiles: [init.input],
+    inputFiles,
     contextFiles: init.contextFiles,
     outputFiles: modelOutputFile ? [modelOutputFile] : [],
     instruction: init.instruction,
@@ -912,6 +1041,7 @@ async function runWorkflowAgent(
 
   const { copiedOutput, displayResult } = await resolveWorkflowOutput(
     init.output,
+    init.outputDir,
     result,
     runContext,
   );

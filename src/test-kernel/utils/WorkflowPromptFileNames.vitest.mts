@@ -8,7 +8,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createFakePlatform } from '@test/support/FakePlatform';
 
 // Local imports - agent output
-import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
+import {
+  getExtractedDocOutputFileName,
+  getSafeDocumentRelativePath,
+} from '@agent/utils/outputFileUtils';
 
 // Local imports - prompt utilities
 import {
@@ -61,6 +64,10 @@ describe('workflow prompt file names', () => {
     );
     expect(getExtractedDocOutputFileName('../main.tex', 'r0')).toBe(
       path.join('r0', 'main.tex'),
+    );
+    expect(getSafeDocumentRelativePath('/tmp/main.tex')).toBe('main.tex');
+    expect(getSafeDocumentRelativePath('chapters/main.tex')).toBe(
+      path.join('chapters', 'main.tex'),
     );
   });
 });
