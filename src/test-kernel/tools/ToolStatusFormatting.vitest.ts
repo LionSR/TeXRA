@@ -12,7 +12,10 @@ import {
   formatListingLine,
   formatTodoSection,
 } from '@tools/executionFormatters';
-import { formatSubagentProgress } from '@tools/subagentResults';
+import {
+  formatSubagentError,
+  formatSubagentProgress,
+} from '@tools/subagentResults';
 
 describe('tool status formatting', () => {
   it('formats execution todos with the shared status display', () => {
@@ -51,6 +54,21 @@ describe('tool status formatting', () => {
     );
     expect(progress).toContain(
       `  ${STATUS_DISPLAY[TODO_STATUS.PENDING].icon} Write response`,
+    );
+  });
+
+  it('marks retryable subagent errors in the orchestrator delivery', () => {
+    const delivery = formatSubagentError(
+      'exec-1',
+      'leanSimplifier',
+      new Error('No output generated - API returned empty response'),
+    );
+
+    expect(delivery).toContain(
+      '<subagent-error id="exec-1" agent="leanSimplifier" retryable="true">',
+    );
+    expect(delivery).toContain(
+      '<message>No output generated - API returned empty response</message>',
     );
   });
 
