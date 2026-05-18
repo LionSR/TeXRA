@@ -18,6 +18,12 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: main
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.1.1
+          run_install: false
+
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
@@ -38,7 +44,6 @@ jobs:
 
       - name: Refresh pnpm lockfile
         run: |
-          corepack enable
           corepack pnpm install --lockfile-only --ignore-scripts
 
       - name: Create Pull Request
