@@ -10,6 +10,8 @@ import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
 export interface RunExecutionRequestOptions {
   runtimeHost: AgentRuntimeHost;
   openWorkflowOutput?: (result: WorkflowFlowResult) => Promise<void>;
+  enforceCategory?: boolean;
+  registerExecution?: boolean;
 }
 
 export async function runValidatedExecutionRequest(
@@ -18,14 +20,22 @@ export async function runValidatedExecutionRequest(
 ): Promise<AgentFlowResult> {
   const executionId =
     request.executionId ?? (generateExecutionId() as ExecutionId);
-  const isResume = request.executionId !== undefined;
+  const shouldRegister =
+    options.registerExecution ?? request.executionId === undefined;
 
-  if (!isResume) {
-    await registerExecution(executionId, request.config, request.config.agent);
+  if (shouldRegister) {
+    await registerExecution(
+      executionId,
+      request.config,
+      request.config.agent,
+      undefined,
+      request.config.agentCategory,
+    );
   }
 
   const result = await executeAgent(request.config, executionId, {
     runtimeHost: options.runtimeHost,
+    enforceCategory: options.enforceCategory,
   });
   if (result.category === 'workflow') {
     await options.openWorkflowOutput?.(result);

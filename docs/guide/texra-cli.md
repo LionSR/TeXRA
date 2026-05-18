@@ -73,9 +73,15 @@ Run a workflow agent from a project directory:
 node packages/cli/dist/bin/texra.js run polish --input paper.tex --output paper.polished.tex --print
 ```
 
-For workflow agents, text output prints the final generated path in run storage
-such as `r1/paper.polished.tex`. If `--output` is provided, TeXRA also copies
-that final artifact to the requested destination.
+Workflow agents always write generated files into the execution's run-storage
+directory first. In text mode, TeXRA prints the final generated run-storage path,
+such as `r1/paper.polished.tex`.
+
+With `--output`, TeXRA also copies the final artifact to the requested
+filesystem destination. JSON and NDJSON output keep `outputs[]` as the
+run-storage source of truth (`relativePath`, `absolutePath`, and `location`),
+include `copiedOutput` when a filesystem copy was written, and report
+`terminalStatus` for the completed run.
 
 ## Execution History
 

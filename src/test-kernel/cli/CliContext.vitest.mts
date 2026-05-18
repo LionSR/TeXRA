@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -81,6 +81,27 @@ describe('CLI context config defaults', () => {
     expect(loaded.warnings.join('\n')).toContain('unknown');
     expect(loaded.warnings.join('\n')).toContain('model');
     expect(loaded.warnings.join('\n')).toContain('chat.other');
+  });
+
+  it('canonicalizes existing workspace paths before reading config', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'texra-cli-context-link-'));
+    const workspace = join(root, 'workspace');
+    const link = join(root, 'linked-workspace');
+    await mkdir(join(workspace, '.texra'), { recursive: true });
+    await writeFile(
+      join(workspace, '.texra', 'config.json'),
+      JSON.stringify({ outputFormat: 'json' }),
+    );
+    await symlink(workspace, link, 'dir');
+
+    const context = await buildCliContext({
+      ambient,
+      env: {},
+      globalArgs: { cwd: link },
+    });
+
+    expect(context.cwd).toBe(await realpath(workspace));
+    expect(context.outputFormat).toBe('json');
   });
 
   it('reports malformed workspace config files without failing', async () => {
