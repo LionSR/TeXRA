@@ -2,31 +2,29 @@ import { dirname } from 'path';
 
 import { z } from 'zod';
 
-import { isRemoteAgent } from '@agent/index';
 import { BaseNode, Flow } from '@agent/node';
 import { recordRound } from '@agent/core/AgentState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   BaseCycleFieldsSchema,
-  getDebugContext,
+  defaultPostCompactionContext,
+  extractModelResponse,
   resetCycleState,
+  saveCycleDebug,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { ProviderUsage } from '@agent/core/ResponseUsage';
 
-import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
-import { getActiveChildren } from '@agent/runtime/executionRegistry';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@agent/core/constants';
 import { bestConnectionMethod } from '@latex';
 import replacementEngine from '@replacement/engine';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
-import { formatPostCompactionContext } from '@tools/subagentResults';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
 import { getSystemPromptWithRules } from '@utils/prompt';
 import { extractScratchpad } from '@utils/text/xmlUtils';
@@ -135,23 +133,15 @@ class ResponsePrepNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    const { config, round } = this.services;
+    const { round } = this.services;
     shared.outputExists = prepRes.exists;
     shared.systemPrompt = prepRes.systemPrompt;
     resetCycleState(shared, ['responseObject', 'processedResponse']);
 
-    await maybeSaveDebugObject({
-      object: shared.messages,
-      objectType: 'messages',
-      context: getDebugContext(this.services, {
-        modelName: config.model,
-        isRemote: isRemoteAgent(config.agent),
-      }),
-      fileOptions: {
-        continuationCount: round.continuationCount,
-        baseName: 'response',
-        outputFile: shared.outputLocation!.relativePath,
-      },
+    await saveCycleDebug(shared.messages, 'messages', this.services, {
+      continuationCount: round.continuationCount,
+      baseName: 'response',
+      outputFile: shared.outputLocation!.relativePath,
     });
 
     return FlowTransition.DEFAULT;
@@ -180,7 +170,7 @@ interface ProcessResult {
   thinkingContent?: string | null;
   useStreaming: boolean;
   responseUsage: ProviderUsage;
-  normalizedUsage: NormalizedUsage;
+  normalizedUsage?: NormalizedUsage;
   repetitionDetected: boolean;
   updatedLastResponse?: string;
   updatedAccumulatedOutput?: string;
@@ -232,7 +222,7 @@ class ResponseProcessNode<C> extends BaseNode<
   }
 
   async exec(prepRes: ProcessPrepResult): Promise<ProcessNodeResult> {
-    const { workspace, logger, modelHandler, setting } = this.services;
+    const { logger } = this.services;
 
     if (prepRes.shouldStop || !prepRes.responseObject) {
       return { kind: 'skipped' };
@@ -247,26 +237,27 @@ class ResponseProcessNode<C> extends BaseNode<
         text: newResponse,
         usage: responseUsage,
         stopReason,
-      } = modelHandler.extractResponse(prepRes.responseObject, setting.endTag);
+        thinking: thinkingContent,
+        useStreaming,
+        normalizedUsage,
+      } = extractModelResponse(
+        prepRes.responseObject,
+        prepRes.responseTimeMs,
+        this.services.setting.endTag,
+        this.services,
+        { normalizeNullUsage: true },
+      );
 
       if (newResponse) {
         logger.debug(`Model response: ${newResponse.slice(0, 100)}`);
       }
-
       if (prepRes.responseTimeMs != null) {
         logger.debug(
           `Response time: ${(prepRes.responseTimeMs / 1000).toFixed(2)}s`,
         );
       }
-
       logger.debug(`Stop reason: ${stopReason}`);
       logger.debug(`Token usage: ${JSON.stringify(responseUsage)}`);
-
-      const thinkingContent = modelHandler.processThinkingBlock(
-        prepRes.responseObject,
-        workspace,
-      );
-      const useStreaming = modelHandler.getStreamingConfig();
 
       if (thinkingContent && !useStreaming) {
         logger.info(thinkingContent, {
@@ -279,17 +270,6 @@ class ResponseProcessNode<C> extends BaseNode<
         logger.info(scratchpad, {
           messageType: MESSAGE_TYPES.SCRATCHPAD,
         });
-      }
-
-      const normalizedUsage = modelHandler.normalizeUsage(
-        responseUsage,
-        prepRes.responseTimeMs ?? 0,
-      );
-
-      const { inputTokens } = normalizedUsage;
-      const contextWindow = modelHandler.getEffectiveContextWindow();
-      if (inputTokens > 0 && contextWindow > 0) {
-        logger.logContextState(inputTokens, contextWindow);
       }
 
       const repetitionResult = checkForMassiveRepetition(
@@ -638,24 +618,11 @@ export function createResponseCycleFlow<C>(): Flow<
     storeResponse: (shared, response) => {
       shared.responseObject = response;
     },
-    getPostCompactionContext: (services) => {
-      const { subagents, processes } = getActiveChildren(services.streamId);
-      return formatPostCompactionContext(
-        subagents,
-        processes,
-        services.workspace.workPlan.toSnapshot(),
-      );
-    },
-    getDebugSaveOptions: (shared, services) => ({
-      context: {
-        modelName: services.config.model,
-        isRemote: isRemoteAgent(services.config.agent),
-      },
-      fileOptions: {
-        continuationCount: services.round.continuationCount,
-        baseName: 'response',
-        outputFile: shared.outputLocation!.relativePath,
-      },
+    getPostCompactionContext: defaultPostCompactionContext,
+    getDebugFileOptions: (shared, services) => ({
+      continuationCount: services.round.continuationCount,
+      baseName: 'response',
+      outputFile: shared.outputLocation!.relativePath,
     }),
   });
   const processNode = new ResponseProcessNode<C>();

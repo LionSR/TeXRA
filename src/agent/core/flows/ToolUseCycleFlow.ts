@@ -3,13 +3,14 @@ import stableStringify from 'fast-json-stable-stringify';
 import { z } from 'zod';
 
 // Local imports - core flow primitives
-import { isRemoteAgent } from '@agent/index';
 import { BaseNode, BatchNode, Flow, Node } from '@agent/node';
 import { recordCycleMetrics } from '@agent/core/AgentState';
 import {
   BaseCycleFieldsSchema,
+  defaultPostCompactionContext,
+  extractModelResponse,
   resetCycleState,
-  getDebugContext,
+  saveCycleDebug,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
@@ -18,9 +19,6 @@ import {
   NormalizedUsageSchema,
   type NormalizedUsage,
 } from '@agent/types/NormalizedUsage';
-
-// Local imports - utilities
-import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 
 // Internal imports - use core ToolTypes as single source of truth
 import {
@@ -33,7 +31,6 @@ import type {
   WorkPlanState,
 } from '@agent/core/AgentWorkspaceState';
 import type { ToolResult } from '@agent/core/ToolTypes';
-import { getActiveChildren } from '@agent/runtime/executionRegistry';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - logging
@@ -44,7 +41,6 @@ import {
   formatZodIssuesForDiagnostics,
   type ValidationErrorDiagnostics,
 } from '@tools/result';
-import { formatPostCompactionContext } from '@tools/subagentResults';
 import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { formatContent } from '@utils/text/xmlUtils';
@@ -270,18 +266,9 @@ class ToolUsePrepNode<C> extends BaseNode<
     ]);
     shared.cycleResponseTimeMs = 0;
 
-    const { config } = this.services;
-    await maybeSaveDebugObject({
-      object: shared.messages,
-      objectType: 'messages',
-      context: getDebugContext(this.services, {
-        modelName: config.model,
-        isRemote: isRemoteAgent(config.agent),
-      }),
-      fileOptions: {
-        continuationCount: shared.cycleIndex,
-        baseName: 'tooluse',
-      },
+    await saveCycleDebug(shared.messages, 'messages', this.services, {
+      continuationCount: shared.cycleIndex,
+      baseName: 'tooluse',
     });
 
     return FlowTransition.DEFAULT;
@@ -331,13 +318,15 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     const services = this.services;
-    const { workspace } = services;
 
-    const thinking = services.modelHandler.processThinkingBlock(
-      prepRes.response,
-      workspace,
-    );
-    const useStreaming = services.modelHandler.getStreamingConfig();
+    const { text, stopReason, thinking, useStreaming, normalizedUsage } =
+      extractModelResponse(
+        prepRes.response,
+        prepRes.responseTimeMs,
+        '',
+        services,
+      );
+
     if (thinking && !useStreaming) {
       const formatted = await formatContent(thinking);
       if (isNonEmptyString(formatted)) {
@@ -348,11 +337,6 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     const toolCalls = services.modelHandler.extractToolUse(prepRes.response);
-    const { text, usage, stopReason } = services.modelHandler.extractResponse(
-      prepRes.response,
-      '',
-    );
-
     const serverToolData = services.modelHandler.extractServerToolData(
       prepRes.response,
     );
@@ -377,19 +361,6 @@ class ToolUseProcessNode<C> extends BaseNode<
         services.logger.info(formatted, {
           messageType: MESSAGE_TYPES.MODEL_RESPONSE,
         });
-      }
-    }
-
-    let normalizedUsage: NormalizedUsage | undefined;
-    if (usage) {
-      normalizedUsage = services.modelHandler.normalizeUsage(
-        usage,
-        prepRes.responseTimeMs ?? 0,
-      );
-      const { inputTokens } = normalizedUsage;
-      const contextWindow = services.modelHandler.getEffectiveContextWindow();
-      if (inputTokens > 0 && contextWindow > 0) {
-        services.logger.logContextState(inputTokens, contextWindow);
       }
     }
 
@@ -891,23 +862,10 @@ export function createToolUseCycleFlow<C>(): Flow<
     storeResponse: (shared, response) => {
       shared.response = response;
     },
-    getPostCompactionContext: (services) => {
-      const { subagents, processes } = getActiveChildren(services.streamId);
-      return formatPostCompactionContext(
-        subagents,
-        processes,
-        services.workspace.workPlan.toSnapshot(),
-      );
-    },
-    getDebugSaveOptions: (shared, services) => ({
-      context: {
-        modelName: services.config.model,
-        isRemote: isRemoteAgent(services.config.agent),
-      },
-      fileOptions: {
-        continuationCount: shared.cycleIndex,
-        baseName: 'tooluse_response',
-      },
+    getPostCompactionContext: defaultPostCompactionContext,
+    getDebugFileOptions: (shared) => ({
+      continuationCount: shared.cycleIndex,
+      baseName: 'tooluse_response',
     }),
   });
   const processNode = new ToolUseProcessNode<C>();
