@@ -1,7 +1,8 @@
 import { isNonEmptyString } from '@utils/core/stringCore';
 
 import type { CliApprovalPolicy } from './approvalPolicy';
-import type { CliGlobalArgs, CliOutputFormat } from './cliContext';
+import type { CliOutputFormat } from './cliConfig';
+import type { CliGlobalArgs } from './cliContext';
 
 /**
  * Shape produced by citty's parser for the four global flags after each
@@ -14,8 +15,8 @@ export interface ParsedGlobalArgs {
   readonly print?: boolean;
   readonly quiet?: boolean;
   readonly cwd?: string;
-  readonly 'output-format': CliOutputFormat;
-  readonly 'approval-policy': CliApprovalPolicy;
+  readonly 'output-format'?: CliOutputFormat;
+  readonly 'approval-policy'?: CliApprovalPolicy;
 }
 
 export function pickGlobalArgs(args: ParsedGlobalArgs): CliGlobalArgs {

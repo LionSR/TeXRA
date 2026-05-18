@@ -1,16 +1,19 @@
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
-
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { listExecutions } from '@agent/storage';
-import { DEFAULT_AGENT_MODEL } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { isNonEmptyString } from '@utils/core/stringCore';
 import { GlobalStorageFS } from '@utils/files/storageFS';
+import {
+  CLI_BUILTIN_DEFAULT_MODEL,
+  loadWorkspaceCliConfig,
+  resolveConfiguredAgent,
+  resolveConfiguredModel,
+  type CliConfigValues,
+} from './cliConfig';
 
 export const BUILTIN_DEFAULT_CHAT_AGENT = 'chat';
-export const BUILTIN_DEFAULT_CHAT_MODEL = DEFAULT_AGENT_MODEL;
+export const BUILTIN_DEFAULT_CHAT_MODEL = CLI_BUILTIN_DEFAULT_MODEL;
 
 export interface ChatDefaults {
   readonly agent: string;
@@ -31,7 +34,6 @@ interface PartialDefaults {
 }
 
 const CONFIG_FILE = 'config.json';
-const WORKSPACE_CONFIG_DIR = '.texra';
 
 function pickDefaults(parsed: unknown): PartialDefaults {
   if (typeof parsed !== 'object' || parsed === null) return {};
@@ -47,15 +49,11 @@ function pickDefaults(parsed: unknown): PartialDefaults {
 }
 
 async function loadWorkspaceDefaults(cwd: string): Promise<PartialDefaults> {
-  try {
-    const raw = await readFile(
-      path.join(cwd, WORKSPACE_CONFIG_DIR, CONFIG_FILE),
-      'utf8',
-    );
-    return pickDefaults(JSON.parse(raw));
-  } catch {
-    return {};
-  }
+  const loaded = await loadWorkspaceCliConfig(cwd);
+  return {
+    agent: resolveConfiguredAgent(loaded.values, 'chat'),
+    model: resolveConfiguredModel(loaded.values, 'chat'),
+  };
 }
 
 async function loadUserDefaults(): Promise<PartialDefaults> {
@@ -99,6 +97,9 @@ export interface ResolveChatDefaultsInit {
   readonly cwd: string;
   readonly agentOverride?: string;
   readonly modelOverride?: string;
+  readonly envAgent?: string;
+  readonly envModel?: string;
+  readonly workspaceConfig?: CliConfigValues;
 }
 
 /**
@@ -112,14 +113,28 @@ export async function resolveChatDefaults(
 ): Promise<ChatDefaults> {
   const overrideAgent = init.agentOverride?.trim();
   const overrideModel = init.modelOverride?.trim();
+  const envAgent = init.envAgent?.trim();
+  const envModel = init.envModel?.trim();
 
   if (overrideAgent && overrideModel) {
     return { agent: overrideAgent, model: overrideModel, source: 'mixed' };
   }
+  if ((overrideAgent || envAgent) && (overrideModel || envModel)) {
+    return {
+      agent: overrideAgent || envAgent || BUILTIN_DEFAULT_CHAT_AGENT,
+      model: overrideModel || envModel || BUILTIN_DEFAULT_CHAT_MODEL,
+      source: 'mixed',
+    };
+  }
 
   // Tiers are independent I/O — fan out in parallel.
   const [workspace, user, history] = await Promise.all([
-    loadWorkspaceDefaults(init.cwd),
+    init.workspaceConfig
+      ? Promise.resolve({
+          agent: resolveConfiguredAgent(init.workspaceConfig, 'chat'),
+          model: resolveConfiguredModel(init.workspaceConfig, 'chat'),
+        })
+      : loadWorkspaceDefaults(init.cwd),
     loadUserDefaults(),
     loadHistoryDefaults(),
   ]);
@@ -133,8 +148,8 @@ export async function resolveChatDefaults(
     agent?: ChatDefaultSource;
     model?: ChatDefaultSource;
   } = {};
-  let agent = overrideAgent;
-  let model = overrideModel;
+  let agent = overrideAgent || envAgent;
+  let model = overrideModel || envModel;
 
   for (const [source, defaults] of tiers) {
     if (!agent && defaults.agent) {

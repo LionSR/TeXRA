@@ -383,6 +383,9 @@ export async function runChat(
     cwd: context.cwd,
     agentOverride: init.agentOverride,
     modelOverride: init.modelOverride,
+    envAgent: context.envAgent,
+    envModel: context.envModel,
+    workspaceConfig: context.cliConfig,
   });
   const { agent, model } = defaults;
   await setCliHelperModel(model);
