@@ -69,7 +69,7 @@ export async function setCliHelperModel(
 export async function initCliPlatform(
   context: Pick<
     CliContext,
-    'cwd' | 'resourcesPath' | 'helperModel' | 'quietLogs'
+    'apiMode' | 'cwd' | 'resourcesPath' | 'helperModel' | 'quietLogs'
   > & { skipIncludedModelAccess?: boolean },
 ): Promise<void> {
   cliWorkspaceCwd = context.cwd;
@@ -104,7 +104,9 @@ export async function initCliPlatform(
     serverSideKeysInitialized = true;
   }
 
-  const authed = context.skipIncludedModelAccess
+  const forcePersonalApiKeys =
+    context.skipIncludedModelAccess === true || context.apiMode === 'personal';
+  const authed = forcePersonalApiKeys
     ? false
     : await getCliAuthProvider().isAuthenticated();
   await getServerSideKeyService().setUseIncludedModelAccess(authed);

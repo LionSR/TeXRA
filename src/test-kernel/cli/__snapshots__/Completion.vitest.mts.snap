@@ -21,7 +21,7 @@ _texra_completion_path() {
   while (( i < COMP_CWORD )); do
     token="\${COMP_WORDS[i]}"
     case "$token" in
-      --output-format|--approval-policy|--cwd|--agent|--model|-m|--input|-i|--output|--instruction|--provider|--month|--login-hint)
+      --output-format|--approval-policy|--api-mode|--cwd|--agent|--model|-m|--input|-i|--output|--instruction|--provider|--month|--login-hint)
         ((i+=2)); continue ;;
       --*=*|-*) ((i++)); continue ;;
     esac
@@ -50,26 +50,26 @@ _texra() {
 
   path="$(_texra_completion_path)"
   case "$path" in
-    '') subcommands='chat run resume history agents models login logout usage auth doctor completion version help'; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
-    'chat') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy --agent --model -m' ;;
-    'run') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy --input -i --output --model -m --instruction' ;;
-    'resume') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
+    '') subcommands='chat run resume history agents models login logout usage auth doctor completion version help'; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
+    'chat') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy --agent --model -m' ;;
+    'run') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy --input -i --output --model -m --instruction' ;;
+    'resume') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
     'history') subcommands='list show delete'; flags='' ;;
-    'history list') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
-    'history show') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
-    'history delete') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy --all' ;;
+    'history list') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
+    'history show') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
+    'history delete') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy --all' ;;
     'agents') subcommands='list'; flags='' ;;
-    'agents list') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
+    'agents list') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
     'models') subcommands='list'; flags='' ;;
-    'models list') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
-    'login') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy --provider --no-browser --select-account --login-hint' ;;
-    'logout') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
-    'usage') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy --month' ;;
+    'models list') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
+    'login') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy --provider --no-browser --select-account --login-hint' ;;
+    'logout') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
+    'usage') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy --month' ;;
     'auth') subcommands='status usage'; flags='' ;;
-    'auth status') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
-    'auth usage') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy --month' ;;
-    'doctor') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
-    'completion') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
+    'auth status') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
+    'auth usage') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy --month' ;;
+    'doctor') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
+    'completion') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
     'version') subcommands=''; flags='' ;;
     'help') subcommands=''; flags='' ;;
     *) subcommands='chat run resume history agents models login logout usage auth doctor completion version help'; flags='' ;;
@@ -115,11 +115,13 @@ complete -c texra -n '__fish_use_subcommand' -a 'help'
 complete -c texra -n '__fish_use_subcommand' -l 'print' -s 'p'
 complete -c texra -n '__fish_use_subcommand' -l 'quiet' -s 'q'
 complete -c texra -n '__fish_use_subcommand' -l 'cwd' -r
+complete -c texra -n '__fish_use_subcommand' -l 'api-mode' -r
 complete -c texra -n '__fish_use_subcommand' -l 'output-format' -r -a 'text json ndjson'
 complete -c texra -n '__fish_use_subcommand' -l 'approval-policy' -r -a 'never ask yolo'
 complete -c texra -n '__fish_seen_subcommand_from chat' -l 'print' -s 'p'
 complete -c texra -n '__fish_seen_subcommand_from chat' -l 'quiet' -s 'q'
 complete -c texra -n '__fish_seen_subcommand_from chat' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from chat' -l 'api-mode' -r
 complete -c texra -n '__fish_seen_subcommand_from chat' -l 'output-format' -r -a 'text json ndjson'
 complete -c texra -n '__fish_seen_subcommand_from chat' -l 'approval-policy' -r -a 'never ask yolo'
 complete -c texra -n '__fish_seen_subcommand_from chat' -l 'agent' -r
@@ -127,6 +129,7 @@ complete -c texra -n '__fish_seen_subcommand_from chat' -l 'model' -s 'm' -r
 complete -c texra -n '__fish_seen_subcommand_from run' -l 'print' -s 'p'
 complete -c texra -n '__fish_seen_subcommand_from run' -l 'quiet' -s 'q'
 complete -c texra -n '__fish_seen_subcommand_from run' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from run' -l 'api-mode' -r
 complete -c texra -n '__fish_seen_subcommand_from run' -l 'output-format' -r -a 'text json ndjson'
 complete -c texra -n '__fish_seen_subcommand_from run' -l 'approval-policy' -r -a 'never ask yolo'
 complete -c texra -n '__fish_seen_subcommand_from run' -l 'input' -s 'i' -r
@@ -136,6 +139,7 @@ complete -c texra -n '__fish_seen_subcommand_from run' -l 'instruction' -r
 complete -c texra -n '__fish_seen_subcommand_from resume' -l 'print' -s 'p'
 complete -c texra -n '__fish_seen_subcommand_from resume' -l 'quiet' -s 'q'
 complete -c texra -n '__fish_seen_subcommand_from resume' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from resume' -l 'api-mode' -r
 complete -c texra -n '__fish_seen_subcommand_from resume' -l 'output-format' -r -a 'text json ndjson'
 complete -c texra -n '__fish_seen_subcommand_from resume' -l 'approval-policy' -r -a 'never ask yolo'
 complete -c texra -n '__fish_seen_subcommand_from history' -a 'list'
@@ -144,16 +148,19 @@ complete -c texra -n '__fish_seen_subcommand_from history' -a 'delete'
 complete -c texra -n '__fish_seen_subcommand_from list' -l 'print' -s 'p'
 complete -c texra -n '__fish_seen_subcommand_from list' -l 'quiet' -s 'q'
 complete -c texra -n '__fish_seen_subcommand_from list' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from list' -l 'api-mode' -r
 complete -c texra -n '__fish_seen_subcommand_from list' -l 'output-format' -r -a 'text json ndjson'
 complete -c texra -n '__fish_seen_subcommand_from list' -l 'approval-policy' -r -a 'never ask yolo'
 complete -c texra -n '__fish_seen_subcommand_from show' -l 'print' -s 'p'
 complete -c texra -n '__fish_seen_subcommand_from show' -l 'quiet' -s 'q'
 complete -c texra -n '__fish_seen_subcommand_from show' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from show' -l 'api-mode' -r
 complete -c texra -n '__fish_seen_subcommand_from show' -l 'output-format' -r -a 'text json ndjson'
 complete -c texra -n '__fish_seen_subcommand_from show' -l 'approval-policy' -r -a 'never ask yolo'
 complete -c texra -n '__fish_seen_subcommand_from delete' -l 'print' -s 'p'
 complete -c texra -n '__fish_seen_subcommand_from delete' -l 'quiet' -s 'q'
 complete -c texra -n '__fish_seen_subcommand_from delete' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from delete' -l 'api-mode' -r
 complete -c texra -n '__fish_seen_subcommand_from delete' -l 'output-format' -r -a 'text json ndjson'
 complete -c texra -n '__fish_seen_subcommand_from delete' -l 'approval-policy' -r -a 'never ask yolo'
 complete -c texra -n '__fish_seen_subcommand_from delete' -l 'all'
@@ -161,17 +168,20 @@ complete -c texra -n '__fish_seen_subcommand_from agents' -a 'list'
 complete -c texra -n '__fish_seen_subcommand_from list' -l 'print' -s 'p'
 complete -c texra -n '__fish_seen_subcommand_from list' -l 'quiet' -s 'q'
 complete -c texra -n '__fish_seen_subcommand_from list' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from list' -l 'api-mode' -r
 complete -c texra -n '__fish_seen_subcommand_from list' -l 'output-format' -r -a 'text json ndjson'
 complete -c texra -n '__fish_seen_subcommand_from list' -l 'approval-policy' -r -a 'never ask yolo'
 complete -c texra -n '__fish_seen_subcommand_from models' -a 'list'
 complete -c texra -n '__fish_seen_subcommand_from list' -l 'print' -s 'p'
 complete -c texra -n '__fish_seen_subcommand_from list' -l 'quiet' -s 'q'
 complete -c texra -n '__fish_seen_subcommand_from list' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from list' -l 'api-mode' -r
 complete -c texra -n '__fish_seen_subcommand_from list' -l 'output-format' -r -a 'text json ndjson'
 complete -c texra -n '__fish_seen_subcommand_from list' -l 'approval-policy' -r -a 'never ask yolo'
 complete -c texra -n '__fish_seen_subcommand_from login' -l 'print' -s 'p'
 complete -c texra -n '__fish_seen_subcommand_from login' -l 'quiet' -s 'q'
 complete -c texra -n '__fish_seen_subcommand_from login' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from login' -l 'api-mode' -r
 complete -c texra -n '__fish_seen_subcommand_from login' -l 'output-format' -r -a 'text json ndjson'
 complete -c texra -n '__fish_seen_subcommand_from login' -l 'approval-policy' -r -a 'never ask yolo'
 complete -c texra -n '__fish_seen_subcommand_from login' -l 'provider' -r
@@ -181,11 +191,13 @@ complete -c texra -n '__fish_seen_subcommand_from login' -l 'login-hint' -r
 complete -c texra -n '__fish_seen_subcommand_from logout' -l 'print' -s 'p'
 complete -c texra -n '__fish_seen_subcommand_from logout' -l 'quiet' -s 'q'
 complete -c texra -n '__fish_seen_subcommand_from logout' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from logout' -l 'api-mode' -r
 complete -c texra -n '__fish_seen_subcommand_from logout' -l 'output-format' -r -a 'text json ndjson'
 complete -c texra -n '__fish_seen_subcommand_from logout' -l 'approval-policy' -r -a 'never ask yolo'
 complete -c texra -n '__fish_seen_subcommand_from usage' -l 'print' -s 'p'
 complete -c texra -n '__fish_seen_subcommand_from usage' -l 'quiet' -s 'q'
 complete -c texra -n '__fish_seen_subcommand_from usage' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from usage' -l 'api-mode' -r
 complete -c texra -n '__fish_seen_subcommand_from usage' -l 'output-format' -r -a 'text json ndjson'
 complete -c texra -n '__fish_seen_subcommand_from usage' -l 'approval-policy' -r -a 'never ask yolo'
 complete -c texra -n '__fish_seen_subcommand_from usage' -l 'month' -r
@@ -194,22 +206,26 @@ complete -c texra -n '__fish_seen_subcommand_from auth' -a 'usage'
 complete -c texra -n '__fish_seen_subcommand_from status' -l 'print' -s 'p'
 complete -c texra -n '__fish_seen_subcommand_from status' -l 'quiet' -s 'q'
 complete -c texra -n '__fish_seen_subcommand_from status' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from status' -l 'api-mode' -r
 complete -c texra -n '__fish_seen_subcommand_from status' -l 'output-format' -r -a 'text json ndjson'
 complete -c texra -n '__fish_seen_subcommand_from status' -l 'approval-policy' -r -a 'never ask yolo'
 complete -c texra -n '__fish_seen_subcommand_from usage' -l 'print' -s 'p'
 complete -c texra -n '__fish_seen_subcommand_from usage' -l 'quiet' -s 'q'
 complete -c texra -n '__fish_seen_subcommand_from usage' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from usage' -l 'api-mode' -r
 complete -c texra -n '__fish_seen_subcommand_from usage' -l 'output-format' -r -a 'text json ndjson'
 complete -c texra -n '__fish_seen_subcommand_from usage' -l 'approval-policy' -r -a 'never ask yolo'
 complete -c texra -n '__fish_seen_subcommand_from usage' -l 'month' -r
 complete -c texra -n '__fish_seen_subcommand_from doctor' -l 'print' -s 'p'
 complete -c texra -n '__fish_seen_subcommand_from doctor' -l 'quiet' -s 'q'
 complete -c texra -n '__fish_seen_subcommand_from doctor' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from doctor' -l 'api-mode' -r
 complete -c texra -n '__fish_seen_subcommand_from doctor' -l 'output-format' -r -a 'text json ndjson'
 complete -c texra -n '__fish_seen_subcommand_from doctor' -l 'approval-policy' -r -a 'never ask yolo'
 complete -c texra -n '__fish_seen_subcommand_from completion' -l 'print' -s 'p'
 complete -c texra -n '__fish_seen_subcommand_from completion' -l 'quiet' -s 'q'
 complete -c texra -n '__fish_seen_subcommand_from completion' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from completion' -l 'api-mode' -r
 complete -c texra -n '__fish_seen_subcommand_from completion' -l 'output-format' -r -a 'text json ndjson'
 complete -c texra -n '__fish_seen_subcommand_from completion' -l 'approval-policy' -r -a 'never ask yolo'
 complete -c texra -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
@@ -238,28 +254,28 @@ _texra() {
   [[ -n "\${words[3]}" && "\${words[3]}" != -* ]] && path="$path \${words[3]}"
 
   case "$path" in
-    'chat') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--agent[Tool-use agent for the session]:value:' '--model[Model for the session]:value:' '-m[Model for the session]:value:' ;;
-    'run') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--input[Input file passed to the workflow agent]:value:' '-i[Input file passed to the workflow agent]:value:' '--output[Output file path]:value:' '--model[Model for the agent]:value:' '-m[Model for the agent]:value:' '--instruction[Instruction passed to the workflow agent]:value:' '1:agent:($(_texra_agents))' ;;
-    'resume') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'chat') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--agent[Tool-use agent for the session]:value:' '--model[Model for the session]:value:' '-m[Model for the session]:value:' ;;
+    'run') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--input[Input file passed to the workflow agent]:value:' '-i[Input file passed to the workflow agent]:value:' '--output[Output file path]:value:' '--model[Model for the agent]:value:' '-m[Model for the agent]:value:' '--instruction[Instruction passed to the workflow agent]:value:' '1:agent:($(_texra_agents))' ;;
+    'resume') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
     'history') _values 'subcommands' 'list' 'show' 'delete'; true ;;
-    'history list') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
-    'history show') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
-    'history delete') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--all[Delete all stored executions]' ;;
+    'history list') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'history show') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'history delete') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--all[Delete all stored executions]' ;;
     'agents') _values 'subcommands' 'list'; true ;;
-    'agents list') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'agents list') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
     'models') _values 'subcommands' 'list'; true ;;
-    'models list') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
-    'login') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--provider[OAuth provider: github or google (alternative to positional)]:value:' '--no-browser[Print the sign-in URL instead of opening a browser]' '--select-account[Ask the OAuth provider to show account selection when supported]' '--login-hint[Suggest a specific provider account, such as a GitHub username or Google email]:value:' ;;
-    'logout') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
-    'usage') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--month[UTC month to show, formatted as YYYY-MM]:value:' ;;
+    'models list') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'login') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--provider[OAuth provider: github or google (alternative to positional)]:value:' '--no-browser[Print the sign-in URL instead of opening a browser]' '--select-account[Ask the OAuth provider to show account selection when supported]' '--login-hint[Suggest a specific provider account, such as a GitHub username or Google email]:value:' ;;
+    'logout') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'usage') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--month[UTC month to show, formatted as YYYY-MM]:value:' ;;
     'auth') _values 'subcommands' 'status' 'usage'; true ;;
-    'auth status') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
-    'auth usage') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--month[UTC month to show, formatted as YYYY-MM]:value:' ;;
-    'doctor') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
-    'completion') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '1:shell:(bash zsh fish)' ;;
+    'auth status') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'auth usage') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--month[UTC month to show, formatted as YYYY-MM]:value:' ;;
+    'doctor') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'completion') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '1:shell:(bash zsh fish)' ;;
     'version') true; true ;;
     'help') true; true ;;
-    *) _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '1:command:(chat run resume history agents models login logout usage auth doctor completion version help)' ;;
+    *) _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '1:command:(chat run resume history agents models login logout usage auth doctor completion version help)' ;;
   esac
 }
 

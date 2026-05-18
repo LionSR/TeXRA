@@ -103,4 +103,38 @@ describe('CLI context config defaults', () => {
     expect(context.envModel).toBeUndefined();
     expect(context.configWarnings?.join('\n')).toContain('TEXRA_MODEL');
   });
+
+  it('parses TEXRA_API_MODE aliases before runtime initialization', async () => {
+    const context = await buildCliContext({
+      ambient,
+      env: { TEXRA_API_MODE: 'direct' },
+      globalArgs: { cwd: '/tmp/no-such-texra-workspace' },
+    });
+
+    expect(context.apiMode).toBe('personal');
+  });
+
+  it('lets --api-mode override TEXRA_API_MODE', async () => {
+    const context = await buildCliContext({
+      ambient,
+      env: { TEXRA_API_MODE: 'personal' },
+      globalArgs: {
+        apiMode: 'included',
+        cwd: '/tmp/no-such-texra-workspace',
+      },
+    });
+
+    expect(context.apiMode).toBe('included');
+  });
+
+  it('reports invalid TEXRA_API_MODE values without failing', async () => {
+    const context = await buildCliContext({
+      ambient,
+      env: { TEXRA_API_MODE: 'unknown-mode' },
+      globalArgs: { cwd: '/tmp/no-such-texra-workspace' },
+    });
+
+    expect(context.apiMode).toBeUndefined();
+    expect(context.configWarnings?.join('\n')).toContain('TEXRA_API_MODE');
+  });
 });
