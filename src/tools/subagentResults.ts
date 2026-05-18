@@ -13,6 +13,7 @@ import type {
   OutputFileSummary,
 } from '@agent/runtime/AgentFlowResult';
 import type { ExecResult } from '@agent/types/ResultTypes';
+import { normalizeProviderError } from '@common/errors';
 import type {
   ActiveChildInfo,
   SubagentProgressUpdate,
@@ -171,16 +172,19 @@ export function formatSubagentError(
   err: unknown,
   options?: { wallTimeMs?: number; workingDirectory?: string },
 ): string {
-  const message = err instanceof Error ? err.message : String(err);
+  const formatted = normalizeProviderError(err);
   const lines = [
-    `<subagent-error id="${escapeAttr(executionId)}" agent="${escapeAttr(agentName)}">`,
+    `<subagent-error id="${escapeAttr(executionId)}" agent="${escapeAttr(agentName)}" retryable="${formatted.userRetryable ? 'true' : 'false'}">`,
   ];
   if (options?.wallTimeMs !== undefined) {
     lines.push(`<wall-time>${formatDuration(options.wallTimeMs)}</wall-time>`);
   }
   const wdElement = workingDirectoryElement(options?.workingDirectory);
   if (wdElement) lines.push(wdElement);
-  lines.push(`<message>${escapeText(message)}</message>`, '</subagent-error>');
+  lines.push(
+    `<message>${escapeText(formatted.message)}</message>`,
+    '</subagent-error>',
+  );
   return lines.join('\n');
 }
 

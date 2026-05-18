@@ -1,13 +1,22 @@
 // Registers the slash commands the input palette surfaces.
 
 import { ApiModeForm } from '../forms/ApiModeForm';
+import { AgentListForm } from '../forms/AgentListForm';
 import { ModelListForm } from '../forms/ModelListForm';
 import { cliState } from '../state/cliState';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 import type { CliApiMode } from '../../../runtime/apiAccessMode';
 
+type AgentSelectHandler = (value: string) => void | Promise<void>;
 type ModelSelectHandler = (value: string) => void | Promise<void>;
 type ApiModeSelectHandler = (value: CliApiMode) => void | Promise<void>;
+
+const defaultAgentSelect: AgentSelectHandler = (value) => {
+  cliState.sessionMeta.set({
+    ...cliState.sessionMeta.get(),
+    agent: value,
+  });
+};
 
 const defaultModelSelect: ModelSelectHandler = (value) => {
   cliState.sessionMeta.set({
@@ -24,12 +33,32 @@ const defaultApiModeSelect: ApiModeSelectHandler = (value) => {
 };
 
 export function registerBuiltinSlashCommands(options?: {
+  onAgentSelect?: AgentSelectHandler;
+  canSelectAgent?: () => boolean;
   onModelSelect?: ModelSelectHandler;
   canSelectModel?: () => boolean;
   onApiModeSelect?: ApiModeSelectHandler;
 }): void {
+  const onAgentSelect = options?.onAgentSelect ?? defaultAgentSelect;
   const onModelSelect = options?.onModelSelect ?? defaultModelSelect;
   const onApiModeSelect = options?.onApiModeSelect ?? defaultApiModeSelect;
+
+  function AgentListFormAdapter(props: SlashFormProps): React.JSX.Element {
+    const current = cliState.sessionMeta.get().agent;
+    const selectable = options?.canSelectAgent?.() ?? true;
+    return (
+      <AgentListForm
+        currentAgent={current}
+        selectable={selectable}
+        onSelect={(value) => {
+          void Promise.resolve(onAgentSelect(value)).finally(() =>
+            props.onDone(value),
+          );
+        }}
+        onClose={() => props.onDone(undefined)}
+      />
+    );
+  }
 
   function ApiModeFormAdapter(props: SlashFormProps): React.JSX.Element {
     const current = cliState.sessionMeta.get().apiMode;
@@ -74,7 +103,8 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'agent',
-    description: 'Switch the active agent',
+    description: 'List or choose the root agent',
+    formComponent: AgentListFormAdapter,
   });
   registerSlashCommand({
     name: 'model',
