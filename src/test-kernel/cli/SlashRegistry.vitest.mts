@@ -40,6 +40,12 @@ describe('slashRegistry', () => {
         formComponent: expect.any(Function),
       }),
     );
+    expect(listSlashCommands().find((cmd) => cmd.name === 'approval')).toEqual(
+      expect.objectContaining({
+        description: 'Switch approval policy',
+        formComponent: expect.any(Function),
+      }),
+    );
   });
 
   it('matches by name prefix case-insensitively', () => {

@@ -48,6 +48,7 @@ function slice(
     queuedFollowUps: 0,
     activeSubagents: [],
     activeProcesses: [],
+    childStreams: [],
     todos: [],
     plan: null,
     processOutput: new Map(),
@@ -115,6 +116,36 @@ describe('CLI stream tabs strip', () => {
       'setup(idle)',
       '[bash]*',
     ]);
+  });
+
+  it('keeps inactive subagent pages visible while their transcript slice exists', () => {
+    const root = streamId('root');
+    const child1 = streamId('child-1');
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [
+        root,
+        slice('root', {
+          status: STREAM_STATUS.WAITING,
+          childStreams: [
+            child({
+              executionId: 'r1',
+              childStreamId: child1,
+              agentName: 'polish',
+            }),
+          ],
+        }),
+      ],
+      [child1, slice('child-1', { status: STREAM_STATUS.WAITING })],
+    ]);
+
+    const items = streamTabsDisplayItems({
+      activeStreamId: root,
+      streams,
+      parentStream: new Map([[child1, root]]),
+      width: 80,
+    });
+
+    expect(items.map(streamTabSegmentText)).toEqual(['[main]', 'polish(idle)']);
   });
 
   it('collapses the middle entries under narrow widths while preserving focus', () => {
