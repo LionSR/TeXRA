@@ -4,13 +4,22 @@ import * as path from 'node:path';
 import { defineCommand, runCommand, showUsage, type CommandDef } from 'citty';
 
 import { getAgent, getVisibleAgents, loadAgents } from '@agent/index';
-import { type AgentConfigPayload } from '@agent/core/AgentConfig';
+import { writeTerminalStatus } from '@agent/storage';
+import {
+  AgentConfigSchema,
+  type AgentConfigPayload,
+} from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { executeAgent } from '@agent/runtime/executeAgent';
+import { runValidatedExecutionRequest } from '@agent/runtime/runExecutionRequest';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { isOAuthProvider } from '@auth/sharedConfig';
 import { toErrorMessage } from '@common/errors/errorMessage';
-import type { ExecutionId } from '@shared/schemas';
+import {
+  EXECUTION_STATUS,
+  type ExecutionId,
+  type ExecutionStatus,
+} from '@shared/schemas';
+import { generateExecutionId } from '@utils/core/executionId';
 import { isNonEmptyString } from '@utils/core/stringCore';
 
 import {
@@ -742,7 +751,13 @@ const runWorkflowCommand = defineCommand({
   },
 });
 
-type ExecuteAgentResult = Awaited<ReturnType<typeof executeAgent>>;
+type ExecuteAgentResult = Awaited<
+  ReturnType<typeof runValidatedExecutionRequest>
+>;
+type CliRunResult = ExecuteAgentResult & {
+  terminalStatus: ExecutionStatus;
+  copiedOutput?: string;
+};
 
 interface WorkflowRunInit {
   readonly agent: string;
@@ -758,15 +773,20 @@ async function resolveWorkflowOutput(
   context: CliContext,
 ): Promise<{
   copiedOutput: string | undefined;
-  displayResult: ExecuteAgentResult;
+  displayResult: CliRunResult;
 }> {
+  const baseResult: CliRunResult = {
+    ...result,
+    terminalStatus: cliTerminalStatus(result),
+  };
   if (!outputFile || result.category !== AgentCategory.Workflow) {
-    return { copiedOutput: undefined, displayResult: result };
+    return { copiedOutput: undefined, displayResult: baseResult };
   }
 
-  const finalOutputIndex = result.outputs.length - 1;
-  const finalOutput = result.outputs[finalOutputIndex];
-  if (!finalOutput) return { copiedOutput: undefined, displayResult: result };
+  const finalOutput = result.outputs.at(-1);
+  if (!finalOutput) {
+    return { copiedOutput: undefined, displayResult: baseResult };
+  }
 
   const targetPath = path.isAbsolute(outputFile)
     ? outputFile
@@ -776,15 +796,17 @@ async function resolveWorkflowOutput(
     await fs.copyFile(finalOutput.absolutePath, targetPath);
   }
 
-  const displayResult: ExecuteAgentResult = {
-    ...result,
-    outputs: result.outputs.map((output, index) =>
-      index === finalOutputIndex
-        ? { ...output, absolutePath: targetPath }
-        : output,
-    ),
+  const displayResult: CliRunResult = {
+    ...baseResult,
+    copiedOutput: targetPath,
   };
   return { copiedOutput: targetPath, displayResult };
+}
+
+function cliTerminalStatus(result: ExecuteAgentResult): ExecutionStatus {
+  return result.status === 'error'
+    ? EXECUTION_STATUS.ERROR
+    : EXECUTION_STATUS.COMPLETED;
 }
 
 async function runWorkflowAgent(
@@ -824,12 +846,25 @@ async function runWorkflowAgent(
     outputFiles: modelOutputFile ? [modelOutputFile] : [],
     instruction: init.instruction,
     workingDirectory: runContext.cwd,
+    agentCategory: AgentCategory.Workflow,
   };
 
+  const executionId = generateExecutionId();
+  const registeredConfig = AgentConfigSchema.parse(config);
   const runtimeHost = createCliRuntimeHost(runContext);
   let result: ExecuteAgentResult;
   try {
-    result = await executeAgent(config, undefined, { runtimeHost });
+    result = await runValidatedExecutionRequest(
+      { config: registeredConfig, executionId },
+      {
+        runtimeHost,
+        enforceCategory: true,
+        registerExecution: true,
+      },
+    );
+  } catch (error) {
+    await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+    throw error;
   } finally {
     await runtimeHost.close();
   }
@@ -918,7 +953,10 @@ async function runResumeExecution(
   const runtimeHost = createCliRuntimeHost(runContext);
   let result: ExecuteAgentResult;
   try {
-    result = await executeAgent(config, undefined, { runtimeHost });
+    result = await runValidatedExecutionRequest(
+      { config, executionId: id },
+      { runtimeHost },
+    );
   } finally {
     await runtimeHost.close();
   }
