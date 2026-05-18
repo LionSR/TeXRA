@@ -944,7 +944,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // classification; AnthropicUserAbortError is a sibling of
         // AnthropicAPIError, so wrapping it would break downstream
         // `instanceof AnthropicUserAbortError` checks.
-        const isAbort = isUserAbort(streamError);
+        const isAbort =
+          streamError instanceof AnthropicUserAbortError ||
+          isUserAbort(streamError);
         let enrichedError: unknown = streamError;
         if (
           !stream.currentMessage &&
