@@ -89,6 +89,7 @@ function isEditLikeTool(toolName: string): boolean {
   const name = lastSegmentToolName(toolName).toLowerCase();
   return (
     name === 'edit' ||
+    name === 'edit_file' ||
     name === 'multiedit' ||
     name.includes('str_replace') ||
     name.includes('text_editor')
