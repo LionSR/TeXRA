@@ -263,23 +263,30 @@ export class ToolCard extends LitElement {
     },
   };
 
-  private renderBadge(): TemplateResult {
+  private renderAvailableStatusIcon(): TemplateResult {
+    const config = ToolCard.STATUS_CONFIG.available;
+    const label = this.item.statusLabel ?? config.label;
+
+    return html`
+      <span
+        class="tool-status-icon"
+        role="img"
+        aria-label=${label}
+        title=${label}
+      >
+        <wa-icon library="texra" name=${config.icon}></wa-icon>
+      </span>
+    `;
+  }
+
+  private renderStatusBadge(): TemplateResult {
     const { status } = this.item;
     const config =
       ToolCard.STATUS_CONFIG[status] ?? ToolCard.STATUS_CONFIG.unknown;
     const label = this.item.statusLabel ?? config.label;
 
     if (status === 'available') {
-      return html`
-        <span
-          class="tool-status-icon"
-          role="img"
-          aria-label=${label}
-          title=${label}
-        >
-          <wa-icon library="texra" name=${config.icon}></wa-icon>
-        </span>
-      `;
+      return this.renderAvailableStatusIcon();
     }
 
     return html`
@@ -452,9 +459,13 @@ export class ToolCard extends LitElement {
       <div class="tool-card">
         <div class="tool-header">
           <div class="tool-title-group">
-            ${this.item.status === 'available' ? this.renderBadge() : nothing}
+            ${this.item.status === 'available'
+              ? this.renderAvailableStatusIcon()
+              : nothing}
             <span class="tool-name">${this.item.name}</span>
-            ${this.item.status !== 'available' ? this.renderBadge() : nothing}
+            ${this.item.status === 'available'
+              ? this.renderAvailableStatusIcon()
+              : this.renderStatusBadge()}
             ${this.renderAuthNote()}
           </div>
           ${this.renderToggle()}
