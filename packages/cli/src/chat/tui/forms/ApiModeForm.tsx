@@ -45,8 +45,8 @@ export function ApiModeForm(props: ApiModeFormProps): React.JSX.Element {
         Choose which credentials model calls should use. Press 1 for API keys.
       </Text>
       <Box marginTop={1} flexDirection="column">
-        {statusLines.map((line) => (
-          <Text key={line} dimColor>
+        {statusLines.map((line, index) => (
+          <Text key={`${index}:${line}`} dimColor>
             {line}
           </Text>
         ))}
