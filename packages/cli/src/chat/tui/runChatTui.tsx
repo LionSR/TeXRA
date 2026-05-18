@@ -41,6 +41,12 @@ import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
 } from '../../runtime/approvalPolicy';
+import {
+  formatCliHistoryText,
+  listCliHistoryEntries,
+  parseCliHistoryId,
+  readCliHistoryConfig,
+} from '../../runtime/history';
 import { App } from './App';
 import { ApiModeForm } from './forms/ApiModeForm';
 import { renderHeaderBanner } from './panes/HeaderBanner';
@@ -91,6 +97,7 @@ interface SlashCommandContext {
   readonly requestInputExit: () => void;
   readonly getApprovalPolicy: () => CliApprovalPolicy;
   readonly setApprovalPolicy: (policy: CliApprovalPolicy) => void;
+  readonly startStoredExecution: (config: AgentConfigPayload) => void;
   readonly runSessionMutation?: <T>(task: () => Promise<T>) => Promise<T>;
 }
 
@@ -370,6 +377,41 @@ async function handleTuiSlashCommand(
       );
       return true;
     }
+    case 'resume': {
+      if (!rest) {
+        const entries = (await listCliHistoryEntries()).slice(0, 20);
+        appendLocalAssistantTranscript(
+          entries.length
+            ? [
+                'Recent executions:',
+                formatCliHistoryText(entries),
+                '',
+                'Usage: /resume <id>',
+              ].join('\n')
+            : 'No execution history found.',
+        );
+        return true;
+      }
+      const id = parseCliHistoryId(rest);
+      if (!id) {
+        appendLocalAssistantTranscript(`Invalid execution id: ${rest}`);
+        return true;
+      }
+      if (context.session.runPromise) {
+        appendLocalAssistantTranscript(
+          'Finish the active chat before resuming a stored execution.',
+        );
+        return true;
+      }
+      const config = await readCliHistoryConfig(id);
+      if (!config) {
+        appendLocalAssistantTranscript(`Execution not found: ${id}`);
+        return true;
+      }
+      context.startStoredExecution(config);
+      appendLocalAssistantTranscript(`Resuming execution ${id}.`);
+      return true;
+    }
     default: {
       const registered = listSlashCommands().find(
         (cmd) =>
@@ -481,34 +523,14 @@ export async function runChat(
     getInterruptible(session.streamId)?.interrupt();
   };
 
-  // Pre-register the slash commands the input palette uses.
-  registerBuiltinSlashCommands({
-    onModelSelect: (nextModel) =>
-      applyCliModelSelection(nextModel, {
-        session,
-        initialAgent: agent,
-        initialModel: model,
-        interruptActive,
-        requestInputExit: () => requestInputExit?.(),
-        getApprovalPolicy,
-        setApprovalPolicy,
-        runSessionMutation,
-      }),
-    onApiModeSelect: (nextMode) => applyCliApiModeSelection(nextMode),
-  });
-
-  const startSession = (instruction: string): void => {
-    const meta = cliState.sessionMeta.get();
-    const currentAgent = meta.agent || agent;
-    const currentModel = meta.model || model;
+  const startAgentRun = (config: AgentConfigPayload): void => {
+    const currentModel = config.model;
     const sessionContext = currentSessionContext(currentModel);
-    const config: AgentConfigPayload = {
-      agent: currentAgent,
-      model: currentModel,
-      instruction,
-      agentCategory: AgentCategory.ToolUse,
-      workingDirectory: context.cwd,
-    };
+    cliState.sessionMeta.set({
+      ...cliState.sessionMeta.get(),
+      agent: config.agent,
+      model: config.model,
+    });
     const runtimeHost = createCliRuntimeHost(sessionContext);
     const wrapped = wrapRuntimeHost(runtimeHost);
     const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
@@ -566,6 +588,36 @@ export async function runChat(
       });
   };
 
+  // Pre-register the slash commands the input palette uses.
+  registerBuiltinSlashCommands({
+    onModelSelect: (nextModel) =>
+      applyCliModelSelection(nextModel, {
+        session,
+        initialAgent: agent,
+        initialModel: model,
+        interruptActive,
+        requestInputExit: () => requestInputExit?.(),
+        getApprovalPolicy,
+        setApprovalPolicy,
+        startStoredExecution: (config) => startAgentRun(config),
+        runSessionMutation,
+      }),
+    onApiModeSelect: (nextMode) => applyCliApiModeSelection(nextMode),
+  });
+
+  const startSession = (instruction: string): void => {
+    const meta = cliState.sessionMeta.get();
+    const currentAgent = meta.agent || agent;
+    const currentModel = meta.model || model;
+    startAgentRun({
+      agent: currentAgent,
+      model: currentModel,
+      instruction,
+      agentCategory: AgentCategory.ToolUse,
+      workingDirectory: context.cwd,
+    });
+  };
+
   const handleSubmit = (line: string): void => {
     void handleSubmittedLine(line);
   };
@@ -580,6 +632,7 @@ export async function runChat(
         requestInputExit: () => requestInputExit?.(),
         getApprovalPolicy,
         setApprovalPolicy,
+        startStoredExecution: (config) => startAgentRun(config),
         runSessionMutation,
       })
     ) {

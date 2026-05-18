@@ -10,6 +10,7 @@ import { executeAgent } from '@agent/runtime/executeAgent';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { isOAuthProvider } from '@auth/sharedConfig';
 import { toErrorMessage } from '@common/errors/errorMessage';
+import type { ExecutionId } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core/stringCore';
 
 import {
@@ -64,6 +65,16 @@ import {
   generateCompletionScript,
   parseCompletionShell,
 } from '../runtime/completion';
+import {
+  cliHistoryNdjsonRecords,
+  deleteCliHistory,
+  formatCliHistoryDetailsText,
+  formatCliHistoryText,
+  listCliHistoryEntries,
+  parseCliHistoryId,
+  readCliHistoryConfig,
+  readCliHistoryDetails,
+} from '../runtime/history';
 
 // One CLI invocation per process — module-level pending exit code is the
 // simplest way to surface handler exit codes back to `bin/texra.ts` after
@@ -525,6 +536,170 @@ const authCommand = defineCommand({
   subCommands: { status: authStatusCommand, usage: usageCommand },
 });
 
+const historyListCommand = defineCommand({
+  meta: { name: 'list', description: 'List stored executions' },
+  args: {
+    ...GLOBAL_ARGS,
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
+    setExitCode(await runHistoryList(context));
+  },
+});
+
+async function runHistoryList(context: CliContext): Promise<number> {
+  await initCliPlatform({
+    ...context,
+    quietLogs: true,
+    skipIncludedModelAccess: true,
+  });
+  const entries = await listCliHistoryEntries();
+
+  if (context.outputFormat === 'json') {
+    writeTextStdout(JSON.stringify(entries, null, 2));
+    return CliExitCode.Success;
+  }
+
+  if (context.outputFormat === 'ndjson') {
+    for (const record of cliHistoryNdjsonRecords(entries)) {
+      writeNdjsonStdout(record);
+    }
+    return CliExitCode.Success;
+  }
+
+  writeTextStdout(
+    entries.length
+      ? formatCliHistoryText(entries)
+      : 'No execution history found.',
+  );
+  return CliExitCode.Success;
+}
+
+const historyShowCommand = defineCommand({
+  meta: { name: 'show', description: 'Show one stored execution' },
+  args: {
+    ...GLOBAL_ARGS,
+    id: {
+      type: 'positional',
+      required: true,
+      description: 'Execution id from `texra history list`',
+    },
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
+    const id = parseCliHistoryId(ctx.args.id);
+    if (!id) {
+      writeTextStderr(`Invalid execution id: ${ctx.args.id}`);
+      setExitCode(CliExitCode.Usage);
+      return;
+    }
+    setExitCode(await runHistoryShow(context, id));
+  },
+});
+
+async function runHistoryShow(
+  context: CliContext,
+  id: ExecutionId,
+): Promise<number> {
+  await initCliPlatform({
+    ...context,
+    quietLogs: true,
+    skipIncludedModelAccess: true,
+  });
+  const details = await readCliHistoryDetails(id);
+  if (!details) {
+    writeTextStderr(`Execution not found: ${id}`);
+    return CliExitCode.Usage;
+  }
+
+  if (context.outputFormat === 'json') {
+    writeTextStdout(JSON.stringify(details, null, 2));
+  } else if (context.outputFormat === 'ndjson') {
+    writeNdjsonStdout({
+      kind: 'history-detail',
+      ts: new Date().toISOString(),
+      detail: details,
+    });
+  } else {
+    writeTextStdout(formatCliHistoryDetailsText(details));
+  }
+  return CliExitCode.Success;
+}
+
+const historyDeleteCommand = defineCommand({
+  meta: { name: 'delete', description: 'Delete stored executions' },
+  args: {
+    ...GLOBAL_ARGS,
+    id: {
+      type: 'positional',
+      required: false,
+      description: 'Execution id from `texra history list`',
+    },
+    all: {
+      type: 'boolean',
+      description: 'Delete all stored executions',
+    },
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
+    const rawId = optString(ctx.args.id);
+    const id = rawId ? parseCliHistoryId(rawId) : undefined;
+    if (rawId && !id) {
+      writeTextStderr(`Invalid execution id: ${rawId}`);
+      setExitCode(CliExitCode.Usage);
+      return;
+    }
+    setExitCode(
+      await runHistoryDelete(context, { id, all: ctx.args.all === true }),
+    );
+  },
+});
+
+async function runHistoryDelete(
+  context: CliContext,
+  options: { id?: ExecutionId; all: boolean },
+): Promise<number> {
+  await initCliPlatform({
+    ...context,
+    quietLogs: true,
+    skipIncludedModelAccess: true,
+  });
+  let result: Awaited<ReturnType<typeof deleteCliHistory>>;
+  try {
+    result = await deleteCliHistory(options);
+  } catch (error) {
+    writeTextStderr(toErrorMessage(error));
+    return CliExitCode.Usage;
+  }
+
+  if (context.outputFormat === 'json') {
+    writeTextStdout(JSON.stringify(result, null, 2));
+  } else if (context.outputFormat === 'ndjson') {
+    writeNdjsonStdout({
+      kind: 'history-delete',
+      ts: new Date().toISOString(),
+      result,
+    });
+  } else if (result.deleted === 'all') {
+    writeTextStdout('Deleted all stored executions.');
+  } else if (result.found) {
+    writeTextStdout(`Deleted execution ${result.id}.`);
+  } else {
+    writeTextStderr(`Execution not found: ${result.id}`);
+    return CliExitCode.Usage;
+  }
+  return CliExitCode.Success;
+}
+
+const historyCommand = defineCommand({
+  meta: { name: 'history', description: 'Inspect stored executions' },
+  subCommands: {
+    list: historyListCommand,
+    show: historyShowCommand,
+    delete: historyDeleteCommand,
+  },
+});
+
 const runWorkflowCommand = defineCommand({
   meta: { name: 'run', description: 'Run a workflow agent' },
   args: {
@@ -689,6 +864,81 @@ async function runWorkflowAgent(
     : CliExitCode.AgentError;
 }
 
+const resumeCommand = defineCommand({
+  meta: { name: 'resume', description: 'Re-run a stored execution config' },
+  args: {
+    ...GLOBAL_ARGS,
+    id: {
+      type: 'positional',
+      required: true,
+      description: 'Execution id from `texra history list`',
+    },
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
+    const id = parseCliHistoryId(ctx.args.id);
+    if (!id) {
+      writeTextStderr(`Invalid execution id: ${ctx.args.id}`);
+      setExitCode(CliExitCode.Usage);
+      return;
+    }
+    setExitCode(await runResumeExecution(context, id));
+  },
+});
+
+async function runResumeExecution(
+  context: CliContext,
+  id: ExecutionId,
+): Promise<number> {
+  await initCliPlatform({ ...context, quietLogs: true });
+  const config = await readCliHistoryConfig(id);
+  if (!config) {
+    writeTextStderr(`Execution not found: ${id}`);
+    return CliExitCode.Usage;
+  }
+
+  const runContext: CliContext = {
+    ...context,
+    helperModel: config.model,
+    quietLogs: true,
+    renderRunProgress: shouldRenderRunProgress(context),
+  };
+  await initCliPlatform(runContext);
+  installCliApprovalHandlers(runContext);
+  await loadAgents({ includeRemote: false });
+  if (
+    !getAgent(config.agent) ||
+    (await shouldHonorRemoteAgentPriority(config.agent))
+  ) {
+    await loadAgents();
+  }
+
+  const runtimeHost = createCliRuntimeHost(runContext);
+  let result: ExecuteAgentResult;
+  try {
+    result = await executeAgent(config, undefined, { runtimeHost });
+  } finally {
+    await runtimeHost.close();
+  }
+
+  if (runContext.outputFormat === 'json') {
+    writeTextStdout(JSON.stringify(result, null, 2));
+  } else if (runContext.outputFormat === 'ndjson') {
+    writeNdjsonStdout({
+      kind: 'result',
+      ts: new Date().toISOString(),
+      result,
+    });
+  } else {
+    writeTextStdout(result.status);
+  }
+
+  if (result.status !== 'error') return CliExitCode.Success;
+  return hasCliApprovalDenied(runContext)
+    ? CliExitCode.ApprovalDenied
+    : CliExitCode.AgentError;
+}
+
 async function shouldHonorRemoteAgentPriority(
   agentName: string,
 ): Promise<boolean> {
@@ -765,6 +1015,8 @@ export const rootCommand = defineCommand({
   subCommands: {
     chat: chatCommand,
     run: runWorkflowCommand,
+    resume: resumeCommand,
+    history: historyCommand,
     agents: agentsCommand,
     models: modelsCommand,
     login: loginCommand,
