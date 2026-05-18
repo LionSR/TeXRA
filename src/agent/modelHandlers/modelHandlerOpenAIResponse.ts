@@ -3073,17 +3073,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   private isMessageItem(
     item?: ResponseInputItem,
   ): item is EasyInputMessage | ResponseInputItem.Message {
-    if (!item || typeof item !== 'object') return false;
-    if (!('role' in item) || typeof item.role !== 'string') return false;
-    if (
-      'type' in item &&
-      typeof item.type === 'string' &&
-      item.type !== 'message'
-    ) {
-      return false;
-    }
-    if (!('content' in item)) return false;
-    const { content } = item;
+    if (!item || item.type !== 'message') return false;
+    const content = item.content;
     return typeof content === 'string' || Array.isArray(content);
   }
 
