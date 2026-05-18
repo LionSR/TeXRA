@@ -13,7 +13,7 @@ import {
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - shared schemas
@@ -28,7 +28,7 @@ import {
   DEFAULT_GIT_AUTHOR_EMAIL,
 } from '@shared/constants/git';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
-import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 @customElement('git-tab')
 export class GitTab extends LitElement {
@@ -183,7 +183,7 @@ export class GitTab extends LitElement {
   @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
 
   private handleMarkCommitsToggle(event: Event): void {
-    const target = event.target as WaCheckbox | null;
+    const target = event.target as WaSwitch | null;
     this.dispatchEvent(
       createEvent('git-mark-commits-toggle', {
         enabled: Boolean(target?.checked),
@@ -388,13 +388,13 @@ export class GitTab extends LitElement {
           : nothing}
 
         <div class="setting-block">
-          <wa-checkbox
+          <wa-switch
             ?checked=${this.markCommits}
             ?disabled=${this.toggleDisabled}
             @change=${this.handleMarkCommitsToggle}
           >
             Mark commits with TeXRA author info
-          </wa-checkbox>
+          </wa-switch>
           <p class="setting-description">
             When enabled, commits made by TeXRA agents are attributed to a
             custom author identity instead of your personal git config.

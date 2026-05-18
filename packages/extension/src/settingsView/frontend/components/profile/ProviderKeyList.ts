@@ -14,8 +14,8 @@ import {
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
+import '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 // Local imports - profile view styles and events
 import type {
@@ -26,7 +26,7 @@ import { profileViewStyles } from './styles';
 import { ProviderKeyEvents } from './events';
 import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
-import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 const STATUS_LABELS: Record<
   Exclude<ProviderKeyStatus['status'], 'set'>,
@@ -106,10 +106,10 @@ export class ProviderKeyList extends LitElement {
   private renderDetailRow(entry: ProviderKeyStatus): TemplateResult {
     const streamingToggle = html`
       <div class="provider-setting">
-        <wa-checkbox
+        <wa-switch
           ?checked=${entry.streaming}
           @change=${(e: Event) => {
-            const checked = (e.target as WaCheckbox).checked;
+            const checked = (e.target as WaSwitch).checked;
             this.dispatchEvent(
               ProviderKeyEvents.setStreaming({
                 provider: entry.provider,
@@ -119,7 +119,7 @@ export class ProviderKeyList extends LitElement {
           }}
         >
           Streaming
-        </wa-checkbox>
+        </wa-switch>
       </div>
     `;
 
@@ -181,10 +181,10 @@ export class ProviderKeyList extends LitElement {
 
     return html`
       <div class="provider-setting provider-setting--block">
-        <wa-checkbox
+        <wa-switch
           ?checked=${setting.value}
           @change=${(e: Event) => {
-            const checked = (e.target as WaCheckbox).checked;
+            const checked = (e.target as WaSwitch).checked;
             this.dispatchEvent(
               ProviderKeyEvents.setVscodeSetting({
                 key: setting.key,
@@ -194,7 +194,7 @@ export class ProviderKeyList extends LitElement {
           }}
         >
           ${setting.label}
-        </wa-checkbox>
+        </wa-switch>
         <span class="provider-setting-description">${setting.description}</span>
         ${warning}
       </div>
@@ -236,17 +236,17 @@ export class ProviderKeyList extends LitElement {
   private renderGlobalStreamingToggle(): TemplateResult {
     return html`
       <div class="global-streaming-toggle">
-        <wa-checkbox
+        <wa-switch
           ?checked=${this.globalStreamingDefault}
           @change=${(e: Event) => {
-            const checked = (e.target as WaCheckbox).checked;
+            const checked = (e.target as WaSwitch).checked;
             this.dispatchEvent(
               ProviderKeyEvents.setGlobalStreaming({ enabled: checked }),
             );
           }}
         >
           Enable streaming
-        </wa-checkbox>
+        </wa-switch>
         <span class="global-streaming-description"
           >Global default for all providers</span
         >
