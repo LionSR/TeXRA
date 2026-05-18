@@ -37,6 +37,10 @@ export function splitTranscriptEntries(
       pending.push(entry);
       continue;
     }
+    if (entry.role === 'process') {
+      finalized.push(entry);
+      continue;
+    }
     if (entry.role === 'assistant' && showLiveAssistant) {
       pending.push(entry);
     }

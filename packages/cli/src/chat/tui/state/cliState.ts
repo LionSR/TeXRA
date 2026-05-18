@@ -20,19 +20,30 @@ import type {
 export interface ConversationEntry {
   /** Same id as the upstream `StreamLogEntry.id` — stable across deltas. */
   readonly id: string;
-  readonly role: 'assistant' | 'error' | 'tool' | 'user';
+  readonly role: 'assistant' | 'error' | 'process' | 'tool' | 'user';
   /** Concatenated text for `MODEL_RESPONSE` entries. Empty for tool rows. */
   readonly text: string;
   /** True once the stream transitions to `WAITING`/`COMPLETED`. */
   readonly finalized: boolean;
   /** Populated only when `role === 'tool'`. */
   readonly toolUse?: NormalizedToolUse;
+  /** Populated only when `role === 'process'`. */
+  readonly process?: CompletedProcessTranscript;
   /** Entry was synthesized by the CLI and is not present in StreamLogStore. */
   readonly synthetic?: boolean;
   /** Why the CLI synthesized this entry. */
-  readonly syntheticKind?: 'final' | 'local';
+  readonly syntheticKind?: 'final' | 'local' | 'process';
   /** StreamLog head at the moment a synthetic entry was appended. */
   readonly syntheticAfterSeq?: number;
+}
+
+export interface CompletedProcessTranscript {
+  readonly executionId: string;
+  readonly title: string;
+  readonly status?: string;
+  readonly elapsed?: string | null;
+  readonly isError: boolean;
+  readonly tailLines: readonly string[];
 }
 
 export interface SessionMeta {
