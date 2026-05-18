@@ -553,9 +553,10 @@ export async function runChat(
       ? (cliState.streams.get().get(activeStreamId)?.status ??
         StreamStatusService.get(activeStreamId))
       : undefined;
+    const isRunPending = Boolean(session.runPromise && !session.runCompleted);
 
     if (
-      (session.runPromise && !session.runCompleted) ||
+      (isRunPending && activeStatus !== STREAM_STATUS.WAITING) ||
       activeStatus === STREAM_STATUS.INITIALIZING ||
       activeStatus === STREAM_STATUS.RUNNING ||
       activeStatus === STREAM_STATUS.RESUMING
@@ -567,6 +568,7 @@ export async function runChat(
     }
 
     const meta = cliState.sessionMeta.get();
+    if (isRunPending) interruptActive();
     clearApprovals();
     followUpQueue.clear();
     session.streamId = undefined;
@@ -574,8 +576,7 @@ export async function runChat(
     session.runExitCode = CliExitCode.Success;
     session.runCompleted = false;
     session.stopRequested = false;
-    resetCliState();
-    cliState.sessionMeta.set(meta);
+    resetCliState(meta);
   };
 
   const startAgentRun = (config: AgentConfigPayload): void => {
