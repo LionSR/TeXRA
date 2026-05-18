@@ -13,7 +13,11 @@ import type { FileListEntry } from '@shared/schemas';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
-import { getListOfFiles, getXmlFormatFromFiles } from '@utils/prompt';
+import {
+  getListOfFiles,
+  getPromptFileName,
+  getXmlFormatFromFiles,
+} from '@utils/prompt';
 import {
   listExternalRoots,
   type ExternalRootKind,
@@ -248,7 +252,9 @@ async function getFileVars(
 
     userVars[`ALL_${prefix}S`] =
       allFiles.length > 0 ? await getXmlFormatFromFiles(allFiles) : null;
-    userVars[`${prefix}_FILES`] = allFiles;
+    userVars[`${prefix}_FILES`] = allFiles.map((file) =>
+      getPromptFileName(file),
+    );
     userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(allFiles);
   }
 
