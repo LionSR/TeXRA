@@ -595,6 +595,15 @@ describe('focusCycle', () => {
     expect(nextFocusForward()).toBe(root);
   });
 
+  it('Ctrl-A can still focus an inactive child stream with retained history', () => {
+    cliState.activeStreamId.set(root);
+    setParentStream(child1, root);
+    patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
+    patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
+
+    expect(nextFocusForward()).toBe(child1);
+  });
+
   it('Ctrl-B returns to the parent and bottoms out at root', () => {
     setParentStream(child1, root);
     cliState.activeStreamId.set(child1);

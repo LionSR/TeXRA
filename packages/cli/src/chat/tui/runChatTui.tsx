@@ -50,6 +50,10 @@ import {
 import { App } from './App';
 import { AgentListForm } from './forms/AgentListForm';
 import { ApiModeForm } from './forms/ApiModeForm';
+import {
+  ApprovalPolicyForm,
+  formatApprovalPolicyForCli,
+} from './forms/ApprovalPolicyForm';
 import { ModelListForm } from './forms/ModelListForm';
 import { renderHeaderBanner } from './panes/HeaderBanner';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
@@ -252,14 +256,7 @@ async function showCliAuthStatus(): Promise<void> {
 }
 
 function formatApprovalPolicy(policy: CliApprovalPolicy): string {
-  switch (policy) {
-    case 'ask':
-      return 'ask before privileged actions';
-    case 'never':
-      return 'deny privileged actions';
-    case 'yolo':
-      return 'approve privileged actions';
-  }
+  return formatApprovalPolicyForCli(policy);
 }
 
 function parseApprovalPolicy(input: string): CliApprovalPolicy | undefined {
@@ -284,23 +281,35 @@ function parseApprovalPolicy(input: string): CliApprovalPolicy | undefined {
   }
 }
 
-const APPROVAL_USAGE =
-  'Usage: /approval ask | /approval never | /approval yolo';
 const YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
+
+function openCliApprovalPolicyForm(context: SlashCommandContext): void {
+  cliState.activeForm.set({
+    commandName: 'approval',
+    render: (close) => (
+      <ApprovalPolicyForm
+        currentPolicy={context.getApprovalPolicy()}
+        onSelect={(policy) => {
+          context.setApprovalPolicy(policy);
+          appendLocalAssistantTranscript(
+            `Approval mode set to ${formatApprovalPolicy(policy)}.`,
+          );
+          close();
+        }}
+        onCancel={close}
+      />
+    ),
+  });
+}
 
 function applyCliApprovalPolicySelection(
   input: string,
   context: SlashCommandContext,
-  usage = APPROVAL_USAGE,
+  usage = YOLO_USAGE,
 ): void {
   const normalized = input.trim().toLowerCase();
   if (!normalized || normalized === 'status') {
-    appendLocalAssistantTranscript(
-      [
-        `approval: ${formatApprovalPolicy(context.getApprovalPolicy())}`,
-        usage,
-      ].join('\n'),
-    );
+    openCliApprovalPolicyForm(context);
     return;
   }
 
@@ -375,7 +384,11 @@ async function handleTuiSlashCommand(
       }
       return true;
     case 'approval':
-      applyCliApprovalPolicySelection(rest, context);
+      if (rest) {
+        applyCliApprovalPolicySelection(rest, context);
+      } else {
+        openCliApprovalPolicyForm(context);
+      }
       return true;
     case 'yolo':
       applyCliApprovalPolicySelection(rest || 'yolo', context, YOLO_USAGE);
@@ -620,6 +633,13 @@ export async function runChat(
         setApprovalPolicy,
         startStoredExecution: (config) => startAgentRun(config),
       }),
+    getApprovalPolicy,
+    onApprovalPolicySelect: (policy) => {
+      setApprovalPolicy(policy);
+      appendLocalAssistantTranscript(
+        `Approval mode set to ${formatApprovalPolicy(policy)}.`,
+      );
+    },
     canSelectModel: () => !session.runPromise,
     onModelSelect: (nextModel) =>
       applyInitialCliModelSelection(nextModel, {
