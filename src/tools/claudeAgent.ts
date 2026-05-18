@@ -1,5 +1,5 @@
 /**
- * Claude Agent tool — spin off a Claude Code agent via @anthropic-ai/claude-agent-sdk.
+ * Claude Code CLI tool — spin off a Claude Code agent via @anthropic-ai/claude-agent-sdk.
  *
  * Mirrors the codex / delegate_agent model: every call is async. Without a
  * session_id, a new Claude Code session is started and the result is delivered
@@ -149,7 +149,7 @@ const sessionRegistry = new Map<string, ActiveSession>();
 function storeSession(sessionId: string, entry: ActiveSession): void {
   sessionRegistry.set(sessionId, entry);
   void getExecutionStore(entry.executionId)
-    .write('claude_agent_session_id', sessionId)
+    .write('claude_code_session_id', sessionId)
     .catch(() => {});
 }
 
@@ -658,7 +658,7 @@ function startClaudeAgentLoop(params: {
 // ============================================================================
 
 export class ClaudeAgentTool extends defineTool({
-  name: 'claude_agent',
+  name: 'claude_code',
   description:
     'Spin off a Claude Code agent (via @anthropic-ai/claude-agent-sdk) to perform code analysis, generation, or research. ' +
     'The agent runs the native `claude` binary locally and can read files, run commands, and make edits within its permission mode. ' +
@@ -675,7 +675,7 @@ export class ClaudeAgentTool extends defineTool({
     const model = input.model ?? config.getClaudeAgentModel();
     const effort = input.effort ?? config.getClaudeAgentEffort();
 
-    const approvalLabel = `[claude_agent ${permissionMode}] ${input.prompt}`;
+    const approvalLabel = `[claude_code ${permissionMode}] ${input.prompt}`;
     const approval = await requestBashApproval({ command: approvalLabel });
     if (!approval.accepted) {
       return buildBashApprovalRejectedResult(
@@ -721,7 +721,7 @@ async function launchClaudeAgentSession(
 ): Promise<ToolResult> {
   if (!parentStreamId || !runtimeHost) {
     throw new ToolError(
-      'Claude Agent requires a parent stream runtime context — it must be called from an active tool-use agent.',
+      'Claude Code CLI requires a parent stream runtime context — it must be called from an active tool-use agent.',
     );
   }
 
@@ -739,11 +739,11 @@ async function launchClaudeAgentSession(
     await registerExecution(
       executionId,
       agentConfig,
-      'claude_agent',
+      'claude_code',
       parentExecutionId,
     );
   } catch {
-    throw new ToolError('Failed to register Claude Agent execution.');
+    throw new ToolError('Failed to register Claude Code CLI execution.');
   }
 
   const { childStreamId, logger } = createChildStream(
@@ -752,10 +752,10 @@ async function launchClaudeAgentSession(
     {
       streamPrefix: 'claude@agent-sdk',
       streamCategory: AgentCategory.ToolUse,
-      agentName: 'claude_agent',
+      agentName: 'claude_code',
       description: input.prompt,
       config: agentConfig,
-      toolName: 'claude_agent',
+      toolName: 'claude_code',
       runtimeHost,
     },
   );
@@ -778,7 +778,7 @@ async function launchClaudeAgentSession(
 
   const preview = truncateWithEllipsis(input.prompt, 60);
   return {
-    summary: `Launched Claude Agent: ${preview}`,
+    summary: `Launched Claude Code CLI: ${preview}`,
     output: [
       `Claude Code agent launched (model: ${model}, permission: ${permissionMode}).`,
       `Execution ID: ${executionId}`,
@@ -796,13 +796,13 @@ function resumeClaudeAgentSession(
   const stored = sessionRegistry.get(sessionId);
   if (!stored) {
     throw new ToolError(
-      `Claude Agent session '${sessionId}' is not active. It may have completed or been stopped; start a new session without session_id.`,
+      `Claude Code CLI session '${sessionId}' is not active. It may have completed or been stopped; start a new session without session_id.`,
     );
   }
 
   if (callerStreamId && stored.parentStreamId !== callerStreamId) {
     throw new ToolError(
-      `Claude Agent session '${sessionId}' is owned by a different session; start a new session without session_id to run in this context.`,
+      `Claude Code CLI session '${sessionId}' is owned by a different session; start a new session without session_id to run in this context.`,
     );
   }
 
@@ -811,7 +811,7 @@ function resumeClaudeAgentSession(
 
   const preview = truncateWithEllipsis(prompt, 60);
   return {
-    summary: `Follow-up queued for Claude Agent: ${preview}`,
+    summary: `Follow-up queued for Claude Code CLI: ${preview}`,
     output: [
       `Follow-up instruction queued for Claude Code session '${sessionId}'. The agent will process it and deliver a new result automatically.`,
       `Execution ID: ${stored.executionId}`,
