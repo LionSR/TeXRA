@@ -73,6 +73,14 @@ Run a workflow agent from a project directory:
 node packages/cli/dist/bin/texra.js run polish --input paper.tex --output paper.polished.tex --print
 ```
 
+Pass read-only context files with repeated `--context` flags. The agent can
+read these files through `{{ ALL_CONTEXTS }}`, but it should only emit revised
+documents for the selected inputs:
+
+```bash
+node packages/cli/dist/bin/texra.js run firstread --input appendices.tex --context Draft0.tex --context refs.bib
+```
+
 Workflow agents always write generated files into the execution's run-storage
 directory first. In text mode, TeXRA prints the final generated run-storage path,
 such as `r1/paper.polished.tex`.
