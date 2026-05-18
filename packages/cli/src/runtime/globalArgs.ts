@@ -1,6 +1,7 @@
 import { isNonEmptyString } from '@utils/core/stringCore';
 
 import type { CliApprovalPolicy } from './approvalPolicy';
+import type { CliApiMode } from './apiAccessMode';
 import type { CliOutputFormat } from './cliConfig';
 import type { CliGlobalArgs } from './cliContext';
 
@@ -17,6 +18,7 @@ export interface ParsedGlobalArgs {
   readonly cwd?: string;
   readonly 'output-format'?: CliOutputFormat;
   readonly 'approval-policy'?: CliApprovalPolicy;
+  readonly 'api-mode'?: CliApiMode | string;
 }
 
 export function pickGlobalArgs(args: ParsedGlobalArgs): CliGlobalArgs {
@@ -26,5 +28,8 @@ export function pickGlobalArgs(args: ParsedGlobalArgs): CliGlobalArgs {
     cwd: isNonEmptyString(args.cwd) ? args.cwd.trim() : undefined,
     outputFormat: args['output-format'],
     approvalPolicy: args['approval-policy'],
+    apiMode: isNonEmptyString(args['api-mode'])
+      ? args['api-mode'].trim()
+      : undefined,
   };
 }
