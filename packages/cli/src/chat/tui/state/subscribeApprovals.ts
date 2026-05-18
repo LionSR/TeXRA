@@ -289,18 +289,35 @@ function handleUserQuestion(
   payload: ProgressEventPayloads['showUserQuestion'],
   context: CliContext,
 ): void {
-  const feedback = userQuestionFeedback(context);
-  void handleUserQuestionAction({
-    requestId: payload.requestId,
-    action: 'skip',
-    feedback,
+  const policy = immediateDecision(context);
+  if (policy) {
+    void handleUserQuestionAction({
+      requestId: payload.requestId,
+      action: 'skip',
+      feedback: userQuestionFeedback(context),
+    });
+    return;
+  }
+
+  void enqueueApproval({ kind: 'userQuestion', payload }).then((decision) => {
+    markIfRejected(context, decision);
+    if (decision.accepted && decision.userQuestionAnswers) {
+      void handleUserQuestionAction({
+        requestId: payload.requestId,
+        action: 'submit',
+        answers: decision.userQuestionAnswers,
+      });
+      return;
+    }
+    void handleUserQuestionAction({
+      requestId: payload.requestId,
+      action: 'skip',
+      feedback: decision.userMessage || 'User question skipped by user.',
+    });
   });
 }
 
 function userQuestionFeedback(context: CliContext): string {
-  if (!immediateDecision(context)) {
-    return 'User questions are not yet supported in the CLI TUI.';
-  }
   if (context.approvalPolicy === 'yolo') {
     return 'User question requires human input; yolo mode cannot synthesize an answer.';
   }
