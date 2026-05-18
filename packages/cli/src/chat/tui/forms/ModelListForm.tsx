@@ -53,25 +53,25 @@ function ModelFrame(props: ModelFrameProps): React.JSX.Element {
   );
 }
 
-function formatStatusForMode(
+export function formatModelStatusForCliMode(
   model: CliModelAccess,
   apiMode: CliApiMode,
 ): string {
-  if (apiMode === 'personal') return model.status;
+  if (apiMode === 'personal') return `api: ${model.status}`;
 
   switch (model.model.availability) {
     case 'included-access':
-      return 'relay included';
+      return 'relay: included';
     case 'not-included':
-      return 'not included in relay';
+      return 'relay: not included';
     case 'provider-key':
-      return 'relay unavailable; api key set';
+      return 'relay: unavailable; api key set';
     case 'openrouter-key':
-      return 'relay unavailable; openrouter key set';
+      return 'relay: unavailable; openrouter key set';
     case 'missing-key':
-      return 'relay unavailable; missing api key';
+      return 'relay: unavailable; missing api key';
     default:
-      return model.status;
+      return `relay: ${model.status}`;
   }
 }
 
@@ -122,7 +122,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   const items = models.map((m) => ({
     value: m.model.value,
     label: m.model.label || m.model.value,
-    description: formatStatusForMode(m, props.apiMode),
+    description: formatModelStatusForCliMode(m, props.apiMode),
     disabled: props.selectable ? !m.available : false,
   }));
   const selectable = props.selectable === true;
@@ -135,14 +135,13 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
       paddingX={1}
     >
       <Text bold color="cyan">
-        /model
+        {`/model · ${formatCliApiMode(props.apiMode)}`}
       </Text>
       <Text dimColor>
         {selectable
           ? 'Choose the root model for the first message.'
           : 'Available models. Start a new chat with texra --model=<name> to choose the root model.'}
       </Text>
-      <Text dimColor>{`Mode: ${formatCliApiMode(props.apiMode)}.`}</Text>
       <Box marginTop={1} flexDirection="column">
         <Select
           items={items}
