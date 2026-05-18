@@ -278,6 +278,11 @@ async function runLogin(context: CliContext, init: LoginInit): Promise<number> {
     return CliExitCode.Usage;
   }
   await initCliPlatform({ ...context, quietLogs: true });
+  if (init.provider === 'github' && init.selectAccount && !init.loginHint) {
+    writeTextStderr(
+      'GitHub does not support --select-account by itself. Use --login-hint <username> to request a specific GitHub account.',
+    );
+  }
   if (context.outputFormat === 'text' && !init.noBrowser) {
     writeTextStdout(`Opening browser for TeXRA ${init.provider} sign-in...`);
   }
@@ -454,7 +459,7 @@ function writeRelayUsageSummary(
       `Relay usage for ${month} (${summary.tier})`,
       `Spend: $${summary.costUsd.toFixed(2)} / $${summary.limitUsd.toFixed(2)} (${summary.usagePercent.toFixed(1)}%)`,
       `Remaining: $${summary.remainingUsd.toFixed(2)}`,
-      `Requests: ${summary.requestCount}`,
+      `Streams: ${summary.streamCount}`,
       `Tokens: ${summary.inputTokens} input (${summary.cachedTokens} cached), ${summary.outputTokens} output, ${summary.reasoningTokens} reasoning`,
       `Models: ${summary.modelsUsed}; providers: ${summary.providersUsed}`,
     ].join('\n'),

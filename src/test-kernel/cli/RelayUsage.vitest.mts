@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildRelayUsageRowsUrl,
   currentUtcMonthRange,
   parseRelayUsageRows,
   parseUtcMonth,
@@ -10,6 +11,7 @@ import {
 
 function row(input: Partial<RelayUsageRow>): RelayUsageRow {
   return {
+    id: '00000000-0000-4000-8000-000000000001',
     logged_at: '2026-05-17T12:00:00.000Z',
     model: 'gpt-5.4',
     provider: 'openai',
@@ -41,6 +43,7 @@ describe('CLI relay usage summary', () => {
     const rows = parseRelayUsageRows([
       {
         logged_at: '2026-05-17T12:00:00+00:00',
+        id: '00000000-0000-4000-8000-000000000002',
         model: 'gpt-5.4',
         provider: 'openai',
         input_tokens: 10,
@@ -53,6 +56,28 @@ describe('CLI relay usage summary', () => {
 
     expect(rows[0]?.logged_at).toBe('2026-05-17T12:00:00+00:00');
     expect(rows[0]?.cost).toBe(1.25);
+  });
+
+  it('builds stable keyset pagination URLs', () => {
+    const first = buildRelayUsageRowsUrl({
+      startIso: '2026-05-01T00:00:00.000Z',
+      endIso: '2026-06-01T00:00:00.000Z',
+    });
+    expect(first.searchParams.get('order')).toBe('logged_at.desc,id.desc');
+    expect(first.searchParams.get('offset')).toBeNull();
+    expect(first.searchParams.get('or')).toBeNull();
+
+    const next = buildRelayUsageRowsUrl({
+      startIso: '2026-05-01T00:00:00.000Z',
+      endIso: '2026-06-01T00:00:00.000Z',
+      cursor: {
+        loggedAt: '2026-05-17T12:00:00+00:00',
+        id: '00000000-0000-4000-8000-000000000002',
+      },
+    });
+    expect(next.searchParams.get('or')).toBe(
+      '(logged_at.lt.2026-05-17T12:00:00+00:00,and(logged_at.eq.2026-05-17T12:00:00+00:00,id.lt.00000000-0000-4000-8000-000000000002))',
+    );
   });
 
   it('aggregates spend, tokens, and distinct surfaces', () => {
@@ -85,7 +110,7 @@ describe('CLI relay usage summary', () => {
       costUsd: 2,
       remainingUsd: 48,
       usagePercent: 4,
-      requestCount: 2,
+      streamCount: 2,
       inputTokens: 22,
       netInputTokens: 17,
       outputTokens: 7,

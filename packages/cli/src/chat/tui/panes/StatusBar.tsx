@@ -26,15 +26,22 @@ function statusLabel(status: string | undefined): string {
 export function StatusBar(): React.JSX.Element {
   const activeStreamId = useSignal(cliState.activeStreamId);
   const streams = useSignal(cliState.streams);
+  const sessionMeta = useSignal(cliState.sessionMeta);
   const pendingExitHint = useSignal(cliState.pendingExitHint);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const queued = slice?.queuedFollowUps ?? 0;
   const bypass = slice?.bypass ?? NO_BYPASS;
+  const agent = sessionMeta.agent || 'chat';
+  const model = sessionMeta.model || '—';
 
   return (
     <Box paddingX={1} justifyContent="space-between">
       <Box gap={1}>
         <Text color="cyan">◆</Text>
+        <Text>
+          {agent} · {model}
+        </Text>
+        <Text dimColor>·</Text>
         {pendingExitHint ? (
           <Text color="yellow">Press Ctrl-C again to exit</Text>
         ) : (

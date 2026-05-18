@@ -6,6 +6,7 @@ import { SUPABASE_CONFIG, getRelaySpendingLimit } from '@auth/sharedConfig';
 const USAGE_PAGE_SIZE = 1000;
 
 const RelayUsageRowSchema = z.object({
+  id: z.uuid(),
   logged_at: z.iso.datetime({ offset: true }),
   model: z.string(),
   provider: z.string(),
@@ -30,7 +31,7 @@ export interface RelayUsageSummary {
   readonly costUsd: number;
   readonly remainingUsd: number;
   readonly usagePercent: number;
-  readonly requestCount: number;
+  readonly streamCount: number;
   readonly inputTokens: number;
   readonly netInputTokens: number;
   readonly outputTokens: number;
@@ -131,7 +132,7 @@ export function summarizeRelayUsage(
     remainingUsd: roundCurrency(Math.max(0, limitUsd - costUsd)),
     usagePercent:
       limitUsd > 0 ? Number(((costUsd / limitUsd) * 100).toFixed(1)) : 0,
-    requestCount: rows.length,
+    streamCount: rows.length,
     inputTokens: totals.inputTokens,
     netInputTokens: totals.netInputTokens,
     outputTokens: totals.outputTokens,
@@ -148,27 +149,9 @@ async function fetchRelayUsageRows(input: {
   endIso: string;
 }): Promise<RelayUsageRow[]> {
   const rows: RelayUsageRow[] = [];
-  for (let offset = 0; ; offset += USAGE_PAGE_SIZE) {
-    const url = new URL('/rest/v1/usage_logs', SUPABASE_CONFIG.url);
-    url.searchParams.set(
-      'select',
-      [
-        'logged_at',
-        'model',
-        'provider',
-        'input_tokens',
-        'output_tokens',
-        'cached_input_tokens',
-        'reasoning_tokens',
-        'cost',
-      ].join(','),
-    );
-    url.searchParams.set('used_relay', 'eq.true');
-    url.searchParams.append('logged_at', `gte.${input.startIso}`);
-    url.searchParams.append('logged_at', `lt.${input.endIso}`);
-    url.searchParams.set('order', 'logged_at.desc');
-    url.searchParams.set('limit', String(USAGE_PAGE_SIZE));
-    url.searchParams.set('offset', String(offset));
+  let cursor: RelayUsageCursor | undefined;
+  for (;;) {
+    const url = buildRelayUsageRowsUrl({ ...input, cursor });
 
     const response = await fetch(url, {
       headers: {
@@ -183,7 +166,49 @@ async function fetchRelayUsageRows(input: {
     const data = parseRelayUsageRows(await response.json());
     rows.push(...data);
     if (data.length < USAGE_PAGE_SIZE) return rows;
+    const last = data.at(-1)!;
+    cursor = { loggedAt: last.logged_at, id: last.id };
   }
+}
+
+export interface RelayUsageCursor {
+  readonly loggedAt: string;
+  readonly id: string;
+}
+
+export function buildRelayUsageRowsUrl(input: {
+  startIso: string;
+  endIso: string;
+  cursor?: RelayUsageCursor;
+}): URL {
+  const url = new URL('/rest/v1/usage_logs', SUPABASE_CONFIG.url);
+  url.searchParams.set(
+    'select',
+    [
+      'id',
+      'logged_at',
+      'model',
+      'provider',
+      'input_tokens',
+      'output_tokens',
+      'cached_input_tokens',
+      'reasoning_tokens',
+      'cost',
+    ].join(','),
+  );
+  url.searchParams.set('used_relay', 'eq.true');
+  url.searchParams.append('logged_at', `gte.${input.startIso}`);
+  url.searchParams.append('logged_at', `lt.${input.endIso}`);
+  if (input.cursor) {
+    const cursorPredicates = [
+      `logged_at.lt.${input.cursor.loggedAt}`,
+      `and(logged_at.eq.${input.cursor.loggedAt},id.lt.${input.cursor.id})`,
+    ].join(',');
+    url.searchParams.set('or', `(${cursorPredicates})`);
+  }
+  url.searchParams.set('order', 'logged_at.desc,id.desc');
+  url.searchParams.set('limit', String(USAGE_PAGE_SIZE));
+  return url;
 }
 
 function roundCurrency(value: number): number {
