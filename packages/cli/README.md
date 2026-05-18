@@ -76,6 +76,14 @@ Run a workflow agent:
 node packages/cli/dist/bin/texra.js run polish --input paper.tex --output paper.polished.tex --print
 ```
 
+Pass read-only context files with repeated `--context` flags. The agent reads
+these through `{{ ALL_CONTEXTS }}` while writing outputs only for the selected
+inputs:
+
+```sh
+node packages/cli/dist/bin/texra.js run firstread --input appendices.tex --context Draft0.tex --context refs.bib
+```
+
 For workflow agents, text output prints the final generated path in run storage
 such as `r1/paper.polished.tex`. If `--output` is provided, TeXRA also copies
 that final artifact to the requested destination.

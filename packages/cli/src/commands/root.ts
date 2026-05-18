@@ -108,6 +108,39 @@ function optString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+export function collectStringFlagValues(
+  rawArgs: readonly string[],
+  longName: string,
+  shortName: string,
+): string[] {
+  const longFlag = `--${longName}`;
+  const inlineLongPrefix = `${longFlag}=`;
+  const shortFlag = `-${shortName}`;
+  const values: string[] = [];
+
+  for (let i = 0; i < rawArgs.length; i += 1) {
+    const arg = rawArgs[i];
+    if (arg === undefined || arg === '--') break;
+
+    if (arg.startsWith(inlineLongPrefix)) {
+      const value = arg.slice(inlineLongPrefix.length).trim();
+      if (value) values.push(value);
+      continue;
+    }
+
+    if (arg === longFlag || arg === shortFlag) {
+      const value = rawArgs[i + 1];
+      if (value === undefined) {
+        throw new CliUsageError(`Missing value for ${arg}`);
+      }
+      values.push(value);
+      i += 1;
+    }
+  }
+
+  return values;
+}
+
 /**
  * Single source of truth for the global flags accepted by every TeXRA
  * subcommand. `as const` + spread would lose literal-type narrowing (citty's
@@ -726,6 +759,11 @@ const runWorkflowCommand = defineCommand({
       required: true,
       description: 'Input file passed to the workflow agent',
     },
+    context: {
+      type: 'string',
+      alias: 'c',
+      description: 'Read-only context file passed to the workflow agent',
+    },
     output: { type: 'string', description: 'Output file path' },
     model: {
       type: 'string',
@@ -743,6 +781,7 @@ const runWorkflowCommand = defineCommand({
       await runWorkflowAgent(context, {
         agent: ctx.args.agent,
         input: ctx.args.input,
+        contextFiles: collectStringFlagValues(ctx.rawArgs, 'context', 'c'),
         output: optString(ctx.args.output),
         model: optString(ctx.args.model),
         instruction: optString(ctx.args.instruction) ?? '',
@@ -762,6 +801,7 @@ type CliRunResult = ExecuteAgentResult & {
 interface WorkflowRunInit {
   readonly agent: string;
   readonly input: string;
+  readonly contextFiles: string[];
   readonly output?: string;
   readonly model?: string;
   readonly instruction: string;
@@ -843,6 +883,7 @@ async function runWorkflowAgent(
     agent: init.agent,
     model,
     inputFiles: [init.input],
+    contextFiles: init.contextFiles,
     outputFiles: modelOutputFile ? [modelOutputFile] : [],
     instruction: init.instruction,
     workingDirectory: runContext.cwd,
