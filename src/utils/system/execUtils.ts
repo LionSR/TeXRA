@@ -1,13 +1,16 @@
 // Third-party imports
 import * as path from 'path';
 
-import { execa, type Options, type ResultPromise, ExecaError } from 'execa';
+import {
+  execa,
+  execaSync,
+  type Options,
+  type ResultPromise,
+  ExecaError,
+  type SyncOptions,
+} from 'execa';
 import { quote as shellQuote } from 'shell-quote';
 
-/**
- * Encoding options compatible with execa v9.
- * execa uses a stricter encoding type than Node's BufferEncoding.
- */
 // Local imports - log
 import type { ExecResult } from '@agent/types/ResultTypes';
 
@@ -23,6 +26,10 @@ import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
 const CHANNEL = 'execUtils';
 logger.initialize(CHANNEL);
 
+/**
+ * Encoding options compatible with execa v9.
+ * execa uses a stricter encoding type than Node's BufferEncoding.
+ */
 type ExecaEncodingOption =
   | 'utf8'
   | 'utf16le'
@@ -38,6 +45,77 @@ const FORCE_KILL_DELAY_MS = 5_000;
 
 function normalizeOutput(text: string | null | undefined): string | null {
   return text?.trim() || null;
+}
+
+function commandEnv(
+  workspacePath: string,
+  envOverrides?: Record<string, string>,
+): Record<string, string | undefined> {
+  const env = { ...process.env, ...getGitAuthorEnv(), ...envOverrides };
+  env.PATH = extendEnvPath(env.PATH);
+
+  // Export project context so AI agents can orient themselves immediately.
+  env.PROJECT_DIR = workspacePath;
+  env.PROJECT_NAME = path.basename(workspacePath);
+  return env;
+}
+
+function resultFromProcessOutput(
+  stdout: string | null | undefined,
+  stderr: string | null | undefined,
+  exitCode: number,
+  timedOut = false,
+): ExecResult {
+  return {
+    success: exitCode === 0 && !timedOut,
+    stdout: normalizeOutput(stdout),
+    stderr: normalizeOutput(stderr),
+    timedOut,
+    exitCode,
+  };
+}
+
+function resultFromExecutionError(err: unknown): ExecResult {
+  if (err instanceof ExecaError) {
+    return {
+      success: false,
+      stdout: normalizeOutput(`${err.stdout ?? ''}`),
+      stderr: normalizeOutput(`${err.stderr || toErrorMessage(err)}`),
+      timedOut: err.timedOut ?? false,
+      exitCode: err.exitCode ?? 127,
+    };
+  }
+
+  return {
+    success: false,
+    stdout: null,
+    stderr: normalizeOutput(toErrorMessage(err)),
+    timedOut: false,
+    exitCode: 127,
+  };
+}
+
+function logCommandStderr(
+  channel: string,
+  stderr: string | null | undefined,
+  truncate = false,
+): void {
+  const normalizedStderr = normalizeOutput(stderr);
+  if (!normalizedStderr) return;
+
+  const stderrForLog =
+    truncate && normalizedStderr.length > MAX_OUTPUT_LENGTH
+      ? `...${normalizedStderr.slice(-MAX_OUTPUT_LENGTH)}`
+      : normalizedStderr;
+  logger.debug(channel, `Command stderr: ${stderrForLog}`);
+}
+
+function workspacePathOrProcessCwd(): string {
+  try {
+    return WorkspaceFS.getPath() ?? process.cwd();
+  } catch {
+    return process.cwd();
+  }
 }
 
 /**
@@ -105,12 +183,7 @@ export async function executeCommand(
       throw new Error('No workspace path found');
     }
 
-    const env = { ...process.env, ...getGitAuthorEnv(), ...options.env };
-    env.PATH = extendEnvPath(env.PATH);
-
-    // Export project context so AI agents can orient themselves immediately.
-    env.PROJECT_DIR = workspacePath;
-    env.PROJECT_NAME = path.basename(workspacePath);
+    const env = commandEnv(workspacePath, options.env);
 
     // Normalize 'utf-8' to 'utf8' for execa compatibility
     const rawEncoding = options.encoding ?? 'utf8';
@@ -212,42 +285,71 @@ export async function executeCommand(
     const exitCode = result.exitCode ?? 1;
     const timedOut = (result.timedOut ?? false) || shellTimedOut;
 
-    const normalizedStdout = normalizeOutput(stdout);
-    const normalizedStderr = normalizeOutput(stderr);
+    logCommandStderr(logChannel, stderr, options.truncate);
 
-    if (normalizedStderr) {
-      const stderrForLog =
-        options.truncate && normalizedStderr.length > MAX_OUTPUT_LENGTH
-          ? `...${normalizedStderr.slice(-MAX_OUTPUT_LENGTH)}`
-          : normalizedStderr;
-      logger.debug(logChannel, `Command stderr: ${stderrForLog}`);
-    }
-
-    return {
-      success: exitCode === 0 && !timedOut,
-      stdout: normalizedStdout,
-      stderr: normalizedStderr,
-      timedOut,
-      exitCode,
-    };
+    return resultFromProcessOutput(stdout, stderr, exitCode, timedOut);
   } catch (err) {
     logger.error(
       options.channel ?? CHANNEL,
       `Error executing command: ${toErrorMessage(err)}`,
     );
 
-    const stderr =
-      err instanceof ExecaError && err.stderr ? `${err.stderr}`.trim() : null;
-    const normalizedError = normalizeOutput(stderr || toErrorMessage(err));
-    return {
-      success: false,
-      stdout: null,
-      stderr: normalizedError,
-      timedOut: false, // Real timeouts are handled in the main flow via result.timedOut
-      exitCode: 127, // Convention for command not found / execution failure
-    };
+    return resultFromExecutionError(err);
   } finally {
     if (shellTimeoutId !== undefined) clearTimeout(shellTimeoutId);
     if (forceKillTimeoutId !== undefined) clearTimeout(forceKillTimeoutId);
+  }
+}
+
+/**
+ * Synchronous companion to executeCommand for APIs that must return a value
+ * synchronously, such as native binary resolvers passed to SDK constructors.
+ * If no cwd is passed and the platform is not initialized yet, this falls back
+ * to process.cwd(); prefer executeCommand for normal workspace command execution.
+ */
+export function executeCommandSync(
+  command: readonly [string, ...string[]],
+  options: {
+    encoding?: BufferEncoding;
+    channel?: string;
+    truncate?: boolean;
+    env?: Record<string, string>;
+    timeout?: number;
+    cwd?: string;
+  } = {},
+): ExecResult {
+  try {
+    const [cmd, ...args] = command;
+    const workspacePath = options.cwd ?? workspacePathOrProcessCwd();
+    const rawEncoding = options.encoding ?? 'utf8';
+    const encodingOption: ExecaEncodingOption =
+      rawEncoding.toLowerCase() === 'utf-8'
+        ? 'utf8'
+        : (rawEncoding as ExecaEncodingOption);
+    const execaOptions: SyncOptions = {
+      cwd: workspacePath,
+      env: commandEnv(workspacePath, options.env),
+      encoding: encodingOption,
+      timeout: options.timeout,
+      reject: false,
+    };
+    const logChannel = options.channel ?? CHANNEL;
+    logger.debug(logChannel, `Running command: ${shellQuote([cmd, ...args])}`);
+    const result = execaSync(cmd, args, execaOptions);
+    const stdout = (result.stdout as string) ?? '';
+    const stderr = (result.stderr as string) ?? '';
+    const exitCode = result.exitCode ?? 1;
+    const timedOut = result.timedOut ?? false;
+
+    logCommandStderr(logChannel, stderr, options.truncate);
+
+    return resultFromProcessOutput(stdout, stderr, exitCode, timedOut);
+  } catch (err) {
+    logger.error(
+      options.channel ?? CHANNEL,
+      `Error executing command: ${toErrorMessage(err)}`,
+    );
+
+    return resultFromExecutionError(err);
   }
 }

@@ -3,12 +3,18 @@
 
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 
+import * as logger from '@agent/core/logger';
+import { toErrorMessage } from '@common/errors';
+
 import { BaseNode, Flow, type Action } from '.';
 
 /** KV key for a flow record. Single source of truth for the prefix. */
 export function flowKey(runId: string): string {
   return `flow_${runId}`;
 }
+
+const CHANNEL = 'PersistedFlow';
+logger.initialize(CHANNEL);
 
 interface NodeRecord {
   action?: string;
@@ -105,7 +111,9 @@ export class PersistedFlow<
     try {
       await this.projection(shared, this.kv);
     } catch (err) {
-      console.warn('[PersistedFlow] projection failed:', err);
+      logger.warn(CHANNEL, `Projection failed: ${toErrorMessage(err)}`, {
+        data: err,
+      });
     }
   }
 
