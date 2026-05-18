@@ -303,9 +303,9 @@ export class AIAgentsTab extends LitElement {
       <div class="tab-content-container">
         <div class="ai-agents-header">
           <p class="ai-agents-intro">
-            Delegate work to third-party AI coding agents. Each integration uses
-            its own authentication (OAuth login, OAuth token, or API key) and
-            runs locally on your machine.
+            Connect external tools and services that TeXRA can call from agent
+            runs, such as coding agents, GitHub, and reference managers. Each
+            integration shows its own setup and authentication state here.
           </p>
           <button
             class="tab-action-btn"
