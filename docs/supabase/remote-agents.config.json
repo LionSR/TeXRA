@@ -23,6 +23,7 @@
     },
     "elevate": { "folder": "researcher", "visibility": ["researcher"] },
     "enhance": { "folder": "whitelist", "visibility": ["public"] },
+    "firstread": { "folder": "researcher", "visibility": ["public"] },
     "generic": { "folder": "public", "visibility": ["public"] },
     "humanize": { "folder": "researcher", "visibility": ["researcher"] },
     "logic": { "folder": "researcher", "visibility": ["public"] },

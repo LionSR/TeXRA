@@ -1,5 +1,5 @@
 name: firstread
-description: First-read pass --- naive linear physicist reading the paper top-to-bottom for the first time. Emits inline \criticize{message}{severity}{confidence} annotations at every reader stop (undefined terms, forward references, AI-jargon, missing baselines, duplicates, oversold tone, unsupported big claims, nonsensical sentences, claims to verify with the author, logical-coverage gaps). Every annotation pairs the stop with a concrete fix. Output is a self-contained compile-ready LaTeX document.
+description: First-read pass --- naive linear physicist reading the paper top-to-bottom for the first time. Emits inline \criticize{message}{severity}{confidence} annotations at every reader stop (undefined terms, forward references, unclear citations, missing baselines, logical-coverage gaps, unsupported claims, unparseable or nonsensical prose, AI-jargon, oversold tone, duplicates, process claims to verify, and domain claims needing support). Every annotation pairs the stop with a concrete fix. Output is a self-contained compile-ready LaTeX document.
 
 settings:
   agentCategory: workflow
@@ -15,7 +15,7 @@ prompts:
 
     Reading discipline. Read strictly top-to-bottom; while reading paragraph k, act as if paragraphs k+1, k+2, ... do not yet exist. Maintain a running mental list of terms defined so far; a word not on that list, used without definition, is a flag. Do not silently fill a gap from background knowledge. Do not make "this is wrong" judgments --- for real domain claims you cannot evaluate, use [domain-claim-unsure] or [verify-with-author]. Do not modify any prose outside the inserted \criticize macros.
 
-    What to flag. Six categories, each emitted with one of the bracketed kind tags below.
+    What to flag. Seven categories, each emitted with one of the bracketed kind tags below.
 
     (1) Missing definition or reference.
         (a) [undefined-term] --- term, symbol, abbreviation, or named result used before definition. Includes every word in the persona vocabulary list above on first use.
@@ -40,6 +40,9 @@ prompts:
 
     (6) Process-claim verification.
         (a) [verify-with-author] --- any factual claim about what was done: counts, dates, decisions, agent actions, sequence of operations. Address as "Please verify with the author: <specific claim>". Do not use the author's name.
+
+    (7) Domain claims the reader cannot evaluate.
+        (a) [domain-claim-unsure] --- real field-specific claims that may be true but require domain knowledge, a citation, or an explicit argument that has not appeared yet. Use this instead of declaring the claim wrong.
 
     How to format each flag. The canonical TeXRA macro is
 
@@ -96,6 +99,10 @@ prompts:
 
     {{ LATEX_STYLE_RULES }}
 
+    {% if IS_GOOGLE_MODEL %}
+    In your response, you should use XML tags instead of markdown syntax to organize the output files. NEVER use markdown tags like ```latex ''' nor ```xml to organize the output files.
+    {% endif %}
+
   userPrefix: |
     The LaTeX draft is below. Read from the beginning, in order.
 
@@ -122,10 +129,10 @@ prompts:
         Note: xcolor with the dvipsnames option must be its own \usepackage line; do not put [dvipsnames] inside a comma-separated package list.
 
       (3) Define the canonical TeXRA \criticize macro verbatim (this exact one-liner, no line breaks):
-          {% raw %}\newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\text{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}{% endraw %}
+          \newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\text{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
 
         Also define the \rewrite macro for substitute text inside Fix: clauses:
-          {% raw %}\newcommand{\rewrite}[1]{\textcolor{teal}{\textit{[rewrite: #1]}}}{% endraw %}
+          \newcommand{\rewrite}[1]{\textcolor{teal}{\textit{[rewrite: #1]}}}
 
       (4) Title block (article-compatible):
           \title{Critique preview: <input filename>}
