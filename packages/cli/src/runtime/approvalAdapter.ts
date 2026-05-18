@@ -182,6 +182,23 @@ function summarizeApprovalEvent<K extends ApprovalEvent>(
   }
 }
 
+export function formatRetryRequestMessage(
+  payload: ProgressEventPayloads['showRetryRequest'],
+): string {
+  const message = `Retry requested (${payload.operation}): ${payload.errorMessage ?? 'unknown error'}`;
+  const details = payload.errorDetails;
+  if (
+    details?.isRelayError === true &&
+    details.isCredentialExhausted === true
+  ) {
+    return [
+      message,
+      'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch to personal API keys.',
+    ].join('\n');
+  }
+  return message;
+}
+
 function dispatchApprovalDecision<K extends ApprovalEvent>(
   event: K,
   payload: ProgressEventPayloads[K],
@@ -429,9 +446,7 @@ export function handleCliApprovalEvent<K extends keyof ProgressEventPayloads>(
   // "Node exceeded maximum manual retry limit" after the budget runs out.
   if (event === 'showRetryRequest') {
     const data = approvalPayload as ProgressEventPayloads['showRetryRequest'];
-    writeTextStderr(
-      `Retry requested (${data.operation}): ${data.errorMessage ?? 'unknown error'}`,
-    );
+    writeTextStderr(formatRetryRequestMessage(data));
   }
 
   const immediate = immediateDecisionForApproval(
