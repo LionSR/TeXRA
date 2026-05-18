@@ -1,5 +1,5 @@
 /**
- * Helpers for the Claude Agent tool.
+ * Helpers for the Claude Code CLI tool.
  *
  * 1. `importClaudeAgentSdk()` — import `query` from `@anthropic-ai/claude-agent-sdk`.
  *    The SDK is ESM-only; esbuild converts it to CJS at bundle time (so it must

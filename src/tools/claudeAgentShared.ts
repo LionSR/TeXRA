@@ -1,4 +1,4 @@
-// Shared constants and helpers for the Claude Agent tool.
+// Shared constants and helpers for the Claude Code CLI tool.
 
 import type { TokenUsageStats, ToolUseLog } from '@shared/schemas';
 import {
@@ -6,7 +6,7 @@ import {
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
 
-export const CLAUDE_AGENT_NAME = 'claude_agent';
+export const CLAUDE_AGENT_NAME = 'claude_code';
 export const CLAUDE_AGENT_DISPLAY_MODEL = 'claude';
 export const CLAUDE_AGENT_PERMISSION_MODES = [
   'default',

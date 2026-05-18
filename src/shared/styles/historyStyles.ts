@@ -100,6 +100,18 @@ export const historyListStyles: CSSResult = css`
     line-height: var(--line-height-normal);
   }
 
+  .history-title {
+    flex: 1;
+    min-width: 0;
+    font-weight: var(--font-weight-medium);
+    color: var(--wa-color-text-normal);
+    word-break: break-word;
+  }
+
+  .history-title .markdown-content {
+    font-weight: var(--font-weight-medium);
+  }
+
   .config-section {
     display: flex;
     flex-direction: column;
