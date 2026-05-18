@@ -18,10 +18,7 @@ import {
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
-import {
-  getInterruptible,
-  switchToolUseModel,
-} from '@agent/toolUse/ToolUseAgentRegistry';
+import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
@@ -52,6 +49,7 @@ import {
 } from '../../runtime/history';
 import { App } from './App';
 import { ApiModeForm } from './forms/ApiModeForm';
+import { ModelListForm } from './forms/ModelListForm';
 import { renderHeaderBanner } from './panes/HeaderBanner';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { listSlashCommands, parseSlashInput } from './commands/slashRegistry';
@@ -101,62 +99,47 @@ interface SlashCommandContext {
   readonly getApprovalPolicy: () => CliApprovalPolicy;
   readonly setApprovalPolicy: (policy: CliApprovalPolicy) => void;
   readonly startStoredExecution: (config: AgentConfigPayload) => void;
-  readonly runSessionMutation?: <T>(task: () => Promise<T>) => Promise<T>;
 }
 
-async function applyCliModelSelection(
+async function applyInitialCliModelSelection(
   model: string,
   context: SlashCommandContext,
 ): Promise<void> {
-  const nextModel = model.trim();
-  if (!nextModel) {
-    appendLocalAssistantTranscript('Usage: /model <name>');
+  if (context.session.runPromise) {
+    appendLocalAssistantTranscript(
+      'Model changes are only available before the first message. Start a new chat with texra --model=<name> to choose a different root model.',
+    );
     return;
   }
-
+  const nextModel = model.trim();
   try {
-    if (!context.session.runPromise) {
-      await setCliHelperModel(nextModel);
-      cliState.sessionMeta.set({
-        ...cliState.sessionMeta.get(),
-        model: nextModel,
-      });
-      appendLocalAssistantTranscript(`Model set to ${nextModel}.`);
-      return;
-    }
-
-    const switchActiveModel = async (): Promise<void> => {
-      const streamId = context.session.streamId;
-      const status = streamId ? StreamStatusService.get(streamId) : undefined;
-      if (!streamId || status !== STREAM_STATUS.WAITING) {
-        appendLocalAssistantTranscript(
-          'The model can be changed while the chat is waiting for your next message.',
-        );
-        return;
-      }
-      const result = await switchToolUseModel(streamId, nextModel);
-      if (result.status === 'no_session') {
-        appendLocalAssistantTranscript(
-          'The active chat is no longer available. Start a new chat to use that model.',
-        );
-        return;
-      }
-      await setCliHelperModel(nextModel);
-      cliState.sessionMeta.set({
-        ...cliState.sessionMeta.get(),
-        model: nextModel,
-      });
-      appendLocalAssistantTranscript(`Model set to ${nextModel}.`);
-    };
-
-    if (context.runSessionMutation) {
-      await context.runSessionMutation(switchActiveModel);
-    } else {
-      await switchActiveModel();
-    }
+    await setCliHelperModel(nextModel);
+    cliState.sessionMeta.set({
+      ...cliState.sessionMeta.get(),
+      model: nextModel,
+    });
+    appendLocalAssistantTranscript(`Root model set to ${nextModel}.`);
   } catch (error: unknown) {
     appendLocalAssistantTranscript(toErrorMessage(error));
   }
+}
+
+function openCliModelListForm(context: SlashCommandContext): void {
+  const selectable = !context.session.runPromise;
+  cliState.activeForm.set({
+    commandName: 'model',
+    render: (close) => (
+      <ModelListForm
+        currentModel={cliState.sessionMeta.get().model}
+        apiMode={cliState.sessionMeta.get().apiMode}
+        selectable={selectable}
+        onSelect={(value) => {
+          void applyInitialCliModelSelection(value, context).finally(close);
+        }}
+        onClose={close}
+      />
+    ),
+  });
 }
 
 async function applyCliApiModeSelection(
@@ -337,7 +320,7 @@ async function handleTuiSlashCommand(
       }
       return true;
     case 'model':
-      await applyCliModelSelection(rest, context);
+      openCliModelListForm(context);
       return true;
     case 'api':
       if (!rest) {
@@ -515,8 +498,6 @@ export async function runChat(
   };
 
   const followUpQueue = new PQueue({ concurrency: 1 });
-  const runSessionMutation = async <T,>(task: () => Promise<T>): Promise<T> =>
-    followUpQueue.add(task);
   let requestInputExit: (() => void) | undefined;
 
   const interruptActive = (): void => {
@@ -593,8 +574,9 @@ export async function runChat(
 
   // Pre-register the slash commands the input palette uses.
   registerBuiltinSlashCommands({
+    canSelectModel: () => !session.runPromise,
     onModelSelect: (nextModel) =>
-      applyCliModelSelection(nextModel, {
+      applyInitialCliModelSelection(nextModel, {
         session,
         initialAgent: agent,
         initialModel: model,
@@ -603,7 +585,6 @@ export async function runChat(
         getApprovalPolicy,
         setApprovalPolicy,
         startStoredExecution: (config) => startAgentRun(config),
-        runSessionMutation,
       }),
     onApiModeSelect: (nextMode) => applyCliApiModeSelection(nextMode),
   });
@@ -636,7 +617,6 @@ export async function runChat(
         getApprovalPolicy,
         setApprovalPolicy,
         startStoredExecution: (config) => startAgentRun(config),
-        runSessionMutation,
       })
     ) {
       return;

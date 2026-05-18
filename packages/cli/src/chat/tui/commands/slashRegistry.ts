@@ -1,7 +1,7 @@
 // In-tree slash command registry.
 
 /** A structured-form component renders inline when the user picks a slash
- *  command that declares one (e.g. `/model`). Calls `onDone(result)` to
+ *  command that declares one (e.g. `/api`). Calls `onDone(result)` to
  *  commit the user's selection or `onDone(undefined)` on cancel. */
 export interface SlashFormProps<T = unknown> {
   readonly onDone: (result: T | undefined) => void;
