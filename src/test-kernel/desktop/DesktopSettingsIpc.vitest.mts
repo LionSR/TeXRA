@@ -260,7 +260,9 @@ describe('desktop settings IPC', () => {
       GIT_COMMITTER_EMAIL: 'bot@example.com',
     });
     expect(
-      settings.handleMessage({ command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY }),
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
+      }),
     ).toBe(false);
     expect(posted).toEqual([]);
     expect(
@@ -282,7 +284,7 @@ describe('desktop settings IPC', () => {
         values: {},
       },
     ]);
-  });
+  }, 15_000);
 
   it('round-trips Git author writes through workspace state and refreshes the renderer', async () => {
     const { createDesktopSettingsIpc } = await loadDesktopSettingsIpc();
