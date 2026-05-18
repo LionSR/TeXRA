@@ -77,6 +77,7 @@ import {
   buildClaudeToolUseLog,
   buildClaudeUsageStats,
   CLAUDE_AGENT_EFFORT_LEVELS,
+  CLAUDE_AGENT_NAME,
   CLAUDE_AGENT_PERMISSION_MODES,
   modelSupportsAdaptiveThinking,
   type ClaudeAgentEffort,
@@ -658,7 +659,7 @@ function startClaudeAgentLoop(params: {
 // ============================================================================
 
 export class ClaudeAgentTool extends defineTool({
-  name: 'claude_code',
+  name: CLAUDE_AGENT_NAME,
   description:
     'Spin off a Claude Code agent (via @anthropic-ai/claude-agent-sdk) to perform code analysis, generation, or research. ' +
     'The agent runs the native `claude` binary locally and can read files, run commands, and make edits within its permission mode. ' +
@@ -675,7 +676,7 @@ export class ClaudeAgentTool extends defineTool({
     const model = input.model ?? config.getClaudeAgentModel();
     const effort = input.effort ?? config.getClaudeAgentEffort();
 
-    const approvalLabel = `[claude_code ${permissionMode}] ${input.prompt}`;
+    const approvalLabel = `[${CLAUDE_AGENT_NAME} ${permissionMode}] ${input.prompt}`;
     const approval = await requestBashApproval({ command: approvalLabel });
     if (!approval.accepted) {
       return buildBashApprovalRejectedResult(
@@ -739,7 +740,7 @@ async function launchClaudeAgentSession(
     await registerExecution(
       executionId,
       agentConfig,
-      'claude_code',
+      CLAUDE_AGENT_NAME,
       parentExecutionId,
     );
   } catch {
@@ -752,10 +753,10 @@ async function launchClaudeAgentSession(
     {
       streamPrefix: 'claude@agent-sdk',
       streamCategory: AgentCategory.ToolUse,
-      agentName: 'claude_code',
+      agentName: CLAUDE_AGENT_NAME,
       description: input.prompt,
       config: agentConfig,
-      toolName: 'claude_code',
+      toolName: CLAUDE_AGENT_NAME,
       runtimeHost,
     },
   );

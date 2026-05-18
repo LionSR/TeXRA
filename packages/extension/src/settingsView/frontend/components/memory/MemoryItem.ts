@@ -23,6 +23,7 @@ import {
 } from '@shared/utils/string';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
+import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 
 // Local imports - memory view events
 import { MemoryViewEvents } from './events';
@@ -33,6 +34,7 @@ export class MemoryItem extends LitElement {
     designTokens,
     commonViewStyles,
     markdownStyles,
+    metaStripStyles,
     css`
       :host {
         display: block;
@@ -44,10 +46,6 @@ export class MemoryItem extends LitElement {
         font-weight: var(--font-weight-medium);
         color: var(--wa-color-text-link);
         word-break: break-all;
-      }
-
-      .memory-meta {
-        margin-top: var(--wa-space-2xs);
       }
 
       .memory-contents {
@@ -154,7 +152,7 @@ export class MemoryItem extends LitElement {
     );
   }
 
-  private renderMeta(item: MemoryViewItem): string {
+  private renderMeta(item: MemoryViewItem): TemplateResult {
     const parts: string[] = [];
     if (item.pinned) {
       parts.push('Pinned');
@@ -167,7 +165,7 @@ export class MemoryItem extends LitElement {
     if (item.modifiedBy) {
       parts.push(`by ${item.modifiedBy}`);
     }
-    return parts.join(' · ');
+    return renderDotMeta(parts);
   }
 
   protected override willUpdate(changedProperties: PropertyValues<this>): void {
@@ -181,8 +179,6 @@ export class MemoryItem extends LitElement {
       }
       return;
     }
-    // Pinned items render contents expanded by default; only unpinned items
-    // start collapsed and defer the markdown render until first open.
     this.contentsOpened = this.item?.pinned ?? false;
     this.requestedPreviewFor = null;
     this.cachedPreviewSource = null;
@@ -231,7 +227,7 @@ export class MemoryItem extends LitElement {
             })}
           </div>
         </div>
-        <div class="text-secondary memory-meta">
+        <div class="text-secondary meta-strip">
           ${this.renderMeta(this.item)}
         </div>
         <wa-details

@@ -6,6 +6,10 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
+import {
+  renderSetStatusIcon,
+  statusCheckIconStyles,
+} from '@shared/wa/statusIcons';
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -31,6 +35,7 @@ export class GitTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    statusCheckIconStyles,
     css`
       :host {
         display: block;
@@ -97,11 +102,6 @@ export class GitTab extends LitElement {
 
       .token-remove-btn:hover {
         color: var(--wa-color-danger-on-quiet);
-      }
-
-      .token-status-check {
-        color: var(--wa-color-success-fill-loud);
-        font-size: 1em;
       }
 
       .instructions {
@@ -232,16 +232,23 @@ export class GitTab extends LitElement {
   private renderTokenStatusBadge(): TemplateResult {
     switch (this.githubTokenStatus) {
       case 'secret':
-        return html`<wa-icon
-          library="texra"
-          name="check"
-          class="token-status-check"
-          title="Token set"
-        ></wa-icon>`;
+        return renderSetStatusIcon({
+          isSet: true,
+          fallbackLabel: '',
+          title: 'Token set',
+        });
       case 'env':
-        return html`<wa-tag variant="neutral" size="small">Env</wa-tag>`;
+        return renderSetStatusIcon({
+          isSet: false,
+          fallbackLabel: 'Env',
+          fallbackVariant: 'neutral',
+        });
       default:
-        return html`<wa-tag variant="warning" size="small">Not set</wa-tag>`;
+        return renderSetStatusIcon({
+          isSet: false,
+          fallbackLabel: 'Not set',
+          fallbackVariant: 'warning',
+        });
     }
   }
 

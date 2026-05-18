@@ -940,6 +940,20 @@ export class LaTeXTab extends LitElement {
     `;
   }
 
+  /**
+   * Icon for non-boolean settings (number/enum): an "edit" pencil when the
+   * value has been customized, a neutral gear when it's still the default.
+   * Red is reserved for booleans that are Off, where it carries meaning.
+   */
+  private renderSettingStatusIcon(isCustom: boolean): TemplateResult {
+    return html`<wa-icon
+      library="texra"
+      name=${isCustom ? 'edit' : 'gear'}
+      class="setting-status-icon ${isCustom ? 'is-set' : 'is-default'}"
+      title=${isCustom ? 'Customized' : 'Using default'}
+    ></wa-icon>`;
+  }
+
   private renderNumberSetting(opts: {
     field: 'workflowAutoCompileTimeoutMs' | 'latexdiffTimeoutMs';
     label: string;
@@ -953,12 +967,7 @@ export class LaTeXTab extends LitElement {
     const isCustom = opts.currentValue !== undefined;
     return html`
       <div class="setting-card">
-        <wa-icon
-          library="texra"
-          name=${isCustom ? 'edit' : 'gear'}
-          class="setting-status-icon ${isCustom ? 'is-set' : 'is-default'}"
-          title=${isCustom ? 'Customized' : 'Using default'}
-        ></wa-icon>
+        ${this.renderSettingStatusIcon(isCustom)}
         <div class="setting-info">
           <div class="setting-name">${opts.label}</div>
           <div class="setting-description">${opts.description}</div>
@@ -1013,12 +1022,7 @@ export class LaTeXTab extends LitElement {
     const isCustom = opts.currentValue !== undefined;
     return html`
       <div class="setting-card">
-        <wa-icon
-          library="texra"
-          name=${isCustom ? 'edit' : 'gear'}
-          class="setting-status-icon ${isCustom ? 'is-set' : 'is-default'}"
-          title=${isCustom ? 'Customized' : 'Using default'}
-        ></wa-icon>
+        ${this.renderSettingStatusIcon(isCustom)}
         <div class="setting-info">
           <div class="setting-name">${opts.label}</div>
           <div class="setting-description">${opts.description}</div>

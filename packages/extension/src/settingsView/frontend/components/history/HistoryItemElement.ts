@@ -14,6 +14,7 @@ import { markdownStyles } from '@shared/styles/markdownStyles';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
+import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -34,6 +35,7 @@ export class HistoryItemElement extends LitElement {
     commonViewStyles,
     ...badgeStyles,
     historyStyles,
+    metaStripStyles,
     markdownStyles,
   ];
 
@@ -252,12 +254,8 @@ export class HistoryItemElement extends LitElement {
       }
     }
 
-    // Title for the row — instruction text when present, otherwise the
-    // human description. Falls back to "(no instruction)" so we always have
-    // something prominent at the top, mirroring the memory row's storagePath.
     const titleText = instructionText ?? descriptionText ?? '(no instruction)';
 
-    // Compact metadata strip — same · separated style the Memory row uses.
     const metaParts: Array<string | TemplateResult> = [
       timestamp,
       html`<wa-tag
@@ -329,11 +327,7 @@ export class HistoryItemElement extends LitElement {
               : nothing}
           </div>
         </div>
-        <div class="text-secondary history-meta">
-          ${metaParts.map(
-            (part, i) => html`${i > 0 ? html` · ` : nothing}${part}`,
-          )}
-        </div>
+        <div class="text-secondary meta-strip">${renderDotMeta(metaParts)}</div>
         ${extraDetails.length
           ? html`
               <wa-details

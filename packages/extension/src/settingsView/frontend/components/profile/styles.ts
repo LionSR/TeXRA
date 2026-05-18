@@ -431,11 +431,6 @@ export const profileViewStyles: CSSResult = css`
     flex-shrink: 0;
   }
 
-  .key-status-check {
-    color: var(--wa-color-success-fill-loud);
-    font-size: 1em;
-  }
-
   .provider-group-key-button {
     flex-shrink: 0;
   }

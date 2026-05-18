@@ -7,6 +7,10 @@ import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
 import { badgeStyles, commonViewStyles, designTokens } from '@shared/styles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
+import {
+  renderSetStatusIcon,
+  statusCheckIconStyles,
+} from '@shared/wa/statusIcons';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -24,17 +28,14 @@ import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 
-const STATUS_LABELS: Record<ProviderKeyStatus['status'], string> = {
-  set: 'Set',
+type FallbackStatus = Exclude<ProviderKeyStatus['status'], 'set'>;
+
+const STATUS_LABELS: Record<FallbackStatus, string> = {
   env: 'Env',
   'not-set': 'Not Set',
 };
 
-const STATUS_VARIANTS: Record<
-  ProviderKeyStatus['status'],
-  'brand' | 'neutral' | 'success' | 'warning' | 'danger'
-> = {
-  set: 'success',
+const STATUS_VARIANTS: Record<FallbackStatus, 'neutral'> = {
   env: 'neutral',
   'not-set': 'neutral',
 };
@@ -45,6 +46,7 @@ export class ProviderKeyList extends LitElement {
     designTokens,
     commonViewStyles,
     ...badgeStyles,
+    statusCheckIconStyles,
     profileViewStyles,
   ];
 
@@ -62,19 +64,17 @@ export class ProviderKeyList extends LitElement {
 
   private renderKeyStatus(status: ProviderKeyStatus['status']): TemplateResult {
     if (status === 'set') {
-      return html`<wa-icon
-        library="texra"
-        name="check"
-        class="key-status-check"
-        title="Key set"
-      ></wa-icon>`;
+      return renderSetStatusIcon({
+        isSet: true,
+        fallbackLabel: '',
+        title: 'Key set',
+      });
     }
-    return html`<wa-tag
-      class="key-status-badge"
-      variant=${STATUS_VARIANTS[status]}
-      size="small"
-      >${STATUS_LABELS[status]}</wa-tag
-    >`;
+    return renderSetStatusIcon({
+      isSet: false,
+      fallbackLabel: STATUS_LABELS[status],
+      fallbackVariant: STATUS_VARIANTS[status],
+    });
   }
 
   private renderActions(entry: ProviderKeyStatus): TemplateResult {
