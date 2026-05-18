@@ -7,6 +7,10 @@ import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import {
+  renderSetStatusIcon,
+  statusCheckIconStyles,
+} from '@shared/wa/statusIcons';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -67,7 +71,12 @@ function sortFastFirst(items: ModelSelectionItem[]): ModelSelectionItem[] {
 
 @customElement('model-selection-list')
 export class ModelSelectionList extends LitElement {
-  static override styles = [designTokens, commonViewStyles, profileViewStyles];
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    statusCheckIconStyles,
+    profileViewStyles,
+  ];
 
   @property({ attribute: false }) models: ModelSelectionItem[] = [];
   @property({ attribute: false }) helperModel = '';
@@ -271,27 +280,18 @@ export class ModelSelectionList extends LitElement {
     const enabledCount = group.current.filter((m) => m.enabled).length;
     const totalCount = group.current.length;
     const keyStatus = this.getProviderKeyStatus(group.provider);
-    let keyStatusLabel: string;
-    switch (keyStatus?.status) {
-      case 'set':
-        keyStatusLabel = 'Key set';
-        break;
-      case 'env':
-        keyStatusLabel = 'Env key';
-        break;
-      default:
-        keyStatusLabel = 'No key';
-    }
-    const keyStatusVariant: 'success' | 'neutral' =
-      keyStatus?.status === 'set' ? 'success' : 'neutral';
     const providerKeyActions = keyStatus
       ? html`
-          <wa-tag
-            class="provider-group-key-status"
-            variant=${keyStatusVariant}
-            size="small"
-            >${keyStatusLabel}</wa-tag
-          >
+          <span class="provider-group-key-status">
+            ${renderSetStatusIcon({
+              status: keyStatus.status,
+              title: 'Key set',
+              fallbacks: {
+                env: { label: 'Env key' },
+                'not-set': { label: 'No key' },
+              },
+            })}
+          </span>
           ${renderLabeledActionButton({
             icon: 'key',
             text: 'Set key',

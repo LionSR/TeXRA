@@ -23,16 +23,19 @@ import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
+// Import OdysseySchema from its leaf module so this file (consumed by
+// webview frontends) does not pull in OdysseyTool/OdysseyStore runtime modules.
+import {
+  OdysseySchema,
+  formatOdysseyTime,
+  isOdysseyInFlight,
+  odysseyDurationMs,
+  odysseyElapsedMs,
+} from '@tools/odyssey/odysseyMeta';
+export type { Odyssey, OdysseyStatus } from '@tools/odyssey/odysseyMeta';
 
 // SETTINGS_VIEW_CMD is defined in commands.ts to avoid circular dependency.
 // Re-exported here for consumers that expect it from the schema module.
-import {
-  AgentCategorySchema,
-  AgentMetadataBaseSchema,
-  AgentSourceSchema,
-} from './agent';
-import { AgentModePresetSchema } from './agentPresets';
-import { NESTED_DELEGATION_DEPTH_RANGE } from '../constants/delegationPolicy';
 import {
   DeleteMemoryMessageSchema,
   GetMemoryDataMessageSchema,
@@ -44,6 +47,13 @@ import {
   SetMemoryEnabledMessageSchema,
   UnpinMemoryMessageSchema,
 } from './memoryViewMessages';
+import { NESTED_DELEGATION_DEPTH_RANGE } from '../constants/delegationPolicy';
+import {
+  AgentCategorySchema,
+  AgentMetadataBaseSchema,
+  AgentSourceSchema,
+} from './agent';
+import { AgentModePresetSchema } from './agentPresets';
 import {
   ClearHistoryMessageSchema,
   DeleteAgentMessageSchema,
@@ -64,22 +74,14 @@ import {
   SignOutMessageSchema,
 } from './profileViewMessages';
 import { StreamTabIdSchema } from './identifiers';
-// Import OdysseySchema from its leaf module so this file (consumed by
-// webview frontends) does not pull in OdysseyTool/OdysseyStore runtime modules.
-import {
-  OdysseySchema,
-  formatOdysseyTime,
-  isOdysseyInFlight,
-  odysseyElapsedMs,
-} from '@tools/odyssey/odysseyMeta';
 export { SETTINGS_VIEW_CMD };
 export {
   OdysseySchema,
   formatOdysseyTime,
   isOdysseyInFlight,
+  odysseyDurationMs,
   odysseyElapsedMs,
 };
-export type { Odyssey, OdysseyStatus } from '@tools/odyssey/odysseyMeta';
 
 /** Tab name order - single source of truth for tab indices */
 export const SETTINGS_TAB_ORDER = [
