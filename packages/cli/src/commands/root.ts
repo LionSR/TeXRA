@@ -22,6 +22,7 @@ import {
   type ExecutionId,
   type ExecutionStatus,
 } from '@shared/schemas';
+import { getRunDir } from '@utils/files';
 import { generateExecutionId } from '@utils/core/executionId';
 import { isNonEmptyString } from '@utils/core/stringCore';
 
@@ -803,9 +804,11 @@ type ExecuteAgentResult = Awaited<
 >;
 type CliRunResult = ExecuteAgentResult & {
   terminalStatus: ExecutionStatus;
+  runDirectory?: string;
   copiedOutput?: string;
   copiedOutputs?: string[];
 };
+type CliWorkflowRunResult = Extract<CliRunResult, { category: 'workflow' }>;
 
 interface WorkflowRunInit {
   readonly agent: string;
@@ -915,6 +918,9 @@ async function resolveWorkflowOutput(
   const baseResult: CliRunResult = {
     ...result,
     terminalStatus: cliTerminalStatus(result),
+    ...(result.category === AgentCategory.Workflow
+      ? { runDirectory: getRunDir(result.executionId) }
+      : {}),
   };
   if (outputDir && result.category === AgentCategory.Workflow) {
     const targetRoot = path.isAbsolute(outputDir)
@@ -963,6 +969,18 @@ function cliTerminalStatus(result: ExecuteAgentResult): ExecutionStatus {
   return result.status === 'error'
     ? EXECUTION_STATUS.ERROR
     : EXECUTION_STATUS.COMPLETED;
+}
+
+function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
+  if (result.copiedOutputs?.length) {
+    return result.copiedOutputs.join('\n');
+  }
+  if (result.copiedOutput) {
+    return result.copiedOutput;
+  }
+
+  const finalOutput = result.outputs.at(-1);
+  return finalOutput?.absolutePath ?? result.runDirectory ?? result.status;
 }
 
 async function runWorkflowAgent(
@@ -1039,7 +1057,7 @@ async function runWorkflowAgent(
     await runtimeHost.close();
   }
 
-  const { copiedOutput, displayResult } = await resolveWorkflowOutput(
+  const { displayResult } = await resolveWorkflowOutput(
     init.output,
     init.outputDir,
     result,
@@ -1054,14 +1072,8 @@ async function runWorkflowAgent(
       ts: new Date().toISOString(),
       result: displayResult,
     });
-  } else if (result.category === AgentCategory.Workflow) {
-    const finalOutput = result.outputs.at(-1);
-    writeTextStdout(
-      finalOutput?.relativePath ??
-        copiedOutput ??
-        finalOutput?.absolutePath ??
-        result.status,
-    );
+  } else if (displayResult.category === AgentCategory.Workflow) {
+    writeTextStdout(formatWorkflowTextResult(displayResult));
   } else {
     writeTextStdout(result.status);
   }
