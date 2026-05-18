@@ -46,6 +46,8 @@ export interface CliAuthProfile {
 export interface CliLoginOptions {
   provider?: OAuthProvider;
   openBrowser?: boolean;
+  selectAccount?: boolean;
+  loginHint?: string;
   log?: LogBackend;
   onAuthUrl?: (url: string) => void;
   manualBrowserHint?: string;
@@ -90,12 +92,19 @@ export async function signInCliSupabase(
   const authCoordinator = getCliSupabaseAuthCoordinator();
   const callbackServer = await startLoopbackCallbackServer(authCoordinator);
   const redirectTo = callbackServer.redirectTo;
+  const queryParams = buildOAuthQueryParams(provider, options);
 
   try {
+    if (options.selectAccount || options.loginHint) {
+      await authCoordinator.clearSession();
+    }
     const { data, error } =
       await SupabaseClient.getClient().auth.signInWithOAuth({
         provider,
-        options: { redirectTo },
+        options: {
+          redirectTo,
+          ...(queryParams && { queryParams }),
+        },
       });
     if (error || !data.url) {
       throw new Error(
@@ -119,6 +128,21 @@ export async function signInCliSupabase(
   } finally {
     await callbackServer.close();
   }
+}
+
+function buildOAuthQueryParams(
+  provider: OAuthProvider,
+  options: Pick<CliLoginOptions, 'selectAccount' | 'loginHint'>,
+): Record<string, string> | undefined {
+  const queryParams: Record<string, string> = {};
+  if (options.loginHint) {
+    queryParams[provider === 'github' ? 'login' : 'login_hint'] =
+      options.loginHint;
+  }
+  if (options.selectAccount && provider === 'google') {
+    queryParams.prompt = 'select_account';
+  }
+  return Object.keys(queryParams).length > 0 ? queryParams : undefined;
 }
 
 export async function signOutCliSupabase(): Promise<void> {

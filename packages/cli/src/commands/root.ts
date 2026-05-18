@@ -35,6 +35,10 @@ import {
 } from '../runtime/approvalAdapter';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { getCliModelAccessList } from '../runtime/modelAccess';
+import {
+  fetchRelayUsageSummary,
+  type RelayUsageSummary,
+} from '../runtime/relayUsage';
 import { createCliRuntimeHost } from '../runtime/runtimeHost';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
@@ -223,6 +227,16 @@ const loginCommand = defineCommand({
       type: 'boolean',
       description: 'Print the sign-in URL instead of opening a browser',
     },
+    'select-account': {
+      type: 'boolean',
+      description:
+        'Ask the OAuth provider to show account selection when supported',
+    },
+    'login-hint': {
+      type: 'string',
+      description:
+        'Suggest a specific provider account, such as a GitHub username or Google email',
+    },
   },
   async run(ctx) {
     const context = await contextFromArgs(ctx.args);
@@ -233,6 +247,8 @@ const loginCommand = defineCommand({
       await runLogin(context, {
         provider,
         noBrowser: ctx.args['no-browser'] === true,
+        selectAccount: ctx.args['select-account'] === true,
+        loginHint: optString(ctx.args['login-hint']),
       }),
     );
   },
@@ -250,6 +266,8 @@ export function resolveLoginProvider(
 interface LoginInit {
   readonly provider: string;
   readonly noBrowser: boolean;
+  readonly selectAccount: boolean;
+  readonly loginHint?: string;
 }
 
 async function runLogin(context: CliContext, init: LoginInit): Promise<number> {
@@ -260,6 +278,11 @@ async function runLogin(context: CliContext, init: LoginInit): Promise<number> {
     return CliExitCode.Usage;
   }
   await initCliPlatform({ ...context, quietLogs: true });
+  if (init.provider === 'github' && init.selectAccount && !init.loginHint) {
+    writeTextStderr(
+      'GitHub does not support --select-account by itself. Use --login-hint <username> to request a specific GitHub account.',
+    );
+  }
   if (context.outputFormat === 'text' && !init.noBrowser) {
     writeTextStdout(`Opening browser for TeXRA ${init.provider} sign-in...`);
   }
@@ -268,6 +291,8 @@ async function runLogin(context: CliContext, init: LoginInit): Promise<number> {
     session = await signInCliSupabase({
       provider: init.provider,
       openBrowser: !init.noBrowser,
+      selectAccount: init.selectAccount,
+      loginHint: init.loginHint,
       manualBrowserHint: 'texra login --no-browser',
       onAuthUrl: (url) => {
         if (init.noBrowser) {
@@ -375,9 +400,75 @@ const authStatusCommand = defineCommand({
   },
 });
 
+const usageCommand = defineCommand({
+  meta: { name: 'usage', description: 'Show relay usage for this account' },
+  args: {
+    ...GLOBAL_ARGS,
+    month: {
+      type: 'string',
+      description: 'UTC month to show, formatted as YYYY-MM',
+    },
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
+    let summary: RelayUsageSummary;
+    try {
+      await initCliPlatform({ ...context, quietLogs: true });
+      const profile = await getCliAuthProfile();
+      if (!profile.authenticated) {
+        writeTextStderr('Not signed in. Run `texra login` first.');
+        setExitCode(CliExitCode.ModelOrNetworkError);
+        return;
+      }
+      summary = await fetchRelayUsageSummary({
+        tier: profile.tier ?? 'free',
+        month: optString(ctx.args.month),
+      });
+    } catch (error) {
+      writeTextStderr(toErrorMessage(error));
+      setExitCode(CliExitCode.ModelOrNetworkError);
+      return;
+    }
+
+    writeRelayUsageSummary(context, summary);
+    setExitCode(CliExitCode.Success);
+  },
+});
+
+function writeRelayUsageSummary(
+  context: CliContext,
+  summary: RelayUsageSummary,
+): void {
+  if (context.outputFormat === 'json') {
+    writeTextStdout(JSON.stringify(summary, null, 2));
+    return;
+  }
+
+  if (context.outputFormat === 'ndjson') {
+    writeNdjsonStdout({
+      kind: 'relay-usage',
+      ts: new Date().toISOString(),
+      ...summary,
+    });
+    return;
+  }
+
+  const month = summary.periodStart.slice(0, 7);
+  writeTextStdout(
+    [
+      `Relay usage for ${month} (${summary.tier})`,
+      `Spend: $${summary.costUsd.toFixed(2)} / $${summary.limitUsd.toFixed(2)} (${summary.usagePercent.toFixed(1)}%)`,
+      `Remaining: $${summary.remainingUsd.toFixed(2)}`,
+      `Streams: ${summary.streamCount}`,
+      `Tokens: ${summary.inputTokens} input (${summary.cachedTokens} cached), ${summary.outputTokens} output, ${summary.reasoningTokens} reasoning`,
+      `Models: ${summary.modelsUsed}; providers: ${summary.providersUsed}`,
+    ].join('\n'),
+  );
+}
+
 const authCommand = defineCommand({
   meta: { name: 'auth', description: 'Authentication commands' },
-  subCommands: { status: authStatusCommand },
+  subCommands: { status: authStatusCommand, usage: usageCommand },
 });
 
 const runWorkflowCommand = defineCommand({
@@ -615,6 +706,7 @@ const rootCommand = defineCommand({
     models: modelsCommand,
     login: loginCommand,
     logout: logoutCommand,
+    usage: usageCommand,
     auth: authCommand,
     version: versionCommand,
     help: helpCommand,
@@ -644,15 +736,15 @@ const GLOBAL_BOOL_FLAGS = new Set<string>(
   }),
 );
 
-/**
- * Citty's runCommand consumes args at the root and passes only `rawArgs.slice(
- * subCommandIndex + 1)` to the matched subcommand. That means global flags
- * appearing before the subcommand name (`texra --output-format ndjson agents
- * list`) never reach the subcommand's parser. We sidestep that by lifting
- * leading global flags to the end of rawArgs so they live inside the
- * subcommand's slice. No-op when there is no subcommand or no leading globals.
- */
-export function reorderGlobalFlags(rawArgs: readonly string[]): string[] {
+interface LeadingGlobalFlags {
+  readonly leadingGlobals: readonly string[];
+  readonly restIndex: number;
+  readonly stoppedOnUnknownFlag: boolean;
+}
+
+function collectLeadingGlobalFlags(
+  rawArgs: readonly string[],
+): LeadingGlobalFlags {
   const leadingGlobals: string[] = [];
   let i = 0;
   while (i < rawArgs.length) {
@@ -679,14 +771,37 @@ export function reorderGlobalFlags(rawArgs: readonly string[]): string[] {
       }
       continue;
     }
-    // Unknown leading flag — leave the rest intact so runMain can surface
+    return { leadingGlobals, restIndex: i, stoppedOnUnknownFlag: true };
+  }
+  return { leadingGlobals, restIndex: i, stoppedOnUnknownFlag: false };
+}
+
+/**
+ * Citty's runCommand consumes args at the root and passes only `rawArgs.slice(
+ * subCommandIndex + 1)` to the matched subcommand. That means global flags
+ * appearing before the subcommand name (`texra --output-format ndjson agents
+ * list`) never reach the subcommand's parser. We sidestep that by lifting
+ * leading global flags to the end of rawArgs so they live inside the
+ * subcommand's slice. No-op when there is no subcommand or no leading globals.
+ */
+export function reorderGlobalFlags(rawArgs: readonly string[]): string[] {
+  const { leadingGlobals, restIndex, stoppedOnUnknownFlag } =
+    collectLeadingGlobalFlags(rawArgs);
+  if (stoppedOnUnknownFlag) {
+    // Unknown leading flag: leave the rest intact so runMain can surface
     // `--help`, `--version`, or an unknown-flag error.
     return [...rawArgs];
   }
-  if (i >= rawArgs.length || leadingGlobals.length === 0) {
+  if (restIndex >= rawArgs.length || leadingGlobals.length === 0) {
     return [...rawArgs];
   }
-  return [...rawArgs.slice(i), ...leadingGlobals];
+  return [...rawArgs.slice(restIndex), ...leadingGlobals];
+}
+
+export function normalizeRootShortcuts(rawArgs: readonly string[]): string[] {
+  const { leadingGlobals, restIndex } = collectLeadingGlobalFlags(rawArgs);
+  if (rawArgs[restIndex] !== '--logout') return [...rawArgs];
+  return ['logout', ...leadingGlobals, ...rawArgs.slice(restIndex + 1)];
 }
 
 function isCliError(error: unknown): error is Error & { code?: string } {
@@ -745,7 +860,9 @@ export async function runCli(
   argv?: readonly string[],
 ): Promise<{ exitCode: number }> {
   pendingExitCode = CliExitCode.Success;
-  const rawArgs = reorderGlobalFlags(argv ? [...argv] : readCliArgv());
+  const rawArgs = reorderGlobalFlags(
+    normalizeRootShortcuts(argv ? [...argv] : readCliArgv()),
+  );
 
   // `--help` / `-h` anywhere prints usage for the deepest matched subcommand
   // (e.g. `texra agents list --help` → list-level usage), mirroring citty's
