@@ -394,6 +394,17 @@ describe('formatProviderHttpError', () => {
     expect(formatted.userRetryable).toBe(true);
   });
 
+  it('treats provider empty responses as retryable transient failures', () => {
+    const formatted = formatProviderHttpError(
+      new Error('No output generated - API returned empty response'),
+    );
+
+    expect(formatted.message).toBe(
+      'No output generated - API returned empty response',
+    );
+    expect(formatted.userRetryable).toBe(true);
+  });
+
   it('formats tagged Anthropic user abort errors', () => {
     const error = new AnthropicAPIUserAbortError();
     tagAnthropicSdkError(error, 'anthropic');
