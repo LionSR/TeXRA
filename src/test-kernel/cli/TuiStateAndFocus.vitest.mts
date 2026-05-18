@@ -448,6 +448,19 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     } as unknown as CliRuntimeHost;
   }
 
+  it('registers suppressed child streams without switching away from the parent page', () => {
+    const wrapped = wrapRuntimeHost(makeHost());
+    cliState.activeStreamId.set(root);
+
+    wrapped.emit('setActiveStream', {
+      streamId: child1,
+      suppressViewSwitch: true,
+    });
+
+    expect(cliState.activeStreamId.get()).toBe(root);
+    expect(cliState.streams.get().has(child1)).toBe(true);
+  });
+
   it('persists a bounded completed-process transcript before pruning processOutput', () => {
     const wrapped = wrapRuntimeHost(makeHost());
     const lines = Array.from(
