@@ -230,6 +230,34 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
   });
 });
 
+describe('ModelHandlerOpenAIResponse.extractAssistantText', () => {
+  it('extracts assistant text from response output text parts', () => {
+    const handler = createHandler();
+    const message = {
+      type: 'message',
+      role: 'assistant',
+      content: [
+        { type: 'output_text', text: 'alpha' },
+        { type: 'refusal', refusal: 'skip' },
+        { type: 'input_text', text: ' beta' },
+      ],
+    } as unknown as ResponseInputItem;
+
+    assert.equal(handler.extractAssistantText(message), 'alpha beta');
+  });
+
+  it('ignores non-assistant message content', () => {
+    const handler = createHandler();
+    const message = {
+      type: 'message',
+      role: 'user',
+      content: [{ type: 'input_text', text: 'not assistant text' }],
+    } as unknown as ResponseInputItem;
+
+    assert.equal(handler.extractAssistantText(message), undefined);
+  });
+});
+
 describe('ModelHandlerOpenAIResponse.initializeOutputAndPrefill', () => {
   it('skips pseudo-prefill instruction when prefill is empty', async () => {
     const tempDir = fs.mkdtempSync(
