@@ -1,8 +1,9 @@
 // Standard library imports
-import { promises as fs } from 'fs';
 import * as path from 'path';
 
 // Local imports - shared schemas
+import { platform } from '@platform/platform';
+import { isFile } from '@common/files/fsEntryType';
 import type { ExecutionId, FileLocation } from '@shared/schemas';
 
 // Local imports - file utilities
@@ -66,36 +67,27 @@ function toPdfRelativePath(options: PublishCompiledPdfOptions): string {
 }
 
 async function ensureParentDir(filePath: string): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await platform().fs.createDirectory(path.dirname(filePath));
 }
 
-async function linkOrCopyFile(
+async function copyArtifactFile(
   source: string,
   destination: string,
 ): Promise<void> {
   await ensureParentDir(destination);
-  await fs.rm(destination, { force: true, recursive: true });
-
-  try {
-    await fs.symlink(source, destination);
-  } catch (error) {
-    const err = error as NodeJS.ErrnoException;
-    if (
-      err.code &&
-      ['EPERM', 'EACCES', 'EINVAL', 'ENOTSUP'].includes(err.code)
-    ) {
-      await fs.copyFile(source, destination);
-      return;
-    }
-    throw err;
-  }
+  await platform()
+    .fs.delete(destination, { recursive: true })
+    .catch(() => {});
+  await platform().fs.copy(source, destination, { overwrite: true });
 }
 
 export async function publishCompiledPdfArtifact(
   options: PublishCompiledPdfOptions,
 ): Promise<CompiledPdfArtifact | null> {
-  const stats = await fs.stat(options.compiledPdfPath).catch(() => null);
-  if (!stats?.isFile()) return null;
+  const stats = await platform()
+    .fs.stat(options.compiledPdfPath)
+    .catch(() => null);
+  if (!stats || !isFile(stats.type)) return null;
 
   const pdfRelativePath = toPdfRelativePath(options);
   const roundRelativePath = path.join(
@@ -110,8 +102,8 @@ export async function publishCompiledPdfArtifact(
     latestRelativePath,
   );
 
-  await linkOrCopyFile(options.compiledPdfPath, roundAbsolutePath);
-  await linkOrCopyFile(roundAbsolutePath, latestAbsolutePath);
+  await copyArtifactFile(options.compiledPdfPath, roundAbsolutePath);
+  await copyArtifactFile(roundAbsolutePath, latestAbsolutePath);
 
   return {
     round: options.round,
