@@ -16,6 +16,7 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
       borderStyle="double"
       color="yellow"
       title="Run bash command?"
+      alwaysAllow={{ kind: 'toolEdit', label: 'approve tools this session' }}
       onDecide={props.onDecide}
     >
       <Box marginY={1}>
