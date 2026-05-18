@@ -401,7 +401,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     check: async () => {
       try {
         await importCodexClass();
-        return findCodexBinaryPath() != null;
+        return (await findCodexBinaryPath()) != null;
       } catch {
         return false;
       }
@@ -426,7 +426,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       }
 
       // Step 2: Can we find the native binary?
-      const codexPath = findCodexBinaryPath();
+      const codexPath = await findCodexBinaryPath();
       if (!codexPath) {
         return (
           'Codex SDK loaded but native binary not found. ' +
@@ -472,7 +472,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     check: async () => {
       try {
         await importClaudeAgentSdk();
-        return findClaudeBinaryPath() != null;
+        return (await findClaudeBinaryPath()) != null;
       } catch {
         return false;
       }
@@ -492,7 +492,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
         return `Claude Code SDK import failed: ${msg}`;
       }
 
-      const claudePath = findClaudeBinaryPath();
+      const claudePath = await findClaudeBinaryPath();
       if (!claudePath) {
         return (
           'Claude Code SDK loaded but native `claude` binary not found. ' +

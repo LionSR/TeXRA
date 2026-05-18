@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 // Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -76,6 +76,16 @@ afterEach(async () => {
 });
 
 describe('ProcessOutputPoller', () => {
+  beforeEach(async () => {
+    const [{ initPlatform }, { nodeFilesystem }, { createFakePlatform }] =
+      await Promise.all([
+        import('@platform/platform'),
+        import('@platform/defaults/nodeFilesystem'),
+        import('@test/support/FakePlatform'),
+      ]);
+    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
+  });
+
   it('flushes only new process output bytes', async () => {
     const { host, events } = createRuntimeHost();
     const { handle, stdoutPath, stderrPath } = await makeProcessHandle(host);
