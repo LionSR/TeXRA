@@ -252,10 +252,46 @@ export class HistoryItemElement extends LitElement {
       }
     }
 
+    // Title for the row — instruction text when present, otherwise the
+    // human description. Falls back to "(no instruction)" so we always have
+    // something prominent at the top, mirroring the memory row's storagePath.
+    const titleText = instructionText ?? descriptionText ?? '(no instruction)';
+
+    // Compact metadata strip — same · separated style the Memory row uses.
+    const metaParts: Array<string | TemplateResult> = [
+      timestamp,
+      html`<wa-tag
+        class="agent-category-badge"
+        variant=${categoryVariant}
+        size="small"
+      >
+        ${decorator.icon
+          ? html`<wa-icon library="texra" name=${decorator.icon}></wa-icon>`
+          : nothing}
+        ${decorator.label}
+      </wa-tag>`,
+      `Agent: ${config.agent ?? 'Unknown'}`,
+      `Model: ${config.model ?? 'Unknown'}`,
+    ];
+    if (config.agentCategory === AGENT_CATEGORY.WORKFLOW) {
+      if (config.inputFiles?.length) {
+        metaParts.push(`Inputs: ${config.inputFiles.join(', ')}`);
+      }
+      if (config.mediaFiles?.length) {
+        metaParts.push(`Media: ${config.mediaFiles.join(', ')}`);
+      }
+    }
+
     return html`
       <div class="list-item history-item">
         <div class="list-item-header">
-          <div class="text-secondary history-timestamp">${timestamp}</div>
+          <div class="history-title">
+            ${instructionText
+              ? html`<div class="markdown-content">
+                  ${unsafeHTML(this.renderMarkdown(titleText))}
+                </div>`
+              : html`<span>${titleText}</span>`}
+          </div>
           <div
             class="history-actions action-button-group"
             @click=${this.handleActionClick}
@@ -293,58 +329,10 @@ export class HistoryItemElement extends LitElement {
               : nothing}
           </div>
         </div>
-        ${descriptionText
-          ? html`<div class="history-description">${descriptionText}</div>`
-          : nothing}
-        <div class="history-details basic-details">
-          <span class="history-label">Category:</span>
-          <span class="history-value">
-            <wa-tag
-              class="agent-category-badge"
-              variant=${categoryVariant}
-              size="small"
-            >
-              ${decorator.icon
-                ? html`<wa-icon
-                    library="texra"
-                    name=${decorator.icon}
-                  ></wa-icon>`
-                : nothing}
-              ${decorator.label}
-            </wa-tag>
-          </span>
-          <span class="history-label">Agent:</span>
-          <span class="history-value">${config.agent ?? 'Unknown'}</span>
-          <span class="history-label">Model:</span>
-          <span class="history-value">${config.model ?? 'Unknown'}</span>
-          <span class="history-label">Instruction:</span>
-          <div class="history-value">
-            ${instructionText
-              ? html`<div class="markdown-content">
-                  ${unsafeHTML(this.renderMarkdown(instructionText))}
-                </div>`
-              : html`<em class="history-none">Not set</em>`}
-          </div>
-          ${config.agentCategory === AGENT_CATEGORY.WORKFLOW
-            ? html`
-                ${config.inputFiles?.length
-                  ? html`
-                      <span class="history-label">InputFiles:</span>
-                      <span class="history-value"
-                        >${config.inputFiles.join(', ')}</span
-                      >
-                    `
-                  : nothing}
-                ${config.mediaFiles?.length
-                  ? html`
-                      <span class="history-label">MediaFiles:</span>
-                      <span class="history-value"
-                        >${config.mediaFiles.join(', ')}</span
-                      >
-                    `
-                  : nothing}
-              `
-            : nothing}
+        <div class="text-secondary history-meta">
+          ${metaParts.map(
+            (part, i) => html`${i > 0 ? html` · ` : nothing}${part}`,
+          )}
         </div>
         ${extraDetails.length
           ? html`

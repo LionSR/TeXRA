@@ -181,7 +181,9 @@ export class MemoryItem extends LitElement {
       }
       return;
     }
-    this.contentsOpened = false;
+    // Pinned items render contents expanded by default; only unpinned items
+    // start collapsed and defer the markdown render until first open.
+    this.contentsOpened = this.item?.pinned ?? false;
     this.requestedPreviewFor = null;
     this.cachedPreviewSource = null;
     this.cachedPreviewHtml = '';
@@ -235,6 +237,7 @@ export class MemoryItem extends LitElement {
         <wa-details
           class="collapsible memory-contents"
           summary="Contents"
+          ?open=${this.item.pinned}
           @wa-show=${this.handleContentsShow}
         >
           ${this.contentsOpened

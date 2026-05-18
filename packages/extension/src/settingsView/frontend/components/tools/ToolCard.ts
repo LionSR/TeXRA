@@ -3,6 +3,7 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
@@ -17,7 +18,7 @@ import type {
   ToolCommandKind,
   ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
-import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 @customElement('tool-card')
 export class ToolCard extends LitElement {
@@ -233,7 +234,7 @@ export class ToolCard extends LitElement {
   }
 
   private handleToggle(e: Event): void {
-    const target = e.currentTarget as WaCheckbox | null;
+    const target = e.currentTarget as WaSwitch | null;
     this.dispatchEvent(
       createEvent('tool-toggle', {
         toolId: this.item.id,
@@ -423,7 +424,7 @@ export class ToolCard extends LitElement {
   private renderToggle(): TemplateResult | typeof nothing {
     if (!this.item.toggleable) return nothing;
     return html`
-      <wa-checkbox
+      <wa-switch
         class="tool-toggle"
         title="${this.item.enabled !== false ? 'Disable' : 'Enable'} ${this.item
           .name} for agent runs"
@@ -433,7 +434,7 @@ export class ToolCard extends LitElement {
         @change=${this.handleToggle}
       >
         Use in runs
-      </wa-checkbox>
+      </wa-switch>
     `;
   }
 

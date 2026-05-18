@@ -100,6 +100,30 @@ export const historyListStyles: CSSResult = css`
     line-height: var(--line-height-normal);
   }
 
+  /* Compact one-line metadata strip — matches the · separator style used by
+     the Memory list, so both tabs feel like the same product. */
+  .history-meta {
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+    margin-top: var(--wa-space-3xs);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--wa-space-3xs) 0;
+    align-items: center;
+  }
+
+  .history-title {
+    flex: 1;
+    min-width: 0;
+    font-weight: var(--font-weight-medium);
+    color: var(--wa-color-text-normal);
+    word-break: break-word;
+  }
+
+  .history-title .markdown-content {
+    font-weight: var(--font-weight-medium);
+  }
+
   .config-section {
     display: flex;
     flex-direction: column;

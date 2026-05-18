@@ -919,13 +919,14 @@ export class LaTeXTab extends LitElement {
           <div class="setting-name">${opts.label}</div>
           <div class="setting-description">${opts.description}</div>
         </div>
-        <button
-          class="tab-action-btn"
-          @click=${() => this.dispatchSetConfigValue(opts.field, !effective)}
+        <wa-switch
+          ?checked=${effective}
+          @change=${(e: Event) => {
+            const checked = (e.target as WaSwitch).checked;
+            this.dispatchSetConfigValue(opts.field, checked);
+          }}
           title="Toggle"
-        >
-          ${effective ? 'On' : 'Off'}
-        </button>
+        ></wa-switch>
         ${isCustom
           ? html`<button
               class="tab-action-btn"
