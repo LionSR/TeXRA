@@ -18,8 +18,8 @@ import type {
 // Side-effect imports - register WA icon and spinner components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
-import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
-import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import '@awesome.me/webawesome/dist/components/switch/switch.js';
+import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 // Side-effect: register tool card component
 import '../components/tools/ToolCard';
@@ -229,7 +229,7 @@ export class ToolsTab extends LitElement {
   }
 
   private emitToggle(eventName: string, e: Event): void {
-    const target = e.target as WaCheckbox | null;
+    const target = e.target as WaSwitch | null;
     this.dispatchEvent(
       createEvent(eventName, { enabled: Boolean(target?.checked) }),
     );
@@ -256,12 +256,12 @@ export class ToolsTab extends LitElement {
         </div>
 
         <div class="setting-block">
-          <wa-checkbox
+          <wa-switch
             ?checked=${this.bashApprovalEnabled}
             @change=${this.handleBashApprovalToggle}
           >
             Require approval for shell commands &amp; agent sessions
-          </wa-checkbox>
+          </wa-switch>
         </div>
       </div>
     `;
@@ -282,12 +282,12 @@ export class ToolsTab extends LitElement {
             are scrubbed before upload and performance tracing stays disabled.
           </p>
           <div class="desktop-settings-row">
-            <wa-checkbox
+            <wa-switch
               ?checked=${this.desktopCrashReportingEnabled}
               @change=${this.handleDesktopCrashReportingToggle}
             >
               Enable native crash reporting
-            </wa-checkbox>
+            </wa-switch>
             <wa-tag
               variant=${this.desktopCrashReportingConfigured
                 ? 'success'

@@ -11,6 +11,8 @@ import {
   odysseyElapsedMs,
 } from '@shared/schemas';
 import type { Odyssey, OdysseyStatus } from '@shared/schemas';
+import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
+import type { MetaPart } from '@shared/wa/metaStrip';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
@@ -23,6 +25,7 @@ export class OdysseyTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    metaStripStyles,
     css`
       :host {
         display: block;
@@ -92,14 +95,6 @@ export class OdysseyTab extends LitElement {
         -webkit-box-orient: vertical;
       }
 
-      .meta {
-        display: flex;
-        gap: var(--wa-space-s);
-        font-size: var(--wa-font-size-xs);
-        color: var(--wa-color-text-quiet);
-        margin-top: 2px;
-      }
-
       .stream-id {
         font-family: var(--wa-font-family-mono);
         font-size: var(--wa-font-size-xs);
@@ -161,6 +156,16 @@ export class OdysseyTab extends LitElement {
 
   private renderRow(item: Odyssey): TemplateResult {
     const inFlight = isOdysseyInFlight(item);
+    const metaParts: MetaPart[] = [
+      html`<span class="stream-id">${item.streamId}</span>`,
+      html`<span
+        title="Wall-clock time since the odyssey was started (includes idle time between agent turns)"
+        >started ${formatOdysseyTime(odysseyElapsedMs(item))} ago</span
+      >`,
+    ];
+    if (item.continuationCount > 0) {
+      metaParts.push(`${item.continuationCount} continuations`);
+    }
     return html`
       <div
         class=${'odyssey-row' + (inFlight ? ' is-clickable' : '')}
@@ -176,12 +181,8 @@ export class OdysseyTab extends LitElement {
         >
         <div>
           <div class="objective" title=${item.objective}>${item.objective}</div>
-          <div class="meta">
-            <span class="stream-id">${item.streamId}</span>
-            <span>· ${formatOdysseyTime(odysseyElapsedMs(item))} elapsed</span>
-            ${item.continuationCount > 0
-              ? html`<span>· ${item.continuationCount} continuations</span>`
-              : nothing}
+          <div class="text-secondary meta-strip">
+            ${renderDotMeta(metaParts)}
           </div>
         </div>
         ${inFlight
