@@ -7,6 +7,7 @@ import { ApprovalModal } from './modals/ApprovalModal';
 import { ConversationPane } from './panes/ConversationPane';
 import { InputBar } from './panes/InputBar';
 import { StatusBar } from './panes/StatusBar';
+import { StreamTabsStrip } from './panes/StreamTabsStrip';
 import { SubagentList } from './panes/SubagentList';
 import { TodosPlanPanel } from './panes/TodosPlanPanel';
 import { currentApproval } from './state/approvalQueue';
@@ -85,6 +86,7 @@ export function App(props: AppProps): React.JSX.Element {
         disabled={inputDisabled}
         history={props.history}
       />
+      <StreamTabsStrip width={columns} />
       <StatusBar />
     </Box>
   );
