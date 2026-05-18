@@ -77,6 +77,41 @@ For workflow agents, text output prints the final generated path in run storage
 such as `r1/paper.polished.tex`. If `--output` is provided, TeXRA also copies
 that final artifact to the requested destination.
 
+## Execution History
+
+TeXRA stores completed executions in the workspace run store. List recent runs:
+
+```bash
+texra history list
+texra history list --output-format ndjson
+```
+
+Text output prints one tab-separated row per execution:
+
+```text
+<id>    <timestamp>    <agent>    <status>    <primary input>
+```
+
+The NDJSON form is stable for scripts. Each line has kind `history-entry` and
+contains the same execution entry object used by JSON output.
+
+Inspect or delete one execution:
+
+```bash
+texra history show <id>
+texra history delete <id>
+```
+
+Resume a stored execution configuration headlessly:
+
+```bash
+texra resume <id>
+```
+
+The interactive chat also accepts `/resume`. With no id it prints recent
+executions; with an id it starts from the stored execution configuration. A
+missing or malformed id exits with code 2 in headless commands.
+
 ## Workspace Defaults
 
 The CLI reads optional, non-secret defaults from `.texra/config.json` in the
