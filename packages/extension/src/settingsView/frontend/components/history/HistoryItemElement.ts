@@ -51,6 +51,7 @@ export class HistoryItemElement extends LitElement {
   /** Cached markdown render to avoid re-parsing on every Lit update cycle. */
   private cachedInstructionSource: string | null = null;
   private cachedInstructionHtml = '';
+  private readonly cachedValueMarkdown = new Map<string, string>();
 
   @queryAll('mark')
   private markElements!: HTMLElement[];
@@ -87,6 +88,15 @@ export class HistoryItemElement extends LitElement {
       this.cachedInstructionHtml = getLightweightMd().render(text);
     }
     return this.cachedInstructionHtml;
+  }
+
+  private renderMarkdownValue(value: string): TemplateResult {
+    let rendered = this.cachedValueMarkdown.get(value);
+    if (rendered == null) {
+      rendered = getLightweightMd().render(value);
+      this.cachedValueMarkdown.set(value, rendered);
+    }
+    return html`<span class="markdown-content">${unsafeHTML(rendered)}</span>`;
   }
 
   private handleAction(action: string): void {
@@ -176,10 +186,13 @@ export class HistoryItemElement extends LitElement {
 
   private renderValue(value: ConfigValue): TemplateResult {
     if (Array.isArray(value)) {
-      return html`${value.join(', ')}`;
+      return this.renderMarkdownValue(value.join(', '));
     }
     if (typeof value === 'boolean') {
       return html`${value ? 'Yes' : 'No'}`;
+    }
+    if (typeof value === 'string') {
+      return this.renderMarkdownValue(value);
     }
     return html`${value ?? ''}`;
   }

@@ -77,6 +77,18 @@ export function odysseyElapsedMs(odyssey: { createdAt: string }): number {
   return Math.max(0, Date.now() - new Date(odyssey.createdAt).getTime());
 }
 
+export function odysseyDurationMs(odyssey: {
+  status: OdysseyStatus;
+  createdAt: string;
+  updatedAt: string;
+}): number {
+  const start = new Date(odyssey.createdAt).getTime();
+  const end = isOdysseyInFlight(odyssey)
+    ? Date.now()
+    : new Date(odyssey.updatedAt).getTime();
+  return Math.max(0, end - start);
+}
+
 /**
  * Hour-aware duration formatter for Odyssey timings. Lives here (not in
  * `@utils/core/stringCore`) so it's importable from webview frontends via
