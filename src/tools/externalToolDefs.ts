@@ -209,7 +209,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'zotero_export',
     ],
     name: 'Zotero Integration',
-    category: 'academic',
+    category: 'ai-agents',
     description:
       'Search, add items to, and export citations from your Zotero library. Requires Better BibTeX plugin.',
     installGuide:
@@ -274,7 +274,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     id: 'github-pr-subscription',
     tools: ['github_subscription'],
     name: 'GitHub Activity Subscription',
-    category: 'workflow',
+    category: 'ai-agents',
     description:
       'Poll GitHub for pull request, issue, and repository activity. Path mirrors GitHub URL shape: "owner/repo" for coarse repo-wide events, "owner/repo/pulls/N" for per-PR comments/reviews/CI, "owner/repo/issues/N" for issue comments and lifecycle.',
     installGuide:
@@ -402,12 +402,16 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
   },
 
   {
+    // ID kept as `claude-agent` for back-compat with persisted disabled-tool
+    // preferences. The user-facing name has been rebranded to "Claude Code CLI"
+    // and the tool name string is `claude_code`, but the persistence key is
+    // stable.
     id: 'claude-agent',
-    tools: ['claude_agent'],
-    name: 'Claude Agent',
+    tools: ['claude_code'],
+    name: 'Claude Code CLI',
     category: 'ai-agents',
     description:
-      'Spin off a Claude agent that works in your workspace. It can read files, run commands, edit code, and search the web on your behalf — great for delegating focused exploration or implementation while another agent stays in charge.',
+      'Spin off a Claude Code CLI agent that works in your workspace. It can read files, run commands, edit code, and search the web on your behalf — great for delegating focused exploration or implementation while another agent stays in charge.',
     installGuide:
       'Install the Claude Code CLI (choose one):\n\n' +
       '  npm install -g @anthropic-ai/claude-code\n' +
@@ -447,13 +451,13 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
         ) {
           return '@anthropic-ai/claude-agent-sdk not found. Reinstall TeXRA or run: npm install @anthropic-ai/claude-agent-sdk';
         }
-        return `Claude Agent SDK import failed: ${msg}`;
+        return `Claude Code SDK import failed: ${msg}`;
       }
 
       const claudePath = findClaudeBinaryPath();
       if (!claudePath) {
         return (
-          'Claude Agent SDK loaded but native `claude` binary not found. ' +
+          'Claude Code SDK loaded but native `claude` binary not found. ' +
           'Install via: npm install -g @anthropic-ai/claude-code' +
           (isWSL() ? ' (run this inside WSL, not on the Windows side)' : '')
         );
