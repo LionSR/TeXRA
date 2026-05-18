@@ -31,6 +31,7 @@ describe('CLI StatusBar display model', () => {
     ]);
     expect(display.right).toBeUndefined();
     expect(display.bindings).toContain('[/api]api');
+    expect(display.bindings).toContain('[/model]models');
     expect(display.left.map(statusBarSegmentText)).not.toContain('deepseekT');
   });
 
