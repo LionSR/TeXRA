@@ -1,6 +1,6 @@
 {
   "name": "@texra/cli",
-  "version": "0.37.10",
+  "version": "0.37.9",
   "description": "TeXRA CLI — AI-powered LaTeX research assistant for the terminal.",
   "license": "SEE LICENSE IN LICENSE.txt",
   "author": "TeXRA.ai",
