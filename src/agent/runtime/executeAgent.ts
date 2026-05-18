@@ -24,6 +24,7 @@ import { AgentLogger } from '@logger/index';
 import {
   STREAM_STATUS,
   END_GROUP_STATUS,
+  EXECUTION_STATUS,
   type StreamTabId,
   type ExecutionId,
   type OutputFileInfo,
@@ -154,7 +155,12 @@ async function runFlowWithLifecycle(
   try {
     const result = await runner();
     await options?.onCompleted?.(result);
-    await writeTerminalStatus(ctx.executionId, result.status).catch(() => {});
+    await writeTerminalStatus(
+      ctx.executionId,
+      result.status === END_GROUP_STATUS.ERROR
+        ? EXECUTION_STATUS.ERROR
+        : EXECUTION_STATUS.COMPLETED,
+    ).catch(() => {});
 
     untrackExecution(ctx.executionId);
     ctx.parentStage.end(result.status);
@@ -172,9 +178,11 @@ async function runFlowWithLifecycle(
     const kind = classifyAgentError(err);
     const status =
       kind === 'abort' ? END_GROUP_STATUS.STOPPED : END_GROUP_STATUS.ERROR;
+    const terminalStatus =
+      kind === 'abort' ? EXECUTION_STATUS.INTERRUPTED : EXECUTION_STATUS.ERROR;
     const streamStatus =
       kind === 'abort' ? STREAM_STATUS.STOPPED : STREAM_STATUS.ERROR;
-    await writeTerminalStatus(ctx.executionId, status).catch(() => {});
+    await writeTerminalStatus(ctx.executionId, terminalStatus).catch(() => {});
     untrackExecution(ctx.executionId);
     const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
