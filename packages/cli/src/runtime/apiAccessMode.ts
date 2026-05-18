@@ -1,5 +1,6 @@
 // Local imports - auth
 import { getServerSideKeyService } from '@auth/serverKeys';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
 export type CliApiMode = 'included' | 'personal';
 
@@ -32,4 +33,5 @@ export async function setCliApiMode(mode: CliApiMode): Promise<void> {
   await getServerSideKeyService().setUseIncludedModelAccess(
     mode === 'included',
   );
+  invalidateModelOptionsCache();
 }
