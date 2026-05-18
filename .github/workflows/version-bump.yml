@@ -36,6 +36,11 @@ jobs:
           NEW_VERSION=$(node scripts/bump-workspace-version.mjs --from "$RELEASE_TAG")
           echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
 
+      - name: Refresh pnpm lockfile
+        run: |
+          corepack enable
+          corepack pnpm install --lockfile-only --ignore-scripts
+
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v8
         with:

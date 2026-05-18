@@ -167,6 +167,41 @@ function verifyDistEntrypoints(entries, failures) {
   }
 }
 
+function verifyPackagedDocs(vsixPath, entries, failures) {
+  const manifest = readJson(path.join(extensionDir, 'package.json'));
+  const repositoryUrl = String(manifest.repository?.url ?? '').replace(
+    /\.git$/,
+    '',
+  );
+
+  for (const [sourceName, packagedName] of [
+    ['README.md', 'readme.md'],
+    ['CHANGELOG.md', 'changelog.md'],
+  ]) {
+    const entryPath = `extension/${packagedName}`;
+    assertEntryExists(entries, entryPath, failures);
+    if (!entries.has(entryPath)) continue;
+
+    const expected = normalizePackagedMarkdown(
+      fs.readFileSync(path.join(rootDir, sourceName), 'utf8'),
+      repositoryUrl,
+    );
+    const actual = readVsixEntry(vsixPath, entryPath).toString('utf8');
+    assert(
+      expected === actual,
+      `VSIX ${packagedName} does not match the repository ${sourceName}`,
+      failures,
+    );
+  }
+}
+
+function normalizePackagedMarkdown(markdown, repositoryUrl) {
+  return markdown.replaceAll(
+    /\]\((?![a-z][a-z+.-]*:|#|mailto:)([^)]+)\)/gi,
+    (_match, target) => `](${repositoryUrl}/blob/HEAD/${target})`,
+  );
+}
+
 const vsixPath = path.resolve(process.argv[2] ?? defaultVsixPath());
 if (!fs.existsSync(vsixPath)) {
   console.error(
@@ -183,6 +218,7 @@ verifyManifest(vsixPath, snapshot, failures);
 verifyRequiredPaths(entries, snapshot, failures);
 verifyResourceHashes(vsixPath, entries, failures);
 verifyDistEntrypoints(entries, failures);
+verifyPackagedDocs(vsixPath, entries, failures);
 
 if (failures.length > 0) {
   console.error('VSIX content check failed:');

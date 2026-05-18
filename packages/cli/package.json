@@ -44,10 +44,10 @@
     "validate:run": "node scripts/validate-run.mjs"
   },
   "devDependencies": {
-    "@inkjs/ui": "^2.0.0",
     "@babel/core": "^7.29.0",
     "@babel/preset-react": "^7.28.5",
     "@babel/preset-typescript": "^7.28.5",
+    "@inkjs/ui": "^2.0.0",
     "@lit-labs/signals": "^0.3.0",
     "@texra/core": "workspace:*",
     "@types/markdown-it": "^14.1.2",
@@ -59,11 +59,11 @@
     "esbuild": "^0.28.0",
     "ink": "^7.0.3",
     "markdown-it": "^14.1.1",
-    "p-queue": "^9.2.0",
+    "p-queue": "^9.3.0",
     "picocolors": "^1.1.1",
     "react": "^19.2.0",
     "string-width": "^8.0.0",
-    "wrap-ansi": "^10.0.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "wrap-ansi": "^10.0.0"
   }
 }
