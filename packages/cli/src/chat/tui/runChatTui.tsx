@@ -42,6 +42,7 @@ import {
   type CliApprovalPolicy,
 } from '../../runtime/approvalPolicy';
 import { App } from './App';
+import { ApiModeForm } from './forms/ApiModeForm';
 import { renderHeaderBanner } from './panes/HeaderBanner';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { listSlashCommands, parseSlashInput } from './commands/slashRegistry';
@@ -179,6 +180,34 @@ async function applyCliApiModeSelection(
   appendLocalAssistantTranscript('Usage: /api personal | /api included');
 }
 
+function openCliApiModeForm(
+  onSelect: (mode: CliApiMode) => void | Promise<void>,
+): void {
+  cliState.activeForm.set({
+    commandName: 'api',
+    render: (close) => {
+      const current = cliState.sessionMeta.get().apiMode;
+      return (
+        <ApiModeForm
+          currentMode={current}
+          onSelect={(value) => {
+            void (async () => {
+              try {
+                await onSelect(value);
+              } catch (error: unknown) {
+                appendLocalAssistantTranscript(toErrorMessage(error));
+              } finally {
+                close();
+              }
+            })();
+          }}
+          onCancel={close}
+        />
+      );
+    },
+  });
+}
+
 async function showCliAuthStatus(): Promise<void> {
   const profile = await getCliAuthProfile();
   const lines = [
@@ -301,6 +330,10 @@ async function handleTuiSlashCommand(
       await applyCliModelSelection(rest, context);
       return true;
     case 'api':
+      if (!rest) {
+        openCliApiModeForm(applyCliApiModeSelection);
+        return true;
+      }
       try {
         await applyCliApiModeSelection(rest);
       } catch (error: unknown) {

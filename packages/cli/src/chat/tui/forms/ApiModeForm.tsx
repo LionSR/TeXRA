@@ -21,7 +21,9 @@ export function ApiModeForm(props: ApiModeFormProps): React.JSX.Element {
       <Text bold color="cyan">
         /api
       </Text>
-      <Text dimColor>Choose which credentials model calls should use.</Text>
+      <Text dimColor>
+        Choose which credentials model calls should use. Press 1 for API keys.
+      </Text>
       <Box marginTop={1} flexDirection="column">
         <Select
           items={[
