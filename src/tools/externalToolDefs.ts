@@ -33,6 +33,10 @@ import { isWSL } from '@utils/system/wslDetect';
 
 const LEAN4_EXT_ID = 'leanprover.lean4';
 const ZOTERO_PROBE_TIMEOUT_MS = 2000;
+const TEXRA_CLI_CHECK = {
+  command: 'texra --version',
+  errorMessage: 'TeXRA CLI is not installed or not on PATH.',
+} as const;
 
 /**
  * Pluggable check for VS Code extension availability.
@@ -84,6 +88,8 @@ export interface ExternalToolDef {
   readonly authNote?: string;
   /** When true, the dashboard shows an enable/disable toggle for this tool group. */
   readonly toggleable?: boolean;
+  /** When true, detect setup but show the integration as not yet enabled. */
+  readonly comingSoon?: boolean;
   /**
    * VS Code command ID invoked by the "fix this" action button in the
    * "tools were excluded" notification. Overrides the default Tools tab
@@ -155,6 +161,14 @@ async function resolveGitHubPRPrerequisites(
   return probeResult === undefined
     ? getGitHubPRPrerequisites()
     : (probeResult as GitHubPRPrerequisites);
+}
+
+async function probeTexraCli(): Promise<boolean> {
+  return checkToolInstalled(TEXRA_CLI_CHECK, false);
+}
+
+function resolveBooleanProbe(probeResult: unknown): boolean | undefined {
+  return typeof probeResult === 'boolean' ? probeResult : undefined;
 }
 
 // ============================================================
@@ -333,6 +347,30 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     authNote: 'Uses your premium chat subscription',
     toggleable: true,
     check: async () => true,
+  },
+
+  {
+    id: 'texra-cli',
+    tools: [],
+    name: 'TeXRA CLI',
+    category: 'ai-agents',
+    description:
+      'Local TeXRA command-line app integration. Detection is shown now; activation is coming soon.',
+    installGuide:
+      'The TeXRA CLI is installed with the TeXRA package. Make sure the `texra` command is on the PATH visible to VS Code or the desktop app.\n\n' +
+      'Check from a terminal:\n' +
+      '  texra --version',
+    configNotes:
+      'Coming soon. This entry only checks whether the local CLI is visible.',
+    comingSoon: true,
+    probe: probeTexraCli,
+    check: async (probeResult) => resolveBooleanProbe(probeResult) ?? false,
+    detailCheck: async (probeResult) => {
+      const installed = resolveBooleanProbe(probeResult) ?? false;
+      return installed
+        ? 'TeXRA CLI detected on PATH. This integration is not enabled for agent runs yet.'
+        : 'TeXRA CLI not detected on PATH. This integration is not enabled for agent runs yet.';
+    },
   },
 
   {

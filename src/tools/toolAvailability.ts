@@ -27,7 +27,7 @@ export interface ExternalToolCheckResult {
   readonly id: string;
   readonly tools: readonly RegisteredToolName[];
   readonly name: string;
-  readonly status: 'available' | 'not-found' | 'unknown';
+  readonly status: 'available' | 'not-found' | 'unknown' | 'coming-soon';
   /** Short status label for the dashboard badge, when the default is too generic. */
   readonly statusLabel?: string;
   /** Human-readable status detail from the group's `detailCheck`, if any. */
@@ -77,8 +77,8 @@ export function getDisabledToolNames(): ReadonlySet<string> {
  * {@link refreshToolAvailability}. Also populates the cache read by
  * `getUnavailableToolNamesCached()`.
  *
- * @returns Per-group results with `available` / `not-found` / `unknown`
- *   status and an optional human-readable `statusDetail`.
+ * @returns Per-group results with availability status and an optional
+ *   human-readable `statusDetail`.
  */
 let inflightProbe: Promise<ExternalToolCheckResult[]> | null = null;
 let pendingRerun = false;
@@ -115,6 +115,7 @@ async function runProbes(): Promise<ExternalToolCheckResult[]> {
         check,
         statusLabel: getStatusLabel,
         detailCheck,
+        comingSoon,
       }): Promise<ExternalToolCheckResult> => {
         // Run check/status/detail from one shared probe result. Some groups
         // (Codex, Zotero, GitHub PR) touch async local state, so running the
@@ -137,7 +138,7 @@ async function runProbes(): Promise<ExternalToolCheckResult[]> {
             id,
             tools,
             name,
-            status: 'unknown',
+            status: comingSoon ? 'coming-soon' : 'unknown',
             statusLabel,
             statusDetail,
           };
@@ -154,7 +155,11 @@ async function runProbes(): Promise<ExternalToolCheckResult[]> {
           id,
           tools,
           name,
-          status: available ? 'available' : 'not-found',
+          status: comingSoon
+            ? 'coming-soon'
+            : available
+              ? 'available'
+              : 'not-found',
           statusLabel,
           statusDetail,
         };
