@@ -3,6 +3,7 @@
  *
  * Wraps vscode.workspace.fs operations, converting string paths to vscode.Uri.
  */
+import * as fs from 'fs';
 import * as vscode from 'vscode';
 
 import type {
@@ -21,8 +22,27 @@ export class VscodeFileSystem implements FileSystemProvider {
     };
   }
 
+  async realPath(target: string): Promise<string> {
+    return fs.promises.realpath(target);
+  }
+
   async readFile(target: string): Promise<Uint8Array> {
     return vscode.workspace.fs.readFile(vscode.Uri.file(target));
+  }
+
+  async readFileChunk(
+    target: string,
+    offset: number,
+    length: number,
+  ): Promise<Uint8Array> {
+    const handle = await fs.promises.open(target, 'r');
+    try {
+      const buffer = Buffer.alloc(length);
+      const { bytesRead } = await handle.read(buffer, 0, length, offset);
+      return buffer.subarray(0, bytesRead);
+    } finally {
+      await handle.close();
+    }
   }
 
   async writeFile(target: string, content: Uint8Array): Promise<void> {
@@ -48,8 +68,17 @@ export class VscodeFileSystem implements FileSystemProvider {
   async copy(
     source: string,
     dest: string,
-    options?: { overwrite?: boolean },
+    options?: { overwrite?: boolean; dereference?: boolean },
   ): Promise<void> {
+    if (options?.dereference) {
+      await fs.promises.cp(source, dest, {
+        recursive: true,
+        force: !!options.overwrite,
+        errorOnExist: !options.overwrite,
+        dereference: true,
+      });
+      return;
+    }
     await vscode.workspace.fs.copy(
       vscode.Uri.file(source),
       vscode.Uri.file(dest),

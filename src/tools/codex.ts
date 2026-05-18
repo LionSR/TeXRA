@@ -669,7 +669,9 @@ async function createCodexThread(
   workingDir?: string,
 ): Promise<Thread> {
   const CodexClass = await importCodexClass();
-  const codex = new CodexClass({ codexPathOverride: findCodexBinaryPath() });
+  const codex = new CodexClass({
+    codexPathOverride: await findCodexBinaryPath(),
+  });
   const config = await getCodexConfig();
   const sandboxMode = input.sandbox_mode ?? undefined;
   // Resumed threads keep their stored workspace unless explicitly overridden.

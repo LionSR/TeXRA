@@ -6,11 +6,12 @@
  */
 
 // Standard library imports
-import * as fs from 'fs';
 import * as path from 'path';
 
 // Third-party imports
 import { z } from 'zod';
+
+import { platform } from '@platform/platform';
 
 // Local imports - agent
 import {
@@ -671,11 +672,13 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     const handle = getHandle(executionId);
     if (handle instanceof ProcessExecutionHandle && handle.outputPaths) {
       const [stdout, stderr] = await Promise.all([
-        fs.promises
-          .readFile(handle.outputPaths.stdout, 'utf-8')
+        platform()
+          .fs.readFile(handle.outputPaths.stdout)
+          .then((bytes) => Buffer.from(bytes).toString('utf8'))
           .catch(() => ''),
-        fs.promises
-          .readFile(handle.outputPaths.stderr, 'utf-8')
+        platform()
+          .fs.readFile(handle.outputPaths.stderr)
+          .then((bytes) => Buffer.from(bytes).toString('utf8'))
           .catch(() => ''),
       ]);
       const sections: string[] = [`Output for ${executionId}:`];
