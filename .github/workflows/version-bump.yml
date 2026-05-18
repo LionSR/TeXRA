@@ -22,7 +22,6 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: '22'
-          cache: 'npm'
 
       - name: Configure Git
         run: |
@@ -31,26 +30,10 @@ jobs:
 
       - name: Bump to next version
         id: bump_version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          # Get current version
-          CURRENT_VERSION=$(node -p "require('./package.json').version")
-
-          # Split version into parts
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
-
-          # Increment patch, but if it reaches 11, increment minor and reset patch to 0
-          PATCH=$((PATCH + 1))
-          if [ $PATCH -gt 10 ]; then
-            MINOR=$((MINOR + 1))
-            PATCH=0
-          fi
-
-          # Construct new version
-          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-
-          # Update package.json
-          npm version $NEW_VERSION --no-git-tag-version --allow-same-version
-
+          NEW_VERSION=$(node scripts/bump-workspace-version.mjs --from "$RELEASE_TAG")
           echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Create Pull Request
@@ -60,7 +43,7 @@ jobs:
           commit-message: 'chore: bump version to ${{ steps.bump_version.outputs.NEW_VERSION }}'
           title: 'chore: bump version to ${{ steps.bump_version.outputs.NEW_VERSION }}'
           body: |
-            This PR automatically bumps the version in package.json to the next patch version after release.
+            This PR automatically bumps the workspace package manifests to the next patch version after release.
 
             Release: ${{ github.event.release.name }}
             Tag: ${{ github.event.release.tag_name }}
