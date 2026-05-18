@@ -168,7 +168,7 @@ Per-phase frame timings (render / diff / write / yoga-layout) and flicker contex
 1. **Workspace setting** — `.texra/config.json` at the workspace root, if present (`agent`, `model` fields). New convention; no consumer of this path exists in the tree today.
 2. **User setting** — `<global-storage>/config.json` (same fields). Also new; today's user-scope settings live in `vscode.workspace.getConfiguration` and won't be there. The CLI host needs a new JSON config loader (`platform().config` currently wraps VS Code's `getConfiguration`).
 3. **Last-used** — the agent + model from the most recent `HistoryItem` for this workspace, read from the existing history store.
-4. **Built-in default** — `agent: chat`, `model: claude-opus-4-7`. The `chat` agent ships in `packages/extension/resources/tool_use_agents/`. There's no schema-level `defaultAgent` / `defaultModel` flag in the agent YAML today; this is a hardcoded fallback in the CLI host.
+4. **Built-in default** — `agent: chat`, `model: deepseekT`. The `chat` agent ships in `packages/extension/resources/tool_use_agents/`. There's no schema-level `defaultAgent` / `defaultModel` flag in the agent YAML today; this is a hardcoded fallback in the CLI host.
 
 `/agent` and `/model` slash forms write back to the user setting unless invoked with a `--workspace` modifier (future). The current selection is always visible in the header (per [mockups/00-idle.md](./mockups/00-idle.md)).
 
