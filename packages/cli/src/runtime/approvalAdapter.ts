@@ -95,9 +95,9 @@ export function immediateDecision(
 }
 
 /** Retry requests caused by exhausted credentials or auth failures need user
- *  action (key swap, top-up, re-login). Auto-accepting them under `yolo` just
- *  burns the 100-retry budget and reports the meaningless "maximum manual
- *  retry limit" error to the user. Force-deny these regardless of policy. */
+ *  action (key swap, top-up, re-login). Interactive runs must still surface the
+ *  retry panel so the user can switch to personal API keys; non-interactive
+ *  and auto-approval modes should not burn the retry budget. */
 function isUnretryableRetryRequest(
   event: ApprovalEvent,
   payload: ProgressEventPayloads[ApprovalEvent],
@@ -117,6 +117,7 @@ export function immediateDecisionForApproval(
   context: CliContext,
 ): ApprovalDecision | undefined {
   if (isUnretryableRetryRequest(event, payload)) {
+    if (approvalPromptAllowed(context)) return undefined;
     markApprovalDenied(context);
     return {
       accepted: false,
