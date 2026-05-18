@@ -1,8 +1,8 @@
 // Standard library imports
 import * as path from 'path';
-import { promises as fs } from 'fs';
 
 // Local imports
+import { platform } from '@platform/platform';
 import { getCleanAgentName } from '@agent/index';
 import type { FileOpResult } from '@agent/types/ResultTypes';
 import { toErrorMessage } from '@common/errors';
@@ -55,10 +55,9 @@ export async function runPackRunDir(
 
   try {
     await WorkspaceFS.createDir(destinationRelative);
-    await fs.cp(runDirAbsolute, destinationAbsolute, {
-      recursive: true,
+    await platform().fs.copy(runDirAbsolute, destinationAbsolute, {
+      overwrite: true,
       dereference: true,
-      errorOnExist: false,
     });
     logger.info(
       CHANNEL,
@@ -95,7 +94,7 @@ export async function runCleanRunDir(
   );
 
   try {
-    await fs.rm(runDirAbsolute, { recursive: true, force: true });
+    await platform().fs.delete(runDirAbsolute, { recursive: true });
     return { status: 'success' };
   } catch (error) {
     const message = toErrorMessage(error);

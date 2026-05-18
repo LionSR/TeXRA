@@ -29,7 +29,13 @@ export interface FileStat {
 
 export interface FileSystemProvider {
   stat(path: string): Promise<FileStat>;
+  realPath(path: string): Promise<string>;
   readFile(path: string): Promise<Uint8Array>;
+  readFileChunk(
+    path: string,
+    offset: number,
+    length: number,
+  ): Promise<Uint8Array>;
   writeFile(path: string, content: Uint8Array): Promise<void>;
   delete(path: string, options?: { recursive?: boolean }): Promise<void>;
   createDirectory(path: string): Promise<void>;
@@ -37,7 +43,7 @@ export interface FileSystemProvider {
   copy(
     source: string,
     dest: string,
-    options?: { overwrite?: boolean },
+    options?: { overwrite?: boolean; dereference?: boolean },
   ): Promise<void>;
   rename(
     source: string,

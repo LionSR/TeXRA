@@ -17,8 +17,8 @@
 
 import { createRequire } from 'module';
 import * as path from 'path';
-import { existsSync } from 'fs';
 
+import { platform } from '@platform/platform';
 import { executeCommandSync } from '@utils/system/execUtils';
 
 type QueryFn = (params: {
@@ -117,15 +117,15 @@ let cachedBinaryPath: string | undefined;
  * SDK's `query()` options. Returning `undefined` lets the SDK fall back to
  * its own resolution.
  */
-export function findClaudeBinaryPath(): string | undefined {
+export async function findClaudeBinaryPath(): Promise<string | undefined> {
   if (cachedBinaryPath !== undefined) return cachedBinaryPath;
 
-  const result = findClaudeBinaryPathUncached();
+  const result = await findClaudeBinaryPathUncached();
   if (result) cachedBinaryPath = result;
   return result;
 }
 
-function findClaudeBinaryPathUncached(): string | undefined {
+async function findClaudeBinaryPathUncached(): Promise<string | undefined> {
   const info = PLATFORM_INFO[`${process.platform}-${process.arch}`];
   if (!info) return undefined;
 
@@ -137,14 +137,14 @@ function findClaudeBinaryPathUncached(): string | undefined {
     const result =
       resourcesPath == null
         ? undefined
-        : findClaudeBinaryInElectronResources(resourcesPath);
+        : await findClaudeBinaryInElectronResources(resourcesPath);
     if (result) return result;
   }
 
   // Strategy 2: resolve from local project's node_modules
   // Preferred in VS Code extension development — matches package.json.
   {
-    const result = resolveClaudeBinary(path.join(__dirname, '..'), info);
+    const result = await resolveClaudeBinary(path.join(__dirname, '..'), info);
     if (result) return result;
   }
 
@@ -169,7 +169,7 @@ function findClaudeBinaryPathUncached(): string | undefined {
       ];
 
       for (const sdkRoot of roots) {
-        const result = resolveClaudeBinary(sdkRoot, info);
+        const result = await resolveClaudeBinary(sdkRoot, info);
         if (result) return result;
       }
     }
@@ -194,7 +194,7 @@ function findClaudeBinaryPathUncached(): string | undefined {
       if (!p) continue;
       // The SDK spawns the binary directly, so skip shell-only npm shims.
       if (process.platform === 'win32' && /\.(cmd|ps1)$/i.test(p)) continue;
-      if (existsSync(p)) return p;
+      if (await pathExists(p)) return p;
     }
   }
 
@@ -205,9 +205,9 @@ function findClaudeBinaryPathUncached(): string | undefined {
  * Locate the Claude binary inside an Electron packaged app's unpacked
  * resources directory.
  */
-export function findClaudeBinaryInElectronResources(
+export async function findClaudeBinaryInElectronResources(
   resourcesPath: string,
-): string | undefined {
+): Promise<string | undefined> {
   const info = PLATFORM_INFO[`${process.platform}-${process.arch}`];
   if (!info) return undefined;
 
@@ -220,7 +220,7 @@ export function findClaudeBinaryInElectronResources(
       ...pkg.split('/'),
     );
     const binary = path.join(platformPkgDir, binaryName);
-    if (existsSync(binary)) return binary;
+    if (await pathExists(binary)) return binary;
   }
   return undefined;
 }
@@ -237,20 +237,27 @@ function getPackagedElectronResourcesPath(): string | undefined {
  * the platform-specific package. Returns the binary path if found, or
  * `undefined`.
  */
-function resolveClaudeBinary(
+async function resolveClaudeBinary(
   baseDir: string,
   platformInfo: PlatformInfo,
-): string | undefined {
+): Promise<string | undefined> {
   const req = createRequire(path.join(baseDir, 'package.json'));
   const binaryName = process.platform === 'win32' ? 'claude.exe' : 'claude';
   for (const pkg of platformInfo.pkgs) {
     try {
       const platformPkgJson = req.resolve(`${pkg}/package.json`);
       const binary = path.join(path.dirname(platformPkgJson), binaryName);
-      if (existsSync(binary)) return binary;
+      if (await pathExists(binary)) return binary;
     } catch {
       // Platform package not resolvable
     }
   }
   return undefined;
+}
+
+async function pathExists(target: string): Promise<boolean> {
+  return platform()
+    .fs.stat(target)
+    .then(() => true)
+    .catch(() => false);
 }

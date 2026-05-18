@@ -1,6 +1,6 @@
-import { promises as fs } from 'fs';
 import * as path from 'path';
 
+import { platform } from '@platform/platform';
 import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { getWorkspaceState } from '@agent/core/stateStore';
 import { toErrorMessage } from '@common/errors';
@@ -56,7 +56,9 @@ export class LatexDiffManager {
   }
 
   private resolveSymlinks(target: string): Promise<string> {
-    return fs.realpath(target).catch(() => target);
+    return platform()
+      .fs.realPath(target)
+      .catch(() => target);
   }
 
   private async getWorkingDirectory(location: FileLocation): Promise<string> {

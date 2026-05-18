@@ -119,11 +119,13 @@ async function loadApprovalModules(workspacePath = '/workspace') {
     };
   });
 
-  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-    import('@platform/platform'),
-    import('@test/support/FakePlatform'),
-  ]);
-  initPlatform(createFakePlatform({ workspacePath }));
+  const [{ initPlatform }, { createFakePlatform }, { nodeFilesystem }] =
+    await Promise.all([
+      import('@platform/platform'),
+      import('@test/support/FakePlatform'),
+      import('@platform/defaults/nodeFilesystem'),
+    ]);
+  initPlatform(createFakePlatform({ workspacePath }, { fs: nodeFilesystem }));
 
   const [
     { bus },

@@ -773,7 +773,7 @@ async function launchClaudeAgentSession(
     cwd: workspace.cwd,
     additionalDirectories: workspace.additionalDirectories,
     env,
-    pathToClaudeCodeExecutable: findClaudeBinaryPath(),
+    pathToClaudeCodeExecutable: await findClaudeBinaryPath(),
     runtimeHost,
   });
 
