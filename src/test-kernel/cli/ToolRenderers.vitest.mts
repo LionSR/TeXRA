@@ -50,6 +50,25 @@ describe('CLI tool renderer registry', () => {
     `);
   });
 
+  it('renders TeXRA edit_file calls through the native diff row', () => {
+    const entry = toolUse('edit_file', {
+      path: 'paper.tex',
+      old_str: 'We use a CNN.\n',
+      new_str: 'We use a transformer.\n',
+    });
+
+    expect(pickToolRenderer(entry)?.key).toBe('edit');
+    expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
+      [
+        "● edit_file (paper.tex)",
+        "⎿ paper.tex",
+        "  @@ -1,1 +1,1 @@",
+        "  -We use a CNN.",
+        "  +We use a transformer.",
+      ]
+    `);
+  });
+
   it('renders bash failures with command preview, output, and explicit exit line', () => {
     const entry = toolUse(
       'bash',

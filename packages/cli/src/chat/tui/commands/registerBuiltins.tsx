@@ -122,7 +122,7 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'clear',
-    description: 'Clear the screen (scrollback preserved)',
+    description: 'Clear the current transcript view',
   });
   registerSlashCommand({
     name: 'agent',

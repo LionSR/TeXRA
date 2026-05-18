@@ -40,7 +40,7 @@ export function App(props: AppProps): React.JSX.Element {
   const streams = useSignal(cliState.streams);
   const activeForm = useSignal(cliState.activeForm);
   const slashPaletteOpen = useSignal(cliState.slashPaletteOpen);
-  const { columns } = useWindowSize();
+  const { columns, rows } = useWindowSize();
   const [childControlMode, setChildControlMode] = useState<
     ChildControlMode | undefined
   >(undefined);
@@ -99,8 +99,8 @@ export function App(props: AppProps): React.JSX.Element {
   );
 
   return (
-    <Box flexDirection="column">
-      <Box flexDirection="row">
+    <Box flexDirection="column" height={rows}>
+      <Box flexDirection="row" flexGrow={1}>
         <Box flexDirection="column">
           <ConversationPane width={transcriptWidth} />
         </Box>
