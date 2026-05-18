@@ -3046,14 +3046,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   override extractAssistantText(
     message: ResponseInputItem,
   ): string | undefined {
-    if (
-      typeof message !== 'object' ||
-      !('type' in message) ||
-      message.type !== 'message' ||
-      !('role' in message) ||
-      message.role !== 'assistant' ||
-      !('content' in message)
-    ) {
+    if (!this.isAssistantTextMessage(message)) {
       return undefined;
     }
 
@@ -3062,15 +3055,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return message.content;
     }
 
-    // Array content (input_text or output_text parts)
+    // Array content (input_text history or output_text response parts)
     if (Array.isArray(message.content)) {
-      const texts = (message.content as { type?: string; text?: string }[])
-        .filter(
-          (p) =>
-            (p.type === 'input_text' || p.type === 'output_text') &&
-            typeof p.text === 'string',
-        )
-        .map((p) => p.text!);
+      const texts = message.content
+        .map((part) => this.extractTextContentPart(part))
+        .filter((text): text is string => text !== undefined);
       return texts.length > 0 ? texts.join('') : undefined;
     }
 
@@ -3096,6 +3085,26 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (!('content' in item)) return false;
     const { content } = item;
     return typeof content === 'string' || Array.isArray(content);
+  }
+
+  private isAssistantTextMessage(
+    item?: ResponseInputItem,
+  ): item is EasyInputMessage | ResponseOutputMessage {
+    return (
+      item?.type === 'message' &&
+      item.role === 'assistant' &&
+      (typeof item.content === 'string' || Array.isArray(item.content))
+    );
+  }
+
+  private extractTextContentPart(part: unknown): string | undefined {
+    if (!part || typeof part !== 'object') return undefined;
+    const candidate = part as { type?: unknown; text?: unknown };
+    return (candidate.type === 'input_text' ||
+      candidate.type === 'output_text') &&
+      typeof candidate.text === 'string'
+      ? candidate.text
+      : undefined;
   }
 
   /** Type guard for ResponseOutputMessage items from the SDK. */
@@ -3242,16 +3251,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     let existingText = '';
     if (Array.isArray(content)) {
       existingText = content
-        .map((part) => {
-          const { type, text: partText } = part as {
-            type?: string;
-            text?: string;
-          };
-          return (type === 'input_text' || type === 'output_text') &&
-            typeof partText === 'string'
-            ? partText
-            : '';
-        })
+        .map((part) => this.extractTextContentPart(part) ?? '')
         .join('');
     }
 
