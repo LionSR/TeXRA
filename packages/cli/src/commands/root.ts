@@ -59,6 +59,10 @@ import {
   doctorExitCode,
   writeDoctorReport,
 } from '../runtime/doctor';
+import {
+  generateCompletionScript,
+  parseCompletionShell,
+} from '../runtime/completion';
 
 // One CLI invocation per process — module-level pending exit code is the
 // simplest way to surface handler exit codes back to `bin/texra.ts` after
@@ -710,7 +714,32 @@ const helpCommand = defineCommand({
   },
 });
 
-const rootCommand = defineCommand({
+const completionCommand = defineCommand({
+  meta: { name: 'completion', description: 'Print shell completion script' },
+  args: {
+    ...GLOBAL_ARGS,
+    shell: {
+      type: 'positional',
+      required: true,
+      description: 'Shell name: bash, zsh, or fish',
+    },
+  },
+  async run(ctx) {
+    try {
+      writeTextStdout(
+        await generateCompletionScript(
+          rootCommand,
+          parseCompletionShell(ctx.args.shell),
+        ),
+      );
+    } catch (error) {
+      throw new CliUsageError(toErrorMessage(error));
+    }
+    setExitCode(CliExitCode.Success);
+  },
+});
+
+export const rootCommand = defineCommand({
   // Citty's `runMain` reads `meta.version` for `--version`/`-v`. We resolve
   // lazily so the bundled binary picks up the version emitted by the build
   // (see `readCliVersion` in cliContext.ts).
@@ -736,6 +765,7 @@ const rootCommand = defineCommand({
     usage: usageCommand,
     auth: authCommand,
     doctor: doctorCommand,
+    completion: completionCommand,
     version: versionCommand,
     help: helpCommand,
   },
