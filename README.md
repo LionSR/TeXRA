@@ -67,8 +67,8 @@ a web-based launch page.
 - **Odyssey mode (experimental)** – let a tool-use agent run a long task to
   completion on its own. A configurable budget auto-pauses the run for your
   approval before going further, and a dedicated panel shows progress so
-  you can step in at any time. Off by default; enable it under
-  Settings → Experimental.
+  you can step in at any time. Off by default; enable it with the
+  `texra.experimental.odyssey.enabled` VS Code setting.
 - **Model flexibility with guardrails** – mix and match per agent: OpenAI
   (incl. GPT-5.5 and GPT Pro), Anthropic (incl. Claude Opus 4.7), Google
   Gemini, DeepSeek, xAI Grok, Moonshot Kimi, Alibaba Qwen (DashScope),
