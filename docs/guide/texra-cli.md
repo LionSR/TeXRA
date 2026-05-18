@@ -139,8 +139,16 @@ Supported top-level keys are `agent`, `model`, `outputFormat`, and
 defaults. The built-in CLI model default is `deepseekT`.
 
 The corresponding environment variables are `TEXRA_AGENT`, `TEXRA_MODEL`,
-`TEXRA_OUTPUT_FORMAT`, and `TEXRA_APPROVAL_POLICY`. Run `texra doctor` to see
-which workspace config file was loaded and whether any keys were ignored.
+`TEXRA_OUTPUT_FORMAT`, `TEXRA_APPROVAL_POLICY`, and `TEXRA_API_MODE`. Run
+`texra doctor` to see which workspace config file was loaded and whether any
+keys were ignored.
+
+Use `--api-mode personal` or `TEXRA_API_MODE=personal` to force a `run` or
+`chat` invocation to use provider API keys even when the CLI is signed in for
+included relay access. `--api-mode included` keeps the default relay behavior
+when the account is signed in. The accepted aliases match the TUI `/api`
+command: for example, `direct`, `api`, and `byok` select personal API keys,
+while `relay` selects included access.
 
 ## Remove the Linked Command
 

@@ -39,6 +39,12 @@ describe('CLI root argument routing', () => {
     ]);
   });
 
+  it('keeps leading api-mode flags attached to explicit subcommands', () => {
+    expect(
+      reorderGlobalFlags(['--api-mode', 'personal', 'run', 'polish']),
+    ).toEqual(['run', 'polish', '--api-mode', 'personal']);
+  });
+
   it('keeps unknown leading flags in place for citty to report', () => {
     expect(reorderGlobalFlags(['--unknown', 'auth'])).toEqual([
       '--unknown',
