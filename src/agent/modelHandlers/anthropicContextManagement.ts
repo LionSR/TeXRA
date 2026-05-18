@@ -91,9 +91,7 @@ export function hasLongCacheControlMarker(messages: MessageParam[]): boolean {
       return false;
     }
     return message.content.some((block) =>
-      isLongCacheControl(
-        (block as { cache_control?: unknown }).cache_control,
-      ),
+      isLongCacheControl((block as { cache_control?: unknown }).cache_control),
     );
   });
 }
@@ -105,11 +103,7 @@ export function hasLongCacheControlMarker(messages: MessageParam[]): boolean {
  * @returns true if a manual compaction request was consumed (caller should clear its flag)
  */
 export function setupContextManagement(
-  {
-    options,
-    contextWindow,
-    thresholdPercent,
-  }: ContextManagementSetupOptions,
+  { options, contextWindow, thresholdPercent }: ContextManagementSetupOptions,
   isToolUseMode: boolean,
   isCompactionEligibleModel: boolean,
   forceCompaction: boolean,
@@ -129,9 +123,7 @@ export function setupContextManagement(
 
   ensureBeta(options, CONTEXT_MANAGEMENT_BETA);
 
-  const contextManagementEdits = [
-    ...(options.context_management?.edits ?? []),
-  ];
+  const contextManagementEdits = [...(options.context_management?.edits ?? [])];
 
   if (
     !contextManagementEdits.some((edit) => edit.type === 'compact_20260112')
@@ -197,19 +189,16 @@ export function logContextManagementFromResponse(
     : 'Anthropic native compaction (empty summary)';
   const summary = compactionBlock.content?.trim() || undefined;
 
-  logger.logContextManagement(
-    `Server-side compaction: summarized context`,
-    {
-      action: 'compaction',
-      tokensBefore,
-      tokensAfter: totalInputTokens,
-      contextWindow,
-      utilizationBefore: (tokensBefore / contextWindow) * 100,
-      utilizationAfter: (totalInputTokens / contextWindow) * 100,
-      details,
-      summary,
-    },
-  );
+  logger.logContextManagement(`Server-side compaction: summarized context`, {
+    action: 'compaction',
+    tokensBefore,
+    tokensAfter: totalInputTokens,
+    contextWindow,
+    utilizationBefore: (tokensBefore / contextWindow) * 100,
+    utilizationAfter: (totalInputTokens / contextWindow) * 100,
+    details,
+    summary,
+  });
 }
 
 /**

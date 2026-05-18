@@ -7,7 +7,11 @@ import { toFile } from '@anthropic-ai/sdk';
 import type { Anthropic } from '@anthropic-ai/sdk';
 
 // Type imports
-import type { Base64ImageSource, ImageBlockParam, DocumentBlockParam } from '@anthropic-ai/sdk/resources/messages';
+import type {
+  Base64ImageSource,
+  ImageBlockParam,
+  DocumentBlockParam,
+} from '@anthropic-ai/sdk/resources/messages';
 import type { BetaImageBlockParam } from '@anthropic-ai/sdk/resources/beta/messages';
 
 // Local imports - agent
@@ -18,8 +22,14 @@ import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Local file imports
 import { FILES_API_BETA } from './anthropicContextManagement';
-import { countPdfPagesFromBuffer, sanitizeAnthropicFilename } from './anthropicDocumentHandling';
-import { loadAttachmentBuffer, type ToolFileAttachment } from './utils/toolAttachmentUtils';
+import {
+  countPdfPagesFromBuffer,
+  sanitizeAnthropicFilename,
+} from './anthropicDocumentHandling';
+import {
+  loadAttachmentBuffer,
+  type ToolFileAttachment,
+} from './utils/toolAttachmentUtils';
 
 /** Supported image media types from SDK's Base64ImageSource definition */
 const SUPPORTED_IMAGE_MEDIA_TYPES: ReadonlySet<string> = new Set([
@@ -89,10 +99,7 @@ export async function uploadToolAttachments(
     let pdfPageCount = 0;
     if (isPdf) {
       pdfPageCount = await countPdfPagesFromBuffer(buffer);
-      if (
-        getTrackedPdfPageCount() + pdfPageCount >
-        getMaxPdfPages()
-      ) {
+      if (getTrackedPdfPageCount() + pdfPageCount > getMaxPdfPages()) {
         pageLimitExceeded.push(attachment);
         buffer.fill(0);
         buffer = undefined;

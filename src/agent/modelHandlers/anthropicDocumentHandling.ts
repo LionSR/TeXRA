@@ -8,10 +8,11 @@ import { PDFDocument } from '@cantoo/pdf-lib';
 import { toFile } from '@anthropic-ai/sdk';
 
 // Type imports
-import type { DocumentBlockParam, ContentBlockParam } from '@anthropic-ai/sdk/resources/messages';
 import type {
-  BetaRequestDocumentBlock,
-} from '@anthropic-ai/sdk/resources/beta/messages';
+  DocumentBlockParam,
+  ContentBlockParam,
+} from '@anthropic-ai/sdk/resources/messages';
+import type { BetaRequestDocumentBlock } from '@anthropic-ai/sdk/resources/beta/messages';
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 
 // Local imports
@@ -52,7 +53,9 @@ export interface DocumentSourceAnalysis {
 /**
  * Analyzes messages for document source types (file references vs base64 PDFs).
  */
-export function analyzeDocumentSources(messages: MessageParam[]): DocumentSourceAnalysis {
+export function analyzeDocumentSources(
+  messages: MessageParam[],
+): DocumentSourceAnalysis {
   let hasFileSource = false;
   let hasBase64Pdf = false;
 
@@ -108,10 +111,7 @@ export function sanitizeAnthropicFilename(filename: string): string {
   const withoutControlChars = Array.from(trimmed, (char) =>
     char.charCodeAt(0) < 32 ? '_' : char,
   ).join('');
-  const withoutForbidden = withoutControlChars.replaceAll(
-    /[:<>"|?*\\/]/g,
-    '_',
-  );
+  const withoutForbidden = withoutControlChars.replaceAll(/[:<>"|?*\\/]/g, '_');
   const sanitized = withoutForbidden || 'document.pdf';
   return sanitized.slice(0, 255);
 }
@@ -166,8 +166,7 @@ export async function replaceDocumentDataWithUploads(
         continue;
       }
 
-      const filename =
-        (block.title ?? 'document.pdf').trim() || 'document.pdf';
+      const filename = (block.title ?? 'document.pdf').trim() || 'document.pdf';
       const sanitizedFilename = sanitizeAnthropicFilename(filename);
       let buffer: Buffer | undefined;
       let uploadedSource: BetaRequestDocumentBlock['source'] | undefined;

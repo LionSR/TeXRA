@@ -8,7 +8,10 @@ import type { AgentLogger } from '@logger/AgentLogger';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Local file imports
-import { loadAttachmentBuffer, type ToolFileAttachment } from '../utils/toolAttachmentUtils';
+import {
+  loadAttachmentBuffer,
+  type ToolFileAttachment,
+} from '../utils/toolAttachmentUtils';
 
 /** MIME types accepted as inline file content by the OpenAI Responses API. */
 export const INLINEABLE_FILE_MIME_TYPES: ReadonlySet<string> = new Set([
@@ -32,14 +35,19 @@ const SUPPORTED_IMAGE_MEDIA_TYPES: ReadonlySet<string> = new Set([
   'image/webp',
 ]);
 
-export type AttachmentClassification = 'image' | 'pdf' | 'document' | 'unsupported';
+export type AttachmentClassification =
+  | 'image'
+  | 'pdf'
+  | 'document'
+  | 'unsupported';
 
 /**
  * Classifies a tool file attachment by MIME type.
  */
-export function classifyAttachment(
-  attachment: ToolFileAttachment,
-): { classification: AttachmentClassification; normalizedMime: string } {
+export function classifyAttachment(attachment: ToolFileAttachment): {
+  classification: AttachmentClassification;
+  normalizedMime: string;
+} {
   const mimeType = attachment.mimeType ?? 'application/octet-stream';
   const normalized = mimeType.toLowerCase();
 
@@ -113,10 +121,7 @@ export function sanitizeUploadFilename(filename: string): string {
   const withoutControlChars = Array.from(trimmed, (char) =>
     char.charCodeAt(0) < 32 ? '_' : char,
   ).join('');
-  const withoutForbidden = withoutControlChars.replaceAll(
-    /[:<>"|?*\\/]/g,
-    '_',
-  );
+  const withoutForbidden = withoutControlChars.replaceAll(/[:<>"|?*\\/]/g, '_');
   const sanitized = withoutForbidden || 'attachment';
   return sanitized.slice(0, 255);
 }

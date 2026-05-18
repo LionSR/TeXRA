@@ -350,9 +350,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
    * Sets up context management configuration for Anthropic's server-side editing.
    * Must be called before token counting so estimate options match create options.
    */
-  private setupContextManagement(
-    opts: ContextManagementSetupOptions,
-  ): void {
+  private setupContextManagement(opts: ContextManagementSetupOptions): void {
     const consumed = setupContextManagement(
       opts,
       this.isToolUseMode(),
