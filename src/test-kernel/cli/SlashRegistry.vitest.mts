@@ -9,12 +9,27 @@ import {
   registerSlashCommand,
   unregisterSlashCommand,
 } from '../../../packages/cli/src/chat/tui/commands/slashRegistry';
+import { registerBuiltinSlashCommands } from '../../../packages/cli/src/chat/tui/commands/registerBuiltins';
 
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
 });
 
 describe('slashRegistry', () => {
+  it('keeps the CLI session control commands registered', () => {
+    registerBuiltinSlashCommands();
+    expect(listSlashCommands().map((cmd) => cmd.name)).toEqual(
+      expect.arrayContaining([
+        'model',
+        'api',
+        'auth',
+        'approval',
+        'yolo',
+        'status',
+      ]),
+    );
+  });
+
   it('matches by name prefix case-insensitively', () => {
     registerSlashCommand({ name: 'model', description: 'pick a model' });
     registerSlashCommand({ name: 'agent', description: 'pick an agent' });
