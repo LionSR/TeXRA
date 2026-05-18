@@ -27,7 +27,7 @@ _texra_completion_path() {
     esac
     next="$token"
     [[ -n "$path" ]] && next="$path $token"
-    case " chat run agents agents list models models list login logout usage auth auth status auth usage doctor completion version help " in
+    case " chat run resume history history list history show history delete agents agents list models models list login logout usage auth auth status auth usage doctor completion version help " in
       *" $next "*) path="$next"; ((i++)); continue ;;
     esac
     break
@@ -50,9 +50,14 @@ _texra() {
 
   path="$(_texra_completion_path)"
   case "$path" in
-    '') subcommands='chat run agents models login logout usage auth doctor completion version help'; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
+    '') subcommands='chat run resume history agents models login logout usage auth doctor completion version help'; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
     'chat') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy --agent --model -m' ;;
     'run') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy --input -i --output --model -m --instruction' ;;
+    'resume') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
+    'history') subcommands='list show delete'; flags='' ;;
+    'history list') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
+    'history show') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
+    'history delete') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy --all' ;;
     'agents') subcommands='list'; flags='' ;;
     'agents list') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
     'models') subcommands='list'; flags='' ;;
@@ -67,7 +72,7 @@ _texra() {
     'completion') subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy' ;;
     'version') subcommands=''; flags='' ;;
     'help') subcommands=''; flags='' ;;
-    *) subcommands='chat run agents models login logout usage auth doctor completion version help'; flags='' ;;
+    *) subcommands='chat run resume history agents models login logout usage auth doctor completion version help'; flags='' ;;
   esac
 
   if [[ "$path" == 'run' && "$cur" != -* ]]; then
@@ -95,6 +100,8 @@ exports[`CLI shell completion > generates fish completion 1`] = `
 "# fish completion for texra
 complete -c texra -n '__fish_use_subcommand' -a 'chat'
 complete -c texra -n '__fish_use_subcommand' -a 'run'
+complete -c texra -n '__fish_use_subcommand' -a 'resume'
+complete -c texra -n '__fish_use_subcommand' -a 'history'
 complete -c texra -n '__fish_use_subcommand' -a 'agents'
 complete -c texra -n '__fish_use_subcommand' -a 'models'
 complete -c texra -n '__fish_use_subcommand' -a 'login'
@@ -126,6 +133,30 @@ complete -c texra -n '__fish_seen_subcommand_from run' -l 'input' -s 'i' -r
 complete -c texra -n '__fish_seen_subcommand_from run' -l 'output' -r
 complete -c texra -n '__fish_seen_subcommand_from run' -l 'model' -s 'm' -r
 complete -c texra -n '__fish_seen_subcommand_from run' -l 'instruction' -r
+complete -c texra -n '__fish_seen_subcommand_from resume' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from resume' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from resume' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from resume' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from resume' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from history' -a 'list'
+complete -c texra -n '__fish_seen_subcommand_from history' -a 'show'
+complete -c texra -n '__fish_seen_subcommand_from history' -a 'delete'
+complete -c texra -n '__fish_seen_subcommand_from list' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from list' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from list' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from list' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from list' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from show' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from show' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from show' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from show' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from show' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from delete' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from delete' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from delete' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from delete' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from delete' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from delete' -l 'all'
 complete -c texra -n '__fish_seen_subcommand_from agents' -a 'list'
 complete -c texra -n '__fish_seen_subcommand_from list' -l 'print' -s 'p'
 complete -c texra -n '__fish_seen_subcommand_from list' -l 'quiet' -s 'q'
@@ -209,6 +240,11 @@ _texra() {
   case "$path" in
     'chat') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--agent[Tool-use agent for the session]:value:' '--model[Model for the session]:value:' '-m[Model for the session]:value:' ;;
     'run') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--input[Input file passed to the workflow agent]:value:' '-i[Input file passed to the workflow agent]:value:' '--output[Output file path]:value:' '--model[Model for the agent]:value:' '-m[Model for the agent]:value:' '--instruction[Instruction passed to the workflow agent]:value:' '1:agent:($(_texra_agents))' ;;
+    'resume') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'history') _values 'subcommands' 'list' 'show' 'delete'; true ;;
+    'history list') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'history show') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'history delete') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--all[Delete all stored executions]' ;;
     'agents') _values 'subcommands' 'list'; true ;;
     'agents list') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
     'models') _values 'subcommands' 'list'; true ;;
@@ -223,7 +259,7 @@ _texra() {
     'completion') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '1:shell:(bash zsh fish)' ;;
     'version') true; true ;;
     'help') true; true ;;
-    *) _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '1:command:(chat run agents models login logout usage auth doctor completion version help)' ;;
+    *) _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '1:command:(chat run resume history agents models login logout usage auth doctor completion version help)' ;;
   esac
 }
 
