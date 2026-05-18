@@ -1,7 +1,7 @@
 // Registers the slash commands the input palette surfaces.
 
 import { ApiModeForm } from '../forms/ApiModeForm';
-import { ModelForm } from '../forms/ModelForm';
+import { ModelListForm } from '../forms/ModelListForm';
 import { cliState } from '../state/cliState';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 import type { CliApiMode } from '../../../runtime/apiAccessMode';
@@ -25,27 +25,11 @@ const defaultApiModeSelect: ApiModeSelectHandler = (value) => {
 
 export function registerBuiltinSlashCommands(options?: {
   onModelSelect?: ModelSelectHandler;
+  canSelectModel?: () => boolean;
   onApiModeSelect?: ApiModeSelectHandler;
 }): void {
   const onModelSelect = options?.onModelSelect ?? defaultModelSelect;
   const onApiModeSelect = options?.onApiModeSelect ?? defaultApiModeSelect;
-
-  /** Adapter: wires the `/model` form's `(value)=>void` API into the generic
-   *  `SlashFormProps<unknown>` shape the registry expects. */
-  function ModelFormAdapter(props: SlashFormProps): React.JSX.Element {
-    const current = cliState.sessionMeta.get().model;
-    return (
-      <ModelForm
-        currentModel={current}
-        onSelect={(value) => {
-          void Promise.resolve(onModelSelect(value)).finally(() =>
-            props.onDone(value),
-          );
-        }}
-        onCancel={() => props.onDone(undefined)}
-      />
-    );
-  }
 
   function ApiModeFormAdapter(props: SlashFormProps): React.JSX.Element {
     const current = cliState.sessionMeta.get().apiMode;
@@ -58,6 +42,24 @@ export function registerBuiltinSlashCommands(options?: {
           );
         }}
         onCancel={() => props.onDone(undefined)}
+      />
+    );
+  }
+
+  function ModelListFormAdapter(props: SlashFormProps): React.JSX.Element {
+    const current = cliState.sessionMeta.get().model;
+    const selectable = options?.canSelectModel?.() ?? true;
+    return (
+      <ModelListForm
+        currentModel={current}
+        apiMode={cliState.sessionMeta.get().apiMode}
+        selectable={selectable}
+        onSelect={(value) => {
+          void Promise.resolve(onModelSelect(value)).finally(() =>
+            props.onDone(value),
+          );
+        }}
+        onClose={() => props.onDone(undefined)}
       />
     );
   }
@@ -76,8 +78,8 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'model',
-    description: 'Switch the active model',
-    formComponent: ModelFormAdapter,
+    description: 'List available models',
+    formComponent: ModelListFormAdapter,
   });
   registerSlashCommand({
     name: 'api',
