@@ -278,7 +278,12 @@ export type UpdateAgentModePresetsMessage = z.infer<
 // ============================================================
 
 /** Status of a tool dependency */
-export const ToolStatusSchema = z.enum(['available', 'not-found', 'unknown']);
+export const ToolStatusSchema = z.enum([
+  'available',
+  'not-found',
+  'unknown',
+  'coming-soon',
+]);
 export type ToolStatus = z.infer<typeof ToolStatusSchema>;
 
 /** Category for grouping tools in the dashboard */
