@@ -7,8 +7,8 @@
  */
 
 import * as path from 'path';
-import { promises as fs } from 'fs';
 
+import { platform } from '@platform/platform';
 import { flexibleFS } from '@utils/files';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
@@ -34,7 +34,9 @@ const BIB_DIRECTIVE_PATTERN = new RegExp(
  * Falls back to the literal dirname if the file can't be realpath'd.
  */
 export async function resolveLatexDir(absolutePath: string): Promise<string> {
-  const resolved = await fs.realpath(absolutePath).catch(() => absolutePath);
+  const resolved = await platform()
+    .fs.realPath(absolutePath)
+    .catch(() => absolutePath);
   return path.dirname(resolved);
 }
 

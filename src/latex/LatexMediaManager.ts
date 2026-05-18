@@ -1,11 +1,12 @@
 import * as path from 'path';
-import { promises as fs } from 'fs';
 
 import pMap from 'p-map';
 
+import { platform } from '@platform/platform';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
 import { toErrorMessage } from '@common/errors';
+import { isFile } from '@common/files/fsEntryType';
 import { AgentLogger } from '@logger/AgentLogger';
 import { ToolConfig } from '@shared/schemas/toolConfig';
 import {
@@ -204,7 +205,9 @@ export class LatexMediaManager {
       texFiles.map(async (file) => {
         let siblingDir = path.dirname(file.absolutePath);
         try {
-          siblingDir = path.dirname(await fs.realpath(file.absolutePath));
+          siblingDir = path.dirname(
+            await platform().fs.realPath(file.absolutePath),
+          );
         } catch (error) {
           this.logger.debug(
             `Unable to resolve real path for ${file.absolutePath}: ${toErrorMessage(error)}`,
@@ -265,7 +268,7 @@ export class LatexMediaManager {
     }
 
     try {
-      const realPath = await fs.realpath(latexFile.absolutePath);
+      const realPath = await platform().fs.realPath(latexFile.absolutePath);
       const content = await flexibleFS.read(latexFile);
       const uncommented = stripLatexComments(content);
       const baseDir = path.dirname(realPath);
@@ -304,7 +307,9 @@ export class LatexMediaManager {
 
     let entries: string[];
     try {
-      entries = await fs.readdir(projectDir);
+      entries = (await platform().fs.readDirectory(projectDir)).map(
+        ([name]) => name,
+      );
     } catch (error) {
       this.logger.debug(
         `Unable to scan project siblings in ${projectDir}: ${toErrorMessage(error)}`,
@@ -328,8 +333,8 @@ export class LatexMediaManager {
     await Promise.all(
       candidates.map(async (absolutePath) => {
         try {
-          const stats = await fs.stat(absolutePath);
-          if (!stats.isFile()) return;
+          const stats = await platform().fs.stat(absolutePath);
+          if (!isFile(stats.type)) return;
           await this.fileService!.mirrorWorkspaceFile(
             pathToLocation(absolutePath),
           );

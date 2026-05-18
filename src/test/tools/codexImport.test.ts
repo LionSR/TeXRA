@@ -53,7 +53,7 @@ describe('findCodexBinaryInElectronResources', () => {
     }
   });
 
-  it('finds the platform binary under app.asar.unpacked resources', function (this: Mocha.Context) {
+  it('finds the platform binary under app.asar.unpacked resources', async function (this: Mocha.Context) {
     const platformPackage =
       PLATFORM_PACKAGES[`${process.platform}-${process.arch}`];
     if (platformPackage == null) {
@@ -74,6 +74,6 @@ describe('findCodexBinaryInElectronResources', () => {
     fs.mkdirSync(path.dirname(binaryPath), { recursive: true });
     fs.writeFileSync(binaryPath, '');
 
-    assert.equal(findCodexBinaryInElectronResources(tempDir), binaryPath);
+    assert.equal(await findCodexBinaryInElectronResources(tempDir), binaryPath);
   });
 });

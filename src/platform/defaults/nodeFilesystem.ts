@@ -92,8 +92,27 @@ export const nodeFilesystem: FileSystemProvider = {
     };
   },
 
+  async realPath(target: string): Promise<string> {
+    return fs.promises.realpath(target);
+  },
+
   async readFile(target: string): Promise<Uint8Array> {
     return fs.promises.readFile(target);
+  },
+
+  async readFileChunk(
+    target: string,
+    offset: number,
+    length: number,
+  ): Promise<Uint8Array> {
+    const handle = await fs.promises.open(target, 'r');
+    try {
+      const buffer = Buffer.alloc(length);
+      const { bytesRead } = await handle.read(buffer, 0, length, offset);
+      return buffer.subarray(0, bytesRead);
+    } finally {
+      await handle.close();
+    }
   },
 
   async writeFile(target: string, content: Uint8Array): Promise<void> {
@@ -136,7 +155,7 @@ export const nodeFilesystem: FileSystemProvider = {
   async copy(
     source: string,
     dest: string,
-    options?: { overwrite?: boolean },
+    options?: { overwrite?: boolean; dereference?: boolean },
   ): Promise<void> {
     const srcStat = await fs.promises.stat(source);
     if (srcStat.isDirectory()) {
@@ -144,6 +163,7 @@ export const nodeFilesystem: FileSystemProvider = {
         recursive: true,
         force: !!options?.overwrite,
         errorOnExist: !options?.overwrite,
+        dereference: !!options?.dereference,
       });
     } else {
       const flag = options?.overwrite ? 0 : fs.constants.COPYFILE_EXCL;
