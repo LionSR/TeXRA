@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { DEFAULT_AGENT_MODEL } from '@agent/core/AgentConfig';
 import {
   BUILTIN_DEFAULT_CHAT_MODEL,
   resolveChatDefaults,
@@ -24,15 +23,15 @@ vi.mock('@utils/files/storageFS', () => ({
 }));
 
 describe('CLI chat defaults', () => {
-  it('uses the shared agent model as the built-in chat model', async () => {
-    expect(BUILTIN_DEFAULT_CHAT_MODEL).toBe(DEFAULT_AGENT_MODEL);
+  it('uses DeepSeek as the built-in chat model', async () => {
+    expect(BUILTIN_DEFAULT_CHAT_MODEL).toBe('deepseekT');
     expect(MODEL_CONFIGS[BUILTIN_DEFAULT_CHAT_MODEL]).toBeDefined();
 
     await expect(
       resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
     ).resolves.toMatchObject({
       agent: 'chat',
-      model: DEFAULT_AGENT_MODEL,
+      model: 'deepseekT',
       source: 'builtin',
     });
   });
@@ -49,7 +48,28 @@ describe('CLI chat defaults', () => {
       resolveChatDefaults({ cwd: workspace }),
     ).resolves.toMatchObject({
       agent: 'chat',
-      model: DEFAULT_AGENT_MODEL,
+      model: 'deepseekT',
+      source: 'mixed',
+    });
+  });
+
+  it('uses command-specific workspace defaults below environment overrides', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-defaults-'));
+    await mkdir(join(workspace, '.texra'), { recursive: true });
+    await writeFile(
+      join(workspace, '.texra', 'config.json'),
+      JSON.stringify({
+        agent: 'generic',
+        model: 'gpt55',
+        chat: { agent: 'chat', model: 'deepseekT' },
+      }),
+    );
+
+    await expect(
+      resolveChatDefaults({ cwd: workspace, envModel: 'sonnet46T' }),
+    ).resolves.toMatchObject({
+      agent: 'chat',
+      model: 'sonnet46T',
       source: 'mixed',
     });
   });

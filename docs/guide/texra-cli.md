@@ -77,6 +77,36 @@ For workflow agents, text output prints the final generated path in run storage
 such as `r1/paper.polished.tex`. If `--output` is provided, TeXRA also copies
 that final artifact to the requested destination.
 
+## Workspace Defaults
+
+The CLI reads optional, non-secret defaults from `.texra/config.json` in the
+current workspace. Command-line flags override environment variables,
+environment variables override the workspace file, and the workspace file
+overrides built-in defaults.
+
+```json
+{
+  "model": "deepseekT",
+  "outputFormat": "text",
+  "approvalPolicy": "never",
+  "chat": {
+    "agent": "chat",
+    "model": "deepseekT"
+  },
+  "run": {
+    "model": "deepseekT"
+  }
+}
+```
+
+Supported top-level keys are `agent`, `model`, `outputFormat`, and
+`approvalPolicy`; `chat` and `run` may set command-specific `agent` and `model`
+defaults. The built-in CLI model default is `deepseekT`.
+
+The corresponding environment variables are `TEXRA_AGENT`, `TEXRA_MODEL`,
+`TEXRA_OUTPUT_FORMAT`, and `TEXRA_APPROVAL_POLICY`. Run `texra doctor` to see
+which workspace config file was loaded and whether any keys were ignored.
+
 ## Remove the Linked Command
 
 ```bash
