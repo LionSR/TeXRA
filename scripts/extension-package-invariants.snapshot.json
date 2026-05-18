@@ -1470,6 +1470,8 @@
   ],
   "requiredPackagedPaths": [
     "LICENSE.txt",
+    "changelog.md",
+    "readme.md",
     "resources/agents",
     "resources/docs/agent-creation",
     "resources/examples",

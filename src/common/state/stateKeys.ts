@@ -44,7 +44,7 @@ export enum WorkspaceStateKey {
   CODEX_REASONING_EFFORT = 'texra.codexReasoningEffort',
   CODEX_APPROVAL_POLICY = 'texra.codexApprovalPolicy',
 
-  // Claude Agent settings
+  // Claude Code CLI settings
   CLAUDE_AGENT_MODEL = 'texra.claudeAgentModel',
   CLAUDE_AGENT_PERMISSION_MODE = 'texra.claudeAgentPermissionMode',
   CLAUDE_AGENT_EFFORT = 'texra.claudeAgentEffort',

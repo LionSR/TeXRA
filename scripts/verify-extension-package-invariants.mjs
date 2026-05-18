@@ -37,6 +37,8 @@ const MANIFEST_KEYS = [
 
 const REQUIRED_PACKAGED_PATHS = [
   'LICENSE.txt',
+  'changelog.md',
+  'readme.md',
   'resources/agents',
   'resources/docs/agent-creation',
   'resources/examples',
@@ -51,6 +53,12 @@ const REQUIRED_PACKAGED_PATHS = [
   'src/settingsView/index.html',
   'src/webview/index.html',
 ];
+
+// Paths in REQUIRED_PACKAGED_PATHS produced by the build (copied from the
+// repo root by scripts/copy-extension-docs.mjs). They do not need to exist
+// in the source tree, but verify-vsix-contents.mjs still checks the built
+// VSIX includes them.
+const BUILD_TIME_PACKAGED_PATHS = new Set(['readme.md', 'changelog.md']);
 
 const REQUIRED_VSCODEIGNORE_LINES = [
   'src/**',
@@ -166,6 +174,7 @@ function verifyAssets(snapshot, failures) {
   }
 
   for (const packagedPath of snapshot.requiredPackagedPaths) {
+    if (BUILD_TIME_PACKAGED_PATHS.has(packagedPath)) continue;
     const absolutePath = path.join(packageDir, packagedPath);
     const exists = fs.existsSync(absolutePath);
     assert(
