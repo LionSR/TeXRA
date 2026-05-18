@@ -12,7 +12,6 @@ import {
 export const CLI_LOCAL_STREAM_ID = 'cli-local' as StreamTabId;
 
 let localEntrySeq = 0;
-const clearedHeadByStream = new Map<StreamTabId, number>();
 
 function normalizeTranscriptText(text: string): string {
   return text.trim();
@@ -122,25 +121,8 @@ export function finalizeAssistantTranscriptEntries(
   });
 }
 
-export function clearActiveTranscript(): void {
-  const activeStreamId = cliState.activeStreamId.get();
-  if (!activeStreamId) {
-    cliState.streams.set(new Map());
-    return;
-  }
-
-  const head = AgentLogger.getStreamLogStore().get(activeStreamId)?.head ?? 0;
-  clearedHeadByStream.set(activeStreamId, head);
-  patchStream(activeStreamId, (slice) => ({ ...slice, entries: [] }));
-}
-
-export function getTranscriptStartSeq(streamId: StreamTabId): number {
-  return clearedHeadByStream.get(streamId) ?? 0;
-}
-
 function resetTranscriptState(): void {
   localEntrySeq = 0;
-  clearedHeadByStream.clear();
 }
 
 registerCliStateResetHook(resetTranscriptState);
