@@ -86,7 +86,7 @@ export function App(props: AppProps): React.JSX.Element {
         return;
       }
       if (lower === 'p') {
-        setChildControlMode('processes');
+        setChildControlMode('tasks');
         return;
       }
       const digit = Number(input);
@@ -120,6 +120,7 @@ export function App(props: AppProps): React.JSX.Element {
           onFocusStream={(streamId) => cliState.activeStreamId.set(streamId)}
           onKillExecution={props.onKillExecution}
           slice={activeSlice}
+          streams={streams}
         />
       ) : null}
       {activeForm

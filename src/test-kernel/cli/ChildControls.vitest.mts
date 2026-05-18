@@ -25,6 +25,7 @@ function slice(
   return {
     streamId: 'root',
     status: undefined,
+    description: undefined,
     usage: undefined,
     conversation: undefined,
     entries: [],
@@ -90,17 +91,66 @@ describe('CLI child execution controls', () => {
       {
         executionId: 'agent-1',
         childStreamId: 'child-a',
+        kind: 'subagent',
         label: 'critic',
+        command: 'critic',
         description: 'running · 12s',
         tailLines: [],
       },
     ]);
-    expect(buildChildControlItems(state, 'processes')).toMatchObject([
+    expect(buildChildControlItems(state, 'tasks')).toMatchObject([
+      {
+        executionId: 'agent-1',
+        childStreamId: 'child-a',
+        kind: 'subagent',
+        label: 'critic',
+        command: 'critic',
+      },
       {
         executionId: 'proc-1',
+        kind: 'process',
         label: 'latexmk',
+        command: 'latexmk',
         description: 'running · 3s · warning',
         tailLines: ['first', 'second', 'warning'],
+      },
+    ]);
+  });
+
+  it('uses stream descriptions as visible task commands', () => {
+    const state = slice({
+      activeSubagents: [
+        {
+          executionId: 'agent-1',
+          agentName: 'bash',
+          childStreamId: 'child-a',
+          status: 'running',
+        },
+      ],
+    });
+    const streams = new Map([
+      [
+        'child-a',
+        slice({
+          description: 'timeout 1800 texra run paper',
+          entries: [
+            {
+              id: 'entry-1',
+              role: 'assistant',
+              text: 'line one\nline two',
+              finalized: true,
+            },
+          ],
+        }),
+      ],
+    ]);
+
+    expect(buildChildControlItems(state, 'tasks', streams)).toMatchObject([
+      {
+        executionId: 'agent-1',
+        label: 'bash',
+        command: 'timeout 1800 texra run paper',
+        tailLines: ['line one', 'line two'],
       },
     ]);
   });
