@@ -68,8 +68,8 @@ export const historyListStyles: CSSResult = css`
   }
 
   .history-label {
-    font-weight: var(--font-weight-bold);
-    color: var(--wa-color-text-normal);
+    font-weight: var(--font-weight-normal);
+    color: var(--wa-color-text-quiet);
   }
 
   .history-value {
@@ -100,26 +100,27 @@ export const historyListStyles: CSSResult = css`
     line-height: var(--line-height-normal);
   }
 
+  .history-item .collapsible::part(header) {
+    font-weight: var(--font-weight-normal);
+  }
+
   .history-title {
     flex: 1;
     min-width: 0;
-    font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-normal);
     color: var(--wa-color-text-normal);
     word-break: break-word;
   }
 
   .history-title .markdown-content {
-    font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-normal);
   }
 
   .config-section {
     display: flex;
     flex-direction: column;
     gap: var(--wa-space-2xs);
-    background-color: var(--wa-color-neutral-fill-quiet);
-    padding: var(--wa-space-xs);
-    border-radius: var(--border-radius);
-    margin: var(--wa-space-xs) 0;
+    padding: var(--wa-space-2xs) 0;
   }
 
   .config-item {
@@ -129,16 +130,20 @@ export const historyListStyles: CSSResult = css`
   }
 
   .config-key {
-    font-weight: var(--font-weight-medium);
-    color: var(--wa-color-brand-on-quiet);
+    font-weight: var(--font-weight-normal);
+    color: var(--wa-color-text-quiet);
     min-width: calc(
       var(--width-button-min) + var(--wa-space-l) + var(--wa-space-l)
     );
   }
 
   .config-value {
-    color: var(--wa-color-text-quiet);
+    color: var(--wa-color-text-normal);
     word-break: break-word;
+  }
+
+  .config-value .markdown-content p {
+    margin: 0;
   }
 `;
 

@@ -460,7 +460,7 @@ export class ToolCard extends LitElement {
               : nothing}
             <span class="tool-name">${this.item.name}</span>
             ${this.item.status === 'available'
-              ? this.renderAvailableStatusIcon()
+              ? nothing
               : this.renderStatusBadge()}
             ${this.renderAuthNote()}
           </div>
