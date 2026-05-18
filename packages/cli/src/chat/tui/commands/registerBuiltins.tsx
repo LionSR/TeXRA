@@ -1,10 +1,13 @@
 // Registers the slash commands the input palette surfaces.
 
+import { ApiModeForm } from '../forms/ApiModeForm';
 import { ModelForm } from '../forms/ModelForm';
 import { cliState } from '../state/cliState';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
+import type { CliApiMode } from '../../../runtime/apiAccessMode';
 
 type ModelSelectHandler = (value: string) => void | Promise<void>;
+type ApiModeSelectHandler = (value: CliApiMode) => void | Promise<void>;
 
 const defaultModelSelect: ModelSelectHandler = (value) => {
   cliState.sessionMeta.set({
@@ -13,10 +16,19 @@ const defaultModelSelect: ModelSelectHandler = (value) => {
   });
 };
 
+const defaultApiModeSelect: ApiModeSelectHandler = (value) => {
+  cliState.sessionMeta.set({
+    ...cliState.sessionMeta.get(),
+    apiMode: value,
+  });
+};
+
 export function registerBuiltinSlashCommands(options?: {
   onModelSelect?: ModelSelectHandler;
+  onApiModeSelect?: ApiModeSelectHandler;
 }): void {
   const onModelSelect = options?.onModelSelect ?? defaultModelSelect;
+  const onApiModeSelect = options?.onApiModeSelect ?? defaultApiModeSelect;
 
   /** Adapter: wires the `/model` form's `(value)=>void` API into the generic
    *  `SlashFormProps<unknown>` shape the registry expects. */
@@ -27,6 +39,21 @@ export function registerBuiltinSlashCommands(options?: {
         currentModel={current}
         onSelect={(value) => {
           void Promise.resolve(onModelSelect(value)).finally(() =>
+            props.onDone(value),
+          );
+        }}
+        onCancel={() => props.onDone(undefined)}
+      />
+    );
+  }
+
+  function ApiModeFormAdapter(props: SlashFormProps): React.JSX.Element {
+    const current = cliState.sessionMeta.get().apiMode;
+    return (
+      <ApiModeForm
+        currentMode={current}
+        onSelect={(value) => {
+          void Promise.resolve(onApiModeSelect(value)).finally(() =>
             props.onDone(value),
           );
         }}
@@ -55,6 +82,7 @@ export function registerBuiltinSlashCommands(options?: {
   registerSlashCommand({
     name: 'api',
     description: 'Switch between included relay and personal API keys',
+    formComponent: ApiModeFormAdapter,
   });
   registerSlashCommand({
     name: 'auth',
