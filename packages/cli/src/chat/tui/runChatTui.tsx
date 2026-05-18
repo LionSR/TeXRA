@@ -74,7 +74,10 @@ import {
   clearActiveTranscript,
   moveLocalTranscriptToStream,
 } from './state/transcript';
-import { cleanupTerminalModes } from './terminalCleanup';
+import {
+  cleanupTerminalModes,
+  enterTerminalFullScreen,
+} from './terminalCleanup';
 
 export interface ChatResult {
   exitCode: number;
@@ -712,6 +715,7 @@ export async function runChat(
   };
 
   const version = await readCliVersion();
+  enterTerminalFullScreen();
   process.stdout.write(
     renderHeaderBanner({ version, agent, model, cwd: context.cwd }),
   );
