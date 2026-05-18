@@ -26,6 +26,28 @@ texra version
 texra agents list
 ```
 
+## Shell Completion
+
+TeXRA can print completion scripts for Bash, Zsh, and Fish:
+
+```bash
+texra completion bash >> ~/.bashrc
+texra completion zsh > "${fpath[1]}/_texra"
+texra completion fish > ~/.config/fish/completions/texra.fish
+```
+
+Restart the shell, or source the file you updated. Completion includes
+subcommands, flags, enum values such as `--output-format text|json|ndjson`,
+agent names for `texra run <TAB>`, and model names for `--model <TAB>`.
+
+Agent and model completion call back into `texra agents list` and
+`texra models list`, so they reflect the current checkout. Disable those
+dynamic lookups in slow shells with:
+
+```bash
+export TEXRA_COMPLETION_DYNAMIC=0
+```
+
 The linked command points to `packages/cli/dist/bin/texra.js`. Rebuild after
 changing CLI code or shared runtime code:
 
