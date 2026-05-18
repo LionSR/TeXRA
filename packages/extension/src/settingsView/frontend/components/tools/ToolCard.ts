@@ -285,10 +285,6 @@ export class ToolCard extends LitElement {
       ToolCard.STATUS_CONFIG[status] ?? ToolCard.STATUS_CONFIG.unknown;
     const label = this.item.statusLabel ?? config.label;
 
-    if (status === 'available') {
-      return this.renderAvailableStatusIcon();
-    }
-
     return html`
       <wa-tag
         class="tool-badge"
