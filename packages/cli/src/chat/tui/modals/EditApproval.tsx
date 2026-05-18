@@ -40,6 +40,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
       borderStyle="double"
       color="cyan"
       title={`Apply edit to ${props.request.path}?`}
+      alwaysAllow={{ kind: 'toolEdit', label: 'approve edits this session' }}
       onDecide={props.onDecide}
     >
       <Text dimColor>

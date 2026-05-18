@@ -21,6 +21,8 @@ import type {
 } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
+export type ApprovalBypassKind = 'toolEdit' | 'superYolo';
+
 export type ApprovalPayload =
   | { kind: 'bash'; payload: BashPermission }
   | { kind: 'toolEdit'; request: ToolEditApprovalRequest }
@@ -40,6 +42,8 @@ export interface ApprovalDecision {
   readonly userMessage?: string;
   /** Structured answers for an AskUserQuestion request. */
   readonly userQuestionAnswers?: UserQuestionAnswers;
+  /** Session bypass to activate before accepting this approval. */
+  readonly bypass?: ApprovalBypassKind;
 }
 
 export interface PendingApproval {

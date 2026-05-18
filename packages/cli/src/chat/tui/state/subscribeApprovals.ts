@@ -25,6 +25,7 @@ import type {
 } from '@eventBus/ProgressEventBus';
 import {
   handleProgressViewBashApprovalAction,
+  setToolEditApprovalSessionBypass,
   setToolEditApprovalHandler,
 } from '@tools/approval';
 import { handleUserQuestionAction } from '@tools/userQuestion';
@@ -80,6 +81,7 @@ export function installTuiApprovals(
         event,
         payload as ProgressEventPayloads[ApprovalEvent],
         context,
+        host,
       );
       return;
     }
@@ -87,10 +89,17 @@ export function installTuiApprovals(
   }) as Emit;
 
   setToolEditApprovalHandler(async (request) => {
-    let decision = immediateDecision(context);
+    let decision: ApprovalDecision | undefined = immediateDecision(context);
     if (!decision) {
       decision = await enqueueApproval({ kind: 'toolEdit', request });
       markIfRejected(context, decision);
+    }
+    if (
+      decision.accepted &&
+      decision.bypass === 'toolEdit' &&
+      request.streamId
+    ) {
+      setToolEditApprovalSessionBypass(request.streamId, true, host);
     }
     return decision.accepted
       ? { accepted: true, appliedContent: request.proposedContent }
@@ -111,6 +120,7 @@ function routeApproval(
   event: ApprovalEvent,
   payload: ProgressEventPayloads[ApprovalEvent],
   context: CliContext,
+  host: CliRuntimeHost,
 ): void {
   switch (event) {
     case 'showBashPermission':
@@ -118,7 +128,16 @@ function routeApproval(
         context,
         'bash',
         payload as ProgressEventPayloads['showBashPermission'],
-        dispatchBash,
+        (bashPayload, decision) => {
+          if (
+            decision.accepted &&
+            decision.bypass === 'toolEdit' &&
+            bashPayload.streamId
+          ) {
+            setToolEditApprovalSessionBypass(bashPayload.streamId, true, host);
+          }
+          dispatchBash(bashPayload, decision);
+        },
       );
       return;
     case 'showPlanApproval':
