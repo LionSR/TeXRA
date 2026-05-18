@@ -84,6 +84,16 @@ inputs:
 node packages/cli/dist/bin/texra.js run firstread --input appendices.tex --context Draft0.tex --context refs.bib
 ```
 
+Pass multiple inputs with repeated `--input` flags, a directory, or a glob.
+Directory inputs expand recursively to `.tex` files. Multi-input runs can copy
+their generated artifacts to a directory with `--output-dir`; relative document
+paths are preserved under that directory:
+
+```sh
+node packages/cli/dist/bin/texra.js run firstread --input Draft0.tex --input appendices.tex --output-dir flagged
+node packages/cli/dist/bin/texra.js run logic --input 'paper/**/*.tex' --output-dir logic-pass
+```
+
 For workflow agents, text output prints the final generated path in run storage
 such as `r1/paper.polished.tex`. If `--output` is provided, TeXRA also copies
 that final artifact to the requested destination.
