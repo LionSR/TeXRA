@@ -627,6 +627,12 @@ function isRelayMonthlyLimitBody(rawErrorBody: unknown): boolean {
   );
 }
 
+function isRelayMonthlyLimitMessage(message: string | undefined): boolean {
+  return (
+    message?.toLowerCase().includes('monthly spending limit reached') ?? false
+  );
+}
+
 function pickStringField(v: unknown, key: string): string | undefined {
   if (!isObject(v)) return undefined;
   const value = (v as Record<string, unknown>)[key];
@@ -665,13 +671,18 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   const rawErrorBody = detectRawErrorBody(err);
   const streamDiagnostics = detectStreamDiagnostics(err);
   const partialText = detectPartialText(err);
-  const isRelay = isRelayError(rawErrorBody);
+  const extractedMessage = extractErrorMessage(err);
+  const isRelayMonthlyLimitByMessage =
+    isRelayMonthlyLimitMessage(extractedMessage);
+  const isRelay = isRelayError(rawErrorBody) || isRelayMonthlyLimitByMessage;
   // Credit exhaustion matches regardless of relay status: a direct
   // Anthropic 400 "credit balance is too low" still wants the "Use your
   // own API key" affordance so the user can switch credentials.
   const isUpstreamCreditDepleted = isUpstreamCreditDepletedBody(rawErrorBody);
   const isCredentialExhausted =
-    isRelayMonthlyLimitBody(rawErrorBody) || isUpstreamCreditDepleted;
+    isRelayMonthlyLimitBody(rawErrorBody) ||
+    isRelayMonthlyLimitByMessage ||
+    isUpstreamCreditDepleted;
 
   // Handle DOMException AbortError (from AbortController.abort())
   if (err instanceof DOMException && err.name === 'AbortError') {
@@ -726,7 +737,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     ? safeGetReasonPhrase(statusCode)
     : undefined;
   const finalMessage =
-    extractErrorMessage(err) ?? fallbackMessage ?? 'Provider request failed';
+    extractedMessage ?? fallbackMessage ?? 'Provider request failed';
   // No status code on an unrecognized error likely means a network-level failure
   // (DNS, proxy, TLS, etc.) — show retry button for safety.
   const userRetryable =

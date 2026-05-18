@@ -263,6 +263,24 @@ describe('formatProviderHttpError', () => {
     expect(formatted.userRetryable).toBe(true);
   });
 
+  it('classifies relay monthly-limit messages as credential exhaustion', () => {
+    const error = new Error(
+      '429 Monthly spending limit reached ($300). Current usage: $623.16.',
+    );
+    attachSdkErrorMetadata(error, {
+      provider: 'fixture',
+      kind: 'rate_limit',
+      statusCode: 429,
+    });
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.statusCode).toBe(429);
+    expect(formatted.isRelayError).toBe(true);
+    expect(formatted.isCredentialExhausted).toBe(true);
+    expect(formatted.userRetryable).toBe(true);
+  });
+
   it('formats tagged OpenAI connection errors with existing retry behavior', () => {
     const error = new OpenAIAPIConnectionTimeoutError();
     tagOpenAISdkError(error, 'openai');
