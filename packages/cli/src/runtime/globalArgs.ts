@@ -12,6 +12,7 @@ import type { CliGlobalArgs, CliOutputFormat } from './cliContext';
  */
 export interface ParsedGlobalArgs {
   readonly print?: boolean;
+  readonly quiet?: boolean;
   readonly cwd?: string;
   readonly 'output-format': CliOutputFormat;
   readonly 'approval-policy': CliApprovalPolicy;
@@ -20,6 +21,7 @@ export interface ParsedGlobalArgs {
 export function pickGlobalArgs(args: ParsedGlobalArgs): CliGlobalArgs {
   return {
     print: args.print === true,
+    quiet: args.quiet === true,
     cwd: isNonEmptyString(args.cwd) ? args.cwd.trim() : undefined,
     outputFormat: args['output-format'],
     approvalPolicy: args['approval-policy'],
