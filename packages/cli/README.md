@@ -88,6 +88,20 @@ node packages/cli/dist/bin/texra.js --output-format ndjson agents list
 node packages/cli/dist/bin/texra.js run polish --input paper.tex --output paper.polished.tex --output-format ndjson --print
 ```
 
+Inspect stored executions:
+
+```sh
+node packages/cli/dist/bin/texra.js history list
+node packages/cli/dist/bin/texra.js history list --output-format ndjson
+node packages/cli/dist/bin/texra.js history show <id>
+node packages/cli/dist/bin/texra.js resume <id>
+```
+
+`history list --output-format ndjson` emits stable `history-entry` records for
+scripts. `resume <id>` runs the stored execution configuration again and exits
+with code 2 when the id is malformed or not found. In `texra chat`, `/resume`
+lists recent executions and `/resume <id>` starts from the stored configuration.
+
 Command-local global flags are accepted after `run`:
 
 ```sh
