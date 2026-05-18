@@ -255,6 +255,10 @@ export class HistoryItemElement extends LitElement {
     }
 
     const titleText = instructionText ?? descriptionText ?? '(no instruction)';
+    const summaryText =
+      instructionText && descriptionText && descriptionText !== instructionText
+        ? descriptionText
+        : null;
 
     const metaParts: Array<string | TemplateResult> = [
       timestamp,
@@ -327,6 +331,9 @@ export class HistoryItemElement extends LitElement {
               : nothing}
           </div>
         </div>
+        ${summaryText
+          ? html`<div class="history-description">${summaryText}</div>`
+          : nothing}
         <div class="text-secondary meta-strip">${renderDotMeta(metaParts)}</div>
         ${extraDetails.length
           ? html`

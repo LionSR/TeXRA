@@ -1625,7 +1625,7 @@
     "prepare:docs": "node ../../scripts/copy-extension-docs.mjs",
     "compile": "corepack pnpm run clean:dist && webpack",
     "watch": "webpack --watch",
-    "package": "corepack pnpm run clean:dist && webpack --mode production --devtool hidden-source-map",
+    "package": "corepack pnpm run prepare:docs && corepack pnpm run clean:dist && webpack --mode production --devtool hidden-source-map",
     "compile-tests": "tsc -p tsconfig.json --outDir out",
     "watch-tests": "tsc -p tsconfig.json -w --outDir out",
     "lint": "eslint src",
