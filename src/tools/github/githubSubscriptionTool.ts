@@ -17,9 +17,6 @@
  * - `owner/repo/pulls/N` and `owner/repo/issues/N` are nuanced (worker-friendly).
  */
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-
 import { z } from 'zod';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -29,6 +26,7 @@ import type { StreamTabId } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@tools/result';
 import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
+import { executeCommand } from '@utils/system/execUtils';
 
 import { defineTool } from '../core/define';
 import {
@@ -52,8 +50,6 @@ import { issuePollingSource } from './IssuePollingSource';
 import { prPollingSource } from './PRPollingSource';
 import { repoPollingSource } from './RepoPollingSource';
 import type { GhIssue, GhPullRequest } from './prTypes';
-
-const execFileAsync = promisify(execFile);
 
 const GitHubSubscriptionInputSchema = z.strictObject({
   command: z.enum(['subscribe', 'unsubscribe', 'list', 'find_current']),
@@ -365,12 +361,17 @@ function parseGitHubRemote(
 }
 
 async function gitInDir(args: string[], cwd: string): Promise<string> {
-  const { stdout } = await execFileAsync('git', args, {
+  const result = await executeCommand(['git', ...args], {
     cwd,
     timeout: 10_000,
-    maxBuffer: 1024 * 1024,
+    channel: 'github_subscription',
   });
-  return stdout.trim();
+  if (!result.success) {
+    throw new ToolError(
+      result.stderr ?? `git ${args.join(' ')} failed with no stderr.`,
+    );
+  }
+  return (result.stdout ?? '').trim();
 }
 
 interface OpenPullSummary {
