@@ -142,6 +142,11 @@ export class MemoryItem extends LitElement {
     this.requestPreviewIfNeeded();
   }
 
+  private handleContentsHide(event: Event): void {
+    if (event.target !== event.currentTarget) return;
+    this.contentsOpened = false;
+  }
+
   private requestPreviewIfNeeded(): void {
     if (!this.item || this.item.preview !== undefined) return;
     if (this.item.previewError) return;
@@ -233,8 +238,9 @@ export class MemoryItem extends LitElement {
         <wa-details
           class="collapsible memory-contents"
           summary="Contents"
-          ?open=${this.item.pinned}
+          ?open=${this.contentsOpened}
           @wa-show=${this.handleContentsShow}
+          @wa-hide=${this.handleContentsHide}
         >
           ${this.contentsOpened
             ? html`<div class="memory-preview">
