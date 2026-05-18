@@ -52,7 +52,7 @@ _texra() {
   case "$path" in
     '') subcommands='chat run resume history agents models login logout usage auth doctor completion version help'; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
     'chat') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy --agent --model -m' ;;
-    'run') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy --input -i --output --model -m --instruction' ;;
+    'run') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy --input -i --context -c --output --output-dir --model -m --instruction' ;;
     'resume') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
     'history') subcommands='list show delete'; flags='' ;;
     'history list') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
@@ -133,7 +133,9 @@ complete -c texra -n '__fish_seen_subcommand_from run' -l 'api-mode' -r
 complete -c texra -n '__fish_seen_subcommand_from run' -l 'output-format' -r -a 'text json ndjson'
 complete -c texra -n '__fish_seen_subcommand_from run' -l 'approval-policy' -r -a 'never ask yolo'
 complete -c texra -n '__fish_seen_subcommand_from run' -l 'input' -s 'i' -r
+complete -c texra -n '__fish_seen_subcommand_from run' -l 'context' -s 'c' -r
 complete -c texra -n '__fish_seen_subcommand_from run' -l 'output' -r
+complete -c texra -n '__fish_seen_subcommand_from run' -l 'output-dir' -r
 complete -c texra -n '__fish_seen_subcommand_from run' -l 'model' -s 'm' -r
 complete -c texra -n '__fish_seen_subcommand_from run' -l 'instruction' -r
 complete -c texra -n '__fish_seen_subcommand_from resume' -l 'print' -s 'p'
@@ -255,7 +257,7 @@ _texra() {
 
   case "$path" in
     'chat') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--agent[Tool-use agent for the session]:value:' '--model[Model for the session]:value:' '-m[Model for the session]:value:' ;;
-    'run') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--input[Input file passed to the workflow agent]:value:' '-i[Input file passed to the workflow agent]:value:' '--output[Output file path]:value:' '--model[Model for the agent]:value:' '-m[Model for the agent]:value:' '--instruction[Instruction passed to the workflow agent]:value:' '1:agent:($(_texra_agents))' ;;
+    'run') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--input[Input file passed to the workflow agent]:value:' '-i[Input file passed to the workflow agent]:value:' '--context[Read-only context file passed to the workflow agent]:value:' '-c[Read-only context file passed to the workflow agent]:value:' '--output[Output file path]:value:' '--output-dir[Directory to copy multi-input workflow outputs into]:value:' '--model[Model for the agent]:value:' '-m[Model for the agent]:value:' '--instruction[Instruction passed to the workflow agent]:value:' '1:agent:($(_texra_agents))' ;;
     'resume') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
     'history') _values 'subcommands' 'list' 'show' 'delete'; true ;;
     'history list') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
