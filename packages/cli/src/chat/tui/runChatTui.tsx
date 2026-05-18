@@ -71,7 +71,6 @@ import {
   appendAssistantTranscriptIfMissing,
   appendLocalAssistantTranscript,
   appendLocalErrorTranscript,
-  clearActiveTranscript,
   moveLocalTranscriptToStream,
 } from './state/transcript';
 import {
@@ -106,6 +105,7 @@ interface SlashCommandContext {
   readonly requestInputExit: () => void;
   readonly getApprovalPolicy: () => CliApprovalPolicy;
   readonly setApprovalPolicy: (policy: CliApprovalPolicy) => void;
+  readonly resetSession: () => void;
   readonly startStoredExecution: (config: AgentConfigPayload) => void;
 }
 
@@ -336,7 +336,7 @@ async function handleTuiSlashCommand(
       return true;
     }
     case 'clear':
-      clearActiveTranscript();
+      context.resetSession();
       return true;
     case 'exit':
     case 'quit':
@@ -547,6 +547,37 @@ export async function runChat(
     getInterruptible(session.streamId)?.interrupt();
   };
 
+  const resetSessionForClear = (): void => {
+    const activeStreamId = session.streamId ?? cliState.activeStreamId.get();
+    const activeStatus = activeStreamId
+      ? (cliState.streams.get().get(activeStreamId)?.status ??
+        StreamStatusService.get(activeStreamId))
+      : undefined;
+
+    if (
+      (session.runPromise && !session.runCompleted) ||
+      activeStatus === STREAM_STATUS.INITIALIZING ||
+      activeStatus === STREAM_STATUS.RUNNING ||
+      activeStatus === STREAM_STATUS.RESUMING
+    ) {
+      appendLocalAssistantTranscript(
+        'Wait for the active response to finish, or press Ctrl-C before /clear.',
+      );
+      return;
+    }
+
+    const meta = cliState.sessionMeta.get();
+    clearApprovals();
+    followUpQueue.clear();
+    session.streamId = undefined;
+    session.runPromise = undefined;
+    session.runExitCode = CliExitCode.Success;
+    session.runCompleted = false;
+    session.stopRequested = false;
+    resetCliState();
+    cliState.sessionMeta.set(meta);
+  };
+
   const startAgentRun = (config: AgentConfigPayload): void => {
     const currentModel = config.model;
     const sessionContext = currentSessionContext(currentModel);
@@ -624,6 +655,7 @@ export async function runChat(
         requestInputExit: () => requestInputExit?.(),
         getApprovalPolicy,
         setApprovalPolicy,
+        resetSession: resetSessionForClear,
         startStoredExecution: (config) => startAgentRun(config),
       }),
     getApprovalPolicy,
@@ -643,6 +675,7 @@ export async function runChat(
         requestInputExit: () => requestInputExit?.(),
         getApprovalPolicy,
         setApprovalPolicy,
+        resetSession: resetSessionForClear,
         startStoredExecution: (config) => startAgentRun(config),
       }),
     onApiModeSelect: (nextMode) => applyCliApiModeSelection(nextMode),
@@ -675,6 +708,7 @@ export async function runChat(
         requestInputExit: () => requestInputExit?.(),
         getApprovalPolicy,
         setApprovalPolicy,
+        resetSession: resetSessionForClear,
         startStoredExecution: (config) => startAgentRun(config),
       })
     ) {

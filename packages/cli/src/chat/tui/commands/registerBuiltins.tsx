@@ -122,7 +122,7 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'clear',
-    description: 'Clear the current transcript view',
+    description: 'Start a fresh chat session',
   });
   registerSlashCommand({
     name: 'agent',
