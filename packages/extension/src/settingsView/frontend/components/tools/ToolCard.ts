@@ -261,6 +261,11 @@ export class ToolCard extends LitElement {
       label: 'Not checked',
       variant: 'neutral',
     },
+    'coming-soon': {
+      icon: 'clock',
+      label: 'Coming soon',
+      variant: 'neutral',
+    },
   };
 
   private renderAvailableStatusIcon(): TemplateResult {
@@ -470,16 +475,20 @@ export class ToolCard extends LitElement {
         ${this.item.statusDetail
           ? html`<div class="tool-config-note">${this.item.statusDetail}</div>`
           : nothing}
-        <div class="tool-ids">
-          ${this.item.tools.map(
-            (tool) =>
-              html`<span
-                class="tool-id-tag"
-                title=${tool.description ?? tool.name}
-                >${tool.name}</span
-              >`,
-          )}
-        </div>
+        ${this.item.tools.length > 0
+          ? html`
+              <div class="tool-ids">
+                ${this.item.tools.map(
+                  (tool) =>
+                    html`<span
+                      class="tool-id-tag"
+                      title=${tool.description ?? tool.name}
+                      >${tool.name}</span
+                    >`,
+                )}
+              </div>
+            `
+          : nothing}
         <slot name="details"></slot>
         ${this.renderGuide()}
       </div>
