@@ -967,7 +967,7 @@ const chatCommand = defineCommand({
 });
 
 const helpCommand = defineCommand({
-  meta: { name: 'help', description: 'Show TeXRA CLI usage' },
+  meta: { name: 'help', description: 'Show TeXRA CLI commands' },
   async run() {
     await showUsage(rootCommand);
   },
