@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.37.9] - 2026-05-18
+
+### Features
+
+- **See your relay quota at a glance** — Settings → Models shows how much of your monthly included-model quota you've used. When it runs out, TeXRA quietly switches to your own API keys so runs don't fail mid-task.
+
+### Improvements
+
+- **Cleaner Settings view** — tighter layouts across tabs, and the README now opens directly inside the extension.
+- **Simpler launcher** — the input and output file panels are easier to read at a glance.
+- **See your workflow PDF** — when a workflow run produces a PDF, you can open it directly from the run.
+
 ## [0.37.8] - 2026-05-17
 
 ### Breaking Changes

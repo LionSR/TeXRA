@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.37.10",
+  "version": "0.37.9",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.105.0"
