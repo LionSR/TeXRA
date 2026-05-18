@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -199,15 +199,23 @@ function pickCliApiMode(
   return undefined;
 }
 
+async function resolveCliCwd(cwdFlag: string | undefined): Promise<string> {
+  const requested = isNonEmptyString(cwdFlag)
+    ? path.resolve(cwdFlag.trim())
+    : process.cwd();
+  try {
+    return await realpath(requested);
+  } catch {
+    return requested;
+  }
+}
+
 export async function buildCliContext(
   init: BuildCliContextInit,
 ): Promise<CliContext> {
   const ambient = init.ambient ?? readCliAmbientState();
   const env = init.env ?? process.env;
-  const cwdFlag = init.globalArgs.cwd;
-  const cwd = isNonEmptyString(cwdFlag)
-    ? path.resolve(cwdFlag.trim())
-    : process.cwd();
+  const cwd = await resolveCliCwd(init.globalArgs.cwd);
   const loadedConfig = await loadWorkspaceCliConfig(cwd);
   const configWarnings = [...loadedConfig.warnings];
   const envModel = pickEnvModel(env, configWarnings);
