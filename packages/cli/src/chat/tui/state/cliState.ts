@@ -74,6 +74,9 @@ export interface StreamSlice {
   readonly queuedFollowUps: number;
   readonly activeSubagents: readonly ActiveChildInfo[];
   readonly activeProcesses: readonly ActiveChildInfo[];
+  /** Child streams seen for this parent. This keeps completed/waiting
+   * subagent pages addressable after they leave the active list. */
+  readonly childStreams: readonly ActiveChildInfo[];
   readonly todos: readonly TodoItem[];
   readonly plan: Plan | null;
   /** Tailed stdout/stderr per execution id; latest only — capped at
@@ -144,6 +147,7 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
     queuedFollowUps: 0,
     activeSubagents: [],
     activeProcesses: [],
+    childStreams: [],
     todos: [],
     plan: null,
     processOutput: new Map(),
