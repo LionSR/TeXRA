@@ -2,8 +2,10 @@
 // and input bar. Tab / Shift-Tab cycles focus across subagent streams.
 
 import { Box, useInput, useWindowSize } from 'ink';
+import { useState } from 'react';
 
 import { ApprovalModal } from './modals/ApprovalModal';
+import { ChildControlPicker } from './modals/ChildControlPicker';
 import { ConversationPane } from './panes/ConversationPane';
 import { InputBar } from './panes/InputBar';
 import { StatusBar } from './panes/StatusBar';
@@ -11,6 +13,10 @@ import { StreamTabsStrip } from './panes/StreamTabsStrip';
 import { SubagentList } from './panes/SubagentList';
 import { TodosPlanPanel } from './panes/TodosPlanPanel';
 import { currentApproval } from './state/approvalQueue';
+import {
+  numericFocusTarget,
+  type ChildControlMode,
+} from './state/childControls';
 import { cliState } from './state/cliState';
 import { nextFocusBack, nextFocusForward } from './state/focusCycle';
 import { useSignal } from './state/useSignal';
@@ -21,6 +27,7 @@ const MIN_TRANSCRIPT_WIDTH = 20;
 
 export interface AppProps {
   readonly onSubmit: (line: string) => void;
+  readonly onKillExecution: (executionId: string) => void;
   readonly inputDisabled?: boolean;
   readonly history?: InputHistory;
 }
@@ -34,8 +41,14 @@ export function App(props: AppProps): React.JSX.Element {
   const activeForm = useSignal(cliState.activeForm);
   const slashPaletteOpen = useSignal(cliState.slashPaletteOpen);
   const { columns } = useWindowSize();
+  const [childControlMode, setChildControlMode] = useState<
+    ChildControlMode | undefined
+  >(undefined);
   const inputDisabled =
-    props.inputDisabled || pending !== undefined || activeForm !== undefined;
+    props.inputDisabled ||
+    pending !== undefined ||
+    activeForm !== undefined ||
+    childControlMode !== undefined;
 
   // Hide the side column when both side panes would render empty —
   // otherwise the conversation loses 28 columns of width for nothing.
@@ -64,6 +77,27 @@ export function App(props: AppProps): React.JSX.Element {
     { isActive: !inputDisabled && !slashPaletteOpen },
   );
 
+  useInput(
+    (input, key) => {
+      if (!key.meta) return;
+      const lower = input.toLowerCase();
+      if (lower === 's') {
+        setChildControlMode('subagents');
+        return;
+      }
+      if (lower === 'p') {
+        setChildControlMode('processes');
+        return;
+      }
+      const digit = Number(input);
+      if (Number.isInteger(digit) && digit >= 1 && digit <= 9) {
+        const target = numericFocusTarget(activeSlice, digit - 1);
+        if (target) cliState.activeStreamId.set(target);
+      }
+    },
+    { isActive: !inputDisabled && !slashPaletteOpen },
+  );
+
   return (
     <Box flexDirection="column">
       <Box flexDirection="row">
@@ -78,6 +112,16 @@ export function App(props: AppProps): React.JSX.Element {
         ) : null}
       </Box>
       <ApprovalModal pending={pending} />
+      {childControlMode ? (
+        <ChildControlPicker
+          activeStreamId={activeStreamId}
+          mode={childControlMode}
+          onClose={() => setChildControlMode(undefined)}
+          onFocusStream={(streamId) => cliState.activeStreamId.set(streamId)}
+          onKillExecution={props.onKillExecution}
+          slice={activeSlice}
+        />
+      ) : null}
       {activeForm
         ? activeForm.render(() => cliState.activeForm.set(undefined))
         : null}

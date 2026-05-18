@@ -109,6 +109,8 @@ function roundSegment(
 
 const STATUS_BAR_BINDINGS = [
   '[Tab]streams',
+  '[Alt-1..9]focus',
+  '[Alt-s/p]children',
   '[/status]details',
   '[/model]model',
   '[/api]api',
