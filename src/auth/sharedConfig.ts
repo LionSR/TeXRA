@@ -82,3 +82,22 @@ export const ULTRA_TIER: UserTier = 'Ultra';
 
 /** Cache TTL for server-side key access and tier config (5 minutes). */
 export const SERVER_SIDE_CACHE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Monthly relay spending limits in USD.
+ *
+ * CROSS-REFERENCE: These values are duplicated in:
+ *   supabase/functions/relay/models.ts
+ * Deno Edge Functions cannot import this source file, so update both files
+ * when changing relay spending policy.
+ */
+export const RELAY_TIER_SPENDING_LIMITS: Record<UserTier, number> = {
+  [FREE_TIER]: 10,
+  [MAX_TIER]: 50,
+  [ULTRA_TIER]: 300,
+};
+
+export function getRelaySpendingLimit(tier: string | undefined): number {
+  const parsedTier = UserTierSchema.catch(FREE_TIER).parse(tier);
+  return RELAY_TIER_SPENDING_LIMITS[parsedTier];
+}
