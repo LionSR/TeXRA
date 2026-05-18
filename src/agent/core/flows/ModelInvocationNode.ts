@@ -3,11 +3,11 @@ import {
   type BaseInvocationPrepResult,
   type BaseInvocationSuccessData,
   type BaseCycleFields,
-  getDebugContext,
+  type CycleDebugFileOptions,
   replaceMessagesInPlace,
+  saveCycleDebug,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
-import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import type { ToolDefinition } from '@model';
 
 import { FlowTransition } from './FlowTransitions';
@@ -31,17 +31,10 @@ export interface ModelInvocationConfig<TShared, TServices> {
    * as a user follow-up message, or null if no context is needed.
    */
   getPostCompactionContext?: (services: TServices) => string | null;
-  getDebugSaveOptions?: (
+  getDebugFileOptions?: (
     shared: TShared,
     services: TServices,
-  ) => {
-    context: { modelName?: string; isRemote?: boolean };
-    fileOptions: {
-      continuationCount: number;
-      baseName: string;
-      outputFile?: string;
-    };
-  };
+  ) => CycleDebugFileOptions;
 }
 
 type InvocationServices = BaseFlowContextInit<any> & {
@@ -154,17 +147,17 @@ export class ModelInvocationNode<
     shared.responseTimeMs = successRes.responseTimeMs;
     this._config.storeResponse(shared, successRes.response);
 
-    if (this._config.getDebugSaveOptions) {
-      const { context, fileOptions } = this._config.getDebugSaveOptions(
+    if (this._config.getDebugFileOptions) {
+      const fileOptions = this._config.getDebugFileOptions(
         shared,
         this.services,
       );
-      await maybeSaveDebugObject({
-        object: successRes.response,
-        objectType: 'response',
-        context: getDebugContext(this.services, context),
+      await saveCycleDebug(
+        successRes.response,
+        'response',
+        this.services,
         fileOptions,
-      });
+      );
     }
 
     return FlowTransition.DEFAULT;
