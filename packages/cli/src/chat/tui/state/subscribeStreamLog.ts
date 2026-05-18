@@ -11,6 +11,7 @@ import {
 } from '@shared/schemas';
 import { normalizeToolUseData } from '@shared/toolUse';
 
+import { appendCliApiSwitchHint } from '../../../runtime/approvalAdapter';
 import { cliState, patchStream, type ConversationEntry } from './cliState';
 import { getTranscriptStartSeq } from './transcript';
 
@@ -136,6 +137,7 @@ function renderLogEntry(
       : entry.messageType === MESSAGE_TYPES.ERROR
         ? 'error'
         : 'assistant';
+  const renderedText = role === 'error' ? appendCliApiSwitchHint(text) : text;
   // Assistant entries defer finalization (see comment above); inherit
   // from `prev` so re-syncs after finalize don't de-finalize and drop
   // the entry from `splitTranscriptEntries` once status flips to
@@ -144,7 +146,7 @@ function renderLogEntry(
   const next: ConversationEntry = {
     id: entry.id,
     role,
-    text,
+    text: renderedText,
     finalized,
   };
   return prev && entriesEqual(prev, next) ? prev : next;

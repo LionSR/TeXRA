@@ -35,6 +35,9 @@ const APPROVAL_EVENTS = [
 ] as const;
 type ApprovalEvent = (typeof APPROVAL_EVENTS)[number];
 
+export const CLI_PERSONAL_API_RETRY_HINT =
+  'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch to personal API keys.';
+
 function isApprovalEvent(
   event: keyof ProgressEventPayloads,
 ): event is ApprovalEvent {
@@ -56,6 +59,31 @@ export function markApprovalDenied(context: CliContext): void {
 
 export function hasCliApprovalDenied(context: CliContext): boolean {
   return deniedApprovalContexts.has(context);
+}
+
+export function isCliMonthlySpendingLimitMessage(
+  message: string | undefined,
+): boolean {
+  return (
+    message?.toLowerCase().includes('monthly spending limit reached') ?? false
+  );
+}
+
+export function isCliApiSwitchableRetry(
+  payload: ProgressEventPayloads['showRetryRequest'],
+): boolean {
+  const details = payload.errorDetails;
+  return (
+    details?.isCredentialExhausted === true &&
+    (details.isRelayError === true ||
+      isCliMonthlySpendingLimitMessage(payload.errorMessage))
+  );
+}
+
+export function appendCliApiSwitchHint(text: string): string {
+  if (!isCliMonthlySpendingLimitMessage(text)) return text;
+  if (text.includes('/api personal')) return text;
+  return [text, CLI_PERSONAL_API_RETRY_HINT].join('\n');
 }
 
 function approvalPromptAllowed(context: CliContext): boolean {
@@ -186,15 +214,8 @@ export function formatRetryRequestMessage(
   payload: ProgressEventPayloads['showRetryRequest'],
 ): string {
   const message = `Retry requested (${payload.operation}): ${payload.errorMessage ?? 'unknown error'}`;
-  const details = payload.errorDetails;
-  if (
-    details?.isRelayError === true &&
-    details.isCredentialExhausted === true
-  ) {
-    return [
-      message,
-      'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch to personal API keys.',
-    ].join('\n');
+  if (isCliApiSwitchableRetry(payload)) {
+    return [message, CLI_PERSONAL_API_RETRY_HINT].join('\n');
   }
   return message;
 }
