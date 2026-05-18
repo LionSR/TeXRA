@@ -53,6 +53,7 @@ import {
   writeTextStderr,
   writeTextStdout,
 } from '../runtime/logSinks';
+import { shouldRenderRunProgress } from '../runtime/runProgressRenderer';
 
 // One CLI invocation per process — module-level pending exit code is the
 // simplest way to surface handler exit codes back to `bin/texra.ts` after
@@ -72,7 +73,7 @@ function optString(value: unknown): string | undefined {
 }
 
 /**
- * Single source of truth for the four global flags accepted by every TeXRA
+ * Single source of truth for the global flags accepted by every TeXRA
  * subcommand. `as const` + spread would lose literal-type narrowing (citty's
  * `ArgsDef` rejects `readonly string[]`), so each enum's `options` is
  * explicitly typed as a mutable literal tuple — assignable to `string[]` and
@@ -81,6 +82,7 @@ function optString(value: unknown): string | undefined {
  */
 const GLOBAL_ARGS: {
   print: { type: 'boolean'; alias: 'p' };
+  quiet: { type: 'boolean'; alias: 'q' };
   cwd: { type: 'string' };
   'output-format': {
     type: 'enum';
@@ -94,6 +96,7 @@ const GLOBAL_ARGS: {
   };
 } = {
   print: { type: 'boolean', alias: 'p' },
+  quiet: { type: 'boolean', alias: 'q' },
   cwd: { type: 'string' },
   'output-format': {
     type: 'enum',
@@ -561,10 +564,12 @@ async function runWorkflowAgent(
   init: WorkflowRunInit,
 ): Promise<number> {
   const model = init.model?.trim() || DEFAULT_AGENT_MODEL;
+  const renderRunProgress = shouldRenderRunProgress(context);
   const runContext: CliContext = {
     ...context,
     helperModel: model,
     quietLogs: true,
+    renderRunProgress,
   };
   await initCliPlatform(runContext);
   installCliApprovalHandlers(runContext);

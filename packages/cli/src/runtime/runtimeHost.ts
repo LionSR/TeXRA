@@ -14,6 +14,7 @@ import {
   StderrTextSink,
   writeNdjsonStdout,
 } from './logSinks';
+import { createRunProgressRenderer } from './runProgressRenderer';
 import type { CliContext } from './cliContext';
 
 export type CliRuntimeHost = AgentRuntimeHost & {
@@ -23,6 +24,7 @@ export type CliRuntimeHost = AgentRuntimeHost & {
 export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   let sink: LogSink | undefined;
   let logger: Logger | undefined;
+  const runProgress = createRunProgressRenderer(context);
   function ensureLogger(): Logger {
     if (logger) return logger;
     sink =
@@ -48,11 +50,14 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       }
 
       if (event === 'requestShowError') {
+        runProgress?.preserve();
         ensureLogger().error(
           (payload as ProgressEventPayloads['requestShowError']).message,
         );
         return;
       }
+
+      if (runProgress?.handle(event, payload)) return;
 
       if (context.quietLogs) return;
 
@@ -67,6 +72,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       ensureLogger().debug(`Progress event: ${String(event)}`);
     },
     async close() {
+      runProgress?.clear();
       await sink?.flush?.();
       await sink?.close?.();
     },
