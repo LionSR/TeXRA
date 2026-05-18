@@ -23,6 +23,11 @@ export interface ConfirmCardProps {
     readonly kind: ApprovalBypassKind;
     readonly label: string;
   };
+  readonly extraActions?: readonly {
+    readonly key: string;
+    readonly label: string;
+    readonly decision: ApprovalDecision;
+  }[];
   readonly children: React.ReactNode;
   readonly onDecide: (decision: ApprovalDecision) => void;
 }
@@ -34,6 +39,7 @@ export function ConfirmCard({
   approveLabel = 'approve',
   rejectLabel = 'reject',
   alwaysAllow,
+  extraActions = [],
   children,
   onDecide,
 }: ConfirmCardProps): React.JSX.Element {
@@ -65,6 +71,12 @@ export function ConfirmCard({
           setFeedbackMode(true);
           return;
         case 'ignore':
+          for (const action of extraActions) {
+            if (input.toLowerCase() === action.key.toLowerCase()) {
+              onDecide(action.decision);
+              return;
+            }
+          }
           return;
       }
     },
@@ -75,6 +87,10 @@ export function ConfirmCard({
     { key: 'y', action: approveLabel },
     { key: 'n', action: rejectLabel },
     ...(alwaysAllow ? [{ key: 'a', action: alwaysAllow.label }] : []),
+    ...extraActions.map((action) => ({
+      key: action.key,
+      action: action.label,
+    })),
     { key: 'e', action: 'reject with feedback' },
     { key: 'Esc', action: 'cancel' },
   ];

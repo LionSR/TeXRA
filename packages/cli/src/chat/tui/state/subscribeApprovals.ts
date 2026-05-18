@@ -37,7 +37,9 @@ import {
   immediateDecisionForApproval,
   markApprovalDenied,
 } from '../../../runtime/approvalAdapter';
+import { setCliApiMode } from '../../../runtime/apiAccessMode';
 import { assertNever } from '../assertNever';
+import { cliState } from './cliState';
 import { enqueueApproval, type ApprovalDecision } from './approvalQueue';
 import type { CliContext } from '../../../runtime/cliContext';
 import type { CliRuntimeHost } from '../../../runtime/runtimeHost';
@@ -260,10 +262,24 @@ function dispatchRetry(
   decision: ApprovalDecision,
 ): void {
   if (decision.accepted) {
-    triggerRetry(payload.streamId, decision.userMessage);
+    void applyRetryDecision(payload, decision);
   } else {
     cancelRetry(payload.streamId);
   }
+}
+
+async function applyRetryDecision(
+  payload: ProgressEventPayloads['showRetryRequest'],
+  decision: ApprovalDecision,
+): Promise<void> {
+  if (decision.apiMode) {
+    await setCliApiMode(decision.apiMode);
+    cliState.sessionMeta.set({
+      ...cliState.sessionMeta.get(),
+      apiMode: decision.apiMode,
+    });
+  }
+  triggerRetry(payload.streamId, decision.userMessage);
 }
 
 function handleExternalInquiry(

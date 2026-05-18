@@ -20,6 +20,7 @@ import type {
   UserQuestionPermission,
 } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+import type { CliApiMode } from '../../../runtime/apiAccessMode';
 
 export type ApprovalBypassKind = 'toolEdit' | 'superYolo';
 
@@ -44,6 +45,8 @@ export interface ApprovalDecision {
   readonly userQuestionAnswers?: UserQuestionAnswers;
   /** Session bypass to activate before accepting this approval. */
   readonly bypass?: ApprovalBypassKind;
+  /** Credential mode to apply before accepting this approval. */
+  readonly apiMode?: CliApiMode;
 }
 
 export interface PendingApproval {
