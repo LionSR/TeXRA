@@ -13,7 +13,8 @@ export function formatRelayUsageStatus(summary: RelayUsageSummary): string {
 }
 
 export async function loadCliApiStatusLines(): Promise<string[]> {
-  const [mode, profile] = [getCliApiMode(), await getCliAuthProfile()];
+  const mode = getCliApiMode();
+  const profile = await getCliAuthProfile();
   const lines = [
     `api: ${formatCliApiMode(mode)}`,
     profile.authenticated

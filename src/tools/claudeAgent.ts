@@ -150,7 +150,7 @@ const sessionRegistry = new Map<string, ActiveSession>();
 function storeSession(sessionId: string, entry: ActiveSession): void {
   sessionRegistry.set(sessionId, entry);
   void getExecutionStore(entry.executionId)
-    .write('claude_code_session_id', sessionId)
+    .write('claude_agent_session_id', sessionId)
     .catch(() => {});
 }
 
