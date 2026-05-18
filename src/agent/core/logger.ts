@@ -9,7 +9,7 @@
  */
 import { tryPlatform } from '@platform/platform';
 import { consoleLog } from '@platform/defaults/consoleLog';
-import type { LogBackend } from '@platform/interfaces/log';
+import type { LogBackend, LogBackendOptions } from '@platform/interfaces/log';
 
 function backend(): LogBackend {
   return tryPlatform()?.log ?? consoleLog;
@@ -19,18 +19,34 @@ export function initialize(channel: string, isAgent = false): void {
   backend().initialize(channel, isAgent);
 }
 
-export function debug(channel: string, message: string): void {
-  backend().debug(channel, message);
+export function debug(
+  channel: string,
+  message: string,
+  options?: LogBackendOptions,
+): void {
+  backend().debug(channel, message, options);
 }
 
-export function info(channel: string, message: string): void {
-  backend().info(channel, message);
+export function info(
+  channel: string,
+  message: string,
+  options?: LogBackendOptions,
+): void {
+  backend().info(channel, message, options);
 }
 
-export function warn(channel: string, message: string): void {
-  backend().warn(channel, message);
+export function warn(
+  channel: string,
+  message: string,
+  options?: LogBackendOptions,
+): void {
+  backend().warn(channel, message, options);
 }
 
-export function error(channel: string, message: string): void {
-  backend().error(channel, message);
+export function error(
+  channel: string,
+  message: string,
+  options?: LogBackendOptions,
+): void {
+  backend().error(channel, message, options);
 }
