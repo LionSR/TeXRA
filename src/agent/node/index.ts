@@ -1,3 +1,4 @@
+import * as logger from '@agent/core/logger';
 import { delay } from '@utils/core';
 
 export type NonIterableObject = Partial<Record<string, unknown>> & {
@@ -7,7 +8,9 @@ export type NonIterableObject = Partial<Record<string, unknown>> & {
 /** Flow transition action - typically 'default' or a custom action name */
 export type Action = string;
 
+const CHANNEL = 'PocketFlow';
 const TERMINAL_ACTIONS = new Set<Action>(['complete']);
+logger.initialize(CHANNEL);
 
 /**
  * Base node class for PocketFlow.
@@ -61,7 +64,7 @@ class BaseNode<
   }
   async run(shared: S): Promise<Action | undefined> {
     if (this._successors.size > 0)
-      console.warn("Node won't run successors. Use Flow.");
+      logger.warn(CHANNEL, "Node won't run successors. Use Flow.");
     return await this._run(shared);
   }
   setParams(params: P): this {
@@ -78,7 +81,7 @@ class BaseNode<
   }
   on(action: Action, node: BaseNode): this {
     if (this._successors.has(action))
-      console.warn(`Overwriting successor for action '${action}'`);
+      logger.warn(CHANNEL, `Overwriting successor for action '${action}'`);
     this._successors.set(action, node);
     return this;
   }
@@ -86,7 +89,8 @@ class BaseNode<
     const next = this._successors.get(action);
     if (!next && TERMINAL_ACTIONS.has(action)) return undefined;
     if (!next && this._successors.size > 0) {
-      console.warn(
+      logger.warn(
+        CHANNEL,
         `Flow ends: '${action}' not found in [${[...this._successors.keys()]}]`,
       );
     }
@@ -177,7 +181,8 @@ class Node<
   async _exec(prepRes: unknown): Promise<unknown> {
     // Guard against infinite loop: ensure at least 1 retry attempt
     if (this.maxRetries < 1) {
-      console.warn(
+      logger.warn(
+        CHANNEL,
         `Node maxRetries must be >= 1, got ${this.maxRetries}. Using 1.`,
       );
     }
