@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import {
+  appendCliApiSwitchHint,
   formatRetryRequestMessage,
   immediateDecisionForApproval,
+  isCliApiSwitchableRetry,
 } from '../../../packages/cli/src/runtime/approvalAdapter';
 import type { CliContext } from '../../../packages/cli/src/runtime/cliContext';
 
@@ -65,6 +67,24 @@ describe('immediateDecisionForApproval', () => {
 describe('formatRetryRequestMessage', () => {
   it('shows the API-key switch for exhausted included access', () => {
     expect(formatRetryRequestMessage(credentialExhaustedRetry)).toContain(
+      '/api personal',
+    );
+  });
+
+  it('recognizes relay monthly-limit text when the relay body is absent', () => {
+    const retry: ProgressEventPayloads['showRetryRequest'] = {
+      ...credentialExhaustedRetry,
+      errorMessage:
+        'HTTP 429 Too Many Requests – 429 Monthly spending limit reached ($300).',
+      errorDetails: {
+        isCredentialExhausted: true,
+        isRelayError: false,
+        statusCode: 429,
+      },
+    };
+
+    expect(isCliApiSwitchableRetry(retry)).toBe(true);
+    expect(appendCliApiSwitchHint(retry.errorMessage!)).toContain(
       '/api personal',
     );
   });
