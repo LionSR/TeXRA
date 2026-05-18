@@ -519,7 +519,9 @@ function getAssistantToolCalls(
 
   // Prefer SDK-native validation for the full tool-call array.
   try {
-    const candidate = [...message.tool_calls] as ChatCompletionMessageToolCall[];
+    const candidate = [
+      ...message.tool_calls,
+    ] as ChatCompletionMessageToolCall[];
     assertToolCallsAreChatCompletionFunctionToolCalls(candidate);
     return candidate;
   } catch {
