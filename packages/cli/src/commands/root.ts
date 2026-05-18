@@ -4,10 +4,7 @@ import * as path from 'node:path';
 import { defineCommand, runCommand, showUsage, type CommandDef } from 'citty';
 
 import { getAgent, getVisibleAgents, loadAgents } from '@agent/index';
-import {
-  DEFAULT_AGENT_MODEL,
-  type AgentConfigPayload,
-} from '@agent/core/AgentConfig';
+import { type AgentConfigPayload } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
@@ -18,13 +15,17 @@ import { isNonEmptyString } from '@utils/core/stringCore';
 import {
   buildCliContext,
   CliUsageError,
-  CLI_OUTPUT_FORMATS,
   readCliAmbientState,
   readCliArgv,
   readCliVersion,
   type CliContext,
-  type CliOutputFormat,
 } from '../runtime/cliContext';
+import {
+  CLI_BUILTIN_DEFAULT_MODEL,
+  CLI_OUTPUT_FORMATS,
+  resolveConfiguredModel,
+  type CliOutputFormat,
+} from '../runtime/cliConfig';
 import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
@@ -74,7 +75,13 @@ function setExitCode(code: number): void {
 }
 
 async function contextFromArgs(args: ParsedGlobalArgs): Promise<CliContext> {
-  return buildCliContext({ globalArgs: pickGlobalArgs(args) });
+  const context = await buildCliContext({ globalArgs: pickGlobalArgs(args) });
+  if (context.quietLogs !== true) {
+    for (const warning of context.configWarnings ?? []) {
+      writeTextStderr(`WARN ${warning}`);
+    }
+  }
+  return context;
 }
 
 function optString(value: unknown): string | undefined {
@@ -96,12 +103,10 @@ const GLOBAL_ARGS: {
   'output-format': {
     type: 'enum';
     options: CliOutputFormat[];
-    default: 'text';
   };
   'approval-policy': {
     type: 'enum';
     options: CliApprovalPolicy[];
-    default: 'never';
   };
 } = {
   print: { type: 'boolean', alias: 'p' },
@@ -110,12 +115,10 @@ const GLOBAL_ARGS: {
   'output-format': {
     type: 'enum',
     options: [...CLI_OUTPUT_FORMATS],
-    default: 'text',
   },
   'approval-policy': {
     type: 'enum',
     options: [...CLI_APPROVAL_POLICIES],
-    default: 'never',
   },
 };
 
@@ -611,7 +614,11 @@ async function runWorkflowAgent(
   context: CliContext,
   init: WorkflowRunInit,
 ): Promise<number> {
-  const model = init.model?.trim() || DEFAULT_AGENT_MODEL;
+  const model =
+    init.model?.trim() ||
+    context.envModel ||
+    resolveConfiguredModel(context.cliConfig, 'run') ||
+    CLI_BUILTIN_DEFAULT_MODEL;
   const renderRunProgress = shouldRenderRunProgress(context);
   const runContext: CliContext = {
     ...context,
