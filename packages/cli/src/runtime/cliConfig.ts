@@ -4,6 +4,8 @@ import path from 'node:path';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { z } from 'zod';
 
+import { KNOWN_TEXRA_KEYS } from '@utils/config/settingsSchema';
+
 import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
@@ -55,8 +57,23 @@ const ModelSchema = NonEmptyStringSchema.refine(
 const OutputFormatSchema = z.enum(CLI_OUTPUT_FORMATS);
 const ApprovalPolicySchema = z.enum(CLI_APPROVAL_POLICIES);
 
+/** Keys from the unified schema that the CLI config file accepts at the top level. */
+const UNIFIED_TOP_LEVEL_KEYS = new Set(
+  [...KNOWN_TEXRA_KEYS].filter((k) => k.startsWith('texra.')),
+);
+
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isKnownConfigKey(key: string): boolean {
+  return (
+    TOP_LEVEL_KEYS.has(key) ||
+    UNIFIED_TOP_LEVEL_KEYS.has(key) ||
+    // Accept bare versions of texra.* keys (e.g. "model.useImprovedConnection")
+    (key.startsWith('texra.') && UNIFIED_TOP_LEVEL_KEYS.has(key)) ||
+    KNOWN_TEXRA_KEYS.has(`texra.${key}`)
+  );
 }
 
 function warnUnknownKeys(
@@ -67,7 +84,7 @@ function warnUnknownKeys(
   prefix = '',
 ): void {
   for (const key of Object.keys(record)) {
-    if (!allowed.has(key)) {
+    if (!allowed.has(key) && !isKnownConfigKey(prefix ? `${prefix}${key}` : key)) {
       warnings.push(`Ignoring unknown ${filePath} key "${prefix}${key}".`);
     }
   }
@@ -94,6 +111,8 @@ function collectValidationWarnings(
 ): string[] {
   const warnings: string[] = [];
   warnUnknownKeys(warnings, filePath, record, TOP_LEVEL_KEYS);
+
+  // Validate bare keys (legacy format)
   warnInvalidField(warnings, filePath, record, 'agent', NonEmptyStringSchema);
   warnInvalidField(warnings, filePath, record, 'model', ModelSchema);
   warnInvalidField(
@@ -108,6 +127,30 @@ function collectValidationWarnings(
     filePath,
     record,
     'approvalPolicy',
+    ApprovalPolicySchema,
+  );
+
+  // Validate texra.* prefixed keys (unified format)
+  warnInvalidField(
+    warnings,
+    filePath,
+    record,
+    'texra.agent',
+    NonEmptyStringSchema,
+  );
+  warnInvalidField(warnings, filePath, record, 'texra.model', ModelSchema);
+  warnInvalidField(
+    warnings,
+    filePath,
+    record,
+    'texra.outputFormat',
+    OutputFormatSchema,
+  );
+  warnInvalidField(
+    warnings,
+    filePath,
+    record,
+    'texra.approvalPolicy',
     ApprovalPolicySchema,
   );
 
@@ -161,20 +204,28 @@ function pickCommandConfig(record: Record<string, unknown>): CliCommandConfig {
   };
 }
 
+/** Look up a value by both bare and `texra.*` prefixed key — prefixed takes precedence. */
+function pickValue<T>(
+  record: Record<string, unknown>,
+  bareKey: string,
+  schema: z.ZodType<T>,
+): T | undefined {
+  const prefixedKey = `texra.${bareKey}`;
+  if (Object.hasOwn(record, prefixedKey)) {
+    return parseOptional(schema, record[prefixedKey]);
+  }
+  if (Object.hasOwn(record, bareKey)) {
+    return parseOptional(schema, record[bareKey]);
+  }
+  return undefined;
+}
+
 function pickConfigValues(record: Record<string, unknown>): CliConfigValues {
   return {
-    agent: Object.hasOwn(record, 'agent')
-      ? parseOptional(NonEmptyStringSchema, record.agent)
-      : undefined,
-    model: Object.hasOwn(record, 'model')
-      ? parseOptional(ModelSchema, record.model)
-      : undefined,
-    outputFormat: Object.hasOwn(record, 'outputFormat')
-      ? parseOptional(OutputFormatSchema, record.outputFormat)
-      : undefined,
-    approvalPolicy: Object.hasOwn(record, 'approvalPolicy')
-      ? parseOptional(ApprovalPolicySchema, record.approvalPolicy)
-      : undefined,
+    agent: pickValue(record, 'agent', NonEmptyStringSchema),
+    model: pickValue(record, 'model', ModelSchema),
+    outputFormat: pickValue(record, 'outputFormat', OutputFormatSchema),
+    approvalPolicy: pickValue(record, 'approvalPolicy', ApprovalPolicySchema),
     chat: isPlainRecord(record.chat)
       ? pickCommandConfig(record.chat)
       : undefined,

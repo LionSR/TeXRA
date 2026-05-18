@@ -3,12 +3,10 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { listExecutions } from '@agent/storage';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { isNonEmptyString } from '@utils/core/stringCore';
+import { getConfig } from '@utils/config/configUtils';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
-  loadWorkspaceCliConfig,
-  resolveConfiguredAgent,
-  resolveConfiguredModel,
   type CliConfigValues,
 } from './cliConfig';
 
@@ -48,11 +46,14 @@ function pickDefaults(parsed: unknown): PartialDefaults {
   return out;
 }
 
-async function loadWorkspaceDefaults(cwd: string): Promise<PartialDefaults> {
-  const loaded = await loadWorkspaceCliConfig(cwd);
+async function loadWorkspaceDefaults(_cwd: string): Promise<PartialDefaults> {
   return {
-    agent: resolveConfiguredAgent(loaded.values, 'chat'),
-    model: resolveConfiguredModel(loaded.values, 'chat'),
+    agent:
+      getConfig<string | undefined>('chat.agent') ??
+      getConfig<string | undefined>('agent'),
+    model:
+      getConfig<string | undefined>('chat.model') ??
+      getConfig<string | undefined>('model'),
   };
 }
 
@@ -99,6 +100,7 @@ export interface ResolveChatDefaultsInit {
   readonly modelOverride?: string;
   readonly envAgent?: string;
   readonly envModel?: string;
+  /** @deprecated Workspace defaults are now read from the unified config provider. */
   readonly workspaceConfig?: CliConfigValues;
 }
 
@@ -128,11 +130,17 @@ export async function resolveChatDefaults(
   }
 
   // Tiers are independent I/O — fan out in parallel.
+  // Workspace defaults come from the platform config provider (unified
+  // schema), which reads the same .texra/config.json file loaded by
+  // initCliPlatform. The workspaceConfig parameter is retained for
+  // backward compatibility but is no longer required.
   const [workspace, user, history] = await Promise.all([
     init.workspaceConfig
       ? Promise.resolve({
-          agent: resolveConfiguredAgent(init.workspaceConfig, 'chat'),
-          model: resolveConfiguredModel(init.workspaceConfig, 'chat'),
+          agent:
+            init.workspaceConfig.chat?.agent ?? init.workspaceConfig.agent,
+          model:
+            init.workspaceConfig.chat?.model ?? init.workspaceConfig.model,
         })
       : loadWorkspaceDefaults(init.cwd),
     loadUserDefaults(),
