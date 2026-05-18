@@ -7,11 +7,10 @@ import { BaseNode, BatchNode, Flow, Node } from '@agent/node';
 import { recordCycleMetrics } from '@agent/core/AgentState';
 import {
   BaseCycleFieldsSchema,
-  defaultDebugMeta,
   defaultPostCompactionContext,
-  getDebugContext,
-  logAndNormalizeUsage,
+  extractModelResponse,
   resetCycleState,
+  saveCycleDebug,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
@@ -20,9 +19,6 @@ import {
   NormalizedUsageSchema,
   type NormalizedUsage,
 } from '@agent/types/NormalizedUsage';
-
-// Local imports - utilities
-import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 
 // Internal imports - use core ToolTypes as single source of truth
 import {
@@ -270,14 +266,9 @@ class ToolUsePrepNode<C> extends BaseNode<
     ]);
     shared.cycleResponseTimeMs = 0;
 
-    await maybeSaveDebugObject({
-      object: shared.messages,
-      objectType: 'messages',
-      context: getDebugContext(this.services, defaultDebugMeta(this.services)),
-      fileOptions: {
-        continuationCount: shared.cycleIndex,
-        baseName: 'tooluse',
-      },
+    await saveCycleDebug(shared.messages, 'messages', this.services, {
+      continuationCount: shared.cycleIndex,
+      baseName: 'tooluse',
     });
 
     return FlowTransition.DEFAULT;
@@ -327,13 +318,15 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     const services = this.services;
-    const { workspace } = services;
 
-    const thinking = services.modelHandler.processThinkingBlock(
-      prepRes.response,
-      workspace,
-    );
-    const useStreaming = services.modelHandler.getStreamingConfig();
+    const { text, stopReason, thinking, useStreaming, normalizedUsage } =
+      extractModelResponse(
+        prepRes.response,
+        prepRes.responseTimeMs,
+        '',
+        services,
+      );
+
     if (thinking && !useStreaming) {
       const formatted = await formatContent(thinking);
       if (isNonEmptyString(formatted)) {
@@ -344,11 +337,6 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     const toolCalls = services.modelHandler.extractToolUse(prepRes.response);
-    const { text, usage, stopReason } = services.modelHandler.extractResponse(
-      prepRes.response,
-      '',
-    );
-
     const serverToolData = services.modelHandler.extractServerToolData(
       prepRes.response,
     );
@@ -375,12 +363,6 @@ class ToolUseProcessNode<C> extends BaseNode<
         });
       }
     }
-
-    const normalizedUsage = logAndNormalizeUsage(
-      usage,
-      prepRes.responseTimeMs ?? 0,
-      services,
-    );
 
     const endTurn =
       services.modelHandler.isEndTurnStop(stopReason) || !toolCalls?.length;
@@ -881,12 +863,9 @@ export function createToolUseCycleFlow<C>(): Flow<
       shared.response = response;
     },
     getPostCompactionContext: defaultPostCompactionContext,
-    getDebugSaveOptions: (shared, services) => ({
-      context: defaultDebugMeta(services),
-      fileOptions: {
-        continuationCount: shared.cycleIndex,
-        baseName: 'tooluse_response',
-      },
+    getDebugFileOptions: (shared) => ({
+      continuationCount: shared.cycleIndex,
+      baseName: 'tooluse_response',
     }),
   });
   const processNode = new ToolUseProcessNode<C>();
