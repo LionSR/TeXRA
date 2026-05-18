@@ -83,6 +83,9 @@ function entriesEqual(
     if (!prev.toolUse || !next.toolUse) return prev.toolUse === next.toolUse;
     return toolUseEqual(prev.toolUse, next.toolUse);
   }
+  if (prev.role === 'process') {
+    return prev.process === next.process;
+  }
   return true;
 }
 

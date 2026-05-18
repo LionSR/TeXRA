@@ -23,6 +23,12 @@ import {
 } from '../../../packages/cli/src/chat/tui/state/focusCycle';
 import { syncStreamLog } from '../../../packages/cli/src/chat/tui/state/subscribeStreamLog';
 import { wrapRuntimeHost } from '../../../packages/cli/src/chat/tui/state/subscribeRuntimeHost';
+import {
+  COMPLETED_PROCESS_TAIL_LINES,
+  buildCompletedProcessTranscript,
+  completedProcessDisplayLines,
+  isCompletedProcessError,
+} from '../../../packages/cli/src/chat/tui/state/completedProcessTranscript';
 import { splitTranscriptEntries } from '../../../packages/cli/src/chat/tui/panes/ConversationPane';
 import {
   appendAssistantTranscriptIfMissing,
@@ -442,22 +448,32 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     } as unknown as CliRuntimeHost;
   }
 
-  it('prunes processOutput entries whose executionId left the active list', () => {
+  it('persists a bounded completed-process transcript before pruning processOutput', () => {
     const wrapped = wrapRuntimeHost(makeHost());
+    const lines = Array.from(
+      { length: COMPLETED_PROCESS_TAIL_LINES + 2 },
+      (_, index) => `line ${index + 1}`,
+    ).join('\n');
 
     // Seed: two live processes with tail output.
     wrapped.emit('updateActiveProcesses', {
       parentStreamId: root,
       processes: [
-        { executionId: 'exec-a', agentName: 'bash' },
+        {
+          executionId: 'exec-a',
+          agentName: 'latexmk',
+          toolName: 'bash',
+          status: 'exit 1',
+          elapsed: '2s',
+        },
         { executionId: 'exec-b', agentName: 'bash' },
       ],
     });
     wrapped.emit('updateProcessOutput', {
       parentStreamId: root,
       executionId: 'exec-a',
-      stdout: 'A',
-      stderr: '',
+      stdout: lines,
+      stderr: 'stderr tail',
     });
     wrapped.emit('updateProcessOutput', {
       parentStreamId: root,
@@ -468,15 +484,90 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     expect(cliState.streams.get().get(root)?.processOutput.size).toBe(2);
 
     // exec-a finishes: its output buffer must be dropped on the next
-    // active-processes update.
+    // active-processes update, after a durable transcript entry is added.
     wrapped.emit('updateActiveProcesses', {
       parentStreamId: root,
       processes: [{ executionId: 'exec-b', agentName: 'bash' }],
     });
+    const slice = cliState.streams.get().get(root);
     const out = cliState.streams.get().get(root)?.processOutput;
     expect(out?.size).toBe(1);
     expect(out?.has('exec-a')).toBe(false);
     expect(out?.has('exec-b')).toBe(true);
+
+    const processEntries =
+      slice?.entries.filter((entry) => entry.role === 'process') ?? [];
+    expect(processEntries).toHaveLength(1);
+    expect(processEntries[0]).toMatchObject({
+      role: 'process',
+      finalized: true,
+      synthetic: true,
+      syntheticKind: 'process',
+      process: {
+        executionId: 'exec-a',
+        title: 'latexmk',
+        status: 'exit 1',
+        elapsed: '2s',
+        isError: true,
+      },
+    });
+    expect(processEntries[0]?.process?.tailLines).toHaveLength(
+      COMPLETED_PROCESS_TAIL_LINES,
+    );
+    expect(processEntries[0]?.process?.tailLines.at(0)).toBe('line 4');
+    expect(processEntries[0]?.process?.tailLines.at(-1)).toBe('stderr tail');
+
+    const split = splitTranscriptEntries(
+      slice?.entries ?? [],
+      STREAM_STATUS.WAITING,
+    );
+    expect(split.finalized).toContain(processEntries[0]);
+    expect(split.pending).not.toContain(processEntries[0]);
+  });
+
+  it('formats completed-process transcript rows for terminal rendering', () => {
+    const process = buildCompletedProcessTranscript(
+      {
+        executionId: 'exec-a',
+        agentName: 'latexmk',
+        status: 'exit 2',
+        elapsed: '5s',
+      },
+      {
+        stdout: 'Compiling\n',
+        stderr: 'fatal error\n',
+      },
+    );
+
+    expect(completedProcessDisplayLines(process)).toMatchInlineSnapshot(`
+      [
+        "latexmk · exit 2 · 5s · error",
+        "⎿ Compiling",
+        "  fatal error",
+      ]
+    `);
+  });
+
+  it('classifies completed process error statuses', () => {
+    expect(isCompletedProcessError('running')).toBe(false);
+    expect(isCompletedProcessError('exit 0')).toBe(false);
+    expect(isCompletedProcessError('exit 1')).toBe(true);
+    expect(isCompletedProcessError('exited with code 2')).toBe(true);
+    expect(isCompletedProcessError('failed')).toBe(true);
+  });
+
+  it('does not keep a stale running status after a process leaves the active list', () => {
+    const process = buildCompletedProcessTranscript(
+      {
+        executionId: 'exec-a',
+        agentName: 'bash',
+        status: 'running',
+      },
+      undefined,
+    );
+
+    expect(process.status).toBe('completed');
+    expect(process.isError).toBe(false);
   });
 });
 
