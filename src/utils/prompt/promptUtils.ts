@@ -11,6 +11,31 @@ const CHANNEL = 'promptUtils';
 logger.initialize(CHANNEL);
 
 /**
+ * File name exposed to prompt XML and workflow output instructions.
+ *
+ * Keep workspace files workspace-relative so sibling documents with the same
+ * basename remain distinct. For external absolute paths, expose only the
+ * basename: model-produced document names must be portable run-storage names,
+ * not host filesystem paths.
+ */
+export function getPromptFileName(file: string): string {
+  if (!file) return file;
+
+  try {
+    const located = WorkspaceFS.locatePath(file);
+    if (located.kind === 'workspace') {
+      return located.relativePath;
+    }
+  } catch {
+    // Some pure prompt-formatting tests call this before host initialization.
+    // Without a workspace root, an absolute host path can only be an external
+    // file, so the basename rule still applies.
+  }
+
+  return path.isAbsolute(file) ? path.basename(file) : file;
+}
+
+/**
  * Get XML formatted string from multiple files
  * @param files List of file paths
  * @returns XML formatted string containing all file contents, or null if no files
@@ -25,7 +50,7 @@ export async function getXmlFormatFromFiles(
   const xmlContents = await Promise.all(
     files.map(async (file) => {
       const content = await WorkspaceFS.read(file);
-      return `<document name="${file}">\n${content}\n</document>`;
+      return `<document name="${getPromptFileName(file)}">\n${content}\n</document>`;
     }),
   );
   return xmlContents.join('\n');
@@ -37,7 +62,12 @@ export async function getXmlFormatFromFiles(
  * @returns Comma-separated string of file paths
  */
 export function getListOfFiles(files: string[] | null | undefined): string {
-  return files?.filter((f) => f.trim() !== '').join(', ') ?? '';
+  return (
+    files
+      ?.filter((f) => f.trim() !== '')
+      .map((file) => getPromptFileName(file))
+      .join(', ') ?? ''
+  );
 }
 
 async function resolveValue(value: unknown): Promise<unknown> {
