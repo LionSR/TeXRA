@@ -55,10 +55,12 @@ export interface PendingApproval {
 }
 
 const CURRENT = signal<PendingApproval | undefined>(undefined);
+const DEPTH = signal<number>(0);
 
 export const currentApproval = CURRENT as Signal.State<
   PendingApproval | undefined
 >;
+export const approvalQueueDepth = DEPTH as Signal.State<number>;
 
 const queue = new PQueue({ concurrency: 1 });
 
@@ -70,6 +72,14 @@ const INTERRUPT: ApprovalDecision = {
   userMessage: 'Session interrupted.',
 };
 
+function syncApprovalDepth(): void {
+  DEPTH.set(pendingResolvers.size);
+}
+
+export function getApprovalQueueDepth(): number {
+  return pendingResolvers.size;
+}
+
 export function enqueueApproval(
   payload: ApprovalPayload,
 ): Promise<ApprovalDecision> {
@@ -78,6 +88,7 @@ export function enqueueApproval(
     resolveOuter = resolve;
   });
   pendingResolvers.add(resolveOuter);
+  syncApprovalDepth();
 
   void queue
     .add(async () => {
@@ -90,6 +101,7 @@ export function enqueueApproval(
           payload,
           decide: (decision) => {
             if (!pendingResolvers.delete(resolveOuter)) return;
+            syncApprovalDepth();
             CURRENT.set(undefined);
             currentAdvance = undefined;
             resolveOuter(decision);
@@ -103,6 +115,7 @@ export function enqueueApproval(
       // outer promise so the requester (e.g. ToolEditApprovalHandler)
       // doesn't hang forever.
       if (pendingResolvers.delete(resolveOuter)) {
+        syncApprovalDepth();
         resolveOuter(INTERRUPT);
       }
     });
@@ -122,6 +135,7 @@ export function clearApprovals(): void {
     pendingResolvers.delete(resolve);
     resolve(INTERRUPT);
   }
+  syncApprovalDepth();
   if (currentAdvance) {
     const advance = currentAdvance;
     currentAdvance = undefined;
