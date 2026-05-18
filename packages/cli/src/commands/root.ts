@@ -54,6 +54,11 @@ import {
   writeTextStdout,
 } from '../runtime/logSinks';
 import { shouldRenderRunProgress } from '../runtime/runProgressRenderer';
+import {
+  buildDoctorReport,
+  doctorExitCode,
+  writeDoctorReport,
+} from '../runtime/doctor';
 
 // One CLI invocation per process — module-level pending exit code is the
 // simplest way to surface handler exit codes back to `bin/texra.ts` after
@@ -469,6 +474,45 @@ function writeRelayUsageSummary(
   );
 }
 
+const doctorCommand = defineCommand({
+  meta: { name: 'doctor', description: 'Check CLI runtime dependencies' },
+  args: {
+    ...GLOBAL_ARGS,
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
+    setExitCode(await runDoctor(context));
+  },
+});
+
+async function runDoctor(context: CliContext): Promise<number> {
+  let initError: unknown;
+  try {
+    await initCliPlatform({
+      ...context,
+      quietLogs: true,
+      skipIncludedModelAccess: true,
+    });
+  } catch (error) {
+    initError = error;
+  }
+  const report = await buildDoctorReport(
+    context,
+    initError == null
+      ? undefined
+      : {
+          authProfile: async () => {
+            throw initError;
+          },
+          modelAccessList: async () => {
+            throw initError;
+          },
+        },
+  );
+  writeDoctorReport(context, report);
+  return doctorExitCode(report);
+}
+
 const authCommand = defineCommand({
   meta: { name: 'auth', description: 'Authentication commands' },
   subCommands: { status: authStatusCommand, usage: usageCommand },
@@ -691,6 +735,7 @@ const rootCommand = defineCommand({
     logout: logoutCommand,
     usage: usageCommand,
     auth: authCommand,
+    doctor: doctorCommand,
     version: versionCommand,
     help: helpCommand,
   },
