@@ -185,10 +185,6 @@ export async function runToolUseFlow<C = unknown>(
     delegationConfig,
     delegationTrimmed,
   };
-  const mutableServices = services as ToolUseServices<C> & {
-    modelHandler: ToolUseServices<C>['modelHandler'];
-    config: ToolUseServices<C>['config'];
-  };
   const switchedHandlers = new Set<ToolUseServices<C>['modelHandler']>();
 
   const switchModel = async (model: string): Promise<void> => {
@@ -196,9 +192,9 @@ export async function runToolUseFlow<C = unknown>(
     if (!nextConfig) {
       throw new Error(`Model ${model} not found in MODEL_CONFIGS`);
     }
-    if (mutableServices.config.model === model) return;
+    if (services.config.model === model) return;
 
-    const previousHandler = mutableServices.modelHandler;
+    const previousHandler = services.modelHandler;
     const nextHandler = (await createModelHandler(
       nextConfig,
     )) as ToolUseServices<C>['modelHandler'];
@@ -211,9 +207,9 @@ export async function runToolUseFlow<C = unknown>(
     nextHandler.setAgentCategory(setting.agentCategory);
     nextHandler.setLogger(logger);
 
-    mutableServices.modelHandler = nextHandler;
-    mutableServices.config = { ...mutableServices.config, model };
-    mutableServices.userVarChannels.transient.MODEL = model;
+    services.modelHandler = nextHandler;
+    services.config.model = model;
+    services.userVarChannels.transient.MODEL = model;
 
     switchedHandlers.add(nextHandler);
     if (previousHandler !== input.modelHandler) {
@@ -226,11 +222,11 @@ export async function runToolUseFlow<C = unknown>(
   const flowContext: ToolUseFlowContext = {
     session: sessionLifecycle,
     get modelHandler() {
-      return mutableServices.modelHandler;
+      return services.modelHandler;
     },
     runtimeHost,
     get model() {
-      return mutableServices.config.model;
+      return services.config.model;
     },
     interrupt(): void {
       onInterrupt?.();
@@ -239,7 +235,7 @@ export async function runToolUseFlow<C = unknown>(
       sessionLifecycle.interrupt();
     },
     requestImmediateCompaction(): void {
-      mutableServices.modelHandler.requestCompaction();
+      services.modelHandler.requestCompaction();
       if (!sessionLifecycle.hasQueuedFollowUp()) {
         sessionLifecycle.appendSyntheticFollowUp(
           IMMEDIATE_COMPACTION_FOLLOW_UP,
@@ -317,7 +313,7 @@ export async function runToolUseFlow<C = unknown>(
         : EXECUTION_STATUS.COMPLETED;
       status = executionToEndStatus(execStatus) as EndGroupStatus;
       lastResponse = findLastAssistantText(shared.messages, (m) =>
-        mutableServices.modelHandler.extractAssistantText(m),
+        services.modelHandler.extractAssistantText(m),
       );
       const extractedTouchedFiles = extractTouchedFiles(shared.stateSlices);
       touchedFiles = extractedTouchedFiles.length

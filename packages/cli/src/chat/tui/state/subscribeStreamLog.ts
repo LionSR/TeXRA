@@ -13,7 +13,6 @@ import { normalizeToolUseData } from '@shared/toolUse';
 
 import { appendCliApiSwitchHint } from '../../../runtime/approvalAdapter';
 import { cliState, patchStream, type ConversationEntry } from './cliState';
-import { getTranscriptStartSeq } from './transcript';
 
 const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.ERROR,
@@ -196,7 +195,7 @@ export function syncStreamLog(streamId: StreamTabId): void {
   if (!log) return;
 
   const responses = log
-    .getRange(getTranscriptStartSeq(streamId))
+    .getRange(0)
     .filter((entry: StreamLogEntry) =>
       TRANSCRIPT_MESSAGE_TYPES.has(entry.messageType ?? ''),
     );
