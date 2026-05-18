@@ -2,12 +2,17 @@
 
 import { ApiModeForm } from '../forms/ApiModeForm';
 import { AgentListForm } from '../forms/AgentListForm';
+import { ApprovalPolicyForm } from '../forms/ApprovalPolicyForm';
 import { ModelListForm } from '../forms/ModelListForm';
 import { cliState } from '../state/cliState';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 import type { CliApiMode } from '../../../runtime/apiAccessMode';
+import type { CliApprovalPolicy } from '../../../runtime/approvalPolicy';
 
 type AgentSelectHandler = (value: string) => void | Promise<void>;
+type ApprovalPolicySelectHandler = (
+  value: CliApprovalPolicy,
+) => void | Promise<void>;
 type ModelSelectHandler = (value: string) => void | Promise<void>;
 type ApiModeSelectHandler = (value: CliApiMode) => void | Promise<void>;
 
@@ -35,11 +40,14 @@ const defaultApiModeSelect: ApiModeSelectHandler = (value) => {
 export function registerBuiltinSlashCommands(options?: {
   onAgentSelect?: AgentSelectHandler;
   canSelectAgent?: () => boolean;
+  getApprovalPolicy?: () => CliApprovalPolicy;
+  onApprovalPolicySelect?: ApprovalPolicySelectHandler;
   onModelSelect?: ModelSelectHandler;
   canSelectModel?: () => boolean;
   onApiModeSelect?: ApiModeSelectHandler;
 }): void {
   const onAgentSelect = options?.onAgentSelect ?? defaultAgentSelect;
+  const onApprovalPolicySelect = options?.onApprovalPolicySelect;
   const onModelSelect = options?.onModelSelect ?? defaultModelSelect;
   const onApiModeSelect = options?.onApiModeSelect ?? defaultApiModeSelect;
 
@@ -67,6 +75,21 @@ export function registerBuiltinSlashCommands(options?: {
         currentMode={current}
         onSelect={(value) => {
           void Promise.resolve(onApiModeSelect(value)).finally(() =>
+            props.onDone(value),
+          );
+        }}
+        onCancel={() => props.onDone(undefined)}
+      />
+    );
+  }
+
+  function ApprovalPolicyFormAdapter(props: SlashFormProps): React.JSX.Element {
+    const current = options?.getApprovalPolicy?.() ?? 'ask';
+    return (
+      <ApprovalPolicyForm
+        currentPolicy={current}
+        onSelect={(value) => {
+          void Promise.resolve(onApprovalPolicySelect?.(value)).finally(() =>
             props.onDone(value),
           );
         }}
@@ -123,6 +146,7 @@ export function registerBuiltinSlashCommands(options?: {
   registerSlashCommand({
     name: 'approval',
     description: 'Switch approval policy',
+    formComponent: ApprovalPolicyFormAdapter,
   });
   registerSlashCommand({
     name: 'yolo',

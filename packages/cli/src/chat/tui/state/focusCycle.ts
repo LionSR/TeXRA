@@ -15,21 +15,31 @@ import { type StreamTabId } from '@shared/schemas';
 import { cliState, type StreamSlice } from './cliState';
 
 export function orderedDescendantsFromSlice(
-  slice: Pick<StreamSlice, 'activeSubagents' | 'activeProcesses'> | undefined,
+  slice:
+    | Pick<StreamSlice, 'activeSubagents' | 'activeProcesses' | 'childStreams'>
+    | undefined,
 ): StreamTabId[] {
   if (!slice) return [];
   const out: StreamTabId[] = [];
-  for (const child of slice.activeSubagents) {
+  for (const child of [
+    ...slice.activeSubagents,
+    ...slice.activeProcesses,
+    ...slice.childStreams,
+  ]) {
     if (child.childStreamId) out.push(child.childStreamId);
   }
-  for (const proc of slice.activeProcesses) {
-    if (proc.childStreamId) out.push(proc.childStreamId);
-  }
-  return out;
+  return [...new Set(out)];
 }
 
 export function orderedDescendants(parent: StreamTabId): StreamTabId[] {
-  return orderedDescendantsFromSlice(cliState.streams.get().get(parent));
+  const streams = cliState.streams.get();
+  const out = orderedDescendantsFromSlice(streams.get(parent));
+  for (const [child, recordedParent] of cliState.parentStream.get()) {
+    if (recordedParent !== parent || !streams.has(child) || out.includes(child))
+      continue;
+    out.push(child);
+  }
+  return out;
 }
 
 /** Returns the next stream id the focus cycle should land on, or `undefined`
