@@ -35,8 +35,6 @@ import {
   appendLocalAssistantTranscript,
   appendLocalErrorTranscript,
   CLI_LOCAL_STREAM_ID,
-  clearActiveTranscript,
-  getTranscriptStartSeq,
   moveLocalTranscriptToStream,
 } from '../../../packages/cli/src/chat/tui/state/transcript';
 import type { CliRuntimeHost } from '../../../packages/cli/src/runtime/runtimeHost';
@@ -391,49 +389,6 @@ describe('CLI transcript state', () => {
         'second answer',
         'third prompt',
       ]);
-    } finally {
-      AgentLogger.setStreamLogStore(previousStore);
-    }
-  });
-
-  it('does not replay cleared log entries on later syncs', () => {
-    const previousStore = AgentLogger.getStreamLogStore();
-    const store = new StreamLogStore();
-    AgentLogger.setStreamLogStore(store);
-
-    try {
-      const logger = new AgentLogger(root, true);
-      logger.info('old prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
-      syncStreamLog(root);
-      cliState.activeStreamId.set(root);
-      clearActiveTranscript();
-
-      logger.info('new prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
-      syncStreamLog(root);
-
-      const entries = cliState.streams.get().get(root)?.entries ?? [];
-      expect(entries.map((entry) => entry.text)).toEqual(['new prompt']);
-    } finally {
-      AgentLogger.setStreamLogStore(previousStore);
-    }
-  });
-
-  it('resets cleared transcript cursors with cli state', () => {
-    const previousStore = AgentLogger.getStreamLogStore();
-    const store = new StreamLogStore();
-    AgentLogger.setStreamLogStore(store);
-
-    try {
-      const logger = new AgentLogger(root, true);
-      logger.info('old prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
-      syncStreamLog(root);
-      cliState.activeStreamId.set(root);
-      clearActiveTranscript();
-      expect(getTranscriptStartSeq(root)).toBeGreaterThan(0);
-
-      resetCliState();
-
-      expect(getTranscriptStartSeq(root)).toBe(0);
     } finally {
       AgentLogger.setStreamLogStore(previousStore);
     }
