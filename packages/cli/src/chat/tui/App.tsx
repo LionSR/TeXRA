@@ -1,16 +1,18 @@
 // Ink TUI root: conversation, optional side column, status, approval modal,
 // and input bar. Tab / Shift-Tab cycles focus across subagent streams.
 
-import { Box, useInput, useWindowSize } from 'ink';
+import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useState } from 'react';
 
 import { ApprovalModal } from './modals/ApprovalModal';
 import { ChildControlPicker } from './modals/ChildControlPicker';
 import { ConversationPane } from './panes/ConversationPane';
+import { HeaderPane } from './panes/HeaderPane';
 import { InputBar } from './panes/InputBar';
 import { StatusBar } from './panes/StatusBar';
 import { StreamTabsStrip } from './panes/StreamTabsStrip';
 import { SubagentList } from './panes/SubagentList';
+import { TipRow } from './panes/TipRow';
 import { TodosPlanPanel } from './panes/TodosPlanPanel';
 import { currentApproval } from './state/approvalQueue';
 import {
@@ -100,6 +102,10 @@ export function App(props: AppProps): React.JSX.Element {
 
   return (
     <Box flexDirection="column" height={rows}>
+      <Box>
+        <Text color="cyan">{'─'.repeat(columns)}</Text>
+      </Box>
+      <HeaderPane />
       <Box flexDirection="row" flexGrow={1}>
         <Box flexDirection="column">
           <ConversationPane width={transcriptWidth} />
@@ -126,6 +132,7 @@ export function App(props: AppProps): React.JSX.Element {
       {activeForm
         ? activeForm.render(() => cliState.activeForm.set(undefined))
         : null}
+      <TipRow />
       <InputBar
         onSubmit={props.onSubmit}
         disabled={inputDisabled}

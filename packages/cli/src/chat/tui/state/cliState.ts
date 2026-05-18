@@ -53,6 +53,7 @@ export interface SessionMeta {
   readonly model: string;
   readonly cwd: string;
   readonly apiMode: CliApiMode;
+  readonly version: string;
 }
 
 export interface ProcessOutputTail {
@@ -94,6 +95,7 @@ const SESSION_META = signal<SessionMeta>({
   model: '',
   cwd: '',
   apiMode: 'personal',
+  version: '',
 });
 
 const ACTIVE_STREAM_ID = signal<StreamTabId | undefined>(undefined);
@@ -208,6 +210,7 @@ function defaultSessionMeta(): SessionMeta {
     model: '',
     cwd: '',
     apiMode: 'personal',
+    version: '',
   };
 }
 

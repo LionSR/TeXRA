@@ -55,7 +55,6 @@ import {
   formatApprovalPolicyForCli,
 } from './forms/ApprovalPolicyForm';
 import { ModelListForm } from './forms/ModelListForm';
-import { renderHeaderBanner } from './panes/HeaderBanner';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { listSlashCommands, parseSlashInput } from './commands/slashRegistry';
 import { loadInputHistory } from './history/inputHistory';
@@ -739,10 +738,11 @@ export async function runChat(
   };
 
   const version = await readCliVersion();
+  cliState.sessionMeta.set({
+    ...cliState.sessionMeta.get(),
+    version,
+  });
   enterTerminalFullScreen();
-  process.stdout.write(
-    renderHeaderBanner({ version, agent, model, cwd: context.cwd }),
-  );
   const ink = render(
     <App
       onSubmit={handleSubmit}
