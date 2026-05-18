@@ -6,6 +6,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
 import * as logger from '@agent/core/logger';
+import { createHelperModelKit } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors';
 
 const CHANNEL = 'LaTeXCommands';
@@ -40,6 +41,9 @@ function buildPrompt(str1: string, str2: string): string {
   );
 }
 
+const SYSTEM_PROMPT =
+  'You are an assistant trained to determine the most grammatically correct string in a LaTeX document context.';
+
 function getMajorityChoice(choices: string[]): ConnectionResult {
   const counts = new Map<string, number>();
   for (const choice of choices) {
@@ -61,22 +65,62 @@ function getMajorityChoice(choices: string[]): ConnectionResult {
   return { connector, choice: majorityChoice };
 }
 
+async function bestConnectionMethodWithHelperModel(
+  str1: string,
+  str2: string,
+  n: number,
+): Promise<ConnectionResult> {
+  const helperResult = await createHelperModelKit();
+  if (!helperResult.kit) {
+    logger.debug(
+      CHANNEL,
+      `Skipping bestConnectionMethod helper call: ${helperResult.reason}`,
+    );
+    return DEFAULT_RESULT;
+  }
+
+  const { handler, client } = helperResult.kit;
+  const prompt = buildPrompt(str1, str2);
+  const choices: string[] = [];
+
+  for (let i = 0; i < Math.max(1, n); i += 1) {
+    const messages = await handler.initializeMessages(
+      '',
+      prompt,
+      undefined,
+      SYSTEM_PROMPT,
+    );
+    const result = await handler.createResponse({
+      client,
+      messages,
+      temperature: 0,
+      systemPrompt: SYSTEM_PROMPT,
+    });
+    const { text } = handler.extractResponse(result.response, '');
+    choices.push(text.trim());
+  }
+
+  return getMajorityChoice(choices);
+}
+
 /**
- * Determines the best way to connect two strings in a LaTeX context using GPT-4
+ * Determines the best way to connect two strings in a LaTeX context.
  */
 export async function bestConnectionMethod(
   str1: string,
   str2: string,
   openaiApiKey?: string,
-  n: number = 10,
+  n: number = 1,
 ): Promise<ConnectionResult> {
   try {
+    if (!openaiApiKey) {
+      return await bestConnectionMethodWithHelperModel(str1, str2, n);
+    }
+
     const prompt = buildPrompt(str1, str2);
     const handler = new ModelHandlerOpenAI(MODEL_CONFIGS['gpt41']);
     const baseURL = handler.getBaseUrl() ?? undefined;
-    const client = openaiApiKey
-      ? new OpenAI({ apiKey: openaiApiKey, baseURL })
-      : await handler.getClient();
+    const client = new OpenAI({ apiKey: openaiApiKey, baseURL });
 
     const completion = await client.chat.completions.create({
       model: 'gpt-4.1',
@@ -85,8 +129,7 @@ export async function bestConnectionMethod(
       messages: [
         {
           role: 'system',
-          content:
-            'You are an assistant trained to determine the most grammatically correct string in a LaTeX document context.',
+          content: SYSTEM_PROMPT,
         },
         { role: 'user', content: prompt },
       ],
@@ -111,15 +154,17 @@ export async function bestConnectionMethodAnthropic(
   str1: string,
   str2: string,
   anthropicApiKey?: string,
-  n: number = 10,
+  n: number = 1,
 ): Promise<ConnectionResult> {
   try {
+    if (!anthropicApiKey) {
+      return await bestConnectionMethodWithHelperModel(str1, str2, n);
+    }
+
     const prompt = buildPrompt(str1, str2);
     const handler = new ModelHandlerAnthropic(MODEL_CONFIGS['sonnet37']);
     const baseURL = handler.getBaseUrl() ?? undefined;
-    const client = anthropicApiKey
-      ? new Anthropic({ apiKey: anthropicApiKey, baseURL })
-      : await handler.getClient();
+    const client = new Anthropic({ apiKey: anthropicApiKey, baseURL });
 
     const choices = await Promise.all(
       Array.from({ length: n }, () =>
