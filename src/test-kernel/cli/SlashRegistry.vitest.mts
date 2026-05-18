@@ -28,6 +28,11 @@ describe('slashRegistry', () => {
         'status',
       ]),
     );
+    expect(
+      listSlashCommands().find((cmd) => cmd.name === 'model'),
+    ).toMatchObject({
+      description: 'List available models',
+    });
   });
 
   it('matches by name prefix case-insensitively', () => {
