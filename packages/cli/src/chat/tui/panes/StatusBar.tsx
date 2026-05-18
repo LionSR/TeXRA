@@ -5,6 +5,7 @@ import { STREAM_STATUS } from '@shared/schemas';
 
 import { cliState, NO_BYPASS } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
+import { shortCliApiMode } from '../../../runtime/apiAccessMode';
 
 function statusLabel(status: string | undefined): string {
   switch (status) {
@@ -33,13 +34,14 @@ export function StatusBar(): React.JSX.Element {
   const bypass = slice?.bypass ?? NO_BYPASS;
   const agent = sessionMeta.agent || 'chat';
   const model = sessionMeta.model || '—';
+  const apiMode = shortCliApiMode(sessionMeta.apiMode);
 
   return (
     <Box paddingX={1} justifyContent="space-between">
       <Box gap={1}>
         <Text color="cyan">◆</Text>
         <Text>
-          {agent} · {model}
+          {agent} · {model} · {apiMode}
         </Text>
         <Text dimColor>·</Text>
         {pendingExitHint ? (
