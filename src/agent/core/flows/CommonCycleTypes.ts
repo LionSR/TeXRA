@@ -9,10 +9,14 @@ import {
   ProviderMessageSchema,
   type ProviderMessage,
 } from '@agent/modelHandlers/types/ProviderMessage';
+import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { ProviderUsage } from '@agent/core/ResponseUsage';
 import { getActiveChildren } from '@agent/runtime/executionRegistry';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import type { DebugContext } from '@agent/utils/debugMessageSaver';
+import {
+  maybeSaveDebugObject,
+  type DebugContext,
+} from '@agent/utils/debugMessageSaver';
 import type { AgentLogger } from '@logger/AgentLogger';
 import { RetryErrorInfoSchema } from '@shared/schemas';
 import type { ExecutionId } from '@shared/schemas';
@@ -95,9 +99,30 @@ export function replaceMessagesInPlace<T>(target: T[], newContents: T[]): void {
   target.push(...newContents);
 }
 
-// --- Shared Helpers for Cycle Flows ---
-
 type CycleServices = AgentCore & { workspace: AgentWorkspaceState };
+
+export type CycleDebugFileOptions = {
+  continuationCount: number;
+  baseName: string;
+  outputFile?: string;
+};
+
+export async function saveCycleDebug(
+  object: unknown,
+  objectType: 'messages' | 'response',
+  services: AgentCore,
+  fileOptions: CycleDebugFileOptions,
+): Promise<void> {
+  await maybeSaveDebugObject({
+    object,
+    objectType,
+    context: getDebugContext(services, {
+      modelName: services.config.model,
+      isRemote: isRemoteAgent(services.config.agent),
+    }),
+    fileOptions,
+  });
+}
 
 export function defaultPostCompactionContext(
   services: CycleServices,
@@ -110,25 +135,39 @@ export function defaultPostCompactionContext(
   );
 }
 
-export function defaultDebugMeta(services: CycleServices) {
-  return {
-    modelName: services.config.model,
-    isRemote: isRemoteAgent(services.config.agent),
-  };
+export interface ExtractedModelResponse {
+  text: string;
+  usage: ProviderUsage;
+  stopReason: ProviderStopReason;
+  thinking: string | null;
+  useStreaming: boolean;
+  /** `undefined` for nullish raw usage so callers can skip stats updates. */
+  normalizedUsage: NormalizedUsage | undefined;
 }
 
-/** Returns `undefined` for nullish usage so callers can skip stats updates. */
-export function logAndNormalizeUsage(
-  usage: ProviderUsage,
-  responseTimeMs: number,
+export function extractModelResponse(
+  response: unknown,
+  responseTimeMs: number | undefined,
+  endTag: string,
   services: CycleServices,
-): NormalizedUsage | undefined {
-  if (usage == null) return undefined;
-  const normalized = services.modelHandler.normalizeUsage(usage, responseTimeMs);
-  const { inputTokens } = normalized;
-  const contextWindow = services.modelHandler.getEffectiveContextWindow();
-  if (inputTokens > 0 && contextWindow > 0) {
-    services.logger.logContextState(inputTokens, contextWindow);
+): ExtractedModelResponse {
+  const { modelHandler, workspace, logger } = services;
+  const thinking = modelHandler.processThinkingBlock(response, workspace);
+  const useStreaming = modelHandler.getStreamingConfig();
+  const { text, usage, stopReason } = modelHandler.extractResponse(
+    response,
+    endTag,
+  );
+
+  let normalizedUsage: NormalizedUsage | undefined;
+  if (usage != null) {
+    normalizedUsage = modelHandler.normalizeUsage(usage, responseTimeMs ?? 0);
+    const { inputTokens } = normalizedUsage;
+    const contextWindow = modelHandler.getEffectiveContextWindow();
+    if (inputTokens > 0 && contextWindow > 0) {
+      logger.logContextState(inputTokens, contextWindow);
+    }
   }
-  return normalized;
+
+  return { text, usage, stopReason, thinking, useStreaming, normalizedUsage };
 }
