@@ -200,13 +200,17 @@ export function removeStream(streamId: StreamTabId): void {
   if (nextParents) cliState.parentStream.set(nextParents);
 }
 
-export function resetCliState(): void {
-  cliState.sessionMeta.set({
+function defaultSessionMeta(): SessionMeta {
+  return {
     agent: '',
     model: '',
     cwd: '',
     apiMode: 'personal',
-  });
+  };
+}
+
+export function resetCliState(sessionMeta = defaultSessionMeta()): void {
+  cliState.sessionMeta.set(sessionMeta);
   cliState.activeStreamId.set(undefined);
   cliState.streams.set(new Map());
   cliState.parentStream.set(new Map());
