@@ -36,7 +36,7 @@ export interface HeaderBannerInfo {
 export function renderHeaderBanner(info: HeaderBannerInfo): string {
   const lines = [
     `${pc.bold(pc.cyan('TeXRA'))} ${pc.dim(`v${info.version}`)}`,
-    `${pc.cyan(info.agent || 'chat')} ${pc.dim('·')} ${info.model || '—'}`,
+    `agent: ${pc.cyan(info.agent || 'chat')} ${pc.dim('·')} model: ${info.model || '—'}`,
     pc.dim(shortenCwd(info.cwd)),
   ];
   return `\n${lines.join('\n')}\n\n`;

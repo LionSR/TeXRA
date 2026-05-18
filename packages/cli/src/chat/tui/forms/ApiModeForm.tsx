@@ -1,6 +1,8 @@
 import { Box, Text } from 'ink';
+import { useEffect, useState } from 'react';
 
 import { type CliApiMode } from '../../../runtime/apiAccessMode';
+import { loadCliApiStatusLines } from '../../../runtime/apiStatus';
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
 
@@ -11,6 +13,24 @@ export interface ApiModeFormProps {
 }
 
 export function ApiModeForm(props: ApiModeFormProps): React.JSX.Element {
+  const [statusLines, setStatusLines] = useState<readonly string[]>([
+    'loading API status...',
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadCliApiStatusLines()
+      .then((lines) => {
+        if (!cancelled) setStatusLines(lines);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setStatusLines([String(error)]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <Box
       borderStyle="round"
@@ -24,6 +44,13 @@ export function ApiModeForm(props: ApiModeFormProps): React.JSX.Element {
       <Text dimColor>
         Choose which credentials model calls should use. Press 1 for API keys.
       </Text>
+      <Box marginTop={1} flexDirection="column">
+        {statusLines.map((line) => (
+          <Text key={line} dimColor>
+            {line}
+          </Text>
+        ))}
+      </Box>
       <Box marginTop={1} flexDirection="column">
         <Select
           items={[
