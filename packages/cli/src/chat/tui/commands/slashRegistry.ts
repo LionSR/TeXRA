@@ -54,7 +54,8 @@ export function matchSlashCommands(prefix: string): readonly SlashCommand[] {
 
 /**
  * Parse a `"/cmd remainder"` input into `{ name, remainder }`.
- * Returns `undefined` if `text` does not begin with `/`.
+ * Also accepts `\clear` as a compatibility alias.
+ * Returns `undefined` if `text` is not a slash command.
  */
 export function parseSlashInput(
   text: string,
