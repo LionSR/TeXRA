@@ -2,10 +2,9 @@
 //
 // Renders a single TOOL_USE entry as one compact header line plus an
 // optional indented output block (max 3 lines), mirroring the visual
-// language Claude Code uses in its Ink TUI. Per-tool rich renderers
-// (edit diffs, file links, ANSI bash output) live in the VS Code
-// progress view; the CLI sticks to a universal renderer that works for
-// every tool without dispatch tables.
+// language Claude Code uses in its Ink TUI. Edit-like tools also show
+// their inline patch, because the completed tool log has enough input
+// data for a compact old-string -> new-string diff.
 
 import { useMemo } from 'react';
 
@@ -17,10 +16,17 @@ import {
   collapseWhitespace,
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
+import {
+  DiffView,
+  diffDisplayLines,
+  editPatchGroups,
+  type InlinePatchGroup,
+} from '../render/DiffView';
 
 const STATUS_DOT = '●';
 const OUTPUT_CORNER = '⎿';
 const MAX_OUTPUT_LINES = 3;
+const MAX_PATCH_LINES = 10;
 const MAX_HEADER_PREVIEW = 80;
 const MAX_ERROR_PREVIEW = 240;
 
@@ -65,6 +71,55 @@ function statusColor(toolUse: NormalizedToolUse): 'green' | 'red' | undefined {
   return undefined;
 }
 
+function isEditLikeTool(toolName: string): boolean {
+  const name = displayToolName(toolName).toLowerCase();
+  return (
+    name === 'edit' ||
+    name === 'multiedit' ||
+    name.includes('str_replace') ||
+    name.includes('text_editor')
+  );
+}
+
+function toolUsePatchGroups(
+  toolUse: NormalizedToolUse,
+): readonly InlinePatchGroup[] | undefined {
+  if (toolUse.isError || !isEditLikeTool(toolUse.toolName)) return undefined;
+  return editPatchGroups(toolUse.input);
+}
+
+export function toolUsePatchDisplayLines(
+  toolUse: NormalizedToolUse,
+): readonly string[] {
+  const groups = toolUsePatchGroups(toolUse);
+  if (!groups) return [];
+  return groups.flatMap((group) => [
+    `${OUTPUT_CORNER} ${group.fileLabel}`,
+    ...diffDisplayLines(group.hunks, MAX_PATCH_LINES).map(
+      (line) => `  ${line.text}`,
+    ),
+  ]);
+}
+
+function PatchPreview({
+  groups,
+}: {
+  readonly groups: readonly InlinePatchGroup[];
+}): React.JSX.Element {
+  return (
+    <Box flexDirection="column" paddingLeft={2}>
+      {groups.map((group, index) => (
+        <Box key={`${group.fileLabel}-${index}`} flexDirection="column">
+          <Text dimColor>{`${OUTPUT_CORNER} ${group.fileLabel}`}</Text>
+          <Box flexDirection="column" paddingLeft={2}>
+            <DiffView hunks={group.hunks} maxHunkLines={MAX_PATCH_LINES} />
+          </Box>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
 export function ToolUseRow({
   toolUse,
 }: {
@@ -77,7 +132,7 @@ export function ToolUseRow({
   // keeps `toolUse` stable across re-renders when nothing changed, so
   // the heavy work (split, slice, JSON.stringify in previewInput) only
   // runs when there's a real update.
-  const { preview, visibleOutput, hiddenCount } = useMemo(() => {
+  const { patchGroups, preview, visibleOutput, hiddenCount } = useMemo(() => {
     const sourceText =
       toolUse.headerSummary || previewInput(toolUse.input) || '';
     const previewText = sourceText
@@ -86,6 +141,7 @@ export function ToolUseRow({
     const lines = toolUse.outputText ? toolUse.outputText.split('\n') : [];
     const visible = lines.slice(0, MAX_OUTPUT_LINES);
     return {
+      patchGroups: toolUsePatchGroups(toolUse),
       preview: previewText,
       visibleOutput: visible,
       hiddenCount: Math.max(0, lines.length - visible.length),
@@ -101,6 +157,7 @@ export function ToolUseRow({
   const showNoOutput =
     toolUse.status === TOOL_USE_STATUS.COMPLETED &&
     visibleOutput.length === 0 &&
+    !patchGroups &&
     !showError;
 
   return (
@@ -127,6 +184,7 @@ export function ToolUseRow({
           ) : null}
         </Box>
       ) : null}
+      {patchGroups ? <PatchPreview groups={patchGroups} /> : null}
       {showError ? (
         <Box flexDirection="row" flexWrap="nowrap" paddingLeft={2}>
           <Text dimColor>{`${OUTPUT_CORNER} `}</Text>
