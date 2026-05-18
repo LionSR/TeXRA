@@ -36,7 +36,7 @@ export const BaseCycleFieldsSchema = z.object({
 export type BaseCycleFields = z.infer<typeof BaseCycleFieldsSchema>;
 
 /** Derive debug context from services at call site. */
-export function getDebugContext(
+function getDebugContext(
   services: { logger: AgentLogger; executionId?: ExecutionId },
   params: { modelName?: string; isRemote?: boolean },
 ): DebugContext {
@@ -141,15 +141,25 @@ export interface ExtractedModelResponse {
   stopReason: ProviderStopReason;
   thinking: string | null;
   useStreaming: boolean;
-  /** `undefined` for nullish raw usage so callers can skip stats updates. */
+  /** `undefined` when the caller chooses to skip nullish raw usage. */
   normalizedUsage: NormalizedUsage | undefined;
 }
+
+export type ExtractModelResponseOptions = {
+  /**
+   * Response flows historically normalized null provider usage into a zero
+   * snapshot. Tool-use flows historically skipped missing usage. Keep that
+   * distinction explicit at the call site.
+   */
+  normalizeNullUsage?: boolean;
+};
 
 export function extractModelResponse(
   response: unknown,
   responseTimeMs: number | undefined,
   endTag: string,
   services: CycleServices,
+  options: ExtractModelResponseOptions = {},
 ): ExtractedModelResponse {
   const { modelHandler, workspace, logger } = services;
   const thinking = modelHandler.processThinkingBlock(response, workspace);
@@ -160,7 +170,7 @@ export function extractModelResponse(
   );
 
   let normalizedUsage: NormalizedUsage | undefined;
-  if (usage != null) {
+  if (usage != null || options.normalizeNullUsage === true) {
     normalizedUsage = modelHandler.normalizeUsage(usage, responseTimeMs ?? 0);
     const { inputTokens } = normalizedUsage;
     const contextWindow = modelHandler.getEffectiveContextWindow();
