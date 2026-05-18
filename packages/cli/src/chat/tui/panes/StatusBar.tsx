@@ -112,7 +112,7 @@ const STATUS_BAR_BINDINGS = [
   '[Alt-1..9]focus',
   '[Alt-s/p]children',
   '[/status]details',
-  '[/model]model',
+  '[/model]models',
   '[/api]api',
   '[Ctrl-C]stop',
 ] as const;
