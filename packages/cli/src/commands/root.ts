@@ -111,6 +111,7 @@ const GLOBAL_ARGS: {
   print: { type: 'boolean'; alias: 'p' };
   quiet: { type: 'boolean'; alias: 'q' };
   cwd: { type: 'string' };
+  'api-mode': { type: 'string' };
   'output-format': {
     type: 'enum';
     options: CliOutputFormat[];
@@ -123,6 +124,7 @@ const GLOBAL_ARGS: {
   print: { type: 'boolean', alias: 'p' },
   quiet: { type: 'boolean', alias: 'q' },
   cwd: { type: 'string' },
+  'api-mode': { type: 'string' },
   'output-format': {
     type: 'enum',
     options: [...CLI_OUTPUT_FORMATS],
