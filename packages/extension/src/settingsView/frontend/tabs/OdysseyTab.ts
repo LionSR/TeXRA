@@ -181,7 +181,9 @@ export class OdysseyTab extends LitElement {
         >
         <div>
           <div class="objective" title=${item.objective}>${item.objective}</div>
-          <div class="meta-strip">${renderDotMeta(metaParts)}</div>
+          <div class="text-secondary meta-strip">
+            ${renderDotMeta(metaParts)}
+          </div>
         </div>
         ${inFlight
           ? html`<wa-icon library="texra" name="arrow-right"></wa-icon>`
