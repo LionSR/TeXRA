@@ -68,6 +68,7 @@ export interface BypassState {
 export interface StreamSlice {
   readonly streamId: StreamTabId;
   readonly status: StreamStatus | undefined;
+  readonly description: string | undefined;
   readonly usage: TokenUsageStats | undefined;
   readonly conversation: ConversationProgress | undefined;
   readonly entries: readonly ConversationEntry[];
@@ -141,6 +142,7 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
   return {
     streamId,
     status: undefined,
+    description: undefined,
     usage: undefined,
     conversation: undefined,
     entries: [],
