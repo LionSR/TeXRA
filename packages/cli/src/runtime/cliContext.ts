@@ -9,6 +9,7 @@ import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
 } from './approvalPolicy';
+import { parseCliApiMode, type CliApiMode } from './apiAccessMode';
 import {
   CLI_OUTPUT_FORMATS,
   isKnownCliModel,
@@ -31,6 +32,7 @@ export interface CliContext {
   readonly outputFormat: CliOutputFormat;
   readonly approvalPolicy: CliApprovalPolicy;
   readonly helperModel?: string;
+  readonly apiMode?: CliApiMode;
   readonly quietLogs?: boolean;
   readonly renderRunProgress?: boolean;
   readonly stderrIsTty?: boolean;
@@ -130,6 +132,7 @@ export interface CliGlobalArgs {
   readonly cwd?: string;
   readonly outputFormat?: CliOutputFormat;
   readonly approvalPolicy?: CliApprovalPolicy;
+  readonly apiMode?: string;
 }
 
 function cliMode(globalArgs: CliGlobalArgs, ambient: CliAmbientState): CliMode {
@@ -183,6 +186,19 @@ function pickEnvModel(
   return undefined;
 }
 
+function pickCliApiMode(
+  candidates: readonly { readonly label: string; readonly value?: string }[],
+  warnings: string[],
+): CliApiMode | undefined {
+  for (const candidate of candidates) {
+    if (!candidate.value) continue;
+    const apiMode = parseCliApiMode(candidate.value);
+    if (apiMode) return apiMode;
+    warnings.push(`Ignoring invalid ${candidate.label} "${candidate.value}".`);
+  }
+  return undefined;
+}
+
 export async function buildCliContext(
   init: BuildCliContextInit,
 ): Promise<CliContext> {
@@ -195,6 +211,13 @@ export async function buildCliContext(
   const loadedConfig = await loadWorkspaceCliConfig(cwd);
   const configWarnings = [...loadedConfig.warnings];
   const envModel = pickEnvModel(env, configWarnings);
+  const apiMode = pickCliApiMode(
+    [
+      { label: '--api-mode', value: init.globalArgs.apiMode },
+      { label: 'TEXRA_API_MODE', value: envValue(env, 'TEXRA_API_MODE') },
+    ],
+    configWarnings,
+  );
   return {
     cwd,
     mode: cliMode(init.globalArgs, ambient),
@@ -220,6 +243,7 @@ export async function buildCliContext(
       configWarnings,
       'TEXRA_APPROVAL_POLICY',
     ),
+    apiMode,
     quietLogs: init.globalArgs.quiet === true,
     stderrIsTty: ambient.stderrIsTty,
     colorEnabled: ambient.colorEnabled,

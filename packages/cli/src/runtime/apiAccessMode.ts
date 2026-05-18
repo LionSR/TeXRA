@@ -20,7 +20,9 @@ export function shortCliApiMode(mode: CliApiMode): string {
 
 export function parseCliApiMode(input: string): CliApiMode | undefined {
   const normalized = input.trim().toLowerCase();
-  if (['personal', 'api', 'byok', 'key', 'keys'].includes(normalized)) {
+  if (
+    ['personal', 'direct', 'api', 'byok', 'key', 'keys'].includes(normalized)
+  ) {
     return 'personal';
   }
   if (['included', 'relay', 'texra'].includes(normalized)) {

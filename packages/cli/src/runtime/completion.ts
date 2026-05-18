@@ -184,7 +184,7 @@ _texra_completion_path() {
   while (( i < COMP_CWORD )); do
     token="\${COMP_WORDS[i]}"
     case "$token" in
-      --output-format|--approval-policy|--cwd|--agent|--model|-m|--input|-i|--output|--instruction|--provider|--month|--login-hint)
+      --output-format|--approval-policy|--api-mode|--cwd|--agent|--model|-m|--input|-i|--output|--instruction|--provider|--month|--login-hint)
         ((i+=2)); continue ;;
       --*=*|-*) ((i++)); continue ;;
     esac
