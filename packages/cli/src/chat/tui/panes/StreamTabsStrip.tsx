@@ -43,8 +43,29 @@ function childLabel(parent: StreamSlice | undefined, id: StreamTabId): string {
   const child = [
     ...(parent?.activeSubagents ?? []),
     ...(parent?.activeProcesses ?? []),
+    ...(parent?.childStreams ?? []),
   ].find((entry) => entry.childStreamId === id);
   return child?.agentName || child?.toolName || child?.executionId || id;
+}
+
+function orderedStreamTree(init: {
+  readonly root: StreamTabId;
+  readonly rootSlice: StreamSlice | undefined;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+}): StreamTabId[] {
+  const ordered = orderedDescendantsFromSlice(init.rootSlice);
+  for (const [child, parent] of init.parentStream) {
+    if (
+      parent !== init.root ||
+      !init.streams.has(child) ||
+      ordered.includes(child)
+    ) {
+      continue;
+    }
+    ordered.push(child);
+  }
+  return [init.root, ...ordered].filter((id) => init.streams.has(id));
 }
 
 function activeTreeRoot(
@@ -105,9 +126,12 @@ export function streamTabsDisplayItems(init: {
   );
   if (!root) return [];
   const rootSlice = init.streams.get(root);
-  const ordered = [root, ...orderedDescendantsFromSlice(rootSlice)].filter(
-    (id) => init.streams.has(id),
-  );
+  const ordered = orderedStreamTree({
+    root,
+    rootSlice,
+    parentStream: init.parentStream,
+    streams: init.streams,
+  });
   if (ordered.length < 2) return [];
   const items = ordered.map((id): StreamTabDisplayItem => {
     const slice = init.streams.get(id);
