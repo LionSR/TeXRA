@@ -245,6 +245,7 @@ class ResponseProcessNode<C> extends BaseNode<
         prepRes.responseTimeMs,
         this.services.setting.endTag,
         this.services,
+        { normalizeNullUsage: true },
       );
 
       if (newResponse) {
