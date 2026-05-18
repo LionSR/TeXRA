@@ -323,16 +323,34 @@ importers:
         version: 1.21.1
 
   packages/cli:
-    dependencies:
+    devDependencies:
       '@inkjs/ui':
         specifier: ^2.0.0
         version: 2.0.0(ink@7.0.3(@types/react@19.2.14)(react@19.2.6))
+      '@babel/core':
+        specifier: ^7.29.0
+        version: 7.29.0
+      '@babel/preset-react':
+        specifier: ^7.28.5
+        version: 7.28.5(@babel/core@7.29.0)
+      '@babel/preset-typescript':
+        specifier: ^7.28.5
+        version: 7.28.5(@babel/core@7.29.0)
       '@lit-labs/signals':
         specifier: ^0.3.0
         version: 0.3.0
       '@texra/core':
         specifier: workspace:*
         version: link:../core
+      '@types/markdown-it':
+        specifier: ^14.1.2
+        version: 14.1.2
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.2.14
+      babel-plugin-react-compiler:
+        specifier: ^1.0.0
+        version: 1.0.0
       citty:
         specifier: ^0.2.2
         version: 0.2.2
@@ -342,6 +360,9 @@ importers:
       diff:
         specifier: ^9.0.0
         version: 9.0.0
+      esbuild:
+        specifier: ^0.28.0
+        version: 0.28.0
       ink:
         specifier: ^7.0.3
         version: 7.0.3(@types/react@19.2.14)(react@19.2.6)
@@ -363,28 +384,6 @@ importers:
       wrap-ansi:
         specifier: ^10.0.0
         version: 10.0.0
-    devDependencies:
-      '@babel/core':
-        specifier: ^7.29.0
-        version: 7.29.0
-      '@babel/preset-react':
-        specifier: ^7.28.5
-        version: 7.28.5(@babel/core@7.29.0)
-      '@babel/preset-typescript':
-        specifier: ^7.28.5
-        version: 7.28.5(@babel/core@7.29.0)
-      '@types/markdown-it':
-        specifier: ^14.1.2
-        version: 14.1.2
-      '@types/react':
-        specifier: ^19.2.0
-        version: 19.2.14
-      babel-plugin-react-compiler:
-        specifier: ^1.0.0
-        version: 1.0.0
-      esbuild:
-        specifier: ^0.28.0
-        version: 0.28.0
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
