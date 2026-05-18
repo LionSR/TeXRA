@@ -94,6 +94,25 @@ Command-local global flags are accepted after `run`:
 node packages/cli/dist/bin/texra.js run polish --input paper.tex --cwd /path/to/project --approval-policy never --print
 ```
 
+## Workspace defaults
+
+Place optional defaults in `.texra/config.json`:
+
+```json
+{
+  "model": "deepseekT",
+  "outputFormat": "text",
+  "approvalPolicy": "never",
+  "chat": { "agent": "chat", "model": "deepseekT" },
+  "run": { "model": "deepseekT" }
+}
+```
+
+Flags override environment variables, environment variables override this file,
+and the file overrides built-in defaults. The supported environment variables
+are `TEXRA_AGENT`, `TEXRA_MODEL`, `TEXRA_OUTPUT_FORMAT`, and
+`TEXRA_APPROVAL_POLICY`.
+
 ## Current validation status
 
 The CLI package currently has structural gates:
