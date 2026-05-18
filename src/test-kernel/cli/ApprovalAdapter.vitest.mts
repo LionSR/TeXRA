@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import { immediateDecisionForApproval } from '../../../packages/cli/src/runtime/approvalAdapter';
+import {
+  formatRetryRequestMessage,
+  immediateDecisionForApproval,
+} from '../../../packages/cli/src/runtime/approvalAdapter';
 import type { CliContext } from '../../../packages/cli/src/runtime/cliContext';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
@@ -56,5 +59,13 @@ describe('immediateDecisionForApproval', () => {
         context({ mode: 'headless' }),
       ),
     ).toMatchObject({ accepted: false });
+  });
+});
+
+describe('formatRetryRequestMessage', () => {
+  it('shows the API-key switch for exhausted included access', () => {
+    expect(formatRetryRequestMessage(credentialExhaustedRetry)).toContain(
+      '/api personal',
+    );
   });
 });
