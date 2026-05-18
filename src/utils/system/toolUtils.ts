@@ -177,6 +177,30 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
       PDFLATEX_INSTRUCTIONS,
     openDocsCommand: 'texra.openDoc,installation',
   },
+  xelatex: {
+    errorMessage:
+      'xelatex is not installed. Please install a TeX distribution to use this feature.\n' +
+      PDFLATEX_INSTRUCTIONS,
+    openDocsCommand: 'texra.openDoc,installation',
+  },
+  lualatex: {
+    errorMessage:
+      'lualatex is not installed. Please install a TeX distribution to use this feature.\n' +
+      PDFLATEX_INSTRUCTIONS,
+    openDocsCommand: 'texra.openDoc,installation',
+  },
+  bibtex: {
+    errorMessage:
+      'bibtex is not installed. Please install a TeX distribution to use this feature.\n' +
+      PDFLATEX_INSTRUCTIONS,
+    openDocsCommand: 'texra.openDoc,installation',
+  },
+  biber: {
+    errorMessage:
+      'biber is not installed. Please install a TeX distribution to use this feature.\n' +
+      PDFLATEX_INSTRUCTIONS,
+    openDocsCommand: 'texra.openDoc,installation',
+  },
 
   // Document conversion tools
   pandoc: {
