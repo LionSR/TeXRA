@@ -1,7 +1,6 @@
 // Standard library imports
 import { constants as fsConstants } from 'node:fs';
 import { access, stat } from 'node:fs/promises';
-import path from 'node:path';
 
 // Local imports - LaTeX
 import {
@@ -10,6 +9,7 @@ import {
 } from '@latex/latexToolchain';
 
 // Local imports - CLI runtime
+import { workspaceCliConfigPath } from './cliConfig';
 import { CliExitCode } from './exitCodes';
 import {
   writeNdjsonStdout,
@@ -228,16 +228,31 @@ async function checkLatex(
 }
 
 async function checkConfig(context: CliContext): Promise<DoctorCheck> {
-  const workspaceConfig = path.join(context.cwd, '.texra', 'config.json');
-  try {
-    await access(workspaceConfig, fsConstants.R_OK);
-    return pass('config', 'Config', `Workspace config: ${workspaceConfig}`);
-  } catch {
+  if (!context.configFilePath) {
     return skip(
       'config',
       'Config',
       'No workspace CLI config file found.',
       'Optional defaults may be placed in .texra/config.json.',
+    );
+  }
+  if ((context.configWarnings ?? []).length > 0) {
+    return warn(
+      'config',
+      'Config',
+      `Workspace config has warnings: ${context.configFilePath}`,
+      context.configWarnings?.join(' '),
+    );
+  }
+  const workspaceConfig = workspaceCliConfigPath(context.cwd);
+  try {
+    await access(workspaceConfig, fsConstants.R_OK);
+    return pass('config', 'Config', `Workspace config: ${workspaceConfig}`);
+  } catch {
+    return warn(
+      'config',
+      'Config',
+      `Configured path is no longer readable: ${context.configFilePath}`,
     );
   }
 }
