@@ -11,7 +11,10 @@ import PQueue from 'p-queue';
 import { loadAgents } from '@agent/index';
 import { type AgentConfigPayload } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { interruptActiveChildren } from '@agent/runtime/executionRegistry';
+import {
+  interruptActiveChildren,
+  killExecution,
+} from '@agent/runtime/executionRegistry';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
@@ -666,11 +669,21 @@ export async function runChat(
   process.stdout.write(
     renderHeaderBanner({ version, agent, model, cwd: context.cwd }),
   );
-  const ink = render(<App onSubmit={handleSubmit} history={inputHistory} />, {
-    stdout: process.stdout,
-    stderr: process.stderr,
-    stdin: process.stdin,
-  });
+  const ink = render(
+    <App
+      onSubmit={handleSubmit}
+      onKillExecution={(executionId) => {
+        clearApprovals();
+        killExecution(executionId);
+      }}
+      history={inputHistory}
+    />,
+    {
+      stdout: process.stdout,
+      stderr: process.stderr,
+      stdin: process.stdin,
+    },
+  );
 
   let pendingExitTimer: ReturnType<typeof setTimeout> | undefined;
   let exitArmed = false;
