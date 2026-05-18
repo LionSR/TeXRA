@@ -1,5 +1,5 @@
 // Third-party imports
-import OpenAI from 'openai';
+import OpenAI, { APIUserAbortError as OpenAIUserAbortError } from 'openai';
 
 // Local imports - core utilities
 import {
@@ -531,7 +531,9 @@ export class ModelHandlerOpenAI<
       if (partialText) {
         attachPartialText(streamError, partialText);
       }
-      if (!isUserAbort(streamError)) {
+      const isAbort =
+        streamError instanceof OpenAIUserAbortError || isUserAbort(streamError);
+      if (!isAbort) {
         this.logger.warn(
           `Stream failed: ${streamError instanceof Error ? streamError.message : String(streamError)}`,
           {
