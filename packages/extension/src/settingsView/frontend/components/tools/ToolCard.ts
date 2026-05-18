@@ -452,6 +452,7 @@ export class ToolCard extends LitElement {
       <div class="tool-card">
         <div class="tool-header">
           <div class="tool-title-group">
+            ${this.item.status === 'available' ? this.renderBadge() : nothing}
             <span class="tool-name">${this.item.name}</span>
             ${this.renderBadge()} ${this.renderAuthNote()}
           </div>

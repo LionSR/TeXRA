@@ -240,6 +240,12 @@ export class LaTeXTab extends LitElement {
         color: var(--wa-color-testing-failed, #f48771);
       }
 
+      /* Using-default state for non-boolean settings (number/enum). Not a
+         problem — just hasn't been overridden. Render neutral, not red. */
+      .setting-status-icon.is-default {
+        color: var(--color-text-secondary);
+      }
+
       .dependency-info {
         flex: 1;
         min-width: 0;
@@ -498,9 +504,7 @@ export class LaTeXTab extends LitElement {
             )}
           </div>
           ${installed
-            ? html`<wa-tag class="setting-badge" variant="success" size="small"
-                >Installed</wa-tag
-              >`
+            ? nothing
             : dep.actionEvent
               ? html`
                   <button
@@ -950,8 +954,9 @@ export class LaTeXTab extends LitElement {
       <div class="setting-card">
         <wa-icon
           library="texra"
-          name=${isCustom ? 'edit' : 'circle-outline'}
-          class="setting-status-icon ${isCustom ? 'is-set' : 'not-set'}"
+          name=${isCustom ? 'edit' : 'gear'}
+          class="setting-status-icon ${isCustom ? 'is-set' : 'is-default'}"
+          title=${isCustom ? 'Customized' : 'Using default'}
         ></wa-icon>
         <div class="setting-info">
           <div class="setting-name">${opts.label}</div>
@@ -1009,8 +1014,9 @@ export class LaTeXTab extends LitElement {
       <div class="setting-card">
         <wa-icon
           library="texra"
-          name=${isCustom ? 'edit' : 'circle-outline'}
-          class="setting-status-icon ${isCustom ? 'is-set' : 'not-set'}"
+          name=${isCustom ? 'edit' : 'gear'}
+          class="setting-status-icon ${isCustom ? 'is-set' : 'is-default'}"
+          title=${isCustom ? 'Customized' : 'Using default'}
         ></wa-icon>
         <div class="setting-info">
           <div class="setting-name">${opts.label}</div>

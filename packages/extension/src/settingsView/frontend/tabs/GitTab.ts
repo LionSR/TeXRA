@@ -99,6 +99,11 @@ export class GitTab extends LitElement {
         color: var(--wa-color-danger-on-quiet);
       }
 
+      .token-status-check {
+        color: var(--wa-color-success-fill-loud);
+        font-size: 1em;
+      }
+
       .instructions {
         margin: var(--wa-space-2xs) 0 0 0;
         font-size: var(--font-size-sm);
@@ -227,7 +232,12 @@ export class GitTab extends LitElement {
   private renderTokenStatusBadge(): TemplateResult {
     switch (this.githubTokenStatus) {
       case 'secret':
-        return html`<wa-tag variant="success" size="small">Set</wa-tag>`;
+        return html`<wa-icon
+          library="texra"
+          name="check"
+          class="token-status-check"
+          title="Token set"
+        ></wa-icon>`;
       case 'env':
         return html`<wa-tag variant="neutral" size="small">Env</wa-tag>`;
       default:

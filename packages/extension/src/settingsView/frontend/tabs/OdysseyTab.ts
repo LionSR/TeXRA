@@ -178,7 +178,10 @@ export class OdysseyTab extends LitElement {
           <div class="objective" title=${item.objective}>${item.objective}</div>
           <div class="meta">
             <span class="stream-id">${item.streamId}</span>
-            <span>· ${formatOdysseyTime(odysseyElapsedMs(item))} elapsed</span>
+            <span
+              title="Wall-clock time since the odyssey was started (includes idle time between agent turns)"
+              >· started ${formatOdysseyTime(odysseyElapsedMs(item))} ago</span
+            >
             ${item.continuationCount > 0
               ? html`<span>· ${item.continuationCount} continuations</span>`
               : nothing}

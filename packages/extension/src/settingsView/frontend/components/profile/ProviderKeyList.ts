@@ -60,6 +60,23 @@ export class ProviderKeyList extends LitElement {
       this.expandedProvider === provider ? null : provider;
   }
 
+  private renderKeyStatus(status: ProviderKeyStatus['status']): TemplateResult {
+    if (status === 'set') {
+      return html`<wa-icon
+        library="texra"
+        name="check"
+        class="key-status-check"
+        title="Key set"
+      ></wa-icon>`;
+    }
+    return html`<wa-tag
+      class="key-status-badge"
+      variant=${STATUS_VARIANTS[status]}
+      size="small"
+      >${STATUS_LABELS[status]}</wa-tag
+    >`;
+  }
+
   private renderActions(entry: ProviderKeyStatus): TemplateResult {
     const { provider } = entry;
     const removeButton =
@@ -213,14 +230,7 @@ export class ProviderKeyList extends LitElement {
             <span class="provider-name">${entry.displayName}</span>
           </div>
         </td>
-        <td>
-          <wa-tag
-            class="key-status-badge"
-            variant=${STATUS_VARIANTS[entry.status]}
-            size="small"
-            >${STATUS_LABELS[entry.status]}</wa-tag
-          >
-        </td>
+        <td>${this.renderKeyStatus(entry.status)}</td>
         <td>${this.renderActions(entry)}</td>
       </tr>
     `;

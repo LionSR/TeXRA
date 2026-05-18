@@ -209,7 +209,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'zotero_export',
     ],
     name: 'Zotero Integration',
-    category: 'academic',
+    category: 'ai-agents',
     description:
       'Search, add items to, and export citations from your Zotero library. Requires Better BibTeX plugin.',
     installGuide:
@@ -274,7 +274,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     id: 'github-pr-subscription',
     tools: ['github_subscription'],
     name: 'GitHub Activity Subscription',
-    category: 'workflow',
+    category: 'ai-agents',
     description:
       'Poll GitHub for pull request, issue, and repository activity. Path mirrors GitHub URL shape: "owner/repo" for coarse repo-wide events, "owner/repo/pulls/N" for per-PR comments/reviews/CI, "owner/repo/issues/N" for issue comments and lifecycle.',
     installGuide:
