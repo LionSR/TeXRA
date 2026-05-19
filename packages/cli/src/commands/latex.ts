@@ -129,13 +129,14 @@ async function initLatexCliPlatform(context: CliContext): Promise<void> {
 }
 
 async function assertReadableFile(filePath: string): Promise<void> {
+  let stats: Awaited<ReturnType<typeof fs.stat>>;
   try {
-    const stats = await fs.stat(filePath);
-    if (!stats.isFile()) {
-      throw new Error(`${filePath} is not a file.`);
-    }
+    stats = await fs.stat(filePath);
   } catch (error) {
     throw new Error(`Cannot read ${filePath}: ${toErrorMessage(error)}`);
+  }
+  if (!stats.isFile()) {
+    throw new Error(`Cannot read ${filePath}: not a regular file.`);
   }
 }
 
