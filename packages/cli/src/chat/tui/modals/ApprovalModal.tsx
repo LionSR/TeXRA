@@ -15,6 +15,7 @@ import { assertNever } from '../assertNever';
 import type { PendingApproval } from '../state/approvalQueue';
 
 export interface ApprovalModalProps {
+  readonly availableRows?: number;
   readonly pending: PendingApproval | undefined;
 }
 
@@ -27,7 +28,13 @@ export function ApprovalModal(
     case 'bash':
       return <BashApproval payload={payload.payload} onDecide={decide} />;
     case 'toolEdit':
-      return <EditApproval request={payload.request} onDecide={decide} />;
+      return (
+        <EditApproval
+          availableRows={props.availableRows}
+          request={payload.request}
+          onDecide={decide}
+        />
+      );
     case 'plan':
       return <PlanApproval payload={payload.payload} onDecide={decide} />;
     case 'proposal':

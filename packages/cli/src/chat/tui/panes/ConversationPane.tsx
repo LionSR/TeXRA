@@ -1,17 +1,18 @@
 // Conversation pane for user and assistant transcript entries.
 //
-// Finalized entries are committed to ink's `<Static>` region so they survive
-// re-renders and stay in scrollback. The in-flight entry (last one when the
-// stream is still streaming) renders in a live `<Box>` above the input bar.
+// Finalized entries render as a viewport-limited tail inside the Ink tree.
+// The in-flight entry (last one when the stream is still streaming) renders
+// in a live `<Box>` above the input bar.
 //
 // Finalized assistant text goes through the ANSI markdown renderer
 // (`render/Markdown.tsx`). Live assistant text stays plain so a growing
 // response does not repeatedly parse a full Markdown document while the input
 // bar is also accepting keystrokes.
 
-import { Box, Static, Text } from 'ink';
+import { Box, Text } from 'ink';
 
 import { Markdown } from '../render/Markdown';
+import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import {
   cliState,
@@ -21,6 +22,7 @@ import {
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
 import { useSignal } from '../state/useSignal';
 import { ToolUseRow } from './ToolUseRow';
+import { toolUseDisplayLines } from './toolRenderers';
 import { splitTranscriptEntries } from './transcriptEntries';
 
 export { splitTranscriptEntries } from './transcriptEntries';
@@ -97,9 +99,171 @@ function TranscriptEntry({
 
 // Bounds the live-region row count. Ink redraws the live region on every
 // streaming delta; if it overflows the viewport the cursor-up rewrite
-// overshoots and clobbers Static rows already in scrollback.
+// overshoots and clobbers rows already in the alternate screen.
 const LIVE_TAIL_ROWS = 12;
 const NEWLINE_CHAR_CODE = 10;
+const DEFAULT_TRANSCRIPT_ROWS = 24;
+const MIN_PENDING_ROWS = 1;
+const HIDDEN_MARKER_ROWS = 1;
+
+function estimateWrappedRows(text: string, width: number): number {
+  const cols = Math.max(1, width);
+  const lines = text.length > 0 ? text.split('\n') : [''];
+  return lines.reduce(
+    (sum, line) => sum + Math.max(1, Math.ceil(line.length / cols)),
+    0,
+  );
+}
+
+export function estimateTranscriptEntryRows(
+  entry: ConversationEntry,
+  width = 80,
+): number {
+  if (entry.role === 'tool' && entry.toolUse) {
+    return toolUseDisplayLines(entry.toolUse).length + 1;
+  }
+  if (entry.role === 'process' && entry.process) {
+    return Math.max(1, completedProcessDisplayLines(entry.process).length) + 1;
+  }
+  if (entry.role === 'assistant') {
+    const rendered = renderAnsiMarkdown(entry.text, { width });
+    return Math.max(1, rendered.split('\n').length) + 1;
+  }
+
+  return estimateWrappedRows(entry.text, width) + 1;
+}
+
+function estimatePendingEntryRows(
+  entry: ConversationEntry,
+  width = 80,
+): number {
+  if (entry.role === 'assistant') {
+    return Math.min(LIVE_TAIL_ROWS, estimateWrappedRows(entry.text, width));
+  }
+
+  return estimateTranscriptEntryRows(entry, width);
+}
+
+function selectEntriesForViewport(
+  entries: readonly ConversationEntry[],
+  maxRows: number,
+  width = 80,
+  estimateRows: (entry: ConversationEntry, width: number) => number,
+): {
+  entries: readonly ConversationEntry[];
+  hiddenCount: number;
+  usedRows: number;
+} {
+  if (!Number.isFinite(maxRows) || maxRows <= 0) {
+    return { entries: [], hiddenCount: entries.length, usedRows: 0 };
+  }
+
+  const selected: ConversationEntry[] = [];
+  let usedRows = 0;
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (!entry) continue;
+    const entryRows = estimateRows(entry, width);
+    const markerRows = index > 0 ? HIDDEN_MARKER_ROWS : 0;
+    const fits = usedRows + entryRows + markerRows <= maxRows;
+    if (!fits) break;
+    selected.unshift(entry);
+    usedRows += entryRows;
+  }
+
+  const hiddenCount = entries.length - selected.length;
+  if (selected.length === 0 && hiddenCount > 0) {
+    return { entries: [], hiddenCount, usedRows: HIDDEN_MARKER_ROWS };
+  }
+
+  return {
+    entries: selected,
+    hiddenCount,
+    usedRows: usedRows + (hiddenCount > 0 ? HIDDEN_MARKER_ROWS : 0),
+  };
+}
+
+export function selectFinalizedEntriesForViewport(
+  entries: readonly ConversationEntry[],
+  maxRows: number,
+  width = 80,
+): {
+  entries: readonly ConversationEntry[];
+  hiddenCount: number;
+  usedRows: number;
+} {
+  return selectEntriesForViewport(
+    entries,
+    maxRows,
+    width,
+    estimateTranscriptEntryRows,
+  );
+}
+
+export function selectPendingEntriesForViewport(
+  entries: readonly ConversationEntry[],
+  maxRows: number,
+  width = 80,
+): {
+  entries: readonly ConversationEntry[];
+  hiddenCount: number;
+  usedRows: number;
+} {
+  return selectEntriesForViewport(
+    entries,
+    maxRows,
+    width,
+    estimatePendingEntryRows,
+  );
+}
+
+export function selectConversationEntriesForViewport({
+  finalized,
+  maxRows,
+  pending,
+  width,
+}: {
+  readonly finalized: readonly ConversationEntry[];
+  readonly maxRows: number;
+  readonly pending: readonly ConversationEntry[];
+  readonly width?: number;
+}): {
+  readonly finalizedRows: number;
+  readonly pendingRows: number;
+  readonly visibleFinalized: ReturnType<
+    typeof selectFinalizedEntriesForViewport
+  >;
+  readonly visiblePending: ReturnType<typeof selectPendingEntriesForViewport>;
+} {
+  const reserveFinalizedMarker =
+    pending.length > 0 && finalized.length > 0 && maxRows > HIDDEN_MARKER_ROWS;
+  const pendingBudget = Math.max(
+    MIN_PENDING_ROWS,
+    maxRows - (reserveFinalizedMarker ? HIDDEN_MARKER_ROWS : 0),
+  );
+  const visiblePending = selectPendingEntriesForViewport(
+    pending,
+    pendingBudget,
+    width,
+  );
+  const pendingRows =
+    pending.length > 0
+      ? Math.max(MIN_PENDING_ROWS, visiblePending.usedRows)
+      : 0;
+  const finalizedRows = Math.max(0, maxRows - pendingRows);
+  const visibleFinalized = selectFinalizedEntriesForViewport(
+    finalized,
+    finalizedRows,
+    width,
+  );
+
+  return {
+    finalizedRows,
+    pendingRows,
+    visibleFinalized,
+    visiblePending,
+  };
+}
 
 // Incremental newline count keyed by entry id. The live text grows
 // monotonically per delta; without a cache we'd rescan the full prefix
@@ -179,6 +343,7 @@ function LiveTranscriptEntry({
 
 export interface ConversationPaneProps {
   readonly width?: number;
+  readonly maxRows?: number;
 }
 
 export function ConversationPane(
@@ -189,23 +354,47 @@ export function ConversationPane(
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const entries = slice?.entries ?? [];
   const { finalized, pending } = splitTranscriptEntries(entries, slice?.status);
+  const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
+  const { pendingRows, visibleFinalized, visiblePending } =
+    selectConversationEntriesForViewport({
+      finalized,
+      maxRows,
+      pending,
+      width: props.width,
+    });
 
   return (
-    <Box flexDirection="column">
-      <Static items={finalized}>
-        {(entry) => (
+    <Box flexDirection="column" height={maxRows} overflowY="hidden">
+      <Box
+        flexDirection="column"
+        height={visibleFinalized.usedRows}
+        overflowY="hidden"
+      >
+        {visibleFinalized.hiddenCount > 0 ? (
+          <Text dimColor>
+            {`⋯ ${visibleFinalized.hiddenCount} earlier ${
+              visibleFinalized.hiddenCount === 1 ? 'entry' : 'entries'
+            } hidden`}
+          </Text>
+        ) : null}
+        {visibleFinalized.entries.map((entry) => (
           <TranscriptEntry key={entry.id} entry={entry} width={props.width} />
-        )}
-      </Static>
+        ))}
+      </Box>
       {/* `pending` interleaves the in-flight assistant entry with tool
        *  rows in stream order — rendering them as separate buckets would
        *  flip the visible order when the model emits text before a tool
-       *  call. <Static> can't carry these because they still mutate
-       *  (assistant text streaming, tool dot transitioning). The
-       *  minHeight=1 keeps the input bar pinned when the bucket is
-       *  empty. */}
-      <Box flexDirection="column" minHeight={1}>
-        {pending.map((entry) => {
+       *  call. The explicit height keeps the input bar pinned and prevents
+       *  tool bursts from stealing rows reserved for the footer chrome. */}
+      <Box flexDirection="column" height={pendingRows} overflowY="hidden">
+        {visiblePending.hiddenCount > 0 ? (
+          <Text dimColor>
+            {`⋯ ${visiblePending.hiddenCount} live ${
+              visiblePending.hiddenCount === 1 ? 'entry' : 'entries'
+            } hidden`}
+          </Text>
+        ) : null}
+        {visiblePending.entries.map((entry) => {
           if (entry.role === 'tool' && entry.toolUse) {
             return <ToolUseRow key={entry.id} toolUse={entry.toolUse} />;
           }
