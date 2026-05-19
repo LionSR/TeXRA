@@ -29,6 +29,8 @@ export interface DownloadSourceOptions {
   progressCallback?: (msg: string, increment?: number) => void;
   autoIndent?: boolean;
   destination?: ArxivDownloadDestination;
+  /** Workspace-relative destination directory. Defaults to References/<id>. */
+  into?: string;
 }
 
 const INVALID_ARXIV_INPUT_ERROR =
@@ -188,6 +190,7 @@ export class ArxivSourceProcessor {
       progressCallback,
       autoIndent = true,
       destination = 'references',
+      into,
     } = options;
 
     // Normalize input (URL or ID) to plain arXiv ID
@@ -203,11 +206,14 @@ export class ArxivSourceProcessor {
       throw new Error('No workspace folder is open');
     }
 
-    const isRoot = destination === 'root';
+    const isRoot = destination === 'root' && !into;
     // Use forward slashes to match WorkspaceFS.relativePath() convention (not path.join which uses backslashes on Windows)
     const paperDirRelative = isRoot
       ? '.'
-      : `References/${id.replaceAll('/', '_')}`;
+      : (into?.trim() || `References/${id.replaceAll('/', '_')}`).replaceAll(
+          path.sep,
+          '/',
+        );
     const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
 
     // Check if source was already downloaded successfully.
