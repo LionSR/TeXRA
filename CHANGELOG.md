@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Bug Fixes
+
+- **CLI chat stays pinned during long output** — the chat header, input, and status rows now stay visible while long replies and tool output stream in the terminal.
+
 ## [0.37.9] - 2026-05-18
 
 ### Features

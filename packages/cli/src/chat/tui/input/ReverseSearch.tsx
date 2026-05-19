@@ -20,6 +20,8 @@ export interface ReverseSearchProps {
   readonly onCancel: () => void;
 }
 
+export const REVERSE_SEARCH_ROWS = 5;
+
 export function ReverseSearch(props: ReverseSearchProps): React.JSX.Element {
   const [query, setQuery] = useState('');
   const [cursor, setCursor] = useState<number | undefined>(undefined);

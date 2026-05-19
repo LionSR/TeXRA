@@ -53,6 +53,7 @@ export interface SessionMeta {
   readonly model: string;
   readonly cwd: string;
   readonly apiMode: CliApiMode;
+  readonly version: string;
 }
 
 export interface ProcessOutputTail {
@@ -94,6 +95,7 @@ const SESSION_META = signal<SessionMeta>({
   model: '',
   cwd: '',
   apiMode: 'personal',
+  version: '',
 });
 
 const ACTIVE_STREAM_ID = signal<StreamTabId | undefined>(undefined);
@@ -119,6 +121,7 @@ const ACTIVE_FORM = signal<ActiveSlashForm | undefined>(undefined);
  *  Tab handlers gate on this so palette-Tab (accept selection) doesn't double
  *  with stream-focus Tab. */
 const SLASH_PALETTE_OPEN = signal<boolean>(false);
+const REVERSE_SEARCH_OPEN = signal<boolean>(false);
 
 const PENDING_EXIT_HINT = signal<boolean>(false);
 
@@ -133,6 +136,7 @@ export const cliState = {
   >,
   activeForm: ACTIVE_FORM as Signal.State<ActiveSlashForm | undefined>,
   slashPaletteOpen: SLASH_PALETTE_OPEN as Signal.State<boolean>,
+  reverseSearchOpen: REVERSE_SEARCH_OPEN as Signal.State<boolean>,
   pendingExitHint: PENDING_EXIT_HINT as Signal.State<boolean>,
 };
 
@@ -208,6 +212,7 @@ function defaultSessionMeta(): SessionMeta {
     model: '',
     cwd: '',
     apiMode: 'personal',
+    version: SESSION_META.get().version,
   };
 }
 
@@ -218,6 +223,7 @@ export function resetCliState(sessionMeta = defaultSessionMeta()): void {
   cliState.parentStream.set(new Map());
   cliState.activeForm.set(undefined);
   cliState.slashPaletteOpen.set(false);
+  cliState.reverseSearchOpen.set(false);
   cliState.pendingExitHint.set(false);
   for (const resetHook of RESET_HOOKS) resetHook();
 }
