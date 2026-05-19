@@ -4,32 +4,30 @@ import { Buffer } from 'node:buffer';
 
 // Third-party imports
 import { toFile } from '@anthropic-ai/sdk';
-import type { Anthropic } from '@anthropic-ai/sdk';
-
-// Type imports
-import type {
-  Base64ImageSource,
-  ImageBlockParam,
-  DocumentBlockParam,
-} from '@anthropic-ai/sdk/resources/messages';
-import type { BetaImageBlockParam } from '@anthropic-ai/sdk/resources/beta/messages';
-
-// Local imports - agent
-import type { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - common
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
-// Local file imports
+// Type imports - agent and tools
+import type { AgentLogger } from '@logger/AgentLogger';
+import type { ToolFileAttachment } from '@tools/result';
+
+// Local imports - model handlers
 import { FILES_API_BETA } from './anthropicContextManagement';
 import {
   countPdfPagesFromBuffer,
   sanitizeAnthropicFilename,
 } from './anthropicDocumentHandling';
-import {
-  loadAttachmentBuffer,
-  type ToolFileAttachment,
-} from './utils/toolAttachmentUtils';
+import { loadAttachmentBuffer } from './utils/toolAttachmentUtils';
+
+// Type imports - Anthropic SDK
+import type { BetaImageBlockParam } from '@anthropic-ai/sdk/resources/beta/messages';
+import type {
+  Base64ImageSource,
+  ImageBlockParam,
+  DocumentBlockParam,
+} from '@anthropic-ai/sdk/resources/messages';
+import type { Anthropic } from '@anthropic-ai/sdk';
 
 /** Supported image media types from SDK's Base64ImageSource definition */
 const SUPPORTED_IMAGE_MEDIA_TYPES: ReadonlySet<string> = new Set([

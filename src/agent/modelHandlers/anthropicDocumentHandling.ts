@@ -3,20 +3,20 @@ import { basename } from 'node:path';
 
 // Third-party imports
 import { Buffer } from 'node:buffer';
-import type { Anthropic } from '@anthropic-ai/sdk';
 import { PDFDocument } from '@cantoo/pdf-lib';
 import { toFile } from '@anthropic-ai/sdk';
 
-// Type imports
+// Local imports
+import { FILES_API_BETA } from './anthropicContextManagement';
+
+// Type imports - Anthropic SDK
+import type { Anthropic } from '@anthropic-ai/sdk';
 import type {
   DocumentBlockParam,
   ContentBlockParam,
 } from '@anthropic-ai/sdk/resources/messages';
 import type { BetaRequestDocumentBlock } from '@anthropic-ai/sdk/resources/beta/messages';
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
-
-// Local imports
-import { FILES_API_BETA } from './anthropicContextManagement';
 
 /**
  * Extracts all document blocks from a content block array, including those

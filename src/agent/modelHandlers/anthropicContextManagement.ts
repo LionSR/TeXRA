@@ -1,4 +1,7 @@
-// Third-party imports
+// Type imports - agent
+import type { AgentLogger } from '@logger/AgentLogger';
+
+// Type imports - Anthropic SDK
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
   BetaContentBlock,
@@ -15,9 +18,6 @@ import type {
   ContentBlockParam,
   ContentBlock,
 } from '@anthropic-ai/sdk/resources/messages';
-
-// Local imports - agent
-import type { AgentLogger } from '@logger/AgentLogger';
 
 export const FILES_API_BETA: AnthropicBeta = 'files-api-2025-04-14';
 export const CONTEXT_MANAGEMENT_BETA: AnthropicBeta =
@@ -118,7 +118,7 @@ export function setupContextManagement(
 
   // Only enable context management if threshold is configured (> 0) or manually requested
   if (thresholdPercent <= 0 && !forceCompaction) {
-    return;
+    return false;
   }
 
   ensureBeta(options, CONTEXT_MANAGEMENT_BETA);
