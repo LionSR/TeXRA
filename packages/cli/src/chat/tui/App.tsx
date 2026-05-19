@@ -72,11 +72,14 @@ export function allocateMiddleRows({
   readonly transcriptRows: number;
 } {
   const availableRows = Math.max(
-    1,
+    0,
     rows - pinnedChromeRows({ reverseSearchOpen, slashPaletteOpen }),
   );
   if (!foregroundOpen) {
     return { foregroundRows: 0, transcriptRows: availableRows };
+  }
+  if (availableRows === 0) {
+    return { foregroundRows: 0, transcriptRows: 0 };
   }
   if (availableRows === 1) {
     return { foregroundRows: 1, transcriptRows: 0 };

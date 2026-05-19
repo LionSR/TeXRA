@@ -12,6 +12,7 @@
 import { Box, Text } from 'ink';
 
 import { Markdown } from '../render/Markdown';
+import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import {
   cliState,
@@ -123,6 +124,10 @@ export function estimateTranscriptEntryRows(
   }
   if (entry.role === 'process' && entry.process) {
     return Math.max(1, completedProcessDisplayLines(entry.process).length) + 1;
+  }
+  if (entry.role === 'assistant') {
+    const rendered = renderAnsiMarkdown(entry.text, { width });
+    return Math.max(1, rendered.split('\n').length) + 1;
   }
 
   return estimateWrappedRows(entry.text, width) + 1;

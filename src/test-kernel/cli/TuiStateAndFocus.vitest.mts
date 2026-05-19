@@ -37,6 +37,7 @@ import {
   selectPendingEntriesForViewport,
   splitTranscriptEntries,
 } from '../../../packages/cli/src/chat/tui/panes/ConversationPane';
+import { renderAnsiMarkdown } from '../../../packages/cli/src/chat/tui/render/ansiMarkdown';
 import {
   appendAssistantTranscriptIfMissing,
   appendLocalAssistantTranscript,
@@ -120,6 +121,18 @@ describe('CLI TUI row allocation', () => {
     });
 
     expect(layout.transcriptRows).toBe(8);
+    expect(layout.foregroundRows).toBe(0);
+  });
+
+  it('does not invent middle rows when pinned chrome fills the terminal', () => {
+    const layout = allocateMiddleRows({
+      foregroundOpen: false,
+      reverseSearchOpen: false,
+      rows: 24,
+      slashPaletteOpen: true,
+    });
+
+    expect(layout.transcriptRows).toBe(0);
     expect(layout.foregroundRows).toBe(0);
   });
 });
@@ -394,6 +407,20 @@ describe('CLI transcript state', () => {
     expect(selected.entries.map((entry) => entry.id)).toEqual(['latest']);
     expect(selected.hiddenCount).toBe(2);
     expect(selected.usedRows).toBe(latestRows + 1);
+  });
+
+  it('estimates finalized assistant rows from rendered markdown', () => {
+    const text = ['A paragraph.', '', '- abcdef ghijkl mnopqr'].join('\n');
+    const width = 10;
+    const renderedRows = renderAnsiMarkdown(text, { width }).split('\n').length;
+    const entry = {
+      id: 'assistant-markdown',
+      role: 'assistant',
+      text,
+      finalized: true,
+    } as const;
+
+    expect(estimateTranscriptEntryRows(entry, width)).toBe(renderedRows + 1);
   });
 
   it('does not force finalized entries into rows reserved for live output', () => {
