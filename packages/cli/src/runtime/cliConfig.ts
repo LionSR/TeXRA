@@ -57,11 +57,6 @@ const ModelSchema = NonEmptyStringSchema.refine(
 const OutputFormatSchema = z.enum(CLI_OUTPUT_FORMATS);
 const ApprovalPolicySchema = z.enum(CLI_APPROVAL_POLICIES);
 
-/** Keys from the unified schema that the CLI config file accepts at the top level. */
-const UNIFIED_TOP_LEVEL_KEYS = new Set(
-  [...KNOWN_TEXRA_KEYS].filter((k) => k.startsWith('texra.')),
-);
-
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -69,9 +64,7 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 function isKnownConfigKey(key: string): boolean {
   return (
     TOP_LEVEL_KEYS.has(key) ||
-    UNIFIED_TOP_LEVEL_KEYS.has(key) ||
-    // Accept bare versions of texra.* keys (e.g. "model.useImprovedConnection")
-    (key.startsWith('texra.') && UNIFIED_TOP_LEVEL_KEYS.has(key)) ||
+    KNOWN_TEXRA_KEYS.has(key) ||
     KNOWN_TEXRA_KEYS.has(`texra.${key}`)
   );
 }
@@ -157,7 +150,7 @@ function collectValidationWarnings(
     ApprovalPolicySchema,
   );
 
-  for (const section of ['chat', 'run'] as const) {
+  for (const section of ['chat', 'run', 'texra.chat', 'texra.run'] as const) {
     if (!Object.hasOwn(record, section)) continue;
     const sectionValue = record[section];
     if (!isPlainRecord(sectionValue)) {
@@ -207,6 +200,17 @@ function pickCommandConfig(record: Record<string, unknown>): CliCommandConfig {
   };
 }
 
+function pickRecord(
+  record: Record<string, unknown>,
+  bareKey: string,
+): Record<string, unknown> | undefined {
+  const prefixedKey = `texra.${bareKey}`;
+  const prefixedValue = record[prefixedKey];
+  if (isPlainRecord(prefixedValue)) return prefixedValue;
+  const bareValue = record[bareKey];
+  return isPlainRecord(bareValue) ? bareValue : undefined;
+}
+
 /** Look up a value by both bare and `texra.*` prefixed key — prefixed takes precedence. */
 function pickValue<T>(
   record: Record<string, unknown>,
@@ -224,15 +228,15 @@ function pickValue<T>(
 }
 
 function pickConfigValues(record: Record<string, unknown>): CliConfigValues {
+  const chat = pickRecord(record, 'chat');
+  const run = pickRecord(record, 'run');
   return {
     agent: pickValue(record, 'agent', NonEmptyStringSchema),
     model: pickValue(record, 'model', ModelSchema),
     outputFormat: pickValue(record, 'outputFormat', OutputFormatSchema),
     approvalPolicy: pickValue(record, 'approvalPolicy', ApprovalPolicySchema),
-    chat: isPlainRecord(record.chat)
-      ? pickCommandConfig(record.chat)
-      : undefined,
-    run: isPlainRecord(record.run) ? pickCommandConfig(record.run) : undefined,
+    chat: chat ? pickCommandConfig(chat) : undefined,
+    run: run ? pickCommandConfig(run) : undefined,
   };
 }
 

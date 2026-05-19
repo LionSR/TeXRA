@@ -83,6 +83,31 @@ describe('CLI context config defaults', () => {
     expect(loaded.warnings.join('\n')).toContain('chat.other');
   });
 
+  it('accepts prefixed command sections from unified workspace config', async () => {
+    const workspace = await workspaceWithConfig(
+      JSON.stringify({
+        'texra.agent': 'generic',
+        'texra.model': 'gpt55',
+        'texra.chat': { agent: 'chat', model: 'deepseekT' },
+        'texra.run': { agent: 'criticize', model: 'sonnet46T' },
+      }),
+    );
+
+    const loaded = await loadWorkspaceCliConfig(workspace);
+
+    expect(loaded.values.agent).toBe('generic');
+    expect(loaded.values.model).toBe('gpt55');
+    expect(loaded.values.chat).toEqual({
+      agent: 'chat',
+      model: 'deepseekT',
+    });
+    expect(loaded.values.run).toEqual({
+      agent: 'criticize',
+      model: 'sonnet46T',
+    });
+    expect(loaded.warnings).toEqual([]);
+  });
+
   it('canonicalizes existing workspace paths before reading config', async () => {
     const root = await mkdtemp(join(tmpdir(), 'texra-cli-context-link-'));
     const workspace = join(root, 'workspace');

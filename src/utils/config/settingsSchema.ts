@@ -208,38 +208,3 @@ export type TexraSettingsKey = keyof typeof TEXRA_SETTINGS;
 export const KNOWN_TEXRA_KEYS: ReadonlySet<string> = new Set(
   Object.keys(TEXRA_SETTINGS),
 );
-
-/** Get the default value for a known key, or undefined. */
-export function getSettingDefault(key: string): unknown {
-  const entry = TEXRA_SETTINGS[key as TexraSettingsKey];
-  return entry?.default;
-}
-
-/** Validate a single key-value pair against its registered schema. */
-export function validateSettingValue(
-  key: string,
-  value: unknown,
-): { success: true; data: unknown } | { success: false; error: z.ZodError } {
-  const entry = TEXRA_SETTINGS[key as TexraSettingsKey];
-  if (!entry) {
-    return { success: true, data: value };
-  }
-  return entry.schema.safeParse(value);
-}
-
-/**
- * Validate a flat record of key-value pairs against the registered schemas.
- * Returns only entries whose keys are known and whose values pass validation.
- */
-export function validateSettingsRecord(
-  record: Record<string, unknown>,
-): Map<string, unknown> {
-  const result = new Map<string, unknown>();
-  for (const [key, value] of Object.entries(record)) {
-    const parsed = validateSettingValue(key, value);
-    if (parsed.success) {
-      result.set(key, parsed.data);
-    }
-  }
-  return result;
-}

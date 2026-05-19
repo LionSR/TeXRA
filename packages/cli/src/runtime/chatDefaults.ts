@@ -3,9 +3,14 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { listExecutions } from '@agent/storage';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { isNonEmptyString } from '@utils/core/stringCore';
-import { getConfig } from '@utils/config/configUtils';
 import { GlobalStorageFS } from '@utils/files/storageFS';
-import { CLI_BUILTIN_DEFAULT_MODEL, type CliConfigValues } from './cliConfig';
+import {
+  CLI_BUILTIN_DEFAULT_MODEL,
+  loadWorkspaceCliConfig,
+  resolveConfiguredAgent,
+  resolveConfiguredModel,
+  type CliConfigValues,
+} from './cliConfig';
 
 export const BUILTIN_DEFAULT_CHAT_AGENT = 'chat';
 export const BUILTIN_DEFAULT_CHAT_MODEL = CLI_BUILTIN_DEFAULT_MODEL;
@@ -43,14 +48,11 @@ function pickDefaults(parsed: unknown): PartialDefaults {
   return out;
 }
 
-async function loadWorkspaceDefaults(_cwd: string): Promise<PartialDefaults> {
+async function loadWorkspaceDefaults(cwd: string): Promise<PartialDefaults> {
+  const loaded = await loadWorkspaceCliConfig(cwd);
   return {
-    agent:
-      getConfig<string | undefined>('chat.agent') ??
-      getConfig<string | undefined>('agent'),
-    model:
-      getConfig<string | undefined>('chat.model') ??
-      getConfig<string | undefined>('model'),
+    agent: resolveConfiguredAgent(loaded.values, 'chat'),
+    model: resolveConfiguredModel(loaded.values, 'chat'),
   };
 }
 
@@ -127,10 +129,8 @@ export async function resolveChatDefaults(
   }
 
   // Tiers are independent I/O — fan out in parallel.
-  // Workspace defaults come from the platform config provider (unified
-  // schema), which reads the same .texra/config.json file loaded by
-  // initCliPlatform. The workspaceConfig parameter is retained for
-  // backward compatibility but is no longer required.
+  // Workspace defaults use the same .texra/config.json reader as the CLI
+  // context so startup does not depend on platform initialization.
   const [workspace, user, history] = await Promise.all([
     init.workspaceConfig
       ? Promise.resolve({
