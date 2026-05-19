@@ -83,6 +83,11 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     return () => cliState.slashPaletteOpen.set(false);
   }, [showPalette]);
 
+  useEffect(() => {
+    cliState.reverseSearchOpen.set(reverseSearchOpen);
+    return () => cliState.reverseSearchOpen.set(false);
+  }, [reverseSearchOpen]);
+
   return (
     <Box flexDirection="column">
       {showPalette ? (

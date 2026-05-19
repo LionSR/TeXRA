@@ -90,6 +90,7 @@ describe('CLI TUI row allocation', () => {
   it('keeps foreground approval and form surfaces inside the middle row budget', () => {
     const layout = allocateMiddleRows({
       foregroundOpen: true,
+      reverseSearchOpen: false,
       rows: 24,
       slashPaletteOpen: false,
     });
@@ -101,11 +102,24 @@ describe('CLI TUI row allocation', () => {
   it('uses the whole middle region for the transcript without foreground UI', () => {
     const layout = allocateMiddleRows({
       foregroundOpen: false,
+      reverseSearchOpen: false,
       rows: 24,
       slashPaletteOpen: false,
     });
 
     expect(layout.transcriptRows).toBe(13);
+    expect(layout.foregroundRows).toBe(0);
+  });
+
+  it('reserves rows for reverse-search input chrome', () => {
+    const layout = allocateMiddleRows({
+      foregroundOpen: false,
+      reverseSearchOpen: true,
+      rows: 24,
+      slashPaletteOpen: false,
+    });
+
+    expect(layout.transcriptRows).toBe(8);
     expect(layout.foregroundRows).toBe(0);
   });
 });

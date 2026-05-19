@@ -4,6 +4,8 @@
 import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useState } from 'react';
 
+import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
+import { REVERSE_SEARCH_ROWS } from './input/ReverseSearch';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { ChildControlPicker } from './modals/ChildControlPicker';
 import { ConversationPane } from './panes/ConversationPane';
@@ -36,29 +38,43 @@ const PINNED_CHROME_ROWS = {
   streamTabsWorstCase: 1,
   status: 2,
 } as const;
-const SLASH_PALETTE_ROWS = 12;
 
-function pinnedChromeRows(slashPaletteOpen: boolean): number {
+function pinnedChromeRows({
+  reverseSearchOpen,
+  slashPaletteOpen,
+}: {
+  readonly reverseSearchOpen: boolean;
+  readonly slashPaletteOpen: boolean;
+}): number {
   const baseRows = Object.values(PINNED_CHROME_ROWS).reduce(
     (sum, rows) => sum + rows,
     0,
   );
-  return baseRows + (slashPaletteOpen ? SLASH_PALETTE_ROWS : 0);
+  return (
+    baseRows +
+    (slashPaletteOpen ? SLASH_PALETTE_ROWS : 0) +
+    (reverseSearchOpen ? REVERSE_SEARCH_ROWS : 0)
+  );
 }
 
 export function allocateMiddleRows({
   foregroundOpen,
+  reverseSearchOpen,
   rows,
   slashPaletteOpen,
 }: {
   readonly foregroundOpen: boolean;
+  readonly reverseSearchOpen: boolean;
   readonly rows: number;
   readonly slashPaletteOpen: boolean;
 }): {
   readonly foregroundRows: number;
   readonly transcriptRows: number;
 } {
-  const availableRows = Math.max(1, rows - pinnedChromeRows(slashPaletteOpen));
+  const availableRows = Math.max(
+    1,
+    rows - pinnedChromeRows({ reverseSearchOpen, slashPaletteOpen }),
+  );
   if (!foregroundOpen) {
     return { foregroundRows: 0, transcriptRows: availableRows };
   }
@@ -91,6 +107,7 @@ export function App(props: AppProps): React.JSX.Element {
   const streams = useSignal(cliState.streams);
   const activeForm = useSignal(cliState.activeForm);
   const slashPaletteOpen = useSignal(cliState.slashPaletteOpen);
+  const reverseSearchOpen = useSignal(cliState.reverseSearchOpen);
   const { columns, rows } = useWindowSize();
   const [childControlMode, setChildControlMode] = useState<
     ChildControlMode | undefined
@@ -120,6 +137,7 @@ export function App(props: AppProps): React.JSX.Element {
     childControlMode !== undefined;
   const { foregroundRows, transcriptRows } = allocateMiddleRows({
     foregroundOpen,
+    reverseSearchOpen,
     rows,
     slashPaletteOpen,
   });
