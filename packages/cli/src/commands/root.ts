@@ -88,6 +88,7 @@ import {
   readCliHistoryConfig,
   readCliHistoryDetails,
 } from '../runtime/history';
+import { createLatexCommand } from './latex';
 
 // One CLI invocation per process — module-level pending exit code is the
 // simplest way to surface handler exit codes back to `bin/texra.ts` after
@@ -1187,6 +1188,12 @@ const chatCommand = defineCommand({
   },
 });
 
+const latexCommand = createLatexCommand({
+  globalArgs: GLOBAL_ARGS,
+  contextFromArgs,
+  setExitCode,
+});
+
 const helpCommand = defineCommand({
   meta: { name: 'help', description: 'Show TeXRA CLI commands' },
   async run() {
@@ -1238,6 +1245,7 @@ export const rootCommand = defineCommand({
   subCommands: {
     chat: chatCommand,
     run: runWorkflowCommand,
+    latex: latexCommand,
     resume: resumeCommand,
     history: historyCommand,
     agents: agentsCommand,
