@@ -235,7 +235,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       const contentBlocks = message.content;
       if (!Array.isArray(contentBlocks)) continue;
 
-      for (const block of this.extractDocumentBlocks(contentBlocks)) {
+      for (const block of extractDocumentBlocks(contentBlocks)) {
         const source = (block as DocumentBlockParam).source as
           | { type: string; file_id?: string }
           | undefined;
@@ -503,7 +503,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     this.enforceCacheControlLimit(messages, reservedCacheSlots, cacheControl);
 
-    const documentAnalysis = this.analyzeDocumentSources(messages);
+    const documentAnalysis = analyzeDocumentSources(messages);
     let hasFileReference = documentAnalysis.hasFileSource;
 
     // Prune tracked PDF page counts for file IDs no longer in messages
@@ -906,16 +906,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.capabilities.supportsNativePdf,
       this.uploadedPdfPageCounts,
     );
-  }
-
-  private extractDocumentBlocks(
-    contentBlocks: ContentBlockParam[],
-  ): DocumentBlockParam[] {
-    return extractDocumentBlocks(contentBlocks);
-  }
-
-  private analyzeDocumentSources(messages: MessageParam[]) {
-    return analyzeDocumentSources(messages);
   }
 
   private async uploadToolAttachments(

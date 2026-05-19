@@ -9,6 +9,7 @@ import type {
   BetaCompactionBlock,
   BetaCompactionIterationUsage,
   BetaContextManagementConfig,
+  BetaMessage,
   BetaUsage,
   MessageCreateParams,
 } from '@anthropic-ai/sdk/resources/beta/messages';
@@ -250,6 +251,3 @@ export function enforceCacheControlLimit(
     delete compactionBlocks[idx].cache_control;
   }
 }
-
-// Re-export BetaMessage type used by logContextManagementFromResponse
-import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages';
