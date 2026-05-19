@@ -488,13 +488,14 @@ export async function runChat(
   });
   const { agent, model } = defaults;
   await setCliHelperModel(model);
+  const version = await readCliVersion();
 
   cliState.sessionMeta.set({
     agent,
     model,
     cwd: context.cwd,
     apiMode: getCliApiMode(),
-    version: '',
+    version,
   });
 
   let activeApprovalPolicy = context.approvalPolicy;
@@ -738,11 +739,6 @@ export async function runChat(
     });
   };
 
-  const version = await readCliVersion();
-  cliState.sessionMeta.set({
-    ...cliState.sessionMeta.get(),
-    version,
-  });
   enterTerminalFullScreen();
   const ink = render(
     <App

@@ -26,7 +26,24 @@ import type { InputHistory } from './history/inputHistory';
 
 const SIDE_COLUMN_WIDTH = 28;
 const MIN_TRANSCRIPT_WIDTH = 20;
-const FIXED_CHROME_ROWS = 11;
+
+const PINNED_CHROME_ROWS = {
+  accent: 1,
+  header: 3,
+  tip: 1,
+  input: 3,
+  streamTabsWorstCase: 1,
+  status: 2,
+} as const;
+const SLASH_PALETTE_ROWS = 12;
+
+function pinnedChromeRows(slashPaletteOpen: boolean): number {
+  const baseRows = Object.values(PINNED_CHROME_ROWS).reduce(
+    (sum, rows) => sum + rows,
+    0,
+  );
+  return baseRows + (slashPaletteOpen ? SLASH_PALETTE_ROWS : 0);
+}
 
 export interface AppProps {
   readonly onSubmit: (line: string) => void;
@@ -66,7 +83,7 @@ export function App(props: AppProps): React.JSX.Element {
     MIN_TRANSCRIPT_WIDTH,
     columns - (showSideColumn ? SIDE_COLUMN_WIDTH : 0),
   );
-  const transcriptRows = Math.max(1, rows - FIXED_CHROME_ROWS);
+  const transcriptRows = Math.max(1, rows - pinnedChromeRows(slashPaletteOpen));
 
   // Tab / Shift-Tab cycles stream focus at the App layer. Stand down while a
   // modal/form is up (they own input) or the slash palette is open (Tab there
@@ -111,6 +128,23 @@ export function App(props: AppProps): React.JSX.Element {
       <Box flexDirection="row" flexGrow={1} overflowY="hidden">
         <Box flexDirection="column" flexGrow={1} overflowY="hidden">
           <ConversationPane width={transcriptWidth} maxRows={transcriptRows} />
+          <ApprovalModal pending={pending} />
+          {childControlMode ? (
+            <ChildControlPicker
+              activeStreamId={activeStreamId}
+              mode={childControlMode}
+              onClose={() => setChildControlMode(undefined)}
+              onFocusStream={(streamId) =>
+                cliState.activeStreamId.set(streamId)
+              }
+              onKillExecution={props.onKillExecution}
+              slice={activeSlice}
+              streams={streams}
+            />
+          ) : null}
+          {activeForm
+            ? activeForm.render(() => cliState.activeForm.set(undefined))
+            : null}
         </Box>
         {showSideColumn ? (
           <Box flexDirection="column" minWidth={SIDE_COLUMN_WIDTH}>
@@ -119,21 +153,6 @@ export function App(props: AppProps): React.JSX.Element {
           </Box>
         ) : null}
       </Box>
-      <ApprovalModal pending={pending} />
-      {childControlMode ? (
-        <ChildControlPicker
-          activeStreamId={activeStreamId}
-          mode={childControlMode}
-          onClose={() => setChildControlMode(undefined)}
-          onFocusStream={(streamId) => cliState.activeStreamId.set(streamId)}
-          onKillExecution={props.onKillExecution}
-          slice={activeSlice}
-          streams={streams}
-        />
-      ) : null}
-      {activeForm
-        ? activeForm.render(() => cliState.activeForm.set(undefined))
-        : null}
       <TipRow />
       <InputBar
         onSubmit={props.onSubmit}

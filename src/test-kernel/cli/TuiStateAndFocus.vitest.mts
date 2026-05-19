@@ -31,6 +31,7 @@ import {
 } from '../../../packages/cli/src/chat/tui/state/completedProcessTranscript';
 import {
   estimateTranscriptEntryRows,
+  selectConversationEntriesForViewport,
   selectFinalizedEntriesForViewport,
   selectPendingEntriesForViewport,
   splitTranscriptEntries,
@@ -413,6 +414,46 @@ describe('CLI transcript state', () => {
     expect(selected.entries).toEqual([]);
     expect(selected.hiddenCount).toBe(2);
     expect(selected.usedRows).toBe(1);
+  });
+
+  it('reserves a history marker row while live output fills the viewport', () => {
+    const finalized = [
+      {
+        id: 'old',
+        role: 'assistant',
+        text: 'old answer',
+        finalized: true,
+      },
+      {
+        id: 'latest',
+        role: 'user',
+        text: 'latest question',
+        finalized: true,
+      },
+    ] as const;
+    const pending = [
+      {
+        id: 'assistant',
+        role: 'assistant',
+        text: 'streaming reply '.repeat(300),
+        finalized: false,
+      },
+    ] as const;
+
+    const selected = selectConversationEntriesForViewport({
+      finalized,
+      maxRows: 13,
+      pending,
+      width: 80,
+    });
+
+    expect(selected.pendingRows).toBe(12);
+    expect(selected.visiblePending.entries.map((entry) => entry.id)).toEqual([
+      'assistant',
+    ]);
+    expect(selected.visibleFinalized.entries).toEqual([]);
+    expect(selected.visibleFinalized.hiddenCount).toBe(2);
+    expect(selected.visibleFinalized.usedRows).toBe(1);
   });
 
   it('moves pre-session local slash-command output onto the resolved stream', () => {

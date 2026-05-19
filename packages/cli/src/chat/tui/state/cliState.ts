@@ -210,7 +210,7 @@ function defaultSessionMeta(): SessionMeta {
     model: '',
     cwd: '',
     apiMode: 'personal',
-    version: '',
+    version: SESSION_META.get().version,
   };
 }
 

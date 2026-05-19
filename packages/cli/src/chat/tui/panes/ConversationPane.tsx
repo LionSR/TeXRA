@@ -212,6 +212,54 @@ export function selectPendingEntriesForViewport(
   );
 }
 
+export function selectConversationEntriesForViewport({
+  finalized,
+  maxRows,
+  pending,
+  width,
+}: {
+  readonly finalized: readonly ConversationEntry[];
+  readonly maxRows: number;
+  readonly pending: readonly ConversationEntry[];
+  readonly width?: number;
+}): {
+  readonly finalizedRows: number;
+  readonly pendingRows: number;
+  readonly visibleFinalized: ReturnType<
+    typeof selectFinalizedEntriesForViewport
+  >;
+  readonly visiblePending: ReturnType<typeof selectPendingEntriesForViewport>;
+} {
+  const reserveFinalizedMarker =
+    pending.length > 0 && finalized.length > 0 && maxRows > HIDDEN_MARKER_ROWS;
+  const pendingBudget = Math.max(
+    MIN_PENDING_ROWS,
+    maxRows - (reserveFinalizedMarker ? HIDDEN_MARKER_ROWS : 0),
+  );
+  const visiblePending = selectPendingEntriesForViewport(
+    pending,
+    pendingBudget,
+    width,
+  );
+  const pendingRows =
+    pending.length > 0
+      ? Math.max(MIN_PENDING_ROWS, visiblePending.usedRows)
+      : MIN_PENDING_ROWS;
+  const finalizedRows = Math.max(0, maxRows - pendingRows);
+  const visibleFinalized = selectFinalizedEntriesForViewport(
+    finalized,
+    finalizedRows,
+    width,
+  );
+
+  return {
+    finalizedRows,
+    pendingRows,
+    visibleFinalized,
+    visiblePending,
+  };
+}
+
 // Incremental newline count keyed by entry id. The live text grows
 // monotonically per delta; without a cache we'd rescan the full prefix
 // every frame and reintroduce the O(text²) cumulative cost the wrap
@@ -302,21 +350,13 @@ export function ConversationPane(
   const entries = slice?.entries ?? [];
   const { finalized, pending } = splitTranscriptEntries(entries, slice?.status);
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
-  const visiblePending = selectPendingEntriesForViewport(
-    pending,
-    maxRows,
-    props.width,
-  );
-  const pendingRows =
-    pending.length > 0
-      ? Math.max(MIN_PENDING_ROWS, visiblePending.usedRows)
-      : MIN_PENDING_ROWS;
-  const finalizedRows = Math.max(0, maxRows - pendingRows);
-  const visibleFinalized = selectFinalizedEntriesForViewport(
-    finalized,
-    finalizedRows,
-    props.width,
-  );
+  const { pendingRows, visibleFinalized, visiblePending } =
+    selectConversationEntriesForViewport({
+      finalized,
+      maxRows,
+      pending,
+      width: props.width,
+    });
 
   return (
     <Box flexDirection="column" height={maxRows} overflowY="hidden">
