@@ -189,7 +189,12 @@ export function DiffView(props: DiffViewProps): React.JSX.Element {
   return (
     <Box flexDirection="column">
       {lines.map((line, li) => (
-        <DiffLine key={li} line={line} width={width} />
+        <DiffLine
+          key={li}
+          line={line}
+          truncate={maxDisplayLines > 0}
+          width={width}
+        />
       ))}
     </Box>
   );
@@ -197,11 +202,34 @@ export function DiffView(props: DiffViewProps): React.JSX.Element {
 
 function DiffLine({
   line,
+  truncate = false,
   width,
 }: {
   readonly line: DiffDisplayLine;
+  readonly truncate?: boolean;
   readonly width: number;
 }): React.JSX.Element {
+  if (truncate) {
+    if (line.kind === 'added') {
+      return (
+        <Text color="green" wrap="truncate-end">
+          {line.text}
+        </Text>
+      );
+    }
+    if (line.kind === 'removed') {
+      return (
+        <Text color="red" wrap="truncate-end">
+          {line.text}
+        </Text>
+      );
+    }
+    return (
+      <Text dimColor wrap="truncate-end">
+        {line.text}
+      </Text>
+    );
+  }
   const wrapped = wrapAnsiToWidth(line.text, width);
   if (line.kind === 'added') return <Text color="green">{wrapped}</Text>;
   if (line.kind === 'removed') return <Text color="red">{wrapped}</Text>;
