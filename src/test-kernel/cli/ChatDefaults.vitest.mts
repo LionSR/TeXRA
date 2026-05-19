@@ -73,4 +73,25 @@ describe('CLI chat defaults', () => {
       source: 'mixed',
     });
   });
+
+  it('uses prefixed command-specific workspace defaults', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-defaults-'));
+    await mkdir(join(workspace, '.texra'), { recursive: true });
+    await writeFile(
+      join(workspace, '.texra', 'config.json'),
+      JSON.stringify({
+        'texra.agent': 'generic',
+        'texra.model': 'gpt55',
+        'texra.chat': { agent: 'chat', model: 'deepseekT' },
+      }),
+    );
+
+    await expect(
+      resolveChatDefaults({ cwd: workspace }),
+    ).resolves.toMatchObject({
+      agent: 'chat',
+      model: 'deepseekT',
+      source: 'workspace',
+    });
+  });
 });

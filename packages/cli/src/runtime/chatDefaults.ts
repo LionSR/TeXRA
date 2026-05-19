@@ -99,6 +99,7 @@ export interface ResolveChatDefaultsInit {
   readonly modelOverride?: string;
   readonly envAgent?: string;
   readonly envModel?: string;
+  /** @deprecated Workspace defaults are now read from the unified config provider. */
   readonly workspaceConfig?: CliConfigValues;
 }
 
@@ -128,11 +129,13 @@ export async function resolveChatDefaults(
   }
 
   // Tiers are independent I/O — fan out in parallel.
+  // Workspace defaults use the same .texra/config.json reader as the CLI
+  // context so startup does not depend on platform initialization.
   const [workspace, user, history] = await Promise.all([
     init.workspaceConfig
       ? Promise.resolve({
-          agent: resolveConfiguredAgent(init.workspaceConfig, 'chat'),
-          model: resolveConfiguredModel(init.workspaceConfig, 'chat'),
+          agent: init.workspaceConfig.chat?.agent ?? init.workspaceConfig.agent,
+          model: init.workspaceConfig.chat?.model ?? init.workspaceConfig.model,
         })
       : loadWorkspaceDefaults(init.cwd),
     loadUserDefaults(),

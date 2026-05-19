@@ -23,7 +23,9 @@ import { setOutputChannelFactory } from '@logger/logUtils';
 // Local imports - CLI runtime
 import { getCliSecrets } from './cliSecrets';
 import { writeTextStderr } from './logSinks';
-import { MemoryConfigProvider } from './memoryStores';
+import { CliConfigProvider } from './cliConfigProvider';
+import { JsonStore } from './jsonStore';
+import { workspaceCliConfigPath } from './cliConfig';
 import { getCliAuthProvider, initializeCliSupabaseAuth } from './supabaseAuth';
 
 // Type imports - platform and CLI runtime
@@ -79,8 +81,11 @@ export async function initCliPlatform(
   );
 
   if (!tryPlatform()) {
+    const configStore = await JsonStore.open(
+      workspaceCliConfigPath(cliWorkspaceCwd),
+    );
     initPlatform({
-      config: new MemoryConfigProvider(),
+      config: new CliConfigProvider(configStore),
       globalState: createMemoryStore(),
       workspaceState: createMemoryStore(),
       log: cliPlatformLog,
