@@ -29,7 +29,10 @@ const ERROR_MESSAGES = {
     `${commandType} operation timed out after ${timeoutMs}ms (retry)`,
   FAILED_BOTH: (commandType: string) =>
     `Failed to run ${commandType} (both with and without --flatten)`,
-  FAILED_GENERAL: (commandType: string) => `Failed to run ${commandType}`,
+  FAILED_GENERAL: (commandType: string, detail?: string | null) =>
+    detail
+      ? `Failed to run ${commandType}: ${detail}`
+      : `Failed to run ${commandType}`,
 } as const;
 
 export const LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS = [
@@ -145,6 +148,7 @@ export class DiffCommandExecutor {
       '--encoding=utf8',
       '-c',
       `PICTUREENV=${pictureEnvs}`,
+      '--graphics-markup=none',
       buildLatexdiffTextCommandExclusionFlag(),
       `--math-markup=${mathMarkup}`,
       ...(subtype ? [`--subtype=${subtype}`] : []),
@@ -169,6 +173,7 @@ export class DiffCommandExecutor {
       `PICTUREENV=${pictureEnvs}`,
       '--force',
       '--git',
+      '--graphics-markup=none',
       buildLatexdiffTextCommandExclusionFlag(),
       `--math-markup=${mathMarkup}`,
       ...(subtype ? [`--subtype=${subtype}`] : []),
@@ -206,7 +211,9 @@ export class DiffCommandExecutor {
     }
 
     if (!this.isBibliographyError(result.stderr ?? '')) {
-      throw new Error(ERROR_MESSAGES.FAILED_GENERAL(commandType));
+      throw new Error(
+        ERROR_MESSAGES.FAILED_GENERAL(commandType, result.stderr),
+      );
     }
 
     return this.retryWithoutFlatten(
