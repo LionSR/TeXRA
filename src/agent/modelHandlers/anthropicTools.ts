@@ -1,5 +1,3 @@
-// Standard library imports
-import { basename } from 'node:path';
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
@@ -21,12 +19,7 @@ import {
 import { loadAttachmentBuffer } from './utils/toolAttachmentUtils';
 
 // Type imports - Anthropic SDK
-import type { BetaImageBlockParam } from '@anthropic-ai/sdk/resources/beta/messages';
-import type {
-  Base64ImageSource,
-  ImageBlockParam,
-  DocumentBlockParam,
-} from '@anthropic-ai/sdk/resources/messages';
+import type { Base64ImageSource } from '@anthropic-ai/sdk/resources/messages';
 import type { Anthropic } from '@anthropic-ai/sdk';
 
 /** Supported image media types from SDK's Base64ImageSource definition */

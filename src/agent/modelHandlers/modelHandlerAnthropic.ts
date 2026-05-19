@@ -1,5 +1,3 @@
-// Standard library imports
-import { Buffer } from 'node:buffer';
 import { basename, dirname } from 'node:path';
 
 // Third-party imports
@@ -83,14 +81,11 @@ import {
   CONTEXT_MANAGEMENT_BETA,
   COMPACTION_BETA,
   EXTENDED_CACHE_TTL_BETA,
-  MIN_COMPACTION_TRIGGER_TOKENS,
   SHORT_CACHE_CONTROL,
   LONG_CACHE_CONTROL,
   isLongCacheControl,
   CACHE_CREATION_COST_MULTIPLIER_5M,
   CACHE_CREATION_COST_MULTIPLIER_1H,
-  MAX_CACHE_BREAKPOINT_SLOTS,
-  isCompactionCacheControlBlock,
   ensureBeta,
   hasLongCacheControlMarker,
   setupContextManagement,
@@ -101,8 +96,6 @@ import {
 import {
   extractDocumentBlocks,
   analyzeDocumentSources,
-  countPdfPagesFromBuffer,
-  sanitizeAnthropicFilename,
   replaceDocumentDataWithUploads,
   type ReplaceDocumentUploadsResult,
 } from './anthropicDocumentHandling';
@@ -925,10 +918,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return analyzeDocumentSources(messages);
   }
 
-  private async countPdfPagesFromBuffer(buffer: Buffer): Promise<number> {
-    return countPdfPagesFromBuffer(buffer);
-  }
-
   private async uploadToolAttachments(
     client: Anthropic,
     attachments: ToolFileAttachment[],
@@ -941,10 +930,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       () => this.getTrackedPdfPageCount(),
       () => this.getMaxPdfPages(),
     );
-  }
-
-  private sanitizeFilename(filename: string): string {
-    return sanitizeAnthropicFilename(filename);
   }
 
   /** Initializes the message array for Anthropic chat models with user prefix, request, and optional media. */
