@@ -27,7 +27,7 @@ _texra_completion_path() {
     esac
     next="$token"
     [[ -n "$path" ]] && next="$path $token"
-    case " chat run resume history history list history show history delete agents agents list models models list login logout usage auth auth status auth usage doctor completion version help " in
+    case " chat run latex latex diff latex count latex arxiv latex figs latex deps latex bib latex fmt latex tikz resume history history list history show history delete agents agents list models models list login logout usage auth auth status auth usage doctor completion version help " in
       *" $next "*) path="$next"; ((i++)); continue ;;
     esac
     break
@@ -44,15 +44,25 @@ _texra() {
   case "$prev" in
     --output-format) COMPREPLY=( $(compgen -W 'text json ndjson' -- "$cur") ); return ;;
     --approval-policy) COMPREPLY=( $(compgen -W 'never ask yolo' -- "$cur") ); return ;;
+    --mode) COMPREPLY=( $(compgen -W 'separate include sum' -- "$cur") ); return ;;
     --model|-m) COMPREPLY=( $(compgen -W "$(_texra_models)" -- "$cur") ); return ;;
     --agent) COMPREPLY=( $(compgen -W "$(_texra_agents)" -- "$cur") ); return ;;
   esac
 
   path="$(_texra_completion_path)"
   case "$path" in
-    '') subcommands='chat run resume history agents models login logout usage auth doctor completion version help'; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
+    '') subcommands='chat run latex resume history agents models login logout usage auth doctor completion version help'; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
     'chat') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy --agent --model -m' ;;
     'run') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy --input -i --context -c --output --output-dir --model -m --instruction' ;;
+    'latex') subcommands='diff count arxiv figs deps bib fmt tikz'; flags='' ;;
+    'latex diff') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy --out' ;;
+    'latex count') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy --mode' ;;
+    'latex arxiv') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy --into' ;;
+    'latex figs') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
+    'latex deps') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
+    'latex bib') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
+    'latex fmt') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
+    'latex tikz') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
     'resume') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
     'history') subcommands='list show delete'; flags='' ;;
     'history list') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
@@ -72,7 +82,7 @@ _texra() {
     'completion') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
     'version') subcommands=''; flags='' ;;
     'help') subcommands=''; flags='' ;;
-    *) subcommands='chat run resume history agents models login logout usage auth doctor completion version help'; flags='' ;;
+    *) subcommands='chat run latex resume history agents models login logout usage auth doctor completion version help'; flags='' ;;
   esac
 
   if [[ "$path" == 'run' && "$cur" != -* ]]; then
@@ -100,6 +110,7 @@ exports[`CLI shell completion > generates fish completion 1`] = `
 "# fish completion for texra
 complete -c texra -n '__fish_use_subcommand' -a 'chat'
 complete -c texra -n '__fish_use_subcommand' -a 'run'
+complete -c texra -n '__fish_use_subcommand' -a 'latex'
 complete -c texra -n '__fish_use_subcommand' -a 'resume'
 complete -c texra -n '__fish_use_subcommand' -a 'history'
 complete -c texra -n '__fish_use_subcommand' -a 'agents'
@@ -138,6 +149,65 @@ complete -c texra -n '__fish_seen_subcommand_from run' -l 'output' -r
 complete -c texra -n '__fish_seen_subcommand_from run' -l 'output-dir' -r
 complete -c texra -n '__fish_seen_subcommand_from run' -l 'model' -s 'm' -r
 complete -c texra -n '__fish_seen_subcommand_from run' -l 'instruction' -r
+complete -c texra -n '__fish_seen_subcommand_from latex' -a 'diff'
+complete -c texra -n '__fish_seen_subcommand_from latex' -a 'count'
+complete -c texra -n '__fish_seen_subcommand_from latex' -a 'arxiv'
+complete -c texra -n '__fish_seen_subcommand_from latex' -a 'figs'
+complete -c texra -n '__fish_seen_subcommand_from latex' -a 'deps'
+complete -c texra -n '__fish_seen_subcommand_from latex' -a 'bib'
+complete -c texra -n '__fish_seen_subcommand_from latex' -a 'fmt'
+complete -c texra -n '__fish_seen_subcommand_from latex' -a 'tikz'
+complete -c texra -n '__fish_seen_subcommand_from diff' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from diff' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from diff' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from diff' -l 'api-mode' -r
+complete -c texra -n '__fish_seen_subcommand_from diff' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from diff' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from diff' -l 'out' -r
+complete -c texra -n '__fish_seen_subcommand_from count' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from count' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from count' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from count' -l 'api-mode' -r
+complete -c texra -n '__fish_seen_subcommand_from count' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from count' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from count' -l 'mode' -r -a 'separate include sum'
+complete -c texra -n '__fish_seen_subcommand_from arxiv' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from arxiv' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from arxiv' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from arxiv' -l 'api-mode' -r
+complete -c texra -n '__fish_seen_subcommand_from arxiv' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from arxiv' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from arxiv' -l 'into' -r
+complete -c texra -n '__fish_seen_subcommand_from figs' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from figs' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from figs' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from figs' -l 'api-mode' -r
+complete -c texra -n '__fish_seen_subcommand_from figs' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from figs' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from deps' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from deps' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from deps' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from deps' -l 'api-mode' -r
+complete -c texra -n '__fish_seen_subcommand_from deps' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from deps' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from bib' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from bib' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from bib' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from bib' -l 'api-mode' -r
+complete -c texra -n '__fish_seen_subcommand_from bib' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from bib' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from fmt' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from fmt' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from fmt' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from fmt' -l 'api-mode' -r
+complete -c texra -n '__fish_seen_subcommand_from fmt' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from fmt' -l 'approval-policy' -r -a 'never ask yolo'
+complete -c texra -n '__fish_seen_subcommand_from tikz' -l 'print' -s 'p'
+complete -c texra -n '__fish_seen_subcommand_from tikz' -l 'quiet' -s 'q'
+complete -c texra -n '__fish_seen_subcommand_from tikz' -l 'cwd' -r
+complete -c texra -n '__fish_seen_subcommand_from tikz' -l 'api-mode' -r
+complete -c texra -n '__fish_seen_subcommand_from tikz' -l 'output-format' -r -a 'text json ndjson'
+complete -c texra -n '__fish_seen_subcommand_from tikz' -l 'approval-policy' -r -a 'never ask yolo'
 complete -c texra -n '__fish_seen_subcommand_from resume' -l 'print' -s 'p'
 complete -c texra -n '__fish_seen_subcommand_from resume' -l 'quiet' -s 'q'
 complete -c texra -n '__fish_seen_subcommand_from resume' -l 'cwd' -r
@@ -258,6 +328,15 @@ _texra() {
   case "$path" in
     'chat') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--agent[Tool-use agent for the session]:value:' '--model[Model for the session]:value:' '-m[Model for the session]:value:' ;;
     'run') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--input[Input file passed to the workflow agent]:value:' '-i[Input file passed to the workflow agent]:value:' '--context[Read-only context file passed to the workflow agent]:value:' '-c[Read-only context file passed to the workflow agent]:value:' '--output[Output file path]:value:' '--output-dir[Directory to copy multi-input workflow outputs into]:value:' '--model[Model for the agent]:value:' '-m[Model for the agent]:value:' '--instruction[Instruction passed to the workflow agent]:value:' '1:agent:($(_texra_agents))' ;;
+    'latex') _values 'subcommands' 'diff' 'count' 'arxiv' 'figs' 'deps' 'bib' 'fmt' 'tikz'; true ;;
+    'latex diff') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--out[Output diff .tex file]:value:' ;;
+    'latex count') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--mode[texcount mode]: :(separate include sum)' ;;
+    'latex arxiv') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '--into[Workspace-relative destination directory]:value:' ;;
+    'latex figs') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'latex deps') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'latex bib') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'latex fmt') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
+    'latex tikz') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
     'resume') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
     'history') _values 'subcommands' 'list' 'show' 'delete'; true ;;
     'history list') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' ;;
@@ -277,7 +356,7 @@ _texra() {
     'completion') true; _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '1:shell:(bash zsh fish)' ;;
     'version') true; true ;;
     'help') true; true ;;
-    *) _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '1:command:(chat run resume history agents models login logout usage auth doctor completion version help)' ;;
+    *) _arguments '--print[]' '-p[]' '--quiet[]' '-q[]' '--cwd[]:value:' '--api-mode[]:value:' '--output-format[]: :(text json ndjson)' '--approval-policy[]: :(never ask yolo)' '1:command:(chat run latex resume history agents models login logout usage auth doctor completion version help)' ;;
   esac
 }
 
