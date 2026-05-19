@@ -15,6 +15,7 @@ export interface SlashPaletteProps {
 }
 
 const MAX_VISIBLE = 8;
+export const SLASH_PALETTE_ROWS = 13;
 
 export function SlashPalette(
   props: SlashPaletteProps,

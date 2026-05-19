@@ -154,40 +154,82 @@ export function diffDisplayLines(
   });
 }
 
+export function boundedDiffDisplayLines(
+  hunks: readonly Hunk[],
+  maxHunkLines = 0,
+  maxDisplayLines = 0,
+): DiffDisplayLine[] {
+  const lines = diffDisplayLines(hunks, maxHunkLines);
+  if (maxDisplayLines <= 0 || lines.length <= maxDisplayLines) return lines;
+  const visibleLines = lines.slice(0, Math.max(0, maxDisplayLines - 1));
+  return [
+    ...visibleLines,
+    {
+      kind: 'overflow',
+      text: `... ${lines.length - visibleLines.length} more diff rows`,
+    },
+  ];
+}
+
 export interface DiffViewProps {
   readonly hunks: readonly Hunk[];
+  /** Maximum total rendered diff rows before truncating; 0 = no truncation. */
+  readonly maxDisplayLines?: number;
   /** Maximum context lines per hunk before truncating; 0 = no truncation. */
   readonly maxHunkLines?: number;
   readonly width?: number;
 }
 
 export function DiffView(props: DiffViewProps): React.JSX.Element {
+  const maxDisplayLines = props.maxDisplayLines ?? 0;
   const max = props.maxHunkLines ?? 0;
   const width = Math.max(MIN_DIFF_WIDTH, props.width ?? DEFAULT_DIFF_WIDTH);
+  const lines = boundedDiffDisplayLines(props.hunks, max, maxDisplayLines);
 
   return (
     <Box flexDirection="column">
-      {props.hunks.map((hunk, hi) => {
-        const lines = diffDisplayLines([hunk], max);
-        return (
-          <Box key={`${hi}-${hunk.oldStart}`} flexDirection="column">
-            {lines.map((line, li) => (
-              <DiffLine key={li} line={line} width={width} />
-            ))}
-          </Box>
-        );
-      })}
+      {lines.map((line, li) => (
+        <DiffLine
+          key={li}
+          line={line}
+          truncate={maxDisplayLines > 0}
+          width={width}
+        />
+      ))}
     </Box>
   );
 }
 
 function DiffLine({
   line,
+  truncate = false,
   width,
 }: {
   readonly line: DiffDisplayLine;
+  readonly truncate?: boolean;
   readonly width: number;
 }): React.JSX.Element {
+  if (truncate) {
+    if (line.kind === 'added') {
+      return (
+        <Text color="green" wrap="truncate-end">
+          {line.text}
+        </Text>
+      );
+    }
+    if (line.kind === 'removed') {
+      return (
+        <Text color="red" wrap="truncate-end">
+          {line.text}
+        </Text>
+      );
+    }
+    return (
+      <Text dimColor wrap="truncate-end">
+        {line.text}
+      </Text>
+    );
+  }
   const wrapped = wrapAnsiToWidth(line.text, width);
   if (line.kind === 'added') return <Text color="green">{wrapped}</Text>;
   if (line.kind === 'removed') return <Text color="red">{wrapped}</Text>;
