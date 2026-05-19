@@ -223,7 +223,9 @@ export function StatusBar(): React.JSX.Element {
         {display.right ? <Text dimColor>{display.right}</Text> : null}
       </Box>
       <Box paddingX={1}>
-        <Text dimColor>{display.bindings}</Text>
+        <Text dimColor wrap="truncate-end">
+          {display.bindings}
+        </Text>
       </Box>
     </Box>
   );
