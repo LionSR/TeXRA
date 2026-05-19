@@ -249,7 +249,7 @@ export function selectConversationEntriesForViewport({
   const pendingRows =
     pending.length > 0
       ? Math.max(MIN_PENDING_ROWS, visiblePending.usedRows)
-      : MIN_PENDING_ROWS;
+      : 0;
   const finalizedRows = Math.max(0, maxRows - pendingRows);
   const visibleFinalized = selectFinalizedEntriesForViewport(
     finalized,

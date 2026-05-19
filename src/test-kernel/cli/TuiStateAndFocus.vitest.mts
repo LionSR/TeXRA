@@ -423,6 +423,27 @@ describe('CLI transcript state', () => {
     expect(estimateTranscriptEntryRows(entry, width)).toBe(renderedRows + 1);
   });
 
+  it('does not reserve pending rows while idle', () => {
+    const finalized = [
+      {
+        id: 'latest',
+        role: 'assistant',
+        text: 'latest answer',
+        finalized: true,
+      },
+    ] as const;
+    const selected = selectConversationEntriesForViewport({
+      finalized,
+      maxRows: 4,
+      pending: [],
+      width: 80,
+    });
+
+    expect(selected.pendingRows).toBe(0);
+    expect(selected.finalizedRows).toBe(4);
+    expect(selected.visibleFinalized.entries).toEqual(finalized);
+  });
+
   it('does not force finalized entries into rows reserved for live output', () => {
     const entries = [
       {
