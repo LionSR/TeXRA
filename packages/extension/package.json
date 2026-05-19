@@ -1594,7 +1594,7 @@
     "concurrently": "^9.1.2",
     "css-loader": "^7.1.4",
     "esbuild": "^0.28.0",
-    "eslint": "^9.39.4",
+    "eslint": "^10.4.0",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-unicorn": "^64.0.0",
     "globals": "^17.5.0",
