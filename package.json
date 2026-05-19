@@ -98,7 +98,7 @@
     "ts-loader": "^9.5.7",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.3",
+    "typescript-eslint": "^8.59.4",
     "vite": "^8.0.13",
     "vitest": "^4.1.6",
     "vscode-languageserver-protocol": "^3.17.5",
