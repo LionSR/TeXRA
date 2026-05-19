@@ -32,6 +32,7 @@ import {
 import {
   estimateTranscriptEntryRows,
   selectFinalizedEntriesForViewport,
+  selectPendingEntriesForViewport,
   splitTranscriptEntries,
 } from '../../../packages/cli/src/chat/tui/panes/ConversationPane';
 import {
@@ -352,6 +353,66 @@ describe('CLI transcript state', () => {
 
     expect(selected.entries.map((entry) => entry.id)).toEqual(['latest']);
     expect(selected.hiddenCount).toBe(2);
+    expect(selected.usedRows).toBe(latestRows + 1);
+  });
+
+  it('does not force finalized entries into rows reserved for live output', () => {
+    const entries = [
+      {
+        id: 'old',
+        role: 'assistant',
+        text: 'old answer',
+        finalized: true,
+      },
+      {
+        id: 'latest',
+        role: 'user',
+        text: 'latest question',
+        finalized: true,
+      },
+    ] as const;
+
+    const latestRows = estimateTranscriptEntryRows(entries[1], 80);
+    const selected = selectFinalizedEntriesForViewport(entries, latestRows, 80);
+
+    expect(selected.entries).toEqual([]);
+    expect(selected.hiddenCount).toBe(2);
+    expect(selected.usedRows).toBe(1);
+  });
+
+  it('keeps pending transcript rows within their viewport budget', () => {
+    const pending = [
+      {
+        id: 'assistant',
+        role: 'assistant',
+        text: 'streaming reply',
+        finalized: false,
+      },
+      {
+        id: 'tool',
+        role: 'tool',
+        text: '',
+        finalized: false,
+        toolUse: {
+          parsed: {},
+          toolName: 'Bash',
+          errorText: '',
+          outputText: 'one\ntwo\nthree',
+          userInstructionText: '',
+          input: { command: 'ls' },
+          isError: false,
+          isUserFeedback: false,
+          headerSummary: '',
+          status: 'completed',
+        },
+      },
+    ] as const;
+
+    const selected = selectPendingEntriesForViewport(pending, 3, 80);
+
+    expect(selected.entries).toEqual([]);
+    expect(selected.hiddenCount).toBe(2);
+    expect(selected.usedRows).toBe(1);
   });
 
   it('moves pre-session local slash-command output onto the resolved stream', () => {

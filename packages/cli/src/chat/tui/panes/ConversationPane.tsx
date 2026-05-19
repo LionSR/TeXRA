@@ -21,6 +21,7 @@ import {
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
 import { useSignal } from '../state/useSignal';
 import { ToolUseRow } from './ToolUseRow';
+import { toolUseDisplayLines } from './toolRenderers';
 import { splitTranscriptEntries } from './transcriptEntries';
 
 export { splitTranscriptEntries } from './transcriptEntries';
@@ -102,6 +103,7 @@ const LIVE_TAIL_ROWS = 12;
 const NEWLINE_CHAR_CODE = 10;
 const DEFAULT_TRANSCRIPT_ROWS = 24;
 const MIN_PENDING_ROWS = 1;
+const HIDDEN_MARKER_ROWS = 1;
 
 function estimateWrappedRows(text: string, width: number): number {
   const cols = Math.max(1, width);
@@ -116,7 +118,9 @@ export function estimateTranscriptEntryRows(
   entry: ConversationEntry,
   width = 80,
 ): number {
-  if (entry.role === 'tool') return 2;
+  if (entry.role === 'tool' && entry.toolUse) {
+    return toolUseDisplayLines(entry.toolUse).length + 1;
+  }
   if (entry.role === 'process' && entry.process) {
     return Math.max(1, completedProcessDisplayLines(entry.process).length) + 1;
   }
@@ -124,13 +128,29 @@ export function estimateTranscriptEntryRows(
   return estimateWrappedRows(entry.text, width) + 1;
 }
 
-export function selectFinalizedEntriesForViewport(
+function estimatePendingEntryRows(
+  entry: ConversationEntry,
+  width = 80,
+): number {
+  if (entry.role === 'assistant') {
+    return Math.min(LIVE_TAIL_ROWS, estimateWrappedRows(entry.text, width));
+  }
+
+  return estimateTranscriptEntryRows(entry, width);
+}
+
+function selectEntriesForViewport(
   entries: readonly ConversationEntry[],
   maxRows: number,
   width = 80,
-): { entries: readonly ConversationEntry[]; hiddenCount: number } {
+  estimateRows: (entry: ConversationEntry, width: number) => number,
+): {
+  entries: readonly ConversationEntry[];
+  hiddenCount: number;
+  usedRows: number;
+} {
   if (!Number.isFinite(maxRows) || maxRows <= 0) {
-    return { entries, hiddenCount: 0 };
+    return { entries: [], hiddenCount: entries.length, usedRows: 0 };
   }
 
   const selected: ConversationEntry[] = [];
@@ -138,20 +158,58 @@ export function selectFinalizedEntriesForViewport(
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
     if (!entry) continue;
-    const entryRows = estimateTranscriptEntryRows(entry, width);
-    const needsHiddenMarker = index > 0;
-    const markerRows = needsHiddenMarker ? 1 : 0;
+    const entryRows = estimateRows(entry, width);
+    const markerRows = index > 0 ? HIDDEN_MARKER_ROWS : 0;
     const fits = usedRows + entryRows + markerRows <= maxRows;
-    if (!fits && selected.length > 0) break;
+    if (!fits) break;
     selected.unshift(entry);
     usedRows += entryRows;
-    if (!fits) break;
+  }
+
+  const hiddenCount = entries.length - selected.length;
+  if (selected.length === 0 && hiddenCount > 0) {
+    return { entries: [], hiddenCount, usedRows: HIDDEN_MARKER_ROWS };
   }
 
   return {
     entries: selected,
-    hiddenCount: entries.length - selected.length,
+    hiddenCount,
+    usedRows: usedRows + (hiddenCount > 0 ? HIDDEN_MARKER_ROWS : 0),
   };
+}
+
+export function selectFinalizedEntriesForViewport(
+  entries: readonly ConversationEntry[],
+  maxRows: number,
+  width = 80,
+): {
+  entries: readonly ConversationEntry[];
+  hiddenCount: number;
+  usedRows: number;
+} {
+  return selectEntriesForViewport(
+    entries,
+    maxRows,
+    width,
+    estimateTranscriptEntryRows,
+  );
+}
+
+export function selectPendingEntriesForViewport(
+  entries: readonly ConversationEntry[],
+  maxRows: number,
+  width = 80,
+): {
+  entries: readonly ConversationEntry[];
+  hiddenCount: number;
+  usedRows: number;
+} {
+  return selectEntriesForViewport(
+    entries,
+    maxRows,
+    width,
+    estimatePendingEntryRows,
+  );
 }
 
 // Incremental newline count keyed by entry id. The live text grows
@@ -244,9 +302,16 @@ export function ConversationPane(
   const entries = slice?.entries ?? [];
   const { finalized, pending } = splitTranscriptEntries(entries, slice?.status);
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
+  const visiblePending = selectPendingEntriesForViewport(
+    pending,
+    maxRows,
+    props.width,
+  );
   const pendingRows =
-    pending.length > 0 ? LIVE_TAIL_ROWS + 1 : MIN_PENDING_ROWS;
-  const finalizedRows = Math.max(1, maxRows - pendingRows);
+    pending.length > 0
+      ? Math.max(MIN_PENDING_ROWS, visiblePending.usedRows)
+      : MIN_PENDING_ROWS;
+  const finalizedRows = Math.max(0, maxRows - pendingRows);
   const visibleFinalized = selectFinalizedEntriesForViewport(
     finalized,
     finalizedRows,
@@ -255,24 +320,36 @@ export function ConversationPane(
 
   return (
     <Box flexDirection="column" height={maxRows} overflowY="hidden">
-      {visibleFinalized.hiddenCount > 0 ? (
-        <Text dimColor>
-          {`⋯ ${visibleFinalized.hiddenCount} earlier ${
-            visibleFinalized.hiddenCount === 1 ? 'entry' : 'entries'
-          } hidden`}
-        </Text>
-      ) : null}
-      {visibleFinalized.entries.map((entry) => (
-        <TranscriptEntry key={entry.id} entry={entry} width={props.width} />
-      ))}
+      <Box
+        flexDirection="column"
+        height={visibleFinalized.usedRows}
+        overflowY="hidden"
+      >
+        {visibleFinalized.hiddenCount > 0 ? (
+          <Text dimColor>
+            {`⋯ ${visibleFinalized.hiddenCount} earlier ${
+              visibleFinalized.hiddenCount === 1 ? 'entry' : 'entries'
+            } hidden`}
+          </Text>
+        ) : null}
+        {visibleFinalized.entries.map((entry) => (
+          <TranscriptEntry key={entry.id} entry={entry} width={props.width} />
+        ))}
+      </Box>
       {/* `pending` interleaves the in-flight assistant entry with tool
        *  rows in stream order — rendering them as separate buckets would
        *  flip the visible order when the model emits text before a tool
-       *  call. The
-       *  minHeight=1 keeps the input bar pinned when the bucket is
-       *  empty. */}
-      <Box flexDirection="column" minHeight={1}>
-        {pending.map((entry) => {
+       *  call. The explicit height keeps the input bar pinned and prevents
+       *  tool bursts from stealing rows reserved for the footer chrome. */}
+      <Box flexDirection="column" height={pendingRows} overflowY="hidden">
+        {visiblePending.hiddenCount > 0 ? (
+          <Text dimColor>
+            {`⋯ ${visiblePending.hiddenCount} live ${
+              visiblePending.hiddenCount === 1 ? 'entry' : 'entries'
+            } hidden`}
+          </Text>
+        ) : null}
+        {visiblePending.entries.map((entry) => {
           if (entry.role === 'tool' && entry.toolUse) {
             return <ToolUseRow key={entry.id} toolUse={entry.toolUse} />;
           }
