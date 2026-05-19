@@ -3,7 +3,7 @@
 // Third-party imports
 import { useEffect, useMemo, useState } from 'react';
 
-import { Box, Text, useInput, useWindowSize } from 'ink';
+import { Box, Text, useInput } from 'ink';
 
 // Local imports - shared schemas
 import type { StreamTabId } from '@shared/schemas';
@@ -22,6 +22,7 @@ import { KeyHints } from '../ui/KeyHints';
 
 export interface ChildControlPickerProps {
   readonly activeStreamId: StreamTabId | undefined;
+  readonly availableRows?: number;
   readonly mode: ChildControlMode;
   readonly onClose: () => void;
   readonly onFocusStream: (streamId: StreamTabId) => void;
@@ -72,23 +73,139 @@ function metaLine(
   );
 }
 
+export interface TaskDetailLayout {
+  readonly compact: boolean;
+  readonly showCommand: boolean;
+  readonly showExpandedMeta: boolean;
+  readonly showHints: boolean;
+  readonly visibleLineCount: number;
+}
+
+export interface PickerListLayout {
+  readonly end: number;
+  readonly hiddenAfter: number;
+  readonly hiddenBefore: number;
+  readonly start: number;
+  readonly visibleCount: number;
+}
+
+export function computeTaskDetailLayout({
+  availableRows,
+  hasTailLines,
+  metaRows,
+}: {
+  readonly availableRows?: number;
+  readonly hasTailLines: boolean;
+  readonly metaRows: number;
+}): TaskDetailLayout {
+  const rows = Math.max(0, availableRows ?? 18);
+  const showExpandedMeta = rows >= 16;
+  const compact = !showExpandedMeta;
+  const showCommand = rows >= 10;
+  const showHints = rows >= 7;
+  const renderedMetaRows = showExpandedMeta ? metaRows : 1;
+  const gapRows = showExpandedMeta ? 2 : 0;
+  const fixedRows =
+    2 + // border
+    1 + // title
+    renderedMetaRows +
+    (showCommand ? 1 : 0) +
+    1 + // output label
+    (showHints ? 1 : 0) +
+    gapRows;
+  const availableOutputRows = Math.max(0, rows - fixedRows);
+  return {
+    compact,
+    showCommand,
+    showExpandedMeta,
+    showHints,
+    visibleLineCount:
+      hasTailLines && rows >= fixedRows + 1
+        ? Math.max(1, availableOutputRows)
+        : availableOutputRows,
+  };
+}
+
+export function computePickerListLayout({
+  availableRows,
+  hasParentStream,
+  highlight,
+  itemCount,
+}: {
+  readonly availableRows?: number;
+  readonly hasParentStream: boolean;
+  readonly highlight: number;
+  readonly itemCount: number;
+}): PickerListLayout {
+  const rows = Math.max(0, availableRows ?? 18);
+  const fixedRows =
+    2 + // border
+    1 + // title
+    (hasParentStream ? 1 : 0) +
+    1 + // list top margin
+    2; // hints margin + row
+  const rowBudget = Math.max(1, rows - fixedRows);
+  const windowStart = (count: number): number => {
+    const lastStart = Math.max(0, itemCount - count);
+    return Math.min(lastStart, Math.max(0, highlight - Math.floor(count / 2)));
+  };
+  let visibleCount = Math.min(itemCount, rowBudget);
+  for (let i = 0; i < 2; i += 1) {
+    const start = windowStart(visibleCount);
+    const end = start + visibleCount;
+    const markerRows =
+      rowBudget >= 3 ? (start > 0 ? 1 : 0) + (end < itemCount ? 1 : 0) : 0;
+    visibleCount = Math.min(itemCount, Math.max(1, rowBudget - markerRows));
+  }
+  const start = windowStart(visibleCount);
+  const end = start + visibleCount;
+  const markerRowsAllowed = rowBudget >= visibleCount + 1;
+  return {
+    end,
+    hiddenAfter: markerRowsAllowed ? Math.max(0, itemCount - end) : 0,
+    hiddenBefore: markerRowsAllowed ? start : 0,
+    start,
+    visibleCount,
+  };
+}
+
 function TaskDetailView({
+  availableRows,
   item,
   onBack,
   onFocusStream,
   onKill,
 }: {
+  readonly availableRows?: number;
   readonly item: ChildControlItem;
   readonly onBack: () => void;
   readonly onFocusStream: () => void;
   readonly onKill: () => void;
 }): React.JSX.Element {
-  const { rows } = useWindowSize();
   const [scrollOffset, setScrollOffset] = useState(0);
-  const visibleLineCount = Math.max(4, rows - 14);
+  const metaRows = [
+    item.kind === 'process' ? 'shell' : 'stream',
+    item.label,
+    item.status,
+    item.elapsed,
+  ].filter(Boolean).length;
+  const layout = computeTaskDetailLayout({
+    availableRows,
+    hasTailLines: item.tailLines.length > 0,
+    metaRows,
+  });
+  const visibleLineCount = layout.visibleLineCount;
   const maxOffset = Math.max(0, item.tailLines.length - visibleLineCount);
   const offset = Math.min(scrollOffset, maxOffset);
   const visibleTail = item.tailLines.slice(offset, offset + visibleLineCount);
+  const compactMeta = [
+    item.kind === 'process' ? 'shell' : 'stream',
+    item.label,
+    item.status,
+    item.elapsed,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   useEffect(() => {
     setScrollOffset((current) => Math.min(current, maxOffset));
@@ -123,51 +240,65 @@ function TaskDetailView({
       <Text bold color="cyan">
         Task details
       </Text>
-      {metaLine('Type', item.kind === 'process' ? 'shell' : 'stream')}
-      {metaLine('Name', item.label)}
-      {metaLine('Status', item.status)}
-      {metaLine('Runtime', item.elapsed)}
-      <Box marginTop={1}>
-        <Box width={10}>
-          <Text bold>Command:</Text>
+      {layout.showExpandedMeta ? (
+        <>
+          {metaLine('Type', item.kind === 'process' ? 'shell' : 'stream')}
+          {metaLine('Name', item.label)}
+          {metaLine('Status', item.status)}
+          {metaLine('Runtime', item.elapsed)}
+        </>
+      ) : (
+        <Text dimColor wrap="truncate-end">
+          {compactMeta}
+        </Text>
+      )}
+      {layout.showCommand ? (
+        <Box marginTop={layout.compact ? 0 : 1}>
+          <Box width={10}>
+            <Text bold>Command:</Text>
+          </Box>
+          <Text wrap="truncate-end">{item.command}</Text>
         </Box>
-        <Text wrap="wrap">{item.command}</Text>
-      </Box>
-      <Box flexDirection="column" marginTop={1}>
+      ) : null}
+      <Box flexDirection="column" marginTop={layout.compact ? 0 : 1}>
         <Text bold>Output:</Text>
-        {item.tailLines.length > 0 ? (
+        {item.tailLines.length > 0 && visibleLineCount > 0 ? (
           visibleTail.map((line, index) => (
             <Text key={`${index}:${line}`} dimColor>
               {line}
             </Text>
           ))
-        ) : item.childStreamId ? (
+        ) : item.tailLines.length > 0 ||
+          visibleLineCount === 0 ? null : item.childStreamId ? (
           <Text dimColor>Open the task stream to see its live transcript.</Text>
         ) : (
           <Text dimColor>No output captured yet.</Text>
         )}
       </Box>
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[
-            ...(item.tailLines.length > visibleLineCount
-              ? [{ key: '↑/↓', action: 'scroll' }]
-              : []),
-            ...(item.childStreamId
-              ? [{ key: 'f', action: 'focus stream' }]
-              : []),
-            { key: 'k', action: 'kill' },
-            { key: 'Esc', action: 'back' },
-          ]}
-          confirmCancel={false}
-        />
-      </Box>
+      {layout.showHints ? (
+        <Box marginTop={layout.compact ? 0 : 1}>
+          <KeyHints
+            hints={[
+              ...(item.tailLines.length > visibleLineCount
+                ? [{ key: '↑/↓', action: 'scroll' }]
+                : []),
+              ...(item.childStreamId
+                ? [{ key: 'f', action: 'focus stream' }]
+                : []),
+              { key: 'k', action: 'kill' },
+              { key: 'Esc', action: 'back' },
+            ]}
+            confirmCancel={false}
+          />
+        </Box>
+      ) : null}
     </Box>
   );
 }
 
 export function ChildControlPicker({
   activeStreamId,
+  availableRows,
   mode,
   onClose,
   onFocusStream,
@@ -186,6 +317,13 @@ export function ChildControlPicker({
   const tailItem = tailExecutionId
     ? items.find((item) => item.executionId === tailExecutionId)
     : undefined;
+  const listLayout = computePickerListLayout({
+    availableRows,
+    hasParentStream: activeStreamId !== undefined,
+    highlight,
+    itemCount: items.length,
+  });
+  const visibleItems = items.slice(listLayout.start, listLayout.end);
 
   useEffect(() => {
     setHighlight((current) => clampPickerIndex(current, items.length));
@@ -249,6 +387,7 @@ export function ChildControlPicker({
   if (tailItem) {
     return (
       <TaskDetailView
+        availableRows={availableRows}
         item={tailItem}
         onBack={() => setTailExecutionId(undefined)}
         onFocusStream={() => {
@@ -279,9 +418,18 @@ export function ChildControlPicker({
       ) : null}
       <Box flexDirection="column" marginTop={1}>
         {items.length > 0 ? (
-          items.map((item, index) =>
-            renderItem(item, index, index === highlight),
-          )
+          <>
+            {listLayout.hiddenBefore > 0 ? (
+              <Text dimColor>{`... ${listLayout.hiddenBefore} earlier`}</Text>
+            ) : null}
+            {visibleItems.map((item, offset) => {
+              const index = listLayout.start + offset;
+              return renderItem(item, index, index === highlight);
+            })}
+            {listLayout.hiddenAfter > 0 ? (
+              <Text dimColor>{`... ${listLayout.hiddenAfter} more`}</Text>
+            ) : null}
+          </>
         ) : (
           <Text dimColor>No active {pickerTitle(mode).toLowerCase()}.</Text>
         )}
