@@ -95,6 +95,18 @@ export function allocateMiddleRows({
   };
 }
 
+export function appFocusShortcutsActive({
+  inputDisabled,
+  reverseSearchOpen,
+  slashPaletteOpen,
+}: {
+  readonly inputDisabled: boolean;
+  readonly reverseSearchOpen: boolean;
+  readonly slashPaletteOpen: boolean;
+}): boolean {
+  return !inputDisabled && !slashPaletteOpen && !reverseSearchOpen;
+}
+
 export interface AppProps {
   readonly onSubmit: (line: string) => void;
   readonly onKillExecution: (executionId: string) => void;
@@ -161,17 +173,22 @@ export function App(props: AppProps): React.JSX.Element {
     activeForm.render(() => cliState.activeForm.set(undefined))
   ) : null;
 
+  const focusShortcutsActive = appFocusShortcutsActive({
+    inputDisabled,
+    reverseSearchOpen,
+    slashPaletteOpen,
+  });
+
   // Tab / Shift-Tab cycles stream focus at the App layer. Stand down while a
-  // modal/form is up (they own input) or the slash palette is open (Tab there
-  // means "accept selection") — Ink broadcasts useInput, so both handlers
-  // would otherwise fire on the same chord.
+  // modal/form/input overlay owns the keyboard. Ink broadcasts useInput, so
+  // both handlers would otherwise fire on the same chord.
   useInput(
     (_input, key) => {
       if (!key.tab) return;
       const next = key.shift ? nextFocusBack() : nextFocusForward();
       if (next) cliState.activeStreamId.set(next);
     },
-    { isActive: !inputDisabled && !slashPaletteOpen },
+    { isActive: focusShortcutsActive },
   );
 
   useInput(
@@ -192,7 +209,7 @@ export function App(props: AppProps): React.JSX.Element {
         if (target) cliState.activeStreamId.set(target);
       }
     },
-    { isActive: !inputDisabled && !slashPaletteOpen },
+    { isActive: focusShortcutsActive },
   );
 
   return (

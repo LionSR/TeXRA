@@ -17,7 +17,10 @@ import {
   resetCliState,
   setParentStream,
 } from '../../../packages/cli/src/chat/tui/state/cliState';
-import { allocateMiddleRows } from '../../../packages/cli/src/chat/tui/App';
+import {
+  allocateMiddleRows,
+  appFocusShortcutsActive,
+} from '../../../packages/cli/src/chat/tui/App';
 import {
   nextFocusBack,
   nextFocusForward,
@@ -134,6 +137,30 @@ describe('CLI TUI row allocation', () => {
 
     expect(layout.transcriptRows).toBe(0);
     expect(layout.foregroundRows).toBe(0);
+  });
+
+  it('lets input overlays own focus shortcuts', () => {
+    expect(
+      appFocusShortcutsActive({
+        inputDisabled: false,
+        reverseSearchOpen: false,
+        slashPaletteOpen: false,
+      }),
+    ).toBe(true);
+    expect(
+      appFocusShortcutsActive({
+        inputDisabled: false,
+        reverseSearchOpen: true,
+        slashPaletteOpen: false,
+      }),
+    ).toBe(false);
+    expect(
+      appFocusShortcutsActive({
+        inputDisabled: false,
+        reverseSearchOpen: false,
+        slashPaletteOpen: true,
+      }),
+    ).toBe(false);
   });
 });
 

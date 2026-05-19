@@ -73,6 +73,51 @@ function metaLine(
   );
 }
 
+export interface TaskDetailLayout {
+  readonly compact: boolean;
+  readonly showCommand: boolean;
+  readonly showExpandedMeta: boolean;
+  readonly showHints: boolean;
+  readonly visibleLineCount: number;
+}
+
+export function computeTaskDetailLayout({
+  availableRows,
+  hasTailLines,
+  metaRows,
+}: {
+  readonly availableRows?: number;
+  readonly hasTailLines: boolean;
+  readonly metaRows: number;
+}): TaskDetailLayout {
+  const rows = Math.max(0, availableRows ?? 18);
+  const showExpandedMeta = rows >= 16;
+  const compact = !showExpandedMeta;
+  const showCommand = rows >= 10;
+  const showHints = rows >= 7;
+  const renderedMetaRows = showExpandedMeta ? metaRows : 1;
+  const gapRows = showExpandedMeta ? 2 : 0;
+  const fixedRows =
+    2 + // border
+    1 + // title
+    renderedMetaRows +
+    (showCommand ? 1 : 0) +
+    1 + // output label
+    (showHints ? 1 : 0) +
+    gapRows;
+  const availableOutputRows = Math.max(0, rows - fixedRows);
+  return {
+    compact,
+    showCommand,
+    showExpandedMeta,
+    showHints,
+    visibleLineCount:
+      hasTailLines && rows >= fixedRows + 1
+        ? Math.max(1, availableOutputRows)
+        : availableOutputRows,
+  };
+}
+
 function TaskDetailView({
   availableRows,
   item,
@@ -93,11 +138,23 @@ function TaskDetailView({
     item.status,
     item.elapsed,
   ].filter(Boolean).length;
-  const fixedRows = 8 + metaRows;
-  const visibleLineCount = Math.max(0, (availableRows ?? 18) - fixedRows);
+  const layout = computeTaskDetailLayout({
+    availableRows,
+    hasTailLines: item.tailLines.length > 0,
+    metaRows,
+  });
+  const visibleLineCount = layout.visibleLineCount;
   const maxOffset = Math.max(0, item.tailLines.length - visibleLineCount);
   const offset = Math.min(scrollOffset, maxOffset);
   const visibleTail = item.tailLines.slice(offset, offset + visibleLineCount);
+  const compactMeta = [
+    item.kind === 'process' ? 'shell' : 'stream',
+    item.label,
+    item.status,
+    item.elapsed,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   useEffect(() => {
     setScrollOffset((current) => Math.min(current, maxOffset));
@@ -132,17 +189,27 @@ function TaskDetailView({
       <Text bold color="cyan">
         Task details
       </Text>
-      {metaLine('Type', item.kind === 'process' ? 'shell' : 'stream')}
-      {metaLine('Name', item.label)}
-      {metaLine('Status', item.status)}
-      {metaLine('Runtime', item.elapsed)}
-      <Box marginTop={1}>
-        <Box width={10}>
-          <Text bold>Command:</Text>
+      {layout.showExpandedMeta ? (
+        <>
+          {metaLine('Type', item.kind === 'process' ? 'shell' : 'stream')}
+          {metaLine('Name', item.label)}
+          {metaLine('Status', item.status)}
+          {metaLine('Runtime', item.elapsed)}
+        </>
+      ) : (
+        <Text dimColor wrap="truncate-end">
+          {compactMeta}
+        </Text>
+      )}
+      {layout.showCommand ? (
+        <Box marginTop={layout.compact ? 0 : 1}>
+          <Box width={10}>
+            <Text bold>Command:</Text>
+          </Box>
+          <Text wrap="truncate-end">{item.command}</Text>
         </Box>
-        <Text wrap="wrap">{item.command}</Text>
-      </Box>
-      <Box flexDirection="column" marginTop={1}>
+      ) : null}
+      <Box flexDirection="column" marginTop={layout.compact ? 0 : 1}>
         <Text bold>Output:</Text>
         {item.tailLines.length > 0 && visibleLineCount > 0 ? (
           visibleTail.map((line, index) => (
@@ -150,27 +217,30 @@ function TaskDetailView({
               {line}
             </Text>
           ))
-        ) : item.tailLines.length > 0 ? null : item.childStreamId ? (
+        ) : item.tailLines.length > 0 ||
+          visibleLineCount === 0 ? null : item.childStreamId ? (
           <Text dimColor>Open the task stream to see its live transcript.</Text>
         ) : (
           <Text dimColor>No output captured yet.</Text>
         )}
       </Box>
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[
-            ...(item.tailLines.length > visibleLineCount
-              ? [{ key: '↑/↓', action: 'scroll' }]
-              : []),
-            ...(item.childStreamId
-              ? [{ key: 'f', action: 'focus stream' }]
-              : []),
-            { key: 'k', action: 'kill' },
-            { key: 'Esc', action: 'back' },
-          ]}
-          confirmCancel={false}
-        />
-      </Box>
+      {layout.showHints ? (
+        <Box marginTop={layout.compact ? 0 : 1}>
+          <KeyHints
+            hints={[
+              ...(item.tailLines.length > visibleLineCount
+                ? [{ key: '↑/↓', action: 'scroll' }]
+                : []),
+              ...(item.childStreamId
+                ? [{ key: 'f', action: 'focus stream' }]
+                : []),
+              { key: 'k', action: 'kill' },
+              { key: 'Esc', action: 'back' },
+            ]}
+            confirmCancel={false}
+          />
+        </Box>
+      ) : null}
     </Box>
   );
 }

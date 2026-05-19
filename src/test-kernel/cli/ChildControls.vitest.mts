@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - CLI TUI state
+import { computeTaskDetailLayout } from '../../../packages/cli/src/chat/tui/modals/ChildControlPicker';
 import {
   buildChildControlItems,
   childPickerKeyAction,
@@ -169,5 +170,20 @@ describe('CLI child execution controls', () => {
     });
     expect(nextPickerIndex(0, 3, 'up')).toBe(2);
     expect(nextPickerIndex(2, 3, 'down')).toBe(0);
+  });
+
+  it('preserves output rows in compact task detail views', () => {
+    expect(
+      computeTaskDetailLayout({
+        availableRows: 12,
+        hasTailLines: true,
+        metaRows: 4,
+      }),
+    ).toMatchObject({
+      compact: true,
+      showCommand: true,
+      showHints: true,
+      visibleLineCount: 5,
+    });
   });
 });
