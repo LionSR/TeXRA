@@ -36,6 +36,28 @@ export interface DownloadSourceOptions {
 const INVALID_ARXIV_INPUT_ERROR =
   'Invalid arXiv ID or URL. Please provide a valid arXiv ID (e.g., 2404.12175) or URL (e.g., https://arxiv.org/abs/2404.12175)';
 
+function normalizeWorkspaceRelativeDirectory(candidate: string): string {
+  return candidate
+    .trim()
+    .replaceAll(path.sep, '/')
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '');
+}
+
+export function resolveArxivPaperDirectoryRelative(
+  id: string,
+  options: Pick<DownloadSourceOptions, 'destination' | 'into'> = {},
+): string {
+  const paperDirName = id.replaceAll('/', '_');
+  const customRoot = options.into
+    ? normalizeWorkspaceRelativeDirectory(options.into)
+    : '';
+  if (customRoot) {
+    return customRoot === '.' ? paperDirName : `${customRoot}/${paperDirName}`;
+  }
+  return options.destination === 'root' ? '.' : `References/${paperDirName}`;
+}
+
 export class ArxivSourceProcessor {
   constructor(private readonly channel: string = 'arxivProcessor') {
     logger.initialize(this.channel);
@@ -206,14 +228,11 @@ export class ArxivSourceProcessor {
       throw new Error('No workspace folder is open');
     }
 
-    const isRoot = destination === 'root' && !into;
-    // Use forward slashes to match WorkspaceFS.relativePath() convention (not path.join which uses backslashes on Windows)
-    const paperDirRelative = isRoot
-      ? '.'
-      : (into?.trim() || `References/${id.replaceAll('/', '_')}`).replaceAll(
-          path.sep,
-          '/',
-        );
+    const paperDirRelative = resolveArxivPaperDirectoryRelative(id, {
+      destination,
+      into,
+    });
+    const isRoot = paperDirRelative === '.';
     const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
 
     // Check if source was already downloaded successfully.

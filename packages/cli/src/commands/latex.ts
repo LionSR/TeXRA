@@ -367,10 +367,13 @@ async function runLatexFigures(
   const filePath = resolveCliPath(context.cwd, file);
   await assertReadableFile(filePath);
   const paths = await extractFigurePathsFromLatex(pathToLocation(filePath));
+  const latexDir = path.dirname(filePath);
   return {
     kind: 'latex-figs',
     file: displayCliPath(context.cwd, filePath),
-    paths,
+    paths: paths.map((figurePath) =>
+      displayCliPath(context.cwd, path.resolve(latexDir, figurePath)),
+    ),
   };
 }
 
