@@ -26,6 +26,7 @@ import type { InputHistory } from './history/inputHistory';
 
 const SIDE_COLUMN_WIDTH = 28;
 const MIN_TRANSCRIPT_WIDTH = 20;
+const FOREGROUND_TRANSCRIPT_ROWS = 3;
 
 const PINNED_CHROME_ROWS = {
   accent: 1,
@@ -43,6 +44,36 @@ function pinnedChromeRows(slashPaletteOpen: boolean): number {
     0,
   );
   return baseRows + (slashPaletteOpen ? SLASH_PALETTE_ROWS : 0);
+}
+
+export function allocateMiddleRows({
+  foregroundOpen,
+  rows,
+  slashPaletteOpen,
+}: {
+  readonly foregroundOpen: boolean;
+  readonly rows: number;
+  readonly slashPaletteOpen: boolean;
+}): {
+  readonly foregroundRows: number;
+  readonly transcriptRows: number;
+} {
+  const availableRows = Math.max(1, rows - pinnedChromeRows(slashPaletteOpen));
+  if (!foregroundOpen) {
+    return { foregroundRows: 0, transcriptRows: availableRows };
+  }
+  if (availableRows === 1) {
+    return { foregroundRows: 1, transcriptRows: 0 };
+  }
+
+  const transcriptRows = Math.min(
+    FOREGROUND_TRANSCRIPT_ROWS,
+    availableRows - 1,
+  );
+  return {
+    foregroundRows: availableRows - transcriptRows,
+    transcriptRows,
+  };
 }
 
 export interface AppProps {
@@ -83,7 +114,30 @@ export function App(props: AppProps): React.JSX.Element {
     MIN_TRANSCRIPT_WIDTH,
     columns - (showSideColumn ? SIDE_COLUMN_WIDTH : 0),
   );
-  const transcriptRows = Math.max(1, rows - pinnedChromeRows(slashPaletteOpen));
+  const foregroundOpen =
+    pending !== undefined ||
+    activeForm !== undefined ||
+    childControlMode !== undefined;
+  const { foregroundRows, transcriptRows } = allocateMiddleRows({
+    foregroundOpen,
+    rows,
+    slashPaletteOpen,
+  });
+  const foregroundSurface = pending ? (
+    <ApprovalModal pending={pending} />
+  ) : childControlMode ? (
+    <ChildControlPicker
+      activeStreamId={activeStreamId}
+      mode={childControlMode}
+      onClose={() => setChildControlMode(undefined)}
+      onFocusStream={(streamId) => cliState.activeStreamId.set(streamId)}
+      onKillExecution={props.onKillExecution}
+      slice={activeSlice}
+      streams={streams}
+    />
+  ) : activeForm ? (
+    activeForm.render(() => cliState.activeForm.set(undefined))
+  ) : null;
 
   // Tab / Shift-Tab cycles stream focus at the App layer. Stand down while a
   // modal/form is up (they own input) or the slash palette is open (Tab there
@@ -127,24 +181,17 @@ export function App(props: AppProps): React.JSX.Element {
       <HeaderPane />
       <Box flexDirection="row" flexGrow={1} overflowY="hidden">
         <Box flexDirection="column" flexGrow={1} overflowY="hidden">
-          <ConversationPane width={transcriptWidth} maxRows={transcriptRows} />
-          <ApprovalModal pending={pending} />
-          {childControlMode ? (
-            <ChildControlPicker
-              activeStreamId={activeStreamId}
-              mode={childControlMode}
-              onClose={() => setChildControlMode(undefined)}
-              onFocusStream={(streamId) =>
-                cliState.activeStreamId.set(streamId)
-              }
-              onKillExecution={props.onKillExecution}
-              slice={activeSlice}
-              streams={streams}
+          {transcriptRows > 0 ? (
+            <ConversationPane
+              width={transcriptWidth}
+              maxRows={transcriptRows}
             />
           ) : null}
-          {activeForm
-            ? activeForm.render(() => cliState.activeForm.set(undefined))
-            : null}
+          {foregroundSurface ? (
+            <Box height={foregroundRows} overflowY="hidden">
+              {foregroundSurface}
+            </Box>
+          ) : null}
         </Box>
         {showSideColumn ? (
           <Box flexDirection="column" minWidth={SIDE_COLUMN_WIDTH}>

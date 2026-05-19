@@ -17,6 +17,7 @@ import {
   resetCliState,
   setParentStream,
 } from '../../../packages/cli/src/chat/tui/state/cliState';
+import { allocateMiddleRows } from '../../../packages/cli/src/chat/tui/App';
 import {
   nextFocusBack,
   nextFocusForward,
@@ -82,6 +83,30 @@ describe('cliState Phase 4 fields', () => {
     patchStream(root, (s) => ({ ...s, status: 'running' }));
     removeStream(root);
     expect(cliState.parentStream.get().has(child2)).toBe(false);
+  });
+});
+
+describe('CLI TUI row allocation', () => {
+  it('keeps foreground approval and form surfaces inside the middle row budget', () => {
+    const layout = allocateMiddleRows({
+      foregroundOpen: true,
+      rows: 24,
+      slashPaletteOpen: false,
+    });
+
+    expect(layout.transcriptRows).toBe(3);
+    expect(layout.foregroundRows).toBe(10);
+  });
+
+  it('uses the whole middle region for the transcript without foreground UI', () => {
+    const layout = allocateMiddleRows({
+      foregroundOpen: false,
+      rows: 24,
+      slashPaletteOpen: false,
+    });
+
+    expect(layout.transcriptRows).toBe(13);
+    expect(layout.foregroundRows).toBe(0);
   });
 });
 
