@@ -95,8 +95,8 @@ describe('CLI TUI row allocation', () => {
       slashPaletteOpen: false,
     });
 
-    expect(layout.transcriptRows).toBe(3);
-    expect(layout.foregroundRows).toBe(10);
+    expect(layout.transcriptRows).toBe(1);
+    expect(layout.foregroundRows).toBe(12);
   });
 
   it('uses the whole middle region for the transcript without foreground UI', () => {

@@ -28,7 +28,7 @@ import type { InputHistory } from './history/inputHistory';
 
 const SIDE_COLUMN_WIDTH = 28;
 const MIN_TRANSCRIPT_WIDTH = 20;
-const FOREGROUND_TRANSCRIPT_ROWS = 3;
+const FOREGROUND_TRANSCRIPT_ROWS = 1;
 
 const PINNED_CHROME_ROWS = {
   accent: 1,
@@ -146,6 +146,7 @@ export function App(props: AppProps): React.JSX.Element {
   ) : childControlMode ? (
     <ChildControlPicker
       activeStreamId={activeStreamId}
+      availableRows={foregroundRows}
       mode={childControlMode}
       onClose={() => setChildControlMode(undefined)}
       onFocusStream={(streamId) => cliState.activeStreamId.set(streamId)}

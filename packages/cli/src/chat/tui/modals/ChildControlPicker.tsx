@@ -3,7 +3,7 @@
 // Third-party imports
 import { useEffect, useMemo, useState } from 'react';
 
-import { Box, Text, useInput, useWindowSize } from 'ink';
+import { Box, Text, useInput } from 'ink';
 
 // Local imports - shared schemas
 import type { StreamTabId } from '@shared/schemas';
@@ -22,6 +22,7 @@ import { KeyHints } from '../ui/KeyHints';
 
 export interface ChildControlPickerProps {
   readonly activeStreamId: StreamTabId | undefined;
+  readonly availableRows?: number;
   readonly mode: ChildControlMode;
   readonly onClose: () => void;
   readonly onFocusStream: (streamId: StreamTabId) => void;
@@ -73,19 +74,27 @@ function metaLine(
 }
 
 function TaskDetailView({
+  availableRows,
   item,
   onBack,
   onFocusStream,
   onKill,
 }: {
+  readonly availableRows?: number;
   readonly item: ChildControlItem;
   readonly onBack: () => void;
   readonly onFocusStream: () => void;
   readonly onKill: () => void;
 }): React.JSX.Element {
-  const { rows } = useWindowSize();
   const [scrollOffset, setScrollOffset] = useState(0);
-  const visibleLineCount = Math.max(4, rows - 14);
+  const metaRows = [
+    item.kind === 'process' ? 'shell' : 'stream',
+    item.label,
+    item.status,
+    item.elapsed,
+  ].filter(Boolean).length;
+  const fixedRows = 8 + metaRows;
+  const visibleLineCount = Math.max(0, (availableRows ?? 18) - fixedRows);
   const maxOffset = Math.max(0, item.tailLines.length - visibleLineCount);
   const offset = Math.min(scrollOffset, maxOffset);
   const visibleTail = item.tailLines.slice(offset, offset + visibleLineCount);
@@ -135,13 +144,13 @@ function TaskDetailView({
       </Box>
       <Box flexDirection="column" marginTop={1}>
         <Text bold>Output:</Text>
-        {item.tailLines.length > 0 ? (
+        {item.tailLines.length > 0 && visibleLineCount > 0 ? (
           visibleTail.map((line, index) => (
             <Text key={`${index}:${line}`} dimColor>
               {line}
             </Text>
           ))
-        ) : item.childStreamId ? (
+        ) : item.tailLines.length > 0 ? null : item.childStreamId ? (
           <Text dimColor>Open the task stream to see its live transcript.</Text>
         ) : (
           <Text dimColor>No output captured yet.</Text>
@@ -168,6 +177,7 @@ function TaskDetailView({
 
 export function ChildControlPicker({
   activeStreamId,
+  availableRows,
   mode,
   onClose,
   onFocusStream,
@@ -249,6 +259,7 @@ export function ChildControlPicker({
   if (tailItem) {
     return (
       <TaskDetailView
+        availableRows={availableRows}
         item={tailItem}
         onBack={() => setTailExecutionId(undefined)}
         onFocusStream={() => {
