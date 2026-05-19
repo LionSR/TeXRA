@@ -26,6 +26,7 @@ import type { InputHistory } from './history/inputHistory';
 
 const SIDE_COLUMN_WIDTH = 28;
 const MIN_TRANSCRIPT_WIDTH = 20;
+const FIXED_CHROME_ROWS = 11;
 
 export interface AppProps {
   readonly onSubmit: (line: string) => void;
@@ -65,6 +66,7 @@ export function App(props: AppProps): React.JSX.Element {
     MIN_TRANSCRIPT_WIDTH,
     columns - (showSideColumn ? SIDE_COLUMN_WIDTH : 0),
   );
+  const transcriptRows = Math.max(1, rows - FIXED_CHROME_ROWS);
 
   // Tab / Shift-Tab cycles stream focus at the App layer. Stand down while a
   // modal/form is up (they own input) or the slash palette is open (Tab there
@@ -106,9 +108,9 @@ export function App(props: AppProps): React.JSX.Element {
         <Text color="cyan">{'─'.repeat(columns)}</Text>
       </Box>
       <HeaderPane />
-      <Box flexDirection="row" flexGrow={1}>
-        <Box flexDirection="column">
-          <ConversationPane width={transcriptWidth} />
+      <Box flexDirection="row" flexGrow={1} overflowY="hidden">
+        <Box flexDirection="column" flexGrow={1} overflowY="hidden">
+          <ConversationPane width={transcriptWidth} maxRows={transcriptRows} />
         </Box>
         {showSideColumn ? (
           <Box flexDirection="column" minWidth={SIDE_COLUMN_WIDTH}>

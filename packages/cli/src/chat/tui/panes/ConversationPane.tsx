@@ -1,15 +1,15 @@
 // Conversation pane for user and assistant transcript entries.
 //
-// Finalized entries are committed to ink's `<Static>` region so they survive
-// re-renders and stay in scrollback. The in-flight entry (last one when the
-// stream is still streaming) renders in a live `<Box>` above the input bar.
+// Finalized entries render as a viewport-limited tail inside the Ink tree.
+// The in-flight entry (last one when the stream is still streaming) renders
+// in a live `<Box>` above the input bar.
 //
 // Finalized assistant text goes through the ANSI markdown renderer
 // (`render/Markdown.tsx`). Live assistant text stays plain so a growing
 // response does not repeatedly parse a full Markdown document while the input
 // bar is also accepting keystrokes.
 
-import { Box, Static, Text } from 'ink';
+import { Box, Text } from 'ink';
 
 import { Markdown } from '../render/Markdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
@@ -97,9 +97,62 @@ function TranscriptEntry({
 
 // Bounds the live-region row count. Ink redraws the live region on every
 // streaming delta; if it overflows the viewport the cursor-up rewrite
-// overshoots and clobbers Static rows already in scrollback.
+// overshoots and clobbers rows already in the alternate screen.
 const LIVE_TAIL_ROWS = 12;
 const NEWLINE_CHAR_CODE = 10;
+const DEFAULT_TRANSCRIPT_ROWS = 24;
+const MIN_PENDING_ROWS = 1;
+
+function estimateWrappedRows(text: string, width: number): number {
+  const cols = Math.max(1, width);
+  const lines = text.length > 0 ? text.split('\n') : [''];
+  return lines.reduce(
+    (sum, line) => sum + Math.max(1, Math.ceil(line.length / cols)),
+    0,
+  );
+}
+
+export function estimateTranscriptEntryRows(
+  entry: ConversationEntry,
+  width = 80,
+): number {
+  if (entry.role === 'tool') return 2;
+  if (entry.role === 'process' && entry.process) {
+    return Math.max(1, completedProcessDisplayLines(entry.process).length) + 1;
+  }
+
+  return estimateWrappedRows(entry.text, width) + 1;
+}
+
+export function selectFinalizedEntriesForViewport(
+  entries: readonly ConversationEntry[],
+  maxRows: number,
+  width = 80,
+): { entries: readonly ConversationEntry[]; hiddenCount: number } {
+  if (!Number.isFinite(maxRows) || maxRows <= 0) {
+    return { entries, hiddenCount: 0 };
+  }
+
+  const selected: ConversationEntry[] = [];
+  let usedRows = 0;
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (!entry) continue;
+    const entryRows = estimateTranscriptEntryRows(entry, width);
+    const needsHiddenMarker = index > 0;
+    const markerRows = needsHiddenMarker ? 1 : 0;
+    const fits = usedRows + entryRows + markerRows <= maxRows;
+    if (!fits && selected.length > 0) break;
+    selected.unshift(entry);
+    usedRows += entryRows;
+    if (!fits) break;
+  }
+
+  return {
+    entries: selected,
+    hiddenCount: entries.length - selected.length,
+  };
+}
 
 // Incremental newline count keyed by entry id. The live text grows
 // monotonically per delta; without a cache we'd rescan the full prefix
@@ -179,6 +232,7 @@ function LiveTranscriptEntry({
 
 export interface ConversationPaneProps {
   readonly width?: number;
+  readonly maxRows?: number;
 }
 
 export function ConversationPane(
@@ -189,19 +243,32 @@ export function ConversationPane(
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const entries = slice?.entries ?? [];
   const { finalized, pending } = splitTranscriptEntries(entries, slice?.status);
+  const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
+  const pendingRows =
+    pending.length > 0 ? LIVE_TAIL_ROWS + 1 : MIN_PENDING_ROWS;
+  const finalizedRows = Math.max(1, maxRows - pendingRows);
+  const visibleFinalized = selectFinalizedEntriesForViewport(
+    finalized,
+    finalizedRows,
+    props.width,
+  );
 
   return (
-    <Box flexDirection="column">
-      <Static items={finalized}>
-        {(entry) => (
-          <TranscriptEntry key={entry.id} entry={entry} width={props.width} />
-        )}
-      </Static>
+    <Box flexDirection="column" height={maxRows} overflowY="hidden">
+      {visibleFinalized.hiddenCount > 0 ? (
+        <Text dimColor>
+          {`⋯ ${visibleFinalized.hiddenCount} earlier ${
+            visibleFinalized.hiddenCount === 1 ? 'entry' : 'entries'
+          } hidden`}
+        </Text>
+      ) : null}
+      {visibleFinalized.entries.map((entry) => (
+        <TranscriptEntry key={entry.id} entry={entry} width={props.width} />
+      ))}
       {/* `pending` interleaves the in-flight assistant entry with tool
        *  rows in stream order — rendering them as separate buckets would
        *  flip the visible order when the model emits text before a tool
-       *  call. <Static> can't carry these because they still mutate
-       *  (assistant text streaming, tool dot transitioning). The
+       *  call. The
        *  minHeight=1 keeps the input bar pinned when the bucket is
        *  empty. */}
       <Box flexDirection="column" minHeight={1}>

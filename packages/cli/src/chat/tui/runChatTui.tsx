@@ -494,6 +494,7 @@ export async function runChat(
     model,
     cwd: context.cwd,
     apiMode: getCliApiMode(),
+    version: '',
   });
 
   let activeApprovalPolicy = context.approvalPolicy;

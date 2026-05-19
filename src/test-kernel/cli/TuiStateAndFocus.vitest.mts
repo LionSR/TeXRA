@@ -29,7 +29,11 @@ import {
   completedProcessDisplayLines,
   isCompletedProcessError,
 } from '../../../packages/cli/src/chat/tui/state/completedProcessTranscript';
-import { splitTranscriptEntries } from '../../../packages/cli/src/chat/tui/panes/ConversationPane';
+import {
+  estimateTranscriptEntryRows,
+  selectFinalizedEntriesForViewport,
+  splitTranscriptEntries,
+} from '../../../packages/cli/src/chat/tui/panes/ConversationPane';
 import {
   appendAssistantTranscriptIfMissing,
   appendLocalAssistantTranscript,
@@ -315,6 +319,39 @@ describe('CLI transcript state', () => {
 
     expect(pending.map((entry) => entry.id)).toEqual(['model-response']);
     expect(finalized.map((entry) => entry.id)).toEqual(['local-help']);
+  });
+
+  it('selects a viewport-limited finalized transcript tail', () => {
+    const entries = [
+      {
+        id: 'old',
+        role: 'assistant',
+        text: 'old answer',
+        finalized: true,
+      },
+      {
+        id: 'middle',
+        role: 'user',
+        text: 'middle question',
+        finalized: true,
+      },
+      {
+        id: 'latest',
+        role: 'assistant',
+        text: 'latest answer',
+        finalized: true,
+      },
+    ] as const;
+
+    const latestRows = estimateTranscriptEntryRows(entries[2], 80);
+    const selected = selectFinalizedEntriesForViewport(
+      entries,
+      latestRows + 1,
+      80,
+    );
+
+    expect(selected.entries.map((entry) => entry.id)).toEqual(['latest']);
+    expect(selected.hiddenCount).toBe(2);
   });
 
   it('moves pre-session local slash-command output onto the resolved stream', () => {
