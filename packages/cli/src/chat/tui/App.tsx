@@ -157,7 +157,7 @@ export function App(props: AppProps): React.JSX.Element {
     slashPaletteOpen,
   });
   const foregroundSurface = pending ? (
-    <ApprovalModal pending={pending} />
+    <ApprovalModal pending={pending} availableRows={foregroundRows} />
   ) : childControlMode ? (
     <ChildControlPicker
       activeStreamId={activeStreamId}

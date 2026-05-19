@@ -2,7 +2,10 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - CLI TUI state
-import { computeTaskDetailLayout } from '../../../packages/cli/src/chat/tui/modals/ChildControlPicker';
+import {
+  computePickerListLayout,
+  computeTaskDetailLayout,
+} from '../../../packages/cli/src/chat/tui/modals/ChildControlPicker';
 import {
   buildChildControlItems,
   childPickerKeyAction,
@@ -184,6 +187,22 @@ describe('CLI child execution controls', () => {
       showCommand: true,
       showHints: true,
       visibleLineCount: 5,
+    });
+  });
+
+  it('keeps the highlighted picker item inside the visible window', () => {
+    expect(
+      computePickerListLayout({
+        availableRows: 12,
+        hasParentStream: true,
+        highlight: 8,
+        itemCount: 12,
+      }),
+    ).toMatchObject({
+      hiddenAfter: 2,
+      hiddenBefore: 7,
+      start: 7,
+      visibleCount: 3,
     });
   });
 });

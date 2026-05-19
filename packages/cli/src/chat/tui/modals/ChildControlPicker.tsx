@@ -81,6 +81,14 @@ export interface TaskDetailLayout {
   readonly visibleLineCount: number;
 }
 
+export interface PickerListLayout {
+  readonly end: number;
+  readonly hiddenAfter: number;
+  readonly hiddenBefore: number;
+  readonly start: number;
+  readonly visibleCount: number;
+}
+
 export function computeTaskDetailLayout({
   availableRows,
   hasTailLines,
@@ -115,6 +123,49 @@ export function computeTaskDetailLayout({
       hasTailLines && rows >= fixedRows + 1
         ? Math.max(1, availableOutputRows)
         : availableOutputRows,
+  };
+}
+
+export function computePickerListLayout({
+  availableRows,
+  hasParentStream,
+  highlight,
+  itemCount,
+}: {
+  readonly availableRows?: number;
+  readonly hasParentStream: boolean;
+  readonly highlight: number;
+  readonly itemCount: number;
+}): PickerListLayout {
+  const rows = Math.max(0, availableRows ?? 18);
+  const fixedRows =
+    2 + // border
+    1 + // title
+    (hasParentStream ? 1 : 0) +
+    1 + // list top margin
+    2; // hints margin + row
+  const rowBudget = Math.max(1, rows - fixedRows);
+  const windowStart = (count: number): number => {
+    const lastStart = Math.max(0, itemCount - count);
+    return Math.min(lastStart, Math.max(0, highlight - Math.floor(count / 2)));
+  };
+  let visibleCount = Math.min(itemCount, rowBudget);
+  for (let i = 0; i < 2; i += 1) {
+    const start = windowStart(visibleCount);
+    const end = start + visibleCount;
+    const markerRows =
+      rowBudget >= 3 ? (start > 0 ? 1 : 0) + (end < itemCount ? 1 : 0) : 0;
+    visibleCount = Math.min(itemCount, Math.max(1, rowBudget - markerRows));
+  }
+  const start = windowStart(visibleCount);
+  const end = start + visibleCount;
+  const markerRowsAllowed = rowBudget >= visibleCount + 1;
+  return {
+    end,
+    hiddenAfter: markerRowsAllowed ? Math.max(0, itemCount - end) : 0,
+    hiddenBefore: markerRowsAllowed ? start : 0,
+    start,
+    visibleCount,
   };
 }
 
@@ -266,6 +317,13 @@ export function ChildControlPicker({
   const tailItem = tailExecutionId
     ? items.find((item) => item.executionId === tailExecutionId)
     : undefined;
+  const listLayout = computePickerListLayout({
+    availableRows,
+    hasParentStream: activeStreamId !== undefined,
+    highlight,
+    itemCount: items.length,
+  });
+  const visibleItems = items.slice(listLayout.start, listLayout.end);
 
   useEffect(() => {
     setHighlight((current) => clampPickerIndex(current, items.length));
@@ -360,9 +418,18 @@ export function ChildControlPicker({
       ) : null}
       <Box flexDirection="column" marginTop={1}>
         {items.length > 0 ? (
-          items.map((item, index) =>
-            renderItem(item, index, index === highlight),
-          )
+          <>
+            {listLayout.hiddenBefore > 0 ? (
+              <Text dimColor>{`... ${listLayout.hiddenBefore} earlier`}</Text>
+            ) : null}
+            {visibleItems.map((item, offset) => {
+              const index = listLayout.start + offset;
+              return renderItem(item, index, index === highlight);
+            })}
+            {listLayout.hiddenAfter > 0 ? (
+              <Text dimColor>{`... ${listLayout.hiddenAfter} more`}</Text>
+            ) : null}
+          </>
         ) : (
           <Text dimColor>No active {pickerTitle(mode).toLowerCase()}.</Text>
         )}
