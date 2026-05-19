@@ -1,5 +1,3 @@
-// Standard library imports
-import { Buffer } from 'node:buffer';
 import { basename, dirname } from 'node:path';
 
 // Third-party imports
@@ -7,9 +5,7 @@ import {
   Anthropic,
   APIError as AnthropicAPIError,
   APIUserAbortError as AnthropicUserAbortError,
-  toFile,
 } from '@anthropic-ai/sdk';
-import { PDFDocument } from '@cantoo/pdf-lib';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -73,7 +69,6 @@ import {
   describeAttachments,
   formatAttachmentSummaryFromNotes,
   formatToolResultAsText,
-  loadAttachmentBuffer,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { computeCachePercentage } from './utils/usageNormalization';
@@ -81,6 +76,34 @@ import {
   tagAnthropicSdkError,
   withSdkErrorTag,
 } from './support/sdkErrorAdapters';
+import {
+  FILES_API_BETA,
+  CONTEXT_MANAGEMENT_BETA,
+  COMPACTION_BETA,
+  EXTENDED_CACHE_TTL_BETA,
+  SHORT_CACHE_CONTROL,
+  LONG_CACHE_CONTROL,
+  isLongCacheControl,
+  CACHE_CREATION_COST_MULTIPLIER_5M,
+  CACHE_CREATION_COST_MULTIPLIER_1H,
+  ensureBeta,
+  hasLongCacheControlMarker,
+  setupContextManagement,
+  logContextManagementFromResponse,
+  enforceCacheControlLimit,
+  type ContextManagementSetupOptions,
+} from './anthropicContextManagement';
+import {
+  extractDocumentBlocks,
+  analyzeDocumentSources,
+  replaceDocumentDataWithUploads,
+  type ReplaceDocumentUploadsResult,
+} from './anthropicDocumentHandling';
+import {
+  isSupportedImageMediaType,
+  uploadToolAttachments,
+  type UploadedAnthropicAttachment,
+} from './anthropicTools';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -125,35 +148,10 @@ import type {
   WebFetchToolResultBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
-/** Supported image media types from SDK's Base64ImageSource definition */
-const SUPPORTED_IMAGE_MEDIA_TYPES: ReadonlySet<string> = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-]);
-
-const isSupportedImageMediaType = (
-  mediaType: string,
-): mediaType is Base64ImageSource['media_type'] =>
-  SUPPORTED_IMAGE_MEDIA_TYPES.has(mediaType);
-
-interface UploadedAnthropicAttachment {
-  attachment: ToolFileAttachment;
-  fileId: string;
-  blockType: 'image' | 'document';
-  base64Data?: string;
-  mediaType?: string;
-}
-
 type ErrorWithRequestId = Error & { request_id?: string };
 
 /**
  * Extracts the tail of text content from a (possibly partial) BetaMessage.
- * The SDK's stream.currentMessage accumulates all content blocks as they
- * arrive, so on a stream failure this already holds whatever text was
- * generated — no custom buffering required. Returns the suffix because
- * continuation prompts only reference the last few hundred chars.
  */
 function extractPartialTextTail(
   message: BetaMessage | undefined,
@@ -180,24 +178,13 @@ const isAnyThinkingBlockParam = (
 const isBetaToolUseBlock = (block: BetaContentBlock): block is ToolUseBlock =>
   block.type === 'tool_use';
 
-/**
- * Anthropic-specific model handler implementation for managing API interactions and message processing.
- */
-
-const FILES_API_BETA: AnthropicBeta = 'files-api-2025-04-14';
 const SONNET_37_OUTPUT_BETA: AnthropicBeta = 'output-128k-2025-02-19';
 const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
-const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
-const COMPACTION_BETA: AnthropicBeta = 'compact-2026-01-12';
-const EXTENDED_CACHE_TTL_BETA: AnthropicBeta = 'extended-cache-ttl-2025-04-11';
 
 const OPUS_46_FULLNAME = 'claude-opus-4-6';
 const OPUS_47_FULLNAME = 'claude-opus-4-7';
 const SONNET_46_FULLNAME = 'claude-sonnet-4-6';
-
-/** Compaction must be triggered at or above this minimum input token threshold. */
-const MIN_COMPACTION_TRIGGER_TOKENS = 50_000;
 
 /**
  * 1M context window is available natively for Opus 4.6, Opus 4.7, and Sonnet 4.6
@@ -215,54 +202,6 @@ const THINKING_TEMPERATURE_EXCLUDED_PATTERNS = [
   'claude-haiku-4',
   'claude-3-7-sonnet',
 ];
-
-/**
- * Options for setting up context management configuration.
- */
-interface ContextManagementSetupOptions {
-  options: MessageCreateParams;
-  contextWindow: number;
-  thresholdPercent: number;
-}
-
-type CacheControlCompactionBlock = Extract<
-  BetaContentBlockParam,
-  { type: 'compaction' }
->;
-
-const SHORT_CACHE_CONTROL: CacheControlEphemeral = {
-  type: 'ephemeral',
-};
-
-const LONG_CACHE_CONTROL: CacheControlEphemeral = {
-  type: 'ephemeral',
-  ttl: '1h',
-};
-
-function isLongCacheControl(cacheControl: unknown): boolean {
-  if (!cacheControl || typeof cacheControl !== 'object') {
-    return false;
-  }
-  const marker = cacheControl as Partial<CacheControlEphemeral>;
-  return marker.type === 'ephemeral' && marker.ttl === '1h';
-}
-
-// Cache creation cost multipliers relative to base input price, by TTL.
-const CACHE_CREATION_COST_MULTIPLIER_5M = 1.25;
-const CACHE_CREATION_COST_MULTIPLIER_1H = 2.0;
-
-// Anthropic allows up to 4 cache breakpoint slots total. Top-level automatic
-// caching uses one slot, and the system prompt uses another when present.
-// enforceCacheControlLimit dynamically computes the remaining slots available
-// for message-level blocks (e.g. compaction blocks).
-const MAX_CACHE_BREAKPOINT_SLOTS = 4;
-
-const isCompactionCacheControlBlock = (
-  block: ContentBlockParam | ContentBlock | BetaContentBlockParam | undefined,
-): block is CacheControlCompactionBlock => {
-  if (block == null || typeof block !== 'object') return false;
-  return (block as { type?: string }).type === 'compaction';
-};
 
 export class ModelHandlerAnthropic extends ModelHandler<
   MessageParam,
@@ -296,7 +235,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       const contentBlocks = message.content;
       if (!Array.isArray(contentBlocks)) continue;
 
-      for (const block of this.extractDocumentBlocks(contentBlocks)) {
+      for (const block of extractDocumentBlocks(contentBlocks)) {
         const source = (block as DocumentBlockParam).source as
           | { type: string; file_id?: string }
           | undefined;
@@ -392,91 +331,28 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return true;
   }
 
-  /** Ensures a beta flag is included in options, initializing the array if needed. */
   private ensureBeta(options: MessageCreateParams, beta: AnthropicBeta): void {
-    if (!options.betas) {
-      options.betas = [];
-    }
-    if (!options.betas.includes(beta)) {
-      options.betas.push(beta);
-    }
+    ensureBeta(options, beta);
   }
 
   private hasLongCacheControlMarker(messages: MessageParam[]): boolean {
-    return messages.some((message) => {
-      if (!Array.isArray(message.content)) {
-        return false;
-      }
-      return message.content.some((block) =>
-        isLongCacheControl(
-          (block as { cache_control?: unknown }).cache_control,
-        ),
-      );
-    });
+    return hasLongCacheControlMarker(messages);
   }
 
   /**
    * Sets up context management configuration for Anthropic's server-side editing.
    * Must be called before token counting so estimate options match create options.
    */
-  private setupContextManagement({
-    options,
-    contextWindow,
-    thresholdPercent,
-  }: ContextManagementSetupOptions): void {
-    if (!this.isToolUseMode()) {
-      return;
-    }
-
-    if (!this.isCompactionEligibleModel()) {
-      return;
-    }
-
-    // Consume the manual compaction flag only after preconditions pass
-    const forceCompaction = this.compactionRequested;
-    if (forceCompaction) {
+  private setupContextManagement(opts: ContextManagementSetupOptions): void {
+    const consumed = setupContextManagement(
+      opts,
+      this.isToolUseMode(),
+      this.isCompactionEligibleModel(),
+      this.compactionRequested,
+    );
+    if (consumed) {
       this.compactionRequested = false;
     }
-
-    // Only enable context management if threshold is configured (> 0) or manually requested
-    if (thresholdPercent <= 0 && !forceCompaction) {
-      return;
-    }
-
-    this.ensureBeta(options, CONTEXT_MANAGEMENT_BETA);
-
-    const contextManagementEdits = [
-      ...(options.context_management?.edits ?? []),
-    ];
-
-    if (
-      !contextManagementEdits.some((edit) => edit.type === 'compact_20260112')
-    ) {
-      this.ensureBeta(options, COMPACTION_BETA);
-      // Anthropic currently enforces a 50K minimum trigger value for compact_20260112.
-      // Keep manual compaction at that floor so the server accepts the request and
-      // compacts on the next call for any normal conversation.
-      const compactionTriggerTokens = forceCompaction
-        ? MIN_COMPACTION_TRIGGER_TOKENS
-        : Math.max(
-            MIN_COMPACTION_TRIGGER_TOKENS,
-            Math.floor((thresholdPercent / 100) * contextWindow),
-          );
-
-      contextManagementEdits.push({
-        type: 'compact_20260112',
-        trigger: {
-          type: 'input_tokens',
-          value: compactionTriggerTokens,
-        },
-        pause_after_compaction: false,
-      });
-    }
-
-    options.context_management = {
-      ...(options.context_management ?? {}),
-      edits: contextManagementEdits,
-    } satisfies BetaContextManagementConfig;
   }
 
   async getClient(): Promise<Anthropic> {
@@ -627,7 +503,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     this.enforceCacheControlLimit(messages, reservedCacheSlots, cacheControl);
 
-    const documentAnalysis = this.analyzeDocumentSources(messages);
+    const documentAnalysis = analyzeDocumentSources(messages);
     let hasFileReference = documentAnalysis.hasFileSource;
 
     // Prune tracked PDF page counts for file IDs no longer in messages
@@ -1000,399 +876,50 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return { response };
   }
 
-  /**
-   * Log context management events from the Anthropic response.
-   * Compaction events are surfaced via `content` blocks and usage iterations.
-   */
   private logContextManagementFromResponse(
     response: BetaMessage,
     contextWindow: number,
   ): void {
-    // Anthropic's input_tokens excludes cached tokens (unlike OpenAI where it's the total).
-    // Per SDK docs: "Total input tokens is the summation of input_tokens,
-    // cache_creation_input_tokens, and cache_read_input_tokens."
-    const totalInputTokens =
-      response.usage.input_tokens +
-      (response.usage.cache_read_input_tokens ?? 0) +
-      (response.usage.cache_creation_input_tokens ?? 0);
-
-    const compactionBlock = response.content.find(
-      (block): block is BetaCompactionBlock => block.type === 'compaction',
-    );
-    if (!compactionBlock) {
-      return;
-    }
-
-    const compactionIteration = (response.usage as BetaUsage).iterations?.find(
-      (iteration): iteration is BetaCompactionIterationUsage =>
-        iteration.type === 'compaction',
-    );
-    const tokensBefore = compactionIteration
-      ? compactionIteration.input_tokens +
-        compactionIteration.cache_read_input_tokens +
-        compactionIteration.cache_creation_input_tokens
-      : totalInputTokens;
-    const details = compactionBlock.content
-      ? `Anthropic native compaction (${compactionBlock.content.length.toLocaleString()} chars)`
-      : 'Anthropic native compaction (empty summary)';
-    const summary = compactionBlock.content?.trim() || undefined;
-
-    this.logger.logContextManagement(
-      `Server-side compaction: summarized context`,
-      {
-        action: 'compaction',
-        tokensBefore,
-        tokensAfter: totalInputTokens,
-        contextWindow,
-        utilizationBefore: (tokensBefore / contextWindow) * 100,
-        utilizationAfter: (totalInputTokens / contextWindow) * 100,
-        details,
-        summary,
-      },
-    );
+    logContextManagementFromResponse(response, contextWindow, this.logger);
   }
 
-  /**
-   * Enforces the Anthropic cache breakpoint slot limit for message-level blocks.
-   *
-   * With top-level automatic caching, only compaction blocks need explicit
-   * cache_control markers in messages. All other block-level markers (including
-   * legacy markers from saved conversations) are stripped. Compaction markers
-   * are then trimmed to fit within the remaining slot budget.
-   *
-   * @param messages - The conversation messages to enforce limits on
-   * @param reservedSlots - Number of slots already used by system prompt
-   *   and top-level automatic caching
-   */
   private enforceCacheControlLimit(
     messages: MessageParam[],
     reservedSlots: number,
     cacheControl: CacheControlEphemeral,
   ): void {
-    if (!this.capabilities.supportsPromptCaching) {
-      return;
-    }
-
-    const compactionBlocks: CacheControlCompactionBlock[] = [];
-
-    for (const message of messages) {
-      const content = message.content;
-      if (!Array.isArray(content) || !content.length) {
-        continue;
-      }
-
-      for (const block of content) {
-        if (!block || typeof block !== 'object') {
-          continue;
-        }
-
-        // Cast to a broader type that includes compaction blocks (which appear
-        // at runtime via server-side context management but aren't in
-        // ContentBlockParam).
-        const anyBlock = block as ContentBlockParam | BetaContentBlockParam;
-
-        // Compaction blocks keep an explicit marker, but it must match the
-        // current request's top-level TTL so Anthropic sees monotone breakpoints.
-        if (isCompactionCacheControlBlock(anyBlock)) {
-          anyBlock.cache_control = cacheControl;
-          compactionBlocks.push(anyBlock);
-          continue;
-        }
-
-        // Strip cache_control from all other blocks (legacy markers from saved
-        // conversations or ineligible block types). Top-level automatic caching
-        // handles the "last block" breakpoint now.
-        if ('cache_control' in block) {
-          delete (block as { cache_control?: unknown }).cache_control;
-        }
-      }
-    }
-
-    // Trim compaction markers if they exceed the remaining slot budget
-    const availableSlots = Math.max(
-      0,
-      MAX_CACHE_BREAKPOINT_SLOTS - reservedSlots,
+    enforceCacheControlLimit(
+      messages,
+      reservedSlots,
+      cacheControl,
+      this.capabilities.supportsPromptCaching,
     );
-    const excess = Math.max(0, compactionBlocks.length - availableSlots);
-    for (let idx = 0; idx < excess; idx += 1) {
-      delete compactionBlocks[idx].cache_control;
-    }
   }
 
   private async replaceDocumentDataWithUploads(
     client: Anthropic,
     messages: MessageParam[],
-  ): Promise<{ uploaded: boolean; hasFileReference: boolean }> {
-    if (!this.capabilities.supportsNativePdf) {
-      return { uploaded: false, hasFileReference: false };
-    }
-
-    let uploaded = false;
-    let hasFileReference = false;
-
-    for (const message of messages) {
-      const contentBlocks = message.content;
-      if (!Array.isArray(contentBlocks)) {
-        continue;
-      }
-
-      for (const block of this.extractDocumentBlocks(contentBlocks)) {
-        // Cast to beta source type: upload code stores BetaFileDocumentSource
-        // entries (via Files API) into non-beta message arrays.
-        const source = block.source as BetaRequestDocumentBlock['source'];
-
-        if (source.type === 'file') {
-          hasFileReference = true;
-          continue;
-        }
-
-        if (source.type !== 'base64') {
-          continue;
-        }
-
-        const mediaType = source.media_type;
-        if (mediaType !== 'application/pdf') {
-          continue;
-        }
-
-        const base64Data = source.data;
-        if (!base64Data) {
-          continue;
-        }
-
-        const filename =
-          (block.title ?? 'document.pdf').trim() || 'document.pdf';
-        const sanitizedFilename = this.sanitizeFilename(filename);
-        let buffer: Buffer | undefined;
-        let uploadedSource: BetaRequestDocumentBlock['source'] | undefined;
-
-        try {
-          buffer = Buffer.from(base64Data, 'base64');
-
-          // Count pages before upload so we can track them for future validation
-          const pageCount = await this.countPdfPagesFromBuffer(buffer);
-
-          const uploadedFile = await client.beta.files.upload({
-            file: await toFile(buffer!, sanitizedFilename, {
-              type: mediaType,
-            }),
-            betas: [FILES_API_BETA],
-          });
-
-          uploadedSource = {
-            type: 'file',
-            file_id: uploadedFile.id,
-          } as BetaRequestDocumentBlock['source'];
-
-          // Track page count so uploadToolAttachments can enforce
-          // the PDF page limit in subsequent rounds
-          if (pageCount > 0) {
-            this.uploadedPdfPageCounts.set(uploadedFile.id, pageCount);
-          }
-        } finally {
-          if (buffer) {
-            buffer.fill(0);
-            buffer = undefined;
-          }
-        }
-
-        if (uploadedSource) {
-          delete (source as { data?: string }).data;
-          (block as BetaRequestDocumentBlock).source = uploadedSource;
-          uploaded = true;
-          hasFileReference = true;
-        }
-      }
-    }
-
-    return { uploaded, hasFileReference };
+  ): Promise<ReplaceDocumentUploadsResult> {
+    return replaceDocumentDataWithUploads(
+      client,
+      messages,
+      this.capabilities.supportsNativePdf,
+      this.uploadedPdfPageCounts,
+    );
   }
 
-  /**
-   * Extracts all document blocks from a content block array, including those
-   * nested inside tool_result blocks. PDFs attached as tool result attachments
-   * (e.g., from ArXiv downloads) are nested inside tool_result content and
-   * would be missed by a top-level-only scan.
-   */
-  private extractDocumentBlocks(
-    contentBlocks: ContentBlockParam[],
-  ): DocumentBlockParam[] {
-    const documents: DocumentBlockParam[] = [];
-    for (const block of contentBlocks) {
-      if (block.type === 'document' && block.source) {
-        documents.push(block);
-      } else if (block.type === 'tool_result' && Array.isArray(block.content)) {
-        for (const nested of block.content) {
-          if (
-            nested.type === 'document' &&
-            (nested as DocumentBlockParam).source
-          ) {
-            documents.push(nested as DocumentBlockParam);
-          }
-        }
-      }
-    }
-    return documents;
-  }
-
-  private analyzeDocumentSources(messages: MessageParam[]): {
-    hasFileSource: boolean;
-    hasBase64Pdf: boolean;
-  } {
-    let hasFileSource = false;
-    let hasBase64Pdf = false;
-
-    for (const message of messages) {
-      const contentBlocks = message.content;
-      if (!Array.isArray(contentBlocks)) {
-        continue;
-      }
-
-      for (const block of this.extractDocumentBlocks(contentBlocks)) {
-        const source = block.source as BetaRequestDocumentBlock['source'];
-        if (source.type === 'file') {
-          hasFileSource = true;
-        } else if (
-          source.type === 'base64' &&
-          source.media_type === 'application/pdf' &&
-          source.data
-        ) {
-          hasBase64Pdf = true;
-        }
-
-        // Early exit if both found
-        if (hasFileSource && hasBase64Pdf) {
-          return { hasFileSource: true, hasBase64Pdf: true };
-        }
-      }
-    }
-
-    return { hasFileSource, hasBase64Pdf };
-  }
-
-  /**
-   * Count pages in a PDF buffer without writing to disk.
-   * Returns 0 on parse failure so the API can enforce the limit as fallback.
-   */
-  private async countPdfPagesFromBuffer(buffer: Buffer): Promise<number> {
-    try {
-      const pdfDoc = await PDFDocument.load(buffer, {
-        updateMetadata: false,
-        ignoreEncryption: true,
-      });
-      return pdfDoc.getPageCount();
-    } catch {
-      return 0;
-    }
-  }
-
-  /**
-   * Uploads tool file attachments (images and PDFs) to the Anthropic Files API.
-   */
   private async uploadToolAttachments(
     client: Anthropic,
     attachments: ToolFileAttachment[],
-  ): Promise<{
-    uploaded: UploadedAnthropicAttachment[];
-    unsupported: ToolFileAttachment[];
-    pageLimitExceeded: ToolFileAttachment[];
-  }> {
-    const uploaded: UploadedAnthropicAttachment[] = [];
-    const unsupported: ToolFileAttachment[] = [];
-    const pageLimitExceeded: ToolFileAttachment[] = [];
-
-    for (const attachment of attachments) {
-      const mimeType = attachment.mimeType ?? 'application/octet-stream';
-      const normalized = mimeType.toLowerCase();
-      const isImage = isSupportedImageMediaType(normalized);
-      const isPdf = normalized === 'application/pdf';
-
-      if (!isImage && !isPdf) {
-        unsupported.push(attachment);
-        continue;
-      }
-
-      let buffer: Buffer | undefined;
-      try {
-        buffer = await loadAttachmentBuffer(attachment);
-      } catch (err) {
-        this.logger.warn(
-          `Unable to read attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
-        );
-        unsupported.push(attachment);
-        continue;
-      }
-
-      // Check PDF page limit before uploading
-      let pdfPageCount = 0;
-      if (isPdf) {
-        pdfPageCount = await this.countPdfPagesFromBuffer(buffer);
-        if (
-          this.getTrackedPdfPageCount() + pdfPageCount >
-          this.getMaxPdfPages()
-        ) {
-          pageLimitExceeded.push(attachment);
-          buffer.fill(0);
-          buffer = undefined;
-          continue;
-        }
-      }
-
-      try {
-        const filename = this.sanitizeFilename(
-          attachment.path ??
-            (isPdf
-              ? 'document.pdf'
-              : `image.${normalized.split('/').pop() ?? 'png'}`),
-        );
-
-        const base64Data = buffer.toString('base64');
-        const uploadedFile = await client.beta.files.upload({
-          file: await toFile(buffer!, filename, { type: mimeType }),
-          betas: [FILES_API_BETA],
-        });
-
-        if (isPdf && pdfPageCount > 0) {
-          this.uploadedPdfPageCounts.set(uploadedFile.id, pdfPageCount);
-        }
-
-        uploaded.push({
-          attachment,
-          fileId: uploadedFile.id,
-          blockType: isPdf ? 'document' : 'image',
-          base64Data,
-          mediaType: normalized,
-        });
-      } catch (err) {
-        unsupported.push(attachment);
-      } finally {
-        if (buffer) {
-          buffer.fill(0);
-          buffer = undefined;
-        }
-      }
-    }
-
-    return { uploaded, unsupported, pageLimitExceeded };
-  }
-
-  private sanitizeFilename(filename: string): string {
-    const baseName = basename(filename) || filename;
-    const trimmed = baseName.trim();
-    const withoutControlChars = Array.from(trimmed, (char) =>
-      char.charCodeAt(0) < 32 ? '_' : char,
-    ).join('');
-    const withoutForbidden = withoutControlChars.replaceAll(
-      /[:<>"|?*\\/]/g,
-      '_',
+  ) {
+    return uploadToolAttachments(
+      client,
+      attachments,
+      this.logger,
+      this.uploadedPdfPageCounts,
+      () => this.getTrackedPdfPageCount(),
+      () => this.getMaxPdfPages(),
     );
-    // Use || here (not ??) because we need to catch empty strings, not just null/undefined
-    const sanitized = withoutForbidden || 'document.pdf';
-    // Removing directory information avoids Anthropic rejecting names that contain
-    // slashes, but it also means the model loses subdirectory context when
-    // generating citations for assets or pictures that originally lived in nested
-    // folders.
-    return sanitized.slice(0, 255);
   }
 
   /** Initializes the message array for Anthropic chat models with user prefix, request, and optional media. */
