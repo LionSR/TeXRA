@@ -34,12 +34,13 @@ export function HeaderPane(): React.JSX.Element {
         <Text dimColor>{shortCliApiMode(meta.apiMode)}</Text>
       </Box>
       <Box>
-        <Text dimColor>agent: </Text>
-        <Text color="cyan">{meta.agent || 'chat'}</Text>
-        <Text dimColor> · model: </Text>
-        <Text>{meta.model || '—'}</Text>
+        <Text wrap="truncate-end">
+          agent: {meta.agent || 'chat'} · model: {meta.model || '—'}
+        </Text>
       </Box>
-      <Text dimColor>{shortenCwd(meta.cwd)}</Text>
+      <Text dimColor wrap="truncate-end">
+        {shortenCwd(meta.cwd)}
+      </Text>
     </Box>
   );
 }
