@@ -161,7 +161,7 @@ export interface ProgressEventPayloads {
   /** Emitted whenever an Odyssey record mutates (start/pause/resume/
    *  complete/abandon/edit-objective/cap-reached) so UI surfaces (header
    *  chip, settings tab, progress board) can refresh. The agent owns state
-   *  transitions via the odyssey() tool; the bus event is how those flow
+   *  transitions through the plan tool; the bus event is how those flow
    *  back to the UI. */
   odysseyStateChanged: { streamId: StreamTabId };
 
