@@ -49,7 +49,7 @@ export async function maybeBuildOdysseyContinuation(
 
   // Safety cap: pause once we've injected `maxContinuations` follow-ups
   // since the last resume / start. Acts as a backstop if the model never
-  // calls odyssey(complete) on its own.
+  // calls plan(command="complete") on its own.
   if (odyssey.continuationCount >= odyssey.maxContinuations) {
     await OdysseyStore.pauseForContinuationCap(ctx.streamId);
     return null;

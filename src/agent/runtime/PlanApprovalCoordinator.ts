@@ -15,12 +15,15 @@ import {
 
 export type PlanApprovalResult =
   | { action: 'approve' }
+  | { action: 'approve_and_odyssey' }
   | { action: 'reject'; feedback?: string }
   | { action: 'timeout' };
 
 export interface PlanApprovalRequestOptions {
   approvalId: string;
   plan: Plan;
+  /** Whether the odyssey feature flag is enabled — gates the extra button. */
+  odysseyEnabled?: boolean;
   /** Timeout in milliseconds (default: wait indefinitely). */
   timeoutMs?: number;
 }
@@ -29,6 +32,7 @@ interface PlanApprovalShowPayload extends Record<string, unknown> {
   approvalId: string;
   streamId: string;
   plan: Plan;
+  odysseyEnabled: boolean;
 }
 
 export class PlanApprovalCoordinator extends BasePromiseCoordinator<
@@ -53,7 +57,7 @@ export class PlanApprovalCoordinator extends BasePromiseCoordinator<
     streamId: string,
     options: PlanApprovalRequestOptions,
   ): Promise<PlanApprovalResult> {
-    const { approvalId, plan, timeoutMs } = options;
+    const { approvalId, plan, odysseyEnabled = false, timeoutMs } = options;
 
     this.streamApprovalMap.set(streamId, approvalId);
     this.approvalStreamMap.set(approvalId, streamId);
@@ -63,7 +67,7 @@ export class PlanApprovalCoordinator extends BasePromiseCoordinator<
 
     return this.waitForUserAction(
       approvalId,
-      { approvalId, streamId, plan },
+      { approvalId, streamId, plan, odysseyEnabled },
       { timeoutMs },
     );
   }
