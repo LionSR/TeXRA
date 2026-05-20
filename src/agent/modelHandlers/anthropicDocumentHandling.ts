@@ -177,7 +177,7 @@ export async function replaceDocumentDataWithUploads(
         const pageCount = await countPdfPagesFromBuffer(buffer);
 
         const uploadedFile = await client.beta.files.upload({
-          file: await toFile(buffer!, sanitizedFilename, {
+          file: await toFile(buffer, sanitizedFilename, {
             type: mediaType,
           }),
           betas: [FILES_API_BETA],

@@ -25,6 +25,7 @@ import {
   STREAM_STATUS,
   END_GROUP_STATUS,
   EXECUTION_STATUS,
+  type EndGroupStatus,
   type StreamTabId,
   type ExecutionId,
   type OutputFileInfo,
@@ -230,11 +231,21 @@ async function runFlowWithLifecycle(
     }
 
     if (kind === 'abort') {
-      return buildStoppedFlowResult(category, ctx.executionId, streamId);
+      return buildTerminalFlowResult(
+        category,
+        END_GROUP_STATUS.STOPPED,
+        ctx.executionId,
+        streamId,
+      );
     }
 
     if (options?.isSubagent) {
-      const result = buildErrorFlowResult(category, ctx.executionId, streamId);
+      const result = buildTerminalFlowResult(
+        category,
+        END_GROUP_STATUS.ERROR,
+        ctx.executionId,
+        streamId,
+      );
       try {
         await options.onError?.(err, result);
       } catch (deliveryError) {
@@ -253,47 +264,18 @@ async function runFlowWithLifecycle(
   }
 }
 
-function buildErrorFlowResult(
+function buildTerminalFlowResult(
   category: 'workflow' | 'toolUse',
+  status: EndGroupStatus,
   executionId: ExecutionId,
   streamId: StreamTabId,
 ): AgentFlowResult {
   if (category === 'toolUse') {
-    return {
-      category,
-      status: END_GROUP_STATUS.ERROR,
-      executionId,
-      streamId,
-    };
+    return { category, status, executionId, streamId };
   }
-
   return {
     category,
-    status: END_GROUP_STATUS.ERROR,
-    executionId,
-    streamId,
-    outputs: [],
-    compileFailures: [],
-  };
-}
-
-function buildStoppedFlowResult(
-  category: 'workflow' | 'toolUse',
-  executionId: ExecutionId,
-  streamId: StreamTabId,
-): AgentFlowResult {
-  if (category === 'toolUse') {
-    return {
-      category,
-      status: END_GROUP_STATUS.STOPPED,
-      executionId,
-      streamId,
-    };
-  }
-
-  return {
-    category,
-    status: END_GROUP_STATUS.STOPPED,
+    status,
     executionId,
     streamId,
     outputs: [],

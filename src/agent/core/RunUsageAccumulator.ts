@@ -7,29 +7,15 @@ import {
   type NormalizedUsage,
 } from '@agent/types/NormalizedUsage';
 
+const TokenCountSchema = z.int().nonnegative();
+
 /**
- * Default values for run usage totals - exported for use in schema defaults.
+ * Schema for run usage totals. Internal only.
  *
  * `totalCost` is the running sum of `NormalizedUsage.cost`, which is already
  * calculated per provider (including prompt-cache discounts or creation
  * premiums). No extra adjustments are applied here.
  */
-export const DEFAULT_TOTALS = {
-  firstInputTokens: 0,
-  totalInputTokens: 0,
-  totalOutputTokens: 0,
-  totalCost: 0,
-  totalCacheReadInputTokens: 0,
-  totalCacheMissInputTokens: 0,
-  totalCacheCreationInputTokens: 0,
-  totalReasoningTokens: 0,
-  totalToolUsePromptTokens: 0,
-  totalServerToolRequests: 0,
-} as const;
-
-const TokenCountSchema = z.int().nonnegative();
-
-/** Schema for run usage totals. Internal only. */
 const RunUsageTotalsSchema = z.object({
   firstInputTokens: TokenCountSchema.prefault(0),
   totalInputTokens: TokenCountSchema.prefault(0),
@@ -44,6 +30,17 @@ const RunUsageTotalsSchema = z.object({
 });
 export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
 
+/**
+ * Build a fresh default totals object from the schema.
+ *
+ * Single source of truth: the per-field `.prefault(0)` declarations on
+ * `RunUsageTotalsSchema` drive the result, so adding a new field there
+ * automatically extends this default without manual sync.
+ */
+export function createDefaultTotals(): RunUsageTotals {
+  return RunUsageTotalsSchema.parse({});
+}
+
 /** Schema for normalized usage snapshot. Internal only. */
 const NormalizedUsageSnapshotSchema = z.object({
   round: z.int().nonnegative(),
@@ -55,7 +52,7 @@ const NormalizedUsageSnapshotSchema = z.object({
  * Uses .prefault() for input normalization before validation.
  */
 export const RunUsageAccumulatorJSONSchema = z.object({
-  totals: RunUsageTotalsSchema.prefault(DEFAULT_TOTALS),
+  totals: RunUsageTotalsSchema.prefault(() => createDefaultTotals()),
   normalizedSnapshots: z.array(NormalizedUsageSnapshotSchema).prefault([]),
 });
 
