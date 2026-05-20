@@ -20,6 +20,7 @@ import {
 import {
   allocateMiddleRows,
   allocateSidePanelRows,
+  appEscapeInterruptActive,
   appFocusShortcutsActive,
 } from '../../../packages/cli/src/chat/tui/App';
 import {
@@ -188,6 +189,49 @@ describe('CLI TUI row allocation', () => {
       appFocusShortcutsActive({
         inputDisabled: false,
         reverseSearchOpen: false,
+        slashPaletteOpen: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('only lets Escape interrupt when no foreground input owns it', () => {
+    expect(
+      appEscapeInterruptActive({
+        inputDisabled: false,
+        reverseSearchOpen: false,
+        runPending: true,
+        slashPaletteOpen: false,
+      }),
+    ).toBe(true);
+    expect(
+      appEscapeInterruptActive({
+        inputDisabled: false,
+        reverseSearchOpen: false,
+        runPending: false,
+        slashPaletteOpen: false,
+      }),
+    ).toBe(false);
+    expect(
+      appEscapeInterruptActive({
+        inputDisabled: true,
+        reverseSearchOpen: false,
+        runPending: true,
+        slashPaletteOpen: false,
+      }),
+    ).toBe(false);
+    expect(
+      appEscapeInterruptActive({
+        inputDisabled: false,
+        reverseSearchOpen: true,
+        runPending: true,
+        slashPaletteOpen: false,
+      }),
+    ).toBe(false);
+    expect(
+      appEscapeInterruptActive({
+        inputDisabled: false,
+        reverseSearchOpen: false,
+        runPending: true,
         slashPaletteOpen: true,
       }),
     ).toBe(false);

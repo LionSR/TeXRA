@@ -752,6 +752,10 @@ export async function runChat(
   const ink = render(
     <App
       onSubmit={handleSubmit}
+      canInterruptActiveRun={() =>
+        Boolean(session.runPromise && !session.runCompleted)
+      }
+      onInterruptActive={interruptActive}
       onKillExecution={(executionId) => {
         clearApprovals();
         killExecution(executionId);
