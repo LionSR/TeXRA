@@ -205,7 +205,7 @@ async function findClaudeBinaryPathUncached(): Promise<string | undefined> {
  * Locate the Claude binary inside an Electron packaged app's unpacked
  * resources directory.
  */
-export async function findClaudeBinaryInElectronResources(
+async function findClaudeBinaryInElectronResources(
   resourcesPath: string,
 ): Promise<string | undefined> {
   const info = PLATFORM_INFO[`${process.platform}-${process.arch}`];
