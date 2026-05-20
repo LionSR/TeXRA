@@ -15,11 +15,7 @@ import { LEAN_SERVER_MODE_LABELS } from './leanConstants';
 
 export type LeanServerMode = keyof typeof LEAN_SERVER_MODE_LABELS;
 
-export type LeanServerStatus =
-  | 'starting'
-  | 'running'
-  | 'error'
-  | 'stopped';
+export type LeanServerStatus = 'starting' | 'running' | 'error' | 'stopped';
 
 export interface LeanServerInfo {
   readonly id: string;
@@ -92,7 +88,10 @@ export interface UpdateLeanServerPatch {
   readonly errorMessage?: string;
 }
 
-export function updateLeanServer(id: string, patch: UpdateLeanServerPatch): void {
+export function updateLeanServer(
+  id: string,
+  patch: UpdateLeanServerPatch,
+): void {
   const existing = servers.get(id);
   if (!existing) return;
   servers.set(id, {

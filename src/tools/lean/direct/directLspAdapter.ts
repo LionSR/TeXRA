@@ -18,10 +18,7 @@ import { warn } from '@logger/logUtils';
 
 import { runLakeCommand } from './lakeCommands';
 import { LeanSession } from './leanSession';
-import type {
-  LeanFileCommand,
-  LeanProjectCommand,
-} from '../leanConstants';
+import type { LeanFileCommand, LeanProjectCommand } from '../leanConstants';
 import type { LeanVscodeServices } from '../leanVscodeServices';
 import type {
   LeanDiagnostic,
@@ -94,7 +91,9 @@ export function createDirectLspLeanAdapter(
       return session?.getDiagnosticsCache(filePath) ?? [];
     },
 
-    async fetchDiagnosticsForFile(file: string): Promise<LeanDiagnostic[] | null> {
+    async fetchDiagnosticsForFile(
+      file: string,
+    ): Promise<LeanDiagnostic[] | null> {
       try {
         const session = await getSession(file);
         return await session.fetchDiagnostics(file);
@@ -235,7 +234,11 @@ export function createDirectLspLeanAdapter(
       // Open the file before the request so the LSP server has parsed it.
       await session.fetchDiagnostics(filePath).catch(() => undefined);
       const data = await invoke(session);
-      if (!data) return { data: null, error: 'Lean returned no data for this position.' };
+      if (!data)
+        return {
+          data: null,
+          error: 'Lean returned no data for this position.',
+        };
       return { data };
     } catch (error) {
       return {

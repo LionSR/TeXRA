@@ -47,8 +47,14 @@ export class JsonRpcConnection {
   private nextId = 1;
   private buffer = Buffer.alloc(0);
   private readonly pending = new Map<RpcId, PendingRequest>();
-  private readonly notificationHandlers = new Map<string, NotificationHandler>();
-  private readonly serverRequestHandlers = new Map<string, ServerRequestHandler>();
+  private readonly notificationHandlers = new Map<
+    string,
+    NotificationHandler
+  >();
+  private readonly serverRequestHandlers = new Map<
+    string,
+    ServerRequestHandler
+  >();
   private closed = false;
   private closeError?: Error;
 
@@ -138,13 +144,15 @@ export class JsonRpcConnection {
         this.write({
           jsonrpc: '2.0',
           id: message.id,
-          error: { code: -32601, message: `Unhandled method: ${message.method}` },
+          error: {
+            code: -32601,
+            message: `Unhandled method: ${message.method}`,
+          },
         });
         return;
       }
       handler(message.params).then(
-        (result) =>
-          this.write({ jsonrpc: '2.0', id: message.id, result }),
+        (result) => this.write({ jsonrpc: '2.0', id: message.id, result }),
         (error: unknown) =>
           this.write({
             jsonrpc: '2.0',
@@ -160,7 +168,9 @@ export class JsonRpcConnection {
       this.pending.delete(message.id);
       if (message.error) {
         pending.reject(
-          new Error(`LSP error ${message.error.code}: ${message.error.message}`),
+          new Error(
+            `LSP error ${message.error.code}: ${message.error.message}`,
+          ),
         );
       } else {
         pending.resolve(message.result);

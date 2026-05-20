@@ -29,7 +29,6 @@ import type {
   PublishDiagnosticsParams,
 } from 'vscode-languageserver-protocol';
 
-
 const LOG_CHANNEL = 'lean.direct';
 
 const LEAN_LANGUAGE_ID = 'lean4';
@@ -140,7 +139,11 @@ export class LeanSession {
     return (await this.rpc!.request(method, params)) as T;
   }
 
-  getPlainGoal(filePath: string, line: number, column: number): Promise<PlainGoal | null> {
+  getPlainGoal(
+    filePath: string,
+    line: number,
+    column: number,
+  ): Promise<PlainGoal | null> {
     return this.sendPositionRequest<PlainGoal | null>(
       filePath,
       line,
@@ -214,7 +217,8 @@ export class LeanSession {
       this.options.onExit?.();
       updateLeanServer(this.id, {
         status: code === 0 ? 'stopped' : 'error',
-        errorMessage: code === 0 ? undefined : `Server exited with code ${code}`,
+        errorMessage:
+          code === 0 ? undefined : `Server exited with code ${code}`,
       });
       this.child = undefined;
       this.rpc?.dispose('Lean server exited');
@@ -243,7 +247,9 @@ export class LeanSession {
           processId: process.pid,
           clientInfo: { name: 'texra-direct-lsp' },
           rootUri: pathToUri(root),
-          workspaceFolders: [{ uri: pathToUri(root), name: path.basename(root) }],
+          workspaceFolders: [
+            { uri: pathToUri(root), name: path.basename(root) },
+          ],
           capabilities: {
             textDocument: {
               synchronization: { didSave: false, willSave: false },
@@ -382,7 +388,11 @@ function uriToPath(uri: string): string | null {
   }
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  message: string,
+): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => reject(new Error(message)), ms);

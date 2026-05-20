@@ -332,7 +332,9 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
         resolveLean4Prerequisites(probeResult);
       if (!extensionAvailable && !lakeAvailable) return 'Needs setup';
       const activeCount = listLeanServers().length;
-      return activeCount > 0 ? `${activeCount} server${activeCount > 1 ? 's' : ''} active` : undefined;
+      return activeCount > 0
+        ? `${activeCount} server${activeCount > 1 ? 's' : ''} active`
+        : undefined;
     },
     detailCheck: async (probeResult) => {
       const { extensionAvailable, lakeAvailable } =
