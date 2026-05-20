@@ -124,8 +124,8 @@ const STATUS_TO_EVENT_KIND: Record<OdysseyStatus, OdysseyEventKind> = {
 const ALLOWED_TRANSITIONS: Record<OdysseyStatus, readonly OdysseyStatus[]> = {
   active: ['paused', 'complete', 'abandoned'],
   // paused → complete: the model can still be invoked from a paused stream
-  // by user input, and may call odyssey(complete) after verifying the
-  // objective. Don't force a resume just to mark it done.
+  // by user input, and may call plan(command="complete") after verifying
+  // the objective. Don't force a resume just to mark it done.
   paused: ['active', 'complete', 'abandoned'],
   complete: [],
   abandoned: [],

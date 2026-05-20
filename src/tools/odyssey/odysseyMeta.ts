@@ -12,7 +12,7 @@ export const ODYSSEY_HISTORY_LIMIT = 200;
 /**
  * Default maximum continuations before the Odyssey auto-pauses for user
  * confirmation. Acts as a safety net so a model that never calls
- * `odyssey(complete)` doesn't loop forever.
+ * `plan(command="complete")` doesn't loop forever.
  */
 export const ODYSSEY_DEFAULT_MAX_CONTINUATIONS = 50;
 

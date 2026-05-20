@@ -30,11 +30,11 @@ continuation:
     - The audit must prove completion, not merely fail to find
       remaining work.
 
-    Only call `odyssey(complete)` when current evidence proves every
-    requirement is satisfied; cite that evidence in `reason`.
+    Only call `plan(command="complete")` when current evidence proves
+    every requirement is satisfied; cite that evidence in `reason`.
     Otherwise keep working in scoped checkpoints. Self-pause via
-    `odyssey(pause)` only when you genuinely need user input to
-    proceed.
+    `plan(command="pause")` only when you genuinely need user input
+    to proceed.
     </odyssey_context>
 
 objective_updated:
@@ -49,7 +49,8 @@ objective_updated:
     </objective>
 
     Re-orient against the new objective. Avoid continuing work that
-    only served the previous one. Do not call `odyssey(complete)`
-    unless the updated objective is actually complete, with current
-    evidence proving every requirement is satisfied.
+    only served the previous one. Do not call
+    `plan(command="complete")` unless the updated objective is
+    actually complete, with current evidence proving every requirement
+    is satisfied.
     </odyssey_context>
