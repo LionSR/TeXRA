@@ -246,6 +246,7 @@ describe('PlanTool — update (plan approval)', () => {
   });
 
   it('clears a timed-out plan from displayed work-plan state', async () => {
+    await installPlatform(false);
     const { events, host } = createRecordingHost();
     const coordinator = new PlanApprovalCoordinator(host);
     const workPlanState = new WorkPlanState();
