@@ -1576,8 +1576,25 @@ export function reorderGlobalFlags(rawArgs: readonly string[]): string[] {
 
 export function normalizeRootShortcuts(rawArgs: readonly string[]): string[] {
   const { leadingGlobals, restIndex } = collectLeadingGlobalFlags(rawArgs);
-  if (rawArgs[restIndex] !== '--logout') return [...rawArgs];
-  return ['logout', ...leadingGlobals, ...rawArgs.slice(restIndex + 1)];
+  const shortcut = rawArgs[restIndex];
+  if (shortcut === '--logout') {
+    return ['logout', ...leadingGlobals, ...rawArgs.slice(restIndex + 1)];
+  }
+  if (shortcut === '--resume') {
+    const id = rawArgs[restIndex + 1];
+    if (!id || id.startsWith('-')) {
+      return ['resume', ...leadingGlobals, ...rawArgs.slice(restIndex + 1)];
+    }
+    return ['resume', id, ...leadingGlobals, ...rawArgs.slice(restIndex + 2)];
+  }
+  if (shortcut?.startsWith('--resume=')) {
+    const id = shortcut.slice('--resume='.length);
+    if (!id) {
+      return ['resume', ...leadingGlobals, ...rawArgs.slice(restIndex + 1)];
+    }
+    return ['resume', id, ...leadingGlobals, ...rawArgs.slice(restIndex + 1)];
+  }
+  return [...rawArgs];
 }
 
 function isCliError(error: unknown): error is Error & { code?: string } {

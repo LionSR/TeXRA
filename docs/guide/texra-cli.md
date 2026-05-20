@@ -131,6 +131,7 @@ Resume a stored execution configuration headlessly:
 
 ```bash
 texra resume <id>
+texra --resume <id>
 ```
 
 The interactive chat also accepts `/resume`. With no id it prints recent
