@@ -1,4 +1,5 @@
 // Local imports - platform
+import { JsonStore } from '@platform/defaults/jsonStore';
 import { createMemoryStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
@@ -24,7 +25,6 @@ import { setOutputChannelFactory } from '@logger/logUtils';
 import { getCliSecrets } from './cliSecrets';
 import { writeTextStderr } from './logSinks';
 import { CliConfigProvider } from './cliConfigProvider';
-import { JsonStore } from './jsonStore';
 import { workspaceCliConfigPath } from './cliConfig';
 import { getCliAuthProvider, initializeCliSupabaseAuth } from './supabaseAuth';
 

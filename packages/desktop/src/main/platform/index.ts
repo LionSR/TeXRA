@@ -4,6 +4,7 @@ import { app } from 'electron';
 
 import { registerAgentFeatures } from '@agent/features';
 import { consoleLog } from '@platform/defaults/consoleLog';
+import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
@@ -14,7 +15,6 @@ import { bootstrapElectronAgentDirectories } from './agentDirectories.js';
 import { ElectronConfigProvider } from './electronConfig.js';
 import { ElectronSecrets } from './electronSecrets.js';
 import { ElectronStateStore } from './electronState.js';
-import { JsonStore } from './jsonStore.js';
 import { repairLaunchPath } from './pathFix.js';
 import { resolveResourcesPath, resolveWorkspacePath } from './paths.js';
 import { showSecretStorageWarningDialog } from './secretStorageWarningDialog.js';

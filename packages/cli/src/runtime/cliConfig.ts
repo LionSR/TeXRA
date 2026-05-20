@@ -7,10 +7,10 @@ import { z } from 'zod';
 import {
   CLI_APPROVAL_POLICIES,
   CLI_OUTPUT_FORMATS,
-  KNOWN_TEXRA_KEYS,
   type CliApprovalPolicy,
   type CliOutputFormat,
-} from '@utils/config/settingsSchema';
+} from '../schemas/cliSettings';
+import { KNOWN_TEXRA_KEYS } from '../schemas/knownKeys';
 
 // Re-export so existing call sites (`from './cliConfig'`) keep working — the
 // canonical home is `@utils/config/settingsSchema`.
