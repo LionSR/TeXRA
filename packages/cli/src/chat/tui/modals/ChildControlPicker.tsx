@@ -183,29 +183,22 @@ function TaskDetailView({
   readonly onKill: () => void;
 }): React.JSX.Element {
   const [scrollOffset, setScrollOffset] = useState(0);
-  const metaRows = [
+  const metaParts = [
     item.kind === 'process' ? 'shell' : 'stream',
     item.label,
     item.status,
     item.elapsed,
-  ].filter(Boolean).length;
+  ].filter((part): part is string => Boolean(part));
   const layout = computeTaskDetailLayout({
     availableRows,
     hasTailLines: item.tailLines.length > 0,
-    metaRows,
+    metaRows: metaParts.length,
   });
   const visibleLineCount = layout.visibleLineCount;
   const maxOffset = Math.max(0, item.tailLines.length - visibleLineCount);
   const offset = Math.min(scrollOffset, maxOffset);
   const visibleTail = item.tailLines.slice(offset, offset + visibleLineCount);
-  const compactMeta = [
-    item.kind === 'process' ? 'shell' : 'stream',
-    item.label,
-    item.status,
-    item.elapsed,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const compactMeta = metaParts.join(' · ');
 
   useEffect(() => {
     setScrollOffset((current) => Math.min(current, maxOffset));
