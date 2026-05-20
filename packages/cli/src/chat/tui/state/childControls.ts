@@ -4,6 +4,7 @@
 import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 
 // Local imports - CLI state
+import { isPlainReturnInput } from '../input/inputKeys';
 import { orderedDescendantsFromSlice } from './focusCycle';
 import type { ProcessOutputTail, StreamSlice } from './cliState';
 
@@ -27,6 +28,8 @@ export interface PickerKeyInput {
   readonly downArrow?: boolean;
   readonly return?: boolean;
   readonly escape?: boolean;
+  readonly ctrl?: boolean;
+  readonly meta?: boolean;
 }
 
 export type PickerKeyAction =
@@ -188,7 +191,7 @@ export function childPickerKeyAction(key: PickerKeyInput): PickerKeyAction {
   if (key.escape) return { kind: 'close' };
   if (key.upArrow) return { kind: 'up' };
   if (key.downArrow) return { kind: 'down' };
-  if (key.return) return { kind: 'select' };
+  if (isPlainReturnInput(key.input, key)) return { kind: 'select' };
   if (key.input.toLowerCase() === 'k') return { kind: 'kill' };
 
   const digit = Number(key.input);

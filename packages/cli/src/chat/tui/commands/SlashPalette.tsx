@@ -4,6 +4,7 @@ import { Box, Text, useInput } from 'ink';
 import { useState, useEffect } from 'react';
 
 import { matchSlashCommands, type SlashCommand } from './slashRegistry';
+import { isPlainReturnInput } from '../input/inputKeys';
 import { KeyHints } from '../ui/KeyHints';
 
 export interface SlashPaletteProps {
@@ -51,7 +52,7 @@ export function SlashPalette(
         setHighlight((h) => (h + 1) % visibleCount);
         return;
       }
-      if (key.return || key.tab || input === '\t') {
+      if (isPlainReturnInput(input, key) || key.tab || input === '\t') {
         const chosen = visible[highlight];
         if (chosen) props.onPick(chosen);
       }
