@@ -54,7 +54,7 @@ export function confirmCardKeyHints({
       ? []
       : [{ key: 'a', action: alwaysAllowLabel }]),
     ...extraActions,
-    { key: 'e', action: 'reject with feedback' },
+    { key: 'e', action: 'feedback' },
     { key: 'Esc', action: 'cancel' },
   ];
 }
