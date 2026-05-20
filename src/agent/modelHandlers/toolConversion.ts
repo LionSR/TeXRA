@@ -88,8 +88,15 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
       const descriptions = branchSchemas
         .map((s) => s.description)
         .filter((d): d is string => typeof d === 'string');
+      // Infer the discriminator type from the branch shapes rather than
+      // hardcoding 'string' — Zod discriminated unions also accept numeric
+      // and boolean literal discriminators.
+      const branchType = branchSchemas
+        .map((s) => (typeof s.type === 'string' ? s.type : undefined))
+        .find((t): t is string => t !== undefined);
+      const inferredType = branchType ?? typeof constValues[0];
       const merged: JSONSchemaObject = {
-        type: 'string',
+        type: inferredType,
         enum: constValues,
       };
       if (descriptions.length) {
@@ -132,11 +139,12 @@ function stripDollarSchema(schema: JSONSchemaObject): JSONSchemaObject {
 
 /**
  * Converts a Zod schema to JSON Schema, or returns the pre-converted parameters.
- * Shared utility used by all provider tool converters. Top-level discriminated
- * unions are flattened and `$schema` is stripped so the output is acceptable
- * to OpenAI Chat Completions, OpenAI Responses, and Gemini function calling.
- * Anthropic also gets the cleaned schema; the cleanup is a no-op for normal
- * `type: "object"` schemas.
+ * Used by OpenAI Chat Completions, OpenAI Responses, and Gemini function-calling
+ * converters: top-level discriminated unions are flattened and `$schema` is
+ * stripped so the output passes their schema validators.
+ * Anthropic bypasses this helper (`toAnthropicTools` calls `toJSONSchema`
+ * directly with `reused: 'ref'`) because Anthropic accepts top-level `oneOf`
+ * and `$schema`.
  */
 function convertToolSchema(def: ToolDefinition): JSONSchemaObject | null {
   let schema: JSONSchemaObject | null;
