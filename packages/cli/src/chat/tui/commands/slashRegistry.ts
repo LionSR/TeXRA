@@ -6,6 +6,7 @@
 export interface SlashFormProps<T = unknown> {
   readonly onDone: (result: T | undefined) => void;
   readonly remainder: string;
+  readonly availableRows?: number;
 }
 
 export interface SlashCommand {

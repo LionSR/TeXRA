@@ -115,7 +115,10 @@ export interface ActiveSlashForm {
   /** The slash command that mounted the form (for the header strip). */
   readonly commandName: string;
   /** Render the form body. Receives the close callback. */
-  readonly render: (onDone: () => void) => React.ReactNode;
+  readonly render: (
+    onDone: () => void,
+    availableRows: number,
+  ) => React.ReactNode;
 }
 const ACTIVE_FORM = signal<ActiveSlashForm | undefined>(undefined);
 
