@@ -1,3 +1,4 @@
+import { tryPlatform } from '@platform/platform';
 import { toErrorMessage } from '@common/errors/errorMessage';
 
 import { runCli } from '../commands/root';
@@ -10,4 +11,6 @@ try {
 } catch (error) {
   writeTextStderr(`TeXRA CLI failed: ${toErrorMessage(error)}`);
   process.exitCode = CliExitCode.AgentError;
+} finally {
+  await tryPlatform()?.lifecycle.runShutdown();
 }
