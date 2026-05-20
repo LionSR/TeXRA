@@ -1,4 +1,6 @@
 name: paper2poster
+description: Converts a research paper into a LaTeX conference poster using a provided template.
+
 settings:
   agentCategory: workflow
   documentTag: documents
