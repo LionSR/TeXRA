@@ -17,6 +17,14 @@ async function readJsonRecord(filePath: string): Promise<JsonRecord> {
   }
 }
 
+/**
+ * File-backed key-value store, persisted as a flat JSON object.
+ *
+ * Shared building block for non-VS-Code platform implementations (Electron,
+ * CLI). All writes are atomic (stage to sibling temp path, then rename) so a
+ * crash mid-flush leaves the previous file intact rather than corrupting the
+ * snapshot.
+ */
 export class JsonStore {
   private writeChain = Promise.resolve();
 
@@ -60,9 +68,6 @@ export class JsonStore {
 
   private async flush(snapshot: JsonRecord): Promise<void> {
     await mkdir(dirname(this.filePath), { recursive: true });
-    // Atomic write: stage to a sibling temp path, then rename. A crash
-    // mid-write leaves the previous file intact; without this we could
-    // corrupt the snapshot if the app is force-quit during persistence.
     // The temp suffix is process-unique so concurrent JsonStore writers
     // (different files in the same dir) don't collide.
     const tempPath = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;

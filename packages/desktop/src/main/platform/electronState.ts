@@ -1,4 +1,4 @@
-import { JsonStore } from './jsonStore.js';
+import type { JsonStore } from '@platform/defaults/jsonStore';
 import type { StateStore } from '@platform/interfaces/state';
 
 export class ElectronStateStore implements StateStore {
