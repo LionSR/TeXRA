@@ -378,7 +378,11 @@ Best practices:
           { plan },
         );
         if (retargeted.status === 'paused') {
-          await OdysseyStore.setStatus(streamId, 'active', 'retargeted to new plan');
+          await OdysseyStore.setStatus(
+            streamId,
+            'active',
+            'retargeted to new plan',
+          );
         }
         return {
           summary: `Plan approved — odyssey ${retargeted.odysseyId} retargeted`,
