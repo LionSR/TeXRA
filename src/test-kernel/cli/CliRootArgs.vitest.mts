@@ -17,6 +17,7 @@ import {
   normalizeRootShortcuts,
   reorderGlobalFlags,
   resolveLoginProvider,
+  resumeWorkflowOutputFile,
   resolveWorkflowOutput,
 } from '../../../packages/cli/src/commands/root';
 import type { CliContext } from '../../../packages/cli/src/runtime/cliContext';
@@ -33,6 +34,23 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
     colorEnabled: false,
     version: '0.0.0',
     resourcesPath: '/tmp/resources',
+    ...overrides,
+  };
+}
+
+function storedConfig(
+  overrides: Partial<Parameters<typeof resumeWorkflowOutputFile>[0]> = {},
+): Parameters<typeof resumeWorkflowOutputFile>[0] {
+  return {
+    agent: 'polish',
+    model: 'deepseekT',
+    inputFiles: ['paper.tex'],
+    contextFiles: [],
+    outputFiles: [],
+    cliOutputFile: undefined,
+    instruction: undefined,
+    workingDirectory: '/tmp/project',
+    agentCategory: AgentCategory.Workflow,
     ...overrides,
   };
 }
@@ -176,6 +194,66 @@ describe('CLI root argument routing', () => {
         EXECUTION_STATUS.INTERRUPTED,
       ),
     ).toBe(EXECUTION_STATUS.INTERRUPTED);
+  });
+
+  it('restores one requested workflow output path for resume', () => {
+    expect(
+      resumeWorkflowOutputFile(
+        storedConfig({ outputFiles: ['paper.polished.tex'] }),
+      ),
+    ).toBe(path.join('/tmp/project', 'paper.polished.tex'));
+  });
+
+  it('restores the exact absolute CLI output target for resume', () => {
+    expect(
+      resumeWorkflowOutputFile(
+        storedConfig({
+          cliOutputFile: '/tmp/elsewhere/paper.polished.tex',
+          outputFiles: ['paper.polished.tex'],
+        }),
+      ),
+    ).toBe('/tmp/elsewhere/paper.polished.tex');
+  });
+
+  it('resolves relative CLI output targets against the stored working directory', () => {
+    expect(
+      resumeWorkflowOutputFile(
+        storedConfig({
+          cliOutputFile: 'out/paper.polished.tex',
+          outputFiles: ['paper.polished.tex'],
+        }),
+      ),
+    ).toBe(path.join('/tmp/project', 'out/paper.polished.tex'));
+  });
+
+  it('keeps legacy resume output paths relative when no stored working directory exists', () => {
+    expect(
+      resumeWorkflowOutputFile(
+        storedConfig({
+          workingDirectory: undefined,
+          outputFiles: ['paper.polished.tex'],
+        }),
+      ),
+    ).toBe('paper.polished.tex');
+  });
+
+  it('does not infer resume output targets for multi-output workflows', () => {
+    expect(
+      resumeWorkflowOutputFile(
+        storedConfig({ outputFiles: ['paper.tex', 'appendix.tex'] }),
+      ),
+    ).toBeUndefined();
+  });
+
+  it('does not infer resume output targets for tool-use configs', () => {
+    expect(
+      resumeWorkflowOutputFile(
+        storedConfig({
+          agentCategory: AgentCategory.ToolUse,
+          outputFiles: ['paper.polished.tex'],
+        }),
+      ),
+    ).toBeUndefined();
   });
 
   it('reports successful stopped workflows with missing requested outputs as failed copies', async () => {
