@@ -966,7 +966,7 @@ const SetClaudeAgentEffortMessageSchema = z.object({
 const OpenVscodeSettingsMessageSchema = commandOnly(CMD.OPEN_VSCODE_SETTINGS);
 
 // Settings-tab IPC is read-only: state transitions are owned by the
-// odyssey() tool, not the user. Don't add mutation commands here.
+// agent-side plan tool, not the user. Don't add mutation commands here.
 const GetOdysseyListMessageSchema = commandOnly(CMD.GET_ODYSSEY_LIST);
 const RevealOdysseyStreamMessageSchema = z.object({
   command: z.literal(CMD.REVEAL_ODYSSEY_STREAM),

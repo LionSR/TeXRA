@@ -171,13 +171,23 @@ export type UserQuestionPermission = z.infer<
 // Plan Approval
 // ============================================================================
 
-export const PLAN_APPROVAL_ACTIONS = ['approve', 'reject'] as const;
+export const PLAN_APPROVAL_ACTIONS = [
+  'approve',
+  'reject',
+  'approve_and_odyssey',
+] as const;
 export type PlanApprovalAction = (typeof PLAN_APPROVAL_ACTIONS)[number];
 
 export const PlanApprovalPermissionSchema = z.strictObject({
   approvalId: z.string(),
   streamId: StreamTabIdSchema,
   plan: PlanSchema,
+  /**
+   * True when the odyssey experimental feature flag is enabled at request
+   * time. Frontend uses this to decide whether to render the
+   * "Approve & Run Autonomously" button.
+   */
+  odysseyEnabled: z.boolean().prefault(false),
 });
 export type PlanApprovalPermission = z.infer<
   typeof PlanApprovalPermissionSchema
