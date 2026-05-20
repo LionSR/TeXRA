@@ -1522,7 +1522,7 @@
     "@lit-labs/virtualizer": "^2.1.1",
     "@lit/context": "^1.1.6",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@openai/codex-sdk": "^0.131.0",
+    "@openai/codex-sdk": "^0.132.0",
     "@openrouter/sdk": "^0.12.35",
     "@supabase/supabase-js": "^2.106.0",
     "@xterm/addon-fit": "^0.11.0",
