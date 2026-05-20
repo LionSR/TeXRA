@@ -44,22 +44,15 @@ let cached: ReadonlySet<string> | null = null;
 /** Last check results — kept for rebuilding the cache without re-probing. */
 let lastResults: ExternalToolCheckResult[] | null = null;
 
-/** Current disabled tool names derived from persisted Settings state. */
-function buildDisabledToolNameSet(): ReadonlySet<string> {
+/** Read the current set of disabled tool names from persisted Settings state. */
+export function getDisabledToolNames(): ReadonlySet<string> {
   const disabledIds = getDisabledToolIds();
   const disabled = new Set<string>();
-
   for (const def of EXTERNAL_TOOL_DEFS) {
     if (!disabledIds.has(def.id)) continue;
     for (const toolName of def.tools) disabled.add(toolName);
   }
-
   return disabled;
-}
-
-/** Read the current set of disabled tool names from persisted Settings state. */
-export function getDisabledToolNames(): ReadonlySet<string> {
-  return buildDisabledToolNameSet();
 }
 
 /**
@@ -121,27 +114,12 @@ async function runProbes(): Promise<ExternalToolCheckResult[]> {
         // (Codex, Zotero, GitHub PR) touch async local state, so running the
         // callbacks independently can duplicate the same probe work.
         let probeResult: unknown;
-        let available: boolean;
+        let probedStatus: 'available' | 'not-found' | 'unknown';
         try {
           probeResult = await probe?.();
-          available = await check(probeResult);
+          probedStatus = (await check(probeResult)) ? 'available' : 'not-found';
         } catch {
-          const statusDetail = await resolveOptionalStatus(
-            detailCheck,
-            probeResult,
-          );
-          const statusLabel = await resolveOptionalStatus(
-            getStatusLabel,
-            probeResult,
-          );
-          return {
-            id,
-            tools,
-            name,
-            status: comingSoon ? 'coming-soon' : 'unknown',
-            statusLabel,
-            statusDetail,
-          };
+          probedStatus = 'unknown';
         }
         const statusDetail = await resolveOptionalStatus(
           detailCheck,
@@ -155,11 +133,7 @@ async function runProbes(): Promise<ExternalToolCheckResult[]> {
           id,
           tools,
           name,
-          status: comingSoon
-            ? 'coming-soon'
-            : available
-              ? 'available'
-              : 'not-found',
+          status: comingSoon ? 'coming-soon' : probedStatus,
           statusLabel,
           statusDetail,
         };

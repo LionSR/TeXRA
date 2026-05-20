@@ -92,9 +92,10 @@ function formatWorkflowOutputs(
   return lines;
 }
 
-/** Map internal end-group statuses to agent-friendly labels. */
-function agentFriendlyStatus(status: string): string {
-  return status === 'stopped' ? 'completed' : status;
+function workingDirectoryElement(value: string | undefined): string | null {
+  return value
+    ? `<working-directory>${escapeText(value)}</working-directory>`
+    : null;
 }
 
 /**
@@ -106,12 +107,6 @@ function agentFriendlyStatus(status: string): string {
  * /executions/{id}/files/{diffRelPath} — the delivery only includes
  * the path reference, not the diff content itself.
  */
-function workingDirectoryElement(value: string | undefined): string | null {
-  return value
-    ? `<working-directory>${escapeText(value)}</working-directory>`
-    : null;
-}
-
 export function formatSubagentDelivery(
   agentName: string,
   result: AgentFlowResult,
@@ -121,7 +116,9 @@ export function formatSubagentDelivery(
     workingDirectory?: string;
   },
 ): string {
-  const displayStatus = agentFriendlyStatus(result.status);
+  // Internal status "stopped" is shown to agents as "completed".
+  const displayStatus =
+    result.status === 'stopped' ? 'completed' : result.status;
   const lines = [
     `<subagent-result id="${escapeAttr(result.executionId)}" agent="${escapeAttr(agentName)}" category="${escapeAttr(result.category)}" status="${escapeAttr(displayStatus)}">`,
   ];
