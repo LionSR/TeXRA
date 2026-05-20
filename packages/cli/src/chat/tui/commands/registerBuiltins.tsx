@@ -3,6 +3,7 @@
 import { ApiModeForm } from '../forms/ApiModeForm';
 import { AgentListForm } from '../forms/AgentListForm';
 import { ApprovalPolicyForm } from '../forms/ApprovalPolicyForm';
+import { MemoryListForm } from '../forms/MemoryListForm';
 import { ModelListForm } from '../forms/ModelListForm';
 import { cliState } from '../state/cliState';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
@@ -15,6 +16,8 @@ type ApprovalPolicySelectHandler = (
 ) => void | Promise<void>;
 type ModelSelectHandler = (value: string) => void | Promise<void>;
 type ApiModeSelectHandler = (value: CliApiMode) => void | Promise<void>;
+type MemorySelectHandler = (storagePath: string) => void | Promise<void>;
+type ErrorHandler = (error: unknown) => void | Promise<void>;
 
 function patchSessionMeta<K extends 'agent' | 'model' | 'apiMode'>(
   key: K,
@@ -31,6 +34,8 @@ export function registerBuiltinSlashCommands(options?: {
   onModelSelect?: ModelSelectHandler;
   canSelectModel?: () => boolean;
   onApiModeSelect?: ApiModeSelectHandler;
+  onMemorySelect?: MemorySelectHandler;
+  onMemoryError?: ErrorHandler;
 }): void {
   const onAgentSelect: AgentSelectHandler =
     options?.onAgentSelect ?? ((value) => patchSessionMeta('agent', value));
@@ -39,6 +44,8 @@ export function registerBuiltinSlashCommands(options?: {
     options?.onModelSelect ?? ((value) => patchSessionMeta('model', value));
   const onApiModeSelect: ApiModeSelectHandler =
     options?.onApiModeSelect ?? ((value) => patchSessionMeta('apiMode', value));
+  const onMemorySelect = options?.onMemorySelect;
+  const onMemoryError = options?.onMemoryError;
 
   function AgentListFormAdapter(props: SlashFormProps): React.JSX.Element {
     const current = cliState.sessionMeta.get().agent;
@@ -107,6 +114,20 @@ export function registerBuiltinSlashCommands(options?: {
     );
   }
 
+  function MemoryListFormAdapter(props: SlashFormProps): React.JSX.Element {
+    return (
+      <MemoryListForm
+        availableRows={props.availableRows}
+        onSelect={(value) => {
+          void Promise.resolve(onMemorySelect?.(value))
+            .catch((error: unknown) => onMemoryError?.(error))
+            .finally(() => props.onDone(value));
+        }}
+        onClose={() => props.onDone(undefined)}
+      />
+    );
+  }
+
   registerSlashCommand({
     name: 'help',
     description: 'Show available slash commands',
@@ -150,6 +171,11 @@ export function registerBuiltinSlashCommands(options?: {
   registerSlashCommand({
     name: 'resume',
     description: 'Resume a previous session',
+  });
+  registerSlashCommand({
+    name: 'memory',
+    description: 'List stored memories',
+    formComponent: MemoryListFormAdapter,
   });
   registerSlashCommand({
     name: 'exit',
