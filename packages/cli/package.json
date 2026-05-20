@@ -41,7 +41,8 @@
     "smoke:react-compiler": "node scripts/smoke-react-compiler.mjs",
     "build": "npm run typecheck && npm run check:architecture && npm run smoke:react-compiler && npm run bundle && npm run copy:resources",
     "prepack": "npm run build",
-    "validate:run": "node scripts/validate-run.mjs"
+    "validate:run": "node scripts/validate-run.mjs",
+    "validate:pack": "node scripts/validate-pack.mjs"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
