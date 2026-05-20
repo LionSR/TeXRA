@@ -182,10 +182,11 @@ function openCliModelListForm(context: SlashCommandContext): void {
   const selectable = !context.session.runPromise;
   cliState.activeForm.set({
     commandName: 'model',
-    render: (close) => (
+    render: (close, availableRows) => (
       <ModelListForm
         currentModel={cliState.sessionMeta.get().model}
         apiMode={cliState.sessionMeta.get().apiMode}
+        availableRows={availableRows}
         selectable={selectable}
         onSelect={(value) => {
           void applyInitialCliModelSelection(value, context).finally(close);
