@@ -12,80 +12,16 @@ export type CliApprovalPolicy = (typeof CLI_APPROVAL_POLICIES)[number];
 // Known `texra.*` configuration keys
 // ---------------------------------------------------------------------------
 //
-// This is the authoritative list of canonical `texra.*` setting keys used by
-// the extension and the CLI for "unknown key" detection. Per-key schemas and
-// defaults live in `src/shared/schemas/settingsConfiguration.ts`; this file
-// intentionally tracks only the names.
+// Authoritative list of canonical `texra.*` setting keys recognized by the
+// extension and the CLI for "unknown key" detection. The structured per-key
+// schemas and defaults are the canonical source (`TEXRA_SETTING_KEYS` from
+// `@shared/schemas/settingsConfiguration`); CLI-runtime-only keys are
+// appended here so they can also pass validation.
 
-const KEYS = [
-  // Agent outputs
-  'texra.agentOutputs.autoOpenFinal',
-  // Inline criticism
-  'texra.inlineCriticism.enabled',
-  // Experimental
-  'texra.experimental.odyssey.enabled',
-  // UI toggles
-  'texra.ui.showApiKeyReminders',
-  'texra.ui.showLoginBanner',
-  'texra.ui.showGettingStartedBanner',
-  'texra.ui.showOrchestratorBanner',
-  // Auth
-  'texra.auth.enableVSCodeGitHub',
-  // Model
-  'texra.model.useImprovedConnection',
-  'texra.model.improvedConnectionDomain',
-  'texra.model.useOpenAIResponsesAPI',
-  'texra.model.useBackgroundResponses',
-  'texra.model.openaiParallelToolCalls',
-  'texra.model.compactionThresholdPercent',
-  'texra.model.gpt5ReasoningSummary',
-  // Model retry
-  'texra.model.retry.maxAttempts',
-  'texra.model.retry.backoffMs',
-  // Files: included
-  'texra.files.included.mediaExtensions',
-  'texra.files.included.inputExtensions',
-  'texra.files.included.contextExtensions',
-  'texra.files.included.editedExtensions',
-  // Files: ignored
-  'texra.files.ignored.fileExtensions',
-  'texra.files.ignored.inputFiles',
-  'texra.files.ignored.inputDirectories',
-  'texra.files.ignored.mediaDirectories',
-  'texra.files.ignored.directories',
-  'texra.files.ignored.keywords',
-  // Images
-  'texra.maxImageDimension',
-  // Bibliography
-  'texra.bib.defaultPath',
-  'texra.bib.zoteroPort',
-  // LaTeX
-  'texra.latex.showLatexindentWarning',
-  'texra.latex.latexindentConfig',
-  'texra.latex.texfmtConfig',
-  'texra.latex.tikzInputDirectory',
-  'texra.latex.tikzTemplate',
-  'texra.latex.includeWorkspaceInTexinputs',
-  'texra.latex.wrapCritiqueInAlign',
-  // LaTeX diff
-  'texra.latexdiff.pictureEnvironments',
-  'texra.latexdiff.tempFileLocation',
-  // LaTeX replacements
-  'texra.latex.enabledReplacements',
-  'texra.latex.enabledReplacementsRegex',
-  'texra.latex.customReplacementsRegex',
-  'texra.latex.customReplacements',
-  // Tool use
-  'texra.toolUse.persistence.enabled',
-  'texra.toolUse.persistence.ttlHours',
-  'texra.toolUse.requireBashApproval',
-  'texra.toolUse.requireEditApproval',
-  // Logger
-  'texra.logger.debugMode',
-  // Git
-  'texra.git.numberOfCommitsToShow',
-  'texra.git.emitPrCiStartedEvents',
-  // CLI runtime
+import { TEXRA_SETTING_KEYS } from '@shared/schemas/settingsConfiguration';
+
+// CLI-only top-level keys (no structured schema; consumed by CLI runtime).
+const CLI_RUNTIME_KEYS = [
   'texra.agent',
   'texra.model',
   'texra.outputFormat',
@@ -95,4 +31,7 @@ const KEYS = [
 ] as const;
 
 /** Set of all known canonical `texra.*` config keys. */
-export const KNOWN_TEXRA_KEYS: ReadonlySet<string> = new Set(KEYS);
+export const KNOWN_TEXRA_KEYS: ReadonlySet<string> = new Set<string>([
+  ...TEXRA_SETTING_KEYS,
+  ...CLI_RUNTIME_KEYS,
+]);
