@@ -10,6 +10,7 @@ import { END_GROUP_STATUS, EXECUTION_STATUS } from '@shared/schemas';
 import {
   cliTerminalStatus,
   collectStringFlagValues,
+  doctorPlatformInitContext,
   expandWorkflowInputSpecs,
   formatCliModelListError,
   isCliFetchStackLog,
@@ -239,6 +240,15 @@ describe('CLI root argument routing', () => {
 
     expect(isCliFetchStackLog([error])).toBe(true);
     expect(isCliFetchStackLog([new Error('unrelated')])).toBe(false);
+  });
+
+  it('does not force doctor into personal-key model availability', () => {
+    const init = doctorPlatformInitContext(
+      cliContext({ apiMode: 'included' }),
+    ) as { skipIncludedModelAccess?: boolean; quietLogs?: boolean };
+
+    expect(init.quietLogs).toBe(true);
+    expect(init.skipIncludedModelAccess).toBeUndefined();
   });
 });
 
