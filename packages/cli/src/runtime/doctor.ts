@@ -57,10 +57,22 @@ interface DoctorDependencies {
   readonly pathAccess?: (filePath: string, mode?: number) => Promise<void>;
 }
 
+type ResolvedDoctorDependencies = Required<DoctorDependencies>;
+
 const MIN_NODE_MAJOR = 22;
 
+function check(
+  id: string,
+  name: string,
+  status: DoctorCheckStatus,
+  message: string,
+  hint?: string,
+): DoctorCheck {
+  return { id, name, status, message, hint };
+}
+
 function pass(id: string, name: string, message: string): DoctorCheck {
-  return { id, name, status: 'pass', message };
+  return check(id, name, 'pass', message);
 }
 
 function warn(
@@ -69,7 +81,7 @@ function warn(
   message: string,
   hint?: string,
 ): DoctorCheck {
-  return { id, name, status: 'warn', message, hint };
+  return check(id, name, 'warn', message, hint);
 }
 
 function fail(
@@ -78,7 +90,7 @@ function fail(
   message: string,
   hint?: string,
 ): DoctorCheck {
-  return { id, name, status: 'fail', message, hint };
+  return check(id, name, 'fail', message, hint);
 }
 
 function skip(
@@ -87,7 +99,21 @@ function skip(
   message: string,
   hint?: string,
 ): DoctorCheck {
-  return { id, name, status: 'skip', message, hint };
+  return check(id, name, 'skip', message, hint);
+}
+
+function failFromError(
+  id: string,
+  name: string,
+  message: string,
+  error: unknown,
+): DoctorCheck {
+  return fail(
+    id,
+    name,
+    message,
+    error instanceof Error ? error.message : undefined,
+  );
 }
 
 function checkNode(version: string): DoctorCheck {
@@ -107,7 +133,7 @@ async function checkDirectory(
   id: string,
   name: string,
   dir: string,
-  deps: Required<Pick<DoctorDependencies, 'pathStat' | 'pathAccess'>>,
+  deps: ResolvedDoctorDependencies,
 ): Promise<DoctorCheck> {
   try {
     const info = await deps.pathStat(dir);
@@ -117,17 +143,17 @@ async function checkDirectory(
     await deps.pathAccess(dir, fsConstants.R_OK | fsConstants.W_OK);
     return pass(id, name, dir);
   } catch (error) {
-    return fail(
+    return failFromError(
       id,
       name,
       `${dir} is not readable and writable.`,
-      error instanceof Error ? error.message : undefined,
+      error,
     );
   }
 }
 
 async function checkAuth(
-  deps: Required<Pick<DoctorDependencies, 'authProfile'>>,
+  deps: ResolvedDoctorDependencies,
 ): Promise<DoctorCheck> {
   try {
     const profile = await deps.authProfile();
@@ -146,17 +172,17 @@ async function checkAuth(
       'Run `texra login`, or use `/api personal` in the chat TUI to use your own API keys.',
     );
   } catch (error) {
-    return fail(
+    return failFromError(
       'auth',
       'Included access',
       'Could not read TeXRA sign-in state.',
-      error instanceof Error ? error.message : undefined,
+      error,
     );
   }
 }
 
 async function checkModels(
-  deps: Required<Pick<DoctorDependencies, 'modelAccessList'>>,
+  deps: ResolvedDoctorDependencies,
 ): Promise<DoctorCheck> {
   try {
     const models = await deps.modelAccessList();
@@ -175,17 +201,17 @@ async function checkModels(
       'Run `texra models list`, sign in with `texra login`, or use `/api personal` in the chat TUI.',
     );
   } catch (error) {
-    return fail(
+    return failFromError(
       'models',
       'Models',
       'Could not compute model availability.',
-      error instanceof Error ? error.message : undefined,
+      error,
     );
   }
 }
 
 async function checkLatex(
-  deps: Required<Pick<DoctorDependencies, 'latexToolchain'>>,
+  deps: ResolvedDoctorDependencies,
 ): Promise<DoctorCheck[]> {
   try {
     const probe = await deps.latexToolchain();
@@ -217,11 +243,11 @@ async function checkLatex(
     return checks;
   } catch (error) {
     return [
-      fail(
+      failFromError(
         'latex',
         'LaTeX toolchain',
         'Could not probe the LaTeX toolchain.',
-        error instanceof Error ? error.message : undefined,
+        error,
       ),
     ];
   }
