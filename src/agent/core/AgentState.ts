@@ -20,16 +20,10 @@ export type ConversationRoundStateSnapshot = z.output<
   typeof ConversationRoundStateSnapshotSchema
 >;
 
-/** Create a fresh round state for the given round index. */
 export function createRoundState(
   roundIndex: number,
 ): ConversationRoundStateSnapshot {
-  return {
-    roundIndex,
-    continuationCount: 0,
-    responseTimeMs: 0,
-    normalizedUsage: null,
-  };
+  return ConversationRoundStateSnapshotSchema.parse({ roundIndex });
 }
 
 export const AgentRunStateSnapshotSchema = z.object({
@@ -45,16 +39,8 @@ export type AgentRunStateSnapshot = z.output<
   typeof AgentRunStateSnapshotSchema
 >;
 
-/** Create a fresh run state (all zeros). */
 export function createRunState(): AgentRunStateSnapshot {
-  return {
-    totalRounds: 0,
-    totalResponseTimeMs: 0,
-    usageAccumulator: {
-      totals: createDefaultTotals(),
-      normalizedSnapshots: [],
-    },
-  };
+  return AgentRunStateSnapshotSchema.parse({});
 }
 
 /**
