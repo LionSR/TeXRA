@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { Box, Text, type BoxProps } from 'ink';
 import { useInput } from 'ink';
 
-import { confirmCardKeyAction } from './ConfirmCardState';
+import { confirmCardKeyAction, confirmCardKeyHints } from './ConfirmCardState';
 import type {
   ApprovalBypassKind,
   ApprovalDecision,
@@ -83,17 +83,15 @@ export function ConfirmCard({
     { isActive: true },
   );
 
-  const hints = [
-    { key: 'y', action: approveLabel },
-    { key: 'n', action: rejectLabel },
-    ...(alwaysAllow ? [{ key: 'a', action: alwaysAllow.label }] : []),
-    ...extraActions.map((action) => ({
+  const hints = confirmCardKeyHints({
+    approveLabel,
+    rejectLabel,
+    alwaysAllowLabel: alwaysAllow?.label,
+    extraActions: extraActions.map((action) => ({
       key: action.key,
       action: action.label,
     })),
-    { key: 'e', action: 'reject with feedback' },
-    { key: 'Esc', action: 'cancel' },
-  ];
+  });
 
   return (
     <Box
@@ -104,7 +102,6 @@ export function ConfirmCard({
     >
       <Text bold color={color}>
         {title}
-        {alwaysAllow ? <Text dimColor> · a = {alwaysAllow.label}</Text> : null}
       </Text>
       {children}
       {feedbackMode ? (
