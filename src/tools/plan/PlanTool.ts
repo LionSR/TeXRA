@@ -147,9 +147,7 @@ Best practices:
         return this.executeUpdate(input.plan, contexts);
       case 'pause':
         if (!streamId) {
-          throw new ToolError(
-            'plan(pause) requires an active stream context.',
-          );
+          throw new ToolError('plan(pause) requires an active stream context.');
         }
         return this.executePause(
           streamId,
