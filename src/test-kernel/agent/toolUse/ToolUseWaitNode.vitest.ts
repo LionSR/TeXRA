@@ -44,4 +44,61 @@ describe('ToolUseWaitNode', () => {
     expect(transition).toBe(FlowTransition.COMPLETE);
     expect(shared.deliveredToOrchestrator).toBe(true);
   });
+
+  it('keeps an already delivered synthetic continuation delivered across interruption', async () => {
+    const shared: ToolUseRunShared = {
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: null,
+    };
+    let interrupted = false;
+    let waitCalls = 0;
+    const onBeforeWaiting = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(true);
+
+    const services = {
+      checkInterruption: () => interrupted,
+      isSubagent: true,
+      logger: { error: vi.fn(), userMessage: vi.fn() },
+      modelHandler: {
+        createUserFollowUpMessages: vi.fn(async () => []),
+        extractAssistantText: () => undefined,
+      },
+      onBeforeWaiting,
+      runtimeHost: { emit: vi.fn() },
+      session: {
+        hasQueuedFollowUp: () => waitCalls === 0,
+        waitForFollowUp: async () => {
+          waitCalls += 1;
+          if (waitCalls === 1) {
+            return {
+              items: ['synthetic continuation'],
+              synthetic: true,
+            };
+          }
+          interrupted = true;
+          return null;
+        },
+      },
+      streamId: 'test-stream',
+    } as unknown as ToolUseServices;
+
+    const node = new ToolUseWaitNode().setServices(services);
+
+    const firstPrep = await node.prep(shared);
+    const firstExec = await node.exec(firstPrep);
+    const firstTransition = await node.post(shared, firstPrep, firstExec);
+    expect(firstTransition).toBe(FlowTransition.CONTINUE);
+    expect(shared.deliveredToOrchestrator).toBeUndefined();
+
+    const secondPrep = await node.prep(shared);
+    const secondExec = await node.exec(secondPrep);
+    const secondTransition = await node.post(shared, secondPrep, secondExec);
+
+    expect(onBeforeWaiting).toHaveBeenCalledTimes(2);
+    expect(secondTransition).toBe(FlowTransition.COMPLETE);
+    expect(shared.deliveredToOrchestrator).toBe(true);
+  });
 });
