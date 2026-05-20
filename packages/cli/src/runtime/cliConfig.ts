@@ -4,19 +4,21 @@ import path from 'node:path';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { z } from 'zod';
 
-import { KNOWN_TEXRA_KEYS } from '@utils/config/settingsSchema';
-
 import {
   CLI_APPROVAL_POLICIES,
+  CLI_OUTPUT_FORMATS,
+  KNOWN_TEXRA_KEYS,
   type CliApprovalPolicy,
-} from './approvalPolicy';
+  type CliOutputFormat,
+} from '@utils/config/settingsSchema';
+
+// Re-export so existing call sites (`from './cliConfig'`) keep working — the
+// canonical home is `@utils/config/settingsSchema`.
+export { CLI_OUTPUT_FORMATS, type CliOutputFormat };
 
 export const CLI_CONFIG_DIR = '.texra';
 export const CLI_CONFIG_FILE = 'config.json';
 export const CLI_BUILTIN_DEFAULT_MODEL = 'deepseekT';
-
-export const CLI_OUTPUT_FORMATS = ['text', 'json', 'ndjson'] as const;
-export type CliOutputFormat = (typeof CLI_OUTPUT_FORMATS)[number];
 
 export interface CliCommandConfig {
   readonly agent?: string;
