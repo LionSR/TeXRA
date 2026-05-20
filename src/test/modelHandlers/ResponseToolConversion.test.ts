@@ -63,7 +63,18 @@ describe('toOpenAITools', () => {
     const tool = tools[0] as OpenAIFunctionTool;
     const parameters = tool.function.parameters as Record<string, unknown>;
     assert.equal(parameters.type, 'object');
-    assert.ok(Array.isArray(parameters.oneOf));
+    assert.equal(parameters.oneOf, undefined);
+    assert.equal(parameters.anyOf, undefined);
+    assert.equal(parameters.allOf, undefined);
+
+    const properties = parameters.properties as Record<
+      string,
+      Record<string, unknown>
+    >;
+    assert.deepEqual(properties.command.enum, ['ask', 'read']);
+    assert.ok(properties.question);
+    assert.ok(properties.thread_id);
+    assert.deepEqual(parameters.required, ['command']);
   });
 });
 
