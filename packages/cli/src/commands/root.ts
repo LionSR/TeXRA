@@ -5,7 +5,7 @@ import { defineCommand, runCommand, showUsage, type CommandDef } from 'citty';
 import { glob, hasMagic } from 'glob';
 
 import { getAgent, getVisibleAgents, loadAgents } from '@agent/index';
-import { writeTerminalStatus } from '@agent/storage';
+import { getExecutionStore, writeTerminalStatus } from '@agent/storage';
 import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
 import {
   AgentConfigSchema,
@@ -243,8 +243,16 @@ const modelsListCommand = defineCommand({
 });
 
 async function listModels(context: CliContext): Promise<number> {
-  await initCliPlatform({ ...context, quietLogs: true });
-  const modelAccess = await getCliModelAccessList();
+  let modelAccess: Awaited<ReturnType<typeof getCliModelAccessList>>;
+  try {
+    modelAccess = await suppressCliFetchStackLogs(async () => {
+      await initCliPlatform({ ...context, quietLogs: true });
+      return getCliModelAccessList();
+    });
+  } catch (error) {
+    writeTextStderr(formatCliModelListError(error));
+    return CliExitCode.ModelOrNetworkError;
+  }
 
   if (context.outputFormat === 'json') {
     writeTextStdout(
@@ -269,6 +277,43 @@ async function listModels(context: CliContext): Promise<number> {
     writeTextStdout(`${model.value}\t${model.label}\t${status}`);
   }
   return CliExitCode.Success;
+}
+
+export function isCliFetchStackLog(args: readonly unknown[]): boolean {
+  const [first] = args;
+  if (!(first instanceof Error)) return false;
+  const cause = first.cause;
+  const causeMessage = cause instanceof Error ? cause.message : '';
+  return (
+    /fetch failed/i.test(first.message) &&
+    /ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT|getaddrinfo|remote\.texra\.ai/i.test(
+      causeMessage,
+    )
+  );
+}
+
+async function suppressCliFetchStackLogs<T>(operation: () => Promise<T>) {
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => {
+    if (isCliFetchStackLog(args)) return;
+    originalError(...args);
+  };
+  try {
+    return await operation();
+  } finally {
+    console.error = originalError;
+  }
+}
+
+export function formatCliModelListError(error: unknown): string {
+  const message = toErrorMessage(error);
+  const cause = error instanceof Error ? error.cause : undefined;
+  const causeMessage = cause instanceof Error ? cause.message : undefined;
+  const detail = causeMessage ?? message;
+  if (/ENOTFOUND|EAI_AGAIN|getaddrinfo|fetch failed/i.test(detail)) {
+    return `texra: could not fetch model access metadata from remote.texra.ai: ${detail}`;
+  }
+  return `texra: could not list models: ${message}`;
 }
 
 const modelsCommand = defineCommand({
@@ -907,18 +952,45 @@ function outputCopyRelativePath(output: OutputFileSummary) {
   return getSafeDocumentRelativePath(withoutRoundDir.join('/'));
 }
 
-async function resolveWorkflowOutput(
+export async function resolveWorkflowOutput(
   outputFile: string | undefined,
   outputDir: string | undefined,
   result: ExecuteAgentResult,
   context: CliContext,
+  terminalStatus = cliTerminalStatus(result),
 ): Promise<{
   copiedOutput: string | undefined;
   displayResult: CliRunResult;
 }> {
+  if (
+    result.category === AgentCategory.Workflow &&
+    result.outputs.length === 0 &&
+    (outputFile || outputDir)
+  ) {
+    if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
+      return {
+        copiedOutput: undefined,
+        displayResult: {
+          ...result,
+          terminalStatus,
+        },
+      };
+    }
+    if (outputDir) {
+      throw new Error(
+        `Workflow ${terminalStatus} without generated outputs; nothing was copied to ${outputDir}.`,
+      );
+    }
+    if (outputFile) {
+      throw new Error(
+        `Workflow ${terminalStatus} without a generated output; ${outputFile} was not written.`,
+      );
+    }
+  }
+
   const baseResult: CliRunResult = {
     ...result,
-    terminalStatus: cliTerminalStatus(result),
+    terminalStatus,
     ...(result.category === AgentCategory.Workflow
       ? { runDirectory: getRunDir(result.executionId) }
       : {}),
@@ -966,10 +1038,34 @@ async function resolveWorkflowOutput(
   return { copiedOutput: targetPath, displayResult };
 }
 
-function cliTerminalStatus(result: ExecuteAgentResult): ExecutionStatus {
-  return result.status === 'error'
-    ? EXECUTION_STATUS.ERROR
-    : EXECUTION_STATUS.COMPLETED;
+function isExecutionStatus(
+  value: string | undefined,
+): value is ExecutionStatus {
+  return (
+    value === EXECUTION_STATUS.COMPLETED ||
+    value === EXECUTION_STATUS.ERROR ||
+    value === EXECUTION_STATUS.INTERRUPTED
+  );
+}
+
+export function cliTerminalStatus(
+  result: ExecuteAgentResult,
+  storedTerminalStatus?: string,
+): ExecutionStatus {
+  if (isExecutionStatus(storedTerminalStatus)) return storedTerminalStatus;
+  if (result.status === 'error') return EXECUTION_STATUS.ERROR;
+  return EXECUTION_STATUS.COMPLETED;
+}
+
+async function readCliTerminalStatus(
+  result: ExecuteAgentResult,
+): Promise<ExecutionStatus> {
+  try {
+    const meta = await getExecutionStore(result.executionId).readMeta();
+    return cliTerminalStatus(result, meta?.terminalStatus);
+  } catch {
+    return cliTerminalStatus(result);
+  }
 }
 
 function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
@@ -1058,12 +1154,21 @@ async function runWorkflowAgent(
     await runtimeHost.close();
   }
 
-  const { displayResult } = await resolveWorkflowOutput(
-    init.output,
-    init.outputDir,
-    result,
-    runContext,
-  );
+  const terminalStatus = await readCliTerminalStatus(result);
+  let displayResult: CliRunResult;
+  try {
+    ({ displayResult } = await resolveWorkflowOutput(
+      init.output,
+      init.outputDir,
+      result,
+      runContext,
+      terminalStatus,
+    ));
+  } catch (error) {
+    await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+    writeTextStderr(toErrorMessage(error));
+    return CliExitCode.AgentError;
+  }
 
   if (runContext.outputFormat === 'json') {
     writeTextStdout(JSON.stringify(displayResult, null, 2));
@@ -1079,10 +1184,15 @@ async function runWorkflowAgent(
     writeTextStdout(result.status);
   }
 
-  if (result.status !== 'error') return CliExitCode.Success;
-  return hasCliApprovalDenied(runContext)
-    ? CliExitCode.ApprovalDenied
-    : CliExitCode.AgentError;
+  if (terminalStatus === EXECUTION_STATUS.ERROR) {
+    return hasCliApprovalDenied(runContext)
+      ? CliExitCode.ApprovalDenied
+      : CliExitCode.AgentError;
+  }
+  if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
+    return CliExitCode.Interrupted;
+  }
+  return CliExitCode.Success;
 }
 
 const resumeCommand = defineCommand({

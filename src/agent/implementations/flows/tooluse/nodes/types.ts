@@ -32,6 +32,8 @@ export interface ToolUseRunShared {
   userCancelledRetry?: boolean;
   /** Distinguishes failure from cancellation during resume. */
   lastError?: RetryErrorInfo;
+  /** True after a tool-use subagent delivered a cycle result to its parent. */
+  deliveredToOrchestrator?: boolean;
 }
 
 export interface PrepareResult {
