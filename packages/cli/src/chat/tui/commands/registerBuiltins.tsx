@@ -94,6 +94,7 @@ export function registerBuiltinSlashCommands(options?: {
       <ModelListForm
         currentModel={current}
         apiMode={cliState.sessionMeta.get().apiMode}
+        availableRows={props.availableRows}
         selectable={selectable}
         onSelect={(value) => {
           void Promise.resolve(onModelSelect(value)).finally(() =>
