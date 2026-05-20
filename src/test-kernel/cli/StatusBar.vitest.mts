@@ -13,6 +13,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.WAITING,
       pendingExitHint: false,
+      pendingExitResumeId: undefined,
       bypass: NO_BYPASS,
       queuedFollowUps: 0,
       usage: undefined,
@@ -41,6 +42,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.RUNNING,
       pendingExitHint: false,
+      pendingExitResumeId: undefined,
       bypass: NO_BYPASS,
       queuedFollowUps: 2,
       usage: { inputTokens: 80_000, outputTokens: 25_000, cost: 0 },
@@ -71,6 +73,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.RUNNING,
       pendingExitHint: false,
+      pendingExitResumeId: undefined,
       bypass: { superYolo: true, toolEdit: true },
       queuedFollowUps: 0,
       usage: undefined,
@@ -98,5 +101,32 @@ describe('CLI StatusBar display model', () => {
       badge: true,
       badgeColor: 'yellow',
     });
+  });
+
+  it('shows the resume command while exit confirmation is armed', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      pendingExitHint: true,
+      pendingExitResumeId: 'abc123',
+      bypass: NO_BYPASS,
+      queuedFollowUps: 0,
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      subagentControlsAvailable: false,
+      model: 'deepseekT',
+      apiMode: 'api',
+    });
+
+    expect(display.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'Press Ctrl-C again to exit',
+      'api',
+    ]);
+    expect(display.bindings).toBe(
+      'Resume this session with: texra --resume abc123',
+    );
   });
 });
