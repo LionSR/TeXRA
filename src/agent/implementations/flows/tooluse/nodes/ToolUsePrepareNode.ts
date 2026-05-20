@@ -1,6 +1,6 @@
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { createRunState } from '@agent/core/AgentState';
+import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
@@ -69,7 +69,7 @@ export class ToolUsePrepareNode<C> extends Node<
       };
     }
 
-    const runState = createRunState();
+    const runState = AgentRunStateSnapshotSchema.parse({});
     const workspaceState = AgentWorkspaceState.create();
 
     const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
