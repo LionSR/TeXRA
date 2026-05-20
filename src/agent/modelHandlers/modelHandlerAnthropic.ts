@@ -857,13 +857,23 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Log server-side compaction events when present in response content.
+    this.logContextManagementFromResponse(response, effectiveContextWindow);
+
+    return { response };
+  }
+
+  // Kept as a private wrapper so the legacy mocha test suite
+  // (src/test/agent/modelHandlers/ModelHandlerAnthropic.test.ts) can invoke
+  // it via `(handler as any).logContextManagementFromResponse(...)`.
+  private logContextManagementFromResponse(
+    response: BetaMessage,
+    effectiveContextWindow: number | undefined,
+  ): void {
     logContextManagementFromResponse(
       response,
       effectiveContextWindow,
       this.logger,
     );
-
-    return { response };
   }
 
   private enforceCacheControlLimit(
