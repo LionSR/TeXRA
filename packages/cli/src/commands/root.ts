@@ -985,6 +985,18 @@ function shouldUseOutputForCopy(
   return existing == null || candidate.round > existing.round;
 }
 
+function latestWorkflowOutput(
+  outputs: readonly OutputFileSummary[],
+): OutputFileSummary | undefined {
+  let latest: OutputFileSummary | undefined;
+  for (const output of outputs) {
+    if (latest == null || output.round >= latest.round) {
+      latest = output;
+    }
+  }
+  return latest;
+}
+
 export async function resolveWorkflowOutput(
   outputFile: string | undefined,
   outputDir: string | undefined,
@@ -1072,7 +1084,7 @@ export async function resolveWorkflowOutput(
     return { copiedOutput: undefined, displayResult: baseResult };
   }
 
-  const finalOutput = result.outputs.at(-1);
+  const finalOutput = latestWorkflowOutput(result.outputs);
   if (!finalOutput) {
     return { copiedOutput: undefined, displayResult: baseResult };
   }
@@ -1134,6 +1146,29 @@ function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
   return finalOutput?.absolutePath ?? result.runDirectory ?? result.status;
 }
 
+export function resumeWorkflowOutputFile(
+  config: AgentConfigPayload,
+): string | undefined {
+  if (config.agentCategory !== AgentCategory.Workflow) return undefined;
+
+  const resolveStoredOutputFile = (outputFile: string | undefined | null) => {
+    const trimmed = outputFile?.trim();
+    if (!trimmed) return undefined;
+    if (path.isAbsolute(trimmed)) return trimmed;
+
+    const workingDirectory = config.workingDirectory?.trim();
+    return workingDirectory ? path.join(workingDirectory, trimmed) : trimmed;
+  };
+
+  const cliOutputFile = resolveStoredOutputFile(config.cliOutputFile);
+  if (cliOutputFile) return cliOutputFile;
+
+  const outputFiles = config.outputFiles ?? [];
+  return outputFiles.length === 1
+    ? resolveStoredOutputFile(outputFiles[0])
+    : undefined;
+}
+
 async function runWorkflowAgent(
   context: CliContext,
   init: WorkflowRunInit,
@@ -1182,6 +1217,7 @@ async function runWorkflowAgent(
     inputFiles,
     contextFiles: init.contextFiles,
     outputFiles: modelOutputFile ? [modelOutputFile] : [],
+    cliOutputFile: init.output,
     instruction: init.instruction,
     workingDirectory: runContext.cwd,
     agentCategory: AgentCategory.Workflow,
@@ -1317,22 +1353,49 @@ async function runResumeExecution(
     await runtimeHost.close();
   }
 
+  const terminalStatus = await readCliTerminalStatus(result);
+  let displayResult: CliRunResult;
+  try {
+    ({ displayResult } = await resolveWorkflowOutput(
+      resumeWorkflowOutputFile(config),
+      undefined,
+      result,
+      runContext,
+      { terminalStatus },
+    ));
+  } catch (error) {
+    if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
+      writeTextStderr(toErrorMessage(error));
+      return CliExitCode.Interrupted;
+    }
+    await writeTerminalStatus(id, EXECUTION_STATUS.ERROR);
+    writeTextStderr(toErrorMessage(error));
+    return CliExitCode.AgentError;
+  }
+
   if (runContext.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(result, null, 2));
+    writeTextStdout(JSON.stringify(displayResult, null, 2));
   } else if (runContext.outputFormat === 'ndjson') {
     writeNdjsonStdout({
       kind: 'result',
       ts: new Date().toISOString(),
-      result,
+      result: displayResult,
     });
+  } else if (displayResult.category === AgentCategory.Workflow) {
+    writeTextStdout(formatWorkflowTextResult(displayResult));
   } else {
-    writeTextStdout(result.status);
+    writeTextStdout(displayResult.status);
   }
 
-  if (result.status !== 'error') return CliExitCode.Success;
-  return hasCliApprovalDenied(runContext)
-    ? CliExitCode.ApprovalDenied
-    : CliExitCode.AgentError;
+  if (terminalStatus === EXECUTION_STATUS.ERROR) {
+    return hasCliApprovalDenied(runContext)
+      ? CliExitCode.ApprovalDenied
+      : CliExitCode.AgentError;
+  }
+  if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
+    return CliExitCode.Interrupted;
+  }
+  return CliExitCode.Success;
 }
 
 async function shouldHonorRemoteAgentPriority(
