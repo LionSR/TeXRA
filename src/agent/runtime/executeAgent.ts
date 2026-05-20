@@ -335,7 +335,7 @@ export interface ExecuteAgentOptions {
   onBeforeWaiting?: (
     lastResponse: string | undefined,
     touchedFiles: string[],
-  ) => void | Promise<void>;
+  ) => boolean | void | Promise<boolean | void>;
   /** Fires when a tool-use session consumes queued follow-up instructions. */
   onFollowUpConsumed?: () => void;
   /** Fires on meaningful progress: todo changes, round completions, tool call milestones. */
