@@ -7,6 +7,8 @@ import {
 import { bus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas/identifiers';
 
+import type { Plan } from '@shared/schemas/plan';
+
 import {
   ODYSSEY_DEFAULT_MAX_CONTINUATIONS,
   ODYSSEY_HISTORY_LIMIT,
@@ -122,8 +124,8 @@ const STATUS_TO_EVENT_KIND: Record<OdysseyStatus, OdysseyEventKind> = {
 const ALLOWED_TRANSITIONS: Record<OdysseyStatus, readonly OdysseyStatus[]> = {
   active: ['paused', 'complete', 'abandoned'],
   // paused → complete: the model can still be invoked from a paused stream
-  // by user input, and may call odyssey(complete) after verifying the
-  // objective. Don't force a resume just to mark it done.
+  // by user input, and may call plan(command="complete") after verifying
+  // the objective. Don't force a resume just to mark it done.
   paused: ['active', 'complete', 'abandoned'],
   complete: [],
   abandoned: [],
@@ -155,7 +157,11 @@ export const OdysseyStore = {
    * in a non-terminal state (active or paused). Replaces complete/abandoned
    * records — finishing one and starting another is a normal flow.
    */
-  async start(streamId: StreamTabId, objective: string): Promise<Odyssey> {
+  async start(
+    streamId: StreamTabId,
+    objective: string,
+    options?: { plan?: Plan },
+  ): Promise<Odyssey> {
     const trimmed = requireNonEmpty(objective, 'objective');
     const existing = readRaw(streamId);
     if (existing && isOdysseyInFlight(existing)) {
@@ -175,6 +181,7 @@ export const OdysseyStore = {
       createdAt: now,
       updatedAt: now,
       history: [{ at: now, kind: 'started', detail: trimmed }],
+      plan: options?.plan ?? null,
     };
     await Promise.all([writeRaw(odyssey), addToIndex(streamId)]);
     bus.emit('odysseyStateChanged', { streamId });
@@ -283,15 +290,25 @@ export const OdysseyStore = {
     );
   },
 
-  /** Replace the objective. Used by the user-side edit-objective flow. */
+  /**
+   * Replace the objective (and optionally the originating plan).
+   * Used by the user-side edit-objective flow and by the Approve & Run
+   * path when an odyssey is already in flight — re-targeting an active
+   * loop is preferable to silently leaving it pointed at a stale
+   * objective.
+   */
   async editObjective(
     streamId: StreamTabId,
     newObjective: string,
+    options?: { plan?: Plan | null },
   ): Promise<Odyssey> {
     const trimmed = requireNonEmpty(newObjective, 'objective');
     const updated = await update(streamId, (odyssey) => ({
       ...odyssey,
       objective: trimmed,
+      ...(options && Object.hasOwn(options, 'plan')
+        ? { plan: options.plan ?? null }
+        : {}),
       history: [
         ...odyssey.history,
         { at: nowIso(), kind: 'objective_edited', detail: trimmed },

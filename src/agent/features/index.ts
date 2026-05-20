@@ -7,5 +7,3 @@ export function registerAgentFeatures(): void {
   registerMemoryFeature();
   registerOdysseyFeature();
 }
-
-export { registerMemoryFeature, registerOdysseyFeature };
