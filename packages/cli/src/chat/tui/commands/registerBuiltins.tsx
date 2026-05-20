@@ -16,26 +16,12 @@ type ApprovalPolicySelectHandler = (
 type ModelSelectHandler = (value: string) => void | Promise<void>;
 type ApiModeSelectHandler = (value: CliApiMode) => void | Promise<void>;
 
-const defaultAgentSelect: AgentSelectHandler = (value) => {
-  cliState.sessionMeta.set({
-    ...cliState.sessionMeta.get(),
-    agent: value,
-  });
-};
-
-const defaultModelSelect: ModelSelectHandler = (value) => {
-  cliState.sessionMeta.set({
-    ...cliState.sessionMeta.get(),
-    model: value,
-  });
-};
-
-const defaultApiModeSelect: ApiModeSelectHandler = (value) => {
-  cliState.sessionMeta.set({
-    ...cliState.sessionMeta.get(),
-    apiMode: value,
-  });
-};
+function patchSessionMeta<K extends 'agent' | 'model' | 'apiMode'>(
+  key: K,
+  value: K extends 'apiMode' ? CliApiMode : string,
+): void {
+  cliState.sessionMeta.set({ ...cliState.sessionMeta.get(), [key]: value });
+}
 
 export function registerBuiltinSlashCommands(options?: {
   onAgentSelect?: AgentSelectHandler;
@@ -46,10 +32,13 @@ export function registerBuiltinSlashCommands(options?: {
   canSelectModel?: () => boolean;
   onApiModeSelect?: ApiModeSelectHandler;
 }): void {
-  const onAgentSelect = options?.onAgentSelect ?? defaultAgentSelect;
+  const onAgentSelect: AgentSelectHandler =
+    options?.onAgentSelect ?? ((value) => patchSessionMeta('agent', value));
   const onApprovalPolicySelect = options?.onApprovalPolicySelect;
-  const onModelSelect = options?.onModelSelect ?? defaultModelSelect;
-  const onApiModeSelect = options?.onApiModeSelect ?? defaultApiModeSelect;
+  const onModelSelect: ModelSelectHandler =
+    options?.onModelSelect ?? ((value) => patchSessionMeta('model', value));
+  const onApiModeSelect: ApiModeSelectHandler =
+    options?.onApiModeSelect ?? ((value) => patchSessionMeta('apiMode', value));
 
   function AgentListFormAdapter(props: SlashFormProps): React.JSX.Element {
     const current = cliState.sessionMeta.get().agent;

@@ -52,7 +52,7 @@ import { AgentListForm } from './forms/AgentListForm';
 import { ApiModeForm } from './forms/ApiModeForm';
 import {
   ApprovalPolicyForm,
-  formatApprovalPolicyForCli,
+  formatApprovalPolicyForCli as formatApprovalPolicy,
 } from './forms/ApprovalPolicyForm';
 import { ModelListForm } from './forms/ModelListForm';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
@@ -245,10 +245,6 @@ function openCliApiModeForm(
 
 async function showCliAuthStatus(): Promise<void> {
   appendLocalAssistantTranscript((await loadCliApiStatusLines()).join('\n'));
-}
-
-function formatApprovalPolicy(policy: CliApprovalPolicy): string {
-  return formatApprovalPolicyForCli(policy);
 }
 
 function parseApprovalPolicy(input: string): CliApprovalPolicy | undefined {
@@ -657,7 +653,7 @@ export async function runChat(
         getApprovalPolicy,
         setApprovalPolicy,
         resetSession: resetSessionForClear,
-        startStoredExecution: (config) => startAgentRun(config),
+        startStoredExecution: startAgentRun,
       }),
     getApprovalPolicy,
     onApprovalPolicySelect: (policy) => {
@@ -677,9 +673,9 @@ export async function runChat(
         getApprovalPolicy,
         setApprovalPolicy,
         resetSession: resetSessionForClear,
-        startStoredExecution: (config) => startAgentRun(config),
+        startStoredExecution: startAgentRun,
       }),
-    onApiModeSelect: (nextMode) => applyCliApiModeSelection(nextMode),
+    onApiModeSelect: applyCliApiModeSelection,
   });
 
   const startSession = (instruction: string): void => {
@@ -710,7 +706,7 @@ export async function runChat(
         getApprovalPolicy,
         setApprovalPolicy,
         resetSession: resetSessionForClear,
-        startStoredExecution: (config) => startAgentRun(config),
+        startStoredExecution: startAgentRun,
       })
     ) {
       return;

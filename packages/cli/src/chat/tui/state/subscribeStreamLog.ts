@@ -100,6 +100,14 @@ function entriesEqual(
   return true;
 }
 
+function logEntryRole(
+  messageType: string | undefined,
+): ConversationEntry['role'] {
+  if (messageType === MESSAGE_TYPES.USER_MESSAGE) return 'user';
+  if (messageType === MESSAGE_TYPES.ERROR) return 'error';
+  return 'assistant';
+}
+
 function renderLogEntry(
   entry: StreamLogEntry,
   prev: ConversationEntry | undefined,
@@ -141,12 +149,7 @@ function renderLogEntry(
   }
 
   const text = entry.text ?? '';
-  const role: ConversationEntry['role'] =
-    entry.messageType === MESSAGE_TYPES.USER_MESSAGE
-      ? 'user'
-      : entry.messageType === MESSAGE_TYPES.ERROR
-        ? 'error'
-        : 'assistant';
+  const role = logEntryRole(entry.messageType);
   const renderedText = role === 'error' ? appendCliApiSwitchHint(text) : text;
   // Assistant entries defer finalization (see comment above); inherit
   // from `prev` so re-syncs after finalize don't de-finalize and drop
