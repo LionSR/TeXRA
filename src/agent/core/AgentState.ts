@@ -5,7 +5,7 @@ import {
   type NormalizedUsage,
 } from '@agent/types/NormalizedUsage';
 import {
-  DEFAULT_TOTALS,
+  createDefaultTotals,
   RunUsageAccumulatorJSONSchema,
   recordNormalizedUsage,
 } from './RunUsageAccumulator';
@@ -35,10 +35,10 @@ export function createRoundState(
 export const AgentRunStateSnapshotSchema = z.object({
   totalRounds: z.int().nonnegative().prefault(0),
   totalResponseTimeMs: z.number().nonnegative().prefault(0),
-  usageAccumulator: RunUsageAccumulatorJSONSchema.prefault({
-    totals: DEFAULT_TOTALS,
+  usageAccumulator: RunUsageAccumulatorJSONSchema.prefault(() => ({
+    totals: createDefaultTotals(),
     normalizedSnapshots: [],
-  }),
+  })),
 });
 
 export type AgentRunStateSnapshot = z.output<
@@ -51,7 +51,7 @@ export function createRunState(): AgentRunStateSnapshot {
     totalRounds: 0,
     totalResponseTimeMs: 0,
     usageAccumulator: {
-      totals: { ...DEFAULT_TOTALS },
+      totals: createDefaultTotals(),
       normalizedSnapshots: [],
     },
   };
