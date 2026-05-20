@@ -151,4 +151,35 @@ describe('CLI workflow output resolution', () => {
       'A2',
     );
   });
+
+  it('uses the latest round when a single requested output arrives out of order', async () => {
+    const cwd = await makeTempDir();
+    const runA1 = join(cwd, 'run', 'r1', 'a.tex');
+    const runA2 = join(cwd, 'run', 'r2', 'a.tex');
+    await mkdir(join(cwd, 'run', 'r1'), { recursive: true });
+    await mkdir(join(cwd, 'run', 'r2'), { recursive: true });
+    await writeFile(runA1, 'A1');
+    await writeFile(runA2, 'A2');
+
+    const { displayResult } = await resolveWorkflowOutput(
+      'out/a.tex',
+      undefined,
+      workflowResult([
+        { absolutePath: runA2, relativePath: 'r2/a.tex', round: 2 },
+        { absolutePath: runA1, relativePath: 'r1/a.tex', round: 1 },
+      ]),
+      testContext(cwd),
+      {
+        runDirectory: join(cwd, 'run'),
+        terminalStatus: EXECUTION_STATUS.COMPLETED,
+      },
+    );
+
+    expect(displayResult).toMatchObject({
+      copiedOutput: join(cwd, 'out', 'a.tex'),
+    });
+    await expect(readFile(join(cwd, 'out', 'a.tex'), 'utf8')).resolves.toBe(
+      'A2',
+    );
+  });
 });
