@@ -19,15 +19,17 @@ const TOOLTIP_STYLES: Partial<CSSStyleDeclaration> = {
   transition: 'opacity var(--transition-fast, 0.15s ease)',
 };
 
+const TOOLTIP_TARGET_TAGS = new Set(['VSCODE-TOOLBAR-BUTTON', 'WA-BUTTON']);
+
 /**
- * Find the nearest `vscode-toolbar-button[title]` in a composed event path.
+ * Find the nearest icon-only button with a title in a composed event path.
  * Works across shadow DOM boundaries.
  */
-function findToolbarButton(e: Event): Element | null {
+function findTooltipTarget(e: Event): Element | null {
   for (const el of e.composedPath()) {
     if (
       el instanceof Element &&
-      el.tagName === 'VSCODE-TOOLBAR-BUTTON' &&
+      TOOLTIP_TARGET_TAGS.has(el.tagName) &&
       el.hasAttribute('title')
     ) {
       return el;
@@ -84,11 +86,11 @@ function hide(): void {
     window.clearTimeout(showTimeoutId);
     showTimeoutId = null;
   }
-  // Restore native title
-  if (currentTarget && savedTitle) {
+  // Restore the title only if no code changed it while the tooltip was shown.
+  if (currentTarget && savedTitle && !currentTarget.hasAttribute('title')) {
     currentTarget.setAttribute('title', savedTitle);
-    savedTitle = '';
   }
+  savedTitle = '';
   currentTarget = null;
   if (tooltipEl) {
     tooltipEl.style.opacity = '0';
@@ -97,7 +99,7 @@ function hide(): void {
 }
 
 function handleOver(e: Event): void {
-  const target = findToolbarButton(e);
+  const target = findTooltipTarget(e);
   if (!target || target === currentTarget) return;
 
   // Skip buttons with text content (they're self-explanatory)
