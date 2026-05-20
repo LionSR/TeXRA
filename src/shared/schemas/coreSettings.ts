@@ -5,15 +5,16 @@ import { z } from 'zod';
  * Core (host-neutral) TeXRA settings.
  *
  * These settings apply to any host that integrates the TeXRA core — VS Code
- * extension, Electron desktop, or CLI. Host-specific settings are layered on
- * top via per-host extension schemas (`vscodeSettings.ts`,
- * `desktopSettings.ts`, `cliSettings.ts`).
+ * extension, Electron desktop, or CLI. The VS Code host layers its own
+ * extension-only settings on top via `vscodeSettings.ts`; the CLI exposes only
+ * the shared enums + a flat-key list from `cliSettings.ts` rather than a
+ * layered schema; the Electron desktop host has no extension settings today.
  *
  * Per the project's split policy: a setting belongs in Core if any host could
  * plausibly implement it, even if only one host implements it today. Truly
  * host-specific settings (those that name-reference a host or are
  * UI affordances unique to one host's toolkit) live in the per-host
- * extension schemas.
+ * extension schema, when one exists.
  */
 
 export const NON_REGEX_REPLACEMENT_CATEGORIES = [

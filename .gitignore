@@ -31,6 +31,7 @@ scripts/Heap-20260221T154935.heapsnapshot
 scripts/analyze_heap.py
 .claude/projects
 .claude/worktrees
+.claude/scheduled_tasks.lock
 .worktrees/
 
 # Playwright e2e: per-run artifacts (screenshots baselines under
