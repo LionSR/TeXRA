@@ -129,6 +129,7 @@ const SLASH_PALETTE_OPEN = signal<boolean>(false);
 const REVERSE_SEARCH_OPEN = signal<boolean>(false);
 
 const PENDING_EXIT_HINT = signal<boolean>(false);
+const PENDING_EXIT_RESUME_ID = signal<string | undefined>(undefined);
 
 const RESET_HOOKS = new Set<() => void>();
 
@@ -143,6 +144,9 @@ export const cliState = {
   slashPaletteOpen: SLASH_PALETTE_OPEN as Signal.State<boolean>,
   reverseSearchOpen: REVERSE_SEARCH_OPEN as Signal.State<boolean>,
   pendingExitHint: PENDING_EXIT_HINT as Signal.State<boolean>,
+  pendingExitResumeId: PENDING_EXIT_RESUME_ID as Signal.State<
+    string | undefined
+  >,
 };
 
 export const NO_BYPASS: BypassState = { toolEdit: false, superYolo: false };
@@ -231,6 +235,7 @@ export function resetCliState(sessionMeta = defaultSessionMeta()): void {
   cliState.slashPaletteOpen.set(false);
   cliState.reverseSearchOpen.set(false);
   cliState.pendingExitHint.set(false);
+  cliState.pendingExitResumeId.set(undefined);
   for (const resetHook of RESET_HOOKS) resetHook();
 }
 

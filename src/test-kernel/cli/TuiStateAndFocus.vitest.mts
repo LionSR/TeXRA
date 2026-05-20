@@ -46,7 +46,11 @@ import {
   splitTranscriptEntries,
 } from '../../../packages/cli/src/chat/tui/panes/ConversationPane';
 import { renderAnsiMarkdown } from '../../../packages/cli/src/chat/tui/render/ansiMarkdown';
-import { chatTuiCanInterruptActiveRun } from '../../../packages/cli/src/chat/tui/runChatTui';
+import {
+  chatTuiCanInterruptActiveRun,
+  clearTuiSessionRunState,
+} from '../../../packages/cli/src/chat/tui/runChatTui';
+import { CliExitCode } from '../../../packages/cli/src/runtime/exitCodes';
 import {
   appendAssistantTranscriptIfMissing,
   appendLocalAssistantTranscript,
@@ -269,6 +273,28 @@ describe('CLI TUI row allocation', () => {
         streamId: root,
       }),
     ).toBe(true);
+  });
+
+  it('clears stale resume ids when clearing chat session run state', () => {
+    const session = {
+      streamId: root,
+      executionId: 'old-execution',
+      runPromise: Promise.resolve(),
+      runExitCode: CliExitCode.Interrupted,
+      runCompleted: true,
+      stopRequested: true,
+    };
+
+    clearTuiSessionRunState(session);
+
+    expect(session).toMatchObject({
+      streamId: undefined,
+      executionId: undefined,
+      runPromise: undefined,
+      runExitCode: 0,
+      runCompleted: false,
+      stopRequested: false,
+    });
   });
 });
 
