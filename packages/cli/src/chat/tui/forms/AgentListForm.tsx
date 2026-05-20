@@ -13,6 +13,7 @@ import { Select } from '../ui/Select';
 
 export interface AgentListFormProps {
   readonly currentAgent: string;
+  readonly availableRows?: number;
   readonly selectable?: boolean;
   readonly onSelect?: (value: string) => void;
   readonly onClose: () => void;
@@ -59,6 +60,78 @@ function agentDescription(agent: AgentOptionData): string {
       : 'built-in';
   const kind = agent.isOrchestrator ? 'orchestrator' : 'tool-use';
   return agent.description ? `${kind}; ${source}; ${agent.description}` : kind;
+}
+
+export function agentSelectWindow({
+  availableRows,
+  itemCount,
+  workflowCount,
+}: {
+  readonly availableRows: number | undefined;
+  readonly itemCount: number;
+  readonly workflowCount: number;
+}): {
+  readonly maxVisibleItems: number | undefined;
+  readonly showOverflow: boolean;
+  readonly maxVisibleWorkflows: number;
+  readonly showWorkflowOverflow: boolean;
+} {
+  if (availableRows == null) {
+    return {
+      maxVisibleItems: undefined,
+      showOverflow: false,
+      maxVisibleWorkflows: workflowCount,
+      showWorkflowOverflow: false,
+    };
+  }
+
+  // Border, title, description, tool-use heading, and key hints are the fixed
+  // chrome for the primary selectable list.
+  const selectRows = Math.max(1, availableRows - 8);
+  if (itemCount > selectRows) {
+    if (selectRows < 3) {
+      return {
+        maxVisibleItems: selectRows,
+        showOverflow: false,
+        maxVisibleWorkflows: 0,
+        showWorkflowOverflow: false,
+      };
+    }
+
+    return {
+      maxVisibleItems: Math.max(1, selectRows - 2),
+      showOverflow: true,
+      maxVisibleWorkflows: 0,
+      showWorkflowOverflow: false,
+    };
+  }
+
+  const remainingRows = availableRows - 8 - itemCount;
+  if (workflowCount === 0 || remainingRows < 4) {
+    return {
+      maxVisibleItems: itemCount,
+      showOverflow: false,
+      maxVisibleWorkflows: 0,
+      showWorkflowOverflow: false,
+    };
+  }
+
+  const workflowRows = remainingRows - 3;
+  if (workflowCount <= workflowRows) {
+    return {
+      maxVisibleItems: itemCount,
+      showOverflow: false,
+      maxVisibleWorkflows: workflowCount,
+      showWorkflowOverflow: false,
+    };
+  }
+
+  return {
+    maxVisibleItems: itemCount,
+    showOverflow: false,
+    maxVisibleWorkflows: Math.max(0, workflowRows - 1),
+    showWorkflowOverflow: true,
+  };
 }
 
 export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
@@ -122,6 +195,15 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     name: agent.label,
     description: agentDescription(agent),
   }));
+  const selectWindow = agentSelectWindow({
+    availableRows: props.availableRows,
+    itemCount: items.length,
+    workflowCount: workflowRows.length,
+  });
+  const visibleWorkflowRows = workflowRows.slice(
+    0,
+    selectWindow.maxVisibleWorkflows,
+  );
 
   return (
     <Box
@@ -143,6 +225,8 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
         <Select
           items={items}
           activeValue={props.currentAgent}
+          maxVisibleItems={selectWindow.maxVisibleItems}
+          showOverflow={selectWindow.showOverflow}
           onSelect={(value) => {
             if (selectable) {
               props.onSelect?.(value);
@@ -153,17 +237,22 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
           onCancel={props.onClose}
         />
       </Box>
-      {workflowRows.length > 0 ? (
+      {visibleWorkflowRows.length > 0 || selectWindow.showWorkflowOverflow ? (
         <Box marginTop={1} flexDirection="column">
           <Text bold>Workflows</Text>
-          {workflowRows.map((workflow) => (
-            <Text key={workflow.name}>
+          {visibleWorkflowRows.map((workflow) => (
+            <Text key={workflow.name} wrap="truncate-end">
               {'  '}
               {workflow.name}
               <Text dimColor>{` — ${workflow.description}`}</Text>
             </Text>
           ))}
-          <Text dimColor>
+          {selectWindow.showWorkflowOverflow ? (
+            <Text dimColor>{`... ${
+              workflowRows.length - visibleWorkflowRows.length
+            } more workflows`}</Text>
+          ) : null}
+          <Text dimColor wrap="truncate-end">
             {'Run a workflow with texra run <name> --input=<file>.'}
           </Text>
         </Box>
