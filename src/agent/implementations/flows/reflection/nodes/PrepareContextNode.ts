@@ -1,5 +1,5 @@
 import { Node } from '@agent/node';
-import { createRoundState } from '@agent/core/AgentState';
+import { ConversationRoundStateSnapshotSchema } from '@agent/core/AgentState';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
@@ -33,7 +33,9 @@ export class PrepareContextNode<C = unknown> extends Node<
     const { promptBuilder, modelHandler, logger } = this.services;
     const { currentRound, conversation } = prepRes;
 
-    const stateRound = createRoundState(currentRound);
+    const stateRound = ConversationRoundStateSnapshotSchema.parse({
+      roundIndex: currentRound,
+    });
     const isFirstRound = currentRound === 0;
 
     let messages: ProviderMessage[];
