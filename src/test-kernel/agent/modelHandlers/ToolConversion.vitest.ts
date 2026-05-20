@@ -12,7 +12,12 @@ import type { FunctionTool } from 'openai/resources/responses/responses';
 type OpenAIFunctionTool = Extract<ChatCompletionTool, { type: 'function' }>;
 
 describe('OpenAI tool conversion', () => {
-  it('normalizes discriminated object unions to object parameter schemas', () => {
+  it('flattens discriminated object unions into a single object schema', () => {
+    // OpenAI's function-calling API rejects schemas whose root is
+    // oneOf/anyOf/allOf with HTTP 400 "Invalid function 'X': schema must have
+    // type 'object' and not contain 'oneOf'/'anyOf'/'allOf' at the top level."
+    // Zod v4 emits z.discriminatedUnion as a top-level oneOf, so the union
+    // must be flattened before the schema reaches OpenAI.
     const defs: ToolDefinition[] = [
       {
         name: 'inquiry',
@@ -35,7 +40,19 @@ describe('OpenAI tool conversion', () => {
     const parameters = tool.function.parameters as Record<string, unknown>;
 
     expect(parameters.type).toBe('object');
-    expect(parameters.oneOf).toEqual(expect.any(Array));
+    expect(parameters.oneOf).toBeUndefined();
+    expect(parameters.anyOf).toBeUndefined();
+    expect(parameters.allOf).toBeUndefined();
+    expect(parameters.$schema).toBeUndefined();
+
+    const properties = parameters.properties as Record<
+      string,
+      Record<string, unknown>
+    >;
+    expect(properties.command.enum).toEqual(['ask', 'read']);
+    expect(properties.question).toBeDefined();
+    expect(properties.thread_id).toBeDefined();
+    expect(parameters.required).toEqual(['command']);
   });
 
   it('uses an empty object schema when parameters are omitted', () => {

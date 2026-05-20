@@ -25,21 +25,132 @@ import type {
 const CHANNEL = 'toolConversion';
 logger.initialize(CHANNEL);
 
+type JSONSchemaObject = Record<string, unknown>;
+
+/**
+ * Both OpenAI and Gemini reject function parameter schemas whose top-level
+ * node is `oneOf`/`anyOf`/`allOf` (HTTP 400:
+ * `schema must have type 'object' and not contain 'oneOf'/'anyOf'/'allOf' at the top level`).
+ * Zod v4's `toJSONSchema` emits discriminated unions exactly that way. Flatten
+ * such unions into a single object schema by:
+ *  - merging the union of all branch properties,
+ *  - keeping only properties required by every branch as `required`,
+ *  - collapsing discriminator literals from every branch into an `enum`.
+ *
+ * Properties that exist on multiple branches with conflicting non-literal
+ * shapes fall back to the first branch's shape; the discriminator enum is
+ * what the model actually selects between, so per-branch shape divergence
+ * beyond that is rare in practice.
+ */
+function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
+  const variantKey = (['oneOf', 'anyOf', 'allOf'] as const).find(
+    (k) => Array.isArray(schema[k]) && schema.type !== 'object',
+  );
+  if (!variantKey) return schema;
+
+  const rawVariants = schema[variantKey] as unknown[];
+  const variants: JSONSchemaObject[] = [];
+  for (const v of rawVariants) {
+    if (typeof v !== 'object' || v === null) return schema;
+    const rec = v as JSONSchemaObject;
+    if (rec.type !== 'object') return schema;
+    variants.push(rec);
+  }
+  if (variants.length === 0) return schema;
+
+  const variantProperties: JSONSchemaObject[] = variants.map(
+    (v) => (v.properties as JSONSchemaObject | undefined) ?? {},
+  );
+
+  const allPropNames = new Set<string>();
+  for (const props of variantProperties) {
+    for (const name of Object.keys(props)) allPropNames.add(name);
+  }
+
+  const mergedProperties: JSONSchemaObject = {};
+  for (const name of allPropNames) {
+    const branchSchemas: JSONSchemaObject[] = [];
+    for (const props of variantProperties) {
+      const s = props[name];
+      if (s && typeof s === 'object') {
+        branchSchemas.push(s as JSONSchemaObject);
+      }
+    }
+    if (branchSchemas.length === 1) {
+      mergedProperties[name] = branchSchemas[0];
+      continue;
+    }
+    // Discriminator: every branch pins this prop to a literal value.
+    const constValues = branchSchemas
+      .map((s) => s.const)
+      .filter((c) => c !== undefined);
+    if (constValues.length === branchSchemas.length) {
+      const descriptions = branchSchemas
+        .map((s) => s.description)
+        .filter((d): d is string => typeof d === 'string');
+      const merged: JSONSchemaObject = {
+        type: 'string',
+        enum: constValues,
+      };
+      if (descriptions.length) {
+        merged.description = descriptions.join(' | ');
+      }
+      mergedProperties[name] = merged;
+      continue;
+    }
+    mergedProperties[name] = branchSchemas[0];
+  }
+
+  const requiredSets = variants.map(
+    (v) => new Set<string>((v.required as string[] | undefined) ?? []),
+  );
+  const commonRequired = [...allPropNames].filter((p) =>
+    requiredSets.every((s) => s.has(p)),
+  );
+
+  const flat: JSONSchemaObject = {
+    type: 'object',
+    properties: mergedProperties,
+  };
+  if (commonRequired.length) flat.required = commonRequired;
+  if (typeof schema.description === 'string') {
+    flat.description = schema.description;
+  }
+  return flat;
+}
+
+/**
+ * OpenAI and Gemini both reject `$schema` at the top level of function
+ * parameter schemas. Zod v4's `toJSONSchema` includes this dialect URI by
+ * default. Strip it for any provider.
+ */
+function stripDollarSchema(schema: JSONSchemaObject): JSONSchemaObject {
+  if (!('$schema' in schema)) return schema;
+  const { $schema: _unused, ...rest } = schema;
+  return rest;
+}
+
 /**
  * Converts a Zod schema to JSON Schema, or returns the pre-converted parameters.
- * Shared utility used by all provider tool converters.
+ * Shared utility used by all provider tool converters. Top-level discriminated
+ * unions are flattened and `$schema` is stripped so the output is acceptable
+ * to OpenAI Chat Completions, OpenAI Responses, and Gemini function calling.
+ * Anthropic also gets the cleaned schema; the cleanup is a no-op for normal
+ * `type: "object"` schemas.
  */
-function convertToolSchema(
-  def: ToolDefinition,
-): Record<string, unknown> | null {
+function convertToolSchema(def: ToolDefinition): JSONSchemaObject | null {
+  let schema: JSONSchemaObject | null;
   if (def.zodSchema) {
-    return toJSONSchema(def.zodSchema, {
+    schema = toJSONSchema(def.zodSchema, {
       target: 'draft-2020-12',
       unrepresentable: 'any',
       io: 'input',
-    }) as Record<string, unknown>;
+    }) as JSONSchemaObject;
+  } else {
+    schema = (def.parameters ?? null) as JSONSchemaObject | null;
   }
-  return (def.parameters ?? null) as Record<string, unknown> | null;
+  if (!schema) return null;
+  return stripDollarSchema(flattenTopLevelUnion(schema));
 }
 
 /**
