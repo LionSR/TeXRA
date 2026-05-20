@@ -300,13 +300,15 @@ export const OdysseyStore = {
   async editObjective(
     streamId: StreamTabId,
     newObjective: string,
-    options?: { plan?: Plan },
+    options?: { plan?: Plan | null },
   ): Promise<Odyssey> {
     const trimmed = requireNonEmpty(newObjective, 'objective');
     const updated = await update(streamId, (odyssey) => ({
       ...odyssey,
       objective: trimmed,
-      ...(options && 'plan' in options ? { plan: options.plan ?? null } : {}),
+      ...(options && Object.hasOwn(options, 'plan')
+        ? { plan: options.plan ?? null }
+        : {}),
       history: [
         ...odyssey.history,
         { at: nowIso(), kind: 'objective_edited', detail: trimmed },

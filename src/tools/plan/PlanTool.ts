@@ -337,8 +337,9 @@ Best practices:
 
   /**
    * Start an autonomous odyssey whose objective is the just-approved plan.
-   * Falls back to a plain approved result if odyssey is disabled, or if one
-   * is already in flight for the stream.
+   * Falls back explicitly if odyssey is disabled. If one is already in flight
+   * for the stream, retarget that odyssey to the newly approved plan so future
+   * continuations follow the current user decision.
    */
   private async startOdysseyForPlan(
     plan: Plan,
@@ -350,16 +351,16 @@ Best practices:
     if (!odysseyEnabled) {
       logger.warn(
         'Approve & Run Autonomously requested but odyssey feature flag is off; ' +
-          'proceeding as a plain approval.',
+          'continuing without an autonomous odyssey.',
       );
       return {
-        summary:
-          'Plan approved — autonomous run skipped (odyssey feature flag is off)',
+        summary: 'Plan approved — autonomous run unavailable',
         output:
-          `The user approved this plan via "Approve & Run", but the odyssey ` +
-          `feature flag is currently off, so the autonomous continuation loop ` +
-          `was not started. Proceed with the plan steps turn-by-turn; update ` +
-          `step statuses as you work through them.`,
+          `The user selected Approve & Run, but the odyssey feature flag is ` +
+          `currently disabled. The plan is approved, but no autonomous ` +
+          `odyssey was started.\n\n` +
+          `Proceed with the plan steps as a normal turn-by-turn workflow. ` +
+          `Update plan step statuses as you go.`,
       };
     }
 
@@ -370,27 +371,29 @@ Best practices:
     // the stale objective. Resuming a paused odyssey keeps the continuation
     // budget so the user-approved cap isn't bypassed by re-targeting.
     const existing = OdysseyStore.getForStream(streamId);
-    if (existing && isOdysseyInFlight(existing)) {
+    if (isOdysseyInFlight(existing)) {
       try {
         const retargeted = await OdysseyStore.editObjective(
           streamId,
           objective,
           { plan },
         );
-        if (retargeted.status === 'paused') {
-          await OdysseyStore.setStatus(
-            streamId,
-            'active',
-            'retargeted to new plan',
-          );
-        }
+        const active =
+          retargeted.status === 'paused'
+            ? ((await OdysseyStore.setStatus(
+                streamId,
+                'active',
+                'User approved a new plan and requested autonomous execution.',
+              )) ?? retargeted)
+            : retargeted;
         return {
-          summary: `Plan approved — odyssey ${retargeted.odysseyId} retargeted`,
+          summary: `Plan approved — odyssey ${active.odysseyId} retargeted`,
           output:
-            `The user approved a new plan while odyssey ${retargeted.odysseyId} ` +
-            `was already in flight. The odyssey objective has been replaced ` +
-            `with the new plan's stopping condition; resume working against ` +
-            `it.\n\n` +
+            `The user approved a new plan while odyssey ${active.odysseyId} ` +
+            `was already in flight. The odyssey has been retargeted to ` +
+            `the newly approved plan instead of leaving the old objective ` +
+            `active.\n\n` +
+            `${formatOdysseyView(active)}\n\n` +
             `Discipline:\n` +
             `- Work through the new plan steps and update their statuses with plan(command="update") as you progress.\n` +
             `- Discard any progress that only served the previous objective.\n` +
@@ -401,7 +404,7 @@ Best practices:
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
         logger.warn(
-          `Failed to retarget in-flight odyssey for approved plan; falling back to plain approval. ${reason}`,
+          `Failed to retarget in-flight odyssey for approved plan; returning an explicit error result. ${reason}`,
         );
         return {
           summary:

@@ -2,7 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
-import { createFakePlatform } from '@test/support/FakePlatform';
+import {
+  FakeConfigProvider,
+  createFakePlatform,
+} from '@test/support/FakePlatform';
 import {
   FileInteractionState,
   WorkPlanState,
@@ -25,6 +28,18 @@ const plan: Plan = {
       description: 'Store plan progress in WorkPlanState.',
       status: 'pending',
       files: ['src/agent/core/AgentWorkspaceState.ts'],
+    },
+  ],
+};
+
+const followUpPlan: Plan = {
+  summary: 'Implement the approved follow-up plan.',
+  steps: [
+    {
+      title: 'Retarget objective',
+      description: 'Make the active odyssey follow the newly approved plan.',
+      status: 'pending',
+      files: ['src/tools/plan/PlanTool.ts'],
     },
   ],
 };
@@ -124,24 +139,62 @@ describe('PlanTool — update (plan approval)', () => {
     }
   });
 
-  it('approve_and_odyssey retargets an in-flight odyssey instead of leaving the previous objective active', async () => {
-    const streamId = 'stream:plan-retarget' as StreamTabId;
+  it('approve_and_odyssey retargets an existing odyssey to the approved plan', async () => {
+    const streamId = 'stream:plan-odyssey-retarget' as StreamTabId;
     await installPlatform(true);
 
-    const stalePlan: Plan = {
-      summary: 'Previous task summary',
-      steps: [
+    try {
+      const existing = await OdysseyStore.start(streamId, 'Old objective', {
+        plan,
+      });
+      const { events, host } = createRecordingHost();
+      const coordinator = new PlanApprovalCoordinator(host);
+      const workPlanState = new WorkPlanState();
+      const tool = new PlanTool();
+
+      const resultPromise = withToolEnvironment(
         {
-          title: 'Old step',
-          description: 'A previous unit of work.',
-          status: 'pending',
-          files: [],
+          run: {
+            runtimeHost: host,
+            streamId,
+            coordinators: { plan: coordinator } as unknown as RunCoordinators,
+          },
+          call: {
+            tracker: new FileInteractionState(),
+            workPlanState,
+          },
         },
-      ],
-    };
-    await OdysseyStore.start(streamId, 'Stale objective from prior plan', {
-      plan: stalePlan,
-    });
+        () => tool.call({ command: 'update', plan: followUpPlan }),
+      );
+
+      const approval = events.find(
+        (entry) => entry.event === 'showPlanApproval',
+      );
+      expect(approval).toBeDefined();
+      coordinator.resolveRequest(
+        (approval!.payload as { approvalId: string }).approvalId,
+        { action: 'approve_and_odyssey' },
+      );
+
+      const result = await resultPromise;
+      expect(result.isError).not.toBe(true);
+      expect(result.summary).toMatch(/retargeted/i);
+
+      const odyssey = OdysseyStore.getForStream(streamId);
+      expect(odyssey).not.toBeNull();
+      expect(odyssey!.odysseyId).toBe(existing.odysseyId);
+      expect(odyssey!.status).toBe('active');
+      expect(odyssey!.objective).toContain(followUpPlan.summary);
+      expect(odyssey!.objective).not.toContain('Old objective');
+      expect(odyssey!.plan).toEqual(followUpPlan);
+    } finally {
+      await OdysseyStore.forget(streamId);
+    }
+  });
+
+  it('approve_and_odyssey explicitly reports when odyssey is disabled before resolution', async () => {
+    const streamId = 'stream:plan-odyssey-disabled' as StreamTabId;
+    const platform = await installPlatform(true);
 
     try {
       const { events, host } = createRecordingHost();
@@ -167,6 +220,15 @@ describe('PlanTool — update (plan approval)', () => {
       const approval = events.find(
         (entry) => entry.event === 'showPlanApproval',
       );
+      expect(approval).toBeDefined();
+      expect(
+        (approval!.payload as { odysseyEnabled: boolean }).odysseyEnabled,
+      ).toBe(true);
+
+      (platform.config as FakeConfigProvider).set(
+        ODYSSEY_FEATURE_FLAG_KEY,
+        false,
+      );
       coordinator.resolveRequest(
         (approval!.payload as { approvalId: string }).approvalId,
         { action: 'approve_and_odyssey' },
@@ -174,15 +236,9 @@ describe('PlanTool — update (plan approval)', () => {
 
       const result = await resultPromise;
       expect(result.isError).not.toBe(true);
-
-      const odyssey = OdysseyStore.getForStream(streamId);
-      expect(odyssey).not.toBeNull();
-      expect(odyssey!.status).toBe('active');
-      // Retargeted to the new plan, NOT the stale objective.
-      expect(odyssey!.objective).not.toContain('Stale objective');
-      expect(odyssey!.objective).toContain(plan.summary);
-      expect(odyssey!.objective).toContain(plan.steps[0]!.title);
-      expect(odyssey!.plan).toEqual(plan);
+      expect(result.summary).toMatch(/autonomous run unavailable/i);
+      expect(result.output).toContain('feature flag is currently disabled');
+      expect(OdysseyStore.getForStream(streamId)).toBeNull();
     } finally {
       await OdysseyStore.forget(streamId);
     }
