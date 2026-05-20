@@ -10,10 +10,10 @@ importers:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.3.143
-        version: 0.3.143(@anthropic-ai/sdk@0.96.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
+        version: 0.3.143(@anthropic-ai/sdk@0.97.1(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
       '@anthropic-ai/sdk':
-        specifier: ^0.96.0
-        version: 0.96.0(zod@4.4.3)
+        specifier: ^0.97.1
+        version: 0.97.1(zod@4.4.3)
       '@awesome.me/webawesome':
         specifier: ^3.7.0
         version: 3.7.0(@floating-ui/utils@0.2.11)(@types/react@19.2.14)
@@ -398,7 +398,7 @@ importers:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.3.143
-        version: 0.3.143(@anthropic-ai/sdk@0.96.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
+        version: 0.3.143(@anthropic-ai/sdk@0.97.1(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
       '@fortawesome/free-solid-svg-icons':
         specifier: ^7.2.0
         version: 7.2.0
@@ -441,10 +441,10 @@ importers:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.3.143
-        version: 0.3.143(@anthropic-ai/sdk@0.96.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
+        version: 0.3.143(@anthropic-ai/sdk@0.97.1(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
       '@anthropic-ai/sdk':
-        specifier: ^0.96.0
-        version: 0.96.0(zod@4.4.3)
+        specifier: ^0.97.1
+        version: 0.97.1(zod@4.4.3)
       '@awesome.me/webawesome':
         specifier: ^3.7.0
         version: 3.7.0(@floating-ui/utils@0.2.11)(@types/react@19.2.14)
@@ -808,8 +808,8 @@ packages:
       '@modelcontextprotocol/sdk': ^1.29.0
       zod: ^4.0.0
 
-  '@anthropic-ai/sdk@0.96.0':
-    resolution: {integrity: sha512-KlCsODtTyb17bLUVCSDC2HtSvAbJf60sEiPEax9dInF+aDF92vS4TZJ5XD7YCQXNb1/5icYaw8Y7wMjPlIV9Zg==}
+  '@anthropic-ai/sdk@0.97.1':
+    resolution: {integrity: sha512-wOf7AUeJPitcVpvKO4UMu63mWH5SaVipkGd7OOQJt/G6VYGlV8D2Gp9dLxOrttDJh/9gqPqdaBwDGcBevumeAg==}
     hasBin: true
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
@@ -6709,9 +6709,9 @@ snapshots:
   '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.143':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk@0.3.143(@anthropic-ai/sdk@0.96.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)':
+  '@anthropic-ai/claude-agent-sdk@0.3.143(@anthropic-ai/sdk@0.97.1(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)':
     dependencies:
-      '@anthropic-ai/sdk': 0.96.0(zod@4.4.3)
+      '@anthropic-ai/sdk': 0.97.1(zod@4.4.3)
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
       zod: 4.4.3
     optionalDependencies:
@@ -6724,7 +6724,7 @@ snapshots:
       '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.143
       '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.143
 
-  '@anthropic-ai/sdk@0.96.0(zod@4.4.3)':
+  '@anthropic-ai/sdk@0.97.1(zod@4.4.3)':
     dependencies:
       json-schema-to-ts: 3.1.1
       standardwebhooks: 1.0.0
