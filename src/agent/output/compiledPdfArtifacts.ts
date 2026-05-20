@@ -66,19 +66,14 @@ function toPdfRelativePath(options: PublishCompiledPdfOptions): string {
   return normalizePdfRelativePath(path.join(directory, `${pdfStem}.pdf`));
 }
 
-async function ensureParentDir(filePath: string): Promise<void> {
-  await platform().fs.createDirectory(path.dirname(filePath));
-}
-
 async function copyArtifactFile(
   source: string,
   destination: string,
 ): Promise<void> {
-  await ensureParentDir(destination);
-  await platform()
-    .fs.delete(destination, { recursive: true })
-    .catch(() => {});
-  await platform().fs.copy(source, destination, { overwrite: true });
+  const fs = platform().fs;
+  await fs.createDirectory(path.dirname(destination));
+  await fs.delete(destination, { recursive: true }).catch(() => {});
+  await fs.copy(source, destination, { overwrite: true });
 }
 
 export async function publishCompiledPdfArtifact(
