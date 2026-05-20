@@ -46,6 +46,7 @@ export function registerBuiltinSlashCommands(options?: {
     return (
       <AgentListForm
         currentAgent={current}
+        availableRows={props.availableRows}
         selectable={selectable}
         onSelect={(value) => {
           void Promise.resolve(onAgentSelect(value)).finally(() =>
