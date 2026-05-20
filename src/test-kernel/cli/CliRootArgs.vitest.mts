@@ -192,7 +192,7 @@ describe('CLI root argument routing', () => {
           compileFailures: [],
         },
         cliContext(),
-        EXECUTION_STATUS.COMPLETED,
+        { terminalStatus: EXECUTION_STATUS.COMPLETED },
       ),
     ).rejects.toThrow(
       'Workflow completed without a generated output; corrected.tex was not written.',
@@ -213,7 +213,7 @@ describe('CLI root argument routing', () => {
           compileFailures: [],
         },
         cliContext(),
-        EXECUTION_STATUS.INTERRUPTED,
+        { terminalStatus: EXECUTION_STATUS.INTERRUPTED },
       ),
     ).resolves.toMatchObject({
       copiedOutput: undefined,
