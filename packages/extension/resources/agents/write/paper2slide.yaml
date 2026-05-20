@@ -1,4 +1,6 @@
 name: paper2slide
+description: Converts a research paper into a LaTeX Beamer slide deck using a provided template.
+
 settings:
   agentCategory: workflow
   documentTag: documents
