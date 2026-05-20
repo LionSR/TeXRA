@@ -12,7 +12,7 @@ import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
-import { fileUriToPath } from '@tools/lean/direct/leanSession';
+import { fileUriToPath, LeanSession } from '@tools/lean/direct/leanSession';
 
 const FAKE_LAKE = `#!/usr/bin/env node
 const fs = require('node:fs');
@@ -118,6 +118,8 @@ async function countStarts(): Promise<number> {
 }
 
 describe('createDirectLspLeanAdapter', () => {
+  const fakeLakeIt = process.platform === 'win32' ? it.skip : it;
+
   it('decodes file URIs with platform path semantics', () => {
     const spacedPath = path.join(projectRoot, 'File With Space.lean');
     expect(fileUriToPath(pathToFileURL(spacedPath).toString())).toBe(
@@ -126,33 +128,52 @@ describe('createDirectLspLeanAdapter', () => {
     expect(fileUriToPath('untitled:Lean')).toBeNull();
   });
 
-  it('joins concurrent first-touch requests for the same workspace', async () => {
-    const adapter = createDirectLspLeanAdapter({ lakeCommand: fakeLakePath });
-    try {
-      const [first, second] = await Promise.all([
-        adapter.fetchDiagnosticsForFile(filePath),
-        adapter.fetchDiagnosticsForFile(filePath),
-      ]);
+  it('rejects ensureReady after disposal through the promise path', async () => {
+    const session = new LeanSession({
+      workspaceRoot: projectRoot,
+      lakeCommand: fakeLakePath,
+    });
 
-      expect(first?.[0]?.message).toBe('fake diagnostic');
-      expect(second?.[0]?.message).toBe('fake diagnostic');
-      expect(await countStarts()).toBe(1);
-    } finally {
-      await adapter.dispose();
-    }
+    await session.dispose();
+
+    await expect(session.ensureReady()).rejects.toThrow(
+      'Lean session has been disposed.',
+    );
   });
 
-  it('restarts by replacing the disposed session with a fresh process', async () => {
-    const adapter = createDirectLspLeanAdapter({ lakeCommand: fakeLakePath });
-    try {
-      await adapter.fetchDiagnosticsForFile(filePath);
-      expect(await countStarts()).toBe(1);
+  fakeLakeIt(
+    'joins concurrent first-touch requests for the same workspace',
+    async () => {
+      const adapter = createDirectLspLeanAdapter({ lakeCommand: fakeLakePath });
+      try {
+        const [first, second] = await Promise.all([
+          adapter.fetchDiagnosticsForFile(filePath),
+          adapter.fetchDiagnosticsForFile(filePath),
+        ]);
 
-      await adapter.executeProjectCommand('restart_server');
+        expect(first?.[0]?.message).toBe('fake diagnostic');
+        expect(second?.[0]?.message).toBe('fake diagnostic');
+        expect(await countStarts()).toBe(1);
+      } finally {
+        await adapter.dispose();
+      }
+    },
+  );
 
-      expect(await countStarts()).toBe(2);
-    } finally {
-      await adapter.dispose();
-    }
-  });
+  fakeLakeIt(
+    'restarts by replacing the disposed session with a fresh process',
+    async () => {
+      const adapter = createDirectLspLeanAdapter({ lakeCommand: fakeLakePath });
+      try {
+        await adapter.fetchDiagnosticsForFile(filePath);
+        expect(await countStarts()).toBe(1);
+
+        await adapter.executeProjectCommand('restart_server');
+
+        expect(await countStarts()).toBe(2);
+      } finally {
+        await adapter.dispose();
+      }
+    },
+  );
 });

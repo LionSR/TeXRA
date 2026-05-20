@@ -191,10 +191,10 @@ export function createDirectLspLeanAdapter(
           return;
         }
         case 'stop_server': {
-          await Promise.all(
-            [...sessions.values()].map((session) => session.dispose()),
-          );
+          const all = [...sessions.values()];
           sessions.clear();
+          sessionStarts.clear();
+          await Promise.all(all.map((session) => session.dispose()));
           return;
         }
         case 'build':
@@ -259,6 +259,7 @@ export function createDirectLspLeanAdapter(
     async dispose(): Promise<void> {
       const all = [...sessions.values()];
       sessions.clear();
+      sessionStarts.clear();
       await Promise.all(all.map((session) => session.dispose()));
     },
   };

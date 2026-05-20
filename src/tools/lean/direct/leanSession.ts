@@ -70,13 +70,16 @@ export class LeanSession {
   }
 
   /** Start (or reuse) the server and complete `initialize`. Idempotent. */
-  ensureReady(): Promise<void> {
+  async ensureReady(): Promise<void> {
     if (this.disposed) {
       throw new Error('Lean session has been disposed.');
     }
-    if (this.readyPromise) return this.readyPromise;
+    if (this.readyPromise) {
+      await this.readyPromise;
+      return;
+    }
     this.readyPromise = this.spawnAndInitialize();
-    return this.readyPromise;
+    await this.readyPromise;
   }
 
   /** Tear down the server and clear cached file state. */
