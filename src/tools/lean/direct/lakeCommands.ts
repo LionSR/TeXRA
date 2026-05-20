@@ -84,13 +84,18 @@ function executeLake(options: LakeCommandOptions): Promise<LakeCommandResult> {
     const timer = setTimeout(() => {
       child.kill();
     }, options.timeoutMs ?? LAKE_RUN_TIMEOUT_MS);
+    let settled = false;
+    function finish(action: () => void): void {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      action();
+    }
     child.on('error', (error) => {
-      clearTimeout(timer);
-      reject(error);
+      finish(() => reject(error));
     });
-    child.on('exit', (code) => {
-      clearTimeout(timer);
-      resolve({ exitCode: code ?? -1, stdout, stderr });
+    child.on('close', (code) => {
+      finish(() => resolve({ exitCode: code ?? -1, stdout, stderr }));
     });
   });
 }

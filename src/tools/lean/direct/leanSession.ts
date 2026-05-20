@@ -287,7 +287,7 @@ export class LeanSession {
     absolute: string,
     options: { forceReload: boolean },
   ): Promise<void> {
-    if (!this.rpc) {
+    if (this.disposed || !this.rpc) {
       throw new Error('Lean session is not running');
     }
     let existing = this.openFiles.get(absolute);
@@ -299,9 +299,13 @@ export class LeanSession {
     });
     existing = this.openFiles.get(absolute);
     if (existing && !options.forceReload) return;
+    const rpc = this.rpc;
+    if (this.disposed || !rpc) {
+      throw new Error('Lean session is not running');
+    }
     const version = (existing?.version ?? 0) + 1;
     if (existing) {
-      this.rpc.notify('textDocument/didChange', {
+      rpc.notify('textDocument/didChange', {
         textDocument: { uri: pathToUri(absolute), version },
         contentChanges: [{ text }],
       });
@@ -315,7 +319,7 @@ export class LeanSession {
         lastDiagnosticsAt: 0,
         diagnosticsWaiters: [],
       });
-      this.rpc.notify('textDocument/didOpen', {
+      rpc.notify('textDocument/didOpen', {
         textDocument: {
           uri: pathToUri(absolute),
           languageId: LEAN_LANGUAGE_ID,
