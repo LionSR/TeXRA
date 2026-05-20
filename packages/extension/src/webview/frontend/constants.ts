@@ -1,7 +1,7 @@
 // Local imports - shared schemas
 import {
   DocumentFileTypeSchema,
-  MultipleDocumentFileTypeSchema,
+  MULTIPLE_DOCUMENT_FILE_TYPES,
   SessionTypeSchema,
   type DocumentFileType,
   type MultipleDocumentFileType,
@@ -19,8 +19,7 @@ export const SESSION_TYPES = {
 export type { SessionType, DocumentFileType, MultipleDocumentFileType };
 
 export const DOCUMENT_FILE_TYPES = DocumentFileTypeSchema.options;
-export const MULTIPLE_DOCUMENT_FILE_TYPES =
-  MultipleDocumentFileTypeSchema.options;
+export { MULTIPLE_DOCUMENT_FILE_TYPES };
 
 export const ELEMENT_IDS = {
   INSTRUCTION: 'instruction',

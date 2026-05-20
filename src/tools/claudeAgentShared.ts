@@ -1,10 +1,7 @@
 // Shared constants and helpers for the Claude Code CLI tool.
 
 import type { TokenUsageStats, ToolUseLog } from '@shared/schemas';
-import {
-  collapseWhitespace,
-  truncateWithEllipsis,
-} from '@utils/text/stringUtils';
+import { truncateSummary } from '@utils/text/stringUtils';
 
 export const CLAUDE_AGENT_NAME = 'claude_code';
 export const CLAUDE_AGENT_DISPLAY_MODEL = 'claude';
@@ -90,10 +87,6 @@ export function buildClaudeUsageStats(usage: {
         cacheCreationInputTokens: usage.cache_creation_input_tokens,
       }),
   };
-}
-
-function truncateSummary(text: string, maxLength: number): string {
-  return truncateWithEllipsis(collapseWhitespace(text), maxLength);
 }
 
 /**
