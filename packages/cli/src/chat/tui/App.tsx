@@ -172,7 +172,7 @@ export function App(props: AppProps): React.JSX.Element {
       streams={streams}
     />
   ) : activeForm ? (
-    activeForm.render(() => cliState.activeForm.set(undefined))
+    activeForm.render(() => cliState.activeForm.set(undefined), foregroundRows)
   ) : null;
 
   const focusShortcutsActive = appFocusShortcutsActive({
