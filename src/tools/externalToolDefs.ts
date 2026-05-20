@@ -26,12 +26,17 @@ import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
   PR_POLL_INTERVAL_MS,
 } from '@tools/github/prSubscriptionConstants';
+import { LEAN4_EXTENSION_ID } from '@tools/lean/leanConstants';
+import {
+  isLeanServerActive,
+  listLeanServers,
+  summarizeLeanServers,
+} from '@tools/lean/leanServerRegistry';
 import { getZoteroPort } from '@tools/zotero/bbtClient';
 import { isGitRepository } from '@utils/system/isGitRepository';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { isWSL } from '@utils/system/wslDetect';
 
-const LEAN4_EXT_ID = 'leanprover.lean4';
 const ZOTERO_PROBE_TIMEOUT_MS = 2000;
 const TEXRA_CLI_CHECK = {
   command: 'texra --version',
@@ -167,6 +172,27 @@ async function probeTexraCli(): Promise<boolean> {
   return checkToolInstalled(TEXRA_CLI_CHECK, false);
 }
 
+interface Lean4Prerequisites {
+  extensionAvailable: boolean;
+  lakeAvailable: boolean;
+}
+
+function resolveLean4Prerequisites(probeResult: unknown): Lean4Prerequisites {
+  if (
+    probeResult &&
+    typeof probeResult === 'object' &&
+    'extensionAvailable' in probeResult &&
+    'lakeAvailable' in probeResult
+  ) {
+    const r = probeResult as Lean4Prerequisites;
+    return {
+      extensionAvailable: Boolean(r.extensionAvailable),
+      lakeAvailable: Boolean(r.lakeAvailable),
+    };
+  }
+  return { extensionAvailable: false, lakeAvailable: false };
+}
+
 function resolveBooleanProbe(probeResult: unknown): boolean | undefined {
   return typeof probeResult === 'boolean' ? probeResult : undefined;
 }
@@ -266,20 +292,70 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     name: 'Lean 4 Proof Assistant',
     category: 'lean',
     description:
-      'Interact with Lean 4 projects: check diagnostics, inspect terms, search Loogle, and manage files.',
+      'Interact with Lean 4 projects: check diagnostics, inspect terms, search Loogle, and manage files. Active language servers (one per project root) are listed below.',
     installGuide:
-      'Requires the Lean 4 VS Code extension (leanprover.lean4).\n\n' +
-      'Setup:\n' +
+      'TeXRA can drive Lean 4 in two ways:\n\n' +
+      '  • VS Code build — uses the "lean4" extension\n' +
+      '    (leanprover.lean4) and its running language server.\n' +
+      '  • CLI / desktop build — spawns `lake env lean --server`\n' +
+      '    directly, one process per Lake project root. Requires\n' +
+      '    `lake` (from elan/Lean) on PATH; install via\n' +
+      '    https://leanprover-community.github.io/install/.\n\n' +
+      'Setup (VS Code):\n' +
       '  1. Install the "lean4" extension from VS Code Marketplace\n' +
-      '  2. Open a Lean 4 project (with lakefile.lean)\n' +
+      '  2. Open a Lean 4 project (with lakefile.lean or lakefile.toml)\n' +
       '  3. The extension will auto-install elan and Lean toolchain\n\n' +
-      'The Lean tools communicate via the Lean Language Server\n' +
-      'provided by the VS Code extension.',
+      'Setup (CLI / desktop):\n' +
+      '  1. Install elan: `curl https://elan.lean-lang.org/elan-init.sh -sSf | sh`\n' +
+      '  2. Make sure `lake --version` works in a fresh shell\n' +
+      '  3. Open a folder containing a lakefile.lean / lakefile.toml',
     installUrl:
       'https://marketplace.visualstudio.com/items?itemName=leanprover.lean4',
-    installExtensionId: LEAN4_EXT_ID,
-    configNotes: 'Lean 4 VS Code extension must be installed and active.',
-    check: async () => extensionChecker(LEAN4_EXT_ID),
+    installExtensionId: LEAN4_EXTENSION_ID,
+    configNotes:
+      'VS Code build: requires the leanprover.lean4 extension. ' +
+      'CLI / desktop builds: requires `lake` on PATH; each Lake project root gets its own language server, surfaced below.',
+    probe: async () => {
+      const extensionAvailable = extensionChecker(LEAN4_EXTENSION_ID);
+      const lakeAvailable = await checkToolInstalled(
+        { command: 'lake --version', errorMessage: 'lake not on PATH' },
+        false,
+      );
+      return { extensionAvailable, lakeAvailable };
+    },
+    check: async (probeResult) => {
+      const { extensionAvailable, lakeAvailable } =
+        resolveLean4Prerequisites(probeResult);
+      return extensionAvailable || lakeAvailable;
+    },
+    statusLabel: async (probeResult) => {
+      const { extensionAvailable, lakeAvailable } =
+        resolveLean4Prerequisites(probeResult);
+      if (!extensionAvailable && !lakeAvailable) return 'Needs setup';
+      const activeCount = listLeanServers().filter(isLeanServerActive).length;
+      return activeCount > 0
+        ? `${activeCount} server${activeCount > 1 ? 's' : ''} active`
+        : undefined;
+    },
+    detailCheck: async (probeResult) => {
+      const { extensionAvailable, lakeAvailable } =
+        resolveLean4Prerequisites(probeResult);
+      const lines: string[] = [];
+      if (extensionAvailable) {
+        lines.push('VS Code Lean 4 extension installed.');
+      }
+      if (lakeAvailable) {
+        lines.push('Direct LSP mode available (`lake` on PATH).');
+      }
+      if (!extensionAvailable && !lakeAvailable) {
+        lines.push(
+          'Neither the leanprover.lean4 extension nor a `lake` binary was detected. Install one of them to enable Lean tools.',
+        );
+      }
+      lines.push('');
+      lines.push(summarizeLeanServers());
+      return lines.join('\n');
+    },
   },
   {
     // ID kept as `github-pr-subscription` for back-compat with persisted
