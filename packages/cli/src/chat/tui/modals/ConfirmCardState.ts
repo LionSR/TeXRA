@@ -9,6 +9,18 @@ export interface ConfirmCardKey {
   readonly escape?: boolean;
 }
 
+export interface ConfirmCardHintAction {
+  readonly key: string;
+  readonly action: string;
+}
+
+export interface ConfirmCardHintOptions {
+  readonly approveLabel?: string;
+  readonly rejectLabel?: string;
+  readonly alwaysAllowLabel?: string;
+  readonly extraActions?: readonly ConfirmCardHintAction[];
+}
+
 export function confirmCardKeyAction(
   input: string,
   key: ConfirmCardKey,
@@ -27,4 +39,22 @@ export function confirmCardKeyAction(
     default:
       return 'ignore';
   }
+}
+
+export function confirmCardKeyHints({
+  approveLabel = 'approve',
+  rejectLabel = 'reject',
+  alwaysAllowLabel,
+  extraActions = [],
+}: ConfirmCardHintOptions): ConfirmCardHintAction[] {
+  return [
+    { key: 'y', action: approveLabel },
+    { key: 'n', action: rejectLabel },
+    ...(alwaysAllowLabel == null
+      ? []
+      : [{ key: 'a', action: alwaysAllowLabel }]),
+    ...extraActions,
+    { key: 'e', action: 'reject with feedback' },
+    { key: 'Esc', action: 'cancel' },
+  ];
 }
