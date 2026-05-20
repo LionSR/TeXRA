@@ -51,6 +51,6 @@ objective_updated:
     Re-orient against the new objective. Avoid continuing work that
     only served the previous one. Do not call
     `plan(command="complete")` unless the updated objective is
-    actually complete, with current evidence proving every requirement
-    is satisfied.
+    actually complete, with current evidence proving every
+    requirement is satisfied.
     </odyssey_context>
