@@ -93,7 +93,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       {showPalette ? (
         <SlashPalette
           query={parsed.name}
-          onPick={(cmd) => {
+          onPick={(cmd, intent) => {
             if (cmd.formComponent) {
               // Structured forms own the screen — clear the input and let
               // the active-form signal mount the component (see App.tsx).
@@ -109,6 +109,14 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
                   />
                 ),
               });
+              return;
+            }
+            if (intent === 'submit') {
+              handleSubmit(
+                `/${cmd.name}${
+                  parsed.remainder ? ` ${parsed.remainder.trimStart()}` : ''
+                }`,
+              );
               return;
             }
             setValue(

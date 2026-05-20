@@ -7,6 +7,7 @@ import {
   matchSlashCommands,
   parseSlashInput,
   registerSlashCommand,
+  slashPickIntent,
   unregisterSlashCommand,
 } from '../../../packages/cli/src/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '../../../packages/cli/src/chat/tui/commands/registerBuiltins';
@@ -72,6 +73,27 @@ describe('slashRegistry', () => {
     });
     expect(matchSlashCommands('h').map((c) => c.name)).toEqual(['help']);
     expect(matchSlashCommands('us').map((c) => c.name)).toEqual(['help']);
+  });
+
+  it('submits exact no-form commands on Enter and completes partial commands', () => {
+    const help = { name: 'help', description: 'show help', aliases: ['h'] };
+    registerSlashCommand(help);
+
+    expect(slashPickIntent('help', help, 'enter')).toBe('submit');
+    expect(slashPickIntent('h', help, 'enter')).toBe('submit');
+    expect(slashPickIntent('he', help, 'enter')).toBe('complete');
+    expect(slashPickIntent('help', help, 'tab')).toBe('complete');
+  });
+
+  it('does not directly submit structured-form commands from the palette', () => {
+    const agent = {
+      name: 'agent',
+      description: 'pick an agent',
+      formComponent: () => null,
+    };
+    registerSlashCommand(agent);
+
+    expect(slashPickIntent('agent', agent, 'enter')).toBe('complete');
   });
 });
 
