@@ -867,13 +867,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
   // it via `(handler as any).logContextManagementFromResponse(...)`.
   private logContextManagementFromResponse(
     response: BetaMessage,
-    effectiveContextWindow: number | undefined,
+    contextWindow: number,
   ): void {
-    logContextManagementFromResponse(
-      response,
-      effectiveContextWindow,
-      this.logger,
-    );
+    logContextManagementFromResponse(response, contextWindow, this.logger);
   }
 
   private enforceCacheControlLimit(
