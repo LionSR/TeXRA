@@ -22,17 +22,24 @@ describe('CLI confirm-card key handling', () => {
     expect(confirmCardKeyAction('a', {}, false)).toBe('ignore');
   });
 
-  it('keeps session-wide approval in the full key-hint list', () => {
+  it('keeps session-wide approval hints compact enough for approval modals', () => {
     expect(
       confirmCardKeyHints({
-        alwaysAllowLabel: 'approve edits this session',
+        alwaysAllowLabel: 'approve session',
       }),
     ).toEqual([
       { key: 'y', action: 'approve' },
       { key: 'n', action: 'reject' },
-      { key: 'a', action: 'approve edits this session' },
-      { key: 'e', action: 'reject with feedback' },
+      { key: 'a', action: 'approve session' },
+      { key: 'e', action: 'feedback' },
       { key: 'Esc', action: 'cancel' },
     ]);
+
+    const rendered = confirmCardKeyHints({
+      alwaysAllowLabel: 'approve session',
+    })
+      .map((hint) => `${hint.key} ${hint.action}`)
+      .join(' · ');
+    expect(rendered.length).toBeLessThanOrEqual(72);
   });
 });
