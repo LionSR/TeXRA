@@ -73,6 +73,26 @@ describe('CLI root argument routing', () => {
     ]);
   });
 
+  it('routes top-level --resume to the resume subcommand', () => {
+    expect(normalizeRootShortcuts(['--resume', 'abc123'])).toEqual([
+      'resume',
+      'abc123',
+    ]);
+  });
+
+  it('routes inline top-level --resume values to the resume subcommand', () => {
+    expect(normalizeRootShortcuts(['--resume=abc123'])).toEqual([
+      'resume',
+      'abc123',
+    ]);
+  });
+
+  it('preserves global flags when routing top-level --resume', () => {
+    expect(
+      normalizeRootShortcuts(['--output-format', 'json', '--resume', 'abc123']),
+    ).toEqual(['resume', 'abc123', '--output-format', 'json']);
+  });
+
   it('does not rewrite unknown leading flags before --logout', () => {
     expect(normalizeRootShortcuts(['--unknown', '--logout'])).toEqual([
       '--unknown',

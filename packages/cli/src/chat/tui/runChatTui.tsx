@@ -22,6 +22,7 @@ import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import { generateExecutionId } from '@utils/core/executionId';
 
 import { type CliContext, readCliVersion } from '../../runtime/cliContext';
 import { hasCliApprovalDenied } from '../../runtime/approvalAdapter';
@@ -89,12 +90,26 @@ export interface RunChatInit {
   readonly modelOverride?: string;
 }
 
-interface TuiSession {
+export interface ClearableTuiSessionState {
   streamId: StreamTabId | undefined;
+  executionId: string | undefined;
   runPromise: Promise<void> | undefined;
   runExitCode: CliExitCode;
   runCompleted: boolean;
   stopRequested: boolean;
+}
+
+interface TuiSession extends ClearableTuiSessionState {}
+
+export function clearTuiSessionRunState(
+  session: ClearableTuiSessionState,
+): void {
+  session.streamId = undefined;
+  session.executionId = undefined;
+  session.runPromise = undefined;
+  session.runExitCode = CliExitCode.Success;
+  session.runCompleted = false;
+  session.stopRequested = false;
 }
 
 export function chatTuiCanInterruptActiveRun(session: {
@@ -549,6 +564,7 @@ export async function runChat(
 
   const session: TuiSession = {
     streamId: undefined,
+    executionId: undefined,
     runPromise: undefined,
     runExitCode: CliExitCode.Success,
     runCompleted: false,
@@ -589,11 +605,7 @@ export async function runChat(
     if (isRunPending) interruptActive();
     clearApprovals();
     followUpQueue.clear();
-    session.streamId = undefined;
-    session.runPromise = undefined;
-    session.runExitCode = CliExitCode.Success;
-    session.runCompleted = false;
-    session.stopRequested = false;
+    clearTuiSessionRunState(session);
     resetCliState(meta);
   };
 
@@ -610,10 +622,12 @@ export async function runChat(
     const wrapped = wrapRuntimeHost(runtimeHost);
     const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
     disposers.push(unbindApprovals);
+    const executionId = generateExecutionId();
+    session.executionId = executionId;
 
     session.runPromise = setCliHelperModel(currentModel)
       .then(() =>
-        executeAgent(config, undefined, {
+        executeAgent(config, executionId, {
           runtimeHost: wrapped,
           enforceCategory: true,
           onStreamResolved: (resolvedStreamId) => {
@@ -784,6 +798,7 @@ export async function runChat(
     pendingExitTimer = undefined;
     exitArmed = false;
     cliState.pendingExitHint.set(false);
+    cliState.pendingExitResumeId.set(undefined);
   };
   const removeProcessHandlers = (): void => {
     process.off('SIGINT', handleSigint);
@@ -800,6 +815,7 @@ export async function runChat(
   const armExit = (): void => {
     exitArmed = true;
     cliState.pendingExitHint.set(true);
+    cliState.pendingExitResumeId.set(session.executionId);
     if (pendingExitTimer) clearTimeout(pendingExitTimer);
     pendingExitTimer = setTimeout(clearPendingExit, 800);
   };
