@@ -65,20 +65,17 @@ export function statusLabel(status: string | undefined): string {
   }
 }
 
+function compactScale(scaled: number, suffix: string): string {
+  const rounded = Number.isInteger(scaled)
+    ? `${scaled}`
+    : scaled.toFixed(1).replace(/\.0$/, '');
+  return `${rounded}${suffix}`;
+}
+
 function formatCompactNumber(value: number): string {
   if (value < 1000) return `${value}`;
-  if (value < 1_000_000) {
-    const thousands = value / 1000;
-    const rounded = Number.isInteger(thousands)
-      ? `${thousands}`
-      : thousands.toFixed(1).replace(/\.0$/, '');
-    return `${rounded}k`;
-  }
-  const millions = value / 1_000_000;
-  const rounded = Number.isInteger(millions)
-    ? `${millions}`
-    : millions.toFixed(1).replace(/\.0$/, '');
-  return `${rounded}M`;
+  if (value < 1_000_000) return compactScale(value / 1000, 'k');
+  return compactScale(value / 1_000_000, 'M');
 }
 
 function formatUsage(
@@ -96,8 +93,10 @@ function formatUsage(
 
   const ratio = total / contextWindow;
   const percent = Math.max(1, Math.round(ratio * 100));
-  const color =
-    ratio >= 0.9 ? 'red' : ratio >= 0.6 ? 'yellow' : ('dim' as const);
+  let color: StatusBarColor;
+  if (ratio >= 0.9) color = 'red';
+  else if (ratio >= 0.6) color = 'yellow';
+  else color = 'dim';
   return {
     text: `${formatCompactNumber(total)}/${formatCompactNumber(
       contextWindow,

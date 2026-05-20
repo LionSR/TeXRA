@@ -46,6 +46,11 @@ export const DEFAULT_TEXRA_SETTINGS = {
   inlineCriticism: {
     enabled: false,
   },
+  experimental: {
+    odyssey: {
+      enabled: false,
+    },
+  },
   ui: {
     showApiKeyReminders: true,
     showLoginBanner: true,
@@ -256,6 +261,17 @@ export const TexraSettingsSchema = z
           .prefault(DEFAULT_TEXRA_SETTINGS.inlineCriticism.enabled),
       })
       .prefault(DEFAULT_TEXRA_SETTINGS.inlineCriticism),
+    experimental: z
+      .strictObject({
+        odyssey: z
+          .strictObject({
+            enabled: z
+              .boolean()
+              .prefault(DEFAULT_TEXRA_SETTINGS.experimental.odyssey.enabled),
+          })
+          .prefault(DEFAULT_TEXRA_SETTINGS.experimental.odyssey),
+      })
+      .prefault(DEFAULT_TEXRA_SETTINGS.experimental),
     ui: z
       .strictObject({
         showApiKeyReminders: z
@@ -493,6 +509,7 @@ export type TexraSettings = z.infer<typeof TexraSettingsSchema>;
 export const TEXRA_SETTING_PATHS = [
   'agentOutputs.autoOpenFinal',
   'inlineCriticism.enabled',
+  'experimental.odyssey.enabled',
   'ui.showApiKeyReminders',
   'ui.showLoginBanner',
   'ui.showGettingStartedBanner',

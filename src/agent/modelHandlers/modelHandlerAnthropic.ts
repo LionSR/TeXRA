@@ -97,7 +97,6 @@ import {
   extractDocumentBlocks,
   analyzeDocumentSources,
   replaceDocumentDataWithUploads,
-  type ReplaceDocumentUploadsResult,
 } from './anthropicDocumentHandling';
 import {
   isSupportedImageMediaType,
@@ -117,9 +116,6 @@ import type {
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
   BetaContentBlock,
-  BetaContentBlockParam,
-  BetaCompactionBlock,
-  BetaCompactionIterationUsage,
   BetaContextManagementConfig,
   BetaImageBlockParam,
   BetaMessage,
@@ -135,7 +131,6 @@ import type {
   Base64ImageSource,
   CacheControlEphemeral,
   MessageParam,
-  ContentBlock,
   ContentBlockParam,
   ToolUseBlock,
   TextBlockParam,
@@ -186,11 +181,9 @@ const OPUS_46_FULLNAME = 'claude-opus-4-6';
 const OPUS_47_FULLNAME = 'claude-opus-4-7';
 const SONNET_46_FULLNAME = 'claude-sonnet-4-6';
 
-/**
- * 1M context window is available natively for Opus 4.6, Opus 4.7, and Sonnet 4.6
- * at standard pricing (no beta header needed). Context window sizes
- * are provided directly by llm-zoo. Other Claude models use 200K.
- */
+// 1M context window is available natively for Opus 4.6, Opus 4.7, and Sonnet 4.6
+// at standard pricing (no beta header needed). Context window sizes come from
+// llm-zoo. Other Claude models use 200K.
 
 /**
  * Model patterns that require temperature removal when thinking is enabled.
@@ -331,14 +324,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return true;
   }
 
-  private ensureBeta(options: MessageCreateParams, beta: AnthropicBeta): void {
-    ensureBeta(options, beta);
-  }
-
-  private hasLongCacheControlMarker(messages: MessageParam[]): boolean {
-    return hasLongCacheControlMarker(messages);
-  }
-
   /**
    * Sets up context management configuration for Anthropic's server-side editing.
    * Must be called before token counting so estimate options match create options.
@@ -440,7 +425,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           beta === EXTENDED_CACHE_TTL_BETA,
       ),
     );
-    if (this.hasLongCacheControlMarker(messages)) {
+    if (hasLongCacheControlMarker(messages)) {
       countTokenBetas.add(EXTENDED_CACHE_TTL_BETA);
     }
     if (countTokenBetas.size > 0) {
@@ -542,10 +527,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     if (
       supportsCache &&
-      (isLongCacheControl(cacheControl) ||
-        this.hasLongCacheControlMarker(messages))
+      (isLongCacheControl(cacheControl) || hasLongCacheControlMarker(messages))
     ) {
-      this.ensureBeta(options, EXTENDED_CACHE_TTL_BETA);
+      ensureBeta(options, EXTENDED_CACHE_TTL_BETA);
     }
 
     if (tools?.length) {
@@ -564,12 +548,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
         this.capabilities.supportsInterleavedThinking &&
         !this.supportsAdaptiveThinking()
       ) {
-        this.ensureBeta(options, INTERLEAVED_THINKING_BETA);
+        ensureBeta(options, INTERLEAVED_THINKING_BETA);
       }
 
       // Memory tool requires the context management beta header
       if (tools.some((t) => t.name === 'memory')) {
-        this.ensureBeta(options, CONTEXT_MANAGEMENT_BETA);
+        ensureBeta(options, CONTEXT_MANAGEMENT_BETA);
       }
     }
 
@@ -628,7 +612,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Add beta features for Claude 3.7 Sonnet to increase max output to 128k tokens and enable thinking
     if (this.config.fullName === 'claude-3-7-sonnet-20250219') {
       // Add the output beta while preserving existing betas (e.g., interleaved thinking, context management)
-      this.ensureBeta(options, SONNET_37_OUTPUT_BETA);
+      ensureBeta(options, SONNET_37_OUTPUT_BETA);
       // Update max tokens to use the higher limit when streaming
       options.max_tokens = useStreaming ? 64000 : this.config.maxOutputTokens;
       // The thinking configuration is now handled above for all reasoning models
@@ -728,9 +712,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     if (documentAnalysis.hasBase64Pdf) {
-      const uploadResult = await this.replaceDocumentDataWithUploads(
+      const uploadResult = await replaceDocumentDataWithUploads(
         client,
         messages,
+        this.capabilities.supportsNativePdf,
+        this.uploadedPdfPageCounts,
       );
       if (uploadResult.hasFileReference) {
         hasFileReference = true;
@@ -738,7 +724,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     if (hasFileReference) {
-      this.ensureBeta(options, FILES_API_BETA);
+      ensureBeta(options, FILES_API_BETA);
     }
 
     // Phase 4: EXECUTE - Make the API call
@@ -876,6 +862,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return { response };
   }
 
+  // Kept as a private wrapper so the legacy mocha test suite
+  // (src/test/agent/modelHandlers/ModelHandlerAnthropic.test.ts) can invoke
+  // it via `(handler as any).logContextManagementFromResponse(...)`.
   private logContextManagementFromResponse(
     response: BetaMessage,
     contextWindow: number,
@@ -893,32 +882,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       reservedSlots,
       cacheControl,
       this.capabilities.supportsPromptCaching,
-    );
-  }
-
-  private async replaceDocumentDataWithUploads(
-    client: Anthropic,
-    messages: MessageParam[],
-  ): Promise<ReplaceDocumentUploadsResult> {
-    return replaceDocumentDataWithUploads(
-      client,
-      messages,
-      this.capabilities.supportsNativePdf,
-      this.uploadedPdfPageCounts,
-    );
-  }
-
-  private async uploadToolAttachments(
-    client: Anthropic,
-    attachments: ToolFileAttachment[],
-  ) {
-    return uploadToolAttachments(
-      client,
-      attachments,
-      this.logger,
-      this.uploadedPdfPageCounts,
-      () => this.getTrackedPdfPageCount(),
-      () => this.getMaxPdfPages(),
     );
   }
 
@@ -1915,9 +1878,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const pageLimitExceeded: ToolFileAttachment[] = [];
 
     if (canUploadFiles && attachments.length > 0 && client) {
-      const uploadResult = await this.uploadToolAttachments(
+      const uploadResult = await uploadToolAttachments(
         client,
         attachments,
+        this.logger,
+        this.uploadedPdfPageCounts,
+        () => this.getTrackedPdfPageCount(),
+        () => this.getMaxPdfPages(),
       );
       uploadedAttachments = uploadResult.uploaded;
       unsupportedAttachments.push(...uploadResult.unsupported);
