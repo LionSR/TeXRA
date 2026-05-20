@@ -78,3 +78,10 @@ export function truncateWithEllipsis(text: string, maxLen: number): string {
 export function collapseWhitespace(text: string): string {
   return text.replaceAll(/\s+/g, ' ').trim();
 }
+
+/**
+ * Collapse whitespace first, then truncate to a fixed-width one-line summary.
+ */
+export function truncateSummary(text: string, maxLength: number): string {
+  return truncateWithEllipsis(collapseWhitespace(text), maxLength);
+}
