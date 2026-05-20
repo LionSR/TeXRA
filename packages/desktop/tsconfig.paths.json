@@ -23,6 +23,7 @@
       "@housekeeping/*": ["src/housekeeping/*"],
       "@progressView/*": ["packages/extension/src/progressView/*"],
       "@settingsView/*": ["packages/extension/src/settingsView/*"],
+      "@extensionSchemas/*": ["packages/extension/src/schemas/*"],
       "@replacement/*": ["src/replacement/*"],
       "@tools/*": ["src/tools/*"],
       "@types/*": ["src/types/*"],

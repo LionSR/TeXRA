@@ -504,3 +504,66 @@ export const CoreSettingsSchema = z
   .prefault(DEFAULT_CORE_SETTINGS);
 
 export type CoreSettings = z.infer<typeof CoreSettingsSchema>;
+
+/**
+ * Dotted leaf paths for every Core setting.
+ *
+ * Used by per-host "known TeXRA key" sets to derive `texra.*` prefixed key
+ * lists for typo detection without hand-maintaining the list in each host.
+ */
+export const CORE_SETTING_PATHS = [
+  'agentOutputs.autoOpenFinal',
+  'inlineCriticism.enabled',
+  'experimental.odyssey.enabled',
+  'ui.showApiKeyReminders',
+  'ui.showLoginBanner',
+  'ui.showGettingStartedBanner',
+  'ui.showOrchestratorBanner',
+  'model.useImprovedConnection',
+  'model.improvedConnectionDomain',
+  'model.useOpenAIResponsesAPI',
+  'model.useBackgroundResponses',
+  'model.openaiParallelToolCalls',
+  'model.compactionThresholdPercent',
+  'model.gpt5ReasoningSummary',
+  'model.retry.maxAttempts',
+  'model.retry.backoffMs',
+  'files.included.mediaExtensions',
+  'files.included.inputExtensions',
+  'files.included.contextExtensions',
+  'files.included.editedExtensions',
+  'files.ignored.fileExtensions',
+  'files.ignored.inputFiles',
+  'files.ignored.inputDirectories',
+  'files.ignored.mediaDirectories',
+  'files.ignored.directories',
+  'files.ignored.keywords',
+  'maxImageDimension',
+  'bib.defaultPath',
+  'bib.zoteroPort',
+  'latex.showLatexindentWarning',
+  'latex.latexindentConfig',
+  'latex.texfmtConfig',
+  'latex.tikzInputDirectory',
+  'latex.tikzTemplate',
+  'latex.includeWorkspaceInTexinputs',
+  'latex.wrapCritiqueInAlign',
+  'latex.enabledReplacements',
+  'latex.enabledReplacementsRegex',
+  'latex.customReplacementsRegex',
+  'latex.customReplacements',
+  'latexdiff.pictureEnvironments',
+  'latexdiff.tempFileLocation',
+  'git.numberOfCommitsToShow',
+  'git.emitPrCiStartedEvents',
+  'audio.soxPath',
+  'logger.debugMode',
+  'debug.saveDebugObjects',
+  'debug.saveInputPrompt',
+  'toolUse.requireEditApproval',
+  'toolUse.requireBashApproval',
+  'toolUse.persistence.enabled',
+  'toolUse.persistence.ttlHours',
+] as const;
+
+export type CoreSettingPath = (typeof CORE_SETTING_PATHS)[number];

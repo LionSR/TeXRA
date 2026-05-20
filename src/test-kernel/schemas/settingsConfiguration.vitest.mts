@@ -5,7 +5,7 @@ import {
   flattenTexraSettings,
   TEXRA_SETTING_PATHS,
   TexraSettingsSchema,
-} from '@shared/schemas/settingsConfiguration';
+} from '@extensionSchemas/texraSettings';
 
 describe('TexraSettingsSchema (composed from Core + VS Code extension)', () => {
   it('parses an empty object to the full default tree', () => {

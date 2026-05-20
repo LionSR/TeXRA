@@ -52,3 +52,14 @@ export const VscodeSettingsExtensionSchema = z
 export type VscodeSettingsExtension = z.infer<
   typeof VscodeSettingsExtensionSchema
 >;
+
+/**
+ * Dotted leaf paths for every VS Code-only setting.
+ */
+export const VSCODE_SETTING_PATHS = [
+  'auth.enableVSCodeGitHub',
+  'apiKeys.set',
+  'apiKeys.remove',
+] as const;
+
+export type VscodeSettingPath = (typeof VSCODE_SETTING_PATHS)[number];
