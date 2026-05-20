@@ -13,6 +13,7 @@
  * - Ultra: All models including premium ($3+/M input)
  */
 
+import type { z } from 'zod';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import {
   SpendingStatusSchema,
@@ -91,6 +92,26 @@ export class TierService {
   }
 
   /**
+   * Parse an optional user-specific block returned by the relay. Returns
+   * null when the block is absent or fails validation; parse failures are
+   * logged so relay-side schema drift is visible.
+   */
+  private parseOptionalBlock<T>(
+    raw: unknown,
+    schema: z.ZodType<T>,
+    label: string,
+  ): T | null {
+    if (raw === undefined || raw === null) return null;
+    const parsed = schema.safeParse(raw);
+    if (parsed.success) return parsed.data;
+    this.logger.error(
+      CHANNEL,
+      `Invalid ${label} payload: ${parsed.error.message}`,
+    );
+    return null;
+  }
+
+  /**
    * Fetch tier configuration from the relay server.
    * @param authToken - Optional JWT token to include user access status in response
    */
@@ -127,40 +148,24 @@ export class TierService {
       }
 
       const data = await response.json();
-      const isCurrentFetch = (): boolean => generation === this.fetchGeneration;
 
       // Parse user-specific blocks. Both are only present when the
       // request carries auth, so clear them on absence (anonymous fetch)
       // and on parse failure — a relay-side schema drift should not
       // silently serve stale values to the quota meter / BYOK switch.
-      if (data.userStatus) {
-        const statusParsed = UserAccessStatusSchema.safeParse(data.userStatus);
-        if (statusParsed.success) {
-          if (isCurrentFetch()) this.userStatus = statusParsed.data;
-        } else {
-          this.logger.error(
-            CHANNEL,
-            `Invalid userStatus payload: ${statusParsed.error.message}`,
-          );
-          if (isCurrentFetch()) this.userStatus = null;
-        }
-      } else {
-        if (isCurrentFetch()) this.userStatus = null;
-      }
-
-      if (data.spendingStatus) {
-        const spendParsed = SpendingStatusSchema.safeParse(data.spendingStatus);
-        if (spendParsed.success) {
-          if (isCurrentFetch()) this.spendingStatus = spendParsed.data;
-        } else {
-          this.logger.error(
-            CHANNEL,
-            `Invalid spendingStatus payload: ${spendParsed.error.message}`,
-          );
-          if (isCurrentFetch()) this.spendingStatus = null;
-        }
-      } else {
-        if (isCurrentFetch()) this.spendingStatus = null;
+      const userStatus = this.parseOptionalBlock(
+        data.userStatus,
+        UserAccessStatusSchema,
+        'userStatus',
+      );
+      const spendingStatus = this.parseOptionalBlock(
+        data.spendingStatus,
+        SpendingStatusSchema,
+        'spendingStatus',
+      );
+      if (generation === this.fetchGeneration) {
+        this.userStatus = userStatus;
+        this.spendingStatus = spendingStatus;
       }
 
       const parsed = TierModelConfigSchema.safeParse(data);
@@ -202,8 +207,7 @@ export class TierService {
     // where concurrent calls see fetchPromise !== null but timestamp is stale
     this.cacheTimestamp = Date.now();
     this.cachedWithAuth = tokenPresent;
-    const generation = this.fetchGeneration + 1;
-    this.fetchGeneration = generation;
+    const generation = ++this.fetchGeneration;
     this.fetchPromise = this.fetchFromServer(authToken, generation).then(
       (result) => {
         if (generation !== this.fetchGeneration) {
