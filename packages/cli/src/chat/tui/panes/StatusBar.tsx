@@ -30,6 +30,7 @@ export interface StatusBarSegment {
 export interface StatusBarDisplayInput {
   readonly status: string | undefined;
   readonly pendingExitHint: boolean;
+  readonly pendingExitResumeId: string | undefined;
   readonly bypass: BypassState;
   readonly queuedFollowUps: number;
   readonly usage: TokenUsageStats | undefined;
@@ -186,7 +187,10 @@ export function buildStatusBarDisplay(
       input.queuedFollowUps > 0
         ? `queued: ${input.queuedFollowUps}`
         : undefined,
-    bindings: statusBarBindingsText(input.subagentControlsAvailable),
+    bindings:
+      input.pendingExitHint && input.pendingExitResumeId
+        ? `Resume this session with: texra --resume ${input.pendingExitResumeId}`
+        : statusBarBindingsText(input.subagentControlsAvailable),
   };
 }
 
@@ -199,11 +203,13 @@ export function StatusBar(): React.JSX.Element {
   const streams = useSignal(cliState.streams);
   const sessionMeta = useSignal(cliState.sessionMeta);
   const pendingExitHint = useSignal(cliState.pendingExitHint);
+  const pendingExitResumeId = useSignal(cliState.pendingExitResumeId);
   const approvals = useSignal(approvalQueueDepth);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const display = buildStatusBarDisplay({
     status: slice?.status,
     pendingExitHint,
+    pendingExitResumeId,
     bypass: slice?.bypass ?? NO_BYPASS,
     queuedFollowUps: slice?.queuedFollowUps ?? 0,
     usage: slice?.usage,
