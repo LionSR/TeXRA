@@ -1,4 +1,10 @@
-import { JsonStore } from './jsonStore.js';
+import {
+  canonicalConfigKey,
+  configKeyVariants,
+  createWatcherRegistry,
+  firstStoredValue,
+} from '@platform/defaults/configKeyHelpers';
+import type { JsonStore } from '@platform/defaults/jsonStore';
 import type {
   ConfigInspection,
   ConfigProvider,
@@ -6,63 +12,8 @@ import type {
 } from '@platform/interfaces/config';
 import type { Disposable } from '@platform/interfaces/disposable';
 
-type ConfigWatcher = {
-  key: string | readonly string[] | RegExp;
-  listener: () => void;
-};
-
-function configKeys(key: string): string[] {
-  const unprefixed = key.startsWith('texra.')
-    ? key.slice('texra.'.length)
-    : key;
-  return [unprefixed, `texra.${unprefixed}`];
-}
-
-function canonicalConfigKey(key: string): string {
-  const unprefixed = key.startsWith('texra.')
-    ? key.slice('texra.'.length)
-    : key;
-  return `texra.${unprefixed}`;
-}
-
-function matchesConfigKey(candidate: string, changedKey: string): boolean {
-  return changedKey === candidate || changedKey.startsWith(`${candidate}.`);
-}
-
-function watcherMatches(
-  watcherKey: ConfigWatcher['key'],
-  changedKey: string,
-): boolean {
-  if (typeof watcherKey === 'string') {
-    return configKeys(watcherKey).some((candidate) =>
-      matchesConfigKey(candidate, changedKey),
-    );
-  }
-  if (watcherKey instanceof RegExp) {
-    return watcherKey.test(changedKey);
-  }
-  if (Array.isArray(watcherKey)) {
-    return watcherKey.some((item) =>
-      configKeys(item).some((candidate) =>
-        matchesConfigKey(candidate, changedKey),
-      ),
-    );
-  }
-  return false;
-}
-
-function firstStoredValue<T>(
-  store: JsonStore,
-  keys: readonly string[],
-): T | undefined {
-  for (const candidate of keys) {
-    if (store.has(candidate)) return store.get<T>(candidate);
-  }
-  return undefined;
-}
-
 export class ElectronConfigProvider implements ConfigProvider {
-  private readonly watchers = new Set<ConfigWatcher>();
+  private readonly watchers = createWatcherRegistry();
 
   constructor(
     private readonly globalStore: JsonStore,
@@ -70,7 +21,7 @@ export class ElectronConfigProvider implements ConfigProvider {
   ) {}
 
   get<T>(key: string, defaultValue?: T): T {
-    const keys = configKeys(key);
+    const keys = configKeyVariants(key);
     const workspaceValue = firstStoredValue<T>(this.workspaceStore, keys);
     if (workspaceValue !== undefined) return workspaceValue;
     const globalValue = firstStoredValue<T>(this.globalStore, keys);
@@ -84,7 +35,7 @@ export class ElectronConfigProvider implements ConfigProvider {
     target: ConfigTarget = 'workspace',
   ): Promise<void> {
     const store = target === 'global' ? this.globalStore : this.workspaceStore;
-    const keys = configKeys(key);
+    const keys = configKeyVariants(key);
     if (value === undefined) {
       await Promise.all(
         keys
@@ -97,15 +48,11 @@ export class ElectronConfigProvider implements ConfigProvider {
         canonicalConfigKey(key);
       await store.set(storedKey, value);
     }
-    for (const watcher of this.watchers) {
-      if (keys.some((changedKey) => watcherMatches(watcher.key, changedKey))) {
-        watcher.listener();
-      }
-    }
+    this.watchers.notify(canonicalConfigKey(key));
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
-    const keys = configKeys(key);
+    const keys = configKeyVariants(key);
     return {
       globalValue: firstStoredValue<T>(this.globalStore, keys),
       workspaceValue: firstStoredValue<T>(this.workspaceStore, keys),
@@ -114,7 +61,7 @@ export class ElectronConfigProvider implements ConfigProvider {
   }
 
   isExplicitlySet(key: string): boolean {
-    return configKeys(key).some(
+    return configKeyVariants(key).some(
       (candidate) =>
         this.globalStore.has(candidate) || this.workspaceStore.has(candidate),
     );
@@ -124,8 +71,6 @@ export class ElectronConfigProvider implements ConfigProvider {
     key: string | readonly string[] | RegExp,
     listener: () => void,
   ): Disposable {
-    const watcher = { key, listener };
-    this.watchers.add(watcher);
-    return { dispose: () => this.watchers.delete(watcher) };
+    return this.watchers.add({ key, listener });
   }
 }
