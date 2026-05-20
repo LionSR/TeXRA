@@ -21,7 +21,7 @@ import {
   numericFocusTarget,
   type ChildControlMode,
 } from './state/childControls';
-import { cliState } from './state/cliState';
+import { canShowSubagentControls, cliState } from './state/cliState';
 import { nextFocusBack, nextFocusForward } from './state/focusCycle';
 import { useSignal } from './state/useSignal';
 import type { InputHistory } from './history/inputHistory';
@@ -120,6 +120,7 @@ export function App(props: AppProps): React.JSX.Element {
   const pending = useSignal(currentApproval);
   const activeStreamId = useSignal(cliState.activeStreamId);
   const streams = useSignal(cliState.streams);
+  const sessionMeta = useSignal(cliState.sessionMeta);
   const activeForm = useSignal(cliState.activeForm);
   const slashPaletteOpen = useSignal(cliState.slashPaletteOpen);
   const reverseSearchOpen = useSignal(cliState.reverseSearchOpen);
@@ -127,16 +128,21 @@ export function App(props: AppProps): React.JSX.Element {
   const [childControlMode, setChildControlMode] = useState<
     ChildControlMode | undefined
   >(undefined);
-  const inputDisabled =
-    props.inputDisabled ||
+  const foregroundOpen =
     pending !== undefined ||
     activeForm !== undefined ||
     childControlMode !== undefined;
+  const inputDisabled = props.inputDisabled === true || foregroundOpen;
 
   // Hide the side column when both side panes would render empty —
   // otherwise the conversation loses 28 columns of width for nothing.
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
+  const subagentControlsAvailable = canShowSubagentControls(
+    sessionMeta,
+    activeSlice,
+  );
   const showSideColumn =
+    !foregroundOpen &&
     activeSlice !== undefined &&
     (activeSlice.activeSubagents.length > 0 ||
       activeSlice.activeProcesses.length > 0 ||
@@ -146,10 +152,6 @@ export function App(props: AppProps): React.JSX.Element {
     MIN_TRANSCRIPT_WIDTH,
     columns - (showSideColumn ? SIDE_COLUMN_WIDTH : 0),
   );
-  const foregroundOpen =
-    pending !== undefined ||
-    activeForm !== undefined ||
-    childControlMode !== undefined;
   const { foregroundRows, transcriptRows } = allocateMiddleRows({
     foregroundOpen,
     reverseSearchOpen,
@@ -196,6 +198,7 @@ export function App(props: AppProps): React.JSX.Element {
       if (!key.meta) return;
       const lower = input.toLowerCase();
       if (lower === 's') {
+        if (!subagentControlsAvailable) return;
         setChildControlMode('subagents');
         return;
       }

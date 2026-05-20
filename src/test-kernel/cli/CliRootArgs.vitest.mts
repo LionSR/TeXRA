@@ -4,13 +4,37 @@ import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { AgentCategory } from '@agent/core/AgentDataclass';
+import { END_GROUP_STATUS, EXECUTION_STATUS } from '@shared/schemas';
+
 import {
+  cliTerminalStatus,
   collectStringFlagValues,
   expandWorkflowInputSpecs,
+  formatCliModelListError,
+  isCliFetchStackLog,
   normalizeRootShortcuts,
   reorderGlobalFlags,
   resolveLoginProvider,
+  resolveWorkflowOutput,
 } from '../../../packages/cli/src/commands/root';
+import type { CliContext } from '../../../packages/cli/src/runtime/cliContext';
+
+function cliContext(overrides: Partial<CliContext> = {}): CliContext {
+  return {
+    cwd: '/tmp/project',
+    mode: 'headless',
+    outputFormat: 'text',
+    approvalPolicy: 'never',
+    quietLogs: false,
+    renderRunProgress: true,
+    stderrIsTty: false,
+    colorEnabled: false,
+    version: '0.0.0',
+    resourcesPath: '/tmp/resources',
+    ...overrides,
+  };
+}
 
 describe('CLI root argument routing', () => {
   it('routes top-level --logout to the logout subcommand', () => {
@@ -114,6 +138,107 @@ describe('CLI root argument routing', () => {
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
+  });
+
+  it('reports missing workflow outputs as a failed copy operation', async () => {
+    await expect(
+      resolveWorkflowOutput(
+        'corrected.tex',
+        undefined,
+        {
+          status: END_GROUP_STATUS.ERROR,
+          category: AgentCategory.Workflow,
+          executionId: 'execution-without-output',
+          streamId: 'stream-without-output',
+          outputs: [],
+          compileFailures: [],
+        },
+        cliContext(),
+      ),
+    ).rejects.toThrow(
+      'Workflow error without a generated output; corrected.tex was not written.',
+    );
+  });
+
+  it('maps stopped end-group status to completed terminal status by default', () => {
+    expect(
+      cliTerminalStatus({
+        status: 'stopped',
+      } as Parameters<typeof cliTerminalStatus>[0]),
+    ).toBe(EXECUTION_STATUS.COMPLETED);
+  });
+
+  it('honors stored interrupted terminal status', () => {
+    expect(
+      cliTerminalStatus(
+        { status: 'stopped' } as Parameters<typeof cliTerminalStatus>[0],
+        EXECUTION_STATUS.INTERRUPTED,
+      ),
+    ).toBe(EXECUTION_STATUS.INTERRUPTED);
+  });
+
+  it('reports successful stopped workflows with missing requested outputs as failed copies', async () => {
+    await expect(
+      resolveWorkflowOutput(
+        'corrected.tex',
+        undefined,
+        {
+          status: END_GROUP_STATUS.STOPPED,
+          category: AgentCategory.Workflow,
+          executionId: 'completed-without-output',
+          streamId: 'completed-stream-without-output',
+          outputs: [],
+          compileFailures: [],
+        },
+        cliContext(),
+        EXECUTION_STATUS.COMPLETED,
+      ),
+    ).rejects.toThrow(
+      'Workflow completed without a generated output; corrected.tex was not written.',
+    );
+  });
+
+  it('keeps stopped workflows with missing requested outputs interrupted', async () => {
+    await expect(
+      resolveWorkflowOutput(
+        'corrected.tex',
+        undefined,
+        {
+          status: END_GROUP_STATUS.STOPPED,
+          category: AgentCategory.Workflow,
+          executionId: 'stopped-without-output',
+          streamId: 'stopped-stream-without-output',
+          outputs: [],
+          compileFailures: [],
+        },
+        cliContext(),
+        EXECUTION_STATUS.INTERRUPTED,
+      ),
+    ).resolves.toMatchObject({
+      copiedOutput: undefined,
+      displayResult: {
+        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      },
+    });
+  });
+
+  it('formats model list network failures without raw stack traces', () => {
+    const error = new Error('fetch failed', {
+      cause: new Error('getaddrinfo ENOTFOUND remote.texra.ai'),
+    });
+
+    expect(formatCliModelListError(error)).toBe(
+      'texra: could not fetch model access metadata from remote.texra.ai: getaddrinfo ENOTFOUND remote.texra.ai',
+    );
+  });
+
+  it('recognizes raw relay fetch stack logs from lower-level clients', () => {
+    const error = new TypeError('fetch failed', {
+      cause: new Error('getaddrinfo ENOTFOUND remote.texra.ai'),
+    });
+
+    expect(isCliFetchStackLog([error])).toBe(true);
+    expect(isCliFetchStackLog([new Error('unrelated')])).toBe(false);
   });
 });
 

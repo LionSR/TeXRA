@@ -63,8 +63,11 @@ export function ApprovalPolicyForm(
         <KeyHints
           hints={[
             { key: '↑/↓', action: 'navigate' },
-            { key: '1-3', action: 'select' },
+            { key: '1-3', action: 'select now' },
+            { key: 'Enter', action: 'select highlighted' },
+            { key: 'Esc', action: 'cancel' },
           ]}
+          confirmCancel={false}
         />
       </Box>
     </Box>
