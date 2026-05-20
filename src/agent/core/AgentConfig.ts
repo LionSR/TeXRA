@@ -23,6 +23,8 @@ const AgentConfigFieldsSchema = NullableFileFieldsSchema.extend({
   memories: z.array(z.string()).prefault([]),
   /** Working directory override for subagent tool calls (e.g. a git worktree). */
   workingDirectory: z.string().nullish(),
+  /** CLI-only workspace copy target for `texra run --output`, preserved for resume. */
+  cliOutputFile: z.string().nullish(),
 });
 
 /**
