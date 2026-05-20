@@ -292,10 +292,14 @@ export const OdysseyStore = {
 
   /**
    * Replace the objective (and optionally the originating plan).
-   * Used by the user-side edit-objective flow and by the Approve & Run
-   * path when an odyssey is already in flight — re-targeting an active
-   * loop is preferable to silently leaving it pointed at a stale
-   * objective.
+   * Used by the Approve & Run path when an odyssey is already in flight —
+   * re-targeting an active loop is preferable to silently leaving it
+   * pointed at a stale objective.
+   *
+   * A new objective is a fresh task, so the continuation budget resets.
+   * This keeps retarget symmetric with paused→active resume (which also
+   * resets) — without it, an active odyssey near its cap would auto-pause
+   * after a single continuation against the newly approved plan.
    */
   async editObjective(
     streamId: StreamTabId,
@@ -303,12 +307,15 @@ export const OdysseyStore = {
     options?: { plan?: Plan | null },
   ): Promise<Odyssey> {
     const trimmed = requireNonEmpty(newObjective, 'objective');
+    // `options.plan !== undefined` keeps absent and explicit `undefined` both
+    // as "don't touch plan"; `null` still means "clear".
+    const planUpdate =
+      options?.plan !== undefined ? { plan: options.plan } : {};
     const updated = await update(streamId, (odyssey) => ({
       ...odyssey,
       objective: trimmed,
-      ...(options && Object.hasOwn(options, 'plan')
-        ? { plan: options.plan ?? null }
-        : {}),
+      continuationCount: 0,
+      ...planUpdate,
       history: [
         ...odyssey.history,
         { at: nowIso(), kind: 'objective_edited', detail: trimmed },
