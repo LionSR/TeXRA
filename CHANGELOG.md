@@ -37,7 +37,7 @@ All notable changes to this project will be documented in this file.
 ### Features
 
 - **Odyssey mode** — let an agent run a long task to completion on its own. A budget auto-pauses the run for your approval before going further, and a dedicated panel shows progress so you can step in any time.
-- **Integrations settings tab** — a new **Settings → Integrations** tab groups external agent integrations (Codex CLI, Claude Code CLI, external chat handoff) in one place, with reasoning-effort and adaptive-thinking controls for Claude Code CLI.
+- **Integrations settings tab** — a new **Settings → Integrations** tab groups external agent integrations (Codex CLI, Claude Code CLI, External Inquiry) in one place, with reasoning-effort and adaptive-thinking controls for Claude Code CLI.
 - **Ask-user-question tool** — agents can now ask you a multiple-choice question mid-run instead of guessing.
 - **Ink-based CLI TUI is the default** — `texra chat` now uses the Ink TUI for interactive sessions, with a
   multi-pane layout, structured slash forms, persistent input history, and shared key hints. Deprecated renderer flags
