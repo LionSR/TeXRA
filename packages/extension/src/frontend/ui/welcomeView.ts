@@ -34,23 +34,26 @@ function renderWelcomeHtml(): string {
   />
   <style>
     body {
-      font-family: var(--wa-font-family-body);
-      font-size: var(--wa-font-size-m);
-      color: var(--wa-color-text-normal);
+      font-family: var(--vscode-font-family, ui-sans-serif, system-ui, sans-serif);
+      font-size: var(--vscode-font-size, 13px);
+      color: var(--vscode-foreground);
       background: transparent;
       padding: 16px;
       line-height: 1.5;
     }
     p { margin: 0 0 12px; }
-    .muted { color: var(--wa-color-text-quiet); }
+    .muted { color: color-mix(in srgb, var(--vscode-foreground) 70%, transparent); }
     ol { margin: 0 0 12px; padding-left: 22px; }
     li { margin-bottom: 6px; }
     .actions { display: flex; flex-direction: column; gap: 6px; margin: 16px 0; }
     a {
-      color: var(--wa-color-text-link);
+      color: var(--vscode-textLink-foreground);
       text-decoration: none;
     }
-    a:hover { text-decoration: underline; }
+    a:hover {
+      color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground));
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
@@ -59,7 +62,7 @@ function renderWelcomeHtml(): string {
     coordinates specialized agents to edit manuscripts, derive results, draw
     figures, and verify proofs.
   </p>
-  <p class="muted"><strong>To get started:</strong></p>
+  <p><strong>To get started:</strong></p>
   <ol>
     <li>Open a folder containing your LaTeX project (or create a sample).</li>
     <li>TeXRA will reload and walk you through sign-in or API key setup.</li>
