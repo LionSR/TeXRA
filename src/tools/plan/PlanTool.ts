@@ -21,6 +21,7 @@ import type { WorkPlanState } from '@agent/core/AgentWorkspaceState';
 import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
 import { waitForPlanApproval } from '@agent/runtime/runCoordinators';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
+import type { CurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   TODO_STATUS,
@@ -139,12 +140,11 @@ Best practices:
 }) {
   protected async execute(input: PlanToolInput): Promise<ToolResult> {
     const contexts = getCurrentToolContexts();
-    const runContext = contexts?.runContext;
-    const streamId = runContext?.streamId;
+    const streamId = contexts?.runContext?.streamId;
 
     switch (input.command) {
       case 'update':
-        return this.executeUpdate(input.plan);
+        return this.executeUpdate(input.plan, contexts);
       case 'pause':
         if (!streamId) {
           throw new ToolError(
@@ -168,8 +168,10 @@ Best practices:
     }
   }
 
-  private async executeUpdate(plan: Plan): Promise<ToolResult> {
-    const contexts = getCurrentToolContexts();
+  private async executeUpdate(
+    plan: Plan,
+    contexts: CurrentToolContexts | undefined,
+  ): Promise<ToolResult> {
     const callContext = contexts?.callContext;
     const runContext = contexts?.runContext;
 
