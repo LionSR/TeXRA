@@ -314,4 +314,55 @@ describe('toGoogleTools', () => {
     assert.equal(tool.functionDeclarations?.[1].name, 'read_file');
     assert.equal(tool.functionDeclarations?.[2].name, 'write_file');
   });
+
+  it('flattens top-level discriminated unions into a single object schema', () => {
+    // Gemini rejects function parameter schemas whose root is oneOf/anyOf/allOf
+    // (HTTP 400: schema must have type 'object' and not contain 'oneOf'/'anyOf'/'allOf').
+    // Discriminated unions like the inquiry tool must flatten to a single object.
+    const defs: ToolDefinition[] = [
+      {
+        name: 'inquiry',
+        description: 'Ask, read, or list inquiry threads',
+        zodSchema: z.discriminatedUnion('command', [
+          z.object({
+            command: z.literal('ask'),
+            question: z.string(),
+            thread_id: z.string().nullish(),
+          }),
+          z.object({
+            command: z.literal('read'),
+            thread_id: z.string(),
+          }),
+          z.object({
+            command: z.literal('list'),
+            status: z.enum(['open', 'answered']).default('open'),
+          }),
+        ]),
+      },
+    ];
+
+    const tools = toGoogleTools(defs);
+    const tool = tools[0] as GeminiTool;
+    const params = tool.functionDeclarations?.[0]
+      .parametersJsonSchema as Record<string, unknown>;
+
+    assert.equal(params.type, 'object');
+    assert.equal(params.oneOf, undefined);
+    assert.equal(params.anyOf, undefined);
+    assert.equal(params.allOf, undefined);
+
+    const properties = params.properties as Record<
+      string,
+      Record<string, unknown>
+    >;
+    // Discriminator collapses literal branches into an enum.
+    assert.deepEqual(properties.command.enum, ['ask', 'read', 'list']);
+    assert.equal(properties.command.type, 'string');
+    // Branch-specific props are merged in.
+    assert.ok(properties.question);
+    assert.ok(properties.thread_id);
+    assert.ok(properties.status);
+    // Only command is required by every branch.
+    assert.deepEqual(params.required, ['command']);
+  });
 });
