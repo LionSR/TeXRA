@@ -51,16 +51,16 @@ function lastSegmentToolName(toolName: string): string {
   return lastColon >= 0 ? toolName.slice(lastColon + 1) : toolName;
 }
 
-function displayToolName(toolName: string): string {
-  return displayMcpToolName(toolName) ?? lastSegmentToolName(toolName);
-}
-
 function displayMcpToolName(toolName: string): string | undefined {
   const parts = toolName.split(':').filter(Boolean);
   if (parts.length < 3 || parts[0].toLowerCase() !== 'mcp') {
     return undefined;
   }
   return `${parts[1]}/${parts.slice(2).join(':')}`;
+}
+
+function displayToolName(toolName: string): string {
+  return displayMcpToolName(toolName) ?? lastSegmentToolName(toolName);
 }
 
 function previewInput(input: unknown): string {
@@ -245,15 +245,69 @@ function PatchPreview({
   );
 }
 
-export function UniversalToolRow({
-  toolUse,
-  displayName,
+function OutputBlock({
+  lines,
+  hiddenCount,
 }: {
+  readonly lines: readonly string[];
+  readonly hiddenCount: number;
+}): React.JSX.Element | null {
+  if (lines.length === 0) return null;
+  return (
+    <Box flexDirection="column" paddingLeft={2}>
+      {lines.map((line, index) => (
+        <Box key={index} flexDirection="row" flexWrap="nowrap">
+          <Text dimColor>{index === 0 ? `${OUTPUT_CORNER} ` : '  '}</Text>
+          <Text>{line}</Text>
+        </Box>
+      ))}
+      {hiddenCount > 0 ? (
+        <Text
+          dimColor
+        >{`  … +${hiddenCount} line${hiddenCount === 1 ? '' : 's'}`}</Text>
+      ) : null}
+    </Box>
+  );
+}
+
+function CornerLine({
+  color,
+  children,
+}: {
+  readonly color?: 'red';
+  readonly children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <Box flexDirection="row" flexWrap="nowrap" paddingLeft={2}>
+      <Text dimColor>{`${OUTPUT_CORNER} `}</Text>
+      <Text color={color} dimColor={!color}>
+        {children}
+      </Text>
+    </Box>
+  );
+}
+
+interface ToolRowProps {
   readonly toolUse: NormalizedToolUse;
   readonly displayName?: string;
-}): React.JSX.Element {
+  readonly fallbackName?: string;
+  readonly previewColor?: 'cyan';
+  readonly showPatch?: boolean;
+  readonly showExitCode?: boolean;
+}
+
+function ToolRow(props: ToolRowProps): React.JSX.Element {
+  const {
+    toolUse,
+    previewColor,
+    showPatch = false,
+    showExitCode = false,
+  } = props;
   const color = statusColor(toolUse);
-  const name = (displayName ?? displayToolName(toolUse.toolName)) || 'tool';
+  const name =
+    (props.displayName ?? displayToolName(toolUse.toolName)) ||
+    props.fallbackName ||
+    'tool';
 
   const { patchGroups, preview, visibleOutput, hiddenCount } = useMemo(() => {
     const sourceText =
@@ -263,82 +317,19 @@ export function UniversalToolRow({
       : '';
     const { lines, hiddenCount: hidden } = visibleOutputLines(toolUse);
     return {
-      patchGroups: toolUsePatchGroups(toolUse),
+      patchGroups: showPatch ? toolUsePatchGroups(toolUse) : undefined,
       preview: previewText,
       visibleOutput: lines,
       hiddenCount: hidden,
     };
-  }, [toolUse]);
+  }, [toolUse, showPatch]);
 
   const errorText = toolUse.isError ? toolUse.errorText || '(error)' : '';
-  const showError = toolUse.isError;
+  const exitCode = showExitCode ? extractExitCode(toolUse) : undefined;
   const showNoOutput =
     toolUse.status === TOOL_USE_STATUS.COMPLETED &&
     visibleOutput.length === 0 &&
     !patchGroups &&
-    !showError;
-
-  return (
-    <Box flexDirection="column" marginBottom={1}>
-      <Box flexDirection="row" flexWrap="nowrap">
-        <Text color={color} dimColor={!color}>
-          {STATUS_DOT}{' '}
-        </Text>
-        <Text bold>{name}</Text>
-        {preview ? <Text dimColor>{` (${preview})`}</Text> : null}
-      </Box>
-      {visibleOutput.length > 0 ? (
-        <Box flexDirection="column" paddingLeft={2}>
-          {visibleOutput.map((line, index) => (
-            <Box key={index} flexDirection="row" flexWrap="nowrap">
-              <Text dimColor>{index === 0 ? `${OUTPUT_CORNER} ` : '  '}</Text>
-              <Text>{line}</Text>
-            </Box>
-          ))}
-          {hiddenCount > 0 ? (
-            <Text
-              dimColor
-            >{`  … +${hiddenCount} line${hiddenCount === 1 ? '' : 's'}`}</Text>
-          ) : null}
-        </Box>
-      ) : null}
-      {patchGroups ? <PatchPreview groups={patchGroups} /> : null}
-      {showError ? (
-        <Box flexDirection="row" flexWrap="nowrap" paddingLeft={2}>
-          <Text dimColor>{`${OUTPUT_CORNER} `}</Text>
-          <Text color="red">
-            {truncateWithEllipsis(
-              collapseWhitespace(errorText),
-              MAX_ERROR_PREVIEW,
-            )}
-          </Text>
-        </Box>
-      ) : null}
-      {showNoOutput ? (
-        <Box flexDirection="row" flexWrap="nowrap" paddingLeft={2}>
-          <Text dimColor>{`${OUTPUT_CORNER} (no output)`}</Text>
-        </Box>
-      ) : null}
-    </Box>
-  );
-}
-
-function BashToolRow({
-  toolUse,
-}: {
-  readonly toolUse: NormalizedToolUse;
-}): React.JSX.Element {
-  const color = statusColor(toolUse);
-  const exitCode = extractExitCode(toolUse);
-  const { lines: visibleOutput, hiddenCount } = visibleOutputLines(toolUse);
-  const preview = previewInput(toolUse.input) || toolUse.headerSummary;
-  const previewText = preview
-    ? truncateWithEllipsis(collapseWhitespace(preview), MAX_HEADER_PREVIEW)
-    : '';
-  const errorText = toolUse.isError ? toolUse.errorText || '(error)' : '';
-  const showNoOutput =
-    toolUse.status === TOOL_USE_STATUS.COMPLETED &&
-    visibleOutput.length === 0 &&
     !toolUse.isError;
 
   return (
@@ -347,47 +338,55 @@ function BashToolRow({
         <Text color={color} dimColor={!color}>
           {STATUS_DOT}{' '}
         </Text>
-        <Text bold>{displayToolName(toolUse.toolName) || 'bash'}</Text>
-        {previewText ? <Text color="cyan">{` (${previewText})`}</Text> : null}
+        <Text bold>{name}</Text>
+        {preview ? (
+          <Text color={previewColor} dimColor={!previewColor}>
+            {` (${preview})`}
+          </Text>
+        ) : null}
       </Box>
-      {visibleOutput.length > 0 ? (
-        <Box flexDirection="column" paddingLeft={2}>
-          {visibleOutput.map((line, index) => (
-            <Box key={index} flexDirection="row" flexWrap="nowrap">
-              <Text dimColor>{index === 0 ? `${OUTPUT_CORNER} ` : '  '}</Text>
-              <Text>{line}</Text>
-            </Box>
-          ))}
-          {hiddenCount > 0 ? (
-            <Text
-              dimColor
-            >{`  … +${hiddenCount} line${hiddenCount === 1 ? '' : 's'}`}</Text>
-          ) : null}
-        </Box>
-      ) : null}
+      <OutputBlock lines={visibleOutput} hiddenCount={hiddenCount} />
+      {patchGroups ? <PatchPreview groups={patchGroups} /> : null}
       {toolUse.isError && exitCode !== undefined ? (
-        <Box flexDirection="row" flexWrap="nowrap" paddingLeft={2}>
-          <Text dimColor>{`${OUTPUT_CORNER} `}</Text>
-          <Text color="red">{`exit ${exitCode}`}</Text>
-        </Box>
+        <CornerLine color="red">{`exit ${exitCode}`}</CornerLine>
       ) : null}
       {toolUse.isError ? (
-        <Box flexDirection="row" flexWrap="nowrap" paddingLeft={2}>
-          <Text dimColor>{`${OUTPUT_CORNER} `}</Text>
-          <Text color="red">
-            {truncateWithEllipsis(
-              collapseWhitespace(errorText),
-              MAX_ERROR_PREVIEW,
-            )}
-          </Text>
-        </Box>
+        <CornerLine color="red">
+          {truncateWithEllipsis(
+            collapseWhitespace(errorText),
+            MAX_ERROR_PREVIEW,
+          )}
+        </CornerLine>
       ) : null}
-      {showNoOutput ? (
-        <Box flexDirection="row" flexWrap="nowrap" paddingLeft={2}>
-          <Text dimColor>{`${OUTPUT_CORNER} (no output)`}</Text>
-        </Box>
-      ) : null}
+      {showNoOutput ? <CornerLine>(no output)</CornerLine> : null}
     </Box>
+  );
+}
+
+export function UniversalToolRow({
+  toolUse,
+  displayName,
+}: {
+  readonly toolUse: NormalizedToolUse;
+  readonly displayName?: string;
+}): React.JSX.Element {
+  return (
+    <ToolRow toolUse={toolUse} displayName={displayName} showPatch={true} />
+  );
+}
+
+function BashToolRow({
+  toolUse,
+}: {
+  readonly toolUse: NormalizedToolUse;
+}): React.JSX.Element {
+  return (
+    <ToolRow
+      toolUse={toolUse}
+      fallbackName="bash"
+      previewColor="cyan"
+      showExitCode={true}
+    />
   );
 }
 

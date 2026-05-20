@@ -27,6 +27,41 @@ import { splitTranscriptEntries } from './transcriptEntries';
 
 export { splitTranscriptEntries } from './transcriptEntries';
 
+function ProcessEntryRow({
+  process,
+}: {
+  readonly process: NonNullable<ConversationEntry['process']>;
+}): React.JSX.Element {
+  const color = process.isError ? 'red' : 'green';
+  const [, ...tailLines] = completedProcessDisplayLines(process);
+  return (
+    <Box marginBottom={1} paddingX={1} flexDirection="column">
+      <Box>
+        <Text color={color}>● </Text>
+        <Text>{process.title}</Text>
+        {process.status ? <Text dimColor>{` · ${process.status}`}</Text> : null}
+        {process.elapsed ? (
+          <Text dimColor>{` · ${process.elapsed}`}</Text>
+        ) : null}
+        {process.isError ? <Text color="red"> · error</Text> : null}
+      </Box>
+      {process.tailLines.length > 0 ? (
+        <Box marginLeft={2} flexDirection="column">
+          {tailLines.map((line, index) => (
+            <Text
+              key={index}
+              color={process.isError ? 'red' : undefined}
+              dimColor={!process.isError}
+            >
+              {line}
+            </Text>
+          ))}
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
+
 function TranscriptEntry({
   entry,
   width,
@@ -34,62 +69,28 @@ function TranscriptEntry({
   readonly entry: ConversationEntry;
   readonly width?: number;
 }): React.JSX.Element {
-  if (entry.role === 'user') {
-    return (
-      <Box marginBottom={1} paddingX={1}>
-        <Text dimColor>› </Text>
-        <Text>{entry.text}</Text>
-      </Box>
-    );
-  }
-
-  if (entry.role === 'error') {
-    return (
-      <Box marginBottom={1} paddingX={1}>
-        <Text color="red">! </Text>
-        <Text color="red">{entry.text}</Text>
-      </Box>
-    );
-  }
-
-  if (entry.role === 'tool' && entry.toolUse) {
-    return <ToolUseRow toolUse={entry.toolUse} />;
-  }
-
-  if (entry.role === 'process' && entry.process) {
-    const process = entry.process;
-    const color = process.isError ? 'red' : 'green';
-    const [, ...tailLines] = completedProcessDisplayLines(process);
-    return (
-      <Box marginBottom={1} paddingX={1} flexDirection="column">
-        <Box>
-          <Text color={color}>● </Text>
-          <Text>{process.title}</Text>
-          {process.status ? (
-            <Text dimColor>{` · ${process.status}`}</Text>
-          ) : null}
-          {process.elapsed ? (
-            <Text dimColor>{` · ${process.elapsed}`}</Text>
-          ) : null}
-          {process.isError ? <Text color="red"> · error</Text> : null}
+  switch (entry.role) {
+    case 'user':
+      return (
+        <Box marginBottom={1} paddingX={1}>
+          <Text dimColor>› </Text>
+          <Text>{entry.text}</Text>
         </Box>
-        {process.tailLines.length > 0 ? (
-          <Box marginLeft={2} flexDirection="column">
-            {tailLines.map((line, index) => (
-              <Text
-                key={index}
-                color={process.isError ? 'red' : undefined}
-                dimColor={!process.isError}
-              >
-                {line}
-              </Text>
-            ))}
-          </Box>
-        ) : null}
-      </Box>
-    );
+      );
+    case 'error':
+      return (
+        <Box marginBottom={1} paddingX={1}>
+          <Text color="red">! </Text>
+          <Text color="red">{entry.text}</Text>
+        </Box>
+      );
+    case 'tool':
+      if (entry.toolUse) return <ToolUseRow toolUse={entry.toolUse} />;
+      break;
+    case 'process':
+      if (entry.process) return <ProcessEntryRow process={entry.process} />;
+      break;
   }
-
   return (
     <Box marginBottom={1}>
       <Markdown content={entry.text} width={width} />
