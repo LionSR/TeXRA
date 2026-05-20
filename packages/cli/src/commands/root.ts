@@ -978,6 +978,13 @@ function expectedOutputFilesForOutputDir(
   return defaultOutputFiles.length > 0 ? defaultOutputFiles : inputFiles;
 }
 
+function shouldUseOutputForCopy(
+  existing: OutputFileSummary | undefined,
+  candidate: OutputFileSummary,
+): boolean {
+  return existing == null || candidate.round > existing.round;
+}
+
 export async function resolveWorkflowOutput(
   outputFile: string | undefined,
   outputDir: string | undefined,
@@ -1028,7 +1035,12 @@ export async function resolveWorkflowOutput(
       : path.join(context.cwd, outputDir);
     const outputsByRelativePath = new Map<string, OutputFileSummary>();
     for (const output of result.outputs) {
-      outputsByRelativePath.set(outputCopyRelativePath(output), output);
+      const relativePath = outputCopyRelativePath(output);
+      if (
+        shouldUseOutputForCopy(outputsByRelativePath.get(relativePath), output)
+      ) {
+        outputsByRelativePath.set(relativePath, output);
+      }
     }
 
     const copiedOutputs: string[] = [];
@@ -1211,6 +1223,10 @@ async function runWorkflowAgent(
       },
     ));
   } catch (error) {
+    if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
+      writeTextStderr(toErrorMessage(error));
+      return CliExitCode.Interrupted;
+    }
     await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
     writeTextStderr(toErrorMessage(error));
     return CliExitCode.AgentError;

@@ -39,7 +39,11 @@ function testContext(cwd: string): CliContext {
 }
 
 function workflowResult(
-  outputs: Array<{ absolutePath: string; relativePath: string }>,
+  outputs: Array<{
+    absolutePath: string;
+    relativePath: string;
+    round?: number;
+  }>,
 ): WorkflowResult {
   return {
     category: AgentCategory.Workflow,
@@ -48,7 +52,7 @@ function workflowResult(
     streamId: 'workflow-output-test',
     compileFailures: [],
     outputs: outputs.map((output) => ({
-      round: 1,
+      round: output.round ?? 1,
       relativePath: output.relativePath,
       absolutePath: output.absolutePath,
       location: 'runStorage',
@@ -96,9 +100,9 @@ describe('CLI workflow output resolution', () => {
       undefined,
       'out',
       workflowResult([
-        { absolutePath: runA1, relativePath: 'r1/a.tex' },
+        { absolutePath: runA1, relativePath: 'r1/a.tex', round: 1 },
         { absolutePath: runB, relativePath: 'r1/b.tex' },
-        { absolutePath: runA2, relativePath: 'r2/a.tex' },
+        { absolutePath: runA2, relativePath: 'r2/a.tex', round: 2 },
       ]),
       testContext(cwd),
       {
@@ -116,6 +120,35 @@ describe('CLI workflow output resolution', () => {
     );
     await expect(readFile(join(cwd, 'out', 'b.tex'), 'utf8')).resolves.toBe(
       'B',
+    );
+  });
+
+  it('uses the latest round when --output-dir workflow outputs arrive out of order', async () => {
+    const cwd = await makeTempDir();
+    const runA1 = join(cwd, 'run', 'r1', 'a.tex');
+    const runA2 = join(cwd, 'run', 'r2', 'a.tex');
+    await mkdir(join(cwd, 'run', 'r1'), { recursive: true });
+    await mkdir(join(cwd, 'run', 'r2'), { recursive: true });
+    await writeFile(runA1, 'A1');
+    await writeFile(runA2, 'A2');
+
+    await resolveWorkflowOutput(
+      undefined,
+      'out',
+      workflowResult([
+        { absolutePath: runA2, relativePath: 'r2/a.tex', round: 2 },
+        { absolutePath: runA1, relativePath: 'r1/a.tex', round: 1 },
+      ]),
+      testContext(cwd),
+      {
+        expectedOutputFiles: ['a.tex'],
+        runDirectory: join(cwd, 'run'),
+        terminalStatus: EXECUTION_STATUS.COMPLETED,
+      },
+    );
+
+    await expect(readFile(join(cwd, 'out', 'a.tex'), 'utf8')).resolves.toBe(
+      'A2',
     );
   });
 });
