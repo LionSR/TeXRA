@@ -25,6 +25,7 @@ import {
 import { GlobalStateKey } from '@common/state/stateKeys';
 
 import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
+import { loadPlatformDefaultsModule } from './loadPlatformDefaultsModule.mjs';
 import type { StorageProvider } from '@platform/interfaces/storage';
 
 interface JsonStore {
@@ -102,7 +103,7 @@ describe('desktop agent directory bootstrap', () => {
       { initPlatform },
       { getAgentDirectories },
     ] = await Promise.all([
-      loadDesktopPlatformModule<JsonStoreModule>('jsonStore.ts'),
+      loadPlatformDefaultsModule<JsonStoreModule>('jsonStore.ts'),
       loadDesktopPlatformModule<ElectronStateStoreModule>('electronState.ts'),
       loadDesktopPlatformModule<ElectronAgentDirectoriesModule>(
         'agentDirectories.ts',

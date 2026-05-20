@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports - test support
-import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
+import { loadPlatformDefaultsModule } from './loadPlatformDefaultsModule.mjs';
 
 interface JsonStore {
   set(key: string, value: unknown): Promise<void>;
@@ -22,11 +22,11 @@ interface JsonStoreModule {
 
 async function loadJsonStore(): Promise<JsonStoreModule['JsonStore']> {
   const { JsonStore } =
-    await loadDesktopPlatformModule<JsonStoreModule>('jsonStore.ts');
+    await loadPlatformDefaultsModule<JsonStoreModule>('jsonStore.ts');
   return JsonStore;
 }
 
-describe('desktop JsonStore', () => {
+describe('shared JsonStore', () => {
   let tempDir: string | undefined;
 
   afterEach(async () => {
