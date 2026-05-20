@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
 import { StreamTabIdSchema } from '@shared/schemas/identifiers';
-
-export const ODYSSEY_TOOL_NAME = 'odyssey' as const;
+import { PlanSchema } from '@shared/schemas/plan';
 
 export const ODYSSEY_FEATURE_FLAG_KEY =
   'texra.experimental.odyssey.enabled' as const;
@@ -13,7 +12,7 @@ export const ODYSSEY_HISTORY_LIMIT = 200;
 /**
  * Default maximum continuations before the Odyssey auto-pauses for user
  * confirmation. Acts as a safety net so a model that never calls
- * `odyssey(complete)` doesn't loop forever.
+ * `plan(command="complete")` doesn't loop forever.
  */
 export const ODYSSEY_DEFAULT_MAX_CONTINUATIONS = 50;
 
@@ -66,6 +65,12 @@ export const OdysseySchema = z.object({
   updatedAt: z.iso.datetime(),
   completedReason: z.string().nullish(),
   history: z.array(OdysseyEventSchema).default([]),
+  /**
+   * Structured plan that seeded the odyssey, when it was started from a
+   * Plan-tool approval. Pure metadata for UI / inspection — the
+   * continuation prompt still uses `objective` as the canonical instruction.
+   */
+  plan: PlanSchema.nullish(),
 });
 
 /**
@@ -105,34 +110,3 @@ export function formatOdysseyTime(ms: number): string {
   return `${sec}s`;
 }
 export type Odyssey = z.infer<typeof OdysseySchema>;
-
-/** Top-level command names exposed by the OdysseyTool. */
-export const OdysseyCommandSchema = z.enum([
-  'view',
-  'start',
-  'pause',
-  'complete',
-]);
-export type OdysseyCommand = z.infer<typeof OdysseyCommandSchema>;
-
-export const OdysseyToolInputSchema = z.strictObject({
-  command: OdysseyCommandSchema,
-  objective: z
-    .string()
-    .nullish()
-    .describe(
-      'Required for command="start". Phrase as "Complete X until Y holds" ' +
-        'with a verifiable stopping condition.',
-    ),
-  reason: z
-    .string()
-    .nullish()
-    .describe(
-      'Required for command="pause" and command="complete". ' +
-        'For "pause": describe what you need from the user. ' +
-        'For "complete": describe HOW you verified the objective is met ' +
-        '(cite current filesystem state, test output, or command results — ' +
-        'never conversation memory).',
-    ),
-});
-export type OdysseyToolInput = z.infer<typeof OdysseyToolInputSchema>;

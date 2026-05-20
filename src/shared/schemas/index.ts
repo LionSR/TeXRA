@@ -40,7 +40,6 @@ export * from './progressView';
 export * as commonViewMessages from './commonViewMessages';
 export { ThemeSchema, type Theme } from './commonViewMessages';
 export * from './memoryViewMessages';
-export * from './odysseyViewMessages';
 export * from './historyViewMessages';
 export * from './profileViewMessages';
 export * from './settingsViewMessages';

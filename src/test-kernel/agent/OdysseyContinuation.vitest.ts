@@ -45,6 +45,10 @@ describe('maybeBuildOdysseyContinuation', () => {
     });
     expect(out).toMatch(/<odyssey_context>/);
     expect(out).toContain('Complete the refactor until pnpm test passes');
+    expect(out).toContain('plan(command="complete")');
+    expect(out).toContain('plan(command="pause")');
+    expect(out).not.toContain('odyssey(complete)');
+    expect(out).not.toContain('odyssey(pause)');
   });
 
   it('returns null in subagent mode (parent owns continuation)', async () => {
