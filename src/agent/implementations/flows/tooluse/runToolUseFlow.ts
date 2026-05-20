@@ -63,7 +63,7 @@ export interface RunToolUseFlowInput<
   onBeforeWaiting?: (
     lastResponse: string | undefined,
     touchedFiles: string[],
-  ) => void | Promise<void>;
+  ) => boolean | void | Promise<boolean | void>;
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Fires after a running tool-use chat changes its model. */
@@ -308,9 +308,15 @@ export async function runToolUseFlow<C = unknown>(
       // the user notification. State was already projected per-step.
       throw new Error(shared.lastError.message);
     } else {
-      const execStatus = input.checkInterruption()
-        ? EXECUTION_STATUS.INTERRUPTED
-        : EXECUTION_STATUS.COMPLETED;
+      const isInterrupted = input.checkInterruption();
+      const interruptedAfterDeliveredSubagentResult =
+        input.isSubagent &&
+        shared.deliveredToOrchestrator === true &&
+        isInterrupted;
+      const execStatus =
+        isInterrupted && !interruptedAfterDeliveredSubagentResult
+          ? EXECUTION_STATUS.INTERRUPTED
+          : EXECUTION_STATUS.COMPLETED;
       status = executionToEndStatus(execStatus) as EndGroupStatus;
       lastResponse = findLastAssistantText(shared.messages, (m) =>
         services.modelHandler.extractAssistantText(m),

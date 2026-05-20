@@ -8,7 +8,7 @@
 import { render } from 'ink';
 import PQueue from 'p-queue';
 
-import { loadAgents } from '@agent/index';
+import { getAgent, loadAgents } from '@agent/index';
 import { type AgentConfigPayload } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
@@ -20,6 +20,7 @@ import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
 import { toErrorMessage } from '@common/errors/errorMessage';
+import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 import { type CliContext, readCliVersion } from '../../runtime/cliContext';
@@ -108,6 +109,14 @@ interface SlashCommandContext {
   readonly startStoredExecution: (config: AgentConfigPayload) => void;
 }
 
+function agentSupportsDelegation(agentName: string): boolean {
+  return (
+    getAgent(agentName, true)?.tools?.some((toolName) =>
+      DELEGATION_TOOLS.has(toolName),
+    ) ?? false
+  );
+}
+
 function applyInitialCliAgentSelection(
   agentName: string,
   context: SlashCommandContext,
@@ -123,6 +132,7 @@ function applyInitialCliAgentSelection(
   cliState.sessionMeta.set({
     ...cliState.sessionMeta.get(),
     agent: nextAgent,
+    canDelegate: agentSupportsDelegation(nextAgent),
   });
   appendLocalAssistantTranscript(`Root agent set to ${nextAgent}.`);
 }
@@ -490,14 +500,6 @@ export async function runChat(
   await setCliHelperModel(model);
   const version = await readCliVersion();
 
-  cliState.sessionMeta.set({
-    agent,
-    model,
-    cwd: context.cwd,
-    apiMode: getCliApiMode(),
-    version,
-  });
-
   let activeApprovalPolicy = context.approvalPolicy;
   const currentSessionContext = (helperModel: string): CliContext => ({
     ...context,
@@ -512,6 +514,14 @@ export async function runChat(
     activeApprovalPolicy = policy;
   };
   await loadAgents();
+  cliState.sessionMeta.set({
+    agent,
+    model,
+    cwd: context.cwd,
+    apiMode: getCliApiMode(),
+    canDelegate: agentSupportsDelegation(agent),
+    version,
+  });
 
   const inputHistory = await loadInputHistory();
 
@@ -586,6 +596,7 @@ export async function runChat(
       ...cliState.sessionMeta.get(),
       agent: config.agent,
       model: config.model,
+      canDelegate: agentSupportsDelegation(config.agent),
     });
     const runtimeHost = createCliRuntimeHost(sessionContext);
     const wrapped = wrapRuntimeHost(runtimeHost);

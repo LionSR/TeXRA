@@ -19,6 +19,7 @@ import {
 } from '../state/childControls';
 import type { StreamSlice } from '../state/cliState';
 import { KeyHints } from '../ui/KeyHints';
+import { SELECT_LABEL_MAX_COLS } from '../ui/Select';
 
 export interface ChildControlPickerProps {
   readonly activeStreamId: StreamTabId | undefined;
@@ -40,20 +41,27 @@ function renderItem(
   index: number,
   highlighted: boolean,
 ): React.JSX.Element {
+  const detail = [
+    item.description,
+    item.command !== item.label ? item.command : '',
+  ]
+    .filter(Boolean)
+    .join(' — ');
   return (
-    <Box key={item.executionId} flexDirection="column">
-      <Box>
+    <Box key={item.executionId} minWidth={0}>
+      <Box flexShrink={0}>
         <Text color={highlighted ? 'cyan' : undefined}>
           {highlighted ? '›' : ' '} {index + 1}.{' '}
         </Text>
-        <Text color={highlighted ? 'cyan' : undefined}>{item.label}</Text>
-        {item.description ? (
-          <Text dimColor>{` — ${item.description}`}</Text>
-        ) : null}
-        {item.command !== item.label ? (
-          <Text dimColor>{` — ${item.command}`}</Text>
-        ) : null}
       </Box>
+      <Box flexShrink={0} maxWidth={SELECT_LABEL_MAX_COLS}>
+        <Text color={highlighted ? 'cyan' : undefined} wrap="truncate-end">
+          {item.label}
+        </Text>
+      </Box>
+      {detail ? (
+        <Text dimColor wrap="truncate-end">{` — ${detail}`}</Text>
+      ) : null}
     </Box>
   );
 }

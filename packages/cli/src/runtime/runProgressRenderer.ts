@@ -37,12 +37,7 @@ export function shouldRenderRunProgress(
     'mode' | 'outputFormat' | 'quietLogs' | 'stderrIsTty'
   >,
 ): boolean {
-  return (
-    context.quietLogs !== true &&
-    context.mode !== 'headless' &&
-    context.outputFormat === 'text' &&
-    context.stderrIsTty === true
-  );
+  return context.quietLogs !== true && context.outputFormat === 'text';
 }
 
 export function createRunProgressRenderer(

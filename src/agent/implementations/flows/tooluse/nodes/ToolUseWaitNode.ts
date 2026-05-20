@@ -13,6 +13,8 @@ interface WaitPrepResult {
   touchedFiles: string[];
   /** True when entering after a failed/cancelled cycle. */
   afterError: boolean;
+  /** Set after the current cycle has been delivered to an orchestrator. */
+  deliveredToOrchestrator?: boolean;
 }
 
 export class ToolUseWaitNode<C> extends Node<
@@ -59,7 +61,12 @@ export class ToolUseWaitNode<C> extends Node<
       return { kind: 'stop' };
     }
     if (!prepRes.afterError) {
-      await onBeforeWaiting?.(prepRes.lastResponse, prepRes.touchedFiles);
+      const delivered = await onBeforeWaiting?.(
+        prepRes.lastResponse,
+        prepRes.touchedFiles,
+      );
+      prepRes.deliveredToOrchestrator =
+        onBeforeWaiting !== undefined && delivered !== false;
     }
 
     // Idle-continuation providers run BEFORE `waitForFollowUp` blocks; once
@@ -114,13 +121,16 @@ export class ToolUseWaitNode<C> extends Node<
 
   async post(
     shared: ToolUseRunShared,
-    _prepRes: WaitPrepResult,
+    prepRes: WaitPrepResult,
     execRes: WaitExecResult,
   ): Promise<string | undefined> {
     const { onFollowUpConsumed, streamId, logger, modelHandler, runtimeHost } =
       this.services;
 
     if (execRes.kind === 'stop') {
+      if (prepRes.deliveredToOrchestrator) {
+        shared.deliveredToOrchestrator = true;
+      }
       return FlowTransition.COMPLETE;
     }
 
@@ -129,6 +139,7 @@ export class ToolUseWaitNode<C> extends Node<
     // a previously-recovered error as a terminal failure.
     shared.lastError = undefined;
     shared.userCancelledRetry = undefined;
+    shared.deliveredToOrchestrator = undefined;
 
     // Synthesized continuations don't come from the user queue, so they
     // must not emit updateQueuedFollowUps via the consume callback. They

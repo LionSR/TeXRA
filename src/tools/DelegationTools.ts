@@ -381,7 +381,7 @@ async function executeSubagent(
       deliveryState.hasDelivered = false;
     },
     onBeforeWaiting: async (lastResponse, touchedFiles) => {
-      if (deliveryState.hasDelivered || !childStreamId) return;
+      if (deliveryState.hasDelivered || !childStreamId) return false;
       const wallTimeMs = Date.now() - startedAt;
       const msg = formatSubagentDelivery(
         agentName,
@@ -408,6 +408,7 @@ async function executeSubagent(
       // onCompleted can still act as a fallback if we somehow never reach here.
       deliveryState.hasDelivered = true;
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+      return true;
     },
     onCompleted: async (result) => {
       if (deliveryState.hasDelivered) return;
