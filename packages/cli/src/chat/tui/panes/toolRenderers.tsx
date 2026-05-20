@@ -294,6 +294,7 @@ interface ToolRowProps {
   readonly previewColor?: 'cyan';
   readonly showPatch?: boolean;
   readonly showExitCode?: boolean;
+  readonly preferInputPreview?: boolean;
 }
 
 function ToolRow(props: ToolRowProps): React.JSX.Element {
@@ -302,6 +303,7 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
     previewColor,
     showPatch = false,
     showExitCode = false,
+    preferInputPreview = false,
   } = props;
   const color = statusColor(toolUse);
   const name =
@@ -310,8 +312,11 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
     'tool';
 
   const { patchGroups, preview, visibleOutput, hiddenCount } = useMemo(() => {
-    const sourceText =
-      toolUse.headerSummary || previewInput(toolUse.input) || '';
+    // Bash rows prefer the command text (input) over the generic header summary;
+    // all other tools prefer the summary (which is curated per-tool) first.
+    const sourceText = preferInputPreview
+      ? previewInput(toolUse.input) || toolUse.headerSummary || ''
+      : toolUse.headerSummary || previewInput(toolUse.input) || '';
     const previewText = sourceText
       ? truncateWithEllipsis(collapseWhitespace(sourceText), MAX_HEADER_PREVIEW)
       : '';
@@ -322,7 +327,7 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
       visibleOutput: lines,
       hiddenCount: hidden,
     };
-  }, [toolUse, showPatch]);
+  }, [toolUse, showPatch, preferInputPreview]);
 
   const errorText = toolUse.isError ? toolUse.errorText || '(error)' : '';
   const exitCode = showExitCode ? extractExitCode(toolUse) : undefined;
@@ -386,6 +391,7 @@ function BashToolRow({
       fallbackName="bash"
       previewColor="cyan"
       showExitCode={true}
+      preferInputPreview={true}
     />
   );
 }
