@@ -46,6 +46,7 @@ export function createDirectLspLeanAdapter(
   const resolveRoot =
     options.resolveWorkspaceRoot ?? defaultResolveWorkspaceRoot;
   const sessions = new Map<string, LeanSession>();
+  const sessionStarts = new Map<string, Promise<LeanSession>>();
 
   async function getSession(filePath: string): Promise<LeanSession> {
     const absolute = path.resolve(filePath);
@@ -55,11 +56,39 @@ export function createDirectLspLeanAdapter(
         `No Lean project found for ${absolute}. Lake projects need a lakefile.lean or lakefile.toml in an ancestor directory.`,
       );
     }
+    return getOrStartSession(root);
+  }
+
+  function getOrStartSession(root: string): Promise<LeanSession> {
+    const inFlight = sessionStarts.get(root);
+    if (inFlight) return inFlight;
+
     const existing = sessions.get(root);
     if (existing) {
-      await existing.ensureReady();
-      return existing;
+      const ready = existing
+        .ensureReady()
+        .then(() => existing)
+        .catch((error) => {
+          if (sessions.get(root) === existing) {
+            sessions.delete(root);
+          }
+          throw error;
+        });
+      sessionStarts.set(root, ready);
+      void ready
+        .catch(() => undefined)
+        .finally(() => {
+          if (sessionStarts.get(root) === ready) {
+            sessionStarts.delete(root);
+          }
+        });
+      return ready;
     }
+
+    return startFreshSession(root);
+  }
+
+  function startFreshSession(root: string): Promise<LeanSession> {
     const session = new LeanSession({
       workspaceRoot: root,
       lakeCommand,
@@ -70,13 +99,43 @@ export function createDirectLspLeanAdapter(
       },
     });
     sessions.set(root, session);
-    try {
+    const start = (async () => {
       await session.ensureReady();
-    } catch (error) {
-      sessions.delete(root);
-      throw error;
-    }
-    return session;
+      return session;
+    })();
+    sessionStarts.set(root, start);
+    void start
+      .catch(() => {
+        if (sessions.get(root) === session) {
+          sessions.delete(root);
+        }
+      })
+      .finally(() => {
+        if (sessionStarts.get(root) === start) {
+          sessionStarts.delete(root);
+        }
+      });
+    return start;
+  }
+
+  function restartSession(root: string): Promise<LeanSession> {
+    const restart = (async () => {
+      const existing = sessions.get(root);
+      if (existing) {
+        sessions.delete(root);
+        await existing.dispose();
+      }
+      return startFreshSession(root);
+    })();
+    sessionStarts.set(root, restart);
+    void restart
+      .catch(() => undefined)
+      .finally(() => {
+        if (sessionStarts.get(root) === restart) {
+          sessionStarts.delete(root);
+        }
+      });
+    return restart;
   }
 
   return {
@@ -124,16 +183,11 @@ export function createDirectLspLeanAdapter(
       // session; lake commands serialize per workspace via the mutex.
       switch (command) {
         case 'restart_server': {
-          const targets = [...sessions.values()];
-          if (targets.length === 0) {
+          const roots = [...sessions.keys()];
+          if (roots.length === 0) {
             throw new Error('No Lean server running to restart.');
           }
-          await Promise.all(
-            targets.map(async (session) => {
-              await session.dispose();
-              await session.ensureReady().catch(() => undefined);
-            }),
-          );
+          await Promise.all(roots.map((root) => restartSession(root)));
           return;
         }
         case 'stop_server': {

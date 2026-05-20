@@ -13,7 +13,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { debug, info, warn } from '@logger/logUtils';
 import {
@@ -71,6 +71,9 @@ export class LeanSession {
 
   /** Start (or reuse) the server and complete `initialize`. Idempotent. */
   ensureReady(): Promise<void> {
+    if (this.disposed) {
+      throw new Error('Lean session has been disposed.');
+    }
     if (this.readyPromise) return this.readyPromise;
     this.readyPromise = this.spawnAndInitialize();
     return this.readyPromise;
@@ -84,6 +87,7 @@ export class LeanSession {
     const rpc = this.rpc;
     this.child = undefined;
     this.rpc = undefined;
+    this.readyPromise = undefined;
     this.openFiles.clear();
     unregisterLeanServer(this.id);
     if (!rpc || !child) return;
@@ -283,13 +287,15 @@ export class LeanSession {
     if (!this.rpc) {
       throw new Error('Lean session is not running');
     }
-    const existing = this.openFiles.get(absolute);
+    let existing = this.openFiles.get(absolute);
     if (existing && !options.forceReload) return;
     const text = await readFile(absolute, 'utf8').catch((error) => {
       throw new Error(
         `Failed to read ${absolute}: ${error instanceof Error ? error.message : String(error)}`,
       );
     });
+    existing = this.openFiles.get(absolute);
+    if (existing && !options.forceReload) return;
     const version = (existing?.version ?? 0) + 1;
     if (existing) {
       this.rpc.notify('textDocument/didChange', {
@@ -300,6 +306,12 @@ export class LeanSession {
       existing.diagnostics = [];
       existing.lastDiagnosticsAt = 0;
     } else {
+      this.openFiles.set(absolute, {
+        version,
+        diagnostics: [],
+        lastDiagnosticsAt: 0,
+        diagnosticsWaiters: [],
+      });
       this.rpc.notify('textDocument/didOpen', {
         textDocument: {
           uri: pathToUri(absolute),
@@ -307,12 +319,6 @@ export class LeanSession {
           version,
           text,
         },
-      });
-      this.openFiles.set(absolute, {
-        version,
-        diagnostics: [],
-        lastDiagnosticsAt: 0,
-        diagnosticsWaiters: [],
       });
     }
   }
@@ -344,7 +350,7 @@ export class LeanSession {
 
   private handlePublishDiagnostics(params: PublishDiagnosticsParams): void {
     const uri = params.uri;
-    const absolute = uriToPath(uri);
+    const absolute = fileUriToPath(uri);
     if (!absolute) return;
     const state = this.openFiles.get(absolute);
     if (!state) return;
@@ -383,10 +389,10 @@ function pathToUri(absolute: string): string {
   return pathToFileURL(absolute).toString();
 }
 
-function uriToPath(uri: string): string | null {
+export function fileUriToPath(uri: string): string | null {
   if (!uri.startsWith('file://')) return null;
   try {
-    return new URL(uri).pathname.replace(/^\/([A-Za-z]:)/, '$1');
+    return fileURLToPath(uri);
   } catch {
     return null;
   }

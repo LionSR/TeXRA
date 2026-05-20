@@ -11,16 +11,16 @@ import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 
 const LAKE_RUN_TIMEOUT_MS = 10 * 60 * 1000;
-const LAKE_MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
+const LAKE_MAX_OUTPUT_CHARS = 4 * 1024 * 1024;
 
 const workspaceMutexes = new Map<string, Promise<unknown>>();
 
 function appendCapped(existing: string, chunk: string): string {
   const combined = existing + chunk;
-  if (combined.length <= LAKE_MAX_OUTPUT_BYTES) return combined;
+  if (combined.length <= LAKE_MAX_OUTPUT_CHARS) return combined;
   return (
     '…[output truncated]…\n' +
-    combined.slice(combined.length - LAKE_MAX_OUTPUT_BYTES)
+    combined.slice(combined.length - LAKE_MAX_OUTPUT_CHARS)
   );
 }
 

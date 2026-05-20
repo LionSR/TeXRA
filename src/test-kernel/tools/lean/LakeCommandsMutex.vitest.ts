@@ -6,6 +6,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { runLakeCommand } from '@tools/lean/direct/lakeCommands';
@@ -39,28 +40,30 @@ afterEach(() => {
 
 describe('runLakeCommand mutex', () => {
   it('serializes calls against the same workspace when `serialize: true`', async () => {
+    const startedAt = performance.now();
     const [first, second] = await Promise.all([
       runLakeCommand({
         workspaceRoot: workspaceA,
         lakeCommand: NODE,
         args: nodeSleep(60, 'a'),
         serialize: true,
-      }),
+      }).then((result) => ({ result, finishedAt: performance.now() })),
       runLakeCommand({
         workspaceRoot: workspaceA,
         lakeCommand: NODE,
         args: nodeSleep(10, 'b'),
         serialize: true,
-      }),
+      }).then((result) => ({ result, finishedAt: performance.now() })),
     ]);
-    expect(first.exitCode).toBe(0);
-    expect(second.exitCode).toBe(0);
-    expect(first.stdout).toContain('a:start');
-    expect(first.stdout).toContain('a:end');
-    expect(second.stdout).toContain('b:start');
-    expect(second.stdout).toContain('b:end');
-    expect(second.stdout.indexOf('b:end')).toBeGreaterThan(
-      second.stdout.indexOf('b:start'),
+    expect(first.result.exitCode).toBe(0);
+    expect(second.result.exitCode).toBe(0);
+    expect(first.result.stdout).toContain('a:start');
+    expect(first.result.stdout).toContain('a:end');
+    expect(second.result.stdout).toContain('b:start');
+    expect(second.result.stdout).toContain('b:end');
+    expect(second.finishedAt).toBeGreaterThanOrEqual(first.finishedAt);
+    expect(second.finishedAt - startedAt).toBeGreaterThanOrEqual(
+      first.finishedAt - startedAt,
     );
   });
 

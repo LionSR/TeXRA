@@ -1,9 +1,11 @@
 // Local imports - platform
 import { JsonStore } from '@platform/defaults/jsonStore';
+import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { createMemoryStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
+import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { initPlatform, tryPlatform } from '@platform/platform';
 
 // Local imports - agent index
@@ -37,15 +39,11 @@ import type { LifecycleHost } from '@platform/interfaces/lifecycle';
 import type { LogBackend } from '@platform/interfaces/log';
 import type { CliContext } from './cliContext';
 
-const noopLifecycle: LifecycleHost = {
-  onShutdown: () => ({ dispose: () => {} }),
-  async runShutdown() {},
-};
-
 let bootstrappedResourcesPath: string | undefined;
 let serverSideKeysInitialized = false;
 let cliWorkspaceCwd = '';
 let quietPlatformLogs = false;
+let shutdownHandlersInstalled = false;
 
 function logAt(
   level: 'debug' | 'info' | 'warn',
@@ -66,6 +64,36 @@ const cliPlatformLog: LogBackend = {
     writeTextStderr(`[error] [${channel}] ${message}`);
   },
 };
+
+function createCliLifecycleHost(): LifecycleHost {
+  return createLifecycleHost({
+    onError: (phase, error) => {
+      logAt(
+        'warn',
+        'cli.lifecycle',
+        `${phase} handler failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    },
+  });
+}
+
+function installCliShutdownSignalHandlers(lifecycle: LifecycleHost): void {
+  if (shutdownHandlersInstalled) return;
+  shutdownHandlersInstalled = true;
+
+  const install = (signal: NodeJS.Signals) => {
+    const handler = () => {
+      process.off(signal, handler);
+      void lifecycle.runShutdown().finally(() => {
+        process.kill(process.pid, signal);
+      });
+    };
+    process.once(signal, handler);
+  };
+
+  install('SIGINT');
+  install('SIGTERM');
+}
 
 export async function setCliHelperModel(
   model: string | undefined,
@@ -90,6 +118,7 @@ export async function initCliPlatform(
     const configStore = await JsonStore.open(
       workspaceCliConfigPath(cliWorkspaceCwd),
     );
+    const lifecycle = createCliLifecycleHost();
     initPlatform({
       config: new CliConfigProvider(configStore),
       globalState: createMemoryStore(),
@@ -101,14 +130,17 @@ export async function initCliPlatform(
         workspacePath: () => cliWorkspaceCwd,
       }),
       secrets: getCliSecrets(),
-      lifecycle: noopLifecycle,
+      lifecycle,
       agentResume: { tryResumeStream: async () => false },
     });
+    installCliShutdownSignalHandlers(lifecycle);
     // Direct LSP adapter for Lean tools — spawns `lake env lean --server`
     // lazily, one server per Lake project root. Errors are surfaced via the
     // Tools dashboard if `lake` isn't on PATH; nothing happens at startup
     // when no Lean tools are invoked.
-    setLeanVscodeServices(createDirectLspLeanAdapter());
+    const leanAdapter = createDirectLspLeanAdapter();
+    setLeanVscodeServices(leanAdapter);
+    lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => leanAdapter.dispose());
   }
 
   if (!serverSideKeysInitialized) {
