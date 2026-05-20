@@ -10,6 +10,8 @@
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useState } from 'react';
 
+export const SELECT_LABEL_MAX_COLS = 24;
+
 export interface SelectItem<T> {
   readonly value: T;
   readonly label: string;
@@ -91,15 +93,26 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
         const tick = active ? '✓' : ' ';
         const numeric = i < 9 ? `${i + 1}.` : '  ';
         return (
-          <Box key={String(item.value)}>
-            <Text color={focused ? 'cyan' : undefined}>
-              {pointer} {tick} {numeric}{' '}
-            </Text>
-            <Text color={focused ? 'cyan' : undefined} dimColor={item.disabled}>
-              {item.label}
-            </Text>
+          <Box key={String(item.value)} minWidth={0}>
+            <Box flexShrink={0}>
+              <Text color={focused ? 'cyan' : undefined}>
+                {pointer} {tick} {numeric}{' '}
+              </Text>
+            </Box>
+            <Box flexShrink={0} maxWidth={SELECT_LABEL_MAX_COLS}>
+              <Text
+                color={focused ? 'cyan' : undefined}
+                dimColor={item.disabled}
+                wrap="truncate-end"
+              >
+                {item.label}
+              </Text>
+            </Box>
             {item.description ? (
-              <Text dimColor>{` — ${item.description}`}</Text>
+              <Text
+                dimColor
+                wrap="truncate-end"
+              >{` — ${item.description}`}</Text>
             ) : null}
           </Box>
         );

@@ -25,7 +25,10 @@ import {
   nextFocusBack,
   nextFocusForward,
 } from '../../../packages/cli/src/chat/tui/state/focusCycle';
-import { syncStreamLog } from '../../../packages/cli/src/chat/tui/state/subscribeStreamLog';
+import {
+  stripOrchestratorFollowup,
+  syncStreamLog,
+} from '../../../packages/cli/src/chat/tui/state/subscribeStreamLog';
 import { wrapRuntimeHost } from '../../../packages/cli/src/chat/tui/state/subscribeRuntimeHost';
 import {
   COMPLETED_PROCESS_TAIL_LINES,
@@ -165,6 +168,17 @@ describe('CLI TUI row allocation', () => {
 });
 
 describe('CLI transcript state', () => {
+  it('renders orchestrator follow-ups without protocol tags', () => {
+    expect(
+      stripOrchestratorFollowup(
+        '<orchestrator-followup>\nPlease inspect the file.\n</orchestrator-followup>',
+      ),
+    ).toBe('Please inspect the file.');
+    expect(stripOrchestratorFollowup('ordinary user text')).toBe(
+      'ordinary user text',
+    );
+  });
+
   it('mirrors error log entries into the transcript', () => {
     const previousStore = AgentLogger.getStreamLogStore();
     const store = new StreamLogStore();

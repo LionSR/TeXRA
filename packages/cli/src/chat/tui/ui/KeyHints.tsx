@@ -36,12 +36,14 @@ export function KeyHints(props: KeyHintsProps): React.JSX.Element {
       : [...props.hints, ...DEFAULT_TAIL];
   return (
     <Box>
-      {all.map((hint, i) => (
-        <Text key={i} dimColor>
-          {i > 0 ? SEP : ''}
-          <Text bold>{hint.key}</Text> {hint.action}
-        </Text>
-      ))}
+      <Text dimColor wrap="truncate-end">
+        {all.map((hint, index) => (
+          <Text key={`${hint.key}-${hint.action}-${index}`}>
+            {index > 0 ? SEP : ''}
+            <Text bold>{hint.key}</Text> {hint.action}
+          </Text>
+        ))}
+      </Text>
     </Box>
   );
 }

@@ -20,6 +20,7 @@ describe('CLI StatusBar display model', () => {
       activeSubagents: 0,
       activeProcesses: 0,
       approvalDepth: 0,
+      subagentControlsAvailable: false,
       model: 'deepseekT',
       apiMode: 'api',
     });
@@ -32,6 +33,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.right).toBeUndefined();
     expect(display.bindings).toContain('[/api]api');
     expect(display.bindings).toContain('[/model]models');
+    expect(display.bindings).not.toContain('[Alt-s]subagents');
     expect(display.left.map(statusBarSegmentText)).not.toContain('deepseekT');
   });
 
@@ -46,6 +48,7 @@ describe('CLI StatusBar display model', () => {
       activeSubagents: 2,
       activeProcesses: 1,
       approvalDepth: 3,
+      subagentControlsAvailable: true,
       model: 'deepseekT',
       apiMode: 'relay',
     });
@@ -61,6 +64,7 @@ describe('CLI StatusBar display model', () => {
       '3 approvals',
     ]);
     expect(display.right).toBe('queued: 2');
+    expect(display.bindings).toContain('[Alt-s]subagents');
   });
 
   it('preserves YOLO and BYPASS badges without agent/model text', () => {
@@ -74,6 +78,7 @@ describe('CLI StatusBar display model', () => {
       activeSubagents: 0,
       activeProcesses: 0,
       approvalDepth: 0,
+      subagentControlsAvailable: false,
       model: 'deepseekT',
       apiMode: 'api',
     });
