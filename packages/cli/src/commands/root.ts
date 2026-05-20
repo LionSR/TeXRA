@@ -4,7 +4,12 @@ import * as path from 'node:path';
 import { defineCommand, runCommand, showUsage, type CommandDef } from 'citty';
 import { glob, hasMagic } from 'glob';
 
-import { getAgent, getVisibleAgents, loadAgents } from '@agent/index';
+import {
+  getAgent,
+  getVisibleAgents,
+  loadAgents,
+  type AgentEntry,
+} from '@agent/index';
 import { getExecutionStore, writeTerminalStatus } from '@agent/storage';
 import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
 import {
@@ -859,6 +864,12 @@ type CliRunResult = ExecuteAgentResult & {
 };
 type CliWorkflowRunResult = Extract<CliRunResult, { category: 'workflow' }>;
 
+interface WorkflowOutputResolutionOptions {
+  readonly expectedOutputFiles?: readonly string[];
+  readonly runDirectory?: string;
+  readonly terminalStatus?: ExecutionStatus;
+}
+
 interface WorkflowRunInit {
   readonly agent: string;
   readonly inputFiles: string[];
@@ -955,16 +966,36 @@ function outputCopyRelativePath(output: OutputFileSummary) {
   return getSafeDocumentRelativePath(withoutRoundDir.join('/'));
 }
 
+function expectedOutputCopyRelativePath(outputFile: string): string {
+  return getSafeDocumentRelativePath(outputFile);
+}
+
+function expectedOutputFilesForOutputDir(
+  agent: AgentEntry | undefined,
+  inputFiles: readonly string[],
+): readonly string[] {
+  const defaultOutputFiles = (agent?.defaultOutputFiles ?? []).filter(Boolean);
+  return defaultOutputFiles.length > 0 ? defaultOutputFiles : inputFiles;
+}
+
+function shouldUseOutputForCopy(
+  existing: OutputFileSummary | undefined,
+  candidate: OutputFileSummary,
+): boolean {
+  return existing == null || candidate.round > existing.round;
+}
+
 export async function resolveWorkflowOutput(
   outputFile: string | undefined,
   outputDir: string | undefined,
   result: ExecuteAgentResult,
   context: CliContext,
-  terminalStatus = cliTerminalStatus(result),
+  options: WorkflowOutputResolutionOptions = {},
 ): Promise<{
   copiedOutput: string | undefined;
   displayResult: CliRunResult;
 }> {
+  const terminalStatus = options.terminalStatus ?? cliTerminalStatus(result);
   if (
     result.category === AgentCategory.Workflow &&
     result.outputs.length === 0 &&
@@ -995,19 +1026,39 @@ export async function resolveWorkflowOutput(
     ...result,
     terminalStatus,
     ...(result.category === AgentCategory.Workflow
-      ? { runDirectory: getRunDir(result.executionId) }
+      ? { runDirectory: options.runDirectory ?? getRunDir(result.executionId) }
       : {}),
   };
   if (outputDir && result.category === AgentCategory.Workflow) {
     const targetRoot = path.isAbsolute(outputDir)
       ? outputDir
       : path.join(context.cwd, outputDir);
-    const copiedOutputs: string[] = [];
+    const outputsByRelativePath = new Map<string, OutputFileSummary>();
     for (const output of result.outputs) {
-      const targetPath = path.join(targetRoot, outputCopyRelativePath(output));
+      const relativePath = outputCopyRelativePath(output);
+      if (
+        shouldUseOutputForCopy(outputsByRelativePath.get(relativePath), output)
+      ) {
+        outputsByRelativePath.set(relativePath, output);
+      }
+    }
+
+    const copiedOutputs: string[] = [];
+    for (const [relativePath, output] of outputsByRelativePath) {
+      const targetPath = path.join(targetRoot, relativePath);
       await fs.mkdir(path.dirname(targetPath), { recursive: true });
       await fs.copyFile(output.absolutePath, targetPath);
       copiedOutputs.push(targetPath);
+    }
+
+    const expectedOutputFiles = options.expectedOutputFiles ?? [];
+    const missing = expectedOutputFiles
+      .map(expectedOutputCopyRelativePath)
+      .filter((expected) => !outputsByRelativePath.has(expected));
+    if (missing.length > 0) {
+      throw new Error(
+        `Workflow ${terminalStatus} without expected output${missing.length === 1 ? '' : 's'}: ${missing.join(', ')}; copied ${copiedOutputs.length} of ${expectedOutputFiles.length} expected output${expectedOutputFiles.length === 1 ? '' : 's'} to ${targetRoot}.`,
+      );
     }
 
     const displayResult: CliRunResult = {
@@ -1115,11 +1166,10 @@ async function runWorkflowAgent(
   await initCliPlatform(runContext);
   installCliApprovalHandlers(runContext);
   await loadAgents({ includeRemote: false });
-  if (
-    !getAgent(init.agent) ||
-    (await shouldHonorRemoteAgentPriority(init.agent))
-  ) {
+  let agent = getAgent(init.agent);
+  if (!agent || (await shouldHonorRemoteAgentPriority(init.agent))) {
     await loadAgents();
+    agent = getAgent(init.agent);
   }
 
   const modelOutputFile =
@@ -1165,9 +1215,18 @@ async function runWorkflowAgent(
       init.outputDir,
       result,
       runContext,
-      terminalStatus,
+      {
+        expectedOutputFiles: init.outputDir
+          ? expectedOutputFilesForOutputDir(agent, inputFiles)
+          : undefined,
+        terminalStatus,
+      },
     ));
   } catch (error) {
+    if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
+      writeTextStderr(toErrorMessage(error));
+      return CliExitCode.Interrupted;
+    }
     await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
     writeTextStderr(toErrorMessage(error));
     return CliExitCode.AgentError;
