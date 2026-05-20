@@ -11,6 +11,10 @@ function fishCompleteLine(parts: readonly string[]): string {
   return `complete -c texra ${parts.join(' ')}`;
 }
 
+function fishDescription(description: string): string[] {
+  return description ? [`-d '${fishEscape(description)}'`] : [];
+}
+
 function fishCondition(path: readonly string[]): string {
   if (path.length === 0) return "-n '__fish_use_subcommand'";
   const command = path.at(-1) ?? '';
@@ -20,11 +24,21 @@ function fishCondition(path: readonly string[]): string {
 export function fishCompletion(commands: readonly CompletionCommand[]): string {
   const lines = ['# fish completion for texra'];
   const root = commands.find((command) => command.path.length === 0);
+  const commandDescriptions = new Map(
+    commands.map((command) => [command.path.join(' '), command.description]),
+  );
+  const subcommandDescription = (
+    parentPath: readonly string[],
+    subcommand: string,
+  ): string =>
+    commandDescriptions.get([...parentPath, subcommand].join(' ')) ?? '';
+
   for (const subcommand of root?.subcommands ?? []) {
     lines.push(
       fishCompleteLine([
         "-n '__fish_use_subcommand'",
         `-a '${fishEscape(subcommand)}'`,
+        ...fishDescription(subcommandDescription([], subcommand)),
       ]),
     );
   }
@@ -37,12 +51,17 @@ export function fishCompletion(commands: readonly CompletionCommand[]): string {
       if (flag.values.length > 0) {
         base.push(`-a '${fishEscape(flag.values.join(' '))}'`);
       }
+      base.push(...fishDescription(flag.description));
       lines.push(fishCompleteLine(base));
     }
     for (const subcommand of command.subcommands) {
       if (command.path.length === 0) continue;
       lines.push(
-        fishCompleteLine([condition, `-a '${fishEscape(subcommand)}'`]),
+        fishCompleteLine([
+          condition,
+          `-a '${fishEscape(subcommand)}'`,
+          ...fishDescription(subcommandDescription(command.path, subcommand)),
+        ]),
       );
     }
   }
