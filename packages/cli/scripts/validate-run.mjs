@@ -207,6 +207,9 @@ try {
   validateRunCommand();
   console.log('CLI run validation passed');
 } finally {
-  const rebuildResult = run('pnpm', ['run', 'build'], { cwd: cliRoot });
+  const rebuildResult = run('pnpm', ['run', 'build'], {
+    cwd: cliRoot,
+    env: { TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '' },
+  });
   assertSuccess(rebuildResult, 'pnpm run build after validation');
 }
