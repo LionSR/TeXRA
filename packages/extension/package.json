@@ -1614,7 +1614,7 @@
     "vscode-languageserver-protocol": "^3.17.5",
     "webpack": "^5.106.1",
     "webpack-cli": "^7.0.2",
-    "zod-v3-to-v4": "^1.21.1"
+    "zod-v3-to-v4": "^1.21.2"
   },
   "packageManager": "pnpm@11.1.1",
   "private": false,
