@@ -290,15 +290,23 @@ export const OdysseyStore = {
     );
   },
 
-  /** Replace the objective. Used by the user-side edit-objective flow. */
+  /**
+   * Replace the objective (and optionally the originating plan).
+   * Used by the user-side edit-objective flow and by the Approve & Run
+   * path when an odyssey is already in flight — re-targeting an active
+   * loop is preferable to silently leaving it pointed at a stale
+   * objective.
+   */
   async editObjective(
     streamId: StreamTabId,
     newObjective: string,
+    options?: { plan?: Plan },
   ): Promise<Odyssey> {
     const trimmed = requireNonEmpty(newObjective, 'objective');
     const updated = await update(streamId, (odyssey) => ({
       ...odyssey,
       objective: trimmed,
+      ...(options && 'plan' in options ? { plan: options.plan ?? null } : {}),
       history: [
         ...odyssey.history,
         { at: nowIso(), kind: 'objective_edited', detail: trimmed },

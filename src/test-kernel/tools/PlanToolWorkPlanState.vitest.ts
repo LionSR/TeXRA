@@ -124,6 +124,70 @@ describe('PlanTool — update (plan approval)', () => {
     }
   });
 
+  it('approve_and_odyssey retargets an in-flight odyssey instead of leaving the previous objective active', async () => {
+    const streamId = 'stream:plan-retarget' as StreamTabId;
+    await installPlatform(true);
+
+    const stalePlan: Plan = {
+      summary: 'Previous task summary',
+      steps: [
+        {
+          title: 'Old step',
+          description: 'A previous unit of work.',
+          status: 'pending',
+          files: [],
+        },
+      ],
+    };
+    await OdysseyStore.start(streamId, 'Stale objective from prior plan', {
+      plan: stalePlan,
+    });
+
+    try {
+      const { events, host } = createRecordingHost();
+      const coordinator = new PlanApprovalCoordinator(host);
+      const workPlanState = new WorkPlanState();
+      const tool = new PlanTool();
+
+      const resultPromise = withToolEnvironment(
+        {
+          run: {
+            runtimeHost: host,
+            streamId,
+            coordinators: { plan: coordinator } as unknown as RunCoordinators,
+          },
+          call: {
+            tracker: new FileInteractionState(),
+            workPlanState,
+          },
+        },
+        () => tool.call({ command: 'update', plan }),
+      );
+
+      const approval = events.find(
+        (entry) => entry.event === 'showPlanApproval',
+      );
+      coordinator.resolveRequest(
+        (approval!.payload as { approvalId: string }).approvalId,
+        { action: 'approve_and_odyssey' },
+      );
+
+      const result = await resultPromise;
+      expect(result.isError).not.toBe(true);
+
+      const odyssey = OdysseyStore.getForStream(streamId);
+      expect(odyssey).not.toBeNull();
+      expect(odyssey!.status).toBe('active');
+      // Retargeted to the new plan, NOT the stale objective.
+      expect(odyssey!.objective).not.toContain('Stale objective');
+      expect(odyssey!.objective).toContain(plan.summary);
+      expect(odyssey!.objective).toContain(plan.steps[0]!.title);
+      expect(odyssey!.plan).toEqual(plan);
+    } finally {
+      await OdysseyStore.forget(streamId);
+    }
+  });
+
   it('clears a timed-out plan from displayed work-plan state', async () => {
     const { events, host } = createRecordingHost();
     const coordinator = new PlanApprovalCoordinator(host);

@@ -35,6 +35,7 @@ import {
   ODYSSEY_FEATURE_FLAG_KEY,
   OdysseyStore,
   formatOdysseyTime,
+  isOdysseyInFlight,
   odysseyElapsedMs,
   type Odyssey,
 } from '@tools/odyssey';
@@ -351,10 +352,67 @@ Best practices:
         'Approve & Run Autonomously requested but odyssey feature flag is off; ' +
           'proceeding as a plain approval.',
       );
-      return this.buildApprovedResult({ autoApproved: false });
+      return {
+        summary:
+          'Plan approved — autonomous run skipped (odyssey feature flag is off)',
+        output:
+          `The user approved this plan via "Approve & Run", but the odyssey ` +
+          `feature flag is currently off, so the autonomous continuation loop ` +
+          `was not started. Proceed with the plan steps turn-by-turn; update ` +
+          `step statuses as you work through them.`,
+      };
     }
 
     const objective = buildOdysseyObjectiveFromPlan(plan);
+
+    // If an odyssey is already in flight on this stream, retarget it at
+    // the newly approved plan instead of silently leaving the loop driving
+    // the stale objective. Resuming a paused odyssey keeps the continuation
+    // budget so the user-approved cap isn't bypassed by re-targeting.
+    const existing = OdysseyStore.getForStream(streamId);
+    if (existing && isOdysseyInFlight(existing)) {
+      try {
+        const retargeted = await OdysseyStore.editObjective(
+          streamId,
+          objective,
+          { plan },
+        );
+        if (retargeted.status === 'paused') {
+          await OdysseyStore.setStatus(streamId, 'active', 'retargeted to new plan');
+        }
+        return {
+          summary: `Plan approved — odyssey ${retargeted.odysseyId} retargeted`,
+          output:
+            `The user approved a new plan while odyssey ${retargeted.odysseyId} ` +
+            `was already in flight. The odyssey objective has been replaced ` +
+            `with the new plan's stopping condition; resume working against ` +
+            `it.\n\n` +
+            `Discipline:\n` +
+            `- Work through the new plan steps and update their statuses with plan(command="update") as you progress.\n` +
+            `- Discard any progress that only served the previous objective.\n` +
+            `- Do not call plan(command="complete") until every step of the new plan is marked completed AND verified.\n` +
+            `- If you genuinely need user input to proceed, call plan(command="pause") with a reason.\n\n` +
+            `Objective:\n${objective}`,
+        };
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        logger.warn(
+          `Failed to retarget in-flight odyssey for approved plan; falling back to plain approval. ${reason}`,
+        );
+        return {
+          summary:
+            'Plan approved — odyssey could not be retargeted, proceeding without it',
+          output:
+            `The user approved this plan and requested autonomous execution, ` +
+            `but the in-flight odyssey could not be retargeted: ${reason}\n\n` +
+            `Proceed with the plan steps turn-by-turn. The pre-existing ` +
+            `odyssey is still active and will keep injecting continuations ` +
+            `against its previous objective until the user pauses or abandons it.`,
+          isError: true,
+        };
+      }
+    }
+
     try {
       const odyssey = await OdysseyStore.start(streamId, objective, { plan });
       return {
