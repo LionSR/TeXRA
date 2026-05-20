@@ -97,6 +97,16 @@ interface TuiSession {
   stopRequested: boolean;
 }
 
+export function chatTuiCanInterruptActiveRun(session: {
+  readonly streamId: StreamTabId | undefined;
+  readonly runPromise: Promise<unknown> | undefined;
+  readonly runCompleted: boolean;
+}): boolean {
+  return Boolean(
+    session.streamId && session.runPromise && !session.runCompleted,
+  );
+}
+
 interface SlashCommandContext {
   readonly session: TuiSession;
   readonly initialAgent: string;
@@ -752,9 +762,7 @@ export async function runChat(
   const ink = render(
     <App
       onSubmit={handleSubmit}
-      canInterruptActiveRun={() =>
-        Boolean(session.runPromise && !session.runCompleted)
-      }
+      canInterruptActiveRun={() => chatTuiCanInterruptActiveRun(session)}
       onInterruptActive={interruptActive}
       onKillExecution={(executionId) => {
         clearApprovals();

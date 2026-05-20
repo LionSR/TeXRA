@@ -46,6 +46,7 @@ import {
   splitTranscriptEntries,
 } from '../../../packages/cli/src/chat/tui/panes/ConversationPane';
 import { renderAnsiMarkdown } from '../../../packages/cli/src/chat/tui/render/ansiMarkdown';
+import { chatTuiCanInterruptActiveRun } from '../../../packages/cli/src/chat/tui/runChatTui';
 import {
   appendAssistantTranscriptIfMissing,
   appendLocalAssistantTranscript,
@@ -235,6 +236,39 @@ describe('CLI TUI row allocation', () => {
         slashPaletteOpen: true,
       }),
     ).toBe(false);
+  });
+
+  it('only reports a chat run interruptible after stream resolution', () => {
+    const runPromise = Promise.resolve();
+
+    expect(
+      chatTuiCanInterruptActiveRun({
+        runCompleted: false,
+        runPromise,
+        streamId: undefined,
+      }),
+    ).toBe(false);
+    expect(
+      chatTuiCanInterruptActiveRun({
+        runCompleted: false,
+        runPromise: undefined,
+        streamId: root,
+      }),
+    ).toBe(false);
+    expect(
+      chatTuiCanInterruptActiveRun({
+        runCompleted: true,
+        runPromise,
+        streamId: root,
+      }),
+    ).toBe(false);
+    expect(
+      chatTuiCanInterruptActiveRun({
+        runCompleted: false,
+        runPromise,
+        streamId: root,
+      }),
+    ).toBe(true);
   });
 });
 
