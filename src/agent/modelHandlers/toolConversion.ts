@@ -25,6 +25,8 @@ import type {
 const CHANNEL = 'toolConversion';
 logger.initialize(CHANNEL);
 
+type JSONSchemaObject = Record<string, unknown>;
+
 /**
  * Both OpenAI and Gemini reject function parameter schemas whose top-level
  * node is `oneOf`/`anyOf`/`allOf` (HTTP 400:
@@ -40,38 +42,38 @@ logger.initialize(CHANNEL);
  * what the model actually selects between, so per-branch shape divergence
  * beyond that is rare in practice.
  */
-function flattenTopLevelUnion(
-  schema: Record<string, unknown>,
-): Record<string, unknown> {
+function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
   const variantKey = (['oneOf', 'anyOf', 'allOf'] as const).find(
     (k) => Array.isArray(schema[k]) && schema.type !== 'object',
   );
   if (!variantKey) return schema;
 
   const rawVariants = schema[variantKey] as unknown[];
-  const variants: Record<string, unknown>[] = [];
+  const variants: JSONSchemaObject[] = [];
   for (const v of rawVariants) {
     if (typeof v !== 'object' || v === null) return schema;
-    const rec = v as Record<string, unknown>;
+    const rec = v as JSONSchemaObject;
     if (rec.type !== 'object') return schema;
     variants.push(rec);
   }
   if (variants.length === 0) return schema;
 
+  const variantProperties: JSONSchemaObject[] = variants.map(
+    (v) => (v.properties as JSONSchemaObject | undefined) ?? {},
+  );
+
   const allPropNames = new Set<string>();
-  for (const v of variants) {
-    const props = (v.properties as Record<string, unknown> | undefined) ?? {};
+  for (const props of variantProperties) {
     for (const name of Object.keys(props)) allPropNames.add(name);
   }
 
-  const mergedProperties: Record<string, unknown> = {};
+  const mergedProperties: JSONSchemaObject = {};
   for (const name of allPropNames) {
-    const branchSchemas: Record<string, unknown>[] = [];
-    for (const v of variants) {
-      const props = (v.properties as Record<string, unknown> | undefined) ?? {};
+    const branchSchemas: JSONSchemaObject[] = [];
+    for (const props of variantProperties) {
       const s = props[name];
       if (s && typeof s === 'object') {
-        branchSchemas.push(s as Record<string, unknown>);
+        branchSchemas.push(s as JSONSchemaObject);
       }
     }
     if (branchSchemas.length === 1) {
@@ -86,7 +88,7 @@ function flattenTopLevelUnion(
       const descriptions = branchSchemas
         .map((s) => s.description)
         .filter((d): d is string => typeof d === 'string');
-      const merged: Record<string, unknown> = {
+      const merged: JSONSchemaObject = {
         type: 'string',
         enum: constValues,
       };
@@ -106,7 +108,7 @@ function flattenTopLevelUnion(
     requiredSets.every((s) => s.has(p)),
   );
 
-  const flat: Record<string, unknown> = {
+  const flat: JSONSchemaObject = {
     type: 'object',
     properties: mergedProperties,
   };
@@ -122,9 +124,7 @@ function flattenTopLevelUnion(
  * parameter schemas. Zod v4's `toJSONSchema` includes this dialect URI by
  * default. Strip it for any provider.
  */
-function stripDollarSchema(
-  schema: Record<string, unknown>,
-): Record<string, unknown> {
+function stripDollarSchema(schema: JSONSchemaObject): JSONSchemaObject {
   if (!('$schema' in schema)) return schema;
   const { $schema: _unused, ...rest } = schema;
   return rest;
@@ -138,18 +138,16 @@ function stripDollarSchema(
  * Anthropic also gets the cleaned schema; the cleanup is a no-op for normal
  * `type: "object"` schemas.
  */
-function convertToolSchema(
-  def: ToolDefinition,
-): Record<string, unknown> | null {
-  let schema: Record<string, unknown> | null;
+function convertToolSchema(def: ToolDefinition): JSONSchemaObject | null {
+  let schema: JSONSchemaObject | null;
   if (def.zodSchema) {
     schema = toJSONSchema(def.zodSchema, {
       target: 'draft-2020-12',
       unrepresentable: 'any',
       io: 'input',
-    }) as Record<string, unknown>;
+    }) as JSONSchemaObject;
   } else {
-    schema = (def.parameters ?? null) as Record<string, unknown> | null;
+    schema = (def.parameters ?? null) as JSONSchemaObject | null;
   }
   if (!schema) return null;
   return stripDollarSchema(flattenTopLevelUnion(schema));
