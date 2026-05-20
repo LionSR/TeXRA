@@ -19,6 +19,7 @@ import {
 } from '../../../packages/cli/src/chat/tui/state/cliState';
 import {
   allocateMiddleRows,
+  allocateSidePanelRows,
   appFocusShortcutsActive,
 } from '../../../packages/cli/src/chat/tui/App';
 import {
@@ -140,6 +141,32 @@ describe('CLI TUI row allocation', () => {
 
     expect(layout.transcriptRows).toBe(0);
     expect(layout.foregroundRows).toBe(0);
+  });
+
+  it('bounds side panels to the available middle row budget', () => {
+    expect(
+      allocateSidePanelRows({
+        hasSubagentPanel: true,
+        hasTodosPlanPanel: true,
+        rows: 13,
+      }),
+    ).toEqual({ subagentRows: 6, todosPlanRows: 7 });
+
+    expect(
+      allocateSidePanelRows({
+        hasSubagentPanel: false,
+        hasTodosPlanPanel: true,
+        rows: 13,
+      }),
+    ).toEqual({ subagentRows: 0, todosPlanRows: 13 });
+
+    expect(
+      allocateSidePanelRows({
+        hasSubagentPanel: true,
+        hasTodosPlanPanel: true,
+        rows: 1,
+      }),
+    ).toEqual({ subagentRows: 1, todosPlanRows: 0 });
   });
 
   it('lets input overlays own focus shortcuts', () => {

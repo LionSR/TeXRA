@@ -62,16 +62,29 @@ function Row({ child, index, tail }: RowProps): React.JSX.Element {
   );
 }
 
-export function SubagentList(): React.JSX.Element | null {
+export interface SubagentListProps {
+  readonly maxRows?: number;
+}
+
+export function SubagentList(
+  props: SubagentListProps = {},
+): React.JSX.Element | null {
   const activeStreamId = useSignal(cliState.activeStreamId);
   const streams = useSignal(cliState.streams);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   if (!slice) return null;
   const { activeSubagents, activeProcesses, processOutput } = slice;
   if (activeSubagents.length === 0 && activeProcesses.length === 0) return null;
+  if (props.maxRows !== undefined && props.maxRows <= 0) return null;
 
   return (
-    <Box flexDirection="column" paddingX={1} marginBottom={1}>
+    <Box
+      flexDirection="column"
+      height={props.maxRows}
+      overflowY={props.maxRows === undefined ? undefined : 'hidden'}
+      paddingX={1}
+      marginBottom={props.maxRows === undefined ? 1 : 0}
+    >
       {activeSubagents.length > 0 ? (
         <Box flexDirection="column">
           <Text bold dimColor>

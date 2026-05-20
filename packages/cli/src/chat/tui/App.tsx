@@ -95,6 +95,39 @@ export function allocateMiddleRows({
   };
 }
 
+export function allocateSidePanelRows({
+  hasSubagentPanel,
+  hasTodosPlanPanel,
+  rows,
+}: {
+  readonly hasSubagentPanel: boolean;
+  readonly hasTodosPlanPanel: boolean;
+  readonly rows: number;
+}): {
+  readonly subagentRows: number;
+  readonly todosPlanRows: number;
+} {
+  const availableRows = Math.max(0, rows);
+  if (!hasSubagentPanel && !hasTodosPlanPanel) {
+    return { subagentRows: 0, todosPlanRows: 0 };
+  }
+  if (!hasTodosPlanPanel) {
+    return { subagentRows: availableRows, todosPlanRows: 0 };
+  }
+  if (!hasSubagentPanel) {
+    return { subagentRows: 0, todosPlanRows: availableRows };
+  }
+  if (availableRows === 0) {
+    return { subagentRows: 0, todosPlanRows: 0 };
+  }
+
+  const subagentRows = Math.max(1, Math.floor(availableRows / 2));
+  return {
+    subagentRows,
+    todosPlanRows: availableRows - subagentRows,
+  };
+}
+
 export function appFocusShortcutsActive({
   inputDisabled,
   reverseSearchOpen,
@@ -141,13 +174,16 @@ export function App(props: AppProps): React.JSX.Element {
     sessionMeta,
     activeSlice,
   );
-  const showSideColumn =
+  const hasSubagentPanel =
     !foregroundOpen &&
     activeSlice !== undefined &&
     (activeSlice.activeSubagents.length > 0 ||
-      activeSlice.activeProcesses.length > 0 ||
-      activeSlice.todos.length > 0 ||
-      activeSlice.plan !== null);
+      activeSlice.activeProcesses.length > 0);
+  const hasTodosPlanPanel =
+    !foregroundOpen &&
+    activeSlice !== undefined &&
+    (activeSlice.todos.length > 0 || activeSlice.plan !== null);
+  const showSideColumn = hasSubagentPanel || hasTodosPlanPanel;
   const transcriptWidth = Math.max(
     MIN_TRANSCRIPT_WIDTH,
     columns - (showSideColumn ? SIDE_COLUMN_WIDTH : 0),
@@ -157,6 +193,11 @@ export function App(props: AppProps): React.JSX.Element {
     reverseSearchOpen,
     rows,
     slashPaletteOpen,
+  });
+  const { subagentRows, todosPlanRows } = allocateSidePanelRows({
+    hasSubagentPanel,
+    hasTodosPlanPanel,
+    rows: transcriptRows,
   });
   const foregroundSurface = pending ? (
     <ApprovalModal pending={pending} availableRows={foregroundRows} />
@@ -236,9 +277,14 @@ export function App(props: AppProps): React.JSX.Element {
           ) : null}
         </Box>
         {showSideColumn ? (
-          <Box flexDirection="column" minWidth={SIDE_COLUMN_WIDTH}>
-            <SubagentList />
-            <TodosPlanPanel />
+          <Box
+            flexDirection="column"
+            minWidth={SIDE_COLUMN_WIDTH}
+            height={transcriptRows}
+            overflowY="hidden"
+          >
+            <SubagentList maxRows={subagentRows} />
+            <TodosPlanPanel maxRows={todosPlanRows} />
           </Box>
         ) : null}
       </Box>
