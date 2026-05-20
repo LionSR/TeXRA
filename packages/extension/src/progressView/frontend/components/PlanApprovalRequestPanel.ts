@@ -27,9 +27,20 @@ import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 export class PlanApprovalRequestPanel extends BaseFeedbackPanel {
   static override styles = [designTokens, commonViewStyles, requestPanelStyles];
 
+  protected override handleExtraKey(key: string): boolean {
+    if (key === 'r') {
+      const data = this.permission.data as PlanApprovalPermission;
+      if (data.odysseyEnabled) {
+        this.emitAction('approve_and_odyssey');
+        return true;
+      }
+    }
+    return false;
+  }
+
   override render(): TemplateResult {
     const data = this.permission.data as PlanApprovalPermission;
-    const { plan } = data;
+    const { plan, odysseyEnabled } = data;
 
     return html`
       <div
@@ -79,6 +90,16 @@ export class PlanApprovalRequestPanel extends BaseFeedbackPanel {
             action: 'approve',
             onClick: () => this.emitAction('approve'),
           })}
+          ${odysseyEnabled
+            ? renderLabeledActionButton({
+                icon: 'rocket',
+                text: 'Approve & Run',
+                title:
+                  'Approve and run this plan autonomously via odyssey mode (r)',
+                action: 'approve_and_odyssey',
+                onClick: () => this.emitAction('approve_and_odyssey'),
+              })
+            : nothing}
           ${this.renderRejectButton('Reject this plan (n)')}
         </div>
         ${this.renderFeedbackSection(

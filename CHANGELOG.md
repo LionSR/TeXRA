@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Features
+
+- **Approve a plan and let it run on its own** — when the plan tool asks you to confirm a plan, a new **Approve & Run** button (visible when Odyssey mode is enabled) approves the plan and immediately starts an Odyssey with the plan's steps as the objective, so the agent works through them autonomously instead of pausing after each turn.
+
+### Improvements
+
+- **One tool for plans and autonomous runs** — the separate `odyssey` tool is gone; the `plan` tool now owns the full lifecycle. Agents use `plan(command="update")` to draft the plan, `plan(command="pause")` to ask for user input mid-run, and `plan(command="complete")` to declare the work done once every step is verified. Starting an autonomous run is exclusively a user action via the **Approve & Run** button on the plan approval card.
+
 ### Bug Fixes
 
 - **CLI chat stays pinned during long output** — the chat header, input, and status rows now stay visible while long replies and tool output stream in the terminal.
