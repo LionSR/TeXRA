@@ -18,12 +18,14 @@ type ModelHandlerConstructor = new (
 
 type ProviderHandlerLoader = () => Promise<ModelHandlerConstructor>;
 
+const INCLUDE_INTERNAL_VALIDATION_MODEL_HANDLER =
+  process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL === '1';
 const INTERNAL_VALIDATION_MODEL_HANDLER_ENV =
-  'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER';
+  process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_ENV ?? '';
 const INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV =
-  'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG';
+  process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV ?? '';
 const INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT =
-  'texra-cli-run-validation';
+  process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT ?? '';
 
 // Record (not Map) so TypeScript enforces exhaustiveness over ModelProvider.
 // A new enum value in llm-zoo without an entry here will fail typecheck.
@@ -170,7 +172,10 @@ export async function createModelHandler(
 ): Promise<ModelHandler> {
   const config = withShortModelName(originalConfig);
 
-  if (await shouldUseInternalValidationModelHandler()) {
+  if (
+    INCLUDE_INTERNAL_VALIDATION_MODEL_HANDLER &&
+    (await shouldUseInternalValidationModelHandler())
+  ) {
     // Package validation still enters the real CLI and executeAgent path.
     // Only the provider boundary is deterministic, so this must not become
     // a user-facing model selector or an injected command-layer substitute.
