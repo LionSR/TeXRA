@@ -15,6 +15,7 @@ import {
 } from './UserQuestionState';
 import type { ApprovalDecision } from '../state/approvalQueue';
 import { BaseTextInput } from '../input/BaseTextInput';
+import { isPlainReturnInput } from '../input/inputKeys';
 import { Select } from '../ui/Select';
 import { KeyHints, type KeyHint } from '../ui/KeyHints';
 import { parseUserQuestionAnswer } from '../../../runtime/userQuestionAnswer';
@@ -108,7 +109,7 @@ function MultiSelectQuestion(
       }
       return;
     }
-    if (key.return) {
+    if (isPlainReturnInput(input, key)) {
       props.onSubmit([...selected]);
       return;
     }
