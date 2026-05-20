@@ -141,9 +141,10 @@ function openCliAgentListForm(context: SlashCommandContext): void {
   const selectable = !context.session.runPromise;
   cliState.activeForm.set({
     commandName: 'agent',
-    render: (close) => (
+    render: (close, availableRows) => (
       <AgentListForm
         currentAgent={cliState.sessionMeta.get().agent}
+        availableRows={availableRows}
         selectable={selectable}
         onSelect={(value) => {
           applyInitialCliAgentSelection(value, context);
