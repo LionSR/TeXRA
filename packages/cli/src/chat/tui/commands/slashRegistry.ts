@@ -27,6 +27,8 @@ export interface SlashCommand {
   readonly formComponent?: React.ComponentType<SlashFormProps>;
 }
 
+export type SlashPickIntent = 'complete' | 'submit';
+
 const COMMANDS = new Map<string, SlashCommand>();
 
 export function registerSlashCommand(command: SlashCommand): void {
@@ -51,6 +53,21 @@ export function matchSlashCommands(prefix: string): readonly SlashCommand[] {
     if (cmd.name.toLowerCase().startsWith(lower)) return true;
     return cmd.aliases?.some((a) => a.toLowerCase().startsWith(lower)) ?? false;
   });
+}
+
+export function slashPickIntent(
+  query: string,
+  command: SlashCommand,
+  acceptKey: 'enter' | 'tab',
+): SlashPickIntent {
+  if (acceptKey !== 'enter') return 'complete';
+  if (command.formComponent) return 'complete';
+
+  const normalized = query.trim().toLowerCase();
+  if (normalized === command.name.toLowerCase()) return 'submit';
+  return command.aliases?.some((alias) => alias.toLowerCase() === normalized)
+    ? 'submit'
+    : 'complete';
 }
 
 /**
