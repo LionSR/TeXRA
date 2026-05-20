@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +23,7 @@ function run(command, args, options = {}) {
   const env = {
     ...process.env,
     CI: '1',
+    ...options.env,
   };
   if (options.validationModel) {
     if (!options.validationFlagPath) {
@@ -130,7 +137,7 @@ function validateRunCommand() {
       validationFlagPath,
     });
     assertSuccess(text, 'texra run text');
-    const copiedOutputPath = path.join(cwd, 'paper.polished.tex');
+    const copiedOutputPath = path.join(realpathSync(cwd), 'paper.polished.tex');
     const outputPathPattern = /^r\d+\/paper\.polished\.tex$/;
     assert(
       text.stdout.trim() === copiedOutputPath,
@@ -190,8 +197,19 @@ function validateRunCommand() {
   }
 }
 
-const buildResult = run('pnpm', ['run', 'build'], { cwd: cliRoot });
-assertSuccess(buildResult, 'pnpm run build');
-validateBinarySmoke();
-validateRunCommand();
-console.log('CLI run validation passed');
+try {
+  const buildResult = run('pnpm', ['run', 'build'], {
+    cwd: cliRoot,
+    env: { TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1' },
+  });
+  assertSuccess(buildResult, 'pnpm run build');
+  validateBinarySmoke();
+  validateRunCommand();
+  console.log('CLI run validation passed');
+} finally {
+  const rebuildResult = run('pnpm', ['run', 'build'], {
+    cwd: cliRoot,
+    env: { TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '' },
+  });
+  assertSuccess(rebuildResult, 'pnpm run build after validation');
+}
