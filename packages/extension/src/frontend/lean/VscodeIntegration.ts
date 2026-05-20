@@ -5,7 +5,7 @@
  * language APIs and the Lean 4 extension's exported API.
  *
  * This module lives in `@frontend/` because it depends on `vscode` APIs.
- * Tool implementations access it via the injectable `LeanVscodeServices`.
+ * Tool implementations access it via the injectable `LeanLanguageServices`.
  */
 
 import * as path from 'path';
@@ -18,13 +18,85 @@ import {
   waitForDiagnosticsChange,
   DiagnosticSeverity,
 } from '@frontend/vscode/vscodeDiagnostics';
+import {
+  LEAN4_EXTENSION_ID,
+  type LeanFileCommand,
+  type LeanProjectCommand,
+} from '@tools/lean/leanConstants';
 import type {
   LeanDiagnostic,
   LspResult,
   PlainGoal,
   PlainTermGoal,
 } from '@tools/lean/leanTypes';
+import {
+  registerLeanServer,
+  unregisterLeanServer,
+  updateLeanServer,
+} from '@tools/lean/leanServerRegistry';
 import { WorkspaceFS } from '@utils/files';
+
+const FILE_COMMAND_VSCODE_IDS: Record<LeanFileCommand, string> = {
+  restart: 'lean4.restartFile',
+  refresh_dependencies: 'lean4.refreshFileDependencies',
+};
+
+const PROJECT_COMMAND_VSCODE_IDS: Record<LeanProjectCommand, string> = {
+  restart_server: 'lean4.restartServer',
+  stop_server: 'lean4.stopServer',
+  build: 'lean4.project.build',
+  clean: 'lean4.project.clean',
+  fetch_cache: 'lean4.project.fetchCache',
+  fetch_file_cache: 'lean4.project.fetchFileCache',
+  install_elan: 'lean4.setup.installElan',
+  install_deps: 'lean4.setup.installDeps',
+  update_elan: 'lean4.setup.updateElan',
+  select_toolchain: 'lean4.setup.selectDefaultToolchain',
+};
+
+const knownExtensionServers = new Set<string>();
+
+function vscodeServerId(workspaceRoot: string): string {
+  return `vscode:${workspaceRoot}`;
+}
+
+/**
+ * Record a workspace folder as having an active VS Code-mediated Lean
+ * server. Idempotent — called from every code path that successfully
+ * reaches the leanprover.lean4 client provider, so the dashboard reflects
+ * actual usage rather than a one-shot snapshot.
+ */
+function noteVscodeLeanServer(workspaceRoot: string): void {
+  const id = vscodeServerId(workspaceRoot);
+  if (knownExtensionServers.has(id)) {
+    updateLeanServer(id, { status: 'running' });
+    return;
+  }
+  knownExtensionServers.add(id);
+  registerLeanServer({
+    id,
+    workspaceRoot,
+    mode: 'vscode-extension',
+    status: 'running',
+  });
+}
+
+function workspaceRootForFile(absolutePath: string): string {
+  const folder = vscode.workspace.getWorkspaceFolder(
+    vscode.Uri.file(absolutePath),
+  );
+  return folder?.uri.fsPath ?? path.dirname(absolutePath);
+}
+
+/**
+ * Clear all VS Code-mediated entries — called on extension deactivation.
+ */
+export function clearVscodeLeanServerEntries(): void {
+  for (const id of knownExtensionServers) {
+    unregisterLeanServer(id);
+  }
+  knownExtensionServers.clear();
+}
 
 type LspHover = import('vscode-languageserver-protocol').Hover;
 
@@ -107,7 +179,7 @@ function toLeanDiagnostic(d: vscode.Diagnostic): LeanDiagnostic {
  * Get diagnostics for a Lean file using VS Code's diagnostics API.
  * This returns diagnostics from the Lean 4 extension's LSP.
  */
-export function getDiagnostics(filePath: string): LeanDiagnostic[] {
+function getDiagnostics(filePath: string): LeanDiagnostic[] {
   const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
   const directLookup = vscode.languages.getDiagnostics(uri);
   if (directLookup.length > 0) {
@@ -129,32 +201,26 @@ function findDiagnosticsByPath(targetPath: string): vscode.Diagnostic[] {
   return [];
 }
 
-/**
- * Execute a VS Code command that requires a file to be open.
- * Opens the file first, then executes the command.
- */
 export async function executeFileCommand(
-  command: string,
+  command: LeanFileCommand,
   filePath: string,
 ): Promise<boolean> {
   try {
     const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preserveFocus: true });
-    await vscode.commands.executeCommand(command);
+    await vscode.commands.executeCommand(FILE_COMMAND_VSCODE_IDS[command]);
     return true;
   } catch {
     return false;
   }
 }
 
-const LEAN4_EXTENSION_ID = 'leanprover.lean4';
-
 /**
  * Prompt user to install Lean 4 extension if not already installed.
  * Used when Lean tools are invoked but the extension is not found.
  */
-export async function promptLean4ExtensionInstall(): Promise<void> {
+async function promptLean4ExtensionInstall(): Promise<void> {
   await showInstructionWithSuppress(
     'lean4-install-tool',
     'Lean 4 extension is required for this operation. Install now?',
@@ -239,6 +305,8 @@ async function sendPositionRequest<T>(
     };
   }
 
+  noteVscodeLeanServer(workspaceRootForFile(absolutePath));
+
   try {
     const params = {
       textDocument: { uri: leanUri.toString() },
@@ -318,6 +386,8 @@ export async function fetchDiagnosticsForFile(
   const openedPath = await openFileInEditor(file, { preserveFocus: true });
   if (!openedPath) return null;
 
+  noteVscodeLeanServer(workspaceRootForFile(WorkspaceFS.toAbsolute(file)));
+
   await diagnosticsWait;
   return getDiagnostics(openedPath);
 }
@@ -335,7 +405,8 @@ export async function navigateToFirstError(
   }
 }
 
-/** Execute a global VS Code command by its command ID. */
-export async function executeGlobalCommand(commandId: string): Promise<void> {
-  await vscode.commands.executeCommand(commandId);
+export async function executeProjectCommand(
+  command: LeanProjectCommand,
+): Promise<void> {
+  await vscode.commands.executeCommand(PROJECT_COMMAND_VSCODE_IDS[command]);
 }
