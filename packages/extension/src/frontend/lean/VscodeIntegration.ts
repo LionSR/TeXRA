@@ -24,7 +24,56 @@ import type {
   PlainGoal,
   PlainTermGoal,
 } from '@tools/lean/leanTypes';
+import {
+  registerLeanServer,
+  unregisterLeanServer,
+  updateLeanServer,
+} from '@tools/lean/leanServerRegistry';
 import { WorkspaceFS } from '@utils/files';
+
+const knownExtensionServers = new Set<string>();
+
+function vscodeServerId(workspaceRoot: string): string {
+  return `vscode:${workspaceRoot}`;
+}
+
+/**
+ * Record a workspace folder as having an active VS Code-mediated Lean
+ * server. Idempotent — called from every code path that successfully
+ * reaches the leanprover.lean4 client provider, so the dashboard reflects
+ * actual usage rather than a one-shot snapshot.
+ */
+function noteVscodeLeanServer(workspaceRoot: string): void {
+  const id = vscodeServerId(workspaceRoot);
+  if (knownExtensionServers.has(id)) {
+    updateLeanServer(id, { status: 'running', touchActivity: true });
+    return;
+  }
+  knownExtensionServers.add(id);
+  registerLeanServer({
+    id,
+    workspaceRoot,
+    mode: 'vscode-extension',
+    status: 'running',
+  });
+}
+
+function workspaceRootForFile(absolutePath: string): string {
+  const folder = vscode.workspace.getWorkspaceFolder(
+    vscode.Uri.file(absolutePath),
+  );
+  return folder?.uri.fsPath ?? path.dirname(absolutePath);
+}
+
+/**
+ * Clear all VS Code-mediated entries — called on extension deactivation.
+ */
+export function clearVscodeLeanServerEntries(): void {
+  for (const id of knownExtensionServers) {
+    unregisterLeanServer(id);
+  }
+  knownExtensionServers.clear();
+}
 
 type LspHover = import('vscode-languageserver-protocol').Hover;
 
@@ -239,6 +288,8 @@ async function sendPositionRequest<T>(
     };
   }
 
+  noteVscodeLeanServer(workspaceRootForFile(absolutePath));
+
   try {
     const params = {
       textDocument: { uri: leanUri.toString() },
@@ -317,6 +368,8 @@ export async function fetchDiagnosticsForFile(
 
   const openedPath = await openFileInEditor(file, { preserveFocus: true });
   if (!openedPath) return null;
+
+  noteVscodeLeanServer(workspaceRootForFile(WorkspaceFS.toAbsolute(file)));
 
   await diagnosticsWait;
   return getDiagnostics(openedPath);

@@ -216,7 +216,7 @@ Tips:
     } catch (error) {
       return {
         summary: 'Failed to get diagnostics',
-        output: `Error: ${toErrorMessage(error)}\n\nMake sure the Lean 4 VS Code extension is installed and active.`,
+        output: `Error: ${toErrorMessage(error)}\n\nIn VS Code: install the Lean 4 extension (leanprover.lean4). In CLI/desktop: install elan so that \`lake\` is on PATH, and make sure the file is inside a Lake project (lakefile.lean / lakefile.toml).`,
         isError: true,
       };
     }

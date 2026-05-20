@@ -10,6 +10,9 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { createWorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { initPlatform } from '@platform/platform';
+import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
+import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
+import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
 
 import { bootstrapElectronAgentDirectories } from './agentDirectories.js';
 import { ElectronConfigProvider } from './electronConfig.js';
@@ -69,6 +72,12 @@ export async function initializeElectronPlatform(
     agentResume: { tryResumeStream: async () => false },
   });
   registerAgentFeatures();
+
+  // Lean tools talk to `lake env lean --server` directly in the desktop build.
+  // Servers are spawned lazily per Lake project root on first request.
+  const leanAdapter = createDirectLspLeanAdapter();
+  setLeanVscodeServices(leanAdapter);
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => leanAdapter.dispose());
 
   await bootstrapElectronAgentDirectories(
     resolveResourcesPath(mainDirname),

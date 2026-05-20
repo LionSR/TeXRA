@@ -21,6 +21,10 @@ import { GlobalStateKey } from '@common/state/stateKeys';
 // Local imports - logger
 import { setOutputChannelFactory } from '@logger/logUtils';
 
+// Local imports - Lean direct LSP adapter
+import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
+import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
+
 // Local imports - CLI runtime
 import { getCliSecrets } from './cliSecrets';
 import { writeTextStderr } from './logSinks';
@@ -100,6 +104,11 @@ export async function initCliPlatform(
       lifecycle: noopLifecycle,
       agentResume: { tryResumeStream: async () => false },
     });
+    // Direct LSP adapter for Lean tools — spawns `lake env lean --server`
+    // lazily, one server per Lake project root. Errors are surfaced via the
+    // Tools dashboard if `lake` isn't on PATH; nothing happens at startup
+    // when no Lean tools are invoked.
+    setLeanVscodeServices(createDirectLspLeanAdapter());
   }
 
   if (!serverSideKeysInitialized) {
