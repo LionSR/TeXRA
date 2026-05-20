@@ -9,7 +9,7 @@ import {
 } from 'llm-zoo';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
-import { createRunState } from '@agent/core/AgentState';
+import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
   createToolUseCycleFlow,
@@ -143,7 +143,7 @@ describe('BashTool', () => {
     };
     const handler = new BashMockHandler(config);
     const workspaceState = AgentWorkspaceState.create();
-    const run = createRunState();
+    const run = AgentRunStateSnapshotSchema.parse({});
     const options: ToolUseCycleServices<OpenAI> = {
       modelHandler: handler,
       config: config as any,

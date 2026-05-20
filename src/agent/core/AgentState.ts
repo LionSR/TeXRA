@@ -5,7 +5,6 @@ import {
   type NormalizedUsage,
 } from '@agent/types/NormalizedUsage';
 import {
-  createDefaultTotals,
   RunUsageAccumulatorJSONSchema,
   recordNormalizedUsage,
 } from './RunUsageAccumulator';
@@ -20,28 +19,15 @@ export type ConversationRoundStateSnapshot = z.output<
   typeof ConversationRoundStateSnapshotSchema
 >;
 
-export function createRoundState(
-  roundIndex: number,
-): ConversationRoundStateSnapshot {
-  return ConversationRoundStateSnapshotSchema.parse({ roundIndex });
-}
-
 export const AgentRunStateSnapshotSchema = z.object({
   totalRounds: z.int().nonnegative().prefault(0),
   totalResponseTimeMs: z.number().nonnegative().prefault(0),
-  usageAccumulator: RunUsageAccumulatorJSONSchema.prefault(() => ({
-    totals: createDefaultTotals(),
-    normalizedSnapshots: [],
-  })),
+  usageAccumulator: RunUsageAccumulatorJSONSchema.prefault({}),
 });
 
 export type AgentRunStateSnapshot = z.output<
   typeof AgentRunStateSnapshotSchema
 >;
-
-export function createRunState(): AgentRunStateSnapshot {
-  return AgentRunStateSnapshotSchema.parse({});
-}
 
 /**
  * Record cycle metrics into run state. Mutates run in place.
