@@ -3,10 +3,7 @@ import { z } from 'zod';
 
 // Local imports - shared schemas
 import type { TokenUsageStats, ToolUseLog } from '@shared/schemas';
-import {
-  collapseWhitespace,
-  truncateWithEllipsis,
-} from '@utils/text/stringUtils';
+import { truncateSummary } from '@utils/text/stringUtils';
 import type {
   CommandExecutionItem,
   FileChangeItem,
@@ -80,8 +77,8 @@ export const CodexTodoToolInputSchema = z.object({
 
 export type CodexTodoToolInput = z.infer<typeof CodexTodoToolInputSchema>;
 
-export const CodexTurnStateSchema = z.enum(['running', 'completed', 'failed']);
-export type CodexTurnState = z.infer<typeof CodexTurnStateSchema>;
+const CodexTurnStateSchema = z.enum(['running', 'completed', 'failed']);
+type CodexTurnState = z.infer<typeof CodexTurnStateSchema>;
 
 export const CodexTurnToolInputSchema = z.object({
   state: CodexTurnStateSchema,
@@ -89,10 +86,6 @@ export const CodexTurnToolInputSchema = z.object({
 });
 
 export type CodexTurnToolInput = z.infer<typeof CodexTurnToolInputSchema>;
-
-function truncateSummary(text: string, maxLength: number): string {
-  return truncateWithEllipsis(collapseWhitespace(text), maxLength);
-}
 
 function getPathBasename(filePath: string): string {
   const normalized = filePath.replaceAll('\\', '/');
