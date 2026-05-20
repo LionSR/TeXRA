@@ -1518,6 +1518,26 @@ interface LeadingGlobalFlags {
   readonly stoppedOnUnknownFlag: boolean;
 }
 
+function knownGlobalFlagTokenCount(
+  rawArgs: readonly string[],
+  index: number,
+): number | undefined {
+  const arg = rawArgs[index];
+  if (arg === undefined || !arg.startsWith('-') || arg === '--') {
+    return undefined;
+  }
+
+  const inline = arg.includes('=');
+  const baseFlag = inline ? arg.slice(0, arg.indexOf('=')) : arg;
+  if (GLOBAL_BOOL_FLAGS.has(baseFlag)) {
+    return 1;
+  }
+  if (GLOBAL_VALUE_FLAGS.has(baseFlag)) {
+    return inline || rawArgs[index + 1] === undefined ? 1 : 2;
+  }
+  return undefined;
+}
+
 function collectLeadingGlobalFlags(
   rawArgs: readonly string[],
 ): LeadingGlobalFlags {
@@ -1528,25 +1548,14 @@ function collectLeadingGlobalFlags(
     if (arg === undefined) break;
     if (!arg.startsWith('-')) break;
     if (arg === '--') break;
-    const inline = arg.includes('=');
-    const baseFlag = inline ? arg.slice(0, arg.indexOf('=')) : arg;
-    if (GLOBAL_BOOL_FLAGS.has(baseFlag)) {
-      leadingGlobals.push(arg);
-      i += 1;
+
+    const tokenCount = knownGlobalFlagTokenCount(rawArgs, i);
+    if (tokenCount !== undefined) {
+      leadingGlobals.push(...rawArgs.slice(i, i + tokenCount));
+      i += tokenCount;
       continue;
     }
-    if (GLOBAL_VALUE_FLAGS.has(baseFlag)) {
-      leadingGlobals.push(arg);
-      i += 1;
-      if (!inline) {
-        const value = rawArgs[i];
-        if (value !== undefined) {
-          leadingGlobals.push(value);
-          i += 1;
-        }
-      }
-      continue;
-    }
+
     return { leadingGlobals, restIndex: i, stoppedOnUnknownFlag: true };
   }
   return { leadingGlobals, restIndex: i, stoppedOnUnknownFlag: false };
@@ -1621,16 +1630,22 @@ function isCliError(error: unknown): error is Error & { code?: string } {
 // `showUsage` accept either width via cast at the call site.
 type AnyCommand = CommandDef<any>;
 
+async function commandSubCommands(
+  cmd: AnyCommand,
+): Promise<Record<string, AnyCommand> | undefined> {
+  const rawSubs = cmd.subCommands;
+  if (!rawSubs) return undefined;
+  return typeof rawSubs === 'function'
+    ? await (rawSubs as () => Promise<Record<string, AnyCommand>>)()
+    : ((await rawSubs) as Record<string, AnyCommand>);
+}
+
 async function resolveDeepestSubCommand(
   cmd: AnyCommand,
   rawArgs: readonly string[],
   parent?: AnyCommand,
 ): Promise<[AnyCommand, AnyCommand | undefined]> {
-  const rawSubs = cmd.subCommands;
-  const subCommands =
-    typeof rawSubs === 'function'
-      ? await (rawSubs as () => Promise<Record<string, AnyCommand>>)()
-      : ((await rawSubs) as Record<string, AnyCommand> | undefined);
+  const subCommands = await commandSubCommands(cmd);
   if (!subCommands) return [cmd, parent];
   for (let i = 0; i < rawArgs.length; i++) {
     const token = rawArgs[i];
@@ -1641,6 +1656,66 @@ async function resolveDeepestSubCommand(
     break;
   }
   return [cmd, parent];
+}
+
+export interface UnknownCliCommand {
+  readonly typedCommand: string;
+  readonly helpCommand: string;
+}
+
+function isPureSubCommandContainer(
+  cmd: AnyCommand,
+  subCommands: Record<string, AnyCommand>,
+): boolean {
+  return (
+    Object.keys(subCommands).length > 0 &&
+    typeof (cmd as { run?: unknown }).run !== 'function'
+  );
+}
+
+export async function detectUnknownCliCommand(
+  rawArgs: readonly string[],
+): Promise<UnknownCliCommand | undefined> {
+  let cmd = rootCommand as AnyCommand;
+  const pathParts = ['texra'];
+
+  for (let i = 0; i < rawArgs.length; ) {
+    const token = rawArgs[i];
+    if (token === undefined || token === '--') break;
+
+    if (token.startsWith('-')) {
+      const tokenCount = knownGlobalFlagTokenCount(rawArgs, i);
+      if (tokenCount === undefined) return undefined;
+      i += tokenCount;
+      continue;
+    }
+
+    const subCommands = await commandSubCommands(cmd);
+    if (!subCommands) return undefined;
+
+    const next = subCommands[token];
+    if (next) {
+      cmd = next;
+      pathParts.push(token);
+      i += 1;
+      continue;
+    }
+
+    if (isPureSubCommandContainer(cmd, subCommands)) {
+      return {
+        typedCommand: [...pathParts, token].join(' '),
+        helpCommand: pathParts.join(' '),
+      };
+    }
+
+    return undefined;
+  }
+
+  return undefined;
+}
+
+export function formatUnknownCliCommand(command: UnknownCliCommand): string {
+  return `Unknown command: ${command.typedCommand}. Run \`${command.helpCommand} --help\` for usage.`;
 }
 
 /**
@@ -1674,6 +1749,12 @@ export async function runCli(
   ) {
     writeTextStdout(await readCliVersion());
     return { exitCode: CliExitCode.Success };
+  }
+
+  const unknownCommand = await detectUnknownCliCommand(rawArgs);
+  if (unknownCommand) {
+    writeTextStderr(formatUnknownCliCommand(unknownCommand));
+    return { exitCode: CliExitCode.Usage };
   }
 
   try {
