@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports - test support
 import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
+import { loadPlatformDefaultsModule } from './loadPlatformDefaultsModule.mjs';
 
 interface JsonStore {
   set(key: string, value: unknown): Promise<void>;
@@ -52,7 +53,7 @@ async function loadDesktopConfigConstructors(): Promise<{
   ElectronConfigProvider: ElectronConfigModule['ElectronConfigProvider'];
 }> {
   const [{ JsonStore }, { ElectronConfigProvider }] = await Promise.all([
-    loadDesktopPlatformModule<JsonStoreModule>('jsonStore.ts'),
+    loadPlatformDefaultsModule<JsonStoreModule>('jsonStore.ts'),
     loadDesktopPlatformModule<ElectronConfigModule>('electronConfig.ts'),
   ]);
   return { JsonStore, ElectronConfigProvider };

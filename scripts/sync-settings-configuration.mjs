@@ -12,7 +12,7 @@ const packagePath = path.join(rootDir, 'packages', 'extension', 'package.json');
 const require = createRequire(import.meta.url);
 const {
   buildTexraPackageConfiguration,
-} = require('../out/src/shared/schemas/settingsConfiguration.js');
+} = require('../out/packages/extension/src/schemas/texraSettings.js');
 
 function parseArgs() {
   return {

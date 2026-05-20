@@ -9,7 +9,7 @@ import {
   getTexraSettingDefault,
   TEXRA_SETTING_KEYS,
   TexraSettingsSchema,
-} from '@shared/schemas/settingsConfiguration';
+} from '@extensionSchemas/texraSettings';
 
 interface PackageConfigurationProperty {
   default?: unknown;

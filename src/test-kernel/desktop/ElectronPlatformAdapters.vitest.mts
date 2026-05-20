@@ -19,6 +19,7 @@ import {
 } from './electronTestStub.mjs';
 import { REPO_ROOT } from './desktopTestPaths.mjs';
 import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
+import { loadPlatformDefaultsModule } from './loadPlatformDefaultsModule.mjs';
 
 interface JsonStore {
   get<T>(key: string, defaultValue?: T): T;
@@ -60,7 +61,7 @@ interface ElectronSecretsModule {
 
 async function loadJsonStore(): Promise<JsonStoreModule['JsonStore']> {
   const { JsonStore } =
-    await loadDesktopPlatformModule<JsonStoreModule>('jsonStore.ts');
+    await loadPlatformDefaultsModule<JsonStoreModule>('jsonStore.ts');
   return JsonStore;
 }
 
@@ -124,7 +125,7 @@ describe('desktop platform adapters', () => {
 
   it('persists state values and deletes undefined updates through JsonStore', async () => {
     const [{ JsonStore }, { ElectronStateStore }] = await Promise.all([
-      loadDesktopPlatformModule<JsonStoreModule>('jsonStore.ts'),
+      loadPlatformDefaultsModule<JsonStoreModule>('jsonStore.ts'),
       loadDesktopPlatformModule<ElectronStateModule>('electronState.ts'),
     ]);
     const root = await makeTempDir('texra-electron-state-');

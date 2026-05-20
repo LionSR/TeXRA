@@ -1,5 +1,5 @@
 // Internal imports
-import { DEFAULT_TEXRA_SETTINGS } from '@shared/schemas/settingsConfiguration';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import {
   getConfig,
   inspectConfig,
@@ -41,7 +41,7 @@ export const LEGACY_AUXILIARY_KEYWORDS_KEY =
  * Return the built-in extension defaults for a file category.
  */
 function getDefaultIncludedExtensions(category: ExtensionCategory): string[] {
-  const { included } = DEFAULT_TEXRA_SETTINGS.files;
+  const { included } = DEFAULT_CORE_SETTINGS.files;
   switch (category) {
     case 'input':
       return included.inputExtensions;
