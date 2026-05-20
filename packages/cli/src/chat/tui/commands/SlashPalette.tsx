@@ -3,7 +3,12 @@
 import { Box, Text, useInput } from 'ink';
 import { useState, useEffect } from 'react';
 
-import { matchSlashCommands, type SlashCommand } from './slashRegistry';
+import {
+  matchSlashCommands,
+  slashPickIntent,
+  type SlashCommand,
+  type SlashPickIntent,
+} from './slashRegistry';
 import { isPlainReturnInput } from '../input/inputKeys';
 import { KeyHints } from '../ui/KeyHints';
 
@@ -11,7 +16,7 @@ export interface SlashPaletteProps {
   /** The current input value (excluding the leading `/`, after the slash). */
   readonly query: string;
   /** Accepted: caller should replace the input with the chosen command name. */
-  readonly onPick: (command: SlashCommand) => void;
+  readonly onPick: (command: SlashCommand, intent: SlashPickIntent) => void;
   readonly onCancel: () => void;
 }
 
@@ -54,7 +59,16 @@ export function SlashPalette(
       }
       if (isPlainReturnInput(input, key) || key.tab || input === '\t') {
         const chosen = visible[highlight];
-        if (chosen) props.onPick(chosen);
+        if (chosen) {
+          props.onPick(
+            chosen,
+            slashPickIntent(
+              props.query,
+              chosen,
+              isPlainReturnInput(input, key) ? 'enter' : 'tab',
+            ),
+          );
+        }
       }
     },
     { isActive: visibleCount > 0 },
