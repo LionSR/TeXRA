@@ -140,9 +140,32 @@ export function appFocusShortcutsActive({
   return !inputDisabled && !slashPaletteOpen && !reverseSearchOpen;
 }
 
+export function appEscapeInterruptActive({
+  inputDisabled,
+  reverseSearchOpen,
+  runPending,
+  slashPaletteOpen,
+}: {
+  readonly inputDisabled: boolean;
+  readonly reverseSearchOpen: boolean;
+  readonly runPending: boolean;
+  readonly slashPaletteOpen: boolean;
+}): boolean {
+  return (
+    runPending &&
+    appFocusShortcutsActive({
+      inputDisabled,
+      reverseSearchOpen,
+      slashPaletteOpen,
+    })
+  );
+}
+
 export interface AppProps {
   readonly onSubmit: (line: string) => void;
   readonly onKillExecution: (executionId: string) => void;
+  readonly canInterruptActiveRun: () => boolean;
+  readonly onInterruptActive: () => void;
   readonly inputDisabled?: boolean;
   readonly history?: InputHistory;
 }
@@ -252,6 +275,24 @@ export function App(props: AppProps): React.JSX.Element {
         const target = numericFocusTarget(activeSlice, digit - 1);
         if (target) cliState.activeStreamId.set(target);
       }
+    },
+    { isActive: focusShortcutsActive },
+  );
+
+  useInput(
+    (_input, key) => {
+      if (!key.escape) return;
+      if (
+        !appEscapeInterruptActive({
+          inputDisabled,
+          reverseSearchOpen,
+          runPending: props.canInterruptActiveRun(),
+          slashPaletteOpen,
+        })
+      ) {
+        return;
+      }
+      props.onInterruptActive();
     },
     { isActive: focusShortcutsActive },
   );
