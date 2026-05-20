@@ -1,5 +1,5 @@
 /**
- * Injectable VS Code services for Lean tools.
+ * Injectable language services for Lean tools.
  *
  * Provides a seam between the platform-agnostic tool implementations
  * in `src/tools/lean/` and the host-specific integrations (VS Code
@@ -21,7 +21,7 @@ import type {
   PlainTermGoal,
 } from './leanTypes';
 
-export interface LeanVscodeServices {
+export interface LeanLanguageServices {
   executeFileCommand(
     command: LeanFileCommand,
     filePath: string,
@@ -49,15 +49,15 @@ export interface LeanVscodeServices {
   executeProjectCommand(command: LeanProjectCommand): Promise<void>;
 }
 
-let services: LeanVscodeServices | undefined;
+let services: LeanLanguageServices | undefined;
 
-export function setLeanVscodeServices(s: LeanVscodeServices): void {
+export function setLeanLanguageServices(s: LeanLanguageServices): void {
   services = s;
 }
 
-export function getLeanVscodeServices(): LeanVscodeServices {
+export function getLeanLanguageServices(): LeanLanguageServices {
   if (!services) {
-    throw new Error('Lean VS Code services not initialized');
+    throw new Error('Lean language services not initialized');
   }
   return services;
 }

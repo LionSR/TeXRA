@@ -1,7 +1,7 @@
 /**
  * Direct LSP adapter for Lean tools — used by the CLI and desktop builds.
  *
- * Implements the same {@link LeanVscodeServices} interface as the VS Code
+ * Implements the same {@link LeanLanguageServices} interface as the VS Code
  * integration. Per-workspace sessions are cached: the first request that
  * targets a file in a given Lake project spawns `lake env lean --server`
  * from that project root; subsequent requests from any agent reuse the
@@ -16,7 +16,7 @@ import { warn } from '@logger/logUtils';
 import { runLakeCommand } from './lakeCommands';
 import { LeanSession } from './leanSession';
 import type { LeanFileCommand, LeanProjectCommand } from '../leanConstants';
-import type { LeanVscodeServices } from '../leanVscodeServices';
+import type { LeanLanguageServices } from '../leanLanguageServices';
 import type {
   LeanDiagnostic,
   LspResult,
@@ -35,13 +35,13 @@ export interface DirectLspLeanAdapterOptions {
 }
 
 /**
- * Build a {@link LeanVscodeServices} implementation that talks directly to
+ * Build a {@link LeanLanguageServices} implementation that talks directly to
  * `lake env lean --server`. Register the returned object with
- * `setLeanVscodeServices(...)` during platform startup.
+ * `setLeanLanguageServices(...)` during platform startup.
  */
 export function createDirectLspLeanAdapter(
   options: DirectLspLeanAdapterOptions = {},
-): LeanVscodeServices & { dispose(): Promise<void> } {
+): LeanLanguageServices & { dispose(): Promise<void> } {
   const lakeCommand = options.lakeCommand ?? 'lake';
   const resolveRoot =
     options.resolveWorkspaceRoot ?? defaultResolveWorkspaceRoot;

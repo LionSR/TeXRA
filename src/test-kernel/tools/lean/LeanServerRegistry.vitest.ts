@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   clearLeanServerRegistry,
   formatUptime,
+  isLeanServerActive,
   listLeanServers,
   registerLeanServer,
   subscribeLeanServers,
@@ -81,6 +82,25 @@ describe('leanServerRegistry', () => {
     expect(seen).toEqual([1, 2]);
   });
 
+  it('counts only starting and running servers as active', () => {
+    expect(
+      [
+        { status: 'starting' },
+        { status: 'running' },
+        { status: 'error' },
+        { status: 'stopped' },
+      ].filter((partial) =>
+        isLeanServerActive({
+          id: `direct:${partial.status}`,
+          workspaceRoot: '/work/proj',
+          mode: 'direct-lsp',
+          startedAt: Date.now(),
+          ...partial,
+        } as LeanServerInfo),
+      ),
+    ).toHaveLength(2);
+  });
+
   it('does not call listeners when nothing matches an update id', () => {
     let calls = 0;
     subscribeLeanServers(() => {
@@ -120,7 +140,7 @@ describe('summarizeLeanServers', () => {
   }
 
   it('handles the empty case', () => {
-    expect(summarizeLeanServers([], NOW)).toBe('No Lean servers active.');
+    expect(summarizeLeanServers([], NOW)).toBe('No Lean servers registered.');
   });
 
   it('renders a running server with uptime and toolchain', () => {
@@ -129,7 +149,7 @@ describe('summarizeLeanServers', () => {
       NOW,
     );
     expect(summary).toBe(
-      '1 Lean server active:\n' +
+      '1 Lean server registered:\n' +
         '• /work/proj (direct LSP, leanprover/lean4:v4.12.0) — uptime 1m 5s',
     );
   });
@@ -159,6 +179,6 @@ describe('summarizeLeanServers', () => {
     expect(summary).toContain('/a (direct LSP) — starting…');
     expect(summary).toContain('/b (direct LSP) — error: spawn ENOENT');
     expect(summary).toContain('/c (direct LSP) — stopped');
-    expect(summary.startsWith('3 Lean servers active:')).toBe(true);
+    expect(summary.startsWith('3 Lean servers registered:')).toBe(true);
   });
 });

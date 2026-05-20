@@ -25,7 +25,7 @@ import { setOutputChannelFactory } from '@logger/logUtils';
 
 // Local imports - Lean direct LSP adapter
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
-import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
+import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 
 // Local imports - CLI runtime
 import { getCliSecrets } from './cliSecrets';
@@ -139,7 +139,7 @@ export async function initCliPlatform(
     // Tools dashboard if `lake` isn't on PATH; nothing happens at startup
     // when no Lean tools are invoked.
     const leanAdapter = createDirectLspLeanAdapter();
-    setLeanVscodeServices(leanAdapter);
+    setLeanLanguageServices(leanAdapter);
     lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => leanAdapter.dispose());
   }
 

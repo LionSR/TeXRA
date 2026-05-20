@@ -54,6 +54,10 @@ export function listLeanServers(): readonly LeanServerInfo[] {
   return snapshot();
 }
 
+export function isLeanServerActive(info: LeanServerInfo): boolean {
+  return info.status === 'starting' || info.status === 'running';
+}
+
 export function subscribeLeanServers(listener: Listener): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -147,7 +151,7 @@ export function summarizeLeanServers(
   list: readonly LeanServerInfo[] = snapshot(),
   now: number = Date.now(),
 ): string {
-  if (list.length === 0) return 'No Lean servers active.';
+  if (list.length === 0) return 'No Lean servers registered.';
   const lines = list.map((info) => {
     const modeLabel = LEAN_SERVER_MODE_LABELS[info.mode];
     const toolchain = info.toolchain ? `, ${info.toolchain}` : '';
@@ -155,7 +159,7 @@ export function summarizeLeanServers(
   });
   const header =
     list.length === 1
-      ? '1 Lean server active:'
-      : `${list.length} Lean servers active:`;
+      ? '1 Lean server registered:'
+      : `${list.length} Lean servers registered:`;
   return [header, ...lines].join('\n');
 }

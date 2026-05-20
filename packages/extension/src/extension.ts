@@ -95,7 +95,7 @@ import {
 import { setToolNotificationHandler } from '@tools/toolUnavailableNotification';
 import { setAddCriticismSink } from '@tools/AddCriticismTool';
 import { setLinterProvider } from '@tools/DiagnosticsTool';
-import { setLeanVscodeServices } from '@tools/lean/leanVscodeServices';
+import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config';
@@ -354,7 +354,7 @@ export async function activate(context: vscode.ExtensionContext) {
   registerFileDecorations(context);
 
   initializeNativeToolEditApproval(context, extensionAgentRuntimeHost);
-  setLeanVscodeServices(leanVscodeIntegration);
+  setLeanLanguageServices(leanVscodeIntegration);
   setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
   setOpenPdfOpener(async ({ location, preserveFocus }) => {
     await vscode.commands.executeCommand(

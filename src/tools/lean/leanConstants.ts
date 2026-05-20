@@ -1,7 +1,7 @@
 /**
  * Shared constants and abstract command types for the Lean integration.
  *
- * Two adapters implement {@link LeanVscodeServices}: the VS Code path that
+ * Two adapters implement {@link LeanLanguageServices}: the VS Code path that
  * talks to the leanprover.lean4 extension, and the direct LSP path used by
  * the CLI and desktop builds. Both speak in terms of the abstract command
  * names declared here, so the underlying VS Code command IDs only live in

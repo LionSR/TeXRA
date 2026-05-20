@@ -28,6 +28,7 @@ import {
 } from '@tools/github/prSubscriptionConstants';
 import { LEAN4_EXTENSION_ID } from '@tools/lean/leanConstants';
 import {
+  isLeanServerActive,
   listLeanServers,
   summarizeLeanServers,
 } from '@tools/lean/leanServerRegistry';
@@ -331,7 +332,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       const { extensionAvailable, lakeAvailable } =
         resolveLean4Prerequisites(probeResult);
       if (!extensionAvailable && !lakeAvailable) return 'Needs setup';
-      const activeCount = listLeanServers().length;
+      const activeCount = listLeanServers().filter(isLeanServerActive).length;
       return activeCount > 0
         ? `${activeCount} server${activeCount > 1 ? 's' : ''} active`
         : undefined;

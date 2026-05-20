@@ -5,7 +5,7 @@
  * language APIs and the Lean 4 extension's exported API.
  *
  * This module lives in `@frontend/` because it depends on `vscode` APIs.
- * Tool implementations access it via the injectable `LeanVscodeServices`.
+ * Tool implementations access it via the injectable `LeanLanguageServices`.
  */
 
 import * as path from 'path';

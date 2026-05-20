@@ -14,7 +14,7 @@ import {
   type LeanFileCommand,
   type LeanProjectCommand,
 } from './leanConstants';
-import { getLeanVscodeServices } from './leanVscodeServices';
+import { getLeanLanguageServices } from './leanLanguageServices';
 import { extractHoverText } from './leanTypes';
 
 const LeanDiagnosticsInputSchema = z.strictObject({
@@ -124,7 +124,7 @@ Tips:
 
     try {
       const diagnostics =
-        await getLeanVscodeServices().fetchDiagnosticsForFile(file);
+        await getLeanLanguageServices().fetchDiagnosticsForFile(file);
       if (!diagnostics) {
         return {
           summary: 'Failed to open file',
@@ -133,7 +133,7 @@ Tips:
         };
       }
 
-      await getLeanVscodeServices().navigateToFirstError(file, diagnostics);
+      await getLeanLanguageServices().navigateToFirstError(file, diagnostics);
 
       const counts = countBySeverity(diagnostics);
       const countsStr = formatCounts(counts);
@@ -183,7 +183,7 @@ Requires: Lean 4 VS Code extension installed and active.`,
     const description = FILE_COMMAND_DESCRIPTIONS[command];
 
     try {
-      const success = await getLeanVscodeServices().executeFileCommand(
+      const success = await getLeanLanguageServices().executeFileCommand(
         command,
         file,
       );
@@ -238,7 +238,7 @@ Requires: Lean 4 VS Code extension installed.`,
     const description = PROJECT_COMMAND_DESCRIPTIONS[command];
 
     try {
-      await getLeanVscodeServices().executeProjectCommand(command);
+      await getLeanLanguageServices().executeProjectCommand(command);
 
       if (command === 'build') {
         return {
@@ -311,7 +311,7 @@ Requires: Lean 4 VS Code extension installed and active.`,
     column: number,
     location: string,
   ): Promise<ToolResult> {
-    const { data, error } = await getLeanVscodeServices().getGoalState(
+    const { data, error } = await getLeanLanguageServices().getGoalState(
       file,
       line,
       column,
@@ -351,7 +351,7 @@ Requires: Lean 4 VS Code extension installed and active.`,
     column: number,
     location: string,
   ): Promise<ToolResult> {
-    const { data, error } = await getLeanVscodeServices().getTermGoal(
+    const { data, error } = await getLeanLanguageServices().getTermGoal(
       file,
       line,
       column,
@@ -374,7 +374,7 @@ Requires: Lean 4 VS Code extension installed and active.`,
     column: number,
     location: string,
   ): Promise<ToolResult> {
-    const { data, error } = await getLeanVscodeServices().getHoverInfo(
+    const { data, error } = await getLeanLanguageServices().getHoverInfo(
       file,
       line,
       column,
