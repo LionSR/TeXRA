@@ -3,12 +3,9 @@
  *
  * Implements the same {@link LeanVscodeServices} interface as the VS Code
  * integration. Per-workspace sessions are cached: the first request that
- * targets a file in a given Lake project spawns `lake env lean --server` from
- * that project root; subsequent requests from any agent reuse the same
- * session. Sessions are torn down on platform shutdown.
- *
- * VS Code command IDs (e.g. `lean4.project.build`) are translated to either
- * direct `lake` subprocess calls or session-level operations.
+ * targets a file in a given Lake project spawns `lake env lean --server`
+ * from that project root; subsequent requests from any agent reuse the
+ * same session. Sessions are torn down on platform shutdown.
  */
 
 import { access } from 'node:fs/promises';
@@ -83,14 +80,6 @@ export function createDirectLspLeanAdapter(
   }
 
   return {
-    getDiagnostics(filePath) {
-      // Synchronous mirror of `vscode.languages.getDiagnostics` — returns
-      // whatever we've buffered for an already-open file. Use
-      // `fetchDiagnosticsForFile` to force an open+wait.
-      const session = sessionForFile(sessions, filePath);
-      return session?.getDiagnosticsCache(filePath) ?? [];
-    },
-
     async fetchDiagnosticsForFile(
       file: string,
     ): Promise<LeanDiagnostic[] | null> {
@@ -213,11 +202,6 @@ export function createDirectLspLeanAdapter(
       );
     },
 
-    async promptLean4ExtensionInstall(): Promise<void> {
-      // No-op outside VS Code. The Tools dashboard already surfaces a
-      // "needs setup" hint when `lake` isn't on PATH.
-    },
-
     async dispose(): Promise<void> {
       const all = [...sessions.values()];
       sessions.clear();
@@ -231,8 +215,6 @@ export function createDirectLspLeanAdapter(
   ): Promise<LspResult<T>> {
     try {
       const session = await getSession(filePath);
-      // Open the file before the request so the LSP server has parsed it.
-      await session.fetchDiagnostics(filePath).catch(() => undefined);
       const data = await invoke(session);
       if (!data)
         return {
@@ -247,19 +229,6 @@ export function createDirectLspLeanAdapter(
       };
     }
   }
-}
-
-function sessionForFile(
-  sessions: Map<string, LeanSession>,
-  filePath: string,
-): LeanSession | null {
-  const absolute = path.resolve(filePath);
-  for (const [root, session] of sessions) {
-    if (absolute === root || absolute.startsWith(`${root}${path.sep}`)) {
-      return session;
-    }
-  }
-  return null;
 }
 
 async function runForAllSessions(

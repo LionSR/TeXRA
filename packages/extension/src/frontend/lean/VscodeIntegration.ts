@@ -179,7 +179,7 @@ function toLeanDiagnostic(d: vscode.Diagnostic): LeanDiagnostic {
  * Get diagnostics for a Lean file using VS Code's diagnostics API.
  * This returns diagnostics from the Lean 4 extension's LSP.
  */
-export function getDiagnostics(filePath: string): LeanDiagnostic[] {
+function getDiagnostics(filePath: string): LeanDiagnostic[] {
   const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
   const directLookup = vscode.languages.getDiagnostics(uri);
   if (directLookup.length > 0) {
@@ -220,7 +220,7 @@ export async function executeFileCommand(
  * Prompt user to install Lean 4 extension if not already installed.
  * Used when Lean tools are invoked but the extension is not found.
  */
-export async function promptLean4ExtensionInstall(): Promise<void> {
+async function promptLean4ExtensionInstall(): Promise<void> {
   await showInstructionWithSuppress(
     'lean4-install-tool',
     'Lean 4 extension is required for this operation. Install now?',

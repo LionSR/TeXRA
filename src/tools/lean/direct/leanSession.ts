@@ -99,15 +99,7 @@ export class LeanSession {
   }
 
   async fetchDiagnostics(filePath: string): Promise<LeanDiagnostic[]> {
-    const absolute = path.resolve(filePath);
-    await this.ensureReady();
-    await this.ensureFileOpen(absolute, { forceReload: false });
-    await this.waitForDiagnosticsQuiet(absolute);
-    return this.openFiles.get(absolute)?.diagnostics ?? [];
-  }
-
-  getDiagnosticsCache(filePath: string): LeanDiagnostic[] {
-    const absolute = path.resolve(filePath);
+    const absolute = await this.openAndSettle(filePath);
     return this.openFiles.get(absolute)?.diagnostics ?? [];
   }
 
@@ -123,15 +115,19 @@ export class LeanSession {
     await this.ensureFileOpen(absolute, { forceReload: true });
   }
 
-  async sendPositionRequest<T>(
+  /**
+   * Open the file (if needed), wait for Lean's diagnostics to settle, and
+   * send a position-scoped LSP request. Position requests like
+   * `$/lean/plainGoal` return stale data if the elaborator hasn't finished —
+   * the quiet-window wait is the only way to get correct goal state.
+   */
+  async requestSettled<T>(
     filePath: string,
     line: number,
     column: number,
     method: string,
   ): Promise<T> {
-    const absolute = path.resolve(filePath);
-    await this.ensureReady();
-    await this.ensureFileOpen(absolute, { forceReload: false });
+    const absolute = await this.openAndSettle(filePath);
     const params = {
       textDocument: { uri: pathToUri(absolute) },
       position: { line, character: column },
@@ -139,12 +135,20 @@ export class LeanSession {
     return (await this.rpc!.request(method, params)) as T;
   }
 
+  private async openAndSettle(filePath: string): Promise<string> {
+    const absolute = path.resolve(filePath);
+    await this.ensureReady();
+    await this.ensureFileOpen(absolute, { forceReload: false });
+    await this.waitForDiagnosticsQuiet(absolute);
+    return absolute;
+  }
+
   getPlainGoal(
     filePath: string,
     line: number,
     column: number,
   ): Promise<PlainGoal | null> {
-    return this.sendPositionRequest<PlainGoal | null>(
+    return this.requestSettled<PlainGoal | null>(
       filePath,
       line,
       column,
@@ -157,7 +161,7 @@ export class LeanSession {
     line: number,
     column: number,
   ): Promise<PlainTermGoal | null> {
-    return this.sendPositionRequest<PlainTermGoal | null>(
+    return this.requestSettled<PlainTermGoal | null>(
       filePath,
       line,
       column,
@@ -170,7 +174,7 @@ export class LeanSession {
     line: number,
     column: number,
   ): Promise<Hover | null> {
-    return this.sendPositionRequest<Hover | null>(
+    return this.requestSettled<Hover | null>(
       filePath,
       line,
       column,

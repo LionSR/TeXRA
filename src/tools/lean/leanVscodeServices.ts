@@ -22,7 +22,6 @@ import type {
 } from './leanTypes';
 
 export interface LeanVscodeServices {
-  getDiagnostics(filePath: string): LeanDiagnostic[];
   executeFileCommand(
     command: LeanFileCommand,
     filePath: string,
@@ -48,7 +47,6 @@ export interface LeanVscodeServices {
     diagnostics: LeanDiagnostic[],
   ): Promise<void>;
   executeProjectCommand(command: LeanProjectCommand): Promise<void>;
-  promptLean4ExtensionInstall(): Promise<void>;
 }
 
 let services: LeanVscodeServices | undefined;
