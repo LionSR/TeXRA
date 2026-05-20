@@ -16,7 +16,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { tryPlatform } from '@platform/platform';
+import { platform } from '@platform/platform';
 import type { WorkPlanState } from '@agent/core/AgentWorkspaceState';
 import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
 import { waitForPlanApproval } from '@agent/runtime/runCoordinators';
@@ -285,9 +285,10 @@ Best practices:
     workPlanState: WorkPlanState,
   ): Promise<ToolResult> {
     const approvalId = `plan-${Date.now().toString(36)}-${++approvalCounter}`;
-    const odysseyEnabled =
-      tryPlatform()?.config.get<boolean>(ODYSSEY_FEATURE_FLAG_KEY, false) ??
-      false;
+    const odysseyEnabled = platform().config.get<boolean>(
+      ODYSSEY_FEATURE_FLAG_KEY,
+      false,
+    );
 
     logger.info(`Requesting approval for plan: ${plan.summary}`);
 
@@ -345,9 +346,10 @@ Best practices:
     plan: Plan,
     streamId: string,
   ): Promise<ToolResult> {
-    const odysseyEnabled =
-      tryPlatform()?.config.get<boolean>(ODYSSEY_FEATURE_FLAG_KEY, false) ??
-      false;
+    const odysseyEnabled = platform().config.get<boolean>(
+      ODYSSEY_FEATURE_FLAG_KEY,
+      false,
+    );
     if (!odysseyEnabled) {
       logger.warn(
         'Approve & Run Autonomously requested but odyssey feature flag is off; ' +
@@ -368,8 +370,9 @@ Best practices:
 
     // If an odyssey is already in flight on this stream, retarget it at
     // the newly approved plan instead of silently leaving the loop driving
-    // the stale objective. Resuming a paused odyssey keeps the continuation
-    // budget so the user-approved cap isn't bypassed by re-targeting.
+    // the stale objective. `editObjective` resets the continuation budget so
+    // the new plan gets a fresh cap regardless of whether the prior odyssey
+    // was active or paused — see odysseyStore.editObjective for the rationale.
     const existing = OdysseyStore.getForStream(streamId);
     if (isOdysseyInFlight(existing)) {
       try {

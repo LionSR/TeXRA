@@ -87,17 +87,25 @@ function withReasoningOverride<T extends ModelHandler>(handler: T): T {
   return handler;
 }
 
-function requiresOpenAIResponsesAPI(config: ModelConfig): boolean {
+function requiresOpenAIResponsesAPI(
+  config: ModelConfig,
+  useOpenRouter: boolean,
+): boolean {
   if (config.provider !== ModelProvider.OPENAI || config.openRouterOnly) {
     return false;
   }
   if (config.requiresResponsesAPI) return true;
 
+  // The gpt-5 reasoning + function-calling heuristic only applies when we are
+  // talking to OpenAI directly. OpenRouter proxies these models on
+  // /v1/chat/completions and rejects Responses-shaped payloads.
+  if (useOpenRouter) return false;
+
   const { capabilities } = config;
   return (
     config.fullName.startsWith('gpt-5') &&
-    capabilities.supportsReasoningEffort === true &&
-    capabilities.supportsFunctionCalling === true
+    capabilities.supportsReasoningEffort !== false &&
+    capabilities.supportsFunctionCalling !== false
   );
 }
 
@@ -110,7 +118,7 @@ export function shouldUseResponsesAPI(
     return false;
   }
   return (
-    requiresOpenAIResponsesAPI(config) ||
+    requiresOpenAIResponsesAPI(config, useOpenRouter) ||
     (!useOpenRouter &&
       (getConfig<boolean>('texra.model.useOpenAIResponsesAPI', false) ||
         config.fullName.startsWith('gpt-oss')))
