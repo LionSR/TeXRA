@@ -87,8 +87,22 @@ function withReasoningOverride<T extends ModelHandler>(handler: T): T {
   return handler;
 }
 
+function requiresOpenAIResponsesAPI(config: ModelConfig): boolean {
+  if (config.provider !== ModelProvider.OPENAI || config.openRouterOnly) {
+    return false;
+  }
+  if (config.requiresResponsesAPI) return true;
+
+  const { capabilities } = config;
+  return (
+    config.fullName.startsWith('gpt-5') &&
+    capabilities.supportsReasoningEffort === true &&
+    capabilities.supportsFunctionCalling === true
+  );
+}
+
 /** Check if OpenAI Responses API should be used for this config. */
-function shouldUseResponsesAPI(
+export function shouldUseResponsesAPI(
   config: ModelConfig,
   useOpenRouter: boolean,
 ): boolean {
@@ -96,7 +110,7 @@ function shouldUseResponsesAPI(
     return false;
   }
   return (
-    config.requiresResponsesAPI ||
+    requiresOpenAIResponsesAPI(config) ||
     (!useOpenRouter &&
       (getConfig<boolean>('texra.model.useOpenAIResponsesAPI', false) ||
         config.fullName.startsWith('gpt-oss')))
