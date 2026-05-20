@@ -68,6 +68,11 @@ import {
   formatSubagentProgress,
   formatFollowUpInstruction,
 } from '@tools/subagentResults';
+import {
+  resolveSubagentBeforeWaitingDelivery,
+  SUBAGENT_DELIVERY_DECISION,
+  type SubagentDeliveryState,
+} from '@tools/subagentDeliveryState';
 import { isWorktreeSupportEnabled } from '@tools/worktreeConfig';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
@@ -94,18 +99,6 @@ const LARGE_BIB_LIMIT_BYTES = 100 * 1024;
 // ============================================================================
 // Subagent delivery state tracking
 // ============================================================================
-
-/**
- * Per-execution delivery gate for subagent result routing.
- *
- * `hasDelivered` prevents duplicate delivery of the same result via both
- * `onBeforeWaiting` and `onCompleted`. Accepted follow-ups mark delivery
- * pending immediately so interrupts before consumption still report back;
- * consuming a follow-up keeps the next cycle pending for `onBeforeWaiting`.
- */
-interface SubagentDeliveryState {
-  hasDelivered: boolean;
-}
 
 const activeSubagentDelivery = new Map<string, SubagentDeliveryState>();
 
@@ -381,7 +374,19 @@ async function executeSubagent(
       deliveryState.hasDelivered = false;
     },
     onBeforeWaiting: async (lastResponse, touchedFiles) => {
-      if (deliveryState.hasDelivered || !childStreamId) return;
+      const deliveryDecision = resolveSubagentBeforeWaitingDelivery(
+        deliveryState,
+        childStreamId,
+      );
+      if (deliveryDecision === SUBAGENT_DELIVERY_DECISION.AlreadyDelivered) {
+        return true;
+      }
+      if (deliveryDecision === SUBAGENT_DELIVERY_DECISION.MissingStream) {
+        return false;
+      }
+      const resolvedChildStreamId = childStreamId;
+      if (!resolvedChildStreamId) return false;
+
       const wallTimeMs = Date.now() - startedAt;
       const msg = formatSubagentDelivery(
         agentName,
@@ -391,7 +396,7 @@ async function executeSubagent(
           lastResponse,
           touchedFiles,
           executionId,
-          streamId: childStreamId,
+          streamId: resolvedChildStreamId,
         },
         {
           wallTimeMs,
@@ -408,6 +413,7 @@ async function executeSubagent(
       // onCompleted can still act as a fallback if we somehow never reach here.
       deliveryState.hasDelivered = true;
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+      return true;
     },
     onCompleted: async (result) => {
       if (deliveryState.hasDelivered) return;

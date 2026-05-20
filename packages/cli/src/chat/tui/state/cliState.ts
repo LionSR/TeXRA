@@ -53,6 +53,7 @@ export interface SessionMeta {
   readonly model: string;
   readonly cwd: string;
   readonly apiMode: CliApiMode;
+  readonly canDelegate: boolean;
   readonly version: string;
 }
 
@@ -95,6 +96,7 @@ const SESSION_META = signal<SessionMeta>({
   model: '',
   cwd: '',
   apiMode: 'personal',
+  canDelegate: false,
   version: '',
 });
 
@@ -212,6 +214,7 @@ function defaultSessionMeta(): SessionMeta {
     model: '',
     cwd: '',
     apiMode: 'personal',
+    canDelegate: false,
     version: SESSION_META.get().version,
   };
 }
@@ -230,4 +233,11 @@ export function resetCliState(sessionMeta = defaultSessionMeta()): void {
 
 export function registerCliStateResetHook(resetHook: () => void): void {
   RESET_HOOKS.add(resetHook);
+}
+
+export function canShowSubagentControls(
+  meta: Pick<SessionMeta, 'canDelegate'>,
+  slice: Pick<StreamSlice, 'childStreams'> | undefined,
+): boolean {
+  return meta.canDelegate || (slice?.childStreams.length ?? 0) > 0;
 }
