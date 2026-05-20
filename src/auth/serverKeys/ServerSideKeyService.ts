@@ -172,9 +172,7 @@ export class ServerSideKeyService {
     this.onCacheCleared = this._onCacheCleared.event;
     this._tierServiceClearSubscription = this._onCacheCleared.event(
       (options) => {
-        if (options.preserveTierCache === true) {
-          return;
-        }
+        if (options.preserveTierCache) return;
         this.tierService.clearCache();
       },
     );
@@ -223,11 +221,8 @@ export class ServerSideKeyService {
   ): Promise<void> {
     const changed = this.useIncludedModelAccess !== value;
     this.useIncludedModelAccess = value;
-    if (value) {
-      this.quotaAutoSwitchActive = false;
-    } else {
-      this.quotaAutoSwitchActive = cacheOptions.quotaAutoSwitch === true;
-    }
+    this.quotaAutoSwitchActive =
+      !value && cacheOptions.quotaAutoSwitch === true;
 
     if (this.globalState) {
       await this.globalState.update(USE_INCLUDED_ACCESS_KEY, value);
@@ -253,7 +248,7 @@ export class ServerSideKeyService {
     this.accessTimestamp = 0;
     this.accessFetchPromise = null;
     this.userTier = null;
-    if (options.resetQuotaFlip === true) {
+    if (options.resetQuotaFlip) {
       this.quotaFlipApplied = false;
       this.quotaAutoSwitchActive = false;
     }
@@ -383,7 +378,7 @@ export class ServerSideKeyService {
   shouldUseServerSideKeysSync(provider: string, modelName?: string): boolean {
     if (
       !this.getUseIncludedModelAccess() ||
-      !this.isProviderOnServer(provider.toLowerCase()) ||
+      !this.isProviderOnServer(provider) ||
       !this.accessResult
     ) {
       return false;
