@@ -235,6 +235,110 @@ export function toAnthropicTools(
 }
 
 /**
+ * Gemini rejects function parameter schemas whose top-level node is
+ * `oneOf`/`anyOf`/`allOf` (e.g. discriminated unions emitted by Zod). The API
+ * requires `type: "object"` at the root. Flatten such unions into a single
+ * object schema by:
+ *  - merging the union of all branch properties,
+ *  - keeping only properties required by every branch as `required`,
+ *  - collapsing discriminator literals from every branch into an `enum`.
+ *
+ * Properties that exist on multiple branches with conflicting shapes fall
+ * back to the first branch's shape; the discriminator enum is what the
+ * model actually selects between, so per-branch shape divergence beyond
+ * that is rare in practice.
+ */
+function flattenTopLevelUnionForGemini(
+  schema: Record<string, unknown>,
+): Record<string, unknown> {
+  const variantKey = (['oneOf', 'anyOf', 'allOf'] as const).find(
+    (k) => Array.isArray(schema[k]) && schema.type !== 'object',
+  );
+  if (!variantKey) return schema;
+
+  const rawVariants = schema[variantKey] as unknown[];
+  const variants: Record<string, unknown>[] = [];
+  for (const v of rawVariants) {
+    if (typeof v !== 'object' || v === null) return schema;
+    const rec = v as Record<string, unknown>;
+    if (rec.type !== 'object') return schema;
+    variants.push(rec);
+  }
+  if (variants.length === 0) return schema;
+
+  const allPropNames = new Set<string>();
+  for (const v of variants) {
+    const props = (v.properties as Record<string, unknown> | undefined) ?? {};
+    for (const name of Object.keys(props)) allPropNames.add(name);
+  }
+
+  const mergedProperties: Record<string, unknown> = {};
+  for (const name of allPropNames) {
+    const branchSchemas: Record<string, unknown>[] = [];
+    for (const v of variants) {
+      const props = (v.properties as Record<string, unknown> | undefined) ?? {};
+      const s = props[name];
+      if (s && typeof s === 'object') {
+        branchSchemas.push(s as Record<string, unknown>);
+      }
+    }
+    if (branchSchemas.length === 1) {
+      mergedProperties[name] = branchSchemas[0];
+      continue;
+    }
+    // Discriminator: every branch pins this prop to a literal value.
+    const constValues = branchSchemas
+      .map((s) => s.const)
+      .filter((c) => c !== undefined);
+    if (constValues.length === branchSchemas.length) {
+      const descriptions = branchSchemas
+        .map((s) => s.description)
+        .filter((d): d is string => typeof d === 'string');
+      const merged: Record<string, unknown> = {
+        type: 'string',
+        enum: constValues,
+      };
+      if (descriptions.length) {
+        merged.description = descriptions.join(' | ');
+      }
+      mergedProperties[name] = merged;
+      continue;
+    }
+    mergedProperties[name] = branchSchemas[0];
+  }
+
+  const requiredSets = variants.map(
+    (v) => new Set<string>((v.required as string[] | undefined) ?? []),
+  );
+  const commonRequired = [...allPropNames].filter((p) =>
+    requiredSets.every((s) => s.has(p)),
+  );
+
+  const flat: Record<string, unknown> = {
+    type: 'object',
+    properties: mergedProperties,
+  };
+  if (commonRequired.length) flat.required = commonRequired;
+  if (typeof schema.description === 'string') {
+    flat.description = schema.description;
+  }
+  return flat;
+}
+
+/**
+ * Gemini rejects `$schema` at the top level of function parameter schemas
+ * with HTTP 400 "Unknown name '$schema'". Zod v4's `toJSONSchema` includes
+ * this dialect URI by default. Strip it for Gemini specifically.
+ */
+function stripDollarSchemaForGemini(
+  schema: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!('$schema' in schema)) return schema;
+  const { $schema: _unused, ...rest } = schema;
+  return rest;
+}
+
+/**
  * Convert generic ToolDefinition objects to Google Gemini Tool format.
  *
  * NOTE: Native googleSearch is currently disabled because Google's regular
@@ -245,11 +349,17 @@ export function toAnthropicTools(
 export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
   if (defs.length === 0) return [];
 
-  const declarations: FunctionDeclaration[] = defs.map((d) => ({
-    name: d.name,
-    description: d.description,
-    parametersJsonSchema: convertToolSchema(d) ?? undefined,
-  }));
+  const declarations: FunctionDeclaration[] = defs.map((d) => {
+    const schema = convertToolSchema(d);
+    const parametersJsonSchema = schema
+      ? stripDollarSchemaForGemini(flattenTopLevelUnionForGemini(schema))
+      : undefined;
+    return {
+      name: d.name,
+      description: d.description,
+      parametersJsonSchema,
+    };
+  });
 
   return [{ functionDeclarations: declarations }];
 }
