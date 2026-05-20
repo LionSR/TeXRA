@@ -101,9 +101,10 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
               setValue('');
               cliState.activeForm.set({
                 commandName: cmd.name,
-                render: (close) => (
+                render: (close, availableRows) => (
                   <Form
                     remainder={parsed.remainder.trimStart()}
+                    availableRows={availableRows}
                     onDone={() => close()}
                   />
                 ),
