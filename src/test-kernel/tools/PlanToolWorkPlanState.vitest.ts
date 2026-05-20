@@ -55,6 +55,7 @@ async function installPlatform(flagOn: boolean): Promise<Platform> {
 
 describe('PlanTool — update (plan approval)', () => {
   it('clears a rejected plan from displayed work-plan state', async () => {
+    await installPlatform(false);
     const { events, host } = createRecordingHost();
     const coordinator = new PlanApprovalCoordinator(host);
     const workPlanState = new WorkPlanState();
