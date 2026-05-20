@@ -41,6 +41,7 @@ function handle(message) {
     process.exit(0);
   }
   if (message.method === 'textDocument/didOpen') {
+    if (process.env.TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS === '1') return;
     send({
       jsonrpc: '2.0',
       method: 'textDocument/publishDiagnostics',
@@ -87,6 +88,7 @@ let fakeLakePath: string;
 let countPath: string;
 let filePath: string;
 let previousCountEnv: string | undefined;
+let previousSuppressDiagnosticsEnv: string | undefined;
 
 beforeEach(() => {
   tempRoot = mkdtempSync(path.join(tmpdir(), 'texra-direct-lsp-'));
@@ -101,6 +103,9 @@ beforeEach(() => {
   countPath = path.join(tempRoot, 'starts.txt');
   previousCountEnv = process.env.TEXRA_FAKE_LEAN_COUNT;
   process.env.TEXRA_FAKE_LEAN_COUNT = countPath;
+  previousSuppressDiagnosticsEnv =
+    process.env.TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS;
+  delete process.env.TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS;
 });
 
 afterEach(() => {
@@ -108,6 +113,12 @@ afterEach(() => {
     delete process.env.TEXRA_FAKE_LEAN_COUNT;
   } else {
     process.env.TEXRA_FAKE_LEAN_COUNT = previousCountEnv;
+  }
+  if (previousSuppressDiagnosticsEnv == null) {
+    delete process.env.TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS;
+  } else {
+    process.env.TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS =
+      previousSuppressDiagnosticsEnv;
   }
   rmSync(tempRoot, { recursive: true, force: true });
 });
@@ -139,6 +150,28 @@ describe('createDirectLspLeanAdapter', () => {
     await expect(session.ensureReady()).rejects.toThrow(
       'Lean session has been disposed.',
     );
+  });
+
+  fakeLakeIt('settles diagnostic waiters during disposal', async () => {
+    process.env.TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS = '1';
+    const session = new LeanSession({
+      workspaceRoot: projectRoot,
+      lakeCommand: fakeLakePath,
+    });
+    await session.ensureReady();
+
+    const pendingDiagnostics = session.fetchDiagnostics(filePath);
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    await session.dispose();
+
+    await expect(
+      Promise.race([
+        pendingDiagnostics.then(() => 'settled'),
+        new Promise<string>((resolve) =>
+          setTimeout(() => resolve('timed out'), 500),
+        ),
+      ]),
+    ).resolves.toBe('settled');
   });
 
   fakeLakeIt(

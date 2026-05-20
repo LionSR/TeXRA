@@ -92,6 +92,7 @@ export class LeanSession {
     this.child = undefined;
     this.rpc = undefined;
     this.readyPromise = undefined;
+    this.releaseAllDiagnosticsWaiters();
     this.openFiles.clear();
     unregisterLeanServer(this.id);
     if (!rpc || !child) return;
@@ -122,7 +123,11 @@ export class LeanSession {
       this.rpc.notify('textDocument/didClose', {
         textDocument: { uri: pathToUri(absolute) },
       });
-      this.openFiles.delete(absolute);
+      const state = this.openFiles.get(absolute);
+      if (state) {
+        this.releaseDiagnosticsWaiters(state);
+        this.openFiles.delete(absolute);
+      }
     }
     await this.ensureFileOpen(absolute, { forceReload: true });
   }
@@ -229,6 +234,7 @@ export class LeanSession {
       this.rpc?.dispose(message ?? 'Lean server stopped');
       this.rpc = undefined;
       this.readyPromise = undefined;
+      this.releaseAllDiagnosticsWaiters();
       this.openFiles.clear();
     };
     const childError = new Promise<never>((_resolve, reject) => {
@@ -357,6 +363,7 @@ export class LeanSession {
     if (!state) return;
     const start = Date.now();
     while (Date.now() - start < DIAGNOSTICS_WAIT_MS) {
+      if (this.disposed || this.openFiles.get(absolute) !== state) return;
       const sinceLast = state.lastDiagnosticsAt
         ? Date.now() - state.lastDiagnosticsAt
         : 0;
@@ -387,9 +394,27 @@ export class LeanSession {
     state.lastDiagnosticsAt = Date.now();
     // Release any waiters — the quiet-window check above re-arms if needed.
     for (const waiter of state.diagnosticsWaiters.splice(0)) {
-      clearTimeout(waiter.timeout);
-      waiter.resolve();
+      this.resolveDiagnosticsWaiter(waiter);
     }
+  }
+
+  private releaseAllDiagnosticsWaiters(): void {
+    for (const state of this.openFiles.values()) {
+      this.releaseDiagnosticsWaiters(state);
+    }
+  }
+
+  private releaseDiagnosticsWaiters(state: OpenedFile): void {
+    for (const waiter of state.diagnosticsWaiters.splice(0)) {
+      this.resolveDiagnosticsWaiter(waiter);
+    }
+  }
+
+  private resolveDiagnosticsWaiter(
+    waiter: OpenedFile['diagnosticsWaiters'][number],
+  ): void {
+    clearTimeout(waiter.timeout);
+    waiter.resolve();
   }
 }
 
