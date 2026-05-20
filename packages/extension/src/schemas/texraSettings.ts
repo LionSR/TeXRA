@@ -1,6 +1,9 @@
 // Third-party imports
 import { z } from 'zod';
 
+// Local imports - shared platform helpers
+import { stripPrefix } from '@platform/defaults/configKeyHelpers';
+
 // Local imports - shared core schema
 import {
   CORE_SETTING_PATHS,
@@ -96,7 +99,11 @@ const GENERATED_PACKAGE_SCHEMA_FIELDS = [
 ] as const;
 
 let texraSettingsJsonSchema: JsonSchemaObject | undefined;
-const parsedDefaultTexraSettings = TexraSettingsSchema.parse({});
+let parsedDefaultTexraSettings: TexraSettings | undefined;
+
+function getParsedDefaults(): TexraSettings {
+  return (parsedDefaultTexraSettings ??= TexraSettingsSchema.parse({}));
+}
 
 function getNestedValue(source: unknown, path: TexraSettingPath): unknown {
   let value = source;
@@ -116,7 +123,7 @@ function cloneSettingValue(value: unknown): unknown {
 export function flattenTexraSettings(settings?: unknown): FlatTexraSettings {
   const parsed =
     settings === undefined
-      ? parsedDefaultTexraSettings
+      ? getParsedDefaults()
       : TexraSettingsSchema.parse(settings);
   return Object.fromEntries(
     TEXRA_SETTING_PATHS.map((path) => [
@@ -127,7 +134,7 @@ export function flattenTexraSettings(settings?: unknown): FlatTexraSettings {
 }
 
 export function getTexraSettingDefault(path: TexraSettingPath): unknown {
-  return cloneSettingValue(getNestedValue(parsedDefaultTexraSettings, path));
+  return cloneSettingValue(getNestedValue(getParsedDefaults(), path));
 }
 
 function getNestedJsonSchema(path: TexraSettingPath): JsonSchemaObject {
@@ -162,7 +169,7 @@ function buildTexraPackageConfigurationProperty(
   key: TexraSettingKey,
   existing: TexraPackageConfigurationProperty = {},
 ): TexraPackageConfigurationProperty {
-  const path = key.replace(/^texra\./, '') as TexraSettingPath;
+  const path = stripPrefix(key) as TexraSettingPath;
   const generated = pickPackageSchemaFields(getNestedJsonSchema(path));
   if (generated.type !== 'null') {
     generated.default = getTexraSettingDefault(path);
