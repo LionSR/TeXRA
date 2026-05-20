@@ -23,10 +23,7 @@ export function configKeyVariants(key: string): string[] {
   return [`${TEXRA_PREFIX}${unprefixed}`, unprefixed];
 }
 
-export function matchesConfigKey(
-  candidate: string,
-  changedKey: string,
-): boolean {
+function matchesConfigKey(candidate: string, changedKey: string): boolean {
   return changedKey === candidate || changedKey.startsWith(`${candidate}.`);
 }
 
@@ -35,7 +32,7 @@ export interface ConfigWatcher {
   listener: () => void;
 }
 
-export function watcherMatches(
+function watcherMatches(
   watcherKey: ConfigWatcher['key'],
   changedKey: string,
 ): boolean {

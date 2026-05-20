@@ -14,7 +14,7 @@ import { z } from 'zod';
  *   values; selecting them in the settings tree opens the API key dialog.
  *
  * Layered on top of {@link CoreSettingsSchema} via the composed
- * `TexraSettingsSchema` in `settingsConfiguration.ts`.
+ * `TexraSettingsSchema` in `texraSettings.ts`.
  */
 
 export const DEFAULT_VSCODE_SETTINGS_EXTENSION = {

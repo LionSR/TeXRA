@@ -1,15 +1,21 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - shared platform helpers
-import { stripPrefix } from '@platform/defaults/configKeyHelpers';
-
-// Local imports - shared core schema
+// Local imports - shared core/runtime modules
+//
+// This file is also loaded after TypeScript emit by
+// scripts/sync-settings-configuration.mjs under plain Node. Keep these imports
+// relative so the compiled module does not require tsconfig path aliases.
+/* eslint-disable local/prefer-alias-for-deep-relative-imports -- This module
+ * must remain require-able after tsc emit by the plain Node settings sync
+ * script, which does not install tsconfig alias hooks. */
+import { stripPrefix } from '../../../../src/platform/defaults/configKeyHelpers';
 import {
   CORE_SETTING_PATHS,
   CoreSettingsShape,
   DEFAULT_CORE_SETTINGS,
-} from '@shared/schemas/coreSettings';
+} from '../../../../src/shared/schemas/coreSettings';
+/* eslint-enable local/prefer-alias-for-deep-relative-imports */
 
 // Local imports - VS Code extension schema
 import {
