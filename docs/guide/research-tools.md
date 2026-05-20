@@ -75,9 +75,9 @@ Set `texra.bib.defaultPath` in your VS Code settings (<wa-icon library="texra" n
 
 The `research` agent can call `wolfram` to run Wolfram Language code and check symbolic algebra, integrals, or limits before you commit them to the manuscript. Requires a local [Wolfram Engine](https://www.wolfram.com/engine/); status shows on **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) → **Computation** (<wa-icon library="texra" name="symbol-operator"></wa-icon>).
 
-### <wa-icon library="texra" name="comment-discussion"></wa-icon> Ask Another Model for a Second Opinion
+### <wa-icon library="texra" name="comment-discussion"></wa-icon> External Inquiry
 
-The `inquiry` tool lets a TeXRA agent dispatch a question to an external chat (ChatGPT, Claude, Gemini) via a copy/paste hand-off so you can bring a second opinion into the loop without switching windows. Dispatch is non-blocking — the agent's cycle continues while you fetch the answer, and resumes automatically once you paste it back (even after a reload). No API key required — uses your existing subscription.
+The `inquiry` tool lets a TeXRA agent ask one question in an external chat (ChatGPT, Claude, Gemini) through a copy/paste flow, then resume with the answer. Dispatch is non-blocking: the agent's cycle continues while you fetch the answer, and resumes automatically once you paste it back (even after a reload). No API key required — it uses your existing subscription. In the CLI, the same flow appears as a terminal modal: paste the prepared question into your chat subscription, then paste the answer back into TeXRA.
 
 ## Which Agent to Use
 
