@@ -546,16 +546,25 @@ export class FileList extends LitElement {
       ${renderFileActionButton({
         icon: 'diff',
         label: 'Compare with base',
-        title: 'Compare with base',
+        title: 'Compare with base in a side-by-side diff',
         className: 'compare-btn',
         command: PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL,
         file: filePath,
         base: basePath,
       })}
       ${renderFileActionButton({
+        icon: 'diff-multiple',
+        label: 'Run latexdiff',
+        title: 'Run latexdiff against the base file',
+        className: 'latexdiff-btn',
+        command: PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE,
+        file: filePath,
+        base: basePath,
+      })}
+      ${renderFileActionButton({
         icon: 'check',
         label: 'Accept edits',
-        title: 'Accept edits',
+        title: 'Accept edits into the workspace file',
         className: 'accept-btn',
         command: PROGRESS_VIEW_COMMANDS.ACCEPT_FILE,
         file: filePath,
@@ -564,7 +573,7 @@ export class FileList extends LitElement {
       ${renderFileActionButton({
         icon: 'git-merge',
         label: 'Merge edits',
-        title: 'Merge edits',
+        title: 'Merge edits into the workspace file',
         className: 'merge-btn',
         command: PROGRESS_VIEW_COMMANDS.MERGE_FILE,
         file: filePath,
@@ -583,7 +592,7 @@ export class FileList extends LitElement {
     return renderFileActionButton({
       icon: 'diff-added',
       label: 'Compare with previous round',
-      title: 'Compare with previous round',
+      title: 'Compare with previous round in a side-by-side diff',
       className: 'prev-btn',
       command: PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS,
       file: filePath,
