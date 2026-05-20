@@ -597,29 +597,33 @@ const doctorCommand = defineCommand({
   },
 });
 
+export function doctorPlatformInitContext(context: CliContext) {
+  return { ...context, quietLogs: true };
+}
+
 async function runDoctor(context: CliContext): Promise<number> {
   let initError: unknown;
   try {
-    await initCliPlatform({
-      ...context,
-      quietLogs: true,
-      skipIncludedModelAccess: true,
+    await suppressCliFetchStackLogs(async () => {
+      await initCliPlatform(doctorPlatformInitContext(context));
     });
   } catch (error) {
     initError = error;
   }
-  const report = await buildDoctorReport(
-    context,
-    initError == null
-      ? undefined
-      : {
-          authProfile: async () => {
-            throw initError;
+  const report = await suppressCliFetchStackLogs(() =>
+    buildDoctorReport(
+      context,
+      initError == null
+        ? undefined
+        : {
+            authProfile: async () => {
+              throw initError;
+            },
+            modelAccessList: async () => {
+              throw initError;
+            },
           },
-          modelAccessList: async () => {
-            throw initError;
-          },
-        },
+    ),
   );
   writeDoctorReport(context, report);
   return doctorExitCode(report);
