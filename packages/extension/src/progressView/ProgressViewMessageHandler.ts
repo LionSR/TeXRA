@@ -794,6 +794,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           action: 'approve',
         });
         break;
+      case 'approve_and_odyssey':
+        resolvePlanApproval(approvalId, {
+          action: 'approve_and_odyssey',
+        });
+        break;
       case 'reject':
         resolvePlanApproval(approvalId, {
           action: 'reject',

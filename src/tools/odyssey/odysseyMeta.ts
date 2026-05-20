@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { StreamTabIdSchema } from '@shared/schemas/identifiers';
+import { PlanSchema } from '@shared/schemas/plan';
 
 export const ODYSSEY_TOOL_NAME = 'odyssey' as const;
 
@@ -66,6 +67,12 @@ export const OdysseySchema = z.object({
   updatedAt: z.iso.datetime(),
   completedReason: z.string().nullish(),
   history: z.array(OdysseyEventSchema).default([]),
+  /**
+   * Structured plan that seeded the odyssey, when it was started from a
+   * Plan-tool approval. Pure metadata for UI / inspection — the
+   * continuation prompt still uses `objective` as the canonical instruction.
+   */
+  plan: PlanSchema.nullish(),
 });
 
 /**

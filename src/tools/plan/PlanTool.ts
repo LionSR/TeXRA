@@ -15,6 +15,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
+import { tryPlatform } from '@platform/platform';
 import type { WorkPlanState } from '@agent/core/AgentWorkspaceState';
 import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
 import { waitForPlanApproval } from '@agent/runtime/runCoordinators';
@@ -28,6 +29,7 @@ import {
   type Plan,
 } from '@shared/schemas';
 import { isProposalBypassedForStream } from '@tools/approval';
+import { ODYSSEY_FEATURE_FLAG_KEY, OdysseyStore } from '@tools/odyssey';
 import { type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
@@ -35,6 +37,30 @@ const logger = new AgentLogger('PlanTool');
 
 /** Counter for generating unique approval IDs */
 let approvalCounter = 0;
+
+/**
+ * Render a plan as an odyssey objective: a verifiable stopping condition that
+ * names each step so the autonomous loop has the full structure in context,
+ * not just the summary.
+ */
+function buildOdysseyObjectiveFromPlan(plan: Plan): string {
+  const stepLines = plan.steps.map((step, i) => {
+    const head = `${i + 1}. ${step.title} — ${step.description}`;
+    return step.files.length > 0
+      ? `${head}\n   Files: ${step.files.join(', ')}`
+      : head;
+  });
+  return [
+    `Complete the following plan in full, then stop.`,
+    ``,
+    `Plan summary: ${plan.summary}`,
+    ``,
+    `Steps:`,
+    ...stepLines,
+    ``,
+    `Stopping condition: every step above has been marked completed via the plan tool AND verified against current external state (file contents, command output, or test results).`,
+  ].join('\n');
+}
 
 /**
  * Schema for the plan tool input.
@@ -152,17 +178,26 @@ Best practices:
     workPlanState: WorkPlanState,
   ): Promise<ToolResult> {
     const approvalId = `plan-${Date.now().toString(36)}-${++approvalCounter}`;
+    const odysseyEnabled =
+      tryPlatform()?.config.get<boolean>(ODYSSEY_FEATURE_FLAG_KEY, false) ??
+      false;
 
     logger.info(`Requesting approval for plan: ${plan.summary}`);
 
     const result: PlanApprovalResult = await waitForPlanApproval(streamId, {
       approvalId,
       plan,
+      odysseyEnabled,
     });
 
     if (result.action === 'approve') {
       logger.info('Plan approved by user');
       return this.buildApprovedResult({ autoApproved: false });
+    }
+
+    if (result.action === 'approve_and_odyssey') {
+      logger.info('Plan approved by user with odyssey mode');
+      return this.startOdysseyForPlan(plan, streamId);
     }
 
     // Rejected or timed out — clear the plan from UI
@@ -191,6 +226,58 @@ Best practices:
       isError: true,
       ...(feedback ? { userInstruction: feedback } : {}),
     };
+  }
+
+  /**
+   * Start an autonomous odyssey whose objective is the just-approved plan.
+   * Falls back to a plain approved result if odyssey is disabled, or if one
+   * is already in flight for the stream.
+   */
+  private async startOdysseyForPlan(
+    plan: Plan,
+    streamId: string,
+  ): Promise<ToolResult> {
+    const odysseyEnabled =
+      tryPlatform()?.config.get<boolean>(ODYSSEY_FEATURE_FLAG_KEY, false) ??
+      false;
+    if (!odysseyEnabled) {
+      logger.warn(
+        'Approve & Run Autonomously requested but odyssey feature flag is off; ' +
+          'proceeding as a plain approval.',
+      );
+      return this.buildApprovedResult({ autoApproved: false });
+    }
+
+    const objective = buildOdysseyObjectiveFromPlan(plan);
+    try {
+      const odyssey = await OdysseyStore.start(streamId, objective, { plan });
+      return {
+        summary: `Plan approved — odyssey ${odyssey.odysseyId} started`,
+        output:
+          `The user approved this plan and started an autonomous odyssey ` +
+          `(${odyssey.odysseyId}) toward the plan's stopping condition.\n\n` +
+          `Discipline:\n` +
+          `- Work through the plan steps and update their statuses with the plan tool as you progress.\n` +
+          `- Do not call odyssey(complete) until every plan step is marked completed AND the result is verified against current external state (file contents, command output, test results).\n` +
+          `- If you genuinely need user input to proceed, call odyssey(pause) with a reason describing what you need.\n` +
+          `- Otherwise, keep working in scoped checkpoints until the plan is finished.\n\n` +
+          `Objective:\n${objective}`,
+      };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      logger.warn(
+        `Failed to start odyssey for approved plan; falling back to plain approval. ${reason}`,
+      );
+      return {
+        summary:
+          'Plan approved — odyssey could not be started, proceeding without it',
+        output:
+          `The user approved this plan and requested autonomous execution, but ` +
+          `the odyssey could not be started: ${reason}\n\n` +
+          `Proceed with the plan steps as a normal turn-by-turn workflow. Update ` +
+          `plan step statuses as you go.`,
+      };
+    }
   }
 
   private buildApprovedResult({

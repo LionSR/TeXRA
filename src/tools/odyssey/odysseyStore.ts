@@ -7,6 +7,8 @@ import {
 import { bus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas/identifiers';
 
+import type { Plan } from '@shared/schemas/plan';
+
 import {
   ODYSSEY_DEFAULT_MAX_CONTINUATIONS,
   ODYSSEY_HISTORY_LIMIT,
@@ -155,7 +157,11 @@ export const OdysseyStore = {
    * in a non-terminal state (active or paused). Replaces complete/abandoned
    * records — finishing one and starting another is a normal flow.
    */
-  async start(streamId: StreamTabId, objective: string): Promise<Odyssey> {
+  async start(
+    streamId: StreamTabId,
+    objective: string,
+    options?: { plan?: Plan },
+  ): Promise<Odyssey> {
     const trimmed = requireNonEmpty(objective, 'objective');
     const existing = readRaw(streamId);
     if (existing && isOdysseyInFlight(existing)) {
@@ -175,6 +181,7 @@ export const OdysseyStore = {
       createdAt: now,
       updatedAt: now,
       history: [{ at: now, kind: 'started', detail: trimmed }],
+      plan: options?.plan ?? null,
     };
     await Promise.all([writeRaw(odyssey), addToIndex(streamId)]);
     bus.emit('odysseyStateChanged', { streamId });
