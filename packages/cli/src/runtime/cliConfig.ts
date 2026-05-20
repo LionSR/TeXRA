@@ -101,6 +101,19 @@ function warnInvalidField(
   }
 }
 
+// Top-level fields validated under both bare (legacy) and `texra.*` forms.
+const TOP_LEVEL_FIELD_SCHEMAS: ReadonlyArray<[string, z.ZodType]> = [
+  ['agent', NonEmptyStringSchema],
+  ['model', ModelSchema],
+  ['outputFormat', OutputFormatSchema],
+  ['approvalPolicy', ApprovalPolicySchema],
+];
+
+const COMMAND_FIELD_SCHEMAS: ReadonlyArray<[string, z.ZodType]> = [
+  ['agent', NonEmptyStringSchema],
+  ['model', ModelSchema],
+];
+
 function collectValidationWarnings(
   filePath: string,
   record: Record<string, unknown>,
@@ -108,47 +121,11 @@ function collectValidationWarnings(
   const warnings: string[] = [];
   warnUnknownKeys(warnings, filePath, record, TOP_LEVEL_KEYS);
 
-  // Validate bare keys (legacy format)
-  warnInvalidField(warnings, filePath, record, 'agent', NonEmptyStringSchema);
-  warnInvalidField(warnings, filePath, record, 'model', ModelSchema);
-  warnInvalidField(
-    warnings,
-    filePath,
-    record,
-    'outputFormat',
-    OutputFormatSchema,
-  );
-  warnInvalidField(
-    warnings,
-    filePath,
-    record,
-    'approvalPolicy',
-    ApprovalPolicySchema,
-  );
-
-  // Validate texra.* prefixed keys (unified format)
-  warnInvalidField(
-    warnings,
-    filePath,
-    record,
-    'texra.agent',
-    NonEmptyStringSchema,
-  );
-  warnInvalidField(warnings, filePath, record, 'texra.model', ModelSchema);
-  warnInvalidField(
-    warnings,
-    filePath,
-    record,
-    'texra.outputFormat',
-    OutputFormatSchema,
-  );
-  warnInvalidField(
-    warnings,
-    filePath,
-    record,
-    'texra.approvalPolicy',
-    ApprovalPolicySchema,
-  );
+  // Validate top-level fields in both bare (legacy) and `texra.*` forms.
+  for (const [key, schema] of TOP_LEVEL_FIELD_SCHEMAS) {
+    warnInvalidField(warnings, filePath, record, key, schema);
+    warnInvalidField(warnings, filePath, record, `texra.${key}`, schema);
+  }
 
   for (const section of ['chat', 'run', 'texra.chat', 'texra.run'] as const) {
     if (!Object.hasOwn(record, section)) continue;
@@ -157,29 +134,11 @@ function collectValidationWarnings(
       warnings.push(`Ignoring invalid ${filePath} key "${section}".`);
       continue;
     }
-    warnUnknownKeys(
-      warnings,
-      filePath,
-      sectionValue,
-      COMMAND_KEYS,
-      `${section}.`,
-    );
-    warnInvalidField(
-      warnings,
-      filePath,
-      sectionValue,
-      'agent',
-      NonEmptyStringSchema,
-      `${section}.`,
-    );
-    warnInvalidField(
-      warnings,
-      filePath,
-      sectionValue,
-      'model',
-      ModelSchema,
-      `${section}.`,
-    );
+    const prefix = `${section}.`;
+    warnUnknownKeys(warnings, filePath, sectionValue, COMMAND_KEYS, prefix);
+    for (const [key, schema] of COMMAND_FIELD_SCHEMAS) {
+      warnInvalidField(warnings, filePath, sectionValue, key, schema, prefix);
+    }
   }
   return warnings;
 }
@@ -191,24 +150,9 @@ function parseOptional<T>(schema: z.ZodType<T>, value: unknown): T | undefined {
 
 function pickCommandConfig(record: Record<string, unknown>): CliCommandConfig {
   return {
-    agent: Object.hasOwn(record, 'agent')
-      ? parseOptional(NonEmptyStringSchema, record.agent)
-      : undefined,
-    model: Object.hasOwn(record, 'model')
-      ? parseOptional(ModelSchema, record.model)
-      : undefined,
+    agent: parseOptional(NonEmptyStringSchema, record.agent),
+    model: parseOptional(ModelSchema, record.model),
   };
-}
-
-function pickRecord(
-  record: Record<string, unknown>,
-  bareKey: string,
-): Record<string, unknown> | undefined {
-  const prefixedKey = `texra.${bareKey}`;
-  const prefixedValue = record[prefixedKey];
-  if (isPlainRecord(prefixedValue)) return prefixedValue;
-  const bareValue = record[bareKey];
-  return isPlainRecord(bareValue) ? bareValue : undefined;
 }
 
 /** Look up a value by both bare and `texra.*` prefixed key — prefixed takes precedence. */
@@ -217,12 +161,19 @@ function pickValue<T>(
   bareKey: string,
   schema: z.ZodType<T>,
 ): T | undefined {
-  const prefixedKey = `texra.${bareKey}`;
-  if (Object.hasOwn(record, prefixedKey)) {
-    return parseOptional(schema, record[prefixedKey]);
+  for (const key of [`texra.${bareKey}`, bareKey]) {
+    if (Object.hasOwn(record, key)) return parseOptional(schema, record[key]);
   }
-  if (Object.hasOwn(record, bareKey)) {
-    return parseOptional(schema, record[bareKey]);
+  return undefined;
+}
+
+function pickRecord(
+  record: Record<string, unknown>,
+  bareKey: string,
+): Record<string, unknown> | undefined {
+  for (const key of [`texra.${bareKey}`, bareKey]) {
+    const value = record[key];
+    if (isPlainRecord(value)) return value;
   }
   return undefined;
 }
