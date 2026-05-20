@@ -17,6 +17,7 @@ import {
   insertText,
   type TextEdit,
 } from './textInputEditing';
+import { isPlainReturnInput } from './inputKeys';
 
 export interface BaseTextInputProps {
   readonly value: string;
@@ -87,13 +88,13 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
 
   useInput(
     (input, key) => {
-      if (key.return) {
-        onSubmit(value);
-        return;
-      }
       if (key.ctrl && input === 'j') {
         // Ctrl-J → literal newline (kills the legacy `/multi` ceremony).
         applyEdit(insertText(value, cursor, '\n'));
+        return;
+      }
+      if (isPlainReturnInput(input, key)) {
+        onSubmit(value);
         return;
       }
       if (key.backspace) {

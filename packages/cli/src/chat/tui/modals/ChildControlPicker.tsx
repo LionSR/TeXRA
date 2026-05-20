@@ -215,7 +215,9 @@ function TaskDetailView({
   useInput((input, key) => {
     const action = childPickerKeyAction({
       input,
+      ctrl: key.ctrl,
       escape: key.escape,
+      meta: key.meta,
       upArrow: key.upArrow,
       downArrow: key.downArrow,
       return: key.return,
@@ -338,7 +340,9 @@ export function ChildControlPicker({
     (input, key) => {
       const action = childPickerKeyAction({
         input,
+        ctrl: key.ctrl,
         escape: key.escape,
+        meta: key.meta,
         upArrow: key.upArrow,
         downArrow: key.downArrow,
         return: key.return,
