@@ -134,7 +134,7 @@ export function formatCliHistoryText(
   return entries.map(formatCliHistoryLine).join('\n');
 }
 
-export function formatCliHistoryLine(entry: CliHistoryEntry): string {
+function formatCliHistoryLine(entry: CliHistoryEntry): string {
   return [
     entry.id,
     entry.timestamp,
@@ -226,24 +226,20 @@ async function walkStorageDirectory(
   maxDepth: number,
 ): Promise<CliHistoryFile[]> {
   const fullPath = relativePath ? path.join(basePath, relativePath) : basePath;
-  let entries: [string, number][];
-  try {
-    entries = await StorageFS.readDir(fullPath);
-  } catch (error) {
+  const entries = await StorageFS.readDir(fullPath).catch((error: unknown) => {
     if (isFileNotFoundError(error)) return [];
     throw error;
-  }
+  });
 
   const files: CliHistoryFile[] = [];
   for (const [name, type] of entries) {
     if (isHistoryKvFile(name)) continue;
     const rawRelative = relativePath ? path.join(relativePath, name) : name;
-    const normalizedPath = rawRelative.replaceAll('\\', '/');
     const childPath = path.join(basePath, rawRelative);
     const entryIsDirectory = isDirectory(type);
     const stat = await StorageFS.stat(childPath).catch(() => ({ size: 0 }));
     files.push({
-      path: normalizedPath,
+      path: rawRelative.replaceAll('\\', '/'),
       size: stat.size,
       isDirectory: entryIsDirectory,
     });
