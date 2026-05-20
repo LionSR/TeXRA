@@ -21,7 +21,11 @@ import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
-import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import {
+  STREAM_STATUS,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 
 import { type CliContext, readCliVersion } from '../../runtime/cliContext';
@@ -43,12 +47,7 @@ import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
 } from '../../runtime/approvalPolicy';
-import {
-  formatCliHistoryText,
-  listCliHistoryEntries,
-  parseCliHistoryId,
-  readCliHistoryConfig,
-} from '../../runtime/history';
+import { parseCliHistoryId, readCliHistoryConfig } from '../../runtime/history';
 import { App } from './App';
 import { AgentListForm } from './forms/AgentListForm';
 import { ApiModeForm } from './forms/ApiModeForm';
@@ -57,6 +56,7 @@ import {
   formatApprovalPolicyForCli as formatApprovalPolicy,
 } from './forms/ApprovalPolicyForm';
 import { ModelListForm } from './forms/ModelListForm';
+import { ResumeListForm } from './forms/ResumeListForm';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { listSlashCommands, parseSlashInput } from './commands/slashRegistry';
 import { loadInputHistory } from './history/inputHistory';
@@ -350,6 +350,43 @@ function applyCliApprovalPolicySelection(
   );
 }
 
+async function resumeStoredExecution(
+  id: ExecutionId,
+  context: SlashCommandContext,
+): Promise<void> {
+  if (context.session.runPromise) {
+    appendLocalAssistantTranscript(
+      'Finish the active chat before resuming a stored execution.',
+    );
+    return;
+  }
+  const config = await readCliHistoryConfig(id);
+  if (!config) {
+    appendLocalAssistantTranscript(`Execution not found: ${id}`);
+    return;
+  }
+  context.startStoredExecution(config);
+  appendLocalAssistantTranscript(`Resuming execution ${id}.`);
+}
+
+function openCliResumeListForm(context: SlashCommandContext): void {
+  cliState.activeForm.set({
+    commandName: 'resume',
+    render: (close, availableRows) => (
+      <ResumeListForm
+        availableRows={availableRows}
+        onSelect={(id) => {
+          close();
+          void resumeStoredExecution(id, context).catch((error: unknown) => {
+            appendLocalAssistantTranscript(toErrorMessage(error));
+          });
+        }}
+        onClose={close}
+      />
+    ),
+  });
+}
+
 async function handleTuiSlashCommand(
   line: string,
   context: SlashCommandContext,
@@ -437,17 +474,7 @@ async function handleTuiSlashCommand(
     }
     case 'resume': {
       if (!rest) {
-        const entries = (await listCliHistoryEntries()).slice(0, 20);
-        appendLocalAssistantTranscript(
-          entries.length
-            ? [
-                'Recent executions:',
-                formatCliHistoryText(entries),
-                '',
-                'Usage: /resume <id>',
-              ].join('\n')
-            : 'No execution history found.',
-        );
+        openCliResumeListForm(context);
         return true;
       }
       const id = parseCliHistoryId(rest);
@@ -455,19 +482,7 @@ async function handleTuiSlashCommand(
         appendLocalAssistantTranscript(`Invalid execution id: ${rest}`);
         return true;
       }
-      if (context.session.runPromise) {
-        appendLocalAssistantTranscript(
-          'Finish the active chat before resuming a stored execution.',
-        );
-        return true;
-      }
-      const config = await readCliHistoryConfig(id);
-      if (!config) {
-        appendLocalAssistantTranscript(`Execution not found: ${id}`);
-        return true;
-      }
-      context.startStoredExecution(config);
-      appendLocalAssistantTranscript(`Resuming execution ${id}.`);
+      await resumeStoredExecution(id, context);
       return true;
     }
     default: {
