@@ -9,7 +9,12 @@ import {
 } from '@shared/schemas';
 
 import { approvalQueueDepth } from '../state/approvalQueue';
-import { cliState, NO_BYPASS, type BypassState } from '../state/cliState';
+import {
+  canShowSubagentControls,
+  cliState,
+  NO_BYPASS,
+  type BypassState,
+} from '../state/cliState';
 import { useSignal } from '../state/useSignal';
 import { shortCliApiMode } from '../../../runtime/apiAccessMode';
 
@@ -32,6 +37,7 @@ export interface StatusBarDisplayInput {
   readonly activeSubagents: number;
   readonly activeProcesses: number;
   readonly approvalDepth: number;
+  readonly subagentControlsAvailable: boolean;
   readonly model: string;
   readonly apiMode: string;
 }
@@ -106,19 +112,32 @@ function roundSegment(
   return turns > 0 ? { text: `r${turns}`, color: 'dim' } : undefined;
 }
 
+const TASKS_BINDING = '[Alt-p]tasks';
+const SUBAGENTS_BINDING = '[Alt-s]subagents';
+
 const STATUS_BAR_BINDINGS = [
   '[Tab]streams',
   '[Alt-1..9]focus',
-  '[Alt-p]tasks',
-  '[Alt-s]subagents',
+  TASKS_BINDING,
   '[/status]details',
   '[/model]models',
   '[/api]api',
   '[Ctrl-C]stop',
 ] as const;
 
-export function statusBarBindingsText(): string {
-  return STATUS_BAR_BINDINGS.join('  ');
+export function statusBarBindingsText(
+  subagentControlsAvailable: boolean,
+): string {
+  const bindings: string[] = [...STATUS_BAR_BINDINGS];
+  if (subagentControlsAvailable) {
+    const tasksIndex = bindings.indexOf(TASKS_BINDING);
+    bindings.splice(
+      tasksIndex >= 0 ? tasksIndex + 1 : bindings.length,
+      0,
+      SUBAGENTS_BINDING,
+    );
+  }
+  return bindings.join('  ');
 }
 
 export function buildStatusBarDisplay(
@@ -167,7 +186,7 @@ export function buildStatusBarDisplay(
       input.queuedFollowUps > 0
         ? `queued: ${input.queuedFollowUps}`
         : undefined,
-    bindings: statusBarBindingsText(),
+    bindings: statusBarBindingsText(input.subagentControlsAvailable),
   };
 }
 
@@ -192,6 +211,7 @@ export function StatusBar(): React.JSX.Element {
     activeSubagents: slice?.activeSubagents.length ?? 0,
     activeProcesses: slice?.activeProcesses.length ?? 0,
     approvalDepth: approvals,
+    subagentControlsAvailable: canShowSubagentControls(sessionMeta, slice),
     model: sessionMeta.model,
     apiMode: shortCliApiMode(sessionMeta.apiMode),
   });

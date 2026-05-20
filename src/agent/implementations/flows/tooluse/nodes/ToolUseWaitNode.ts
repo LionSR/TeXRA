@@ -13,6 +13,10 @@ interface WaitPrepResult {
   touchedFiles: string[];
   /** True when entering after a failed/cancelled cycle. */
   afterError: boolean;
+  /** True when an earlier cycle already delivered this subagent result. */
+  previouslyDeliveredToOrchestrator: boolean;
+  /** Set after the current cycle has been delivered to an orchestrator. */
+  deliveredToOrchestrator?: boolean;
 }
 
 export class ToolUseWaitNode<C> extends Node<
@@ -25,8 +29,16 @@ export class ToolUseWaitNode<C> extends Node<
     const afterError = !!(shared.lastError || shared.userCancelledRetry);
 
     // Only extract when the callback is wired (subagent mode)
+    const previouslyDeliveredToOrchestrator =
+      shared.deliveredToOrchestrator === true;
+
     if (!onBeforeWaiting)
-      return { lastResponse: undefined, touchedFiles: [], afterError };
+      return {
+        lastResponse: undefined,
+        touchedFiles: [],
+        afterError,
+        previouslyDeliveredToOrchestrator,
+      };
 
     return {
       touchedFiles: extractTouchedFiles(shared.stateSlices),
@@ -34,6 +46,7 @@ export class ToolUseWaitNode<C> extends Node<
         modelHandler.extractAssistantText(m),
       ),
       afterError,
+      previouslyDeliveredToOrchestrator,
     };
   }
 
@@ -48,6 +61,9 @@ export class ToolUseWaitNode<C> extends Node<
     } = this.services;
 
     if (checkInterruption()) {
+      if (prepRes.previouslyDeliveredToOrchestrator) {
+        prepRes.deliveredToOrchestrator = true;
+      }
       return { kind: 'stop' };
     }
 
@@ -59,7 +75,12 @@ export class ToolUseWaitNode<C> extends Node<
       return { kind: 'stop' };
     }
     if (!prepRes.afterError) {
-      await onBeforeWaiting?.(prepRes.lastResponse, prepRes.touchedFiles);
+      const delivered = await onBeforeWaiting?.(
+        prepRes.lastResponse,
+        prepRes.touchedFiles,
+      );
+      prepRes.deliveredToOrchestrator =
+        onBeforeWaiting !== undefined && delivered !== false;
     }
 
     // Idle-continuation providers run BEFORE `waitForFollowUp` blocks; once
@@ -114,13 +135,16 @@ export class ToolUseWaitNode<C> extends Node<
 
   async post(
     shared: ToolUseRunShared,
-    _prepRes: WaitPrepResult,
+    prepRes: WaitPrepResult,
     execRes: WaitExecResult,
   ): Promise<string | undefined> {
     const { onFollowUpConsumed, streamId, logger, modelHandler, runtimeHost } =
       this.services;
 
     if (execRes.kind === 'stop') {
+      if (prepRes.deliveredToOrchestrator) {
+        shared.deliveredToOrchestrator = true;
+      }
       return FlowTransition.COMPLETE;
     }
 
@@ -129,11 +153,17 @@ export class ToolUseWaitNode<C> extends Node<
     // a previously-recovered error as a terminal failure.
     shared.lastError = undefined;
     shared.userCancelledRetry = undefined;
+    if (prepRes.deliveredToOrchestrator) {
+      shared.deliveredToOrchestrator = true;
+    }
 
     // Synthesized continuations don't come from the user queue, so they
     // must not emit updateQueuedFollowUps via the consume callback. They
-    // also don't need to be replayed in the chat log.
+    // also don't need to be replayed in the chat log. Keep any prior
+    // delivery marker across synthetic continuations because the orchestrator
+    // has not consumed and replaced the delivered result.
     if (!execRes.synthetic) {
+      shared.deliveredToOrchestrator = undefined;
       onFollowUpConsumed?.();
       logger.userMessage(execRes.followUp);
     }

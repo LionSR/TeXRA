@@ -18,10 +18,14 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly snapshot: ToolUseSessionSnapshot | null;
   readonly onRoundFinalized: RoundFinalizedCallback;
   readonly onFollowUpConsumed?: () => void;
+  /** Return `false` to signal nothing was delivered to an orchestrator (the
+   *  current cycle is purely internal). `true` or `void` indicates a result
+   *  was delivered; on interruption the wait node uses this to mark the flow
+   *  as completed rather than aborted. */
   readonly onBeforeWaiting?: (
     lastResponse: string | undefined,
     touchedFiles: string[],
-  ) => void | Promise<void>;
+  ) => boolean | void | Promise<boolean | void>;
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
   /** Persist todos to the execution KV store. Injected by runToolUseFlow. */
   readonly persistTodos?: (todos: TodoItem[]) => Promise<void>;

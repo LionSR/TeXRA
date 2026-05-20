@@ -136,19 +136,17 @@ describe('CLI run progress renderer', () => {
     ).toBe(undefined);
   });
 
-  it('derives the run progress flag from quiet, headless, structured, and non-TTY contexts', () => {
+  it('derives the run progress flag from quiet and structured-output contexts', () => {
     expect(shouldRenderRunProgress(context())).toBe(true);
     expect(shouldRenderRunProgress(context({ quietLogs: true }))).toBe(false);
-    expect(shouldRenderRunProgress(context({ mode: 'headless' }))).toBe(false);
+    expect(shouldRenderRunProgress(context({ mode: 'headless' }))).toBe(true);
     expect(shouldRenderRunProgress(context({ outputFormat: 'json' }))).toBe(
       false,
     );
     expect(shouldRenderRunProgress(context({ outputFormat: 'ndjson' }))).toBe(
       false,
     );
-    expect(shouldRenderRunProgress(context({ stderrIsTty: false }))).toBe(
-      false,
-    );
+    expect(shouldRenderRunProgress(context({ stderrIsTty: false }))).toBe(true);
   });
 
   it('routes progress events even when ordinary CLI logs are quiet', async () => {

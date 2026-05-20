@@ -67,6 +67,14 @@ function toolUseEqual(
   );
 }
 
+export function stripOrchestratorFollowup(text: string): string {
+  const trimmed = text.trim();
+  const match = trimmed.match(
+    /^<orchestrator-followup>\s*([\s\S]*?)\s*<\/orchestrator-followup>$/,
+  );
+  return match?.[1]?.trim() ?? text;
+}
+
 // `normalizeToolUseData` is dominated by a Zod parse + YAML stringify
 // of `entry.data`. `StreamLog.update` spreads its patch into a fresh
 // `data` object every tick, so reference equality is a reliable signal
@@ -150,7 +158,12 @@ function renderLogEntry(
 
   const text = entry.text ?? '';
   const role = logEntryRole(entry.messageType);
-  const renderedText = role === 'error' ? appendCliApiSwitchHint(text) : text;
+  const renderedText =
+    role === 'error'
+      ? appendCliApiSwitchHint(text)
+      : role === 'user'
+        ? stripOrchestratorFollowup(text)
+        : text;
   // Assistant entries defer finalization (see comment above); inherit
   // from `prev` so re-syncs after finalize don't de-finalize and drop
   // the entry from `splitTranscriptEntries` once status flips to
