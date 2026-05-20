@@ -1,6 +1,6 @@
 /**
  * AI Agents tab — shows third-party agent integrations (Codex, Claude Code,
- * external chat handoffs) grouped on their own panel. Reuses the same
+ * external inquiries) grouped on their own panel. Reuses the same
  * `tool-card` component as the Tools tab, plus the Codex-specific inline
  * settings that used to live inside ToolsTab.
  */
