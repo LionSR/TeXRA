@@ -13,10 +13,10 @@ describe('tool-injection registry', () => {
 
   it('registers injections and returns them in insertion order', () => {
     registerToolInjection({ toolName: 'memory', shouldInject: () => true });
-    registerToolInjection({ toolName: 'odyssey', shouldInject: () => false });
+    registerToolInjection({ toolName: 'plan', shouldInject: () => false });
 
     const names = listToolInjections().map((i) => i.toolName);
-    expect(names).toEqual(['memory', 'odyssey']);
+    expect(names).toEqual(['memory', 'plan']);
   });
 
   it('rejects duplicate `toolName` registrations', () => {
