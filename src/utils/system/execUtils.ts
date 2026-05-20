@@ -47,6 +47,12 @@ function normalizeOutput(text: string | null | undefined): string | null {
   return text?.trim() || null;
 }
 
+/** Normalize Node's 'utf-8' alias to execa's 'utf8' encoding option. */
+function normalizeEncoding(encoding?: BufferEncoding): ExecaEncodingOption {
+  const raw = encoding ?? 'utf8';
+  return raw.toLowerCase() === 'utf-8' ? 'utf8' : (raw as ExecaEncodingOption);
+}
+
 function commandEnv(
   workspacePath: string,
   envOverrides?: Record<string, string>,
@@ -185,17 +191,10 @@ export async function executeCommand(
 
     const env = commandEnv(workspacePath, options.env);
 
-    // Normalize 'utf-8' to 'utf8' for execa compatibility
-    const rawEncoding = options.encoding ?? 'utf8';
-    const encodingOption: ExecaEncodingOption =
-      rawEncoding.toLowerCase() === 'utf-8'
-        ? 'utf8'
-        : (rawEncoding as ExecaEncodingOption);
-
     const execaOptions: Options = {
       cwd: workspacePath,
       env,
-      encoding: encodingOption,
+      encoding: normalizeEncoding(options.encoding),
       timeout: options.timeout,
       reject: false,
       input: options.stdin,
@@ -321,15 +320,10 @@ export function executeCommandSync(
   try {
     const [cmd, ...args] = command;
     const workspacePath = options.cwd ?? workspacePathOrProcessCwd();
-    const rawEncoding = options.encoding ?? 'utf8';
-    const encodingOption: ExecaEncodingOption =
-      rawEncoding.toLowerCase() === 'utf-8'
-        ? 'utf8'
-        : (rawEncoding as ExecaEncodingOption);
     const execaOptions: SyncOptions = {
       cwd: workspacePath,
       env: commandEnv(workspacePath, options.env),
-      encoding: encodingOption,
+      encoding: normalizeEncoding(options.encoding),
       timeout: options.timeout,
       reject: false,
     };

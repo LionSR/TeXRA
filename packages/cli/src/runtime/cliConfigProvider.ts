@@ -18,18 +18,19 @@ type ConfigWatcher = {
  * are accepted on read (prefixed tried first). Writes always use the canonical
  * `texra.<key>` form.
  */
-function configKeyVariants(key: string): string[] {
-  const unprefixed = key.startsWith('texra.')
-    ? key.slice('texra.'.length)
-    : key;
-  return [`texra.${unprefixed}`, unprefixed];
+const TEXRA_PREFIX = 'texra.';
+
+function stripPrefix(key: string): string {
+  return key.startsWith(TEXRA_PREFIX) ? key.slice(TEXRA_PREFIX.length) : key;
 }
 
 function canonicalConfigKey(key: string): string {
-  const unprefixed = key.startsWith('texra.')
-    ? key.slice('texra.'.length)
-    : key;
-  return `texra.${unprefixed}`;
+  return `${TEXRA_PREFIX}${stripPrefix(key)}`;
+}
+
+function configKeyVariants(key: string): string[] {
+  const unprefixed = stripPrefix(key);
+  return [`${TEXRA_PREFIX}${unprefixed}`, unprefixed];
 }
 
 function matchesConfigKey(candidate: string, changedKey: string): boolean {
