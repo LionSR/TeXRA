@@ -1,73 +1,16 @@
+import {
+  canonicalConfigKey,
+  configKeyVariants,
+  createWatcherRegistry,
+  firstStoredValue,
+} from '@platform/defaults/configKeyHelpers';
+import type { JsonStore } from '@platform/defaults/jsonStore';
 import type {
   ConfigInspection,
   ConfigProvider,
   ConfigTarget,
 } from '@platform/interfaces/config';
 import type { Disposable } from '@platform/interfaces/disposable';
-import type { JsonStore } from './jsonStore';
-
-type ConfigWatcher = {
-  key: string | readonly string[] | RegExp;
-  listener: () => void;
-};
-
-/**
- * Canonical config key helpers — mirrors `ElectronConfigProvider`.
- *
- * Keys are stored flat in the JSON file. Both `texra.<key>` and bare `<key>`
- * are accepted on read (prefixed tried first). Writes always use the canonical
- * `texra.<key>` form.
- */
-const TEXRA_PREFIX = 'texra.';
-
-function stripPrefix(key: string): string {
-  return key.startsWith(TEXRA_PREFIX) ? key.slice(TEXRA_PREFIX.length) : key;
-}
-
-function canonicalConfigKey(key: string): string {
-  return `${TEXRA_PREFIX}${stripPrefix(key)}`;
-}
-
-function configKeyVariants(key: string): string[] {
-  const unprefixed = stripPrefix(key);
-  return [`${TEXRA_PREFIX}${unprefixed}`, unprefixed];
-}
-
-function matchesConfigKey(candidate: string, changedKey: string): boolean {
-  return changedKey === candidate || changedKey.startsWith(`${candidate}.`);
-}
-
-function watcherMatches(
-  watcherKey: ConfigWatcher['key'],
-  changedKey: string,
-): boolean {
-  if (typeof watcherKey === 'string') {
-    return configKeyVariants(watcherKey).some((candidate) =>
-      matchesConfigKey(candidate, changedKey),
-    );
-  }
-  if (watcherKey instanceof RegExp) {
-    return watcherKey.test(changedKey);
-  }
-  if (Array.isArray(watcherKey)) {
-    return watcherKey.some((item) =>
-      configKeyVariants(item).some((candidate) =>
-        matchesConfigKey(candidate, changedKey),
-      ),
-    );
-  }
-  return false;
-}
-
-function firstStoredValue<T>(
-  store: JsonStore,
-  keys: readonly string[],
-): T | undefined {
-  for (const candidate of keys) {
-    if (store.has(candidate)) return store.get<T>(candidate);
-  }
-  return undefined;
-}
 
 /**
  * File-backed {@link ConfigProvider} for the CLI host.
@@ -78,7 +21,7 @@ function firstStoredValue<T>(
  * extension's `texra.*` settings namespace.
  */
 export class CliConfigProvider implements ConfigProvider {
-  private readonly watchers = new Set<ConfigWatcher>();
+  private readonly watchers = createWatcherRegistry();
 
   constructor(private readonly store: JsonStore) {}
 
@@ -106,11 +49,7 @@ export class CliConfigProvider implements ConfigProvider {
         canonicalConfigKey(key);
       await this.store.set(storedKey, value);
     }
-    for (const watcher of this.watchers) {
-      if (watcherMatches(watcher.key, canonicalConfigKey(key))) {
-        watcher.listener();
-      }
-    }
+    this.watchers.notify(canonicalConfigKey(key));
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
@@ -131,8 +70,6 @@ export class CliConfigProvider implements ConfigProvider {
     key: string | readonly string[] | RegExp,
     listener: () => void,
   ): Disposable {
-    const watcher = { key, listener };
-    this.watchers.add(watcher);
-    return { dispose: () => this.watchers.delete(watcher) };
+    return this.watchers.add({ key, listener });
   }
 }
