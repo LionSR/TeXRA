@@ -1,4 +1,4 @@
-import { DEFAULT_TEXRA_SETTINGS } from '@shared/schemas/settingsConfiguration';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 
 import {
   LEGACY_AUXILIARY_KEYWORDS_KEY,
@@ -67,7 +67,7 @@ function normalizeList(values: readonly string[]): string[] {
 export function loadFileListSettings(
   readConfig: ConfigReader,
 ): FileListSettings {
-  const ignored = DEFAULT_TEXRA_SETTINGS.files.ignored;
+  const ignored = DEFAULT_CORE_SETTINGS.files.ignored;
   return {
     ignoredFileExtensions: readConfig(
       'texra.files.ignored.fileExtensions',

@@ -20,6 +20,7 @@
  * the previous file intact rather than corrupting the snapshot.
  */
 
+import { JsonStore } from '@platform/defaults/jsonStore';
 import {
   emptyRestoredStreamsFile,
   RestoredStreamsFileSchema,
@@ -28,8 +29,6 @@ import {
   type RestoredStreamsFile,
   type StreamTabId,
 } from '@shared/schemas';
-
-import { JsonStore } from './platform/jsonStore.js';
 
 const STREAMS_KEY = 'restoredStreams';
 
