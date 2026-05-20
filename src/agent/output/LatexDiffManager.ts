@@ -55,14 +55,10 @@ export class LatexDiffManager {
     this.latexdiffService = new LaTeXdiffService(streamId);
   }
 
-  private resolveSymlinks(target: string): Promise<string> {
-    return platform()
-      .fs.realPath(target)
-      .catch(() => target);
-  }
-
   private async getWorkingDirectory(location: FileLocation): Promise<string> {
-    const resolved = await this.resolveSymlinks(location.absolutePath);
+    const resolved = await platform()
+      .fs.realPath(location.absolutePath)
+      .catch(() => location.absolutePath);
     return path.dirname(resolved);
   }
 
