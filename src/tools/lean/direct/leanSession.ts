@@ -33,6 +33,7 @@ const LOG_CHANNEL = 'lean.direct';
 
 const LEAN_LANGUAGE_ID = 'lean4';
 const HANDSHAKE_TIMEOUT_MS = 15_000;
+const SHUTDOWN_TIMEOUT_MS = 2_000;
 const DIAGNOSTICS_WAIT_MS = 10_000;
 const DIAGNOSTICS_QUIET_WINDOW_MS = 400;
 
@@ -95,7 +96,11 @@ export class LeanSession {
     unregisterLeanServer(this.id);
     if (!rpc || !child) return;
     try {
-      await rpc.request('shutdown').catch(() => undefined);
+      await withTimeout(
+        rpc.request('shutdown'),
+        SHUTDOWN_TIMEOUT_MS,
+        'Lean LSP shutdown timeout',
+      ).catch(() => undefined);
       rpc.notify('exit');
     } finally {
       rpc.dispose('LeanSession.dispose');
@@ -214,6 +219,27 @@ export class LeanSession {
     this.child = child;
     let stderrTail = '';
     const STDERR_TAIL_LIMIT = 4096;
+    let finalized = false;
+    const finalizeServer = (status: 'stopped' | 'error', message?: string) => {
+      if (finalized) return;
+      finalized = true;
+      this.options.onExit?.();
+      updateLeanServer(this.id, { status, errorMessage: message });
+      this.child = undefined;
+      this.rpc?.dispose(message ?? 'Lean server stopped');
+      this.rpc = undefined;
+      this.readyPromise = undefined;
+      this.openFiles.clear();
+    };
+    const childError = new Promise<never>((_resolve, reject) => {
+      child.once('error', (error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        finalizeServer('error', message);
+        reject(
+          new Error(`Failed to spawn 'lake env lean --server': ${message}`),
+        );
+      });
+    });
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', (chunk: string) => {
       stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_LIMIT);
@@ -225,17 +251,10 @@ export class LeanSession {
         LOG_CHANNEL,
         `lake env lean --server exited (code=${code}, signal=${signal}) at ${root}${tail ? `\n${tail}` : ''}`,
       );
-      this.options.onExit?.();
-      updateLeanServer(this.id, {
-        status: code === 0 ? 'stopped' : 'error',
-        errorMessage:
-          code === 0 ? undefined : `Server exited with code ${code}`,
-      });
-      this.child = undefined;
-      this.rpc?.dispose('Lean server exited');
-      this.rpc = undefined;
-      this.readyPromise = undefined;
-      this.openFiles.clear();
+      finalizeServer(
+        code === 0 ? 'stopped' : 'error',
+        code === 0 ? undefined : `Server exited with code ${code}`,
+      );
     });
 
     const rpc = new JsonRpcConnection(child.stdin, child.stdout);
@@ -254,22 +273,25 @@ export class LeanSession {
 
     try {
       await withTimeout(
-        rpc.request('initialize', {
-          processId: process.pid,
-          clientInfo: { name: 'texra-direct-lsp' },
-          rootUri: pathToUri(root),
-          workspaceFolders: [
-            { uri: pathToUri(root), name: path.basename(root) },
-          ],
-          capabilities: {
-            textDocument: {
-              synchronization: { didSave: false, willSave: false },
-              hover: { contentFormat: ['plaintext', 'markdown'] },
-              publishDiagnostics: {},
+        Promise.race([
+          rpc.request('initialize', {
+            processId: process.pid,
+            clientInfo: { name: 'texra-direct-lsp' },
+            rootUri: pathToUri(root),
+            workspaceFolders: [
+              { uri: pathToUri(root), name: path.basename(root) },
+            ],
+            capabilities: {
+              textDocument: {
+                synchronization: { didSave: false, willSave: false },
+                hover: { contentFormat: ['plaintext', 'markdown'] },
+                publishDiagnostics: {},
+              },
+              workspace: {},
             },
-            workspace: {},
-          },
-        }),
+          }),
+          childError,
+        ]),
         HANDSHAKE_TIMEOUT_MS,
         'Lean LSP initialize timeout',
       );

@@ -160,6 +160,19 @@ describe('createDirectLspLeanAdapter', () => {
     },
   );
 
+  it('handles a missing lake command as a reported adapter failure', async () => {
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: path.join(tempRoot, 'missing-lake'),
+    });
+    try {
+      await expect(
+        adapter.fetchDiagnosticsForFile(filePath),
+      ).resolves.toBeNull();
+    } finally {
+      await adapter.dispose();
+    }
+  });
+
   fakeLakeIt(
     'restarts by replacing the disposed session with a fresh process',
     async () => {
