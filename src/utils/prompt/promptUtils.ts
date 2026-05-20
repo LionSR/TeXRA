@@ -62,12 +62,11 @@ export async function getXmlFormatFromFiles(
  * @returns Comma-separated string of file paths
  */
 export function getListOfFiles(files: string[] | null | undefined): string {
-  return (
-    files
-      ?.filter((f) => f.trim() !== '')
-      .map((file) => getPromptFileName(file))
-      .join(', ') ?? ''
-  );
+  if (!files) return '';
+  return files
+    .filter((f) => f.trim() !== '')
+    .map(getPromptFileName)
+    .join(', ');
 }
 
 async function resolveValue(value: unknown): Promise<unknown> {
