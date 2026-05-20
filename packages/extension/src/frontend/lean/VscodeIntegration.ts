@@ -46,7 +46,7 @@ function vscodeServerId(workspaceRoot: string): string {
 function noteVscodeLeanServer(workspaceRoot: string): void {
   const id = vscodeServerId(workspaceRoot);
   if (knownExtensionServers.has(id)) {
-    updateLeanServer(id, { status: 'running', touchActivity: true });
+    updateLeanServer(id, { status: 'running' });
     return;
   }
   knownExtensionServers.add(id);

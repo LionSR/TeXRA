@@ -11,8 +11,18 @@ import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 
 const LAKE_RUN_TIMEOUT_MS = 10 * 60 * 1000;
+const LAKE_MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
 
 const workspaceMutexes = new Map<string, Promise<unknown>>();
+
+function appendCapped(existing: string, chunk: string): string {
+  const combined = existing + chunk;
+  if (combined.length <= LAKE_MAX_OUTPUT_BYTES) return combined;
+  return (
+    '…[output truncated]…\n' +
+    combined.slice(combined.length - LAKE_MAX_OUTPUT_BYTES)
+  );
+}
 
 export interface LakeCommandResult {
   exitCode: number;
@@ -66,10 +76,10 @@ function executeLake(options: LakeCommandOptions): Promise<LakeCommandResult> {
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', (chunk: string) => {
-      stdout += chunk;
+      stdout = appendCapped(stdout, chunk);
     });
     child.stderr.on('data', (chunk: string) => {
-      stderr += chunk;
+      stderr = appendCapped(stderr, chunk);
     });
     const timer = setTimeout(() => {
       child.kill();

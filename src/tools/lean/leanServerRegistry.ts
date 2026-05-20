@@ -25,7 +25,6 @@ export interface LeanServerInfo {
   readonly mode: LeanServerMode;
   readonly status: LeanServerStatus;
   readonly startedAt: number;
-  readonly lastActivityAt: number;
   readonly toolchain?: string;
   readonly pid?: number;
   readonly errorMessage?: string;
@@ -63,23 +62,21 @@ export function subscribeLeanServers(listener: Listener): () => void {
 }
 
 export interface RegisterLeanServerInit {
-  id: string;
-  workspaceRoot: string;
-  mode: LeanServerMode;
-  status?: LeanServerStatus;
-  toolchain?: string;
-  pid?: number;
+  readonly id: string;
+  readonly workspaceRoot: string;
+  readonly mode: LeanServerMode;
+  readonly status?: LeanServerStatus;
+  readonly toolchain?: string;
+  readonly pid?: number;
 }
 
 export function registerLeanServer(init: RegisterLeanServerInit): void {
-  const now = Date.now();
   servers.set(init.id, {
     id: init.id,
     workspaceRoot: init.workspaceRoot,
     mode: init.mode,
     status: init.status ?? 'starting',
-    startedAt: now,
-    lastActivityAt: now,
+    startedAt: Date.now(),
     toolchain: init.toolchain,
     pid: init.pid,
   });
@@ -87,11 +84,10 @@ export function registerLeanServer(init: RegisterLeanServerInit): void {
 }
 
 export interface UpdateLeanServerPatch {
-  status?: LeanServerStatus;
-  toolchain?: string;
-  pid?: number;
-  errorMessage?: string;
-  touchActivity?: boolean;
+  readonly status?: LeanServerStatus;
+  readonly toolchain?: string;
+  readonly pid?: number;
+  readonly errorMessage?: string;
 }
 
 export function updateLeanServer(id: string, patch: UpdateLeanServerPatch): void {
@@ -106,7 +102,6 @@ export function updateLeanServer(id: string, patch: UpdateLeanServerPatch): void
       patch.status && patch.status !== 'error'
         ? undefined
         : (patch.errorMessage ?? existing.errorMessage),
-    lastActivityAt: patch.touchActivity ? Date.now() : existing.lastActivityAt,
   });
   notify();
 }
@@ -134,25 +129,29 @@ export function formatUptime(ms: number): string {
   return `${hours}h ${remMinutes}m`;
 }
 
+function statusTail(info: LeanServerInfo, now: number): string {
+  switch (info.status) {
+    case 'error':
+      return ` — error: ${info.errorMessage ?? 'unknown'}`;
+    case 'running':
+      return ` — uptime ${formatUptime(now - info.startedAt)}`;
+    case 'starting':
+      return ' — starting…';
+    case 'stopped':
+      return ' — stopped';
+  }
+}
+
 export function summarizeLeanServers(
   list: readonly LeanServerInfo[] = snapshot(),
   now: number = Date.now(),
 ): string {
   if (list.length === 0) return 'No Lean servers active.';
   const lines = list.map((info) => {
-    const uptime = formatUptime(now - info.startedAt);
     const modeLabel =
       info.mode === 'vscode-extension' ? 'leanprover.lean4' : 'direct LSP';
     const toolchain = info.toolchain ? `, ${info.toolchain}` : '';
-    const tail =
-      info.status === 'error'
-        ? ` — error: ${info.errorMessage ?? 'unknown'}`
-        : info.status === 'running'
-          ? ` — uptime ${uptime}`
-          : info.status === 'starting'
-            ? ' — starting…'
-            : ' — stopped';
-    return `• ${info.workspaceRoot} (${modeLabel}${toolchain})${tail}`;
+    return `• ${info.workspaceRoot} (${modeLabel}${toolchain})${statusTail(info, now)}`;
   });
   const header =
     list.length === 1

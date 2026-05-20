@@ -51,7 +51,6 @@ interface OpenedFile {
 export interface LeanSessionOptions {
   workspaceRoot: string;
   lakeCommand: string;
-  toolchainResolver?: () => Promise<string | undefined>;
   onExit?: () => void;
 }
 
@@ -138,7 +137,6 @@ export class LeanSession {
       textDocument: { uri: pathToUri(absolute) },
       position: { line, character: column },
     };
-    updateLeanServer(this.id, { touchActivity: true });
     return (await this.rpc!.request(method, params)) as T;
   }
 
@@ -200,16 +198,15 @@ export class LeanSession {
       throw new Error(`Failed to spawn 'lake env lean --server': ${message}`);
     }
     this.child = child;
-    const stderrChunks: string[] = [];
+    let stderrTail = '';
+    const STDERR_TAIL_LIMIT = 4096;
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', (chunk: string) => {
-      stderrChunks.push(chunk);
-      // Avoid unbounded retention.
-      if (stderrChunks.length > 200) stderrChunks.splice(0, stderrChunks.length - 200);
+      stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_LIMIT);
       warn(LOG_CHANNEL, `[${root}] ${chunk.trimEnd()}`);
     });
     child.on('exit', (code, signal) => {
-      const tail = stderrChunks.join('').slice(-1000);
+      const tail = stderrTail.slice(-1000);
       info(
         LOG_CHANNEL,
         `lake env lean --server exited (code=${code}, signal=${signal}) at ${root}${tail ? `\n${tail}` : ''}`,
@@ -260,12 +257,7 @@ export class LeanSession {
         'Lean LSP initialize timeout',
       );
       rpc.notify('initialized', {});
-      const toolchain = await this.options.toolchainResolver?.().catch(() => undefined);
-      updateLeanServer(this.id, {
-        status: 'running',
-        toolchain,
-        touchActivity: true,
-      });
+      updateLeanServer(this.id, { status: 'running' });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       updateLeanServer(this.id, { status: 'error', errorMessage: message });
@@ -348,7 +340,6 @@ export class LeanSession {
     if (!state) return;
     state.diagnostics = params.diagnostics.map(toLeanDiagnostic);
     state.lastDiagnosticsAt = Date.now();
-    updateLeanServer(this.id, { touchActivity: true });
     // Release any waiters — the quiet-window check above re-arms if needed.
     for (const waiter of state.diagnosticsWaiters.splice(0)) {
       clearTimeout(waiter.timeout);

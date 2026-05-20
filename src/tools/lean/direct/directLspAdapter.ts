@@ -162,19 +162,11 @@ export function createDirectLspLeanAdapter(
           await runForAllSessions(sessions, lakeCommand, ['clean'], true);
           return;
         }
-        case 'lean4.project.fetchCache': {
-          await runForAllSessions(
-            sessions,
-            lakeCommand,
-            ['exe', 'cache', 'get'],
-            true,
-          );
-          return;
-        }
+        // `fetchFileCache` normally needs the active editor's file; we don't
+        // have one in CLI/desktop, so it falls back to the project-wide
+        // cache fetch (same as `fetchCache`).
+        case 'lean4.project.fetchCache':
         case 'lean4.project.fetchFileCache': {
-          // VS Code's "fetch file cache" needs the active editor's file; we
-          // don't have one in CLI/desktop, so fall back to the project-wide
-          // cache fetch.
           await runForAllSessions(
             sessions,
             lakeCommand,
@@ -201,10 +193,9 @@ export function createDirectLspLeanAdapter(
       line: number,
       column: number,
     ): Promise<LspResult<PlainGoal>> {
-      return positionRequest<PlainGoal>(filePath, async (session) => {
-        const data = await session.getPlainGoal(filePath, line, column);
-        return data;
-      });
+      return positionRequest<PlainGoal>(filePath, (session) =>
+        session.getPlainGoal(filePath, line, column),
+      );
     },
 
     async getTermGoal(
@@ -212,9 +203,9 @@ export function createDirectLspLeanAdapter(
       line: number,
       column: number,
     ): Promise<LspResult<PlainTermGoal>> {
-      return positionRequest<PlainTermGoal>(filePath, async (session) => {
-        return session.getPlainTermGoal(filePath, line, column);
-      });
+      return positionRequest<PlainTermGoal>(filePath, (session) =>
+        session.getPlainTermGoal(filePath, line, column),
+      );
     },
 
     async getHoverInfo(
@@ -222,9 +213,9 @@ export function createDirectLspLeanAdapter(
       line: number,
       column: number,
     ): Promise<LspResult<Hover>> {
-      return positionRequest<Hover>(filePath, async (session) => {
-        return session.getHover(filePath, line, column);
-      });
+      return positionRequest<Hover>(filePath, (session) =>
+        session.getHover(filePath, line, column),
+      );
     },
 
     async promptLean4ExtensionInstall(): Promise<void> {
