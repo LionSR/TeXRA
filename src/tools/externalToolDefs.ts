@@ -338,12 +338,12 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
   {
     id: 'external-inquiry',
     tools: ['inquiry'],
-    name: 'External Chat Handoff',
+    name: 'External Inquiry',
     category: 'ai-agents',
     description:
       'Tap your premium chat subscriptions — ChatGPT Pro, Claude Opus, Gemini Deep Think, Grok, and similar — without an API key. The agent drafts a question, you paste the answer back, and the run continues. Useful for the deep-reasoning tiers that aren’t available through the API.',
     configNotes:
-      'No local install required. Uses your own external chat subscription and a human-in-the-loop copy/paste flow.',
+      'No local install required. Uses your own external chat subscription through a human-in-the-loop copy/paste flow.',
     authNote: 'Uses your premium chat subscription',
     toggleable: true,
     check: async () => true,
