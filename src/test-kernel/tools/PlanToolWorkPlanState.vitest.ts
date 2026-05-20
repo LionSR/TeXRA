@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import { createFakePlatform } from '@test/support/FakePlatform';
@@ -15,6 +15,8 @@ import { ODYSSEY_FEATURE_FLAG_KEY, OdysseyStore } from '@tools/odyssey';
 import { PlanTool } from '@tools/plan/PlanTool';
 import { createRecordingHost } from '../agent/progressTestUtils';
 
+import type { Platform } from '@platform/platform';
+
 const plan: Plan = {
   summary: 'Refactor the plan state boundary.',
   steps: [
@@ -27,7 +29,16 @@ const plan: Plan = {
   ],
 };
 
-describe('PlanTool work-plan state', () => {
+async function installPlatform(flagOn: boolean): Promise<Platform> {
+  const { initPlatform } = await import('@platform/platform');
+  const platform = createFakePlatform({
+    config: flagOn ? { [ODYSSEY_FEATURE_FLAG_KEY]: true } : {},
+  });
+  initPlatform(platform);
+  return platform;
+}
+
+describe('PlanTool — update (plan approval)', () => {
   it('clears a rejected plan from displayed work-plan state', async () => {
     const { events, host } = createRecordingHost();
     const coordinator = new PlanApprovalCoordinator(host);
@@ -46,7 +57,7 @@ describe('PlanTool work-plan state', () => {
           workPlanState,
         },
       },
-      () => tool.call({ plan }),
+      () => tool.call({ command: 'update', plan }),
     );
 
     const approval = events.find((entry) => entry.event === 'showPlanApproval');
@@ -64,10 +75,7 @@ describe('PlanTool work-plan state', () => {
 
   it('approve_and_odyssey starts an odyssey using the plan as the objective', async () => {
     const streamId = 'stream:plan-odyssey' as StreamTabId;
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform({ config: { [ODYSSEY_FEATURE_FLAG_KEY]: true } }),
-    );
+    await installPlatform(true);
 
     try {
       const { events, host } = createRecordingHost();
@@ -87,7 +95,7 @@ describe('PlanTool work-plan state', () => {
             workPlanState,
           },
         },
-        () => tool.call({ plan }),
+        () => tool.call({ command: 'update', plan }),
       );
 
       const approval = events.find(
@@ -134,7 +142,7 @@ describe('PlanTool work-plan state', () => {
           workPlanState,
         },
       },
-      () => tool.call({ plan }),
+      () => tool.call({ command: 'update', plan }),
     );
 
     const approval = events.find((entry) => entry.event === 'showPlanApproval');
@@ -148,5 +156,83 @@ describe('PlanTool work-plan state', () => {
     expect(result.isError).toBe(true);
     expect(workPlanState.plan).toBeNull();
     expect(workPlanState.planSummary).toBeNull();
+  });
+});
+
+describe('PlanTool — pause/complete (odyssey lifecycle)', () => {
+  const STREAM_ID = 'stream:plan-lifecycle' as StreamTabId;
+
+  beforeEach(async () => {
+    await installPlatform(true);
+  });
+
+  afterEach(async () => {
+    await OdysseyStore.forget(STREAM_ID);
+  });
+
+  async function callTool(input: unknown) {
+    const { host } = createRecordingHost();
+    const tool = new PlanTool();
+    return withToolEnvironment(
+      {
+        run: { runtimeHost: host, streamId: STREAM_ID },
+        call: { tracker: new FileInteractionState() },
+      },
+      () => tool.call(input),
+    );
+  }
+
+  it('pauses an active odyssey with a reason', async () => {
+    await OdysseyStore.start(STREAM_ID, 'Drive the plan to completion.', {
+      plan,
+    });
+    const result = await callTool({
+      command: 'pause',
+      reason: 'Need API credentials from the user.',
+    });
+    expect(result.isError).toBeFalsy();
+    expect(OdysseyStore.getForStream(STREAM_ID)?.status).toBe('paused');
+  });
+
+  it('completes an active odyssey with a verification reason', async () => {
+    await OdysseyStore.start(STREAM_ID, 'Drive the plan to completion.', {
+      plan,
+    });
+    const result = await callTool({
+      command: 'complete',
+      reason: 'Ran pnpm test; all 142 tests pass.',
+    });
+    expect(result.isError).toBeFalsy();
+    expect(OdysseyStore.getForStream(STREAM_ID)?.status).toBe('complete');
+    expect(OdysseyStore.getForStream(STREAM_ID)?.completedReason).toContain(
+      'all 142 tests pass',
+    );
+  });
+
+  it('refuses to complete an abandoned odyssey', async () => {
+    await OdysseyStore.start(STREAM_ID, 'objective', { plan });
+    await OdysseyStore.setStatus(STREAM_ID, 'abandoned', 'user abandoned');
+    const result = await callTool({
+      command: 'complete',
+      reason: 'I think I am done.',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.error).toMatch(/abandoned/i);
+  });
+
+  it('pause is a no-op when no odyssey is running', async () => {
+    const result = await callTool({
+      command: 'pause',
+      reason: 'Need user input.',
+    });
+    expect(result.isError).toBeFalsy();
+    expect(result.summary).toMatch(/no-op/i);
+  });
+
+  it('rejects whitespace-only reason on pause', async () => {
+    await OdysseyStore.start(STREAM_ID, 'objective', { plan });
+    const result = await callTool({ command: 'pause', reason: '   ' });
+    expect(result.isError).toBe(true);
+    expect(result.error).toMatch(/empty/i);
   });
 });
