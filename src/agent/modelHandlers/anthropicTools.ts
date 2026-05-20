@@ -108,7 +108,7 @@ export async function uploadToolAttachments(
 
       const base64Data = buffer.toString('base64');
       const uploadedFile = await client.beta.files.upload({
-        file: await toFile(buffer!, filename, { type: mimeType }),
+        file: await toFile(buffer, filename, { type: mimeType }),
         betas: [FILES_API_BETA],
       });
 
@@ -123,7 +123,7 @@ export async function uploadToolAttachments(
         base64Data,
         mediaType: normalized,
       });
-    } catch (err) {
+    } catch {
       unsupported.push(attachment);
     } finally {
       if (buffer) {
