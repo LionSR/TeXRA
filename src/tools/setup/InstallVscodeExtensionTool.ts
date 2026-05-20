@@ -4,6 +4,7 @@ import { z } from 'zod';
 // Local imports
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { ToolError, type ToolResult } from '@tools/result';
+import { LEAN4_EXTENSION_ID } from '@tools/lean/leanConstants';
 
 // Local file imports
 import { defineTool } from '../core/define';
@@ -15,7 +16,7 @@ import { getSetupPlatform } from './platform';
  */
 const ALLOWED_EXTENSIONS: ReadonlySet<string> = new Set([
   LATEX_WORKSHOP_EXT_ID,
-  'leanprover.lean4',
+  LEAN4_EXTENSION_ID,
 ]);
 
 const InstallVscodeExtensionInputSchema = z.strictObject({

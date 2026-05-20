@@ -8,6 +8,12 @@ import {
   formatCounts,
   formatGroupedSections,
 } from '@utils/diagnostics/diagnosticFormatting';
+import {
+  LEAN_FILE_COMMANDS,
+  LEAN_PROJECT_COMMANDS,
+  type LeanFileCommand,
+  type LeanProjectCommand,
+} from './leanConstants';
 import { getLeanVscodeServices } from './leanVscodeServices';
 import { extractHoverText } from './leanTypes';
 
@@ -23,27 +29,15 @@ const LeanDiagnosticsInputSchema = z.strictObject({
 
 export type LeanDiagnosticsInput = z.infer<typeof LeanDiagnosticsInputSchema>;
 
-const FILE_COMMANDS = ['restart', 'refresh_dependencies'] as const;
-type FileCommand = (typeof FILE_COMMANDS)[number];
-
-const FILE_COMMAND_CONFIG: Record<
-  FileCommand,
-  { vscode: string; description: string }
-> = {
-  restart: {
-    vscode: 'lean4.restartFile',
-    description: 'Restart Lean server for this file',
-  },
-  refresh_dependencies: {
-    vscode: 'lean4.refreshFileDependencies',
-    description: 'Refresh file dependencies without full restart',
-  },
+const FILE_COMMAND_DESCRIPTIONS: Record<LeanFileCommand, string> = {
+  restart: 'Restart Lean server for this file',
+  refresh_dependencies: 'Refresh file dependencies without full restart',
 };
 
 const LeanFileInputSchema = z.strictObject({
   /** Command to execute on the file */
   command: z
-    .enum(FILE_COMMANDS)
+    .enum(LEAN_FILE_COMMANDS)
     .describe('Command: "restart" or "refresh_dependencies"'),
   /** Path to the Lean file */
   file: z.string().describe('Path to the .lean file'),
@@ -51,72 +45,22 @@ const LeanFileInputSchema = z.strictObject({
 
 export type LeanFileInput = z.infer<typeof LeanFileInputSchema>;
 
-const PROJECT_COMMANDS = [
-  // Server commands
-  'restart_server',
-  'stop_server',
-  // Project commands
-  'build',
-  'clean',
-  'fetch_cache',
-  'fetch_file_cache',
-  // Setup commands
-  'install_elan',
-  'install_deps',
-  'update_elan',
-  'select_toolchain',
-] as const;
-type ProjectCommand = (typeof PROJECT_COMMANDS)[number];
-
-const PROJECT_COMMAND_CONFIG: Record<
-  ProjectCommand,
-  { vscode: string; description: string }
-> = {
-  restart_server: {
-    vscode: 'lean4.restartServer',
-    description: 'Restart the entire Lean language server',
-  },
-  stop_server: {
-    vscode: 'lean4.stopServer',
-    description: 'Stop the Lean language server',
-  },
-  build: {
-    vscode: 'lean4.project.build',
-    description: 'Build the project (runs lake build)',
-  },
-  clean: {
-    vscode: 'lean4.project.clean',
-    description: 'Clean project build artifacts',
-  },
-  fetch_cache: {
-    vscode: 'lean4.project.fetchCache',
-    description: 'Download Mathlib build cache for the project',
-  },
-  fetch_file_cache: {
-    vscode: 'lean4.project.fetchFileCache',
-    description: "Download Mathlib cache for current file's imports only",
-  },
-  install_elan: {
-    vscode: 'lean4.setup.installElan',
-    description: 'Install Elan (Lean version manager)',
-  },
-  install_deps: {
-    vscode: 'lean4.setup.installDeps',
-    description: 'Install Lean dependencies',
-  },
-  update_elan: {
-    vscode: 'lean4.setup.updateElan',
-    description: 'Update Elan to latest version',
-  },
-  select_toolchain: {
-    vscode: 'lean4.setup.selectDefaultToolchain',
-    description: 'Select default Lean toolchain version',
-  },
+const PROJECT_COMMAND_DESCRIPTIONS: Record<LeanProjectCommand, string> = {
+  restart_server: 'Restart the entire Lean language server',
+  stop_server: 'Stop the Lean language server',
+  build: 'Build the project (runs lake build)',
+  clean: 'Clean project build artifacts',
+  fetch_cache: 'Download Mathlib build cache for the project',
+  fetch_file_cache: "Download Mathlib cache for current file's imports only",
+  install_elan: 'Install Elan (Lean version manager)',
+  install_deps: 'Install Lean dependencies',
+  update_elan: 'Update Elan to latest version',
+  select_toolchain: 'Select default Lean toolchain version',
 };
 
 const LeanProjectInputSchema = z.strictObject({
   /** Command to execute */
-  command: z.enum(PROJECT_COMMANDS).describe(
+  command: z.enum(LEAN_PROJECT_COMMANDS).describe(
     `Global command to execute:
 Server: restart_server, stop_server
 Project: build, clean, fetch_cache, fetch_file_cache
@@ -236,11 +180,11 @@ Requires: Lean 4 VS Code extension installed and active.`,
 }) {
   protected async execute(input: LeanFileInput): Promise<ToolResult> {
     const { command, file } = input;
-    const config = FILE_COMMAND_CONFIG[command];
+    const description = FILE_COMMAND_DESCRIPTIONS[command];
 
     try {
       const success = await getLeanVscodeServices().executeFileCommand(
-        config.vscode,
+        command,
         file,
       );
       if (!success) {
@@ -251,7 +195,7 @@ Requires: Lean 4 VS Code extension installed and active.`,
         };
       }
       return {
-        summary: config.description,
+        summary: description,
         output: `Executed "${command}" on ${file}`,
       };
     } catch (error) {
@@ -291,20 +235,20 @@ Requires: Lean 4 VS Code extension installed.`,
 }) {
   protected async execute(input: LeanProjectInput): Promise<ToolResult> {
     const { command } = input;
-    const config = PROJECT_COMMAND_CONFIG[command];
+    const description = PROJECT_COMMAND_DESCRIPTIONS[command];
 
     try {
-      await getLeanVscodeServices().executeGlobalCommand(config.vscode);
+      await getLeanVscodeServices().executeProjectCommand(command);
 
       if (command === 'build') {
         return {
-          summary: config.description,
+          summary: description,
           output: `Build started. Note: this command does not capture build output directly.\n\nTo check for errors and warnings, run lean_diagnostics on the relevant .lean files.`,
         };
       }
 
       return {
-        summary: config.description,
+        summary: description,
         output: `Executed "${command}" successfully`,
       };
     } catch (error) {

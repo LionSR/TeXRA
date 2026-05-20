@@ -18,6 +18,10 @@ import { warn } from '@logger/logUtils';
 
 import { runLakeCommand } from './lakeCommands';
 import { LeanSession } from './leanSession';
+import type {
+  LeanFileCommand,
+  LeanProjectCommand,
+} from '../leanConstants';
 import type { LeanVscodeServices } from '../leanVscodeServices';
 import type {
   LeanDiagnostic,
@@ -108,19 +112,16 @@ export function createDirectLspLeanAdapter(
       // the diagnostic list so the agent can act on it.
     },
 
-    async executeFileCommand(command: string, filePath: string): Promise<boolean> {
+    async executeFileCommand(
+      command: LeanFileCommand,
+      filePath: string,
+    ): Promise<boolean> {
       try {
-        switch (command) {
-          case 'lean4.restartFile':
-          case 'lean4.refreshFileDependencies': {
-            const session = await getSession(filePath);
-            await session.restartFile(filePath);
-            return true;
-          }
-          default:
-            warn(LOG_CHANNEL, `Unsupported file command: ${command}`);
-            return false;
-        }
+        // Both file commands have the same effect from our point of view: drop
+        // the cached open state and re-open with fresh contents.
+        const session = await getSession(filePath);
+        await session.restartFile(filePath);
+        return true;
       } catch (error) {
         warn(
           LOG_CHANNEL,
@@ -130,11 +131,11 @@ export function createDirectLspLeanAdapter(
       }
     },
 
-    async executeGlobalCommand(commandId: string): Promise<void> {
-      // Global commands aren't tied to a file. We pick whichever workspace
-      // has an active session; if there are several we apply to all.
-      switch (commandId) {
-        case 'lean4.restartServer': {
+    async executeProjectCommand(command: LeanProjectCommand): Promise<void> {
+      // Project commands aren't tied to a file. We apply to every active
+      // session; lake commands serialize per workspace via the mutex.
+      switch (command) {
+        case 'restart_server': {
           const targets = [...sessions.values()];
           if (targets.length === 0) {
             throw new Error('No Lean server running to restart.');
@@ -147,26 +148,24 @@ export function createDirectLspLeanAdapter(
           );
           return;
         }
-        case 'lean4.stopServer': {
+        case 'stop_server': {
           await Promise.all(
             [...sessions.values()].map((session) => session.dispose()),
           );
           sessions.clear();
           return;
         }
-        case 'lean4.project.build': {
+        case 'build':
           await runForAllSessions(sessions, lakeCommand, ['build'], true);
           return;
-        }
-        case 'lean4.project.clean': {
+        case 'clean':
           await runForAllSessions(sessions, lakeCommand, ['clean'], true);
           return;
-        }
-        // `fetchFileCache` normally needs the active editor's file; we don't
-        // have one in CLI/desktop, so it falls back to the project-wide
-        // cache fetch (same as `fetchCache`).
-        case 'lean4.project.fetchCache':
-        case 'lean4.project.fetchFileCache': {
+        // `fetch_file_cache` normally needs the active editor's file; we don't
+        // have one in CLI/desktop, so it falls back to the project-wide cache
+        // fetch (same as `fetch_cache`).
+        case 'fetch_cache':
+        case 'fetch_file_cache':
           await runForAllSessions(
             sessions,
             lakeCommand,
@@ -174,17 +173,14 @@ export function createDirectLspLeanAdapter(
             true,
           );
           return;
-        }
-        case 'lean4.setup.installElan':
-        case 'lean4.setup.installDeps':
-        case 'lean4.setup.updateElan':
-        case 'lean4.setup.selectDefaultToolchain':
+        case 'install_elan':
+        case 'install_deps':
+        case 'update_elan':
+        case 'select_toolchain':
           throw new Error(
-            `Command "${commandId}" is only available inside VS Code with the leanprover.lean4 extension. ` +
+            `Command "${command}" is only available inside VS Code with the leanprover.lean4 extension. ` +
               'In CLI/desktop builds, run the matching shell command directly (see https://leanprover-community.github.io/install/linux.html).',
           );
-        default:
-          throw new Error(`Unsupported Lean global command: ${commandId}`);
       }
     },
 

@@ -11,7 +11,9 @@
  * surface across all three builds.
  */
 
-export type LeanServerMode = 'vscode-extension' | 'direct-lsp';
+import { LEAN_SERVER_MODE_LABELS } from './leanConstants';
+
+export type LeanServerMode = keyof typeof LEAN_SERVER_MODE_LABELS;
 
 export type LeanServerStatus =
   | 'starting'
@@ -148,8 +150,7 @@ export function summarizeLeanServers(
 ): string {
   if (list.length === 0) return 'No Lean servers active.';
   const lines = list.map((info) => {
-    const modeLabel =
-      info.mode === 'vscode-extension' ? 'leanprover.lean4' : 'direct LSP';
+    const modeLabel = LEAN_SERVER_MODE_LABELS[info.mode];
     const toolchain = info.toolchain ? `, ${info.toolchain}` : '';
     return `• ${info.workspaceRoot} (${modeLabel}${toolchain})${statusTail(info, now)}`;
   });

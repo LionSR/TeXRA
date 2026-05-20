@@ -2,12 +2,18 @@
  * Injectable VS Code services for Lean tools.
  *
  * Provides a seam between the platform-agnostic tool implementations
- * in `src/tools/lean/` and the VS Code integration layer in `src/frontend/lean/`.
- * The services are registered during extension activation.
+ * in `src/tools/lean/` and the host-specific integrations (VS Code
+ * extension in `packages/extension/src/frontend/lean/`, direct LSP for
+ * CLI / desktop in `src/tools/lean/direct/`).
+ *
+ * The interface speaks in abstract command names; each adapter owns the
+ * mapping to its native primitives (VS Code command IDs vs `lake` /
+ * LSP requests).
  */
 
 import type { Hover } from 'vscode-languageserver-protocol';
 
+import type { LeanFileCommand, LeanProjectCommand } from './leanConstants';
 import type {
   LeanDiagnostic,
   LspResult,
@@ -17,7 +23,10 @@ import type {
 
 export interface LeanVscodeServices {
   getDiagnostics(filePath: string): LeanDiagnostic[];
-  executeFileCommand(command: string, filePath: string): Promise<boolean>;
+  executeFileCommand(
+    command: LeanFileCommand,
+    filePath: string,
+  ): Promise<boolean>;
   getGoalState(
     filePath: string,
     line: number,
@@ -38,7 +47,7 @@ export interface LeanVscodeServices {
     filePath: string,
     diagnostics: LeanDiagnostic[],
   ): Promise<void>;
-  executeGlobalCommand(commandId: string): Promise<void>;
+  executeProjectCommand(command: LeanProjectCommand): Promise<void>;
   promptLean4ExtensionInstall(): Promise<void>;
 }
 

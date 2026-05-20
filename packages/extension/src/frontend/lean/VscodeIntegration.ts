@@ -18,6 +18,11 @@ import {
   waitForDiagnosticsChange,
   DiagnosticSeverity,
 } from '@frontend/vscode/vscodeDiagnostics';
+import {
+  LEAN4_EXTENSION_ID,
+  type LeanFileCommand,
+  type LeanProjectCommand,
+} from '@tools/lean/leanConstants';
 import type {
   LeanDiagnostic,
   LspResult,
@@ -30,6 +35,24 @@ import {
   updateLeanServer,
 } from '@tools/lean/leanServerRegistry';
 import { WorkspaceFS } from '@utils/files';
+
+const FILE_COMMAND_VSCODE_IDS: Record<LeanFileCommand, string> = {
+  restart: 'lean4.restartFile',
+  refresh_dependencies: 'lean4.refreshFileDependencies',
+};
+
+const PROJECT_COMMAND_VSCODE_IDS: Record<LeanProjectCommand, string> = {
+  restart_server: 'lean4.restartServer',
+  stop_server: 'lean4.stopServer',
+  build: 'lean4.project.build',
+  clean: 'lean4.project.clean',
+  fetch_cache: 'lean4.project.fetchCache',
+  fetch_file_cache: 'lean4.project.fetchFileCache',
+  install_elan: 'lean4.setup.installElan',
+  install_deps: 'lean4.setup.installDeps',
+  update_elan: 'lean4.setup.updateElan',
+  select_toolchain: 'lean4.setup.selectDefaultToolchain',
+};
 
 const knownExtensionServers = new Set<string>();
 
@@ -178,26 +201,20 @@ function findDiagnosticsByPath(targetPath: string): vscode.Diagnostic[] {
   return [];
 }
 
-/**
- * Execute a VS Code command that requires a file to be open.
- * Opens the file first, then executes the command.
- */
 export async function executeFileCommand(
-  command: string,
+  command: LeanFileCommand,
   filePath: string,
 ): Promise<boolean> {
   try {
     const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preserveFocus: true });
-    await vscode.commands.executeCommand(command);
+    await vscode.commands.executeCommand(FILE_COMMAND_VSCODE_IDS[command]);
     return true;
   } catch {
     return false;
   }
 }
-
-const LEAN4_EXTENSION_ID = 'leanprover.lean4';
 
 /**
  * Prompt user to install Lean 4 extension if not already installed.
@@ -388,7 +405,8 @@ export async function navigateToFirstError(
   }
 }
 
-/** Execute a global VS Code command by its command ID. */
-export async function executeGlobalCommand(commandId: string): Promise<void> {
-  await vscode.commands.executeCommand(commandId);
+export async function executeProjectCommand(
+  command: LeanProjectCommand,
+): Promise<void> {
+  await vscode.commands.executeCommand(PROJECT_COMMAND_VSCODE_IDS[command]);
 }

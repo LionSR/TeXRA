@@ -26,6 +26,7 @@ import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
   PR_POLL_INTERVAL_MS,
 } from '@tools/github/prSubscriptionConstants';
+import { LEAN4_EXTENSION_ID } from '@tools/lean/leanConstants';
 import {
   listLeanServers,
   summarizeLeanServers,
@@ -35,7 +36,6 @@ import { isGitRepository } from '@utils/system/isGitRepository';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { isWSL } from '@utils/system/wslDetect';
 
-const LEAN4_EXT_ID = 'leanprover.lean4';
 const ZOTERO_PROBE_TIMEOUT_MS = 2000;
 const TEXRA_CLI_CHECK = {
   command: 'texra --version',
@@ -310,12 +310,12 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       '  3. Open a folder containing a lakefile.lean / lakefile.toml',
     installUrl:
       'https://marketplace.visualstudio.com/items?itemName=leanprover.lean4',
-    installExtensionId: LEAN4_EXT_ID,
+    installExtensionId: LEAN4_EXTENSION_ID,
     configNotes:
       'VS Code build: requires the leanprover.lean4 extension. ' +
       'CLI / desktop builds: requires `lake` on PATH; each Lake project root gets its own language server, surfaced below.',
     probe: async () => {
-      const extensionAvailable = extensionChecker(LEAN4_EXT_ID);
+      const extensionAvailable = extensionChecker(LEAN4_EXTENSION_ID);
       const lakeAvailable = await checkToolInstalled(
         { command: 'lake --version', errorMessage: 'lake not on PATH' },
         false,
