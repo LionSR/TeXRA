@@ -91,7 +91,7 @@ describe('ToolUseWaitNode', () => {
     const firstExec = await node.exec(firstPrep);
     const firstTransition = await node.post(shared, firstPrep, firstExec);
     expect(firstTransition).toBe(FlowTransition.CONTINUE);
-    expect(shared.deliveredToOrchestrator).toBeUndefined();
+    expect(shared.deliveredToOrchestrator).toBe(true);
 
     const secondPrep = await node.prep(shared);
     const secondExec = await node.exec(secondPrep);
@@ -99,6 +99,40 @@ describe('ToolUseWaitNode', () => {
 
     expect(onBeforeWaiting).toHaveBeenCalledTimes(2);
     expect(secondTransition).toBe(FlowTransition.COMPLETE);
+    expect(shared.deliveredToOrchestrator).toBe(true);
+  });
+
+  it('preserves delivered state when interruption is already set before waiting', async () => {
+    const shared: ToolUseRunShared = {
+      deliveredToOrchestrator: true,
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: null,
+    };
+    const onBeforeWaiting = vi.fn(async () => true);
+
+    const services = {
+      checkInterruption: () => true,
+      isSubagent: true,
+      logger: { error: vi.fn(), userMessage: vi.fn() },
+      modelHandler: { extractAssistantText: () => undefined },
+      onBeforeWaiting,
+      runtimeHost: { emit: vi.fn() },
+      session: {
+        hasQueuedFollowUp: () => false,
+        waitForFollowUp: vi.fn(),
+      },
+      streamId: 'test-stream',
+    } as unknown as ToolUseServices;
+
+    const node = new ToolUseWaitNode().setServices(services);
+
+    const prep = await node.prep(shared);
+    const exec = await node.exec(prep);
+    const transition = await node.post(shared, prep, exec);
+
+    expect(onBeforeWaiting).not.toHaveBeenCalled();
+    expect(transition).toBe(FlowTransition.COMPLETE);
     expect(shared.deliveredToOrchestrator).toBe(true);
   });
 });
