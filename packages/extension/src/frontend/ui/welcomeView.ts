@@ -42,7 +42,7 @@ function renderWelcomeHtml(): string {
       line-height: 1.5;
     }
     p { margin: 0 0 12px; }
-    .muted { color: var(--vscode-descriptionForeground, var(--vscode-foreground)); }
+    .muted { color: color-mix(in srgb, var(--vscode-foreground) 70%, transparent); }
     ol { margin: 0 0 12px; padding-left: 22px; }
     li { margin-bottom: 6px; }
     .actions { display: flex; flex-direction: column; gap: 6px; margin: 16px 0; }
