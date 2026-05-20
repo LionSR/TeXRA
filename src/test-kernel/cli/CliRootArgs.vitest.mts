@@ -10,9 +10,11 @@ import { END_GROUP_STATUS, EXECUTION_STATUS } from '@shared/schemas';
 import {
   cliTerminalStatus,
   collectStringFlagValues,
+  detectUnknownCliCommand,
   doctorPlatformInitContext,
   expandWorkflowInputSpecs,
   formatCliModelListError,
+  formatUnknownCliCommand,
   isCliFetchStackLog,
   normalizeRootShortcuts,
   reorderGlobalFlags,
@@ -119,6 +121,64 @@ describe('CLI root argument routing', () => {
       '--unknown',
       'auth',
     ]);
+  });
+
+  it('detects unknown top-level commands before citty falls back to help', async () => {
+    await expect(detectUnknownCliCommand(['bogus'])).resolves.toEqual({
+      typedCommand: 'texra bogus',
+      helpCommand: 'texra',
+    });
+  });
+
+  it('detects unknown command-group children', async () => {
+    await expect(detectUnknownCliCommand(['agents', 'bogus'])).resolves.toEqual(
+      {
+        typedCommand: 'texra agents bogus',
+        helpCommand: 'texra agents',
+      },
+    );
+    await expect(
+      detectUnknownCliCommand(['history', 'bogus']),
+    ).resolves.toEqual({
+      typedCommand: 'texra history bogus',
+      helpCommand: 'texra history',
+    });
+    await expect(detectUnknownCliCommand(['auth', 'bogus'])).resolves.toEqual({
+      typedCommand: 'texra auth bogus',
+      helpCommand: 'texra auth',
+    });
+    await expect(detectUnknownCliCommand(['models', 'bogus'])).resolves.toEqual(
+      {
+        typedCommand: 'texra models bogus',
+        helpCommand: 'texra models',
+      },
+    );
+  });
+
+  it('formats unknown command usage guidance', () => {
+    expect(
+      formatUnknownCliCommand({
+        typedCommand: 'texra agents bogus',
+        helpCommand: 'texra agents',
+      }),
+    ).toBe(
+      'Unknown command: texra agents bogus. Run `texra agents --help` for usage.',
+    );
+  });
+
+  it('does not classify known command arguments as unknown commands', async () => {
+    await expect(
+      detectUnknownCliCommand(['run', 'polish', '--input', 'paper.tex']),
+    ).resolves.toBeUndefined();
+    await expect(
+      detectUnknownCliCommand(['history', 'show', 'abc123']),
+    ).resolves.toBeUndefined();
+    await expect(
+      detectUnknownCliCommand(['completion', 'zsh']),
+    ).resolves.toBeUndefined();
+    await expect(
+      detectUnknownCliCommand(['--unknown', 'bogus']),
+    ).resolves.toBeUndefined();
   });
 
   it('collects repeated run context flags from raw args', () => {
