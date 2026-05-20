@@ -29,11 +29,36 @@ export interface SelectProps<T> {
   readonly onCancel: () => void;
   /** Focus the Nth item on mount (defaults to the active value's index, or 0). */
   readonly initialIndex?: number;
+  readonly maxVisibleItems?: number;
+  readonly showOverflow?: boolean;
 }
 
 function clampIndex(index: number, length: number): number {
   if (length <= 0) return 0;
   return Math.min(Math.max(index, 0), length - 1);
+}
+
+export function visibleSelectRange({
+  itemCount,
+  highlight,
+  maxVisibleItems,
+}: {
+  readonly itemCount: number;
+  readonly highlight: number;
+  readonly maxVisibleItems: number | undefined;
+}): { readonly start: number; readonly end: number } {
+  if (itemCount <= 0) return { start: 0, end: 0 };
+  const visibleCount =
+    maxVisibleItems == null
+      ? itemCount
+      : Math.min(Math.max(1, maxVisibleItems), itemCount);
+  const clampedHighlight = clampIndex(highlight, itemCount);
+  const centerOffset = Math.floor(visibleCount / 2);
+  const start = Math.min(
+    Math.max(0, clampedHighlight - centerOffset),
+    itemCount - visibleCount,
+  );
+  return { start, end: start + visibleCount };
 }
 
 export function Select<T>(props: SelectProps<T>): React.JSX.Element {
@@ -49,6 +74,15 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   useEffect(() => {
     setHighlight((h) => clampIndex(h, props.items.length));
   }, [props.items.length]);
+
+  const visibleRange = visibleSelectRange({
+    itemCount: props.items.length,
+    highlight,
+    maxVisibleItems: props.maxVisibleItems,
+  });
+  const hiddenBefore = visibleRange.start;
+  const hiddenAfter = props.items.length - visibleRange.end;
+  const visibleItems = props.items.slice(visibleRange.start, visibleRange.end);
 
   useInput((input, key) => {
     if (key.escape) {
@@ -88,7 +122,11 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
 
   return (
     <Box flexDirection="column">
-      {props.items.map((item, i) => {
+      {props.showOverflow && hiddenBefore > 0 ? (
+        <Text dimColor>{`... ${hiddenBefore} earlier`}</Text>
+      ) : null}
+      {visibleItems.map((item, offset) => {
+        const i = visibleRange.start + offset;
         const focused = i === highlight;
         const active = item.value === props.activeValue;
         const pointer = focused ? '›' : ' ';
@@ -119,6 +157,9 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
           </Box>
         );
       })}
+      {props.showOverflow && hiddenAfter > 0 ? (
+        <Text dimColor>{`... ${hiddenAfter} more`}</Text>
+      ) : null}
     </Box>
   );
 }

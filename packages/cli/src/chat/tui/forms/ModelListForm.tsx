@@ -20,6 +20,7 @@ import {
 export interface ModelListFormProps {
   readonly currentModel: string;
   readonly apiMode: CliApiMode;
+  readonly availableRows?: number;
   readonly selectable?: boolean;
   readonly onSelect?: (value: string) => void;
   readonly onClose: () => void;
@@ -75,6 +76,38 @@ export function formatModelStatusForCliMode(
   }
 }
 
+export function modelSelectWindow({
+  availableRows,
+  itemCount,
+}: {
+  readonly availableRows: number | undefined;
+  readonly itemCount: number;
+}): {
+  readonly maxVisibleItems: number | undefined;
+  readonly showOverflow: boolean;
+} {
+  if (availableRows == null) {
+    return { maxVisibleItems: undefined, showOverflow: false };
+  }
+
+  // Border, title, description, and key hints are the irreducible chrome.
+  const selectRows = Math.max(1, availableRows - 5);
+  if (itemCount <= selectRows) {
+    return { maxVisibleItems: itemCount, showOverflow: false };
+  }
+
+  // Overflow markers cost rows too. On very short terminals, keep the active
+  // choice visible instead of spending the whole budget on markers.
+  if (selectRows < 3) {
+    return { maxVisibleItems: selectRows, showOverflow: false };
+  }
+
+  return {
+    maxVisibleItems: Math.max(1, selectRows - 2),
+    showOverflow: true,
+  };
+}
+
 export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   const [models, setModels] = useState<readonly CliModelAccess[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,6 +159,10 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     disabled: props.selectable ? !m.available : false,
   }));
   const selectable = props.selectable === true;
+  const selectWindow = modelSelectWindow({
+    availableRows: props.availableRows,
+    itemCount: items.length,
+  });
 
   return (
     <Box
@@ -142,10 +179,12 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
           ? 'Choose the root model for the first message.'
           : 'Available models. Start a new chat with texra --model=<name> to choose the root model.'}
       </Text>
-      <Box marginTop={1} flexDirection="column">
+      <Box flexDirection="column">
         <Select
           items={items}
           activeValue={props.currentModel}
+          maxVisibleItems={selectWindow.maxVisibleItems}
+          showOverflow={selectWindow.showOverflow}
           onSelect={(value) => {
             if (selectable) {
               props.onSelect?.(value);
@@ -156,7 +195,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
           onCancel={props.onClose}
         />
       </Box>
-      <Box marginTop={1}>
+      <Box>
         {selectable ? (
           <KeyHints
             hints={[
