@@ -83,7 +83,6 @@ function installCliShutdownSignalHandlers(lifecycle: LifecycleHost): void {
 
   const install = (signal: NodeJS.Signals) => {
     const handler = () => {
-      process.off(signal, handler);
       void lifecycle.runShutdown().finally(() => {
         process.kill(process.pid, signal);
       });

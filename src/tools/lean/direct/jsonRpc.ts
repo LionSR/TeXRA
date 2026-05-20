@@ -45,7 +45,9 @@ interface PendingRequest {
 
 export class JsonRpcConnection {
   private nextId = 1;
-  private buffer = Buffer.alloc(0);
+  private readonly chunks: Buffer[] = [];
+  private bufferedLength = 0;
+  private pendingBodyLength: number | undefined;
   private readonly pending = new Map<RpcId, PendingRequest>();
   private readonly notificationHandlers = new Map<
     string,
@@ -109,30 +111,105 @@ export class JsonRpcConnection {
   }
 
   private onData(chunk: Buffer): void {
-    this.buffer = Buffer.concat([this.buffer, chunk]);
+    this.chunks.push(chunk);
+    this.bufferedLength += chunk.length;
     // Drain as many complete messages as we have in the buffer.
     for (;;) {
-      const headerEnd = this.buffer.indexOf('\r\n\r\n');
+      if (this.pendingBodyLength !== undefined) {
+        if (this.bufferedLength < this.pendingBodyLength) return;
+        this.dispatchBody(this.consumeBytes(this.pendingBodyLength));
+        this.pendingBodyLength = undefined;
+        continue;
+      }
+
+      const headerEnd = this.findHeaderEnd();
       if (headerEnd < 0) return;
-      const headerText = this.buffer.slice(0, headerEnd).toString('ascii');
+      const headerText = this.consumeBytes(headerEnd).toString('ascii');
+      this.discardBytes(4);
       const match = headerText.match(/Content-Length: (\d+)/i);
       if (!match) {
         // Malformed header — drop and resync at the next blank line.
-        this.buffer = this.buffer.slice(headerEnd + 4);
         continue;
       }
       const length = Number.parseInt(match[1]!, 10);
-      const bodyStart = headerEnd + 4;
-      if (this.buffer.length < bodyStart + length) return;
-      const body = this.buffer.slice(bodyStart, bodyStart + length);
-      this.buffer = this.buffer.slice(bodyStart + length);
-      let parsed: RpcMessage | undefined;
-      try {
-        parsed = JSON.parse(body.toString('utf8')) as RpcMessage;
-      } catch {
-        // Drop malformed payload and keep going.
+      if (this.bufferedLength < length) {
+        this.pendingBodyLength = length;
+        return;
       }
-      if (parsed) this.dispatch(parsed);
+      this.dispatchBody(this.consumeBytes(length));
+    }
+  }
+
+  private dispatchBody(body: Buffer): void {
+    let parsed: RpcMessage | undefined;
+    try {
+      parsed = JSON.parse(body.toString('utf8')) as RpcMessage;
+    } catch {
+      // Drop malformed payload and keep going.
+    }
+    if (parsed) this.dispatch(parsed);
+  }
+
+  private findHeaderEnd(): number {
+    const delimiter = [13, 10, 13, 10];
+    let matched = 0;
+    let offset = 0;
+    for (const chunk of this.chunks) {
+      for (const byte of chunk) {
+        if (byte === delimiter[matched]) {
+          matched += 1;
+          if (matched === delimiter.length) {
+            return offset - delimiter.length + 1;
+          }
+        } else {
+          matched = byte === delimiter[0] ? 1 : 0;
+        }
+        offset += 1;
+      }
+    }
+    return -1;
+  }
+
+  private consumeBytes(length: number): Buffer {
+    if (length === 0) return Buffer.alloc(0);
+    const parts: Buffer[] = [];
+    let remaining = length;
+    while (remaining > 0) {
+      const head = this.chunks[0];
+      if (!head) {
+        throw new Error('JSON-RPC buffer underflow');
+      }
+      if (head.length <= remaining) {
+        parts.push(head);
+        this.chunks.shift();
+        this.bufferedLength -= head.length;
+        remaining -= head.length;
+      } else {
+        parts.push(head.subarray(0, remaining));
+        this.chunks[0] = head.subarray(remaining);
+        this.bufferedLength -= remaining;
+        remaining = 0;
+      }
+    }
+    return parts.length === 1 ? parts[0]! : Buffer.concat(parts, length);
+  }
+
+  private discardBytes(length: number): void {
+    let remaining = length;
+    while (remaining > 0) {
+      const head = this.chunks[0];
+      if (!head) {
+        throw new Error('JSON-RPC buffer underflow');
+      }
+      if (head.length <= remaining) {
+        this.chunks.shift();
+        this.bufferedLength -= head.length;
+        remaining -= head.length;
+      } else {
+        this.chunks[0] = head.subarray(remaining);
+        this.bufferedLength -= remaining;
+        remaining = 0;
+      }
     }
   }
 
@@ -187,6 +264,9 @@ export class JsonRpcConnection {
     if (this.closed) return;
     this.closed = true;
     this.closeError = error;
+    this.chunks.length = 0;
+    this.bufferedLength = 0;
+    this.pendingBodyLength = undefined;
     for (const pending of this.pending.values()) {
       pending.reject(error);
     }

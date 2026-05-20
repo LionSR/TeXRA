@@ -149,7 +149,11 @@ export class LeanSession {
       textDocument: { uri: pathToUri(absolute) },
       position: { line, character: column },
     };
-    return (await this.rpc!.request(method, params)) as T;
+    const rpc = this.rpc;
+    if (this.disposed || !rpc) {
+      throw new Error('Lean session is not running');
+    }
+    return (await rpc.request(method, params)) as T;
   }
 
   private async openAndSettle(filePath: string): Promise<string> {

@@ -124,6 +124,28 @@ describe('JsonRpcConnection', () => {
     expect(handler).toHaveBeenCalledWith({ ok: true });
   });
 
+  it('reassembles a frame whose header arrives across multiple chunks', async () => {
+    const { connection, serverOut } = makePair();
+    const handler = vi.fn();
+    connection.onNotification('split-header', handler);
+
+    const body = Buffer.from(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'split-header',
+        params: { ok: true },
+      }),
+      'utf8',
+    );
+    const header = Buffer.from(`Content-Length: ${body.length}\r\n\r\n`);
+    serverOut.write(header.subarray(0, 6));
+    serverOut.write(header.subarray(6));
+    serverOut.write(body);
+
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(handler).toHaveBeenCalledWith({ ok: true });
+  });
+
   it('reassembles two frames written back-to-back', async () => {
     const { connection, serverSends } = makePair();
     const a = vi.fn();

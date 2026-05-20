@@ -198,22 +198,21 @@ export function createDirectLspLeanAdapter(
           return;
         }
         case 'build':
-          await runForAllSessions(sessions, lakeCommand, ['build'], true);
+          await runForAllSessions(sessions, lakeCommand, ['build']);
           return;
         case 'clean':
-          await runForAllSessions(sessions, lakeCommand, ['clean'], true);
+          await runForAllSessions(sessions, lakeCommand, ['clean']);
           return;
         // `fetch_file_cache` normally needs the active editor's file; we don't
         // have one in CLI/desktop, so it falls back to the project-wide cache
         // fetch (same as `fetch_cache`).
         case 'fetch_cache':
         case 'fetch_file_cache':
-          await runForAllSessions(
-            sessions,
-            lakeCommand,
-            ['exe', 'cache', 'get'],
-            true,
-          );
+          await runForAllSessions(sessions, lakeCommand, [
+            'exe',
+            'cache',
+            'get',
+          ]);
           return;
         case 'install_elan':
         case 'install_deps':
@@ -290,7 +289,6 @@ async function runForAllSessions(
   sessions: Map<string, LeanSession>,
   lakeCommand: string,
   args: readonly string[],
-  serialize: boolean,
 ): Promise<void> {
   if (sessions.size === 0) {
     throw new Error(
@@ -303,7 +301,7 @@ async function runForAllSessions(
         workspaceRoot: session.workspaceRoot,
         lakeCommand,
         args,
-        serialize,
+        serialize: true,
       }),
     ),
   );
