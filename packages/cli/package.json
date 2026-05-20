@@ -51,7 +51,7 @@
     "@lit-labs/signals": "^0.3.0",
     "@texra/core": "workspace:*",
     "@types/markdown-it": "^14.1.2",
-    "@types/react": "^19.2.0",
+    "@types/react": "^19.2.15",
     "babel-plugin-react-compiler": "^1.0.0",
     "citty": "^0.2.2",
     "cli-highlight": "^2.1.11",
