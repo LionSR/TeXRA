@@ -4,7 +4,7 @@ import { strict as assert } from 'assert';
 // Local imports - agent
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import { createRunState } from '@agent/core/AgentState';
+import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   AgentExecutionHandle,
@@ -35,7 +35,7 @@ describe('ToolUseFollowUp', () => {
     }),
     messages: [],
     // State slices stored directly (v2 schema)
-    run: createRunState(),
+    run: AgentRunStateSnapshotSchema.parse({}),
     workspace: workspaceState.toSnapshot(),
     user: {
       input: {},
