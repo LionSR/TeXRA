@@ -5,6 +5,7 @@ import { z } from 'zod';
 // Local imports
 import type { ExtensionCommandActions } from '@commands/extensionCommandSurface';
 import {
+  awaitTrue,
   definedHandler,
   dispatchCommandFromRegistry,
   type CommandHandler,
@@ -20,10 +21,6 @@ import { StreamTabIdSchema } from '@shared/schemas/identifiers';
 // calls the right `actions.*` method, AND that async failures
 // propagate through the dispatcher (regression guard for #3782).
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
-
-function awaitTrue(p: Promise<unknown> | Thenable<unknown>): Promise<boolean> {
-  return Promise.resolve(p).then(() => true);
-}
 
 const HANDLERS = {
   'texra.cleanOutput': (actions: ExtensionCommandActions) =>
