@@ -29,6 +29,7 @@ describe('slashRegistry', () => {
         'yolo',
         'status',
         'memory',
+        'compact',
       ]),
     );
     expect(
@@ -52,6 +53,11 @@ describe('slashRegistry', () => {
       expect.objectContaining({
         description: 'List stored memories',
         formComponent: expect.any(Function),
+      }),
+    );
+    expect(listSlashCommands().find((cmd) => cmd.name === 'compact')).toEqual(
+      expect.objectContaining({
+        description: 'Request context compaction',
       }),
     );
   });
