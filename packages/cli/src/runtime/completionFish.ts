@@ -17,8 +17,10 @@ function fishDescription(description: string): string[] {
 
 function fishCondition(path: readonly string[]): string {
   if (path.length === 0) return "-n '__fish_use_subcommand'";
-  const command = path.at(-1) ?? '';
-  return `-n '__fish_seen_subcommand_from ${fishEscape(command)}'`;
+  const pathCondition = path
+    .map((command) => `__fish_seen_subcommand_from ${fishEscape(command)}`)
+    .join('; and ');
+  return `-n '${pathCondition}'`;
 }
 
 export function fishCompletion(commands: readonly CompletionCommand[]): string {
