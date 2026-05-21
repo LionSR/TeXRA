@@ -1,8 +1,4 @@
-import {
-  commandCatalogById,
-  type CommandId,
-  type CommandKeybinding,
-} from '@shared/commands/catalog';
+import { commandCatalogById, type CommandId } from '@shared/commands/catalog';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 import type { StreamTabId } from '@shared/schemas';
@@ -15,10 +11,16 @@ import {
   dispatchCommandFromRegistry,
   type CommandHandler,
 } from '@shared/commands/registry';
+import {
+  formatDesktopAccelerator,
+  toElectronAccelerator,
+  toPlatformAccelerator,
+} from '@shared/commands/accelerators';
 import type { MenuItemConstructorOptions } from 'electron';
 import type { DesktopRoute } from './desktopShellMessages.js';
 
 export { SETTINGS_TAB };
+export { formatDesktopAccelerator, toElectronAccelerator };
 
 export const DESKTOP_LOCAL_COMMANDS = {
   SHOW_LOGS: 'texra.desktop.showLogs',
@@ -257,15 +259,6 @@ function resolveLocalCommandEntry(
   };
 }
 
-export function toElectronAccelerator(
-  keybinding: CommandKeybinding,
-  platform: NodeJS.Platform = process.platform,
-): string {
-  const key =
-    platform === 'darwin' && keybinding.mac ? keybinding.mac : keybinding.key;
-  return key.split('+').map(toElectronAcceleratorPart).join('+');
-}
-
 const DESKTOP_COMMAND_HANDLERS = {
   'texra.showMainView': (actions) => {
     actions.showRoute('main');
@@ -369,28 +362,6 @@ function isDesktopLocalCommandId(id: string): id is DesktopLocalCommandId {
   );
 }
 
-function toPlatformAccelerator(
-  accelerator: string | undefined,
-  platform: NodeJS.Platform,
-): string | undefined {
-  if (!accelerator) return undefined;
-  if (platform !== 'darwin') return accelerator;
-  return accelerator.replaceAll('CommandOrControl', 'Command');
-}
-
-export function formatDesktopAccelerator(
-  accelerator: string | undefined,
-  platform: NodeJS.Platform = process.platform,
-): string | undefined {
-  if (!accelerator) return undefined;
-  const isMac = platform === 'darwin';
-  const parts = accelerator
-    .replaceAll('CommandOrControl', isMac ? 'Command' : 'Control')
-    .split('+')
-    .map((part) => toDisplayAcceleratorPart(part, platform));
-  return parts.join(isMac ? '' : '+');
-}
-
 export function buildDesktopSettingsTabMessage(
   tabIndex: SettingsTab,
   agentSubTab?: AgentCategory,
@@ -465,56 +436,4 @@ export function buildDesktopMenuTemplate(
       submenu: DESKTOP_HELP_COMMANDS.map(commandItem),
     },
   ];
-}
-
-function toElectronAcceleratorPart(part: string): string {
-  const normalized = part.trim().toLowerCase();
-  switch (normalized) {
-    case 'cmd':
-      return 'Command';
-    case 'ctrl':
-      return 'Control';
-    case 'option':
-      return 'Option';
-    case 'alt':
-      return 'Alt';
-    case 'shift':
-      return 'Shift';
-    case 'enter':
-      return 'Enter';
-    case 'escape':
-      return 'Escape';
-    case 'space':
-      return 'Space';
-    case 'tab':
-      return 'Tab';
-    default:
-      if (/^f\d{1,2}$/.test(normalized)) return normalized.toUpperCase();
-      return normalized.length === 1 ? normalized.toUpperCase() : normalized;
-  }
-}
-
-function toDisplayAcceleratorPart(
-  part: string,
-  platform: NodeJS.Platform,
-): string {
-  const normalized = part.trim().toLowerCase();
-  const isMac = platform === 'darwin';
-  switch (normalized) {
-    case 'cmd':
-    case 'command':
-      return isMac ? '⌘' : 'Cmd';
-    case 'ctrl':
-    case 'control':
-      return isMac ? '⌃' : 'Ctrl';
-    case 'alt':
-    case 'option':
-      return isMac ? '⌥' : 'Alt';
-    case 'shift':
-      return isMac ? '⇧' : 'Shift';
-    default: {
-      const trimmed = part.trim();
-      return trimmed.length === 1 ? trimmed.toUpperCase() : trimmed;
-    }
-  }
 }

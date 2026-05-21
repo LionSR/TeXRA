@@ -68,6 +68,7 @@ import { getMainWebview } from '@frontend/system/commandUtils';
 import { runCleanBuild, runCleanOutput } from '@housekeeping';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import {
+  awaitTrue,
   definedHandler,
   dispatchCommandFromRegistry,
   type CommandHandler,
@@ -336,19 +337,6 @@ export function createExtensionCommandActions(
       agentHandleCreateAgentWithAI(context, category),
     execute: agentRunExecuteCommand,
   };
-}
-
-/**
- * Dispatch a no-arg `actions.X()` call through the registry while
- * preserving async semantics. Sync handlers that miss this helper
- * regressed in #3778 — the original `void actions.X(); return true;`
- * shape fired-and-forgot the promise, swallowing rejections (#3782).
- *
- * Wrap promise-returning actions through `awaitTrue` so the dispatcher
- * actually awaits the work and surfaces failures.
- */
-function awaitTrue(p: Promise<unknown> | Thenable<unknown>): Promise<boolean> {
-  return Promise.resolve(p).then(() => true);
 }
 
 const EXTENSION_COMMAND_HANDLERS = {
