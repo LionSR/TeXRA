@@ -100,6 +100,7 @@ import {
   formatCliMultiAgentPresetList,
   readCliMultiAgentPresets,
 } from '../runtime/multiAgentPresets';
+import { buildCliOrchestrationItems } from '../runtime/orchestration';
 
 // One CLI invocation per process — module-level pending exit code is the
 // simplest way to surface handler exit codes back to `bin/texra.ts` after
@@ -1430,6 +1431,67 @@ const resumeCommand = defineCommand({
   },
 });
 
+const orchestrationCommand = defineCommand({
+  meta: {
+    name: 'orchestrate',
+    description: 'Choose a chat, resume, or team preset',
+  },
+  args: {
+    ...GLOBAL_ARGS,
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
+    setExitCode(await runOrchestration(context));
+  },
+});
+
+async function runOrchestration(context: CliContext): Promise<number> {
+  const isHeadless =
+    context.mode === 'headless' || context.stdoutIsTty !== true;
+  const dumbTerm = context.termIsDumb === true;
+  if (isHeadless || dumbTerm) {
+    writeTextStderr(
+      isHeadless
+        ? 'texra orchestrate requires an interactive terminal (TTY stdin and stdout). For scripting, use `texra run`, `texra chat`, or a concrete subcommand.'
+        : 'texra orchestrate needs a capable terminal — TERM=dumb strips the cursor controls Ink uses.',
+    );
+    return CliExitCode.Usage;
+  }
+
+  await initCliPlatform({
+    ...context,
+    quietLogs: true,
+    skipIncludedModelAccess: true,
+  });
+  await loadAgents({ includeRemote: false });
+  const history = await listCliHistoryEntries();
+  const items = buildCliOrchestrationItems({
+    presets: readCliMultiAgentPresets(),
+    history,
+    toolUseAgents: getVisibleAgents(AgentCategory.ToolUse),
+  });
+  const { runOrchestrationTui } =
+    await import('../orchestration/runOrchestrationTui');
+  const action = await runOrchestrationTui(items);
+
+  switch (action.kind) {
+    case 'chat': {
+      const { runChat } = await import('../chat/tui/runChatTui');
+      const result = await runChat(context, {
+        agentOverride: action.agent,
+      });
+      return result.exitCode;
+    }
+    case 'resume':
+      return runResumeExecution(context, action.id);
+    case 'help':
+      await showUsage(rootCommand);
+      return CliExitCode.Success;
+    case 'exit':
+      return CliExitCode.Success;
+  }
+}
+
 async function runResumeExecution(
   context: CliContext,
   id: ExecutionId,
@@ -1587,6 +1649,7 @@ export const rootCommand = defineCommand({
     ...GLOBAL_ARGS,
   },
   subCommands: {
+    orchestrate: orchestrationCommand,
     chat: chatCommand,
     run: runWorkflowCommand,
     resume: resumeCommand,
@@ -1603,14 +1666,15 @@ export const rootCommand = defineCommand({
     version: versionCommand,
     help: helpCommand,
   },
-  // No subcommand on bare `texra`: dispatch to `chat` when both TTYs are
-  // interactive (per docs/prd/cli-tui-ink/10-architecture.md#entrypoint-default);
-  // fall through to the synthetic `help` subcommand otherwise.
-  default: () => {
-    const ambient = readCliAmbientState();
-    return ambient.stdinIsTty && ambient.stdoutIsTty ? 'chat' : 'help';
-  },
+  // No subcommand on bare `texra`: dispatch to the orchestration view when
+  // both TTYs are interactive; fall through to synthetic `help` otherwise.
+  default: defaultRootSubcommand,
 });
+
+export function defaultRootSubcommand(): 'orchestrate' | 'help' {
+  const ambient = readCliAmbientState();
+  return ambient.stdinIsTty && ambient.stdoutIsTty ? 'orchestrate' : 'help';
+}
 
 // Derived from `GLOBAL_ARGS` so adding/renaming a global flag in one place
 // flows through to `reorderGlobalFlags` automatically.
