@@ -122,13 +122,13 @@ export async function writePromptToXml(
   const { dir, name } = path.parse(inputFile);
   const agentName = getAgentFirstNameChunk(agent);
   const fullPrompt = `\n<system>${systemPrompt}</system>\n\n${userPrefix}\n${userRequest}\n`;
+  const fileName = `${name}_${agentName}_input.xml`;
 
+  // With an executionId, prompts are scoped to per-run storage; otherwise they
+  // land beside the input file in the workspace.
   if (executionId) {
     const runDir = path.join(TASK_RUNS_DIR, executionId);
-    const relativeOutputFile = path.join(
-      runDir,
-      `${name}_${agentName}_input.xml`,
-    );
+    const relativeOutputFile = path.join(runDir, fileName);
 
     await StorageFS.ensureDir(TASK_RUNS_DIR);
     await StorageFS.ensureDir(runDir);
@@ -140,7 +140,7 @@ export async function writePromptToXml(
     return storagePath;
   }
 
-  const outputFile = path.join(dir, `${name}_${agentName}_input.xml`);
+  const outputFile = path.join(dir, fileName);
   const workspacePath = WorkspaceFS.fullPath(outputFile);
   logger.debug(CHANNEL, `Writing input prompt to ${workspacePath}`);
   await WorkspaceFS.write(outputFile, fullPrompt);
