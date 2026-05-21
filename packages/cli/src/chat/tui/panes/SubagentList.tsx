@@ -8,6 +8,7 @@ import { Box, Text } from 'ink';
 
 import type { ActiveChildInfo } from '@shared/schemas';
 
+import { visibleSubagentRows } from '../state/childControls';
 import { cliState, type ProcessOutputTail } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
 
@@ -73,8 +74,9 @@ export function SubagentList(
   const streams = useSignal(cliState.streams);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   if (!slice) return null;
-  const { activeSubagents, activeProcesses, processOutput } = slice;
-  if (activeSubagents.length === 0 && activeProcesses.length === 0) return null;
+  const { activeProcesses, processOutput } = slice;
+  const subagents = visibleSubagentRows(slice);
+  if (subagents.length === 0 && activeProcesses.length === 0) return null;
   if (props.maxRows !== undefined && props.maxRows <= 0) return null;
 
   return (
@@ -85,21 +87,18 @@ export function SubagentList(
       paddingX={1}
       marginBottom={props.maxRows === undefined ? 1 : 0}
     >
-      {activeSubagents.length > 0 ? (
+      {subagents.length > 0 ? (
         <Box flexDirection="column">
           <Text bold dimColor>
             Subagents
           </Text>
-          {activeSubagents.map((child, i) => (
+          {subagents.map((child, i) => (
             <Row key={child.executionId} child={child} index={i} />
           ))}
         </Box>
       ) : null}
       {activeProcesses.length > 0 ? (
-        <Box
-          flexDirection="column"
-          marginTop={activeSubagents.length > 0 ? 1 : 0}
-        >
+        <Box flexDirection="column" marginTop={subagents.length > 0 ? 1 : 0}>
           <Text bold dimColor>
             Processes
           </Text>
@@ -107,7 +106,7 @@ export function SubagentList(
             <Row
               key={child.executionId}
               child={child}
-              index={activeSubagents.length + i}
+              index={subagents.length + i}
               tail={processOutput.get(child.executionId)}
             />
           ))}
