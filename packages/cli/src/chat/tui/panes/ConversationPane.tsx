@@ -131,10 +131,11 @@ export function estimateTranscriptEntryRows(
     return Math.max(1, rendered.split('\n').length) + 1;
   }
   // User / error rows render without a trailing margin (compact mode) so
-  // chat-heavy sessions don't burn half the viewport on blank gaps. Keep
-  // the estimate in sync with the rendered height to avoid wasted budget.
+  // chat-heavy sessions don't burn half the viewport on blank gaps. Their
+  // box uses `paddingX={1}` (2 cols) and a 2-col prefix (`› ` / `! `), so
+  // long text wraps to `width - 4` — keep the estimate in sync.
   if (entry.role === 'user' || entry.role === 'error') {
-    return estimateWrappedRows(entry.text, width);
+    return estimateWrappedRows(entry.text, Math.max(1, width - 4));
   }
 
   return estimateWrappedRows(entry.text, width) + 1;

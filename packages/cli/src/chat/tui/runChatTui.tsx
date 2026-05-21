@@ -438,9 +438,11 @@ async function handleTuiSlashCommand(
   const rest = parsed.remainder.trim();
   // Echo the slash input into the transcript so the user can see what they
   // typed. Slash commands don't go through the agent run, so the usual
-  // USER_MESSAGE stream-log entry is never produced. Skip the echo for /clear
-  // (it resets the transcript) and exits (the TUI is tearing down).
-  if (command !== 'clear' && command !== 'exit' && command !== 'quit') {
+  // USER_MESSAGE stream-log entry is never produced. Skip the echo for the
+  // exit commands (the TUI is tearing down); /clear still echoes because
+  // resetSessionForClear refuses while a run is active and surfaces an
+  // error — without the echo the user wouldn't see what triggered it.
+  if (command !== 'exit' && command !== 'quit') {
     appendLocalUserTranscript(line.trim());
   }
   switch (command) {
