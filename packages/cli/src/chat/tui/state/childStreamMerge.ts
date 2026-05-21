@@ -12,3 +12,18 @@ export function mergeChildStreams(
   }
   return [...byStream.values()];
 }
+
+export function visibleSubagentRows(
+  activeSubagents: readonly ActiveChildInfo[],
+  retainedChildStreams: readonly ActiveChildInfo[],
+): readonly ActiveChildInfo[] {
+  const activeKeys = new Set(
+    activeSubagents.map((child) => child.childStreamId ?? child.executionId),
+  );
+  return [
+    ...activeSubagents,
+    ...retainedChildStreams.filter(
+      (child) => !activeKeys.has(child.childStreamId ?? child.executionId),
+    ),
+  ];
+}

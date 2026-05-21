@@ -18,6 +18,7 @@ import { TipRow } from './panes/TipRow';
 import { TodosPlanPanel } from './panes/TodosPlanPanel';
 import { currentApproval } from './state/approvalQueue';
 import {
+  hasChildExecutionRows,
   numericFocusTarget,
   type ChildControlMode,
 } from './state/childControls';
@@ -198,10 +199,7 @@ export function App(props: AppProps): React.JSX.Element {
     activeSlice,
   );
   const hasSubagentPanel =
-    !foregroundOpen &&
-    activeSlice !== undefined &&
-    (activeSlice.activeSubagents.length > 0 ||
-      activeSlice.activeProcesses.length > 0);
+    !foregroundOpen && hasChildExecutionRows(activeSlice);
   const hasTodosPlanPanel =
     !foregroundOpen &&
     activeSlice !== undefined &&
