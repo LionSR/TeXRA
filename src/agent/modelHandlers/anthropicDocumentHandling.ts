@@ -14,9 +14,9 @@ import type { Anthropic } from '@anthropic-ai/sdk';
 import type {
   DocumentBlockParam,
   ContentBlockParam,
+  MessageParam,
 } from '@anthropic-ai/sdk/resources/messages';
 import type { BetaRequestDocumentBlock } from '@anthropic-ai/sdk/resources/beta/messages';
-import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 
 /**
  * Extracts all document blocks from a content block array, including those
@@ -33,11 +33,8 @@ export function extractDocumentBlocks(
       documents.push(block);
     } else if (block.type === 'tool_result' && Array.isArray(block.content)) {
       for (const nested of block.content) {
-        if (
-          nested.type === 'document' &&
-          (nested as DocumentBlockParam).source
-        ) {
-          documents.push(nested as DocumentBlockParam);
+        if (nested.type === 'document' && nested.source) {
+          documents.push(nested);
         }
       }
     }
