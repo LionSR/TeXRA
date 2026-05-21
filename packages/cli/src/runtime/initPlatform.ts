@@ -8,6 +8,7 @@ import { initPlatform, tryPlatform } from '@platform/platform';
 
 // Local imports - agent index
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
+import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
 
 // Local imports - auth
 import {
@@ -168,4 +169,11 @@ export async function initCliPlatform(
     });
     bootstrappedResourcesPath = context.resourcesPath;
   }
+
+  setRuntimeSkillSources(
+    defaultSkillSources({
+      cwd: context.cwd,
+      resourcesPath: context.resourcesPath,
+    }),
+  );
 }
