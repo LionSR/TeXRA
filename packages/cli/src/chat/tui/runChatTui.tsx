@@ -612,6 +612,20 @@ export async function runChat(
   const setApprovalPolicy = (policy: CliApprovalPolicy): void => {
     activeApprovalPolicy = policy;
   };
+  // The slash-command context is identical at every call site; build it once
+  // lazily so the closures it captures (interruptActive, resetSessionForClear,
+  // startAgentRun) are all defined before the first use.
+  const slashCommandContext = (): SlashCommandContext => ({
+    session,
+    initialAgent: agent,
+    initialModel: model,
+    interruptActive,
+    requestInputExit: () => requestInputExit?.(),
+    getApprovalPolicy,
+    setApprovalPolicy,
+    resetSession: resetSessionForClear,
+    startStoredExecution: startAgentRun,
+  });
   await loadAgents();
   cliState.sessionMeta.set({
     agent,
@@ -757,17 +771,7 @@ export async function runChat(
   registerBuiltinSlashCommands({
     canSelectAgent: () => !session.runPromise,
     onAgentSelect: (nextAgent) =>
-      applyInitialCliAgentSelection(nextAgent, {
-        session,
-        initialAgent: agent,
-        initialModel: model,
-        interruptActive,
-        requestInputExit: () => requestInputExit?.(),
-        getApprovalPolicy,
-        setApprovalPolicy,
-        resetSession: resetSessionForClear,
-        startStoredExecution: startAgentRun,
-      }),
+      applyInitialCliAgentSelection(nextAgent, slashCommandContext()),
     getApprovalPolicy,
     onApprovalPolicySelect: (policy) => {
       setApprovalPolicy(policy);
@@ -777,34 +781,13 @@ export async function runChat(
     },
     canSelectModel: () => !session.runPromise,
     onModelSelect: (nextModel) =>
-      applyInitialCliModelSelection(nextModel, {
-        session,
-        initialAgent: agent,
-        initialModel: model,
-        interruptActive,
-        requestInputExit: () => requestInputExit?.(),
-        getApprovalPolicy,
-        setApprovalPolicy,
-        resetSession: resetSessionForClear,
-        startStoredExecution: startAgentRun,
-      }),
+      applyInitialCliModelSelection(nextModel, slashCommandContext()),
     onApiModeSelect: applyCliApiModeSelection,
     onMemorySelect: showCliMemoryPreview,
     onMemoryError: (error) => {
       appendLocalAssistantTranscript(toErrorMessage(error));
     },
-    onResumeSelect: (id) =>
-      resumeStoredExecution(id, {
-        session,
-        initialAgent: agent,
-        initialModel: model,
-        interruptActive,
-        requestInputExit: () => requestInputExit?.(),
-        getApprovalPolicy,
-        setApprovalPolicy,
-        resetSession: resetSessionForClear,
-        startStoredExecution: startAgentRun,
-      }),
+    onResumeSelect: (id) => resumeStoredExecution(id, slashCommandContext()),
     onResumeError: (error) => {
       appendLocalAssistantTranscript(toErrorMessage(error));
     },
@@ -828,19 +811,7 @@ export async function runChat(
   };
 
   const handleSubmittedLine = async (line: string): Promise<void> => {
-    if (
-      await handleTuiSlashCommand(line, {
-        session,
-        initialAgent: agent,
-        initialModel: model,
-        interruptActive,
-        requestInputExit: () => requestInputExit?.(),
-        getApprovalPolicy,
-        setApprovalPolicy,
-        resetSession: resetSessionForClear,
-        startStoredExecution: startAgentRun,
-      })
-    ) {
+    if (await handleTuiSlashCommand(line, slashCommandContext())) {
       return;
     }
     if (!session.runPromise) {

@@ -177,6 +177,38 @@ export function computePickerListLayout({
   };
 }
 
+function TaskOutput({
+  childStreamId,
+  tailLines,
+  visibleTail,
+  visibleLineCount,
+}: {
+  readonly childStreamId: StreamTabId | undefined;
+  readonly tailLines: readonly string[];
+  readonly visibleTail: readonly string[];
+  readonly visibleLineCount: number;
+}): React.JSX.Element | null {
+  if (tailLines.length > 0) {
+    if (visibleLineCount <= 0) return null;
+    return (
+      <>
+        {visibleTail.map((line, index) => (
+          <Text key={`${index}:${line}`} dimColor>
+            {line}
+          </Text>
+        ))}
+      </>
+    );
+  }
+  if (visibleLineCount === 0) return null;
+  if (childStreamId) {
+    return (
+      <Text dimColor>Open the task stream to see its live transcript.</Text>
+    );
+  }
+  return <Text dimColor>No output captured yet.</Text>;
+}
+
 function TaskDetailView({
   availableRows,
   item,
