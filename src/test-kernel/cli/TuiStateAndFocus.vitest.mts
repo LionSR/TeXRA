@@ -49,6 +49,7 @@ import { renderAnsiMarkdown } from '../../../packages/cli/src/chat/tui/render/an
 import {
   chatTuiCanInterruptActiveRun,
   chatTuiCanStartRootRun,
+  chatTuiActiveChildFollowUpTarget,
   clearTuiSessionRunState,
 } from '../../../packages/cli/src/chat/tui/runChatTui';
 import { CliExitCode } from '../../../packages/cli/src/runtime/exitCodes';
@@ -308,6 +309,18 @@ describe('CLI TUI row allocation', () => {
     ).toBe(true);
   });
 
+  it('selects the focused child stream as a follow-up target', () => {
+    patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
+    patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
+    setParentStream(child1, root);
+
+    cliState.activeStreamId.set(root);
+    expect(chatTuiActiveChildFollowUpTarget()).toBeUndefined();
+
+    cliState.activeStreamId.set(child1);
+    expect(chatTuiActiveChildFollowUpTarget()).toBe(child1);
+  });
+
   it('clears stale resume ids when clearing chat session run state', () => {
     const session = {
       streamId: root,
@@ -484,6 +497,20 @@ describe('CLI transcript state', () => {
       'Available commands: /help',
       'Available commands: /help',
     ]);
+  });
+
+  it('can append local assistant output to an explicit stream', () => {
+    cliState.activeStreamId.set(root);
+
+    appendLocalAssistantTranscript('Child stream note.', child1);
+
+    expect(cliState.streams.get().get(root)?.entries ?? []).toEqual([]);
+    expect(
+      cliState.streams
+        .get()
+        .get(child1)
+        ?.entries.map((entry) => entry.text),
+    ).toEqual(['Child stream note.']);
   });
 
   it('adds local runtime errors to the transcript', () => {
