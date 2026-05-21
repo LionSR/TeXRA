@@ -5,7 +5,7 @@ import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 
 // Local imports - CLI state
 import { isPlainReturnInput } from '../input/inputKeys';
-import { mergeChildStreams } from './childStreamMerge';
+import { visibleSubagentRows as mergeVisibleSubagentRows } from './childStreamMerge';
 import { orderedDescendantsFromSlice } from './focusCycle';
 import type { ProcessOutputTail, StreamSlice } from './cliState';
 
@@ -146,8 +146,8 @@ export function buildChildControlItems(
   > = new Map(),
 ): readonly ChildControlItem[] {
   if (mode === 'subagents') {
-    return mergeChildStreams(slice.childStreams, slice.activeSubagents).map(
-      (child) => buildSubagentItem(child, streamsById),
+    return visibleSubagentRows(slice).map((child) =>
+      buildSubagentItem(child, streamsById),
     );
   }
 
@@ -159,6 +159,23 @@ export function buildChildControlItems(
       buildProcessItem(child, slice.processOutput.get(child.executionId)),
     ),
   ];
+}
+
+export function visibleSubagentRows(
+  slice: Pick<StreamSlice, 'activeSubagents' | 'childStreams'>,
+): readonly ActiveChildInfo[] {
+  return mergeVisibleSubagentRows(slice.activeSubagents, slice.childStreams);
+}
+
+export function hasChildExecutionRows(
+  slice:
+    | Pick<StreamSlice, 'activeProcesses' | 'activeSubagents' | 'childStreams'>
+    | undefined,
+): boolean {
+  return (
+    slice !== undefined &&
+    (visibleSubagentRows(slice).length > 0 || slice.activeProcesses.length > 0)
+  );
 }
 
 export function numericFocusTarget(
