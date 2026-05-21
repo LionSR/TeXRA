@@ -1,6 +1,13 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
+// Local imports - progressView frontend
+import type {
+  GroupTree,
+  MessageIndex,
+  TimelineEntry,
+} from '@progressView/frontend/components/messageIndex';
+
 // Local imports - shared schemas
 import {
   LOG_LEVELS,
@@ -12,31 +19,13 @@ import {
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
-type TimelineEntry =
-  | { key: string; time: number; msg: LogMessageData }
-  | { key: string; time: number; tree: GroupTreeForTest };
-
-interface GroupTreeForTest {
-  group: TaskGroup;
-  children: GroupTreeForTest[];
-  messages: LogMessageData[];
-}
-
 type TaskGroupListInternals = HTMLElement & {
   groups: TaskGroup[];
   messages: LogMessageData[];
   hasStreams: boolean;
   terminal: boolean;
   updateComplete: Promise<boolean>;
-  cachedTree: GroupTreeForTest[];
-  cachedUngrouped: LogMessageData[];
-  cachedTimeline: TimelineEntry[];
-  ungroupedMessageById: Map<string, LogMessageData>;
-  ungroupedMessageIndex: Map<string, number>;
-  buildGroupTree: () => [GroupTreeForTest[], LogMessageData[]];
-  buildFullTimeline: () => TimelineEntry[];
-  replaceSingleMessage: (message: LogMessageData) => void;
-  updateTimelineMessageRefs: () => void;
+  readonly index: MessageIndex;
   willUpdate: (changedProperties: Map<string, unknown>) => void;
 };
 
@@ -77,8 +66,8 @@ function createList(messages: LogMessageData[]): TaskGroupListInternals {
   ) as unknown as TaskGroupListInternals;
   element.groups = [];
   element.messages = messages;
-  [element.cachedTree, element.cachedUngrouped] = element.buildGroupTree();
-  element.cachedTimeline = element.buildFullTimeline();
+  element.index.rebuildTree([], messages);
+  element.index.rebuildTimeline();
   return element;
 }
 
@@ -106,29 +95,19 @@ describe('task-group-list ungrouped message indexes', () => {
     ];
     const list = createList(original);
     const updated = { ...original[1], text: 'two updated' };
+    const next = [original[0], updated, original[2]];
 
-    list.replaceSingleMessage(updated);
+    list.index.updateCachedMessageRefs(next, original, [1]);
 
-    expect(list.cachedUngrouped[1]).toBe(updated);
-    expect(list.ungroupedMessageById.get('m2')).toBe(updated);
-    expect(list.ungroupedMessageIndex.get('m2')).toBe(1);
+    expect(list.index.ungrouped[1]).toBe(updated);
 
-    const timelineEntry = list.cachedTimeline.find(
+    const timelineEntry = list.index.timeline.find(
       (entry): entry is Extract<TimelineEntry, { msg: LogMessageData }> =>
         entry.key === 'm2' && 'msg' in entry,
     );
     expect(timelineEntry?.msg).toBe(original[1]);
 
-    list.cachedUngrouped = new Proxy(list.cachedUngrouped, {
-      get(target, property, receiver) {
-        if (typeof property === 'string' && /^\d+$/.test(property)) {
-          throw new Error('unexpected ungrouped array scan');
-        }
-        return Reflect.get(target, property, receiver);
-      },
-    }) as LogMessageData[];
-
-    list.updateTimelineMessageRefs();
+    list.index.updateTimelineMessageRefs(next, [1]);
 
     expect(timelineEntry?.msg).toBe(updated);
   });
@@ -138,29 +117,29 @@ describe('task-group-list ungrouped message indexes', () => {
     const message = createMessage('m1', 'grouped', 2, group.id);
     const list = createList([message]);
     list.groups = [group];
-    [list.cachedTree, list.cachedUngrouped] = list.buildGroupTree();
-    list.cachedTimeline = list.buildFullTimeline();
+    list.index.rebuildTree([group], [message]);
+    list.index.rebuildTimeline();
 
-    const originalTree = list.cachedTree[0];
+    const originalTree: GroupTree | undefined = list.index.tree[0];
     const stoppedGroup = {
       ...group,
       status: STREAM_STATUS.STOPPED,
       endTime: 3,
     };
     list.groups = [stoppedGroup];
-    list.buildGroupTree = () => {
+    list.index.rebuildTree = () => {
       throw new Error('unexpected full group tree rebuild');
     };
-    list.updateTimelineMessageRefs = () => {
+    list.index.updateTimelineMessageRefs = () => {
       throw new Error('unexpected timeline message scan');
     };
 
     list.willUpdate(new Map([['groups', [group]]]));
 
-    expect(list.cachedTree[0]).toBe(originalTree);
-    expect(list.cachedTree[0]?.group).toBe(stoppedGroup);
-    expect(list.cachedTree[0]?.messages).toEqual([message]);
-    expect(list.cachedTimeline).toHaveLength(1);
+    expect(list.index.tree[0]).toBe(originalTree);
+    expect(list.index.tree[0]?.group).toBe(stoppedGroup);
+    expect(list.index.tree[0]?.messages).toEqual([message]);
+    expect(list.index.timeline).toHaveLength(1);
   });
 
   it('bounds top-level timeline DOM for large ungrouped streams', async () => {
