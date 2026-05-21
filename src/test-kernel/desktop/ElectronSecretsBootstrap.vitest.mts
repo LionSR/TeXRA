@@ -127,7 +127,7 @@ describe('desktop renderer bootstrap fallback', () => {
     const source = loadRendererMain();
     expect(source).toContain('renderBootstrapFallback');
     expect(source).toContain('try {');
-    expect(source).toContain('renderLogViewer();');
+    expect(source).toContain('logsDrawer.rerenderViewer();');
     expect(source).toContain('rerenderShell();');
     expect(source).toContain('catch (error)');
     expect(source).toContain('bootstrapFailed');
