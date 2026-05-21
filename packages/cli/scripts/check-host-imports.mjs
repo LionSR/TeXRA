@@ -20,11 +20,13 @@ const processInputAllowedFiles = new Set([
   // Ink needs the actual `process.stdin` stream object to wire its raw-mode
   // input pipeline; this file is the TUI I/O boundary.
   'packages/cli/src/chat/tui/runChatTui.tsx',
+  'packages/cli/src/orchestration/runOrchestrationTui.tsx',
 ]);
 
 const processTerminalInputAllowedFiles = new Set([
   'packages/cli/src/runtime/cliContext.ts',
   'packages/cli/src/chat/tui/runChatTui.tsx',
+  'packages/cli/src/orchestration/runOrchestrationTui.tsx',
 ]);
 
 const processOutputAllowedFiles = new Set([
@@ -33,6 +35,7 @@ const processOutputAllowedFiles = new Set([
   // Ink mounts onto real `process.stdout`/`process.stderr` streams; the rest
   // of the TUI must keep going through logSinks.
   'packages/cli/src/chat/tui/runChatTui.tsx',
+  'packages/cli/src/orchestration/runOrchestrationTui.tsx',
 ]);
 
 const processOutputPatterns = [
