@@ -70,9 +70,7 @@ export function definedHandler<TActions, TArgs>(
  * whenever they delegate to an async action so failures propagate to
  * `executeCommand` callers.
  */
-export function awaitTrue(
-  p: Promise<unknown> | Thenable<unknown>,
-): Promise<boolean> {
+export function awaitTrue(p: PromiseLike<unknown>): Promise<boolean> {
   return Promise.resolve(p).then(() => true);
 }
 
