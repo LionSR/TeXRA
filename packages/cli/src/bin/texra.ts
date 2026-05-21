@@ -3,9 +3,13 @@ import { toErrorMessage } from '@common/errors/errorMessage';
 
 import { runCli } from '../commands/root';
 import { CliExitCode } from '../runtime/exitCodes';
-import { writeTextStderr } from '../runtime/logSinks';
+import {
+  installCliPipeErrorHandlers,
+  writeTextStderr,
+} from '../runtime/logSinks';
 
 try {
+  installCliPipeErrorHandlers();
   const result = await runCli();
   process.exitCode = result.exitCode;
 } catch (error) {
