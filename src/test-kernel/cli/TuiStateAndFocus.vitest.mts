@@ -98,6 +98,15 @@ describe('cliState Phase 4 fields', () => {
     removeStream(root);
     expect(cliState.parentStream.get().has(child2)).toBe(false);
   });
+
+  it('treats a null-parent update as child promotion to top-level', () => {
+    setParentStream(child1, root);
+    expect(cliState.parentStream.get().get(child1)).toBe(root);
+
+    setParentStream(child1, null);
+
+    expect(cliState.parentStream.get().has(child1)).toBe(false);
+  });
 });
 
 describe('CLI TUI row allocation', () => {

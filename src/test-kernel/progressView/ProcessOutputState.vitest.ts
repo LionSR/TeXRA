@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view frontend
+import { streamLifecycleHandlers } from '@progressView/frontend/slices/streamLifecycleSlice';
 import { streamMetaHandlers } from '@progressView/frontend/slices/streamMetaSlice';
 import {
   createInitialState,
@@ -89,6 +90,15 @@ function dispatch(
   handler?.(message as never, ctx);
 }
 
+function dispatchLifecycle(
+  message: ProgressViewOutboundMessage,
+  ctx: MessageHandlerContext,
+) {
+  const handler = streamLifecycleHandlers[message.command];
+  expect(handler).toBeDefined();
+  handler?.(message as never, ctx);
+}
+
 describe('process output frontend state', () => {
   it('appends output without pruning sibling process entries', () => {
     const streamId = 'stream-a' as StreamTabId;
@@ -141,5 +151,36 @@ describe('process output frontend state', () => {
     const outputs = getState().processOutputs.get(streamId);
     expect(outputs?.has('active-process')).toBe(true);
     expect(outputs?.has('stale-process')).toBe(false);
+  });
+
+  it('clears a stream parent when update parent stream receives null', () => {
+    const parent = 'stream-parent' as StreamTabId;
+    const child = 'stream-child' as StreamTabId;
+    const state = createInitialState();
+    state.streamById.set(parent, {
+      name: parent,
+      label: 'parent',
+      agentCategory: AGENT_CATEGORY.WORKFLOW,
+      creationTimestamp: 1,
+    });
+    state.streamById.set(child, {
+      name: child,
+      label: 'child',
+      agentCategory: AGENT_CATEGORY.TOOL_USE,
+      creationTimestamp: 2,
+      parentStreamId: parent,
+    });
+    const { ctx, getState } = createContext(state);
+
+    dispatchLifecycle(
+      {
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM,
+        stream: child,
+        parentStreamId: null,
+      },
+      ctx,
+    );
+
+    expect(getState().streamById.get(child)?.parentStreamId).toBeUndefined();
   });
 });
