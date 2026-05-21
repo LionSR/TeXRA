@@ -11,8 +11,6 @@
 import * as vscode from 'vscode';
 
 // Shared schemas and dispatchers
-import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
-import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { platform } from '@platform/platform';
 import {
@@ -98,6 +96,7 @@ import {
 } from '@shared/settingsView/handlers/memoryHandlers';
 import {
   buildModelSelectionMessage,
+  createModelSelectionController,
   setHelperModel as setHelperModelShared,
   setModelEnabled as setModelEnabledShared,
   setPreferShortModelNames as setPreferShortModelNamesShared,
@@ -109,6 +108,7 @@ import {
   setSuperYoloBoolean,
 } from '@shared/settingsView/handlers/superYoloHandlers';
 import { buildToolDashboardMessage } from '@shared/settingsView/handlers/toolDashboardHandlers';
+import { createSettingsMemoryController } from '@shared/settingsView/handlers/memoryControllerFactory';
 import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
@@ -138,16 +138,7 @@ import {
   unbindAllForPR,
   unbindAllForRepo,
 } from '@tools/github';
-import {
-  MEMORY_STORAGE_ROOT,
-  MAX_PINNED_MEMORIES,
-} from '@tools/memory/constants';
-import {
-  buildFile,
-  countPinnedMemories,
-  parseFrontmatter,
-  setPinnedMeta,
-} from '@tools/memory/memoryMeta';
+import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
 import { setToolUseMemoryEnabled } from '@utils/config/constants';
@@ -164,10 +155,10 @@ import {
 } from '@utils/config/providerConfig';
 import { getConfig, updateConfig } from '@utils/config/configUtils';
 import { setToolEnabled } from '@utils/config/constants';
-import { loadMemoryItems, loadMemoryPreview } from './utils/memoryFileSystem';
 import { buildToolDashboardItems } from './utils/toolDashboardData';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
+import type { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 
 // Re-use the shared type helper for extracting specific message types.
@@ -252,32 +243,14 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
   }));
 }
 
-const modelSelectionController = new SettingsModelSelectionController({
-  state: {
-    getEnabledModels: () =>
-      globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS),
-    setEnabledModels: async (models) => {
-      await globalSM.update(GlobalStateKey.ENABLED_MODELS, models);
-    },
-    getHelperModel: () => globalSM.get<string>(GlobalStateKey.HELPER_MODEL),
-    setHelperModel: async (model) => {
-      await globalSM.update(GlobalStateKey.HELPER_MODEL, model);
-    },
-    getReasoningLevelOverrides: () =>
-      globalSM.get<Record<string, string>>(GlobalStateKey.REASONING_LEVELS),
-    setReasoningLevelOverrides: async (overrides) => {
-      await globalSM.update(GlobalStateKey.REASONING_LEVELS, overrides);
-    },
-    getPreferShortModelNames: () =>
-      globalSM.get<boolean>(GlobalStateKey.PREFER_SHORT_MODEL_NAMES),
-    setPreferShortModelNames: async (enabled) => {
-      await globalSM.update(GlobalStateKey.PREFER_SHORT_MODEL_NAMES, enabled);
-    },
+const modelSelectionController = createModelSelectionController(
+  { workspaceState: workspaceSM, globalState: globalSM },
+  {
+    useIncludedAccess: () =>
+      getServerSideKeyService().getUseIncludedModelAccess(),
+    getUserTier: () => getServerSideKeyService().getUserTier() ?? undefined,
   },
-  useIncludedAccess: () =>
-    getServerSideKeyService().getUseIncludedModelAccess(),
-  getUserTier: () => getServerSideKeyService().getUserTier() ?? undefined,
-});
+);
 
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
@@ -300,20 +273,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       withActiveWebview: (fn) => this.withActiveWebview(fn),
     };
 
-    this.memoryController = new SettingsMemoryController({
+    this.memoryController = createSettingsMemoryController({
+      workspaceState: workspaceSM,
+      globalState: globalSM,
       prompt: new VscodePromptHost(),
-      loadMemoryItems,
-      loadMemoryPreview,
-      isMemoryEnabled: () =>
-        globalSM?.get<boolean>(GlobalStateKey.MEMORY_ENABLED, true) ?? true,
       setMemoryEnabled: setToolUseMemoryEnabled,
-      resolveStoragePath: resolveMemoryStoragePath,
-      storage: StorageFS,
-      maxPinnedMemories: MAX_PINNED_MEMORIES,
-      parseMemoryFile: parseFrontmatter,
-      buildMemoryFile: buildFile,
-      setPinnedMeta,
-      countPinnedMemories,
     });
     this.profileKeyController = new SettingsProfileKeyController({
       prompt: new VscodePromptHost(),

@@ -5,18 +5,9 @@ import {
   isAllowedLatexInstallCommand,
   LatexToolingController,
 } from '@controllers/settingsView/LatexToolingController';
-import {
-  SettingsAgentCatalogController,
-  type SettingsAgentCatalogState,
-} from '@controllers/settingsView/SettingsAgentCatalogController';
-import { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
-import { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
-import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
-import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import { deleteAllExecutions, deleteExecution } from '@agent/storage';
 import {
   computeAgentOptionsData,
-  getAgent,
   getToolUseAgents,
   getVisibleAgents as getVisibleRegistryAgents,
   getWorkflowAgents,
@@ -36,15 +27,10 @@ import {
   isApiProvider,
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
-import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import {
   computeModelOptionsData,
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
-import {
-  loadMemoryItems,
-  loadMemoryPreview,
-} from '@settingsView/utils/memoryFileSystem';
 import type { ExecutionId } from '@shared/schemas';
 import {
   PROVIDER_DISPLAY_NAMES,
@@ -80,11 +66,14 @@ import {
 } from '@shared/settingsView/handlers/memoryHandlers';
 import {
   buildModelSelectionMessage,
+  createModelSelectionController,
   setHelperModel as setHelperModelShared,
   setModelEnabled as setModelEnabledShared,
   setPreferShortModelNames as setPreferShortModelNamesShared,
   setReasoningLevel as setReasoningLevelShared,
 } from '@shared/settingsView/handlers/modelSelectionHandlers';
+import { createSettingsAgentControllers } from '@shared/settingsView/handlers/agentControllerFactory';
+import { createSettingsMemoryController } from '@shared/settingsView/handlers/memoryControllerFactory';
 import {
   buildSuperYoloMessage,
   setNestedDelegationMaxDepth as setNestedDelegationMaxDepthShared,
@@ -92,16 +81,7 @@ import {
 } from '@shared/settingsView/handlers/superYoloHandlers';
 import { buildToolDashboardMessage } from '@shared/settingsView/handlers/toolDashboardHandlers';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
-import {
-  MEMORY_STORAGE_ROOT,
-  MAX_PINNED_MEMORIES,
-} from '@tools/memory/constants';
-import {
-  buildFile,
-  countPinnedMemories,
-  parseFrontmatter,
-  setPinnedMeta,
-} from '@tools/memory/memoryMeta';
+import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
 import {
@@ -266,83 +246,21 @@ export function createDesktopSettingsIpc(
     }),
     onDetectionError: onError,
   });
-  const agentCatalogState: SettingsAgentCatalogState = {
-    getEnabledAgentKeys: (category) =>
-      workspaceState.get<string[]>(getAgentStateKey(category)),
-    setEnabledAgentKeys: async (category, enabledKeys) => {
-      await workspaceState.update(getAgentStateKey(category), enabledKeys);
-    },
+  const {
+    catalog: agentCatalogController,
+    directory: agentDirectoryController,
+    visibility: agentVisibilityController,
+  } = createSettingsAgentControllers({
+    workspaceState,
+    globalState,
+    getCustomAgentDirectory,
+    getSourceDirectory: getAgentDirectory,
     getAgents: getAgentEntries,
     getVisibleAgents: getVisibleAgentEntries,
-    getCustomPresetsRaw: () =>
-      workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
-    setCustomPresets: async (presets) => {
-      await workspaceState.update(
-        WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-        presets,
-      );
-    },
-  };
-  const agentCatalogController = new SettingsAgentCatalogController({
-    state: agentCatalogState,
   });
-  const agentDirectoryController = new SettingsAgentDirectoryController({
-    state: {
-      getConfiguredCustomDir: () =>
-        globalState.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
-      setConfiguredCustomDir: async (customDir) => {
-        await globalState.update(
-          GlobalStateKey.CUSTOM_AGENT_DIR,
-          customDir || undefined,
-        );
-      },
-      getCustomDir: getCustomAgentDirectory,
-      getSourceDir: getAgentDirectory,
-      getAgent: (source, name) => getAgent(`${source}:${name}`) ?? null,
-    },
-  });
-  const agentVisibilityController = new SettingsAgentVisibilityController({
-    state: {
-      getEnabledAgentKeys: agentCatalogState.getEnabledAgentKeys,
-      setEnabledAgentKeys: agentCatalogState.setEnabledAgentKeys,
-      getAgents: (category) =>
-        getAgentEntries(category).map((entry) => ({
-          source: entry.source,
-          name: entry.name,
-        })),
-    },
-  });
-  const modelSelectionController = new SettingsModelSelectionController({
-    state: {
-      getEnabledModels: () =>
-        globalState.get<string[]>(
-          GlobalStateKey.ENABLED_MODELS,
-          DEFAULT_MODELS,
-        ),
-      setEnabledModels: async (models) => {
-        await globalState.update(GlobalStateKey.ENABLED_MODELS, models);
-      },
-      getHelperModel: () => globalState.get(GlobalStateKey.HELPER_MODEL),
-      setHelperModel: async (model) => {
-        await globalState.update(GlobalStateKey.HELPER_MODEL, model);
-      },
-      getReasoningLevelOverrides: () =>
-        globalState.get<Record<string, string>>(
-          GlobalStateKey.REASONING_LEVELS,
-          {},
-        ),
-      setReasoningLevelOverrides: async (overrides) => {
-        await globalState.update(GlobalStateKey.REASONING_LEVELS, overrides);
-      },
-      getPreferShortModelNames: () =>
-        globalState.get(GlobalStateKey.PREFER_SHORT_MODEL_NAMES),
-      setPreferShortModelNames: async (enabled) => {
-        await globalState.update(
-          GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-          enabled,
-        );
-      },
-    },
+  const modelSelectionController = createModelSelectionController({
+    workspaceState,
+    globalState,
   });
   const modelListRefresh =
     options.modelListRefresh ??
@@ -350,7 +268,9 @@ export function createDesktopSettingsIpc(
       globalState,
       onError,
     });
-  const memoryController = new SettingsMemoryController({
+  const memoryController = createSettingsMemoryController({
+    workspaceState,
+    globalState,
     prompt: {
       confirm: (message, promptOptions) =>
         options.confirmAction?.(message, promptOptions?.confirmLabel) ??
@@ -359,20 +279,6 @@ export function createDesktopSettingsIpc(
         await options.showInfoMessage?.(message);
       },
     },
-    loadMemoryItems,
-    loadMemoryPreview,
-    isMemoryEnabled: () =>
-      globalState.get<boolean>(GlobalStateKey.MEMORY_ENABLED, true),
-    setMemoryEnabled: async (enabled) => {
-      await globalState.update(GlobalStateKey.MEMORY_ENABLED, enabled);
-    },
-    resolveStoragePath: resolveMemoryStoragePath,
-    storage: StorageFS,
-    maxPinnedMemories: MAX_PINNED_MEMORIES,
-    parseMemoryFile: parseFrontmatter,
-    buildMemoryFile: buildFile,
-    setPinnedMeta,
-    countPinnedMemories,
   });
 
   function readCurrentGitAuthorSettings() {
@@ -414,12 +320,6 @@ export function createDesktopSettingsIpc(
 
   function getAgentRegistryEntries(category: AgentCategory): AgentEntry[] {
     return category === 'workflow' ? getWorkflowAgents() : getToolUseAgents();
-  }
-
-  function getAgentStateKey(category: AgentCategory): WorkspaceStateKey {
-    return category === 'workflow'
-      ? WorkspaceStateKey.ENABLED_AGENTS
-      : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS;
   }
 
   function getAgentDirectory(source: AgentSource): Promise<string | undefined> {
