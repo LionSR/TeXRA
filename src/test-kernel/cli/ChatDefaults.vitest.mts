@@ -19,10 +19,7 @@ vi.mock('@agent/storage', () => ({
 
 const mockedListExecutions = vi.mocked(listExecutions);
 
-function historyEntry(
-  agent: string,
-  overrides: Record<string, unknown> = {},
-) {
+function historyEntry(agent: string, overrides: Record<string, unknown> = {}) {
   return {
     timestamp: new Date().toISOString(),
     agentConfig: {
@@ -107,7 +104,9 @@ describe('CLI chat defaults', () => {
     // whose root is the team orchestrator. It must not become the default
     // agent for a plain `texra chat` — fall back to the built-in instead.
     mockedListExecutions.mockResolvedValueOnce([
-      historyEntry('leanOrchestrator', { cliMultiAgentPresetId: 'lean-project' }),
+      historyEntry('leanOrchestrator', {
+        cliMultiAgentPresetId: 'lean-project',
+      }),
     ]);
 
     await expect(
