@@ -471,6 +471,7 @@ async function runMultiAgentPreset(
     instruction: formatMultiAgentRunInstruction(plan.preset, init),
     workingDirectory: runContext.cwd,
     agentCategory: AgentCategory.ToolUse,
+    cliMultiAgentPresetId: plan.preset.id,
   };
 
   const executionId = generateExecutionId();
