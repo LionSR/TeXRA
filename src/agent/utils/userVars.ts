@@ -8,6 +8,7 @@ import {
   AgentCategory,
 } from '@agent/core/AgentDataclass';
 import { getConfig } from '@agent/core/config';
+import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { FileListEntry } from '@shared/schemas';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
@@ -83,6 +84,7 @@ export async function buildUserVars(
     { vars: patternVars, files: patternFiles },
     latexStyleRules,
     attachedMemories,
+    availableSkills,
   ] = await Promise.all([
     getRequiredFileVars(agentSetting, agentPath),
     getPatternBasedFileVars(agentConfig, agentSetting),
@@ -91,6 +93,7 @@ export async function buildUserVars(
       () => '',
     ),
     getAttachedMemories(agentConfig.memories),
+    loadRuntimeSkillCatalog(logger),
   ]);
   allLoadedFiles.push(...requiredFiles);
   allLoadedFiles.push(...patternFiles);
@@ -106,6 +109,7 @@ export async function buildUserVars(
     ...getToolFlags(agentConfig, agentSetting, agentPrompt),
     LATEX_STYLE_RULES: latexStyleRules,
     ATTACHED_MEMORIES: attachedMemories,
+    AVAILABLE_SKILLS: availableSkills,
   };
 
   // Emit aggregated file list if any files were loaded
