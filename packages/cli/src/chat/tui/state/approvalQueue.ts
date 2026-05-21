@@ -54,6 +54,10 @@ export interface PendingApproval {
   readonly decide: (decision: ApprovalDecision) => void;
 }
 
+export interface EnqueueApprovalOptions {
+  readonly onPresent?: () => void;
+}
+
 const CURRENT = signal<PendingApproval | undefined>(undefined);
 const DEPTH = signal<number>(0);
 
@@ -82,6 +86,7 @@ export function getApprovalQueueDepth(): number {
 
 export function enqueueApproval(
   payload: ApprovalPayload,
+  options: EnqueueApprovalOptions = {},
 ): Promise<ApprovalDecision> {
   let resolveOuter!: (decision: ApprovalDecision) => void;
   const outer = new Promise<ApprovalDecision>((resolve) => {
@@ -97,6 +102,12 @@ export function enqueueApproval(
       if (!pendingResolvers.has(resolveOuter)) return;
       await new Promise<void>((advance) => {
         currentAdvance = advance;
+        try {
+          options.onPresent?.();
+        } catch {
+          // Presentation hooks update the surrounding TUI only; approval
+          // resolution must remain available even if focus activation fails.
+        }
         CURRENT.set({
           payload,
           decide: (decision) => {
