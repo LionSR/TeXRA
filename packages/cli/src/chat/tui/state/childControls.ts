@@ -5,6 +5,7 @@ import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 
 // Local imports - CLI state
 import { isPlainReturnInput } from '../input/inputKeys';
+import { mergeChildStreams } from './childStreamMerge';
 import { orderedDescendantsFromSlice } from './focusCycle';
 import type { ProcessOutputTail, StreamSlice } from './cliState';
 
@@ -136,7 +137,7 @@ export function processTailLines(
 export function buildChildControlItems(
   slice: Pick<
     StreamSlice,
-    'activeProcesses' | 'activeSubagents' | 'processOutput'
+    'activeProcesses' | 'activeSubagents' | 'childStreams' | 'processOutput'
   >,
   mode: ChildControlMode,
   streamsById: ReadonlyMap<
@@ -145,8 +146,8 @@ export function buildChildControlItems(
   > = new Map(),
 ): readonly ChildControlItem[] {
   if (mode === 'subagents') {
-    return slice.activeSubagents.map((child) =>
-      buildSubagentItem(child, streamsById),
+    return mergeChildStreams(slice.childStreams, slice.activeSubagents).map(
+      (child) => buildSubagentItem(child, streamsById),
     );
   }
 

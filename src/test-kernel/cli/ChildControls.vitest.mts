@@ -24,7 +24,10 @@ function tail(stdout: string, stderr = ''): ProcessOutputTail {
 
 function slice(
   overrides: Partial<StreamSlice> = {},
-): Pick<StreamSlice, 'activeProcesses' | 'activeSubagents' | 'processOutput'> &
+): Pick<
+  StreamSlice,
+  'activeProcesses' | 'activeSubagents' | 'childStreams' | 'processOutput'
+> &
   StreamSlice {
   return {
     streamId: 'root',
@@ -155,6 +158,50 @@ describe('CLI child execution controls', () => {
         label: 'bash',
         command: 'timeout 1800 texra run paper',
         tailLines: ['line one', 'line two'],
+      },
+    ]);
+  });
+
+  it('keeps retained subagent streams selectable after they leave the active list', () => {
+    const state = slice({
+      activeSubagents: [
+        {
+          executionId: 'agent-2',
+          agentName: 'polisher',
+          childStreamId: 'child-b',
+          status: 'running',
+        },
+      ],
+      childStreams: [
+        {
+          executionId: 'agent-1',
+          agentName: 'critic',
+          childStreamId: 'child-a',
+          status: 'completed',
+        },
+        {
+          executionId: 'agent-2',
+          agentName: 'polisher',
+          childStreamId: 'child-b',
+          status: 'waiting',
+        },
+      ],
+    });
+
+    expect(buildChildControlItems(state, 'subagents')).toMatchObject([
+      {
+        executionId: 'agent-1',
+        childStreamId: 'child-a',
+        kind: 'subagent',
+        label: 'critic',
+        description: 'completed',
+      },
+      {
+        executionId: 'agent-2',
+        childStreamId: 'child-b',
+        kind: 'subagent',
+        label: 'polisher',
+        description: 'running',
       },
     ]);
   });
