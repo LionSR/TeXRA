@@ -891,21 +891,3 @@ function postWebviewReady(): void {
 function applyDesktopTheme(theme: DesktopThemeKind): void {
   applyHostBodyTheme(theme);
 }
-
-// Re-export references that downstream modules (or future hooks) may want to
-// drive imperatively. Keeps the API surface explicit even though the desktop
-// shell currently consumes them directly.
-const openDiffOverlay = diffOverlay.open;
-const closeDiffOverlay = diffOverlay.close;
-const openPdfOverlay = pdfOverlay.open;
-const closePdfOverlay = pdfOverlay.close;
-
-export {
-  setRoute,
-  openSettingsOverlay,
-  openLogsDrawer,
-  openDiffOverlay,
-  closeDiffOverlay,
-  openPdfOverlay,
-  closePdfOverlay,
-};
