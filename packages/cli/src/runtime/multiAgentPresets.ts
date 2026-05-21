@@ -102,6 +102,24 @@ export function cliMultiAgentPresetNdjsonRecords(
   }));
 }
 
+/**
+ * True when a planned run is missing any preset member — either no root agent
+ * could be selected, or some workflow/tool-use agents the preset names aren't
+ * resolvable from the loaded registry. Used to decide whether a remote agent
+ * load is worth attempting for an authenticated user (relay-served premium
+ * agents like the orchestrator and delegation specialists are only visible
+ * after a remote load).
+ */
+export function cliMultiAgentPlanHasGaps(
+  plan: CliMultiAgentPresetRunPlan,
+): boolean {
+  return (
+    !plan.rootAgent ||
+    plan.missingWorkflowAgents.length > 0 ||
+    plan.missingToolUseAgents.length > 0
+  );
+}
+
 export function planCliMultiAgentPresetRun(
   preset: CliMultiAgentPreset,
   options: {
