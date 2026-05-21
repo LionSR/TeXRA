@@ -7,7 +7,6 @@ import { classMap } from 'lit/directives/class-map.js';
 import { guard } from 'lit/directives/guard.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
-import stripAnsi from 'strip-ansi';
 
 // Local imports - shared schemas
 import { STREAM_STATUS } from '@shared/schemas';
@@ -23,8 +22,6 @@ import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { scrollToBottom } from '@shared/utils/dom';
 import { getGettingStartedHtml } from '@shared/utils/uiConstants';
 import { formatDuration } from '@utils/core';
-
-// Local imports - shared styles
 
 // Local imports - progress view constants
 import {
@@ -43,11 +40,9 @@ import { playCompletionSound } from '../utils/audioNotification';
 import { formatLogEntry } from '../formatters';
 import { getTimeFormatter } from '../formatters/timestampUtils';
 
-interface GroupTree {
-  group: TaskGroup;
-  children: GroupTree[];
-  messages: LogMessageData[];
-}
+// Local imports - sibling helpers
+import { MessageIndex, type GroupTree } from './messageIndex';
+import { TerminalBuffer, processTerminalText } from './terminalBuffer';
 
 const PLACEHOLDER_HTML = getGettingStartedHtml(
   'No runs yet—use TeXRA commands to start. Try ',
@@ -57,54 +52,6 @@ const DEFAULT_TIMELINE_ITEM_WINDOW = 120;
 const TIMELINE_ITEM_WINDOW_STEP = 120;
 const DEFAULT_GROUP_MESSAGE_WINDOW = 400;
 const GROUP_MESSAGE_WINDOW_STEP = 400;
-
-const ESCAPE_CHARACTER = String.fromCharCode(27);
-// Null byte used as a sentinel for ANSI erase-line sequences inside processTerminalText.
-// Real null bytes in the input are stripped first so the sentinel is unambiguous.
-const ERASE_SENTINEL = '\x00';
-const ANSI_ERASE_LINE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[\\d*K`, 'g');
-
-/** Strip ANSI codes and simulate \r overwrite within each newline-delimited line. */
-function processTerminalText(text: string): string {
-  // Strip any real null bytes so \x00 is unambiguous as our internal sentinel.
-  // Then replace ANSI erase-line escapes (\x1b[K, \x1b[0K, \x1b[2K, …) with it
-  // before stripping all ANSI so the overwrite loop can honour them: an erase clears
-  // the line from that column onward instead of preserving the stale tail characters.
-
-  const preprocessed = text
-    .split(ERASE_SENTINEL)
-    .join('')
-    .replaceAll(ANSI_ERASE_LINE_PATTERN, ERASE_SENTINEL);
-  return stripAnsi(preprocessed)
-    .replaceAll('\r\n', '\n')
-    .split('\n')
-    .map((line) => {
-      const segs = line.split('\r');
-      // On a fresh line (no preceding \r), \x1b[K has nothing to clear; text after
-      // the erase point is still written at the cursor, so just strip the markers.
-      let current = segs[0]!.split(ERASE_SENTINEL).join('');
-
-      for (let i = 1; i < segs.length; i++) {
-        const seg = segs[i]!;
-        const eraseAt = seg.indexOf(ERASE_SENTINEL);
-        if (eraseAt >= 0) {
-          // \r overlays the prefix up to the erase point; \x1b[K clears from there to EOL.
-          const pre = seg.slice(0, eraseAt);
-          const post = seg
-            .slice(eraseAt + 1)
-            .split(ERASE_SENTINEL)
-            .join('');
-          current = pre + post;
-        } else {
-          // \r moves cursor to column 0 without clearing; shorter writes preserve the tail
-          current =
-            seg.length < current.length ? seg + current.slice(seg.length) : seg;
-        }
-      }
-      return current.split(ERASE_SENTINEL).join('');
-    })
-    .join('\n');
-}
 
 /** Maps group status to a wa-icon name; null indicates an animated spinner. */
 function getStatusIcon(status: string): string | null {
@@ -163,28 +110,8 @@ export class TaskGroupList extends LitElement {
   /** Track previous group statuses to detect completion (not rendered — no @state needed) */
   private previousStatuses = new Map<string, string>();
 
-  /** Memoized tree output from buildGroupTree() - recomputed only when inputs change */
-  private cachedTree: GroupTree[] = [];
-  private cachedUngrouped: LogMessageData[] = [];
-  private ungroupedMessageById = new Map<string, LogMessageData>();
-  private ungroupedMessageIndex = new Map<string, number>();
-
-  /** Raw partial-line buffer: unprocessed bytes after the last '\n', capped at 64 KiB */
-  private cachedRawTail = '';
-  /** Processed complete lines for terminal mode (up to and including the last '\n') */
-  private cachedTerminalLines = '';
-
-  /** O(1) lookup from groupId → tree node. Built during buildGroupTree(). */
-  private groupNodeIndex = new Map<string, GroupTree>();
-
-  /** Memoized tool-use timeline (ungrouped msgs + groups sorted chronologically) */
-  private cachedTimeline: Array<
-    | { key: string; time: number; msg: LogMessageData }
-    | { key: string; time: number; tree: GroupTree }
-  > = [];
-
-  /** O(1) lookup from ungrouped message ID → cachedTimeline index. */
-  private timelineMessageIndex = new Map<string, number>();
+  private readonly index = new MessageIndex();
+  private readonly terminalBuffer = new TerminalBuffer();
 
   /** Number of recent top-level timeline entries currently rendered. */
   private timelineItemWindow = DEFAULT_TIMELINE_ITEM_WINDOW;
@@ -208,15 +135,6 @@ export class TaskGroupList extends LitElement {
 
   /** Threshold for detecting "near bottom" in scroll listener (px) */
   private static readonly STICKY_THRESHOLD = 150;
-
-  /** Text node currently attached to terminalCommittedPre. */
-  private terminalCommittedTextNode: Text | null = null;
-
-  /** Number of committed terminal characters already written to the DOM. */
-  private renderedTerminalLinesLength = 0;
-
-  /** True after a terminal cache rebuild, when incremental append is invalid. */
-  private terminalCommittedNeedsReset = true;
 
   /** Message generation represented by the current cached tree/timeline. */
   private processedMessageGeneration = 0;
@@ -253,22 +171,22 @@ export class TaskGroupList extends LitElement {
     const messagesChanged = changedProperties.has('messages');
 
     if (this.terminal) {
+      const fullText = (): string => this.messages.map((m) => m.text).join('');
+      const prevMsgs = changedProperties.get('messages') as
+        | LogMessageData[]
+        | undefined;
+      const prevCount = prevMsgs?.length ?? 0;
       if (changedProperties.has('terminal')) {
-        this.rebuildTerminalText();
+        this.terminalBuffer.rebuild(fullText());
+      } else if (messagesChanged && this.messages.length > prevCount) {
+        this.terminalBuffer.append(
+          this.messages
+            .slice(prevCount)
+            .map((m) => m.text)
+            .join(''),
+        );
       } else if (messagesChanged) {
-        const prevCount =
-          (changedProperties.get('messages') as LogMessageData[] | undefined)
-            ?.length ?? 0;
-        if (this.messages.length > prevCount) {
-          this.appendTerminalChunk(
-            this.messages
-              .slice(prevCount)
-              .map((m) => m.text)
-              .join(''),
-          );
-        } else {
-          this.rebuildTerminalText();
-        }
+        this.terminalBuffer.rebuild(fullText());
       }
     }
 
@@ -279,8 +197,8 @@ export class TaskGroupList extends LitElement {
     // If terminal just switched off, caches weren't maintained while it was on —
     // do a full rebuild so the non-terminal render has accurate data.
     if (changedProperties.get('terminal') === true) {
-      [this.cachedTree, this.cachedUngrouped] = this.buildGroupTree();
-      this.cachedTimeline = this.buildFullTimeline();
+      this.index.rebuildTree(this.groups, this.messages);
+      this.index.rebuildTimeline();
       this.resetRenderWindows();
       return;
     }
@@ -290,206 +208,73 @@ export class TaskGroupList extends LitElement {
       : undefined;
     const patchedGroupMetadata =
       groupsChanged && prevGroups
-        ? this.patchGroupMetadataIfShapeStable(prevGroups)
+        ? this.index.patchGroupMetadataIfShapeStable(prevGroups, this.groups)
         : false;
 
     const prevMessages = messagesChanged
       ? (changedProperties.get('messages') as LogMessageData[] | undefined)
       : undefined;
     const prevCount = prevMessages?.length ?? 0;
+    const deltaIndices = this.canUseUpdatedMessageIndices()
+      ? (this.updatedMessageIndices ?? [])
+      : null;
 
     if (groupsChanged && !patchedGroupMetadata) {
-      // Structural change — always full rebuild
-      [this.cachedTree, this.cachedUngrouped] = this.buildGroupTree();
+      this.index.rebuildTree(this.groups, this.messages);
     } else if (messagesChanged) {
-      // Only messages changed — use Lit's old value to pick incremental path
       if (this.messages.length === prevCount && prevMessages) {
-        // Same length: update changed refs (streaming output, status changes).
-        this.updateCachedMessageRefs(prevMessages);
+        this.index.updateCachedMessageRefs(
+          this.messages,
+          prevMessages,
+          deltaIndices,
+        );
       } else if (this.messages.length > prevCount) {
-        // Append-only: classify only the new messages incrementally.
-        this.appendNewMessages(prevCount);
+        this.index.appendNewMessages(this.messages, prevCount);
         // A LOG_DELTA batch may also contain updates to existing entries
-        // (e.g. tool status → completed). Use explicit delta metadata when
-        // available so pure appends do not scan the old message array.
-        if (prevMessages)
-          this.updateExistingMessageRefs(prevMessages, prevCount);
+        // (e.g. tool status → completed) alongside the appended entries.
+        if (prevMessages) {
+          this.index.updateCachedMessageRefs(
+            this.messages,
+            prevMessages,
+            deltaIndices,
+            prevCount,
+          );
+        }
       } else {
-        // Messages shrunk (e.g. clear) — full rebuild
-        [this.cachedTree, this.cachedUngrouped] = this.buildGroupTree();
+        this.index.rebuildTree(this.groups, this.messages);
         this.resetRenderWindows();
       }
     }
 
-    // Recompute the interleaved timeline incrementally when possible.
-    // Used by both tool-use and workflow streams so the user's original
-    // instruction (the earliest ungrouped message) stays at the top.
+    // Recompute the interleaved timeline incrementally when possible so the
+    // earliest ungrouped message (the user's original instruction) stays at
+    // the top for both tool-use and workflow streams.
     if (groupsChanged || messagesChanged) {
       if (
         (groupsChanged && !patchedGroupMetadata) ||
         this.messages.length < prevCount
       ) {
-        // Structural change, or messages shrunk (e.g. clear/resync) —
-        // removed IDs must be pruned from cachedTimeline, so rebuild.
-        this.cachedTimeline = this.buildFullTimeline();
+        this.index.rebuildTimeline();
       } else if (messagesChanged && this.messages.length > prevCount) {
-        // Append-only: classify each new message and insert ungrouped ones
-        // into the timeline. Iterate the messages slice (not the ungrouped
-        // array) so a new message spliced into the middle of cachedUngrouped
-        // by appendNewMessages still gets picked up.
-        this.appendToTimeline(prevCount);
-        // LOG_DELTA may also mutate existing timeline entries in the same batch.
-        this.updateTimelineMessageRefs();
+        this.index.appendToTimeline(this.messages, prevCount);
+        this.index.updateTimelineMessageRefs(this.messages, deltaIndices);
       } else if (messagesChanged) {
-        // Same length — streaming update. guard([item.msg]) in render()
-        // detects new refs on existing timeline entries.
-        this.updateTimelineMessageRefs();
+        this.index.updateTimelineMessageRefs(this.messages, deltaIndices);
       }
     }
-  }
-
-  /**
-   * Patch status/name/end-time changes into the existing group tree.
-   * This avoids re-sorting and reclassifying every log message for ordinary
-   * group-completion updates, while still rebuilding when the tree shape changes.
-   */
-  private patchGroupMetadataIfShapeStable(
-    previousGroups: readonly TaskGroup[],
-  ): boolean {
-    if (previousGroups.length !== this.groups.length) return false;
-
-    for (let i = 0; i < this.groups.length; i++) {
-      const previous = previousGroups[i];
-      const next = this.groups[i];
-      if (!previous || !next) return false;
-      if (
-        previous.id !== next.id ||
-        previous.parentGroupId !== next.parentGroupId ||
-        previous.startTime !== next.startTime
-      ) {
-        return false;
-      }
-      if (!this.groupNodeIndex.has(next.id)) return false;
-    }
-
-    for (const group of this.groups) {
-      this.groupNodeIndex.get(group.id)!.group = group;
-    }
-    return true;
   }
 
   override updated(): void {
     this.processedMessageGeneration = this.messageGeneration;
 
     if (this.terminal) {
-      this.syncTerminalCommittedText();
+      if (this.terminalCommittedPre) {
+        this.terminalBuffer.sync(this.terminalCommittedPre);
+      }
       return;
     }
 
-    this.terminalCommittedTextNode = null;
-    this.renderedTerminalLinesLength = 0;
-    this.terminalCommittedNeedsReset = true;
-  }
-
-  /**
-   * Incrementally classify messages appended since `startIndex`.
-   * Avoids full tree rebuilds by classifying only new messages and inserting by timestamp.
-   */
-  private appendNewMessages(startIndex: number): void {
-    for (let i = startIndex; i < this.messages.length; i++) {
-      const msg = this.messages[i];
-      const node = msg.groupId ? this.groupNodeIndex.get(msg.groupId) : null;
-      if (node) {
-        this.removeUngroupedMessageIndex(msg.id);
-        this.insertMessageInPlace(node.messages, msg);
-      } else {
-        this.insertUngroupedMessageInPlace(msg);
-      }
-    }
-  }
-
-  /**
-   * Insert a message into a sorted array in-place.
-   * O(1) push when appending (common case — timestamps increase), O(n) splice otherwise.
-   */
-  private insertMessageInPlace(
-    target: LogMessageData[],
-    message: LogMessageData,
-  ): number {
-    const msgTime = message.timestamp ?? 0;
-    const lastTs =
-      target.length > 0 ? (target.at(-1)!.timestamp ?? 0) : -Infinity;
-    if (msgTime >= lastTs) {
-      target.push(message);
-      return target.length - 1;
-    } else {
-      const idx = target.findIndex((e) => (e.timestamp ?? 0) > msgTime);
-      if (idx >= 0) {
-        target.splice(idx, 0, message);
-        return idx;
-      }
-      target.push(message);
-      return target.length - 1;
-    }
-  }
-
-  private insertUngroupedMessageInPlace(message: LogMessageData): void {
-    const index = this.insertMessageInPlace(this.cachedUngrouped, message);
-    this.reindexUngroupedMessagesFrom(index);
-  }
-
-  /**
-   * Replace stale message references in cached structures with fresh ones.
-   *
-   * Full reverse scan — completion status updates can target any position
-   * in the array (not just the tail), so early-exit would miss them.
-   * Reference comparison is O(1) per element, making the full scan cheap.
-   */
-  private updateCachedMessageRefs(prevMessages: LogMessageData[]): void {
-    if (this.canUseUpdatedMessageIndices()) {
-      this.updateCachedMessageRefsByIndex(prevMessages);
-      return;
-    }
-
-    for (let i = this.messages.length - 1; i >= 0; i--) {
-      if (this.messages[i] !== prevMessages[i]) {
-        this.replaceSingleMessage(this.messages[i]);
-      }
-    }
-  }
-
-  /**
-   * Scan entries in the pre-append range [0, upTo) for changed refs.
-   * Called when a LOG_DELTA batch contains both new entries and updates
-   * to existing entries (e.g. tool status in_progress → completed).
-   */
-  private updateExistingMessageRefs(
-    prevMessages: LogMessageData[],
-    upTo: number,
-  ): void {
-    if (this.canUseUpdatedMessageIndices()) {
-      this.updateCachedMessageRefsByIndex(prevMessages, upTo);
-      return;
-    }
-
-    for (let i = upTo - 1; i >= 0; i--) {
-      if (this.messages[i] !== prevMessages[i]) {
-        this.replaceSingleMessage(this.messages[i]);
-      }
-    }
-  }
-
-  private updateCachedMessageRefsByIndex(
-    prevMessages: LogMessageData[],
-    upTo: number = this.messages.length,
-  ): void {
-    const indices = this.updatedMessageIndices ?? [];
-    for (const index of indices) {
-      if (index < 0 || index >= upTo || index >= this.messages.length) continue;
-      if (this.messages[index] !== prevMessages[index]) {
-        this.replaceSingleMessage(this.messages[index]);
-      }
-    }
+    this.terminalBuffer.resetDomState();
   }
 
   private canUseUpdatedMessageIndices(): boolean {
@@ -497,71 +282,6 @@ export class TaskGroupList extends LitElement {
       this.updatedMessageIndices !== null &&
       this.updatedMessageBaseGeneration === this.processedMessageGeneration
     );
-  }
-
-  /**
-   * Replace a single message ref in the cached tree. O(1) node lookup + O(k) findIndex.
-   * Mutates arrays in-place — safe because cachedTree/cachedUngrouped are private fields
-   * (not @property/@state), so Lit doesn't track their references. The render is already
-   * scheduled from the `messages` @property change, and guard([m]) detects updated refs.
-   */
-  private replaceSingleMessage(msg: LogMessageData): void {
-    // Try group node first (O(1) lookup). A message with groupId may live in
-    // cachedUngrouped if the group didn't exist at classification time,
-    // so fall through to ungrouped search on miss.
-    if (msg.groupId) {
-      const node = this.groupNodeIndex.get(msg.groupId);
-      if (node) {
-        this.removeUngroupedMessageIndex(msg.id);
-        const idx = node.messages.findIndex((m) => m.id === msg.id);
-        if (idx >= 0) {
-          node.messages[idx] = msg;
-          return;
-        }
-      }
-    }
-
-    const indexed = this.ungroupedMessageIndex.get(msg.id);
-    if (indexed !== undefined && this.cachedUngrouped[indexed]?.id === msg.id) {
-      this.cachedUngrouped[indexed] = msg;
-      this.ungroupedMessageById.set(msg.id, msg);
-      return;
-    }
-
-    const idx = this.cachedUngrouped.findIndex((m) => m.id === msg.id);
-    if (idx >= 0) {
-      this.cachedUngrouped[idx] = msg;
-      this.ungroupedMessageIndex.set(msg.id, idx);
-      this.ungroupedMessageById.set(msg.id, msg);
-    }
-  }
-
-  private rebuildTerminalText(): void {
-    this.cachedRawTail = '';
-    this.cachedTerminalLines = '';
-    this.terminalCommittedNeedsReset = true;
-    this.appendTerminalChunk(this.messages.map((m) => m.text).join(''));
-  }
-
-  private appendTerminalChunk(newRaw: string): void {
-    const combined = this.cachedRawTail + newRaw;
-    const lastNl = combined.lastIndexOf('\n');
-    if (lastNl >= 0) {
-      this.cachedTerminalLines += processTerminalText(
-        combined.slice(0, lastNl + 1),
-      );
-      this.cachedRawTail = combined.slice(lastNl + 1);
-    } else {
-      // No newline: keep raw bytes so split ANSI sequences and cross-chunk \r
-      // overwrites are handled correctly at render time. Cap unconditionally:
-      // if the tail ends with \r (potential CRLF split) the cap still preserves
-      // that trailing \r, so the next arriving \n is correctly joined into \r\n.
-      const MAX_TAIL = 65536;
-      this.cachedRawTail =
-        combined.length > MAX_TAIL
-          ? combined.slice(combined.length - MAX_TAIL)
-          : combined;
-    }
   }
 
   /** Play sound when a run group completes */
@@ -582,201 +302,6 @@ export class TaskGroupList extends LitElement {
       nextStatuses.set(group.id, group.status);
     }
     this.previousStatuses = nextStatuses;
-  }
-
-  /**
-   * Build hierarchical tree from flat groups array.
-   * Returns [tree, ungrouped] tuple. Messages are classified purely by
-   * groupId — initial user messages have no groupId (logged before the
-   * run stage via beginRunStage), while follow-ups inherit their group.
-   */
-  private buildGroupTree(): [GroupTree[], LogMessageData[]] {
-    const groupMap = new Map<string, TaskGroup>();
-    const childrenMap = new Map<string, TaskGroup[]>();
-
-    // Index groups
-    for (const group of this.groups) {
-      groupMap.set(group.id, group);
-      if (group.parentGroupId) {
-        const siblings = childrenMap.get(group.parentGroupId) ?? [];
-        siblings.push(group);
-        childrenMap.set(group.parentGroupId, siblings);
-      }
-    }
-
-    // Sort messages by timestamp and classify by groupId.
-    // JS engines use stable sort, so equal timestamps preserve original order.
-    const sortedMessages = [...this.messages].sort(
-      (a, b) =>
-        (a.timestamp ?? Number.MAX_SAFE_INTEGER) -
-        (b.timestamp ?? Number.MAX_SAFE_INTEGER),
-    );
-    const messagesByGroup = new Map<string, LogMessageData[]>();
-    const ungrouped: LogMessageData[] = [];
-    this.ungroupedMessageById.clear();
-    this.ungroupedMessageIndex.clear();
-
-    for (const msg of sortedMessages) {
-      if (msg.groupId && groupMap.has(msg.groupId)) {
-        const bucket = messagesByGroup.get(msg.groupId) ?? [];
-        bucket.push(msg);
-        messagesByGroup.set(msg.groupId, bucket);
-      } else {
-        this.ungroupedMessageIndex.set(msg.id, ungrouped.length);
-        this.ungroupedMessageById.set(msg.id, msg);
-        ungrouped.push(msg);
-      }
-    }
-
-    // Build tree recursively, populating the groupId → node index
-    this.groupNodeIndex.clear();
-    const nodeIndex = this.groupNodeIndex;
-    function buildNode(group: TaskGroup): GroupTree {
-      const node: GroupTree = {
-        group,
-        children: (childrenMap.get(group.id) ?? [])
-          .sort((a, b) => a.startTime - b.startTime)
-          .map(buildNode),
-        messages: messagesByGroup.get(group.id) ?? [],
-      };
-      nodeIndex.set(group.id, node);
-      return node;
-    }
-
-    // Get root groups (no parent), sorted by start time.
-    // Stable sort preserves original order for equal timestamps.
-    const tree = this.groups
-      .filter((g) => !g.parentGroupId)
-      .sort(
-        (a, b) =>
-          (a.startTime ?? Number.MAX_SAFE_INTEGER) -
-          (b.startTime ?? Number.MAX_SAFE_INTEGER),
-      )
-      .map(buildNode);
-
-    return [tree, ungrouped];
-  }
-
-  /** Build full chronological timeline from cached tree + ungrouped. */
-  private buildFullTimeline(): typeof this.cachedTimeline {
-    const timeline = [
-      ...this.cachedUngrouped.map((m) => ({
-        key: m.id,
-        time: m.timestamp ?? 0,
-        msg: m,
-      })),
-      ...this.cachedTree.map((t) => ({
-        key: t.group.id,
-        time: t.group.startTime ?? 0,
-        tree: t,
-      })),
-    ].sort((a, b) => a.time - b.time);
-    this.rebuildTimelineMessageIndex(timeline);
-    return timeline;
-  }
-
-  /**
-   * Insert timeline entries for ungrouped messages appended since `startIndex`.
-   * Grouped messages are already referenced via their tree node in timeline,
-   * so we skip them here. Iterating the messages slice — rather than the
-   * cachedUngrouped array — keeps this correct when a message with an earlier
-   * timestamp gets spliced into the middle of cachedUngrouped by
-   * appendNewMessages.
-   */
-  private appendToTimeline(startIndex: number): void {
-    for (let i = startIndex; i < this.messages.length; i++) {
-      const m = this.messages[i];
-      const inGroupNode = m.groupId
-        ? this.groupNodeIndex.has(m.groupId)
-        : false;
-      if (inGroupNode) continue;
-      const entry = { key: m.id, time: m.timestamp ?? 0, msg: m };
-      const lastTime =
-        this.cachedTimeline.length > 0
-          ? this.cachedTimeline.at(-1)!.time
-          : -Infinity;
-      if (entry.time >= lastTime) {
-        this.timelineMessageIndex.set(entry.key, this.cachedTimeline.length);
-        this.cachedTimeline.push(entry);
-      } else {
-        const idx = this.cachedTimeline.findIndex((e) => e.time > entry.time);
-        if (idx >= 0) {
-          this.cachedTimeline.splice(idx, 0, entry);
-          this.reindexTimelineMessagesFrom(idx);
-        } else {
-          this.timelineMessageIndex.set(entry.key, this.cachedTimeline.length);
-          this.cachedTimeline.push(entry);
-        }
-      }
-    }
-  }
-
-  /**
-   * Update message refs on existing timeline entries.
-   * Full scan — status updates can target any position, not just the tail.
-   */
-  private updateTimelineMessageRefs(): void {
-    if (this.canUseUpdatedMessageIndices()) {
-      this.updateTimelineMessageRefsByIndex();
-      return;
-    }
-
-    for (let i = this.cachedTimeline.length - 1; i >= 0; i--) {
-      const item = this.cachedTimeline[i];
-      if (!('msg' in item)) continue;
-      const fresh = this.ungroupedMessageById.get(item.key);
-      if (fresh && fresh !== item.msg) {
-        (item as { msg: LogMessageData }).msg = fresh;
-      }
-    }
-  }
-
-  private updateTimelineMessageRefsByIndex(): void {
-    const indices = this.updatedMessageIndices ?? [];
-    for (const index of indices) {
-      const msg = this.messages[index];
-      if (!msg) continue;
-      const timelineIndex = this.timelineMessageIndex.get(msg.id);
-      if (timelineIndex === undefined) continue;
-      const item = this.cachedTimeline[timelineIndex];
-      if (item && 'msg' in item && item.key === msg.id) {
-        item.msg = msg;
-      }
-    }
-  }
-
-  private rebuildTimelineMessageIndex(
-    timeline: typeof this.cachedTimeline = this.cachedTimeline,
-  ): void {
-    this.timelineMessageIndex.clear();
-    for (let i = 0; i < timeline.length; i++) {
-      const item = timeline[i];
-      if ('msg' in item) {
-        this.timelineMessageIndex.set(item.key, i);
-      }
-    }
-  }
-
-  private reindexTimelineMessagesFrom(startIndex: number): void {
-    for (let i = startIndex; i < this.cachedTimeline.length; i++) {
-      const item = this.cachedTimeline[i];
-      if ('msg' in item) {
-        this.timelineMessageIndex.set(item.key, i);
-      }
-    }
-  }
-
-  private reindexUngroupedMessagesFrom(startIndex: number): void {
-    for (let i = startIndex; i < this.cachedUngrouped.length; i++) {
-      const message = this.cachedUngrouped[i];
-      this.ungroupedMessageIndex.set(message.id, i);
-      this.ungroupedMessageById.set(message.id, message);
-    }
-  }
-
-  private removeUngroupedMessageIndex(id: string): void {
-    this.ungroupedMessageIndex.delete(id);
-    this.ungroupedMessageById.delete(id);
   }
 
   private resetRenderWindows(): void {
@@ -862,13 +387,12 @@ export class TaskGroupList extends LitElement {
     this.requestUpdate();
   }
 
-  private visibleTimelineEntries(): typeof this.cachedTimeline {
-    if (this.cachedTimeline.length <= this.timelineItemWindow) {
-      return this.cachedTimeline;
+  private visibleTimelineEntries(): typeof this.index.timeline {
+    const timeline = this.index.timeline;
+    if (timeline.length <= this.timelineItemWindow) {
+      return timeline;
     }
-    return this.cachedTimeline.slice(
-      this.cachedTimeline.length - this.timelineItemWindow,
-    );
+    return timeline.slice(timeline.length - this.timelineItemWindow);
   }
 
   /** Check if a group is expanded */
@@ -1002,51 +526,12 @@ export class TaskGroupList extends LitElement {
   }
 
   private renderTerminalOutput(): TemplateResult {
-    const tailText = processTerminalText(this.cachedRawTail);
+    const tailText = processTerminalText(this.terminalBuffer.tail);
     const committedClass = 'terminal-pre terminal-pre--committed';
     const tailClass = 'terminal-pre terminal-pre--tail';
     const committed = html`<pre class=${committedClass}></pre>`;
     const tail = html`<pre class=${tailClass}>${tailText}</pre>`;
-
     return html`<div class="terminal-container">${[committed, tail]}</div>`;
-  }
-
-  private syncTerminalCommittedText(): void {
-    const pre = this.terminalCommittedPre;
-    if (!pre) return;
-
-    const next = this.cachedTerminalLines;
-    const hasAttachedNode = this.terminalCommittedTextNode?.parentNode === pre;
-    const shouldReset =
-      this.terminalCommittedNeedsReset ||
-      !hasAttachedNode ||
-      next.length < this.renderedTerminalLinesLength;
-
-    if (shouldReset) {
-      pre.textContent = '';
-      this.terminalCommittedTextNode =
-        next.length > 0 ? document.createTextNode(next) : null;
-      if (this.terminalCommittedTextNode) {
-        pre.append(this.terminalCommittedTextNode);
-      }
-      this.renderedTerminalLinesLength = next.length;
-      this.terminalCommittedNeedsReset = false;
-      return;
-    }
-
-    if (next.length > this.renderedTerminalLinesLength) {
-      if (!this.terminalCommittedTextNode) {
-        this.terminalCommittedTextNode = document.createTextNode('');
-        pre.append(this.terminalCommittedTextNode);
-      }
-
-      this.terminalCommittedTextNode.appendData(
-        next.slice(this.renderedTerminalLinesLength),
-      );
-      this.renderedTerminalLinesLength = next.length;
-    }
-
-    this.terminalCommittedNeedsReset = false;
   }
 
   override render(): TemplateResult {
@@ -1104,7 +589,7 @@ export class TaskGroupList extends LitElement {
     // memory and can be revealed from the top control.
     const visibleTimeline = this.visibleTimelineEntries();
     const hiddenTimelineCount =
-      this.cachedTimeline.length - visibleTimeline.length;
+      this.index.timeline.length - visibleTimeline.length;
 
     return html`
       <div
