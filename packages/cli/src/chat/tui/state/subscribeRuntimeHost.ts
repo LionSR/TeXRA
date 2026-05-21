@@ -7,7 +7,6 @@ import type {
   ProgressEvent,
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
-import type { ActiveChildInfo } from '@shared/schemas';
 import { appendTail } from '@utils/strings/appendTail';
 
 import {
@@ -17,6 +16,7 @@ import {
   setParentStream,
   type ProcessOutputTail,
 } from './cliState';
+import { mergeChildStreams } from './childStreamMerge';
 import { appendCompletedProcessEntries } from './completedProcessTranscript';
 import type { CliRuntimeHost } from '../../../runtime/runtimeHost';
 
@@ -30,22 +30,6 @@ type Emit = <K extends ProgressEvent>(
  *  we truncate at the head via the shared `appendTail` helper so the live
  *  pane never grows unbounded. */
 export const PROCESS_TAIL_CHARS_MAX = 8 * 1024;
-
-function mergeChildStreams(
-  current: readonly ActiveChildInfo[],
-  next: readonly ActiveChildInfo[],
-): readonly ActiveChildInfo[] {
-  const byStream = new Map<string, ActiveChildInfo>();
-  for (const child of current) {
-    const key = child.childStreamId ?? child.executionId;
-    byStream.set(key, child);
-  }
-  for (const child of next) {
-    const key = child.childStreamId ?? child.executionId;
-    byStream.set(key, child);
-  }
-  return [...byStream.values()];
-}
 
 export function wrapRuntimeHost(host: CliRuntimeHost): CliRuntimeHost {
   const original = host.emit;
