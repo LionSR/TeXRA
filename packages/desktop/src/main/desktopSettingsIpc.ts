@@ -13,11 +13,7 @@ import { SettingsAgentDirectoryController } from '@controllers/settingsView/Sett
 import { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
-import {
-  deleteAllExecutions,
-  deleteExecution,
-  listExecutions,
-} from '@agent/storage';
+import { deleteAllExecutions, deleteExecution } from '@agent/storage';
 import {
   computeAgentOptionsData,
   getAgent,
@@ -58,33 +54,44 @@ import {
   LATEX_WORKSHOP_EXT_ID,
   normalizePlatform,
 } from '@shared/constants/latex';
-import {
-  NESTED_DELEGATION_DEPTH_RANGE,
-  clampNestedDelegationDepth,
-} from '@shared/constants/delegationPolicy';
 import type { LatexConfigField } from '@shared/constants/latex';
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import {
   SettingsViewInboundMessageSchema,
   type LatexSettingsStatus,
-  type HistoryItem,
   type ProviderKeyStatus,
   type ReasoningLevel,
   type ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
+import {
+  buildApprovalSettingsMessage,
+  setBashApprovalEnabled,
+  setWorkspaceAgentSetting,
+} from '@shared/settingsView/handlers/approvalHandlers';
+import { buildGitAuthorSettingsMessage } from '@shared/settingsView/handlers/gitAuthorHandlers';
+import { buildHistoryMessage } from '@shared/settingsView/handlers/historyHandlers';
+import {
+  deleteMemory as deleteMemoryShared,
+  postMemoryData as postMemoryDataShared,
+  postMemoryEnabled as postMemoryEnabledShared,
+  postMemoryPreview as postMemoryPreviewShared,
+  setMemoryEnabled as setMemoryEnabledShared,
+  setMemoryPinned as setMemoryPinnedShared,
+} from '@shared/settingsView/handlers/memoryHandlers';
+import {
+  buildModelSelectionMessage,
+  setHelperModel as setHelperModelShared,
+  setModelEnabled as setModelEnabledShared,
+  setPreferShortModelNames as setPreferShortModelNamesShared,
+  setReasoningLevel as setReasoningLevelShared,
+} from '@shared/settingsView/handlers/modelSelectionHandlers';
+import {
+  buildSuperYoloMessage,
+  setNestedDelegationMaxDepth as setNestedDelegationMaxDepthShared,
+  setSuperYoloBoolean,
+} from '@shared/settingsView/handlers/superYoloHandlers';
+import { buildToolDashboardMessage } from '@shared/settingsView/handlers/toolDashboardHandlers';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
-import {
-  parseCodexApprovalPolicy,
-  parseCodexReasoningEffort,
-  parseCodexSandboxMode,
-} from '@tools/codexConfig';
-import {
-  CLAUDE_AGENT_DEFAULT_MODEL,
-  parseClaudeAgentEffort,
-  parseClaudeAgentModel,
-  parseClaudeAgentPermissionMode,
-} from '@tools/claudeAgentConfig';
-import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
 import {
   MEMORY_STORAGE_ROOT,
   MAX_PINNED_MEMORIES,
@@ -383,10 +390,9 @@ export function createDesktopSettingsIpc(
   function postGitAuthorSettings(
     settings = readCurrentGitAuthorSettings(),
   ): void {
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
-      ...settings,
-    });
+    options.postToRenderer(
+      buildGitAuthorSettingsMessage({ workspaceState, globalState }, settings),
+    );
   }
 
   function applyAndPostGitAuthorSettings(): void {
@@ -441,11 +447,9 @@ export function createDesktopSettingsIpc(
 
   async function postModelSelectionData(): Promise<void> {
     await modelListRefresh;
-    const data = modelSelectionController.buildSelectionData();
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-      ...data,
-    });
+    options.postToRenderer(
+      buildModelSelectionMessage(modelSelectionController),
+    );
   }
 
   async function postMainModelOptionsData(): Promise<void> {
@@ -502,33 +506,25 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  async function postMemoryData(): Promise<void> {
-    options.postToRenderer(await memoryController.getMemoryDataMessage());
-  }
+  const respond = options.postToRenderer;
 
-  async function postMemoryPreview(storagePath: string): Promise<void> {
-    try {
-      options.postToRenderer(
-        await memoryController.getMemoryPreviewMessage(storagePath),
-      );
-    } catch (error) {
-      onError(error);
-      options.postToRenderer(
-        memoryController.getMemoryPreviewErrorMessage(storagePath),
-      );
-    }
-  }
-
-  function postMemoryEnabled(): void {
-    options.postToRenderer(memoryController.getMemoryEnabledMessage());
-  }
-
-  async function postSettingsMemoryMessage(
-    message: Awaited<ReturnType<SettingsMemoryController['deleteMemory']>>,
-  ): Promise<void> {
-    if (!message) return;
-    options.postToRenderer(message);
-  }
+  const postMemoryData = (): Promise<void> =>
+    postMemoryDataShared(memoryController, respond);
+  const postMemoryPreview = (storagePath: string): Promise<void> =>
+    postMemoryPreviewShared(memoryController, respond, storagePath, onError);
+  const postMemoryEnabled = (): void =>
+    postMemoryEnabledShared(memoryController, respond);
+  const deleteMemory = (input: {
+    storagePath: string;
+    displayPath: string;
+  }): Promise<void> => deleteMemoryShared(memoryController, respond, input);
+  const setMemoryEnabled = (enabled: boolean): Promise<void> =>
+    setMemoryEnabledShared(memoryController, respond, enabled);
+  const setMemoryPinned = (
+    storagePath: string,
+    pinned: boolean,
+  ): Promise<void> =>
+    setMemoryPinnedShared(memoryController, respond, storagePath, pinned);
 
   async function openMemoryFile(input: { storagePath: string }): Promise<void> {
     const resolvedPath = resolveMemoryStoragePath(input.storagePath);
@@ -540,65 +536,8 @@ export function createDesktopSettingsIpc(
     await options.openPath?.(StorageFS.fullPath(MEMORY_STORAGE_ROOT));
   }
 
-  async function deleteMemory(input: {
-    storagePath: string;
-    displayPath: string;
-  }): Promise<void> {
-    await postSettingsMemoryMessage(await memoryController.deleteMemory(input));
-  }
-
-  async function setMemoryEnabled(enabled: boolean): Promise<void> {
-    await postSettingsMemoryMessage(
-      await memoryController.setMemoryEnabled(enabled),
-    );
-  }
-
-  async function setMemoryPinned(
-    storagePath: string,
-    pinned: boolean,
-  ): Promise<void> {
-    await postSettingsMemoryMessage(
-      pinned
-        ? await memoryController.pinMemory(storagePath)
-        : await memoryController.unpinMemory(storagePath),
-    );
-  }
-
   async function postHistoryData(): Promise<void> {
-    const entries = await listExecutions();
-    const historyItems = entries
-      .filter(
-        (entry) => entry.agentConfig !== null && entry.category !== 'process',
-      )
-      .map((entry): HistoryItem => {
-        const cfg = entry.agentConfig!;
-        const base = {
-          agent: cfg.agent,
-          model: cfg.model,
-          instruction: cfg.instruction,
-        };
-        return {
-          id: entry.id,
-          timestamp: entry.timestamp,
-          agentConfig:
-            cfg.agentCategory === 'toolUse'
-              ? { agentCategory: 'toolUse' as const, ...base }
-              : {
-                  agentCategory: 'workflow' as const,
-                  ...base,
-                  inputFiles: cfg.inputFiles,
-                  mediaFiles: cfg.mediaFiles,
-                  contextFiles: cfg.contextFiles,
-                  outputFiles: cfg.outputFiles,
-                  toolConfig: cfg.toolConfig,
-                },
-          description: entry.description,
-        };
-      });
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY,
-      historyItems,
-    });
+    options.postToRenderer(await buildHistoryMessage());
   }
 
   async function deleteHistoryItem(historyId: string): Promise<void> {
@@ -636,10 +575,7 @@ export function createDesktopSettingsIpc(
         ? await getCachedToolCheckResults()
         : undefined;
     const items = await buildToolDashboardItems(cachedResults);
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-      items,
-    });
+    options.postToRenderer(buildToolDashboardMessage(items));
   }
 
   async function postLatexSettingsStatus(): Promise<void> {
@@ -675,25 +611,13 @@ export function createDesktopSettingsIpc(
   }
 
   function postSuperYoloEnabled(): void {
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
-      enabled: true,
-      reliabilitySettings: [],
-      allowOrchestratorKill: workspaceState.get<boolean>(
-        WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
-        true,
-      ),
-      detachSubagentsOnStop: workspaceState.get<boolean>(
-        WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-        false,
-      ),
-      nestedDelegationMaxDepth: clampNestedDelegationDepth(
-        workspaceState.get<number>(
-          WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
-          NESTED_DELEGATION_DEPTH_RANGE.default,
-        ),
-      ),
-    });
+    options.postToRenderer(
+      buildSuperYoloMessage({
+        workspaceState,
+        globalState,
+        getReliabilitySettings: () => [],
+      }),
+    );
   }
 
   function postAgentModePresets(): void {
@@ -704,49 +628,13 @@ export function createDesktopSettingsIpc(
   }
 
   function postApprovalSettings(): void {
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
-      bashApprovalEnabled: getConfigProvider().get<boolean>(
-        BASH_APPROVAL_CONFIG_KEY,
-        true,
-      ),
-      codexSandboxMode: parseCodexSandboxMode(
-        workspaceState.get<string>(
-          WorkspaceStateKey.CODEX_SANDBOX_MODE,
-          'workspace-write',
-        ),
-      ),
-      codexReasoningEffort: parseCodexReasoningEffort(
-        workspaceState.get<string>(
-          WorkspaceStateKey.CODEX_REASONING_EFFORT,
-          'high',
-        ),
-      ),
-      codexApprovalPolicy: parseCodexApprovalPolicy(
-        workspaceState.get<string>(
-          WorkspaceStateKey.CODEX_APPROVAL_POLICY,
-          'never',
-        ),
-      ),
-      claudeAgentModel: parseClaudeAgentModel(
-        workspaceState.get<string>(
-          WorkspaceStateKey.CLAUDE_AGENT_MODEL,
-          CLAUDE_AGENT_DEFAULT_MODEL,
-        ),
-      ),
-      claudeAgentPermissionMode: parseClaudeAgentPermissionMode(
-        workspaceState.get<string>(
-          WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
-          'acceptEdits',
-        ),
-      ),
-      claudeAgentEffort: parseClaudeAgentEffort(
-        workspaceState.get<string>(
-          WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
-          'high',
-        ),
-      ),
-    });
+    options.postToRenderer(
+      buildApprovalSettingsMessage({
+        workspaceState,
+        globalState,
+        config: getConfigProvider(),
+      }),
+    );
   }
 
   async function postInitialSettingsData(): Promise<void> {
@@ -800,7 +688,7 @@ export function createDesktopSettingsIpc(
     modelName: string;
     enabled: boolean;
   }): Promise<void> {
-    await modelSelectionController.setModelEnabled(input);
+    await setModelEnabledShared(modelSelectionController, input);
     await postModelSelectionData();
     await postMainModelOptionsData();
   }
@@ -809,17 +697,17 @@ export function createDesktopSettingsIpc(
     modelName: string;
     level: ReasoningLevel | null;
   }): Promise<void> {
-    await modelSelectionController.setReasoningLevel(input);
+    await setReasoningLevelShared(modelSelectionController, input);
     await postModelSelectionData();
   }
 
   async function updateHelperModel(modelName: string): Promise<void> {
-    await modelSelectionController.setHelperModel(modelName);
+    await setHelperModelShared(modelSelectionController, modelName);
     await postModelSelectionData();
   }
 
   async function updatePreferShortModelNames(enabled: boolean): Promise<void> {
-    await modelSelectionController.setPreferShortModelNames(enabled);
+    await setPreferShortModelNamesShared(modelSelectionController, enabled);
     await postModelSelectionData();
   }
 
@@ -957,13 +845,13 @@ export function createDesktopSettingsIpc(
     key: WorkspaceStateKey,
     value: string,
   ): Promise<void> {
-    await workspaceState.update(key, value);
+    await setWorkspaceAgentSetting({ workspaceState, globalState }, key, value);
     postApprovalSettings();
   }
 
   async function updateBashApprovalEnabled(enabled: boolean): Promise<void> {
-    await getConfigProvider().update(
-      BASH_APPROVAL_CONFIG_KEY,
+    await setBashApprovalEnabled(
+      { workspaceState, globalState, config: getConfigProvider() },
       enabled,
       'workspace',
     );
@@ -974,14 +862,14 @@ export function createDesktopSettingsIpc(
     key: WorkspaceStateKey,
     enabled: boolean,
   ): Promise<void> {
-    await workspaceState.update(key, enabled);
+    await setSuperYoloBoolean({ workspaceState, globalState }, key, enabled);
     postSuperYoloEnabled();
   }
 
   async function updateNestedDelegationMaxDepth(value: number): Promise<void> {
-    await workspaceState.update(
-      WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
-      clampNestedDelegationDepth(value),
+    await setNestedDelegationMaxDepthShared(
+      { workspaceState, globalState },
+      value,
     );
     postSuperYoloEnabled();
   }
