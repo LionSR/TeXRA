@@ -136,6 +136,13 @@ export function chatTuiCanInterruptActiveRun(session: {
   );
 }
 
+export function chatTuiCanStartRootRun(session: {
+  readonly runPromise: Promise<unknown> | undefined;
+  readonly runCompleted: boolean;
+}): boolean {
+  return !session.runPromise || session.runCompleted;
+}
+
 interface SlashCommandContext {
   readonly session: TuiSession;
   readonly initialAgent: string;
@@ -160,7 +167,7 @@ function applyInitialCliAgentSelection(
   agentName: string,
   context: SlashCommandContext,
 ): void {
-  if (context.session.runPromise) {
+  if (!chatTuiCanStartRootRun(context.session)) {
     appendLocalAssistantTranscript(
       'Agent changes are only available before the first message. Start a new chat with texra --agent=<name> to choose a different root agent.',
     );
@@ -177,7 +184,7 @@ function applyInitialCliAgentSelection(
 }
 
 function openCliAgentListForm(context: SlashCommandContext): void {
-  const selectable = !context.session.runPromise;
+  const selectable = chatTuiCanStartRootRun(context.session);
   cliState.activeForm.set({
     commandName: 'agent',
     render: (close, availableRows) => (
@@ -199,7 +206,7 @@ async function applyInitialCliModelSelection(
   model: string,
   context: SlashCommandContext,
 ): Promise<void> {
-  if (context.session.runPromise) {
+  if (!chatTuiCanStartRootRun(context.session)) {
     appendLocalAssistantTranscript(
       'Model changes are only available before the first message. Start a new chat with texra --model=<name> to choose a different root model.',
     );
@@ -219,7 +226,7 @@ async function applyInitialCliModelSelection(
 }
 
 function openCliModelListForm(context: SlashCommandContext): void {
-  const selectable = !context.session.runPromise;
+  const selectable = chatTuiCanStartRootRun(context.session);
   cliState.activeForm.set({
     commandName: 'model',
     render: (close, availableRows) => (
@@ -368,7 +375,7 @@ async function resumeStoredExecution(
   id: ExecutionId,
   context: SlashCommandContext,
 ): Promise<void> {
-  if (context.session.runPromise) {
+  if (!chatTuiCanStartRootRun(context.session)) {
     appendLocalAssistantTranscript(
       'Finish the active chat before resuming a stored execution.',
     );
@@ -463,7 +470,7 @@ async function handleTuiSlashCommand(
       context.requestInputExit();
       return true;
     case 'agent':
-      if (context.session.runPromise && rest) {
+      if (!chatTuiCanStartRootRun(context.session) && rest) {
         appendLocalAssistantTranscript(
           'The agent is fixed for this chat session. Start a new chat to use a different agent.',
         );
@@ -710,6 +717,12 @@ export async function runChat(
   };
 
   const startAgentRun = (config: AgentConfigPayload): void => {
+    followUpQueue.clear();
+    session.streamId = undefined;
+    session.runCompleted = false;
+    session.stopRequested = false;
+    session.runExitCode = CliExitCode.Success;
+
     const currentModel = config.model;
     const sessionContext = currentSessionContext(currentModel);
     cliState.sessionMeta.set({
@@ -779,7 +792,7 @@ export async function runChat(
 
   // Pre-register the slash commands the input palette uses.
   registerBuiltinSlashCommands({
-    canSelectAgent: () => !session.runPromise,
+    canSelectAgent: () => chatTuiCanStartRootRun(session),
     onAgentSelect: (nextAgent) =>
       applyInitialCliAgentSelection(nextAgent, slashCommandContext()),
     getApprovalPolicy,
@@ -789,7 +802,7 @@ export async function runChat(
         `Approval mode set to ${formatApprovalPolicy(policy)}.`,
       );
     },
-    canSelectModel: () => !session.runPromise,
+    canSelectModel: () => chatTuiCanStartRootRun(session),
     onModelSelect: (nextModel) =>
       applyInitialCliModelSelection(nextModel, slashCommandContext()),
     onApiModeSelect: applyCliApiModeSelection,
@@ -824,7 +837,7 @@ export async function runChat(
     if (await handleTuiSlashCommand(line, slashCommandContext())) {
       return;
     }
-    if (!session.runPromise) {
+    if (chatTuiCanStartRootRun(session)) {
       startSession(line);
       return;
     }
