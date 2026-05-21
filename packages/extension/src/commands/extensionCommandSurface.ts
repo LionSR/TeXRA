@@ -67,20 +67,20 @@ import { type ApiProvider, SecretManager } from '@frontend/secretManager';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { runCleanBuild, runCleanOutput } from '@housekeeping';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
+import type { CommandId } from '@shared/commands/catalog';
 import {
   awaitTrue,
   definedHandler,
   dispatchCommandFromRegistry,
   type CommandHandler,
 } from '@shared/commands/registry';
+import { AgentCategorySchema, type AgentCategory } from '@shared/schemas/agent';
 import { StreamTabIdSchema } from '@shared/schemas/identifiers';
 import {
   SETTINGS_TAB,
   type SettingsTab,
 } from '@shared/schemas/settingsViewMessages';
-import { AgentCategorySchema, type AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_QUERY } from '@utils/config';
-import type { CommandId } from '@shared/commands/catalog';
 
 /**
  * Optional `ApiProvider` argument for `texra.setApiKey`. The schema accepts

@@ -1,4 +1,3 @@
-import { commandCatalogById, type CommandId } from '@shared/commands/catalog';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 import type { StreamTabId } from '@shared/schemas';
@@ -8,15 +7,17 @@ import {
   type SettingsTab,
 } from '@shared/schemas/settingsViewMessages';
 import {
-  dispatchCommandFromRegistry,
-  type CommandHandler,
-} from '@shared/commands/registry';
-import {
   formatDesktopAccelerator,
   toElectronAccelerator,
   toPlatformAccelerator,
 } from '@shared/commands/accelerators';
+import { commandCatalogById, type CommandId } from '@shared/commands/catalog';
+import {
+  dispatchCommandFromRegistry,
+  type CommandHandler,
+} from '@shared/commands/registry';
 import type { MenuItemConstructorOptions } from 'electron';
+
 import type { DesktopRoute } from './desktopShellMessages.js';
 
 export { SETTINGS_TAB };
