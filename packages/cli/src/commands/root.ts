@@ -108,6 +108,12 @@ import {
   type CliMultiAgentPresetRunPlan,
 } from '../runtime/multiAgentPresets';
 import { buildCliOrchestrationItems } from '../runtime/orchestration';
+import {
+  formatCliSkillIssue,
+  formatCliSkillList,
+  readCliSkills,
+  skillListRecord,
+} from '../runtime/skills';
 
 // One CLI invocation per process — module-level pending exit code is the
 // simplest way to surface handler exit codes back to `bin/texra.ts` after
@@ -267,6 +273,83 @@ async function listAgents(context: CliContext): Promise<number> {
 const agentsCommand = defineCommand({
   meta: { name: 'agents', description: 'Inspect TeXRA agents' },
   subCommands: { list: agentsListCommand },
+});
+
+const skillsListCommand = defineCommand({
+  meta: { name: 'list', description: 'List available skills' },
+  args: {
+    ...GLOBAL_ARGS,
+    'include-interop': {
+      type: 'boolean',
+      description:
+        'Also scan .claude/skills, .codex/skills, and .gemini/skills under the workspace and home directory',
+    },
+    source: {
+      type: 'string',
+      alias: 's',
+      description:
+        'Additional skill root to scan; may be repeated and is resolved relative to --cwd',
+    },
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
+    setExitCode(
+      await listSkills(context, {
+        includeInterop: ctx.args['include-interop'] === true,
+        additionalPaths: collectStringFlagValues(ctx.rawArgs, 'source', 's'),
+      }),
+    );
+  },
+});
+
+async function listSkills(
+  context: CliContext,
+  options: {
+    readonly includeInterop: boolean;
+    readonly additionalPaths: readonly string[];
+  },
+): Promise<number> {
+  const result = await readCliSkills(context, options);
+
+  if (context.outputFormat === 'json') {
+    writeTextStdout(
+      JSON.stringify(
+        {
+          skills: result.skills.map(skillListRecord),
+          errors: result.errors,
+        },
+        null,
+        2,
+      ),
+    );
+    return CliExitCode.Success;
+  }
+
+  if (context.outputFormat === 'ndjson') {
+    const ts = new Date().toISOString();
+    for (const entry of result.skills) {
+      writeNdjsonStdout({
+        kind: 'skill',
+        ts,
+        skill: skillListRecord(entry),
+      });
+    }
+    for (const issue of result.errors) {
+      writeNdjsonStdout({ kind: 'skill-issue', ts, issue });
+    }
+    return CliExitCode.Success;
+  }
+
+  for (const issue of result.errors) {
+    writeTextStderr(formatCliSkillIssue(issue));
+  }
+  writeTextStdout(formatCliSkillList(result.skills));
+  return CliExitCode.Success;
+}
+
+const skillsCommand = defineCommand({
+  meta: { name: 'skills', description: 'Inspect TeXRA skills' },
+  subCommands: { list: skillsListCommand },
 });
 
 const multiAgentListCommand = defineCommand({
@@ -1925,6 +2008,7 @@ export const rootCommand = defineCommand({
     resume: resumeCommand,
     history: historyCommand,
     agents: agentsCommand,
+    skills: skillsCommand,
     'multi-agent': multiAgentCommand,
     models: modelsCommand,
     login: loginCommand,
