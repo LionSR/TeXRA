@@ -155,7 +155,6 @@ export async function getCliAuthProfile(): Promise<CliAuthProfile> {
 }
 
 export async function getCliStoredAuthProfile(): Promise<CliAuthProfile> {
-  initializeCliSupabaseAuth();
   const session = await getCliSupabaseAuthCoordinator().loadSession();
   if (!session) return { authenticated: false };
   return {
