@@ -1,9 +1,7 @@
 // Local imports - platform
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { createMemoryStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { initPlatform, tryPlatform } from '@platform/platform';
@@ -33,6 +31,7 @@ import { writeTextStderr } from './logSinks';
 import { CliConfigProvider } from './cliConfigProvider';
 import { workspaceCliConfigPath } from './cliConfig';
 import { getCliAuthProvider, initializeCliSupabaseAuth } from './supabaseAuth';
+import { createCliStateStores } from './cliStateStores';
 
 // Type imports - platform and CLI runtime
 import type { LifecycleHost } from '@platform/interfaces/lifecycle';
@@ -117,17 +116,18 @@ export async function initCliPlatform(
     const configStore = await JsonStore.open(
       workspaceCliConfigPath(cliWorkspaceCwd),
     );
+    const stateStores = await createCliStateStores({
+      workspacePath: () => cliWorkspaceCwd,
+    });
     const lifecycle = createCliLifecycleHost();
     initPlatform({
       config: new CliConfigProvider(configStore),
-      globalState: createMemoryStore(),
-      workspaceState: createMemoryStore(),
+      globalState: stateStores.globalState,
+      workspaceState: stateStores.workspaceState,
       log: cliPlatformLog,
       fs: nodeFilesystem,
       workspace: createNodeWorkspace(() => cliWorkspaceCwd),
-      storage: createNodeStorageProvider({
-        workspacePath: () => cliWorkspaceCwd,
-      }),
+      storage: stateStores.storage,
       secrets: getCliSecrets(),
       lifecycle,
       agentResume: { tryResumeStream: async () => false },
