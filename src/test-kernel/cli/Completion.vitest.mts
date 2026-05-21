@@ -5,6 +5,7 @@ import {
   CLI_COMPLETION_SHELLS,
   generateCompletionScript,
 } from '../../../packages/cli/src/runtime/completion';
+import { collectCommands } from '../../../packages/cli/src/runtime/completionCommandTree';
 
 describe('CLI shell completion', () => {
   for (const shell of CLI_COMPLETION_SHELLS) {
@@ -21,5 +22,20 @@ describe('CLI shell completion', () => {
     expect(bash).toContain('TEXRA_COMPLETION_DYNAMIC');
     expect(bash).toContain('texra agents list --quiet');
     expect(bash).toContain('texra models list --quiet');
+  });
+
+  it('does not offer headless-only flags on interactive commands', async () => {
+    const commands = await collectCommands(rootCommand);
+    const flagsFor = (path: string) =>
+      commands
+        .find((command) => command.path.join(' ') === path)
+        ?.flags.map((flag) => flag.name);
+
+    expect(flagsFor('chat')).not.toContain('print');
+    expect(flagsFor('chat')).not.toContain('output-format');
+    expect(flagsFor('orchestrate')).not.toContain('print');
+    expect(flagsFor('orchestrate')).not.toContain('output-format');
+    expect(flagsFor('run')).toContain('print');
+    expect(flagsFor('run')).toContain('output-format');
   });
 });

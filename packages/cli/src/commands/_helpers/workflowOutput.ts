@@ -11,6 +11,7 @@ import { getRunDir } from '@utils/files';
 
 import {
   cliTerminalStatus,
+  createCliRunResult,
   type CliRunResult,
   type ExecuteAgentResult,
 } from './terminalStatus';
@@ -87,10 +88,7 @@ export async function resolveWorkflowOutput(
     if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
       return {
         copiedOutput: undefined,
-        displayResult: {
-          ...result,
-          terminalStatus,
-        },
+        displayResult: createCliRunResult(result, terminalStatus),
       };
     }
     if (outputDir) {
@@ -105,13 +103,10 @@ export async function resolveWorkflowOutput(
     }
   }
 
-  const baseResult: CliRunResult = {
-    ...result,
-    terminalStatus,
-    ...(result.category === AgentCategory.Workflow
-      ? { runDirectory: options.runDirectory ?? getRunDir(result.executionId) }
-      : {}),
-  };
+  const runDirectory =
+    result.category === AgentCategory.Workflow
+      ? (options.runDirectory ?? getRunDir(result.executionId))
+      : undefined;
   if (outputDir && result.category === AgentCategory.Workflow) {
     const targetRoot = path.isAbsolute(outputDir)
       ? outputDir
@@ -144,20 +139,30 @@ export async function resolveWorkflowOutput(
       );
     }
 
-    const displayResult: CliRunResult = {
-      ...baseResult,
+    const displayResult = createCliRunResult(result, terminalStatus, {
+      runDirectory,
       copiedOutputs,
-    };
+    });
     return { copiedOutput: undefined, displayResult };
   }
 
   if (!outputFile || result.category !== AgentCategory.Workflow) {
-    return { copiedOutput: undefined, displayResult: baseResult };
+    return {
+      copiedOutput: undefined,
+      displayResult: createCliRunResult(result, terminalStatus, {
+        runDirectory,
+      }),
+    };
   }
 
   const finalOutput = latestWorkflowOutput(result.outputs);
   if (!finalOutput) {
-    return { copiedOutput: undefined, displayResult: baseResult };
+    return {
+      copiedOutput: undefined,
+      displayResult: createCliRunResult(result, terminalStatus, {
+        runDirectory,
+      }),
+    };
   }
 
   const targetPath = path.isAbsolute(outputFile)
@@ -168,10 +173,10 @@ export async function resolveWorkflowOutput(
     await fs.copyFile(finalOutput.absolutePath, targetPath);
   }
 
-  const displayResult: CliRunResult = {
-    ...baseResult,
+  const displayResult = createCliRunResult(result, terminalStatus, {
+    runDirectory,
     copiedOutput: targetPath,
-  };
+  });
   return { copiedOutput: targetPath, displayResult };
 }
 
