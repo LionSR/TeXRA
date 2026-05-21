@@ -673,12 +673,6 @@
         "icon": "$(mortar-board)"
       },
       {
-        "command": "texra.selectAgentTeam",
-        "title": "Select Agent Team",
-        "category": "TeXRA",
-        "icon": "$(organization)"
-      },
-      {
         "command": "texra.cleanOutput",
         "title": "Clean All LLM Output Files (Workspace-wide)",
         "shortTitle": "Clean LLM Outputs",
@@ -1057,14 +1051,13 @@
           {
             "id": "texra.gettingStarted.multiAgent",
             "title": "Pick your field",
-            "description": "We have teams for different disciplines that give the orchestrator the right set of tools for your work:\n\n- **Physicist** -- derivations, numerical experiments, literature, presentations\n- **Mathematician** -- proofs, formalization, research\n- **Lean Project** -- Lean 4 with theorem search and blueprints\n\n[Pick a team](command:texra.selectAgentTeam) or [open the Multi-Agent tab](command:texra.showDashboard) in Settings to tweak it.",
+            "description": "We have teams for different disciplines that give the orchestrator the right set of tools for your work:\n\n- **Physicist** -- derivations, numerical experiments, literature, presentations\n- **Mathematician** -- proofs, formalization, research\n- **Lean Project** -- Lean 4 with theorem search and blueprints\n\n[Pick a team](command:texra.showMultiAgent) — opens the Multi-Agent tab. Click a card to apply it.",
             "media": {
               "image": "resources/walkthroughs/media/agent-model-selection.png",
               "altText": "Screenshot of multi-agent team selection"
             },
             "completionEvents": [
-              "onCommand:texra.selectAgentTeam",
-              "onCommand:texra.showDashboard"
+              "onCommand:texra.showMultiAgent"
             ]
           },
           {

@@ -8,4 +8,3 @@ export { runExecuteCommand, registerExecuteCommand } from './executeCommand';
 export { registerFollowUpCommand } from './followUpCommand';
 export { registerMergeCommands } from './mergeCommands';
 export { registerResumeAgentCommand } from './resumeCommand';
-export { registerAgentTeamCommands, selectAgentTeam } from './teamCommands';

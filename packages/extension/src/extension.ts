@@ -652,12 +652,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const welcomeKey = 'texra.welcomeShown';
   if (!context.globalState.get<boolean>(welcomeKey)) {
-    // Onboard with a multi-agent team pick first, then open the
-    // walkthrough so the "Pick your field" step is already actioned.
-    // Skipping the picker still flows into the walkthrough, which links
-    // back to the same command.
+    // Land first-run users on the Multi-Agent tab so they see the
+    // team card grid (icons, descriptions, agent pills) as their first
+    // interaction, then open the walkthrough alongside for the rest of
+    // the onboarding tips.
     void vscode.commands
-      .executeCommand('texra.selectAgentTeam', { onboarding: true })
+      .executeCommand('texra.showMultiAgent')
       .then(() => vscode.commands.executeCommand('texra.openGettingStarted'))
       .then(() => context.globalState.update(welcomeKey, true));
   }

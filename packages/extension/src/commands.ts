@@ -23,7 +23,6 @@ import {
   registerExecuteCommand,
   registerFollowUpCommand,
   registerResumeAgentCommand,
-  registerAgentTeamCommands,
 } from '@commands/agent';
 import {
   registerXmlCommands,
@@ -60,7 +59,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   registerPackCommands(context);
   registerCleanCommands(context);
   registerMergeCommands(context);
-  registerAgentTeamCommands(context);
   registerExecuteCommand(context);
   registerLatexCommands(context);
   registerImageCommands(context);
