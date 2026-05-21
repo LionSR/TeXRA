@@ -7,12 +7,20 @@ export type ExecuteAgentResult = Awaited<
   ReturnType<typeof runValidatedExecutionRequest>
 >;
 
-export type CliRunResult = ExecuteAgentResult & {
+type CliRunResultFor<T extends ExecuteAgentResult> = Omit<T, 'status'> & {
+  status: ExecutionStatus;
+  endGroupStatus: T['status'];
   terminalStatus: ExecutionStatus;
   runDirectory?: string;
   copiedOutput?: string;
   copiedOutputs?: string[];
 };
+
+export type CliRunResult = ExecuteAgentResult extends infer T
+  ? T extends ExecuteAgentResult
+    ? CliRunResultFor<T>
+    : never
+  : never;
 
 function isExecutionStatus(
   value: string | undefined,
@@ -31,6 +39,25 @@ export function cliTerminalStatus(
   if (isExecutionStatus(storedTerminalStatus)) return storedTerminalStatus;
   if (result.status === 'error') return EXECUTION_STATUS.ERROR;
   return EXECUTION_STATUS.COMPLETED;
+}
+
+export function createCliRunResult<T extends ExecuteAgentResult>(
+  result: T,
+  terminalStatus: ExecutionStatus,
+  extras: {
+    readonly runDirectory?: string;
+    readonly copiedOutput?: string;
+    readonly copiedOutputs?: string[];
+  } = {},
+): T extends ExecuteAgentResult ? CliRunResultFor<T> : never {
+  const { status: endGroupStatus, ...rest } = result;
+  return {
+    ...rest,
+    status: terminalStatus,
+    endGroupStatus,
+    terminalStatus,
+    ...extras,
+  } as T extends ExecuteAgentResult ? CliRunResultFor<T> : never;
 }
 
 export async function readCliTerminalStatus(

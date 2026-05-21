@@ -598,7 +598,7 @@ export async function runChat(
     // actionable advice is "use `texra run`", not "fix your TERM".
     writeTextStderr(
       isHeadless
-        ? 'texra chat requires an interactive terminal (TTY stdin and stdout). For scripting, --print, or piped output, use `texra run`.'
+        ? 'texra chat requires an interactive terminal (TTY stdin and stdout). For scripting or piped input, use `texra run`.'
         : 'texra chat needs a capable terminal — TERM=dumb strips the cursor controls Ink uses. For non-interactive runs, use `texra run`.',
     );
     return { exitCode: CliExitCode.Usage };

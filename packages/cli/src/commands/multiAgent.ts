@@ -51,6 +51,7 @@ import {
   optString,
 } from './_helpers/globalArgs';
 import {
+  createCliRunResult,
   readCliTerminalStatus,
   type CliRunResult,
   type ExecuteAgentResult,
@@ -294,10 +295,10 @@ async function runMultiAgentPreset(
     );
     return CliExitCode.AgentError;
   }
-  const displayResult: CliToolUseRunResult = {
-    ...result,
+  const displayResult: CliToolUseRunResult = createCliRunResult(
+    result,
     terminalStatus,
-  };
+  );
   writeMultiAgentRunResult(runContext, plan, displayResult);
 
   if (terminalStatus === EXECUTION_STATUS.ERROR) {
