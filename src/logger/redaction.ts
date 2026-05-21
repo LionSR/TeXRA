@@ -6,14 +6,14 @@ const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/=_-]+/g;
 const PROVIDER_KEY_PATTERN =
   /\b(?:sk-[A-Za-z0-9_-]{12,}|sk-ant-[A-Za-z0-9_-]{12,}|xai-[A-Za-z0-9_-]{12,})\b/g;
 
-export interface DesktopLogRedactionOptions {
-  homeDir?: string | undefined;
-  workspacePath?: string | undefined;
+export interface LogRedactionOptions {
+  readonly homeDir?: string | undefined;
+  readonly workspacePath?: string | undefined;
 }
 
-export function redactDesktopLog(
+export function redactSecrets(
   text: string,
-  options: DesktopLogRedactionOptions = {},
+  options: LogRedactionOptions = {},
 ): string {
   const prefixes = [options.workspacePath, options.homeDir]
     .filter((prefix): prefix is string => Boolean(prefix))
