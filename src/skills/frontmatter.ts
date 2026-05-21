@@ -21,9 +21,7 @@ export function extractFrontmatter(content: string): ExtractedFrontmatter {
     throw new Error('SKILL.md must start with YAML frontmatter');
   }
 
-  const closeIndex = lines.findIndex((line, index) => {
-    return index > 0 && line === '---';
-  });
+  const closeIndex = lines.indexOf('---', 1);
   if (closeIndex < 0) {
     throw new Error('SKILL.md frontmatter is missing a closing delimiter');
   }
