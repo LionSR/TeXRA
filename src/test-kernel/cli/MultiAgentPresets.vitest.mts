@@ -1,12 +1,31 @@
 import { describe, expect, it } from 'vitest';
 
+import type { AgentEntry } from '@agent/index';
+import { AgentCategory } from '@agent/core/AgentDataclass';
+
 import {
   cliMultiAgentPresets,
   findCliMultiAgentPreset,
   formatCliMultiAgentPresetDetails,
   formatCliMultiAgentPresetList,
+  planCliMultiAgentPresetRun,
   parseCliCustomAgentPresets,
 } from '../../../packages/cli/src/runtime/multiAgentPresets';
+
+function agent(
+  name: string,
+  category: AgentCategory,
+  tools: string[] = [],
+): AgentEntry {
+  return {
+    name,
+    category,
+    source:
+      category === AgentCategory.ToolUse ? 'builtInToolUse' : 'builtInWorkflow',
+    path: `/agents/${name}.yaml`,
+    tools,
+  };
+}
 
 describe('CLI multi-agent presets', () => {
   it('lists built-in team presets with stable counts', () => {
@@ -63,5 +82,55 @@ describe('CLI multi-agent presets', () => {
     expect(formatCliMultiAgentPresetDetails(preset!)).toContain(
       'Tool-use agents:\n  lean',
     );
+  });
+
+  it('plans a preset run with canonical visibility keys and an orchestrator root', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'physicist',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [
+        agent('criticize', AgentCategory.Workflow),
+        agent('generic', AgentCategory.Workflow),
+        agent('devise', AgentCategory.Workflow),
+        agent('apply', AgentCategory.Workflow),
+      ],
+      toolUseAgents: [
+        agent('review', AgentCategory.ToolUse),
+        agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
+      ],
+    });
+
+    expect(plan.rootAgent?.name).toBe('orchestrator');
+    expect(plan.workflowAgentKeys).toEqual([
+      'builtInWorkflow:criticize',
+      'builtInWorkflow:generic',
+      'builtInWorkflow:devise',
+      'builtInWorkflow:apply',
+    ]);
+    expect(plan.toolUseAgentKeys).toEqual([
+      'builtInToolUse:orchestrator',
+      'builtInToolUse:review',
+    ]);
+    expect(plan.missingToolUseAgents).toContain('research');
+  });
+
+  it('adds an explicit root override to the visible tool-use team', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'lean-project',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [
+        agent('lean', AgentCategory.ToolUse),
+        agent('review', AgentCategory.ToolUse, ['delegate_agent']),
+      ],
+      agentOverride: 'review',
+    });
+
+    expect(plan.rootAgent?.name).toBe('review');
+    expect(plan.toolUseAgentKeys).toContain('builtInToolUse:review');
   });
 });
