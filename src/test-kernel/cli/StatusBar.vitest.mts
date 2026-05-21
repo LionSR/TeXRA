@@ -4,6 +4,7 @@ import { STREAM_STATUS } from '@shared/schemas';
 
 import {
   buildStatusBarDisplay,
+  defaultShortcutModifierLabel,
   statusBarSegmentText,
 } from '../../../packages/cli/src/chat/tui/panes/StatusBar';
 import { NO_BYPASS } from '../../../packages/cli/src/chat/tui/state/cliState';
@@ -24,6 +25,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: false,
       model: 'deepseekT',
       apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
     });
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
@@ -53,6 +55,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: true,
       model: 'deepseekT',
       apiMode: 'relay',
+      shortcutModifierLabel: 'Alt',
     });
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
@@ -84,6 +87,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: false,
       model: 'deepseekT',
       apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
     });
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
@@ -118,6 +122,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: false,
       model: 'deepseekT',
       apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
     });
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
@@ -128,5 +133,28 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toBe(
       'Resume this session with: texra --resume abc123',
     );
+  });
+
+  it('uses Option labels for meta shortcuts on macOS', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.WAITING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUps: 0,
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      subagentControlsAvailable: true,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: defaultShortcutModifierLabel('darwin'),
+    });
+
+    expect(display.bindings).toContain('[Option-1..9]focus');
+    expect(display.bindings).toContain('[Option-p]tasks');
+    expect(display.bindings).toContain('[Option-s]subagents');
   });
 });
