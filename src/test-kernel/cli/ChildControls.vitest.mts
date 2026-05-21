@@ -9,8 +9,10 @@ import {
 import {
   buildChildControlItems,
   childPickerKeyAction,
+  hasChildExecutionRows,
   nextPickerIndex,
   numericFocusTarget,
+  visibleSubagentRows,
 } from '../../../packages/cli/src/chat/tui/state/childControls';
 import { NO_BYPASS } from '../../../packages/cli/src/chat/tui/state/cliState';
 import type {
@@ -65,11 +67,19 @@ describe('CLI child execution controls', () => {
           childStreamId: 'child-b',
         },
       ],
+      childStreams: [
+        {
+          executionId: 'agent-2',
+          agentName: 'critic',
+          childStreamId: 'child-c',
+        },
+      ],
     });
 
     expect(numericFocusTarget(state, 0)).toBe('child-a');
-    expect(numericFocusTarget(state, 1)).toBe('child-b');
-    expect(numericFocusTarget(state, 2)).toBeUndefined();
+    expect(numericFocusTarget(state, 1)).toBe('child-c');
+    expect(numericFocusTarget(state, 2)).toBe('child-b');
+    expect(numericFocusTarget(state, 3)).toBeUndefined();
   });
 
   it('builds subagent and process picker items with stable labels and tails', () => {
@@ -190,20 +200,76 @@ describe('CLI child execution controls', () => {
 
     expect(buildChildControlItems(state, 'subagents')).toMatchObject([
       {
-        executionId: 'agent-1',
-        childStreamId: 'child-a',
-        kind: 'subagent',
-        label: 'critic',
-        description: 'completed',
-      },
-      {
         executionId: 'agent-2',
         childStreamId: 'child-b',
         kind: 'subagent',
         label: 'polisher',
         description: 'running',
       },
+      {
+        executionId: 'agent-1',
+        childStreamId: 'child-a',
+        kind: 'subagent',
+        label: 'critic',
+        description: 'completed',
+      },
     ]);
+  });
+
+  it('keeps retained subagent streams visible in the side-panel row model', () => {
+    const state = slice({
+      activeSubagents: [
+        {
+          executionId: 'agent-2',
+          agentName: 'polisher',
+          childStreamId: 'child-b',
+          status: 'running',
+        },
+      ],
+      childStreams: [
+        {
+          executionId: 'agent-1',
+          agentName: 'critic',
+          childStreamId: 'child-a',
+          status: 'completed',
+        },
+        {
+          executionId: 'agent-2',
+          agentName: 'polisher',
+          childStreamId: 'child-b',
+          status: 'waiting',
+        },
+      ],
+    });
+
+    expect(visibleSubagentRows(state)).toMatchObject([
+      {
+        executionId: 'agent-2',
+        childStreamId: 'child-b',
+        status: 'running',
+      },
+      {
+        executionId: 'agent-1',
+        childStreamId: 'child-a',
+        status: 'completed',
+      },
+    ]);
+    expect(hasChildExecutionRows(state)).toBe(true);
+  });
+
+  it('opens the child side panel when only retained subagent streams remain', () => {
+    const state = slice({
+      childStreams: [
+        {
+          executionId: 'agent-1',
+          agentName: 'critic',
+          childStreamId: 'child-a',
+          status: 'completed',
+        },
+      ],
+    });
+
+    expect(hasChildExecutionRows(state)).toBe(true);
   });
 
   it('keeps picker key handling independent of Ink rendering', () => {
