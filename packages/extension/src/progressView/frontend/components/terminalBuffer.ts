@@ -73,10 +73,6 @@ export class TerminalBuffer {
     return this.rawTail;
   }
 
-  get committed(): string {
-    return this.committedLines;
-  }
-
   /** Reset the DOM-patching state (called when leaving terminal mode). */
   resetDomState(): void {
     this.committedTextNode = null;
