@@ -51,8 +51,11 @@ export function appendAssistantTranscriptIfMissing(
   });
 }
 
-export function appendLocalAssistantTranscript(text: string): void {
-  appendLocalTranscriptEntry('assistant', text);
+export function appendLocalAssistantTranscript(
+  text: string,
+  streamId?: StreamTabId,
+): void {
+  appendLocalTranscriptEntry('assistant', text, streamId);
 }
 
 export function appendLocalErrorTranscript(text: string): void {
@@ -66,11 +69,13 @@ export function appendLocalUserTranscript(text: string): void {
 function appendLocalTranscriptEntry(
   role: 'assistant' | 'error' | 'user',
   text: string,
+  explicitStreamId?: StreamTabId,
 ): void {
   const normalized = normalizeTranscriptText(text);
   if (!normalized) return;
 
-  const streamId = cliState.activeStreamId.get() ?? CLI_LOCAL_STREAM_ID;
+  const streamId =
+    explicitStreamId ?? cliState.activeStreamId.get() ?? CLI_LOCAL_STREAM_ID;
   if (!cliState.activeStreamId.get()) cliState.activeStreamId.set(streamId);
   const syntheticAfterSeq =
     AgentLogger.getStreamLogStore().get(streamId)?.head ?? 0;
