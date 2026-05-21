@@ -254,7 +254,7 @@ importers:
         version: 9.2.1
       css-loader:
         specifier: ^7.1.4
-        version: 7.1.4(webpack@5.107.0)
+        version: 7.1.4(webpack@5.107.1)
       esbuild:
         specifier: ^0.28.0
         version: 0.28.0
@@ -275,7 +275,7 @@ importers:
         version: 29.1.1
       node-loader:
         specifier: ^2.1.0
-        version: 2.1.0(webpack@5.107.0)
+        version: 2.1.0(webpack@5.107.1)
       nunjucks:
         specifier: ^3.2.4
         version: 3.2.4(chokidar@3.6.0)
@@ -287,13 +287,13 @@ importers:
         version: 3.8.3
       style-loader:
         specifier: ^4.0.0
-        version: 4.0.0(webpack@5.107.0)
+        version: 4.0.0(webpack@5.107.1)
       terser-webpack-plugin:
         specifier: ^5.6.0
-        version: 5.6.0(esbuild@0.28.0)(postcss@8.5.13)(webpack@5.107.0)
+        version: 5.6.0(esbuild@0.28.0)(postcss@8.5.13)(webpack@5.107.1)
       ts-loader:
         specifier: ^9.5.7
-        version: 9.5.7(typescript@6.0.3)(webpack@5.107.0)
+        version: 9.5.7(typescript@6.0.3)(webpack@5.107.1)
       tsconfig-paths:
         specifier: ^4.2.0
         version: 4.2.0
@@ -313,11 +313,11 @@ importers:
         specifier: ^3.17.5
         version: 3.17.5
       webpack:
-        specifier: ^5.107.0
-        version: 5.107.0(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
+        specifier: ^5.107.1
+        version: 5.107.1(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
       webpack-cli:
         specifier: ^7.0.2
-        version: 7.0.2(webpack@5.107.0)
+        version: 7.0.2(webpack@5.107.1)
       zod-v3-to-v4:
         specifier: ^1.21.2
         version: 1.21.2
@@ -679,7 +679,7 @@ importers:
         version: 9.2.1
       css-loader:
         specifier: ^7.1.4
-        version: 7.1.4(webpack@5.107.0)
+        version: 7.1.4(webpack@5.107.1)
       esbuild:
         specifier: ^0.28.0
         version: 0.28.0
@@ -700,7 +700,7 @@ importers:
         version: 29.1.1
       node-loader:
         specifier: ^2.1.0
-        version: 2.1.0(webpack@5.107.0)
+        version: 2.1.0(webpack@5.107.1)
       nunjucks:
         specifier: ^3.2.4
         version: 3.2.4(chokidar@3.6.0)
@@ -712,13 +712,13 @@ importers:
         version: 3.8.3
       style-loader:
         specifier: ^4.0.0
-        version: 4.0.0(webpack@5.107.0)
+        version: 4.0.0(webpack@5.107.1)
       terser-webpack-plugin:
         specifier: ^5.6.0
-        version: 5.6.0(esbuild@0.28.0)(postcss@8.5.13)(webpack@5.107.0)
+        version: 5.6.0(esbuild@0.28.0)(postcss@8.5.13)(webpack@5.107.1)
       ts-loader:
         specifier: ^9.5.7
-        version: 9.5.7(typescript@6.0.3)(webpack@5.107.0)
+        version: 9.5.7(typescript@6.0.3)(webpack@5.107.1)
       tsconfig-paths:
         specifier: ^4.2.0
         version: 4.2.0
@@ -738,11 +738,11 @@ importers:
         specifier: ^3.17.5
         version: 3.17.5
       webpack:
-        specifier: ^5.107.0
-        version: 5.107.0(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
+        specifier: ^5.107.1
+        version: 5.107.1(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
       webpack-cli:
         specifier: ^7.0.2
-        version: 7.0.2(webpack@5.107.0)
+        version: 7.0.2(webpack@5.107.1)
       zod-v3-to-v4:
         specifier: ^1.21.2
         version: 1.21.2
@@ -3334,8 +3334,8 @@ packages:
   electron-publish@26.11.0:
     resolution: {integrity: sha512-FeGZ3wLrQv9zIat00WhRg/7Pcboe3B9zwkQojdBgtt6pEQ4MgxA2xll5Cnrtgn0c65ENRWOr5TQ8YBIx7j5xSA==}
 
-  electron-to-chromium@1.5.359:
-    resolution: {integrity: sha512-8lPELWuYZIWk7NDvCNthtmMw/7Q5Wu25NpM4djFMHBmk8DubPAtL4YTOp7ou0e7HyJtwkVlWv8XMLURnrtgJQw==}
+  electron-to-chromium@1.5.360:
+    resolution: {integrity: sha512-GkcBt6YYAw9SxFWn+xVar4cLVGlXVuswwtRLBozi2zp0GjXs4ZnOrqV4zbXzg35n7w81hCkyJNYicgXlVHAmBA==}
 
   electron-winstaller@5.4.0:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
@@ -6449,8 +6449,8 @@ packages:
     resolution: {integrity: sha512-eACpxRN02yaawnt+uUNIF7Qje6A9zArxBbcAJjK1PK3S9Ycg5jIuJ8pW4q8EMnwNZCEGltcjkRx1QzOxOkKD8A==}
     engines: {node: '>=10.13.0'}
 
-  webpack@5.107.0:
-    resolution: {integrity: sha512-PSxeHk/dmLYZlnTU+vL1Gej6Evg5RNtl3flhxBresfznFnzxinHMzHKloHnywM/3ouQv7/AlZCswWDIkNSggUA==}
+  webpack@5.107.1:
+    resolution: {integrity: sha512-mvdIWxj/H6QsfgDdH9djne3a5dYcmEmtsXGESkypaGN5jXjF/b+9KDlmTDQ2TKlFUeA2fI9Y65kihD30JOdB+Q==}
     engines: {node: '>=10.13.0'}
     hasBin: true
     peerDependencies:
@@ -9059,7 +9059,7 @@ snapshots:
     dependencies:
       baseline-browser-mapping: 2.10.31
       caniuse-lite: 1.0.30001793
-      electron-to-chromium: 1.5.359
+      electron-to-chromium: 1.5.360
       node-releases: 2.0.44
       update-browserslist-db: 1.2.3(browserslist@4.28.2)
 
@@ -9409,7 +9409,7 @@ snapshots:
 
   crypto-js@4.2.0: {}
 
-  css-loader@7.1.4(webpack@5.107.0):
+  css-loader@7.1.4(webpack@5.107.1):
     dependencies:
       icss-utils: 5.1.0(postcss@8.5.13)
       postcss: 8.5.13
@@ -9420,7 +9420,7 @@ snapshots:
       postcss-value-parser: 4.2.0
       semver: 7.7.4
     optionalDependencies:
-      webpack: 5.107.0(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
+      webpack: 5.107.1(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
 
   css-select@5.2.2:
     dependencies:
@@ -9670,7 +9670,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron-to-chromium@1.5.359: {}
+  electron-to-chromium@1.5.360: {}
 
   electron-winstaller@5.4.0:
     dependencies:
@@ -11463,10 +11463,10 @@ snapshots:
 
   node-int64@0.4.0: {}
 
-  node-loader@2.1.0(webpack@5.107.0):
+  node-loader@2.1.0(webpack@5.107.1):
     dependencies:
       loader-utils: 2.0.4
-      webpack: 5.107.0(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
+      webpack: 5.107.1(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
 
   node-pandoc@0.3.0: {}
 
@@ -12550,9 +12550,9 @@ snapshots:
     dependencies:
       boundary: 2.0.0
 
-  style-loader@4.0.0(webpack@5.107.0):
+  style-loader@4.0.0(webpack@5.107.1):
     dependencies:
-      webpack: 5.107.0(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
+      webpack: 5.107.1(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
 
   sumchecker@3.0.1:
     dependencies:
@@ -12633,13 +12633,13 @@ snapshots:
 
   terminal-size@4.0.1: {}
 
-  terser-webpack-plugin@5.6.0(esbuild@0.28.0)(postcss@8.5.13)(webpack@5.107.0):
+  terser-webpack-plugin@5.6.0(esbuild@0.28.0)(postcss@8.5.13)(webpack@5.107.1):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       jest-worker: 27.5.1
       schema-utils: 4.3.3
       terser: 5.47.1
-      webpack: 5.107.0(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
+      webpack: 5.107.1(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
     optionalDependencies:
       esbuild: 0.28.0
       postcss: 8.5.13
@@ -12724,7 +12724,7 @@ snapshots:
     dependencies:
       typescript: 6.0.3
 
-  ts-loader@9.5.7(typescript@6.0.3)(webpack@5.107.0):
+  ts-loader@9.5.7(typescript@6.0.3)(webpack@5.107.1):
     dependencies:
       chalk: 4.1.2
       enhanced-resolve: 5.21.0
@@ -12732,7 +12732,7 @@ snapshots:
       semver: 7.7.4
       source-map: 0.7.6
       typescript: 6.0.3
-      webpack: 5.107.0(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
+      webpack: 5.107.1(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
 
   ts-morph@27.0.2:
     dependencies:
@@ -13008,7 +13008,7 @@ snapshots:
 
   webidl-conversions@8.0.1: {}
 
-  webpack-cli@7.0.2(webpack@5.107.0):
+  webpack-cli@7.0.2(webpack@5.107.1):
     dependencies:
       '@discoveryjs/json-ext': 1.0.0
       commander: 14.0.3
@@ -13018,7 +13018,7 @@ snapshots:
       import-local: 3.2.0
       interpret: 3.1.1
       rechoir: 0.8.0
-      webpack: 5.107.0(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
+      webpack: 5.107.1(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
       webpack-merge: 6.0.1
 
   webpack-merge@6.0.1:
@@ -13029,7 +13029,7 @@ snapshots:
 
   webpack-sources@3.4.1: {}
 
-  webpack@5.107.0(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2):
+  webpack@5.107.1(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2):
     dependencies:
       '@types/estree': 1.0.9
       '@types/json-schema': 7.0.15
@@ -13051,11 +13051,11 @@ snapshots:
       neo-async: 2.6.2
       schema-utils: 4.3.3
       tapable: 2.3.3
-      terser-webpack-plugin: 5.6.0(esbuild@0.28.0)(postcss@8.5.13)(webpack@5.107.0)
+      terser-webpack-plugin: 5.6.0(esbuild@0.28.0)(postcss@8.5.13)(webpack@5.107.1)
       watchpack: 2.5.1
       webpack-sources: 3.4.1
     optionalDependencies:
-      webpack-cli: 7.0.2(webpack@5.107.0)
+      webpack-cli: 7.0.2(webpack@5.107.1)
     transitivePeerDependencies:
       - '@minify-html/node'
       - '@swc/core'
