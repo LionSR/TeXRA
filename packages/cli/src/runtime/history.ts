@@ -154,8 +154,7 @@ export function cliHistoryNdjsonRecords(
 export function formatCliHistoryDetailsText(
   details: CliHistoryDetails,
 ): string {
-  const config = details.config;
-  const meta = details.meta;
+  const { config, meta } = details;
   const lines = [
     `Execution: ${details.id}`,
     `Status: ${meta?.terminalStatus ?? EXECUTION_STATUS.COMPLETED}`,

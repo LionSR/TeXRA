@@ -13,16 +13,21 @@ export function openBrowser(
   log: LogBackend | undefined,
   manualBrowserHint: string,
 ): Promise<void> {
-  const command =
-    process.platform === 'darwin'
-      ? 'open'
-      : process.platform === 'win32'
-        ? 'cmd'
-        : 'xdg-open';
-  const args =
-    process.platform === 'win32'
-      ? ['/d', '/s', '/c', `start "" "${quoteWindowsStartUrl(url)}"`]
-      : [url];
+  let command: string;
+  let args: string[];
+  switch (process.platform) {
+    case 'darwin':
+      command = 'open';
+      args = [url];
+      break;
+    case 'win32':
+      command = 'cmd';
+      args = ['/d', '/s', '/c', `start "" "${quoteWindowsStartUrl(url)}"`];
+      break;
+    default:
+      command = 'xdg-open';
+      args = [url];
+  }
 
   return new Promise((resolve, reject) => {
     let child: ChildProcess;
