@@ -147,6 +147,7 @@ const extensionConfig = {
       '@hosts': path.resolve(rootSrc, 'hosts'),
       '@utils': path.resolve(rootSrc, 'utils'),
       '@logger': path.resolve(rootSrc, 'logger'),
+      '@skills': path.resolve(rootSrc, 'skills'),
       '@latex': path.resolve(rootSrc, 'latex'),
       '@commands': path.resolve(packageSrc, 'commands'),
       '@resources': path.resolve(__dirname, 'resources'),
