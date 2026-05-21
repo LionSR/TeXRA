@@ -2,6 +2,7 @@
 import { createInterface } from 'node:readline/promises';
 
 // Local imports - logger
+import { composeSinks } from '@logger/sinks';
 import type { LogRecord, LogSink } from '@logger/structuredLogger';
 
 const closed = { stdout: false, stderr: false };
@@ -152,4 +153,13 @@ export class NdjsonStdoutSink implements LogSink {
       process.stdout.once('close', onClosed);
     });
   }
+}
+
+// CLI logs to stdout/stderr are not redacted — operators are expected to
+// inspect their own terminals. Desktop logs (which can be exported and shared)
+// are redacted in `desktopAppLog.ts` via the shared `redactSecrets` helper.
+export function createCliLogSink(format: string): LogSink {
+  return composeSinks([
+    format === 'ndjson' ? new NdjsonStdoutSink() : new StderrTextSink(),
+  ]);
 }
