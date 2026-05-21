@@ -84,31 +84,15 @@ import {
   setBashApprovalEnabled as setBashApprovalEnabledShared,
   setWorkspaceAgentSetting,
 } from '@shared/settingsView/handlers/approvalHandlers';
-import { buildGitAuthorSettingsMessage } from '@shared/settingsView/handlers/gitAuthorHandlers';
 import { buildHistoryMessage } from '@shared/settingsView/handlers/historyHandlers';
-import {
-  deleteMemory as deleteMemoryShared,
-  postMemoryData as postMemoryDataShared,
-  postMemoryEnabled as postMemoryEnabledShared,
-  postMemoryPreview as postMemoryPreviewShared,
-  setMemoryEnabled as setMemoryEnabledShared,
-  setMemoryPinned as setMemoryPinnedShared,
-} from '@shared/settingsView/handlers/memoryHandlers';
 import {
   buildModelSelectionMessage,
   createModelSelectionController,
-  setHelperModel as setHelperModelShared,
-  setModelEnabled as setModelEnabledShared,
-  setPreferShortModelNames as setPreferShortModelNamesShared,
-  setReasoningLevel as setReasoningLevelShared,
 } from '@shared/settingsView/handlers/modelSelectionHandlers';
-import {
-  buildSuperYoloMessage,
-  setNestedDelegationMaxDepth as setNestedDelegationMaxDepthShared,
-  setSuperYoloBoolean,
-} from '@shared/settingsView/handlers/superYoloHandlers';
-import { buildToolDashboardMessage } from '@shared/settingsView/handlers/toolDashboardHandlers';
+import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
 import { createSettingsMemoryController } from '@shared/settingsView/handlers/memoryControllerFactory';
+import { clampNestedDelegationDepth } from '@shared/constants/delegationPolicy';
+import { readGitAuthorSettingsFromState } from '@utils/system/gitAuthorSettings';
 import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
@@ -745,34 +729,34 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendMemoryData(webview: vscode.Webview): Promise<void> {
-    await postMemoryDataShared(this.memoryController, (m) =>
-      webview.postMessage(m),
+    await webview.postMessage(
+      await this.memoryController.getMemoryDataMessage(),
     );
   }
 
   private async handleGetMemoryPreview(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.GET_MEMORY_PREVIEW>,
   ): Promise<void> {
-    await this.withActiveWebview((webview) =>
-      postMemoryPreviewShared(
-        this.memoryController,
-        (m) => void webview.postMessage(m),
-        data.storagePath,
-        (error) => {
-          void showLoggedErrorMessage(
-            this.channel,
-            'Failed to load memory preview',
-            error,
-          );
-        },
-      ),
-    );
+    await this.withActiveWebview(async (webview) => {
+      try {
+        await webview.postMessage(
+          await this.memoryController.getMemoryPreviewMessage(data.storagePath),
+        );
+      } catch (error) {
+        void showLoggedErrorMessage(
+          this.channel,
+          'Failed to load memory preview',
+          error,
+        );
+        await webview.postMessage(
+          this.memoryController.getMemoryPreviewErrorMessage(data.storagePath),
+        );
+      }
+    });
   }
 
   public async sendMemoryEnabled(webview: vscode.Webview): Promise<void> {
-    await postMemoryEnabledShared(this.memoryController, (m) =>
-      webview.postMessage(m),
-    );
+    await webview.postMessage(this.memoryController.getMemoryEnabledMessage());
   }
 
   public async sendInlineCriticismEnabled(
@@ -897,20 +881,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     key: WorkspaceStateKey,
     data: { enabled: boolean },
   ): Promise<void> {
-    await setSuperYoloBoolean(
-      { workspaceState: workspaceSM, globalState: globalSM },
-      key,
-      data.enabled,
-    );
+    await workspaceSM.update(key, data.enabled);
     await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
   }
 
   private async handleSetNestedDelegationMaxDepth(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_NESTED_DELEGATION_MAX_DEPTH>,
   ): Promise<void> {
-    await setNestedDelegationMaxDepthShared(
-      { workspaceState: workspaceSM, globalState: globalSM },
-      data.value,
+    await workspaceSM.update(
+      WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
+      clampNestedDelegationDepth(data.value),
     );
     await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
   }
@@ -923,12 +903,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     webview: vscode.Webview,
     settings?: ReturnType<typeof readGitAuthorSettings>,
   ): Promise<void> {
-    await webview.postMessage(
-      buildGitAuthorSettingsMessage(
-        { workspaceState: workspaceSM, globalState: globalSM },
-        settings,
-      ),
-    );
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
+      ...(settings ?? readGitAuthorSettingsFromState(workspaceSM)),
+    });
   }
 
   private async updateGitAuthorSetting(
@@ -1152,13 +1130,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.DELETE_MEMORY>,
   ): Promise<void> {
     try {
-      await this.withActiveWebview((webview) =>
-        deleteMemoryShared(
-          this.memoryController,
-          (m) => webview.postMessage(m),
-          data,
-        ),
-      );
+      const message = await this.memoryController.deleteMemory(data);
+      if (message) {
+        await this.withActiveWebview(async (w) => {
+          await w.postMessage(message);
+        });
+      }
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
@@ -1172,13 +1149,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetMemoryEnabled(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MEMORY_ENABLED>,
   ): Promise<void> {
-    await this.withActiveWebview((webview) =>
-      setMemoryEnabledShared(
-        this.memoryController,
-        (m) => webview.postMessage(m),
-        data.enabled,
-      ),
-    );
+    const message = await this.memoryController.setMemoryEnabled(data.enabled);
+    if (message) {
+      await this.withActiveWebview(async (w) => {
+        await w.postMessage(message);
+      });
+    }
   }
 
   private async handlePinMemory(
@@ -1198,14 +1174,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     pinned: boolean,
   ): Promise<void> {
     try {
-      await this.withActiveWebview((webview) =>
-        setMemoryPinnedShared(
-          this.memoryController,
-          (m) => webview.postMessage(m),
-          storagePath,
-          pinned,
-        ),
-      );
+      const message = pinned
+        ? await this.memoryController.pinMemory(storagePath)
+        : await this.memoryController.unpinMemory(storagePath);
+      if (message) {
+        await this.withActiveWebview(async (w) => {
+          await w.postMessage(message);
+        });
+      }
     } catch (error) {
       const action = pinned ? 'pin' : 'unpin';
       await showLoggedErrorMessage(
@@ -1591,10 +1567,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetModelEnabled(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MODEL_ENABLED>,
   ): Promise<void> {
-    await setModelEnabledShared(modelSelectionController, {
+    await modelSelectionController.setModelEnabled({
       modelName: data.modelName,
       enabled: data.enabled,
     });
+    invalidateModelOptionsCache();
     await Promise.all([
       vscode.commands.executeCommand('texra.refreshAllOptions'),
       this.withActiveWebview((w) => this.sendModelSelectionData(w)),
@@ -1604,14 +1581,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetHelperModel(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_HELPER_MODEL>,
   ): Promise<void> {
-    await setHelperModelShared(modelSelectionController, data.modelName);
+    await modelSelectionController.setHelperModel(data.modelName);
     await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 
   private async handleSetModelReasoningLevel(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MODEL_REASONING_LEVEL>,
   ): Promise<void> {
-    await setReasoningLevelShared(modelSelectionController, {
+    await modelSelectionController.setReasoningLevel({
       modelName: data.modelName,
       level: data.level,
     });
@@ -1621,10 +1598,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetPreferShortModelNames(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PREFER_SHORT_MODEL_NAMES>,
   ): Promise<void> {
-    await setPreferShortModelNamesShared(
-      modelSelectionController,
-      data.enabled,
-    );
+    await modelSelectionController.setPreferShortModelNames(data.enabled);
     await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 
@@ -1640,7 +1614,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       ? (getLastCheckResults() ?? undefined)
       : undefined;
     const items = await buildToolDashboardItems(cachedResults);
-    await webview.postMessage(buildToolDashboardMessage(items));
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+      items,
+    });
   }
 
   private async handleInstallToolExtension(

@@ -1,10 +1,8 @@
 /**
- * Model selection shared handlers and controller factory.
+ * Model selection controller factory + outbound message builder.
  *
- * The controller encapsulates the read/write logic; this module exposes a
- * factory that builds it from a `SettingsStatePorts` and wraps the result
- * in the outbound message shape plus the `invalidateModelOptionsCache` dance
- * both hosts perform after mutations.
+ * Both hosts wire the same five global-state pairs into the controller, so
+ * the factory captures that. The outbound message is also shared.
  */
 import {
   SettingsModelSelectionController,
@@ -13,11 +11,7 @@ import {
 import { GlobalStateKey } from '@common/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import type {
-  ReasoningLevel,
-  UpdateModelSelectionMessage,
-} from '@shared/schemas/settingsViewMessages';
+import type { UpdateModelSelectionMessage } from '@shared/schemas/settingsViewMessages';
 
 import type { SettingsStatePorts } from './types';
 
@@ -74,33 +68,4 @@ export function buildModelSelectionMessage(
     command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
     ...controller.buildSelectionData(),
   };
-}
-
-export async function setModelEnabled(
-  controller: SettingsModelSelectionController,
-  input: { modelName: string; enabled: boolean },
-): Promise<void> {
-  await controller.setModelEnabled(input);
-  invalidateModelOptionsCache();
-}
-
-export async function setReasoningLevel(
-  controller: SettingsModelSelectionController,
-  input: { modelName: string; level: ReasoningLevel | null },
-): Promise<void> {
-  await controller.setReasoningLevel(input);
-}
-
-export async function setHelperModel(
-  controller: SettingsModelSelectionController,
-  modelName: string,
-): Promise<void> {
-  await controller.setHelperModel(modelName);
-}
-
-export async function setPreferShortModelNames(
-  controller: SettingsModelSelectionController,
-  enabled: boolean,
-): Promise<void> {
-  await controller.setPreferShortModelNames(enabled);
 }

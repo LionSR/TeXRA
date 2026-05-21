@@ -1,5 +1,5 @@
 /**
- * Multi-agent coordination ("super yolo") settings.
+ * Multi-agent coordination ("super yolo") settings message builder.
  *
  * The outbound message carries reliability tuning, orchestrator-kill
  * permissions, subagent-detach behaviour, and the nested-delegation depth
@@ -45,22 +45,4 @@ export function buildSuperYoloMessage(
       ),
     ),
   };
-}
-
-export async function setSuperYoloBoolean(
-  ports: SettingsStatePorts,
-  key: WorkspaceStateKey,
-  enabled: boolean,
-): Promise<void> {
-  await ports.workspaceState.update(key, enabled);
-}
-
-export async function setNestedDelegationMaxDepth(
-  ports: SettingsStatePorts,
-  value: number,
-): Promise<void> {
-  await ports.workspaceState.update(
-    WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
-    clampNestedDelegationDepth(value),
-  );
 }
