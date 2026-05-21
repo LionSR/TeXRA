@@ -93,6 +93,13 @@ import {
   readCliHistoryConfig,
   readCliHistoryDetails,
 } from '../runtime/history';
+import {
+  cliMultiAgentPresetNdjsonRecords,
+  findCliMultiAgentPreset,
+  formatCliMultiAgentPresetDetails,
+  formatCliMultiAgentPresetList,
+  readCliMultiAgentPresets,
+} from '../runtime/multiAgentPresets';
 
 // One CLI invocation per process — module-level pending exit code is the
 // simplest way to surface handler exit codes back to `bin/texra.ts` after
@@ -252,6 +259,95 @@ async function listAgents(context: CliContext): Promise<number> {
 const agentsCommand = defineCommand({
   meta: { name: 'agents', description: 'Inspect TeXRA agents' },
   subCommands: { list: agentsListCommand },
+});
+
+const multiAgentListCommand = defineCommand({
+  meta: { name: 'list', description: 'List multi-agent team presets' },
+  args: {
+    ...GLOBAL_ARGS,
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
+    setExitCode(await runMultiAgentList(context));
+  },
+});
+
+async function runMultiAgentList(context: CliContext): Promise<number> {
+  await initCliPlatform({
+    ...context,
+    quietLogs: true,
+    skipIncludedModelAccess: true,
+  });
+  const presets = readCliMultiAgentPresets();
+
+  if (context.outputFormat === 'json') {
+    writeTextStdout(JSON.stringify(presets, null, 2));
+    return CliExitCode.Success;
+  }
+
+  if (context.outputFormat === 'ndjson') {
+    for (const record of cliMultiAgentPresetNdjsonRecords(presets)) {
+      writeNdjsonStdout(record);
+    }
+    return CliExitCode.Success;
+  }
+
+  writeTextStdout(formatCliMultiAgentPresetList(presets));
+  return CliExitCode.Success;
+}
+
+const multiAgentShowCommand = defineCommand({
+  meta: { name: 'show', description: 'Show one multi-agent team preset' },
+  args: {
+    ...GLOBAL_ARGS,
+    preset: {
+      type: 'positional',
+      required: true,
+      description: 'Preset id or name from `texra multi-agent list`',
+    },
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
+    setExitCode(await runMultiAgentShow(context, ctx.args.preset));
+  },
+});
+
+async function runMultiAgentShow(
+  context: CliContext,
+  presetIdOrName: string,
+): Promise<number> {
+  await initCliPlatform({
+    ...context,
+    quietLogs: true,
+    skipIncludedModelAccess: true,
+  });
+  const presets = readCliMultiAgentPresets();
+  const preset = findCliMultiAgentPreset(presets, presetIdOrName);
+  if (!preset) {
+    writeTextStderr(`Multi-agent preset not found: ${presetIdOrName}`);
+    return CliExitCode.Usage;
+  }
+
+  if (context.outputFormat === 'json') {
+    writeTextStdout(JSON.stringify(preset, null, 2));
+  } else if (context.outputFormat === 'ndjson') {
+    writeNdjsonStdout({
+      kind: 'multi-agent-preset',
+      ts: new Date().toISOString(),
+      preset,
+    });
+  } else {
+    writeTextStdout(formatCliMultiAgentPresetDetails(preset));
+  }
+  return CliExitCode.Success;
+}
+
+const multiAgentCommand = defineCommand({
+  meta: { name: 'multi-agent', description: 'Inspect multi-agent teams' },
+  subCommands: {
+    list: multiAgentListCommand,
+    show: multiAgentShowCommand,
+  },
 });
 
 const modelsListCommand = defineCommand({
@@ -1496,6 +1592,7 @@ export const rootCommand = defineCommand({
     resume: resumeCommand,
     history: historyCommand,
     agents: agentsCommand,
+    'multi-agent': multiAgentCommand,
     models: modelsCommand,
     login: loginCommand,
     logout: logoutCommand,
