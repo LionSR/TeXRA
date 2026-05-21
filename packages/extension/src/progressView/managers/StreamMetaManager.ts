@@ -63,8 +63,15 @@ export class StreamMetaManager {
     return this.parentStreamIds.get(stream);
   }
 
-  setParentStream(child: StreamTabId, parent: StreamTabId): void {
-    this.parentStreamIds.set(child, parent);
+  setParentStream(
+    child: StreamTabId,
+    parent: StreamTabId | null | undefined,
+  ): void {
+    if (parent == null) {
+      this.parentStreamIds.delete(child);
+    } else {
+      this.parentStreamIds.set(child, parent);
+    }
     this.save(child);
   }
 
