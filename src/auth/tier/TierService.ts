@@ -343,7 +343,6 @@ export class TierService {
    * transient network failure.
    */
   isQuotaExceeded(): boolean {
-    const s = this.spendingStatus;
-    return s !== null && s.remaining <= 0;
+    return this.spendingStatus !== null && this.spendingStatus.remaining <= 0;
   }
 }
