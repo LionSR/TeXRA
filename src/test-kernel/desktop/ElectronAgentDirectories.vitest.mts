@@ -39,8 +39,8 @@ interface JsonStoreModule {
   };
 }
 
-interface ElectronStateStoreModule {
-  ElectronStateStore: new (store: JsonStore) => {
+interface JsonStateStoreModule {
+  JsonStateStore: new (store: JsonStore) => {
     get<T>(key: string, defaultValue?: T): T;
     update(key: string, value: unknown): PromiseLike<void>;
   };
@@ -98,13 +98,13 @@ describe('desktop agent directory bootstrap', () => {
 
     const [
       { JsonStore },
-      { ElectronStateStore },
+      { JsonStateStore },
       { bootstrapElectronAgentDirectories },
       { initPlatform },
       { getAgentDirectories },
     ] = await Promise.all([
       loadPlatformDefaultsModule<JsonStoreModule>('jsonStore.ts'),
-      loadDesktopPlatformModule<ElectronStateStoreModule>('electronState.ts'),
+      loadPlatformDefaultsModule<JsonStateStoreModule>('jsonStateStore.ts'),
       loadDesktopPlatformModule<ElectronAgentDirectoriesModule>(
         'agentDirectories.ts',
       ),
@@ -121,8 +121,8 @@ describe('desktop agent directory bootstrap', () => {
 
     initPlatform({
       config: new FakeConfigProvider(),
-      globalState: new ElectronStateStore(globalStateStore),
-      workspaceState: new ElectronStateStore(workspaceStateStore),
+      globalState: new JsonStateStore(globalStateStore),
+      workspaceState: new JsonStateStore(workspaceStateStore),
       log: new RecordingLogBackend(),
       fs: nodeFilesystem,
       workspace: createNodeWorkspace(() => workspacePath),
