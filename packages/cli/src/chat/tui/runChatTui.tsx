@@ -85,6 +85,7 @@ import {
   appendAssistantTranscriptIfMissing,
   appendLocalAssistantTranscript,
   appendLocalErrorTranscript,
+  appendLocalUserTranscript,
   moveLocalTranscriptToStream,
 } from './state/transcript';
 import {
@@ -435,6 +436,13 @@ async function handleTuiSlashCommand(
 
   const command = parsed.name.toLowerCase();
   const rest = parsed.remainder.trim();
+  // Echo the slash input into the transcript so the user can see what they
+  // typed. Slash commands don't go through the agent run, so the usual
+  // USER_MESSAGE stream-log entry is never produced. Skip the echo for /clear
+  // (it resets the transcript) and exits (the TUI is tearing down).
+  if (command !== 'clear' && command !== 'exit' && command !== 'quit') {
+    appendLocalUserTranscript(line.trim());
+  }
   switch (command) {
     case 'help': {
       const commands = listSlashCommands()
