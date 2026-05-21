@@ -15,7 +15,10 @@ import { buildCliOrchestrationItems } from '../runtime/orchestration';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
-import { GLOBAL_ARGS } from './_helpers/globalArgs';
+import {
+  INTERACTIVE_GLOBAL_ARGS,
+  rejectHeadlessOnlyFlags,
+} from './_helpers/globalArgs';
 import { resolveMultiAgentRunPlan } from './multiAgent';
 import { runResumeExecution } from './resume';
 import type { CliContext } from '../runtime/cliContext';
@@ -27,7 +30,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
   if (isHeadless || dumbTerm) {
     writeTextStderr(
       isHeadless
-        ? 'texra orchestrate requires an interactive terminal (TTY stdin and stdout). For scripting, use `texra run`, `texra chat`, or a concrete subcommand.'
+        ? 'texra orchestrate requires an interactive terminal (TTY stdin and stdout). For scripting, use `texra run` or a concrete subcommand.'
         : 'texra orchestrate needs a capable terminal — TERM=dumb strips the cursor controls Ink uses.',
     );
     return CliExitCode.Usage;
@@ -91,9 +94,10 @@ export const orchestrationCommand = defineCommand({
     description: 'Choose a chat, resume, or team preset',
   },
   args: {
-    ...GLOBAL_ARGS,
+    ...INTERACTIVE_GLOBAL_ARGS,
   },
   async run(ctx) {
+    rejectHeadlessOnlyFlags(ctx.rawArgs, 'orchestrate');
     const context = await contextFromArgs(ctx.args);
     setExitCode(await runOrchestration(context));
   },
