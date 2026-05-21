@@ -1,3 +1,4 @@
+// Local imports - logger
 import { redactSecrets, type LogRedactionOptions } from './redaction';
 import type { LogRecord, LogSink } from './structuredLogger';
 
@@ -36,8 +37,19 @@ export function createRedactingSink(
   inner: LogSink,
   options: LogRedactionOptions = {},
 ): LogSink {
-  return createFilterSink(inner, (record) => ({
-    ...record,
-    message: redactSecrets(record.message, options),
-  }));
+  return createFilterSink(inner, (record) => {
+    const fields = Object.fromEntries(
+      Object.entries(record.fields).map(([key, value]) => [
+        key,
+        typeof value === 'string' ? redactSecrets(value, options) : value,
+      ]),
+    );
+
+    return {
+      ...record,
+      message: redactSecrets(record.message, options),
+      fields,
+      groups: record.groups.map((group) => redactSecrets(group, options)),
+    };
+  });
 }
