@@ -27,9 +27,10 @@ export const SkillNameSchema = z
 export const SkillDescriptionSchema = z
   .string()
   .transform((description) => collapseWhitespace(description))
-  .refine((description) => description.length > 0, {
-    message: 'Skill description is required',
-  })
+  .refine(
+    (description) => description.length > 0,
+    'Skill description is required',
+  )
   .refine(
     (description) => description.length <= SKILL_DESCRIPTION_MAX_LENGTH,
     `Skill description must be at most ${SKILL_DESCRIPTION_MAX_LENGTH} characters`,

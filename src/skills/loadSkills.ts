@@ -60,6 +60,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isFileNotFound(err: unknown): boolean {
+  return (err as NodeJS.ErrnoException).code === 'ENOENT';
+}
+
 function firstZodMessage(error: ZodError): string {
   return error.issues[0]?.message ?? 'Invalid skill metadata';
 }
@@ -125,17 +129,9 @@ function normalizeSkillDescription(
 ): { description?: string; errors: SkillLoadIssue[] } {
   const errors: SkillLoadIssue[] = [];
   const rawDescription = frontmatter.description;
-  if (typeof rawDescription !== 'string') {
-    errors.push(
-      issue('error', 'missing_description', 'Skill description is required', {
-        path: skillPath,
-        name,
-      }),
-    );
-    return { errors };
-  }
+  const description =
+    typeof rawDescription === 'string' ? collapseWhitespace(rawDescription) : '';
 
-  const description = collapseWhitespace(rawDescription);
   if (!description) {
     errors.push(
       issue('error', 'missing_description', 'Skill description is required', {
@@ -220,19 +216,32 @@ async function loadSkillDirectory(
   } catch (err) {
     return {
       errors: [
-        issue(
-          'error',
-          err instanceof Error &&
-            (err.message.startsWith('Invalid SKILL.md') ||
-              err.message.startsWith('SKILL.md'))
-            ? 'invalid_frontmatter'
-            : 'read_error',
-          err instanceof Error ? err.message : String(err),
-          { path: skillPath },
-        ),
+        issue('error', skillReadErrorCode(err), errorMessage(err), {
+          path: skillPath,
+        }),
       ],
     };
   }
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * `extractFrontmatter` throws plain errors whose messages begin with `SKILL.md`
+ * or `Invalid SKILL.md`. Treat those as malformed frontmatter; anything else
+ * (e.g. a failed `readFile`) is a read error.
+ */
+function skillReadErrorCode(err: unknown): SkillIssueCode {
+  if (
+    err instanceof Error &&
+    (err.message.startsWith('SKILL.md') ||
+      err.message.startsWith('Invalid SKILL.md'))
+  ) {
+    return 'invalid_frontmatter';
+  }
+  return 'read_error';
 }
 
 /**
@@ -253,19 +262,12 @@ export async function discoverSkills(
   try {
     entries = await fs.readdir(root, { withFileTypes: true });
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+    if (isFileNotFound(err)) {
       return { skills, errors };
     }
 
     errors.push(
-      issue(
-        'error',
-        'read_error',
-        err instanceof Error ? err.message : String(err),
-        {
-          path: root,
-        },
-      ),
+      issue('error', 'read_error', errorMessage(err), { path: root }),
     );
     return { skills, errors };
   }
@@ -279,14 +281,11 @@ export async function discoverSkills(
     try {
       realSkillPath = await fs.realpath(skillPath);
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      if (!isFileNotFound(err)) {
         errors.push(
-          issue(
-            'warning',
-            'read_error',
-            err instanceof Error ? err.message : String(err),
-            { path: skillPath },
-          ),
+          issue('warning', 'read_error', errorMessage(err), {
+            path: skillPath,
+          }),
         );
       }
       continue;
