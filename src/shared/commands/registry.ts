@@ -63,6 +63,18 @@ export function definedHandler<TActions, TArgs>(
 }
 
 /**
+ * Wrap a promise-returning action so the dispatcher awaits it before
+ * settling. Sync handlers that miss this helper regressed in #3778 — the
+ * original `void actions.X(); return true;` shape fired-and-forgot the
+ * promise, swallowing rejections (#3782). Handlers should use this helper
+ * whenever they delegate to an async action so failures propagate to
+ * `executeCommand` callers.
+ */
+export function awaitTrue(p: PromiseLike<unknown>): Promise<boolean> {
+  return Promise.resolve(p).then(() => true);
+}
+
+/**
  * Dispatch a command through its registered handler. Returns the
  * handler's result directly — sync handlers settle immediately;
  * async handlers return a promise that callers can `await` so
