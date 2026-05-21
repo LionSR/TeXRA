@@ -23,6 +23,11 @@ import {
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { createSettingsAgentControllers } from '@shared/settingsView/handlers/agentControllerFactory';
 import {
+  buildAgentModePresetsMessage,
+  buildAgentSelectionMessage,
+  buildCustomAgentDirMessage,
+} from '@shared/settingsView/handlers/agentSelectionHandlers';
+import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
 } from '@shared/schemas/settingsViewMessages';
@@ -61,12 +66,9 @@ export class AgentHandlers {
 
   async sendAgentSelectionData(webview: vscode.Webview): Promise<void> {
     await loadAgents();
-    const { workflow, toolUse } = this.catalogController.buildSelectionItems();
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-      workflow,
-      toolUse,
-    });
+    await webview.postMessage(
+      buildAgentSelectionMessage(this.catalogController),
+    );
   }
 
   // ── Agent selection handlers ──
@@ -374,12 +376,9 @@ export class AgentHandlers {
   // ── Custom agent directory handlers ──
 
   async sendCustomAgentDir(webview: vscode.Webview): Promise<void> {
-    const status = await this.directoryController.getCustomDirStatus();
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
-      path: status.path,
-      isDefault: status.isDefault,
-    });
+    await webview.postMessage(
+      await buildCustomAgentDirMessage(this.directoryController),
+    );
   }
 
   async handleSetCustomAgentDir(): Promise<void> {
@@ -412,10 +411,9 @@ export class AgentHandlers {
   // ── Agent team handlers ──
 
   async sendAgentModePresets(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
-      customPresets: this.catalogController.getCustomPresets(),
-    });
+    await webview.postMessage(
+      buildAgentModePresetsMessage(this.catalogController),
+    );
   }
 
   async handleApplyAgentModePreset(

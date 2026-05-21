@@ -75,6 +75,11 @@ import {
 import { createSettingsAgentControllers } from '@shared/settingsView/handlers/agentControllerFactory';
 import { createSettingsMemoryController } from '@shared/settingsView/handlers/memoryControllerFactory';
 import {
+  buildAgentModePresetsMessage,
+  buildAgentSelectionMessage,
+  buildCustomAgentDirMessage,
+} from '@shared/settingsView/handlers/agentSelectionHandlers';
+import {
   buildSuperYoloMessage,
   setNestedDelegationMaxDepth as setNestedDelegationMaxDepthShared,
   setSuperYoloBoolean,
@@ -337,12 +342,7 @@ export function createDesktopSettingsIpc(
 
   async function postAgentSelectionData(): Promise<void> {
     await loadAgentRegistry();
-    const { workflow, toolUse } = agentCatalogController.buildSelectionItems();
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-      workflow,
-      toolUse,
-    });
+    options.postToRenderer(buildAgentSelectionMessage(agentCatalogController));
   }
 
   async function postModelSelectionData(): Promise<void> {
@@ -370,11 +370,9 @@ export function createDesktopSettingsIpc(
   }
 
   async function postCustomAgentDir(): Promise<void> {
-    const status = await agentDirectoryController.getCustomDirStatus();
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
-      ...status,
-    });
+    options.postToRenderer(
+      await buildCustomAgentDirMessage(agentDirectoryController),
+    );
   }
 
   async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
@@ -521,10 +519,9 @@ export function createDesktopSettingsIpc(
   }
 
   function postAgentModePresets(): void {
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
-      customPresets: agentCatalogController.getCustomPresets(),
-    });
+    options.postToRenderer(
+      buildAgentModePresetsMessage(agentCatalogController),
+    );
   }
 
   function postApprovalSettings(): void {
