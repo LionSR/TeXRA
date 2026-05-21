@@ -5,6 +5,9 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
+import { AgentCategory } from '@agent/core/AgentDataclass';
+import { listExecutions } from '@agent/storage';
+
 import {
   BUILTIN_DEFAULT_CHAT_MODEL,
   resolveChatDefaults,
@@ -13,6 +16,23 @@ import {
 vi.mock('@agent/storage', () => ({
   listExecutions: vi.fn(async () => []),
 }));
+
+const mockedListExecutions = vi.mocked(listExecutions);
+
+function historyEntry(
+  agent: string,
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    timestamp: new Date().toISOString(),
+    agentConfig: {
+      agent,
+      model: 'sonnet46T',
+      agentCategory: AgentCategory.ToolUse,
+      ...overrides,
+    },
+  } as unknown as Awaited<ReturnType<typeof listExecutions>>[number];
+}
 
 vi.mock('@utils/files/storageFS', () => ({
   GlobalStorageFS: {
@@ -72,6 +92,41 @@ describe('CLI chat defaults', () => {
       model: 'sonnet46T',
       source: 'mixed',
     });
+  });
+
+  it('inherits the agent from the most recent single-agent tool-use execution', async () => {
+    mockedListExecutions.mockResolvedValueOnce([historyEntry('research')]);
+
+    await expect(
+      resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
+    ).resolves.toMatchObject({ agent: 'research', source: 'history' });
+  });
+
+  it('does not inherit the orchestrator from a multi-agent team run', async () => {
+    // A `texra multi-agent run physicist` is stored as a tool-use execution
+    // whose root is the team orchestrator. It must not become the default
+    // agent for a plain `texra chat` — fall back to the built-in instead.
+    mockedListExecutions.mockResolvedValueOnce([
+      historyEntry('leanOrchestrator', { cliMultiAgentPresetId: 'lean-project' }),
+    ]);
+
+    await expect(
+      resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
+    ).resolves.toMatchObject({ agent: 'chat', source: 'builtin' });
+  });
+
+  it('skips a team run to reach an earlier single-agent execution', async () => {
+    mockedListExecutions.mockResolvedValueOnce([
+      historyEntry('orchestrator', {
+        cliMultiAgentPresetId: 'physicist',
+        // newer timestamp so it would win if not filtered
+      }),
+      historyEntry('research'),
+    ]);
+
+    await expect(
+      resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
+    ).resolves.toMatchObject({ agent: 'research', source: 'history' });
   });
 
   it('uses prefixed command-specific workspace defaults', async () => {
