@@ -9,11 +9,7 @@ import {
 
 // Local imports - CLI runtime
 import { handleCliApprovalEvent } from './approvalAdapter';
-import {
-  NdjsonStdoutSink,
-  StderrTextSink,
-  writeNdjsonStdout,
-} from './logSinks';
+import { createCliLogSink, writeNdjsonStdout } from './logSinks';
 import { createRunProgressRenderer } from './runProgressRenderer';
 import type { CliContext } from './cliContext';
 
@@ -27,10 +23,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   const runProgress = createRunProgressRenderer(context);
   function ensureLogger(): Logger {
     if (logger) return logger;
-    sink =
-      context.outputFormat === 'ndjson'
-        ? new NdjsonStdoutSink()
-        : new StderrTextSink();
+    sink = createCliLogSink(context.outputFormat);
     logger = createStructuredLogger(sink);
     return logger;
   }
