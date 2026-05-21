@@ -96,6 +96,7 @@ import {
   readCliHistoryDetails,
 } from '../runtime/history';
 import {
+  cliMultiAgentPlanHasGaps,
   cliMultiAgentPresetNdjsonRecords,
   findCliMultiAgentPreset,
   formatCliMultiAgentPresetDetails,
@@ -443,7 +444,14 @@ async function runMultiAgentPreset(
   await loadAgents({ includeRemote: false });
 
   let plan = resolveMultiAgentRunPlan(init);
-  if (!plan.rootAgent && (await getCliAuthProvider().isAuthenticated())) {
+  // Relay-served premium agents (the team orchestrator and delegation
+  // specialists most presets name) are only visible after a remote load. Fill
+  // any preset gap — not just a missing root — so an authenticated, entitled
+  // user runs the full team instead of a silently degraded one.
+  if (
+    cliMultiAgentPlanHasGaps(plan) &&
+    (await getCliAuthProvider().isAuthenticated())
+  ) {
     await loadAgents();
     plan = resolveMultiAgentRunPlan(init);
   }
