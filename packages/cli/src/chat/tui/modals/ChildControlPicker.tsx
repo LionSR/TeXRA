@@ -297,18 +297,12 @@ function TaskDetailView({
       ) : null}
       <Box flexDirection="column" marginTop={layout.compact ? 0 : 1}>
         <Text bold>Output:</Text>
-        {item.tailLines.length > 0 && visibleLineCount > 0 ? (
-          visibleTail.map((line, index) => (
-            <Text key={`${index}:${line}`} dimColor>
-              {line}
-            </Text>
-          ))
-        ) : item.tailLines.length > 0 ||
-          visibleLineCount === 0 ? null : item.childStreamId ? (
-          <Text dimColor>Open the task stream to see its live transcript.</Text>
-        ) : (
-          <Text dimColor>No output captured yet.</Text>
-        )}
+        <TaskOutput
+          childStreamId={item.childStreamId}
+          tailLines={item.tailLines}
+          visibleTail={visibleTail}
+          visibleLineCount={visibleLineCount}
+        />
       </Box>
       {layout.showHints ? (
         <Box marginTop={layout.compact ? 0 : 1}>
