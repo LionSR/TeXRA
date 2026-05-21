@@ -233,6 +233,10 @@ export function detachActiveChildren(
       handle.childStreamId !== parentStreamId
     ) {
       handle.detach();
+      runtimeHost.emit('setParentStream', {
+        childStreamId: handle.childStreamId,
+        parentStreamId: null,
+      });
     } else if (handle instanceof ProcessExecutionHandle) {
       handle.terminate();
     }

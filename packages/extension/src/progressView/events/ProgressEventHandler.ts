@@ -134,7 +134,7 @@ export class ProgressEventHandler {
           if (this.webviewUpdater.isAvailable()) {
             this.webviewUpdater.updateParentStream(
               childStreamId,
-              parentStreamId,
+              parentStreamId ?? undefined,
             );
           }
         },
