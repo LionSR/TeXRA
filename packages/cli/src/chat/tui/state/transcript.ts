@@ -59,8 +59,12 @@ export function appendLocalErrorTranscript(text: string): void {
   appendLocalTranscriptEntry('error', text);
 }
 
+export function appendLocalUserTranscript(text: string): void {
+  appendLocalTranscriptEntry('user', text);
+}
+
 function appendLocalTranscriptEntry(
-  role: 'assistant' | 'error',
+  role: 'assistant' | 'error' | 'user',
   text: string,
 ): void {
   const normalized = normalizeTranscriptText(text);
