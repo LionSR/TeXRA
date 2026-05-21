@@ -7,7 +7,6 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports - test support
-import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
 import { loadPlatformDefaultsModule } from './loadPlatformDefaultsModule.mjs';
 
 interface JsonStore {
@@ -15,7 +14,7 @@ interface JsonStore {
   snapshot(): Record<string, unknown>;
 }
 
-interface ElectronConfigProvider {
+interface JsonConfigProvider {
   get<T>(key: string, defaultValue?: T): T;
   inspect<T = unknown>(
     key: string,
@@ -41,25 +40,27 @@ interface JsonStoreModule {
   };
 }
 
-interface ElectronConfigModule {
-  ElectronConfigProvider: new (
-    globalStore: JsonStore,
+interface JsonConfigProviderModule {
+  JsonConfigProvider: new (
     workspaceStore: JsonStore,
-  ) => ElectronConfigProvider;
+    globalStore?: JsonStore,
+  ) => JsonConfigProvider;
 }
 
 async function loadDesktopConfigConstructors(): Promise<{
   JsonStore: JsonStoreModule['JsonStore'];
-  ElectronConfigProvider: ElectronConfigModule['ElectronConfigProvider'];
+  JsonConfigProvider: JsonConfigProviderModule['JsonConfigProvider'];
 }> {
-  const [{ JsonStore }, { ElectronConfigProvider }] = await Promise.all([
+  const [{ JsonStore }, { JsonConfigProvider }] = await Promise.all([
     loadPlatformDefaultsModule<JsonStoreModule>('jsonStore.ts'),
-    loadDesktopPlatformModule<ElectronConfigModule>('electronConfig.ts'),
+    loadPlatformDefaultsModule<JsonConfigProviderModule>(
+      'jsonConfigProvider.ts',
+    ),
   ]);
-  return { JsonStore, ElectronConfigProvider };
+  return { JsonStore, JsonConfigProvider };
 }
 
-describe('desktop ElectronConfigProvider', () => {
+describe('desktop JsonConfigProvider (dual-store)', () => {
   let tempDir: string | undefined;
 
   afterEach(async () => {
@@ -69,11 +70,11 @@ describe('desktop ElectronConfigProvider', () => {
   });
 
   async function createProvider(): Promise<{
-    provider: ElectronConfigProvider;
+    provider: JsonConfigProvider;
     globalStore: JsonStore;
     workspaceStore: JsonStore;
   }> {
-    const { JsonStore, ElectronConfigProvider } =
+    const { JsonStore, JsonConfigProvider } =
       await loadDesktopConfigConstructors();
     tempDir = await mkdtemp(join(tmpdir(), 'texra-electron-config-'));
     const globalStore = await JsonStore.open(join(tempDir, 'global.json'));
@@ -81,7 +82,7 @@ describe('desktop ElectronConfigProvider', () => {
       join(tempDir, 'workspace.json'),
     );
     return {
-      provider: new ElectronConfigProvider(globalStore, workspaceStore),
+      provider: new JsonConfigProvider(workspaceStore, globalStore),
       globalStore,
       workspaceStore,
     };
