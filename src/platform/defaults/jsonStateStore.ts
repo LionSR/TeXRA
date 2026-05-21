@@ -1,7 +1,9 @@
-import type { JsonStore } from '@platform/defaults/jsonStore';
-import type { StateStore } from '@platform/interfaces/state';
+// Local imports - platform
+import type { JsonStore } from './jsonStore';
+import type { StateStore } from '../interfaces/state';
 
-export class ElectronStateStore implements StateStore {
+/** {@link StateStore} backed by a {@link JsonStore}. */
+export class JsonStateStore implements StateStore {
   constructor(private readonly store: JsonStore) {}
 
   get<T>(key: string, defaultValue?: T): T {
