@@ -1,6 +1,3 @@
-import * as os from 'node:os';
-import * as path from 'node:path';
-
 // Local imports - skills
 import {
   discoverSkillSources,
@@ -9,14 +6,15 @@ import {
   type SkillSource,
   type SourcedSkill,
 } from '@skills/loadSkills';
+import {
+  defaultSkillSources,
+  type SkillSourceOptions,
+} from '@skills/skillSources';
 
 // Local imports - CLI runtime
 import type { CliContext } from './cliContext';
 
-export interface CliSkillDiscoveryOptions {
-  readonly includeInterop?: boolean;
-  readonly additionalPaths?: readonly string[];
-}
+export type CliSkillDiscoveryOptions = SkillSourceOptions;
 
 interface CliSkillRecord {
   readonly name: string;
@@ -26,86 +24,11 @@ interface CliSkillRecord {
   readonly path: string;
 }
 
-const INTEROP_SKILL_DIRS = ['.claude', '.codex', '.gemini'] as const;
-
-function bundledSkillSources(resourcesPath: string): SkillSource[] {
-  return [
-    {
-      scope: 'bundled',
-      path: path.join(resourcesPath, 'skills'),
-      label: 'bundled',
-    },
-    {
-      scope: 'bundled',
-      path: path.resolve(resourcesPath, '../../..', 'skills'),
-      label: 'bundled source',
-    },
-  ];
-}
-
-function resolveSkillSourcePath(base: string, candidate: string): string {
-  return path.isAbsolute(candidate)
-    ? path.resolve(candidate)
-    : path.resolve(base, candidate);
-}
-
-function uniqueSources(sources: readonly SkillSource[]): SkillSource[] {
-  const unique: SkillSource[] = [];
-  const seen = new Set<string>();
-  for (const source of sources) {
-    const key = path.resolve(source.path);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push({ ...source, path: key });
-  }
-  return unique;
-}
-
 export function cliSkillSources(
   context: Pick<CliContext, 'cwd' | 'resourcesPath'>,
   options: CliSkillDiscoveryOptions = {},
 ): SkillSource[] {
-  const home = os.homedir();
-  const sources: SkillSource[] = [
-    ...bundledSkillSources(context.resourcesPath),
-    {
-      scope: 'user',
-      path: path.join(home, '.texra', 'skills'),
-      label: 'user',
-    },
-    {
-      scope: 'project',
-      path: path.join(context.cwd, '.texra', 'skills'),
-      label: 'project',
-    },
-  ];
-
-  if (options.includeInterop === true) {
-    for (const dir of INTEROP_SKILL_DIRS) {
-      sources.push(
-        {
-          scope: 'interop',
-          path: path.join(home, dir, 'skills'),
-          label: `${dir} user`,
-        },
-        {
-          scope: 'interop',
-          path: path.join(context.cwd, dir, 'skills'),
-          label: `${dir} project`,
-        },
-      );
-    }
-  }
-
-  for (const candidate of options.additionalPaths ?? []) {
-    sources.push({
-      scope: 'custom',
-      path: resolveSkillSourcePath(context.cwd, candidate),
-      label: 'custom',
-    });
-  }
-
-  return uniqueSources(sources);
+  return defaultSkillSources(context, options);
 }
 
 export function skillListRecord(entry: SourcedSkill): CliSkillRecord {
