@@ -7,6 +7,7 @@ import { z } from 'zod';
 import {
   CLI_APPROVAL_POLICIES,
   CLI_OUTPUT_FORMATS,
+  CLI_SETTING_PATHS,
   type CliApprovalPolicy,
   type CliOutputFormat,
 } from '../schemas/cliSettings';
@@ -38,26 +39,32 @@ export interface LoadedCliConfig {
   readonly warnings: readonly string[];
 }
 
-const TOP_LEVEL_KEYS = new Set([
-  'agent',
-  'model',
-  'outputFormat',
-  'approvalPolicy',
-  'chat',
-  'run',
-]);
-
-const COMMAND_KEYS = new Set(['agent', 'model']);
+export function isKnownCliModel(model: string): boolean {
+  return MODEL_CONFIGS[model] != null;
+}
 
 const NonEmptyStringSchema = z.string().trim().min(1);
-const ModelSchema = NonEmptyStringSchema.refine(
-  (model) => MODEL_CONFIGS[model],
-  {
-    message: 'unknown model',
-  },
-);
+const ModelSchema = NonEmptyStringSchema.refine(isKnownCliModel, {
+  message: 'unknown model',
+});
 const OutputFormatSchema = z.enum(CLI_OUTPUT_FORMATS);
 const ApprovalPolicySchema = z.enum(CLI_APPROVAL_POLICIES);
+
+// Top-level fields validated under both bare (legacy) and `texra.*` forms.
+const TOP_LEVEL_FIELD_SCHEMAS: ReadonlyArray<[string, z.ZodType]> = [
+  ['agent', NonEmptyStringSchema],
+  ['model', ModelSchema],
+  ['outputFormat', OutputFormatSchema],
+  ['approvalPolicy', ApprovalPolicySchema],
+];
+
+const COMMAND_FIELD_SCHEMAS: ReadonlyArray<[string, z.ZodType]> = [
+  ['agent', NonEmptyStringSchema],
+  ['model', ModelSchema],
+];
+
+const TOP_LEVEL_KEYS = new Set<string>(CLI_SETTING_PATHS);
+const COMMAND_KEYS = new Set(COMMAND_FIELD_SCHEMAS.map(([key]) => key));
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -102,19 +109,6 @@ function warnInvalidField(
     warnings.push(`Ignoring invalid ${filePath} key "${prefix}${key}".`);
   }
 }
-
-// Top-level fields validated under both bare (legacy) and `texra.*` forms.
-const TOP_LEVEL_FIELD_SCHEMAS: ReadonlyArray<[string, z.ZodType]> = [
-  ['agent', NonEmptyStringSchema],
-  ['model', ModelSchema],
-  ['outputFormat', OutputFormatSchema],
-  ['approvalPolicy', ApprovalPolicySchema],
-];
-
-const COMMAND_FIELD_SCHEMAS: ReadonlyArray<[string, z.ZodType]> = [
-  ['agent', NonEmptyStringSchema],
-  ['model', ModelSchema],
-];
 
 function collectValidationWarnings(
   filePath: string,
@@ -195,10 +189,6 @@ function pickConfigValues(record: Record<string, unknown>): CliConfigValues {
 
 export function workspaceCliConfigPath(cwd: string): string {
   return path.join(cwd, CLI_CONFIG_DIR, CLI_CONFIG_FILE);
-}
-
-export function isKnownCliModel(model: string): boolean {
-  return MODEL_CONFIGS[model] != null;
 }
 
 export async function loadWorkspaceCliConfig(
