@@ -19,6 +19,7 @@
       "@resources/*": ["packages/extension/resources/*"],
       "@model": ["src/model"],
       "@model/*": ["src/model/*"],
+      "@skills/*": ["src/skills/*"],
       "@housekeeping": ["src/housekeeping"],
       "@housekeeping/*": ["src/housekeeping/*"],
       "@progressView/*": ["packages/extension/src/progressView/*"],
