@@ -4,6 +4,7 @@ import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 
 import {
+  cliMultiAgentPlanHasGaps,
   cliMultiAgentPresets,
   findCliMultiAgentPreset,
   formatCliMultiAgentPresetDetails,
@@ -114,6 +115,58 @@ describe('CLI multi-agent presets', () => {
       'builtInToolUse:review',
     ]);
     expect(plan.missingToolUseAgents).toContain('research');
+  });
+
+  it('flags a gap when the preset has a root but missing members', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'physicist',
+    )!;
+    // A local-only registry: `review` can serve as root, but the orchestrator
+    // and the rest of the team are absent. The run should still be treated as
+    // having gaps so an authenticated user triggers a remote load.
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [agent('review', AgentCategory.ToolUse)],
+    });
+
+    expect(plan.rootAgent?.name).toBe('review');
+    expect(cliMultiAgentPlanHasGaps(plan)).toBe(true);
+  });
+
+  it('reports no gaps when every preset member resolves', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'lean-project',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: preset.toolUseAgents.map((name) =>
+        agent(
+          name,
+          AgentCategory.ToolUse,
+          name === 'leanOrchestrator' ? ['delegate_agent'] : [],
+        ),
+      ),
+    });
+
+    expect(plan.rootAgent?.name).toBe('leanOrchestrator');
+    expect(plan.missingToolUseAgents).toEqual([]);
+    expect(cliMultiAgentPlanHasGaps(plan)).toBe(false);
+  });
+
+  it('flags a gap when no root agent can be selected', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'physicist',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [],
+    });
+
+    expect(plan.rootAgent).toBeUndefined();
+    expect(cliMultiAgentPlanHasGaps(plan)).toBe(true);
   });
 
   it('adds an explicit root override to the visible tool-use team', () => {
