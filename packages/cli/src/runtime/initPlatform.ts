@@ -64,18 +64,6 @@ const cliPlatformLog: LogBackend = {
   },
 };
 
-function createCliLifecycleHost(): LifecycleHost {
-  return createLifecycleHost({
-    onError: (phase, error) => {
-      logAt(
-        'warn',
-        'cli.lifecycle',
-        `${phase} handler failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    },
-  });
-}
-
 function installCliShutdownSignalHandlers(lifecycle: LifecycleHost): void {
   if (shutdownHandlersInstalled) return;
   shutdownHandlersInstalled = true;
@@ -119,7 +107,15 @@ export async function initCliPlatform(
     const stateStores = await createCliStateStores({
       workspacePath: () => cliWorkspaceCwd,
     });
-    const lifecycle = createCliLifecycleHost();
+    const lifecycle = createLifecycleHost({
+      onError: (phase, error) => {
+        logAt(
+          'warn',
+          'cli.lifecycle',
+          `${phase} handler failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      },
+    });
     initPlatform({
       config: new CliConfigProvider(configStore),
       globalState: stateStores.globalState,
