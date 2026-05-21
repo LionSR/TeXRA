@@ -102,7 +102,7 @@ describe('CLI orchestration items', () => {
     expect(items.map((item) => item.label)).not.toContain('Chat with missing');
   });
 
-  it('lists team presets as disabled until preset execution exists', () => {
+  it('lists team presets as runnable orchestration actions', () => {
     const items = buildCliOrchestrationItems({
       presets: [preset({ id: 'physicist' })],
       history: [],
@@ -111,8 +111,8 @@ describe('CLI orchestration items', () => {
 
     expect(items.find((item) => item.label === 'Team Physicist')).toEqual(
       expect.objectContaining({
-        disabled: true,
-        description: 'built-in; workflow:1; tool-use:2; run pending',
+        value: { kind: 'preset', preset: 'physicist' },
+        description: 'built-in; workflow:1; tool-use:2',
       }),
     );
   });
