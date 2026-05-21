@@ -6,6 +6,9 @@ import * as path from 'node:path';
 // Third-party imports
 import { ZodError } from 'zod';
 
+// Local imports - common
+import { isFileNotFoundError, toErrorMessage } from '@common/errors';
+
 // Local imports - skill parsing
 import {
   SKILL_DESCRIPTION_MAX_LENGTH,
@@ -62,6 +65,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function firstZodMessage(error: ZodError): string {
   return error.issues[0]?.message ?? 'Invalid skill metadata';
+}
+
+/**
+ * `extractFrontmatter` throws plain errors whose messages begin with `SKILL.md`
+ * or `Invalid SKILL.md`. Treat those as malformed frontmatter; anything else
+ * (e.g. a failed `readFile`) is a read error.
+ */
+function skillReadErrorCode(err: unknown): SkillIssueCode {
+  if (
+    err instanceof Error &&
+    (err.message.startsWith('SKILL.md') ||
+      err.message.startsWith('Invalid SKILL.md'))
+  ) {
+    return 'invalid_frontmatter';
+  }
+  return 'read_error';
 }
 
 function normalizeSkillName(
@@ -220,16 +239,9 @@ async function loadSkillDirectory(
   } catch (err) {
     return {
       errors: [
-        issue(
-          'error',
-          err instanceof Error &&
-            (err.message.startsWith('Invalid SKILL.md') ||
-              err.message.startsWith('SKILL.md'))
-            ? 'invalid_frontmatter'
-            : 'read_error',
-          err instanceof Error ? err.message : String(err),
-          { path: skillPath },
-        ),
+        issue('error', skillReadErrorCode(err), toErrorMessage(err), {
+          path: skillPath,
+        }),
       ],
     };
   }
@@ -253,19 +265,14 @@ export async function discoverSkills(
   try {
     entries = await fs.readdir(root, { withFileTypes: true });
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+    if (isFileNotFoundError(err)) {
       return { skills, errors };
     }
 
     errors.push(
-      issue(
-        'error',
-        'read_error',
-        err instanceof Error ? err.message : String(err),
-        {
-          path: root,
-        },
-      ),
+      issue('error', 'read_error', toErrorMessage(err), {
+        path: root,
+      }),
     );
     return { skills, errors };
   }
@@ -279,14 +286,11 @@ export async function discoverSkills(
     try {
       realSkillPath = await fs.realpath(skillPath);
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      if (!isFileNotFoundError(err)) {
         errors.push(
-          issue(
-            'warning',
-            'read_error',
-            err instanceof Error ? err.message : String(err),
-            { path: skillPath },
-          ),
+          issue('warning', 'read_error', toErrorMessage(err), {
+            path: skillPath,
+          }),
         );
       }
       continue;
