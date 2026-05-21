@@ -1612,7 +1612,7 @@
     "vite": "^8.0.13",
     "vitest": "^4.1.7",
     "vscode-languageserver-protocol": "^3.17.5",
-    "webpack": "^5.107.0",
+    "webpack": "^5.107.1",
     "webpack-cli": "^7.0.2",
     "zod-v3-to-v4": "^1.21.2"
   },
