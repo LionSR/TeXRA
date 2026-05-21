@@ -2,7 +2,7 @@ import {
   commandCatalogById,
   type CommandId,
   type CommandKeybinding,
-} from '@commands/catalog';
+} from '@shared/commands/catalog';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 import type { StreamTabId } from '@shared/schemas';

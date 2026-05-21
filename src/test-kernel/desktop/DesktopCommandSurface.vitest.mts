@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - command catalog
-import { commandCatalogById, type CommandId } from '@commands/catalog';
+import { commandCatalogById, type CommandId } from '@shared/commands/catalog';
 
 // Local imports - webview commands
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';

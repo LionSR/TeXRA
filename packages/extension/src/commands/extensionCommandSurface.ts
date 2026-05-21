@@ -79,7 +79,7 @@ import {
 } from '@shared/schemas/settingsViewMessages';
 import { AgentCategorySchema, type AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_QUERY } from '@utils/config';
-import type { CommandId } from './catalog';
+import type { CommandId } from '@shared/commands/catalog';
 
 /**
  * Optional `ApiProvider` argument for `texra.setApiKey`. The schema accepts
