@@ -143,6 +143,14 @@ export function chatTuiCanStartRootRun(session: {
   return !session.runPromise || session.runCompleted;
 }
 
+export function chatTuiActiveChildFollowUpTarget(): StreamTabId | undefined {
+  const activeStreamId = cliState.activeStreamId.get();
+  if (!activeStreamId) return undefined;
+  return cliState.parentStream.get().has(activeStreamId)
+    ? activeStreamId
+    : undefined;
+}
+
 interface SlashCommandContext {
   readonly session: TuiSession;
   readonly initialAgent: string;
@@ -837,7 +845,8 @@ export async function runChat(
     if (await handleTuiSlashCommand(line, slashCommandContext())) {
       return;
     }
-    if (chatTuiCanStartRootRun(session)) {
+    const childFollowUpTarget = chatTuiActiveChildFollowUpTarget();
+    if (!childFollowUpTarget && chatTuiCanStartRootRun(session)) {
       startSession(line);
       return;
     }
@@ -846,17 +855,27 @@ export async function runChat(
     // p-queue serializes work but doesn't have an "await predicate" primitive,
     // so the task itself waits for the stream id via a tiny poll loop.
     void followUpQueue.add(async () => {
+      let followUpTarget = childFollowUpTarget;
       while (
-        session.streamId === undefined &&
+        !followUpTarget &&
         !session.stopRequested &&
         !session.runCompleted
       ) {
         await new Promise<void>((resolve) => setTimeout(resolve, 25));
+        followUpTarget = session.streamId;
       }
-      if (!session.streamId || session.stopRequested) return;
-      const result = await sendFollowUp(session.streamId, line);
+      if (!followUpTarget || session.stopRequested) return;
+      const result = await sendFollowUp(followUpTarget, line);
       if (result.status === 'no_session') {
-        session.stopRequested = true;
+        // Child stream ids are keys in parentStream; the root session id is not.
+        if (followUpTarget === session.streamId) {
+          session.stopRequested = true;
+        } else {
+          appendLocalAssistantTranscript(
+            'The selected subagent is no longer accepting follow-ups.',
+            followUpTarget,
+          );
+        }
       }
     });
   };
