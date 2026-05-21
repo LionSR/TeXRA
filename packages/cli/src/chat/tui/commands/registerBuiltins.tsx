@@ -178,6 +178,10 @@ export function registerBuiltinSlashCommands(options?: {
     formComponent: MemoryListFormAdapter,
   });
   registerSlashCommand({
+    name: 'compact',
+    description: 'Request context compaction',
+  });
+  registerSlashCommand({
     name: 'exit',
     description: 'Exit the CLI session',
     aliases: ['quit'],
