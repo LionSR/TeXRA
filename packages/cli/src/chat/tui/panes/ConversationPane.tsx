@@ -72,14 +72,14 @@ function TranscriptEntry({
   switch (entry.role) {
     case 'user':
       return (
-        <Box marginBottom={1} paddingX={1}>
+        <Box paddingX={1}>
           <Text dimColor>› </Text>
           <Text>{entry.text}</Text>
         </Box>
       );
     case 'error':
       return (
-        <Box marginBottom={1} paddingX={1}>
+        <Box paddingX={1}>
           <Text color="red">! </Text>
           <Text color="red">{entry.text}</Text>
         </Box>
@@ -129,6 +129,13 @@ export function estimateTranscriptEntryRows(
   if (entry.role === 'assistant') {
     const rendered = renderAnsiMarkdown(entry.text, { width });
     return Math.max(1, rendered.split('\n').length) + 1;
+  }
+  // User / error rows render without a trailing margin (compact mode) so
+  // chat-heavy sessions don't burn half the viewport on blank gaps. Their
+  // box uses `paddingX={1}` (2 cols) and a 2-col prefix (`› ` / `! `), so
+  // long text wraps to `width - 4` — keep the estimate in sync.
+  if (entry.role === 'user' || entry.role === 'error') {
+    return estimateWrappedRows(entry.text, Math.max(1, width - 4));
   }
 
   return estimateWrappedRows(entry.text, width) + 1;
