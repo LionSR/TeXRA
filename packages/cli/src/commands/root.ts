@@ -6,7 +6,9 @@ import { glob, hasMagic } from 'glob';
 
 import {
   getAgent,
+  getToolUseAgents,
   getVisibleAgents,
+  getWorkflowAgents,
   loadAgents,
   type AgentEntry,
 } from '@agent/index';
@@ -98,7 +100,11 @@ import {
   findCliMultiAgentPreset,
   formatCliMultiAgentPresetDetails,
   formatCliMultiAgentPresetList,
+  planCliMultiAgentPresetRun,
   readCliMultiAgentPresets,
+  withCliMultiAgentPresetVisibility,
+  type CliMultiAgentPreset,
+  type CliMultiAgentPresetRunPlan,
 } from '../runtime/multiAgentPresets';
 import { buildCliOrchestrationItems } from '../runtime/orchestration';
 
@@ -343,11 +349,250 @@ async function runMultiAgentShow(
   return CliExitCode.Success;
 }
 
+const multiAgentRunCommand = defineCommand({
+  meta: { name: 'run', description: 'Run a multi-agent team preset' },
+  args: {
+    ...GLOBAL_ARGS,
+    preset: {
+      type: 'positional',
+      required: true,
+      description: 'Preset id or name from `texra multi-agent list`',
+    },
+    input: {
+      type: 'string',
+      alias: 'i',
+      required: true,
+      description: 'Input file passed to the team orchestrator',
+    },
+    context: {
+      type: 'string',
+      alias: 'c',
+      description: 'Read-only context file passed to the team orchestrator',
+    },
+    agent: {
+      type: 'string',
+      description:
+        'Tool-use agent to start as the team root (defaults to the preset orchestrator)',
+    },
+    model: {
+      type: 'string',
+      alias: 'm',
+      description: 'Model for the root tool-use agent',
+    },
+    instruction: {
+      type: 'string',
+      description: 'Additional instruction for the team orchestrator',
+    },
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
+    setExitCode(
+      await runMultiAgentPreset(context, {
+        preset: ctx.args.preset,
+        inputFiles: collectStringFlagValues(ctx.rawArgs, 'input', 'i'),
+        contextFiles: collectStringFlagValues(ctx.rawArgs, 'context', 'c'),
+        agent: optString(ctx.args.agent),
+        model: optString(ctx.args.model),
+        instruction: optString(ctx.args.instruction) ?? '',
+      }),
+    );
+  },
+});
+
+interface MultiAgentRunInit {
+  readonly preset: string;
+  readonly inputFiles: string[];
+  readonly contextFiles: string[];
+  readonly agent?: string;
+  readonly model?: string;
+  readonly instruction: string;
+}
+
+type CliToolUseRunResult = Extract<CliRunResult, { category: 'toolUse' }>;
+
+async function runMultiAgentPreset(
+  context: CliContext,
+  init: MultiAgentRunInit,
+): Promise<number> {
+  const model =
+    init.model?.trim() ||
+    context.envModel ||
+    resolveConfiguredModel(context.cliConfig, 'chat') ||
+    CLI_BUILTIN_DEFAULT_MODEL;
+  const renderRunProgress = shouldRenderRunProgress(context);
+  const runContext: CliContext = {
+    ...context,
+    helperModel: model,
+    quietLogs: true,
+    renderRunProgress,
+  };
+  const inputFiles = await expandWorkflowInputSpecs(
+    init.inputFiles,
+    runContext.cwd,
+  );
+  const contextFiles = (
+    await Promise.all(
+      init.contextFiles.map((spec) =>
+        expandWorkflowInputSpec(spec, runContext.cwd),
+      ),
+    )
+  ).flat();
+
+  await initCliPlatform(runContext);
+  installCliApprovalHandlers(runContext);
+  await loadAgents({ includeRemote: false });
+
+  let plan = resolveMultiAgentRunPlan(init);
+  if (!plan.rootAgent && (await getCliAuthProvider().isAuthenticated())) {
+    await loadAgents();
+    plan = resolveMultiAgentRunPlan(init);
+  }
+  if (!plan.rootAgent) {
+    writeTextStderr(
+      `Multi-agent preset "${init.preset}" has no available tool-use agent to run. Use --agent with an installed tool-use agent, or enable a team with an orchestrator.`,
+    );
+    return CliExitCode.Usage;
+  }
+  writeMissingPresetAgents(plan);
+
+  const config: AgentConfigPayload = {
+    agent: plan.rootAgent.name,
+    model,
+    inputFiles,
+    contextFiles,
+    instruction: formatMultiAgentRunInstruction(plan.preset, init),
+    workingDirectory: runContext.cwd,
+    agentCategory: AgentCategory.ToolUse,
+  };
+
+  const executionId = generateExecutionId();
+  const registeredConfig = AgentConfigSchema.parse(config);
+  const runtimeHost = createCliRuntimeHost(runContext);
+  let result: ExecuteAgentResult;
+  try {
+    result = await withCliMultiAgentPresetVisibility(plan, () =>
+      runValidatedExecutionRequest(
+        { config: registeredConfig, executionId },
+        {
+          runtimeHost,
+          enforceCategory: true,
+          registerExecution: true,
+        },
+      ),
+    );
+  } catch (error) {
+    await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+    throw error;
+  } finally {
+    await runtimeHost.close();
+  }
+
+  const terminalStatus = await readCliTerminalStatus(result);
+  if (result.category !== AgentCategory.ToolUse) {
+    await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+    writeTextStderr(
+      `Multi-agent preset "${init.preset}" resolved to a non tool-use execution.`,
+    );
+    return CliExitCode.AgentError;
+  }
+  const displayResult: CliToolUseRunResult = {
+    ...result,
+    terminalStatus,
+  };
+  writeMultiAgentRunResult(runContext, plan, displayResult);
+
+  if (terminalStatus === EXECUTION_STATUS.ERROR) {
+    return hasCliApprovalDenied(runContext)
+      ? CliExitCode.ApprovalDenied
+      : CliExitCode.AgentError;
+  }
+  if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
+    return CliExitCode.Interrupted;
+  }
+  return CliExitCode.Success;
+}
+
+function resolveMultiAgentRunPlan(
+  init: Pick<MultiAgentRunInit, 'preset' | 'agent'>,
+): CliMultiAgentPresetRunPlan {
+  const preset = findCliMultiAgentPreset(
+    readCliMultiAgentPresets(),
+    init.preset,
+  );
+  if (!preset) {
+    throw new CliUsageError(`Multi-agent preset not found: ${init.preset}`);
+  }
+  return planCliMultiAgentPresetRun(preset, {
+    workflowAgents: getWorkflowAgents(),
+    toolUseAgents: getToolUseAgents(),
+    agentOverride: init.agent,
+  });
+}
+
+function writeMissingPresetAgents(plan: CliMultiAgentPresetRunPlan): void {
+  const missing = [
+    ...plan.missingWorkflowAgents.map((agent) => `workflow:${agent}`),
+    ...plan.missingToolUseAgents.map((agent) => `tool-use:${agent}`),
+  ];
+  if (missing.length === 0) return;
+  writeTextStderr(
+    `WARN preset ${plan.preset.id} references unavailable agents: ${missing.join(', ')}`,
+  );
+}
+
+function formatMultiAgentRunInstruction(
+  preset: CliMultiAgentPreset,
+  init: Pick<MultiAgentRunInit, 'instruction'>,
+): string {
+  const parts = [
+    `Run the "${preset.name}" multi-agent team preset.`,
+    preset.description,
+    'Use the visible workflow and tool-use agents as the team available for delegation.',
+  ];
+  const instruction = init.instruction.trim();
+  if (instruction) {
+    parts.push('Additional user instruction:', instruction);
+  }
+  return parts.join('\n\n');
+}
+
+function writeMultiAgentRunResult(
+  context: CliContext,
+  plan: CliMultiAgentPresetRunPlan,
+  result: CliToolUseRunResult,
+): void {
+  const payload = {
+    preset: {
+      id: plan.preset.id,
+      name: plan.preset.name,
+      source: plan.preset.source,
+    },
+    rootAgent: plan.rootAgent?.name,
+    result,
+  };
+
+  if (context.outputFormat === 'json') {
+    writeTextStdout(JSON.stringify(payload, null, 2));
+  } else if (context.outputFormat === 'ndjson') {
+    writeNdjsonStdout({
+      kind: 'multi-agent-result',
+      ts: new Date().toISOString(),
+      ...payload,
+    });
+  } else {
+    writeTextStdout(
+      result.lastResponse?.trim() ||
+        `${result.status}\nExecution: ${result.executionId}`,
+    );
+  }
+}
+
 const multiAgentCommand = defineCommand({
   meta: { name: 'multi-agent', description: 'Inspect multi-agent teams' },
   subCommands: {
     list: multiAgentListCommand,
     show: multiAgentShowCommand,
+    run: multiAgentRunCommand,
   },
 });
 
@@ -1480,6 +1725,22 @@ async function runOrchestration(context: CliContext): Promise<number> {
       const result = await runChat(context, {
         agentOverride: action.agent,
       });
+      return result.exitCode;
+    }
+    case 'preset': {
+      const plan = resolveMultiAgentRunPlan({ preset: action.preset });
+      if (!plan.rootAgent) {
+        writeTextStderr(
+          `Multi-agent preset "${action.preset}" has no available tool-use agent to start.`,
+        );
+        return CliExitCode.Usage;
+      }
+      const { runChat } = await import('../chat/tui/runChatTui');
+      const result = await withCliMultiAgentPresetVisibility(plan, () =>
+        runChat(context, {
+          agentOverride: plan.rootAgent?.name,
+        }),
+      );
       return result.exitCode;
     }
     case 'resume':
