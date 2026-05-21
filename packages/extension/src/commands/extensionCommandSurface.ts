@@ -203,7 +203,10 @@ export type ExtensionRegistryCommandId = Extract<
  * over the same `CommandId` union with their host-specific actions.
  */
 export interface ExtensionCommandActions {
-  showSettings(tabIndex?: SettingsTab, agentSubTab?: AgentCategory): void;
+  showSettings(
+    tabIndex?: SettingsTab,
+    agentSubTab?: AgentCategory,
+  ): Promise<void>;
   resetMainView(): Promise<void>;
   openWorkbenchSettings(): Thenable<unknown>;
   cleanBuild(): Promise<void>;
@@ -263,7 +266,7 @@ export function createExtensionCommandActions(
 ): ExtensionCommandActions {
   return {
     showSettings(tabIndex, agentSubTab) {
-      void settingsViewProvider.showSettingsView(tabIndex, agentSubTab);
+      return settingsViewProvider.showSettingsView(tabIndex, agentSubTab);
     },
     async resetMainView() {
       const webviewView = await getMainWebview(RESET_CHANNEL);
@@ -349,34 +352,18 @@ function awaitTrue(p: Promise<unknown> | Thenable<unknown>): Promise<boolean> {
 }
 
 const EXTENSION_COMMAND_HANDLERS = {
-  'texra.showSettingsView': (actions) => {
-    actions.showSettings();
-    return true;
-  },
-  'texra.showDashboard': (actions) => {
-    actions.showSettings();
-    return true;
-  },
-  'texra.showMemory': (actions) => {
-    actions.showSettings(SETTINGS_TAB.MEMORY);
-    return true;
-  },
-  'texra.showAgentHistory': (actions) => {
-    actions.showSettings(SETTINGS_TAB.HISTORY);
-    return true;
-  },
-  'texra.showModels': (actions) => {
-    actions.showSettings(SETTINGS_TAB.MODELS);
-    return true;
-  },
-  'texra.showTools': (actions) => {
-    actions.showSettings(SETTINGS_TAB.TOOLS);
-    return true;
-  },
-  'texra.showMultiAgent': (actions) => {
-    actions.showSettings(SETTINGS_TAB.MULTI_AGENT);
-    return true;
-  },
+  'texra.showSettingsView': (actions) => awaitTrue(actions.showSettings()),
+  'texra.showDashboard': (actions) => awaitTrue(actions.showSettings()),
+  'texra.showMemory': (actions) =>
+    awaitTrue(actions.showSettings(SETTINGS_TAB.MEMORY)),
+  'texra.showAgentHistory': (actions) =>
+    awaitTrue(actions.showSettings(SETTINGS_TAB.HISTORY)),
+  'texra.showModels': (actions) =>
+    awaitTrue(actions.showSettings(SETTINGS_TAB.MODELS)),
+  'texra.showTools': (actions) =>
+    awaitTrue(actions.showSettings(SETTINGS_TAB.TOOLS)),
+  'texra.showMultiAgent': (actions) =>
+    awaitTrue(actions.showSettings(SETTINGS_TAB.MULTI_AGENT)),
   'texra.openSettings': (actions) => awaitTrue(actions.openWorkbenchSettings()),
   'texra.mainView.reset': (actions) => awaitTrue(actions.resetMainView()),
   'texra.cleanOutput': (actions) => awaitTrue(actions.cleanOutput()),
@@ -491,12 +478,11 @@ const EXTENSION_COMMAND_HANDLERS = {
 // the surrounding parameterized commands (pack/clean/compare/etc.) are
 // migrated through that path. Keeping it as-is for now to minimize churn.
 const EXTENSION_PARAMETERIZED_HANDLERS = {
-  'texra.showAgents': (actions, subTab?: AgentCategory) => {
-    actions.showSettings(SETTINGS_TAB.AGENTS, subTab);
-  },
+  'texra.showAgents': (actions, subTab?: AgentCategory) =>
+    actions.showSettings(SETTINGS_TAB.AGENTS, subTab),
 } satisfies Record<
   Extract<ExtensionRegistryCommandId, 'texra.showAgents'>,
-  (actions: ExtensionCommandActions, arg?: AgentCategory) => void
+  (actions: ExtensionCommandActions, arg?: AgentCategory) => Promise<void>
 >;
 
 /**
@@ -536,9 +522,9 @@ export function registerExtensionCommandRegistry(
     EXTENSION_PARAMETERIZED_HANDLERS,
   ) as ReadonlyArray<keyof typeof EXTENSION_PARAMETERIZED_HANDLERS>) {
     context.subscriptions.push(
-      vscode.commands.registerCommand(id, (arg?: AgentCategory) => {
-        EXTENSION_PARAMETERIZED_HANDLERS[id](actions, arg);
-      }),
+      vscode.commands.registerCommand(id, (arg?: AgentCategory) =>
+        EXTENSION_PARAMETERIZED_HANDLERS[id](actions, arg),
+      ),
     );
   }
 }
