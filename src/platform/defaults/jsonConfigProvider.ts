@@ -13,27 +13,28 @@ import type {
 } from '../interfaces/config';
 import type { Disposable } from '../interfaces/disposable';
 
+export interface JsonConfigProviderOptions {
+  workspace: JsonStore;
+  global?: JsonStore;
+}
+
 /**
- * File-backed {@link ConfigProvider} implementation shared by non-VS-Code
- * hosts (CLI, Electron desktop).
- *
- * Keys are stored flat with the canonical `texra.*` prefix — matching the VS
- * Code extension's `texra.*` settings namespace. Bare (unprefixed) keys are
- * still accepted on read for legacy compatibility; writes always use the
- * canonical prefixed form unless a legacy unprefixed entry already exists.
- *
- * When only a workspace store is supplied (CLI), this collapses to a
- * single-tier provider. When a global store is also supplied (Electron),
- * workspace values take precedence over global values on read, and `update()`
- * routes writes by {@link ConfigTarget}.
+ * File-backed {@link ConfigProvider}. Keys are stored flat with the canonical
+ * `texra.*` prefix; bare keys are accepted on read for legacy compatibility.
+ * Writes use the canonical prefixed form unless a legacy unprefixed entry
+ * already exists. When a `global` store is supplied, workspace values shadow
+ * global values on read and `update()` routes writes by {@link ConfigTarget}.
+ * Writing to `'global'` without a `global` store throws.
  */
 export class JsonConfigProvider implements ConfigProvider {
   private readonly watchers = createWatcherRegistry();
+  private readonly workspaceStore: JsonStore;
+  private readonly globalStore: JsonStore | undefined;
 
-  constructor(
-    private readonly workspaceStore: JsonStore,
-    private readonly globalStore?: JsonStore,
-  ) {}
+  constructor({ workspace, global }: JsonConfigProviderOptions) {
+    this.workspaceStore = workspace;
+    this.globalStore = global;
+  }
 
   get<T>(key: string, defaultValue?: T): T {
     const keys = configKeyVariants(key);
@@ -51,10 +52,7 @@ export class JsonConfigProvider implements ConfigProvider {
     value: T,
     target: ConfigTarget = 'workspace',
   ): Promise<void> {
-    const store =
-      target === 'global' && this.globalStore
-        ? this.globalStore
-        : this.workspaceStore;
+    const store = this.storeForWrite(target);
     const keys = configKeyVariants(key);
     if (value === undefined) {
       await Promise.all(
@@ -95,5 +93,17 @@ export class JsonConfigProvider implements ConfigProvider {
     listener: () => void,
   ): Disposable {
     return this.watchers.add({ key, listener });
+  }
+
+  private storeForWrite(target: ConfigTarget): JsonStore {
+    if (target === 'global') {
+      if (!this.globalStore) {
+        throw new Error(
+          "JsonConfigProvider was constructed without a global store; cannot update with target='global'.",
+        );
+      }
+      return this.globalStore;
+    }
+    return this.workspaceStore;
   }
 }

@@ -41,10 +41,10 @@ interface JsonStoreModule {
 }
 
 interface JsonConfigProviderModule {
-  JsonConfigProvider: new (
-    workspaceStore: JsonStore,
-    globalStore?: JsonStore,
-  ) => JsonConfigProvider;
+  JsonConfigProvider: new (options: {
+    workspace: JsonStore;
+    global?: JsonStore;
+  }) => JsonConfigProvider;
 }
 
 async function loadDesktopConfigConstructors(): Promise<{
@@ -82,7 +82,10 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
       join(tempDir, 'workspace.json'),
     );
     return {
-      provider: new JsonConfigProvider(workspaceStore, globalStore),
+      provider: new JsonConfigProvider({
+        workspace: workspaceStore,
+        global: globalStore,
+      }),
       globalStore,
       workspaceStore,
     };

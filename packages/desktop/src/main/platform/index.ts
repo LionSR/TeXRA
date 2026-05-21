@@ -58,7 +58,10 @@ export async function initializeElectronPlatform(
 
   repairLaunchPath();
   initPlatform({
-    config: new JsonConfigProvider(workspaceConfigStore, globalConfigStore),
+    config: new JsonConfigProvider({
+      workspace: workspaceConfigStore,
+      global: globalConfigStore,
+    }),
     globalState: new JsonStateStore(globalStateStore),
     workspaceState: new JsonStateStore(workspaceStateStore),
     log: consoleLog,

@@ -118,7 +118,7 @@ export async function initCliPlatform(
       },
     });
     initPlatform({
-      config: new JsonConfigProvider(configStore),
+      config: new JsonConfigProvider({ workspace: configStore }),
       globalState: stateStores.globalState,
       workspaceState: stateStores.workspaceState,
       log: cliPlatformLog,
