@@ -8,6 +8,7 @@ import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { getConfig } from '@agent/core/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { normalizeProviderError, toErrorMessage } from '@common/errors';
+import { isUserAbort } from '@common/errors/sdkErrorUtils';
 import type { AgentLogger } from '@logger/AgentLogger';
 import {
   MESSAGE_TYPES,
@@ -201,6 +202,8 @@ export abstract class RetryableInvocationNode<
    *  they need human attention (switching keys, topping up). `userRetryable`
    *  only gates the manual retry UI; auto-retry is a stricter subset. */
   shouldAutoRetry(error: Error): boolean {
+    if (isUserAbort(error)) return false;
+
     const formatted = normalizeProviderError(error);
     if (formatted.isCredentialExhausted) return false;
     if (!formatted.userRetryable) return false;
@@ -301,7 +304,7 @@ export abstract class RetryableInvocationNode<
   ):
     | { kind: 'cancelled' }
     | { kind: 'failed'; message: string; userRetryable?: boolean } {
-    if (this._userCancelled) {
+    if (this._userCancelled || isUserAbort(error)) {
       return { kind: 'cancelled' };
     }
 
