@@ -8,42 +8,28 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 
-import {
-  SettingsAgentCatalogController,
-  type SettingsAgentCatalogState,
-} from '@controllers/settingsView/SettingsAgentCatalogController';
-import { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
-import { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
-import {
-  createKey,
-  getAgent,
-  getVisibleAgents,
-  getWorkflowAgents,
-  getToolUseAgents,
-  loadAgents,
-} from '@agent/index';
+import { createKey, getAgent, loadAgents } from '@agent/index';
 import { EdgeFunctionResponseSchema } from '@agent/remote/types';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ULTRA_TIER, SUPABASE_CONFIG } from '@auth/config';
 import { renderAgentTemplateFromBundle } from '@commands/agent/agentTemplateRenderer';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
-import {
-  WorkspaceStateKey,
-  GlobalStateKey,
-  workspaceSM,
-  globalSM,
-} from '@common/state';
+import { workspaceSM, globalSM } from '@common/state';
 import {
   isFileNotFoundError,
   showLoggedErrorMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import { createSettingsAgentControllers } from '@shared/settingsView/handlers/agentControllerFactory';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
 } from '@shared/schemas/settingsViewMessages';
 import { AbsoluteFS } from '@utils/files';
+import type { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
+import type { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
+import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
 
@@ -60,64 +46,15 @@ export class AgentHandlers {
     private readonly ctx: SettingsHandlerContext,
     private readonly refreshAfterAgentMutation: () => Promise<void>,
   ) {
-    const agentCatalogState: SettingsAgentCatalogState = {
-      getEnabledAgentKeys: (category: 'workflow' | 'toolUse') =>
-        workspaceSM.get<string[]>(
-          category === 'workflow'
-            ? WorkspaceStateKey.ENABLED_AGENTS
-            : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-        ),
-      setEnabledAgentKeys: async (
-        category: 'workflow' | 'toolUse',
-        enabledKeys: string[],
-      ) => {
-        await workspaceSM.update(
-          category === 'workflow'
-            ? WorkspaceStateKey.ENABLED_AGENTS
-            : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-          enabledKeys,
-        );
-      },
-      getAgents: (category: 'workflow' | 'toolUse') =>
-        category === 'workflow' ? getWorkflowAgents() : getToolUseAgents(),
-      getVisibleAgents: (category: 'workflow' | 'toolUse') =>
-        getVisibleAgents(category),
-      getCustomPresetsRaw: () =>
-        workspaceSM.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
-      setCustomPresets: async (presets) => {
-        await workspaceSM.update(
-          WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-          presets,
-        );
-      },
-    };
-
-    this.catalogController = new SettingsAgentCatalogController({
-      state: agentCatalogState,
+    const controllers = createSettingsAgentControllers({
+      workspaceState: workspaceSM,
+      globalState: globalSM,
+      getCustomAgentDirectory: () => agentDirectories.custom(),
+      getSourceDirectory: (source) => agentDirectories.getDirectory(source),
     });
-    this.directoryController = new SettingsAgentDirectoryController({
-      state: {
-        getConfiguredCustomDir: () =>
-          globalSM.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
-        setConfiguredCustomDir: async (customDir) => {
-          await globalSM.update(GlobalStateKey.CUSTOM_AGENT_DIR, customDir);
-        },
-        getCustomDir: () => agentDirectories.custom(),
-        getSourceDir: (source) => agentDirectories.getDirectory(source),
-        getAgent: (source, name) => getAgent(createKey(source, name)) ?? null,
-      },
-    });
-    this.visibilityController = new SettingsAgentVisibilityController({
-      state: {
-        getEnabledAgentKeys: agentCatalogState.getEnabledAgentKeys,
-        setEnabledAgentKeys: agentCatalogState.setEnabledAgentKeys,
-        getAgents: (category) =>
-          agentCatalogState.getAgents(category).map((entry) => ({
-            source: entry.source,
-            name: entry.name,
-          })),
-      },
-    });
+    this.catalogController = controllers.catalog;
+    this.directoryController = controllers.directory;
+    this.visibilityController = controllers.visibility;
   }
 
   // ── Agent selection data ──
@@ -440,8 +377,7 @@ export class AgentHandlers {
     const status = await this.directoryController.getCustomDirStatus();
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
-      path: status.path,
-      isDefault: status.isDefault,
+      ...status,
     });
   }
 

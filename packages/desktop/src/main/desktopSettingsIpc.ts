@@ -5,22 +5,9 @@ import {
   isAllowedLatexInstallCommand,
   LatexToolingController,
 } from '@controllers/settingsView/LatexToolingController';
-import {
-  SettingsAgentCatalogController,
-  type SettingsAgentCatalogState,
-} from '@controllers/settingsView/SettingsAgentCatalogController';
-import { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
-import { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
-import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
-import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
-import {
-  deleteAllExecutions,
-  deleteExecution,
-  listExecutions,
-} from '@agent/storage';
+import { deleteAllExecutions, deleteExecution } from '@agent/storage';
 import {
   computeAgentOptionsData,
-  getAgent,
   getToolUseAgents,
   getVisibleAgents as getVisibleRegistryAgents,
   getWorkflowAgents,
@@ -40,15 +27,10 @@ import {
   isApiProvider,
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
-import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import {
   computeModelOptionsData,
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
-import {
-  loadMemoryItems,
-  loadMemoryPreview,
-} from '@settingsView/utils/memoryFileSystem';
 import type { ExecutionId } from '@shared/schemas';
 import {
   PROVIDER_DISPLAY_NAMES,
@@ -58,43 +40,31 @@ import {
   LATEX_WORKSHOP_EXT_ID,
   normalizePlatform,
 } from '@shared/constants/latex';
-import {
-  NESTED_DELEGATION_DEPTH_RANGE,
-  clampNestedDelegationDepth,
-} from '@shared/constants/delegationPolicy';
 import type { LatexConfigField } from '@shared/constants/latex';
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import {
   SettingsViewInboundMessageSchema,
   type LatexSettingsStatus,
-  type HistoryItem,
   type ProviderKeyStatus,
   type ReasoningLevel,
   type ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
+import {
+  buildApprovalSettingsMessage,
+  setBashApprovalEnabled,
+  setWorkspaceAgentSetting,
+} from '@shared/settingsView/handlers/approvalHandlers';
+import { buildHistoryMessage } from '@shared/settingsView/handlers/historyHandlers';
+import {
+  buildModelSelectionMessage,
+  createModelSelectionController,
+} from '@shared/settingsView/handlers/modelSelectionHandlers';
+import { createSettingsAgentControllers } from '@shared/settingsView/handlers/agentControllerFactory';
+import { createSettingsMemoryController } from '@shared/settingsView/handlers/memoryControllerFactory';
+import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
+import { clampNestedDelegationDepth } from '@shared/constants/delegationPolicy';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
-import {
-  parseCodexApprovalPolicy,
-  parseCodexReasoningEffort,
-  parseCodexSandboxMode,
-} from '@tools/codexConfig';
-import {
-  CLAUDE_AGENT_DEFAULT_MODEL,
-  parseClaudeAgentEffort,
-  parseClaudeAgentModel,
-  parseClaudeAgentPermissionMode,
-} from '@tools/claudeAgentConfig';
-import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
-import {
-  MEMORY_STORAGE_ROOT,
-  MAX_PINNED_MEMORIES,
-} from '@tools/memory/constants';
-import {
-  buildFile,
-  countPinnedMemories,
-  parseFrontmatter,
-  setPinnedMeta,
-} from '@tools/memory/memoryMeta';
+import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
 import {
@@ -259,83 +229,21 @@ export function createDesktopSettingsIpc(
     }),
     onDetectionError: onError,
   });
-  const agentCatalogState: SettingsAgentCatalogState = {
-    getEnabledAgentKeys: (category) =>
-      workspaceState.get<string[]>(getAgentStateKey(category)),
-    setEnabledAgentKeys: async (category, enabledKeys) => {
-      await workspaceState.update(getAgentStateKey(category), enabledKeys);
-    },
+  const {
+    catalog: agentCatalogController,
+    directory: agentDirectoryController,
+    visibility: agentVisibilityController,
+  } = createSettingsAgentControllers({
+    workspaceState,
+    globalState,
+    getCustomAgentDirectory,
+    getSourceDirectory: getAgentDirectory,
     getAgents: getAgentEntries,
     getVisibleAgents: getVisibleAgentEntries,
-    getCustomPresetsRaw: () =>
-      workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
-    setCustomPresets: async (presets) => {
-      await workspaceState.update(
-        WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-        presets,
-      );
-    },
-  };
-  const agentCatalogController = new SettingsAgentCatalogController({
-    state: agentCatalogState,
   });
-  const agentDirectoryController = new SettingsAgentDirectoryController({
-    state: {
-      getConfiguredCustomDir: () =>
-        globalState.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
-      setConfiguredCustomDir: async (customDir) => {
-        await globalState.update(
-          GlobalStateKey.CUSTOM_AGENT_DIR,
-          customDir || undefined,
-        );
-      },
-      getCustomDir: getCustomAgentDirectory,
-      getSourceDir: getAgentDirectory,
-      getAgent: (source, name) => getAgent(`${source}:${name}`) ?? null,
-    },
-  });
-  const agentVisibilityController = new SettingsAgentVisibilityController({
-    state: {
-      getEnabledAgentKeys: agentCatalogState.getEnabledAgentKeys,
-      setEnabledAgentKeys: agentCatalogState.setEnabledAgentKeys,
-      getAgents: (category) =>
-        getAgentEntries(category).map((entry) => ({
-          source: entry.source,
-          name: entry.name,
-        })),
-    },
-  });
-  const modelSelectionController = new SettingsModelSelectionController({
-    state: {
-      getEnabledModels: () =>
-        globalState.get<string[]>(
-          GlobalStateKey.ENABLED_MODELS,
-          DEFAULT_MODELS,
-        ),
-      setEnabledModels: async (models) => {
-        await globalState.update(GlobalStateKey.ENABLED_MODELS, models);
-      },
-      getHelperModel: () => globalState.get(GlobalStateKey.HELPER_MODEL),
-      setHelperModel: async (model) => {
-        await globalState.update(GlobalStateKey.HELPER_MODEL, model);
-      },
-      getReasoningLevelOverrides: () =>
-        globalState.get<Record<string, string>>(
-          GlobalStateKey.REASONING_LEVELS,
-          {},
-        ),
-      setReasoningLevelOverrides: async (overrides) => {
-        await globalState.update(GlobalStateKey.REASONING_LEVELS, overrides);
-      },
-      getPreferShortModelNames: () =>
-        globalState.get(GlobalStateKey.PREFER_SHORT_MODEL_NAMES),
-      setPreferShortModelNames: async (enabled) => {
-        await globalState.update(
-          GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-          enabled,
-        );
-      },
-    },
+  const modelSelectionController = createModelSelectionController({
+    workspaceState,
+    globalState,
   });
   const modelListRefresh =
     options.modelListRefresh ??
@@ -343,7 +251,9 @@ export function createDesktopSettingsIpc(
       globalState,
       onError,
     });
-  const memoryController = new SettingsMemoryController({
+  const memoryController = createSettingsMemoryController({
+    workspaceState,
+    globalState,
     prompt: {
       confirm: (message, promptOptions) =>
         options.confirmAction?.(message, promptOptions?.confirmLabel) ??
@@ -352,20 +262,6 @@ export function createDesktopSettingsIpc(
         await options.showInfoMessage?.(message);
       },
     },
-    loadMemoryItems,
-    loadMemoryPreview,
-    isMemoryEnabled: () =>
-      globalState.get<boolean>(GlobalStateKey.MEMORY_ENABLED, true),
-    setMemoryEnabled: async (enabled) => {
-      await globalState.update(GlobalStateKey.MEMORY_ENABLED, enabled);
-    },
-    resolveStoragePath: resolveMemoryStoragePath,
-    storage: StorageFS,
-    maxPinnedMemories: MAX_PINNED_MEMORIES,
-    parseMemoryFile: parseFrontmatter,
-    buildMemoryFile: buildFile,
-    setPinnedMeta,
-    countPinnedMemories,
   });
 
   function readCurrentGitAuthorSettings() {
@@ -410,12 +306,6 @@ export function createDesktopSettingsIpc(
     return category === 'workflow' ? getWorkflowAgents() : getToolUseAgents();
   }
 
-  function getAgentStateKey(category: AgentCategory): WorkspaceStateKey {
-    return category === 'workflow'
-      ? WorkspaceStateKey.ENABLED_AGENTS
-      : WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS;
-  }
-
   function getAgentDirectory(source: AgentSource): Promise<string | undefined> {
     switch (source) {
       case 'custom':
@@ -441,11 +331,9 @@ export function createDesktopSettingsIpc(
 
   async function postModelSelectionData(): Promise<void> {
     await modelListRefresh;
-    const data = modelSelectionController.buildSelectionData();
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-      ...data,
-    });
+    options.postToRenderer(
+      buildModelSelectionMessage(modelSelectionController),
+    );
   }
 
   async function postMainModelOptionsData(): Promise<void> {
@@ -519,15 +407,31 @@ export function createDesktopSettingsIpc(
     }
   }
 
-  function postMemoryEnabled(): void {
+  async function postMemoryEnabled(): Promise<void> {
     options.postToRenderer(memoryController.getMemoryEnabledMessage());
   }
 
-  async function postSettingsMemoryMessage(
-    message: Awaited<ReturnType<SettingsMemoryController['deleteMemory']>>,
+  async function deleteMemory(input: {
+    storagePath: string;
+    displayPath: string;
+  }): Promise<void> {
+    const message = await memoryController.deleteMemory(input);
+    if (message) options.postToRenderer(message);
+  }
+
+  async function setMemoryEnabled(enabled: boolean): Promise<void> {
+    const message = await memoryController.setMemoryEnabled(enabled);
+    if (message) options.postToRenderer(message);
+  }
+
+  async function setMemoryPinned(
+    storagePath: string,
+    pinned: boolean,
   ): Promise<void> {
-    if (!message) return;
-    options.postToRenderer(message);
+    const message = pinned
+      ? await memoryController.pinMemory(storagePath)
+      : await memoryController.unpinMemory(storagePath);
+    if (message) options.postToRenderer(message);
   }
 
   async function openMemoryFile(input: { storagePath: string }): Promise<void> {
@@ -540,65 +444,8 @@ export function createDesktopSettingsIpc(
     await options.openPath?.(StorageFS.fullPath(MEMORY_STORAGE_ROOT));
   }
 
-  async function deleteMemory(input: {
-    storagePath: string;
-    displayPath: string;
-  }): Promise<void> {
-    await postSettingsMemoryMessage(await memoryController.deleteMemory(input));
-  }
-
-  async function setMemoryEnabled(enabled: boolean): Promise<void> {
-    await postSettingsMemoryMessage(
-      await memoryController.setMemoryEnabled(enabled),
-    );
-  }
-
-  async function setMemoryPinned(
-    storagePath: string,
-    pinned: boolean,
-  ): Promise<void> {
-    await postSettingsMemoryMessage(
-      pinned
-        ? await memoryController.pinMemory(storagePath)
-        : await memoryController.unpinMemory(storagePath),
-    );
-  }
-
   async function postHistoryData(): Promise<void> {
-    const entries = await listExecutions();
-    const historyItems = entries
-      .filter(
-        (entry) => entry.agentConfig !== null && entry.category !== 'process',
-      )
-      .map((entry): HistoryItem => {
-        const cfg = entry.agentConfig!;
-        const base = {
-          agent: cfg.agent,
-          model: cfg.model,
-          instruction: cfg.instruction,
-        };
-        return {
-          id: entry.id,
-          timestamp: entry.timestamp,
-          agentConfig:
-            cfg.agentCategory === 'toolUse'
-              ? { agentCategory: 'toolUse' as const, ...base }
-              : {
-                  agentCategory: 'workflow' as const,
-                  ...base,
-                  inputFiles: cfg.inputFiles,
-                  mediaFiles: cfg.mediaFiles,
-                  contextFiles: cfg.contextFiles,
-                  outputFiles: cfg.outputFiles,
-                  toolConfig: cfg.toolConfig,
-                },
-          description: entry.description,
-        };
-      });
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY,
-      historyItems,
-    });
+    options.postToRenderer(await buildHistoryMessage());
   }
 
   async function deleteHistoryItem(historyId: string): Promise<void> {
@@ -675,25 +522,13 @@ export function createDesktopSettingsIpc(
   }
 
   function postSuperYoloEnabled(): void {
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
-      enabled: true,
-      reliabilitySettings: [],
-      allowOrchestratorKill: workspaceState.get<boolean>(
-        WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
-        true,
-      ),
-      detachSubagentsOnStop: workspaceState.get<boolean>(
-        WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-        false,
-      ),
-      nestedDelegationMaxDepth: clampNestedDelegationDepth(
-        workspaceState.get<number>(
-          WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
-          NESTED_DELEGATION_DEPTH_RANGE.default,
-        ),
-      ),
-    });
+    options.postToRenderer(
+      buildSuperYoloMessage({
+        workspaceState,
+        globalState,
+        getReliabilitySettings: () => [],
+      }),
+    );
   }
 
   function postAgentModePresets(): void {
@@ -704,60 +539,25 @@ export function createDesktopSettingsIpc(
   }
 
   function postApprovalSettings(): void {
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
-      bashApprovalEnabled: getConfigProvider().get<boolean>(
-        BASH_APPROVAL_CONFIG_KEY,
-        true,
-      ),
-      codexSandboxMode: parseCodexSandboxMode(
-        workspaceState.get<string>(
-          WorkspaceStateKey.CODEX_SANDBOX_MODE,
-          'workspace-write',
-        ),
-      ),
-      codexReasoningEffort: parseCodexReasoningEffort(
-        workspaceState.get<string>(
-          WorkspaceStateKey.CODEX_REASONING_EFFORT,
-          'high',
-        ),
-      ),
-      codexApprovalPolicy: parseCodexApprovalPolicy(
-        workspaceState.get<string>(
-          WorkspaceStateKey.CODEX_APPROVAL_POLICY,
-          'never',
-        ),
-      ),
-      claudeAgentModel: parseClaudeAgentModel(
-        workspaceState.get<string>(
-          WorkspaceStateKey.CLAUDE_AGENT_MODEL,
-          CLAUDE_AGENT_DEFAULT_MODEL,
-        ),
-      ),
-      claudeAgentPermissionMode: parseClaudeAgentPermissionMode(
-        workspaceState.get<string>(
-          WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
-          'acceptEdits',
-        ),
-      ),
-      claudeAgentEffort: parseClaudeAgentEffort(
-        workspaceState.get<string>(
-          WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
-          'high',
-        ),
-      ),
-    });
+    options.postToRenderer(
+      buildApprovalSettingsMessage({
+        workspaceState,
+        globalState,
+        config: getConfigProvider(),
+      }),
+    );
   }
 
   async function postInitialSettingsData(): Promise<void> {
     postGitAuthorSettings();
     postLatexConfigValues();
-    postMemoryEnabled();
+    const memoryEnabledPosted = postMemoryEnabled();
     const modelSelectionDataPosted = postModelSelectionData();
     postSuperYoloEnabled();
     postAgentModePresets();
     postApprovalSettings();
     await Promise.all([
+      memoryEnabledPosted,
       postMemoryData(),
       postHistoryData(),
       modelSelectionDataPosted,
@@ -957,13 +757,13 @@ export function createDesktopSettingsIpc(
     key: WorkspaceStateKey,
     value: string,
   ): Promise<void> {
-    await workspaceState.update(key, value);
+    await setWorkspaceAgentSetting({ workspaceState, globalState }, key, value);
     postApprovalSettings();
   }
 
   async function updateBashApprovalEnabled(enabled: boolean): Promise<void> {
-    await getConfigProvider().update(
-      BASH_APPROVAL_CONFIG_KEY,
+    await setBashApprovalEnabled(
+      { workspaceState, globalState, config: getConfigProvider() },
       enabled,
       'workspace',
     );
@@ -1174,7 +974,7 @@ export function createDesktopSettingsIpc(
           runAsync(postMemoryPreview(result.data.storagePath));
           return true;
         case SETTINGS_VIEW_COMMANDS.GET_MEMORY_ENABLED:
-          postMemoryEnabled();
+          runAsync(postMemoryEnabled());
           return true;
         case SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE:
           runAsync(openMemoryFile(result.data));
