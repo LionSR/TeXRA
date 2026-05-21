@@ -1,22 +1,11 @@
 import * as path from 'node:path';
 
+import { JsonStateStore } from '@platform/defaults/jsonStateStore';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 
 import type { StateStore } from '@platform/interfaces/state';
 import type { StorageProvider } from '@platform/interfaces/storage';
-
-class CliJsonStateStore implements StateStore {
-  constructor(private readonly store: JsonStore) {}
-
-  get<T>(key: string, defaultValue?: T): T {
-    return this.store.get(key, defaultValue);
-  }
-
-  update(key: string, value: unknown): PromiseLike<void> {
-    return this.store.set(key, value);
-  }
-}
 
 export interface CliStateStores {
   readonly storage: StorageProvider;
@@ -43,7 +32,7 @@ export async function createCliStateStores(
 
   return {
     storage,
-    globalState: new CliJsonStateStore(globalStore),
-    workspaceState: new CliJsonStateStore(workspaceStore),
+    globalState: new JsonStateStore(globalStore),
+    workspaceState: new JsonStateStore(workspaceStore),
   };
 }
