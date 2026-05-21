@@ -149,11 +149,15 @@ export class LeanSession {
       textDocument: { uri: pathToUri(absolute) },
       position: { line, character: column },
     };
-    const rpc = this.rpc;
-    if (this.disposed || !rpc) {
+    return (await this.requireRpc().request(method, params)) as T;
+  }
+
+  /** Return the live JSON-RPC connection, or throw if the session is down. */
+  private requireRpc(): JsonRpcConnection {
+    if (this.disposed || !this.rpc) {
       throw new Error('Lean session is not running');
     }
-    return (await rpc.request(method, params)) as T;
+    return this.rpc;
   }
 
   private async openAndSettle(filePath: string): Promise<string> {
@@ -319,9 +323,7 @@ export class LeanSession {
     absolute: string,
     options: { forceReload: boolean },
   ): Promise<void> {
-    if (this.disposed || !this.rpc) {
-      throw new Error('Lean session is not running');
-    }
+    this.requireRpc();
     let existing = this.openFiles.get(absolute);
     if (existing && !options.forceReload) return;
     const text = await readFile(absolute, 'utf8').catch((error) => {
@@ -331,10 +333,8 @@ export class LeanSession {
     });
     existing = this.openFiles.get(absolute);
     if (existing && !options.forceReload) return;
-    const rpc = this.rpc;
-    if (this.disposed || !rpc) {
-      throw new Error('Lean session is not running');
-    }
+    // Re-check after the await: the session may have been disposed mid-read.
+    const rpc = this.requireRpc();
     const version = (existing?.version ?? 0) + 1;
     if (existing) {
       rpc.notify('textDocument/didChange', {
@@ -397,9 +397,7 @@ export class LeanSession {
     state.diagnostics = params.diagnostics.map(toLeanDiagnostic);
     state.lastDiagnosticsAt = Date.now();
     // Release any waiters — the quiet-window check above re-arms if needed.
-    for (const waiter of state.diagnosticsWaiters.splice(0)) {
-      this.resolveDiagnosticsWaiter(waiter);
-    }
+    this.releaseDiagnosticsWaiters(state);
   }
 
   private releaseAllDiagnosticsWaiters(): void {
@@ -410,15 +408,9 @@ export class LeanSession {
 
   private releaseDiagnosticsWaiters(state: OpenedFile): void {
     for (const waiter of state.diagnosticsWaiters.splice(0)) {
-      this.resolveDiagnosticsWaiter(waiter);
+      clearTimeout(waiter.timeout);
+      waiter.resolve();
     }
-  }
-
-  private resolveDiagnosticsWaiter(
-    waiter: OpenedFile['diagnosticsWaiters'][number],
-  ): void {
-    clearTimeout(waiter.timeout);
-    waiter.resolve();
   }
 }
 

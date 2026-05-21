@@ -59,30 +59,50 @@ export function createDirectLspLeanAdapter(
     return getOrStartSession(root);
   }
 
+  /**
+   * Register an in-flight start so concurrent callers join the same promise,
+   * dropping the session on failure and clearing the in-flight slot once it
+   * settles.
+   */
+  function trackStart(
+    root: string,
+    session: LeanSession | undefined,
+    start: Promise<LeanSession>,
+  ): Promise<LeanSession> {
+    sessionStarts.set(root, start);
+    void start
+      .catch(() => {
+        if (session && sessions.get(root) === session) {
+          sessions.delete(root);
+        }
+      })
+      .finally(() => {
+        if (sessionStarts.get(root) === start) {
+          sessionStarts.delete(root);
+        }
+      });
+    return start;
+  }
+
+  /** Dispose every session and clear all tracking. */
+  async function disposeAll(): Promise<void> {
+    const all = [...sessions.values()];
+    sessions.clear();
+    sessionStarts.clear();
+    await Promise.all(all.map((session) => session.dispose()));
+  }
+
   function getOrStartSession(root: string): Promise<LeanSession> {
     const inFlight = sessionStarts.get(root);
     if (inFlight) return inFlight;
 
     const existing = sessions.get(root);
     if (existing) {
-      const ready = existing
-        .ensureReady()
-        .then(() => existing)
-        .catch((error) => {
-          if (sessions.get(root) === existing) {
-            sessions.delete(root);
-          }
-          throw error;
-        });
-      sessionStarts.set(root, ready);
-      void ready
-        .catch(() => undefined)
-        .finally(() => {
-          if (sessionStarts.get(root) === ready) {
-            sessionStarts.delete(root);
-          }
-        });
-      return ready;
+      return trackStart(
+        root,
+        existing,
+        existing.ensureReady().then(() => existing),
+      );
     }
 
     return startFreshSession(root);
@@ -99,43 +119,26 @@ export function createDirectLspLeanAdapter(
       },
     });
     sessions.set(root, session);
-    const start = (async () => {
-      await session.ensureReady();
-      return session;
-    })();
-    sessionStarts.set(root, start);
-    void start
-      .catch(() => {
-        if (sessions.get(root) === session) {
-          sessions.delete(root);
-        }
-      })
-      .finally(() => {
-        if (sessionStarts.get(root) === start) {
-          sessionStarts.delete(root);
-        }
-      });
-    return start;
+    return trackStart(
+      root,
+      session,
+      session.ensureReady().then(() => session),
+    );
   }
 
   function restartSession(root: string): Promise<LeanSession> {
-    const restart = (async () => {
-      const existing = sessions.get(root);
-      if (existing) {
-        sessions.delete(root);
-        await existing.dispose();
-      }
-      return startFreshSession(root);
-    })();
-    sessionStarts.set(root, restart);
-    void restart
-      .catch(() => undefined)
-      .finally(() => {
-        if (sessionStarts.get(root) === restart) {
-          sessionStarts.delete(root);
+    return trackStart(
+      root,
+      undefined,
+      (async () => {
+        const existing = sessions.get(root);
+        if (existing) {
+          sessions.delete(root);
+          await existing.dispose();
         }
-      });
-    return restart;
+        return startFreshSession(root);
+      })(),
+    );
   }
 
   return {
@@ -190,13 +193,9 @@ export function createDirectLspLeanAdapter(
           await Promise.all(roots.map((root) => restartSession(root)));
           return;
         }
-        case 'stop_server': {
-          const all = [...sessions.values()];
-          sessions.clear();
-          sessionStarts.clear();
-          await Promise.all(all.map((session) => session.dispose()));
+        case 'stop_server':
+          await disposeAll();
           return;
-        }
         case 'build':
           await runForAllSessions(sessions, lakeCommand, ['build']);
           return;
@@ -256,10 +255,7 @@ export function createDirectLspLeanAdapter(
     },
 
     async dispose(): Promise<void> {
-      const all = [...sessions.values()];
-      sessions.clear();
-      sessionStarts.clear();
-      await Promise.all(all.map((session) => session.dispose()));
+      await disposeAll();
     },
   };
 
