@@ -33,13 +33,13 @@ interface JsonStoreModule {
   };
 }
 
-interface ElectronStateStore {
+interface JsonBackedStateStore {
   get<T>(key: string, defaultValue?: T): T;
   update(key: string, value: unknown): PromiseLike<void>;
 }
 
-interface ElectronStateModule {
-  ElectronStateStore: new (store: JsonStore) => ElectronStateStore;
+interface JsonStateStoreModule {
+  JsonStateStore: new (store: JsonStore) => JsonBackedStateStore;
 }
 
 interface ElectronSecrets {
@@ -124,13 +124,13 @@ describe('desktop platform adapters', () => {
   });
 
   it('persists state values and deletes undefined updates through JsonStore', async () => {
-    const [{ JsonStore }, { ElectronStateStore }] = await Promise.all([
+    const [{ JsonStore }, { JsonStateStore }] = await Promise.all([
       loadPlatformDefaultsModule<JsonStoreModule>('jsonStore.ts'),
-      loadDesktopPlatformModule<ElectronStateModule>('electronState.ts'),
+      loadPlatformDefaultsModule<JsonStateStoreModule>('jsonStateStore.ts'),
     ]);
     const root = await makeTempDir('texra-electron-state-');
     const store = await JsonStore.open(join(root, 'state.json'));
-    const state = new ElectronStateStore(store);
+    const state = new JsonStateStore(store);
 
     await state.update('session', { active: true });
     await state.update('cleared', 'value');
