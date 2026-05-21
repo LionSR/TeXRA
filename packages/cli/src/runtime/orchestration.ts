@@ -7,6 +7,7 @@ import type { CliMultiAgentPreset } from './multiAgentPresets';
 
 export type CliOrchestrationAction =
   | { readonly kind: 'chat'; readonly agent?: string }
+  | { readonly kind: 'preset'; readonly preset: string }
   | { readonly kind: 'resume'; readonly id: ExecutionId }
   | { readonly kind: 'help' }
   | { readonly kind: 'exit' };
@@ -87,9 +88,8 @@ function presetItems(
   presets: readonly CliMultiAgentPreset[],
 ): CliOrchestrationItem[] {
   return presets.slice(0, MAX_PRESET_ITEMS).map((preset) => ({
-    value: { kind: 'help' },
+    value: { kind: 'preset', preset: preset.id },
     label: `Team ${preset.name}`,
-    description: `${preset.source}; workflow:${preset.workflowAgents.length}; tool-use:${preset.toolUseAgents.length}; run pending`,
-    disabled: true,
+    description: `${preset.source}; workflow:${preset.workflowAgents.length}; tool-use:${preset.toolUseAgents.length}`,
   }));
 }
