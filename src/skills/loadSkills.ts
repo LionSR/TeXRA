@@ -45,6 +45,29 @@ export interface DiscoverSkillsResult {
   errors: SkillLoadIssue[];
 }
 
+export type SkillSourceScope =
+  | 'bundled'
+  | 'user'
+  | 'project'
+  | 'interop'
+  | 'custom';
+
+export interface SkillSource {
+  scope: SkillSourceScope;
+  path: string;
+  label?: string;
+}
+
+export interface SourcedSkill {
+  skill: Skill;
+  source: SkillSource;
+}
+
+export interface DiscoverSkillSourcesResult {
+  skills: SourcedSkill[];
+  errors: SkillLoadIssue[];
+}
+
 interface LoadedSkill {
   skill?: Skill;
   errors: SkillLoadIssue[];
@@ -321,6 +344,67 @@ export async function discoverSkills(
 
     seenNames.add(loaded.skill.name);
     skills.push(loaded.skill);
+  }
+
+  return { skills, errors };
+}
+
+/**
+ * Discover skills from several roots in precedence order.
+ *
+ * The one-root loader remains useful for tests and direct imports. This wrapper
+ * adds the cross-root invariants needed by runtimes: a skill name or canonical
+ * `SKILL.md` file is accepted only from the first source that provides it.
+ */
+export async function discoverSkillSources(
+  sources: readonly SkillSource[],
+): Promise<DiscoverSkillSourcesResult> {
+  const skills: SourcedSkill[] = [];
+  const errors: SkillLoadIssue[] = [];
+  const seenNames = new Set<string>();
+  const seenRealPaths = new Set<string>();
+
+  for (const source of sources) {
+    const result = await discoverSkills(source.path);
+    errors.push(...result.errors);
+
+    for (const skill of result.skills) {
+      let realSkillPath = skill.path;
+      try {
+        realSkillPath = await fs.realpath(skill.path);
+      } catch {
+        // The one-root loader has already read this file. If the path vanishes
+        // between the read and this check, name deduplication still suffices.
+      }
+
+      if (seenRealPaths.has(realSkillPath)) {
+        errors.push(
+          issue(
+            'warning',
+            'duplicate_realpath',
+            `Skipping duplicate skill path ${realSkillPath}`,
+            { path: skill.path, name: skill.name },
+          ),
+        );
+        continue;
+      }
+
+      if (seenNames.has(skill.name)) {
+        errors.push(
+          issue(
+            'warning',
+            'duplicate_name',
+            `Skipping duplicate skill name "${skill.name}"`,
+            { path: skill.path, name: skill.name },
+          ),
+        );
+        continue;
+      }
+
+      seenRealPaths.add(realSkillPath);
+      seenNames.add(skill.name);
+      skills.push({ skill, source });
+    }
   }
 
   return { skills, errors };

@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports - skills
-import { discoverSkills } from '@skills/loadSkills';
+import { discoverSkills, discoverSkillSources } from '@skills/loadSkills';
 
 const tempRoots: string[] = [];
 
@@ -185,6 +185,58 @@ description: The second skill with this name.
         severity: 'warning',
         code: 'duplicate_name',
         name: 'repeated-name',
+      }),
+    );
+  });
+});
+
+describe('discoverSkillSources', () => {
+  it('keeps source precedence across multiple roots', async () => {
+    const bundled = await createTempRoot();
+    const project = await createTempRoot();
+    await writeSkill(
+      bundled,
+      'shared-skill',
+      `
+name: shared-skill
+description: The bundled version.
+`,
+    );
+    await writeSkill(
+      project,
+      'shared-skill',
+      `
+name: shared-skill
+description: The project version.
+`,
+    );
+    await writeSkill(
+      project,
+      'project-only',
+      `
+name: project-only
+description: A project-specific skill.
+`,
+    );
+
+    const result = await discoverSkillSources([
+      { scope: 'bundled', path: bundled },
+      { scope: 'project', path: project },
+    ]);
+
+    expect(result.skills.map(({ skill }) => skill.description)).toEqual([
+      'The bundled version.',
+      'A project-specific skill.',
+    ]);
+    expect(result.skills.map(({ source }) => source.scope)).toEqual([
+      'bundled',
+      'project',
+    ]);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        severity: 'warning',
+        code: 'duplicate_name',
+        name: 'shared-skill',
       }),
     );
   });
