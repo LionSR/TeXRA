@@ -28,6 +28,13 @@ function readRendererOnboarding(): string {
   );
 }
 
+function readLogsDrawer(): string {
+  return readFileSync(
+    repoPath('packages/desktop/src/renderer/logsDrawer.ts'),
+    'utf8',
+  );
+}
+
 function readSharedWalkthroughDialog(): string {
   return readFileSync(repoPath('src/shared/wa/walkthroughDialog.ts'), 'utf8');
 }
@@ -161,10 +168,11 @@ describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () 
 
   it('mounts logs as a wa-drawer (not a route)', () => {
     const rendererMain = readRendererMain();
+    const logsDrawer = readLogsDrawer();
     const styles = readRendererStyles();
 
-    expect(rendererMain).toContain("createElement('wa-drawer')");
-    expect(rendererMain).toContain('desktop-logs-drawer');
+    expect(logsDrawer).toContain("createElement('wa-drawer')");
+    expect(logsDrawer).toContain('desktop-logs-drawer');
     expect(rendererMain).toContain('openLogsDrawer');
     expect(styles).toContain('wa-drawer.desktop-logs-drawer');
   });
@@ -247,12 +255,13 @@ describe('desktop renderer shell — three-pane layout (PRD § 6 + § 7.D)', () 
 
   it('mounts an in-app log viewer with copy and export actions', () => {
     const rendererMain = readRendererMain();
+    const logsDrawer = readLogsDrawer();
 
-    expect(rendererMain).toContain('DESKTOP_LOG_COMMANDS.REQUEST_LOG');
-    expect(rendererMain).toContain('DESKTOP_LOG_COMMANDS.COPY_LOG');
-    expect(rendererMain).toContain('DESKTOP_LOG_COMMANDS.EXPORT_LOG');
+    expect(logsDrawer).toContain('DESKTOP_LOG_COMMANDS.REQUEST_LOG');
+    expect(logsDrawer).toContain('DESKTOP_LOG_COMMANDS.COPY_LOG');
+    expect(logsDrawer).toContain('DESKTOP_LOG_COMMANDS.EXPORT_LOG');
     expect(rendererMain).toContain('DesktopSetLogMessageSchema.safeParse');
-    expect(rendererMain).toContain('logViewerTemplate');
+    expect(logsDrawer).toContain('viewerTemplate');
   });
 
   it('does not import the deleted workspace-explorer surface', () => {
