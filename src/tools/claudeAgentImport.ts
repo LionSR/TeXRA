@@ -106,6 +106,10 @@ const PLATFORM_INFO: Record<string, PlatformInfo> = {
   'win32-arm64': { pkgs: ['@anthropic-ai/claude-agent-sdk-win32-arm64'] },
 };
 
+/** Native CLI binary filename for the current platform. */
+const CLAUDE_BINARY_NAME =
+  process.platform === 'win32' ? 'claude.exe' : 'claude';
+
 /** Cached result — found paths are cached; misses are retried. */
 let cachedBinaryPath: string | undefined;
 
@@ -137,7 +141,7 @@ async function findClaudeBinaryPathUncached(): Promise<string | undefined> {
     const result =
       resourcesPath == null
         ? undefined
-        : await findClaudeBinaryInElectronResources(resourcesPath);
+        : await findClaudeBinaryInElectronResources(resourcesPath, info);
     if (result) return result;
   }
 
@@ -207,11 +211,8 @@ async function findClaudeBinaryPathUncached(): Promise<string | undefined> {
  */
 async function findClaudeBinaryInElectronResources(
   resourcesPath: string,
+  info: PlatformInfo,
 ): Promise<string | undefined> {
-  const info = PLATFORM_INFO[`${process.platform}-${process.arch}`];
-  if (!info) return undefined;
-
-  const binaryName = process.platform === 'win32' ? 'claude.exe' : 'claude';
   for (const pkg of info.pkgs) {
     const platformPkgDir = path.join(
       resourcesPath,
@@ -219,7 +220,7 @@ async function findClaudeBinaryInElectronResources(
       'node_modules',
       ...pkg.split('/'),
     );
-    const binary = path.join(platformPkgDir, binaryName);
+    const binary = path.join(platformPkgDir, CLAUDE_BINARY_NAME);
     if (await pathExists(binary)) return binary;
   }
   return undefined;
@@ -242,11 +243,13 @@ async function resolveClaudeBinary(
   platformInfo: PlatformInfo,
 ): Promise<string | undefined> {
   const req = createRequire(path.join(baseDir, 'package.json'));
-  const binaryName = process.platform === 'win32' ? 'claude.exe' : 'claude';
   for (const pkg of platformInfo.pkgs) {
     try {
       const platformPkgJson = req.resolve(`${pkg}/package.json`);
-      const binary = path.join(path.dirname(platformPkgJson), binaryName);
+      const binary = path.join(
+        path.dirname(platformPkgJson),
+        CLAUDE_BINARY_NAME,
+      );
       if (await pathExists(binary)) return binary;
     } catch {
       // Platform package not resolvable
