@@ -1,3 +1,5 @@
+import process from 'node:process';
+
 import { Box, Text } from 'ink';
 import { Badge } from '@inkjs/ui';
 import { MODEL_CONFIGS } from 'llm-zoo';
@@ -41,6 +43,7 @@ export interface StatusBarDisplayInput {
   readonly subagentControlsAvailable: boolean;
   readonly model: string;
   readonly apiMode: string;
+  readonly shortcutModifierLabel?: string;
 }
 
 export interface StatusBarDisplay {
@@ -113,29 +116,36 @@ function roundSegment(
   return turns > 0 ? { text: `r${turns}`, color: 'dim' } : undefined;
 }
 
-const TASKS_BINDING = '[Alt-p]tasks';
-const SUBAGENTS_BINDING = '[Alt-s]subagents';
+export function defaultShortcutModifierLabel(
+  platform: NodeJS.Platform = process.platform,
+): string {
+  return platform === 'darwin' ? 'Option' : 'Alt';
+}
 
-const STATUS_BAR_BINDINGS = [
-  '[Tab]streams',
-  '[Alt-1..9]focus',
-  TASKS_BINDING,
-  '[/status]details',
-  '[/model]models',
-  '[/api]api',
-  '[Ctrl-C]stop',
-] as const;
+function statusBarBindings(modifierLabel: string): readonly string[] {
+  return [
+    '[Tab]streams',
+    `[${modifierLabel}-1..9]focus`,
+    `[${modifierLabel}-p]tasks`,
+    '[/status]details',
+    '[/model]models',
+    '[/api]api',
+    '[Ctrl-C]stop',
+  ];
+}
 
 export function statusBarBindingsText(
   subagentControlsAvailable: boolean,
+  modifierLabel = defaultShortcutModifierLabel(),
 ): string {
-  const bindings: string[] = [...STATUS_BAR_BINDINGS];
+  const bindings: string[] = [...statusBarBindings(modifierLabel)];
   if (subagentControlsAvailable) {
-    const tasksIndex = bindings.indexOf(TASKS_BINDING);
+    const tasksBinding = `[${modifierLabel}-p]tasks`;
+    const tasksIndex = bindings.indexOf(tasksBinding);
     bindings.splice(
       tasksIndex >= 0 ? tasksIndex + 1 : bindings.length,
       0,
-      SUBAGENTS_BINDING,
+      `[${modifierLabel}-s]subagents`,
     );
   }
   return bindings.join('  ');
@@ -190,7 +200,10 @@ export function buildStatusBarDisplay(
     bindings:
       input.pendingExitHint && input.pendingExitResumeId
         ? `Resume this session with: texra --resume ${input.pendingExitResumeId}`
-        : statusBarBindingsText(input.subagentControlsAvailable),
+        : statusBarBindingsText(
+            input.subagentControlsAvailable,
+            input.shortcutModifierLabel,
+          ),
   };
 }
 
