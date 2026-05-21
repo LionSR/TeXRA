@@ -6,7 +6,7 @@ import type { CliOutputFormat } from './cliConfig';
 import type { CliGlobalArgs } from './cliContext';
 
 /**
- * Shape produced by citty's parser for the four global flags after each
+ * Shape produced by citty's parser for the shared global flags after each
  * subcommand inlines them with `type: 'enum'` + literal `options`. Subcommand
  * definitions in `commands/root.ts` re-declare these args inline (not via a
  * spread) so citty's `defineCommand<const T>` generic preserves the enum

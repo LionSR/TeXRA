@@ -22,6 +22,7 @@ import {
   resumeWorkflowOutputFile,
   resolveWorkflowOutput,
 } from '../../../packages/cli/src/commands/root';
+import { rejectHeadlessOnlyFlags } from '../../../packages/cli/src/commands/_helpers/globalArgs';
 import type { CliContext } from '../../../packages/cli/src/runtime/cliContext';
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
@@ -212,6 +213,18 @@ describe('CLI root argument routing', () => {
         'i',
       ),
     ).toEqual(['Draft0.tex', 'appendices.tex']);
+  });
+
+  it('rejects headless-only flags on interactive command bodies', () => {
+    expect(() => rejectHeadlessOnlyFlags(['--print'], 'chat')).toThrow(
+      'texra chat is interactive',
+    );
+    expect(() =>
+      rejectHeadlessOnlyFlags(['--output-format=json'], 'orchestrate'),
+    ).toThrow('texra orchestrate is interactive');
+    expect(() =>
+      rejectHeadlessOnlyFlags(['--approval-policy', 'ask'], 'chat'),
+    ).not.toThrow();
   });
 
   it('expands workflow input directories and globs relative to cwd', async () => {

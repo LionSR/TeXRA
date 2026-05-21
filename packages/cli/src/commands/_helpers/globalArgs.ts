@@ -16,7 +16,7 @@ import { CliUsageError } from '../../runtime/cliContext';
  * narrow enough for `defineCommand<const T>` to expose the per-option literal
  * on `ctx.args[...]`. Adding a new global flag is a one-line change here.
  */
-export const GLOBAL_ARGS: {
+type CliGlobalArgsDef = {
   print: { type: 'boolean'; alias: 'p'; description: string };
   quiet: { type: 'boolean'; alias: 'q'; description: string };
   cwd: { type: 'string'; description: string };
@@ -31,7 +31,9 @@ export const GLOBAL_ARGS: {
     options: CliApprovalPolicy[];
     description: string;
   };
-} = {
+};
+
+export const GLOBAL_ARGS: CliGlobalArgsDef = {
   print: {
     type: 'boolean',
     alias: 'p',
@@ -63,6 +65,21 @@ export const GLOBAL_ARGS: {
   },
 };
 
+/**
+ * Flags that are meaningful for commands which necessarily own the terminal.
+ * In particular, `chat` and `orchestrate` cannot honor `--print` or
+ * `--output-format`; scripts should use a concrete headless command instead.
+ */
+export const INTERACTIVE_GLOBAL_ARGS: Omit<
+  CliGlobalArgsDef,
+  'print' | 'output-format'
+> = {
+  quiet: GLOBAL_ARGS.quiet,
+  cwd: GLOBAL_ARGS.cwd,
+  'api-mode': GLOBAL_ARGS['api-mode'],
+  'approval-policy': GLOBAL_ARGS['approval-policy'],
+};
+
 // Derived from `GLOBAL_ARGS` so adding/renaming a global flag in one place
 // flows through to `reorderGlobalFlags` automatically.
 export const GLOBAL_VALUE_FLAGS = new Set<string>(
@@ -82,6 +99,24 @@ export const GLOBAL_BOOL_FLAGS = new Set<string>(
 
 export function optString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
+}
+
+export function rejectHeadlessOnlyFlags(
+  rawArgs: readonly string[],
+  commandName: string,
+): void {
+  const headlessOnly = rawArgs.some(
+    (arg) =>
+      arg === '--print' ||
+      arg === '-p' ||
+      arg === '--output-format' ||
+      arg.startsWith('--output-format='),
+  );
+  if (!headlessOnly) return;
+
+  throw new CliUsageError(
+    `texra ${commandName} is interactive and does not support --print or --output-format. For scripting, use \`texra run\` or a concrete non-interactive subcommand.`,
+  );
 }
 
 export function collectStringFlagValues(
