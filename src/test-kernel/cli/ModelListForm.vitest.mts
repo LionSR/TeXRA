@@ -6,7 +6,10 @@ import {
   formatModelStatusForCliMode,
   modelSelectWindow,
 } from '../../../packages/cli/src/chat/tui/forms/ModelListForm';
-import { visibleSelectRange } from '../../../packages/cli/src/chat/tui/ui/Select';
+import {
+  selectItemRenderKey,
+  visibleSelectRange,
+} from '../../../packages/cli/src/chat/tui/ui/Select';
 import type { CliModelAccess } from '../../../packages/cli/src/runtime/modelAccess';
 
 function access(
@@ -50,6 +53,23 @@ describe('CLI ModelListForm status text', () => {
         'included',
       ),
     ).toBe('relay: unavailable; api key set');
+  });
+});
+
+describe('Select render keys', () => {
+  it('does not collapse object-valued items to the same React key', () => {
+    const first = selectItemRenderKey(
+      { value: { kind: 'chat' }, label: 'New chat' },
+      0,
+    );
+    const second = selectItemRenderKey(
+      { value: { kind: 'help' }, label: 'Help' },
+      1,
+    );
+
+    expect(first).toBe('0:New chat');
+    expect(second).toBe('1:Help');
+    expect(first).not.toBe(second);
   });
 });
 
