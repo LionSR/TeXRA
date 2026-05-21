@@ -12,6 +12,8 @@ export interface DesktopFirstRunWalkthroughOptions {
   document: Document;
   dismiss(): void;
   setRoute(route: DesktopRoute): void;
+  /** Open the Settings overlay focused on the Multi-Agent (team picker) tab. */
+  openMultiAgent(): void;
 }
 
 export type DesktopFirstRunWalkthrough = WalkthroughDialogController;
@@ -29,8 +31,8 @@ const ONBOARDING_STEPS: ReadonlyArray<WalkthroughStep> = [
   },
   {
     index: '3',
-    title: 'Choose an agent',
-    body: 'Select a workflow agent, direct agent, or tool-use agent.',
+    title: 'Pick your team',
+    body: 'Choose a discipline (physics, math, ML, Lean) and the orchestrator brings the right specialists.',
   },
   {
     index: '4',
@@ -43,12 +45,13 @@ export function createFirstRunWalkthrough({
   document,
   dismiss: postDismissed,
   setRoute,
+  openMultiAgent,
 }: DesktopFirstRunWalkthroughOptions): DesktopFirstRunWalkthrough {
   return createWalkthroughDialog({
     document,
     title: 'Welcome to TeXRA Desktop',
     description:
-      'Start from a workspace, configure model access, choose an agent, and run without switching to VS Code.',
+      'Start from a workspace, configure model access, pick a team for your field, and run without switching to VS Code.',
     steps: ONBOARDING_STEPS,
     onUserDismiss: postDismissed,
     classes: {
@@ -61,26 +64,18 @@ export function createFirstRunWalkthrough({
     },
     actions: [
       {
-        label: 'Open Settings',
-        appearance: 'outlined',
-        className: 'desktop-secondary-button',
-        onClick: () => setRoute('settings'),
-      },
-      {
         label: 'Go to Launcher',
         appearance: 'outlined',
         className: 'desktop-secondary-button',
         onClick: () => setRoute('main'),
       },
       {
-        label: 'Got it',
+        label: 'Pick Your Team',
         emphasis: 'primary',
         appearance: 'filled',
         variant: 'brand',
         className: 'desktop-primary-button',
-        onClick: () => {
-          /* dialog auto-closes; onUserDismiss handles the post */
-        },
+        onClick: () => openMultiAgent(),
       },
     ],
   });
