@@ -243,12 +243,8 @@ function findPreferredRootAgent(
   agents: readonly AgentEntry[],
   presetOrder: readonly string[],
 ): AgentEntry | undefined {
-  const preferredNames = ['orchestrator', 'leanOrchestrator'];
-  for (const preferred of preferredNames) {
-    const entry = agents.find((agent) => agent.name === preferred);
-    if (entry) return entry;
-  }
-  for (const name of presetOrder) {
+  const searchOrder = ['orchestrator', 'leanOrchestrator', ...presetOrder];
+  for (const name of searchOrder) {
     const entry = agents.find((agent) => agent.name === name);
     if (entry) return entry;
   }
