@@ -818,6 +818,21 @@ export async function runChat(
     onMemoryError: (error) => {
       appendLocalAssistantTranscript(toErrorMessage(error));
     },
+    onResumeSelect: (id) =>
+      resumeStoredExecution(id, {
+        session,
+        initialAgent: agent,
+        initialModel: model,
+        interruptActive,
+        requestInputExit: () => requestInputExit?.(),
+        getApprovalPolicy,
+        setApprovalPolicy,
+        resetSession: resetSessionForClear,
+        startStoredExecution: startAgentRun,
+      }),
+    onResumeError: (error) => {
+      appendLocalAssistantTranscript(toErrorMessage(error));
+    },
   });
 
   const startSession = (instruction: string): void => {

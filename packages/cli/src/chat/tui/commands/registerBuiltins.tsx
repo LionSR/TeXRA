@@ -1,10 +1,13 @@
 // Registers the slash commands the input palette surfaces.
 
+import type { ExecutionId } from '@shared/schemas';
+
 import { ApiModeForm } from '../forms/ApiModeForm';
 import { AgentListForm } from '../forms/AgentListForm';
 import { ApprovalPolicyForm } from '../forms/ApprovalPolicyForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
 import { ModelListForm } from '../forms/ModelListForm';
+import { ResumeListForm } from '../forms/ResumeListForm';
 import { cliState } from '../state/cliState';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 import type { CliApiMode } from '../../../runtime/apiAccessMode';
@@ -17,6 +20,7 @@ type ApprovalPolicySelectHandler = (
 type ModelSelectHandler = (value: string) => void | Promise<void>;
 type ApiModeSelectHandler = (value: CliApiMode) => void | Promise<void>;
 type MemorySelectHandler = (storagePath: string) => void | Promise<void>;
+type ResumeSelectHandler = (id: ExecutionId) => void | Promise<void>;
 type ErrorHandler = (error: unknown) => void | Promise<void>;
 
 function patchSessionMeta<K extends 'agent' | 'model' | 'apiMode'>(
@@ -36,6 +40,8 @@ export function registerBuiltinSlashCommands(options?: {
   onApiModeSelect?: ApiModeSelectHandler;
   onMemorySelect?: MemorySelectHandler;
   onMemoryError?: ErrorHandler;
+  onResumeSelect?: ResumeSelectHandler;
+  onResumeError?: ErrorHandler;
 }): void {
   const onAgentSelect: AgentSelectHandler =
     options?.onAgentSelect ?? ((value) => patchSessionMeta('agent', value));
@@ -46,6 +52,8 @@ export function registerBuiltinSlashCommands(options?: {
     options?.onApiModeSelect ?? ((value) => patchSessionMeta('apiMode', value));
   const onMemorySelect = options?.onMemorySelect;
   const onMemoryError = options?.onMemoryError;
+  const onResumeSelect = options?.onResumeSelect;
+  const onResumeError = options?.onResumeError;
 
   function AgentListFormAdapter(props: SlashFormProps): React.JSX.Element {
     const current = cliState.sessionMeta.get().agent;
@@ -128,6 +136,20 @@ export function registerBuiltinSlashCommands(options?: {
     );
   }
 
+  function ResumeListFormAdapter(props: SlashFormProps): React.JSX.Element {
+    return (
+      <ResumeListForm
+        availableRows={props.availableRows}
+        onSelect={(id) => {
+          void Promise.resolve(onResumeSelect?.(id))
+            .catch((error: unknown) => onResumeError?.(error))
+            .finally(() => props.onDone(id));
+        }}
+        onClose={() => props.onDone(undefined)}
+      />
+    );
+  }
+
   registerSlashCommand({
     name: 'help',
     description: 'Show available slash commands',
@@ -171,6 +193,7 @@ export function registerBuiltinSlashCommands(options?: {
   registerSlashCommand({
     name: 'resume',
     description: 'Resume a previous session',
+    formComponent: ResumeListFormAdapter,
   });
   registerSlashCommand({
     name: 'memory',
