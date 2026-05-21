@@ -8,7 +8,7 @@
 import type { StateStore } from '@platform/interfaces/state';
 
 /** Sends a single message to the settings webview. */
-export type SettingsRespond = (message: unknown) => void;
+export type SettingsRespond = (message: unknown) => void | PromiseLike<unknown>;
 
 /** Host-neutral state ports used across most domains. */
 export interface SettingsStatePorts {

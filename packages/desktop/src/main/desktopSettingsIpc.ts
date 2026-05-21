@@ -512,7 +512,7 @@ export function createDesktopSettingsIpc(
     postMemoryDataShared(memoryController, respond);
   const postMemoryPreview = (storagePath: string): Promise<void> =>
     postMemoryPreviewShared(memoryController, respond, storagePath, onError);
-  const postMemoryEnabled = (): void =>
+  const postMemoryEnabled = (): Promise<void> =>
     postMemoryEnabledShared(memoryController, respond);
   const deleteMemory = (input: {
     storagePath: string;
@@ -640,12 +640,13 @@ export function createDesktopSettingsIpc(
   async function postInitialSettingsData(): Promise<void> {
     postGitAuthorSettings();
     postLatexConfigValues();
-    postMemoryEnabled();
+    const memoryEnabledPosted = postMemoryEnabled();
     const modelSelectionDataPosted = postModelSelectionData();
     postSuperYoloEnabled();
     postAgentModePresets();
     postApprovalSettings();
     await Promise.all([
+      memoryEnabledPosted,
       postMemoryData(),
       postHistoryData(),
       modelSelectionDataPosted,
@@ -1062,7 +1063,7 @@ export function createDesktopSettingsIpc(
           runAsync(postMemoryPreview(result.data.storagePath));
           return true;
         case SETTINGS_VIEW_COMMANDS.GET_MEMORY_ENABLED:
-          postMemoryEnabled();
+          runAsync(postMemoryEnabled());
           return true;
         case SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE:
           runAsync(openMemoryFile(result.data));

@@ -13,7 +13,7 @@ export async function postMemoryData(
   controller: SettingsMemoryController,
   respond: SettingsRespond,
 ): Promise<void> {
-  respond(await controller.getMemoryDataMessage());
+  await respond(await controller.getMemoryDataMessage());
 }
 
 export async function postMemoryPreview(
@@ -23,18 +23,18 @@ export async function postMemoryPreview(
   onError: (error: unknown) => void,
 ): Promise<void> {
   try {
-    respond(await controller.getMemoryPreviewMessage(storagePath));
+    await respond(await controller.getMemoryPreviewMessage(storagePath));
   } catch (error) {
     onError(error);
-    respond(controller.getMemoryPreviewErrorMessage(storagePath));
+    await respond(controller.getMemoryPreviewErrorMessage(storagePath));
   }
 }
 
-export function postMemoryEnabled(
+export async function postMemoryEnabled(
   controller: SettingsMemoryController,
   respond: SettingsRespond,
-): void {
-  respond(controller.getMemoryEnabledMessage());
+): Promise<void> {
+  await respond(controller.getMemoryEnabledMessage());
 }
 
 export async function setMemoryPinned(
@@ -46,7 +46,7 @@ export async function setMemoryPinned(
   const message = pinned
     ? await controller.pinMemory(storagePath)
     : await controller.unpinMemory(storagePath);
-  if (message) respond(message);
+  if (message) await respond(message);
 }
 
 export async function deleteMemory(
@@ -55,7 +55,7 @@ export async function deleteMemory(
   input: { storagePath: string; displayPath: string },
 ): Promise<void> {
   const message = await controller.deleteMemory(input);
-  if (message) respond(message);
+  if (message) await respond(message);
 }
 
 export async function setMemoryEnabled(
@@ -64,5 +64,5 @@ export async function setMemoryEnabled(
   enabled: boolean,
 ): Promise<void> {
   const message = await controller.setMemoryEnabled(enabled);
-  if (message) respond(message);
+  if (message) await respond(message);
 }
