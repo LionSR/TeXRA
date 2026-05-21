@@ -16,10 +16,8 @@ import {
   type WebContentsConsoleMessageEventParams,
 } from 'electron';
 
-import {
-  redactDesktopLog,
-  type DesktopLogRedactionOptions,
-} from './desktopLogRedaction.js';
+import { redactSecrets, type LogRedactionOptions } from '@logger/redaction';
+
 import type { DesktopLogSnapshot } from '../desktopLogMessages.js';
 
 type ConsoleLevel = 'debug' | 'error' | 'info' | 'log' | 'warn';
@@ -71,15 +69,15 @@ export function readDesktopLogSnapshot(options: {
       ? buffer.subarray(buffer.length - maxBytes)
       : buffer;
     return {
-      path: redactDesktopLog(path, redactionOptions),
+      path: redactSecrets(path, redactionOptions),
       truncated,
-      text: redactDesktopLog(excerpt.toString('utf8'), redactionOptions),
+      text: redactSecrets(excerpt.toString('utf8'), redactionOptions),
     };
   } catch (error) {
     return {
-      path: redactDesktopLog(path, redactionOptions),
+      path: redactSecrets(path, redactionOptions),
       truncated: false,
-      text: redactDesktopLog(
+      text: redactSecrets(
         format('Desktop log is not available: %s', error),
         redactionOptions,
       ),
@@ -162,7 +160,7 @@ function rotateDesktopLogFile(path: string): void {
 
 function makeDesktopLogRedactionOptions(options: {
   workspacePath?: string | undefined;
-}): DesktopLogRedactionOptions {
+}): LogRedactionOptions {
   return {
     homeDir: homedir(),
     workspacePath: options.workspacePath,
