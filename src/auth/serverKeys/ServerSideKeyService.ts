@@ -291,7 +291,7 @@ export class ServerSideKeyService {
    * Primes all caches for subsequent sync calls.
    */
   async canUseServerSideKeys(): Promise<boolean> {
-    if (!this.getUseIncludedModelAccess()) {
+    if (!this.useIncludedModelAccess) {
       this.clearAllCaches({ preserveTierCache: this.wasQuotaAutoSwitched() });
       return false;
     }
@@ -327,8 +327,9 @@ export class ServerSideKeyService {
       }
 
       const providers = this.tierService.getProviders();
+      const accessGranted = hasAccess && providers.length > 0;
 
-      if (hasAccess && providers.length > 0) {
+      if (accessGranted) {
         this.accessTimestamp = Date.now();
         this._isCachePrimed = true;
       }
@@ -357,7 +358,7 @@ export class ServerSideKeyService {
         return false;
       }
 
-      return hasAccess && providers.length > 0;
+      return accessGranted;
     })();
 
     return this.accessFetchPromise;
@@ -377,7 +378,7 @@ export class ServerSideKeyService {
 
   shouldUseServerSideKeysSync(provider: string, modelName?: string): boolean {
     if (
-      !this.getUseIncludedModelAccess() ||
+      !this.useIncludedModelAccess ||
       !this.isProviderOnServer(provider) ||
       !this.accessResult
     ) {
