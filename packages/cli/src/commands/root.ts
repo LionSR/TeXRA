@@ -448,7 +448,10 @@ async function runMultiAgentPreset(
   // specialists most presets name) are only visible after a remote load. Fill
   // any preset gap — not just a missing root — so an authenticated, entitled
   // user runs the full team instead of a silently degraded one.
-  if (cliMultiAgentPlanHasGaps(plan) && (await getCliAuthProvider().isAuthenticated())) {
+  if (
+    cliMultiAgentPlanHasGaps(plan) &&
+    (await getCliAuthProvider().isAuthenticated())
+  ) {
     await loadAgents();
     plan = resolveMultiAgentRunPlan(init);
   }
