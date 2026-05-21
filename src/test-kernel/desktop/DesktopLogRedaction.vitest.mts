@@ -1,27 +1,10 @@
-// Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - desktop test paths
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-
-interface DesktopLogRedactionModule {
-  redactDesktopLog(
-    text: string,
-    options?: { homeDir?: string; workspacePath?: string },
-  ): string;
-}
-
-async function loadDesktopLogRedaction(): Promise<DesktopLogRedactionModule> {
-  return import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopLogRedaction.ts'))
-  ) as Promise<DesktopLogRedactionModule>;
-}
+import { redactSecrets } from '@logger/redaction';
 
 describe('desktop log redaction', () => {
   it('redacts obvious secrets and sensitive path prefixes', async () => {
-    const { redactDesktopLog } = await loadDesktopLogRedaction();
-
-    const redacted = redactDesktopLog(
+    const redacted = redactSecrets(
       [
         'OPENAI_API_KEY=sk-1234567890abcdef',
         'Authorization: Bearer ghp_1234567890abcdef',
