@@ -28,6 +28,7 @@ describe('slashRegistry', () => {
         'approval',
         'yolo',
         'status',
+        'memory',
       ]),
     );
     expect(
@@ -44,6 +45,12 @@ describe('slashRegistry', () => {
     expect(listSlashCommands().find((cmd) => cmd.name === 'approval')).toEqual(
       expect.objectContaining({
         description: 'Switch approval policy',
+        formComponent: expect.any(Function),
+      }),
+    );
+    expect(listSlashCommands().find((cmd) => cmd.name === 'memory')).toEqual(
+      expect.objectContaining({
+        description: 'List stored memories',
         formComponent: expect.any(Function),
       }),
     );

@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FileType, type FileStat } from '@platform/interfaces/filesystem';
 
 // Local imports - settings memory
-import { walkMemoryDirectory } from '@settingsView/utils/memoryFileSystem';
+import { walkMemoryDirectory } from '@tools/memory/memoryFileSystem';
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { StorageFS } from '@utils/files';
 

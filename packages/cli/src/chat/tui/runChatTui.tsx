@@ -26,6 +26,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 import { generateExecutionId } from '@utils/core/executionId';
 
 import { type CliContext, readCliVersion } from '../../runtime/cliContext';
@@ -48,6 +49,10 @@ import {
   type CliApprovalPolicy,
 } from '../../runtime/approvalPolicy';
 import { parseCliHistoryId, readCliHistoryConfig } from '../../runtime/history';
+import {
+  formatCliMemoryList,
+  formatCliMemoryPreview,
+} from '../../runtime/memory';
 import { App } from './App';
 import { AgentListForm } from './forms/AgentListForm';
 import { ApiModeForm } from './forms/ApiModeForm';
@@ -55,6 +60,7 @@ import {
   ApprovalPolicyForm,
   formatApprovalPolicyForCli as formatApprovalPolicy,
 } from './forms/ApprovalPolicyForm';
+import { MemoryListForm } from './forms/MemoryListForm';
 import { ModelListForm } from './forms/ModelListForm';
 import { ResumeListForm } from './forms/ResumeListForm';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
@@ -387,6 +393,32 @@ function openCliResumeListForm(context: SlashCommandContext): void {
   });
 }
 
+async function showCliMemoryList(): Promise<void> {
+  appendLocalAssistantTranscript(formatCliMemoryList(await loadMemoryItems()));
+}
+
+async function showCliMemoryPreview(inputPath: string): Promise<void> {
+  appendLocalAssistantTranscript(await formatCliMemoryPreview(inputPath));
+}
+
+function openCliMemoryListForm(): void {
+  cliState.activeForm.set({
+    commandName: 'memory',
+    render: (close, availableRows) => (
+      <MemoryListForm
+        availableRows={availableRows}
+        onSelect={(storagePath) => {
+          close();
+          void showCliMemoryPreview(storagePath).catch((error: unknown) => {
+            appendLocalAssistantTranscript(toErrorMessage(error));
+          });
+        }}
+        onClose={close}
+      />
+    ),
+  });
+}
+
 async function handleTuiSlashCommand(
   line: string,
   context: SlashCommandContext,
@@ -483,6 +515,20 @@ async function handleTuiSlashCommand(
         return true;
       }
       await resumeStoredExecution(id, context);
+      return true;
+    }
+    case 'memory': {
+      try {
+        if (!rest) {
+          openCliMemoryListForm();
+        } else if (rest.toLowerCase() === 'list') {
+          await showCliMemoryList();
+        } else {
+          await showCliMemoryPreview(rest);
+        }
+      } catch (error: unknown) {
+        appendLocalAssistantTranscript(toErrorMessage(error));
+      }
       return true;
     }
     default: {
@@ -728,6 +774,10 @@ export async function runChat(
         startStoredExecution: startAgentRun,
       }),
     onApiModeSelect: applyCliApiModeSelection,
+    onMemorySelect: showCliMemoryPreview,
+    onMemoryError: (error) => {
+      appendLocalAssistantTranscript(toErrorMessage(error));
+    },
   });
 
   const startSession = (instruction: string): void => {
