@@ -3,29 +3,46 @@ import {
   configKeyVariants,
   createWatcherRegistry,
   firstStoredValue,
-} from '@platform/defaults/configKeyHelpers';
-import type { JsonStore } from '@platform/defaults/jsonStore';
+} from './configKeyHelpers';
+
+import type { JsonStore } from './jsonStore';
 import type {
   ConfigInspection,
   ConfigProvider,
   ConfigTarget,
-} from '@platform/interfaces/config';
-import type { Disposable } from '@platform/interfaces/disposable';
+} from '../interfaces/config';
+import type { Disposable } from '../interfaces/disposable';
 
-export class ElectronConfigProvider implements ConfigProvider {
+/**
+ * File-backed {@link ConfigProvider} implementation shared by non-VS-Code
+ * hosts (CLI, Electron desktop).
+ *
+ * Keys are stored flat with the canonical `texra.*` prefix — matching the VS
+ * Code extension's `texra.*` settings namespace. Bare (unprefixed) keys are
+ * still accepted on read for legacy compatibility; writes always use the
+ * canonical prefixed form unless a legacy unprefixed entry already exists.
+ *
+ * When only a workspace store is supplied (CLI), this collapses to a
+ * single-tier provider. When a global store is also supplied (Electron),
+ * workspace values take precedence over global values on read, and `update()`
+ * routes writes by {@link ConfigTarget}.
+ */
+export class JsonConfigProvider implements ConfigProvider {
   private readonly watchers = createWatcherRegistry();
 
   constructor(
-    private readonly globalStore: JsonStore,
     private readonly workspaceStore: JsonStore,
+    private readonly globalStore?: JsonStore,
   ) {}
 
   get<T>(key: string, defaultValue?: T): T {
     const keys = configKeyVariants(key);
     const workspaceValue = firstStoredValue<T>(this.workspaceStore, keys);
     if (workspaceValue !== undefined) return workspaceValue;
-    const globalValue = firstStoredValue<T>(this.globalStore, keys);
-    if (globalValue !== undefined) return globalValue;
+    if (this.globalStore) {
+      const globalValue = firstStoredValue<T>(this.globalStore, keys);
+      if (globalValue !== undefined) return globalValue;
+    }
     return defaultValue as T;
   }
 
@@ -34,7 +51,10 @@ export class ElectronConfigProvider implements ConfigProvider {
     value: T,
     target: ConfigTarget = 'workspace',
   ): Promise<void> {
-    const store = target === 'global' ? this.globalStore : this.workspaceStore;
+    const store =
+      target === 'global' && this.globalStore
+        ? this.globalStore
+        : this.workspaceStore;
     const keys = configKeyVariants(key);
     if (value === undefined) {
       await Promise.all(
@@ -54,7 +74,9 @@ export class ElectronConfigProvider implements ConfigProvider {
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
     const keys = configKeyVariants(key);
     return {
-      globalValue: firstStoredValue<T>(this.globalStore, keys),
+      globalValue: this.globalStore
+        ? firstStoredValue<T>(this.globalStore, keys)
+        : undefined,
       workspaceValue: firstStoredValue<T>(this.workspaceStore, keys),
       effectiveValue: this.get<T>(key),
     };
@@ -63,7 +85,8 @@ export class ElectronConfigProvider implements ConfigProvider {
   isExplicitlySet(key: string): boolean {
     return configKeyVariants(key).some(
       (candidate) =>
-        this.globalStore.has(candidate) || this.workspaceStore.has(candidate),
+        this.workspaceStore.has(candidate) ||
+        (this.globalStore?.has(candidate) ?? false),
     );
   }
 

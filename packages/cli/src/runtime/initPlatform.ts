@@ -1,4 +1,5 @@
 // Local imports - platform
+import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -28,7 +29,6 @@ import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 // Local imports - CLI runtime
 import { getCliSecrets } from './cliSecrets';
 import { writeTextStderr } from './logSinks';
-import { CliConfigProvider } from './cliConfigProvider';
 import { workspaceCliConfigPath } from './cliConfig';
 import { getCliAuthProvider, initializeCliSupabaseAuth } from './supabaseAuth';
 import { createCliStateStores } from './cliStateStores';
@@ -117,7 +117,7 @@ export async function initCliPlatform(
       },
     });
     initPlatform({
-      config: new CliConfigProvider(configStore),
+      config: new JsonConfigProvider(configStore),
       globalState: stateStores.globalState,
       workspaceState: stateStores.workspaceState,
       log: cliPlatformLog,
