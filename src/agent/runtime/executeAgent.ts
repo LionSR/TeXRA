@@ -7,7 +7,10 @@ import {
   runToolUseFlow,
   type IToolUseSession,
 } from '@agent/implementations/flows/tooluse';
-import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
+import {
+  runReflectionFlow,
+  type RunReflectionFlowResult,
+} from '@agent/implementations/flows/reflection/runReflectionFlow';
 import {
   type AgentConfig,
   type AgentConfigPayload,
@@ -95,6 +98,22 @@ function toCompileFailureSummaries(
       logAbsolutePath: failure.log.absolutePath,
     })),
   );
+}
+
+/** Build a workflow AgentFlowResult from a reflection flow run. */
+function buildWorkflowFlowResult(
+  result: RunReflectionFlowResult,
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+): AgentFlowResult {
+  return {
+    category: 'workflow',
+    status: result.status,
+    outputs: toOutputSummaries(result.roundOutputs),
+    compileFailures: toCompileFailureSummaries(result.roundOutputs),
+    executionId,
+    streamId,
+  };
 }
 
 /** Create an onRoundCompleted callback that feeds progress into the execution registry and orchestrator. */
@@ -369,6 +388,8 @@ export async function executeAgent(
     const { setting, streamId, config } = ctx;
     const { agent: agentName } = config;
     const { isSubagent } = options;
+    const category =
+      setting.agentCategory === AgentCategory.ToolUse ? 'toolUse' : 'workflow';
 
     // Fire-and-forget: generate AI session description from the user's instruction.
     // Triggered at the start so cancelled/errored sessions still get descriptions.
@@ -476,22 +497,12 @@ export async function executeAgent(
             parentStage: ctx.parentStage,
             onRoundCompleted,
           });
-          return {
-            category: 'workflow' as const,
-            status: result.status,
-            outputs: toOutputSummaries(result.roundOutputs),
-            compileFailures: toCompileFailureSummaries(result.roundOutputs),
-            executionId: ctx.executionId,
-            streamId,
-          };
+          return buildWorkflowFlowResult(result, ctx.executionId, streamId);
         });
       },
       {
         isSubagent,
-        category:
-          setting.agentCategory === AgentCategory.ToolUse
-            ? 'toolUse'
-            : 'workflow',
+        category,
         parentStreamId: options.parentStreamId,
         onCompleted: options.onCompleted,
         onError: options.onError,
@@ -547,14 +558,7 @@ export async function executeMergeAgent(
             ctx.runtimeHost,
           ),
         });
-        return {
-          category: 'workflow' as const,
-          status: result.status,
-          outputs: toOutputSummaries(result.roundOutputs),
-          compileFailures: toCompileFailureSummaries(result.roundOutputs),
-          executionId: ctx.executionId,
-          streamId,
-        };
+        return buildWorkflowFlowResult(result, ctx.executionId, streamId);
       });
     }),
   );
