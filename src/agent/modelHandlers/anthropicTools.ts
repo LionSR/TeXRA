@@ -57,12 +57,17 @@ export async function uploadToolAttachments(
   attachments: ToolFileAttachment[],
   logger: AgentLogger,
   uploadedPdfPageCounts: Map<string, number>,
-  getTrackedPdfPageCount: () => number,
-  getMaxPdfPages: () => number,
+  maxPdfPages: number,
 ): Promise<UploadToolAttachmentsResult> {
   const uploaded: UploadedAnthropicAttachment[] = [];
   const unsupported: ToolFileAttachment[] = [];
   const pageLimitExceeded: ToolFileAttachment[] = [];
+
+  const trackedPdfPageCount = (): number => {
+    let total = 0;
+    for (const count of uploadedPdfPageCounts.values()) total += count;
+    return total;
+  };
 
   for (const attachment of attachments) {
     const mimeType = attachment.mimeType ?? 'application/octet-stream';
@@ -90,7 +95,7 @@ export async function uploadToolAttachments(
     let pdfPageCount = 0;
     if (isPdf) {
       pdfPageCount = await countPdfPagesFromBuffer(buffer);
-      if (getTrackedPdfPageCount() + pdfPageCount > getMaxPdfPages()) {
+      if (trackedPdfPageCount() + pdfPageCount > maxPdfPages) {
         pageLimitExceeded.push(attachment);
         buffer.fill(0);
         buffer = undefined;
