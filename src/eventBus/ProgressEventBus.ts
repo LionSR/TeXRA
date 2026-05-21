@@ -148,7 +148,7 @@ export interface ProgressEventPayloads {
   };
   setParentStream: {
     childStreamId: StreamTabId;
-    parentStreamId: StreamTabId;
+    parentStreamId: StreamTabId | null;
   };
   /** A follow-up message was sent to an active tool-use session.
    *  Listened by blocking tools (e.g. ExecutionsTool wait) to abort early. */
