@@ -652,10 +652,13 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const welcomeKey = 'texra.welcomeShown';
   if (!context.globalState.get<boolean>(welcomeKey)) {
-    // Opening the VS Code walkthrough is enough — its first step is the
-    // setup assistant CTA, so don't double up with a popup.
+    // Land first-run users on the Multi-Agent tab so they see the
+    // team card grid (icons, descriptions, agent pills) as their first
+    // interaction, then open the walkthrough alongside for the rest of
+    // the onboarding tips.
     void vscode.commands
-      .executeCommand('texra.openGettingStarted')
+      .executeCommand('texra.showMultiAgent')
+      .then(() => vscode.commands.executeCommand('texra.openGettingStarted'))
       .then(() => context.globalState.update(welcomeKey, true));
   }
 }

@@ -82,6 +82,7 @@ import {
   DESKTOP_LOCAL_COMMANDS,
   formatDesktopAccelerator,
   getDesktopCommandMenuEntries,
+  SETTINGS_TAB,
   type DesktopCommandActions,
   type DesktopCommandId,
 } from '../desktopCommandSurface';
@@ -903,6 +904,7 @@ const firstRunWalkthrough = bootstrapFailed
       document,
       dismiss: () => postMessage(DESKTOP_ONBOARDING_COMMANDS.DISMISS),
       setRoute,
+      openMultiAgent: () => openSettingsTab(SETTINGS_TAB.MULTI_AGENT),
     });
 if (firstRunWalkthrough) appRoot.append(firstRunWalkthrough.element);
 
