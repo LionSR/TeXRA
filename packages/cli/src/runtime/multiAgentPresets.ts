@@ -1,5 +1,8 @@
 import { platform } from '@platform/platform';
+import type { AgentEntry } from '@agent/index';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { agentKey } from '@shared/schemas/agent';
 import {
   AGENT_MODE_PRESETS,
   AgentModePresetSchema,
@@ -10,6 +13,15 @@ export type CliMultiAgentPresetSource = 'built-in' | 'custom';
 
 export interface CliMultiAgentPreset extends AgentModePreset {
   readonly source: CliMultiAgentPresetSource;
+}
+
+export interface CliMultiAgentPresetRunPlan {
+  readonly preset: CliMultiAgentPreset;
+  readonly rootAgent?: AgentEntry;
+  readonly workflowAgentKeys: readonly string[];
+  readonly toolUseAgentKeys: readonly string[];
+  readonly missingWorkflowAgents: readonly string[];
+  readonly missingToolUseAgents: readonly string[];
 }
 
 export function parseCliCustomAgentPresets(raw: unknown): AgentModePreset[] {
@@ -90,11 +102,156 @@ export function cliMultiAgentPresetNdjsonRecords(
   }));
 }
 
+export function planCliMultiAgentPresetRun(
+  preset: CliMultiAgentPreset,
+  options: {
+    readonly workflowAgents: readonly AgentEntry[];
+    readonly toolUseAgents: readonly AgentEntry[];
+    readonly agentOverride?: string;
+  },
+): CliMultiAgentPresetRunPlan {
+  const workflow = resolvePresetAgents(
+    preset.workflowAgents,
+    options.workflowAgents,
+  );
+  const toolUse = resolvePresetAgents(
+    preset.toolUseAgents,
+    options.toolUseAgents,
+  );
+  const overrideAgent = resolveAgentOverride(
+    options.agentOverride,
+    options.toolUseAgents,
+  );
+  const rootAgent =
+    overrideAgent ??
+    selectPresetRootAgent(toolUse.resolved, preset.toolUseAgents);
+  const toolUseAgents = rootAgent
+    ? includeAgent(toolUse.resolved, rootAgent)
+    : toolUse.resolved;
+
+  return {
+    preset,
+    rootAgent,
+    workflowAgentKeys: workflow.resolved.map(toAgentKey),
+    toolUseAgentKeys: toolUseAgents.map(toAgentKey),
+    missingWorkflowAgents: workflow.missing,
+    missingToolUseAgents: toolUse.missing,
+  };
+}
+
+export async function withCliMultiAgentPresetVisibility<T>(
+  plan: CliMultiAgentPresetRunPlan,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const workspaceState = platform().workspaceState;
+  const previousWorkflowAgents = workspaceState.get<string[] | undefined>(
+    WorkspaceStateKey.ENABLED_AGENTS,
+  );
+  const previousToolUseAgents = workspaceState.get<string[] | undefined>(
+    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+  );
+
+  await workspaceState.update(WorkspaceStateKey.ENABLED_AGENTS, [
+    ...plan.workflowAgentKeys,
+  ]);
+  await workspaceState.update(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS, [
+    ...plan.toolUseAgentKeys,
+  ]);
+
+  try {
+    return await operation();
+  } finally {
+    await workspaceState.update(
+      WorkspaceStateKey.ENABLED_AGENTS,
+      previousWorkflowAgents,
+    );
+    await workspaceState.update(
+      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+      previousToolUseAgents,
+    );
+  }
+}
+
 function withSource(
   preset: AgentModePreset,
   source: CliMultiAgentPresetSource,
 ): CliMultiAgentPreset {
   return { ...preset, source };
+}
+
+function resolvePresetAgents(
+  names: readonly string[],
+  agents: readonly AgentEntry[],
+): { resolved: AgentEntry[]; missing: string[] } {
+  const resolved: AgentEntry[] = [];
+  const missing: string[] = [];
+  for (const name of names) {
+    const entry = agents.find((agent) => agent.name === name);
+    if (entry) {
+      resolved.push(entry);
+    } else {
+      missing.push(name);
+    }
+  }
+  return { resolved, missing };
+}
+
+function resolveAgentOverride(
+  override: string | undefined,
+  agents: readonly AgentEntry[],
+): AgentEntry | undefined {
+  const query = override?.trim();
+  if (!query) return undefined;
+  return agents.find(
+    (agent) => agent.name === query || toAgentKey(agent) === query,
+  );
+}
+
+function selectPresetRootAgent(
+  agents: readonly AgentEntry[],
+  presetOrder: readonly string[],
+): AgentEntry | undefined {
+  const delegatingAgents = agents.filter(agentHasDelegationTools);
+  if (delegatingAgents.length > 0) {
+    return (
+      findPreferredRootAgent(delegatingAgents, presetOrder) ??
+      delegatingAgents[0]
+    );
+  }
+  return agents[0];
+}
+
+function findPreferredRootAgent(
+  agents: readonly AgentEntry[],
+  presetOrder: readonly string[],
+): AgentEntry | undefined {
+  const preferredNames = ['orchestrator', 'leanOrchestrator'];
+  for (const preferred of preferredNames) {
+    const entry = agents.find((agent) => agent.name === preferred);
+    if (entry) return entry;
+  }
+  for (const name of presetOrder) {
+    const entry = agents.find((agent) => agent.name === name);
+    if (entry) return entry;
+  }
+  return undefined;
+}
+
+function includeAgent(
+  agents: readonly AgentEntry[],
+  rootAgent: AgentEntry,
+): AgentEntry[] {
+  return agents.some((agent) => toAgentKey(agent) === toAgentKey(rootAgent))
+    ? [...agents]
+    : [...agents, rootAgent];
+}
+
+function agentHasDelegationTools(agent: AgentEntry): boolean {
+  return agent.tools?.some((tool) => DELEGATION_TOOLS.has(tool)) ?? false;
+}
+
+function toAgentKey(agent: AgentEntry): string {
+  return agentKey(agent.source, agent.name);
 }
 
 function formatAgentNames(names: readonly string[]): string {
