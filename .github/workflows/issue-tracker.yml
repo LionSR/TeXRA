@@ -65,15 +65,25 @@ jobs:
           EVENT_ACTION: ${{ github.event.action }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
           should_run=true
 
           if [[ "$EVENT_NAME" == pull_request* ]]; then
-            tracker_workflow_changes="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- .github/workflows/issue-tracker.yml)"
-            if [[ -n "$tracker_workflow_changes" ]]; then
-              should_run=false
-              echo "Skipping tracker agent because this PR changes issue-tracker.yml."
-              echo "The Claude action requires workflow content to match the default branch before token exchange."
+            diff_head="$HEAD_SHA"
+            if ! git cat-file -e "$diff_head^{commit}" 2>/dev/null && [[ -n "$MERGE_SHA" ]]; then
+              diff_head="$MERGE_SHA"
+            fi
+
+            if git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null && git cat-file -e "$diff_head^{commit}" 2>/dev/null; then
+              tracker_workflow_changes="$(git diff --name-only "$BASE_SHA" "$diff_head" -- .github/workflows/issue-tracker.yml)"
+              if [[ -n "$tracker_workflow_changes" ]]; then
+                should_run=false
+                echo "Skipping tracker agent because this PR changes issue-tracker.yml."
+                echo "The Claude action requires workflow content to match the default branch before token exchange."
+              fi
+            else
+              echo "::notice::Skipping tracker workflow diff gate because the pull request comparison commits are unavailable."
             fi
           fi
 
