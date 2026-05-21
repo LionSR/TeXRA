@@ -7,6 +7,34 @@ const closed = { stdout: false, stderr: false };
 
 type StreamKey = 'stdout' | 'stderr';
 
+export function isCliPipeClosureError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const code = (error as { code?: unknown }).code;
+  return code === 'EPIPE' || code === 'ERR_STREAM_DESTROYED';
+}
+
+let pipeErrorHandlersInstalled = false;
+
+export function installCliPipeErrorHandlers(): void {
+  if (pipeErrorHandlersInstalled) return;
+  pipeErrorHandlersInstalled = true;
+
+  process.stdout.on('error', (error) => {
+    if (isCliPipeClosureError(error)) {
+      closed.stdout = true;
+      return;
+    }
+    throw error;
+  });
+  process.stderr.on('error', (error) => {
+    if (isCliPipeClosureError(error)) {
+      closed.stderr = true;
+      return;
+    }
+    throw error;
+  });
+}
+
 // CLI output is best effort: throwing from an async write callback would bypass
 // the command error boundary and can crash the process.
 function writeRaw(key: StreamKey, text: string): void {
