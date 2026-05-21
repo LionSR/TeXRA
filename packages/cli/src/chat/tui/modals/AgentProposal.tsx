@@ -1,12 +1,12 @@
 import { Box, Text } from 'ink';
 
 import {
-  AGENT_CATEGORY,
   getProposalFileGroups,
   type AgentProposalPermission,
 } from '@shared/schemas';
 
 import { ConfirmCard } from './ConfirmCard';
+import { agentProposalCategoryLabel } from './AgentProposalDisplay';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface AgentProposalProps {
@@ -48,10 +48,8 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
           {props.payload.model}
         </Text>
         <Text>
-          <Text bold>Kind: </Text>
-          {props.payload.agentCategory === AGENT_CATEGORY.WORKFLOW
-            ? 'workflow'
-            : 'tool-use'}
+          <Text bold>Category: </Text>
+          {agentProposalCategoryLabel(props.payload.agentCategory)}
         </Text>
         {props.payload.workingDirectory ? (
           <Text>
