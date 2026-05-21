@@ -19,9 +19,13 @@ vi.mock('@agent/storage', () => ({
 
 const mockedListExecutions = vi.mocked(listExecutions);
 
-function historyEntry(agent: string, overrides: Record<string, unknown> = {}) {
+function historyEntry(
+  agent: string,
+  overrides: Record<string, unknown> = {},
+  timestamp = '2026-05-21T08:00:00.000Z',
+) {
   return {
-    timestamp: new Date().toISOString(),
+    timestamp,
     agentConfig: {
       agent,
       model: 'sonnet46T',
@@ -116,11 +120,14 @@ describe('CLI chat defaults', () => {
 
   it('skips a team run to reach an earlier single-agent execution', async () => {
     mockedListExecutions.mockResolvedValueOnce([
-      historyEntry('orchestrator', {
-        cliMultiAgentPresetId: 'physicist',
-        // newer timestamp so it would win if not filtered
-      }),
-      historyEntry('research'),
+      historyEntry(
+        'orchestrator',
+        {
+          cliMultiAgentPresetId: 'physicist',
+        },
+        '2026-05-21T08:02:00.000Z',
+      ),
+      historyEntry('research', {}, '2026-05-21T08:01:00.000Z'),
     ]);
 
     await expect(
