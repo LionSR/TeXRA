@@ -40,7 +40,11 @@ import {
 import { setCliApiMode } from '../../../runtime/apiAccessMode';
 import { assertNever } from '../assertNever';
 import { cliState } from './cliState';
-import { enqueueApproval, type ApprovalDecision } from './approvalQueue';
+import {
+  enqueueApproval,
+  type ApprovalDecision,
+  type ApprovalPayload,
+} from './approvalQueue';
 import type { CliContext } from '../../../runtime/cliContext';
 import type { CliRuntimeHost } from '../../../runtime/runtimeHost';
 
@@ -93,7 +97,7 @@ export function installTuiApprovals(
   setToolEditApprovalHandler(async (request) => {
     let decision: ApprovalDecision | undefined = immediateDecision(context);
     if (!decision) {
-      decision = await enqueueApproval({ kind: 'toolEdit', request });
+      decision = await enqueueTuiApproval({ kind: 'toolEdit', request }, host);
       markIfRejected(context, decision);
     }
     if (
@@ -128,6 +132,7 @@ function routeApproval(
     case 'showBashPermission':
       routeWithPolicy(
         context,
+        host,
         'bash',
         payload as ProgressEventPayloads['showBashPermission'],
         (bashPayload, decision) => {
@@ -145,6 +150,7 @@ function routeApproval(
     case 'showPlanApproval':
       routeWithPolicy(
         context,
+        host,
         'plan',
         payload as ProgressEventPayloads['showPlanApproval'],
         dispatchPlan,
@@ -153,6 +159,7 @@ function routeApproval(
     case 'showAgentProposal':
       routeWithPolicy(
         context,
+        host,
         'proposal',
         payload as ProgressEventPayloads['showAgentProposal'],
         dispatchProposal,
@@ -161,6 +168,7 @@ function routeApproval(
     case 'showRetryRequest':
       routeWithPolicy(
         context,
+        host,
         'retry',
         payload as ProgressEventPayloads['showRetryRequest'],
         dispatchRetry,
@@ -173,12 +181,14 @@ function routeApproval(
       handleExternalInquiry(
         payload as ProgressEventPayloads['showExternalInquiry'],
         context,
+        host,
       );
       return;
     case 'showUserQuestion':
       handleUserQuestion(
         payload as ProgressEventPayloads['showUserQuestion'],
         context,
+        host,
       );
       return;
     default:
@@ -188,6 +198,7 @@ function routeApproval(
 
 function routeWithPolicy<K extends 'bash' | 'plan' | 'proposal' | 'retry', P>(
   context: CliContext,
+  host: CliRuntimeHost,
   kind: K,
   payload: P,
   dispatch: (payload: P, decision: ApprovalDecision) => void,
@@ -210,9 +221,39 @@ function routeWithPolicy<K extends 'bash' | 'plan' | 'proposal' | 'retry', P>(
     Parameters<typeof enqueueApproval>[0],
     { kind: K }
   >;
-  void enqueueApproval(queuePayload).then((decision) => {
+  void enqueueTuiApproval(queuePayload, host).then((decision) => {
     markIfRejected(context, decision);
     dispatch(payload, decision);
+  });
+}
+
+export function approvalPayloadStreamId(
+  payload: ApprovalPayload,
+): string | undefined {
+  switch (payload.kind) {
+    case 'bash':
+    case 'plan':
+    case 'proposal':
+    case 'retry':
+    case 'externalInquiry':
+    case 'userQuestion':
+      return payload.payload.streamId || undefined;
+    case 'toolEdit':
+      return payload.request.streamId || undefined;
+    default:
+      assertNever(payload, 'Unhandled approval payload kind');
+  }
+}
+
+function enqueueTuiApproval(
+  payload: ApprovalPayload,
+  host: CliRuntimeHost,
+): Promise<ApprovalDecision> {
+  return enqueueApproval(payload, {
+    onPresent: () => {
+      const streamId = approvalPayloadStreamId(payload);
+      if (streamId) host.emit('setActiveStream', { streamId });
+    },
   });
 }
 
@@ -285,6 +326,7 @@ async function applyRetryDecision(
 function handleExternalInquiry(
   payload: ProgressEventPayloads['showExternalInquiry'],
   context: CliContext,
+  host: CliRuntimeHost,
 ): void {
   const threadId = payload.threadId;
   if (!threadId) return;
@@ -298,7 +340,7 @@ function handleExternalInquiry(
     void handleExternalInquiryAction({ action: 'drop', threadId, feedback });
     return;
   }
-  void enqueueApproval({ kind: 'externalInquiry', payload }).then(
+  void enqueueTuiApproval({ kind: 'externalInquiry', payload }, host).then(
     (decision) => {
       markIfRejected(context, decision);
       // User-accept with text submits an answer; empty text, reject, and
@@ -323,6 +365,7 @@ function handleExternalInquiry(
 function handleUserQuestion(
   payload: ProgressEventPayloads['showUserQuestion'],
   context: CliContext,
+  host: CliRuntimeHost,
 ): void {
   const policy = immediateDecision(context);
   if (policy) {
@@ -334,22 +377,24 @@ function handleUserQuestion(
     return;
   }
 
-  void enqueueApproval({ kind: 'userQuestion', payload }).then((decision) => {
-    markIfRejected(context, decision);
-    if (decision.accepted && decision.userQuestionAnswers) {
+  void enqueueTuiApproval({ kind: 'userQuestion', payload }, host).then(
+    (decision) => {
+      markIfRejected(context, decision);
+      if (decision.accepted && decision.userQuestionAnswers) {
+        void handleUserQuestionAction({
+          requestId: payload.requestId,
+          action: 'submit',
+          answers: decision.userQuestionAnswers,
+        });
+        return;
+      }
       void handleUserQuestionAction({
         requestId: payload.requestId,
-        action: 'submit',
-        answers: decision.userQuestionAnswers,
+        action: 'skip',
+        feedback: decision.userMessage || 'User question skipped by user.',
       });
-      return;
-    }
-    void handleUserQuestionAction({
-      requestId: payload.requestId,
-      action: 'skip',
-      feedback: decision.userMessage || 'User question skipped by user.',
-    });
-  });
+    },
+  );
 }
 
 function userQuestionFeedback(context: CliContext): string {
