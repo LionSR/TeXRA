@@ -38,10 +38,8 @@ const HANDLERS = {
     awaitTrue(actions.signOut()),
   'texra.auth.viewProfile': (actions: ExtensionCommandActions) =>
     awaitTrue(actions.viewProfile()),
-  'texra.showMemory': (actions: ExtensionCommandActions) => {
-    actions.showSettings(SETTINGS_TAB.MEMORY);
-    return true;
-  },
+  'texra.showMemory': (actions: ExtensionCommandActions) =>
+    awaitTrue(actions.showSettings(SETTINGS_TAB.MEMORY)),
   'texra.runSetupAssistant': (actions: ExtensionCommandActions) =>
     awaitTrue(actions.runSetupAssistant()),
   'texra.openGettingStarted': (actions: ExtensionCommandActions) =>
@@ -161,7 +159,7 @@ const HANDLERS = {
 
 function makeActions(): ExtensionCommandActions {
   return {
-    showSettings: vi.fn(),
+    showSettings: vi.fn().mockResolvedValue(undefined),
     resetMainView: vi.fn().mockResolvedValue(undefined),
     openWorkbenchSettings: vi.fn().mockReturnValue(Promise.resolve()),
     cleanBuild: vi.fn().mockResolvedValue(undefined),
@@ -254,11 +252,14 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     expect(actions[actionKey]).toHaveBeenCalledOnce();
   });
 
-  it('texra.showMemory passes the memory tab index', () => {
+  it('texra.showMemory passes the memory tab index', async () => {
     const actions = makeActions();
-    expect(
-      dispatchCommandFromRegistry('texra.showMemory', HANDLERS, actions),
-    ).toBe(true);
+    const result = dispatchCommandFromRegistry(
+      'texra.showMemory',
+      HANDLERS,
+      actions,
+    );
+    await expect(Promise.resolve(result)).resolves.toBe(true);
     expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith(
       SETTINGS_TAB.MEMORY,
     );
@@ -447,6 +448,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     it.each([
       ['texra.cleanOutput', 'cleanOutput'],
       ['texra.auth.signIn', 'signIn'],
+      ['texra.showMemory', 'showSettings'],
       ['texra.encodeImageToBase64', 'encodeImageToBase64'],
       ['texra.cloneOverleafProject', 'cloneOverleafProject'],
     ] as const)('%s rejection bubbles up', async (id, actionKey) => {
