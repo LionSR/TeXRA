@@ -69,7 +69,11 @@ async function loadHistoryDefaults(): Promise<PartialDefaults> {
     const entries = await listExecutions();
     const mostRecent = entries
       .filter(
-        (entry) => entry.agentConfig?.agentCategory === AgentCategory.ToolUse,
+        (entry) =>
+          entry.agentConfig?.agentCategory === AgentCategory.ToolUse &&
+          // A multi-agent team run's root is an orchestrator agent, not a
+          // sensible default for a plain single-agent chat session.
+          !entry.agentConfig?.cliMultiAgentPresetId,
       )
       .sort(
         (a, b) =>

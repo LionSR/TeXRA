@@ -25,6 +25,13 @@ const AgentConfigFieldsSchema = NullableFileFieldsSchema.extend({
   workingDirectory: z.string().nullish(),
   /** CLI-only workspace copy target for `texra run --output`, preserved for resume. */
   cliOutputFile: z.string().nullish(),
+  /**
+   * CLI-only marker: the multi-agent team preset id this execution was launched
+   * from (`texra multi-agent run <preset>`). Used so a team run — whose root is
+   * an orchestrator agent — is not inferred as the default agent for a plain
+   * `texra chat` session. Preserved across resume.
+   */
+  cliMultiAgentPresetId: z.string().nullish(),
 });
 
 /**
