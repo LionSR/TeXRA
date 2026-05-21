@@ -4,6 +4,8 @@ import { app } from 'electron';
 
 import { registerAgentFeatures } from '@agent/features';
 import { consoleLog } from '@platform/defaults/consoleLog';
+import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
+import { JsonStateStore } from '@platform/defaults/jsonStateStore';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -15,9 +17,7 @@ import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter'
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 
 import { bootstrapElectronAgentDirectories } from './agentDirectories.js';
-import { ElectronConfigProvider } from './electronConfig.js';
 import { ElectronSecrets } from './electronSecrets.js';
-import { ElectronStateStore } from './electronState.js';
 import { repairLaunchPath } from './pathFix.js';
 import { resolveResourcesPath, resolveWorkspacePath } from './paths.js';
 import { showSecretStorageWarningDialog } from './secretStorageWarningDialog.js';
@@ -58,9 +58,12 @@ export async function initializeElectronPlatform(
 
   repairLaunchPath();
   initPlatform({
-    config: new ElectronConfigProvider(globalConfigStore, workspaceConfigStore),
-    globalState: new ElectronStateStore(globalStateStore),
-    workspaceState: new ElectronStateStore(workspaceStateStore),
+    config: new JsonConfigProvider({
+      workspace: workspaceConfigStore,
+      global: globalConfigStore,
+    }),
+    globalState: new JsonStateStore(globalStateStore),
+    workspaceState: new JsonStateStore(workspaceStateStore),
     log: consoleLog,
     fs: nodeFilesystem,
     workspace: createNodeWorkspace(() => workspacePath),
