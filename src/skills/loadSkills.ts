@@ -144,17 +144,11 @@ function normalizeSkillDescription(
 ): { description?: string; errors: SkillLoadIssue[] } {
   const errors: SkillLoadIssue[] = [];
   const rawDescription = frontmatter.description;
-  if (typeof rawDescription !== 'string') {
-    errors.push(
-      issue('error', 'missing_description', 'Skill description is required', {
-        path: skillPath,
-        name,
-      }),
-    );
-    return { errors };
-  }
+  const description =
+    typeof rawDescription === 'string'
+      ? collapseWhitespace(rawDescription)
+      : '';
 
-  const description = collapseWhitespace(rawDescription);
   if (!description) {
     errors.push(
       issue('error', 'missing_description', 'Skill description is required', {
