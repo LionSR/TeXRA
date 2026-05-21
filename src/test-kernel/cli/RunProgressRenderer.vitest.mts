@@ -178,6 +178,66 @@ describe('CLI run progress renderer', () => {
     expect(output).toContain('polish paper.tex · 0s');
   });
 
+  it('writes subagent progress events to stdout in ndjson mode', async () => {
+    let output = '';
+    const originalWrite = process.stdout.write;
+    process.stdout.write = ((
+      chunk: string | Uint8Array,
+      ...args: unknown[]
+    ) => {
+      output += String(chunk);
+      const callback = args.find(
+        (arg): arg is (error?: Error | null) => void =>
+          typeof arg === 'function',
+      );
+      callback?.();
+      return true;
+    }) as typeof process.stdout.write;
+
+    try {
+      const host = createCliRuntimeHost(
+        context({ outputFormat: 'ndjson', renderRunProgress: false }),
+      );
+      host.emit('updateActiveSubagents', {
+        parentStreamId: 'parent-stream',
+        children: [
+          {
+            executionId: 'child-execution',
+            childStreamId: 'child-stream',
+            agentName: 'review',
+            status: 'running',
+          },
+        ],
+      });
+      await host.close();
+    } finally {
+      process.stdout.write = originalWrite;
+    }
+
+    const records = output
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+
+    expect(records).toEqual([
+      expect.objectContaining({
+        kind: 'progress',
+        event: 'updateActiveSubagents',
+        payload: {
+          parentStreamId: 'parent-stream',
+          children: [
+            {
+              executionId: 'child-execution',
+              childStreamId: 'child-stream',
+              agentName: 'review',
+              status: 'running',
+            },
+          ],
+        },
+      }),
+    ]);
+  });
+
   it('maps the global quiet flag into CLI context args', () => {
     expect(
       pickGlobalArgs({
