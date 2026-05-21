@@ -189,6 +189,28 @@ const baseConfig = {
     },
   },
   ignoreDeadLinks: true,
+  // Public site allowlist: only index.md, launch.md, terms.md, providers.md,
+  // and everything under guide/. Every other markdown file in this directory
+  // is internal and must NOT be published to texra.ai. Static assets under
+  // public/ are served as-is and are fine to expose.
+  srcExclude: [
+    'README.md',
+    'analysis-subagent-updates.md',
+    'desktop-signing-ci.md',
+    'electron-migration-plan.md',
+    'relay-tier-config.md',
+    'blog/**',
+    'design/**',
+    'dev/**',
+    'pocketflow/**',
+    'prd/**',
+    'proposals/**',
+    'reference/**',
+    'skills/**',
+    'supabase/**',
+    'toolCalls/**',
+    'node_modules/**',
+  ],
   vite: {
     vue: {
       template: {
