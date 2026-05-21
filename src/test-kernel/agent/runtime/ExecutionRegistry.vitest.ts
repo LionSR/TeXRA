@@ -92,9 +92,14 @@ describe('executionRegistry', () => {
       expect(explicit.events.map((entry) => entry.event)).toEqual([
         'updateActiveSubagents',
         'setParentStream',
+        'setParentStream',
         'updateActiveSubagents',
       ]);
       expect(explicit.events[2].payload).toEqual({
+        childStreamId,
+        parentStreamId: null,
+      });
+      expect(explicit.events[3].payload).toEqual({
         parentStreamId,
         children: [],
       });

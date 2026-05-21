@@ -185,9 +185,17 @@ export function patchStream(
 
 export function setParentStream(
   childStreamId: StreamTabId,
-  parentStreamId: StreamTabId,
+  parentStreamId: StreamTabId | null | undefined,
 ): void {
   const current = cliState.parentStream.get();
+  // A null parent means the runtime promoted this child to a top-level stream.
+  if (parentStreamId == null || childStreamId === parentStreamId) {
+    if (!current.has(childStreamId)) return;
+    const out = new Map(current);
+    out.delete(childStreamId);
+    cliState.parentStream.set(out);
+    return;
+  }
   if (current.get(childStreamId) === parentStreamId) return;
   const out = new Map(current);
   out.set(childStreamId, parentStreamId);

@@ -722,11 +722,15 @@ export class DesktopProgressBridge {
       }
       case 'setParentStream': {
         const data = payload as ProgressEventPayloads['setParentStream'];
-        this.parentStreams.set(data.childStreamId, data.parentStreamId);
+        if (data.parentStreamId == null) {
+          this.parentStreams.delete(data.childStreamId);
+        } else {
+          this.parentStreams.set(data.childStreamId, data.parentStreamId);
+        }
         this.send({
           command: PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM,
           stream: data.childStreamId,
-          parentStreamId: data.parentStreamId,
+          parentStreamId: data.parentStreamId ?? undefined,
         });
         break;
       }
