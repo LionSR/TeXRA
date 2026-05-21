@@ -59,7 +59,6 @@ import {
   type ProgressViewOutboundMessage,
 } from '@shared/schemas/progressView';
 import type { DesktopThemeKind } from '@shared/constants/desktopTheme';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import {
   applyHostBodyTheme,
   getWindowTargetOrigin,
@@ -72,7 +71,6 @@ import {
   type DesktopSetRouteMessage,
 } from '../desktopShellMessages';
 import {
-  DESKTOP_LOG_COMMANDS,
   DesktopSetLogMessageSchema,
   type DesktopSetLogMessage,
 } from '../desktopLogMessages';
@@ -94,20 +92,19 @@ import {
 import {
   DesktopShowDiffMessageSchema,
   DesktopCloseDiffMessageSchema,
-  type DesktopShowDiffMessage,
   type DesktopCloseDiffMessage,
 } from '../desktopDiffMessages';
 import {
   DesktopShowPdfMessageSchema,
   DesktopClosePdfMessageSchema,
-  isSafeAbsolutePdfPath,
-  type DesktopShowPdfMessage,
   type DesktopClosePdfMessage,
 } from '../desktopPdfMessages';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
 import { createFirstRunWalkthrough } from './desktopOnboarding';
 import { getRendererPlatform } from './rendererPlatform';
-import type WaDrawer from '@awesome.me/webawesome/dist/components/drawer/drawer.js';
+import { createPdfOverlay } from './pdfOverlay';
+import { createDiffOverlay } from './diffOverlay';
+import { createLogsDrawer } from './logsDrawer';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 
 const root = document.querySelector<HTMLElement>('#app');
@@ -157,6 +154,11 @@ function shortcutTitle(label: string, accelerator: string): string {
   return shortcut ? `${label} - ${shortcut}` : label;
 }
 
+function setRouteState(route: DesktopRoute): void {
+  currentRoute = route;
+  document.body.dataset.desktopRoute = route;
+}
+
 // `<settings-app>` lives inside the wa-dialog overlay below; `<main-app>` and
 // `<stream-conversation>` mount directly in the center pane. These are
 // instantiated once and slotted into the shell template via Lit's DOM-node
@@ -166,10 +168,7 @@ mainView.setAttribute('data-desktop-view', 'main');
 const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
 if (!hasWorkspace) {
   // Empty-state placeholder when no workspace is open. The launcher cannot
-  // run anything without a workspace; show a minimal prompt instead. We
-  // render this as a sibling and hide `<main-app>` rather than swapping the
-  // tag so the test surface (and downstream tooling) always sees the
-  // canonical `<main-app>` mount.
+  // run anything without a workspace; show a minimal prompt instead.
   noWorkspacePlaceholder.className = 'desktop-empty-workspace';
   render(emptyWorkspaceTemplate(), noWorkspacePlaceholder);
 }
@@ -193,9 +192,14 @@ const railTabs = document.createElement('stream-tabs') as HTMLElement & {
 const settingsView: HTMLElement = document.createElement('settings-app');
 settingsView.setAttribute('data-desktop-view', 'settings');
 
-const logsContainer: HTMLElement = document.createElement('div');
-logsContainer.setAttribute('data-desktop-view', 'logs');
-logsContainer.className = 'desktop-log-host';
+const logsDrawer = createLogsDrawer(appRoot);
+const diffOverlay = createDiffOverlay(appRoot);
+const pdfOverlay = createPdfOverlay(appRoot);
+
+function openLogsDrawer(): void {
+  setRouteState('logs');
+  logsDrawer.open();
+}
 
 function emptyWorkspaceTemplate(): TemplateResult {
   return html`
@@ -239,10 +243,6 @@ function emptyWorkspaceTemplate(): TemplateResult {
 // PRD § 7.C: `<progress-app>` is NOT mounted in Electron; the children mount
 // directly. We recreate the message-routing and event-handler context here so
 // the same `messageDispatcher` + `eventHandlers` modules drive both hosts.
-//
-// `appState`, `permissions$`, `placement` are module-level signals that all
-// the imported components subscribe to via SignalWatcher, so changes here
-// propagate into both `<stream-tabs>` and `<stream-conversation>`.
 
 function getEventHandlerContext(): FrontendEventHandlerContext {
   return {
@@ -461,13 +461,12 @@ function renderBootstrapFallback(error: unknown): void {
               appearance="outlined"
               @click=${() => {
                 try {
-                  renderLogViewer();
+                  logsDrawer.rerenderViewer();
                   rerenderShell();
                   // Recovery must wire rail tabs / conversation events and
                   // install the signal watcher — without these the recovered
                   // shell renders but stays inert (rail clicks ignored,
-                  // signal changes don't trigger rerenders). Bot review
-                  // #3801 caught this regression.
+                  // signal changes don't trigger rerenders).
                   wireRailTabs();
                   wireConversation();
                   installShellSignalWatcher();
@@ -495,40 +494,8 @@ function renderBootstrapFallback(error: unknown): void {
 }
 
 // =============================================================================
-// Logs drawer
+// Signal watcher + bootstrap
 // =============================================================================
-
-interface LogViewerState {
-  meta: string;
-  text: string;
-}
-
-let logViewerState: LogViewerState = {
-  meta: 'Recent redacted log entries appear here.',
-  text: 'Open Logs to load recent entries.',
-};
-
-let logsDrawer: WaDrawer | null = null;
-
-function ensureLogsDrawer(): WaDrawer {
-  if (logsDrawer) return logsDrawer;
-  const drawer = document.createElement('wa-drawer') as WaDrawer;
-  drawer.classList.add('desktop-logs-drawer');
-  drawer.setAttribute('label', 'Desktop Logs');
-  drawer.setAttribute('placement', 'bottom');
-  drawer.append(logsContainer);
-  appRoot.append(drawer);
-  logsDrawer = drawer;
-  return drawer;
-}
-
-function openLogsDrawer(): void {
-  const drawer = ensureLogsDrawer();
-  currentRoute = 'logs';
-  document.body.dataset.desktopRoute = 'logs';
-  drawer.open = true;
-  requestLogSnapshot();
-}
 
 let shellWatcherInstalled = false;
 
@@ -540,11 +507,6 @@ function installShellSignalWatcher(): void {
   // `Signal.subtle.Watcher` from @lit-labs/signals (TC39 polyfill) — this
   // is what `SignalWatcher(LitElement)` wraps internally. We schedule the
   // re-render on a microtask so multiple synchronous signal writes batch.
-  //
-  // The watcher pattern: after `notify` fires, the watcher pauses tracking;
-  // we must read the pending computed (which re-runs and re-establishes
-  // dependencies) and call `watch()` again to re-arm. This is the same
-  // pattern @lit-labs/signals' `SignalWatcher` mixin uses internally.
   const shellDeps = new Signal.Computed(() => {
     activeStreamId$.get();
     hasAnyStreams$.get();
@@ -574,7 +536,7 @@ function installShellSignalWatcher(): void {
 
 let bootstrapFailed = false;
 try {
-  renderLogViewer();
+  logsDrawer.rerenderViewer();
   rerenderShell();
   installShellSignalWatcher();
 } catch (error) {
@@ -606,8 +568,6 @@ function ensureSettingsDialog(): WaDialog {
   // Settings-app fills the dialog body. We append it directly so subsequent
   // re-opens reuse the same instance (preserving tab selection and state).
   dialog.append(settingsView);
-  // Add an explicit close button (gear toggle dismiss flow). Esc is handled
-  // natively by wa-dialog.
   const close = document.createElement('wa-button');
   close.classList.add('desktop-settings-close');
   close.setAttribute('appearance', 'plain');
@@ -626,8 +586,7 @@ function ensureSettingsDialog(): WaDialog {
 
 function openSettingsOverlay(): void {
   const dialog = ensureSettingsDialog();
-  currentRoute = 'settings';
-  document.body.dataset.desktopRoute = 'settings';
+  setRouteState('settings');
   dialog.open = true;
 }
 
@@ -643,255 +602,6 @@ function openSettingsTab(
     buildDesktopSettingsTabMessage(tabIndex, agentSubTab),
     getWindowTargetOrigin(),
   );
-}
-
-// =============================================================================
-// Diff overlay (audit item C, trajectory #18)
-// =============================================================================
-//
-// Replaces `desktopDiffHost`'s old "open the patch in the OS editor" flow
-// with an in-app `<texra-diff-view>` mounted inside a wa-dialog overlay.
-// Mirrors the settings-overlay pattern so the two surfaces share UX +
-// keyboard handling (Esc dismisses; clicking the close button hides the
-// dialog without unmounting it).
-
-interface DiffViewElement extends HTMLElement {
-  originalText: string;
-  proposedText: string;
-  language: string;
-}
-
-let diffDialog: WaDialog | null = null;
-let diffViewElement: DiffViewElement | null = null;
-let diffTitleElement: HTMLElement | null = null;
-let diffSubtitleElement: HTMLElement | null = null;
-
-function ensureDiffDialog(): WaDialog {
-  if (diffDialog) return diffDialog;
-  const dialog = document.createElement('wa-dialog') as WaDialog;
-  dialog.classList.add('desktop-diff-overlay');
-  dialog.withoutHeader = true;
-  dialog.lightDismiss = false;
-  dialog.setAttribute('aria-label', 'Compare files');
-
-  const body = document.createElement('section');
-  body.classList.add('desktop-diff-body');
-
-  const header = document.createElement('header');
-  header.classList.add('desktop-diff-header');
-  const titleEl = document.createElement('h2');
-  titleEl.classList.add('desktop-diff-title');
-  titleEl.textContent = 'Compare';
-  diffTitleElement = titleEl;
-  const subtitleEl = document.createElement('p');
-  subtitleEl.classList.add('desktop-diff-subtitle');
-  diffSubtitleElement = subtitleEl;
-  header.append(titleEl, subtitleEl);
-
-  // Lazily create the <texra-diff-view> on first show (Monaco is heavy
-  // to import; defer until actually needed). The element is reused
-  // across re-opens — Lit's @property setter handles content swaps.
-  const view = document.createElement('texra-diff-view') as DiffViewElement;
-  view.classList.add('desktop-diff-view');
-  diffViewElement = view;
-
-  body.append(header, view);
-  dialog.append(body);
-
-  // Explicit close button — wa-dialog handles Esc natively but we want a
-  // visible affordance to match the settings overlay.
-  const close = document.createElement('wa-button');
-  close.classList.add('desktop-diff-close');
-  close.setAttribute('appearance', 'plain');
-  close.setAttribute('size', 'small');
-  close.setAttribute('aria-label', 'Close diff');
-  close.setAttribute('title', 'Close diff');
-  render(waIcon('xmark'), close);
-  close.addEventListener('click', () => {
-    dialog.open = false;
-  });
-  dialog.append(close);
-
-  appRoot.append(dialog);
-  diffDialog = dialog;
-  return dialog;
-}
-
-function openDiffOverlay(payload: DesktopShowDiffMessage): void {
-  const dialog = ensureDiffDialog();
-  if (diffTitleElement) diffTitleElement.textContent = payload.title;
-  if (diffSubtitleElement) {
-    // Show the proposed path (the file the user is reviewing) — fall
-    // back to the original or empty string. This is purely informative;
-    // payload contains the full text already.
-    diffSubtitleElement.textContent =
-      payload.proposedPath ?? payload.originalPath ?? '';
-  }
-  if (diffViewElement) {
-    diffViewElement.originalText = payload.originalText;
-    diffViewElement.proposedText = payload.proposedText;
-    diffViewElement.language = payload.language;
-  }
-  dialog.open = true;
-}
-
-function closeDiffOverlay(): void {
-  if (diffDialog) diffDialog.open = false;
-}
-
-// =============================================================================
-// PDF preview overlay (audit item B, trajectory #17)
-// =============================================================================
-//
-// Replaces `desktopPreviewHost.openBuildDisplay`'s old "open the PDF in
-// the OS viewer" flow with an in-app `<iframe src="file://...">` mounted
-// inside a wa-dialog overlay — Electron's bundled Chromium renders PDFs
-// natively, so no extra dependency is required. Mirrors the diff
-// overlay shape so the two surfaces share UX + keyboard handling
-// (Esc dismisses; clicking the close button hides the dialog without
-// unmounting it).
-//
-// Note: this is the second overlay (settings was first via the
-// drawer/dialog refactor; diff via #3815). If a third overlay arrives
-// we should extract a shared `createOverlay()` factory; today the
-// duplication is small enough that an abstraction would be premature.
-
-let pdfDialog: WaDialog | null = null;
-let pdfFrameElement: HTMLIFrameElement | null = null;
-let pdfTitleElement: HTMLElement | null = null;
-let pdfSubtitleElement: HTMLElement | null = null;
-
-function ensurePdfDialog(): WaDialog {
-  if (pdfDialog) return pdfDialog;
-  const dialog = document.createElement('wa-dialog') as WaDialog;
-  dialog.classList.add('desktop-pdf-overlay');
-  dialog.withoutHeader = true;
-  dialog.lightDismiss = false;
-  dialog.setAttribute('aria-label', 'PDF preview');
-
-  const body = document.createElement('section');
-  body.classList.add('desktop-pdf-body');
-
-  const header = document.createElement('header');
-  header.classList.add('desktop-pdf-header');
-  const titleEl = document.createElement('h2');
-  titleEl.classList.add('desktop-pdf-title');
-  titleEl.textContent = 'Preview';
-  pdfTitleElement = titleEl;
-  const subtitleEl = document.createElement('p');
-  subtitleEl.classList.add('desktop-pdf-subtitle');
-  pdfSubtitleElement = subtitleEl;
-  header.append(titleEl, subtitleEl);
-
-  // Use an `<iframe>` (not `<webview>`) — `<webview>` requires
-  // `webviewTag: true` in webPreferences which we don't enable.
-  // Electron's main BrowserWindow renders PDFs in iframes via the
-  // bundled Chromium PDF plugin, no flag needed. The src is set
-  // when the overlay is opened (we keep it empty initially so
-  // dormant dialogs don't load anything).
-  const frame = document.createElement('iframe');
-  frame.classList.add('desktop-pdf-frame');
-  frame.setAttribute('title', 'PDF preview');
-  // sandbox: allow same-origin so the PDF viewer's controls (toolbar,
-  // page nav) work; deny scripts so a malformed PDF can't run JS into
-  // our renderer. The Chromium PDF viewer itself runs in a separate
-  // origin so this restriction is benign.
-  frame.setAttribute('sandbox', 'allow-same-origin');
-  pdfFrameElement = frame;
-
-  body.append(header, frame);
-  dialog.append(body);
-
-  // Explicit close button — wa-dialog handles Esc natively, but the
-  // visible affordance matches the settings + diff overlays.
-  const close = document.createElement('wa-button');
-  close.classList.add('desktop-pdf-close');
-  close.setAttribute('appearance', 'plain');
-  close.setAttribute('size', 'small');
-  close.setAttribute('aria-label', 'Close PDF preview');
-  close.setAttribute('title', 'Close PDF preview');
-  render(waIcon('xmark'), close);
-  close.addEventListener('click', () => {
-    dialog.open = false;
-  });
-  dialog.append(close);
-
-  // Clear the iframe src when the dialog hides so we don't keep the
-  // PDF resident in memory across closes. Re-opening reassigns the
-  // src in `openPdfOverlay`.
-  dialog.addEventListener('wa-after-hide', () => {
-    if (pdfFrameElement) pdfFrameElement.removeAttribute('src');
-  });
-
-  appRoot.append(dialog);
-  pdfDialog = dialog;
-  return dialog;
-}
-
-function openPdfOverlay(payload: DesktopShowPdfMessage): void {
-  // Extra defense in depth: even though the schema parsed `pdfPath`
-  // as a non-empty string, the renderer enforces an absolute-fs-path
-  // contract before assigning to `iframe.src`. Anything that smells
-  // like a non-`file:` URL is rejected (logged + ignored). The main
-  // process is the only producer today, but the renderer should not
-  // trust messages it didn't originate (Cursor Bugbot guidance).
-  if (!isSafeAbsolutePdfPath(payload.pdfPath)) {
-    console.error(
-      '[desktop] desktopPdfOverlay: rejected unsafe PDF path',
-      payload.pdfPath,
-    );
-    return;
-  }
-  const dialog = ensurePdfDialog();
-  if (pdfTitleElement) pdfTitleElement.textContent = payload.title;
-  if (pdfSubtitleElement) pdfSubtitleElement.textContent = payload.pdfPath;
-  if (pdfFrameElement) {
-    pdfFrameElement.src = pdfPathToFileUrl(payload.pdfPath);
-  }
-  dialog.open = true;
-}
-
-/**
- * Convert an absolute filesystem path (already shape-validated by
- * `isSafeAbsolutePdfPath`) into a `file:` URL safe for an iframe `src`.
- *
- * - posix `/abs/path.pdf` → `file:///abs/path.pdf`
- * - Windows drive `C:\path\file.pdf` → `file:///C:/path/file.pdf`
- * - Windows UNC `\\server\share\file.pdf` → `file://server/share/file.pdf`
- *
- * Per-segment `encodeURIComponent` percent-encodes `#`, `?`, spaces, and
- * other URL-unsafe characters that `encodeURI` leaves intact, so the
- * iframe doesn't truncate or alter the loaded path. Bot review (#3816)
- * caught the prior `file://${encodeURI(path)}` form which produced
- * invalid URLs for Windows drive-letter and UNC paths.
- */
-function pdfPathToFileUrl(absolutePath: string): string {
-  const normalised = absolutePath.replaceAll('\\', '/');
-  const encodePath = (path: string): string =>
-    path.split('/').map(encodeURIComponent).join('/');
-  // Windows UNC: //server/share/file → file://server/share/file
-  if (normalised.startsWith('//')) {
-    return `file://${encodePath(normalised.slice(2))}`;
-  }
-  // posix absolute: /abs/file → file:///abs/file
-  if (normalised.startsWith('/')) {
-    return `file:///${encodePath(normalised.slice(1))}`;
-  }
-  // Windows drive: C:/path/file → file:///C:/path/file
-  // Drive letter colon stays unescaped; only the rest of the segments are
-  // percent-encoded.
-  const driveMatch = normalised.match(/^([A-Za-z]):\/(.*)$/);
-  if (driveMatch) {
-    return `file:///${driveMatch[1]}:/${encodePath(driveMatch[2])}`;
-  }
-  // Defensive fallback — shouldn't happen because `isSafeAbsolutePdfPath`
-  // already accepted only the three shapes above. Encode the whole string
-  // so we still produce a parseable URL.
-  return `file:///${encodeURIComponent(normalised)}`;
-}
-
-function closePdfOverlay(): void {
-  if (pdfDialog) pdfDialog.open = false;
 }
 
 // =============================================================================
@@ -968,8 +678,7 @@ function returnToLauncher(): void {
       draft.activeStreamId = null;
     }),
   );
-  currentRoute = 'main';
-  document.body.dataset.desktopRoute = 'main';
+  setRouteState('main');
 }
 
 function isDesktopSetRouteMessage(
@@ -1012,13 +721,11 @@ function isDesktopClosePdfMessage(
 //   - 'settings' → overlay
 //   - 'logs' → drawer
 function setRoute(route: DesktopRoute): void {
-  currentRoute = route;
-  document.body.dataset.desktopRoute = route;
+  setRouteState(route);
   if (bootstrapFailed) return;
   switch (route) {
     case 'main':
       returnToLauncher();
-      // returnToLauncher rerenders via the effect.
       break;
     case 'progress':
       // No-op: the conversation pane shows automatically when activeStreamId$
@@ -1052,25 +759,25 @@ window.addEventListener('message', (event) => {
     return;
   }
   if (isDesktopSetLogMessage(event.data)) {
-    renderLogSnapshot(event.data);
+    logsDrawer.applySnapshot(event.data);
     return;
   }
   const diffParsed = DesktopShowDiffMessageSchema.safeParse(event.data);
   if (diffParsed.success) {
-    openDiffOverlay(diffParsed.data);
+    diffOverlay.open(diffParsed.data);
     return;
   }
   if (isDesktopCloseDiffMessage(event.data)) {
-    closeDiffOverlay();
+    diffOverlay.close();
     return;
   }
   const pdfParsed = DesktopShowPdfMessageSchema.safeParse(event.data);
   if (pdfParsed.success) {
-    openPdfOverlay(pdfParsed.data);
+    pdfOverlay.open(pdfParsed.data);
     return;
   }
   if (isDesktopClosePdfMessage(event.data)) {
-    closePdfOverlay();
+    pdfOverlay.close();
     return;
   }
   // Progress view messages: dispatch directly into the shared messageDispatcher
@@ -1088,10 +795,8 @@ window.addEventListener('message', (event) => {
 function wireRailTabs(): void {
   railTabs.addEventListener('stream-switch', ((e: CustomEvent) => {
     handleStreamSwitch(e, getEventHandlerContext());
-    // Switching to a stream pulls the user out of the launcher view. The
-    // effect-driven rerender will swap to the conversation pane.
-    currentRoute = 'progress';
-    document.body.dataset.desktopRoute = 'progress';
+    // Switching to a stream pulls the user out of the launcher view.
+    setRouteState('progress');
   }) as EventListener);
   railTabs.addEventListener('stream-delete', ((e: CustomEvent) =>
     handleStreamDelete(e, getEventHandlerContext())) as EventListener);
@@ -1186,73 +891,3 @@ function postWebviewReady(): void {
 function applyDesktopTheme(theme: DesktopThemeKind): void {
   applyHostBodyTheme(theme);
 }
-
-function logViewerTemplate(state: LogViewerState): TemplateResult {
-  const action = (
-    icon: 'rotate-right' | 'copy' | 'download' | 'folder-open',
-    label: string,
-    onClick: () => void,
-  ): TemplateResult =>
-    renderLabeledActionButton({
-      icon,
-      text: label,
-      className: 'desktop-secondary-button',
-      appearance: 'outlined',
-      onClick,
-    });
-  return html`
-    <section class="desktop-log-viewer">
-      <header class="desktop-log-viewer-header">
-        <div>
-          <h2>Desktop Logs</h2>
-          <p>${state.meta}</p>
-        </div>
-        <div class="desktop-log-viewer-actions">
-          ${action('rotate-right', 'Refresh', requestLogSnapshot)}
-          ${action('copy', 'Copy', () =>
-            postMessage(DESKTOP_LOG_COMMANDS.COPY_LOG),
-          )}
-          ${action('download', 'Export', () =>
-            postMessage(DESKTOP_LOG_COMMANDS.EXPORT_LOG),
-          )}
-          ${action('folder-open', 'Open Folder', () =>
-            postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
-          )}
-        </div>
-      </header>
-      <pre class="desktop-log-viewer-output">${state.text}</pre>
-    </section>
-  `;
-}
-
-function renderLogViewer(): void {
-  render(logViewerTemplate(logViewerState), logsContainer);
-}
-
-function requestLogSnapshot(): void {
-  postMessage(DESKTOP_LOG_COMMANDS.REQUEST_LOG);
-}
-
-function renderLogSnapshot(message: DesktopSetLogMessage): void {
-  const path = message.log.path ?? 'desktop log file';
-  logViewerState = {
-    text: message.log.text || 'No desktop log entries yet.',
-    meta: message.log.truncated
-      ? `Showing the most recent redacted entries from ${path}.`
-      : `Showing redacted entries from ${path}.`,
-  };
-  renderLogViewer();
-}
-
-// Re-export references that downstream modules (or future hooks) may want to
-// drive imperatively. Keeps the API surface explicit even though the desktop
-// shell currently consumes them directly.
-export {
-  setRoute,
-  openSettingsOverlay,
-  openLogsDrawer,
-  openDiffOverlay,
-  closeDiffOverlay,
-  openPdfOverlay,
-  closePdfOverlay,
-};
