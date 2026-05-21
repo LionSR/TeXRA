@@ -48,6 +48,7 @@ import {
 import { renderAnsiMarkdown } from '../../../packages/cli/src/chat/tui/render/ansiMarkdown';
 import {
   chatTuiCanInterruptActiveRun,
+  chatTuiCanStartRootRun,
   clearTuiSessionRunState,
 } from '../../../packages/cli/src/chat/tui/runChatTui';
 import { CliExitCode } from '../../../packages/cli/src/runtime/exitCodes';
@@ -280,6 +281,29 @@ describe('CLI TUI row allocation', () => {
         runCompleted: false,
         runPromise,
         streamId: root,
+      }),
+    ).toBe(true);
+  });
+
+  it('allows a fresh root run after a terminal chat failure', () => {
+    const runPromise = Promise.resolve();
+
+    expect(
+      chatTuiCanStartRootRun({
+        runCompleted: false,
+        runPromise: undefined,
+      }),
+    ).toBe(true);
+    expect(
+      chatTuiCanStartRootRun({
+        runCompleted: false,
+        runPromise,
+      }),
+    ).toBe(false);
+    expect(
+      chatTuiCanStartRootRun({
+        runCompleted: true,
+        runPromise,
       }),
     ).toBe(true);
   });
