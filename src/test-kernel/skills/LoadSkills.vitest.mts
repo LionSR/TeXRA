@@ -1,0 +1,191 @@
+// Standard library imports
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
+
+// Third-party imports
+import { afterEach, describe, expect, it } from 'vitest';
+
+// Local imports - skills
+import { discoverSkills } from '@skills/loadSkills';
+
+const tempRoots: string[] = [];
+
+async function createTempRoot(): Promise<string> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-skills-'));
+  tempRoots.push(root);
+  return root;
+}
+
+async function writeSkill(
+  root: string,
+  dirName: string,
+  frontmatter: string,
+  body = 'Use this skill carefully.',
+): Promise<string> {
+  const skillDir = path.join(root, dirName);
+  await fs.mkdir(skillDir, { recursive: true });
+  await fs.writeFile(
+    path.join(skillDir, 'SKILL.md'),
+    `---\n${frontmatter.trim()}\n---\n\n${body}\n`,
+  );
+  return skillDir;
+}
+
+afterEach(async () => {
+  await Promise.all(
+    tempRoots.splice(0).map((root) => {
+      return fs.rm(root, { recursive: true, force: true });
+    }),
+  );
+});
+
+describe('discoverSkills', () => {
+  it('loads valid SKILL.md packages', async () => {
+    const root = await createTempRoot();
+    await writeSkill(
+      root,
+      'manuscript-review',
+      `
+name: manuscript-review
+description: Reviews mathematical manuscripts for correctness and exposition.
+`,
+      'Read the paper and report substantial mathematical issues.',
+    );
+
+    const result = await discoverSkills(root);
+
+    expect(result.errors).toEqual([]);
+    expect(result.skills).toHaveLength(1);
+    expect(result.skills[0]).toMatchObject({
+      name: 'manuscript-review',
+      description:
+        'Reviews mathematical manuscripts for correctness and exposition.',
+      body: 'Read the paper and report substantial mathematical issues.',
+    });
+  });
+
+  it('rejects skills without descriptions', async () => {
+    const root = await createTempRoot();
+    await writeSkill(root, 'missing-description', 'name: missing-description');
+
+    const result = await discoverSkills(root);
+
+    expect(result.skills).toEqual([]);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        severity: 'error',
+        code: 'missing_description',
+      }),
+    );
+  });
+
+  it('loads name-mismatched skills with a warning', async () => {
+    const root = await createTempRoot();
+    await writeSkill(
+      root,
+      'directory-name',
+      `
+name: frontmatter-name
+description: A skill whose declared name differs from its directory.
+`,
+    );
+
+    const result = await discoverSkills(root);
+
+    expect(result.skills.map((skill) => skill.name)).toEqual([
+      'frontmatter-name',
+    ]);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        severity: 'warning',
+        code: 'name_mismatch',
+        name: 'frontmatter-name',
+      }),
+    );
+  });
+
+  it('reports invalid YAML frontmatter without aborting discovery', async () => {
+    const root = await createTempRoot();
+    await writeSkill(
+      root,
+      'valid-skill',
+      `
+name: valid-skill
+description: A valid skill.
+`,
+    );
+    const invalidDir = path.join(root, 'invalid-skill');
+    await fs.mkdir(invalidDir);
+    await fs.writeFile(
+      path.join(invalidDir, 'SKILL.md'),
+      `---\nname: : bad\n---\n\nBody\n`,
+    );
+
+    const result = await discoverSkills(root);
+
+    expect(result.skills.map((skill) => skill.name)).toEqual(['valid-skill']);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        severity: 'error',
+        code: 'invalid_frontmatter',
+      }),
+    );
+  });
+
+  it('deduplicates symlinked skill packages by real path', async () => {
+    const root = await createTempRoot();
+    const actualDir = await writeSkill(
+      root,
+      'actual-skill',
+      `
+name: actual-skill
+description: A skill reached through a real directory and a symlink.
+`,
+    );
+    await fs.symlink(actualDir, path.join(root, 'linked-skill'), 'dir');
+
+    const result = await discoverSkills(root);
+
+    expect(result.skills.map((skill) => skill.name)).toEqual(['actual-skill']);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        severity: 'warning',
+        code: 'duplicate_realpath',
+      }),
+    );
+  });
+
+  it('keeps the first skill when names collide', async () => {
+    const root = await createTempRoot();
+    await writeSkill(
+      root,
+      'alpha',
+      `
+name: repeated-name
+description: The first skill with this name.
+`,
+    );
+    await writeSkill(
+      root,
+      'beta',
+      `
+name: repeated-name
+description: The second skill with this name.
+`,
+    );
+
+    const result = await discoverSkills(root);
+
+    expect(result.skills.map((skill) => skill.description)).toEqual([
+      'The first skill with this name.',
+    ]);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        severity: 'warning',
+        code: 'duplicate_name',
+        name: 'repeated-name',
+      }),
+    );
+  });
+});
