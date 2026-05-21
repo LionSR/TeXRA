@@ -80,6 +80,7 @@ import { wrapRuntimeHost } from './state/subscribeRuntimeHost';
 import { subscribeStreamLog, syncStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
+import { requestCliCompaction } from './state/compactionRequest';
 import {
   appendAssistantTranscriptIfMissing,
   appendLocalAssistantTranscript,
@@ -425,37 +426,6 @@ function openCliMemoryListForm(): void {
   });
 }
 
-function requestCliCompaction(): void {
-  const streamId = cliState.activeStreamId.get();
-  if (!streamId) {
-    appendLocalAssistantTranscript(
-      'No active tool-use session found for context compaction.',
-    );
-    return;
-  }
-
-  const flowContext = getToolUseFlowContext(streamId);
-  if (!flowContext) {
-    appendLocalAssistantTranscript(
-      'No active tool-use session found for context compaction.',
-    );
-    return;
-  }
-
-  if (!flowContext.modelHandler.supportsManualCompaction) {
-    appendLocalAssistantTranscript(
-      'Manual context compaction is not available for the current model.',
-    );
-    return;
-  }
-
-  flowContext.requestImmediateCompaction();
-  notifyFollowUpSent(streamId, flowContext.runtimeHost);
-  appendLocalAssistantTranscript(
-    'Context compaction requested. The agent will process it on the next model call.',
-  );
-}
-
 async function handleTuiSlashCommand(
   line: string,
   context: SlashCommandContext,
@@ -569,7 +539,12 @@ async function handleTuiSlashCommand(
       return true;
     }
     case 'compact':
-      requestCliCompaction();
+      requestCliCompaction({
+        streamId: cliState.activeStreamId.get(),
+        getFlowContext: getToolUseFlowContext,
+        notifyFollowUpSent,
+        appendTranscript: appendLocalAssistantTranscript,
+      });
       return true;
     default: {
       const registered = listSlashCommands().find(
