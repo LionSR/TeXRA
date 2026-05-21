@@ -229,7 +229,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       if (!Array.isArray(contentBlocks)) continue;
 
       for (const block of extractDocumentBlocks(contentBlocks)) {
-        const source = (block as DocumentBlockParam).source as
+        const source = block.source as
           | { type: string; file_id?: string }
           | undefined;
         if (source?.type === 'file' && source.file_id) {
@@ -1883,8 +1883,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         attachments,
         this.logger,
         this.uploadedPdfPageCounts,
-        () => this.getTrackedPdfPageCount(),
-        () => this.getMaxPdfPages(),
+        this.getMaxPdfPages(),
       );
       uploadedAttachments = uploadResult.uploaded;
       unsupportedAttachments.push(...uploadResult.unsupported);
