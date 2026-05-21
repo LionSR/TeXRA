@@ -3,7 +3,7 @@ import { strict as assert } from 'assert';
 import { createRequire } from 'module';
 
 // Local imports - commands
-import { commandCatalog, commandKeybindings } from '@commands/catalog';
+import { commandCatalog, commandKeybindings } from '@shared/commands/catalog';
 
 interface PackageCommand {
   command: string;
