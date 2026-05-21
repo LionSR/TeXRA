@@ -130,7 +130,9 @@ function normalizeSkillDescription(
   const errors: SkillLoadIssue[] = [];
   const rawDescription = frontmatter.description;
   const description =
-    typeof rawDescription === 'string' ? collapseWhitespace(rawDescription) : '';
+    typeof rawDescription === 'string'
+      ? collapseWhitespace(rawDescription)
+      : '';
 
   if (!description) {
     errors.push(
