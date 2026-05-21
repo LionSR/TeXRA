@@ -17,8 +17,14 @@ import {
 } from '@agent/runtime/executionRegistry';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
-import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
+import {
+  notifyFollowUpSent,
+  sendFollowUp,
+} from '@agent/toolUse/ToolUseFollowUp';
+import {
+  getInterruptible,
+  getToolUseFlowContext,
+} from '@agent/toolUse/ToolUseAgentRegistry';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import {
@@ -419,6 +425,37 @@ function openCliMemoryListForm(): void {
   });
 }
 
+function requestCliCompaction(): void {
+  const streamId = cliState.activeStreamId.get();
+  if (!streamId) {
+    appendLocalAssistantTranscript(
+      'No active tool-use session found for context compaction.',
+    );
+    return;
+  }
+
+  const flowContext = getToolUseFlowContext(streamId);
+  if (!flowContext) {
+    appendLocalAssistantTranscript(
+      'No active tool-use session found for context compaction.',
+    );
+    return;
+  }
+
+  if (!flowContext.modelHandler.supportsManualCompaction) {
+    appendLocalAssistantTranscript(
+      'Manual context compaction is not available for the current model.',
+    );
+    return;
+  }
+
+  flowContext.requestImmediateCompaction();
+  notifyFollowUpSent(streamId, flowContext.runtimeHost);
+  appendLocalAssistantTranscript(
+    'Context compaction requested. The agent will process it on the next model call.',
+  );
+}
+
 async function handleTuiSlashCommand(
   line: string,
   context: SlashCommandContext,
@@ -531,6 +568,9 @@ async function handleTuiSlashCommand(
       }
       return true;
     }
+    case 'compact':
+      requestCliCompaction();
+      return true;
     default: {
       const registered = listSlashCommands().find(
         (cmd) =>
