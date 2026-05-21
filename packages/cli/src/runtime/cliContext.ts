@@ -35,6 +35,8 @@ export interface CliContext {
   readonly apiMode?: CliApiMode;
   readonly quietLogs?: boolean;
   readonly renderRunProgress?: boolean;
+  readonly stdoutIsTty?: boolean;
+  readonly termIsDumb?: boolean;
   readonly stderrIsTty?: boolean;
   readonly colorEnabled: boolean;
   readonly version: string;
@@ -59,6 +61,7 @@ export interface CliAmbientState {
   readonly stdinIsTty: boolean;
   readonly stdoutIsTty: boolean;
   readonly stderrIsTty: boolean;
+  readonly termIsDumb?: boolean;
   readonly colorEnabled: boolean;
 }
 
@@ -76,6 +79,7 @@ export function readCliAmbientState(): CliAmbientState {
     stdinIsTty,
     stdoutIsTty,
     stderrIsTty,
+    termIsDumb: dumbTerm,
     colorEnabled: stderrIsTty && !noColor && !dumbTerm,
   };
   return cachedAmbient;
@@ -253,6 +257,8 @@ export async function buildCliContext(
     ),
     apiMode,
     quietLogs: init.globalArgs.quiet === true,
+    stdoutIsTty: ambient.stdoutIsTty,
+    termIsDumb: ambient.termIsDumb === true,
     stderrIsTty: ambient.stderrIsTty,
     colorEnabled: ambient.colorEnabled,
     version: await readCliVersion(),

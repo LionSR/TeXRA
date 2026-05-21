@@ -61,6 +61,13 @@ export function visibleSelectRange({
   return { start, end: start + visibleCount };
 }
 
+export function selectItemRenderKey<T>(
+  item: SelectItem<T>,
+  index: number,
+): string {
+  return `${index}:${item.label}`;
+}
+
 export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   const activeIndex = props.items.findIndex(
     (it) => it.value === props.activeValue,
@@ -133,7 +140,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
         const tick = active ? '✓' : ' ';
         const numeric = i < 9 ? `${i + 1}.` : '  ';
         return (
-          <Box key={String(item.value)} minWidth={0}>
+          <Box key={selectItemRenderKey(item, i)} minWidth={0}>
             <Box flexShrink={0}>
               <Text color={focused ? 'cyan' : undefined}>
                 {pointer} {tick} {numeric}{' '}
