@@ -185,7 +185,7 @@ export class AgentLogger {
       type: entry.type ?? STREAM_LOG_ENTRY_TYPES.LOG,
       level,
       timestamp: entry.timestamp,
-      groupId: entry.groupId,
+      groupId: entry.groupId ?? this.resolveActiveGroupId(),
       messageType,
       text: entry.text,
       data: entry.data,
@@ -318,7 +318,7 @@ export class AgentLogger {
       'info',
       `Context: ${inputTokens}/${contextWindow} tokens (${utilizationPercent.toFixed(1)}%)`,
       {
-        groupId: groupId ?? this.resolveActiveGroupId(),
+        groupId,
         messageType: MESSAGE_TYPES.CONTEXT_STATE,
         data: { inputTokens, contextWindow, utilizationPercent },
       },
@@ -411,11 +411,10 @@ export class AgentLogger {
     input: unknown,
     groupId?: string,
   ): { logId: string; groupId: string | undefined } {
-    const resolvedGroupId = groupId ?? this.resolveActiveGroupId();
-    this.debug(`Tool started: ${toolName}`, { groupId: resolvedGroupId });
+    this.debug(`Tool started: ${toolName}`, { groupId });
     return this.emitToolUse(
       { toolName, input, status: 'in_progress' } satisfies ToolUseLog,
-      resolvedGroupId,
+      groupId,
     );
   }
 
@@ -436,7 +435,7 @@ export class AgentLogger {
     this.appendToStore('info', MESSAGE_TYPES.WEB_SEARCH, {
       id: randomUUID(),
       timestamp: Date.now(),
-      groupId: groupId ?? this.resolveActiveGroupId(),
+      groupId,
       data,
     });
   }
@@ -445,7 +444,7 @@ export class AgentLogger {
     this.appendToStore('info', MESSAGE_TYPES.WEB_FETCH, {
       id: randomUUID(),
       timestamp: Date.now(),
-      groupId: groupId ?? this.resolveActiveGroupId(),
+      groupId,
       data,
     });
   }

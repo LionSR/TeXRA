@@ -95,6 +95,9 @@ const MemoryToolInputSchema = z.strictObject({
 /** Derived from MemoryToolInputSchema - single source of truth */
 export type MemoryToolInput = z.infer<typeof MemoryToolInputSchema>;
 
+/** Canonical pair of display path (`/memories/...`) and storage path. */
+type MemoryLocation = { display: string; storage: string };
+
 /**
  * Memory tool for managing persistent context files under /memories.
  */
@@ -109,19 +112,26 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   schema: MemoryToolInputSchema,
 }) {
   /**
-   * Canonicalize a raw display path so that equivalent spellings
-   * (e.g. `/memories/` vs `/memories`) resolve to the same string.
-   * Round-trips through storage resolution to normalize slashes and segments.
+   * Normalize a raw display path into a `{ display, storage }` pair at the
+   * dispatch boundary so ops never need to call `resolveMemoryPath` themselves.
+   * Throws ToolError if the path is outside `/memories`.
    */
-  private canonicalize(rawPath: string): string {
-    return toDisplayPath(displayToStoragePath(rawPath));
+  private locate(rawPath: string): MemoryLocation {
+    const storage = this.resolveMemoryPath(rawPath);
+    return { display: toDisplayPath(storage), storage };
   }
 
   protected async execute(input: MemoryToolInput): Promise<ToolResult> {
+    const locate = (
+      raw: string | undefined | null,
+      field: string,
+    ): MemoryLocation =>
+      this.locate(requireField(raw, field, input.command));
+
     switch (input.command) {
       case 'view':
         return this.view(
-          this.canonicalize(requireField(input.path, 'path', input.command)),
+          locate(input.path, 'path'),
           // Schema enforces length 2; cast since Zod infers number[]
           input.view_range as [number, number] | undefined,
           input.offset ?? 0,
@@ -129,18 +139,18 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
         );
       case 'create':
         return this.create(
-          this.canonicalize(requireField(input.path, 'path', input.command)),
+          locate(input.path, 'path'),
           requireField(input.file_text, 'file_text', input.command),
         );
       case 'str_replace':
         return this.strReplace(
-          this.canonicalize(requireField(input.path, 'path', input.command)),
+          locate(input.path, 'path'),
           requireField(input.old_str, 'old_str', input.command),
           requireField(input.new_str, 'new_str', input.command),
         );
       case 'insert':
         return this.insert(
-          this.canonicalize(requireField(input.path, 'path', input.command)),
+          locate(input.path, 'path'),
           requireField(input.insert_line, 'insert_line', input.command),
           requireField(
             input.insert_text ?? input.new_str,
@@ -149,26 +159,16 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
           ),
         );
       case 'delete':
-        return this.delete(
-          this.canonicalize(requireField(input.path, 'path', input.command)),
-        );
+        return this.delete(locate(input.path, 'path'));
       case 'rename':
         return this.rename(
-          this.canonicalize(
-            requireField(input.old_path, 'old_path', input.command),
-          ),
-          this.canonicalize(
-            requireField(input.new_path, 'new_path', input.command),
-          ),
+          locate(input.old_path, 'old_path'),
+          locate(input.new_path, 'new_path'),
         );
       case 'pin':
-        return this.pin(
-          this.canonicalize(requireField(input.path, 'path', input.command)),
-        );
+        return this.pin(locate(input.path, 'path'));
       case 'unpin':
-        return this.unpin(
-          this.canonicalize(requireField(input.path, 'path', input.command)),
-        );
+        return this.unpin(locate(input.path, 'path'));
       default:
         throw new ToolError(`Unrecognized command: ${input.command}`);
     }
@@ -231,12 +231,12 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   }
 
   private async view(
-    inputPath: string,
+    loc: MemoryLocation,
     viewRange?: [number, number],
     offset = 0,
     limit = 100,
   ): Promise<ToolResult> {
-    const resolvedPath = this.resolveMemoryPath(inputPath);
+    const { display: inputPath, storage: resolvedPath } = loc;
     const exists = await StorageFS.exists(resolvedPath);
 
     // Handle non-existent root directory gracefully - return empty listing
@@ -298,10 +298,10 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   }
 
   private async create(
-    inputPath: string,
+    loc: MemoryLocation,
     fileText: string,
   ): Promise<ToolResult> {
-    const resolvedPath = this.resolveMemoryPath(inputPath);
+    const { display: inputPath, storage: resolvedPath } = loc;
     const exists = await StorageFS.exists(resolvedPath);
     if (exists) {
       throw new ToolError(`File ${inputPath} already exists.`);
@@ -319,17 +319,17 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   }
 
   private async strReplace(
-    inputPath: string,
+    loc: MemoryLocation,
     oldStr: string,
     newStr: string,
   ): Promise<ToolResult> {
+    const { display: inputPath, storage: resolvedPath } = loc;
     if (oldStr.length === 0) {
       throw new ToolError(
         `old_str must not be empty for ${inputPath}. Provide the exact text to replace.`,
       );
     }
 
-    const resolvedPath = this.resolveMemoryPath(inputPath);
     await this.requireEditableFile(resolvedPath, inputPath);
 
     const readGate = this.requireViewBeforeModify(inputPath);
@@ -371,11 +371,11 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   }
 
   private async insert(
-    inputPath: string,
+    loc: MemoryLocation,
     insertLine: number,
     insertText: string,
   ): Promise<ToolResult> {
-    const resolvedPath = this.resolveMemoryPath(inputPath);
+    const { display: inputPath, storage: resolvedPath } = loc;
     await this.requireEditableFile(resolvedPath, inputPath);
 
     const readGate = this.requireViewBeforeModify(inputPath);
@@ -406,8 +406,8 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     };
   }
 
-  private async delete(inputPath: string): Promise<ToolResult> {
-    const resolvedPath = this.resolveMemoryPath(inputPath);
+  private async delete(loc: MemoryLocation): Promise<ToolResult> {
+    const { display: inputPath, storage: resolvedPath } = loc;
     const exists = await StorageFS.exists(resolvedPath);
     if (!exists) {
       throw new ToolError(`The path ${inputPath} does not exist.`);
@@ -424,11 +424,11 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   }
 
   private async rename(
-    oldPathInput: string,
-    newPathInput: string,
+    oldLoc: MemoryLocation,
+    newLoc: MemoryLocation,
   ): Promise<ToolResult> {
-    const resolvedOldPath = this.resolveMemoryPath(oldPathInput);
-    const resolvedNewPath = this.resolveMemoryPath(newPathInput);
+    const { display: oldPathInput, storage: resolvedOldPath } = oldLoc;
+    const { display: newPathInput, storage: resolvedNewPath } = newLoc;
 
     const oldExists = await StorageFS.exists(resolvedOldPath);
     if (!oldExists) {
@@ -450,8 +450,8 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     };
   }
 
-  private async pin(inputPath: string): Promise<ToolResult> {
-    const resolvedPath = this.resolveMemoryPath(inputPath);
+  private async pin(loc: MemoryLocation): Promise<ToolResult> {
+    const { display: inputPath, storage: resolvedPath } = loc;
     await this.requireEditableFile(resolvedPath, inputPath);
 
     const { meta, content } = await this.readMemoryFile(resolvedPath);
@@ -478,8 +478,8 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     };
   }
 
-  private async unpin(inputPath: string): Promise<ToolResult> {
-    const resolvedPath = this.resolveMemoryPath(inputPath);
+  private async unpin(loc: MemoryLocation): Promise<ToolResult> {
+    const { display: inputPath, storage: resolvedPath } = loc;
     await this.requireEditableFile(resolvedPath, inputPath);
 
     const { meta, content } = await this.readMemoryFile(resolvedPath);
