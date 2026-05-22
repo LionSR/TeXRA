@@ -125,8 +125,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     const locate = (
       raw: string | undefined | null,
       field: string,
-    ): MemoryLocation =>
-      this.locate(requireField(raw, field, input.command));
+    ): MemoryLocation => this.locate(requireField(raw, field, input.command));
 
     switch (input.command) {
       case 'view':
