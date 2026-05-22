@@ -88,7 +88,34 @@ export function resolveMultiAgentRunPlan(
   });
 }
 
-function writeMissingPresetAgents(plan: CliMultiAgentPresetRunPlan): void {
+/**
+ * Resolve a preset plan, then — when it still has gaps and the user is
+ * authenticated — perform a remote load and replan. Relay-served premium agents
+ * (the team orchestrator and delegation specialists most presets name) are only
+ * visible after a remote load, so a local-only resolve silently degrades the
+ * team (e.g. falling back to the first plain tool-use agent as root). Both the
+ * headless `multi-agent run` path and the interactive `orchestrate` menu route
+ * through here so they can't drift apart again.
+ *
+ * Assumes local agents are already loaded by the caller.
+ */
+export async function fillMultiAgentRunPlanGaps(
+  init: Pick<MultiAgentRunInit, 'preset' | 'agent'>,
+): Promise<CliMultiAgentPresetRunPlan> {
+  let plan = resolveMultiAgentRunPlan(init);
+  if (
+    cliMultiAgentPlanHasGaps(plan) &&
+    (await getCliAuthProvider().isAuthenticated())
+  ) {
+    await loadAgents();
+    plan = resolveMultiAgentRunPlan(init);
+  }
+  return plan;
+}
+
+export function writeMissingPresetAgents(
+  plan: CliMultiAgentPresetRunPlan,
+): void {
   const missing = [
     ...plan.missingWorkflowAgents.map((agent) => `workflow:${agent}`),
     ...plan.missingToolUseAgents.map((agent) => `tool-use:${agent}`),
@@ -232,18 +259,7 @@ async function runMultiAgentPreset(
   installCliApprovalHandlers(runContext);
   await loadAgents({ includeRemote: false });
 
-  let plan = resolveMultiAgentRunPlan(init);
-  // Relay-served premium agents (the team orchestrator and delegation
-  // specialists most presets name) are only visible after a remote load. Fill
-  // any preset gap — not just a missing root — so an authenticated, entitled
-  // user runs the full team instead of a silently degraded one.
-  if (
-    cliMultiAgentPlanHasGaps(plan) &&
-    (await getCliAuthProvider().isAuthenticated())
-  ) {
-    await loadAgents();
-    plan = resolveMultiAgentRunPlan(init);
-  }
+  const plan = await fillMultiAgentRunPlanGaps(init);
   if (!plan.rootAgent) {
     writeTextStderr(
       `Multi-agent preset "${init.preset}" has no available tool-use agent to run. Use --agent with an installed tool-use agent, or enable a team with an orchestrator.`,
