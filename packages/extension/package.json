@@ -1560,7 +1560,7 @@
     "pdf2pic": "^3.2.0",
     "perfect-debounce": "^2.1.0",
     "postal-mime": "^2.7.4",
-    "shell-quote": "^1.8.3",
+    "shell-quote": "^1.8.4",
     "signal-polyfill": "^0.2.2",
     "sortablejs": "^1.15.7",
     "strip-ansi": "^7.2.0",
