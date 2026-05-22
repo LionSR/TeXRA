@@ -60,15 +60,21 @@ function formatAgentDetails(entry: AgentEntry): string {
     lines.push('');
     lines.push(entry.description);
   }
+  const metadataLines: string[] = [];
   if (entry.tools && entry.tools.length > 0) {
-    lines.push('');
-    lines.push(`tools: ${entry.tools.join(', ')}`);
+    metadataLines.push(`tools: ${entry.tools.join(', ')}`);
   }
   if (entry.defaultOutputFiles && entry.defaultOutputFiles.length > 0) {
-    lines.push(`defaultOutputFiles: ${entry.defaultOutputFiles.join(', ')}`);
+    metadataLines.push(
+      `defaultOutputFiles: ${entry.defaultOutputFiles.join(', ')}`,
+    );
   }
   if (entry.visibility && entry.visibility.length > 0) {
-    lines.push(`visibility: ${entry.visibility.join(', ')}`);
+    metadataLines.push(`visibility: ${entry.visibility.join(', ')}`);
+  }
+  if (metadataLines.length > 0) {
+    lines.push('');
+    lines.push(...metadataLines);
   }
   return lines.join('\n');
 }
@@ -123,7 +129,8 @@ const agentsShowCommand = defineCommand({
     name: {
       type: 'positional',
       required: true,
-      description: 'Agent name from `texra agents list`',
+      description:
+        'Agent name from `texra agents list` (use `source:name` to disambiguate when the same name exists in multiple sources)',
     },
   },
   async run(ctx) {
