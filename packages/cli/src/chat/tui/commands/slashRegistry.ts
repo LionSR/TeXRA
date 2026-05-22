@@ -25,6 +25,15 @@ export interface SlashCommand {
    * mounts this component instead of routing through `handler` / the input.
    */
   readonly formComponent?: React.ComponentType<SlashFormProps>;
+  /**
+   * Set for commands that take a free-text inline argument (e.g. `/foo bar`).
+   * When true, Enter in the palette *completes* the command into the input
+   * (with a trailing space) so the user can type the argument, rather than
+   * running it argument-less. No built-in command needs this today — every
+   * arg-taking command uses `formComponent` instead — but it's the hook for
+   * future inline-argument commands. See `slashPickIntent`.
+   */
+  readonly takesArgs?: boolean;
 }
 
 export type SlashPickIntent = 'complete' | 'submit';
@@ -56,18 +65,19 @@ export function matchSlashCommands(prefix: string): readonly SlashCommand[] {
 }
 
 export function slashPickIntent(
-  query: string,
   command: SlashCommand,
   acceptKey: 'enter' | 'tab',
 ): SlashPickIntent {
+  // Tab always just fills the input so the user can keep editing (e.g. add
+  // arguments). Enter runs the highlighted command immediately — except for:
+  //  - commands that mount a structured form, which need the input cleared so
+  //    the form can take over (InputBar handles that branch before reading the
+  //    intent, so 'complete' here is just a safe default for them); and
+  //  - commands that take a free-text inline argument, which complete to
+  //    `/cmd ` so the user can type the argument instead of running blank.
   if (acceptKey !== 'enter') return 'complete';
-  if (command.formComponent) return 'complete';
-
-  const normalized = query.trim().toLowerCase();
-  if (normalized === command.name.toLowerCase()) return 'submit';
-  return command.aliases?.some((alias) => alias.toLowerCase() === normalized)
-    ? 'submit'
-    : 'complete';
+  if (command.formComponent || command.takesArgs) return 'complete';
+  return 'submit';
 }
 
 /**

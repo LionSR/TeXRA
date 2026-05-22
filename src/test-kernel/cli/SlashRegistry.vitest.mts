@@ -95,14 +95,20 @@ describe('slashRegistry', () => {
     expect(matchSlashCommands('us').map((c) => c.name)).toEqual(['help']);
   });
 
-  it('submits exact no-form commands on Enter and completes partial commands', () => {
+  it('submits no-form commands on Enter and completes on Tab', () => {
     const help = { name: 'help', description: 'show help', aliases: ['h'] };
     registerSlashCommand(help);
 
-    expect(slashPickIntent('help', help, 'enter')).toBe('submit');
-    expect(slashPickIntent('h', help, 'enter')).toBe('submit');
-    expect(slashPickIntent('he', help, 'enter')).toBe('complete');
-    expect(slashPickIntent('help', help, 'tab')).toBe('complete');
+    expect(slashPickIntent(help, 'enter')).toBe('submit');
+    expect(slashPickIntent(help, 'tab')).toBe('complete');
+  });
+
+  it('completes arg-taking commands on Enter so the user can type the argument', () => {
+    const foo = { name: 'foo', description: 'takes args', takesArgs: true };
+    registerSlashCommand(foo);
+
+    expect(slashPickIntent(foo, 'enter')).toBe('complete');
+    expect(slashPickIntent(foo, 'tab')).toBe('complete');
   });
 
   it('does not directly submit structured-form commands from the palette', () => {
@@ -113,7 +119,7 @@ describe('slashRegistry', () => {
     };
     registerSlashCommand(agent);
 
-    expect(slashPickIntent('agent', agent, 'enter')).toBe('complete');
+    expect(slashPickIntent(agent, 'enter')).toBe('complete');
   });
 });
 
