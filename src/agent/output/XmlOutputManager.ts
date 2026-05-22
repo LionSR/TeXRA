@@ -45,6 +45,7 @@ const XML_PARSER_OPTIONS = {
 const EXTRACTION_METHOD_MESSAGES: Record<string, string> = {
   named: 'from named document tag',
   simple: 'using fallback method',
+  latex_document: 'from legacy <latex_document> tag',
   markdown: 'from markdown code block',
   latex: 'from \\documentclass block',
 };
@@ -69,12 +70,15 @@ export class XmlOutputManager {
   private extractMultipleDocumentsbyRegex(
     outputContent: string,
     documentTag: string,
+    preferredName?: string,
   ): Array<{ content: string; name: string }> | null {
-    const result = extractDocuments(outputContent, documentTag);
+    const result = extractDocuments(outputContent, documentTag, preferredName);
 
     if (result.documents) {
+      const suffix =
+        EXTRACTION_METHOD_MESSAGES[result.method] ?? 'using fallback method';
       this.logger.logInternal(
-        `Successfully extracted multiple ${documentTag} using fallback method`,
+        `Recovered ${documentTag} ${suffix} (${result.documents.length} document${result.documents.length === 1 ? '' : 's'})`,
       );
       return result.documents;
     }
@@ -210,9 +214,20 @@ export class XmlOutputManager {
     }
 
     if (!documents) {
+      // Single-input agents whose model regressed to a legacy single-doc shape
+      // (<latex_document>, ```latex fence, or bare \documentclass) can still
+      // be recovered: pass the primary input filename so the fallback can
+      // synthesize a named document. Multi-input agents cannot safely recover
+      // — without per-document names there's no way to route content.
+      const inputFiles = this.agentConfig.inputFiles;
+      // Keep the relative path verbatim — getExtractedDocOutputFileName
+      // preserves subdirectories so `Draft/Draft1.tex` lands at the right
+      // workspace location instead of collapsing to the round root.
+      const preferredName = inputFiles.length === 1 ? inputFiles[0] : undefined;
       documents = this.extractMultipleDocumentsbyRegex(
         outputContent,
         documentTag,
+        preferredName,
       );
     }
 
