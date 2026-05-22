@@ -110,6 +110,16 @@ _texra() {
     return
   fi
 
+  if [[ "$path" == 'agents show' && "$cur" != -* ]]; then
+    COMPREPLY=( $(compgen -W "$(_texra_agents)" -- "$cur") )
+    return
+  fi
+
+  if [[ "$path" == 'models show' && "$cur" != -* ]]; then
+    COMPREPLY=( $(compgen -W "$(_texra_models)" -- "$cur") )
+    return
+  fi
+
   if [[ "$cur" == -* ]]; then
     COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
   else
