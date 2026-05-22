@@ -97,6 +97,15 @@ describe('desktop Codex package payload', () => {
     expect(output).toContain('Codex CLI payload size');
   });
 
+  it('verifies the aliased pnpm Codex package layout', () => {
+    const { packageRoot, resourcesDir } = createFakeDesktopPackage([]);
+    writePnpmCodexPlatformPackage(resourcesDir, 'darwin-arm64');
+
+    const output = runVerifier(packageRoot);
+    expect(output).toContain('@openai/codex-darwin-arm64');
+    expect(output).toContain('Codex CLI payload size');
+  });
+
   it('does not infer Windows from a darwin path segment', async () => {
     const { inferCodexPlatformKeys } = (await import(payloadUrl)) as {
       inferCodexPlatformKeys: (input: { appPath: string }) => string[];
@@ -331,6 +340,32 @@ function writeCodexPlatformPackage(
   });
   writeText(
     join(packageRoot, 'vendor', info.triple, 'codex', info.binaryName),
+    'fake codex binary\n',
+  );
+}
+
+function writePnpmCodexPlatformPackage(
+  appRoot: string,
+  platform: keyof typeof codexPlatforms,
+): void {
+  const info = codexPlatforms[platform];
+  const packageRoot = join(
+    appRoot,
+    'app.asar.unpacked',
+    'node_modules',
+    '.pnpm',
+    `@openai+codex@0.133.0-${platform}`,
+    'node_modules',
+    '@openai',
+    'codex',
+  );
+
+  writeJson(join(packageRoot, 'package.json'), {
+    name: '@openai/codex',
+    version: `0.133.0-${platform}`,
+  });
+  writeText(
+    join(packageRoot, 'vendor', info.triple, 'bin', info.binaryName),
     'fake codex binary\n',
   );
 }
