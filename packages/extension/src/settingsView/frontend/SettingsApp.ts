@@ -922,15 +922,6 @@ export class SettingsApp extends SettingsAppBase {
             ></wa-icon>
             Memory</wa-tab
           >
-          <wa-tab panel="odyssey"
-            ><wa-icon
-              class="settings-tab-icon"
-              library=${TEXRA_ICON_LIBRARY}
-              name="compass"
-              variant="solid"
-            ></wa-icon>
-            Odyssey</wa-tab
-          >
           <wa-tab panel="history"
             ><wa-icon
               class="settings-tab-icon"
@@ -1002,6 +993,15 @@ export class SettingsApp extends SettingsAppBase {
               variant="solid"
             ></wa-icon>
             LaTeX</wa-tab
+          >
+          <wa-tab panel="odyssey"
+            ><wa-icon
+              class="settings-tab-icon"
+              library=${TEXRA_ICON_LIBRARY}
+              name="compass"
+              variant="solid"
+            ></wa-icon>
+            Odyssey</wa-tab
           >
 
           <wa-tab-panel name="memory">
