@@ -80,6 +80,7 @@ import { faMagnifyingGlassChart } from '@fortawesome/free-solid-svg-icons/faMagn
 import { faMicrophone } from '@fortawesome/free-solid-svg-icons/faMicrophone';
 import { faMinus } from '@fortawesome/free-solid-svg-icons/faMinus';
 import { faNoteSticky } from '@fortawesome/free-solid-svg-icons/faNoteSticky';
+import { faNotEqual } from '@fortawesome/free-solid-svg-icons/faNotEqual';
 import { faPalette } from '@fortawesome/free-solid-svg-icons/faPalette';
 import { faPaperPlane } from '@fortawesome/free-solid-svg-icons/faPaperPlane';
 import { faPencil } from '@fortawesome/free-solid-svg-icons/faPencil';
@@ -219,6 +220,7 @@ const icons = {
   microphone: faMicrophone,
   minus: faMinus,
   'note-sticky': faNoteSticky,
+  'not-equal': faNotEqual,
   palette: faPalette,
   'paper-plane': faPaperPlane,
   pencil: faPencil,
@@ -280,8 +282,8 @@ const CODICON_ALIASES = {
   'device-camera-video': 'video',
   diff: 'code-compare',
   'diff-added': 'plus',
-  'diff-multiple': 'code-compare',
-  'diff-single': 'code-compare',
+  'diff-multiple': 'not-equal',
+  'diff-single': 'not-equal',
   discard: 'arrow-rotate-left',
   edit: 'pencil',
   error: 'circle-exclamation',
