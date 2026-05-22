@@ -373,7 +373,8 @@ export async function checkToolInstalled(
   } catch (err) {
     if (showError) {
       const errorMessage =
-        config.errorMessage || `Failed to check tool installation: ${err}`;
+        config.errorMessage ||
+        `Failed to check tool installation: ${toErrorMessage(err)}`;
       await reportMissingTool(errorMessage);
     }
     return false;

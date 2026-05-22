@@ -73,7 +73,10 @@ async function cleanupTempFiles(
       AbsoluteFS.deleteSync(fullPath);
       logger.debug(CHANNEL, `Cleaned up temporary file: ${file}`);
     } catch (err) {
-      logger.warn(CHANNEL, `Failed to delete temporary file ${file}: ${err}`);
+      logger.warn(
+        CHANNEL,
+        `Failed to delete temporary file ${file}: ${toErrorMessage(err)}`,
+      );
     }
   }
 }
