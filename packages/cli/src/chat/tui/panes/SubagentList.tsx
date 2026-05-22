@@ -9,7 +9,8 @@ import { Box, Text } from 'ink';
 
 import type { ActiveChildInfo } from '@shared/schemas';
 
-import { visibleSubagentRows } from '../state/childControls';
+import { processTailLines } from '../state/childControls';
+import { visibleSubagentRows } from '../state/childStreamMerge';
 import { cliState, type ProcessOutputTail } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
 import {
@@ -28,18 +29,6 @@ interface RowProps {
 const TAIL_LINES = 4;
 const PULSE_INTERVAL_MS = 700;
 
-/** Pull the last `TAIL_LINES` non-blank lines from the combined std streams.
- *  The state layer already caps each stream at PROCESS_TAIL_CHARS_MAX, so
- *  this is bounded work. */
-function lastLines(tail: ProcessOutputTail | undefined): string[] {
-  if (!tail) return [];
-  const nonBlank = `${tail.stdout}\n${tail.stderr}`
-    .split('\n')
-    .map((line) => line.trimEnd())
-    .filter((line) => line.length > 0);
-  return nonBlank.slice(-TAIL_LINES);
-}
-
 function usePulse(enabled: boolean): boolean {
   const [pulseOn, setPulseOn] = useState(true);
   useEffect(() => {
@@ -57,7 +46,9 @@ function usePulse(enabled: boolean): boolean {
 }
 
 function Row({ child, index, pulseOn, tail }: RowProps): React.JSX.Element {
-  const tailLines = lastLines(tail);
+  // The state layer already caps each stream at PROCESS_TAIL_CHARS_MAX, so
+  // pulling the last `TAIL_LINES` non-blank lines is bounded work.
+  const tailLines = processTailLines(tail).slice(-TAIL_LINES);
   return (
     <Box flexDirection="column">
       <Box flexDirection="row">
