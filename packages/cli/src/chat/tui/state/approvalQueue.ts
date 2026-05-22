@@ -80,10 +80,6 @@ function syncApprovalDepth(): void {
   DEPTH.set(pendingResolvers.size);
 }
 
-export function getApprovalQueueDepth(): number {
-  return pendingResolvers.size;
-}
-
 export function enqueueApproval(
   payload: ApprovalPayload,
   options: EnqueueApprovalOptions = {},
