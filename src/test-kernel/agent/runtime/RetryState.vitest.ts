@@ -2,8 +2,8 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - agent runtime
-import { RetryableInvocationNode } from '@agent/core/flows/RetryState';
 import type { NonIterableObject } from '@agent/node';
+import { RetryableInvocationNode } from '@agent/core/flows/RetryState';
 
 class ExposedRetryNode extends RetryableInvocationNode<
   unknown,

@@ -82,72 +82,57 @@ export function ensureAgentCategoryForSource<
 export async function loadAgentSettingAndPrompts(
   resolution: ResolvedAgent,
 ): Promise<[AgentSetting, AgentPrompt]> {
-  try {
-    const { entry } = resolution;
+  const { entry } = resolution;
 
-    // Handle remote agents
-    if (entry.source === 'remote') {
-      const remoteConfig = await RemoteAgentLoader.loadRemoteAgent(
-        resolution.resolvedName,
-      );
-
-      // Remote agents are already fully processed (tools resolved, validated)
-      return [remoteConfig.settings, remoteConfig.prompts];
-    }
-
-    const rawConfig = await loadYaml(resolution.definitionPath);
-    const config = AgentDefinitionSchema.parse(rawConfig);
-
-    // Initialize with own settings/prompts (spread creates a mutable copy)
-    let settings: Partial<AgentSetting> = { ...config.settings };
-    let prompts: Partial<AgentPrompt> = { ...config.prompts };
-
-    // Merge with parent if inheritance is specified
-    if (config.inherits) {
-      const parentResolution = resolveAgent(
-        `${entry.source}:${config.inherits}`,
-      );
-      if (!parentResolution) {
-        throw new Error(
-          `Unable to locate parent agent "${config.inherits}" in source "${entry.source}".`,
-        );
-      }
-      const [parentSettings, parentPrompts] =
-        await loadAgentSettingAndPrompts(parentResolution);
-
-      // Parent provides defaults, child overrides
-      settings = deepmerge(parentSettings, config.settings, {
-        arrayMerge: (_d, s) => s,
-      });
-      prompts = deepmerge(parentPrompts, config.prompts, {
-        arrayMerge: (_d, s) => s,
-      });
-    }
-
-    settings = ensureAgentCategoryForSource(settings, entry.source);
-
-    // Resolve tool names to definitions using shared utility
-    if (Array.isArray(settings.tools)) {
-      settings.tools = resolveToolDefinitions(
-        settings.tools as (string | { name: string })[],
-        (name) => logger.warn(CHANNEL, `Tool "${name}" not found in registry`),
-      );
-    }
-
-    // Apply defaults and validate the final settings and prompts
-    return [
-      AgentSettingSchema.parse(settings),
-      AgentPromptSchema.parse(prompts),
-    ];
-  } catch (err) {
-    // Log error context, then rethrow original to preserve error type (e.g., ZodError)
-    // for proper handling by callers like executeCommand.ts
-    logger.error(
-      CHANNEL,
-      `Error loading agent settings and prompts: ${toErrorMessage(err)}`,
+  // Handle remote agents
+  if (entry.source === 'remote') {
+    const remoteConfig = await RemoteAgentLoader.loadRemoteAgent(
+      resolution.resolvedName,
     );
-    throw err;
+
+    // Remote agents are already fully processed (tools resolved, validated)
+    return [remoteConfig.settings, remoteConfig.prompts];
   }
+
+  const rawConfig = await loadYaml(resolution.definitionPath);
+  const config = AgentDefinitionSchema.parse(rawConfig);
+
+  // Initialize with own settings/prompts (spread creates a mutable copy)
+  let settings: Partial<AgentSetting> = { ...config.settings };
+  let prompts: Partial<AgentPrompt> = { ...config.prompts };
+
+  // Merge with parent if inheritance is specified
+  if (config.inherits) {
+    const parentResolution = resolveAgent(`${entry.source}:${config.inherits}`);
+    if (!parentResolution) {
+      throw new Error(
+        `Unable to locate parent agent "${config.inherits}" in source "${entry.source}".`,
+      );
+    }
+    const [parentSettings, parentPrompts] =
+      await loadAgentSettingAndPrompts(parentResolution);
+
+    // Parent provides defaults, child overrides
+    settings = deepmerge(parentSettings, config.settings, {
+      arrayMerge: (_d, s) => s,
+    });
+    prompts = deepmerge(parentPrompts, config.prompts, {
+      arrayMerge: (_d, s) => s,
+    });
+  }
+
+  settings = ensureAgentCategoryForSource(settings, entry.source);
+
+  // Resolve tool names to definitions using shared utility
+  if (Array.isArray(settings.tools)) {
+    settings.tools = resolveToolDefinitions(
+      settings.tools as (string | { name: string })[],
+      (name) => logger.warn(CHANNEL, `Tool "${name}" not found in registry`),
+    );
+  }
+
+  // Apply defaults and validate the final settings and prompts
+  return [AgentSettingSchema.parse(settings), AgentPromptSchema.parse(prompts)];
 }
 
 /**

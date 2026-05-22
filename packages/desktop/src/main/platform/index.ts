@@ -2,7 +2,6 @@ import { join } from 'node:path';
 
 import { app } from 'electron';
 
-import { registerAgentFeatures } from '@agent/features';
 import { consoleLog } from '@platform/defaults/consoleLog';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { JsonStateStore } from '@platform/defaults/jsonStateStore';
@@ -13,6 +12,7 @@ import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { createWorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { initPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
+import { registerAgentFeatures } from '@agent/features';
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 

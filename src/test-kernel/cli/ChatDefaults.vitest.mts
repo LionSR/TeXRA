@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { AgentCategory } from '@agent/core/AgentDataclass';
 import { listExecutions } from '@agent/storage';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 
 import {
   BUILTIN_DEFAULT_CHAT_MODEL,

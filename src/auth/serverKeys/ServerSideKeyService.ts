@@ -15,6 +15,7 @@
  */
 
 import { EventEmitter } from 'events';
+import { toErrorMessage } from '@common/errors';
 import {
   SERVER_SIDE_CACHE_TTL_MS,
   ULTRA_TIER,
@@ -110,8 +111,10 @@ class NodeEventEmitter<T> implements ServerSideKeyDisposable {
       try {
         listener(event);
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        this.logger.error(CHANNEL, `Event listener failed: ${message}`);
+        this.logger.error(
+          CHANNEL,
+          `Event listener failed: ${toErrorMessage(error)}`,
+        );
       }
     }
   }
