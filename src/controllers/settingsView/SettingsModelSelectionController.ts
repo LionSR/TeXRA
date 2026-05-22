@@ -62,7 +62,11 @@ export class SettingsModelSelectionController {
   }
 
   getVisibleModels(): string[] {
-    return this.deps.state.getEnabledModels() ?? DEFAULT_MODELS;
+    // Normalize at the single read boundary: an empty persisted list (e.g. the
+    // user disabled every model) falls back to defaults so downstream consumers
+    // — including the helper-model dropdown — never see an empty model set.
+    const enabled = this.deps.state.getEnabledModels();
+    return enabled && enabled.length > 0 ? enabled : DEFAULT_MODELS;
   }
 
   buildSelectionData(): SettingsModelSelectionData {
