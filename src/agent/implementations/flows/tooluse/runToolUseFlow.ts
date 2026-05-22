@@ -326,9 +326,6 @@ export async function runToolUseFlow<C = unknown>(
         ? extractedTouchedFiles
         : undefined;
     }
-  } catch (error) {
-    status = END_GROUP_STATUS.ERROR;
-    throw error;
   } finally {
     if (shared.userCancelledRetry) {
       logger.debug('Flow record preserved for resume after retry cancellation');

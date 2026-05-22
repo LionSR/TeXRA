@@ -9,6 +9,7 @@
  * Electron desktop builds without dragging in VS Code's language client.
  */
 
+import { toErrorMessage } from '@common/errors';
 import type { Readable, Writable } from 'node:stream';
 
 export type RpcId = number | string;
@@ -234,7 +235,7 @@ export class JsonRpcConnection {
           this.write({
             jsonrpc: '2.0',
             id: message.id,
-            error: { code: -32603, message: errorMessage(error) },
+            error: { code: -32603, message: toErrorMessage(error) },
           }),
       );
       return;
@@ -272,9 +273,4 @@ export class JsonRpcConnection {
     }
     this.pending.clear();
   }
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
 }

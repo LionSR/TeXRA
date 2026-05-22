@@ -4,6 +4,8 @@ import path from 'node:path';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { z } from 'zod';
 
+import { toErrorMessage } from '@common/errors';
+
 import {
   CLI_APPROVAL_POLICIES,
   CLI_OUTPUT_FORMATS,
@@ -206,11 +208,10 @@ export async function loadWorkspaceCliConfig(
   try {
     parsed = JSON.parse(raw);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
     return {
       path: filePath,
       values: {},
-      warnings: [`Could not parse ${filePath}: ${message}`],
+      warnings: [`Could not parse ${filePath}: ${toErrorMessage(error)}`],
     };
   }
 

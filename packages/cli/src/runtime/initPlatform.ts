@@ -8,8 +8,8 @@ import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { initPlatform, tryPlatform } from '@platform/platform';
 
 // Local imports - agent index
-import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
+import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 
 // Local imports - auth
 import {
@@ -18,6 +18,7 @@ import {
 } from '@auth/serverKeys';
 
 // Local imports - common state
+import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey } from '@common/state/stateKeys';
 
 // Local imports - logger
@@ -113,7 +114,7 @@ export async function initCliPlatform(
         logAt(
           'warn',
           'cli.lifecycle',
-          `${phase} handler failed: ${error instanceof Error ? error.message : String(error)}`,
+          `${phase} handler failed: ${toErrorMessage(error)}`,
         );
       },
     });

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { formatError, formatZodError } from '@common/errors';
+import { formatError, formatZodError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { z } from 'zod';
 
@@ -89,6 +89,9 @@ export async function showLoggedMessageWithDocs(
   try {
     await vscode.commands.executeCommand('texra.openDoc', docId);
   } catch (err) {
-    logger.error(channel, `Failed to open documentation: ${err}`);
+    logger.error(
+      channel,
+      `Failed to open documentation: ${toErrorMessage(err)}`,
+    );
   }
 }

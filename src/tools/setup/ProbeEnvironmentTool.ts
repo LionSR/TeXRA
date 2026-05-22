@@ -6,6 +6,7 @@ import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports
+import { toErrorMessage } from '@common/errors';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { ToolError, type ToolResult } from '@tools/result';
 import { detectPackageManager } from '@utils/system/toolUtils';
@@ -83,7 +84,8 @@ export class ProbeEnvironmentTool extends defineTool({
         ),
         platform.secrets.anyApiKeyExists().catch((err) => {
           throw new ToolError(
-            `Failed to probe API key status: ${err instanceof Error ? err.message : String(err)}`,
+            `Failed to probe API key status: ${toErrorMessage(err)}`,
+            { cause: err },
           );
         }),
         platform.auth.getStatus().catch(() => ({

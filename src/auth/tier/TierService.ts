@@ -13,7 +13,6 @@
  * - Ultra: All models including premium ($3+/M input)
  */
 
-import type { z } from 'zod';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import {
   SpendingStatusSchema,
@@ -31,6 +30,7 @@ import {
   type TierModelsConfig,
   type UserAccessStatus,
 } from './types';
+import type { z } from 'zod';
 
 const CHANNEL = 'TierService';
 

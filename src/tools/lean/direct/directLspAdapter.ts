@@ -11,6 +11,7 @@
 import { access } from 'node:fs/promises';
 import * as path from 'node:path';
 
+import { toErrorMessage } from '@common/errors';
 import { warn } from '@logger/logUtils';
 
 import { runLakeCommand } from './lakeCommands';
@@ -151,7 +152,7 @@ export function createDirectLspLeanAdapter(
       } catch (error) {
         warn(
           LOG_CHANNEL,
-          `fetchDiagnosticsForFile failed for ${file}: ${error instanceof Error ? error.message : String(error)}`,
+          `fetchDiagnosticsForFile failed for ${file}: ${toErrorMessage(error)}`,
         );
         return null;
       }
@@ -175,7 +176,7 @@ export function createDirectLspLeanAdapter(
       } catch (error) {
         warn(
           LOG_CHANNEL,
-          `executeFileCommand(${command}) failed for ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+          `executeFileCommand(${command}) failed for ${filePath}: ${toErrorMessage(error)}`,
         );
         return false;
       }
@@ -275,7 +276,7 @@ export function createDirectLspLeanAdapter(
     } catch (error) {
       return {
         data: null,
-        error: error instanceof Error ? error.message : String(error),
+        error: toErrorMessage(error),
       };
     }
   }

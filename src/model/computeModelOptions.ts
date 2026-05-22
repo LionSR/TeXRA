@@ -1,9 +1,9 @@
 import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { platform } from '@platform/platform';
-import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
+import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { apiKeyExists, isApiProvider } from './apiProviders';
