@@ -66,7 +66,7 @@ function readIndex(): StreamTabId[] {
   if (!state) return [];
   const raw = state.get<unknown>(INDEX_KEY);
   return Array.isArray(raw)
-    ? (raw.filter((v) => typeof v === 'string') as string[])
+    ? raw.filter((v): v is StreamTabId => typeof v === 'string')
     : [];
 }
 

@@ -30,6 +30,19 @@ function patchSessionMeta<K extends 'agent' | 'model' | 'apiMode'>(
   cliState.sessionMeta.set({ ...cliState.sessionMeta.get(), [key]: value });
 }
 
+/** Run a select handler (sync or async) and close the form with the selected
+ *  value once it settles, routing any rejection to `onError` first. */
+function settleThenDone<T>(
+  result: void | Promise<void>,
+  value: T,
+  onDone: (value: T) => void,
+  onError?: ErrorHandler,
+): void {
+  void Promise.resolve(result)
+    .catch((error: unknown) => onError?.(error))
+    .finally(() => onDone(value));
+}
+
 export function registerBuiltinSlashCommands(options?: {
   onAgentSelect?: AgentSelectHandler;
   canSelectAgent?: () => boolean;
@@ -63,11 +76,9 @@ export function registerBuiltinSlashCommands(options?: {
         currentAgent={current}
         availableRows={props.availableRows}
         selectable={selectable}
-        onSelect={(value) => {
-          void Promise.resolve(onAgentSelect(value)).finally(() =>
-            props.onDone(value),
-          );
-        }}
+        onSelect={(value) =>
+          settleThenDone(onAgentSelect(value), value, props.onDone)
+        }
         onClose={() => props.onDone(undefined)}
       />
     );
@@ -78,11 +89,9 @@ export function registerBuiltinSlashCommands(options?: {
     return (
       <ApiModeForm
         currentMode={current}
-        onSelect={(value) => {
-          void Promise.resolve(onApiModeSelect(value)).finally(() =>
-            props.onDone(value),
-          );
-        }}
+        onSelect={(value) =>
+          settleThenDone(onApiModeSelect(value), value, props.onDone)
+        }
         onCancel={() => props.onDone(undefined)}
       />
     );
@@ -93,11 +102,9 @@ export function registerBuiltinSlashCommands(options?: {
     return (
       <ApprovalPolicyForm
         currentPolicy={current}
-        onSelect={(value) => {
-          void Promise.resolve(onApprovalPolicySelect?.(value)).finally(() =>
-            props.onDone(value),
-          );
-        }}
+        onSelect={(value) =>
+          settleThenDone(onApprovalPolicySelect?.(value), value, props.onDone)
+        }
         onCancel={() => props.onDone(undefined)}
       />
     );
@@ -112,11 +119,9 @@ export function registerBuiltinSlashCommands(options?: {
         apiMode={cliState.sessionMeta.get().apiMode}
         availableRows={props.availableRows}
         selectable={selectable}
-        onSelect={(value) => {
-          void Promise.resolve(onModelSelect(value)).finally(() =>
-            props.onDone(value),
-          );
-        }}
+        onSelect={(value) =>
+          settleThenDone(onModelSelect(value), value, props.onDone)
+        }
         onClose={() => props.onDone(undefined)}
       />
     );
@@ -126,11 +131,14 @@ export function registerBuiltinSlashCommands(options?: {
     return (
       <MemoryListForm
         availableRows={props.availableRows}
-        onSelect={(value) => {
-          void Promise.resolve(onMemorySelect?.(value))
-            .catch((error: unknown) => onMemoryError?.(error))
-            .finally(() => props.onDone(value));
-        }}
+        onSelect={(value) =>
+          settleThenDone(
+            onMemorySelect?.(value),
+            value,
+            props.onDone,
+            onMemoryError,
+          )
+        }
         onClose={() => props.onDone(undefined)}
       />
     );
@@ -140,11 +148,9 @@ export function registerBuiltinSlashCommands(options?: {
     return (
       <ResumeListForm
         availableRows={props.availableRows}
-        onSelect={(id) => {
-          void Promise.resolve(onResumeSelect?.(id))
-            .catch((error: unknown) => onResumeError?.(error))
-            .finally(() => props.onDone(id));
-        }}
+        onSelect={(id) =>
+          settleThenDone(onResumeSelect?.(id), id, props.onDone, onResumeError)
+        }
         onClose={() => props.onDone(undefined)}
       />
     );
