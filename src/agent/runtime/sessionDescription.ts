@@ -13,9 +13,9 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createHelperModelKit } from '@agent/runtime/helperModel';
 import * as logger from '@agent/core/logger';
+import { toErrorMessage } from '@common/errors/errorMessage';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 const CHANNEL = 'SessionDescription';

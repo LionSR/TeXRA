@@ -11,6 +11,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 
+import { toErrorMessage } from '@common/errors';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
@@ -280,7 +281,10 @@ async function sendPositionRequest<T>(
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preserveFocus: true });
   } catch (e) {
-    return { data: null, error: `Failed to open file ${absolutePath}: ${e}` };
+    return {
+      data: null,
+      error: `Failed to open file ${absolutePath}: ${toErrorMessage(e)}`,
+    };
   }
 
   let client: LeanClient | undefined;
@@ -315,7 +319,10 @@ async function sendPositionRequest<T>(
     const result = await client.sendRequest(method, params);
     return { data: result as T };
   } catch (e) {
-    return { data: null, error: `LSP request ${method} failed: ${e}` };
+    return {
+      data: null,
+      error: `LSP request ${method} failed: ${toErrorMessage(e)}`,
+    };
   }
 }
 

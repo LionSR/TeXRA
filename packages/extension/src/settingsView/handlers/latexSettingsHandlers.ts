@@ -11,6 +11,7 @@ import { LatexConfigPersistenceController } from '@controllers/settingsView/Late
 import { LatexRecommendedSettingsController } from '@controllers/settingsView/LatexRecommendedSettingsController';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
+import { toErrorMessage } from '@common/errors';
 import { workspaceSM } from '@common/state';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import {
@@ -72,9 +73,7 @@ export class LatexSettingsHandlers {
     onDetectionError: (error) => {
       this.ctx.logger.error(
         this.ctx.channel,
-        `LaTeX settings detection failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `LaTeX settings detection failed: ${toErrorMessage(error)}`,
       );
     },
   });

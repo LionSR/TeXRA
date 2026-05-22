@@ -1,5 +1,6 @@
 import * as path from 'path';
 
+import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { getVisibleAgents, type AgentEntry } from '@agent/index/agentRegistry';
 import {
@@ -8,7 +9,6 @@ import {
   AgentCategory,
 } from '@agent/core/AgentDataclass';
 import { getConfig } from '@agent/core/config';
-import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { FileListEntry } from '@shared/schemas';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';

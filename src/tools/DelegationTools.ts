@@ -33,6 +33,9 @@ import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager
 // Local imports - logger
 import * as logger from '@agent/core/logger';
 
+// Local imports - common
+import { toErrorMessage } from '@common/errors';
+
 // Local imports - model
 import {
   getVisibleModels,
@@ -138,9 +141,9 @@ function ensureWorkingDirectoryExists(dir: string): void {
   try {
     if (AbsoluteFS.statSync(dir).isDirectory()) return;
   } catch (e) {
-    const reason = e instanceof Error ? e.message : String(e);
     throw new Error(
-      `working_directory must be an existing directory: ${reason}`,
+      `working_directory must be an existing directory: ${toErrorMessage(e)}`,
+      { cause: e },
     );
   }
   throw new Error(`working_directory must be a directory: ${dir}`);
@@ -165,7 +168,7 @@ const workingDirectoryField = z
     } catch (e) {
       ctx.addIssue({
         code: 'custom',
-        message: e instanceof Error ? e.message : String(e),
+        message: toErrorMessage(e),
       });
       return z.NEVER;
     }
@@ -182,7 +185,7 @@ const workingDirectoryField = z
     } catch (e) {
       ctx.addIssue({
         code: 'custom',
-        message: e instanceof Error ? e.message : String(e),
+        message: toErrorMessage(e),
       });
       return z.NEVER;
     }
