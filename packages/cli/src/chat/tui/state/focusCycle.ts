@@ -22,7 +22,10 @@ export function orderedDescendantsFromSlice(
 ): StreamTabId[] {
   if (!slice) return [];
   const out: StreamTabId[] = [];
-  for (const child of [...visibleSubagentRows(slice), ...slice.activeProcesses]) {
+  for (const child of [
+    ...visibleSubagentRows(slice),
+    ...slice.activeProcesses,
+  ]) {
     if (child.childStreamId) out.push(child.childStreamId);
   }
   return [...new Set(out)];
