@@ -130,6 +130,7 @@ function statusBarBindings(modifierLabel: string): readonly string[] {
     '[/status]details',
     '[/model]models',
     '[/api]api',
+    '[Ctrl-J]newline',
     '[Ctrl-C]stop',
   ];
 }
