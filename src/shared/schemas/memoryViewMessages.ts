@@ -134,4 +134,3 @@ export const PinMemoryMessageSchema = MemoryPathMessageSchema.extend({
 export const UnpinMemoryMessageSchema = MemoryPathMessageSchema.extend({
   command: z.literal(MEMORY_VIEW_COMMANDS.UNPIN_MEMORY),
 });
-

@@ -134,4 +134,3 @@ export const SetApiAccessModeInboundMessageSchema =
   SetApiAccessModeMessageSchema.extend({
     command: z.literal(PROFILE_VIEW_COMMANDS.SET_API_ACCESS_MODE),
   });
-

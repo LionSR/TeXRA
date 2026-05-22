@@ -108,4 +108,3 @@ export const ExportChatTexMessageSchema = z.object({
   command: z.literal(HISTORY_VIEW_COMMANDS.EXPORT_CHAT_TEX),
   historyId: z.string().min(1),
 });
-
