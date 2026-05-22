@@ -91,17 +91,6 @@ function editCandidate(
   };
 }
 
-export function editPatchHunks(input: unknown): readonly Hunk[] | undefined {
-  const candidate = editCandidate(input, 'edit');
-  if (!candidate) return undefined;
-  const hunks = buildHunks(
-    candidate.fileLabel,
-    candidate.oldText,
-    candidate.newText,
-  );
-  return hunks.length > 0 ? hunks : undefined;
-}
-
 export function editPatchGroups(
   input: unknown,
 ): readonly InlinePatchGroup[] | undefined {
