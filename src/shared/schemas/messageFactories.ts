@@ -24,11 +24,3 @@ export function withOptionalFilePath<T extends string>(command: T) {
 export function withFilesArray<T extends string>(command: T) {
   return z.object({ command: z.literal(command), files: z.array(z.string()) });
 }
-
-/** Schema with `command` + optional `notifyWhenEmpty` boolean. */
-export function withNotifyWhenEmpty<T extends string>(command: T) {
-  return z.object({
-    command: z.literal(command),
-    notifyWhenEmpty: z.boolean().nullish(),
-  });
-}

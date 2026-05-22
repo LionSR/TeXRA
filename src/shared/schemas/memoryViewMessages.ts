@@ -7,10 +7,6 @@
 import { z } from 'zod';
 
 import { MEMORY_VIEW_COMMANDS } from '@common/webview/commands';
-import {
-  createDispatcher,
-  type HandlerRegistry,
-} from '@shared/utils/dispatcher';
 import { commandOnly } from './messageFactories';
 
 // ============================================================
@@ -138,34 +134,3 @@ export const PinMemoryMessageSchema = MemoryPathMessageSchema.extend({
 export const UnpinMemoryMessageSchema = MemoryPathMessageSchema.extend({
   command: z.literal(MEMORY_VIEW_COMMANDS.UNPIN_MEMORY),
 });
-
-// ============================================================
-// Discriminated union of all inbound messages
-// ============================================================
-
-export const MemoryViewInboundMessageSchema = z.discriminatedUnion('command', [
-  GetMemoryDataMessageSchema,
-  GetMemoryPreviewMessageSchema,
-  OpenMemoryFileMessageSchema,
-  OpenMemoryFolderMessageSchema,
-  DeleteMemoryMessageSchema,
-  GetMemoryEnabledMessageSchema,
-  SetMemoryEnabledMessageSchema,
-  PinMemoryMessageSchema,
-  UnpinMemoryMessageSchema,
-]);
-
-export type MemoryViewInboundMessage = z.infer<
-  typeof MemoryViewInboundMessageSchema
->;
-
-// ============================================================
-// Type-safe handler registry and dispatcher
-// ============================================================
-
-export type MemoryViewInboundHandlerRegistry =
-  HandlerRegistry<MemoryViewInboundMessage>;
-
-export const dispatchMemoryViewInbound = createDispatcher(
-  MemoryViewInboundMessageSchema,
-);
