@@ -433,8 +433,11 @@ export class AgentLogger {
     groupId?: string,
     status: ToolUseLog['status'] = 'completed',
   ): void {
+    // Omit groupId when undefined so the patch doesn't clobber the canonical
+    // value stamped at emitToolUse time (deferred tools capture groupId at
+    // start but never copy the resolved id back into logRef).
     this.updateStore(logId, {
-      groupId,
+      ...(groupId !== undefined && { groupId }),
       messageType: MESSAGE_TYPES.TOOL_USE,
       data: { ...toolUseLog, status } satisfies ToolUseLog,
     });

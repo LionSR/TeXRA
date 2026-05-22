@@ -135,4 +135,30 @@ describe('AgentLogger groupId resolution', () => {
       AgentLogger.setStreamLogStore(previousStore);
     }
   });
+
+  it('does not clobber a tool-use entry groupId when updateToolUse is called with undefined', async () => {
+    const previousStore = AgentLogger.getStreamLogStore();
+    const store = new StreamLogStore();
+    AgentLogger.setStreamLogStore(store);
+
+    try {
+      const logger = new AgentLogger('stream', true);
+      const outer = await logger.stage('outer');
+      const { logId, groupId: createdGroupId } = await outer.within(async () =>
+        logger.logToolUseStart('demoTool', { arg: 1 }),
+      );
+
+      expect(createdGroupId).toBeDefined();
+
+      // Mirrors the deferred-tool path: caller never copied the resolved
+      // groupId back into its ref, so it passes undefined on update.
+      logger.updateToolUse(logId, { toolName: 'demoTool', input: { arg: 1 }, output: 'ok' }, undefined);
+
+      const entries = store.get('stream')?.getRange(0) ?? [];
+      const toolEntry = entries.find((e) => e.id === logId);
+      expect(toolEntry?.groupId).toBe(createdGroupId);
+    } finally {
+      AgentLogger.setStreamLogStore(previousStore);
+    }
+  });
 });
