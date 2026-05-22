@@ -24,7 +24,7 @@ describe('CLI API status text', () => {
     };
 
     expect(formatRelayUsageStatus(summary)).toBe(
-      'relay usage: $42.00 / $300.00 (14.0%), $258.00 remaining',
+      'relay usage this month: 14.0% used, 86.0% remaining',
     );
   });
 });
