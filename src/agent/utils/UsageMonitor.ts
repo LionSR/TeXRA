@@ -4,6 +4,7 @@ import type { RunUsageTotals } from '@agent/core/RunUsageAccumulator';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 import { shouldUseOpenRouter } from '@agent/modelHandlers/support/ProxyConfigResolver';
 import { getServerSideKeyService } from '@auth/serverKeys';
+import { toErrorMessage } from '@common/errors';
 import {
   UsageLogService,
   type AgentLogger,
@@ -187,7 +188,9 @@ export class UsageMonitor {
         cost: roundCost,
       });
     } catch (error) {
-      logger.error(`Error printing ${runKind} statistics: ${error}`);
+      logger.error(
+        `Error printing ${runKind} statistics: ${toErrorMessage(error)}`,
+      );
     }
   }
 
@@ -259,7 +262,9 @@ export class UsageMonitor {
         streamId: this.context.streamId,
       });
     } catch (error) {
-      this.context.logger.debug(`Backend usage logging failed: ${error}`);
+      this.context.logger.debug(
+        `Backend usage logging failed: ${toErrorMessage(error)}`,
+      );
     }
   }
 }

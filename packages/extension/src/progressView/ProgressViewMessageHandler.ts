@@ -42,7 +42,6 @@ import {
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
 import { handleExternalInquiryAction } from '@tools/inquiry';
-import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import {
   handleProgressViewBashApprovalAction,
@@ -51,6 +50,8 @@ import {
   isApprovalBypassedForStream,
   toggleProposalBypass,
 } from '@tools/approval';
+import { OdysseyStore, isOdysseyInFlight } from '@tools/odyssey';
+import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import {
   createExternalLocation,
   flexibleFS,
@@ -62,7 +63,6 @@ import {
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
 
-import { OdysseyStore, isOdysseyInFlight } from '@tools/odyssey';
 import { ProgressStreamLifecycleHost } from './managers/ProgressStreamLifecycleHost';
 import type { ProgressViewProvider } from './ProgressViewProvider';
 

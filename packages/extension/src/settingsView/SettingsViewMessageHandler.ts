@@ -92,7 +92,6 @@ import {
 import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
 import { createSettingsMemoryController } from '@shared/settingsView/handlers/memoryControllerFactory';
 import { clampNestedDelegationDepth } from '@shared/constants/delegationPolicy';
-import { readGitAuthorSettingsFromState } from '@utils/system/gitAuthorSettings';
 import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
@@ -125,6 +124,7 @@ import {
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
+import { readGitAuthorSettingsFromState } from '@utils/system/gitAuthorSettings';
 import { setToolUseMemoryEnabled } from '@utils/config/constants';
 import {
   getGlobalStreaming,
