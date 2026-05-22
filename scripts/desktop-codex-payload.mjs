@@ -53,15 +53,22 @@ const platformKeyByPackageName = new Map(
 );
 
 export function codexBinaryPath(prefix, platformInfo) {
-  return join(
-    prefix,
-    'node_modules',
-    ...platformInfo.pkg.split('/'),
-    'vendor',
-    platformInfo.triple,
-    'codex',
-    platformInfo.binaryName,
-  ).replaceAll('\\', '/');
+  return codexBinaryPathCandidates(prefix, platformInfo)[0];
+}
+
+export function codexBinaryPathCandidates(prefix, platformInfo) {
+  return codexBinarySubpathCandidates(platformInfo).map((subpath) =>
+    join(prefix, 'node_modules', ...platformInfo.pkg.split('/'), subpath)
+      .replaceAll('\\', '/')
+      .replace(/^\//, ''),
+  );
+}
+
+export function codexBinarySubpathCandidates(platformInfo) {
+  return [
+    join('vendor', platformInfo.triple, 'codex', platformInfo.binaryName),
+    join('vendor', platformInfo.triple, 'bin', platformInfo.binaryName),
+  ].map((path) => path.replaceAll('\\', '/'));
 }
 
 export function formatBytes(bytes) {
@@ -211,13 +218,34 @@ async function collectOpenAiAliasCandidates(unpackedRoot) {
 async function collectPnpmStoreCandidates(unpackedRoot) {
   const pnpmDir = join(unpackedRoot, 'node_modules', '.pnpm');
   const entries = await readDirNames(pnpmDir);
-  return entries
-    .map((entry) => {
-      const platformKey = inferPlatformKeyFromPnpmEntry(entry);
-      if (platformKey == null) return null;
-      return { platformKey, path: join(pnpmDir, entry) };
-    })
-    .filter((candidate) => candidate != null);
+  const candidates = [];
+
+  for (const entry of entries) {
+    const platformKey = inferPlatformKeyFromPnpmEntry(entry);
+    if (platformKey == null) continue;
+
+    for (const packageRoot of pnpmCodexPackageRootCandidates(
+      pnpmDir,
+      entry,
+      platformKey,
+    )) {
+      if (await exists(packageRoot)) {
+        candidates.push({ platformKey, path: packageRoot });
+        break;
+      }
+    }
+  }
+
+  return candidates;
+}
+
+function pnpmCodexPackageRootCandidates(pnpmDir, entry, platformKey) {
+  const entryRoot = join(pnpmDir, entry);
+  const platformInfo = codexPlatformInfoByKey[platformKey];
+  return [
+    join(entryRoot, 'node_modules', ...platformInfo.pkg.split('/')),
+    join(entryRoot, 'node_modules', '@openai', 'codex'),
+  ];
 }
 
 function inferPlatformKeyFromPnpmEntry(entry) {
