@@ -168,11 +168,15 @@ describe('Anthropic tool conversion', () => {
     ];
 
     const tools = toAnthropicTools(definitions);
-    const customTools = tools.filter(
-      (
-        tool,
-      ): tool is { name: string; input_schema?: Record<string, unknown> } =>
-        !('type' in tool),
+    const customTools = tools.flatMap((tool) =>
+      'type' in tool
+        ? []
+        : [
+            tool as unknown as {
+              name: string;
+              input_schema: Record<string, unknown>;
+            },
+          ],
     );
 
     expect(customTools.map((tool) => tool.name)).toContain('grep');
