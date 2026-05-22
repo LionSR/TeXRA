@@ -12,7 +12,6 @@
 import { toErrorMessage } from '@common/errors';
 import type { Readable, Writable } from 'node:stream';
 
-
 export type RpcId = number | string;
 
 export interface RpcRequest {

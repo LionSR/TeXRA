@@ -534,15 +534,12 @@ export class ModelHandlerOpenAI<
       const isAbort =
         streamError instanceof OpenAIUserAbortError || isUserAbort(streamError);
       if (!isAbort) {
-        this.logger.warn(
-          `Stream failed: ${getSdkErrorMessage(streamError)}`,
-          {
-            data: {
-              model: this.config.fullName,
-              partialTextLength: partialText.length,
-            },
+        this.logger.warn(`Stream failed: ${getSdkErrorMessage(streamError)}`, {
+          data: {
+            model: this.config.fullName,
+            partialTextLength: partialText.length,
           },
-        );
+        });
       }
       throw streamError;
     } finally {
