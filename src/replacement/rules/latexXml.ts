@@ -18,10 +18,12 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     // Lists of environment/tag names
     const latexEnvironments = LATEX_ENVIRONMENTS;
 
-    // Pure XML tags that should not be treated as LaTeX environments
+    // Pure XML tags that should not be treated as LaTeX environments.
+    // Note: `latex_document` is intentionally NOT here — all of its
+    // normalization lives in `latex_document` (latexDocument.ts) so the
+    // legacy wrapper has a single owner.
     const pureXmlTags = [
       'revised_statement',
-      'latex_document',
       'scratchpad',
       'idea',
       'cover_letter',
@@ -81,6 +83,15 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     // Fix extra braces in LaTeX environment tags
     patterns['\\begin{figure*}}'] = '\\begin{figure*}';
     patterns['\\begin{figure}}'] = '\\begin{figure}';
+
+    // ===== 7. Unified <documents><document name="..."> hygiene =====
+    // Empty name attribute breaks the named-document fallback in extraction.
+    patterns['<document name="">'] = '<document name="unknown">';
+
+    // ===== 8. Stray XML noise emitted by some models =====
+    patterns['<?xml version="1.0" encoding="UTF-8"?>'] = '';
+    patterns['```xml\n'] = '';
+    patterns['</xml>'] = '';
 
     return patterns;
   })(),
