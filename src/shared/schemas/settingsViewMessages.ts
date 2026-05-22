@@ -86,7 +86,6 @@ export {
 /** Tab name order - single source of truth for tab indices */
 export const SETTINGS_TAB_ORDER = [
   'MEMORY',
-  'ODYSSEY',
   'HISTORY',
   'MODELS',
   'AGENTS',
@@ -95,6 +94,7 @@ export const SETTINGS_TAB_ORDER = [
   'AI_AGENTS',
   'GIT',
   'LATEX',
+  'ODYSSEY',
 ] as const;
 
 export type SettingsTabName = (typeof SETTINGS_TAB_ORDER)[number];
