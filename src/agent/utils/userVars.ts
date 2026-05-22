@@ -497,6 +497,15 @@ export function getToolFlags(
         'When multiple codex agents need to edit the same files, or when you want to isolate experimental changes, ' +
         'use a git worktree (`git worktree add ../worktree-name branch-name`) and pass its path as working_directory.'
       : '',
+    CLAUDE_CODE_GUIDANCE: agentSetting.tools.some(
+      (t) => t.name === 'claude_code',
+    )
+      ? 'Choose claude_code for coding tasks that benefit from a separate Anthropic Claude Code agent — it runs in its own workspace with independent file editing, search, and shell access. ' +
+        'claude_code is async and multi-turn, mirroring delegate_agent: each call returns an execution ID, and results arrive as follow-up messages that include a session_id. ' +
+        'Pass that session_id back on a later claude_code call to continue the same session — the agent retains full history and file context. ' +
+        'Use permission_mode to control how it handles edits (acceptEdits auto-applies file edits; plan keeps it read-only), and set model and effort to trade off speed against depth. ' +
+        'codex and claude_code are both independent sandboxed coders distinct from the in-process delegate_agent specialists; prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.'
+      : '',
   };
 
   // Only compute ROUNDS for workflow agents, not tool-use agents
