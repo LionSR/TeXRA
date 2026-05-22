@@ -7,10 +7,7 @@ import { runValidatedExecutionRequest } from '@agent/runtime/runExecutionRequest
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
 
-import {
-  hasCliApprovalDenied,
-  installCliApprovalHandlers,
-} from '../runtime/approvalAdapter';
+import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import { CliExitCode } from '../runtime/exitCodes';
 import { readCliHistoryConfig, parseCliHistoryId } from '../runtime/history';
 import { initCliPlatform } from '../runtime/initPlatform';
@@ -28,6 +25,7 @@ import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { shouldHonorRemoteAgentPriority } from './_helpers/remoteAgents';
 import {
   readCliTerminalStatus,
+  terminalStatusExitCode,
   type CliRunResult,
   type ExecuteAgentResult,
 } from './_helpers/terminalStatus';
@@ -110,15 +108,7 @@ export async function runResumeExecution(
     writeTextStdout(displayResult.status);
   }
 
-  if (terminalStatus === EXECUTION_STATUS.ERROR) {
-    return hasCliApprovalDenied(runContext)
-      ? CliExitCode.ApprovalDenied
-      : CliExitCode.AgentError;
-  }
-  if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
-    return CliExitCode.Interrupted;
-  }
-  return CliExitCode.Success;
+  return terminalStatusExitCode(terminalStatus, runContext);
 }
 
 export const resumeCommand = defineCommand({

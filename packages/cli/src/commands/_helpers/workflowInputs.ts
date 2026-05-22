@@ -5,10 +5,14 @@ import { glob, hasMagic } from 'glob';
 
 import { CliUsageError } from '../../runtime/cliContext';
 
-function normalizeCliInputPath(candidate: string, cwd: string): string {
-  const absolutePath = path.isAbsolute(candidate)
+function resolveAgainstCwd(candidate: string, cwd: string): string {
+  return path.isAbsolute(candidate)
     ? path.resolve(candidate)
     : path.resolve(cwd, candidate);
+}
+
+function normalizeCliInputPath(candidate: string, cwd: string): string {
+  const absolutePath = resolveAgainstCwd(candidate, cwd);
   const relativePath = path.relative(cwd, absolutePath);
   if (
     relativePath &&
@@ -28,25 +32,19 @@ export async function expandWorkflowInputSpec(
   if (!trimmed) return [];
 
   if (hasMagic(trimmed)) {
-    const matches = path.isAbsolute(trimmed)
-      ? await glob(trimmed.replaceAll('\\', '/'), {
-          absolute: true,
-          nodir: true,
-        })
-      : await glob(trimmed.replaceAll('\\', '/'), {
-          cwd,
-          absolute: false,
-          nodir: true,
-        });
+    const isAbsolute = path.isAbsolute(trimmed);
+    const matches = await glob(trimmed.replaceAll('\\', '/'), {
+      cwd: isAbsolute ? undefined : cwd,
+      absolute: isAbsolute,
+      nodir: true,
+    });
     if (matches.length === 0) {
       throw new CliUsageError(`No input files matched: ${trimmed}`);
     }
     return matches.sort().map((match) => normalizeCliInputPath(match, cwd));
   }
 
-  const absolutePath = path.isAbsolute(trimmed)
-    ? path.resolve(trimmed)
-    : path.resolve(cwd, trimmed);
+  const absolutePath = resolveAgainstCwd(trimmed, cwd);
   const stats = await fs.stat(absolutePath).catch(() => null);
   if (stats?.isDirectory()) {
     const matches = await glob('**/*.tex', {

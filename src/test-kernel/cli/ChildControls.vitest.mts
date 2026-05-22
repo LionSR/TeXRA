@@ -12,8 +12,8 @@ import {
   hasChildExecutionRows,
   nextPickerIndex,
   numericFocusTarget,
-  visibleSubagentRows,
 } from '../../../packages/cli/src/chat/tui/state/childControls';
+import { visibleSubagentRows } from '../../../packages/cli/src/chat/tui/state/childStreamMerge';
 import { NO_BYPASS } from '../../../packages/cli/src/chat/tui/state/cliState';
 import type {
   ProcessOutputTail,
