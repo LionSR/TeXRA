@@ -1,6 +1,11 @@
 // Local imports - replacement
 import { ReplacementCategory } from '@replacement/types';
 
+/**
+ * Scratchpad-only normalization. `<latex_document>` interactions live in
+ * `latex_document` (see latexDocument.ts) so the legacy wrapper has a single
+ * owner.
+ */
 export const SCRATCHPAD_XML_REPLACEMENTS: ReplacementCategory = {
   name: 'scratchpad_xml',
   description: 'Fixes for scratchpad XML processing',
@@ -12,31 +17,14 @@ export const SCRATCHPAD_XML_REPLACEMENTS: ReplacementCategory = {
     // gemini
     '\\begin{document}t}': '\\begin{document}',
     '\\end{document}t}': '\\end{document}',
-    'null\n</latex_document>': '\n</latex_document>',
     // Duplicate scratchpad tag fixes - remove redundant tags
     '<scratchpad><scratchpad>': '<scratchpad>',
     '<scratchpad> <scratchpad>': '<scratchpad>',
     '<scratchpad>\n<scratchpad>': '<scratchpad>',
-    // Scratchpad to latex_document transitions - ensure proper nesting
-    '<scratchpad>\n<latex_document>':
-      '<scratchpad>\n</scratchpad>\n<latex_document>',
-    '<scratchpad><latex_document>':
-      '<scratchpad>\n</scratchpad>\n<latex_document>',
+    // Cover-letter transition (kept separate from <latex_document> handling)
     '<scratchpad><cover_letter>': '<scratchpad>\n</scratchpad>\n<cover_letter>',
     '<scratchpad>\n<cover_letter>':
       '<scratchpad>\n</scratchpad>\n<cover_letter>',
-    // Code block to latex_document conversions - handle markdown code blocks
-    '<scratchpad>\n```latex\n<latex_document>':
-      '<scratchpad>\n</scratchpad>\n<latex_document>',
-    '</scratchpad>\n```latex': '</scratchpad>\n<latex_document>',
-    '</scratchpad>\n\n```latex': '</scratchpad>\n\n<latex_document>',
-    '</scratchpad>\n    \n```latex': '</scratchpad>\n\n<latex_document>',
-    // '```\n</latex_document>': '</latex_document>',
-    // Special LaTeX content handling
-    '</scratchpad>\n\\section{':
-      '</scratchpad>\n\\<latex_document>\n\\section{',
-    '</scratchpad>\n\\begin{document}':
-      '</scratchpad>\n\\<latex_document>\n\\begin{document}',
     // Rebuttal package fixes
     '<rebuttal_package><scratchpad>\n\n<rebuttal_package><scratchpad>':
       '<rebuttal_package><scratchpad>',
