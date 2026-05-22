@@ -4,12 +4,16 @@ import { formatCliApiMode, getCliApiMode } from './apiAccessMode';
 import { fetchRelayUsageSummary, type RelayUsageSummary } from './relayUsage';
 import { getCliAuthProfile } from './supabaseAuth';
 
-function formatUsd(value: number): string {
-  return value.toFixed(2);
+function formatPercent(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '0%';
+  if (value < 1) return '<1%';
+  return `${value.toFixed(1)}%`;
 }
 
 export function formatRelayUsageStatus(summary: RelayUsageSummary): string {
-  return `relay usage: $${formatUsd(summary.costUsd)} / $${formatUsd(summary.limitUsd)} (${summary.usagePercent.toFixed(1)}%), $${formatUsd(summary.remainingUsd)} remaining`;
+  const used = formatPercent(summary.usagePercent);
+  const remaining = formatPercent(Math.max(0, 100 - summary.usagePercent));
+  return `relay usage this month: ${used} used, ${remaining} remaining`;
 }
 
 export async function loadCliApiStatusLines(): Promise<string[]> {
