@@ -7,10 +7,6 @@
 import { z } from 'zod';
 
 import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands';
-import {
-  createDispatcher,
-  type HandlerRegistry,
-} from '@shared/utils/dispatcher';
 import { ProviderVscodeSettingDefSchema } from '@shared/constants/providers';
 import { AgentMetadataBaseSchema } from './agent';
 import { commandOnly } from './messageFactories';
@@ -138,30 +134,3 @@ export const SetApiAccessModeInboundMessageSchema =
   SetApiAccessModeMessageSchema.extend({
     command: z.literal(PROFILE_VIEW_COMMANDS.SET_API_ACCESS_MODE),
   });
-
-// ============================================================
-// Discriminated union of all inbound messages
-// ============================================================
-
-export const ProfileViewInboundMessageSchema = z.discriminatedUnion('command', [
-  GetProfileDataMessageSchema,
-  SelectAgentInboundMessageSchema,
-  SignInMessageSchema,
-  SignOutMessageSchema,
-  SetApiAccessModeInboundMessageSchema,
-]);
-
-export type ProfileViewInboundMessage = z.infer<
-  typeof ProfileViewInboundMessageSchema
->;
-
-// ============================================================
-// Type-safe handler registry and dispatcher
-// ============================================================
-
-export type ProfileViewInboundHandlerRegistry =
-  HandlerRegistry<ProfileViewInboundMessage>;
-
-export const dispatchProfileViewInbound = createDispatcher(
-  ProfileViewInboundMessageSchema,
-);
