@@ -830,7 +830,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           (enrichedError as ErrorWithRequestId).request_id = requestId;
         }
 
-        const logMessage = `Stream ${isAbort ? 'aborted' : 'failed'}: ${enrichedError instanceof Error ? enrichedError.message : String(enrichedError)}`;
+        const logMessage = `Stream ${isAbort ? 'aborted' : 'failed'}: ${getSdkErrorMessage(enrichedError)}`;
         const logData = {
           data: {
             isUsingRelay: this.shouldUseServerSideKeys(),

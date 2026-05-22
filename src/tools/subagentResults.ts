@@ -13,7 +13,7 @@ import type {
   OutputFileSummary,
 } from '@agent/runtime/AgentFlowResult';
 import type { ExecResult } from '@agent/types/ResultTypes';
-import { normalizeProviderError } from '@common/errors';
+import { normalizeProviderError, toErrorMessage } from '@common/errors';
 import type {
   ActiveChildInfo,
   SubagentProgressUpdate,
@@ -318,7 +318,7 @@ export function formatBashError(
   command: string,
   err: unknown,
 ): string {
-  const message = err instanceof Error ? err.message : String(err);
+  const message = toErrorMessage(err);
   return [
     `<background-error id="${executionId}" command="${escapeAttr(command)}">`,
     `<message>${escapeText(message)}</message>`,

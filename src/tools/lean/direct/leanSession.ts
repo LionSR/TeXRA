@@ -15,6 +15,7 @@ import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { toErrorMessage } from '@common/errors';
 import { debug, info, warn } from '@logger/logUtils';
 import {
   registerLeanServer,
@@ -225,9 +226,11 @@ export class LeanSession {
         windowsHide: true,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = toErrorMessage(error);
       updateLeanServer(this.id, { status: 'error', errorMessage: message });
-      throw new Error(`Failed to spawn 'lake env lean --server': ${message}`);
+      throw new Error(`Failed to spawn 'lake env lean --server': ${message}`, {
+        cause: error,
+      });
     }
     this.child = child;
     let stderrTail = '';
@@ -247,10 +250,12 @@ export class LeanSession {
     };
     const childError = new Promise<never>((_resolve, reject) => {
       child.once('error', (error) => {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = toErrorMessage(error);
         finalizeServer('error', message);
         reject(
-          new Error(`Failed to spawn 'lake env lean --server': ${message}`),
+          new Error(`Failed to spawn 'lake env lean --server': ${message}`, {
+            cause: error,
+          }),
         );
       });
     });
@@ -312,8 +317,10 @@ export class LeanSession {
       rpc.notify('initialized', {});
       updateLeanServer(this.id, { status: 'running' });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      updateLeanServer(this.id, { status: 'error', errorMessage: message });
+      updateLeanServer(this.id, {
+        status: 'error',
+        errorMessage: toErrorMessage(error),
+      });
       await this.dispose();
       throw error;
     }
@@ -327,9 +334,9 @@ export class LeanSession {
     let existing = this.openFiles.get(absolute);
     if (existing && !options.forceReload) return;
     const text = await readFile(absolute, 'utf8').catch((error) => {
-      throw new Error(
-        `Failed to read ${absolute}: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      throw new Error(`Failed to read ${absolute}: ${toErrorMessage(error)}`, {
+        cause: error,
+      });
     });
     existing = this.openFiles.get(absolute);
     if (existing && !options.forceReload) return;

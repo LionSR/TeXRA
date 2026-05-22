@@ -277,7 +277,7 @@ export async function checkToolInstalled(
       } catch (execErr) {
         logger.info(
           CHANNEL,
-          `Exception executing '${cmd}': ${execErr instanceof Error ? execErr.message : String(execErr)}`,
+          `Exception executing '${cmd}': ${toErrorMessage(execErr)}`,
         );
         return false;
       }
@@ -311,7 +311,7 @@ export async function checkToolInstalled(
         } catch (fallbackErr) {
           logger.info(
             CHANNEL,
-            `Exception executing fallback '${fallback.command}': ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
+            `Exception executing fallback '${fallback.command}': ${toErrorMessage(fallbackErr)}`,
           );
           return false;
         }

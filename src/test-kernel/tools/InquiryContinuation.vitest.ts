@@ -3,12 +3,12 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import type {
   ExternalInquiryThreadId,
   ExternalInquiryThreadSummary,
   StreamTabId,
 } from '@shared/schemas';
+import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 
 const STREAM = 'stream:test' as StreamTabId;
 const THREAD: ExternalInquiryThreadId =

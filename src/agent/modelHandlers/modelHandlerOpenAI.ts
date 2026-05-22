@@ -535,7 +535,7 @@ export class ModelHandlerOpenAI<
         streamError instanceof OpenAIUserAbortError || isUserAbort(streamError);
       if (!isAbort) {
         this.logger.warn(
-          `Stream failed: ${streamError instanceof Error ? streamError.message : String(streamError)}`,
+          `Stream failed: ${getSdkErrorMessage(streamError)}`,
           {
             data: {
               model: this.config.fullName,
