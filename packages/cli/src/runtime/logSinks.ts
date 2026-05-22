@@ -82,16 +82,6 @@ export async function askCliQuestion(question: string): Promise<string> {
   }
 }
 
-export function createCliLineReader(
-  prompt: string,
-): ReturnType<typeof createInterface> {
-  return createInterface({
-    input: process.stdin,
-    output: process.stderr,
-    prompt,
-  });
-}
-
 export class StderrTextSink implements LogSink {
   write(record: LogRecord): void {
     const groups = record.groups.length

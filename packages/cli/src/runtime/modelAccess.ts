@@ -26,15 +26,6 @@ function toCliModelAccess(model: ModelOptionData): CliModelAccess {
   };
 }
 
-export async function getCliModelAccess(
-  modelValue: string,
-): Promise<CliModelAccess | undefined> {
-  const models = await computeModelOptionsData();
-  const model = models.find((entry) => entry.value === modelValue);
-  if (!model) return undefined;
-  return toCliModelAccess(model);
-}
-
 export async function getCliModelAccessList(): Promise<CliModelAccess[]> {
   const models = await computeModelOptionsData();
   return models.map(toCliModelAccess);

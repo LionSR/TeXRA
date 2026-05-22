@@ -11,11 +11,4 @@ export const ExecutionIdSchema = z
 export type ExecutionId = z.infer<typeof ExecutionIdSchema>;
 
 /** Execution ID or the __default__ sentinel for legacy storage. */
-export const StorageKeySchema = z
-  .string()
-  .regex(
-    /^(__default__|[0-9a-f][-0-9a-f]*)$/i,
-    'Invalid storage key: must be execution ID or __default__',
-  )
-  .transform((val) => val as StorageKey);
 export type StorageKey = string & { readonly __brand: 'StorageKey' };
