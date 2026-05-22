@@ -8,7 +8,6 @@ import dotenv from 'dotenv';
 // Local imports - core
 import { initPlatform } from '@platform/platform';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { tryResumeFromSnapshot } from '@commands/agent/resumeFromSnapshot';
 import {
   SHUTDOWN_PHASE,
   type LifecycleHost,
@@ -16,9 +15,9 @@ import {
 import { loadAgents, setAgentDirectories } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
+import { initializeOdysseyPrompts } from '@agent/odyssey';
 import { setDefaultAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
-import { initializeOdysseyPrompts } from '@agent/odyssey';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import {
   getServerSideKeyService,
@@ -34,6 +33,7 @@ import {
   setRuntimeExtensionId,
 } from '@auth/config';
 import { getAuthStatus } from '@auth/authCommands';
+import { tryResumeFromSnapshot } from '@commands/agent/resumeFromSnapshot';
 import { toErrorMessage } from '@common/errors';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import {

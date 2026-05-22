@@ -22,6 +22,7 @@ import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator'
 import { waitForPlanApproval } from '@agent/runtime/runCoordinators';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import type { CurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
+import { toErrorMessage } from '@common/errors';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   TODO_STATUS,
@@ -405,7 +406,7 @@ Best practices:
             `Objective:\n${objective}`,
         };
       } catch (err) {
-        const reason = err instanceof Error ? err.message : String(err);
+        const reason = toErrorMessage(err);
         logger.warn(
           `Failed to retarget in-flight odyssey for approved plan; returning an explicit error result. ${reason}`,
         );
@@ -438,7 +439,7 @@ Best practices:
           `Objective:\n${objective}`,
       };
     } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
+      const reason = toErrorMessage(err);
       logger.warn(
         `Failed to start odyssey for approved plan; falling back to plain approval. ${reason}`,
       );

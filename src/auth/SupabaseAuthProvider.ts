@@ -237,7 +237,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       } catch (error) {
         logger.error(
           'SupabaseAuthProvider',
-          `Failed to trigger sign-in: ${error}`,
+          `Failed to trigger sign-in: ${toErrorMessage(error)}`,
         );
       }
     }
@@ -396,8 +396,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       return this.toVSCodeSession(session);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      void vscode.window.showErrorMessage(`Authentication failed: ${message}`);
+      void vscode.window.showErrorMessage(
+        `Authentication failed: ${toErrorMessage(error)}`,
+      );
       throw error;
     }
   }
@@ -457,8 +458,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       }
       return sessions[0];
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      void vscode.window.showErrorMessage(`Authentication failed: ${message}`);
+      void vscode.window.showErrorMessage(
+        `Authentication failed: ${toErrorMessage(error)}`,
+      );
       throw error;
     } finally {
       // Reset flag after entire OAuth flow completes (success or failure)

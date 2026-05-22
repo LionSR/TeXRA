@@ -293,8 +293,8 @@ export abstract class ModelHandler<
   ): Promise<string> {
     try {
       return await getApiKey(platform().secrets, provider);
-    } catch {
-      throw new Error(errorMessage);
+    } catch (cause) {
+      throw new Error(errorMessage, { cause });
     }
   }
 

@@ -2,6 +2,7 @@
 import * as path from 'path';
 
 // Local imports
+import { toErrorMessage } from '@common/errors';
 import type { AgentSource } from '@shared/schemas/agent';
 
 export const DEFAULT_CUSTOM_AGENTS_DIR_NAME = 'custom_agents';
@@ -111,9 +112,8 @@ export class AgentDirectoryService {
     try {
       await this.options.storage.ensureDir(this.defaultCustomDirectoryName);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
       this.options.logger.error(
-        `Failed to create default custom agents directory: ${message}`,
+        `Failed to create default custom agents directory: ${toErrorMessage(error)}`,
       );
       throw new Error(
         'Unable to create custom agents directory. Please check permissions.',
