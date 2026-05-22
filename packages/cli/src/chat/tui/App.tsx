@@ -220,22 +220,33 @@ export function App(props: AppProps): React.JSX.Element {
     hasTodosPlanPanel,
     rows: transcriptRows,
   });
-  const foregroundSurface = pending ? (
-    <ApprovalModal pending={pending} availableRows={foregroundRows} />
-  ) : childControlMode ? (
-    <ChildControlPicker
-      activeStreamId={activeStreamId}
-      availableRows={foregroundRows}
-      mode={childControlMode}
-      onClose={() => setChildControlMode(undefined)}
-      onFocusStream={(streamId) => cliState.activeStreamId.set(streamId)}
-      onKillExecution={props.onKillExecution}
-      slice={activeSlice}
-      streams={streams}
-    />
-  ) : activeForm ? (
-    activeForm.render(() => cliState.activeForm.set(undefined), foregroundRows)
-  ) : null;
+  function renderForegroundSurface(): React.ReactNode {
+    if (pending) {
+      return <ApprovalModal pending={pending} availableRows={foregroundRows} />;
+    }
+    if (childControlMode) {
+      return (
+        <ChildControlPicker
+          activeStreamId={activeStreamId}
+          availableRows={foregroundRows}
+          mode={childControlMode}
+          onClose={() => setChildControlMode(undefined)}
+          onFocusStream={(streamId) => cliState.activeStreamId.set(streamId)}
+          onKillExecution={props.onKillExecution}
+          slice={activeSlice}
+          streams={streams}
+        />
+      );
+    }
+    if (activeForm) {
+      return activeForm.render(
+        () => cliState.activeForm.set(undefined),
+        foregroundRows,
+      );
+    }
+    return null;
+  }
+  const foregroundSurface = renderForegroundSurface();
 
   const focusShortcutsActive = appFocusShortcutsActive({
     inputDisabled,

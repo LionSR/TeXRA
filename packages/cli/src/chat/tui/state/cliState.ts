@@ -91,14 +91,16 @@ export interface StreamSlice {
   readonly bypass: BypassState;
 }
 
-const SESSION_META = signal<SessionMeta>({
+const EMPTY_SESSION_META: SessionMeta = {
   agent: '',
   model: '',
   cwd: '',
   apiMode: 'personal',
   canDelegate: false,
   version: '',
-});
+};
+
+const SESSION_META = signal<SessionMeta>(EMPTY_SESSION_META);
 
 const ACTIVE_STREAM_ID = signal<StreamTabId | undefined>(undefined);
 
@@ -224,14 +226,8 @@ export function removeStream(streamId: StreamTabId): void {
 }
 
 function defaultSessionMeta(): SessionMeta {
-  return {
-    agent: '',
-    model: '',
-    cwd: '',
-    apiMode: 'personal',
-    canDelegate: false,
-    version: SESSION_META.get().version,
-  };
+  // Preserve the resolved CLI version across resets; everything else clears.
+  return { ...EMPTY_SESSION_META, version: SESSION_META.get().version };
 }
 
 export function resetCliState(sessionMeta = defaultSessionMeta()): void {

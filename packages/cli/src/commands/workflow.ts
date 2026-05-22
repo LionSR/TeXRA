@@ -14,10 +14,7 @@ import { toErrorMessage } from '@common/errors/errorMessage';
 import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 
-import {
-  hasCliApprovalDenied,
-  installCliApprovalHandlers,
-} from '../runtime/approvalAdapter';
+import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import { CliUsageError } from '../runtime/cliContext';
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
@@ -43,6 +40,7 @@ import {
 import { shouldHonorRemoteAgentPriority } from './_helpers/remoteAgents';
 import {
   readCliTerminalStatus,
+  terminalStatusExitCode,
   type CliRunResult,
   type ExecuteAgentResult,
 } from './_helpers/terminalStatus';
@@ -177,15 +175,7 @@ async function runWorkflowAgent(
     writeTextStdout(result.status);
   }
 
-  if (terminalStatus === EXECUTION_STATUS.ERROR) {
-    return hasCliApprovalDenied(runContext)
-      ? CliExitCode.ApprovalDenied
-      : CliExitCode.AgentError;
-  }
-  if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
-    return CliExitCode.Interrupted;
-  }
-  return CliExitCode.Success;
+  return terminalStatusExitCode(terminalStatus, runContext);
 }
 
 export const runWorkflowCommand = defineCommand({

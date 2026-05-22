@@ -16,10 +16,7 @@ import {
   CLI_BUILTIN_DEFAULT_MODEL,
   resolveConfiguredModel,
 } from '../runtime/cliConfig';
-import {
-  hasCliApprovalDenied,
-  installCliApprovalHandlers,
-} from '../runtime/approvalAdapter';
+import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import {
@@ -53,6 +50,7 @@ import {
 import {
   createCliRunResult,
   readCliTerminalStatus,
+  terminalStatusExitCode,
   type CliRunResult,
   type ExecuteAgentResult,
 } from './_helpers/terminalStatus';
@@ -301,15 +299,7 @@ async function runMultiAgentPreset(
   );
   writeMultiAgentRunResult(runContext, plan, displayResult);
 
-  if (terminalStatus === EXECUTION_STATUS.ERROR) {
-    return hasCliApprovalDenied(runContext)
-      ? CliExitCode.ApprovalDenied
-      : CliExitCode.AgentError;
-  }
-  if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
-    return CliExitCode.Interrupted;
-  }
-  return CliExitCode.Success;
+  return terminalStatusExitCode(terminalStatus, runContext);
 }
 
 const multiAgentListCommand = defineCommand({
