@@ -162,7 +162,7 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
         <KeyHints
           hints={[
             { key: '↑/↓', action: 'navigate' },
-            { key: '1-9/Enter', action: 'resume' },
+            { key: '1-9/a-z/Enter', action: 'resume' },
             { key: 'Esc', action: 'close' },
           ]}
           confirmCancel={false}
