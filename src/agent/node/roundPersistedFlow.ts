@@ -164,9 +164,6 @@ export class RoundPersistedFlow<
           currentShared,
         );
       }
-    } catch (error) {
-      status = EXECUTION_STATUS.ERROR;
-      throw error;
     } finally {
       this.currentRoundStage?.end();
       this.currentRoundStage = null;

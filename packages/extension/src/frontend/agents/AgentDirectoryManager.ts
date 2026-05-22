@@ -12,6 +12,7 @@ import {
   GlobalStorageAgentDirectoryStorage,
 } from '@agent/index';
 import type { AgentSource } from '@agent/index';
+import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
@@ -347,7 +348,7 @@ export class AgentDirectoryManager {
       } catch (error) {
         logger.debug(
           CHANNEL,
-          `Unable to scan agent directory ${uri.fsPath}: ${error instanceof Error ? error.message : String(error)}`,
+          `Unable to scan agent directory ${uri.fsPath}: ${toErrorMessage(error)}`,
         );
         continue;
       }
@@ -397,7 +398,7 @@ export class AgentDirectoryManager {
       } catch (error) {
         logger.debug(
           CHANNEL,
-          `Unable to scan new agent directory ${directory.fsPath}: ${error instanceof Error ? error.message : String(error)}`,
+          `Unable to scan new agent directory ${directory.fsPath}: ${toErrorMessage(error)}`,
         );
         continue;
       }
@@ -418,7 +419,7 @@ export class AgentDirectoryManager {
     void this.ensureAgentWatchers().catch((error) => {
       logger.error(
         CHANNEL,
-        `Failed to refresh agent directory watchers: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to refresh agent directory watchers: ${toErrorMessage(error)}`,
       );
     });
   }

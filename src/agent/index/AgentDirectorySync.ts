@@ -6,6 +6,7 @@ import fsExtra from 'fs-extra';
 import { glob } from 'glob';
 
 // Local imports
+import { toErrorMessage } from '@common/errors';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
 // Local imports - agent index
@@ -54,10 +55,6 @@ export interface BundledAgentDirectorySyncOptions {
   storage: AgentDirectoryStorage;
   versionStore: AgentDirectoryVersionStore;
   logger: AgentDirectorySyncLogger;
-}
-
-function toMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 export class PathAgentDirectoryBundleSource implements AgentDirectoryBundleSource {
@@ -157,7 +154,7 @@ export class BundledAgentDirectorySync {
         this.options.logger.info(`Deleted legacy agent file: ${legacyFile}`);
       } catch (error) {
         this.options.logger.warn(
-          `Failed to delete legacy agent file ${legacyFile}: ${toMessage(error)}`,
+          `Failed to delete legacy agent file ${legacyFile}: ${toErrorMessage(error)}`,
         );
       }
     }

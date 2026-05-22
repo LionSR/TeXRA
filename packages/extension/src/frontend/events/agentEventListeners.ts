@@ -9,6 +9,7 @@
 import * as vscode from 'vscode';
 
 import { getRunStorageService } from '@agent/runtime/RunStorageService';
+import { toErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { bus } from '@eventBus/ProgressEventBus';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
@@ -27,7 +28,7 @@ function handleRequestOpenFile(
   }).catch((err) =>
     logger.warn(
       CHANNEL,
-      `Failed to open file ${payload.location.absolutePath}: ${err}`,
+      `Failed to open file ${payload.location.absolutePath}: ${toErrorMessage(err)}`,
     ),
   );
 }
@@ -47,7 +48,10 @@ function handleRequestShowInstruction(
     actions,
     payload.showSuppress,
   ).catch((err) =>
-    logger.warn(CHANNEL, `Failed to show instruction "${payload.key}": ${err}`),
+    logger.warn(
+      CHANNEL,
+      `Failed to show instruction "${payload.key}": ${toErrorMessage(err)}`,
+    ),
   );
 }
 

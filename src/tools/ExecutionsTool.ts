@@ -39,6 +39,7 @@ import { onFollowUpSent } from '@agent/toolUse/ToolUseFollowUp';
 import { getWorkspaceState } from '@agent/core/stateStore';
 
 // Local imports - utils
+import { toErrorMessage } from '@common/errors';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { isDirectory } from '@common/files/fsEntryType';
 import {
@@ -641,7 +642,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     try {
       bindExecutionSubscription(streamId, executionId, ctx.runtimeHost);
     } catch (err) {
-      throw new ToolError(err instanceof Error ? err.message : String(err));
+      throw new ToolError(toErrorMessage(err));
     }
     return {
       summary: `Subscribed to ${executionId}`,

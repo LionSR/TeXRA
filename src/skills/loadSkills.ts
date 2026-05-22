@@ -1,5 +1,4 @@
 // Standard library imports
-import type { Dirent } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -10,6 +9,7 @@ import { ZodError } from 'zod';
 import { isFileNotFoundError, toErrorMessage } from '@common/errors';
 
 // Local imports - skill parsing
+import { collapseWhitespace } from '@utils/text/stringUtils';
 import {
   SKILL_DESCRIPTION_MAX_LENGTH,
   SkillNameSchema,
@@ -19,7 +19,7 @@ import {
 import { extractFrontmatter } from './frontmatter';
 
 // Local imports - utilities
-import { collapseWhitespace } from '@utils/text/stringUtils';
+import type { Dirent } from 'node:fs';
 
 export type SkillIssueSeverity = 'error' | 'warning';
 
