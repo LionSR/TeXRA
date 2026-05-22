@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { toErrorMessage } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import type { DiffViewHost } from '@hosts/diffViewHost';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
@@ -224,7 +225,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
   private runAction(requestId: string, action: () => Promise<void>): void {
     void action().catch((error) => {
       if (this.pending.has(requestId)) {
-        this.report(error instanceof Error ? error.message : String(error));
+        this.report(toErrorMessage(error));
       }
     });
   }

@@ -20,7 +20,7 @@ async function cleanupIndentLog(logPath: string): Promise<void> {
     if (isFileNotFoundError(err)) {
       logger.debug(CHANNEL, `No indent.log to remove at ${logPath}`);
     } else {
-      logger.warn(CHANNEL, `Error removing indent.log: ${err}`);
+      logger.warn(CHANNEL, `Error removing indent.log: ${toErrorMessage(err)}`);
     }
   }
 }
@@ -47,7 +47,7 @@ async function cleanupBackupFiles(
       if (!isFileNotFoundError(err)) {
         logger.warn(
           CHANNEL,
-          `Error removing backup file ${backupFile}: ${err}`,
+          `Error removing backup file ${backupFile}: ${toErrorMessage(err)}`,
         );
       }
     }

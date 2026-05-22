@@ -13,6 +13,7 @@ import type {
   WebFetchPayload,
   LogMessageData,
 } from '@shared/schemas';
+import { normalizeToolUseData } from '@shared/toolUse';
 import { isPlainObject } from '@shared/utils/string';
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
@@ -59,7 +60,6 @@ import {
   buildDetailsSummary,
   SPINNER_ICON_NAME,
 } from '../htmlBuilders';
-import { normalizeToolUseData } from '@shared/toolUse';
 import { registerProposalInput } from '../proposalInputStore';
 import { stringifyWithLanguage, extractCodeOnlyInput } from '../parseUtils';
 import {

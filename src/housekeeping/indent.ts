@@ -120,7 +120,10 @@ export async function indentLatexFilesInDirectory(
           logger.error(CHANNEL, `Failed to format ${fullPath}`);
         }
       } catch (err) {
-        logger.error(CHANNEL, `Error formatting file ${fullPath}: ${err}`);
+        logger.error(
+          CHANNEL,
+          `Error formatting file ${fullPath}: ${toErrorMessage(err)}`,
+        );
       }
     });
 

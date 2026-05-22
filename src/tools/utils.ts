@@ -71,6 +71,8 @@ export function requireField<T>(
 /**
  * Wrap an async API call and convert any error to a ToolError.
  * Simplifies the common try-catch-rethrow-as-ToolError pattern.
+ * ToolErrors from nested calls pass through unwrapped so the original
+ * message and cause chain survive.
  */
 export async function wrapApiCall<T>(
   operation: () => Promise<T>,
@@ -79,6 +81,9 @@ export async function wrapApiCall<T>(
   try {
     return await operation();
   } catch (error) {
-    throw new ToolError(`${errorPrefix}: ${toErrorMessage(error)}`);
+    if (error instanceof ToolError) throw error;
+    throw new ToolError(`${errorPrefix}: ${toErrorMessage(error)}`, {
+      cause: error,
+    });
   }
 }

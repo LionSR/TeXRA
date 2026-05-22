@@ -10,6 +10,7 @@ import { sync as globSync } from 'glob';
 
 import { platform } from '@platform/platform';
 import { getConfig } from '@agent/core/config';
+import { toErrorMessage } from '@common/errors';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import {
@@ -103,8 +104,7 @@ async function withLatexOperation(
   try {
     await operation();
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    entry.onError(`${operationName} failed: ${message}`);
+    entry.onError(`${operationName} failed: ${toErrorMessage(err)}`);
   } finally {
     entry.latexOperationInProgress = false;
   }
