@@ -71,7 +71,7 @@ interface MultiAgentRunInit {
   readonly instruction: string;
 }
 
-export function resolveMultiAgentRunPlan(
+function resolveMultiAgentRunPlan(
   init: Pick<MultiAgentRunInit, 'preset' | 'agent'>,
 ): CliMultiAgentPresetRunPlan {
   const preset = findCliMultiAgentPreset(
