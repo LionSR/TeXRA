@@ -36,6 +36,9 @@ describe('CLI StatusBar display model', () => {
     expect(display.right).toBeUndefined();
     expect(display.bindings).toContain('[/api]api');
     expect(display.bindings).toContain('[/model]models');
+    // [Ctrl-J]newline must be visible — the binding exists in BaseTextInput
+    // (see #4399) but used to be discoverable only via source diving.
+    expect(display.bindings).toContain('[Ctrl-J]newline');
     expect(display.bindings).not.toContain('[Alt-s]subagents');
     expect(display.left.map(statusBarSegmentText)).not.toContain('deepseekT');
   });
