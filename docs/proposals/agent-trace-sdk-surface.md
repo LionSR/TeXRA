@@ -2,7 +2,7 @@
 
 **Status:** Proposal / design note. Not approved.
 **Date:** 2026-05-22
-**Related:** [`logger-simplification-feasibility.md`](./logger-simplification-feasibility.md) (overlapping but distinct concern — that proposal is about internal LOC reduction; this one is about the *shape* SDK consumers would see)
+**Related:** [`logger-simplification-feasibility.md`](./logger-simplification-feasibility.md) (overlapping but distinct concern — that proposal is about internal LOC reduction; this one is about the _shape_ SDK consumers would see)
 
 ## TL;DR
 
@@ -31,13 +31,13 @@ learn both.
 
 ### Penetration
 
-| Directory     | Logger imports | Module-load singletons |
-| ------------- | -------------: | ---------------------: |
-| `src/agent/`  | 45             | 5                      |
-| `src/tools/`  | 16             | 5                      |
-| `src/latex/`  | 12             | 0                      |
-| `src/model/`  | 0              | 0                      |
-| `packages/extension/` | (many)| 3                      |
+| Directory             | Logger imports | Module-load singletons |
+| --------------------- | -------------: | ---------------------: |
+| `src/agent/`          |             45 |                      5 |
+| `src/tools/`          |             16 |                      5 |
+| `src/latex/`          |             12 |                      0 |
+| `src/model/`          |              0 |                      0 |
+| `packages/extension/` |         (many) |                      3 |
 
 13 sites construct `new AgentLogger(...)` at module load (e.g.
 `PlanTool.ts:46`, `executeAgent.ts:66`). These prevent injection of a
@@ -68,7 +68,7 @@ type AgentEvent =
   | { type: 'stream.start'; id: string; kind: StreamKind }
   | { type: 'stream.chunk'; id: string; text: string }
   | { type: 'stream.end'; id: string; finalText?: string }
-  | { type: 'domain'; key: string; data: unknown };  // TeXRA-specific escape hatch
+  | { type: 'domain'; key: string; data: unknown }; // TeXRA-specific escape hatch
 
 interface AgentTrace {
   emit(event: AgentEvent): void;
@@ -89,7 +89,7 @@ Lives on `RunContext` alongside the existing `RunLogger`:
 
 ```typescript
 interface RunContext {
-  readonly trace: AgentTrace;  // ← new
+  readonly trace: AgentTrace; // ← new
   // ... existing fields (RunLogger collapses into trace via sugar)
 }
 ```
@@ -162,12 +162,12 @@ inside ops).
 
 ## 4. What moves where
 
-| Bucket          | Today                                                | After                                       |
-| --------------- | ---------------------------------------------------- | ------------------------------------------- |
-| Plain logging   | `debug/info/warn/error` on `AgentLogger`             | `AgentTrace` sugar → emits `{type:'log'}`   |
-| Domain events   | `stage/logToolUse*/statistics/logContext*/fileList/missingOutputs/createStream` (~20 methods) | `AgentEvent` union arms                     |
-| Host product    | `StreamLogStore` writes, throttling, `UsageLogService`, `MESSAGE_TYPES` taxonomy | TeXRA subscriber(s) in `packages/extension/` |
-| TeXRA-specific  | `latexDiff`, `logScratchpad`                         | `{type:'domain', key:'latexDiff', data}` (escape hatch keeps SDK union clean) |
+| Bucket         | Today                                                                                         | After                                                                         |
+| -------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Plain logging  | `debug/info/warn/error` on `AgentLogger`                                                      | `AgentTrace` sugar → emits `{type:'log'}`                                     |
+| Domain events  | `stage/logToolUse*/statistics/logContext*/fileList/missingOutputs/createStream` (~20 methods) | `AgentEvent` union arms                                                       |
+| Host product   | `StreamLogStore` writes, throttling, `UsageLogService`, `MESSAGE_TYPES` taxonomy              | TeXRA subscriber(s) in `packages/extension/`                                  |
+| TeXRA-specific | `latexDiff`, `logScratchpad`                                                                  | `{type:'domain', key:'latexDiff', data}` (escape hatch keeps SDK union clean) |
 
 `StreamLogEntry` becomes a thin serialization of `AgentEvent` (ideally same
 field names and shapes — one transform from event to stored entry, not
