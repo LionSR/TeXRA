@@ -5,7 +5,7 @@ import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 
 // Local imports - CLI state
 import { isPlainReturnInput } from '../input/inputKeys';
-import { visibleSubagentRows as mergeVisibleSubagentRows } from './childStreamMerge';
+import { visibleSubagentRows } from './childStreamMerge';
 import { orderedDescendantsFromSlice } from './focusCycle';
 import type { ProcessOutputTail, StreamSlice } from './cliState';
 
@@ -159,12 +159,6 @@ export function buildChildControlItems(
       buildProcessItem(child, slice.processOutput.get(child.executionId)),
     ),
   ];
-}
-
-export function visibleSubagentRows(
-  slice: Pick<StreamSlice, 'activeSubagents' | 'childStreams'>,
-): readonly ActiveChildInfo[] {
-  return mergeVisibleSubagentRows(slice.activeSubagents, slice.childStreams);
 }
 
 export function hasChildExecutionRows(
