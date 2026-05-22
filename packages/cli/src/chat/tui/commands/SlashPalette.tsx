@@ -63,7 +63,6 @@ export function SlashPalette(
           props.onPick(
             chosen,
             slashPickIntent(
-              props.query,
               chosen,
               isPlainReturnInput(input, key) ? 'enter' : 'tab',
             ),
@@ -97,7 +96,8 @@ export function SlashPalette(
         <KeyHints
           hints={[
             { key: '↑/↓', action: 'navigate' },
-            { key: 'Tab/Enter', action: 'accept' },
+            { key: 'Enter', action: 'run' },
+            { key: 'Tab', action: 'complete' },
           ]}
           confirmCancel={false}
         />
