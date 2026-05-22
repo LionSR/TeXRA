@@ -140,9 +140,9 @@ describe('CLI chat defaults', () => {
   });
 
   it('skips a history row whose agent is not in the tool-use registry', async () => {
-    // A stale `bash` row (or any other name not in `getToolUseAgents()`) used
-    // to win this tier and the chat session would then crash on first submit
-    // with "Could not find agent: bash" — see #4397.
+    // A stale `bash` row (or any other name not resolved by `getAgent()`)
+    // used to win this tier and the chat session would then crash on first
+    // submit with "Could not find agent: bash" — see #4397.
     mockedListExecutions.mockResolvedValueOnce([
       historyEntry('bash', {}, '2026-05-21T08:02:00.000Z'),
       historyEntry('research', {}, '2026-05-21T08:01:00.000Z'),
