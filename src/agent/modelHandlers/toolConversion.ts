@@ -28,7 +28,9 @@ logger.initialize(CHANNEL);
 type JSONSchemaObject = Record<string, unknown>;
 
 /**
- * Both OpenAI and Gemini reject function parameter schemas whose top-level
+ * OpenAI, Gemini, and Anthropic all require function parameter schemas whose
+ * top-level node is an object. OpenAI and Gemini also reject schemas whose
+ * top-level
  * node is `oneOf`/`anyOf`/`allOf` (HTTP 400:
  * `schema must have type 'object' and not contain 'oneOf'/'anyOf'/'allOf' at the top level`).
  * Zod v4's `toJSONSchema` emits discriminated unions exactly that way. Flatten
@@ -139,12 +141,9 @@ function stripDollarSchema(schema: JSONSchemaObject): JSONSchemaObject {
 
 /**
  * Converts a Zod schema to JSON Schema, or returns the pre-converted parameters.
- * Used by OpenAI Chat Completions, OpenAI Responses, and Gemini function-calling
+ * Used by OpenAI Chat Completions, OpenAI Responses, Anthropic, and Gemini function-calling
  * converters: top-level discriminated unions are flattened and `$schema` is
  * stripped so the output passes their schema validators.
- * Anthropic bypasses this helper (`toAnthropicTools` calls `toJSONSchema`
- * directly with `reused: 'ref'`) because Anthropic accepts top-level `oneOf`
- * and `$schema`.
  */
 function convertToolSchema(def: ToolDefinition): JSONSchemaObject | null {
   let schema: JSONSchemaObject | null;
@@ -171,15 +170,16 @@ const EMPTY_TOOL_PARAMETERS_SCHEMA: Record<string, unknown> = {
   additionalProperties: false,
 };
 
-function toOpenAIParametersSchema(
+function toObjectParametersSchema(
   schema: Record<string, unknown> | null,
+  provider: string,
 ): Record<string, unknown> {
   if (!schema) return EMPTY_TOOL_PARAMETERS_SCHEMA;
   if (schema.type === 'object') return schema;
   if (schema.type !== undefined) {
     logger.warn(
       CHANNEL,
-      `OpenAI tool parameters must be object schemas; received type "${String(schema.type)}". Falling back to an empty object schema.`,
+      `${provider} tool parameters must be object schemas; received type "${String(schema.type)}". Falling back to an empty object schema.`,
     );
     return EMPTY_TOOL_PARAMETERS_SCHEMA;
   }
@@ -187,7 +187,11 @@ function toOpenAIParametersSchema(
 }
 
 function toOpenAISchemaObject(def: ToolDefinition): Record<string, unknown> {
-  return toOpenAIParametersSchema(convertToolSchema(def));
+  return toObjectParametersSchema(convertToolSchema(def), 'OpenAI');
+}
+
+function toAnthropicInputSchema(def: ToolDefinition): Record<string, unknown> {
+  return toObjectParametersSchema(convertToolSchema(def), 'Anthropic');
 }
 
 // Map local tool names to Anthropic remote tool types.
@@ -337,18 +341,10 @@ export function toAnthropicTools(
       }
     }
 
-    // Use Zod schema with ref support for complex types, else fallback
-    const params = d.zodSchema
-      ? (toJSONSchema(d.zodSchema, {
-          reused: 'ref',
-          unrepresentable: 'any',
-        }) as AnthropicTool['input_schema'])
-      : (d.parameters as AnthropicTool['input_schema'] | undefined);
-
     return {
       name: d.name,
       description: d.description,
-      ...(params ? { input_schema: params } : {}),
+      input_schema: toAnthropicInputSchema(d) as AnthropicTool['input_schema'],
     } as ToolUnion;
   });
 }
