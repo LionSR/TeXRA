@@ -7,10 +7,6 @@
 import { z } from 'zod';
 
 import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
-import {
-  createDispatcher,
-  type HandlerRegistry,
-} from '@shared/utils/dispatcher';
 import { commandOnly } from './messageFactories';
 
 import { AGENT_CATEGORY } from './agent';
@@ -113,31 +109,3 @@ export const ExportChatTexMessageSchema = z.object({
   historyId: z.string().min(1),
 });
 
-// ============================================================
-// Discriminated union of all inbound messages
-// ============================================================
-
-export const HistoryViewInboundMessageSchema = z.discriminatedUnion('command', [
-  GetHistoryDataMessageSchema,
-  RerunAgentMessageSchema,
-  RestoreAgentMessageSchema,
-  DeleteAgentMessageSchema,
-  ClearHistoryMessageSchema,
-  ExportChatMdMessageSchema,
-  ExportChatTexMessageSchema,
-]);
-
-export type HistoryViewInboundMessage = z.infer<
-  typeof HistoryViewInboundMessageSchema
->;
-
-// ============================================================
-// Type-safe handler registry and dispatcher
-// ============================================================
-
-export type HistoryViewInboundHandlerRegistry =
-  HandlerRegistry<HistoryViewInboundMessage>;
-
-export const dispatchHistoryViewInbound = createDispatcher(
-  HistoryViewInboundMessageSchema,
-);
