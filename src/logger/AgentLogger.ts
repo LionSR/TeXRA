@@ -180,12 +180,21 @@ export class AgentLogger {
     const { shouldEmit, debugMode } = getEmitFilter({ level, messageType });
     if (!shouldEmit) return undefined;
 
+    const type = entry.type ?? STREAM_LOG_ENTRY_TYPES.LOG;
+    // For GROUP_START entries, `groupId` is the *parent* group; undefined
+    // means "no parent" (root group), so don't auto-resolve. For LOG entries,
+    // undefined means "infer from active stage context."
+    const groupId =
+      type === STREAM_LOG_ENTRY_TYPES.GROUP_START
+        ? entry.groupId
+        : (entry.groupId ?? this.resolveActiveGroupId());
+
     return this.store.append(this.streamId, {
       id: entry.id,
-      type: entry.type ?? STREAM_LOG_ENTRY_TYPES.LOG,
+      type,
       level,
       timestamp: entry.timestamp,
-      groupId: entry.groupId,
+      groupId,
       messageType,
       text: entry.text,
       data: entry.data,
@@ -318,7 +327,7 @@ export class AgentLogger {
       'info',
       `Context: ${inputTokens}/${contextWindow} tokens (${utilizationPercent.toFixed(1)}%)`,
       {
-        groupId: groupId ?? this.resolveActiveGroupId(),
+        groupId,
         messageType: MESSAGE_TYPES.CONTEXT_STATE,
         data: { inputTokens, contextWindow, utilizationPercent },
       },
@@ -411,11 +420,10 @@ export class AgentLogger {
     input: unknown,
     groupId?: string,
   ): { logId: string; groupId: string | undefined } {
-    const resolvedGroupId = groupId ?? this.resolveActiveGroupId();
-    this.debug(`Tool started: ${toolName}`, { groupId: resolvedGroupId });
+    this.debug(`Tool started: ${toolName}`, { groupId });
     return this.emitToolUse(
       { toolName, input, status: 'in_progress' } satisfies ToolUseLog,
-      resolvedGroupId,
+      groupId,
     );
   }
 
@@ -425,8 +433,11 @@ export class AgentLogger {
     groupId?: string,
     status: ToolUseLog['status'] = 'completed',
   ): void {
+    // Omit groupId when undefined so the patch doesn't clobber the canonical
+    // value stamped at emitToolUse time (deferred tools capture groupId at
+    // start but never copy the resolved id back into logRef).
     this.updateStore(logId, {
-      groupId,
+      ...(groupId !== undefined && { groupId }),
       messageType: MESSAGE_TYPES.TOOL_USE,
       data: { ...toolUseLog, status } satisfies ToolUseLog,
     });
@@ -436,7 +447,7 @@ export class AgentLogger {
     this.appendToStore('info', MESSAGE_TYPES.WEB_SEARCH, {
       id: randomUUID(),
       timestamp: Date.now(),
-      groupId: groupId ?? this.resolveActiveGroupId(),
+      groupId,
       data,
     });
   }
@@ -445,7 +456,7 @@ export class AgentLogger {
     this.appendToStore('info', MESSAGE_TYPES.WEB_FETCH, {
       id: randomUUID(),
       timestamp: Date.now(),
-      groupId: groupId ?? this.resolveActiveGroupId(),
+      groupId,
       data,
     });
   }
