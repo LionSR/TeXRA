@@ -28,15 +28,16 @@ async function listSkills(
   const result = await readCliSkills(context, options);
 
   if (context.outputFormat === 'json') {
+    // Match the bare-array JSON shape every other `<resource> list` command
+    // emits (agents, models, multi-agent, history, tools). Parse errors are
+    // surfaced on stderr below (same as the text branch) so the stdout
+    // contract stays scriptable with `jq '.[]'`. NDJSON consumers still get
+    // structured `kind: skill-issue` records for the same errors.
+    for (const issue of result.errors) {
+      writeTextStderr(formatCliSkillIssue(issue));
+    }
     writeTextStdout(
-      JSON.stringify(
-        {
-          skills: result.skills.map(skillListRecord),
-          errors: result.errors,
-        },
-        null,
-        2,
-      ),
+      JSON.stringify(result.skills.map(skillListRecord), null, 2),
     );
     return CliExitCode.Success;
   }
