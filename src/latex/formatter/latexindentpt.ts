@@ -20,10 +20,7 @@ async function cleanupIndentLog(logPath: string): Promise<void> {
     if (isFileNotFoundError(err)) {
       logger.debug(CHANNEL, `No indent.log to remove at ${logPath}`);
     } else {
-      logger.warn(
-        CHANNEL,
-        `Error removing indent.log: ${toErrorMessage(err)}`,
-      );
+      logger.warn(CHANNEL, `Error removing indent.log: ${toErrorMessage(err)}`);
     }
   }
 }
