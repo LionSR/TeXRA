@@ -93,7 +93,12 @@ export async function buildUserVars(
       () => '',
     ),
     getAttachedMemories(agentConfig.memories),
-    loadRuntimeSkillCatalog(logger),
+    // AVAILABLE_SKILLS is only substituted into TOOL_USE_INSTRUCTIONS, so the
+    // catalog (a multi-source readdir + per-skill realpath/read/parse) is dead
+    // work for workflow agents — gate it on the ToolUse category.
+    agentSetting.agentCategory === AgentCategory.ToolUse
+      ? loadRuntimeSkillCatalog(logger)
+      : Promise.resolve(''),
   ]);
   allLoadedFiles.push(...requiredFiles);
   allLoadedFiles.push(...patternFiles);
