@@ -17,6 +17,27 @@ vi.mock('@agent/storage', () => ({
   listExecutions: vi.fn(async () => []),
 }));
 
+// Stub the agent registry so chat-defaults validation is hermetic — the real
+// `loadAgents()` reads from disk paths that aren't reliably populated in the
+// test kernel, so we treat a small allowlist of names as "real tool-use
+// agents" and everything else (including the stale `bash` row from #4397) as
+// unresolvable.
+const TOOL_USE_AGENT_FIXTURES = new Set([
+  'research',
+  'review',
+  'chat',
+  'orchestrator',
+  'leanOrchestrator',
+]);
+vi.mock('@agent/index', () => ({
+  loadAgents: vi.fn(async () => {}),
+  getAgent: vi.fn((name: string) =>
+    TOOL_USE_AGENT_FIXTURES.has(name)
+      ? { name, category: 'toolUse' as const }
+      : undefined,
+  ),
+}));
+
 const mockedListExecutions = vi.mocked(listExecutions);
 
 function historyEntry(
@@ -116,6 +137,20 @@ describe('CLI chat defaults', () => {
     await expect(
       resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
     ).resolves.toMatchObject({ agent: 'chat', source: 'builtin' });
+  });
+
+  it('skips a history row whose agent is not in the tool-use registry', async () => {
+    // A stale `bash` row (or any other name not in `getToolUseAgents()`) used
+    // to win this tier and the chat session would then crash on first submit
+    // with "Could not find agent: bash" — see #4397.
+    mockedListExecutions.mockResolvedValueOnce([
+      historyEntry('bash', {}, '2026-05-21T08:02:00.000Z'),
+      historyEntry('research', {}, '2026-05-21T08:01:00.000Z'),
+    ]);
+
+    await expect(
+      resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
+    ).resolves.toMatchObject({ agent: 'research', source: 'history' });
   });
 
   it('skips a team run to reach an earlier single-agent execution', async () => {
