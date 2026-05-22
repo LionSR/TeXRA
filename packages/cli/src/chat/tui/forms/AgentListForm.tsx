@@ -191,6 +191,14 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     label: agent.label,
     description: agentDescription(agent),
   }));
+  // The current agent may be stored as a canonical key (`source:name`) or a
+  // bare name; rows are keyed by bare name, so resolve to the matching label
+  // so Select can render the ✓ on the active row.
+  const activeAgent = agents.toolUse.find(
+    (agent) =>
+      agent.value === props.currentAgent || agent.label === props.currentAgent,
+  );
+  const activeValue = activeAgent?.label ?? props.currentAgent;
   const workflowRows = agents.workflow.map((agent) => ({
     name: agent.label,
     description: agentDescription(agent),
@@ -224,7 +232,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
         <Text bold>Tool-use agents</Text>
         <Select
           items={items}
-          activeValue={props.currentAgent}
+          activeValue={activeValue}
           maxVisibleItems={selectWindow.maxVisibleItems}
           showOverflow={selectWindow.showOverflow}
           onSelect={(value) => {
@@ -262,7 +270,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
           <KeyHints
             hints={[
               { key: '↑/↓', action: 'navigate' },
-              { key: '1-9', action: 'select' },
+              { key: '1-9/a-z', action: 'select' },
             ]}
           />
         ) : (
