@@ -81,9 +81,10 @@ function formatModelDetails(entry: ModelAccessEntry): string {
   const lines: string[] = [];
   lines.push(`id: ${model.value}`);
   lines.push(`label: ${model.label}`);
-  lines.push(`provider: ${model.provider}`);
+  if (model.provider) lines.push(`provider: ${model.provider}`);
   lines.push(`status: ${status}`);
-  lines.push(`availability: ${model.availabilityLabel}`);
+  if (model.availabilityLabel)
+    lines.push(`availability: ${model.availabilityLabel}`);
   if (model.context) lines.push(`context: ${model.context}`);
   if (model.cost) lines.push(`cost: ${model.cost}`);
   if (model.hint) {
