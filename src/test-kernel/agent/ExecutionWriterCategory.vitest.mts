@@ -15,7 +15,7 @@ vi.mock('@agent/index/agentRegistry', () => ({
 }));
 
 const { normalizeWriterCategory } =
-  await import('../../agent/storage/executionLifecycle');
+  await import('@agent/storage/executionLifecycle');
 
 function config(agent: string, agentCategory: AgentCategory): AgentConfig {
   return { agent, agentCategory } as AgentConfig;
