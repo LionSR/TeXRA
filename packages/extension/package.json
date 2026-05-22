@@ -979,7 +979,6 @@
         "id": "texra.gettingStarted",
         "title": "Get started with TeXRA",
         "description": "Get TeXRA up and running in a few minutes. Connect your account, pick your field, and run your first paper through the orchestrator.",
-        "when": "texra.activated",
         "steps": [
           {
             "id": "texra.gettingStarted.setupAssistant",

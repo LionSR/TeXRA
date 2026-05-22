@@ -640,14 +640,11 @@ export async function activate(context: vscode.ExtensionContext) {
     mainViewProvider.setProgressViewProvider(progressViewProvider);
   }
 
-  // Gating UI contributions (commandPalette / keybindings / menus / walkthroughs
-  // / views) on `texra.activated` keeps them hidden until every command handler
-  // is registered. This must run after ALL `registerCommand` calls in this
-  // function (including the late ones for `texra.showMainView` and
-  // `texra.toggleView`), otherwise palette entries can fire before their
-  // handlers exist and produce "command not found" errors. It must also run
-  // BEFORE the welcome walkthrough is opened below, because the walkthrough
-  // itself is gated on `texra.activated`.
+  // Gating commandPalette / keybindings / menus / views on `texra.activated`
+  // keeps them hidden until every command handler is registered. This must run
+  // after ALL `registerCommand` calls in this function (including the late ones
+  // for `texra.showMainView` and `texra.toggleView`), otherwise palette entries
+  // can fire before their handlers exist and produce "command not found" errors.
   await vscode.commands.executeCommand('setContext', 'texra.activated', true);
 
   const welcomeKey = 'texra.welcomeShown';
