@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentLogger } from '@logger/AgentLogger';
 import { StreamLogStore } from '@logger/StreamLogStore';
-import { MESSAGE_TYPES } from '@shared/schemas';
+import { MESSAGE_TYPES, STREAM_LOG_ENTRY_TYPES } from '@shared/schemas';
 
 describe('AgentLogger stream output', () => {
   afterEach(() => {
@@ -97,6 +97,39 @@ describe('AgentLogger stream output', () => {
       expect(vi.getTimerCount()).toBe(0);
       expect(stream.finalize()).toBe('abc');
       expect(store.get('stream')).toBeUndefined();
+    } finally {
+      AgentLogger.setStreamLogStore(previousStore);
+    }
+  });
+});
+
+describe('AgentLogger groupId resolution', () => {
+  it('keeps GROUP_START as a root group even when an active stage exists', async () => {
+    const previousStore = AgentLogger.getStreamLogStore();
+    const store = new StreamLogStore();
+    AgentLogger.setStreamLogStore(store);
+
+    try {
+      const logger = new AgentLogger('stream', true);
+      const outer = await logger.stage('outer');
+      await outer.within(async () => {
+        // Sanity: a plain log line emitted from inside the stage nests under it.
+        logger.info('inside outer');
+        // Calling startGroup() with no explicit parent must create a ROOT
+        // group, not nest under the active stage.
+        logger.startGroup('detached');
+      });
+
+      const entries = store.get('stream')?.getRange(0) ?? [];
+      const detached = entries.find(
+        (e) =>
+          e.type === STREAM_LOG_ENTRY_TYPES.GROUP_START && e.text === 'detached',
+      );
+      expect(detached).toBeDefined();
+      expect(detached?.groupId).toBeUndefined();
+
+      const inside = entries.find((e) => e.text === 'inside outer');
+      expect(inside?.groupId).toBeDefined();
     } finally {
       AgentLogger.setStreamLogStore(previousStore);
     }

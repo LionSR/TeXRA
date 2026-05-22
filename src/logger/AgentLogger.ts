@@ -180,12 +180,21 @@ export class AgentLogger {
     const { shouldEmit, debugMode } = getEmitFilter({ level, messageType });
     if (!shouldEmit) return undefined;
 
+    const type = entry.type ?? STREAM_LOG_ENTRY_TYPES.LOG;
+    // For GROUP_START entries, `groupId` is the *parent* group; undefined
+    // means "no parent" (root group), so don't auto-resolve. For LOG entries,
+    // undefined means "infer from active stage context."
+    const groupId =
+      type === STREAM_LOG_ENTRY_TYPES.GROUP_START
+        ? entry.groupId
+        : entry.groupId ?? this.resolveActiveGroupId();
+
     return this.store.append(this.streamId, {
       id: entry.id,
-      type: entry.type ?? STREAM_LOG_ENTRY_TYPES.LOG,
+      type,
       level,
       timestamp: entry.timestamp,
-      groupId: entry.groupId ?? this.resolveActiveGroupId(),
+      groupId,
       messageType,
       text: entry.text,
       data: entry.data,
