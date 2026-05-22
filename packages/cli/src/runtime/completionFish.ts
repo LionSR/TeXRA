@@ -3,6 +3,14 @@ import {
   type CompletionCommand,
 } from './completionCommandTree';
 
+// Dynamic positional sources, gated on TEXRA_COMPLETION_DYNAMIC so scripts can
+// opt out of shelling back into texra. Shared by the `--agent`/`--model` flags
+// and the `run` / `agents show` / `models show` positionals.
+const AGENTS_LIST_SOURCE =
+  '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet 2>/dev/null | awk "{print \\$2}")';
+const MODELS_LIST_SOURCE =
+  '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra models list --quiet 2>/dev/null | awk "{print \\$1}")';
+
 function fishEscape(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
 }
@@ -76,23 +84,26 @@ export function fishCompletion(commands: readonly CompletionCommand[]): string {
   lines.push(
     fishCompleteLine([
       "-n '__fish_seen_subcommand_from run'",
-      '-a \'(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet 2>/dev/null | awk "{print \\$2}")\'',
+      `-a '${AGENTS_LIST_SOURCE}'`,
     ]),
   );
   lines.push(
     fishCompleteLine([
-      '-l model',
-      '-s m',
-      '-r',
-      '-a \'(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra models list --quiet 2>/dev/null | awk "{print \\$1}")\'',
+      "-n '__fish_seen_subcommand_from agents; and __fish_seen_subcommand_from show'",
+      `-a '${AGENTS_LIST_SOURCE}'`,
     ]),
   );
   lines.push(
     fishCompleteLine([
-      '-l agent',
-      '-r',
-      '-a \'(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet 2>/dev/null | awk "{print \\$2}")\'',
+      "-n '__fish_seen_subcommand_from models; and __fish_seen_subcommand_from show'",
+      `-a '${MODELS_LIST_SOURCE}'`,
     ]),
+  );
+  lines.push(
+    fishCompleteLine(['-l model', '-s m', '-r', `-a '${MODELS_LIST_SOURCE}'`]),
+  );
+  lines.push(
+    fishCompleteLine(['-l agent', '-r', `-a '${AGENTS_LIST_SOURCE}'`]),
   );
   return `${lines.join('\n')}\n`;
 }
