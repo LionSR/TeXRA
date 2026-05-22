@@ -152,7 +152,11 @@ describe('AgentLogger groupId resolution', () => {
 
       // Mirrors the deferred-tool path: caller never copied the resolved
       // groupId back into its ref, so it passes undefined on update.
-      logger.updateToolUse(logId, { toolName: 'demoTool', input: { arg: 1 }, output: 'ok' }, undefined);
+      logger.updateToolUse(
+        logId,
+        { toolName: 'demoTool', input: { arg: 1 }, output: 'ok' },
+        undefined,
+      );
 
       const entries = store.get('stream')?.getRange(0) ?? [];
       const toolEntry = entries.find((e) => e.id === logId);
