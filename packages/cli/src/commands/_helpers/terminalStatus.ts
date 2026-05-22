@@ -3,6 +3,10 @@ import type { OutputFileSummary } from '@agent/runtime/AgentFlowResult';
 import { runValidatedExecutionRequest } from '@agent/runtime/runExecutionRequest';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 
+import { hasCliApprovalDenied } from '../../runtime/approvalAdapter';
+import { CliExitCode } from '../../runtime/exitCodes';
+import type { CliContext } from '../../runtime/cliContext';
+
 export type ExecuteAgentResult = Awaited<
   ReturnType<typeof runValidatedExecutionRequest>
 >;
@@ -58,6 +62,23 @@ export function createCliRunResult<T extends ExecuteAgentResult>(
     terminalStatus,
     ...extras,
   } as T extends ExecuteAgentResult ? CliRunResultFor<T> : never;
+}
+
+/** Map a terminal execution status to the CLI process exit code, treating an
+ *  approval-denied error distinctly from a generic agent error. */
+export function terminalStatusExitCode(
+  terminalStatus: ExecutionStatus,
+  context: CliContext,
+): number {
+  if (terminalStatus === EXECUTION_STATUS.ERROR) {
+    return hasCliApprovalDenied(context)
+      ? CliExitCode.ApprovalDenied
+      : CliExitCode.AgentError;
+  }
+  if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
+    return CliExitCode.Interrupted;
+  }
+  return CliExitCode.Success;
 }
 
 export async function readCliTerminalStatus(
