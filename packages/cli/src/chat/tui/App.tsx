@@ -1,14 +1,14 @@
 // Ink TUI root: conversation, optional side column, status, approval modal,
 // and input bar. Tab / Shift-Tab cycles focus across subagent streams.
 
-import { Box, Text, useInput, useWindowSize } from 'ink';
+import { Box, Static, Text, useInput, useWindowSize } from 'ink';
 import { useState } from 'react';
 
 import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
 import { REVERSE_SEARCH_ROWS } from './input/ReverseSearch';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { ChildControlPicker } from './modals/ChildControlPicker';
-import { ConversationPane } from './panes/ConversationPane';
+import { ConversationPane, TranscriptEntry } from './panes/ConversationPane';
 import { HeaderPane } from './panes/HeaderPane';
 import { InputBar } from './panes/InputBar';
 import { StatusBar } from './panes/StatusBar';
@@ -24,6 +24,7 @@ import {
 } from './state/childControls';
 import { canShowSubagentControls, cliState } from './state/cliState';
 import { nextFocusBack, nextFocusForward } from './state/focusCycle';
+import { scrollbackLog } from './state/scrollbackLog';
 import { useSignal } from './state/useSignal';
 import type { InputHistory } from './history/inputHistory';
 
@@ -181,6 +182,7 @@ export function App(props: AppProps): React.JSX.Element {
   const activeForm = useSignal(cliState.activeForm);
   const slashPaletteOpen = useSignal(cliState.slashPaletteOpen);
   const reverseSearchOpen = useSignal(cliState.reverseSearchOpen);
+  const scrollback = useSignal(scrollbackLog);
   const { columns, rows } = useWindowSize();
   const [childControlMode, setChildControlMode] = useState<
     ChildControlMode | undefined
@@ -307,13 +309,29 @@ export function App(props: AppProps): React.JSX.Element {
   );
 
   return (
-    <Box flexDirection="column" height={rows}>
+    <Box flexDirection="column">
+      {/* Finalized history is committed to the terminal's native scrollback
+       *  via `<Static>`: Ink prints each item once, above the live frame, and
+       *  never rewrites it — so the user can scroll/select/copy the full
+       *  conversation with their normal terminal gestures (two-finger swipe,
+       *  Cmd+F). The dynamic frame below is the only region Ink redraws. */}
+      <Static items={scrollback}>
+        {(item) => (
+          <TranscriptEntry
+            key={item.key}
+            entry={item.entry}
+            width={transcriptWidth}
+          />
+        )}
+      </Static>
+      {/* Live frame — redrawn each delta, pinned at the bottom. The rule and
+       *  header delimit committed history (above) from live output (below). */}
       <Box>
         <Text color="cyan">{'─'.repeat(columns)}</Text>
       </Box>
       <HeaderPane />
-      <Box flexDirection="row" flexGrow={1} overflowY="hidden">
-        <Box flexDirection="column" flexGrow={1} overflowY="hidden">
+      <Box flexDirection="row">
+        <Box flexDirection="column" flexGrow={1}>
           {transcriptRows > 0 ? (
             <ConversationPane
               width={transcriptWidth}
@@ -327,12 +345,7 @@ export function App(props: AppProps): React.JSX.Element {
           ) : null}
         </Box>
         {showSideColumn ? (
-          <Box
-            flexDirection="column"
-            minWidth={SIDE_COLUMN_WIDTH}
-            height={transcriptRows}
-            overflowY="hidden"
-          >
+          <Box flexDirection="column" minWidth={SIDE_COLUMN_WIDTH}>
             <SubagentList maxRows={subagentRows} />
             <TodosPlanPanel maxRows={todosPlanRows} />
           </Box>

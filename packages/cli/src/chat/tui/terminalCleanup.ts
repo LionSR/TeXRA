@@ -1,21 +1,14 @@
 import { writeSync } from 'node:fs';
 
-const ENTER_TERMINAL_FULL_SCREEN = '\x1b[?1049h\x1b[2J\x1b[H';
+// Resets input/display modes the session may have enabled. `?1049l` (leave
+// alternate screen) is kept defensively even though the CLI now renders in
+// the primary buffer — it is a no-op if no alternate screen was entered.
 const RESET_TERMINAL_MODES =
   '\x1b[?1000;1003;1006l\x1b[?1049l\x1b[<u\x1b[?2004l\x1b[?25h';
 const CLEAR_ITERM_PROGRESS = '\x1b]9;4;0\x07';
 
 export interface CleanupTerminalModesOptions {
   readonly clearItermProgress?: boolean;
-}
-
-export function enterTerminalFullScreen(): void {
-  try {
-    writeSync(1, ENTER_TERMINAL_FULL_SCREEN);
-  } catch {
-    // Startup cannot surface terminal-mode failures usefully; Ink will still
-    // render in the primary buffer.
-  }
 }
 
 export function cleanupTerminalModes(

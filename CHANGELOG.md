@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Scroll back through the full chat history** — the CLI chat now renders to your terminal's primary screen and commits finalized messages to native scrollback. Two-finger swipe (or mouse wheel) scrolls up through every past message; selection, copy, and Cmd+F all work. Long replies are no longer collapsed behind a `⋯ N earlier entries hidden` marker.
 - **CLI chat stays pinned during long output** — the chat header, input, and status rows now stay visible while long replies and tool output stream in the terminal.
 
 ## [0.37.9] - 2026-05-18

@@ -1,6 +1,7 @@
-// Sticky header pane — rendered as an Ink component so it pins to the top of
-// the alternate screen for the whole session. Replaces the pre-mount string
-// banner that lived in terminal scrollback and scrolled away.
+// Header pane — rendered at the top of Ink's live frame, just above the live
+// output and below the committed `<Static>` history. It stays pinned with the
+// prompt while finalized history scrolls away into the terminal's native
+// scrollback.
 
 import os from 'node:os';
 import path from 'node:path';

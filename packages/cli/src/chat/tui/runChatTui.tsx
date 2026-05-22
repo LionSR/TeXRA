@@ -76,6 +76,7 @@ import { notify } from './notifications/terminalNotifier';
 import { clearApprovals } from './state/approvalQueue';
 import { cliState, resetCliState } from './state/cliState';
 import { installTuiApprovals } from './state/subscribeApprovals';
+import { startScrollbackSync } from './state/scrollbackLog';
 import { wrapRuntimeHost } from './state/subscribeRuntimeHost';
 import { subscribeStreamLog, syncStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
@@ -88,10 +89,7 @@ import {
   appendLocalUserTranscript,
   moveLocalTranscriptToStream,
 } from './state/transcript';
-import {
-  cleanupTerminalModes,
-  enterTerminalFullScreen,
-} from './terminalCleanup';
+import { cleanupTerminalModes } from './terminalCleanup';
 
 export interface ChatResult {
   exitCode: number;
@@ -676,6 +674,9 @@ export async function runChat(
   const disposers: Array<() => void> = [];
   disposers.push(subscribeStreamLog());
   disposers.push(subscribeStreamStatus());
+  // Commit finalized entries to the append-only `<Static>` scrollback log as
+  // streams change, so history lands in the terminal's native scrollback.
+  disposers.push(startScrollbackSync());
 
   const session: TuiSession = {
     streamId: undefined,
@@ -880,7 +881,9 @@ export async function runChat(
     });
   };
 
-  enterTerminalFullScreen();
+  // Render in the primary buffer (no alternate screen) so finalized history
+  // committed via `<Static>` accumulates in the terminal's native scrollback
+  // and stays scrollable/selectable after the session ends.
   const ink = render(
     <App
       onSubmit={handleSubmit}

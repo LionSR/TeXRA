@@ -62,7 +62,10 @@ function ProcessEntryRow({
   );
 }
 
-function TranscriptEntry({
+// Renders a single finalized entry. Exported so the App-level `<Static>`
+// scrollback region can render committed history with the same formatting
+// the live region uses once an entry finalizes.
+export function TranscriptEntry({
   entry,
   width,
 }: {
@@ -354,70 +357,58 @@ export interface ConversationPaneProps {
   readonly maxRows?: number;
 }
 
+// Live region only. Finalized history is committed to the App-level
+// `<Static>` scrollback (see `state/scrollbackLog.ts`) so it lands in the
+// terminal's native scrollback and stays readable/scrollable; this pane
+// renders just the in-flight entries for the active stream. It is
+// content-sized — no fixed-height box — so an idle session puts the input
+// bar directly under the history instead of reserving blank rows.
 export function ConversationPane(
   props: ConversationPaneProps = {},
-): React.JSX.Element {
+): React.JSX.Element | null {
   const activeStreamId = useSignal(cliState.activeStreamId);
   const streams = useSignal(cliState.streams);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const entries = slice?.entries ?? [];
-  const { finalized, pending } = splitTranscriptEntries(entries, slice?.status);
-  const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
-  const { pendingRows, visibleFinalized, visiblePending } =
-    selectConversationEntriesForViewport({
-      finalized,
-      maxRows,
-      pending,
-      width: props.width,
-    });
+  const { pending } = splitTranscriptEntries(entries, slice?.status);
+  if (pending.length === 0) return null;
 
+  // `maxRows` is a *cap* on the live region (so a tool burst can't shove the
+  // input off-screen), not a reserved height.
+  const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
+  const visiblePending = selectPendingEntriesForViewport(
+    pending,
+    Math.max(MIN_PENDING_ROWS, maxRows),
+    props.width,
+  );
+
+  // `pending` interleaves the in-flight assistant entry with tool rows in
+  // stream order — rendering them as separate buckets would flip the visible
+  // order when the model emits text before a tool call.
   return (
-    <Box flexDirection="column" height={maxRows} overflowY="hidden">
-      <Box
-        flexDirection="column"
-        height={visibleFinalized.usedRows}
-        overflowY="hidden"
-      >
-        {visibleFinalized.hiddenCount > 0 ? (
-          <Text dimColor>
-            {`⋯ ${visibleFinalized.hiddenCount} earlier ${
-              visibleFinalized.hiddenCount === 1 ? 'entry' : 'entries'
-            } hidden`}
-          </Text>
-        ) : null}
-        {visibleFinalized.entries.map((entry) => (
-          <TranscriptEntry key={entry.id} entry={entry} width={props.width} />
-        ))}
-      </Box>
-      {/* `pending` interleaves the in-flight assistant entry with tool
-       *  rows in stream order — rendering them as separate buckets would
-       *  flip the visible order when the model emits text before a tool
-       *  call. The explicit height keeps the input bar pinned and prevents
-       *  tool bursts from stealing rows reserved for the footer chrome. */}
-      <Box flexDirection="column" height={pendingRows} overflowY="hidden">
-        {visiblePending.hiddenCount > 0 ? (
-          <Text dimColor>
-            {`⋯ ${visiblePending.hiddenCount} live ${
-              visiblePending.hiddenCount === 1 ? 'entry' : 'entries'
-            } hidden`}
-          </Text>
-        ) : null}
-        {visiblePending.entries.map((entry) => {
-          if (entry.role === 'tool' && entry.toolUse) {
-            return <ToolUseRow key={entry.id} toolUse={entry.toolUse} />;
-          }
-          if (entry.role === 'assistant') {
-            return (
-              <LiveTranscriptEntry
-                key={entry.id}
-                entry={entry}
-                width={props.width}
-              />
-            );
-          }
-          return null;
-        })}
-      </Box>
+    <Box flexDirection="column">
+      {visiblePending.hiddenCount > 0 ? (
+        <Text dimColor>
+          {`⋯ ${visiblePending.hiddenCount} live ${
+            visiblePending.hiddenCount === 1 ? 'entry' : 'entries'
+          } hidden`}
+        </Text>
+      ) : null}
+      {visiblePending.entries.map((entry) => {
+        if (entry.role === 'tool' && entry.toolUse) {
+          return <ToolUseRow key={entry.id} toolUse={entry.toolUse} />;
+        }
+        if (entry.role === 'assistant') {
+          return (
+            <LiveTranscriptEntry
+              key={entry.id}
+              entry={entry}
+              width={props.width}
+            />
+          );
+        }
+        return null;
+      })}
     </Box>
   );
 }
