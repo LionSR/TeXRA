@@ -187,7 +187,7 @@ export class AgentLogger {
     const groupId =
       type === STREAM_LOG_ENTRY_TYPES.GROUP_START
         ? entry.groupId
-        : entry.groupId ?? this.resolveActiveGroupId();
+        : (entry.groupId ?? this.resolveActiveGroupId());
 
     return this.store.append(this.streamId, {
       id: entry.id,

@@ -123,7 +123,8 @@ describe('AgentLogger groupId resolution', () => {
       const entries = store.get('stream')?.getRange(0) ?? [];
       const detached = entries.find(
         (e) =>
-          e.type === STREAM_LOG_ENTRY_TYPES.GROUP_START && e.text === 'detached',
+          e.type === STREAM_LOG_ENTRY_TYPES.GROUP_START &&
+          e.text === 'detached',
       );
       expect(detached).toBeDefined();
       expect(detached?.groupId).toBeUndefined();
