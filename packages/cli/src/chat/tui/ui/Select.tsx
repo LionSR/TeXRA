@@ -5,7 +5,8 @@
 // docs/prd/cli-tui-ink/10-architecture.md § Intuitiveness conventions.
 //
 // `↑/↓` walks the rows, Enter calls `onSelect`, Esc calls `onCancel`. Items
-// receive a 1-based numeric prefix so digit shortcuts can jump directly.
+// receive a single-key shortcut prefix so the row can be jumped to directly:
+// `1`-`9` for the first nine rows, then `a`-`z` for rows 10-35.
 
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useState } from 'react';
@@ -68,6 +69,31 @@ export function selectItemRenderKey<T>(
   return `${index}:${item.label}`;
 }
 
+/**
+ * Single-key shortcut for a row: `1`-`9` for the first nine, then `a`-`z` for
+ * rows 10-35. Rows beyond that have no shortcut (undefined).
+ */
+export function selectHotkeyForIndex(index: number): string | undefined {
+  if (index < 0) return undefined;
+  if (index < 9) return String(index + 1);
+  const letterIndex = index - 9;
+  if (letterIndex < 26) return String.fromCharCode(97 + letterIndex);
+  return undefined;
+}
+
+/** Inverse of {@link selectHotkeyForIndex}: maps a typed key to a row index. */
+export function selectIndexForHotkey(input: string): number | undefined {
+  if (input.length !== 1) return undefined;
+  if (input >= '1' && input <= '9') {
+    return input.charCodeAt(0) - '1'.charCodeAt(0);
+  }
+  const lower = input.toLowerCase();
+  if (lower >= 'a' && lower <= 'z') {
+    return 9 + (lower.charCodeAt(0) - 'a'.charCodeAt(0));
+  }
+  return undefined;
+}
+
 export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   const activeIndex = props.items.findIndex(
     (it) => it.value === props.activeValue,
@@ -113,16 +139,13 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
       if (choice && !choice.disabled) props.onSelect(choice.value);
       return;
     }
-    // 1-9 digit jumps for direct selection.
-    const digit = Number(input);
-    if (Number.isInteger(digit) && digit >= 1 && digit <= 9) {
-      const idx = digit - 1;
-      if (idx < props.items.length) {
-        const choice = props.items[idx];
-        if (choice && !choice.disabled) {
-          setHighlight(idx);
-          props.onSelect(choice.value);
-        }
+    // Single-key jumps (1-9, then a-z) for direct selection.
+    const idx = selectIndexForHotkey(input);
+    if (idx != null && idx < props.items.length) {
+      const choice = props.items[idx];
+      if (choice && !choice.disabled) {
+        setHighlight(idx);
+        props.onSelect(choice.value);
       }
     }
   });
@@ -138,12 +161,13 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
         const active = item.value === props.activeValue;
         const pointer = focused ? '›' : ' ';
         const tick = active ? '✓' : ' ';
-        const numeric = i < 9 ? `${i + 1}.` : '  ';
+        const hotkey = selectHotkeyForIndex(i);
+        const shortcut = hotkey ? `${hotkey}.` : '  ';
         return (
           <Box key={selectItemRenderKey(item, i)} minWidth={0}>
             <Box flexShrink={0}>
               <Text color={focused ? 'cyan' : undefined}>
-                {pointer} {tick} {numeric}{' '}
+                {pointer} {tick} {shortcut}{' '}
               </Text>
             </Box>
             <Box flexShrink={0} maxWidth={SELECT_LABEL_MAX_COLS}>

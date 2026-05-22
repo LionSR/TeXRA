@@ -158,7 +158,7 @@ export function MemoryListForm(props: MemoryListFormProps): React.JSX.Element {
         <KeyHints
           hints={[
             { key: 'up/down', action: 'navigate' },
-            { key: '1-9/Enter', action: 'preview' },
+            { key: '1-9/a-z/Enter', action: 'preview' },
             { key: 'Esc', action: 'close' },
           ]}
           confirmCancel={false}
