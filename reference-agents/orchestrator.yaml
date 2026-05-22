@@ -22,6 +22,7 @@ settings:
     - texcount
     - inquiry
     - codex
+    - claude_code
     # GitHub subscription (repos, PRs, issues) — opt-in. Disabled by default;
     # enable in Dashboard → Tools and configure a GitHub token in Dashboard →
     # Git. When disabled by the user, resolveTools() strips this from the

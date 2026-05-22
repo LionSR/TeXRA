@@ -22,6 +22,7 @@ settings:
     - ls
     # Codex agent
     - codex
+    - claude_code
     # Lean tools (for quick checks without delegating)
     - lean_diagnostics
     - lean_inspect
