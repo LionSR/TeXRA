@@ -159,8 +159,8 @@ importers:
         specifier: ^2.7.4
         version: 2.7.4
       shell-quote:
-        specifier: ^1.8.3
-        version: 1.8.3
+        specifier: ^1.8.4
+        version: 1.8.4
       signal-polyfill:
         specifier: ^0.2.2
         version: 0.2.2
@@ -587,8 +587,8 @@ importers:
         specifier: ^2.7.4
         version: 2.7.4
       shell-quote:
-        specifier: ^1.8.3
-        version: 1.8.3
+        specifier: ^1.8.4
+        version: 1.8.4
       signal-polyfill:
         specifier: ^0.2.2
         version: 0.2.2
@@ -5720,6 +5720,10 @@ packages:
 
   shell-quote@1.8.3:
     resolution: {integrity: sha512-ObmnIF4hXNg1BqhnHmgbDETF8dLPCggZWBjkQfhZpbszZnYur5DUljTcCHii5LC3J5E0yeO/1LIMyH+UvHQgyw==}
+    engines: {node: '>= 0.4'}
+
+  shell-quote@1.8.4:
+    resolution: {integrity: sha512-VsC6n6vz1ihYYyZZwX7YZSF5l5x36ca17OC+a69h94YqB7X6XLwf+5MOgynYir2SLFUbl8gIYvBo8K8RoNQ6bQ==}
     engines: {node: '>= 0.4'}
 
   side-channel-list@1.0.1:
@@ -12321,6 +12325,8 @@ snapshots:
       shell-env: 4.0.3
 
   shell-quote@1.8.3: {}
+
+  shell-quote@1.8.4: {}
 
   side-channel-list@1.0.1:
     dependencies:
