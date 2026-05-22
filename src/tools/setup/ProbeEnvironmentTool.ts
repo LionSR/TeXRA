@@ -85,6 +85,7 @@ export class ProbeEnvironmentTool extends defineTool({
         platform.secrets.anyApiKeyExists().catch((err) => {
           throw new ToolError(
             `Failed to probe API key status: ${toErrorMessage(err)}`,
+            { cause: err },
           );
         }),
         platform.auth.getStatus().catch(() => ({
