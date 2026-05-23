@@ -81,6 +81,10 @@ function createExecutionRunContext(ctx: AgentLaunchContext): RunContext {
     runtimeHost: ctx.runtimeHost,
     streamId: ctx.streamId,
     executionId: ctx.executionId,
+    // Trace is the single event channel for this run. The default RunLogger
+    // forwards plain debug/info/warn/error into it so subscribers see one
+    // unified stream of events.
+    trace: ctx.logger.getTrace(),
     logger: ctx.logger,
     coordinators: ctx.coordinators,
     model: ctx.config.model,

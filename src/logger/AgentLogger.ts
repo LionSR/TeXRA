@@ -1,10 +1,26 @@
+/**
+ * AgentLogger — TeXRA's structured-logging facade.
+ *
+ * Internally this class composes a {@link TraceEmitter} so every emission
+ * passes through one channel: subscribers (console output + transcript
+ * recorder) consume that channel; nothing writes to the store directly.
+ *
+ * The public API is preserved so existing callers (~100 files, ~800 method
+ * calls) keep working unchanged while new code can reach the same channel
+ * via `RunContext.trace`.
+ */
 import { randomUUID } from 'crypto';
 
+import {
+  TraceEmitter,
+  type AgentTrace,
+  type StageHandle,
+  type StreamHandle,
+} from '@agent/trace';
 import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
 import {
   END_GROUP_STATUS,
   MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
   type ContextManagementData,
   type EndGroupStatus,
   type ErrorContext,
@@ -12,38 +28,26 @@ import {
   type FileListEntry,
   type LogLevel,
   type MessageType,
-  type StreamLogEntry,
+  type StreamTabId,
   type ToolUseLog,
 } from '@shared/schemas';
-import { getConfig } from '@utils/config';
-import { serializeError } from '@utils/core';
 
-import * as logger from './logUtils';
+
+import { attachConsoleSubscriber } from './consoleSubscriber';
+import {
+  attachTranscriptRecorder,
+  type TranscriptRecorderHandle,
+} from './TexraTranscriptRecorder';
 import {
   getDefaultStreamLogStore,
   setDefaultStreamLogStore,
   type StreamLogStore,
 } from './StreamLogStore';
 
-const STREAM_UPDATE_THROTTLE_MS = 50;
-
 interface LogOptions {
   groupId?: string;
   messageType?: MessageType;
   data?: unknown;
-}
-
-function getEmitFilter(options: {
-  level: LogLevel;
-  messageType: MessageType;
-}): { shouldEmit: boolean; debugMode: boolean } {
-  const debugMode = getConfig<boolean>('texra.logger.debugMode', false);
-  return {
-    shouldEmit:
-      options.messageType !== MESSAGE_TYPES.INTERNAL &&
-      (options.level !== 'debug' || debugMode),
-    debugMode,
-  };
 }
 
 export interface LoggerScopeOptions {
@@ -69,13 +73,29 @@ export interface AgentLogStage {
   ): Promise<AgentLogStage>;
 }
 
-class AgentLogStageHandle implements AgentLogStage {
+export interface AgentLogStreamOptions {
+  groupId?: string;
+  level?: 'debug' | 'info' | 'warn' | 'error';
+  progressViewEnabled?: boolean;
+}
+
+export interface AgentLogStream {
+  append(text: string): void;
+  finalize(finalText?: string): string;
+}
+
+/**
+ * Mirror of the old AgentLogStage but powered by a {@link StageHandle}.
+ * `skip` callers receive a passthrough handle that doesn't open a stage
+ * but still propagates `parentGroupId` so nested log lines stay attached.
+ */
+class StageWrapper implements AgentLogStage {
   private ended = false;
 
   constructor(
-    private readonly logger: AgentLogger,
+    private readonly agentLogger: AgentLogger,
+    private readonly handle: StageHandle | undefined,
     private readonly config: {
-      id?: string;
       skip: boolean;
       successStatus: EndGroupStatus;
       errorStatus: EndGroupStatus;
@@ -84,24 +104,22 @@ class AgentLogStageHandle implements AgentLogStage {
   ) {}
 
   get id(): string | undefined {
-    return this.config.id;
+    return this.handle?.id;
   }
 
   async stage(
     label: string,
     options: AgentLoggerStageOptions = {},
   ): Promise<AgentLogStage> {
-    return this.logger.stage(label, {
+    return this.agentLogger.stage(label, {
       ...options,
       parent: options.parent ?? this,
     });
   }
 
   async within<T>(fn: () => Promise<T>): Promise<T> {
-    const groupId = this.config.skip
-      ? this.config.parentGroupId
-      : this.config.id;
-    return this.logger.runWithGroup(groupId, fn);
+    const targetId = this.config.skip ? this.config.parentGroupId : this.id;
+    return this.agentLogger.runWithGroup(targetId, fn);
   }
 
   async run<T>(fn: () => Promise<T>): Promise<T> {
@@ -116,29 +134,15 @@ class AgentLogStageHandle implements AgentLogStage {
   }
 
   end(status: EndGroupStatus = END_GROUP_STATUS.STOPPED): void {
-    if (this.config.skip || !this.config.id || this.ended) {
-      return;
-    }
-
+    if (this.config.skip || !this.handle || this.ended) return;
     this.ended = true;
-    this.logger.endGroup(this.config.id, status);
+    this.handle.end(status);
   }
-}
-
-export interface AgentLogStreamOptions {
-  groupId?: string;
-  level?: 'debug' | 'info' | 'warn' | 'error';
-  progressViewEnabled?: boolean;
-}
-
-export interface AgentLogStream {
-  append(text: string): void;
-  finalize(finalText?: string): string;
 }
 
 export class AgentLogger {
   private static streamLogStore: StreamLogStore | undefined;
-  private static pendingStreamFlushers = new Set<() => void>();
+  private static activeFlushers = new Set<() => void>();
 
   static setStreamLogStore(store: StreamLogStore): void {
     setDefaultStreamLogStore(store);
@@ -150,91 +154,65 @@ export class AgentLogger {
     return AgentLogger.streamLogStore;
   }
 
+  /**
+   * Drain any pending stream-chunk updates across every active logger.
+   * Used by shutdown paths (progress view dispose, CLI exit) to make sure
+   * in-flight throttled writes hit the store before the process tears down.
+   */
   static flushPendingStreamUpdates(): void {
-    // Snapshot to allow each flusher to remove itself from the registry as
-    // it drains without invalidating iteration.
-    for (const flush of [...AgentLogger.pendingStreamFlushers]) {
-      flush();
-    }
+    for (const flush of [...AgentLogger.activeFlushers]) flush();
   }
 
-  private get store(): StreamLogStore {
-    return AgentLogger.getStreamLogStore();
-  }
+  private readonly trace = new TraceEmitter();
+  private readonly transcriptHandle?: TranscriptRecorderHandle;
 
   constructor(
     public readonly streamId: string,
     public readonly isAgentLogger = false,
   ) {
-    logger.initialize(streamId, isAgentLogger);
+    attachConsoleSubscriber(this.trace, {
+      channel: streamId,
+      isAgent: isAgentLogger,
+    });
+
+    if (isAgentLogger) {
+      this.transcriptHandle = attachTranscriptRecorder(
+        this.trace,
+        streamId as StreamTabId,
+        AgentLogger.getStreamLogStore(),
+      );
+      AgentLogger.activeFlushers.add(this.transcriptHandle.flushPending);
+    }
   }
 
-  private appendToStore(
-    level: LogLevel,
-    messageType: MessageType,
-    entry: Omit<StreamLogEntry, 'seqNo' | 'type' | 'level' | 'messageType'> &
-      Partial<Pick<StreamLogEntry, 'type'>>,
-  ): StreamLogEntry | undefined {
-    if (!this.isAgentLogger) return undefined;
+  /**
+   * Expose the underlying trace so SDK consumers can subscribe directly or
+   * pass it through `RunContext.trace`.
+   */
+  getTrace(): AgentTrace {
+    return this.trace;
+  }
 
-    const { shouldEmit, debugMode } = getEmitFilter({ level, messageType });
-    if (!shouldEmit) return undefined;
+  /** Detach subscribers; used by shutdown paths in tests. */
+  dispose(): void {
+    if (this.transcriptHandle) {
+      AgentLogger.activeFlushers.delete(this.transcriptHandle.flushPending);
+      this.transcriptHandle.unsubscribe();
+    }
+  }
 
-    const type = entry.type ?? STREAM_LOG_ENTRY_TYPES.LOG;
-    // For GROUP_START entries, `groupId` is the *parent* group; undefined
-    // means "no parent" (root group), so don't auto-resolve. For LOG entries,
-    // undefined means "infer from active stage context."
-    const groupId =
-      type === STREAM_LOG_ENTRY_TYPES.GROUP_START
-        ? entry.groupId
-        : (entry.groupId ?? this.resolveActiveGroupId());
+  // ─── Plain logging ───────────────────────────────────────────────────
 
-    return this.store.append(this.streamId, {
-      id: entry.id,
-      type,
+  private log(level: LogLevel, message: string, options: LogOptions): void {
+    this.trace.emit({
+      type: 'log',
       level,
-      timestamp: entry.timestamp,
-      groupId,
-      messageType,
-      text: entry.text,
-      data: entry.data,
-      verbose: entry.verbose ?? debugMode,
-    });
-  }
-
-  private updateStore(
-    id: string,
-    patch: Partial<Omit<StreamLogEntry, 'id' | 'seqNo'>>,
-  ): StreamLogEntry | undefined {
-    if (!this.isAgentLogger) return undefined;
-    return this.store.update(this.streamId, id, patch);
-  }
-
-  private log(
-    level: LogLevel,
-    message: string,
-    options: LogOptions = {},
-  ): void {
-    const messageType = options.messageType ?? MESSAGE_TYPES.DEFAULT;
-    const groupId = options.groupId ?? this.resolveActiveGroupId();
-    const data =
-      options.data instanceof Error
-        ? serializeError(options.data)
-        : options.data;
-
-    logger[level](this.streamId, message, {
-      groupId,
-      messageType,
-      isAgent: this.isAgentLogger,
-      data,
-    });
-
-    this.appendToStore(level, messageType, {
-      id: randomUUID(),
-      timestamp: Date.now(),
-      groupId,
-      text: message,
-      data,
+      message,
+      data: options.data,
+      messageType: options.messageType,
+      // Carrying the explicit groupId through bypasses the AsyncLocalStorage
+      // fallback inside emit() for callers that already resolved it.
+      stageId: options.groupId,
     });
   }
 
@@ -260,11 +238,10 @@ export class AgentLogger {
     context?: ErrorContext,
     groupId?: string,
   ): void {
-    const errorData = buildErrorLogData(err, context);
     this.error(message, {
       groupId,
       messageType: MESSAGE_TYPES.ERROR,
-      data: errorData,
+      data: buildErrorLogData(err, context),
     });
   }
 
@@ -322,16 +299,12 @@ export class AgentLogger {
     contextWindow: number,
     groupId?: string,
   ): void {
-    const utilizationPercent = (inputTokens / contextWindow) * 100;
-    this.log(
-      'info',
-      `Context: ${inputTokens}/${contextWindow} tokens (${utilizationPercent.toFixed(1)}%)`,
-      {
-        groupId,
-        messageType: MESSAGE_TYPES.CONTEXT_STATE,
-        data: { inputTokens, contextWindow, utilizationPercent },
-      },
-    );
+    this.trace.emit({
+      type: 'context.state',
+      inputTokens,
+      contextWindow,
+      stageId: groupId,
+    });
   }
 
   fileList(files: FileListEntry[], groupId?: string): void {
@@ -348,17 +321,18 @@ export class AgentLogger {
     groupId?: string,
   ): void {
     if (files.length === 0) return;
-
     const entries: FileListEntry[] = files.map((f) => ({
       path: f.path,
       ok: f.ok === true,
       source: category,
       sourceDisplay: category,
     }));
-    this.info(
-      `Loading ${category} (${files.filter((f) => f.ok).length}/${files.length})`,
-      { groupId, messageType: MESSAGE_TYPES.FILE_LIST, data: entries },
-    );
+    this.trace.emit({
+      type: 'files.loaded',
+      category,
+      entries,
+      stageId: groupId,
+    });
   }
 
   missingOutputs(info: unknown, groupId?: string): void {
@@ -380,21 +354,20 @@ export class AgentLogger {
   }
 
   statistics(stats: ExtendedTokenUsageStats, groupId?: string): void {
-    this.info(
-      `Usage - input: ${stats.inputTokens ?? 0}, output: ${stats.outputTokens ?? 0}`,
-      {
-        groupId,
-        messageType: MESSAGE_TYPES.STATISTICS,
-        data: stats,
-      },
-    );
+    this.trace.emit({
+      type: 'usage',
+      stats,
+      stageId: groupId,
+    });
   }
 
   userMessage(message: string): void {
-    this.log('info', message, {
+    this.info(message, {
       messageType: MESSAGE_TYPES.USER_MESSAGE,
     });
   }
+
+  // ─── Tool use ────────────────────────────────────────────────────────
 
   logToolUse(data: unknown, groupId?: string): void {
     this.emitToolUse(data, groupId);
@@ -404,15 +377,19 @@ export class AgentLogger {
     data: unknown,
     groupId?: string,
   ): { logId: string; groupId: string | undefined } {
-    const id = randomUUID();
-    const resolvedGroupId = groupId ?? this.resolveActiveGroupId();
-    this.appendToStore('info', MESSAGE_TYPES.TOOL_USE, {
-      id,
-      timestamp: Date.now(),
-      groupId: resolvedGroupId,
-      data,
+    const logId = randomUUID();
+    const resolvedGroupId = groupId ?? this.trace.activeStageId();
+    const toolName =
+      (data as { toolName?: string } | null)?.toolName ?? 'unknown';
+    const input = (data as { input?: unknown } | null)?.input;
+    this.trace.emit({
+      type: 'tool.start',
+      logId,
+      toolName,
+      input,
+      stageId: resolvedGroupId,
     });
-    return { logId: id, groupId: resolvedGroupId };
+    return { logId, groupId: resolvedGroupId };
   }
 
   logToolUseStart(
@@ -420,11 +397,12 @@ export class AgentLogger {
     input: unknown,
     groupId?: string,
   ): { logId: string; groupId: string | undefined } {
-    this.debug(`Tool started: ${toolName}`, { groupId });
-    return this.emitToolUse(
+    const ref = this.emitToolUse(
       { toolName, input, status: 'in_progress' } satisfies ToolUseLog,
       groupId,
     );
+    this.debug(`Tool started: ${toolName}`, { groupId: ref.groupId });
+    return ref;
   }
 
   updateToolUse(
@@ -433,57 +411,49 @@ export class AgentLogger {
     groupId?: string,
     status: ToolUseLog['status'] = 'completed',
   ): void {
-    // Omit groupId when undefined so the patch doesn't clobber the canonical
-    // value stamped at emitToolUse time (deferred tools capture groupId at
-    // start but never copy the resolved id back into logRef).
-    this.updateStore(logId, {
-      ...(groupId !== undefined && { groupId }),
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      data: { ...toolUseLog, status } satisfies ToolUseLog,
+    this.trace.emit({
+      type: 'tool.end',
+      logId,
+      status,
+      result: { ...toolUseLog },
+      stageId: groupId,
     });
   }
 
   logWebSearch(data: unknown, groupId?: string): void {
-    this.appendToStore('info', MESSAGE_TYPES.WEB_SEARCH, {
-      id: randomUUID(),
-      timestamp: Date.now(),
-      groupId,
+    this.trace.emit({
+      type: 'domain',
+      key: 'webSearch',
       data,
+      stageId: groupId,
     });
   }
 
   logWebFetch(data: unknown, groupId?: string): void {
-    this.appendToStore('info', MESSAGE_TYPES.WEB_FETCH, {
-      id: randomUUID(),
-      timestamp: Date.now(),
-      groupId,
+    this.trace.emit({
+      type: 'domain',
+      key: 'webFetch',
       data,
+      stageId: groupId,
     });
   }
 
+  // ─── Stage scope helpers ─────────────────────────────────────────────
+
   withCurrentGroup<T>(fn: (groupId: string) => T): T | undefined {
-    const groupId = this.resolveActiveGroupId();
+    const groupId = this.trace.activeStageId();
     return groupId ? fn(groupId) : undefined;
   }
 
   async runWithinCurrentGroup<T>(fn: () => Promise<T> | T): Promise<T> {
-    return this.runWithGroup(this.resolveActiveGroupId(), fn);
+    return this.runWithGroup(this.trace.activeStageId(), fn);
   }
 
   async runWithGroup<T>(
     groupId: string | undefined,
     fn: () => Promise<T> | T,
   ): Promise<T> {
-    if (!groupId) {
-      return fn();
-    }
-
-    return logger.runWithGroupContext(
-      this.streamId,
-      groupId,
-      this.isAgentLogger,
-      fn,
-    );
+    return this.trace.withStage(groupId, fn);
   }
 
   async stage(
@@ -492,130 +462,123 @@ export class AgentLogger {
   ): Promise<AgentLogStage> {
     const {
       skip = false,
-      successStatus = 'stopped',
-      errorStatus = 'error',
+      successStatus = END_GROUP_STATUS.STOPPED,
+      errorStatus = END_GROUP_STATUS.ERROR,
       parentGroupId,
       id,
       parent,
     } = options;
 
     const resolvedParent =
-      parent?.id ?? parentGroupId ?? this.resolveActiveGroupId();
-    const groupId = skip
-      ? undefined
-      : this.startGroup(groupName, id, resolvedParent);
+      parent?.id ?? parentGroupId ?? this.trace.activeStageId();
 
-    return new AgentLogStageHandle(this, {
-      id: groupId,
-      skip,
+    if (skip) {
+      return new StageWrapper(this, undefined, {
+        skip: true,
+        successStatus,
+        errorStatus,
+        parentGroupId: resolvedParent,
+      });
+    }
+
+    const handle = this.trace.openStage(groupName, {
+      id,
+      parentId: resolvedParent,
+      defaultStatus: successStatus,
+    });
+    return new StageWrapper(this, handle, {
+      skip: false,
       successStatus,
       errorStatus,
       parentGroupId: resolvedParent,
     });
   }
 
+  // ─── Streaming ───────────────────────────────────────────────────────
+
   createStream(
     type: MessageType,
     options: AgentLogStreamOptions = {},
   ): AgentLogStream {
-    const id = randomUUID();
     const level = options.level ?? 'info';
-    const groupId = options.groupId ?? this.resolveActiveGroupId();
     const progressEnabled = options.progressViewEnabled ?? true;
 
+    if (!progressEnabled) {
+      // Buffer locally without emitting any events — preserves the legacy
+      // "in-memory only" stream behavior used by callers that disable the
+      // progress view sink.
+      let buffer = '';
+      return {
+        append: (text: string) => {
+          if (text) buffer += text;
+        },
+        finalize: (finalText?: string) => {
+          if (typeof finalText === 'string') buffer = finalText;
+          this.debug(`Final ${type} length: ${buffer.length}`, {
+            groupId: options.groupId,
+          });
+          return buffer;
+        },
+      };
+    }
+
+    const handle: StreamHandle = this.runWithStreamScope(
+      options.groupId,
+      () => this.trace.openStream(type, { level }),
+    );
+
     let buffer = '';
-    let pendingChunks: string[] = [];
-    let created = false;
-    let storeEnabled = progressEnabled;
-    let updateTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const registerPendingFlush = (): void => {
-      AgentLogger.pendingStreamFlushers.add(flushPendingUpdate);
-    };
-
-    const unregisterPendingFlush = (): void => {
-      AgentLogger.pendingStreamFlushers.delete(flushPendingUpdate);
-    };
-
-    const materializePending = (): void => {
-      if (pendingChunks.length === 0) return;
-      buffer += pendingChunks.join('');
-      pendingChunks = [];
-    };
-
-    const emitNow = (): void => {
-      materializePending();
-      if (!storeEnabled) return;
-
-      if (!created) {
-        const appended = this.appendToStore(level, type, {
-          id,
-          timestamp: Date.now(),
-          groupId,
-          text: buffer,
-        });
-        created = !!appended;
-        if (!created) storeEnabled = false;
-        return;
-      }
-
-      this.updateStore(id, { text: buffer });
-    };
-
-    const scheduleUpdate = (): void => {
-      if (updateTimer) return;
-      updateTimer = setTimeout(() => {
-        updateTimer = null;
-        emitNow();
-        unregisterPendingFlush();
-      }, STREAM_UPDATE_THROTTLE_MS);
-      registerPendingFlush();
-    };
-
-    const flushPendingUpdate = (): void => {
-      if (updateTimer) {
-        clearTimeout(updateTimer);
-        updateTimer = null;
-      }
-      emitNow();
-      unregisterPendingFlush();
-    };
-
     return {
       append: (text: string) => {
         if (!text) return;
-        pendingChunks.push(text);
-        if (!storeEnabled) return;
-        if (!created) {
-          emitNow();
-        } else {
-          scheduleUpdate();
-        }
+        buffer += text;
+        handle.append(text);
       },
       finalize: (finalText?: string) => {
-        if (typeof finalText === 'string') {
-          buffer = finalText;
-          pendingChunks = [];
-        }
-        flushPendingUpdate();
-        this.debug(`Final ${type} length: ${buffer.length}`, { groupId });
+        if (typeof finalText === 'string') buffer = finalText;
+        handle.finalize(finalText);
+        this.debug(`Final ${type} length: ${buffer.length}`, {
+          groupId: options.groupId,
+        });
         return buffer;
       },
     };
   }
 
-  startGroup(groupName: string, id?: string, parentGroupId?: string): string {
-    const groupId = id ?? randomUUID();
-
-    this.appendToStore('info', MESSAGE_TYPES.DEFAULT, {
-      id: groupId,
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-      timestamp: Date.now(),
-      groupId: parentGroupId,
-      text: groupName,
-      data: { status: 'running' },
+  /**
+   * Open a stream while the given groupId is active so the `stream.start`
+   * event carries the right stageId. Falls back to the current scope when
+   * no override is provided.
+   */
+  private runWithStreamScope<T>(
+    groupId: string | undefined,
+    fn: () => T,
+  ): T {
+    if (!groupId || groupId === this.trace.activeStageId()) return fn();
+    let result!: T;
+    // withStage is async-storage based; we synchronously resolve fn() inside
+    // the scope. The Promise wrapper isn't observable since openStream is
+    // synchronous.
+    void this.trace.withStage(groupId, () => {
+      result = fn();
     });
+    return result;
+  }
 
+  // ─── Group primitives ────────────────────────────────────────────────
+
+  startGroup(groupName: string, id?: string, parentGroupId?: string): string {
+    // Emit directly so an explicit `parentGroupId: undefined` produces a
+    // ROOT group rather than inheriting the active stage. AgentLogger.stage
+    // (the higher-level API) does its own resolution before calling
+    // openStage, so the inherit-on-omit default belongs there, not here.
+    const groupId = id ?? randomUUID();
+    this.trace.emit({
+      type: 'stage.start',
+      id: groupId,
+      label: groupName,
+      parentId: parentGroupId,
+    });
     return groupId;
   }
 
@@ -623,13 +586,10 @@ export class AgentLogger {
     groupId: string,
     status: EndGroupStatus = END_GROUP_STATUS.STOPPED,
   ): void {
-    this.updateStore(groupId, {
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-      data: { status, endTime: Date.now() },
-    });
+    this.trace.emit({ type: 'stage.end', id: groupId, status });
   }
 
   resolveActiveGroupId(): string | undefined {
-    return logger.getActiveGroupId(this.streamId, this.isAgentLogger);
+    return this.trace.activeStageId();
   }
 }

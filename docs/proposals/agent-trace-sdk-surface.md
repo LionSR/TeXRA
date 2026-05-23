@@ -1,7 +1,7 @@
 # Agent Trace — SDK Surface Design
 
-**Status:** Proposal / design note. Not approved.
-**Date:** 2026-05-22
+**Status:** Foundation implemented (2026-05-23). Bulk caller migration deferred — see §9.
+**Date:** 2026-05-22 (proposal); 2026-05-23 (implementation)
 **Related:** [`logger-simplification-feasibility.md`](./logger-simplification-feasibility.md) (overlapping but distinct concern — that proposal is about internal LOC reduction; this one is about the _shape_ SDK consumers would see)
 
 ## TL;DR
@@ -225,7 +225,63 @@ for in review.
    In the new model, applied once at `emit()`, before subscribers see
    anything. Confirm this is the right boundary (it almost certainly is).
 
-## 8. Verification
+## 8. Implementation status (2026-05-23)
+
+The architectural foundation from §2–§3 and the precursor cleanup from §6
+are now in `main` (well, on `claude/agent-trace-sdk-surface-UzsKR`):
+
+- **`src/agent/trace/`** — `AgentEvent` discriminated union, `AgentTrace`
+  interface, `TraceEmitter` with a single stage-stamp at `emit()`, and
+  `noopTrace` for SDK consumers who don't subscribe.
+- **`RunContext.trace`** — defaults to `noopTrace`; populated by
+  `AgentLaunchContext` with the live emitter so every run has an SDK
+  channel attached. The default `RunLogger` (`debug/info/warn/error`)
+  forwards into the trace so plain log lines arrive as `{type:'log'}`.
+- **`src/logger/TexraTranscriptRecorder.ts`** — subscriber that converts
+  `AgentEvent` into the existing `StreamLogStore` writes (webview
+  transcript). The exhaustive `switch (event.type)` enforces SSoT —
+  adding a new arm forces an error here.
+- **`src/logger/consoleSubscriber.ts`** — subscriber that routes plain
+  log events through `logUtils` to the existing per-channel output
+  sinks. Replaces the inline `logger.{level}()` calls that used to live
+  inside `AgentLogger`.
+- **`AgentLogger`** — same public API, but the body has been rewritten:
+  it composes a `TraceEmitter`, attaches the two subscribers at
+  construction, and every domain method now emits a single
+  `AgentEvent`. The 7 in-class `resolveActiveGroupId()` calls collapsed
+  to one inside `TraceEmitter.emit()` (precursor §6 #1, done).
+- **`MemoryTool.resolveMemoryPath`** — precursor §6 #2 was already done
+  by an earlier change: `execute()` dispatches via `locate()` and ops
+  receive a normalized `MemoryLocation` instead of raw paths.
+
+What this buys us: the trace channel is the single emission point, every
+event is structured, subscribers are independent, and SDK consumers can
+attach with `runContext.trace.subscribe(fn)`.
+
+## 9. Deferred — bulk caller migration (§5 step 4)
+
+`AgentLogger` is preserved as a compat shim for the ~810 method calls
+across ~105 files. Removing it requires migrating those call sites to
+either `runContext.trace.*` (when context is available) or to the SDK
+surface directly. That's a multi-day mechanical pass and was scoped out
+of the foundation PR.
+
+Realistic order (extends §5):
+
+1. Tool-handler callers that already have access to `useRunContext()` —
+   ~16 files in `src/tools/` and `src/agent/toolUse/`.
+2. Model-handler callers — `ModelHandler` field + every concrete
+   handler. Replace `setLogger(agentLogger)` with `setTrace(trace)`.
+3. Output managers (`OutputFileProcessor`, `LatexDiffManager`, etc.).
+4. The 13 module-load singletons in §1 — these run before any context
+   exists and may stay as compat-shim `AgentLogger` instances or
+   migrate to the thin `@agent/core/logger` facade.
+
+When all production callers are migrated, `AgentLogger` can be deleted
+and the compat path in `RunLogger` (`buildRunLogger`) becomes the only
+caller of trace's sugar methods.
+
+## 10. Verification
 
 Counts and line refs in this proposal:
 

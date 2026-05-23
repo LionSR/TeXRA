@@ -9,3 +9,8 @@ export {
   type TaskState,
 } from './TaskState';
 export { UsageLogService } from './UsageLogService';
+export {
+  attachTranscriptRecorder,
+  type TranscriptRecorderHandle,
+} from './TexraTranscriptRecorder';
+export { attachConsoleSubscriber } from './consoleSubscriber';
