@@ -60,6 +60,11 @@ export async function expandWorkflowInputSpec(
     return matches.sort().map((match) => normalizeCliInputPath(match, cwd));
   }
 
+  // Fail fast with a Usage error (exit 2) instead of paying full platform
+  // init + agent loading just to ENOENT inside the agent run (exit 1).
+  if (!stats) {
+    throw new CliUsageError(`--input: file not found: ${trimmed}`);
+  }
   return [normalizeCliInputPath(trimmed, cwd)];
 }
 

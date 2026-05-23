@@ -99,6 +99,19 @@ async function runWorkflowAgent(
     await loadAgents();
     agent = getAgent(init.agent);
   }
+  // Pre-validate the resolved agent so usage errors land before the runtime
+  // host starts: an unknown name or wrong category should be exit 2 (Usage),
+  // not exit 1 (AgentError) raised mid-run.
+  if (!agent) {
+    throw new CliUsageError(
+      `Agent not found: ${init.agent}. Use \`texra agents list\` to see available agents.`,
+    );
+  }
+  if (agent.category !== AgentCategory.Workflow) {
+    throw new CliUsageError(
+      `Agent "${init.agent}" is a ${agent.category} agent; use \`texra chat\` or \`texra multi-agent run\` instead.`,
+    );
+  }
 
   const modelOutputFile =
     init.output && path.isAbsolute(init.output)

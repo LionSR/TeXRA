@@ -258,6 +258,20 @@ describe('CLI root argument routing', () => {
     }
   });
 
+  it('rejects a literal --input file that does not exist', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-inputs-'));
+    try {
+      const missing = path.join(root, 'no-such.tex');
+      // Pure path (no glob magic, not a directory) — previously this was
+      // returned as-is and the workflow ran until the agent ENOENT'd.
+      await expect(
+        expandWorkflowInputSpecs([missing], root),
+      ).rejects.toThrow(/--input: file not found/);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('reports missing workflow outputs as a failed copy operation', async () => {
     await expect(
       resolveWorkflowOutput(
