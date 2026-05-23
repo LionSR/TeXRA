@@ -100,7 +100,11 @@ export function createChildStream(
   if (options.toolName) handle.toolName = options.toolName;
   trackExecution(handle);
 
-  return { childStreamId, logger: runTrace.trace, disposeTrace: runTrace.dispose };
+  return {
+    childStreamId,
+    logger: runTrace.trace,
+    disposeTrace: runTrace.dispose,
+  };
 }
 
 interface FinalizeChildStreamArgs {
