@@ -288,6 +288,27 @@ describe('CLI root argument routing', () => {
     }
   });
 
+  it('expands a glob --context spec the same way --input does', async () => {
+    // `texra run -c '<glob>'` previously stuffed the literal glob string into
+    // the AgentConfig and failed late with raw ENOENT (exit 1). Routing
+    // through expandWorkflowInputSpecs gives it the same expansion semantics
+    // as `--input` (and surfaces missing-path errors as Usage / exit 2).
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-ctx-'));
+    try {
+      await fs.writeFile(path.join(root, 'a.bib'), 'a');
+      await fs.writeFile(path.join(root, 'b.bib'), 'b');
+      await expect(
+        expandWorkflowInputSpecs(
+          [path.join(root, '*.bib')],
+          root,
+          '--context',
+        ),
+      ).resolves.toEqual(['a.bib', 'b.bib']);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   // Skip on Windows (no POSIX chmod semantics) and when running as root, where
   // mode-0 doesn't block stat.
   const skipPermissionTest =
