@@ -49,9 +49,9 @@ describe('assertOutputDirAvailable', () => {
       await expect(
         assertOutputDirAvailable(filePath, root),
       ).rejects.toBeInstanceOf(CliUsageError);
-      await expect(
-        assertOutputDirAvailable(filePath, root),
-      ).rejects.toThrow(/--output-dir is not a directory/);
+      await expect(assertOutputDirAvailable(filePath, root)).rejects.toThrow(
+        /--output-dir is not a directory/,
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }
