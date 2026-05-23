@@ -3,11 +3,11 @@ import * as path from 'path';
 import pMap from 'p-map';
 
 import { platform } from '@platform/platform';
+import type { AgentTrace } from '@agent/trace';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
 import { toErrorMessage } from '@common/errors';
 import { isFile } from '@common/files/fsEntryType';
-import { AgentLogger } from '@logger/AgentLogger';
 import { ToolConfig } from '@shared/schemas/toolConfig';
 import {
   TaskRunFileService,
@@ -50,7 +50,7 @@ type PathInput = string | FileLocation;
  */
 export class LatexMediaManager {
   constructor(
-    private readonly logger: AgentLogger,
+    private readonly logger: AgentTrace,
     private readonly fileService?: TaskRunFileService,
   ) {}
 

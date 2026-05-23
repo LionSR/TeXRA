@@ -1,6 +1,7 @@
 import * as path from 'path';
 
 import { getExecutionStore } from '@agent/storage';
+import type { StageHandle } from '@agent/trace';
 import {
   createOutputState,
   setActiveRun,
@@ -31,7 +32,6 @@ import {
 } from '@agent/output/workflowOutputLayout';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import { LatexMediaManager } from '@latex';
-import type { AgentLogStage } from '@logger/AgentLogger';
 import {
   END_GROUP_STATUS,
   type EndGroupStatus,
@@ -64,7 +64,7 @@ export interface RunReflectionFlowInput<
 > extends BaseFlowContextInit<C> {
   setting: AgentWorkflowSetting;
   storageKey: StorageKey;
-  parentStage: AgentLogStage;
+  parentStage: StageHandle;
   getOutputFileLocation?: (round: number) => AgentFileLocation;
   usageMonitor?: UsageMonitor;
   onRoundCompleted?: (
@@ -250,7 +250,7 @@ export async function runReflectionFlow<C = unknown>(
       parentStage,
       callbacks: {
         createRoundStage: (roundIndex, parent) =>
-          logger.stage(`r${roundIndex}`, {
+          logger.openStage(`r${roundIndex}`, {
             parent: parent ?? undefined,
           }),
         onStageCreated: (stage) => {

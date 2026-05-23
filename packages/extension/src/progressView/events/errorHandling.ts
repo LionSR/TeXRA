@@ -1,9 +1,9 @@
 // Local imports - logger
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelTrace } from '@logger';
 import { serializeError } from '@utils/core';
 
 // Shared logger for all event handlers
-const eventLogger = new AgentLogger('ProgressEvents');
+const eventLogger = createChannelTrace('ProgressEvents');
 
 /** Serialize an error for logging, preserving original error reference. */
 function toErrorData(error: unknown): Record<string, unknown> {

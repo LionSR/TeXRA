@@ -4,6 +4,7 @@ import { ZodError } from 'zod';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { isRemoteAgent, resolveAgent, type ResolvedAgent } from '@agent/index';
+import type { StageHandle } from '@agent/trace';
 import type { AgentCore } from '@agent/implementations/flows/common/BaseFlowServices';
 import {
   AgentConfigSchema,
@@ -21,11 +22,11 @@ import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError, getSdkErrorMessage, toErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
+import type { TexraTrace } from '@logger';
 import {
-  AgentLogger,
   AgentUsageReporter,
+  createRunTrace,
   getStreamTabId,
-  type AgentLogStage,
 } from '@logger/index';
 import {
   STREAM_STATUS,
@@ -51,7 +52,7 @@ import type { AgentRuntimeHost } from './AgentRuntimeHost';
 export interface AgentLaunchContext extends AgentCore {
   usageMonitor: UsageMonitor;
   storageKey: StorageKey;
-  parentStage: AgentLogStage;
+  parentStage: StageHandle;
   coordinators: RunCoordinators;
 }
 
@@ -81,7 +82,7 @@ function createExecutionRunContext(ctx: AgentLaunchContext): RunContext {
     runtimeHost: ctx.runtimeHost,
     streamId: ctx.streamId,
     executionId: ctx.executionId,
-    logger: ctx.logger,
+    trace: ctx.logger,
     coordinators: ctx.coordinators,
     model: ctx.config.model,
     agentName: ctx.config.agent,
@@ -147,14 +148,14 @@ async function validateModelExists(
  * therefore renders the instruction before the run group.
  */
 async function beginRunStage(
-  agentLogger: AgentLogger,
+  agentLogger: TexraTrace,
   label: string,
   instruction: string | undefined,
-): Promise<AgentLogStage> {
+): Promise<StageHandle> {
   if (instruction) {
     agentLogger.userMessage(instruction);
   }
-  return agentLogger.stage(label);
+  return agentLogger.openStage(label);
 }
 
 async function assembleAgentLaunchContext(
@@ -207,7 +208,8 @@ async function assembleAgentLaunchContext(
     reservedStreamId ??
     getStreamTabId(config.agent, fullConfig.model, { executionId });
 
-  const agentLogger = new AgentLogger(streamId, true);
+  const runTrace = createRunTrace(streamId);
+  const agentLogger = runTrace.trace;
   const usageReporter = new AgentUsageReporter(
     agentLogger,
     streamId,
@@ -260,7 +262,7 @@ async function assembleAgentLaunchContext(
   const baseVars =
     setting.agentCategory === AgentCategory.ToolUse
       ? await buildVars()
-      : await parentStage.stage('Init').then((s) => s.run(buildVars));
+      : await parentStage.child('Init').run(buildVars);
 
   const userVarChannels: UserVariableChannels = {
     input: Object.freeze(baseVars),
@@ -345,7 +347,7 @@ function compensateFailedActivation(args: {
   } = args;
 
   if (activatedStreamId) {
-    new AgentLogger(activatedStreamId, true).logError(
+    createRunTrace(activatedStreamId).trace.logError(
       `Failed to start agent ${configPayload.agent}: ${getSdkErrorMessage(err)}`,
       err,
       { operation: `start ${configPayload.agent}` },

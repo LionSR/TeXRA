@@ -22,11 +22,12 @@ import { K_SLICE } from '@agent/core/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { MAX_TIER, FREE_TIER } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import type { TexraTrace } from '@logger';
 
 // Local imports - platform
 
 // Local imports - model
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelTrace } from '@logger';
 import { getApiKey, type ApiProvider } from '@model/apiProviders';
 
 // Local imports - logger
@@ -105,7 +106,7 @@ export abstract class ModelHandler<
   public continueLimit: number;
   public inputTokenLimit: number;
   public maxOutputTokensFactor: number;
-  protected logger: AgentLogger;
+  protected logger: TexraTrace;
   protected outputStreaming = false;
   protected backgroundModeSupported = false;
   protected progressViewEnabled = true;
@@ -136,14 +137,14 @@ export abstract class ModelHandler<
     this.inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT;
     this.maxOutputTokensFactor = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR;
     // Initialize with default channel, will be overwritten by agent
-    this.logger = new AgentLogger('Agent');
+    this.logger = createChannelTrace('Agent');
     this.mediaProcessor = new MediaAttachmentProcessor(this.logger, {
       getCapabilities: () => this.capabilities,
       isOpenAIProvider: () => this.isOpenai,
     });
   }
 
-  public setLogger(logger: AgentLogger): void {
+  public setLogger(logger: TexraTrace): void {
     this.logger = logger;
     this.mediaProcessor.setLogger(logger);
   }
@@ -215,7 +216,7 @@ export abstract class ModelHandler<
    * Convenience wrapper for thinking streams.
    */
   protected createThinkingStream() {
-    return this.logger.createStream(MESSAGE_TYPES.THINKING, {
+    return this.logger.openStream(MESSAGE_TYPES.THINKING, {
       progressViewEnabled: this.progressViewEnabled,
     });
   }
@@ -224,7 +225,7 @@ export abstract class ModelHandler<
    * Convenience wrapper for output streams.
    */
   protected createOutputStream() {
-    return this.logger.createStream(MESSAGE_TYPES.MODEL_RESPONSE, {
+    return this.logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE, {
       progressViewEnabled: this.progressViewEnabled,
     });
   }

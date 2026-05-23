@@ -9,7 +9,7 @@ import {
   AgentCategory,
 } from '@agent/core/AgentDataclass';
 import { getConfig } from '@agent/core/config';
-import { AgentLogger } from '@logger/AgentLogger';
+import type { TexraTrace } from '@logger';
 import type { FileListEntry } from '@shared/schemas';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
@@ -37,7 +37,7 @@ export type UserVars = Record<string, unknown>;
 /**
  * Information about a loaded file for prompt variable substitution.
  * Extends FileListEntry with required source and varName fields.
- * Compatible with FileListEntry (can be passed to AgentLogger.fileList).
+ * Compatible with FileListEntry (can be passed to AgentTrace.fileList).
  */
 export type LoadedFileEntry = FileListEntry & {
   source: string;
@@ -73,7 +73,7 @@ export async function buildUserVars(
   agentPrompt: AgentPrompt,
   agentPath: string,
   providerFlags: ModelProviderFlags,
-  logger: AgentLogger,
+  logger: TexraTrace,
   workspacePath?: string,
 ): Promise<UserVars> {
   const allLoadedFiles: LoadedFileEntry[] = [];
@@ -119,7 +119,7 @@ export async function buildUserVars(
 
   // Emit aggregated file list if any files were loaded
   if (allLoadedFiles.length > 0) {
-    logger.fileList(allLoadedFiles);
+    logger.filesLoaded({ category: 'all', entries: allLoadedFiles });
   }
 
   return userVars;
@@ -231,7 +231,7 @@ const FILE_VAR_CATEGORIES = ['INPUT', 'REFERENCE', 'EDITED'];
 async function getFileVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
-  logger: AgentLogger,
+  logger: TexraTrace,
 ): Promise<UserVars> {
   const userVars: UserVars = {};
 
@@ -292,7 +292,7 @@ async function getFileVars(
  * them sequentially to preserve the expected UI display order.
  */
 async function logFileCategoriesWithExistence(
-  logger: AgentLogger,
+  logger: TexraTrace,
   categories: Array<[category: string, files: string[]]>,
 ): Promise<void> {
   // Process all categories in parallel for better performance

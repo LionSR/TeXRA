@@ -12,9 +12,10 @@ import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 // Local imports - errors
 import { toErrorMessage } from '@common/errors';
+import type { TexraTrace } from '@logger';
 
 // Local imports - logger
-import { AgentLogger } from '@logger/AgentLogger';
+import { createRunTrace } from '@logger';
 
 // Local imports - shared
 import type { ExecutionId, StreamTabId, StorageKey } from '@shared/schemas';
@@ -52,7 +53,7 @@ export function createChildStream(
   executionId: ExecutionId,
   parentStreamId: StreamTabId,
   options: CreateChildStreamOptions,
-): { childStreamId: StreamTabId; logger: AgentLogger } {
+): { childStreamId: StreamTabId; logger: TexraTrace } {
   const childStreamId = `${options.streamPrefix}#${executionId}` as StreamTabId;
   const { runtimeHost } = options;
 
@@ -77,7 +78,7 @@ export function createChildStream(
     description: truncateWithEllipsis(options.description, 80),
   });
 
-  const logger = new AgentLogger(childStreamId, true);
+  const logger = createRunTrace(childStreamId).trace;
   const handle = new AgentExecutionHandle(
     executionId,
     parentStreamId,
@@ -96,7 +97,7 @@ export function createChildStream(
 export function finalizeChildStream(
   childStreamId: StreamTabId,
   executionId: ExecutionId,
-  logger: AgentLogger,
+  logger: TexraTrace,
   runtimeHost: AgentRuntimeHost,
   options?: FinalizeChildStreamOptions,
 ): void {

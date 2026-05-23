@@ -3,9 +3,9 @@
  * StreamTabStore. This module can be deleted once all users have migrated.
  */
 
+import type { AgentTrace } from '@agent/trace';
 import { WorkspaceStateKey } from '@common/state';
 import { normalizeRunId } from '@common/constants/runIds';
-import { AgentLogger } from '@logger/AgentLogger';
 import { TaskStateSchema, type TaskState } from '@logger/TaskState';
 import {
   StorageRecordSchema,
@@ -57,7 +57,7 @@ export async function needsMigrationFromMemento(
 export async function migrateFromMemento(
   storage: MementoStorage,
   streamLogKeys: StreamTabId[],
-  logger: AgentLogger,
+  logger: AgentTrace,
 ): Promise<void> {
   logger.info(
     '[Migration] Starting one-time migration from workspace state to disk',

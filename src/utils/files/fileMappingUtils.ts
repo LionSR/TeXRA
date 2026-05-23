@@ -2,10 +2,10 @@
 import * as path from 'path';
 
 // Local imports - common
+import type { AgentTrace } from '@agent/trace';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - logger
-import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - core utilities
 import { normalizeLatexPath, getPathSegments } from '@utils/core/pathCore';
@@ -97,7 +97,7 @@ const TEX_EXTENSION_REGEX = /\.tex$/i;
 export async function replaceInputCommands(
   baseFiles: FileLocation[],
   outputFiles: FileLocation[],
-  logger?: AgentLogger,
+  logger?: AgentTrace,
 ): Promise<void> {
   if (baseFiles.length === 0 || outputFiles.length === 0) {
     logger?.debug('No files to process for input command replacement');

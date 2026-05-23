@@ -1,6 +1,7 @@
 import { getExecutionStore } from '@agent/storage';
 import { getCleanAgentName } from '@agent/index';
-import { AgentLogger } from '@logger/AgentLogger';
+import type { AgentTrace } from '@agent/trace';
+import { createChannelTrace } from '@logger';
 import {
   TaskStateSchema,
   isToolUseTaskState,
@@ -27,11 +28,11 @@ export class StreamMetaManager {
   private parentStreamIds = new Map<StreamTabId, StreamTabId>();
   private descriptions = new Map<StreamTabId, string>();
   private loaded = false;
-  private readonly logger: AgentLogger;
+  private readonly logger: AgentTrace;
   private readonly pendingWrites = new Map<StreamTabId, Promise<void>>();
 
   constructor() {
-    this.logger = new AgentLogger('StreamMetaManager');
+    this.logger = createChannelTrace('StreamMetaManager');
   }
 
   // -- Task states ------------------------------------------------------------

@@ -16,6 +16,7 @@ import {
   peekWorktreeInfo,
   resolveWorktreeInfo,
 } from '@agent/index';
+import type { AgentTrace } from '@agent/trace';
 import type { ValidatedExecutionRequest } from '@agent/core/executionRequests';
 import {
   clearRetryRequest,
@@ -46,7 +47,7 @@ import type { ExternalOpener } from '@hosts/externalOpener';
 import { getAcceptedFileTarget } from '@latex/acceptedFileTarget';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelTrace, setDefaultStreamLogStore } from '@logger';
 import { StreamLogStore } from '@logger/StreamLogStore';
 import {
   STREAM_STATUS,
@@ -140,7 +141,9 @@ function toFileLocation(filePath: string): FileLocation {
 
 export class DesktopProgressBridge {
   private readonly streamLogs = new StreamLogStore();
-  private readonly logger = new AgentLogger('DesktopProgressBridge');
+  private readonly logger: AgentTrace = createChannelTrace(
+    'DesktopProgressBridge',
+  );
   private readonly agentProposalController: ProgressAgentProposalController;
   private readonly workflowFileActions: ProgressWorkflowFileActionsController;
   private readonly cursors = new Map<StreamTabId, number>();
@@ -179,7 +182,7 @@ export class DesktopProgressBridge {
     private readonly postToRenderer: (message: unknown) => void,
     private readonly options: DesktopProgressBridgeOptions = {},
   ) {
-    AgentLogger.setStreamLogStore(this.streamLogs);
+    setDefaultStreamLogStore(this.streamLogs);
     setRunStorageService({ isViewVisible: () => true });
     const unsubscribeStreamLogs = this.streamLogs.onChange((streamId) =>
       this.flushLogs(streamId),
