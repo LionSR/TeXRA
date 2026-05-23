@@ -18,6 +18,11 @@ import {
 } from './terminalStatus';
 import { CliUsageError, type CliContext } from '../../runtime/cliContext';
 
+/** Resolve a user-supplied path against `cwd` when it isn't already absolute. */
+function joinCwdRelative(target: string, cwd: string): string {
+  return path.isAbsolute(target) ? target : path.join(cwd, target);
+}
+
 /**
  * Stat `target` for the output-path guards. Returns `null` when the path
  * doesn't exist yet (the workflow will create it). `ENOTDIR` (a parent path
@@ -49,9 +54,7 @@ export async function assertOutputDirAvailable(
   cwd: string,
 ): Promise<void> {
   if (!outputDir) return;
-  const target = path.isAbsolute(outputDir)
-    ? outputDir
-    : path.join(cwd, outputDir);
+  const target = joinCwdRelative(outputDir, cwd);
   const stats = await probeOutputPath(target, '--output-dir');
   if (stats && !stats.isDirectory()) {
     throw new CliUsageError(`--output-dir is not a directory: ${target}`);
@@ -64,9 +67,7 @@ export async function assertOutputFileAvailable(
   cwd: string,
 ): Promise<void> {
   if (!outputFile) return;
-  const target = path.isAbsolute(outputFile)
-    ? outputFile
-    : path.join(cwd, outputFile);
+  const target = joinCwdRelative(outputFile, cwd);
   const stats = await probeOutputPath(target, '--output');
   if (stats?.isDirectory()) {
     throw new CliUsageError(
@@ -166,9 +167,7 @@ export async function resolveWorkflowOutput(
       ? (options.runDirectory ?? getRunDir(result.executionId))
       : undefined;
   if (outputDir && result.category === AgentCategory.Workflow) {
-    const targetRoot = path.isAbsolute(outputDir)
-      ? outputDir
-      : path.join(context.cwd, outputDir);
+    const targetRoot = joinCwdRelative(outputDir, context.cwd);
     const outputsByRelativePath = new Map<string, OutputFileSummary>();
     for (const output of result.outputs) {
       const relativePath = outputCopyRelativePath(output);
@@ -223,9 +222,7 @@ export async function resolveWorkflowOutput(
     };
   }
 
-  const targetPath = path.isAbsolute(outputFile)
-    ? outputFile
-    : path.join(context.cwd, outputFile);
+  const targetPath = joinCwdRelative(outputFile, context.cwd);
   if (path.resolve(finalOutput.absolutePath) !== path.resolve(targetPath)) {
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
     await fs.copyFile(finalOutput.absolutePath, targetPath);
