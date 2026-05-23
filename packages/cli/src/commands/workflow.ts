@@ -32,6 +32,7 @@ import { createCliRuntimeHost } from '../runtime/runtimeHost';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
+import { assertExplicitModelKnown } from './_helpers/modelArg';
 import {
   GLOBAL_ARGS,
   collectStringFlagValues,
@@ -67,8 +68,9 @@ async function runWorkflowAgent(
   context: CliContext,
   init: WorkflowRunInit,
 ): Promise<number> {
+  const explicitModel = assertExplicitModelKnown(init.model);
   const model =
-    init.model?.trim() ||
+    explicitModel ||
     context.envModel ||
     resolveConfiguredModel(context.cliConfig, 'run') ||
     CLI_BUILTIN_DEFAULT_MODEL;
