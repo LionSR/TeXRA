@@ -5,7 +5,10 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { CliUsageError } from '../../../packages/cli/src/runtime/cliContext';
-import { assertOutputDirAvailable } from '../../../packages/cli/src/commands/_helpers/workflowOutput';
+import {
+  assertOutputDirAvailable,
+  assertOutputFileAvailable,
+} from '../../../packages/cli/src/commands/_helpers/workflowOutput';
 
 describe('assertOutputDirAvailable', () => {
   it('no-ops when --output-dir was not passed', async () => {
@@ -114,4 +117,87 @@ describe('assertOutputDirAvailable', () => {
       }
     },
   );
+});
+
+describe('assertOutputFileAvailable', () => {
+  it('no-ops when --output was not passed', async () => {
+    await expect(
+      assertOutputFileAvailable(undefined, tmpdir()),
+    ).resolves.toBeUndefined();
+  });
+
+  it('accepts a path that does not exist yet (writer creates the file)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'texra-cli-outfile-'));
+    try {
+      await expect(
+        assertOutputFileAvailable(join(root, 'out.tex'), root),
+      ).resolves.toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts an existing file (the writer overwrites)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'texra-cli-outfile-'));
+    try {
+      const target = join(root, 'existing.tex');
+      await writeFile(target, 'old content');
+      await expect(
+        assertOutputFileAvailable(target, root),
+      ).resolves.toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects --output pointing at an existing directory', async () => {
+    // Previously: workflow ran ~19s, then EISDIR on copyfile at the end
+    // (exit 1). The fast path now refuses with a Usage error (exit 2) and
+    // hints at --output-dir.
+    const root = await mkdtemp(join(tmpdir(), 'texra-cli-outfile-'));
+    try {
+      const dirPath = join(root, 'sub');
+      await mkdir(dirPath);
+      await expect(
+        assertOutputFileAvailable(dirPath, root),
+      ).rejects.toBeInstanceOf(CliUsageError);
+      await expect(
+        assertOutputFileAvailable(dirPath, root),
+      ).rejects.toThrow(/--output is a directory.*use --output-dir/);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects --output whose parent path component is a file (ENOTDIR)', async () => {
+    // Previously: workflow ran ~40s, then EEXIST on mkdir of the parent
+    // (exit 1). `mkdir -p` can't recover this — the parent IS a file.
+    const root = await mkdtemp(join(tmpdir(), 'texra-cli-outfile-'));
+    try {
+      const filePath = join(root, 'not-a-dir');
+      await writeFile(filePath, 'just a file');
+      const through = join(filePath, 'out.tex');
+      await expect(
+        assertOutputFileAvailable(through, root),
+      ).rejects.toBeInstanceOf(CliUsageError);
+      await expect(
+        assertOutputFileAvailable(through, root),
+      ).rejects.toThrow(/parent path component is a file/);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('resolves a relative --output against cwd before stat-ing', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'texra-cli-outfile-'));
+    try {
+      const dirPath = join(root, 'rel-dir');
+      await mkdir(dirPath);
+      await expect(
+        assertOutputFileAvailable('rel-dir', root),
+      ).rejects.toThrow(/--output is a directory/);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
