@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -70,4 +70,48 @@ describe('assertOutputDirAvailable', () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it('rejects an --output-dir whose parent path component is a file (ENOTDIR)', async () => {
+    // `mkdir -p` can't fix this — `/tmp/file/sub` where `/tmp/file` is a
+    // regular file — so previously the fast path treated the stat ENOTDIR as
+    // "doesn't exist yet" and we paid the full agent run before mkdir failed.
+    const root = await mkdtemp(join(tmpdir(), 'texra-cli-outdir-enotdir-'));
+    try {
+      const filePath = join(root, 'not-a-dir');
+      await writeFile(filePath, 'just a file');
+      const through = join(filePath, 'subdir');
+      await expect(
+        assertOutputDirAvailable(through, root),
+      ).rejects.toBeInstanceOf(CliUsageError);
+      await expect(
+        assertOutputDirAvailable(through, root),
+      ).rejects.toThrow(/is not a directory/);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  // Skip on Windows (no POSIX chmod semantics) and when running as root, where
+  // mode-0 doesn't restrict stat.
+  const skipPermissionTest =
+    process.platform === 'win32' ||
+    (typeof process.getuid === 'function' && process.getuid() === 0);
+  (skipPermissionTest ? it.skip : it)(
+    'propagates non-ENOENT/ENOTDIR stat errors with their original cause',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'texra-cli-outdir-perm-'));
+      const blocked = join(root, 'blocked');
+      const inner = join(blocked, 'dir');
+      try {
+        await mkdir(blocked);
+        await chmod(blocked, 0o000);
+        await expect(
+          assertOutputDirAvailable(inner, root),
+        ).rejects.toThrow(/(EACCES|permission)/i);
+      } finally {
+        await chmod(blocked, 0o755).catch(() => undefined);
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
 });

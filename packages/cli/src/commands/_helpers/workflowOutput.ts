@@ -22,6 +22,13 @@ import { CliUsageError, type CliContext } from '../../runtime/cliContext';
  * later), but if the path exists today and isn't a directory we want to fail
  * fast as a Usage error (exit 2) instead of running the whole workflow and
  * blowing up with an EEXIST mkdir error at the very end (exit 1).
+ *
+ * Only `ENOENT` is treated as "not there yet, mkdir -p will create it".
+ * `ENOTDIR` (an intermediate path component is a file — e.g.
+ * `--output-dir /tmp/file/sub` where `/tmp/file` is a regular file) is also a
+ * Usage error: `mkdir -p` can't fix it, and we'd otherwise pay the full agent
+ * run before failing. Other stat errors (EACCES, EIO, …) are environment
+ * problems and must propagate with their real cause.
  */
 export async function assertOutputDirAvailable(
   outputDir: string | undefined,
@@ -31,8 +38,25 @@ export async function assertOutputDirAvailable(
   const target = path.isAbsolute(outputDir)
     ? outputDir
     : path.join(cwd, outputDir);
-  const stats = await fs.stat(target).catch(() => null);
-  if (stats && !stats.isDirectory()) {
+  let stats: Awaited<ReturnType<typeof fs.stat>> | null = null;
+  try {
+    stats = await fs.stat(target);
+  } catch (error: unknown) {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? (error as { code?: unknown }).code
+        : undefined;
+    if (code === 'ENOENT') {
+      return;
+    }
+    if (code === 'ENOTDIR') {
+      throw new CliUsageError(
+        `--output-dir is not a directory (a parent path component is a file): ${target}`,
+      );
+    }
+    throw error;
+  }
+  if (!stats.isDirectory()) {
     throw new CliUsageError(`--output-dir is not a directory: ${target}`);
   }
 }
