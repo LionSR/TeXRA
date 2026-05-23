@@ -17,7 +17,6 @@ import type {
   ContextManagementData,
   EndGroupStatus,
   ErrorContext,
-  ExtendedTokenUsageStats,
   FileListEntry,
 } from '@shared/schemas';
 
@@ -84,9 +83,6 @@ export interface TexraTrace extends AgentTrace {
   ): void;
   logWebSearch(data: unknown, groupId?: string): void;
   logWebFetch(data: unknown, groupId?: string): void;
-
-  // ─── Statistics is a TeXRA-typed wrapper of usage() ────────────────
-  statistics(stats: ExtendedTokenUsageStats, groupId?: string): void;
 
   // ─── Group primitives kept on the TeXRA layer because the legacy
   // semantics (literal parentId = root group) are TeXRA-specific. The

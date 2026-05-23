@@ -18,7 +18,6 @@ import {
   type ContextManagementData,
   type EndGroupStatus,
   type ErrorContext,
-  type ExtendedTokenUsageStats,
   type FileListEntry,
 } from '@shared/schemas';
 
@@ -205,10 +204,6 @@ export class TexraTraceEmitter extends TraceEmitter implements TexraTrace {
 
   logWebFetch(data: unknown, groupId?: string): void {
     this.domain({ key: 'webFetch', data, stageId: groupId });
-  }
-
-  statistics(stats: ExtendedTokenUsageStats, groupId?: string): void {
-    this.usage(stats, { stageId: groupId });
   }
 
   // ─── Group primitives ──────────────────────────────────────────────
