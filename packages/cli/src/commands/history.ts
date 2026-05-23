@@ -129,8 +129,7 @@ async function runHistoryDelete(
       result,
     });
   } else if (result.deleted === 'all') {
-    const noun =
-      result.count === 1 ? 'stored execution' : 'stored executions';
+    const noun = result.count === 1 ? 'stored execution' : 'stored executions';
     writeTextStdout(`Deleted ${result.count} ${noun}.`);
   } else if (result.found) {
     writeTextStdout(`Deleted execution ${result.id}.`);

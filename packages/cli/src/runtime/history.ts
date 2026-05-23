@@ -118,8 +118,7 @@ export async function deleteCliHistory(options: {
   preCountForAll?: number;
 }): Promise<CliHistoryDeleteResult> {
   if (options.all) {
-    const count =
-      options.preCountForAll ?? (await listExecutions()).length;
+    const count = options.preCountForAll ?? (await listExecutions()).length;
     await deleteAllExecutions();
     return { deleted: 'all', count };
   }
