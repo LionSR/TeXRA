@@ -520,6 +520,7 @@ function startClaudeAgentLoop(params: {
   parentStreamId: StreamTabId;
   executionId: ExecutionId;
   logger: TexraTrace;
+  disposeTrace: () => void;
   initialPrompt: string;
   model: string;
   permissionMode: ClaudeAgentPermissionMode;
@@ -535,6 +536,7 @@ function startClaudeAgentLoop(params: {
     parentStreamId,
     executionId,
     logger,
+    disposeTrace,
     initialPrompt,
     runtimeHost,
   } = params;
@@ -650,6 +652,7 @@ function startClaudeAgentLoop(params: {
       await writeTerminalStatus(executionId, 'completed').catch(() => {});
       untrackExecution(executionId);
       finalizeClaudeAgentLoopStatus(childStreamId, runtimeHost);
+      disposeTrace();
     }
   })();
 }
@@ -747,7 +750,7 @@ async function launchClaudeAgentSession(
     throw new ToolError('Failed to register Claude Code CLI execution.');
   }
 
-  const { childStreamId, logger } = createChildStream(
+  const { childStreamId, logger, disposeTrace } = createChildStream(
     executionId,
     parentStreamId,
     {
@@ -766,6 +769,7 @@ async function launchClaudeAgentSession(
     parentStreamId,
     executionId,
     logger,
+    disposeTrace,
     initialPrompt: input.prompt,
     model,
     permissionMode,
