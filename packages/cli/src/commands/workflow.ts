@@ -46,6 +46,7 @@ import {
 } from './_helpers/terminalStatus';
 import { expandWorkflowInputSpecs } from './_helpers/workflowInputs';
 import {
+  assertOutputDirAvailable,
   expectedOutputFilesForOutputDir,
   formatWorkflowTextResult,
   resolveWorkflowOutput,
@@ -81,6 +82,9 @@ async function runWorkflowAgent(
   if (init.output && init.outputDir) {
     throw new CliUsageError('Use either --output or --output-dir, not both.');
   }
+  // Reject `--output-dir <path>` early when the path already points at a
+  // non-directory (else we'd run the full workflow and EEXIST at the end).
+  await assertOutputDirAvailable(init.outputDir, runContext.cwd);
   const inputFiles = await expandWorkflowInputSpecs(
     init.inputFiles,
     runContext.cwd,
