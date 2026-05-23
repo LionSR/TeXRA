@@ -4,17 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.37.10] - 2026-05-23
+
 ### Features
 
-- **Approve a plan and let it run on its own** — when the plan tool asks you to confirm a plan, a new **Approve & Run** button (visible when Odyssey mode is enabled) approves the plan and immediately starts an Odyssey with the plan's steps as the objective, so the agent works through them autonomously instead of pausing after each turn.
+- **Approve & Run a plan** — plan approval cards have a new **Approve & Run** button (in Odyssey mode) that approves the plan and lets the agent work through every step on its own.
+- **Orchestrators can hand off to Claude Code** — built-in orchestrator agents can delegate a sub-task to Claude Code when that's the better tool for the job.
 
 ### Improvements
 
-- **One tool for plans and autonomous runs** — the separate `odyssey` tool is gone; the `plan` tool now owns the full lifecycle. Agents use `plan(command="update")` to draft the plan, `plan(command="pause")` to ask for user input mid-run, and `plan(command="complete")` to declare the work done once every step is verified. Starting an autonomous run is exclusively a user action via the **Approve & Run** button on the plan approval card.
+- **Quota shown as a percentage** — Settings → Models tells you how much of your monthly included-model quota you've used as a percentage rather than a dollar amount.
+- **Less prominent Odyssey settings tab** — the Odyssey tab now sits at the end of Settings so the everyday tabs come first.
 
 ### Bug Fixes
 
-- **CLI chat stays pinned during long output** — the chat header, input, and status rows now stay visible while long replies and tool output stream in the terminal.
+- **Sensible defaults when something is missing** — empty model lists and missing-agent sessions fall back to a working default.
+- **More reliable tool calls** — fixes tool-call failures on Anthropic, Gemini, and OpenAI (including GPT reasoning models) for tools with complex arguments.
+- **Old workflow outputs load correctly** — outputs saved by older versions open again.
+- **Stopping a run isn't an error** — interrupting an agent is treated as a cancellation.
+- **Welcome walkthrough stays reachable** — easy to find again from the editor's walkthrough list.
 
 ## [0.37.9] - 2026-05-18
 
