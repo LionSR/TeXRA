@@ -429,6 +429,23 @@ describe('CLI root argument routing', () => {
   });
 });
 
+describe('CLI model flag validation contract', () => {
+  it('classifies built-in models as known and bogus names as unknown', async () => {
+    // `texra run -m X` and `texra multi-agent run -m X` validate the explicit
+    // `-m` value via this predicate before any platform init, so a typo is
+    // surfaced as a Usage error (exit 2) instead of an AgentError (exit 1)
+    // raised mid-run by the runtime's `MODEL_CONFIGS` lookup.
+    const { isKnownCliModel } = await import(
+      '../../../packages/cli/src/runtime/cliConfig'
+    );
+
+    expect(isKnownCliModel('sonnet46T')).toBe(true);
+    expect(isKnownCliModel('deepseekT')).toBe(true);
+    expect(isKnownCliModel('nonexistent-model-xyz')).toBe(false);
+    expect(isKnownCliModel('')).toBe(false);
+  });
+});
+
 describe('CLI login arguments', () => {
   it('prefers explicit provider flags over positional providers', () => {
     expect(resolveLoginProvider('google', 'github')).toBe('github');
