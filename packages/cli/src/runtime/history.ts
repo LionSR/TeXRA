@@ -60,7 +60,7 @@ export interface CliHistoryFile {
 }
 
 export type CliHistoryDeleteResult =
-  | { readonly deleted: 'all' }
+  | { readonly deleted: 'all'; readonly count: number }
   | {
       readonly deleted: 'one';
       readonly id: ExecutionId;
@@ -113,10 +113,14 @@ export async function readCliHistoryConfig(
 export async function deleteCliHistory(options: {
   id?: ExecutionId;
   all?: boolean;
+  /** Pre-computed entry count from `preflightCliHistoryDeleteAll`, surfaced in
+   *  the `'all'` result so structured callers can report what was removed. */
+  preCountForAll?: number;
 }): Promise<CliHistoryDeleteResult> {
   if (options.all) {
+    const count = options.preCountForAll ?? (await listExecutions()).length;
     await deleteAllExecutions();
-    return { deleted: 'all' };
+    return { deleted: 'all', count };
   }
   if (!options.id) {
     throw new Error('Expected an execution id, or --all.');
@@ -126,6 +130,26 @@ export async function deleteCliHistory(options: {
     id: options.id,
     found: await deleteExecution(options.id),
   };
+}
+
+/**
+ * `texra history delete --all` is destructive and unrecoverable. The command
+ * handler must call this first: if `--all` is set without `--yes`, it should
+ * refuse and quote the count back to the user; otherwise it can pass `count`
+ * into `deleteCliHistory` so the success report covers what was removed.
+ */
+export interface CliHistoryDeleteAllPreflight {
+  readonly proceed: boolean;
+  readonly count: number;
+}
+
+export async function preflightCliHistoryDeleteAll(options: {
+  all?: boolean;
+  yes?: boolean;
+}): Promise<CliHistoryDeleteAllPreflight> {
+  if (!options.all) return { proceed: false, count: 0 };
+  const count = (await listExecutions()).length;
+  return { proceed: options.yes === true, count };
 }
 
 export function formatCliHistoryText(
