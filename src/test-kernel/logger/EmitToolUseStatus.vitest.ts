@@ -18,8 +18,8 @@ describe('TexraTraceEmitter.emitToolUse', () => {
 
     trace.emitToolUse({ toolName: 'bash', input: { command: 'ls' } });
 
-    const toolEvents = events.filter((e) =>
-      e.type === 'tool.start' || e.type === 'tool.end',
+    const toolEvents = events.filter(
+      (e) => e.type === 'tool.start' || e.type === 'tool.end',
     );
     expect(toolEvents).toHaveLength(1);
     expect(toolEvents[0]?.type).toBe('tool.start');
@@ -37,8 +37,8 @@ describe('TexraTraceEmitter.emitToolUse', () => {
       status: 'completed',
     });
 
-    const toolEvents = events.filter((e) =>
-      e.type === 'tool.start' || e.type === 'tool.end',
+    const toolEvents = events.filter(
+      (e) => e.type === 'tool.start' || e.type === 'tool.end',
     );
     expect(toolEvents).toHaveLength(2);
     expect(toolEvents[0]?.type).toBe('tool.start');
@@ -63,8 +63,8 @@ describe('TexraTraceEmitter.emitToolUse', () => {
       status: 'failed',
     });
 
-    const toolEvents = events.filter((e) =>
-      e.type === 'tool.start' || e.type === 'tool.end',
+    const toolEvents = events.filter(
+      (e) => e.type === 'tool.start' || e.type === 'tool.end',
     );
     expect(toolEvents).toHaveLength(2);
     if (toolEvents[1]?.type === 'tool.end') {
@@ -82,8 +82,8 @@ describe('TexraTraceEmitter.emitToolUse', () => {
       status: 'in_progress',
     });
 
-    const toolEvents = events.filter((e) =>
-      e.type === 'tool.start' || e.type === 'tool.end',
+    const toolEvents = events.filter(
+      (e) => e.type === 'tool.start' || e.type === 'tool.end',
     );
     expect(toolEvents).toHaveLength(1);
     expect(toolEvents[0]?.type).toBe('tool.start');
