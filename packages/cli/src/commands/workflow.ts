@@ -67,9 +67,6 @@ async function runWorkflowAgent(
   context: CliContext,
   init: WorkflowRunInit,
 ): Promise<number> {
-  // Validate the explicit `-m` value up-front so a typo is a Usage error
-  // (exit 2), not a mid-run AgentError (exit 1). Env / config / built-in
-  // fallbacks already warn on their own and are left alone.
   const explicitModel = assertExplicitModelKnown(init.model);
   const model =
     explicitModel ||

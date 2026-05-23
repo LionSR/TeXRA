@@ -16,10 +16,6 @@ describe('assertExplicitModelKnown', () => {
   });
 
   it('throws a CliUsageError for an unknown model id', () => {
-    // The thrown error is what makes the typo surface as exit 2 (Usage)
-    // instead of an exit 1 (AgentError) raised mid-run by the runtime's
-    // MODEL_CONFIGS lookup. The message must name the model and steer the
-    // user to `texra models list`.
     expect(() => assertExplicitModelKnown('nonexistent-model-xyz')).toThrow(
       CliUsageError,
     );

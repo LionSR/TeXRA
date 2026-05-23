@@ -23,6 +23,7 @@ import {
   resolveWorkflowOutput,
 } from '../../../packages/cli/src/commands/root';
 import { rejectHeadlessOnlyFlags } from '../../../packages/cli/src/commands/_helpers/globalArgs';
+import { isKnownCliModel } from '../../../packages/cli/src/runtime/cliConfig';
 import type { CliContext } from '../../../packages/cli/src/runtime/cliContext';
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
@@ -430,14 +431,7 @@ describe('CLI root argument routing', () => {
 });
 
 describe('CLI model flag validation contract', () => {
-  it('classifies built-in models as known and bogus names as unknown', async () => {
-    // `texra run -m X` and `texra multi-agent run -m X` validate the explicit
-    // `-m` value via this predicate before any platform init, so a typo is
-    // surfaced as a Usage error (exit 2) instead of an AgentError (exit 1)
-    // raised mid-run by the runtime's `MODEL_CONFIGS` lookup.
-    const { isKnownCliModel } =
-      await import('../../../packages/cli/src/runtime/cliConfig');
-
+  it('classifies built-in models as known and bogus names as unknown', () => {
     expect(isKnownCliModel('sonnet46T')).toBe(true);
     expect(isKnownCliModel('deepseekT')).toBe(true);
     expect(isKnownCliModel('nonexistent-model-xyz')).toBe(false);
