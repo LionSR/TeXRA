@@ -6,10 +6,10 @@ import { Buffer } from 'buffer';
 import pMap from 'p-map';
 
 // Local imports - agent utils
-import type { AgentTrace } from '@agent/trace';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { toErrorMessage } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import type { TexraTrace } from '@logger';
 
 // Type imports
 import {
@@ -54,11 +54,11 @@ interface MediaAttachmentProcessorOptions {
 
 export class MediaAttachmentProcessor {
   constructor(
-    private logger: AgentTrace,
+    private logger: TexraTrace,
     private readonly options: MediaAttachmentProcessorOptions,
   ) {}
 
-  public setLogger(logger: AgentTrace): void {
+  public setLogger(logger: TexraTrace): void {
     this.logger = logger;
   }
 

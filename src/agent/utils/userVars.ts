@@ -1,7 +1,6 @@
 import * as path from 'path';
 
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
-import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { getVisibleAgents, type AgentEntry } from '@agent/index/agentRegistry';
 import {
@@ -10,6 +9,7 @@ import {
   AgentCategory,
 } from '@agent/core/AgentDataclass';
 import { getConfig } from '@agent/core/config';
+import type { TexraTrace } from '@logger';
 import type { FileListEntry } from '@shared/schemas';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
@@ -73,7 +73,7 @@ export async function buildUserVars(
   agentPrompt: AgentPrompt,
   agentPath: string,
   providerFlags: ModelProviderFlags,
-  logger: AgentTrace,
+  logger: TexraTrace,
   workspacePath?: string,
 ): Promise<UserVars> {
   const allLoadedFiles: LoadedFileEntry[] = [];
@@ -231,7 +231,7 @@ const FILE_VAR_CATEGORIES = ['INPUT', 'REFERENCE', 'EDITED'];
 async function getFileVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
-  logger: AgentTrace,
+  logger: TexraTrace,
 ): Promise<UserVars> {
   const userVars: UserVars = {};
 
@@ -292,7 +292,7 @@ async function getFileVars(
  * them sequentially to preserve the expected UI display order.
  */
 async function logFileCategoriesWithExistence(
-  logger: AgentTrace,
+  logger: TexraTrace,
   categories: Array<[category: string, files: string[]]>,
 ): Promise<void> {
   // Process all categories in parallel for better performance

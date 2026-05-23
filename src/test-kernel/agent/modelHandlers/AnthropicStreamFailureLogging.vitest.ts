@@ -4,8 +4,8 @@ import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent model handlers
-import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
+import type { TexraTrace } from '@logger';
 
 // Type imports
 import type Anthropic from '@anthropic-ai/sdk';
@@ -63,7 +63,7 @@ describe('Anthropic stream failure logging', () => {
   it('keeps raw stream failures out of visible warning logs', async () => {
     const handler = createHandler();
     const logger = createLoggerStub();
-    handler.setLogger(logger as unknown as AgentTrace);
+    handler.setLogger(logger as unknown as TexraTrace);
 
     const providerError = new AnthropicBadRequestError(
       400,

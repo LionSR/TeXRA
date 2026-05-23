@@ -117,7 +117,7 @@ export function attachTranscriptRecorder(
   };
 
   const handleLog = (event: LogEvent): void => {
-    const messageType = event.messageType ?? MESSAGE_TYPES.DEFAULT;
+    const messageType = (event.messageType ?? MESSAGE_TYPES.DEFAULT) as MessageType;
     if (!shouldEmit(event.level, messageType)) return;
 
     store.append(streamId, {
@@ -233,22 +233,6 @@ export function attachTranscriptRecorder(
         return;
       }
 
-      case 'files.loaded': {
-        const okCount = event.entries.filter((e) => e.ok).length;
-        store.append(streamId, {
-          id: randomUUID(),
-          type: STREAM_LOG_ENTRY_TYPES.LOG,
-          level: 'info',
-          timestamp: Date.now(),
-          groupId: event.stageId,
-          messageType: MESSAGE_TYPES.FILE_LIST,
-          text: `Loading ${event.category} (${okCount}/${event.entries.length})`,
-          data: event.entries,
-          verbose: debugModeEnabled(),
-        });
-        return;
-      }
-
       case 'stream.start':
         streams.set(event.id, {
           buffer: '',
@@ -257,7 +241,7 @@ export function attachTranscriptRecorder(
           enabled: true,
           groupId: event.stageId,
           level: 'info',
-          messageType: event.kind,
+          messageType: event.kind as MessageType,
           updateTimer: null,
         });
         return;
@@ -287,8 +271,27 @@ export function attachTranscriptRecorder(
       }
 
       case 'domain': {
-        // Domain events render as text + data with a synthetic messageType.
         // Subscribers that care about specific keys can switch on event.key.
+        // filesLoaded has a richer payload shape; format the text accordingly.
+        if (event.key === 'filesLoaded') {
+          const payload = event.data as
+            | { category?: string; entries?: ReadonlyArray<{ ok?: boolean }> }
+            | undefined;
+          const entries = payload?.entries ?? [];
+          const okCount = entries.filter((e) => e?.ok).length;
+          store.append(streamId, {
+            id: randomUUID(),
+            type: STREAM_LOG_ENTRY_TYPES.LOG,
+            level: 'info',
+            timestamp: Date.now(),
+            groupId: event.stageId,
+            messageType: MESSAGE_TYPES.FILE_LIST,
+            text: `Loading ${payload?.category ?? ''} (${okCount}/${entries.length})`,
+            data: entries,
+            verbose: debugModeEnabled(),
+          });
+          return;
+        }
         store.append(streamId, {
           id: randomUUID(),
           type: STREAM_LOG_ENTRY_TYPES.LOG,

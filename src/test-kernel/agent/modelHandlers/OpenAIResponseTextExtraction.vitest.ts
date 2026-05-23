@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 
-import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
+import type { TexraTrace } from '@logger';
 import type { ModelConfig } from 'llm-zoo';
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
 
-function createLoggerStub(): Partial<AgentTrace> & { streamId: string } {
+function createLoggerStub(): Partial<TexraTrace> & { streamId: string } {
   return {
     streamId: 'test-channel',
     debug: () => undefined,
@@ -40,7 +40,7 @@ function createConfig(): ModelConfig {
 
 function createHandler(): ModelHandlerOpenAIResponse {
   const handler = new ModelHandlerOpenAIResponse(createConfig());
-  handler.setLogger(createLoggerStub() as unknown as AgentTrace);
+  handler.setLogger(createLoggerStub() as unknown as TexraTrace);
   return handler;
 }
 

@@ -2,7 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports
-import type { AgentTrace } from '@agent/trace';
+import type { TexraTrace } from '@logger';
 import {
   createRunTrace,
   getDefaultStreamLogStore,
@@ -12,7 +12,7 @@ import { StreamLogStore } from '@logger/StreamLogStore';
 import { MESSAGE_TYPES } from '@shared/schemas';
 
 describe('AgentLogger.logFileCategory', () => {
-  let logger: AgentTrace;
+  let logger: TexraTrace;
   let capturedMessages: any[];
 
   beforeEach(async () => {

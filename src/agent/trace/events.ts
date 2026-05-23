@@ -1,28 +1,24 @@
 /**
  * AgentEvent — discriminated union of everything that happens during a run.
  *
- * This is the SDK contract. Adding a new event type yields an exhaustive-switch
- * error in every subscriber until handled.
+ * This is the agent-general SDK contract. Adding a new event type yields
+ * an exhaustive-switch error in every subscriber until handled.
  *
- * Domain-specific events that don't belong in the SDK union (TeXRA's
- * latexdiff, scratchpad, etc.) use the `domain` escape hatch.
+ * Host-specific events that don't belong in the core union (TeXRA's
+ * file-list payloads, latexdiff, scratchpad, etc.) use the `domain`
+ * escape hatch with a host-chosen `key`.
  */
-import type {
-  EndGroupStatus,
-  FileListEntry,
-  LogLevel,
-  MessageType,
-  StreamLogEntry,
-} from '@shared/schemas';
+import type { EndGroupStatus } from '@shared/schemas';
 
 /** Status assigned to a tool call when it completes. */
 export type ToolStatus = 'completed' | 'failed' | 'in_progress';
 
 /**
- * StreamKind identifies what a streaming message represents. Mirrors the
- * MessageType values that AgentLogger.createStream() accepts.
+ * StreamKind identifies what a streaming message represents. Subscribers
+ * key on it for render decisions. Generic string so host taxonomies
+ * (TeXRA's MessageType) plug in without coupling the SDK.
  */
-export type StreamKind = MessageType;
+export type StreamKind = string;
 
 /** Token-usage stats emitted at the end of each model turn. */
 export interface TokenUsageStats {
@@ -43,7 +39,7 @@ export interface ContextStateData {
 /**
  * Stage stamp attached to every event by the emit boundary. Subscribers
  * read this to nest events under the active stage in the transcript;
- * SDK consumers ignore it.
+ * agent-general SDK consumers may ignore it.
  */
 export interface StageStamp {
   readonly stageId?: string;
@@ -52,11 +48,11 @@ export interface StageStamp {
 /** Plain log line — sugar for debug/info/warn/error converges here. */
 export interface LogEvent extends StageStamp {
   readonly type: 'log';
-  readonly level: LogLevel;
+  readonly level: 'debug' | 'info' | 'warn' | 'error';
   readonly message: string;
   readonly data?: unknown;
-  /** Optional override for the transcript's `messageType` column. */
-  readonly messageType?: MessageType;
+  /** Host-specific category (e.g. TeXRA's MessageType taxonomy). */
+  readonly messageType?: string;
   /**
    * If false, the renderer should treat this as a verbose/debug-only line.
    * Defaults to true for non-debug levels.
@@ -87,7 +83,7 @@ export interface ToolStartEvent extends StageStamp {
   readonly input: unknown;
 }
 
-/** Tool call finished. Mirrors ToolUseLog status. */
+/** Tool call finished. */
 export interface ToolEndEvent extends StageStamp {
   readonly type: 'tool.end';
   readonly logId: string;
@@ -107,13 +103,6 @@ export interface ContextStateEvent extends StageStamp {
   readonly type: 'context.state';
   readonly inputTokens: number;
   readonly contextWindow: number;
-}
-
-/** Files loaded into the prompt for a given category. */
-export interface FilesLoadedEvent extends StageStamp {
-  readonly type: 'files.loaded';
-  readonly category: string;
-  readonly entries: readonly FileListEntry[];
 }
 
 /** Streaming message opened — subsequent stream.chunk events append text. */
@@ -138,9 +127,10 @@ export interface StreamEndEvent extends StageStamp {
 }
 
 /**
- * TeXRA-specific escape hatch. Use for events that aren't part of the SDK
- * union (latexdiff, scratchpad, missingOutputs, etc.). Keeps the union clean
- * for SDK consumers; TeXRA subscribers switch on `key`.
+ * Host-specific escape hatch. Hosts use this for events that aren't part
+ * of the agent-general union (TeXRA: `latexdiff`, `scratchpad`,
+ * `filesLoaded`, `missingOutputs`, `webSearch`, `webFetch`, …). Keeps the
+ * union clean for SDK consumers; host subscribers switch on `key`.
  */
 export interface DomainEvent extends StageStamp {
   readonly type: 'domain';
@@ -159,11 +149,7 @@ export type AgentEvent =
   | ToolEndEvent
   | UsageEvent
   | ContextStateEvent
-  | FilesLoadedEvent
   | StreamStartEvent
   | StreamChunkEvent
   | StreamEndEvent
   | DomainEvent;
-
-/** Re-export the underlying stream-log entry shape so subscribers can refer to it. */
-export type { StreamLogEntry };

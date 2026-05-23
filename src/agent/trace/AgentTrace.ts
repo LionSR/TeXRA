@@ -1,28 +1,21 @@
 /**
- * AgentTrace — single discriminated-event channel for an agent run.
+ * AgentTrace — agent-general SDK surface.
  *
- * SDK consumers subscribe with `subscribe()` and receive every AgentEvent
- * (logs, stages, tools, streams, etc.). Every other method on this
- * interface is sugar over `emit()` — they exist to make TeXRA's internal
- * call sites readable, but they don't add new emission channels.
+ * Discriminated-event channel for an agent run. Any host (TeXRA, future
+ * CLI, future SDK consumer) can subscribe with `subscribe()` and receive
+ * every {@link AgentEvent}. Every other method on this interface is sugar
+ * over `emit()` so the trace channel remains a single source of truth.
  *
- * Pure pass-through aliases that AgentLogger historically exposed
- * (`statistics`, `fileList`, `createStream`, `logToolUse`, `resolveActiveGroupId`,
- * `withCurrentGroup`, async `stage(...)`, etc.) have been removed. Callers
- * use the canonical names directly.
+ * Host-specific helpers (TeXRA's `logError`/`logProgress`/`latexDiff`/
+ * `userMessage`/etc.) live on {@link TexraTrace} in `@logger/TexraTrace`,
+ * which extends this interface. SDK consumers should program against
+ * `AgentTrace` so they don't depend on TeXRA-specific message taxonomy.
  */
-import type {
-  ContextManagementData,
-  EndGroupStatus,
-  ErrorContext,
-  FileListEntry,
-  MessageType,
-} from '@shared/schemas';
+import type { EndGroupStatus } from '@shared/schemas';
 
 import type {
   AgentEvent,
   ContextStateData,
-  FilesLoadedEvent,
   LogEvent,
   StreamKind,
   TokenUsageStats,
@@ -106,7 +99,11 @@ export interface DomainEventInput {
 /** Sugar passed to debug/info/warn/error. */
 export interface LogOptions {
   readonly data?: unknown;
-  readonly messageType?: MessageType;
+  /**
+   * Host-specific category (e.g. TeXRA's MessageType taxonomy). Subscribers
+   * may use it to pick a render style; agent-general consumers can ignore.
+   */
+  readonly messageType?: string;
   readonly verbose?: boolean;
   /**
    * Explicit stage override — bypasses the AsyncLocalStorage default for
@@ -116,20 +113,15 @@ export interface LogOptions {
   readonly stageId?: string;
 }
 
-/** Options accepted by usage / contextState / filesLoaded convenience emitters. */
+/** Options accepted by usage / contextState convenience emitters. */
 export interface StagedEmitOptions {
   readonly stageId?: string;
 }
 
-/** Payload returned by tool-start helpers. */
-export interface ToolStartRef {
-  readonly logId: string;
-  readonly groupId: string | undefined;
-}
-
 /**
- * Core SDK surface. Every method ultimately reduces to `emit()` so the
- * trace channel is a single source of truth.
+ * Agent-general SDK surface. Every method ultimately reduces to `emit()` so
+ * the trace channel is a single source of truth. TeXRA-specific helpers
+ * extend this via `TexraTrace`.
  */
 export interface AgentTrace {
   // ─── SSoT primitives ────────────────────────────────────────────────
@@ -147,44 +139,9 @@ export interface AgentTrace {
   warn(message: string, options?: LogOptions): void;
   error(message: string, options?: LogOptions): void;
 
-  // ─── Domain log-event sugar (each emits a single `log` event) ───────
-  logError(
-    message: string,
-    err: unknown,
-    context?: ErrorContext,
-    groupId?: string,
-  ): void;
-  logProgress(message: string, context?: ErrorContext, groupId?: string): void;
-  logErrorData(message: string, errorData: unknown, groupId?: string): void;
-  logInternal(message: string, groupId?: string): void;
-  debugInternal(message: string, groupId?: string): void;
-  logScratchpad(content: string, groupId?: string): void;
-  logContextManagement(
-    message: string,
-    data?: ContextManagementData,
-    groupId?: string,
-  ): void;
-  logContextState(
-    inputTokens: number,
-    contextWindow: number,
-    groupId?: string,
-  ): void;
-  missingOutputs(info: unknown, groupId?: string): void;
-  latexDiff(results: unknown[], groupId?: string): void;
-  userMessage(message: string): void;
-
-  // ─── Structured first-class union arms ──────────────────────────────
+  // ─── First-class agent-general union arms ───────────────────────────
   usage(stats: TokenUsageStats, options?: StagedEmitOptions): void;
   contextState(snapshot: ContextStateData, options?: StagedEmitOptions): void;
-  filesLoaded(
-    input: Omit<FilesLoadedEvent, 'type' | 'stageId'>,
-    options?: StagedEmitOptions,
-  ): void;
-  logFileCategory(
-    category: string,
-    files: Array<Pick<FileListEntry, 'path'> & { ok?: boolean }>,
-    groupId?: string,
-  ): void;
   toolStart(
     input: { logId: string; toolName: string; input: unknown },
     options?: StagedEmitOptions,
@@ -193,27 +150,11 @@ export interface AgentTrace {
     input: { logId: string; status: ToolStatus; result?: unknown },
     options?: StagedEmitOptions,
   ): void;
-  emitToolUse(data: unknown, groupId?: string): ToolStartRef;
-  logToolUseStart(
-    toolName: string,
-    input: unknown,
-    groupId?: string,
-  ): ToolStartRef;
-  updateToolUse(
-    logId: string,
-    toolUseLog: { toolName?: string; input?: unknown; output?: unknown },
-    groupId?: string,
-    status?: ToolStatus,
-  ): void;
-  logWebSearch(data: unknown, groupId?: string): void;
-  logWebFetch(data: unknown, groupId?: string): void;
   domain(input: DomainEventInput): void;
 
   // ─── Stage + stream handles ─────────────────────────────────────────
   openStage(label: string, options?: StageOptions): StageHandle;
   openStream(kind: StreamKind, options?: StreamOptions): StreamHandle;
-  startGroup(name: string, id?: string, parentGroupId?: string): string;
-  endGroup(id: string, status?: EndGroupStatus): void;
 }
 
 /**

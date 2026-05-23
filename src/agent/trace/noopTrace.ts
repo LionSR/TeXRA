@@ -1,6 +1,7 @@
 /**
- * No-op trace used as the default for RunContexts created without an
- * explicit trace (tests, embedded callers that don't care about events).
+ * No-op AgentTrace. Used as the default for SDK consumers who don't
+ * subscribe and as a baseline for the TeXRA-extended noop in
+ * `@logger/noopTexraTrace`.
  */
 import { randomUUID } from 'node:crypto';
 
@@ -48,29 +49,11 @@ export const noopTrace: AgentTrace = {
   info: NOOP,
   warn: NOOP,
   error: NOOP,
-  logError: NOOP,
-  logProgress: NOOP,
-  logErrorData: NOOP,
-  logInternal: NOOP,
-  debugInternal: NOOP,
-  logScratchpad: NOOP,
-  logContextManagement: NOOP,
-  logContextState: NOOP,
-  missingOutputs: NOOP,
-  latexDiff: NOOP,
-  userMessage: NOOP,
 
   usage: NOOP,
   contextState: NOOP,
-  filesLoaded: NOOP,
-  logFileCategory: NOOP,
   toolStart: NOOP,
   toolEnd: NOOP,
-  emitToolUse: () => ({ logId: randomUUID(), groupId: undefined }),
-  logToolUseStart: () => ({ logId: randomUUID(), groupId: undefined }),
-  updateToolUse: NOOP,
-  logWebSearch: NOOP,
-  logWebFetch: NOOP,
   domain: NOOP,
 
   openStage(_label, options) {
@@ -79,6 +62,4 @@ export const noopTrace: AgentTrace = {
   openStream(_kind, options) {
     return new NoopStreamHandle(options?.id ?? randomUUID());
   },
-  startGroup: (_name, id) => id ?? randomUUID(),
-  endGroup: NOOP,
 };

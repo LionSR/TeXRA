@@ -1,7 +1,6 @@
 import { AsyncLocalStorage } from 'async_hooks';
 
-import type { AgentTrace } from '@agent/trace';
-import { noopTrace } from '@agent/trace';
+import { noopTexraTrace, type TexraTrace } from '@logger';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 
@@ -42,7 +41,7 @@ export interface RunContext {
    * `trace.subscribe(...)` to receive every event the run emits. Defaults
    * to `noopTrace` when callers don't provide one.
    */
-  readonly trace: AgentTrace;
+  readonly trace: TexraTrace;
   readonly coordinators?: RunCoordinators;
   /** Model short name of the executing agent (e.g. "opus46T", "sonnet46T"). */
   readonly model?: string;
@@ -73,7 +72,7 @@ export interface CreateRunContextOptions {
    * forwards into it so subscribers see plain log lines as `{type:'log'}`
    * events.
    */
-  trace?: AgentTrace;
+  trace?: TexraTrace;
   coordinators?: RunCoordinators;
   model?: string;
   agentName?: string;
@@ -90,7 +89,7 @@ const runContextScope = new AsyncLocalStorage<RunContext>();
  * still win, but the default routes every log line through the SDK surface.
  */
 function buildRunLogger(
-  trace: AgentTrace,
+  trace: TexraTrace,
   override: Partial<RunLogger> | undefined,
 ): RunLogger {
   if (!override) {
@@ -114,7 +113,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     throw new Error('createRunContext requires an explicit runtimeHost');
   }
 
-  const trace = options.trace ?? noopTrace;
+  const trace = options.trace ?? noopTexraTrace;
   const logger = buildRunLogger(trace, options.logger);
 
   return Object.freeze({

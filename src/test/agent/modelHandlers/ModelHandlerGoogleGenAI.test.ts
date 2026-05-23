@@ -15,12 +15,12 @@ import {
   type ModelConfig,
   ModelProvider,
 } from 'llm-zoo';
-import type { AgentTrace } from '@agent/trace';
 import {
   ModelHandlerGoogleGenAI,
   validateGoogleMessageHistory,
 } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
 import { MediaEntry } from '@agent/utils/mediaTypes';
+import type { TexraTrace } from '@logger';
 
 // Type imports
 
@@ -36,12 +36,12 @@ import type {
   Content,
 } from '@google/genai';
 
-interface LoggerStub extends Partial<AgentTrace> {
+interface LoggerStub extends Partial<TexraTrace> {
   streamId: string;
   fileListEntries: Array<Array<{ path: string; ok: boolean }>>;
 }
 
-function createLoggerStub(): { logger: AgentTrace; stub: LoggerStub } {
+function createLoggerStub(): { logger: TexraTrace; stub: LoggerStub } {
   const stub: LoggerStub = {
     streamId: 'test-channel',
     fileListEntries: [],
@@ -62,7 +62,7 @@ function createLoggerStub(): { logger: AgentTrace; stub: LoggerStub } {
     },
   };
 
-  return { logger: stub as unknown as AgentTrace, stub };
+  return { logger: stub as unknown as TexraTrace, stub };
 }
 
 function buildGoogleConfig(
@@ -315,7 +315,7 @@ describe('validateGoogleMessageHistory', () => {
     const logger = {
       warn: (msg: string) => warnings.push(msg),
       debug: () => {},
-    } as unknown as AgentTrace;
+    } as unknown as TexraTrace;
 
     const messages: Content[] = [
       { role: 'user', parts: [createPartFromText('first')] },
@@ -333,7 +333,7 @@ describe('validateGoogleMessageHistory', () => {
     const logger = {
       warn: (msg: string) => warnings.push(msg),
       debug: () => {},
-    } as unknown as AgentTrace;
+    } as unknown as TexraTrace;
 
     const messages: Content[] = [
       { role: 'user', parts: [createPartFromText('hello')] },

@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - logger
-import type { AgentTrace } from '@agent/trace';
+import type { TexraTrace } from '@logger';
 import {
   createRunTrace,
   getDefaultStreamLogStore,
@@ -35,7 +35,7 @@ async function* streamMessages(messages: unknown[]): AsyncGenerator<unknown> {
 }
 
 async function runWithLoggerStore<T>(
-  fn: (store: StreamLogStore, logger: AgentTrace) => Promise<T>,
+  fn: (store: StreamLogStore, logger: TexraTrace) => Promise<T>,
 ): Promise<T> {
   const previousStore = getDefaultStreamLogStore();
   const store = new StreamLogStore();
@@ -57,7 +57,7 @@ function collectToolLogs(store: StreamLogStore): unknown[] {
     .map((entry) => entry.data);
 }
 
-function runTurn(logger: AgentTrace) {
+function runTurn(logger: TexraTrace) {
   return runStreamedTurn({
     prompt: 'Run lint',
     childStreamId: streamId,

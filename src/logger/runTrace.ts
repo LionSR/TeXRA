@@ -1,5 +1,5 @@
 /**
- * Factories that produce ready-to-use {@link AgentTrace} instances with
+ * Factories that produce ready-to-use {@link TexraTrace} instances with
  * the standard TeXRA subscribers attached.
  *
  * - `createChannelTrace(name)` — for module-level singletons that just need
@@ -10,12 +10,10 @@
  *   drives the webview transcript. Returns `{ trace, flushPending,
  *   dispose }` so callers can drain in-flight stream chunks at shutdown.
  *
- * Lives in `src/logger/` rather than `src/agent/trace/` because both
- * subscribers (channel output, transcript) are TeXRA-product concerns. The
- * trace core itself stays platform-neutral.
+ * The returned trace is `TexraTrace` (the host-extended surface). SDK
+ * consumers that only care about agent-general events can still treat it
+ * as `AgentTrace` — `TexraTrace extends AgentTrace`.
  */
-import type { AgentTrace } from '@agent/trace';
-import { TraceEmitter } from '@agent/trace';
 import type { StreamTabId } from '@shared/schemas';
 
 import { attachChannelSubscriber } from './logUtils';
@@ -27,20 +25,22 @@ import {
   attachTranscriptRecorder,
   type TranscriptRecorderHandle,
 } from './TexraTranscriptRecorder';
+import { TexraTraceEmitter } from './TexraTraceEmitter';
+import type { TexraTrace } from './TexraTrace';
 
 /**
  * Produce a trace that writes log events to a per-channel output sink and
  * ignores everything else. Used by module-level singletons that exist
  * outside any agent run.
  */
-export function createChannelTrace(name: string): AgentTrace {
-  const trace = new TraceEmitter();
+export function createChannelTrace(name: string): TexraTrace {
+  const trace = new TexraTraceEmitter();
   attachChannelSubscriber(trace, { channel: name, isAgent: false });
   return trace;
 }
 
 export interface RunTrace {
-  readonly trace: AgentTrace;
+  readonly trace: TexraTrace;
   readonly flushPending: () => void;
   readonly dispose: () => void;
 }
@@ -55,7 +55,7 @@ export function createRunTrace(
   streamId: StreamTabId,
   store: StreamLogStore = getDefaultStreamLogStore(),
 ): RunTrace {
-  const trace = new TraceEmitter();
+  const trace = new TexraTraceEmitter();
   const unsubscribeChannel = attachChannelSubscriber(trace, {
     channel: streamId,
     isAgent: true,

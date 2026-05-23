@@ -1,7 +1,6 @@
 /** Retry state management: Node retry config, error tracking, and retryable node base class. */
 
 import { Node, type NonIterableObject } from '@agent/node';
-import type { AgentTrace } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { type RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import { waitForRetry } from '@agent/runtime/runCoordinators';
@@ -10,6 +9,7 @@ import { getConfig } from '@agent/core/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { normalizeProviderError, toErrorMessage } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
+import type { TexraTrace } from '@logger';
 import {
   MESSAGE_TYPES,
   STREAM_STATUS,
@@ -48,7 +48,7 @@ export type InvocationResult<TSuccess> =
 interface RetryableNodeServices {
   streamId: string;
   runtimeHost: AgentRuntimeHost;
-  logger: AgentTrace;
+  logger: TexraTrace;
   setAbortController: (ac: AbortController | null) => void;
   refreshClient?: () => Promise<void>;
 }
@@ -59,7 +59,7 @@ interface RetryableNodeServices {
  */
 async function tryRefreshClient(
   refreshClient: (() => Promise<void>) | undefined,
-  logger: AgentTrace,
+  logger: TexraTrace,
   context: string,
 ): Promise<boolean> {
   if (!refreshClient) {
@@ -327,7 +327,7 @@ const EMPTY_RESPONSE_ERROR_MESSAGE =
   'Model response was empty or aborted; this may indicate a server issue or network problem.';
 
 interface InvocationResultHandlerOptions {
-  logger: AgentTrace;
+  logger: TexraTrace;
   operationName: string;
 }
 

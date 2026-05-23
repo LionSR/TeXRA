@@ -9,7 +9,6 @@ import {
   ReasoningEffort,
 } from 'llm-zoo';
 import { platform } from '@platform/platform';
-import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory, type AgentSetting } from '@agent/core/AgentDataclass';
 import type {
@@ -23,6 +22,7 @@ import { K_SLICE } from '@agent/core/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { MAX_TIER, FREE_TIER } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import type { TexraTrace } from '@logger';
 
 // Local imports - platform
 
@@ -106,7 +106,7 @@ export abstract class ModelHandler<
   public continueLimit: number;
   public inputTokenLimit: number;
   public maxOutputTokensFactor: number;
-  protected logger: AgentTrace;
+  protected logger: TexraTrace;
   protected outputStreaming = false;
   protected backgroundModeSupported = false;
   protected progressViewEnabled = true;
@@ -144,7 +144,7 @@ export abstract class ModelHandler<
     });
   }
 
-  public setLogger(logger: AgentTrace): void {
+  public setLogger(logger: TexraTrace): void {
     this.logger = logger;
     this.mediaProcessor.setLogger(logger);
   }

@@ -1,9 +1,12 @@
 /**
- * AgentTrace — SDK surface for agent runs.
+ * AgentTrace — agent-general SDK surface for agent runs.
  *
  * One discriminated-event channel per run. Subscribers attach with
  * `subscribe()`. Plain `debug/info/warn/error`, stages, streams, and the
- * domain helpers are all sugar over `emit()`.
+ * domain helpers are sugar over `emit()`.
+ *
+ * Host-specific helpers (TeXRA's `logError`/`latexDiff`/`statistics`/
+ * etc.) live on `TexraTrace` in `@logger`, which extends this interface.
  *
  * See `docs/proposals/agent-trace-sdk-surface.md` for the design.
  */
@@ -12,7 +15,6 @@ export type {
   ContextStateData,
   ContextStateEvent,
   DomainEvent,
-  FilesLoadedEvent,
   LogEvent,
   StageEndEvent,
   StageStartEvent,
@@ -40,7 +42,6 @@ export type {
   StageOptions,
   StreamHandle,
   StreamOptions,
-  ToolStartRef,
 } from './AgentTrace';
 
 export { TraceEmitter } from './TraceEmitter';

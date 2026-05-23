@@ -23,3 +23,10 @@ export {
   setDefaultStreamLogStore,
   StreamLogStore,
 } from './StreamLogStore';
+export type {
+  FilesLoadedInput,
+  TexraTrace,
+  ToolStartRef,
+} from './TexraTrace';
+export { TexraTraceEmitter } from './TexraTraceEmitter';
+export { noopTexraTrace } from './noopTexraTrace';

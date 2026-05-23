@@ -10,18 +10,18 @@ import { PDFDocument, StandardFonts } from '@cantoo/pdf-lib';
 
 // Local imports - agent
 import { DEFAULT_MODEL_CAPABILITIES, type ModelCapabilities } from 'llm-zoo';
-import type { AgentTrace } from '@agent/trace';
 import {
   MediaAttachmentProcessor,
   type MediaFileResult,
 } from '@agent/modelHandlers/support/MediaAttachmentProcessor';
+import type { TexraTrace } from '@logger';
 
 // Type imports
 
 // Internal imports
 import { AbsoluteFS, pathToLocation, getShortDisplayPath } from '@utils/files';
 
-interface LoggerStub extends Partial<AgentTrace> {
+interface LoggerStub extends Partial<TexraTrace> {
   streamId: string;
   debugMessages: string[];
   warnMessages: string[];
@@ -29,7 +29,7 @@ interface LoggerStub extends Partial<AgentTrace> {
   fileListEntries: MediaFileResult[][];
 }
 
-function createLoggerStub(): { logger: AgentTrace; stub: LoggerStub } {
+function createLoggerStub(): { logger: TexraTrace; stub: LoggerStub } {
   const stub: LoggerStub = {
     streamId: 'media-test',
     debugMessages: [],
@@ -53,7 +53,7 @@ function createLoggerStub(): { logger: AgentTrace; stub: LoggerStub } {
     },
   };
 
-  return { logger: stub as unknown as AgentTrace, stub };
+  return { logger: stub as unknown as TexraTrace, stub };
 }
 
 describe('MediaAttachmentProcessor', () => {
@@ -94,7 +94,7 @@ describe('MediaAttachmentProcessor', () => {
   });
 
   function createProcessor(
-    logger: AgentTrace,
+    logger: TexraTrace,
     capabilities: Partial<ModelCapabilities>,
     isOpenAIProvider: boolean = true,
   ): MediaAttachmentProcessor {

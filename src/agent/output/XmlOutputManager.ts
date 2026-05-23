@@ -2,12 +2,12 @@ import * as path from 'path';
 
 import { XMLParser } from 'fast-xml-parser';
 
-import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
 import { WORKFLOW_OUTPUT_BASENAME } from '@agent/output/workflowOutputLayout';
 import { toErrorMessage } from '@common/errors';
+import type { TexraTrace } from '@logger';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import type { OutputFileInfo } from '@shared/schemas';
@@ -54,7 +54,7 @@ export class XmlOutputManager {
   constructor(
     private readonly agentSetting: AgentSetting,
     private readonly agentConfig: AgentConfig,
-    private readonly logger: AgentTrace,
+    private readonly logger: TexraTrace,
     private readonly fileService: TaskRunFileService,
   ) {}
 

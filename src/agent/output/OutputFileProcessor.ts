@@ -1,7 +1,7 @@
-import type { AgentTrace } from '@agent/trace';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { toErrorMessage } from '@common/errors';
+import type { TexraTrace } from '@logger';
 import {
   MESSAGE_TYPES,
   type FileLocation,
@@ -23,7 +23,7 @@ export interface ProcessingContext {
   baseFiles: FileLocation[];
   streamId: string;
   runtimeHost: AgentRuntimeHost;
-  logger: AgentTrace;
+  logger: TexraTrace;
   xmlManager: XmlOutputManager;
   setRoundOutputs: (round: number, outputs: OutputFileInfo[]) => void;
   ensureRoundData: (round: number) => { xmlSummary: OutputXmlSummary };

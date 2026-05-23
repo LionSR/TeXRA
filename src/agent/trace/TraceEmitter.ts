@@ -1,33 +1,23 @@
 /**
  * Default in-process implementation of {@link AgentTrace}.
  *
+ * This is the agent-general core: no MESSAGE_TYPES, no TeXRA-specific
+ * sugar. Hosts that need product-specific helpers extend this class
+ * (see `TexraTraceEmitter` in `@logger/TexraTraceEmitter`).
+ *
  * Responsibilities at the emit boundary (one place, not many):
  *   - stamp `stageId` from the AsyncLocalStorage scope
  *   - fan out to subscribers
  *   - swallow per-subscriber exceptions so one bad sink can't break the run
- *
- * Every sugar method on AgentTrace (debug/info/warn/error, logError,
- * openStage, openStream, usage, etc.) reduces to a single `emit()` call.
- * Adding a new event arm forces an exhaustive-switch error in every
- * subscriber and nothing else.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 
-import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
-import {
-  END_GROUP_STATUS,
-  MESSAGE_TYPES,
-  type ContextManagementData,
-  type EndGroupStatus,
-  type ErrorContext,
-  type FileListEntry,
-} from '@shared/schemas';
+import { END_GROUP_STATUS, type EndGroupStatus } from '@shared/schemas';
 
 import type {
   AgentEvent,
   ContextStateData,
-  FilesLoadedEvent,
   StreamKind,
   TokenUsageStats,
   ToolStatus,
@@ -42,7 +32,6 @@ import type {
   StageOptions,
   StreamHandle,
   StreamOptions,
-  ToolStartRef,
 } from './AgentTrace';
 
 const stageScope = new AsyncLocalStorage<string[]>();
@@ -111,7 +100,7 @@ export class TraceEmitter implements AgentTrace {
     this.emitLog('error', message, options);
   }
 
-  private emitLog(
+  protected emitLog(
     level: 'debug' | 'info' | 'warn' | 'error',
     message: string,
     options: LogOptions,
@@ -125,105 +114,6 @@ export class TraceEmitter implements AgentTrace {
       verbose: options.verbose,
       stageId: options.stageId,
     });
-  }
-
-  // ─── Domain log-event sugar ────────────────────────────────────────
-
-  logError(
-    message: string,
-    err: unknown,
-    context?: ErrorContext,
-    groupId?: string,
-  ): void {
-    this.error(message, {
-      messageType: MESSAGE_TYPES.ERROR,
-      data: buildErrorLogData(err, context),
-      stageId: groupId,
-    });
-  }
-
-  logProgress(message: string, context?: ErrorContext, groupId?: string): void {
-    this.info(message, {
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-      data: context,
-      stageId: groupId,
-    });
-  }
-
-  logErrorData(message: string, errorData: unknown, groupId?: string): void {
-    this.error(message, {
-      messageType: MESSAGE_TYPES.ERROR,
-      data: errorData,
-      stageId: groupId,
-    });
-  }
-
-  logInternal(message: string, groupId?: string): void {
-    this.info(message, {
-      messageType: MESSAGE_TYPES.INTERNAL,
-      stageId: groupId,
-    });
-  }
-
-  debugInternal(message: string, groupId?: string): void {
-    this.debug(message, {
-      messageType: MESSAGE_TYPES.INTERNAL,
-      stageId: groupId,
-    });
-  }
-
-  logScratchpad(content: string, groupId?: string): void {
-    this.info(content, {
-      messageType: MESSAGE_TYPES.SCRATCHPAD,
-      stageId: groupId,
-    });
-  }
-
-  logContextManagement(
-    message: string,
-    data?: ContextManagementData,
-    groupId?: string,
-  ): void {
-    this.info(message, {
-      messageType: MESSAGE_TYPES.CONTEXT_MANAGEMENT,
-      data,
-      stageId: groupId,
-    });
-  }
-
-  logContextState(
-    inputTokens: number,
-    contextWindow: number,
-    groupId?: string,
-  ): void {
-    this.emit({
-      type: 'context.state',
-      inputTokens,
-      contextWindow,
-      stageId: groupId,
-    });
-  }
-
-  missingOutputs(info: unknown, groupId?: string): void {
-    const missing = (info as { missing?: unknown[] } | null)?.missing;
-    const count = Array.isArray(missing) ? missing.length : 0;
-    this.info(`${count} output file${count === 1 ? '' : 's'} missing`, {
-      messageType: MESSAGE_TYPES.MISSING_OUTPUTS,
-      data: info,
-      stageId: groupId,
-    });
-  }
-
-  latexDiff(results: unknown[], groupId?: string): void {
-    this.info(`Latexdiff results: ${results.length}`, {
-      messageType: MESSAGE_TYPES.LATEXDIFF,
-      data: results,
-      stageId: groupId,
-    });
-  }
-
-  userMessage(message: string): void {
-    this.info(message, { messageType: MESSAGE_TYPES.USER_MESSAGE });
   }
 
   // ─── Structured emitters ───────────────────────────────────────────
@@ -242,33 +132,6 @@ export class TraceEmitter implements AgentTrace {
       contextWindow: snapshot.contextWindow,
       stageId: options.stageId,
     });
-  }
-
-  filesLoaded(
-    input: Omit<FilesLoadedEvent, 'type' | 'stageId'>,
-    options: StagedEmitOptions = {},
-  ): void {
-    this.emit({
-      type: 'files.loaded',
-      category: input.category,
-      entries: input.entries,
-      stageId: options.stageId,
-    });
-  }
-
-  logFileCategory(
-    category: string,
-    files: Array<Pick<FileListEntry, 'path'> & { ok?: boolean }>,
-    groupId?: string,
-  ): void {
-    if (files.length === 0) return;
-    const entries: FileListEntry[] = files.map((f) => ({
-      path: f.path,
-      ok: f.ok === true,
-      source: category,
-      sourceDisplay: category,
-    }));
-    this.filesLoaded({ category, entries }, { stageId: groupId });
   }
 
   toolStart(
@@ -297,46 +160,6 @@ export class TraceEmitter implements AgentTrace {
     });
   }
 
-  emitToolUse(data: unknown, groupId?: string): ToolStartRef {
-    const logId = randomUUID();
-    const resolvedGroupId = groupId ?? this.activeStageId();
-    const toolName =
-      (data as { toolName?: string } | null)?.toolName ?? 'unknown';
-    const input = (data as { input?: unknown } | null)?.input;
-    this.toolStart({ logId, toolName, input }, { stageId: resolvedGroupId });
-    return { logId, groupId: resolvedGroupId };
-  }
-
-  logToolUseStart(
-    toolName: string,
-    input: unknown,
-    groupId?: string,
-  ): ToolStartRef {
-    const ref = this.emitToolUse({ toolName, input }, groupId);
-    this.debug(`Tool started: ${toolName}`, { stageId: ref.groupId });
-    return ref;
-  }
-
-  updateToolUse(
-    logId: string,
-    toolUseLog: { toolName?: string; input?: unknown; output?: unknown },
-    groupId?: string,
-    status: ToolStatus = 'completed',
-  ): void {
-    this.toolEnd(
-      { logId, status, result: { ...toolUseLog } },
-      { stageId: groupId },
-    );
-  }
-
-  logWebSearch(data: unknown, groupId?: string): void {
-    this.domain({ key: 'webSearch', data, stageId: groupId });
-  }
-
-  logWebFetch(data: unknown, groupId?: string): void {
-    this.domain({ key: 'webFetch', data, stageId: groupId });
-  }
-
   domain(input: DomainEventInput): void {
     this.emit({
       type: 'domain',
@@ -361,27 +184,6 @@ export class TraceEmitter implements AgentTrace {
     const id = options.id ?? randomUUID();
     this.emit({ type: 'stage.start', id, label, parentId });
     return new StageHandleImpl(this, id, defaultStatus);
-  }
-
-  startGroup(name: string, id?: string, parentGroupId?: string): string {
-    // Direct emit — explicit `parentGroupId: undefined` produces a ROOT
-    // group rather than inheriting the active stage. openStage's higher-
-    // level API has the inherit-on-omit fallback; this primitive does not.
-    const groupId = id ?? randomUUID();
-    this.emit({
-      type: 'stage.start',
-      id: groupId,
-      label: name,
-      parentId: parentGroupId,
-    });
-    return groupId;
-  }
-
-  endGroup(
-    id: string,
-    status: EndGroupStatus = END_GROUP_STATUS.STOPPED,
-  ): void {
-    this.emit({ type: 'stage.end', id, status });
   }
 
   // ─── Streams ───────────────────────────────────────────────────────
