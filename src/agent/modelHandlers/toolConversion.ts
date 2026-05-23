@@ -2,7 +2,7 @@
 import { toJSONSchema } from 'zod';
 
 // Local imports - agent
-import * as logger from '@agent/core/logger';
+import * as logger from '@logger/logUtils';
 
 // Type imports
 import type { ToolDefinition } from '@model';
