@@ -20,7 +20,6 @@ import { createWorkspaceStorageProvider } from '@platform/defaults/workspaceStor
 import {
   FakeConfigProvider,
   FakeSecrets,
-  RecordingLogBackend,
 } from '@test/support/FakePlatform';
 import { GlobalStateKey } from '@common/state/stateKeys';
 
@@ -123,7 +122,6 @@ describe('desktop agent directory bootstrap', () => {
       config: new FakeConfigProvider(),
       globalState: new JsonStateStore(globalStateStore),
       workspaceState: new JsonStateStore(workspaceStateStore),
-      log: new RecordingLogBackend(),
       fs: nodeFilesystem,
       workspace: createNodeWorkspace(() => workspacePath),
       storage,

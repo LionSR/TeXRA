@@ -1,6 +1,6 @@
 // Local imports - log
-import * as logger from '@agent/core/logger';
 import { toErrorMessage } from '@common/errors';
+import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
 import { flexibleFS, type FileLocation } from '@utils/files';
 

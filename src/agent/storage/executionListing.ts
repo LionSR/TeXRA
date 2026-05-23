@@ -12,11 +12,11 @@
 import pMap from 'p-map';
 
 import { type AgentConfig, AgentConfigSchema } from '@agent/core/AgentConfig';
-import * as logger from '@agent/core/logger';
 import { getWorkspaceState } from '@agent/core/stateStore';
 import { isFileNotFoundError } from '@common/errors';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { isDirectory } from '@common/files/fsEntryType';
+import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS, WorkspaceFS } from '@utils/files';
 

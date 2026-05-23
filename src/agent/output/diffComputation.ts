@@ -7,9 +7,9 @@
 
 import { diff_match_patch } from 'diff-match-patch';
 
-import * as logger from '@agent/core/logger';
 import type { DiffStats } from '@agent/types/DiffTypes';
 import { toErrorMessage } from '@common/errors';
+import * as logger from '@logger/logUtils';
 import type { OutputFileInfo, FileLocation } from '@shared/schemas';
 import { flexibleFS, getComparablePath } from '@utils/files';
 import { countLines } from '@utils/text/stringUtils';
