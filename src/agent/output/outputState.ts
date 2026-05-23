@@ -7,11 +7,11 @@
 
 import { z } from 'zod';
 
+import type { AgentTrace, AgentLogStage } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { normalizeRunId } from '@common/constants/runIds';
-import type { AgentLogger, AgentLogStage } from '@logger/AgentLogger';
 import {
   CompileFailureSchema,
   FileLocationSchema,
@@ -48,7 +48,7 @@ export interface OutputDependencies {
   setting: AgentWorkflowSetting;
   config: AgentConfig;
   baseFiles: FileLocation[];
-  logger: AgentLogger;
+  logger: AgentTrace;
   fileService: TaskRunFileService;
   executionId: string;
   streamId: string;

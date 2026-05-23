@@ -5,7 +5,7 @@
  * diff stats and preparing data for event emission and file opening.
  */
 
-import type { AgentLogStage } from '@logger/AgentLogger';
+import type { AgentLogStage } from '@agent/trace';
 import {
   MESSAGE_TYPES,
   type FileLocation,

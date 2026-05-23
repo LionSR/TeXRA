@@ -26,6 +26,7 @@ import {
   registerExecution,
   writeTerminalStatus,
 } from '@agent/storage';
+import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { untrackExecution } from '@agent/runtime/executionRegistry';
@@ -40,7 +41,6 @@ import {
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
-import { AgentLogger } from '@logger/AgentLogger';
 import type {
   StreamTabId,
   ExecutionId,
@@ -288,7 +288,7 @@ function formatCodexError(
 // Stream tab helpers
 // ============================================================================
 
-type CodexToolLogRef = ReturnType<AgentLogger['emitToolUse']>;
+type CodexToolLogRef = ReturnType<AgentTrace['emitToolUse']>;
 type ToolUseStatus = NonNullable<ToolUseLog['status']>;
 
 export function publishCodexTodos(
@@ -325,7 +325,7 @@ function toProgressTodos(item: TodoListItem): TodoItem[] {
 function logCodexItem(
   item: ThreadItem,
   childStreamId: StreamTabId,
-  logger: AgentLogger,
+  logger: AgentTrace,
   runtimeHost: AgentRuntimeHost,
 ): void {
   switch (item.type) {
@@ -388,7 +388,7 @@ function buildCodexLiveToolLog(
 }
 
 function updateCodexLiveToolLog(
-  logger: AgentLogger,
+  logger: AgentTrace,
   refs: Map<string, CodexToolLogRef>,
   item: ThreadItem,
   toolLog: ToolUseLog,
@@ -407,7 +407,7 @@ function publishCodexItemProgress(params: {
   item: ThreadItem;
   status: ToolUseStatus;
   childStreamId: StreamTabId;
-  logger: AgentLogger;
+  logger: AgentTrace;
   refs: Map<string, CodexToolLogRef>;
   runtimeHost: AgentRuntimeHost;
 }): boolean {
@@ -430,7 +430,7 @@ function publishCodexItemProgress(params: {
 
 /** Log a turn summary to the child stream. */
 function logTurnSummary(
-  logger: AgentLogger,
+  logger: AgentTrace,
   wallTimeMs: number,
   usage: RunResult['usage'],
 ): void {
@@ -451,7 +451,7 @@ export async function runStreamedTurn(
   thread: Thread,
   prompt: string,
   childStreamId: StreamTabId,
-  logger: AgentLogger,
+  logger: AgentTrace,
   runtimeHost: AgentRuntimeHost,
   signal?: AbortSignal,
 ): Promise<RunResult> {
@@ -524,7 +524,7 @@ function startCodexLoop(params: {
   childStreamId: StreamTabId;
   parentStreamId: StreamTabId;
   executionId: ExecutionId;
-  logger: AgentLogger;
+  logger: AgentTrace;
   initialPrompt: string;
   runtimeHost: AgentRuntimeHost;
 }): void {

@@ -23,7 +23,7 @@ import {
   classifyAgentError,
   getSdkErrorMessage,
 } from '@common/errors';
-import { AgentLogger } from '@logger/index';
+import { createChannelTrace } from '@logger';
 import {
   STREAM_STATUS,
   END_GROUP_STATUS,
@@ -63,7 +63,7 @@ import type {
 export { getAgentPath } from './AgentLaunchContext';
 
 const CHANNEL = 'executeAgent';
-const logger = new AgentLogger(CHANNEL);
+const logger = createChannelTrace(CHANNEL);
 
 /** Map workflow RoundOutput[] to OutputFileSummary[] for AgentFlowResult. */
 function toOutputSummaries(roundOutputs: RoundOutput[]): OutputFileSummary[] {

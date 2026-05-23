@@ -3,13 +3,13 @@
  * Encapsulates the streaming event handling logic for improved testability and readability.
  */
 // Third-party imports
+import type { AgentTrace } from '@agent/trace';
 import {
   extractDomain,
   type WebFetchResult,
   type WebSearchResult,
   type WebSearchResultEntry,
 } from '@agent/modelHandlers/types/ServerToolTypes';
-import type { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES, type StreamDiagnostics } from '@shared/schemas';
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
 import type {
@@ -42,7 +42,7 @@ const MAX_SERVER_TOOL_INPUT_SIZE = 65536;
  */
 interface AnthropicStreamState {
   /** Current output stream for text blocks */
-  outputStream: ReturnType<AgentLogger['createStream']> | null;
+  outputStream: ReturnType<AgentTrace['createStream']> | null;
   /** Index of most recent block (any type) */
   lastBlockIndex: number;
   /** Track web search: tool_use_id → { index, accumulated input JSON } */
@@ -89,8 +89,8 @@ interface StreamHandlerConfig {
  * Factory functions for creating streams.
  */
 interface StreamFactories {
-  createThinkingStream: () => ReturnType<AgentLogger['createStream']>;
-  createOutputStream: () => ReturnType<AgentLogger['createStream']>;
+  createThinkingStream: () => ReturnType<AgentTrace['createStream']>;
+  createOutputStream: () => ReturnType<AgentTrace['createStream']>;
 }
 
 /**
@@ -107,7 +107,7 @@ interface StreamFactories {
 export class AnthropicStreamHandler {
   private readonly thinkingStreams = new Map<
     number,
-    ReturnType<AgentLogger['createStream']>
+    ReturnType<AgentTrace['createStream']>
   >();
   private readonly state: AnthropicStreamState = {
     outputStream: null,
@@ -134,7 +134,7 @@ export class AnthropicStreamHandler {
   };
 
   constructor(
-    private readonly logger: AgentLogger,
+    private readonly logger: AgentTrace,
     private readonly config: StreamHandlerConfig,
     private readonly factories: StreamFactories,
   ) {}

@@ -4,10 +4,10 @@
  */
 
 // Local imports - agent workspace
+import type { AgentTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
 // Local imports - replacement
-import type { AgentLogger } from '@logger/AgentLogger';
 import { cleanFileContent } from '@replacement/engine';
 
 // Local imports - files
@@ -49,7 +49,7 @@ export interface PreparedFileContent {
 export async function prepareExistingOutputContent(
   outputLocation: FileLocation,
   workspaceState: AgentWorkspaceState,
-  logger: AgentLogger,
+  logger: AgentTrace,
 ): Promise<PreparedFileContent> {
   // Read and clean the file content
   let content = await flexibleFS.read(outputLocation);

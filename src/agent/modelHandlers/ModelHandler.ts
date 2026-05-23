@@ -9,6 +9,7 @@ import {
   ReasoningEffort,
 } from 'llm-zoo';
 import { platform } from '@platform/platform';
+import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory, type AgentSetting } from '@agent/core/AgentDataclass';
 import type {
@@ -26,7 +27,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 // Local imports - platform
 
 // Local imports - model
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelTrace } from '@logger';
 import { getApiKey, type ApiProvider } from '@model/apiProviders';
 
 // Local imports - logger
@@ -105,7 +106,7 @@ export abstract class ModelHandler<
   public continueLimit: number;
   public inputTokenLimit: number;
   public maxOutputTokensFactor: number;
-  protected logger: AgentLogger;
+  protected logger: AgentTrace;
   protected outputStreaming = false;
   protected backgroundModeSupported = false;
   protected progressViewEnabled = true;
@@ -136,14 +137,14 @@ export abstract class ModelHandler<
     this.inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT;
     this.maxOutputTokensFactor = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR;
     // Initialize with default channel, will be overwritten by agent
-    this.logger = new AgentLogger('Agent');
+    this.logger = createChannelTrace('Agent');
     this.mediaProcessor = new MediaAttachmentProcessor(this.logger, {
       getCapabilities: () => this.capabilities,
       isOpenAIProvider: () => this.isOpenai,
     });
   }
 
-  public setLogger(logger: AgentLogger): void {
+  public setLogger(logger: AgentTrace): void {
     this.logger = logger;
     this.mediaProcessor.setLogger(logger);
   }

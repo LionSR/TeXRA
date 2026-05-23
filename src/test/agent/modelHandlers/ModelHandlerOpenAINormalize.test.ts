@@ -9,16 +9,16 @@ import {
   type ModelConfig,
   ModelProvider,
 } from 'llm-zoo';
+import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerDashScope } from '@agent/modelHandlers/modelHandlerDashScope';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
 import { ModelHandlerKimi } from '@agent/modelHandlers/modelHandlerKimi';
 
 // Type imports
-import type { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - model config
 
-type LoggerStub = Partial<AgentLogger> & {
+type LoggerStub = Partial<AgentTrace> & {
   streamId: string;
   debugMessages: string[];
   infoMessages: string[];
@@ -132,7 +132,7 @@ describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
     });
     const handler = new ModelHandlerDeepSeek(config);
     const loggerStub = createLoggerStub();
-    handler.setLogger(loggerStub as unknown as AgentLogger);
+    handler.setLogger(loggerStub as unknown as AgentTrace);
     (handler as any).getStreamingConfig = () => false;
 
     const client = createClientStub();
@@ -172,7 +172,7 @@ describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
     });
     const handler = new ModelHandlerKimi(config);
     const loggerStub = createLoggerStub();
-    handler.setLogger(loggerStub as unknown as AgentLogger);
+    handler.setLogger(loggerStub as unknown as AgentTrace);
     (handler as any).getStreamingConfig = () => false;
 
     const client = createClientStub();
@@ -198,7 +198,7 @@ describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
     });
     const handler = new ModelHandlerDashScope(config);
     const loggerStub = createLoggerStub();
-    handler.setLogger(loggerStub as unknown as AgentLogger);
+    handler.setLogger(loggerStub as unknown as AgentTrace);
     (handler as any).getStreamingConfig = () => false;
 
     const client = createClientStub();

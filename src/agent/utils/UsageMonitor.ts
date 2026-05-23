@@ -1,3 +1,4 @@
+import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentRunStateSnapshot } from '@agent/core/AgentState';
 import type { RunUsageTotals } from '@agent/core/RunUsageAccumulator';
@@ -7,7 +8,6 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import { toErrorMessage } from '@common/errors';
 import {
   UsageLogService,
-  type AgentLogger,
   type AgentUsageReporter,
 } from '@logger/index';
 import type {
@@ -66,7 +66,7 @@ export interface UsageMonitorModelInfo {
  * - streamId: For backend logging
  */
 export interface UsageMonitorContext {
-  logger: AgentLogger;
+  logger: AgentTrace;
   usageReporter: AgentUsageReporter;
   storageKey: StorageKey;
   streamId: StreamTabId;

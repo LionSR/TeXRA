@@ -15,6 +15,7 @@ import {
   type ModelConfig,
   ModelProvider,
 } from 'llm-zoo';
+import type { AgentTrace } from '@agent/trace';
 import {
   ModelHandlerGoogleGenAI,
   validateGoogleMessageHistory,
@@ -22,7 +23,6 @@ import {
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Type imports
-import type { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - model config
 import { pathToLocation, type FileLocation } from '@utils/files';
@@ -36,12 +36,12 @@ import type {
   Content,
 } from '@google/genai';
 
-interface LoggerStub extends Partial<AgentLogger> {
+interface LoggerStub extends Partial<AgentTrace> {
   streamId: string;
   fileListEntries: Array<Array<{ path: string; ok: boolean }>>;
 }
 
-function createLoggerStub(): { logger: AgentLogger; stub: LoggerStub } {
+function createLoggerStub(): { logger: AgentTrace; stub: LoggerStub } {
   const stub: LoggerStub = {
     streamId: 'test-channel',
     fileListEntries: [],
@@ -65,7 +65,7 @@ function createLoggerStub(): { logger: AgentLogger; stub: LoggerStub } {
     runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
   };
 
-  return { logger: stub as unknown as AgentLogger, stub };
+  return { logger: stub as unknown as AgentTrace, stub };
 }
 
 function buildGoogleConfig(
@@ -318,7 +318,7 @@ describe('validateGoogleMessageHistory', () => {
     const logger = {
       warn: (msg: string) => warnings.push(msg),
       debug: () => {},
-    } as unknown as AgentLogger;
+    } as unknown as AgentTrace;
 
     const messages: Content[] = [
       { role: 'user', parts: [createPartFromText('first')] },
@@ -336,7 +336,7 @@ describe('validateGoogleMessageHistory', () => {
     const logger = {
       warn: (msg: string) => warnings.push(msg),
       debug: () => {},
-    } as unknown as AgentLogger;
+    } as unknown as AgentTrace;
 
     const messages: Content[] = [
       { role: 'user', parts: [createPartFromText('hello')] },

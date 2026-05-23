@@ -19,11 +19,11 @@ import {
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
 
-const logger = new AgentLogger('ExecutionSubscriptionBinder');
+const logger = createChannelTrace('ExecutionSubscriptionBinder');
 
 const TAG = 'execution-activity';
 

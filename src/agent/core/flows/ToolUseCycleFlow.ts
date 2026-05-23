@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 // Local imports - core flow primitives
 import { BaseNode, BatchNode, Flow, Node } from '@agent/node';
+import type { AgentTrace } from '@agent/trace';
 import { recordCycleMetrics } from '@agent/core/AgentState';
 import {
   BaseCycleFieldsSchema,
@@ -34,7 +35,6 @@ import type { ToolResult } from '@agent/core/ToolTypes';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - logging
-import type { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
@@ -85,7 +85,7 @@ function findDuplicateCallIds(toolCalls: SdkToolCall[]): Set<string> {
 function parseToolInput(
   raw: unknown,
   callId: string,
-  logger: AgentLogger,
+  logger: AgentTrace,
 ): unknown {
   if (raw == null) {
     logger.debug(

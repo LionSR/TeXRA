@@ -1,4 +1,4 @@
-import { AgentLogger } from '@logger/AgentLogger';
+import { getDefaultStreamLogStore } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 
 import {
@@ -25,7 +25,7 @@ export function appendAssistantTranscriptIfMissing(
   const normalized = normalizeTranscriptText(text ?? '');
   if (!normalized) return;
   const syntheticAfterSeq =
-    AgentLogger.getStreamLogStore().get(streamId)?.head ?? 0;
+    getDefaultStreamLogStore().get(streamId)?.head ?? 0;
 
   patchStream(streamId, (slice) => {
     const entryId = `${idPrefix}:${streamId}`;
@@ -78,7 +78,7 @@ function appendLocalTranscriptEntry(
     explicitStreamId ?? cliState.activeStreamId.get() ?? CLI_LOCAL_STREAM_ID;
   if (!cliState.activeStreamId.get()) cliState.activeStreamId.set(streamId);
   const syntheticAfterSeq =
-    AgentLogger.getStreamLogStore().get(streamId)?.head ?? 0;
+    getDefaultStreamLogStore().get(streamId)?.head ?? 0;
 
   patchStream(streamId, (slice) => {
     const entry: ConversationEntry = {

@@ -4,6 +4,7 @@ import { ZodError } from 'zod';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { isRemoteAgent, resolveAgent, type ResolvedAgent } from '@agent/index';
+import type { AgentTrace, AgentLogStage } from '@agent/trace';
 import type { AgentCore } from '@agent/implementations/flows/common/BaseFlowServices';
 import {
   AgentConfigSchema,
@@ -22,10 +23,9 @@ import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError, getSdkErrorMessage, toErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
 import {
-  AgentLogger,
   AgentUsageReporter,
+  createRunTrace,
   getStreamTabId,
-  type AgentLogStage,
 } from '@logger/index';
 import {
   STREAM_STATUS,
@@ -84,7 +84,7 @@ function createExecutionRunContext(ctx: AgentLaunchContext): RunContext {
     // Trace is the single event channel for this run. The default RunLogger
     // forwards plain debug/info/warn/error into it so subscribers see one
     // unified stream of events.
-    trace: ctx.logger.getTrace(),
+    trace: ctx.logger,
     logger: ctx.logger,
     coordinators: ctx.coordinators,
     model: ctx.config.model,
@@ -151,7 +151,7 @@ async function validateModelExists(
  * therefore renders the instruction before the run group.
  */
 async function beginRunStage(
-  agentLogger: AgentLogger,
+  agentLogger: AgentTrace,
   label: string,
   instruction: string | undefined,
 ): Promise<AgentLogStage> {
@@ -211,7 +211,8 @@ async function assembleAgentLaunchContext(
     reservedStreamId ??
     getStreamTabId(config.agent, fullConfig.model, { executionId });
 
-  const agentLogger = new AgentLogger(streamId, true);
+  const runTrace = createRunTrace(streamId);
+  const agentLogger = runTrace.trace;
   const usageReporter = new AgentUsageReporter(
     agentLogger,
     streamId,
@@ -349,7 +350,7 @@ function compensateFailedActivation(args: {
   } = args;
 
   if (activatedStreamId) {
-    new AgentLogger(activatedStreamId, true).logError(
+    createRunTrace(activatedStreamId).trace.logError(
       `Failed to start agent ${configPayload.agent}: ${getSdkErrorMessage(err)}`,
       err,
       { operation: `start ${configPayload.agent}` },

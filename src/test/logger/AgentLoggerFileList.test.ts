@@ -2,24 +2,29 @@
 import { strict as assert } from 'assert';
 
 // Local imports
-import { AgentLogger } from '@logger/AgentLogger';
+import type { AgentTrace } from '@agent/trace';
+import {
+  createRunTrace,
+  getDefaultStreamLogStore,
+  setDefaultStreamLogStore,
+} from '@logger';
 import { StreamLogStore } from '@logger/StreamLogStore';
 import { MESSAGE_TYPES } from '@shared/schemas';
 
 describe('AgentLogger.logFileCategory', () => {
-  let logger: AgentLogger;
+  let logger: AgentTrace;
   let capturedMessages: any[];
 
   beforeEach(async () => {
     const store = new StreamLogStore();
-    AgentLogger.setStreamLogStore(store);
+    setDefaultStreamLogStore(store);
     await store.clear();
-    logger = new AgentLogger('TestFileListLogger', true);
+    logger = createRunTrace('TestFileListLogger').trace;
     capturedMessages = [];
   });
 
   const refreshCaptured = (): void => {
-    const log = AgentLogger.getStreamLogStore().get('TestFileListLogger');
+    const log = getDefaultStreamLogStore().get('TestFileListLogger');
     capturedMessages = (log?.getRange(0, log.head) ?? []).map((entry) => ({
       id: entry.id,
       text: entry.text ?? '',

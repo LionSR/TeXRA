@@ -1,6 +1,7 @@
 import * as path from 'path';
 
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
+import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { getVisibleAgents, type AgentEntry } from '@agent/index/agentRegistry';
 import {
@@ -9,7 +10,6 @@ import {
   AgentCategory,
 } from '@agent/core/AgentDataclass';
 import { getConfig } from '@agent/core/config';
-import { AgentLogger } from '@logger/AgentLogger';
 import type { FileListEntry } from '@shared/schemas';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
@@ -37,7 +37,7 @@ export type UserVars = Record<string, unknown>;
 /**
  * Information about a loaded file for prompt variable substitution.
  * Extends FileListEntry with required source and varName fields.
- * Compatible with FileListEntry (can be passed to AgentLogger.fileList).
+ * Compatible with FileListEntry (can be passed to AgentTrace.fileList).
  */
 export type LoadedFileEntry = FileListEntry & {
   source: string;
@@ -73,7 +73,7 @@ export async function buildUserVars(
   agentPrompt: AgentPrompt,
   agentPath: string,
   providerFlags: ModelProviderFlags,
-  logger: AgentLogger,
+  logger: AgentTrace,
   workspacePath?: string,
 ): Promise<UserVars> {
   const allLoadedFiles: LoadedFileEntry[] = [];
@@ -231,7 +231,7 @@ const FILE_VAR_CATEGORIES = ['INPUT', 'REFERENCE', 'EDITED'];
 async function getFileVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
-  logger: AgentLogger,
+  logger: AgentTrace,
 ): Promise<UserVars> {
   const userVars: UserVars = {};
 
@@ -292,7 +292,7 @@ async function getFileVars(
  * them sequentially to preserve the expected UI display order.
  */
 async function logFileCategoriesWithExistence(
-  logger: AgentLogger,
+  logger: AgentTrace,
   categories: Array<[category: string, files: string[]]>,
 ): Promise<void> {
   // Process all categories in parallel for better performance

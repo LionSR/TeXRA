@@ -2,7 +2,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - logger
-import { AgentLogger } from '@logger/AgentLogger';
+import type { AgentTrace } from '@agent/trace';
+import {
+  createRunTrace,
+  getDefaultStreamLogStore,
+  setDefaultStreamLogStore,
+} from '@logger';
 import { StreamLogStore } from '@logger/StreamLogStore';
 
 // Local imports - shared
@@ -30,17 +35,17 @@ async function* streamMessages(messages: unknown[]): AsyncGenerator<unknown> {
 }
 
 async function runWithLoggerStore<T>(
-  fn: (store: StreamLogStore, logger: AgentLogger) => Promise<T>,
+  fn: (store: StreamLogStore, logger: AgentTrace) => Promise<T>,
 ): Promise<T> {
-  const previousStore = AgentLogger.getStreamLogStore();
+  const previousStore = getDefaultStreamLogStore();
   const store = new StreamLogStore();
-  AgentLogger.setStreamLogStore(store);
+  setDefaultStreamLogStore(store);
   await store.clear();
 
   try {
-    return await fn(store, new AgentLogger(streamId, true));
+    return await fn(store, createRunTrace(streamId).trace);
   } finally {
-    AgentLogger.setStreamLogStore(previousStore);
+    setDefaultStreamLogStore(previousStore);
   }
 }
 
@@ -52,7 +57,7 @@ function collectToolLogs(store: StreamLogStore): unknown[] {
     .map((entry) => entry.data);
 }
 
-function runTurn(logger: AgentLogger) {
+function runTurn(logger: AgentTrace) {
   return runStreamedTurn({
     prompt: 'Run lint',
     childStreamId: streamId,

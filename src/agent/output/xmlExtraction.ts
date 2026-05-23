@@ -8,8 +8,8 @@
  * Legacy agents with a custom documentTag use single-document extraction.
  */
 
+import type { AgentLogStage } from '@agent/trace';
 import { toErrorMessage } from '@common/errors';
-import type { AgentLogStage } from '@logger/AgentLogger';
 import {
   MESSAGE_TYPES,
   type FileLocation,

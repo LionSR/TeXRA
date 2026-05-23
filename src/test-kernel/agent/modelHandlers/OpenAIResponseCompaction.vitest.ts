@@ -7,13 +7,13 @@ import {
 } from 'llm-zoo';
 
 // Local imports - agent model handlers
+import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
 
 // Type imports
-import type { AgentLogger } from '@logger/AgentLogger';
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
 
-function createLoggerStub(): Partial<AgentLogger> & { streamId: string } {
+function createLoggerStub(): Partial<AgentTrace> & { streamId: string } {
   return {
     streamId: 'test-channel',
     debug: vi.fn(),
@@ -54,7 +54,7 @@ function createConfig(overrides: Partial<ModelConfig> = {}): ModelConfig {
 
 function createHandler(): ModelHandlerOpenAIResponse {
   const handler = new ModelHandlerOpenAIResponse(createConfig());
-  handler.setLogger(createLoggerStub() as unknown as AgentLogger);
+  handler.setLogger(createLoggerStub() as unknown as AgentTrace);
   (handler as { getStreamingConfig: () => boolean }).getStreamingConfig = () =>
     false;
   return handler;

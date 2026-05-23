@@ -14,7 +14,7 @@ import { getActiveChildren } from '@agent/runtime/executionRegistry';
 import { getToolUseFlowContext } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelTrace } from '@logger';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
 
@@ -29,7 +29,7 @@ export type SendFollowUpResult =
     }
   | { status: 'no_session'; streamStatus: string | undefined };
 
-const logger = new AgentLogger('ToolUseFollowUp');
+const logger = createChannelTrace('ToolUseFollowUp');
 const followUpSentObservers = new Set<(streamId: StreamTabId) => void>();
 
 export function onFollowUpSent(

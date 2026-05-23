@@ -17,7 +17,7 @@
  */
 
 import type { ExecutionKVStore } from '@agent/storage';
-import type { AgentLogStage } from '@logger/AgentLogger';
+import type { AgentLogStage } from '@agent/trace';
 import {
   EXECUTION_STATUS,
   type ExecutionStatus,

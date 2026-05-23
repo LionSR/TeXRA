@@ -10,18 +10,18 @@ import { PDFDocument, StandardFonts } from '@cantoo/pdf-lib';
 
 // Local imports - agent
 import { DEFAULT_MODEL_CAPABILITIES, type ModelCapabilities } from 'llm-zoo';
+import type { AgentTrace } from '@agent/trace';
 import {
   MediaAttachmentProcessor,
   type MediaFileResult,
 } from '@agent/modelHandlers/support/MediaAttachmentProcessor';
 
 // Type imports
-import type { AgentLogger } from '@logger/AgentLogger';
 
 // Internal imports
 import { AbsoluteFS, pathToLocation, getShortDisplayPath } from '@utils/files';
 
-interface LoggerStub extends Partial<AgentLogger> {
+interface LoggerStub extends Partial<AgentTrace> {
   streamId: string;
   debugMessages: string[];
   warnMessages: string[];
@@ -29,7 +29,7 @@ interface LoggerStub extends Partial<AgentLogger> {
   fileListEntries: MediaFileResult[][];
 }
 
-function createLoggerStub(): { logger: AgentLogger; stub: LoggerStub } {
+function createLoggerStub(): { logger: AgentTrace; stub: LoggerStub } {
   const stub: LoggerStub = {
     streamId: 'media-test',
     debugMessages: [],
@@ -56,7 +56,7 @@ function createLoggerStub(): { logger: AgentLogger; stub: LoggerStub } {
     runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
   };
 
-  return { logger: stub as unknown as AgentLogger, stub };
+  return { logger: stub as unknown as AgentTrace, stub };
 }
 
 describe('MediaAttachmentProcessor', () => {
@@ -97,7 +97,7 @@ describe('MediaAttachmentProcessor', () => {
   });
 
   function createProcessor(
-    logger: AgentLogger,
+    logger: AgentTrace,
     capabilities: Partial<ModelCapabilities>,
     isOpenAIProvider: boolean = true,
   ): MediaAttachmentProcessor {

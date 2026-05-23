@@ -1,15 +1,11 @@
 /**
  * AgentTrace — SDK surface for agent runs.
  *
- * One discriminated-event channel per run. Subscribers (transcript recorder,
- * Supabase usage reporter, etc.) attach with `subscribe()`. Plain
- * debug/info/warn/error are sugar over `emit()`; stages and streams are
- * stateful handles that also reduce to `emit()`.
+ * One discriminated-event channel per run. Subscribers attach with
+ * `subscribe()`. Plain `debug/info/warn/error`, stages, streams, and the
+ * domain helpers are all sugar over `emit()`.
  *
- * The TeXRA-internal AgentLogger still exists for the 100+ legacy call sites
- * and now forwards into the trace channel so subscribers see everything.
- * New code (SDK consumers, refactored core) should reach the trace via
- * `RunContext.trace`.
+ * See `docs/proposals/agent-trace-sdk-surface.md` for the design.
  */
 export type {
   AgentEvent,
@@ -33,14 +29,18 @@ export type {
 } from './events';
 
 export type {
+  AgentLogStage,
+  AgentLogStream,
   AgentTrace,
   AgentTraceSubscriber,
   DomainEventInput,
   LogOptions,
+  StagedEmitOptions,
   StageHandle,
   StageOptions,
   StreamHandle,
   StreamOptions,
+  ToolStartRef,
 } from './AgentTrace';
 
 export { TraceEmitter } from './TraceEmitter';

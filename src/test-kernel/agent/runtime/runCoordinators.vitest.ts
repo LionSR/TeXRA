@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
+import type { AgentTrace } from '@agent/trace';
 import {
   getDefaultAgentRuntimeHost,
   setDefaultAgentRuntimeHost,
@@ -24,7 +25,6 @@ import {
   waitForProposal,
   waitForRetry,
 } from '@agent/runtime/runCoordinators';
-import type { AgentLogger } from '@logger/AgentLogger';
 import {
   AGENT_CATEGORY,
   TODO_STATUS,
@@ -63,11 +63,11 @@ function createCoordinators(host: AgentRuntimeHost): RunCoordinators {
   };
 }
 
-function createLogger(): AgentLogger {
+function createLogger(): AgentTrace {
   return {
     debug: vi.fn(),
     warn: vi.fn(),
-  } as unknown as AgentLogger;
+  } as unknown as AgentTrace;
 }
 
 describe('runCoordinators', () => {

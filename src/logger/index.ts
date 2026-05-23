@@ -1,4 +1,3 @@
-export { AgentLogger, type AgentLogStage } from './AgentLogger';
 export { AgentUsageReporter } from './AgentUsageReporter';
 export * as logUtils from './logUtils';
 export { redactSecrets, type LogRedactionOptions } from './redaction';
@@ -14,3 +13,14 @@ export {
   type TranscriptRecorderHandle,
 } from './TexraTranscriptRecorder';
 export { attachConsoleSubscriber } from './consoleSubscriber';
+export {
+  createChannelTrace,
+  createRunTrace,
+  flushPendingRunTraces,
+  type RunTrace,
+} from './runTrace';
+export {
+  getDefaultStreamLogStore,
+  setDefaultStreamLogStore,
+  StreamLogStore,
+} from './StreamLogStore';

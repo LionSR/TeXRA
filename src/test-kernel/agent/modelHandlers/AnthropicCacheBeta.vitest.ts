@@ -3,10 +3,10 @@ import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent model handlers
+import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
 
 // Type imports
-import type { AgentLogger } from '@logger/AgentLogger';
 import type { ToolDefinition } from '@model';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
@@ -45,7 +45,7 @@ function createHandler(): ModelHandlerAnthropic {
     runWithGroup: vi.fn(
       async (_groupId: string | undefined, fn: () => unknown) => fn(),
     ),
-  } as unknown as AgentLogger);
+  } as unknown as AgentTrace);
   (handler as { getStreamingConfig: () => boolean }).getStreamingConfig = () =>
     false;
   return handler;

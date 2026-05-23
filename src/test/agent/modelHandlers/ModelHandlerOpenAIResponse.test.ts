@@ -12,17 +12,17 @@ import {
 } from 'llm-zoo';
 
 // Local imports - agent
+import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory, AgentSettingSchema } from '@agent/core/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
 
 // Type imports
-import type { AgentLogger } from '@logger/AgentLogger';
 import { pathToLocation } from '@utils/files';
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
 
-type LoggerStub = Partial<AgentLogger> & {
+type LoggerStub = Partial<AgentTrace> & {
   streamId: string;
 };
 
@@ -78,7 +78,7 @@ function createHandler(
   configOverrides: Partial<ModelConfig> = {},
 ): ModelHandlerOpenAIResponse {
   const handler = new ModelHandlerOpenAIResponse(createConfig(configOverrides));
-  handler.setLogger(createLoggerStub() as unknown as AgentLogger);
+  handler.setLogger(createLoggerStub() as unknown as AgentTrace);
   handler.getStreamingConfig = () => false;
   return handler;
 }

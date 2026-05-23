@@ -30,6 +30,7 @@ import {
 
 // Local imports - agent
 import { ReasoningEffort } from 'llm-zoo';
+import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import {
@@ -49,7 +50,6 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
-import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - replacement
 import replacementEngine from '@replacement/engine';
@@ -109,7 +109,7 @@ function extractNonThinkingText(parts: Part[], trim = false): string {
  */
 export function validateGoogleMessageHistory(
   messages: Content[],
-  logger: AgentLogger,
+  logger: AgentTrace,
 ): void {
   let lastRole: string | undefined;
 

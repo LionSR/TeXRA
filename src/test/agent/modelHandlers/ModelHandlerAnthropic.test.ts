@@ -15,13 +15,13 @@ import {
   ModelProvider,
   ReasoningEffort,
 } from 'llm-zoo';
+import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory, AgentSettingSchema } from '@agent/core/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
 
 // Type imports
-import type { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - model config
 import * as configModule from '@utils/config';
@@ -111,7 +111,7 @@ function stubHandlerForTest(
   loggerOverrides?: Partial<Record<string, unknown>>,
 ): void {
   handler.setLogger(
-    createLoggerStub(loggerOverrides) as unknown as AgentLogger,
+    createLoggerStub(loggerOverrides) as unknown as AgentTrace,
   );
   (handler as any).getStreamingConfig = () => false;
 }
@@ -1251,7 +1251,7 @@ describe('ModelHandlerAnthropic message guards', () => {
         logContextManagement: (message: string, data: unknown) => {
           events.push({ message, data });
         },
-      }) as unknown as AgentLogger,
+      }) as unknown as AgentTrace,
     );
 
     (handler as any).logContextManagementFromResponse(
@@ -1526,7 +1526,7 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
       supportsTokenCounting: false,
       supportsReasoning: false,
     });
-    handler.setLogger(createLoggerStub() as unknown as AgentLogger);
+    handler.setLogger(createLoggerStub() as unknown as AgentTrace);
     // Force streaming path so we exercise the pre-message_start catch block.
     (handler as any).getStreamingConfig = () => true;
 

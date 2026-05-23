@@ -1,6 +1,7 @@
 import * as path from 'path';
 
 import { getExecutionStore } from '@agent/storage';
+import type { AgentLogStage } from '@agent/trace';
 import {
   createOutputState,
   setActiveRun,
@@ -31,7 +32,6 @@ import {
 } from '@agent/output/workflowOutputLayout';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import { LatexMediaManager } from '@latex';
-import type { AgentLogStage } from '@logger/AgentLogger';
 import {
   END_GROUP_STATUS,
   type EndGroupStatus,
