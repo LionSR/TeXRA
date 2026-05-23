@@ -33,24 +33,29 @@ describe('child stream progress events', () => {
     setDefaultAgentRuntimeHost(fallback.host);
 
     try {
-      const { childStreamId: actualChildStreamId, logger } = createChildStream(
-        executionId,
-        parentStreamId,
-        {
-          runtimeHost: active.host,
-          streamPrefix: 'bash',
-          streamCategory: AgentCategory.ToolUse,
-          agentName: 'test-agent',
-          description: 'Run a background bash command',
-          config,
-          toolName: 'bash',
-        },
-      );
+      const {
+        childStreamId: actualChildStreamId,
+        logger,
+        disposeTrace,
+      } = createChildStream(executionId, parentStreamId, {
+        runtimeHost: active.host,
+        streamPrefix: 'bash',
+        streamCategory: AgentCategory.ToolUse,
+        agentName: 'test-agent',
+        description: 'Run a background bash command',
+        config,
+        toolName: 'bash',
+      });
 
       expect(actualChildStreamId).toBe(childStreamId);
 
-      finalizeChildStream(childStreamId, executionId, logger, active.host, {
-        autoClose: true,
+      finalizeChildStream({
+        childStreamId,
+        executionId,
+        logger,
+        disposeTrace,
+        runtimeHost: active.host,
+        options: { autoClose: true },
       });
     } finally {
       setDefaultAgentRuntimeHost(previousDefault);
