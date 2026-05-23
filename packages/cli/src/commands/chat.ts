@@ -7,6 +7,7 @@ import {
   optString,
   rejectHeadlessOnlyFlags,
 } from './_helpers/globalArgs';
+import { assertExplicitModelKnown } from './_helpers/modelArg';
 
 export const chatCommand = defineCommand({
   meta: { name: 'chat', description: 'Interactive tool-use chat session' },
@@ -17,11 +18,12 @@ export const chatCommand = defineCommand({
   },
   async run(ctx) {
     rejectHeadlessOnlyFlags(ctx.rawArgs, 'chat');
+    const modelOverride = assertExplicitModelKnown(optString(ctx.args.model));
     const context = await contextFromArgs(ctx.args);
     const { runChat } = await import('../chat/tui/runChatTui');
     const result = await runChat(context, {
       agentOverride: optString(ctx.args.agent),
-      modelOverride: optString(ctx.args.model),
+      modelOverride,
     });
     setExitCode(result.exitCode);
   },
