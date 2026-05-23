@@ -24,7 +24,10 @@ import {
   attachConsoleSubscriber,
   type ConsoleSubscriberOptions,
 } from './consoleSubscriber';
-import { getDefaultStreamLogStore, type StreamLogStore } from './StreamLogStore';
+import {
+  getDefaultStreamLogStore,
+  type StreamLogStore,
+} from './StreamLogStore';
 import {
   attachTranscriptRecorder,
   type TranscriptRecorderHandle,

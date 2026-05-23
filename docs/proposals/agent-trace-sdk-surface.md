@@ -250,7 +250,7 @@ shipped on `claude/agent-trace-sdk-surface-UzsKR`:
   (wires console + transcript subscribers and a `dispose()` for
   shutdown). These factories replace `new AgentLogger(...)`.
 - **`AgentLogger` deleted** — every one of the ~36 production `new
-  AgentLogger(...)` call sites, the ~50 `AgentLogger` type annotations,
+AgentLogger(...)` call sites, the ~50 `AgentLogger` type annotations,
   and every test using the class migrated to `AgentTrace` /
   `createChannelTrace` / `createRunTrace`. The single-emit boundary
   collapsed the ~10 internal `resolveActiveGroupId()` calls to one

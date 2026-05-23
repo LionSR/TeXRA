@@ -24,8 +24,7 @@ export function appendAssistantTranscriptIfMissing(
 ): void {
   const normalized = normalizeTranscriptText(text ?? '');
   if (!normalized) return;
-  const syntheticAfterSeq =
-    getDefaultStreamLogStore().get(streamId)?.head ?? 0;
+  const syntheticAfterSeq = getDefaultStreamLogStore().get(streamId)?.head ?? 0;
 
   patchStream(streamId, (slice) => {
     const entryId = `${idPrefix}:${streamId}`;
@@ -77,8 +76,7 @@ function appendLocalTranscriptEntry(
   const streamId =
     explicitStreamId ?? cliState.activeStreamId.get() ?? CLI_LOCAL_STREAM_ID;
   if (!cliState.activeStreamId.get()) cliState.activeStreamId.set(streamId);
-  const syntheticAfterSeq =
-    getDefaultStreamLogStore().get(streamId)?.head ?? 0;
+  const syntheticAfterSeq = getDefaultStreamLogStore().get(streamId)?.head ?? 0;
 
   patchStream(streamId, (slice) => {
     const entry: ConversationEntry = {

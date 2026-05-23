@@ -5,7 +5,6 @@ import { noopTrace } from '@agent/trace';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 
-
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentProposalCoordinator } from './AgentProposalCoordinator';
 import type { PlanApprovalCoordinator } from './PlanApprovalCoordinator';

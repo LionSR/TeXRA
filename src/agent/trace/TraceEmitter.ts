@@ -52,9 +52,10 @@ function currentStageStack(): string[] {
   return stageScope.getStore() ?? [];
 }
 
-function resolveStage(options: { stageId?: string; groupId?: string }):
-  | string
-  | undefined {
+function resolveStage(options: {
+  stageId?: string;
+  groupId?: string;
+}): string | undefined {
   return options.stageId ?? options.groupId;
 }
 
@@ -154,11 +155,7 @@ export class TraceEmitter implements AgentTrace {
     });
   }
 
-  logProgress(
-    message: string,
-    context?: ErrorContext,
-    groupId?: string,
-  ): void {
+  logProgress(message: string, context?: ErrorContext, groupId?: string): void {
     this.info(message, {
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
       data: context,
@@ -277,10 +274,7 @@ export class TraceEmitter implements AgentTrace {
   }
 
   fileList(files: FileListEntry[], groupId?: string): void {
-    this.filesLoaded(
-      { category: 'all', entries: files },
-      { stageId: groupId },
-    );
+    this.filesLoaded({ category: 'all', entries: files }, { stageId: groupId });
   }
 
   logFileCategory(
@@ -334,10 +328,7 @@ export class TraceEmitter implements AgentTrace {
     const toolName =
       (data as { toolName?: string } | null)?.toolName ?? 'unknown';
     const input = (data as { input?: unknown } | null)?.input;
-    this.toolStart(
-      { logId, toolName, input },
-      { stageId: resolvedGroupId },
-    );
+    this.toolStart({ logId, toolName, input }, { stageId: resolvedGroupId });
     return { logId, groupId: resolvedGroupId };
   }
 

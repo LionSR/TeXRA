@@ -189,10 +189,7 @@ export interface AgentTrace {
   // ─── Structured first-class union arms ──────────────────────────────
   usage(stats: TokenUsageStats, options?: StagedEmitOptions): void;
   statistics(stats: ExtendedTokenUsageStats, groupId?: string): void;
-  contextState(
-    snapshot: ContextStateData,
-    options?: StagedEmitOptions,
-  ): void;
+  contextState(snapshot: ContextStateData, options?: StagedEmitOptions): void;
   filesLoaded(
     input: Omit<FilesLoadedEvent, 'type' | 'stageId'>,
     options?: StagedEmitOptions,

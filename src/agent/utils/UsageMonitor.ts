@@ -6,10 +6,7 @@ import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 import { shouldUseOpenRouter } from '@agent/modelHandlers/support/ProxyConfigResolver';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { toErrorMessage } from '@common/errors';
-import {
-  UsageLogService,
-  type AgentUsageReporter,
-} from '@logger/index';
+import { UsageLogService, type AgentUsageReporter } from '@logger/index';
 import type {
   ExtendedTokenUsageStats,
   StorageKey,

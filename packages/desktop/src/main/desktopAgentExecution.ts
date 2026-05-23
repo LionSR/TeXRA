@@ -141,7 +141,9 @@ function toFileLocation(filePath: string): FileLocation {
 
 export class DesktopProgressBridge {
   private readonly streamLogs = new StreamLogStore();
-  private readonly logger: AgentTrace = createChannelTrace('DesktopProgressBridge');
+  private readonly logger: AgentTrace = createChannelTrace(
+    'DesktopProgressBridge',
+  );
   private readonly agentProposalController: ProgressAgentProposalController;
   private readonly workflowFileActions: ProgressWorkflowFileActionsController;
   private readonly cursors = new Map<StreamTabId, number>();

@@ -110,9 +110,7 @@ function stubHandlerForTest(
   handler: ModelHandlerAnthropic,
   loggerOverrides?: Partial<Record<string, unknown>>,
 ): void {
-  handler.setLogger(
-    createLoggerStub(loggerOverrides) as unknown as AgentTrace,
-  );
+  handler.setLogger(createLoggerStub(loggerOverrides) as unknown as AgentTrace);
   (handler as any).getStreamingConfig = () => false;
 }
 

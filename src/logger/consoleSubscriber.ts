@@ -14,7 +14,6 @@ import type {
 } from '@agent/trace';
 import { serializeError } from '@utils/core';
 
-
 import * as logger from './logUtils';
 
 export interface ConsoleSubscriberOptions {
