@@ -8,7 +8,11 @@
  */
 export { formatError, formatZodError } from './errorFormatUtils';
 export { toErrorMessage } from './errorMessage';
-export { isDiskFullError, isFileNotFoundError } from './errorPredicates';
+export {
+  isDiskFullError,
+  isFileNotFoundError,
+  isNotADirectoryError,
+} from './errorPredicates';
 export {
   classifyAgentError,
   type AgentErrorKind,

@@ -3,6 +3,7 @@ import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { isNonEmptyString } from '@utils/core/stringCore';
 
 import {
@@ -219,11 +220,7 @@ export async function resolveCliCwd(
   try {
     info = await stat(requested);
   } catch (error: unknown) {
-    const code =
-      typeof error === 'object' && error !== null && 'code' in error
-        ? (error as { code?: unknown }).code
-        : undefined;
-    if (code === 'ENOENT' || code === 'ENOTDIR') {
+    if (isFileNotFoundError(error) || isNotADirectoryError(error)) {
       throw new CliUsageError(`--cwd: path does not exist: ${requested}`);
     }
     throw new CliUsageError(
