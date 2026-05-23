@@ -47,7 +47,11 @@ export interface Logger {
 const EMPTY_GROUPS: readonly string[] = Object.freeze([]);
 
 export function createStructuredLogger(sink: LogSink): Logger {
-  const write = (level: LogLevel, message: string, fields?: LogFields): void => {
+  const write = (
+    level: LogLevel,
+    message: string,
+    fields?: LogFields,
+  ): void => {
     sink.write({
       ts: new Date().toISOString(),
       level,

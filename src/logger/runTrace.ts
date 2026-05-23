@@ -91,4 +91,3 @@ const activeFlushers = new Set<() => void>();
 export function flushPendingRunTraces(): void {
   for (const flush of [...activeFlushers]) flush();
 }
-

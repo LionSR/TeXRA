@@ -124,9 +124,7 @@ function logAt(
   options: LogUtilsOptions,
 ): void {
   const data =
-    options.data instanceof Error
-      ? serializeError(options.data)
-      : options.data;
+    options.data instanceof Error ? serializeError(options.data) : options.data;
   writeLine(level, channel, options.isAgent ?? false, message, data);
 }
 
