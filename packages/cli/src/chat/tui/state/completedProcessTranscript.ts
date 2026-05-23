@@ -1,4 +1,4 @@
-import { AgentLogger } from '@logger/AgentLogger';
+import { getDefaultStreamLogStore } from '@logger';
 import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 
 import type {
@@ -96,7 +96,7 @@ export function buildCompletedProcessEntry(params: {
     synthetic: true,
     syntheticKind: 'process',
     syntheticAfterSeq:
-      AgentLogger.getStreamLogStore().get(params.streamId)?.head ?? 0,
+      getDefaultStreamLogStore().get(params.streamId)?.head ?? 0,
   };
 }
 

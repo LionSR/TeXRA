@@ -4,10 +4,10 @@ import { Buffer } from 'node:buffer';
 import { toFile } from '@anthropic-ai/sdk';
 
 // Local imports - common
+import type { AgentTrace } from '@agent/trace';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Type imports - agent and tools
-import type { AgentLogger } from '@logger/AgentLogger';
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - model handlers
@@ -55,7 +55,7 @@ export interface UploadToolAttachmentsResult {
 export async function uploadToolAttachments(
   client: Anthropic,
   attachments: ToolFileAttachment[],
-  logger: AgentLogger,
+  logger: AgentTrace,
   uploadedPdfPageCounts: Map<string, number>,
   maxPdfPages: number,
 ): Promise<UploadToolAttachmentsResult> {

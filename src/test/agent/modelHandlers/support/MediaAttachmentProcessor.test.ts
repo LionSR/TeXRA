@@ -14,14 +14,14 @@ import {
   MediaAttachmentProcessor,
   type MediaFileResult,
 } from '@agent/modelHandlers/support/MediaAttachmentProcessor';
+import type { TexraTrace } from '@logger';
 
 // Type imports
-import type { AgentLogger } from '@logger/AgentLogger';
 
 // Internal imports
 import { AbsoluteFS, pathToLocation, getShortDisplayPath } from '@utils/files';
 
-interface LoggerStub extends Partial<AgentLogger> {
+interface LoggerStub extends Partial<TexraTrace> {
   streamId: string;
   debugMessages: string[];
   warnMessages: string[];
@@ -29,7 +29,7 @@ interface LoggerStub extends Partial<AgentLogger> {
   fileListEntries: MediaFileResult[][];
 }
 
-function createLoggerStub(): { logger: AgentLogger; stub: LoggerStub } {
+function createLoggerStub(): { logger: TexraTrace; stub: LoggerStub } {
   const stub: LoggerStub = {
     streamId: 'media-test',
     debugMessages: [],
@@ -48,15 +48,15 @@ function createLoggerStub(): { logger: AgentLogger; stub: LoggerStub } {
     error(message: string) {
       this.errorMessages.push(message);
     },
-    fileList(entries: MediaFileResult[]) {
-      this.fileListEntries.push(entries);
+    filesLoaded(input: {
+      category: string;
+      entries: readonly MediaFileResult[];
+    }) {
+      this.fileListEntries.push([...input.entries]);
     },
-    withCurrentGroup: () => undefined,
-    runWithinCurrentGroup: async (fn: () => any) => fn(),
-    runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
   };
 
-  return { logger: stub as unknown as AgentLogger, stub };
+  return { logger: stub as unknown as TexraTrace, stub };
 }
 
 describe('MediaAttachmentProcessor', () => {
@@ -97,7 +97,7 @@ describe('MediaAttachmentProcessor', () => {
   });
 
   function createProcessor(
-    logger: AgentLogger,
+    logger: TexraTrace,
     capabilities: Partial<ModelCapabilities>,
     isOpenAIProvider: boolean = true,
   ): MediaAttachmentProcessor {

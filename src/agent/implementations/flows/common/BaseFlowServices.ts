@@ -8,7 +8,7 @@ import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { TexraTrace } from '@logger';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 
@@ -23,7 +23,7 @@ export interface AgentCore<C = unknown> {
   config: AgentConfig;
   setting: AgentSetting;
   prompt: AgentPrompt;
-  logger: AgentLogger;
+  logger: TexraTrace;
   runtimeHost: AgentRuntimeHost;
   streamId: StreamTabId;
   executionId: ExecutionId;

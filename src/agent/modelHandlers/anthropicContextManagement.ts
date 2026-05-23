@@ -1,5 +1,5 @@
 // Type imports - agent
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { TexraTrace } from '@logger';
 
 // Type imports - Anthropic SDK
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
@@ -162,7 +162,7 @@ export function setupContextManagement(
 export function logContextManagementFromResponse(
   response: BetaMessage,
   contextWindow: number,
-  logger: AgentLogger,
+  logger: TexraTrace,
 ): void {
   const totalInputTokens =
     response.usage.input_tokens +

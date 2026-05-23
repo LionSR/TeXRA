@@ -6,11 +6,11 @@
  */
 
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelTrace } from '@logger';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { FollowUpQueue } from './FollowUpQueue';
 
-const logger = new AgentLogger('ToolUseFollowUpQueue');
+const logger = createChannelTrace('ToolUseFollowUpQueue');
 
 /**
  * Static manager for follow-up queues indexed by stream ID.

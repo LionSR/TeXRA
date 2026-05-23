@@ -12,7 +12,7 @@ import {
 } from '@agent/output/OutputFileProcessor';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { normalizeRunId } from '@common/constants/runIds';
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { TexraTrace } from '@logger';
 import type {
   AgentFileLocation,
   FileLocation,
@@ -108,7 +108,7 @@ describe('output progress events', () => {
     const logger = {
       debug: () => {},
       missingOutputs: () => {},
-    } as unknown as AgentLogger;
+    } as unknown as TexraTrace;
     const xmlManager = {
       processSingleXmlOutput: async () => {
         throw new Error('invalid xml');

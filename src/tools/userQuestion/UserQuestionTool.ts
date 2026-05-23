@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelTrace } from '@logger';
 import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
@@ -12,7 +12,7 @@ import type { ToolResult } from '@tools/result';
 import { requireRuntimeHost } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 
-const logger = new AgentLogger('UserQuestionTool');
+const logger = createChannelTrace('UserQuestionTool');
 
 const AskUserQuestionInputSchema = z.strictObject({
   questions: z

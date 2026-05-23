@@ -5,9 +5,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent model handlers
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
+import type { TexraTrace } from '@logger';
 
 // Type imports
-import type { AgentLogger } from '@logger/AgentLogger';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 
@@ -43,12 +43,7 @@ function createLoggerStub() {
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
-    fileList: vi.fn(),
-    withCurrentGroup: vi.fn(() => undefined),
-    runWithinCurrentGroup: vi.fn(async (fn: () => unknown) => fn()),
-    runWithGroup: vi.fn(
-      async (_groupId: string | undefined, fn: () => unknown) => fn(),
-    ),
+    filesLoaded: vi.fn(),
   };
 }
 
@@ -68,7 +63,7 @@ describe('Anthropic stream failure logging', () => {
   it('keeps raw stream failures out of visible warning logs', async () => {
     const handler = createHandler();
     const logger = createLoggerStub();
-    handler.setLogger(logger as unknown as AgentLogger);
+    handler.setLogger(logger as unknown as TexraTrace);
 
     const providerError = new AnthropicBadRequestError(
       400,

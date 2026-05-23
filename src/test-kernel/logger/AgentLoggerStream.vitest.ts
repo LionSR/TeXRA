@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { AgentLogger } from '@logger/AgentLogger';
+import {
+  createRunTrace,
+  flushPendingRunTraces,
+  getDefaultStreamLogStore,
+  setDefaultStreamLogStore,
+} from '@logger';
 import { StreamLogStore } from '@logger/StreamLogStore';
 import { MESSAGE_TYPES, STREAM_LOG_ENTRY_TYPES } from '@shared/schemas';
 
@@ -12,13 +17,13 @@ describe('AgentLogger stream output', () => {
   it('coalesces streaming text updates and flushes on finalize', () => {
     vi.useFakeTimers();
 
-    const previousStore = AgentLogger.getStreamLogStore();
+    const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
-    AgentLogger.setStreamLogStore(store);
+    setDefaultStreamLogStore(store);
 
     try {
-      const logger = new AgentLogger('stream', true);
-      const stream = logger.createStream(MESSAGE_TYPES.MODEL_RESPONSE);
+      const logger = createRunTrace('stream').trace;
+      const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
 
       stream.append('a');
       let entries = store.get('stream')?.getRange(0) ?? [];
@@ -47,45 +52,45 @@ describe('AgentLogger stream output', () => {
       vi.runOnlyPendingTimers();
       expect((store.get('stream')?.getRange(0) ?? [])[0]?.text).toBe('abcd');
     } finally {
-      AgentLogger.setStreamLogStore(previousStore);
+      setDefaultStreamLogStore(previousStore);
     }
   });
 
   it('drains pending stream updates for shutdown persistence', () => {
     vi.useFakeTimers();
 
-    const previousStore = AgentLogger.getStreamLogStore();
+    const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
-    AgentLogger.setStreamLogStore(store);
+    setDefaultStreamLogStore(store);
 
     try {
-      const logger = new AgentLogger('stream', true);
-      const stream = logger.createStream(MESSAGE_TYPES.MODEL_RESPONSE);
+      const logger = createRunTrace('stream').trace;
+      const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
 
       stream.append('a');
       stream.append('b');
       expect((store.get('stream')?.getRange(0) ?? [])[0]?.text).toBe('a');
 
-      AgentLogger.flushPendingStreamUpdates();
+      flushPendingRunTraces();
       expect((store.get('stream')?.getRange(0) ?? [])[0]?.text).toBe('ab');
       expect(vi.getTimerCount()).toBe(0);
 
       expect(stream.finalize()).toBe('ab');
     } finally {
-      AgentLogger.setStreamLogStore(previousStore);
+      setDefaultStreamLogStore(previousStore);
     }
   });
 
   it('accumulates disabled progress streams without scheduled updates', () => {
     vi.useFakeTimers();
 
-    const previousStore = AgentLogger.getStreamLogStore();
+    const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
-    AgentLogger.setStreamLogStore(store);
+    setDefaultStreamLogStore(store);
 
     try {
-      const logger = new AgentLogger('stream', true);
-      const stream = logger.createStream(MESSAGE_TYPES.MODEL_RESPONSE, {
+      const logger = createRunTrace('stream').trace;
+      const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE, {
         progressViewEnabled: false,
       });
 
@@ -98,20 +103,20 @@ describe('AgentLogger stream output', () => {
       expect(stream.finalize()).toBe('abc');
       expect(store.get('stream')).toBeUndefined();
     } finally {
-      AgentLogger.setStreamLogStore(previousStore);
+      setDefaultStreamLogStore(previousStore);
     }
   });
 });
 
 describe('AgentLogger groupId resolution', () => {
   it('keeps GROUP_START as a root group even when an active stage exists', async () => {
-    const previousStore = AgentLogger.getStreamLogStore();
+    const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
-    AgentLogger.setStreamLogStore(store);
+    setDefaultStreamLogStore(store);
 
     try {
-      const logger = new AgentLogger('stream', true);
-      const outer = await logger.stage('outer');
+      const logger = createRunTrace('stream').trace;
+      const outer = logger.openStage('outer');
       await outer.within(async () => {
         // Sanity: a plain log line emitted from inside the stage nests under it.
         logger.info('inside outer');
@@ -132,18 +137,18 @@ describe('AgentLogger groupId resolution', () => {
       const inside = entries.find((e) => e.text === 'inside outer');
       expect(inside?.groupId).toBeDefined();
     } finally {
-      AgentLogger.setStreamLogStore(previousStore);
+      setDefaultStreamLogStore(previousStore);
     }
   });
 
   it('does not clobber a tool-use entry groupId when updateToolUse is called with undefined', async () => {
-    const previousStore = AgentLogger.getStreamLogStore();
+    const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
-    AgentLogger.setStreamLogStore(store);
+    setDefaultStreamLogStore(store);
 
     try {
-      const logger = new AgentLogger('stream', true);
-      const outer = await logger.stage('outer');
+      const logger = createRunTrace('stream').trace;
+      const outer = logger.openStage('outer');
       const { logId, groupId: createdGroupId } = await outer.within(async () =>
         logger.logToolUseStart('demoTool', { arg: 1 }),
       );
@@ -162,7 +167,7 @@ describe('AgentLogger groupId resolution', () => {
       const toolEntry = entries.find((e) => e.id === logId);
       expect(toolEntry?.groupId).toBe(createdGroupId);
     } finally {
-      AgentLogger.setStreamLogStore(previousStore);
+      setDefaultStreamLogStore(previousStore);
     }
   });
 });

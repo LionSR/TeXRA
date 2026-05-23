@@ -9,7 +9,7 @@ import pMap from 'p-map';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { toErrorMessage } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
-import { AgentLogger } from '@logger/AgentLogger';
+import type { TexraTrace } from '@logger';
 
 // Type imports
 import {
@@ -54,11 +54,11 @@ interface MediaAttachmentProcessorOptions {
 
 export class MediaAttachmentProcessor {
   constructor(
-    private logger: AgentLogger,
+    private logger: TexraTrace,
     private readonly options: MediaAttachmentProcessorOptions,
   ) {}
 
-  public setLogger(logger: AgentLogger): void {
+  public setLogger(logger: TexraTrace): void {
     this.logger = logger;
   }
 
@@ -210,7 +210,7 @@ export class MediaAttachmentProcessor {
       this.logger.warn('Some media files failed to load');
     }
 
-    this.logger.fileList(results);
+    this.logger.filesLoaded({ category: 'all', entries: results });
   }
 
   private async loadMediaEntry(
