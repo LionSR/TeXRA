@@ -24,9 +24,19 @@ function normalizeCliInputPath(candidate: string, cwd: string): string {
   return absolutePath;
 }
 
+/**
+ * Expand a single user-supplied path spec into the absolute / cwd-relative
+ * paths it resolves to.
+ *
+ * `flagLabel` is the CLI flag name (e.g. `--input`, `--context`) used in
+ * Usage-error messages so a missing file is attributed to the right flag.
+ * Defaults to `--input` for the common case; callers that pass context paths
+ * (multi-agent `--context`) should override.
+ */
 export async function expandWorkflowInputSpec(
   inputSpec: string,
   cwd: string,
+  flagLabel: string = '--input',
 ): Promise<string[]> {
   const trimmed = inputSpec.trim();
   if (!trimmed) return [];
@@ -77,7 +87,7 @@ export async function expandWorkflowInputSpec(
   // Fail fast with a Usage error (exit 2) instead of paying full platform
   // init + agent loading just to ENOENT inside the agent run (exit 1).
   if (!stats) {
-    throw new CliUsageError(`--input: file not found: ${trimmed}`);
+    throw new CliUsageError(`${flagLabel}: file not found: ${trimmed}`);
   }
   return [normalizeCliInputPath(trimmed, cwd)];
 }
@@ -85,10 +95,11 @@ export async function expandWorkflowInputSpec(
 export async function expandWorkflowInputSpecs(
   inputSpecs: readonly string[],
   cwd: string,
+  flagLabel: string = '--input',
 ): Promise<string[]> {
   const expanded = (
     await Promise.all(
-      inputSpecs.map((spec) => expandWorkflowInputSpec(spec, cwd)),
+      inputSpecs.map((spec) => expandWorkflowInputSpec(spec, cwd, flagLabel)),
     )
   ).flat();
   const unique = [...new Set(expanded)];

@@ -272,6 +272,21 @@ describe('CLI root argument routing', () => {
     }
   });
 
+  it('attributes the missing-path error to the caller-supplied flag label', async () => {
+    // The helper is shared between --input (texra run, multi-agent run input)
+    // and --context (multi-agent run context). The error must name the flag
+    // the user actually passed, not always say --input.
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-flag-'));
+    try {
+      const missing = path.join(root, 'no-such-context.tex');
+      await expect(
+        expandWorkflowInputSpecs([missing], root, '--context'),
+      ).rejects.toThrow(/--context: file not found/);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   // Skip on Windows (no POSIX chmod semantics) and when running as root, where
   // mode-0 doesn't block stat.
   const skipPermissionTest =
