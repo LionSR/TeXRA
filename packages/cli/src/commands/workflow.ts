@@ -18,7 +18,6 @@ import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import { CliUsageError } from '../runtime/cliContext';
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
-  isKnownCliModel,
   resolveConfiguredModel,
 } from '../runtime/cliConfig';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -33,6 +32,7 @@ import { createCliRuntimeHost } from '../runtime/runtimeHost';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
+import { assertExplicitModelKnown } from './_helpers/modelArg';
 import {
   GLOBAL_ARGS,
   collectStringFlagValues,
@@ -67,16 +67,10 @@ async function runWorkflowAgent(
   context: CliContext,
   init: WorkflowRunInit,
 ): Promise<number> {
-  const explicitModel = init.model?.trim();
   // Validate the explicit `-m` value up-front so a typo is a Usage error
-  // (exit 2), not a mid-run "Model not found in MODEL_CONFIGS" AgentError
-  // (exit 1). Env / workspace-config / built-in fallbacks already emit
-  // warnings on their own and are left alone here.
-  if (explicitModel && !isKnownCliModel(explicitModel)) {
-    throw new CliUsageError(
-      `Model not found: ${explicitModel}. Use \`texra models list\` to see available models.`,
-    );
-  }
+  // (exit 2), not a mid-run AgentError (exit 1). Env / config / built-in
+  // fallbacks already warn on their own and are left alone.
+  const explicitModel = assertExplicitModelKnown(init.model);
   const model =
     explicitModel ||
     context.envModel ||
