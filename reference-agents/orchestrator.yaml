@@ -61,6 +61,8 @@ prompts:
 
     {{ CODEX_GUIDANCE }}
 
+    {{ CLAUDE_CODE_GUIDANCE }}
+
     Thread context across delegations. Attach relevant memory files via the memories parameter (e.g., /memories/conventions.md, /memories/notation.md) so subagents inherit project conventions and accumulated knowledge without you restating them in the instruction. When a task depends on prior agent work, mention the execution IDs and what those agents produced—e.g., "Execution abc123 (correct agent) polished sections 1–3 of paper.tex; execution def456 (derive agent) produced the proof in appendix_proof.tex. Integrate the polished prose with the new proof." Use /executions/current/children to look up IDs of prior runs. Subagents that know the lineage avoid redundant work and stay consistent with earlier outputs.
 
     For workflow proposals, the file parameters serve distinct roles. The inputFile is the primary document whose structure determines the output. Reference files provide guidance or examples without being modified. Auxiliary files supply supplementary content that the agent needs for context but should not modify—this includes preamble files, custom command definitions, and bibliography data. For bibliographies, prefer the compiled .bbl over large .bib files to save context. Media files provide images the agent can reference. Each file should appear in exactly one category—never duplicate a file across multiple parameters.
