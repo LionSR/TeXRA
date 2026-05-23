@@ -161,9 +161,9 @@ describe('assertOutputFileAvailable', () => {
       await expect(
         assertOutputFileAvailable(dirPath, root),
       ).rejects.toBeInstanceOf(CliUsageError);
-      await expect(
-        assertOutputFileAvailable(dirPath, root),
-      ).rejects.toThrow(/--output is a directory.*use --output-dir/);
+      await expect(assertOutputFileAvailable(dirPath, root)).rejects.toThrow(
+        /--output is a directory.*use --output-dir/,
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -180,9 +180,9 @@ describe('assertOutputFileAvailable', () => {
       await expect(
         assertOutputFileAvailable(through, root),
       ).rejects.toBeInstanceOf(CliUsageError);
-      await expect(
-        assertOutputFileAvailable(through, root),
-      ).rejects.toThrow(/parent path component is a file/);
+      await expect(assertOutputFileAvailable(through, root)).rejects.toThrow(
+        /parent path component is a file/,
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -193,9 +193,9 @@ describe('assertOutputFileAvailable', () => {
     try {
       const dirPath = join(root, 'rel-dir');
       await mkdir(dirPath);
-      await expect(
-        assertOutputFileAvailable('rel-dir', root),
-      ).rejects.toThrow(/--output is a directory/);
+      await expect(assertOutputFileAvailable('rel-dir', root)).rejects.toThrow(
+        /--output is a directory/,
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }
