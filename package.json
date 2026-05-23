@@ -1,6 +1,6 @@
 {
   "name": "texra-workspace",
-  "version": "0.37.10",
+  "version": "0.37.11",
   "private": true,
   "packageManager": "pnpm@11.1.1",
   "workspaces": [
