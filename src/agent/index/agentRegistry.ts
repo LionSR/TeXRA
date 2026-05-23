@@ -349,6 +349,15 @@ export function getAgentsBySource(source: AgentSource): AgentEntry[] {
   return [...cache.values()].filter((e) => e.source === source);
 }
 
+/**
+ * Whether the local registry has been loaded so `getAgent` lookups are
+ * meaningful. Callers that distinguish "agent absent" from "registry not yet
+ * loaded" must check this first — an empty cache looks identical otherwise.
+ */
+export function isAgentRegistryReady(): boolean {
+  return initialized;
+}
+
 /** Refresh the cache. */
 export async function refresh(): Promise<void> {
   initialized = false;
