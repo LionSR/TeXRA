@@ -36,6 +36,7 @@ import {
   formatChatAsMarkdown,
   formatChatAsLatex,
   generateExportFilename,
+  generateExportFolderName,
   type ChatExportInput,
 } from '@commands/history/chatExportFormatter';
 import {
@@ -247,8 +248,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly memoryController: SettingsMemoryController;
   private readonly profileKeyController: SettingsProfileKeyController;
 
+  /** Used by handleExportChat to locate the bundled HTML export assets. */
+  private readonly extensionPath: string;
+
   constructor(context: vscode.ExtensionContext) {
     super('SettingsView', { trackActiveView: true });
+
+    this.extensionPath = context.extensionPath;
 
     const ctx: SettingsHandlerContext = {
       channel: this.channel,
@@ -346,6 +352,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleExportChat(data, 'md'),
       [SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX]: (data) =>
         this.handleExportChat(data, 'tex'),
+      [SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_HTML]: (data) =>
+        this.handleExportChat(data, 'html'),
 
       // Profile handlers
       [SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA]: () =>
@@ -1272,7 +1280,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   private async handleExportChat(
     data: { historyId: string },
-    format: 'md' | 'tex',
+    format: 'md' | 'tex' | 'html',
   ): Promise<void> {
     try {
       const store = getExecutionStore(data.historyId as ExecutionId);
@@ -1310,6 +1318,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         },
         messages: conversation,
       };
+
+      if (format === 'html') {
+        await this.exportChatAsHtml(data.historyId, exportInput);
+        return;
+      }
 
       const filename = generateExportFilename(exportInput, format);
       const storagePath = `executions/${data.historyId}/${filename}`;
@@ -1357,6 +1370,54 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         error,
       );
     }
+  }
+
+  /**
+   * Build a self-contained HTML chat export.
+   *
+   * Layout (under the execution's storage folder):
+   *   texra-chat-{date}-{slug}/
+   *     index.html           ← document references ./assets/*
+   *     assets/              ← chat.css, katex.min.css, hljs themes, fonts
+   *
+   * Opens index.html in the user's default browser so they see the same
+   * KaTeX/highlight.js rendering an audience would see.
+   */
+  private async exportChatAsHtml(
+    historyId: string,
+    exportInput: ChatExportInput,
+  ): Promise<void> {
+    const path = await import('node:path');
+    const { formatChatAsHtml } = await import(
+      '@commands/history/htmlExport/htmlFormatter'
+    );
+
+    const folderName = generateExportFolderName(exportInput);
+    const folderPath = `executions/${historyId}/${folderName}`;
+    const assetsPath = `${folderPath}/assets`;
+
+    await StorageFS.ensureDir(folderPath);
+
+    const html = formatChatAsHtml(exportInput);
+    await StorageFS.write(`${folderPath}/index.html`, html);
+
+    const assetsSrc = path.join(this.extensionPath, 'resources', 'htmlExport');
+    const fsExtra = (await import('fs-extra')).default;
+    if (!(await fsExtra.pathExists(assetsSrc))) {
+      throw new Error(
+        `HTML export assets missing at ${assetsSrc} — rebuild the extension ` +
+          `(npm run package:fast) so scripts/copy-html-export-assets.mjs runs.`,
+      );
+    }
+    await fsExtra.copy(assetsSrc, StorageFS.fullPath(assetsPath), {
+      overwrite: true,
+    });
+
+    const htmlAbsolute = StorageFS.fullPath(`${folderPath}/index.html`);
+    await vscode.env.openExternal(vscode.Uri.file(htmlAbsolute));
+    void vscode.window.showInformationMessage(
+      `Chat exported to ${folderName}/index.html`,
+    );
   }
 
   private async withHistoryConfig(
