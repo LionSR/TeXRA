@@ -45,7 +45,21 @@ export async function expandWorkflowInputSpec(
   }
 
   const absolutePath = resolveAgainstCwd(trimmed, cwd);
-  const stats = await fs.stat(absolutePath).catch(() => null);
+  // Only treat true missing-path errors as "file not found"; other failures
+  // (EACCES, EIO, …) are environment problems, not Usage errors, and must
+  // propagate so the user sees the real cause.
+  let stats: Awaited<ReturnType<typeof fs.stat>> | null = null;
+  try {
+    stats = await fs.stat(absolutePath);
+  } catch (error: unknown) {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? (error as { code?: unknown }).code
+        : undefined;
+    if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+      throw error;
+    }
+  }
   if (stats?.isDirectory()) {
     const matches = await glob('**/*.tex', {
       cwd: absolutePath,
