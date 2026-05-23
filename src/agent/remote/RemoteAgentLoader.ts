@@ -14,10 +14,10 @@ import {
   updateAgentTools,
   updateAgentDefaultOutputFiles,
 } from '@agent/index/agentRegistry';
-import * as logger from '@agent/core/logger';
 import { SUPABASE_CONFIG } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { toErrorMessage } from '@common/errors/errorMessage';
+import * as logger from '@logger/logUtils';
 import { resolveToolDefinitions } from '@tools/registry';
 
 import {

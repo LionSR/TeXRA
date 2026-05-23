@@ -14,7 +14,6 @@ import type {
   ConfigTarget,
 } from '@platform/interfaces/config';
 import type { Disposable } from '@platform/interfaces/disposable';
-import type { LogBackend } from '@platform/interfaces/log';
 import type { StateStore } from '@platform/interfaces/state';
 import type { StorageProvider } from '@platform/interfaces/storage';
 import type { WorkspaceProvider } from '@platform/interfaces/workspace';
@@ -38,7 +37,6 @@ export type RecordingLogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export interface RecordingLogEntry {
   level: RecordingLogLevel;
-  channel: string;
   message: string;
 }
 
@@ -274,41 +272,6 @@ export class FakeStateStore implements StateStore {
       return;
     }
     this.values.set(key, value);
-  }
-}
-
-export class RecordingLogBackend implements LogBackend {
-  readonly initializedChannels: Array<{ channel: string; isAgent?: boolean }> =
-    [];
-
-  readonly entries: RecordingLogEntry[] = [];
-
-  initialize(channel: string, isAgent?: boolean): void {
-    this.initializedChannels.push({ channel, isAgent });
-  }
-
-  debug(channel: string, message: string): void {
-    this.record('debug', channel, message);
-  }
-
-  info(channel: string, message: string): void {
-    this.record('info', channel, message);
-  }
-
-  warn(channel: string, message: string): void {
-    this.record('warn', channel, message);
-  }
-
-  error(channel: string, message: string): void {
-    this.record('error', channel, message);
-  }
-
-  private record(
-    level: RecordingLogLevel,
-    channel: string,
-    message: string,
-  ): void {
-    this.entries.push({ level, channel, message });
   }
 }
 
@@ -762,7 +725,6 @@ export function createFakePlatform(
     config: new FakeConfigProvider(options.config),
     globalState: new FakeStateStore(options.globalState),
     workspaceState: new FakeStateStore(options.workspaceState),
-    log: new RecordingLogBackend(),
     fs: new FakeFileSystemProvider(options.files),
     workspace: new FakeWorkspaceProvider(workspacePath),
     storage: new FakeStorageProvider(
