@@ -1,4 +1,3 @@
-export { AgentUsageReporter } from './AgentUsageReporter';
 export * as logUtils from './logUtils';
 export { redactSecrets, type LogRedactionOptions } from './redaction';
 export { getStreamTabId } from './streamUtils';
