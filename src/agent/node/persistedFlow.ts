@@ -3,8 +3,8 @@
 
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 
-import * as logger from '@agent/core/logger';
 import { toErrorMessage } from '@common/errors';
+import * as logger from '@logger/logUtils';
 
 import { BaseNode, Flow, type Action } from '.';
 

@@ -182,7 +182,6 @@ export async function activate(context: vscode.ExtensionContext) {
     config: new VscodeConfigProvider(),
     globalState: context.globalState,
     workspaceState: workspaceSM,
-    log: logger,
     fs: new VscodeFileSystem(),
     workspace: new VscodeWorkspace(),
     storage: new VscodeStorage(context),

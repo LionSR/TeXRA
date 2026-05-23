@@ -167,9 +167,10 @@ export class TexraTraceEmitter extends TraceEmitter implements TexraTrace {
     input: unknown,
     groupId?: string,
   ): ToolStartRef {
-    const ref = this.emitToolUse({ toolName, input }, groupId);
-    this.debug(`Tool started: ${toolName}`, { stageId: ref.groupId });
-    return ref;
+    // Tool start is already announced by the `tool.start` event — subscribers
+    // render the tool-use card from that. A second debug log line would be
+    // redundant (transcript shows the card; channel filters debug by default).
+    return this.emitToolUse({ toolName, input }, groupId);
   }
 
   updateToolUse(

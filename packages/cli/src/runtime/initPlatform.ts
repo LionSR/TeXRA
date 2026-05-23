@@ -37,7 +37,7 @@ import { createCliStateStores } from './cliStateStores';
 
 // Type imports - platform and CLI runtime
 import type { LifecycleHost } from '@platform/interfaces/lifecycle';
-import type { LogBackend } from '@platform/interfaces/log';
+import type { LogBackend } from './supabaseAuth';
 import type { CliContext } from './cliContext';
 
 let bootstrappedResourcesPath: string | undefined;
@@ -122,7 +122,6 @@ export async function initCliPlatform(
       config: new JsonConfigProvider({ workspace: configStore }),
       globalState: stateStores.globalState,
       workspaceState: stateStores.workspaceState,
-      log: cliPlatformLog,
       fs: nodeFilesystem,
       workspace: createNodeWorkspace(() => cliWorkspaceCwd),
       storage: stateStores.storage,

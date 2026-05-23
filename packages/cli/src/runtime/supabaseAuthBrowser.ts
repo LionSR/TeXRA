@@ -1,8 +1,7 @@
 // Standard library imports
 import { spawn, type ChildProcess } from 'node:child_process';
 
-// Type imports - platform
-import type { LogBackend } from '@platform/interfaces/log';
+import type { LogBackend } from './supabaseAuth';
 
 function quoteWindowsStartUrl(url: string): string {
   return url.replaceAll('"', '%22');

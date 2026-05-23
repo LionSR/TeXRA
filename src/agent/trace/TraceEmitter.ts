@@ -195,7 +195,7 @@ export class TraceEmitter implements AgentTrace {
     if (!progressEnabled) {
       // Local-only buffering — chunks never emit. `finalize` returns the
       // text but nothing reaches subscribers.
-      return new BufferOnlyStreamHandle(this, id, kind);
+      return new BufferOnlyStreamHandle(this, id);
     }
 
     // Open inside the explicit stage scope so the start event carries the
@@ -205,13 +205,13 @@ export class TraceEmitter implements AgentTrace {
       let handle!: StreamHandle;
       stageScope.run(nextStack, () => {
         this.emit({ type: 'stream.start', id, kind });
-        handle = new StreamHandleImpl(this, id, kind);
+        handle = new StreamHandleImpl(this, id);
       });
       return handle;
     }
 
     this.emit({ type: 'stream.start', id, kind });
-    return new StreamHandleImpl(this, id, kind);
+    return new StreamHandleImpl(this, id);
   }
 }
 
@@ -292,7 +292,6 @@ class StreamHandleImpl implements StreamHandle {
   constructor(
     private readonly trace: TraceEmitter,
     readonly id: string,
-    private readonly kind: StreamKind,
   ) {}
 
   append(text: string): void {
@@ -310,7 +309,6 @@ class StreamHandleImpl implements StreamHandle {
       id: this.id,
       finalText: typeof finalText === 'string' ? finalText : undefined,
     });
-    this.trace.debug(`Final ${this.kind} length: ${this.buffer.length}`);
     return this.buffer;
   }
 }
@@ -327,7 +325,6 @@ class BufferOnlyStreamHandle implements StreamHandle {
   constructor(
     private readonly trace: TraceEmitter,
     readonly id: string,
-    private readonly kind: StreamKind,
   ) {}
 
   append(text: string): void {
@@ -339,7 +336,6 @@ class BufferOnlyStreamHandle implements StreamHandle {
     if (this.finalized) return this.buffer;
     this.finalized = true;
     if (typeof finalText === 'string') this.buffer = finalText;
-    this.trace.debug(`Final ${this.kind} length: ${this.buffer.length}`);
     return this.buffer;
   }
 }
