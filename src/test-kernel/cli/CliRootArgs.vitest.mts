@@ -23,6 +23,7 @@ import {
   resolveWorkflowOutput,
 } from '../../../packages/cli/src/commands/root';
 import { rejectHeadlessOnlyFlags } from '../../../packages/cli/src/commands/_helpers/globalArgs';
+import { isKnownCliModel } from '../../../packages/cli/src/runtime/cliConfig';
 import type { CliContext } from '../../../packages/cli/src/runtime/cliContext';
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
@@ -482,6 +483,15 @@ describe('CLI root argument routing', () => {
 
     expect(init.quietLogs).toBe(true);
     expect(init.skipIncludedModelAccess).toBeUndefined();
+  });
+});
+
+describe('CLI model flag validation contract', () => {
+  it('classifies built-in models as known and bogus names as unknown', () => {
+    expect(isKnownCliModel('sonnet46T')).toBe(true);
+    expect(isKnownCliModel('deepseekT')).toBe(true);
+    expect(isKnownCliModel('nonexistent-model-xyz')).toBe(false);
+    expect(isKnownCliModel('')).toBe(false);
   });
 });
 

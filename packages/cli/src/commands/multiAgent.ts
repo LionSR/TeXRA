@@ -42,6 +42,7 @@ import { getCliAuthProvider } from '../runtime/supabaseAuth';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
+import { assertExplicitModelKnown } from './_helpers/modelArg';
 import {
   GLOBAL_ARGS,
   collectStringFlagValues,
@@ -204,8 +205,9 @@ async function runMultiAgentPreset(
   context: CliContext,
   init: MultiAgentRunInit,
 ): Promise<number> {
+  const explicitModel = assertExplicitModelKnown(init.model);
   const model =
-    init.model?.trim() ||
+    explicitModel ||
     context.envModel ||
     resolveConfiguredModel(context.cliConfig, 'chat') ||
     CLI_BUILTIN_DEFAULT_MODEL;
