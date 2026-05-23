@@ -5,7 +5,8 @@
 // docs/prd/cli-tui-ink/10-architecture.md § Intuitiveness conventions.
 //
 // `↑/↓` walks the rows, Enter calls `onSelect`, Esc calls `onCancel`. Items
-// receive a 1-based numeric prefix so digit shortcuts can jump directly.
+// 1-9 are reachable by digit; items 10-35 by a-z (lowercase). Beyond 35,
+// only arrow-key navigation reaches the row.
 
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useState } from 'react';
@@ -68,6 +69,33 @@ export function selectItemRenderKey<T>(
   return `${index}:${item.label}`;
 }
 
+const A_LOWERCASE = 'a'.charCodeAt(0);
+const Z_LOWERCASE = 'z'.charCodeAt(0);
+
+/** Map a typed keystroke to a zero-based item index, or undefined if unbound. */
+export function hotkeyIndex(input: string): number | undefined {
+  if (input.length !== 1) return undefined;
+  const digit = Number(input);
+  if (Number.isInteger(digit) && digit >= 1 && digit <= 9) return digit - 1;
+  const code = input.charCodeAt(0);
+  if (code >= A_LOWERCASE && code <= Z_LOWERCASE) return code - A_LOWERCASE + 9;
+  return undefined;
+}
+
+/** Render the leading slot for an item: `1.`-`9.`, `a.`-`z.`, or two spaces. */
+export function selectIndexLabel(index: number): string {
+  if (index < 9) return `${index + 1}.`;
+  if (index < 9 + 26) return `${String.fromCharCode(A_LOWERCASE + index - 9)}.`;
+  return '  ';
+}
+
+/** Footer hint string matching the active hotkey range for a given item count. */
+export function selectHotkeyHint(itemCount: number): string {
+  if (itemCount <= 0) return '';
+  if (itemCount <= 9) return '1-9';
+  return '1-9 a-z';
+}
+
 export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   const activeIndex = props.items.findIndex(
     (it) => it.value === props.activeValue,
@@ -113,16 +141,15 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
       if (choice && !choice.disabled) props.onSelect(choice.value);
       return;
     }
-    // 1-9 digit jumps for direct selection.
-    const digit = Number(input);
-    if (Number.isInteger(digit) && digit >= 1 && digit <= 9) {
-      const idx = digit - 1;
-      if (idx < props.items.length) {
-        const choice = props.items[idx];
-        if (choice && !choice.disabled) {
-          setHighlight(idx);
-          props.onSelect(choice.value);
-        }
+    // 1-9 digit jumps for items 1-9; a-z covers items 10-35 so pickers with
+    // many remote agents (the worst offender is `/agent`, which can list 18+)
+    // do not have a silent number-less tail.
+    const idx = hotkeyIndex(input);
+    if (idx != null && idx < props.items.length) {
+      const choice = props.items[idx];
+      if (choice && !choice.disabled) {
+        setHighlight(idx);
+        props.onSelect(choice.value);
       }
     }
   });
@@ -138,7 +165,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
         const active = item.value === props.activeValue;
         const pointer = focused ? '›' : ' ';
         const tick = active ? '✓' : ' ';
-        const numeric = i < 9 ? `${i + 1}.` : '  ';
+        const numeric = selectIndexLabel(i);
         return (
           <Box key={selectItemRenderKey(item, i)} minWidth={0}>
             <Box flexShrink={0}>

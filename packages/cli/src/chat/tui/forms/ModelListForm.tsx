@@ -6,7 +6,7 @@ import { Box, Text, useInput } from 'ink';
 import { Spinner } from '@inkjs/ui';
 import { useEffect, useState } from 'react';
 
-import { Select } from '../ui/Select';
+import { Select, selectHotkeyHint } from '../ui/Select';
 import { KeyHints } from '../ui/KeyHints';
 import {
   getCliModelAccessList,
@@ -200,7 +200,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
           <KeyHints
             hints={[
               { key: '↑/↓', action: 'navigate' },
-              { key: '1-9', action: 'select' },
+              { key: selectHotkeyHint(items.length), action: 'select' },
             ]}
           />
         ) : (

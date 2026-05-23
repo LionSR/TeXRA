@@ -9,7 +9,7 @@ import { computeAgentOptionsData } from '@agent/index';
 import type { AgentOptionData } from '@shared/schemas';
 
 import { KeyHints } from '../ui/KeyHints';
-import { Select } from '../ui/Select';
+import { Select, selectHotkeyHint } from '../ui/Select';
 
 export interface AgentListFormProps {
   readonly currentAgent: string;
@@ -262,7 +262,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
           <KeyHints
             hints={[
               { key: '↑/↓', action: 'navigate' },
-              { key: '1-9', action: 'select' },
+              { key: selectHotkeyHint(items.length), action: 'select' },
             ]}
           />
         ) : (
