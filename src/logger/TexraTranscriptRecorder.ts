@@ -117,7 +117,8 @@ export function attachTranscriptRecorder(
   };
 
   const handleLog = (event: LogEvent): void => {
-    const messageType = (event.messageType ?? MESSAGE_TYPES.DEFAULT) as MessageType;
+    const messageType = (event.messageType ??
+      MESSAGE_TYPES.DEFAULT) as MessageType;
     if (!shouldEmit(event.level, messageType)) return;
 
     store.append(streamId, {

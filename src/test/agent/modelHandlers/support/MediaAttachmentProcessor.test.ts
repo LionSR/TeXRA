@@ -48,7 +48,10 @@ function createLoggerStub(): { logger: TexraTrace; stub: LoggerStub } {
     error(message: string) {
       this.errorMessages.push(message);
     },
-    filesLoaded(input: { category: string; entries: readonly MediaFileResult[] }) {
+    filesLoaded(input: {
+      category: string;
+      entries: readonly MediaFileResult[];
+    }) {
       this.fileListEntries.push([...input.entries]);
     },
   };

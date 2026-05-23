@@ -11,10 +11,7 @@
  * presentation layer can program against `AgentTrace`.
  */
 
-import type {
-  AgentTrace,
-  StagedEmitOptions,
-} from '@agent/trace';
+import type { AgentTrace, StagedEmitOptions } from '@agent/trace';
 import type { ToolStatus } from '@agent/trace';
 import type {
   ContextManagementData,

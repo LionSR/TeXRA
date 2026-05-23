@@ -57,8 +57,13 @@ function createLoggerStub(): { logger: TexraTrace; stub: LoggerStub } {
     error: () => {
       /* no-op for tests */
     },
-    filesLoaded(input: { category: string; entries: Array<{ path: string; ok: boolean }> }) {
-      this.fileListEntries.push(input.entries as Array<{ path: string; ok: boolean }>);
+    filesLoaded(input: {
+      category: string;
+      entries: Array<{ path: string; ok: boolean }>;
+    }) {
+      this.fileListEntries.push(
+        input.entries as Array<{ path: string; ok: boolean }>,
+      );
     },
   };
 

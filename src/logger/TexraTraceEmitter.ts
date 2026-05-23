@@ -22,12 +22,7 @@ import {
   type FileListEntry,
 } from '@shared/schemas';
 
-
-import type {
-  FilesLoadedInput,
-  TexraTrace,
-  ToolStartRef,
-} from './TexraTrace';
+import type { FilesLoadedInput, TexraTrace, ToolStartRef } from './TexraTrace';
 
 export class TexraTraceEmitter extends TraceEmitter implements TexraTrace {
   // ─── Domain log-event sugar ────────────────────────────────────────
@@ -45,11 +40,7 @@ export class TexraTraceEmitter extends TraceEmitter implements TexraTrace {
     });
   }
 
-  logProgress(
-    message: string,
-    context?: ErrorContext,
-    groupId?: string,
-  ): void {
+  logProgress(message: string, context?: ErrorContext, groupId?: string): void {
     this.info(message, {
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
       data: context,
