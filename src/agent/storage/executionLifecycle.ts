@@ -8,10 +8,36 @@
  */
 
 import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentCategory } from '@agent/core/AgentDataclass';
+import { getAgent, isAgentRegistryReady } from '@agent/index/agentRegistry';
 
 import type { ExecutionId } from '@shared/schemas';
 import { type ExecutionMeta, getExecutionStore } from './ExecutionKVStore';
 import { invalidateListingCache } from './executionListing';
+
+/**
+ * Tool-driven executions (e.g. the `bash` background tool) persist a synthetic
+ * config tagged `agentCategory: ToolUse` with a name that is not a real
+ * tool-use agent. Those rows would otherwise be picked up as chat-session
+ * defaults (see `chatDefaults.loadHistoryDefaults`, which keys off
+ * `agentConfig.agentCategory === ToolUse`). Demote the persisted category to
+ * Workflow for names the loaded registry does not know as tool-use agents so
+ * the rows stop polluting defaults resolution.
+ *
+ * Skipped when the registry is not loaded — an empty registry can't tell
+ * "agent absent" from "not loaded yet", and we must never demote a legitimate
+ * tool-use agent's run. The displayed history category is unaffected: listing
+ * surfaces `meta.category` (e.g. `'process'`) ahead of `config.agentCategory`.
+ */
+export function normalizeWriterCategory(
+  config: AgentConfig,
+  agentName: string,
+): AgentConfig {
+  if (config.agentCategory !== AgentCategory.ToolUse) return config;
+  if (!isAgentRegistryReady()) return config;
+  if (getAgent(agentName)?.category === AgentCategory.ToolUse) return config;
+  return { ...config, agentCategory: AgentCategory.Workflow };
+}
 
 // ---------------------------------------------------------------------------
 // Per-execution write queue — serializes read-modify-write cycles on meta
@@ -70,7 +96,7 @@ export async function registerExecution(
   if (delegationDepth !== undefined) meta.delegationDepth = delegationDepth;
 
   const writes: Promise<void>[] = [
-    store.writeConfig(config),
+    store.writeConfig(normalizeWriterCategory(config, agentName)),
     store.writeMeta(meta),
   ];
 

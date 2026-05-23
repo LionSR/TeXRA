@@ -54,6 +54,7 @@ export {
   getWorkflowAgents,
   getToolUseAgents,
   getAgentsBySource,
+  isAgentRegistryReady,
   refresh,
   // Typed data options
   computeAgentOptionsData,
