@@ -3,27 +3,22 @@
  * the standard TeXRA subscribers attached.
  *
  * - `createChannelTrace(name)` — for module-level singletons that just need
- *   per-channel debug output (no transcript). Replaces the
- *   `new AgentLogger(name)` pattern (isAgentLogger=false).
+ *   per-channel debug output (no transcript).
  *
  * - `createRunTrace(streamId, store)` — for agent runs. Attaches BOTH the
- *   console subscriber (channel output) AND the {@link
- *   TexraTranscriptRecorder} that drives the webview transcript. Returns
- *   `{ trace, flushPending, dispose }` so callers can drain in-flight
- *   stream chunks at shutdown.
+ *   channel-output subscriber AND the {@link TexraTranscriptRecorder} that
+ *   drives the webview transcript. Returns `{ trace, flushPending,
+ *   dispose }` so callers can drain in-flight stream chunks at shutdown.
  *
  * Lives in `src/logger/` rather than `src/agent/trace/` because both
- * subscribers (console, transcript) are TeXRA-product concerns. The trace
- * core itself stays platform-neutral.
+ * subscribers (channel output, transcript) are TeXRA-product concerns. The
+ * trace core itself stays platform-neutral.
  */
 import type { AgentTrace } from '@agent/trace';
 import { TraceEmitter } from '@agent/trace';
 import type { StreamTabId } from '@shared/schemas';
 
-import {
-  attachConsoleSubscriber,
-  type ConsoleSubscriberOptions,
-} from './consoleSubscriber';
+import { attachChannelSubscriber } from './logUtils';
 import {
   getDefaultStreamLogStore,
   type StreamLogStore,
@@ -40,10 +35,7 @@ import {
  */
 export function createChannelTrace(name: string): AgentTrace {
   const trace = new TraceEmitter();
-  attachConsoleSubscriber(trace, {
-    channel: name,
-    isAgent: false,
-  } satisfies ConsoleSubscriberOptions);
+  attachChannelSubscriber(trace, { channel: name, isAgent: false });
   return trace;
 }
 
@@ -55,16 +47,16 @@ export interface RunTrace {
 
 /**
  * Produce a trace wired with the standard agent-run subscribers: per-channel
- * console output AND the transcript recorder.
+ * channel output AND the transcript recorder.
  *
- * `store` defaults to the AgentLogger-managed default — tests can override.
+ * `store` defaults to the global stream-log store — tests can override.
  */
 export function createRunTrace(
   streamId: StreamTabId,
   store: StreamLogStore = getDefaultStreamLogStore(),
 ): RunTrace {
   const trace = new TraceEmitter();
-  const unsubscribeConsole = attachConsoleSubscriber(trace, {
+  const unsubscribeChannel = attachChannelSubscriber(trace, {
     channel: streamId,
     isAgent: true,
   });
@@ -84,7 +76,7 @@ export function createRunTrace(
     dispose: () => {
       activeFlushers.delete(transcript.flushPending);
       transcript.unsubscribe();
-      unsubscribeConsole();
+      unsubscribeChannel();
     },
   };
 }
@@ -99,3 +91,4 @@ const activeFlushers = new Set<() => void>();
 export function flushPendingRunTraces(): void {
   for (const flush of [...activeFlushers]) flush();
 }
+

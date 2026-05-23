@@ -12,7 +12,6 @@ export {
   attachTranscriptRecorder,
   type TranscriptRecorderHandle,
 } from './TexraTranscriptRecorder';
-export { attachConsoleSubscriber } from './consoleSubscriber';
 export {
   createChannelTrace,
   createRunTrace,

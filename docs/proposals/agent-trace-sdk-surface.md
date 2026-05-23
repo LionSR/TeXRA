@@ -241,10 +241,12 @@ shipped on `claude/agent-trace-sdk-surface-UzsKR`:
   `AgentEvent` into the existing `StreamLogStore` writes (webview
   transcript). The exhaustive `switch (event.type)` enforces SSoT —
   adding a new arm forces an error here.
-- **`src/logger/consoleSubscriber.ts`** — subscriber that routes plain
-  log events through `logUtils` to the existing per-channel output
-  sinks. Replaces the inline `logger.{level}()` calls that used to live
-  inside `AgentLogger`.
+- **`logUtils.attachChannelSubscriber`** — single function that routes
+  `log` events from a trace into the per-channel output sinks (VS Code
+  output channels in the extension, console elsewhere). Replaces the
+  former `consoleSubscriber.ts` shim and the structuredLogger middleman
+  inside logUtils — there is now one write per log event, straight from
+  the subscriber into the sink.
 - **`src/logger/runTrace.ts`** — `createChannelTrace(name)` for module-
   load debug singletons; `createRunTrace(streamId)` for agent runs
   (wires console + transcript subscribers and a `dispose()` for
