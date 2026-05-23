@@ -23,11 +23,7 @@ import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError, getSdkErrorMessage, toErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
 import type { TexraTrace } from '@logger';
-import {
-  createRunTrace,
-  getStreamTabId,
-  type RunTrace,
-} from '@logger/index';
+import { createRunTrace, getStreamTabId, type RunTrace } from '@logger/index';
 import {
   STREAM_STATUS,
   type ExecutionId,
