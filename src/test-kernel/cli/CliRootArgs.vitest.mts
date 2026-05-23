@@ -298,11 +298,7 @@ describe('CLI root argument routing', () => {
       await fs.writeFile(path.join(root, 'a.bib'), 'a');
       await fs.writeFile(path.join(root, 'b.bib'), 'b');
       await expect(
-        expandWorkflowInputSpecs(
-          [path.join(root, '*.bib')],
-          root,
-          '--context',
-        ),
+        expandWorkflowInputSpecs([path.join(root, '*.bib')], root, '--context'),
       ).resolves.toEqual(['a.bib', 'b.bib']);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
