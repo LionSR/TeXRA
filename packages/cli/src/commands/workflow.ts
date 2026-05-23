@@ -51,6 +51,7 @@ import {
 } from './_helpers/workflowInputs';
 import {
   assertOutputDirAvailable,
+  assertOutputFileAvailable,
   expectedOutputFilesForOutputDir,
   formatWorkflowTextResult,
   resolveWorkflowOutput,
@@ -90,6 +91,10 @@ async function runWorkflowAgent(
   // Reject `--output-dir <path>` early when the path already points at a
   // non-directory (else we'd run the full workflow and EEXIST at the end).
   await assertOutputDirAvailable(init.outputDir, runContext.cwd);
+  // Same fast-fail for `--output <path>`: existing directory or file-typed
+  // parent component blows up at copy time (`EISDIR` / `EEXIST`) after the
+  // full agent run otherwise.
+  await assertOutputFileAvailable(init.output, runContext.cwd);
   const inputFiles = await expandWorkflowInputSpecs(
     init.inputFiles,
     runContext.cwd,
