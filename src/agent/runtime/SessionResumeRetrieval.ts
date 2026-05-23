@@ -22,16 +22,16 @@ import {
   TOOL_USE_SNAPSHOT_VERSION,
   ToolUseSessionSnapshotSchema,
 } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
+import { createChannelTrace } from '@logger';
 import type { TaskState } from '@logger/TaskState';
 import { isToolUseTaskState, isWorkflowTaskState } from '@logger/TaskState';
-import { AgentLogger } from '@logger/AgentLogger';
 import {
   ExecutionIdSchema,
   type StreamTabId,
   type ExecutionId,
 } from '@shared/schemas';
 
-const logger = new AgentLogger('SessionResumeRetrieval');
+const logger = createChannelTrace('SessionResumeRetrieval');
 
 /** Tool-use session resume data: full snapshot with messages, state slices. */
 const ToolUseResumeDataSchema = z.object({

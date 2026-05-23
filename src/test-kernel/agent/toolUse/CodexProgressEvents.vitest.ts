@@ -8,7 +8,11 @@ import {
 } from '@agent/runtime/AgentRuntimeHost';
 
 // Local imports - logger
-import { AgentLogger } from '@logger/AgentLogger';
+import {
+  createRunTrace,
+  getDefaultStreamLogStore,
+  setDefaultStreamLogStore,
+} from '@logger';
 import { StreamLogStore } from '@logger/StreamLogStore';
 
 // Local imports - shared
@@ -95,12 +99,12 @@ describe('codex progress events', () => {
   });
 
   it('updates in-flight Codex command items in place', async () => {
-    const previousStore = AgentLogger.getStreamLogStore();
+    const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
-    AgentLogger.setStreamLogStore(store);
+    setDefaultStreamLogStore(store);
     await store.clear();
 
-    const logger = new AgentLogger(streamId, true);
+    const logger = createRunTrace(streamId).trace;
     const runtime = createRecordingHost();
     const startedCommand: CommandExecutionItem = {
       id: 'cmd-1',
@@ -172,7 +176,7 @@ describe('codex progress events', () => {
         status: 'completed',
       });
     } finally {
-      AgentLogger.setStreamLogStore(previousStore);
+      setDefaultStreamLogStore(previousStore);
     }
   });
 });

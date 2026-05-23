@@ -11,7 +11,7 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { getCurrentToolCallContext } from '@agent/toolUse/ToolFileInteractionContext';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelTrace } from '@logger';
 import {
   TODO_STATUS,
   STATUS_DISPLAY,
@@ -22,7 +22,7 @@ import {
 import { type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
-const logger = new AgentLogger('TodoWriteTool');
+const logger = createChannelTrace('TodoWriteTool');
 
 /**
  * Schema for the todo_write tool input.

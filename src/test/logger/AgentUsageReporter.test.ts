@@ -2,9 +2,9 @@
 import { strict as assert } from 'assert';
 
 // Local imports
+import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { AgentLogger } from '@logger/AgentLogger';
 import type { ExtendedTokenUsageStats, StorageKey } from '@shared/schemas';
 import { AgentUsageReporter } from '@/logger/AgentUsageReporter';
 
@@ -45,7 +45,7 @@ describe('AgentUsageReporter', () => {
         recordedStats = stats;
         recordedStorageKey = key;
       },
-    } as unknown as AgentLogger;
+    } as unknown as AgentTrace;
 
     const reporter = new AgentUsageReporter(
       loggerStub,
@@ -92,7 +92,7 @@ describe('AgentUsageReporter', () => {
       statistics: () => {
         throw new Error('statistics should not be called for tool-use runs');
       },
-    } as unknown as AgentLogger;
+    } as unknown as AgentTrace;
 
     const reporter = new AgentUsageReporter(
       loggerStub,
@@ -133,7 +133,7 @@ describe('AgentUsageReporter', () => {
       statistics: () => {
         /* no-op */
       },
-    } as unknown as AgentLogger;
+    } as unknown as AgentTrace;
 
     const reporter = new AgentUsageReporter(
       loggerStub,
@@ -178,7 +178,7 @@ describe('AgentUsageReporter', () => {
       statistics: () => {
         /* no-op */
       },
-    } as unknown as AgentLogger;
+    } as unknown as AgentTrace;
 
     const reporter = new AgentUsageReporter(
       loggerStub,
@@ -218,7 +218,7 @@ describe('AgentUsageReporter', () => {
       statistics: () => {
         /* no-op */
       },
-    } as unknown as AgentLogger;
+    } as unknown as AgentTrace;
 
     const reporter = new AgentUsageReporter(
       loggerStub,

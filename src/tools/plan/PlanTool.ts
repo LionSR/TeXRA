@@ -23,7 +23,7 @@ import { waitForPlanApproval } from '@agent/runtime/runCoordinators';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import type { CurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import { toErrorMessage } from '@common/errors';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelTrace } from '@logger';
 import {
   TODO_STATUS,
   STATUS_DISPLAY,
@@ -44,7 +44,7 @@ import { ToolError, type ToolResult } from '@tools/result';
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
-const logger = new AgentLogger('PlanTool');
+const logger = createChannelTrace('PlanTool');
 
 /** Counter for generating unique approval IDs */
 let approvalCounter = 0;

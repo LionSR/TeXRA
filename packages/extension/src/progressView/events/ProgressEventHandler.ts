@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 
+import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import { bus } from '@eventBus/ProgressEventBus';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelTrace } from '@logger';
 import { WebviewBridge } from '@progressView/managers/WebviewBridge';
 import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
@@ -48,7 +49,7 @@ type StreamBadgeSnapshot = {
 
 /** Handles progress event bus subscriptions for the progress view. */
 export class ProgressEventHandler {
-  private readonly logger: AgentLogger;
+  private readonly logger: AgentTrace;
   private readonly ctx: EventHandlerContext;
   private progressThrottleTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingProgressUpdates = new Map<StreamTabId, ConversationProgress>();
@@ -60,7 +61,7 @@ export class ProgressEventHandler {
     private readonly uiCallbacks: UICallbacks,
     private readonly hasPendingPermissions: (streamId: string) => boolean,
   ) {
-    this.logger = new AgentLogger('ProgressEventHandler');
+    this.logger = createChannelTrace('ProgressEventHandler');
     this.ctx = { state: this.state, webviewUpdater: this.webviewUpdater };
   }
 

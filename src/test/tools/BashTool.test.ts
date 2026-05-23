@@ -27,7 +27,7 @@ import type { ExecResult } from '@agent/types/ResultTypes';
 
 // Internal imports
 import { MapToolRegistry } from '@agent/core/ToolTypes';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createRunTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 import { BashTool } from '@tools/bash';
 import * as execUtils from '@utils/system/execUtils';
@@ -164,7 +164,7 @@ describe('BashTool', () => {
         userRequest: '',
       } satisfies AgentPrompt,
       userVarChannels: { input: {}, transient: {} },
-      logger: new AgentLogger('BashToolTest', true),
+      logger: createRunTrace('BashToolTest').trace,
       runtimeHost: noopAgentRuntimeHost,
       client: {} as OpenAI,
       toolRegistry: new MapToolRegistry({ bash: bashTool }),

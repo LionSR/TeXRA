@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import { computeAgentOptionsData } from '@agent/index';
+import type { AgentTrace } from '@agent/trace';
 import type { IRunStorageService } from '@agent/runtime/RunStorageService';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
@@ -11,7 +12,7 @@ import {
   setActiveSidebarView,
 } from '@common/webview';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelTrace } from '@logger';
 import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
@@ -79,7 +80,7 @@ export class ProgressViewProvider
   /** Set by disposePanelResources so showInSidebar knows replay is needed. */
   private _panelJustDisposed = false;
   private _pendingUpdateOptions: { forceRebuild: boolean } | null = null;
-  private readonly logger: AgentLogger;
+  private readonly logger: AgentTrace;
 
   private _sidebarWebviewGetter?: () => vscode.Webview | undefined;
   private _mainViewProvider?: MainViewProvider;
@@ -115,7 +116,7 @@ export class ProgressViewProvider
 
   constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
-    this.logger = new AgentLogger('ProgressViewProvider');
+    this.logger = createChannelTrace('ProgressViewProvider');
 
     this.state = new ProgressViewState();
     this.webviewUpdater = new WebviewUpdater(() => [this.getActiveWebview()]);

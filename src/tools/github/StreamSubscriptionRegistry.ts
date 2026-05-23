@@ -11,10 +11,11 @@
  * bound to that stream is auto-disposed.
  */
 
+import type { AgentTrace } from '@agent/trace';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 
 import { emitGitHubSubscriptionChangedToHosts } from './subscriptionEventEmitter';
@@ -63,7 +64,7 @@ interface BoundSubscription {
 }
 
 export class StreamSubscriptionRegistry<K extends string, Input> {
-  private readonly logger: AgentLogger;
+  private readonly logger: AgentTrace;
   private readonly perStream = new Map<
     StreamTabId,
     Map<K, BoundSubscription>
@@ -73,7 +74,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
   constructor(
     private readonly opts: StreamSubscriptionRegistryOptions<K, Input>,
   ) {
-    this.logger = new AgentLogger(opts.name);
+    this.logger = createChannelTrace(opts.name);
   }
 
   /** Returns true if a new subscription was created, false if it already existed. */

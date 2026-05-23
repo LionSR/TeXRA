@@ -11,9 +11,9 @@ import {
 
 // Local imports - agent
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
+import type { TexraTrace } from '@logger';
 
 // Type imports
-import type { AgentLogger } from '@logger/AgentLogger';
 import type { ToolDefinition } from '@model';
 
 function thinkingFor(
@@ -50,9 +50,8 @@ function buildConfig(overrides: Partial<ModelConfig> = {}): ModelConfig {
   };
 }
 
-function createLoggerStub(): Partial<AgentLogger> {
+function createLoggerStub(): Partial<TexraTrace> {
   return {
-    streamId: 'test-channel',
     debug: () => {
       /* no-op */
     },
@@ -65,12 +64,6 @@ function createLoggerStub(): Partial<AgentLogger> {
     error: () => {
       /* no-op */
     },
-    withCurrentGroup: () => undefined,
-    runWithinCurrentGroup: async <T>(fn: () => T | Promise<T>) => fn(),
-    runWithGroup: async <T>(
-      _groupId: string | undefined,
-      fn: () => T | Promise<T>,
-    ) => fn(),
   };
 }
 
@@ -173,7 +166,7 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
         },
       }),
     );
-    handler.setLogger(createLoggerStub() as AgentLogger);
+    handler.setLogger(createLoggerStub() as TexraTrace);
     (handler as any).getStreamingConfig = () => false;
 
     let capturedParams: any;
@@ -220,7 +213,7 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
         },
       }),
     );
-    handler.setLogger(createLoggerStub() as AgentLogger);
+    handler.setLogger(createLoggerStub() as TexraTrace);
     (handler as any).getStreamingConfig = () => false;
 
     let capturedParams: any;
@@ -421,7 +414,7 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
 
   it('sends nullable Chat Completions tools without SDK strict auto-parse validation', async () => {
     const handler = new ModelHandlerDeepSeek(buildConfig());
-    handler.setLogger(createLoggerStub() as AgentLogger);
+    handler.setLogger(createLoggerStub() as TexraTrace);
     (handler as any).getStreamingConfig = () => false;
 
     let capturedParams: any;

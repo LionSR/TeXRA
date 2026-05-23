@@ -1,10 +1,10 @@
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { AgentTrace } from '@agent/trace';
 
 /**
  * Safely parse tool call arguments from raw string to object.
  * Returns the original value if not a string, or if JSON parsing fails.
  */
-export function parseToolArguments(raw: unknown, logger: AgentLogger): unknown {
+export function parseToolArguments(raw: unknown, logger: AgentTrace): unknown {
   if (typeof raw !== 'string') {
     return raw;
   }

@@ -1,12 +1,17 @@
 import { z } from 'zod';
 
+import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import { toErrorMessage } from '@common/errors';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { isInFlightStatus } from '@common/constants/streamStatus';
-import { AgentLogger } from '@logger/AgentLogger';
+import {
+  createChannelTrace,
+  flushPendingRunTraces,
+  setDefaultStreamLogStore,
+} from '@logger';
 import { StreamLogStore } from '@logger/StreamLogStore';
 import { OutputFilesManager } from '@progressView/managers/OutputFilesManager';
 import { UsageStatsManager } from '@progressView/managers/UsageStatsManager';
@@ -124,7 +129,7 @@ export class ProgressViewState {
   private _sessionState = new Map<StreamTabId, StreamSessionState>();
 
   private readonly storage: MementoStorage;
-  private readonly logger: AgentLogger;
+  private readonly logger: AgentTrace;
 
   constructor(storage?: MementoStorage) {
     const resolvedStorage = storage ?? workspaceSM;
@@ -133,14 +138,14 @@ export class ProgressViewState {
     }
 
     this.storage = resolvedStorage;
-    this.logger = new AgentLogger('ProgressViewState');
+    this.logger = createChannelTrace('ProgressViewState');
     this._prefs = new PersistedState(
       createBackendStorage(resolvedStorage),
       WorkspaceStateKey.PROGRESS_VIEW_PREFS,
       ProgressViewPrefsSchema,
     );
     this.streamLogs = new StreamLogStore();
-    AgentLogger.setStreamLogStore(this.streamLogs);
+    setDefaultStreamLogStore(this.streamLogs);
     this.outputFiles = new OutputFilesManager();
     this.usageStats = new UsageStatsManager();
     this.meta = new StreamMetaManager();
@@ -429,7 +434,7 @@ export class ProgressViewState {
    * Flush pending writes from all managers.
    */
   async flush(): Promise<void> {
-    AgentLogger.flushPendingStreamUpdates();
+    flushPendingRunTraces();
     await Promise.all([
       this.streamLogs.flush(),
       this.meta.flush(),
