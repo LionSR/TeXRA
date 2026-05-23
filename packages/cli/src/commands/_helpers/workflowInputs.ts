@@ -3,6 +3,8 @@ import * as path from 'node:path';
 
 import { glob, hasMagic } from 'glob';
 
+import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+
 import { CliUsageError } from '../../runtime/cliContext';
 
 function resolveAgainstCwd(candidate: string, cwd: string): string {
@@ -62,11 +64,7 @@ export async function expandWorkflowInputSpec(
   try {
     stats = await fs.stat(absolutePath);
   } catch (error: unknown) {
-    const code =
-      typeof error === 'object' && error !== null && 'code' in error
-        ? (error as { code?: unknown }).code
-        : undefined;
-    if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+    if (!isFileNotFoundError(error) && !isNotADirectoryError(error)) {
       throw error;
     }
   }
