@@ -1,3 +1,4 @@
+import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 
@@ -6,11 +7,10 @@ import type {
   StorageKey,
   StreamTabId,
 } from '@shared/schemas';
-import { AgentLogger } from './AgentLogger';
 
 export class AgentUsageReporter {
   constructor(
-    private readonly logger: AgentLogger,
+    private readonly logger: AgentTrace,
     private readonly streamId: StreamTabId,
     private readonly agentCategory: AgentCategory,
     private readonly runtimeHost: AgentRuntimeHost,
@@ -28,7 +28,7 @@ export class AgentUsageReporter {
     });
 
     if (this.agentCategory === AgentCategory.Workflow) {
-      this.logger.statistics(stats, groupId ?? storageKey);
+      this.logger.usage(stats, { stageId: groupId ?? storageKey });
     }
   }
 }

@@ -19,6 +19,7 @@
       "@hosts": ["../../src/hosts"],
       "@hosts/*": ["../../src/hosts/*"],
       "@utils/*": ["../../src/utils/*"],
+      "@logger": ["../../src/logger"],
       "@logger/*": ["../../src/logger/*"],
       "@skills/*": ["../../src/skills/*"],
       "@latex": ["../../src/latex"],

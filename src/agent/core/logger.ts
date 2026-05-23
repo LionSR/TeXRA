@@ -5,7 +5,7 @@
  * module-level `logger.initialize(CHANNEL)` calls at import time.
  *
  * NOTE: For agent-transcript logging (group context, structured events
- * visible in the webview), use `@logger/AgentLogger` instead.
+ * visible in the webview), use `AgentTrace` from `@agent/trace` instead.
  */
 import { tryPlatform } from '@platform/platform';
 import { consoleLog } from '@platform/defaults/consoleLog';

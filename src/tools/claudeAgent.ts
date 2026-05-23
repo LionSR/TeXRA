@@ -44,7 +44,7 @@ import {
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
-import { AgentLogger } from '@logger/AgentLogger';
+import type { TexraTrace } from '@logger';
 import type {
   StreamTabId,
   ExecutionId,
@@ -281,7 +281,7 @@ function formatClaudeError(
 // Stream tab helpers
 // ============================================================================
 
-type ClaudeToolLogRef = ReturnType<AgentLogger['emitToolUse']> & {
+type ClaudeToolLogRef = ReturnType<TexraTrace['emitToolUse']> & {
   toolLog: ToolUseLog;
 };
 
@@ -300,7 +300,7 @@ function publishClaudeAgentStreamUsage(
 }
 
 function logTurnSummary(
-  logger: AgentLogger,
+  logger: TexraTrace,
   wallTimeMs: number,
   usage: TurnResult['usage'],
 ): void {
@@ -338,7 +338,7 @@ interface SdkMessage {
 export async function runStreamedTurn(params: {
   prompt: string;
   childStreamId: StreamTabId;
-  logger: AgentLogger;
+  logger: TexraTrace;
   abortController: AbortController;
   model: string;
   permissionMode: ClaudeAgentPermissionMode;
@@ -433,7 +433,7 @@ export async function runStreamedTurn(params: {
 
 function handleAssistantBlocks(
   blocks: ClaudeMessageBlock[],
-  logger: AgentLogger,
+  logger: TexraTrace,
   refs: Map<string, ClaudeToolLogRef>,
   responseParts: string[],
 ): void {
@@ -469,7 +469,7 @@ function handleAssistantBlocks(
 
 function handleToolResults(
   blocks: ClaudeMessageBlock[],
-  logger: AgentLogger,
+  logger: TexraTrace,
   refs: Map<string, ClaudeToolLogRef>,
 ): void {
   for (const block of blocks) {
@@ -519,7 +519,7 @@ function startClaudeAgentLoop(params: {
   childStreamId: StreamTabId;
   parentStreamId: StreamTabId;
   executionId: ExecutionId;
-  logger: AgentLogger;
+  logger: TexraTrace;
   initialPrompt: string;
   model: string;
   permissionMode: ClaudeAgentPermissionMode;

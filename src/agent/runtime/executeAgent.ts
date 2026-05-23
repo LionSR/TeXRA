@@ -23,7 +23,7 @@ import {
   classifyAgentError,
   getSdkErrorMessage,
 } from '@common/errors';
-import { AgentLogger } from '@logger/index';
+import { createChannelTrace } from '@logger';
 import {
   STREAM_STATUS,
   END_GROUP_STATUS,
@@ -63,7 +63,7 @@ import type {
 export { getAgentPath } from './AgentLaunchContext';
 
 const CHANNEL = 'executeAgent';
-const logger = new AgentLogger(CHANNEL);
+const logger = createChannelTrace(CHANNEL);
 
 /** Map workflow RoundOutput[] to OutputFileSummary[] for AgentFlowResult. */
 function toOutputSummaries(roundOutputs: RoundOutput[]): OutputFileSummary[] {
@@ -430,7 +430,7 @@ export async function executeAgent(
           taskState: agentConfigToTaskState(config),
         });
 
-        const taskStage = await logger.stage(
+        const taskStage = logger.openStage(
           `Task: ${agentName}@${config.model}`,
         );
         return taskStage.run(async () => {
@@ -536,7 +536,7 @@ export async function executeMergeAgent(
         runtimeHost: ctx.runtimeHost,
       });
 
-      const taskStage = await logger.stage(`Task: merge@${model}`);
+      const taskStage = logger.openStage(`Task: merge@${model}`);
       return taskStage.run(async () => {
         logger.info(`Executing merge with model ${model}`);
 

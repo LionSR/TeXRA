@@ -2,7 +2,11 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { AgentLogger } from '@logger/AgentLogger';
+import {
+  createRunTrace,
+  getDefaultStreamLogStore,
+  setDefaultStreamLogStore,
+} from '@logger';
 import { StreamLogStore } from '@logger/StreamLogStore';
 import {
   MESSAGE_TYPES,
@@ -357,12 +361,12 @@ describe('CLI transcript state', () => {
   });
 
   it('mirrors error log entries into the transcript', () => {
-    const previousStore = AgentLogger.getStreamLogStore();
+    const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
-    AgentLogger.setStreamLogStore(store);
+    setDefaultStreamLogStore(store);
 
     try {
-      const logger = new AgentLogger(root, true);
+      const logger = createRunTrace(root).trace;
       logger.error('Model request failed', {
         messageType: MESSAGE_TYPES.ERROR,
       });
@@ -377,7 +381,7 @@ describe('CLI transcript state', () => {
         finalized: true,
       });
     } finally {
-      AgentLogger.setStreamLogStore(previousStore);
+      setDefaultStreamLogStore(previousStore);
     }
   });
 
@@ -388,12 +392,12 @@ describe('CLI transcript state', () => {
   // `splitTranscriptEntries` once status flipped to WAITING and silently
   // disappear from the transcript.
   it('preserves the finalized flag through a post-finalize sync tick', () => {
-    const previousStore = AgentLogger.getStreamLogStore();
+    const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
-    AgentLogger.setStreamLogStore(store);
+    setDefaultStreamLogStore(store);
 
     try {
-      const logger = new AgentLogger(root, true);
+      const logger = createRunTrace(root).trace;
       logger.info('streaming assistant chunk', {
         messageType: MESSAGE_TYPES.MODEL_RESPONSE,
       });
@@ -417,7 +421,7 @@ describe('CLI transcript state', () => {
         finalized: true,
       });
     } finally {
-      AgentLogger.setStreamLogStore(previousStore);
+      setDefaultStreamLogStore(previousStore);
     }
   });
 
@@ -435,12 +439,12 @@ describe('CLI transcript state', () => {
   });
 
   it('keeps repeated final responses from distinct turns visible', () => {
-    const previousStore = AgentLogger.getStreamLogStore();
+    const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
-    AgentLogger.setStreamLogStore(store);
+    setDefaultStreamLogStore(store);
 
     try {
-      const logger = new AgentLogger(root, true);
+      const logger = createRunTrace(root).trace;
       logger.info('first prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
       syncStreamLog(root);
       appendAssistantTranscriptIfMissing(root, 'Done.', 'final:first');
@@ -463,17 +467,17 @@ describe('CLI transcript state', () => {
         'third prompt',
       ]);
     } finally {
-      AgentLogger.setStreamLogStore(previousStore);
+      setDefaultStreamLogStore(previousStore);
     }
   });
 
   it('does not duplicate a final response already present in the stream log', () => {
-    const previousStore = AgentLogger.getStreamLogStore();
+    const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
-    AgentLogger.setStreamLogStore(store);
+    setDefaultStreamLogStore(store);
 
     try {
-      const logger = new AgentLogger(root, true);
+      const logger = createRunTrace(root).trace;
       logger.info('Done.', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
       syncStreamLog(root);
       appendAssistantTranscriptIfMissing(root, 'Done.', 'final:first');
@@ -482,7 +486,7 @@ describe('CLI transcript state', () => {
       expect(entries.map((entry) => entry.text)).toEqual(['Done.']);
       expect(entries[0]?.synthetic).toBeUndefined();
     } finally {
-      AgentLogger.setStreamLogStore(previousStore);
+      setDefaultStreamLogStore(previousStore);
     }
   });
 
@@ -530,13 +534,13 @@ describe('CLI transcript state', () => {
   });
 
   it('flushes pending model-response chunks before transcript sync', () => {
-    const previousStore = AgentLogger.getStreamLogStore();
+    const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
-    AgentLogger.setStreamLogStore(store);
+    setDefaultStreamLogStore(store);
 
     try {
-      const logger = new AgentLogger(root, true);
-      const stream = logger.createStream(MESSAGE_TYPES.MODEL_RESPONSE);
+      const logger = createRunTrace(root).trace;
+      const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
       stream.append('A short final answer.');
 
       syncStreamLog(root);
@@ -546,17 +550,17 @@ describe('CLI transcript state', () => {
         'A short final answer.',
       ]);
     } finally {
-      AgentLogger.setStreamLogStore(previousStore);
+      setDefaultStreamLogStore(previousStore);
     }
   });
 
   it('keeps repeated local slash-command responses after stream-log syncs', () => {
-    const previousStore = AgentLogger.getStreamLogStore();
+    const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
-    AgentLogger.setStreamLogStore(store);
+    setDefaultStreamLogStore(store);
 
     try {
-      const logger = new AgentLogger(root, true);
+      const logger = createRunTrace(root).trace;
       logger.info('prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
       syncStreamLog(root);
       cliState.activeStreamId.set(root);
@@ -577,7 +581,7 @@ describe('CLI transcript state', () => {
           .map((entry) => entry.text),
       ).toEqual(['Available commands: /help', 'Available commands: /help']);
     } finally {
-      AgentLogger.setStreamLogStore(previousStore);
+      setDefaultStreamLogStore(previousStore);
     }
   });
 
@@ -795,12 +799,12 @@ describe('CLI transcript state', () => {
   });
 
   it('preserves synthetic final responses across later log syncs', () => {
-    const previousStore = AgentLogger.getStreamLogStore();
+    const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
-    AgentLogger.setStreamLogStore(store);
+    setDefaultStreamLogStore(store);
 
     try {
-      const logger = new AgentLogger(root, true);
+      const logger = createRunTrace(root).trace;
       logger.info('1+1', { messageType: MESSAGE_TYPES.USER_MESSAGE });
       syncStreamLog(root);
       appendAssistantTranscriptIfMissing(root, 'The answer is 2.', 'final');
@@ -815,17 +819,17 @@ describe('CLI transcript state', () => {
         'next prompt',
       ]);
     } finally {
-      AgentLogger.setStreamLogStore(previousStore);
+      setDefaultStreamLogStore(previousStore);
     }
   });
 
   it('orders multiple synthetic responses relative to their stream-log anchors', () => {
-    const previousStore = AgentLogger.getStreamLogStore();
+    const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
-    AgentLogger.setStreamLogStore(store);
+    setDefaultStreamLogStore(store);
 
     try {
-      const logger = new AgentLogger(root, true);
+      const logger = createRunTrace(root).trace;
       logger.info('first prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
       syncStreamLog(root);
       appendAssistantTranscriptIfMissing(root, 'first answer', 'final-1');
@@ -848,7 +852,7 @@ describe('CLI transcript state', () => {
         'third prompt',
       ]);
     } finally {
-      AgentLogger.setStreamLogStore(previousStore);
+      setDefaultStreamLogStore(previousStore);
     }
   });
 });

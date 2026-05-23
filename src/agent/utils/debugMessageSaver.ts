@@ -1,14 +1,14 @@
 import * as path from 'path';
 
+import type { AgentTrace } from '@agent/trace';
 import { getConfig } from '@agent/core/config';
 import { toErrorMessage } from '@common/errors';
-import { AgentLogger } from '@logger/AgentLogger';
 import type { ExecutionId } from '@shared/schemas';
 import { WorkspaceFS, StorageFS } from '@utils/files';
 import { ensureRunDir, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 
 export interface DebugContext {
-  logger: AgentLogger;
+  logger: AgentTrace;
   modelName?: string;
   executionId?: ExecutionId;
   /** Remote agents skip saving to avoid leaking prompts. */

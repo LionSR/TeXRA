@@ -19,7 +19,7 @@ import { z } from 'zod';
 
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { bus } from '@eventBus/ProgressEventBus';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelTrace } from '@logger';
 import {
   ExternalInquiryThreadIdSchema,
   type ExternalInquiryThreadId,
@@ -48,7 +48,7 @@ import {
   injectContinuationForDroppedThread,
 } from './inquiryContinuation';
 
-const logger = new AgentLogger('InquiryTool');
+const logger = createChannelTrace('InquiryTool');
 
 // ============================================================================
 // Schemas
