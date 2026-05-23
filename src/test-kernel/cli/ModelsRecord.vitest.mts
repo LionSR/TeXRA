@@ -49,12 +49,16 @@ describe('CLI model JSON record', () => {
     }
   });
 
-  it('keeps `id` synchronized with `value` even when `value` is mutated upstream', () => {
-    // The projection is pure: mutating the source after the call must not
-    // change either alias. Guards against future shared-reference mistakes.
+  it('snapshots the source `value` so post-call mutation does not bleed in', () => {
+    // Guards against a future regression where `cliModelRecord` is rewritten
+    // to return a reference instead of a copy: mutating `m.value` after the
+    // projection must not change the record's `id` or `value`.
     const m = model({ value: 'gpt55' });
     const record = cliModelRecord(m);
 
-    expect(record).toMatchObject({ id: 'gpt55', value: 'gpt55' });
+    (m as { value: string }).value = 'mutated-after-call';
+
+    expect(record.id).toBe('gpt55');
+    expect(record.value).toBe('gpt55');
   });
 });
