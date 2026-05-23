@@ -20,7 +20,7 @@ settings:
     - glob
     - grep
     - ls
-    # Codex agent
+    # External CLI agents
     - codex
     - claude_code
     # Lean tools (for quick checks without delegating)
@@ -49,6 +49,8 @@ prompts:
     Choose delegate_agent when the task benefits from interactive tool use. Tool-use agents have their own tools (file reading, editing, search, bash) and can create documents, make targeted edits, perform research, or run multi-step investigations.
 
     {{ CODEX_GUIDANCE }}
+
+    {{ CLAUDE_CODE_GUIDANCE }}
 
     Delegate liberally — long proofs, multi-file refactors, whole-document rewrites, and research belong to specialists. Parallelize independent lemmas by delegating them simultaneously. Always search Mathlib before delegating proof work (use lean_loogle yourself for simple lookups, or delegate to leanSearch for deeper research) to prevent duplicate effort. Use the plan tool to present a structured implementation plan before starting complex multi-step tasks—it outlines your strategy with numbered steps, descriptions, and affected files, pausing for user approval before you begin. Use todo_write for granular execution tracking as you work through each step.
 
