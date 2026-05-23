@@ -17,10 +17,7 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createWorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 // Local imports - test support
-import {
-  FakeConfigProvider,
-  FakeSecrets,
-} from '@test/support/FakePlatform';
+import { FakeConfigProvider, FakeSecrets } from '@test/support/FakePlatform';
 import { GlobalStateKey } from '@common/state/stateKeys';
 
 import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
