@@ -15,7 +15,27 @@ import {
   type CliRunResult,
   type ExecuteAgentResult,
 } from './terminalStatus';
-import type { CliContext } from '../../runtime/cliContext';
+import { CliUsageError, type CliContext } from '../../runtime/cliContext';
+
+/**
+ * `--output-dir` may legitimately not exist yet (the run will `mkdir -p`
+ * later), but if the path exists today and isn't a directory we want to fail
+ * fast as a Usage error (exit 2) instead of running the whole workflow and
+ * blowing up with an EEXIST mkdir error at the very end (exit 1).
+ */
+export async function assertOutputDirAvailable(
+  outputDir: string | undefined,
+  cwd: string,
+): Promise<void> {
+  if (!outputDir) return;
+  const target = path.isAbsolute(outputDir)
+    ? outputDir
+    : path.join(cwd, outputDir);
+  const stats = await fs.stat(target).catch(() => null);
+  if (stats && !stats.isDirectory()) {
+    throw new CliUsageError(`--output-dir is not a directory: ${target}`);
+  }
+}
 
 export type CliWorkflowRunResult = Extract<
   CliRunResult,
