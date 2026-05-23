@@ -274,14 +274,35 @@ describe('CLI root argument routing', () => {
 
   it('attributes the missing-path error to the caller-supplied flag label', async () => {
     // The helper is shared between --input (texra run, multi-agent run input)
-    // and --context (multi-agent run context). The error must name the flag
-    // the user actually passed, not always say --input.
+    // and --context (texra run / multi-agent run context). The error must
+    // name the flag the user actually passed, not always say --input.
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-flag-'));
     try {
       const missing = path.join(root, 'no-such-context.tex');
       await expect(
         expandWorkflowInputSpecs([missing], root, '--context'),
       ).rejects.toThrow(/--context: file not found/);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('expands a glob --context spec the same way --input does', async () => {
+    // `texra run -c '<glob>'` previously stuffed the literal glob string into
+    // the AgentConfig and failed late with raw ENOENT (exit 1). Routing
+    // through expandWorkflowInputSpecs gives it the same expansion semantics
+    // as `--input` (and surfaces missing-path errors as Usage / exit 2).
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-ctx-'));
+    try {
+      await fs.writeFile(path.join(root, 'a.bib'), 'a');
+      await fs.writeFile(path.join(root, 'b.bib'), 'b');
+      await expect(
+        expandWorkflowInputSpecs(
+          [path.join(root, '*.bib')],
+          root,
+          '--context',
+        ),
+      ).resolves.toEqual(['a.bib', 'b.bib']);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }

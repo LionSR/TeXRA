@@ -44,7 +44,10 @@ import {
   type CliRunResult,
   type ExecuteAgentResult,
 } from './_helpers/terminalStatus';
-import { expandWorkflowInputSpecs } from './_helpers/workflowInputs';
+import {
+  expandWorkflowInputSpec,
+  expandWorkflowInputSpecs,
+} from './_helpers/workflowInputs';
 import {
   expectedOutputFilesForOutputDir,
   formatWorkflowTextResult,
@@ -85,6 +88,18 @@ async function runWorkflowAgent(
     init.inputFiles,
     runContext.cwd,
   );
+  // `--context` files are optional, so we can't reuse the plural helper
+  // (which errors on an empty result). Expand each spec individually with
+  // the right flag label so a missing context path fails fast as a Usage
+  // error (exit 2) instead of reaching the agent as a raw ENOENT (exit 1),
+  // and so a glob like `refs/*.bib` actually expands.
+  const contextFiles = (
+    await Promise.all(
+      init.contextFiles.map((spec) =>
+        expandWorkflowInputSpec(spec, runContext.cwd, '--context'),
+      ),
+    )
+  ).flat();
   if (init.output && inputFiles.length > 1) {
     throw new CliUsageError(
       'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.',
@@ -121,7 +136,7 @@ async function runWorkflowAgent(
     agent: init.agent,
     model,
     inputFiles,
-    contextFiles: init.contextFiles,
+    contextFiles,
     outputFiles: modelOutputFile ? [modelOutputFile] : [],
     cliOutputFile: init.output,
     instruction: init.instruction,
