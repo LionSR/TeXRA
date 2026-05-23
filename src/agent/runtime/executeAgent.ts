@@ -280,6 +280,9 @@ async function runFlowWithLifecycle(
     // Release long-lived resources (e.g., WebSocket connections, keepalive intervals)
     // to prevent leaks when handler instances are discarded after execution.
     ctx.modelHandler.dispose();
+    // Drop the run-trace subscribers (channel sink + transcript recorder) so
+    // they don't pile up across many agent runs.
+    ctx.disposeTrace();
   }
 }
 

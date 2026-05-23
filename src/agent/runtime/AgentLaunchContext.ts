@@ -27,6 +27,7 @@ import {
   AgentUsageReporter,
   createRunTrace,
   getStreamTabId,
+  type RunTrace,
 } from '@logger/index';
 import {
   STREAM_STATUS,
@@ -54,6 +55,13 @@ export interface AgentLaunchContext extends AgentCore {
   storageKey: StorageKey;
   parentStage: StageHandle;
   coordinators: RunCoordinators;
+  /**
+   * Dispose the run-trace subscribers (channel sink + transcript recorder)
+   * registered by {@link createRunTrace}. Must be called once at end-of-run
+   * to avoid leaking entries in the module-global `activeFlushers` set and
+   * keeping subscribers attached to the trace emitter.
+   */
+  disposeTrace: () => void;
 }
 
 export interface AgentLaunchInput {
@@ -164,6 +172,7 @@ async function assembleAgentLaunchContext(
   runtimeHost: AgentRuntimeHost,
   reservedStreamId: StreamTabId | undefined,
   onActivated: (streamId: StreamTabId) => void,
+  onRunTraceCreated: (runTrace: RunTrace) => void,
 ): Promise<AgentLaunchContext> {
   const { configPayload } = input;
   const fullConfig = AgentConfigSchema.parse(configPayload);
@@ -209,6 +218,7 @@ async function assembleAgentLaunchContext(
     getStreamTabId(config.agent, fullConfig.model, { executionId });
 
   const runTrace = createRunTrace(streamId);
+  onRunTraceCreated(runTrace);
   const agentLogger = runTrace.trace;
   const usageReporter = new AgentUsageReporter(
     agentLogger,
@@ -297,6 +307,7 @@ async function assembleAgentLaunchContext(
       proposal: new AgentProposalCoordinator(runtimeHost),
       retry: new RetryRequestCoordinatorImpl(runtimeHost),
     },
+    disposeTrace: runTrace.dispose,
   };
 }
 
@@ -337,6 +348,10 @@ function compensateFailedActivation(args: {
   activatedStreamId?: StreamTabId;
   runtimeHost: AgentRuntimeHost;
   err: unknown;
+  // The run-trace from assembleAgentLaunchContext when it was created before the
+  // throw. Reused for the error log so we don't allocate a second one; outer
+  // catch disposes it after this returns.
+  runTrace?: RunTrace;
 }): void {
   const {
     configPayload,
@@ -344,10 +359,14 @@ function compensateFailedActivation(args: {
     activatedStreamId,
     runtimeHost,
     err,
+    runTrace,
   } = args;
 
   if (activatedStreamId) {
-    createRunTrace(activatedStreamId).trace.logError(
+    // `activatedStreamId` is set only after `runTrace` is created in
+    // `assembleAgentLaunchContext`, so runTrace is always present here in
+    // practice. Guard for defensiveness.
+    runTrace?.trace.logError(
       `Failed to start agent ${configPayload.agent}: ${getSdkErrorMessage(err)}`,
       err,
       { operation: `start ${configPayload.agent}` },
@@ -393,6 +412,10 @@ export async function buildAgentLaunchContext(
   }
 
   let activatedStreamId: StreamTabId | undefined;
+  // Captured so the outer catch can dispose the trace and let
+  // `compensateFailedActivation` reuse it for the failure log. Released to the
+  // returned context on the success path (cleaned up by runFlowWithLifecycle).
+  let runTrace: RunTrace | undefined;
   try {
     return await assembleAgentLaunchContext(
       input,
@@ -402,6 +425,9 @@ export async function buildAgentLaunchContext(
       (streamId) => {
         activatedStreamId = streamId;
       },
+      (rt) => {
+        runTrace = rt;
+      },
     );
   } catch (err) {
     compensateFailedActivation({
@@ -410,7 +436,9 @@ export async function buildAgentLaunchContext(
       activatedStreamId,
       runtimeHost,
       err,
+      runTrace,
     });
+    runTrace?.dispose();
     if (!input.suppressErrorNotification && !(err instanceof ZodError)) {
       runtimeHost.emit('requestShowError', {
         message: toErrorMessage(err),
