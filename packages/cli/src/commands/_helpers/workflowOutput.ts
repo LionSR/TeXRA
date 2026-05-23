@@ -61,6 +61,49 @@ export async function assertOutputDirAvailable(
   }
 }
 
+/**
+ * Single-file twin of {@link assertOutputDirAvailable}: `--output` must end at
+ * a path the workflow can write a file to. The path doesn't need to exist
+ * (we `mkdir -p` the parent and create the file during the run), but pointing
+ * `--output` at an existing directory or through a file-typed parent component
+ * blows up at copy time after the full agent run (`EISDIR` / `EEXIST`).
+ *
+ * `ENOENT` → return (file will be created). `ENOTDIR` (parent component is a
+ * file) → Usage error. Other stat errors propagate.
+ */
+export async function assertOutputFileAvailable(
+  outputFile: string | undefined,
+  cwd: string,
+): Promise<void> {
+  if (!outputFile) return;
+  const target = path.isAbsolute(outputFile)
+    ? outputFile
+    : path.join(cwd, outputFile);
+  let stats: Awaited<ReturnType<typeof fs.stat>> | null = null;
+  try {
+    stats = await fs.stat(target);
+  } catch (error: unknown) {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? (error as { code?: unknown }).code
+        : undefined;
+    if (code === 'ENOENT') {
+      return;
+    }
+    if (code === 'ENOTDIR') {
+      throw new CliUsageError(
+        `--output: a parent path component is a file: ${target}`,
+      );
+    }
+    throw error;
+  }
+  if (stats.isDirectory()) {
+    throw new CliUsageError(
+      `--output is a directory; use --output-dir or pick a file path: ${target}`,
+    );
+  }
+}
+
 export type CliWorkflowRunResult = Extract<
   CliRunResult,
   { category: 'workflow' }
