@@ -3,7 +3,7 @@
  */
 
 // Local imports - log
-import * as logger from '@agent/core/logger';
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'ReplacementEngine';
 logger.initialize(CHANNEL);

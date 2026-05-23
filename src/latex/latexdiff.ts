@@ -3,10 +3,10 @@ import * as path from 'path';
 import { z } from 'zod';
 
 import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
-import * as logger from '@agent/core/logger';
 import { tryGetWorkspaceState } from '@agent/core/stateStore';
 import { formatError, toErrorMessage } from '@common/errors';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
+import * as logger from '@logger/logUtils';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { flexibleFS, pathToLocation, type FileLocation } from '@utils/files';
 import { executeCommand } from '@utils/system';

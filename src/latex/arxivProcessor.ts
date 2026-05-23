@@ -7,9 +7,9 @@ import { StatusCodes } from 'http-status-codes';
 import * as arxivIdentifiers from 'identifiers-arxiv';
 import * as tar from 'tar';
 
-import * as logger from '@agent/core/logger';
 import { toErrorMessage } from '@common/errors';
 import { indentLatexFilesInDirectory } from '@housekeeping/indent';
+import * as logger from '@logger/logUtils';
 import { normaliseArxivIdentifier } from '@tools/latex/arxivShared';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 

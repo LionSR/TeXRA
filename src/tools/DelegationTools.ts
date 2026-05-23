@@ -31,10 +31,10 @@ import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
 // Local imports - logger
-import * as logger from '@agent/core/logger';
+import { toErrorMessage } from '@common/errors';
+import * as logger from '@logger/logUtils';
 
 // Local imports - common
-import { toErrorMessage } from '@common/errors';
 
 // Local imports - model
 import {

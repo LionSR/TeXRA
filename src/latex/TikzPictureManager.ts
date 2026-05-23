@@ -2,8 +2,8 @@
 import * as path from 'path';
 
 // Local imports - log
-import * as logger from '@agent/core/logger';
 import { getConfig } from '@agent/core/config';
+import * as logger from '@logger/logUtils';
 import { renderPrompt } from '@utils/prompt';
 import {
   flexibleFS,

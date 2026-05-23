@@ -2,7 +2,6 @@ import { join } from 'node:path';
 
 import { app } from 'electron';
 
-import { consoleLog } from '@platform/defaults/consoleLog';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { JsonStateStore } from '@platform/defaults/jsonStateStore';
 import { JsonStore } from '@platform/defaults/jsonStore';
@@ -64,7 +63,6 @@ export async function initializeElectronPlatform(
     }),
     globalState: new JsonStateStore(globalStateStore),
     workspaceState: new JsonStateStore(workspaceStateStore),
-    log: consoleLog,
     fs: nodeFilesystem,
     workspace: createNodeWorkspace(() => workspacePath),
     storage,
