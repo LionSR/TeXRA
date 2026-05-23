@@ -11,6 +11,7 @@ export { toErrorMessage } from './errorMessage';
 export {
   isDiskFullError,
   isFileNotFoundError,
+  isModuleNotFoundError,
   isNotADirectoryError,
 } from './errorPredicates';
 export {
