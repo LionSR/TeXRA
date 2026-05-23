@@ -5,7 +5,7 @@
  * diff stats and preparing data for event emission and file opening.
  */
 
-import type { AgentLogStage } from '@agent/trace';
+import type { StageHandle } from '@agent/trace';
 import {
   MESSAGE_TYPES,
   type FileLocation,
@@ -31,7 +31,7 @@ export interface RoundSummary {
   filesToOpen: FileLocation[];
   outputFile: FileLocation;
   endTurn: boolean;
-  stage?: AgentLogStage;
+  stage?: StageHandle;
 }
 
 export async function summarizeRound(
@@ -41,7 +41,7 @@ export async function summarizeRound(
   currRound: number,
   options: {
     endTurn: boolean;
-    stage?: AgentLogStage;
+    stage?: StageHandle;
     mapping?: RoundFileMapping;
     isRewrite?: boolean;
     /** Snapshot-resolved base files. Required for in-place workflows so

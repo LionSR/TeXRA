@@ -31,8 +31,6 @@ export type {
 } from './events';
 
 export type {
-  AgentLogStage,
-  AgentLogStream,
   AgentTrace,
   AgentTraceSubscriber,
   DomainEventInput,

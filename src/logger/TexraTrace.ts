@@ -15,6 +15,7 @@ import type { AgentTrace, StagedEmitOptions } from '@agent/trace';
 import type { ToolStatus } from '@agent/trace';
 import type {
   ContextManagementData,
+  EndGroupStatus,
   ErrorContext,
   ExtendedTokenUsageStats,
   FileListEntry,
@@ -91,5 +92,5 @@ export interface TexraTrace extends AgentTrace {
   // semantics (literal parentId = root group) are TeXRA-specific. The
   // agent-general API uses `openStage` with an inheriting fallback.
   startGroup(name: string, id?: string, parentGroupId?: string): string;
-  endGroup(id: string, status?: import('@shared/schemas').EndGroupStatus): void;
+  endGroup(id: string, status?: EndGroupStatus): void;
 }

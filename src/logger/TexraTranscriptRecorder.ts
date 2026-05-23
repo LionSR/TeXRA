@@ -36,6 +36,20 @@ import { type StreamLogStore } from './StreamLogStore';
 
 const STREAM_UPDATE_THROTTLE_MS = 50;
 
+const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
+
+/**
+ * Coerce an arbitrary string to a `MessageType`. Unknown values (which an
+ * agent-general SDK consumer can produce via `LogOptions.messageType`)
+ * fall back to `DEFAULT` instead of corrupting the persisted entry.
+ */
+function asMessageType(candidate: string | undefined): MessageType {
+  if (!candidate) return MESSAGE_TYPES.DEFAULT;
+  return KNOWN_MESSAGE_TYPES.has(candidate)
+    ? (candidate as MessageType)
+    : MESSAGE_TYPES.DEFAULT;
+}
+
 function shouldEmit(level: LogLevel, messageType: MessageType): boolean {
   if (messageType === MESSAGE_TYPES.INTERNAL) return false;
   if (level !== 'debug') return true;
@@ -117,8 +131,7 @@ export function attachTranscriptRecorder(
   };
 
   const handleLog = (event: LogEvent): void => {
-    const messageType = (event.messageType ??
-      MESSAGE_TYPES.DEFAULT) as MessageType;
+    const messageType = asMessageType(event.messageType);
     if (!shouldEmit(event.level, messageType)) return;
 
     store.append(streamId, {
@@ -242,7 +255,7 @@ export function attachTranscriptRecorder(
           enabled: true,
           groupId: event.stageId,
           level: 'info',
-          messageType: event.kind as MessageType,
+          messageType: asMessageType(event.kind),
           updateTimer: null,
         });
         return;

@@ -5,7 +5,7 @@
  * reporting missing files for user notification.
  */
 
-import type { AgentLogStage } from '@agent/trace';
+import type { StageHandle } from '@agent/trace';
 import {
   MESSAGE_TYPES,
   type FileLocation,
@@ -42,7 +42,7 @@ export async function checkExpectedOutputs(
   deps: OutputDependencies,
   outputLocation: FileLocation,
   currRound: number,
-  stage?: AgentLogStage,
+  stage?: StageHandle,
 ): Promise<ValidationResult> {
   return withOutputStage(
     deps,

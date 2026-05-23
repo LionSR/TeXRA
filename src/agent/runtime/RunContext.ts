@@ -9,22 +9,6 @@ import type { AgentProposalCoordinator } from './AgentProposalCoordinator';
 import type { PlanApprovalCoordinator } from './PlanApprovalCoordinator';
 import type { RetryRequestCoordinatorImpl } from './RetryRequestCoordinator';
 
-export type RunLogData = Record<string, unknown>;
-
-/**
- * RunLogger — the plain debug/info/warn/error facade exposed on RunContext.
- *
- * Implementations are expected to forward into the run's `trace` channel so
- * subscribers see plain log lines alongside structured events. The default
- * implementation in `createRunContext` does exactly that.
- */
-export interface RunLogger {
-  debug(message: string, data?: RunLogData): void;
-  info(message: string, data?: RunLogData): void;
-  warn(message: string, data?: RunLogData): void;
-  error(message: string, data?: RunLogData): void;
-}
-
 export interface RunCoordinators {
   readonly plan: PlanApprovalCoordinator;
   readonly proposal: AgentProposalCoordinator;
@@ -35,11 +19,10 @@ export interface RunContext {
   readonly runtimeHost: AgentRuntimeHost;
   readonly streamId?: StreamTabId;
   readonly executionId?: ExecutionId;
-  readonly logger: RunLogger;
   /**
    * Discriminated-event SDK channel for this run. Subscribe with
    * `trace.subscribe(...)` to receive every event the run emits. Defaults
-   * to `noopTrace` when callers don't provide one.
+   * to `noopTexraTrace` when callers don't provide one.
    */
   readonly trace: TexraTrace;
   readonly coordinators?: RunCoordinators;
@@ -65,12 +48,9 @@ export interface CreateRunContextOptions {
   runtimeHost: AgentRuntimeHost;
   streamId?: StreamTabId;
   executionId?: ExecutionId;
-  logger?: Partial<RunLogger>;
   /**
    * Discriminated-event channel for the run. When omitted, the context uses
-   * `noopTrace`. When the caller passes a real trace, the default RunLogger
-   * forwards into it so subscribers see plain log lines as `{type:'log'}`
-   * events.
+   * `noopTexraTrace`.
    */
   trace?: TexraTrace;
   coordinators?: RunCoordinators;
@@ -81,47 +61,18 @@ export interface CreateRunContextOptions {
   delegationConfig?: NestedDelegationConfig;
 }
 
-const noopLog = (): void => undefined;
 const runContextScope = new AsyncLocalStorage<RunContext>();
-
-/**
- * Build a RunLogger that forwards into a trace channel — explicit callers
- * still win, but the default routes every log line through the SDK surface.
- */
-function buildRunLogger(
-  trace: TexraTrace,
-  override: Partial<RunLogger> | undefined,
-): RunLogger {
-  if (!override) {
-    return Object.freeze({
-      debug: (msg: string, data?: RunLogData) => trace.debug(msg, { data }),
-      info: (msg: string, data?: RunLogData) => trace.info(msg, { data }),
-      warn: (msg: string, data?: RunLogData) => trace.warn(msg, { data }),
-      error: (msg: string, data?: RunLogData) => trace.error(msg, { data }),
-    });
-  }
-  return Object.freeze({
-    debug: override.debug ?? noopLog,
-    info: override.info ?? noopLog,
-    warn: override.warn ?? noopLog,
-    error: override.error ?? noopLog,
-  });
-}
 
 export function createRunContext(options: CreateRunContextOptions): RunContext {
   if (options.runtimeHost == null) {
     throw new Error('createRunContext requires an explicit runtimeHost');
   }
 
-  const trace = options.trace ?? noopTexraTrace;
-  const logger = buildRunLogger(trace, options.logger);
-
   return Object.freeze({
     runtimeHost: options.runtimeHost,
     streamId: options.streamId,
     executionId: options.executionId,
-    logger,
-    trace,
+    trace: options.trace ?? noopTexraTrace,
     coordinators: options.coordinators,
     model: options.model,
     agentName: options.agentName,

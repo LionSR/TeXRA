@@ -1,7 +1,7 @@
 import * as path from 'path';
 
 import { platform } from '@platform/platform';
-import type { AgentLogStage } from '@agent/trace';
+import type { StageHandle } from '@agent/trace';
 import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { getWorkspaceState } from '@agent/core/stateStore';
 import { toErrorMessage } from '@common/errors';
@@ -110,7 +110,7 @@ export class LatexDiffManager {
   async handleLatexdiffofOutput(
     currRound: number,
     mapping: RoundFileMapping,
-    stage?: AgentLogStage,
+    stage?: StageHandle,
   ): Promise<CompiledPdfArtifact[]> {
     const execute = () => this.performLatexdiffOperations(currRound, mapping);
     try {

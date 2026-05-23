@@ -4,7 +4,7 @@ import { ZodError } from 'zod';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { isRemoteAgent, resolveAgent, type ResolvedAgent } from '@agent/index';
-import type { AgentLogStage } from '@agent/trace';
+import type { StageHandle } from '@agent/trace';
 import type { AgentCore } from '@agent/implementations/flows/common/BaseFlowServices';
 import {
   AgentConfigSchema,
@@ -52,7 +52,7 @@ import type { AgentRuntimeHost } from './AgentRuntimeHost';
 export interface AgentLaunchContext extends AgentCore {
   usageMonitor: UsageMonitor;
   storageKey: StorageKey;
-  parentStage: AgentLogStage;
+  parentStage: StageHandle;
   coordinators: RunCoordinators;
 }
 
@@ -82,11 +82,7 @@ function createExecutionRunContext(ctx: AgentLaunchContext): RunContext {
     runtimeHost: ctx.runtimeHost,
     streamId: ctx.streamId,
     executionId: ctx.executionId,
-    // Trace is the single event channel for this run. The default RunLogger
-    // forwards plain debug/info/warn/error into it so subscribers see one
-    // unified stream of events.
     trace: ctx.logger,
-    logger: ctx.logger,
     coordinators: ctx.coordinators,
     model: ctx.config.model,
     agentName: ctx.config.agent,
@@ -155,7 +151,7 @@ async function beginRunStage(
   agentLogger: TexraTrace,
   label: string,
   instruction: string | undefined,
-): Promise<AgentLogStage> {
+): Promise<StageHandle> {
   if (instruction) {
     agentLogger.userMessage(instruction);
   }

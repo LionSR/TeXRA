@@ -1,7 +1,7 @@
 import * as path from 'path';
 
 import { getExecutionStore } from '@agent/storage';
-import type { AgentLogStage } from '@agent/trace';
+import type { StageHandle } from '@agent/trace';
 import {
   createOutputState,
   setActiveRun,
@@ -64,7 +64,7 @@ export interface RunReflectionFlowInput<
 > extends BaseFlowContextInit<C> {
   setting: AgentWorkflowSetting;
   storageKey: StorageKey;
-  parentStage: AgentLogStage;
+  parentStage: StageHandle;
   getOutputFileLocation?: (round: number) => AgentFileLocation;
   usageMonitor?: UsageMonitor;
   onRoundCompleted?: (

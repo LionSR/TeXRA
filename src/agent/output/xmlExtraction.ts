@@ -8,7 +8,7 @@
  * Legacy agents with a custom documentTag use single-document extraction.
  */
 
-import type { AgentLogStage } from '@agent/trace';
+import type { StageHandle } from '@agent/trace';
 import { toErrorMessage } from '@common/errors';
 import {
   MESSAGE_TYPES,
@@ -94,7 +94,7 @@ export async function extractFilesFromXml(
   xmlManager: XmlOutputManager,
   outputLocation: FileLocation,
   currRound: number,
-  stage?: AgentLogStage,
+  stage?: StageHandle,
 ): Promise<void> {
   await withOutputStage(
     deps,

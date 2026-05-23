@@ -17,7 +17,7 @@
  */
 
 import type { ExecutionKVStore } from '@agent/storage';
-import type { AgentLogStage } from '@agent/trace';
+import type { StageHandle } from '@agent/trace';
 import {
   EXECUTION_STATUS,
   type ExecutionStatus,
@@ -63,14 +63,14 @@ export interface RoundCallbacks<S extends RoundAwareState> {
    */
   createRoundStage?: (
     roundIndex: number,
-    parentStage: AgentLogStage | null,
-  ) => AgentLogStage;
+    parentStage: StageHandle | null,
+  ) => StageHandle;
 
   /**
    * Called after a new round stage is created.
    * Use for registering usage tracking callbacks etc.
    */
-  onStageCreated?: (stage: AgentLogStage) => void;
+  onStageCreated?: (stage: StageHandle) => void;
 
   /** Check if execution should be interrupted. */
   checkInterruption?: () => boolean;
@@ -100,15 +100,15 @@ export class RoundPersistedFlow<
   Svc = unknown,
 > extends PersistedFlow<S, P, Svc> {
   private readonly callbacks: RoundCallbacks<S>;
-  private readonly parentStage: AgentLogStage | null;
-  private currentRoundStage: AgentLogStage | null = null;
+  private readonly parentStage: StageHandle | null;
+  private currentRoundStage: StageHandle | null = null;
 
   constructor(
     start: BaseNode<any, any>,
     kv: ExecutionKVStore,
     options?: {
       callbacks?: RoundCallbacks<S>;
-      parentStage?: AgentLogStage | null;
+      parentStage?: StageHandle | null;
     },
     runId?: string,
   ) {

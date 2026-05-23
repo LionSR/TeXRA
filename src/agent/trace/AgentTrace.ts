@@ -156,11 +156,3 @@ export interface AgentTrace {
   openStage(label: string, options?: StageOptions): StageHandle;
   openStream(kind: StreamKind, options?: StreamOptions): StreamHandle;
 }
-
-/**
- * Legacy alias — `AgentLogStage` was the type exposed by the removed
- * `AgentLogger`. Still imported from a handful of files; kept here while
- * the rename to `StageHandle` proceeds.
- */
-export type AgentLogStage = StageHandle;
-export type AgentLogStream = StreamHandle;
