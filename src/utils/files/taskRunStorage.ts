@@ -517,11 +517,10 @@ export class TaskRunFileService {
             return;
           }
         } catch (error) {
-          const err = error as NodeJS.ErrnoException;
-          if (err?.code !== 'ENOENT') {
+          if (!isFileNotFoundError(error)) {
             logger.debug(
               CHANNEL,
-              `Unable to stat ${destinationAbsolute}: ${toErrorMessage(err)}`,
+              `Unable to stat ${destinationAbsolute}: ${toErrorMessage(error)}`,
             );
           }
           // ENOENT is the common case — no collision, proceed with the link.
