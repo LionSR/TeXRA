@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { readFile, realpath } from 'node:fs/promises';
+import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -203,15 +203,37 @@ function pickCliApiMode(
   return undefined;
 }
 
-async function resolveCliCwd(cwdFlag: string | undefined): Promise<string> {
-  const requested = isNonEmptyString(cwdFlag)
-    ? path.resolve(cwdFlag.trim())
-    : process.cwd();
-  try {
-    return await realpath(requested);
-  } catch {
-    return requested;
+export async function resolveCliCwd(
+  cwdFlag: string | undefined,
+): Promise<string> {
+  // When the user did not pass `--cwd`, `process.cwd()` is correct by
+  // construction (the shell can't put us in a directory that doesn't exist).
+  // When `--cwd` IS passed, validate it explicitly: a typo or stale path
+  // should fail loudly instead of silently falling back to the resolved-but-
+  // nonexistent string and running the agent against the wrong workspace.
+  if (!isNonEmptyString(cwdFlag)) {
+    return await realpath(process.cwd()).catch(() => process.cwd());
   }
+  const requested = path.resolve(cwdFlag.trim());
+  let info: Awaited<ReturnType<typeof stat>>;
+  try {
+    info = await stat(requested);
+  } catch (error: unknown) {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? (error as { code?: unknown }).code
+        : undefined;
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      throw new CliUsageError(`--cwd: path does not exist: ${requested}`);
+    }
+    throw new CliUsageError(
+      `--cwd: cannot access ${requested}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (!info.isDirectory()) {
+    throw new CliUsageError(`--cwd: not a directory: ${requested}`);
+  }
+  return await realpath(requested).catch(() => requested);
 }
 
 export async function buildCliContext(
