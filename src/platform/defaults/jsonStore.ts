@@ -1,6 +1,8 @@
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
+import { isFileNotFoundError } from '@common/errors';
+
 type JsonRecord = Record<string, unknown>;
 
 async function readJsonRecord(filePath: string): Promise<JsonRecord> {
@@ -11,7 +13,7 @@ async function readJsonRecord(filePath: string): Promise<JsonRecord> {
       ? (parsed as JsonRecord)
       : {};
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {};
+    if (isFileNotFoundError(error)) return {};
     if (error instanceof SyntaxError) return {};
     throw error;
   }
