@@ -155,10 +155,24 @@ export class TexraTraceEmitter extends TraceEmitter implements TexraTrace {
   emitToolUse(data: unknown, groupId?: string): ToolStartRef {
     const logId = randomUUID();
     const resolvedGroupId = groupId ?? this.activeStageId();
-    const toolName =
-      (data as { toolName?: string } | null)?.toolName ?? 'unknown';
-    const input = (data as { input?: unknown } | null)?.input;
+    const payload = (data ?? {}) as {
+      toolName?: string;
+      input?: unknown;
+      status?: ToolStatus;
+    };
+    const toolName = payload.toolName ?? 'unknown';
+    const input = payload.input;
     this.toolStart({ logId, toolName, input }, { stageId: resolvedGroupId });
+    // Fast-tool path: callers that pass a terminal `status` need both
+    // start AND end events so the transcript row reaches `completed`/`failed`
+    // instead of dangling in `in_progress`. Forward the full payload (output,
+    // files, isError) as the result patch — `updateToolUse` does the same.
+    if (payload.status && payload.status !== 'in_progress') {
+      this.toolEnd(
+        { logId, status: payload.status, result: payload },
+        { stageId: resolvedGroupId },
+      );
+    }
     return { logId, groupId: resolvedGroupId };
   }
 
