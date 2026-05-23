@@ -4,15 +4,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { isFileNotFoundError } from '@common/errors';
+
 import {
   FileType,
   type FileSystemProvider,
   type FileStat,
 } from '../interfaces/filesystem';
-
-function isNotFound(err: unknown): boolean {
-  return (err as NodeJS.ErrnoException).code === 'ENOENT';
-}
 
 /**
  * Resolve the target type of a symlink, producing combined bitmasks
@@ -134,7 +132,7 @@ export const nodeFilesystem: FileSystemProvider = {
         });
       }
     } catch (err) {
-      if (!isNotFound(err)) throw err;
+      if (!isFileNotFoundError(err)) throw err;
     }
   },
 
@@ -183,7 +181,7 @@ export const nodeFilesystem: FileSystemProvider = {
           code: 'EEXIST',
         });
       } catch (err) {
-        if (!isNotFound(err)) throw err;
+        if (!isFileNotFoundError(err)) throw err;
       }
     }
     await fs.promises.rename(source, dest);
