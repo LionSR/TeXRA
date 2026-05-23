@@ -1,5 +1,7 @@
 import { defineCommand } from 'citty';
 
+import type { ModelOptionData } from '@shared/schemas';
+
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import {
@@ -20,6 +22,18 @@ import type { CliContext } from '../runtime/cliContext';
 
 type ModelAccessList = Awaited<ReturnType<typeof getCliModelAccessList>>;
 type ModelAccessEntry = ModelAccessList[number];
+
+/**
+ * Output projection for JSON/NDJSON: prefix the model record with `id` so the
+ * model id is addressable under the same key (`.id`) as every other CLI
+ * resource (`agents`, `multi-agent`, `history`). `value` is kept for backward
+ * compatibility with existing scripts.
+ */
+export function cliModelRecord(
+  model: ModelOptionData,
+): { id: string } & ModelOptionData {
+  return { id: model.value, ...model };
+}
 
 async function loadModelAccessList(
   context: CliContext,
@@ -44,7 +58,7 @@ async function listModels(context: CliContext): Promise<number> {
   if (context.outputFormat === 'json') {
     writeTextStdout(
       JSON.stringify(
-        result.map(({ model }) => model),
+        result.map(({ model }) => cliModelRecord(model)),
         null,
         2,
       ),
@@ -55,7 +69,7 @@ async function listModels(context: CliContext): Promise<number> {
   if (context.outputFormat === 'ndjson') {
     const ts = new Date().toISOString();
     for (const { model } of result) {
-      writeNdjsonStdout({ kind: 'model', ts, model });
+      writeNdjsonStdout({ kind: 'model', ts, model: cliModelRecord(model) });
     }
     return CliExitCode.Success;
   }
@@ -108,7 +122,7 @@ async function showModel(context: CliContext, id: string): Promise<number> {
   }
 
   if (context.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(entry.model, null, 2));
+    writeTextStdout(JSON.stringify(cliModelRecord(entry.model), null, 2));
     return CliExitCode.Success;
   }
 
@@ -116,7 +130,7 @@ async function showModel(context: CliContext, id: string): Promise<number> {
     writeNdjsonStdout({
       kind: 'model',
       ts: new Date().toISOString(),
-      model: entry.model,
+      model: cliModelRecord(entry.model),
     });
     return CliExitCode.Success;
   }
