@@ -11,7 +11,6 @@
 import type { AgentResumePort } from './interfaces/agentResume';
 import type { ConfigProvider } from './interfaces/config';
 import type { StateStore } from './interfaces/state';
-import type { LogBackend } from './interfaces/log';
 import type { FileSystemProvider } from './interfaces/filesystem';
 import type { WorkspaceProvider } from './interfaces/workspace';
 import type { StorageProvider } from './interfaces/storage';
@@ -21,12 +20,16 @@ import type { PlatformSecrets } from './secrets';
 /**
  * The complete set of platform services a host must provide.
  * Frozen after initialization — immutable for the lifetime of the process.
+ *
+ * Note on logging: channel-output logging is its own subsystem
+ * (`@logger/logUtils`). Hosts wire the per-channel sink factory via
+ * `logUtils.setOutputChannelFactory` directly; the platform abstraction
+ * doesn't carry a log backend.
  */
 export interface Platform {
   readonly config: ConfigProvider;
   readonly globalState: StateStore;
   readonly workspaceState: StateStore;
-  readonly log: LogBackend;
   readonly fs: FileSystemProvider;
   readonly workspace: WorkspaceProvider;
   readonly storage: StorageProvider;

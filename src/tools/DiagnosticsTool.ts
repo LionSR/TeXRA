@@ -2,8 +2,8 @@
 import { z } from 'zod';
 
 // Internal imports
-import * as logger from '@agent/core/logger';
 import { toErrorMessage } from '@common/errors';
+import * as logger from '@logger/logUtils';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 
 type LinterProvider = (path: string) => Promise<GenericDiagnostic[]>;

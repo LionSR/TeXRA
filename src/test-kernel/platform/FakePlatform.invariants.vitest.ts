@@ -7,7 +7,6 @@ import { FileType } from '@platform/interfaces/filesystem';
 // Local imports - test support
 import {
   FakeFileSystemProvider,
-  RecordingLogBackend,
   createFakePlatform,
 } from '@test/support/FakePlatform';
 
@@ -126,24 +125,13 @@ describe('FakePlatform kernel invariants', () => {
   });
 
   it('supports custom service overrides while retaining other fakes', () => {
-    const log = new RecordingLogBackend();
     const fs = new FakeFileSystemProvider();
-    const platform = createFakePlatform({}, { fs, log });
-
-    platform.log.initialize('TeXRA');
-    platform.log.info('TeXRA', 'ready');
+    const platform = createFakePlatform({}, { fs });
 
     expect(platform.fs).toBe(fs);
-    expect(log.initializedChannels).toEqual([
-      { channel: 'TeXRA', isAgent: undefined },
-    ]);
-    expect(log.entries).toEqual([
-      {
-        level: 'info',
-        channel: 'TeXRA',
-        message: 'ready',
-      },
-    ]);
+    // Other services still come from the default fakes.
+    expect(platform.config).toBeDefined();
+    expect(platform.secrets).toBeDefined();
   });
 
   it('rejects file writes when parent directories are missing', async () => {

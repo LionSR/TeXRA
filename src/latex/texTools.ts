@@ -2,13 +2,13 @@
 import * as path from 'path';
 
 // Local imports - common
-import * as logger from '@agent/core/logger';
 import { getConfig } from '@agent/core/config';
 import { toErrorMessage } from '@common/errors';
 import {
   LaTeXCompileOptionsSchema,
   type LaTeXCompileOptions,
 } from '@common/schemas';
+import * as logger from '@logger/logUtils';
 
 // Local imports - log
 
