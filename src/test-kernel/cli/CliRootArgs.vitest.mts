@@ -264,9 +264,9 @@ describe('CLI root argument routing', () => {
       const missing = path.join(root, 'no-such.tex');
       // Pure path (no glob magic, not a directory) — previously this was
       // returned as-is and the workflow ran until the agent ENOENT'd.
-      await expect(
-        expandWorkflowInputSpecs([missing], root),
-      ).rejects.toThrow(/--input: file not found/);
+      await expect(expandWorkflowInputSpecs([missing], root)).rejects.toThrow(
+        /--input: file not found/,
+      );
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
