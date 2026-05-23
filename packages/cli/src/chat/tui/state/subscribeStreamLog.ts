@@ -2,7 +2,7 @@
 // `cliState.streams[].entries`. Approval/permission entries land in side
 // panels and modals; tool rows render inline alongside assistant prose.
 
-import { AgentLogger } from '@logger/AgentLogger';
+import { flushPendingRunTraces, getDefaultStreamLogStore } from '@logger';
 import {
   MESSAGE_TYPES,
   type NormalizedToolUse,
@@ -191,7 +191,7 @@ type TranscriptCandidate = {
 };
 
 export function subscribeStreamLog(): () => void {
-  const store = AgentLogger.getStreamLogStore();
+  const store = getDefaultStreamLogStore();
   const pendingTimers = new Map<StreamTabId, ReturnType<typeof setTimeout>>();
 
   const dispose = store.onChange((streamId) => {
@@ -211,13 +211,13 @@ export function subscribeStreamLog(): () => void {
 }
 
 export function syncStreamLog(streamId: StreamTabId): void {
-  // AgentLogger throttles MODEL_RESPONSE chunks into the store via a 50ms
+  // AgentTrace throttles MODEL_RESPONSE chunks into the store via a 50ms
   // timer. If we read before that timer fires (e.g. the stream finalized
   // between two TUI sync ticks), the assistant text is still sitting in
   // an in-memory buffer and never reaches the transcript. Force any
   // pending flushers to materialize before we read.
-  AgentLogger.flushPendingStreamUpdates();
-  const store = AgentLogger.getStreamLogStore();
+  flushPendingRunTraces();
+  const store = getDefaultStreamLogStore();
   const log = store.get(streamId);
   if (!log) return;
 

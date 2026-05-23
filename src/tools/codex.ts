@@ -40,7 +40,7 @@ import {
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
-import { AgentLogger } from '@logger/AgentLogger';
+import type { TexraTrace } from '@logger';
 import type {
   StreamTabId,
   ExecutionId,
@@ -288,7 +288,7 @@ function formatCodexError(
 // Stream tab helpers
 // ============================================================================
 
-type CodexToolLogRef = ReturnType<AgentLogger['emitToolUse']>;
+type CodexToolLogRef = ReturnType<TexraTrace['emitToolUse']>;
 type ToolUseStatus = NonNullable<ToolUseLog['status']>;
 
 export function publishCodexTodos(
@@ -325,18 +325,18 @@ function toProgressTodos(item: TodoListItem): TodoItem[] {
 function logCodexItem(
   item: ThreadItem,
   childStreamId: StreamTabId,
-  logger: AgentLogger,
+  logger: TexraTrace,
   runtimeHost: AgentRuntimeHost,
 ): void {
   switch (item.type) {
     case 'command_execution': {
-      logger.logToolUse(buildCodexCommandToolLog(item));
+      logger.emitToolUse(buildCodexCommandToolLog(item));
       break;
     }
     case 'file_change': {
       const fileLog = buildCodexFileChangeToolLog(item);
       if (fileLog) {
-        logger.logToolUse(fileLog);
+        logger.emitToolUse(fileLog);
       }
       break;
     }
@@ -347,7 +347,7 @@ function logCodexItem(
       logger.info(item.text, { messageType: MESSAGE_TYPES.THINKING });
       break;
     case 'mcp_tool_call': {
-      logger.logToolUse(buildCodexMcpToolLog(item as McpToolCallItem));
+      logger.emitToolUse(buildCodexMcpToolLog(item as McpToolCallItem));
       break;
     }
     case 'web_search':
@@ -388,7 +388,7 @@ function buildCodexLiveToolLog(
 }
 
 function updateCodexLiveToolLog(
-  logger: AgentLogger,
+  logger: TexraTrace,
   refs: Map<string, CodexToolLogRef>,
   item: ThreadItem,
   toolLog: ToolUseLog,
@@ -407,7 +407,7 @@ function publishCodexItemProgress(params: {
   item: ThreadItem;
   status: ToolUseStatus;
   childStreamId: StreamTabId;
-  logger: AgentLogger;
+  logger: TexraTrace;
   refs: Map<string, CodexToolLogRef>;
   runtimeHost: AgentRuntimeHost;
 }): boolean {
@@ -430,7 +430,7 @@ function publishCodexItemProgress(params: {
 
 /** Log a turn summary to the child stream. */
 function logTurnSummary(
-  logger: AgentLogger,
+  logger: TexraTrace,
   wallTimeMs: number,
   usage: RunResult['usage'],
 ): void {
@@ -451,7 +451,7 @@ export async function runStreamedTurn(
   thread: Thread,
   prompt: string,
   childStreamId: StreamTabId,
-  logger: AgentLogger,
+  logger: TexraTrace,
   runtimeHost: AgentRuntimeHost,
   signal?: AbortSignal,
 ): Promise<RunResult> {
@@ -524,7 +524,7 @@ function startCodexLoop(params: {
   childStreamId: StreamTabId;
   parentStreamId: StreamTabId;
   executionId: ExecutionId;
-  logger: AgentLogger;
+  logger: TexraTrace;
   initialPrompt: string;
   runtimeHost: AgentRuntimeHost;
 }): void {

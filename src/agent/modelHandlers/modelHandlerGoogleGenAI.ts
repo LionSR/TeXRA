@@ -49,7 +49,7 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
-import { AgentLogger } from '@logger/AgentLogger';
+import type { TexraTrace } from '@logger';
 
 // Local imports - replacement
 import replacementEngine from '@replacement/engine';
@@ -109,7 +109,7 @@ function extractNonThinkingText(parts: Part[], trim = false): string {
  */
 export function validateGoogleMessageHistory(
   messages: Content[],
-  logger: AgentLogger,
+  logger: TexraTrace,
 ): void {
   let lastRole: string | undefined;
 

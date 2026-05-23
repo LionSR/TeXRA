@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'async_hooks';
 
+import { noopTexraTrace, type TexraTrace } from '@logger';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 
@@ -7,15 +8,6 @@ import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentProposalCoordinator } from './AgentProposalCoordinator';
 import type { PlanApprovalCoordinator } from './PlanApprovalCoordinator';
 import type { RetryRequestCoordinatorImpl } from './RetryRequestCoordinator';
-
-export type RunLogData = Record<string, unknown>;
-
-export interface RunLogger {
-  debug(message: string, data?: RunLogData): void;
-  info(message: string, data?: RunLogData): void;
-  warn(message: string, data?: RunLogData): void;
-  error(message: string, data?: RunLogData): void;
-}
 
 export interface RunCoordinators {
   readonly plan: PlanApprovalCoordinator;
@@ -27,7 +19,12 @@ export interface RunContext {
   readonly runtimeHost: AgentRuntimeHost;
   readonly streamId?: StreamTabId;
   readonly executionId?: ExecutionId;
-  readonly logger: RunLogger;
+  /**
+   * Discriminated-event SDK channel for this run. Subscribe with
+   * `trace.subscribe(...)` to receive every event the run emits. Defaults
+   * to `noopTexraTrace` when callers don't provide one.
+   */
+  readonly trace: TexraTrace;
   readonly coordinators?: RunCoordinators;
   /** Model short name of the executing agent (e.g. "opus46T", "sonnet46T"). */
   readonly model?: string;
@@ -51,7 +48,11 @@ export interface CreateRunContextOptions {
   runtimeHost: AgentRuntimeHost;
   streamId?: StreamTabId;
   executionId?: ExecutionId;
-  logger?: Partial<RunLogger>;
+  /**
+   * Discriminated-event channel for the run. When omitted, the context uses
+   * `noopTexraTrace`.
+   */
+  trace?: TexraTrace;
   coordinators?: RunCoordinators;
   model?: string;
   agentName?: string;
@@ -60,7 +61,6 @@ export interface CreateRunContextOptions {
   delegationConfig?: NestedDelegationConfig;
 }
 
-const noopLog = (): void => undefined;
 const runContextScope = new AsyncLocalStorage<RunContext>();
 
 export function createRunContext(options: CreateRunContextOptions): RunContext {
@@ -68,18 +68,11 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     throw new Error('createRunContext requires an explicit runtimeHost');
   }
 
-  const { logger } = options;
-
   return Object.freeze({
     runtimeHost: options.runtimeHost,
     streamId: options.streamId,
     executionId: options.executionId,
-    logger: Object.freeze({
-      debug: logger?.debug ?? noopLog,
-      info: logger?.info ?? noopLog,
-      warn: logger?.warn ?? noopLog,
-      error: logger?.error ?? noopLog,
-    }),
+    trace: options.trace ?? noopTexraTrace,
     coordinators: options.coordinators,
     model: options.model,
     agentName: options.agentName,

@@ -5,7 +5,7 @@ import { toErrorMessage } from '@common/errors';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { hasLatexCompiler } from '@latex/latexToolchain';
 import { compileLatex2Pdf } from '@latex/texTools';
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { TexraTrace } from '@logger';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 import {
   LATEX_CONFIG_DEFAULTS,
@@ -28,7 +28,7 @@ import { getOutputFilesByRound, type OutputState } from './outputState';
 export interface CompileCheckContext {
   fileService: TaskRunFileService;
   outputState: OutputState;
-  logger: AgentLogger;
+  logger: TexraTrace;
   streamId: string;
 }
 

@@ -1,4 +1,4 @@
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { AgentTrace } from '@agent/trace';
 
 import {
   discoverSkillSources,
@@ -39,7 +39,7 @@ export function formatRuntimeSkillCatalog(
 }
 
 export async function loadRuntimeSkillCatalog(
-  logger?: AgentLogger,
+  logger?: AgentTrace,
 ): Promise<string> {
   const sources = listRuntimeSkillSources();
   if (sources.length === 0) return '';

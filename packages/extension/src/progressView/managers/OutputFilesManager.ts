@@ -1,4 +1,5 @@
-import { AgentLogger } from '@logger/AgentLogger';
+import type { AgentTrace } from '@agent/trace';
+import { createChannelTrace } from '@logger';
 import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import {
@@ -23,7 +24,7 @@ export class OutputFilesManager {
   private _compileFailures: Map<StreamTabId, Map<number, CompileFailure[]>> =
     new Map();
   private loaded = false;
-  private readonly logger: AgentLogger;
+  private readonly logger: AgentTrace;
   private readonly pendingWrites = new Map<StreamTabId, Promise<void>>();
   private readonly pendingMissingWrites = new Map<StreamTabId, Promise<void>>();
   private readonly pendingCompileFailureWrites = new Map<
@@ -32,7 +33,7 @@ export class OutputFilesManager {
   >();
 
   constructor() {
-    this.logger = new AgentLogger('OutputFilesManager');
+    this.logger = createChannelTrace('OutputFilesManager');
   }
 
   private getOrCreate<V>(

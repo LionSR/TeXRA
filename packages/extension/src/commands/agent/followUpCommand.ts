@@ -11,14 +11,14 @@ import {
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { hasPersistedFlowRecord } from '@agent/storage/detectWaitingStreams';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelTrace } from '@logger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { STREAM_STATUS } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
 
 import { tryResumeFromSnapshot } from './resumeFromSnapshot';
 
-const logger = new AgentLogger('followUpCommand');
+const logger = createChannelTrace('followUpCommand');
 
 const inFlightDetections = new Set<StreamTabId>();
 

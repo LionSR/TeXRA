@@ -20,9 +20,9 @@ import {
   validateGoogleMessageHistory,
 } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
 import { MediaEntry } from '@agent/utils/mediaTypes';
+import type { TexraTrace } from '@logger';
 
 // Type imports
-import type { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - model config
 import { pathToLocation, type FileLocation } from '@utils/files';
@@ -36,12 +36,12 @@ import type {
   Content,
 } from '@google/genai';
 
-interface LoggerStub extends Partial<AgentLogger> {
+interface LoggerStub extends Partial<TexraTrace> {
   streamId: string;
   fileListEntries: Array<Array<{ path: string; ok: boolean }>>;
 }
 
-function createLoggerStub(): { logger: AgentLogger; stub: LoggerStub } {
+function createLoggerStub(): { logger: TexraTrace; stub: LoggerStub } {
   const stub: LoggerStub = {
     streamId: 'test-channel',
     fileListEntries: [],
@@ -57,15 +57,17 @@ function createLoggerStub(): { logger: AgentLogger; stub: LoggerStub } {
     error: () => {
       /* no-op for tests */
     },
-    fileList(entries: Array<{ path: string; ok: boolean }>) {
-      this.fileListEntries.push(entries);
+    filesLoaded(input: {
+      category: string;
+      entries: Array<{ path: string; ok: boolean }>;
+    }) {
+      this.fileListEntries.push(
+        input.entries as Array<{ path: string; ok: boolean }>,
+      );
     },
-    withCurrentGroup: () => undefined,
-    runWithinCurrentGroup: async (fn: () => any) => fn(),
-    runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
   };
 
-  return { logger: stub as unknown as AgentLogger, stub };
+  return { logger: stub as unknown as TexraTrace, stub };
 }
 
 function buildGoogleConfig(
@@ -318,7 +320,7 @@ describe('validateGoogleMessageHistory', () => {
     const logger = {
       warn: (msg: string) => warnings.push(msg),
       debug: () => {},
-    } as unknown as AgentLogger;
+    } as unknown as TexraTrace;
 
     const messages: Content[] = [
       { role: 'user', parts: [createPartFromText('first')] },
@@ -336,7 +338,7 @@ describe('validateGoogleMessageHistory', () => {
     const logger = {
       warn: (msg: string) => warnings.push(msg),
       debug: () => {},
-    } as unknown as AgentLogger;
+    } as unknown as TexraTrace;
 
     const messages: Content[] = [
       { role: 'user', parts: [createPartFromText('hello')] },
