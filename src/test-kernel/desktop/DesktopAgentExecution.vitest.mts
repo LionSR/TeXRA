@@ -117,18 +117,14 @@ async function createBridge(messages: unknown[]): Promise<TestableBridge> {
   vi.doMock('@controllers/mainView/MainViewExecutionController', () => ({
     prepareMainViewExecutionRequest: vi.fn(),
   }));
-  vi.doMock('@logger/AgentLogger', () => ({
-    AgentLogger: class {
-      static setStreamLogStore(): void {}
-
-      debug(): void {}
-
-      info(): void {}
-
-      warn(): void {}
-
-      error(): void {}
-    },
+  vi.doMock('@logger', () => ({
+    createChannelTrace: () => ({
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    }),
+    setDefaultStreamLogStore: () => {},
   }));
   vi.doMock('vscode', () => ({
     commands: {
@@ -244,18 +240,14 @@ async function createExecution(options: {
   vi.doMock('@controllers/mainView/MainViewExecutionController', () => ({
     prepareMainViewExecutionRequest: options.prepareMainViewExecutionRequest,
   }));
-  vi.doMock('@logger/AgentLogger', () => ({
-    AgentLogger: class {
-      static setStreamLogStore(): void {}
-
-      debug(): void {}
-
-      info(): void {}
-
-      warn(): void {}
-
-      error(): void {}
-    },
+  vi.doMock('@logger', () => ({
+    createChannelTrace: () => ({
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    }),
+    setDefaultStreamLogStore: () => {},
   }));
   const { createDesktopAgentExecution } = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
@@ -285,7 +277,7 @@ describe('DesktopProgressBridge', () => {
     vi.doUnmock('@agent/runtime/runExecutionRequest');
     vi.doUnmock('@common/storage/KVStore');
     vi.doUnmock('@controllers/mainView/MainViewExecutionController');
-    vi.doUnmock('@logger/AgentLogger');
+    vi.doUnmock('@logger');
     vi.doUnmock('vscode');
     vi.restoreAllMocks();
   });

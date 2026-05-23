@@ -10,13 +10,13 @@ import * as vscode from 'vscode';
 
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelTrace } from '@logger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { StreamTabId } from '@shared/schemas';
 
 import { ResumeAgentResultSchema } from './resumeCommand';
 
-const logger = new AgentLogger('resumeFromSnapshot');
+const logger = createChannelTrace('resumeFromSnapshot');
 
 export async function tryResumeFromSnapshot(
   streamId: StreamTabId,

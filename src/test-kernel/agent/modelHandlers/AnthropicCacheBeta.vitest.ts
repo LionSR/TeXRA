@@ -4,9 +4,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent model handlers
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
+import type { TexraTrace } from '@logger';
 
 // Type imports
-import type { AgentLogger } from '@logger/AgentLogger';
 import type { ToolDefinition } from '@model';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
@@ -39,13 +39,8 @@ function createHandler(): ModelHandlerAnthropic {
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
-    fileList: vi.fn(),
-    withCurrentGroup: vi.fn(() => undefined),
-    runWithinCurrentGroup: vi.fn(async (fn: () => unknown) => fn()),
-    runWithGroup: vi.fn(
-      async (_groupId: string | undefined, fn: () => unknown) => fn(),
-    ),
-  } as unknown as AgentLogger);
+    filesLoaded: vi.fn(),
+  } as unknown as TexraTrace);
   (handler as { getStreamingConfig: () => boolean }).getStreamingConfig = () =>
     false;
   return handler;

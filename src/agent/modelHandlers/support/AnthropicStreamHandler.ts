@@ -9,7 +9,7 @@ import {
   type WebSearchResult,
   type WebSearchResultEntry,
 } from '@agent/modelHandlers/types/ServerToolTypes';
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { TexraTrace } from '@logger';
 import { MESSAGE_TYPES, type StreamDiagnostics } from '@shared/schemas';
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
 import type {
@@ -42,7 +42,7 @@ const MAX_SERVER_TOOL_INPUT_SIZE = 65536;
  */
 interface AnthropicStreamState {
   /** Current output stream for text blocks */
-  outputStream: ReturnType<AgentLogger['createStream']> | null;
+  outputStream: ReturnType<TexraTrace['openStream']> | null;
   /** Index of most recent block (any type) */
   lastBlockIndex: number;
   /** Track web search: tool_use_id → { index, accumulated input JSON } */
@@ -89,8 +89,8 @@ interface StreamHandlerConfig {
  * Factory functions for creating streams.
  */
 interface StreamFactories {
-  createThinkingStream: () => ReturnType<AgentLogger['createStream']>;
-  createOutputStream: () => ReturnType<AgentLogger['createStream']>;
+  createThinkingStream: () => ReturnType<TexraTrace['openStream']>;
+  createOutputStream: () => ReturnType<TexraTrace['openStream']>;
 }
 
 /**
@@ -107,7 +107,7 @@ interface StreamFactories {
 export class AnthropicStreamHandler {
   private readonly thinkingStreams = new Map<
     number,
-    ReturnType<AgentLogger['createStream']>
+    ReturnType<TexraTrace['openStream']>
   >();
   private readonly state: AnthropicStreamState = {
     outputStream: null,
@@ -134,7 +134,7 @@ export class AnthropicStreamHandler {
   };
 
   constructor(
-    private readonly logger: AgentLogger,
+    private readonly logger: TexraTrace,
     private readonly config: StreamHandlerConfig,
     private readonly factories: StreamFactories,
   ) {}

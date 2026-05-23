@@ -180,9 +180,6 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
       warn: () => {},
       error: () => {},
       statistics: () => {},
-      withCurrentGroup: () => undefined,
-      runWithinCurrentGroup: async (fn: () => any) => fn(),
-      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
     };
     (handler as any).getStreamingConfig = () => false;
 
@@ -280,9 +277,6 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
         append: () => {},
         finalize: () => {},
       }),
-      withCurrentGroup: () => undefined,
-      runWithinCurrentGroup: async (fn: () => any) => fn(),
-      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
     };
     (handler as any).getStreamingConfig = () => true;
 
@@ -379,9 +373,6 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
         append: () => {},
         finalize: () => {},
       }),
-      withCurrentGroup: () => undefined,
-      runWithinCurrentGroup: async (fn: () => any) => fn(),
-      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
     };
     (handler as any).getStreamingConfig = () => true;
 

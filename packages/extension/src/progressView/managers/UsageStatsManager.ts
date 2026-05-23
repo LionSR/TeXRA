@@ -1,4 +1,5 @@
-import { AgentLogger } from '@logger/AgentLogger';
+import type { AgentTrace } from '@agent/trace';
+import { createChannelTrace } from '@logger';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import {
   TokenUsageStatsParsingSchema,
@@ -27,11 +28,11 @@ type RunUsageMap = Map<string, TokenUsageStats>;
 export class UsageStatsManager {
   private items: Map<StreamTabId, RunUsageMap> = new Map();
   private loaded = false;
-  private readonly logger: AgentLogger;
+  private readonly logger: AgentTrace;
   private readonly pendingWrites = new Map<StreamTabId, Promise<void>>();
 
   constructor() {
-    this.logger = new AgentLogger('UsageStatsManager');
+    this.logger = createChannelTrace('UsageStatsManager');
   }
 
   /**

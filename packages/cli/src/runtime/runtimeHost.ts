@@ -1,15 +1,16 @@
 // Local imports - runtime
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import {
-  createStructuredLogger,
-  type Logger,
-  type LogSink,
-} from '@logger/structuredLogger';
 
 // Local imports - CLI runtime
 import { handleCliApprovalEvent } from './approvalAdapter';
-import { createCliLogSink, writeNdjsonStdout } from './logSinks';
+import {
+  createCliLogger,
+  createCliLogSink,
+  writeNdjsonStdout,
+  type Logger,
+  type LogSink,
+} from './logSinks';
 import { createRunProgressRenderer } from './runProgressRenderer';
 import type { CliContext } from './cliContext';
 
@@ -24,7 +25,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   function ensureLogger(): Logger {
     if (logger) return logger;
     sink = createCliLogSink(context.outputFormat);
-    logger = createStructuredLogger(sink);
+    logger = createCliLogger(sink);
     return logger;
   }
 

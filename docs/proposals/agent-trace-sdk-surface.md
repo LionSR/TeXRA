@@ -1,7 +1,7 @@
 # Agent Trace — SDK Surface Design
 
-**Status:** Proposal / design note. Not approved.
-**Date:** 2026-05-22
+**Status:** Implemented (2026-05-23). `AgentLogger` deleted; all callers migrated to `AgentTrace`. See §8 for what landed and §9 for design deviations.
+**Date:** 2026-05-22 (proposal); 2026-05-23 (implementation)
 **Related:** [`logger-simplification-feasibility.md`](./logger-simplification-feasibility.md) (overlapping but distinct concern — that proposal is about internal LOC reduction; this one is about the _shape_ SDK consumers would see)
 
 ## TL;DR
@@ -225,7 +225,71 @@ for in review.
    In the new model, applied once at `emit()`, before subscribers see
    anything. Confirm this is the right boundary (it almost certainly is).
 
-## 8. Verification
+## 8. Implementation status (2026-05-23)
+
+All four migration steps from §5, plus both precursor cleanups from §6,
+shipped on `claude/agent-trace-sdk-surface-UzsKR`:
+
+- **`src/agent/trace/`** — `AgentEvent` discriminated union, `AgentTrace`
+  interface, `TraceEmitter` with a single stage-stamp at `emit()`, and
+  `noopTrace` for SDK consumers who don't subscribe.
+- **`RunContext.trace`** — defaults to `noopTrace`; populated by
+  `AgentLaunchContext` with the live emitter so every run has an SDK
+  channel attached. The default `RunLogger` (`debug/info/warn/error`)
+  forwards into the trace so plain log lines arrive as `{type:'log'}`.
+- **`src/logger/TexraTranscriptRecorder.ts`** — subscriber that converts
+  `AgentEvent` into the existing `StreamLogStore` writes (webview
+  transcript). The exhaustive `switch (event.type)` enforces SSoT —
+  adding a new arm forces an error here.
+- **`logUtils.attachChannelSubscriber`** — single function that routes
+  `log` events from a trace into the per-channel output sinks (VS Code
+  output channels in the extension, console elsewhere). Replaces the
+  former `consoleSubscriber.ts` shim and the structuredLogger middleman
+  inside logUtils — there is now one write per log event, straight from
+  the subscriber into the sink.
+- **`src/logger/runTrace.ts`** — `createChannelTrace(name)` for module-
+  load debug singletons; `createRunTrace(streamId)` for agent runs
+  (wires console + transcript subscribers and a `dispose()` for
+  shutdown). These factories replace `new AgentLogger(...)`.
+- **`AgentLogger` deleted** — every one of the ~36 production `new
+AgentLogger(...)` call sites, the ~50 `AgentLogger` type annotations,
+  and every test using the class migrated to `AgentTrace` /
+  `createChannelTrace` / `createRunTrace`. The single-emit boundary
+  collapsed the ~10 internal `resolveActiveGroupId()` calls to one
+  (precursor §6 #1).
+- **`MemoryTool.resolveMemoryPath`** — precursor §6 #2 was already done
+  by an earlier change: `execute()` dispatches via `locate()` and ops
+  receive a normalized `MemoryLocation` instead of raw paths.
+
+What this buys us: the trace channel is the single emission point, every
+event is structured, subscribers are independent, and SDK consumers can
+attach with `runContext.trace.subscribe(fn)`. No code path writes to
+`StreamLogStore` directly anymore.
+
+## 9. Trade-off vs. the lean-AgentTrace vision
+
+The proposal envisioned ~10 methods on `AgentTrace`. The implementation
+keeps ~30 — every sugar method `AgentLogger` historically exposed
+(`logError`, `logProgress`, `logFileCategory`, `statistics`,
+`logToolUseStart`, `updateToolUse`, `stage`, `createStream`, etc.) lives
+on `AgentTrace`. Every one is a one-liner over `emit()`, so subscribers
+still see a clean structured event stream — the trade-off is purely
+interface size.
+
+Why: the alternative was inlining the helper bodies at ~810 call sites,
+which would have turned the migration into a multi-day surgery
+(`agentLogger.logError(msg, err, ctx)` → `trace.error(msg, {
+messageType: MESSAGE_TYPES.ERROR, data: buildErrorLogData(err, ctx) })`)
+without changing the runtime behavior. Keeping the sugar made deletion
+of `AgentLogger` a same-day mechanical rename. The SSoT property the
+proposal cared about (single emit channel, exhaustive subscriber
+switch, no product coupling) is unaffected.
+
+If future SDK consumers want the leaner surface, the helpers can be
+peeled off one at a time — they're already structured so each method
+body is the inlined version.
+
+## 10. Verification
 
 Counts and line refs in this proposal:
 

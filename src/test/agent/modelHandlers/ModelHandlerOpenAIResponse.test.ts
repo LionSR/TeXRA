@@ -16,13 +16,13 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory, AgentSettingSchema } from '@agent/core/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
+import type { TexraTrace } from '@logger';
 
 // Type imports
-import type { AgentLogger } from '@logger/AgentLogger';
 import { pathToLocation } from '@utils/files';
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
 
-type LoggerStub = Partial<AgentLogger> & {
+type LoggerStub = Partial<TexraTrace> & {
   streamId: string;
 };
 
@@ -47,9 +47,6 @@ function createLoggerStub(): LoggerStub {
     logContextManagement: () => {
       /* no-op for tests */
     },
-    withCurrentGroup: () => undefined,
-    runWithinCurrentGroup: async (fn: () => any) => fn(),
-    runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
   };
 }
 
@@ -78,7 +75,7 @@ function createHandler(
   configOverrides: Partial<ModelConfig> = {},
 ): ModelHandlerOpenAIResponse {
   const handler = new ModelHandlerOpenAIResponse(createConfig(configOverrides));
-  handler.setLogger(createLoggerStub() as unknown as AgentLogger);
+  handler.setLogger(createLoggerStub() as unknown as TexraTrace);
   handler.getStreamingConfig = () => false;
   return handler;
 }
