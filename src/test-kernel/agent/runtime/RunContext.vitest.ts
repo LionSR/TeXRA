@@ -20,10 +20,9 @@ describe('RunContext', () => {
     const context = createRunContext({ runtimeHost: createRuntimeHost() });
 
     expect(Object.isFrozen(context)).toBe(true);
-    expect(Object.isFrozen(context.logger)).toBe(true);
 
     expect(() => {
-      (context as { logger: unknown }).logger = {};
+      (context as { trace: unknown }).trace = {};
     }).toThrow(TypeError);
   });
 
@@ -35,12 +34,11 @@ describe('RunContext', () => {
     ).toThrow(/explicit runtimeHost/);
   });
 
-  it('isolates log objects across contexts', () => {
-    const first = createRunContext({ runtimeHost: createRuntimeHost() });
-    const second = createRunContext({ runtimeHost: createRuntimeHost() });
+  it('defaults to the no-op trace when none is provided', () => {
+    const context = createRunContext({ runtimeHost: createRuntimeHost() });
 
-    expect(first).not.toBe(second);
-    expect(first.logger).not.toBe(second.logger);
+    expect(context.trace).toBeDefined();
+    expect(() => context.trace.debug('hello')).not.toThrow();
   });
 
   it('exposes the runtime host owned by the active context', () => {

@@ -8,8 +8,8 @@
  * 3. On resolution → emits 'resolveRetryRequest' to dismiss UI.
  */
 
+import type { AgentTrace } from '@agent/trace';
 import { getDefaultAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { AgentLogger } from '@logger/AgentLogger';
 import type { ProviderErrorPartial } from '@shared/schemas';
 import {
   BasePromiseCoordinator,
@@ -29,7 +29,7 @@ export interface RetryRequestOptions {
   /** Model name for context. */
   model?: string;
   /** Logger for debug messages. */
-  logger: AgentLogger;
+  logger: AgentTrace;
   /** Timeout in milliseconds (default: wait indefinitely). */
   timeoutMs?: number;
   /** Structured error details for expandable display. */
@@ -55,7 +55,7 @@ export class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
   };
 
   /** Per-stream logger captured during waitForRetry, consulted by trigger/cancel. */
-  private readonly loggers = new Map<string, AgentLogger>();
+  private readonly loggers = new Map<string, AgentTrace>();
 
   protected getDefaultCancelResult(): RetryResult {
     return { action: 'cancel' };

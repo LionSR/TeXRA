@@ -1,19 +1,33 @@
-import { LOG_LEVELS, type LogLevel, type MessageType } from '@shared/schemas';
+/**
+ * Channel-keyed logging primitives.
+ *
+ * Two surfaces:
+ *
+ *   1. Functional `debug/info/warn/error(channel, message, options)` — used
+ *      by ~70 non-trace callers (utils, housekeeping, common, auth, etc.)
+ *      that just want to write a line to a per-channel output sink.
+ *
+ *   2. `attachChannelSubscriber(trace, { channel, isAgent })` — subscribes
+ *      the same sink machinery to an {@link AgentTrace}. Used by
+ *      `createChannelTrace` / `createRunTrace` so the trace channel
+ *      converges on the same output sinks. Replaces the former
+ *      `consoleSubscriber.ts` pass-through.
+ *
+ * Output-channel creation is host-injected via {@link setOutputChannelFactory};
+ * the VS Code extension provides a factory that returns VS Code
+ * `OutputChannel`s, tests/CLI fall back to a console-backed sink.
+ */
+import type {
+  AgentEvent,
+  AgentTrace,
+  AgentTraceSubscriber,
+} from '@agent/trace';
+import { LOG_LEVELS, MESSAGE_TYPES, type LogLevel } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 import { serializeError } from '@utils/core';
 
-import {
-  createStructuredLogger,
-  type Logger,
-  type LogRecord,
-  type LogSink as StructuredLogSink,
-} from './structuredLogger';
-
 export interface LogUtilsOptions {
-  groupId?: string;
-  messageType?: MessageType;
   data?: unknown;
-  isAgent?: boolean;
 }
 
 const EMOJI_BY_LEVEL: Record<LogLevel, string> = {
@@ -31,7 +45,6 @@ interface OutputSink {
 type OutputChannelFactory = (name: string) => OutputSink;
 
 const channels = new Map<string, OutputSink>();
-const legacyLoggers = new Map<string, Logger>();
 let mainOutputChannel: OutputSink | null = null;
 let outputChannelFactory: OutputChannelFactory | null = null;
 
@@ -41,7 +54,7 @@ function getKey(channel: string, isAgent: boolean): string {
 
 function getTimestamp(): string {
   const now = new Date();
-  const pad = (value: number, width: number = 2) =>
+  const pad = (value: number, width = 2): string =>
     value.toString().padStart(width, '0');
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${pad(now.getMilliseconds(), 3)}`;
 }
@@ -71,40 +84,29 @@ function ensureChannel(channel: string, isAgent: boolean): OutputSink {
   return output;
 }
 
-function createLegacySink(
-  output: OutputSink,
+/**
+ * Write one line to the per-channel sink. Single emission point — both the
+ * functional logger API and the trace subscriber funnel through this.
+ */
+function writeLine(
+  level: LogLevel,
   channel: string,
   isAgent: boolean,
-): StructuredLogSink {
+  message: string,
+  data: unknown,
+): void {
+  const sink = ensureChannel(channel, isAgent);
   const prefix = isAgent ? '' : `[${channel}] `;
-  return {
-    write(record: LogRecord): void {
-      output.appendLine(
-        `${EMOJI_BY_LEVEL[record.level]} [${getTimestamp()}] ${prefix}${record.message}`,
-      );
+  sink.appendLine(
+    `${EMOJI_BY_LEVEL[level]} [${getTimestamp()}] ${prefix}${message}`,
+  );
 
-      const data = record.fields.data;
-      if (data === null || data === undefined) return;
-      if (!getConfig<boolean>('texra.logger.debugMode', false)) return;
+  if (data === null || data === undefined) return;
+  if (!getConfig<boolean>('texra.logger.debugMode', false)) return;
 
-      output.appendLine(
-        typeof data === 'string' ? data : JSON.stringify(data, null, 2),
-      );
-    },
-  };
-}
-
-function ensureLegacyLogger(channel: string, isAgent: boolean): Logger {
-  const key = getKey(channel, isAgent);
-  const existing = legacyLoggers.get(key);
-  if (existing) return existing;
-
-  const output = ensureChannel(channel, isAgent);
-  const logger = createStructuredLogger(
-    createLegacySink(output, channel, isAgent),
-  ).child({ streamId: channel, isAgent });
-  legacyLoggers.set(key, logger);
-  return logger;
+  sink.appendLine(
+    typeof data === 'string' ? data : JSON.stringify(data, null, 2),
+  );
 }
 
 function logAt(
@@ -113,18 +115,16 @@ function logAt(
   message: string,
   options: LogUtilsOptions,
 ): void {
-  const legacyLogger = ensureLegacyLogger(channel, options.isAgent ?? false);
-  legacyLogger[level](message, {
-    groupId: options.groupId ?? legacyLogger.activeGroupId(),
-    data:
-      options.data instanceof Error
-        ? serializeError(options.data)
-        : options.data,
-  });
+  const data =
+    options.data instanceof Error ? serializeError(options.data) : options.data;
+  // Functional callers (housekeeping, utils, common) never write to the
+  // per-stream agent channels — that's exclusively the trace subscriber
+  // path via `attachChannelSubscriber`.
+  writeLine(level, channel, /* isAgent */ false, message, data);
 }
 
 export function initialize(channel: string, isAgent = false): void {
-  ensureLegacyLogger(channel, isAgent);
+  ensureChannel(channel, isAgent);
 }
 
 export function setOutputChannelFactory(
@@ -136,24 +136,7 @@ export function setOutputChannelFactory(
 
   outputChannelFactory = factory;
   channels.clear();
-  legacyLoggers.clear();
   mainOutputChannel = null;
-}
-
-export function getActiveGroupId(
-  channel: string,
-  isAgent = false,
-): string | undefined {
-  return ensureLegacyLogger(channel, isAgent).activeGroupId();
-}
-
-export function runWithGroupContext<T>(
-  channel: string,
-  groupId: string,
-  isAgent: boolean,
-  fn: () => Promise<T> | T,
-): Promise<T> {
-  return ensureLegacyLogger(channel, isAgent).withGroup(groupId, fn);
 }
 
 export function debug(
@@ -186,4 +169,48 @@ export function error(
   options: LogUtilsOptions = {},
 ): void {
   logAt('error', channel, message, options);
+}
+
+// ─── Trace subscriber ────────────────────────────────────────────────────
+
+export interface ChannelSubscriberOptions {
+  /** Channel name used for the per-channel output sink. */
+  readonly channel: string;
+  /** Whether to route writes to the agent-specific output channel. */
+  readonly isAgent: boolean;
+}
+
+/**
+ * Subscribe to a trace and route every `log` event to the per-channel
+ * output sink. Non-log events are ignored — they are for structured
+ * subscribers (transcript recorder, Supabase, SDK consumers).
+ *
+ * Replaces the former `attachConsoleSubscriber` shim: there is no longer
+ * a `consoleSubscriber.ts` module sitting between the trace and the
+ * sink-write boundary.
+ */
+export function attachChannelSubscriber(
+  trace: AgentTrace,
+  options: ChannelSubscriberOptions,
+): () => void {
+  ensureChannel(options.channel, options.isAgent);
+
+  const subscriber: AgentTraceSubscriber = (event: AgentEvent) => {
+    if (event.type !== 'log') return;
+    // Internal-tagged log lines never reach the console — they exist for
+    // upstream subscribers (debug telemetry, transcript) that opt in.
+    if (event.messageType === MESSAGE_TYPES.INTERNAL) return;
+
+    const data =
+      event.data instanceof Error ? serializeError(event.data) : event.data;
+    writeLine(
+      event.level,
+      options.channel,
+      options.isAgent,
+      event.message,
+      data,
+    );
+  };
+
+  return trace.subscribe(subscriber);
 }

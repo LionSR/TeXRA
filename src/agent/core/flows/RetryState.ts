@@ -9,7 +9,7 @@ import { getConfig } from '@agent/core/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { normalizeProviderError, toErrorMessage } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { TexraTrace } from '@logger';
 import {
   MESSAGE_TYPES,
   STREAM_STATUS,
@@ -48,7 +48,7 @@ export type InvocationResult<TSuccess> =
 interface RetryableNodeServices {
   streamId: string;
   runtimeHost: AgentRuntimeHost;
-  logger: AgentLogger;
+  logger: TexraTrace;
   setAbortController: (ac: AbortController | null) => void;
   refreshClient?: () => Promise<void>;
 }
@@ -59,7 +59,7 @@ interface RetryableNodeServices {
  */
 async function tryRefreshClient(
   refreshClient: (() => Promise<void>) | undefined,
-  logger: AgentLogger,
+  logger: TexraTrace,
   context: string,
 ): Promise<boolean> {
   if (!refreshClient) {
@@ -327,7 +327,7 @@ const EMPTY_RESPONSE_ERROR_MESSAGE =
   'Model response was empty or aborted; this may indicate a server issue or network problem.';
 
 interface InvocationResultHandlerOptions {
-  logger: AgentLogger;
+  logger: TexraTrace;
   operationName: string;
 }
 
