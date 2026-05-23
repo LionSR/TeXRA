@@ -22,20 +22,12 @@ import type {
   AgentTrace,
   AgentTraceSubscriber,
 } from '@agent/trace';
-import {
-  LOG_LEVELS,
-  MESSAGE_TYPES,
-  type LogLevel,
-  type MessageType,
-} from '@shared/schemas';
+import { LOG_LEVELS, MESSAGE_TYPES, type LogLevel } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 import { serializeError } from '@utils/core';
 
 export interface LogUtilsOptions {
-  groupId?: string;
-  messageType?: MessageType;
   data?: unknown;
-  isAgent?: boolean;
 }
 
 const EMOJI_BY_LEVEL: Record<LogLevel, string> = {
@@ -125,7 +117,10 @@ function logAt(
 ): void {
   const data =
     options.data instanceof Error ? serializeError(options.data) : options.data;
-  writeLine(level, channel, options.isAgent ?? false, message, data);
+  // Functional callers (housekeeping, utils, common) never write to the
+  // per-stream agent channels — that's exclusively the trace subscriber
+  // path via `attachChannelSubscriber`.
+  writeLine(level, channel, /* isAgent */ false, message, data);
 }
 
 export function initialize(channel: string, isAgent = false): void {
