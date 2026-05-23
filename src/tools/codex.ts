@@ -330,13 +330,13 @@ function logCodexItem(
 ): void {
   switch (item.type) {
     case 'command_execution': {
-      logger.logToolUse(buildCodexCommandToolLog(item));
+      logger.emitToolUse(buildCodexCommandToolLog(item));
       break;
     }
     case 'file_change': {
       const fileLog = buildCodexFileChangeToolLog(item);
       if (fileLog) {
-        logger.logToolUse(fileLog);
+        logger.emitToolUse(fileLog);
       }
       break;
     }
@@ -347,7 +347,7 @@ function logCodexItem(
       logger.info(item.text, { messageType: MESSAGE_TYPES.THINKING });
       break;
     case 'mcp_tool_call': {
-      logger.logToolUse(buildCodexMcpToolLog(item as McpToolCallItem));
+      logger.emitToolUse(buildCodexMcpToolLog(item as McpToolCallItem));
       break;
     }
     case 'web_search':

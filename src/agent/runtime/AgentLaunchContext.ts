@@ -158,7 +158,7 @@ async function beginRunStage(
   if (instruction) {
     agentLogger.userMessage(instruction);
   }
-  return agentLogger.stage(label);
+  return agentLogger.openStage(label);
 }
 
 async function assembleAgentLaunchContext(
@@ -265,7 +265,7 @@ async function assembleAgentLaunchContext(
   const baseVars =
     setting.agentCategory === AgentCategory.ToolUse
       ? await buildVars()
-      : await parentStage.stage('Init').then((s) => s.run(buildVars));
+      : await parentStage.child('Init').run(buildVars);
 
   const userVarChannels: UserVariableChannels = {
     input: Object.freeze(baseVars),

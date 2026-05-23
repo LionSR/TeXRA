@@ -15,12 +15,6 @@ function createLoggerStub(): Partial<AgentTrace> & { streamId: string } {
     error: () => undefined,
     logProgress: () => undefined,
     logContextManagement: () => undefined,
-    withCurrentGroup: () => undefined,
-    runWithinCurrentGroup: async <T>(fn: () => T | Promise<T>) => fn(),
-    runWithGroup: async <T>(
-      _groupId: string | undefined,
-      fn: () => T | Promise<T>,
-    ) => fn(),
   };
 }
 

@@ -70,7 +70,7 @@ export async function withOutputStage<T>(
   parentStage: AgentLogStage | undefined,
   fn: (stage: AgentLogStage) => Promise<T>,
 ): Promise<T> {
-  const stage = await deps.logger.stage(`Output: ${label}`, {
+  const stage = deps.logger.openStage(`Output: ${label}`, {
     parent: parentStage,
     skip: true,
   });

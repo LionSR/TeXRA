@@ -22,12 +22,6 @@ function createLoggerStub(): Partial<AgentTrace> & { streamId: string } {
     error: vi.fn(),
     logProgress: vi.fn(),
     logContextManagement: vi.fn(),
-    withCurrentGroup: vi.fn(),
-    runWithinCurrentGroup: async <T>(fn: () => T | Promise<T>) => fn(),
-    runWithGroup: async <T>(
-      _groupId: string | undefined,
-      fn: () => T | Promise<T>,
-    ) => fn(),
   };
 }
 

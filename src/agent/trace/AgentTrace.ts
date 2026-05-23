@@ -6,19 +6,15 @@
  * interface is sugar over `emit()` — they exist to make TeXRA's internal
  * call sites readable, but they don't add new emission channels.
  *
- * The proposal envisioned a leaner ~10-method surface. The implementation
- * keeps the ~30 sugar methods AgentLogger callers historically relied on
- * (logError, logProgress, statistics, stage, createStream, etc.) so the
- * delete-AgentLogger migration can be a mechanical rename rather than an
- * inline-everywhere pass. Subscribers only ever see structured AgentEvents,
- * so the trade-off is in interface size — not in the SSoT property the
- * proposal cares about.
+ * Pure pass-through aliases that AgentLogger historically exposed
+ * (`statistics`, `fileList`, `createStream`, `logToolUse`, `resolveActiveGroupId`,
+ * `withCurrentGroup`, async `stage(...)`, etc.) have been removed. Callers
+ * use the canonical names directly.
  */
 import type {
   ContextManagementData,
   EndGroupStatus,
   ErrorContext,
-  ExtendedTokenUsageStats,
   FileListEntry,
   MessageType,
 } from '@shared/schemas';
@@ -36,7 +32,7 @@ import type {
 /** Subscriber receives every event emitted on the trace. */
 export type AgentTraceSubscriber = (event: AgentEvent) => void;
 
-/** Options accepted by `openStage` / `stage`. */
+/** Options accepted by `openStage`. */
 export interface StageOptions {
   /** Explicit id; otherwise a fresh one is generated. */
   readonly id?: string;
@@ -47,14 +43,12 @@ export interface StageOptions {
    * Defaults to `stopped`.
    */
   readonly defaultStatus?: EndGroupStatus;
-  /** Legacy alias for parentId. */
-  readonly parentGroupId?: string;
-  /** Skip stage creation but propagate parentGroupId for nested calls. */
+  /**
+   * Skip stage creation but propagate parent context to nested calls.
+   * `handle.id` is undefined; `handle.within(fn)` runs `fn` in the parent
+   * scope. Used by output sub-stages that don't need their own group.
+   */
   readonly skip?: boolean;
-  /** Status emitted by `.run()` on success — defaults to `defaultStatus`. */
-  readonly successStatus?: EndGroupStatus;
-  /** Status emitted by `.run()` on failure — defaults to `error`. */
-  readonly errorStatus?: EndGroupStatus;
   /** Parent handle for nested-stage chains. */
   readonly parent?: StageHandle;
 }
@@ -71,11 +65,9 @@ export interface StageHandle {
   run<T>(fn: () => Promise<T> | T): Promise<T>;
   /** Open a nested stage parented to this one. */
   child(label: string, options?: StageOptions): StageHandle;
-  /** Legacy alias of `child` — matches the AgentLogStage.stage(...) API. */
-  stage(label: string, options?: StageOptions): Promise<StageHandle>;
 }
 
-/** Options accepted by `openStream` / `createStream`. */
+/** Options accepted by `openStream`. */
 export interface StreamOptions {
   /** Explicit id; otherwise a fresh one is generated. */
   readonly id?: string;
@@ -83,8 +75,6 @@ export interface StreamOptions {
   readonly level?: LogEvent['level'];
   /** Stage id stamped on the start event; defaults to the active scope. */
   readonly stageId?: string;
-  /** Legacy alias for stageId. */
-  readonly groupId?: string;
   /**
    * When false, chunks are accumulated locally without emitting. `finalize`
    * still returns the buffered text. Useful for tests / off-progress paths.
@@ -124,8 +114,6 @@ export interface LogOptions {
    * to it.
    */
   readonly stageId?: string;
-  /** Legacy alias for stageId — matches AgentLogger.LogOptions.groupId. */
-  readonly groupId?: string;
 }
 
 /** Options accepted by usage / contextState / filesLoaded convenience emitters. */
@@ -140,8 +128,8 @@ export interface ToolStartRef {
 }
 
 /**
- * Core SDK surface. Every domain method ultimately reduces to `emit()` so
- * the trace channel is a single source of truth.
+ * Core SDK surface. Every method ultimately reduces to `emit()` so the
+ * trace channel is a single source of truth.
  */
 export interface AgentTrace {
   // ─── SSoT primitives ────────────────────────────────────────────────
@@ -152,7 +140,6 @@ export interface AgentTrace {
     stageId: string | undefined,
     fn: () => Promise<T> | T,
   ): Promise<T>;
-  resolveActiveGroupId(): string | undefined;
 
   // ─── Plain logging (sugar over emit) ────────────────────────────────
   debug(message: string, options?: LogOptions): void;
@@ -188,13 +175,11 @@ export interface AgentTrace {
 
   // ─── Structured first-class union arms ──────────────────────────────
   usage(stats: TokenUsageStats, options?: StagedEmitOptions): void;
-  statistics(stats: ExtendedTokenUsageStats, groupId?: string): void;
   contextState(snapshot: ContextStateData, options?: StagedEmitOptions): void;
   filesLoaded(
     input: Omit<FilesLoadedEvent, 'type' | 'stageId'>,
     options?: StagedEmitOptions,
   ): void;
-  fileList(files: FileListEntry[], groupId?: string): void;
   logFileCategory(
     category: string,
     files: Array<Pick<FileListEntry, 'path'> & { ok?: boolean }>,
@@ -208,7 +193,6 @@ export interface AgentTrace {
     input: { logId: string; status: ToolStatus; result?: unknown },
     options?: StagedEmitOptions,
   ): void;
-  logToolUse(data: unknown, groupId?: string): void;
   emitToolUse(data: unknown, groupId?: string): ToolStartRef;
   logToolUseStart(
     toolName: string,
@@ -227,25 +211,15 @@ export interface AgentTrace {
 
   // ─── Stage + stream handles ─────────────────────────────────────────
   openStage(label: string, options?: StageOptions): StageHandle;
-  stage(label: string, options?: StageOptions): Promise<StageHandle>;
   openStream(kind: StreamKind, options?: StreamOptions): StreamHandle;
-  createStream(kind: StreamKind, options?: StreamOptions): StreamHandle;
   startGroup(name: string, id?: string, parentGroupId?: string): string;
   endGroup(id: string, status?: EndGroupStatus): void;
-
-  // ─── Legacy scope helpers (mostly used by tool-use coordinators) ────
-  withCurrentGroup<T>(fn: (groupId: string) => T): T | undefined;
-  runWithinCurrentGroup<T>(fn: () => Promise<T> | T): Promise<T>;
-  runWithGroup<T>(
-    groupId: string | undefined,
-    fn: () => Promise<T> | T,
-  ): Promise<T>;
 }
 
 /**
- * Legacy aliases — `AgentLogStage` and `AgentLogStream` were the names
- * exposed by `AgentLogger`. They are still imported from a few files; this
- * keeps those imports working while the migration completes.
+ * Legacy alias — `AgentLogStage` was the type exposed by the removed
+ * `AgentLogger`. Still imported from a handful of files; kept here while
+ * the rename to `StageHandle` proceeds.
  */
 export type AgentLogStage = StageHandle;
 export type AgentLogStream = StreamHandle;

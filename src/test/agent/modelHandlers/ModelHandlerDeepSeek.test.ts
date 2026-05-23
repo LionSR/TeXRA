@@ -64,12 +64,6 @@ function createLoggerStub(): Partial<AgentTrace> {
     error: () => {
       /* no-op */
     },
-    withCurrentGroup: () => undefined,
-    runWithinCurrentGroup: async <T>(fn: () => T | Promise<T>) => fn(),
-    runWithGroup: async <T>(
-      _groupId: string | undefined,
-      fn: () => T | Promise<T>,
-    ) => fn(),
   };
 }
 

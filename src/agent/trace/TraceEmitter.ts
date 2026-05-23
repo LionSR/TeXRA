@@ -1,15 +1,15 @@
 /**
  * Default in-process implementation of {@link AgentTrace}.
  *
- * Responsibilities at the emit boundary (one place, not 10):
+ * Responsibilities at the emit boundary (one place, not many):
  *   - stamp `stageId` from the AsyncLocalStorage scope
  *   - fan out to subscribers
  *   - swallow per-subscriber exceptions so one bad sink can't break the run
  *
- * All sugar methods on AgentTrace (debug/info/warn/error, logError, stage,
- * createStream, statistics, etc.) reduce to a single `emit()` call. Adding
- * a new event arm forces an exhaustive-switch error in every subscriber
- * and nothing else.
+ * Every sugar method on AgentTrace (debug/info/warn/error, logError,
+ * openStage, openStream, usage, etc.) reduces to a single `emit()` call.
+ * Adding a new event arm forces an exhaustive-switch error in every
+ * subscriber and nothing else.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
@@ -21,7 +21,6 @@ import {
   type ContextManagementData,
   type EndGroupStatus,
   type ErrorContext,
-  type ExtendedTokenUsageStats,
   type FileListEntry,
 } from '@shared/schemas';
 
@@ -52,13 +51,6 @@ function currentStageStack(): string[] {
   return stageScope.getStore() ?? [];
 }
 
-function resolveStage(options: {
-  stageId?: string;
-  groupId?: string;
-}): string | undefined {
-  return options.stageId ?? options.groupId;
-}
-
 export class TraceEmitter implements AgentTrace {
   private readonly subscribers = new Set<AgentTraceSubscriber>();
 
@@ -72,9 +64,8 @@ export class TraceEmitter implements AgentTrace {
   }
 
   emit(event: AgentEvent): void {
-    // Stage stamp wins from the event itself if the caller supplied one;
-    // otherwise fall back to the active scope. Single resolve point — this
-    // is the §6 precursor cleanup the proposal called out.
+    // Single resolve point — stage stamp wins from the event itself if
+    // the caller supplied one; otherwise fall back to the active scope.
     const stamped: AgentEvent =
       event.stageId !== undefined
         ? event
@@ -91,10 +82,6 @@ export class TraceEmitter implements AgentTrace {
 
   activeStageId(): string | undefined {
     return currentStageStack().at(-1);
-  }
-
-  resolveActiveGroupId(): string | undefined {
-    return this.activeStageId();
   }
 
   withStage<T>(
@@ -136,7 +123,7 @@ export class TraceEmitter implements AgentTrace {
       data: options.data,
       messageType: options.messageType,
       verbose: options.verbose,
-      stageId: resolveStage(options),
+      stageId: options.stageId,
     });
   }
 
@@ -245,10 +232,6 @@ export class TraceEmitter implements AgentTrace {
     this.emit({ type: 'usage', stats, stageId: options.stageId });
   }
 
-  statistics(stats: ExtendedTokenUsageStats, groupId?: string): void {
-    this.usage(stats, { stageId: groupId });
-  }
-
   contextState(
     snapshot: ContextStateData,
     options: StagedEmitOptions = {},
@@ -271,10 +254,6 @@ export class TraceEmitter implements AgentTrace {
       entries: input.entries,
       stageId: options.stageId,
     });
-  }
-
-  fileList(files: FileListEntry[], groupId?: string): void {
-    this.filesLoaded({ category: 'all', entries: files }, { stageId: groupId });
   }
 
   logFileCategory(
@@ -316,10 +295,6 @@ export class TraceEmitter implements AgentTrace {
       result: input.result,
       stageId: options.stageId,
     });
-  }
-
-  logToolUse(data: unknown, groupId?: string): void {
-    this.emitToolUse(data, groupId);
   }
 
   emitToolUse(data: unknown, groupId?: string): ToolStartRef {
@@ -375,16 +350,9 @@ export class TraceEmitter implements AgentTrace {
   // ─── Stages ────────────────────────────────────────────────────────
 
   openStage(label: string, options: StageOptions = {}): StageHandle {
-    const successStatus =
-      options.successStatus ??
-      options.defaultStatus ??
-      END_GROUP_STATUS.STOPPED;
-    const errorStatus = options.errorStatus ?? END_GROUP_STATUS.ERROR;
+    const defaultStatus = options.defaultStatus ?? END_GROUP_STATUS.STOPPED;
     const parentId =
-      options.parent?.id ??
-      options.parentId ??
-      options.parentGroupId ??
-      this.activeStageId();
+      options.parent?.id ?? options.parentId ?? this.activeStageId();
 
     if (options.skip) {
       return new SkippedStageHandle(this, parentId);
@@ -392,11 +360,7 @@ export class TraceEmitter implements AgentTrace {
 
     const id = options.id ?? randomUUID();
     this.emit({ type: 'stage.start', id, label, parentId });
-    return new StageHandleImpl(this, id, successStatus, errorStatus);
-  }
-
-  async stage(label: string, options: StageOptions = {}): Promise<StageHandle> {
-    return this.openStage(label, options);
+    return new StageHandleImpl(this, id, defaultStatus);
   }
 
   startGroup(name: string, id?: string, parentGroupId?: string): string {
@@ -424,7 +388,6 @@ export class TraceEmitter implements AgentTrace {
 
   openStream(kind: StreamKind, options: StreamOptions = {}): StreamHandle {
     const id = options.id ?? randomUUID();
-    const stageOverride = options.stageId ?? options.groupId;
     const progressEnabled = options.progressViewEnabled ?? true;
 
     if (!progressEnabled) {
@@ -435,9 +398,8 @@ export class TraceEmitter implements AgentTrace {
 
     // Open inside the explicit stage scope so the start event carries the
     // right stageId without forcing the caller to await.
-    if (stageOverride && stageOverride !== this.activeStageId()) {
-      const prevStack = currentStageStack();
-      const nextStack = [...prevStack, stageOverride];
+    if (options.stageId && options.stageId !== this.activeStageId()) {
+      const nextStack = [...currentStageStack(), options.stageId];
       let handle!: StreamHandle;
       stageScope.run(nextStack, () => {
         this.emit({ type: 'stream.start', id, kind });
@@ -449,28 +411,6 @@ export class TraceEmitter implements AgentTrace {
     this.emit({ type: 'stream.start', id, kind });
     return new StreamHandleImpl(this, id, kind);
   }
-
-  createStream(kind: StreamKind, options: StreamOptions = {}): StreamHandle {
-    return this.openStream(kind, options);
-  }
-
-  // ─── Legacy scope helpers ──────────────────────────────────────────
-
-  withCurrentGroup<T>(fn: (groupId: string) => T): T | undefined {
-    const id = this.activeStageId();
-    return id ? fn(id) : undefined;
-  }
-
-  async runWithinCurrentGroup<T>(fn: () => Promise<T> | T): Promise<T> {
-    return this.withStage(this.activeStageId(), fn);
-  }
-
-  async runWithGroup<T>(
-    groupId: string | undefined,
-    fn: () => Promise<T> | T,
-  ): Promise<T> {
-    return this.withStage(groupId, fn);
-  }
 }
 
 class StageHandleImpl implements StageHandle {
@@ -479,8 +419,7 @@ class StageHandleImpl implements StageHandle {
   constructor(
     private readonly trace: TraceEmitter,
     readonly id: string,
-    private readonly successStatus: EndGroupStatus,
-    private readonly errorStatus: EndGroupStatus,
+    private readonly defaultStatus: EndGroupStatus,
   ) {}
 
   end(status?: EndGroupStatus): void {
@@ -489,7 +428,7 @@ class StageHandleImpl implements StageHandle {
     this.trace.emit({
       type: 'stage.end',
       id: this.id,
-      status: status ?? this.successStatus,
+      status: status ?? this.defaultStatus,
     });
   }
 
@@ -500,20 +439,16 @@ class StageHandleImpl implements StageHandle {
   async run<T>(fn: () => Promise<T> | T): Promise<T> {
     try {
       const result = await this.within(fn);
-      this.end(this.successStatus);
+      this.end(this.defaultStatus);
       return result;
     } catch (err) {
-      this.end(this.errorStatus);
+      this.end(END_GROUP_STATUS.ERROR);
       throw err;
     }
   }
 
   child(label: string, options: StageOptions = {}): StageHandle {
     return this.trace.openStage(label, { ...options, parent: this });
-  }
-
-  async stage(label: string, options: StageOptions = {}): Promise<StageHandle> {
-    return this.child(label, options);
   }
 }
 
@@ -545,10 +480,6 @@ class SkippedStageHandle implements StageHandle {
       ...options,
       parentId: options.parentId ?? this.parentId,
     });
-  }
-
-  async stage(label: string, options: StageOptions = {}): Promise<StageHandle> {
-    return this.child(label, options);
   }
 }
 

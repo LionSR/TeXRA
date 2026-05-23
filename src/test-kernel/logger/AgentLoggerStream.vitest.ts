@@ -23,7 +23,7 @@ describe('AgentLogger stream output', () => {
 
     try {
       const logger = createRunTrace('stream').trace;
-      const stream = logger.createStream(MESSAGE_TYPES.MODEL_RESPONSE);
+      const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
 
       stream.append('a');
       let entries = store.get('stream')?.getRange(0) ?? [];
@@ -65,7 +65,7 @@ describe('AgentLogger stream output', () => {
 
     try {
       const logger = createRunTrace('stream').trace;
-      const stream = logger.createStream(MESSAGE_TYPES.MODEL_RESPONSE);
+      const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
 
       stream.append('a');
       stream.append('b');
@@ -90,7 +90,7 @@ describe('AgentLogger stream output', () => {
 
     try {
       const logger = createRunTrace('stream').trace;
-      const stream = logger.createStream(MESSAGE_TYPES.MODEL_RESPONSE, {
+      const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE, {
         progressViewEnabled: false,
       });
 
@@ -116,7 +116,7 @@ describe('AgentLogger groupId resolution', () => {
 
     try {
       const logger = createRunTrace('stream').trace;
-      const outer = await logger.stage('outer');
+      const outer = logger.openStage('outer');
       await outer.within(async () => {
         // Sanity: a plain log line emitted from inside the stage nests under it.
         logger.info('inside outer');
@@ -148,7 +148,7 @@ describe('AgentLogger groupId resolution', () => {
 
     try {
       const logger = createRunTrace('stream').trace;
-      const outer = await logger.stage('outer');
+      const outer = logger.openStage('outer');
       const { logId, groupId: createdGroupId } = await outer.within(async () =>
         logger.logToolUseStart('demoTool', { arg: 1 }),
       );

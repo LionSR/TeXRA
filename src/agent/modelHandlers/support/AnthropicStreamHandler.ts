@@ -42,7 +42,7 @@ const MAX_SERVER_TOOL_INPUT_SIZE = 65536;
  */
 interface AnthropicStreamState {
   /** Current output stream for text blocks */
-  outputStream: ReturnType<AgentTrace['createStream']> | null;
+  outputStream: ReturnType<AgentTrace['openStream']> | null;
   /** Index of most recent block (any type) */
   lastBlockIndex: number;
   /** Track web search: tool_use_id → { index, accumulated input JSON } */
@@ -89,8 +89,8 @@ interface StreamHandlerConfig {
  * Factory functions for creating streams.
  */
 interface StreamFactories {
-  createThinkingStream: () => ReturnType<AgentTrace['createStream']>;
-  createOutputStream: () => ReturnType<AgentTrace['createStream']>;
+  createThinkingStream: () => ReturnType<AgentTrace['openStream']>;
+  createOutputStream: () => ReturnType<AgentTrace['openStream']>;
 }
 
 /**
@@ -107,7 +107,7 @@ interface StreamFactories {
 export class AnthropicStreamHandler {
   private readonly thinkingStreams = new Map<
     number,
-    ReturnType<AgentTrace['createStream']>
+    ReturnType<AgentTrace['openStream']>
   >();
   private readonly state: AnthropicStreamState = {
     outputStream: null,

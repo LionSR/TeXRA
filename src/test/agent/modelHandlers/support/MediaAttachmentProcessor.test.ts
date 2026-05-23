@@ -48,12 +48,9 @@ function createLoggerStub(): { logger: AgentTrace; stub: LoggerStub } {
     error(message: string) {
       this.errorMessages.push(message);
     },
-    fileList(entries: MediaFileResult[]) {
-      this.fileListEntries.push(entries);
+    filesLoaded(input: { category: string; entries: readonly MediaFileResult[] }) {
+      this.fileListEntries.push([...input.entries]);
     },
-    withCurrentGroup: () => undefined,
-    runWithinCurrentGroup: async (fn: () => any) => fn(),
-    runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
   };
 
   return { logger: stub as unknown as AgentTrace, stub };

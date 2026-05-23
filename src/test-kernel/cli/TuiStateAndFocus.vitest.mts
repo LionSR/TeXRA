@@ -540,7 +540,7 @@ describe('CLI transcript state', () => {
 
     try {
       const logger = createRunTrace(root).trace;
-      const stream = logger.createStream(MESSAGE_TYPES.MODEL_RESPONSE);
+      const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
       stream.append('A short final answer.');
 
       syncStreamLog(root);

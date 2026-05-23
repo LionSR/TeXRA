@@ -210,7 +210,7 @@ export class MediaAttachmentProcessor {
       this.logger.warn('Some media files failed to load');
     }
 
-    this.logger.fileList(results);
+    this.logger.filesLoaded({ category: 'all', entries: results });
   }
 
   private async loadMediaEntry(

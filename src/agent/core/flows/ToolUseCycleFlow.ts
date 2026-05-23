@@ -559,7 +559,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
         editedFiles: [],
         logRef: {
           logId: undefined,
-          groupId: this.services.logger.resolveActiveGroupId(),
+          groupId: this.services.logger.activeStageId(),
         },
       };
     }
@@ -628,7 +628,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     const logRef: ToolExecutionResult['logRef'] =
       SLOW_TOOLS.has(call.name) && !isDeferred
         ? options.logger.logToolUseStart(call.name, parsedInput ?? call.raw)
-        : { logId: undefined, groupId: options.logger.resolveActiveGroupId() };
+        : { logId: undefined, groupId: options.logger.activeStageId() };
 
     const onExecutionReady = isDeferred
       ? () => {
@@ -729,7 +729,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     if (logRef.logId) {
       options.logger.updateToolUse(logRef.logId, toolUseLog, logRef.groupId);
     } else {
-      options.logger.logToolUse(
+      options.logger.emitToolUse(
         { ...toolUseLog, status: 'completed' },
         logRef.groupId,
       );

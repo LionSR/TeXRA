@@ -216,7 +216,7 @@ export abstract class ModelHandler<
    * Convenience wrapper for thinking streams.
    */
   protected createThinkingStream() {
-    return this.logger.createStream(MESSAGE_TYPES.THINKING, {
+    return this.logger.openStream(MESSAGE_TYPES.THINKING, {
       progressViewEnabled: this.progressViewEnabled,
     });
   }
@@ -225,7 +225,7 @@ export abstract class ModelHandler<
    * Convenience wrapper for output streams.
    */
   protected createOutputStream() {
-    return this.logger.createStream(MESSAGE_TYPES.MODEL_RESPONSE, {
+    return this.logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE, {
       progressViewEnabled: this.progressViewEnabled,
     });
   }

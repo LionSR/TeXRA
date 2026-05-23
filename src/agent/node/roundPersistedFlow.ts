@@ -64,7 +64,7 @@ export interface RoundCallbacks<S extends RoundAwareState> {
   createRoundStage?: (
     roundIndex: number,
     parentStage: AgentLogStage | null,
-  ) => Promise<AgentLogStage>;
+  ) => AgentLogStage;
 
   /**
    * Called after a new round stage is created.
@@ -145,7 +145,7 @@ export class RoundPersistedFlow<
 
     try {
       // Create initial round stage (r0)
-      await this.createStage(currentShared.currentRound);
+      this.createStage(currentShared.currentRound);
 
       // Execute all nodes for the current round
       currentShared = await this.executeRoundSteps(currentShared);
@@ -247,15 +247,15 @@ export class RoundPersistedFlow<
     await this.resetNodeHistory(shared);
 
     // Create new stage
-    await this.createStage(shared.currentRound);
+    this.createStage(shared.currentRound);
   }
 
   /**
    * Create a round stage and notify callback.
    */
-  private async createStage(roundIndex: number): Promise<void> {
+  private createStage(roundIndex: number): void {
     if (this.callbacks.createRoundStage) {
-      this.currentRoundStage = await this.callbacks.createRoundStage(
+      this.currentRoundStage = this.callbacks.createRoundStage(
         roundIndex,
         this.parentStage,
       );

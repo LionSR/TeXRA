@@ -39,12 +39,7 @@ function createHandler(): ModelHandlerAnthropic {
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
-    fileList: vi.fn(),
-    withCurrentGroup: vi.fn(() => undefined),
-    runWithinCurrentGroup: vi.fn(async (fn: () => unknown) => fn()),
-    runWithGroup: vi.fn(
-      async (_groupId: string | undefined, fn: () => unknown) => fn(),
-    ),
+    filesLoaded: vi.fn(),
   } as unknown as AgentTrace);
   (handler as { getStreamingConfig: () => boolean }).getStreamingConfig = () =>
     false;

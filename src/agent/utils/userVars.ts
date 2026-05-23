@@ -119,7 +119,7 @@ export async function buildUserVars(
 
   // Emit aggregated file list if any files were loaded
   if (allLoadedFiles.length > 0) {
-    logger.fileList(allLoadedFiles);
+    logger.filesLoaded({ category: 'all', entries: allLoadedFiles });
   }
 
   return userVars;

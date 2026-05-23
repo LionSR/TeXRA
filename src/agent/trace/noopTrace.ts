@@ -27,9 +27,6 @@ class NoopStageHandle implements StageHandle {
   child(_label: string, _options?: StageOptions): StageHandle {
     return new NoopStageHandle(randomUUID());
   }
-  async stage(_label: string, _options?: StageOptions): Promise<StageHandle> {
-    return new NoopStageHandle(randomUUID());
-  }
 }
 
 class NoopStreamHandle implements StreamHandle {
@@ -44,7 +41,6 @@ export const noopTrace: AgentTrace = {
   emit: NOOP,
   subscribe: () => NOOP,
   activeStageId: () => undefined,
-  resolveActiveGroupId: () => undefined,
   withStage: <T>(_id: string | undefined, fn: () => Promise<T> | T) =>
     Promise.resolve(fn()),
 
@@ -65,14 +61,11 @@ export const noopTrace: AgentTrace = {
   userMessage: NOOP,
 
   usage: NOOP,
-  statistics: NOOP,
   contextState: NOOP,
   filesLoaded: NOOP,
-  fileList: NOOP,
   logFileCategory: NOOP,
   toolStart: NOOP,
   toolEnd: NOOP,
-  logToolUse: NOOP,
   emitToolUse: () => ({ logId: randomUUID(), groupId: undefined }),
   logToolUseStart: () => ({ logId: randomUUID(), groupId: undefined }),
   updateToolUse: NOOP,
@@ -83,20 +76,9 @@ export const noopTrace: AgentTrace = {
   openStage(_label, options) {
     return new NoopStageHandle(options?.id ?? randomUUID());
   },
-  async stage(_label, options) {
-    return new NoopStageHandle(options?.id ?? randomUUID());
-  },
   openStream(_kind, options) {
-    return new NoopStreamHandle(options?.id ?? randomUUID());
-  },
-  createStream(_kind, options) {
     return new NoopStreamHandle(options?.id ?? randomUUID());
   },
   startGroup: (_name, id) => id ?? randomUUID(),
   endGroup: NOOP,
-
-  withCurrentGroup: () => undefined,
-  runWithinCurrentGroup: <T>(fn: () => Promise<T> | T) => Promise.resolve(fn()),
-  runWithGroup: <T>(_id: string | undefined, fn: () => Promise<T> | T) =>
-    Promise.resolve(fn()),
 };

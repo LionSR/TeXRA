@@ -28,7 +28,7 @@ export class AgentUsageReporter {
     });
 
     if (this.agentCategory === AgentCategory.Workflow) {
-      this.logger.statistics(stats, groupId ?? storageKey);
+      this.logger.usage(stats, { stageId: groupId ?? storageKey });
     }
   }
 }

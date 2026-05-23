@@ -250,7 +250,7 @@ export async function runReflectionFlow<C = unknown>(
       parentStage,
       callbacks: {
         createRoundStage: (roundIndex, parent) =>
-          logger.stage(`r${roundIndex}`, {
+          logger.openStage(`r${roundIndex}`, {
             parent: parent ?? undefined,
           }),
         onStageCreated: (stage) => {

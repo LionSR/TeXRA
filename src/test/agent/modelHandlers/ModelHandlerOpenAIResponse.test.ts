@@ -47,9 +47,6 @@ function createLoggerStub(): LoggerStub {
     logContextManagement: () => {
       /* no-op for tests */
     },
-    withCurrentGroup: () => undefined,
-    runWithinCurrentGroup: async (fn: () => any) => fn(),
-    runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
   };
 }
 

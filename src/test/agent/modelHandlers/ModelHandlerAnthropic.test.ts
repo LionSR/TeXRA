@@ -98,9 +98,6 @@ function createLoggerStub(
     warn: () => {},
     error: () => {},
     fileList: () => {},
-    withCurrentGroup: () => undefined,
-    runWithinCurrentGroup: async (fn: () => any) => fn(),
-    runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
     ...overrides,
   };
 }
