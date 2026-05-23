@@ -223,7 +223,7 @@ async function runMultiAgentPreset(
   const contextFiles = (
     await Promise.all(
       init.contextFiles.map((spec) =>
-        expandWorkflowInputSpec(spec, runContext.cwd),
+        expandWorkflowInputSpec(spec, runContext.cwd, '--context'),
       ),
     )
   ).flat();
