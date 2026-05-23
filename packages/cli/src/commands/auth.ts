@@ -14,6 +14,7 @@ import {
 } from '../runtime/logSinks';
 import {
   fetchRelayUsageSummary,
+  parseUtcMonth,
   type RelayUsageSummary,
 } from '../runtime/relayUsage';
 import {
@@ -260,6 +261,19 @@ export const usageCommand = defineCommand({
   },
   async run(ctx) {
     const context = await contextFromArgs(ctx.args);
+    const month = optString(ctx.args.month);
+    // Pre-validate `--month` before any network I/O so a malformed value
+    // yields a Usage error (exit 2), not the catch-all ModelOrNetworkError
+    // (exit 3) that the broader try/catch below would assign.
+    if (month) {
+      try {
+        parseUtcMonth(month);
+      } catch (error) {
+        writeTextStderr(toErrorMessage(error));
+        setExitCode(CliExitCode.Usage);
+        return;
+      }
+    }
     let summary: RelayUsageSummary;
     try {
       await initCliPlatform({ ...context, quietLogs: true });
@@ -271,7 +285,7 @@ export const usageCommand = defineCommand({
       }
       summary = await fetchRelayUsageSummary({
         tier: profile.tier ?? 'free',
-        month: optString(ctx.args.month),
+        month,
       });
     } catch (error) {
       writeTextStderr(toErrorMessage(error));

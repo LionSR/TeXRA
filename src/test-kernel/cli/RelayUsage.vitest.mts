@@ -36,6 +36,21 @@ describe('CLI relay usage ranges', () => {
     expect(range.start.toISOString()).toBe('2026-12-01T00:00:00.000Z');
     expect(range.end.toISOString()).toBe('2027-01-01T00:00:00.000Z');
   });
+
+  it('rejects values that do not match YYYY-MM', () => {
+    // The command handler pre-validates `--month` so a malformed value yields
+    // a Usage error (exit 2), not the catch-all ModelOrNetworkError (exit 3).
+    // This contract is what makes that pre-validation possible.
+    expect(() => parseUtcMonth('not-a-date')).toThrow(/YYYY-MM format/);
+    expect(() => parseUtcMonth('2026/05')).toThrow(/YYYY-MM format/);
+    expect(() => parseUtcMonth('26-05')).toThrow(/YYYY-MM format/);
+    expect(() => parseUtcMonth('2026-5')).toThrow(/YYYY-MM format/);
+  });
+
+  it('rejects month numbers outside 01..12', () => {
+    expect(() => parseUtcMonth('2026-00')).toThrow(/YYYY-MM format/);
+    expect(() => parseUtcMonth('2026-13')).toThrow(/YYYY-MM format/);
+  });
 });
 
 describe('CLI relay usage summary', () => {
