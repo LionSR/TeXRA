@@ -3,8 +3,8 @@ import {
   SupabaseClient as Client,
   User,
 } from '@supabase/supabase-js';
-import * as logger from '@agent/core/logger';
 import { toErrorMessage } from '@common/errors/errorMessage';
+import * as logger from '@logger/logUtils';
 import {
   type UserAuthContext,
   type UserTier,

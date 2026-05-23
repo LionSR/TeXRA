@@ -1,4 +1,4 @@
-import * as logger from '@agent/core/logger';
+import * as logger from '@logger/logUtils';
 import { delay } from '@utils/core';
 
 export type NonIterableObject = Partial<Record<string, unknown>> & {
