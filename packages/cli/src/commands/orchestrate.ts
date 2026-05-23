@@ -19,7 +19,10 @@ import {
   INTERACTIVE_GLOBAL_ARGS,
   rejectHeadlessOnlyFlags,
 } from './_helpers/globalArgs';
-import { resolveMultiAgentRunPlan } from './multiAgent';
+import {
+  fillMultiAgentRunPlanGaps,
+  writeMissingPresetAgents,
+} from './multiAgent';
 import { runResumeExecution } from './resume';
 import type { CliContext } from '../runtime/cliContext';
 
@@ -61,13 +64,17 @@ async function runOrchestration(context: CliContext): Promise<number> {
       return result.exitCode;
     }
     case 'preset': {
-      const plan = resolveMultiAgentRunPlan({ preset: action.preset });
+      // Match the headless path: load remote premium agents (orchestrator,
+      // delegation specialists) and replan so the team starts with its real
+      // root instead of silently degrading to the first local tool-use agent.
+      const plan = await fillMultiAgentRunPlanGaps({ preset: action.preset });
       if (!plan.rootAgent) {
         writeTextStderr(
           `Multi-agent preset "${action.preset}" has no available tool-use agent to start.`,
         );
         return CliExitCode.Usage;
       }
+      writeMissingPresetAgents(plan);
       const { runChat } = await import('../chat/tui/runChatTui');
       const result = await withCliMultiAgentPresetVisibility(plan, () =>
         runChat(context, {
