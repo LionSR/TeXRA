@@ -2,11 +2,12 @@ import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentRunStateSnapshot } from '@agent/core/AgentState';
 import type { RunUsageTotals } from '@agent/core/RunUsageAccumulator';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 import { shouldUseOpenRouter } from '@agent/modelHandlers/support/ProxyConfigResolver';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { toErrorMessage } from '@common/errors';
-import { UsageLogService, type AgentUsageReporter } from '@logger/index';
+import { UsageLogService } from '@logger/index';
 import type {
   ExtendedTokenUsageStats,
   StorageKey,
@@ -57,14 +58,14 @@ export interface UsageMonitorModelInfo {
  * Runtime dependencies for UsageMonitor.
  *
  * Takes individual fields instead of full AgentExecutionContext:
- * - logger: For error logging
- * - usageReporter: For reporting usage to UI
+ * - logger: For error logging and the workflow-mode `usage` trace event
+ * - runtimeHost: For the `updateStreamUsage` progress-view event
  * - storageKey: The storage key for this execution (immutable)
  * - streamId: For backend logging
  */
 export interface UsageMonitorContext {
   logger: AgentTrace;
-  usageReporter: AgentUsageReporter;
+  runtimeHost: AgentRuntimeHost;
   storageKey: StorageKey;
   streamId: StreamTabId;
 }
@@ -107,11 +108,10 @@ export class UsageMonitor {
   }
 
   async recordUsage(stateGlobal: AgentRunStateSnapshot): Promise<void> {
-    const { logger, usageReporter } = this.context;
+    const { logger, runtimeHost, storageKey, streamId } = this.context;
+    const { agentCategory } = this.metadata;
     const runKind: UsageMonitorRunKind =
-      this.metadata.agentCategory === AgentCategory.ToolUse
-        ? 'tool-use'
-        : 'workflow';
+      agentCategory === AgentCategory.ToolUse ? 'tool-use' : 'workflow';
 
     try {
       const totals = stateGlobal.usageAccumulator.totals;
@@ -166,11 +166,20 @@ export class UsageMonitor {
         ...(toolUseTokens > 0 && { toolUseTokens }),
       };
 
-      usageReporter.report(
-        payload,
-        this.context.storageKey,
-        this.activeGroupId,
-      );
+      // Two surfaces for usage: the progress-view sidebar (via runtimeHost
+      // event) and — for workflow agents — the transcript's statistics line
+      // (via the trace channel). Tool-use agents skip the transcript copy
+      // because their UI surface is the tool-use cards, not a stats line.
+      runtimeHost.emit('updateStreamUsage', {
+        streamId,
+        storageKey,
+        usage: payload,
+      });
+      if (agentCategory === AgentCategory.Workflow) {
+        logger.usage(payload, {
+          stageId: this.activeGroupId ?? storageKey,
+        });
+      }
 
       // Log to backend for analytics (non-blocking, fire-and-forget)
       this.logToBackend(stateGlobal.totalResponseTimeMs, {
