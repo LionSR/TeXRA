@@ -225,7 +225,7 @@ export class BashTool extends defineTool({
       'process',
     );
 
-    const { childStreamId, logger } = createChildStream(
+    const { childStreamId, logger, disposeTrace } = createChildStream(
       executionId,
       parentStreamId,
       {
@@ -298,14 +298,21 @@ export class BashTool extends defineTool({
         const terminalStatus = result.success ? 'completed' : 'error';
         await writeTerminalStatus(executionId, terminalStatus).catch(() => {});
         unregisterInterruptible(childStreamId);
-        finalizeChildStream(childStreamId, executionId, logger, runtimeHost, {
-          wallTimeMs,
-          error: result.success
-            ? undefined
-            : new ToolError(
-                `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
-              ),
-          autoClose: true,
+        finalizeChildStream({
+          childStreamId,
+          executionId,
+          logger,
+          disposeTrace,
+          runtimeHost,
+          options: {
+            wallTimeMs,
+            error: result.success
+              ? undefined
+              : new ToolError(
+                  `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
+                ),
+            autoClose: true,
+          },
         });
 
         const msg = formatBashDelivery(
@@ -322,9 +329,16 @@ export class BashTool extends defineTool({
       .catch(async (err: unknown) => {
         await writeTerminalStatus(executionId, 'error').catch(() => {});
         unregisterInterruptible(childStreamId);
-        finalizeChildStream(childStreamId, executionId, logger, runtimeHost, {
-          error: err,
-          autoClose: true,
+        finalizeChildStream({
+          childStreamId,
+          executionId,
+          logger,
+          disposeTrace,
+          runtimeHost,
+          options: {
+            error: err,
+            autoClose: true,
+          },
         });
 
         const msg = formatBashError(executionId, command, err);

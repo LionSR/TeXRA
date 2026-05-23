@@ -525,6 +525,7 @@ function startCodexLoop(params: {
   parentStreamId: StreamTabId;
   executionId: ExecutionId;
   logger: TexraTrace;
+  disposeTrace: () => void;
   initialPrompt: string;
   runtimeHost: AgentRuntimeHost;
 }): void {
@@ -534,6 +535,7 @@ function startCodexLoop(params: {
     parentStreamId,
     executionId,
     logger,
+    disposeTrace,
     initialPrompt,
     runtimeHost,
   } = params;
@@ -656,6 +658,7 @@ function startCodexLoop(params: {
       untrackExecution(executionId);
 
       finalizeCodexLoopStatus(childStreamId, runtimeHost);
+      disposeTrace();
     }
   })();
 }
@@ -774,7 +777,7 @@ async function launchCodexSession(
     throw new ToolError('Failed to register Codex execution.');
   }
 
-  const { childStreamId, logger } = createChildStream(
+  const { childStreamId, logger, disposeTrace } = createChildStream(
     executionId,
     parentStreamId,
     {
@@ -794,6 +797,7 @@ async function launchCodexSession(
     parentStreamId,
     executionId,
     logger,
+    disposeTrace,
     initialPrompt: input.prompt,
     runtimeHost,
   });
