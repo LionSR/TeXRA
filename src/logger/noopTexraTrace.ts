@@ -39,7 +39,6 @@ export const noopTexraTrace: TexraTrace = {
   updateToolUse: NOOP,
   logWebSearch: NOOP,
   logWebFetch: NOOP,
-  statistics: NOOP,
 
   startGroup: (_name, id) => id ?? randomUUID(),
   endGroup: NOOP,
