@@ -6,6 +6,7 @@ import type { AgentConfigPayload } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { OutputFileSummary } from '@agent/runtime/AgentFlowResult';
 import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
+import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import { getRunDir } from '@utils/files';
 
@@ -18,18 +19,31 @@ import {
 import { CliUsageError, type CliContext } from '../../runtime/cliContext';
 
 /**
- * `--output-dir` may legitimately not exist yet (the run will `mkdir -p`
- * later), but if the path exists today and isn't a directory we want to fail
- * fast as a Usage error (exit 2) instead of running the whole workflow and
- * blowing up with an EEXIST mkdir error at the very end (exit 1).
- *
- * Only `ENOENT` is treated as "not there yet, mkdir -p will create it".
- * `ENOTDIR` (an intermediate path component is a file — e.g.
- * `--output-dir /tmp/file/sub` where `/tmp/file` is a regular file) is also a
- * Usage error: `mkdir -p` can't fix it, and we'd otherwise pay the full agent
- * run before failing. Other stat errors (EACCES, EIO, …) are environment
- * problems and must propagate with their real cause.
+ * Stat `target` for the output-path guards. Returns `null` when the path
+ * doesn't exist yet (the workflow will create it). `ENOTDIR` (a parent path
+ * component is a file) is surfaced as a Usage error here so callers don't
+ * have to repeat it. Other stat errors propagate with their real cause.
  */
+async function probeOutputPath(
+  target: string,
+  flagLabel: '--output' | '--output-dir',
+): Promise<Awaited<ReturnType<typeof fs.stat>> | null> {
+  try {
+    return await fs.stat(target);
+  } catch (error: unknown) {
+    if (isFileNotFoundError(error)) return null;
+    if (isNotADirectoryError(error)) {
+      throw new CliUsageError(
+        flagLabel === '--output-dir'
+          ? `--output-dir is not a directory (a parent path component is a file): ${target}`
+          : `--output: a parent path component is a file: ${target}`,
+      );
+    }
+    throw error;
+  }
+}
+
+/** `--output-dir <path>` must point at a directory (or not exist yet). */
 export async function assertOutputDirAvailable(
   outputDir: string | undefined,
   cwd: string,
@@ -38,39 +52,13 @@ export async function assertOutputDirAvailable(
   const target = path.isAbsolute(outputDir)
     ? outputDir
     : path.join(cwd, outputDir);
-  let stats: Awaited<ReturnType<typeof fs.stat>> | null = null;
-  try {
-    stats = await fs.stat(target);
-  } catch (error: unknown) {
-    const code =
-      typeof error === 'object' && error !== null && 'code' in error
-        ? (error as { code?: unknown }).code
-        : undefined;
-    if (code === 'ENOENT') {
-      return;
-    }
-    if (code === 'ENOTDIR') {
-      throw new CliUsageError(
-        `--output-dir is not a directory (a parent path component is a file): ${target}`,
-      );
-    }
-    throw error;
-  }
-  if (!stats.isDirectory()) {
+  const stats = await probeOutputPath(target, '--output-dir');
+  if (stats && !stats.isDirectory()) {
     throw new CliUsageError(`--output-dir is not a directory: ${target}`);
   }
 }
 
-/**
- * Single-file twin of {@link assertOutputDirAvailable}: `--output` must end at
- * a path the workflow can write a file to. The path doesn't need to exist
- * (we `mkdir -p` the parent and create the file during the run), but pointing
- * `--output` at an existing directory or through a file-typed parent component
- * blows up at copy time after the full agent run (`EISDIR` / `EEXIST`).
- *
- * `ENOENT` → return (file will be created). `ENOTDIR` (parent component is a
- * file) → Usage error. Other stat errors propagate.
- */
+/** `--output <path>` must end at a writable file path (or not exist yet). */
 export async function assertOutputFileAvailable(
   outputFile: string | undefined,
   cwd: string,
@@ -79,25 +67,8 @@ export async function assertOutputFileAvailable(
   const target = path.isAbsolute(outputFile)
     ? outputFile
     : path.join(cwd, outputFile);
-  let stats: Awaited<ReturnType<typeof fs.stat>> | null = null;
-  try {
-    stats = await fs.stat(target);
-  } catch (error: unknown) {
-    const code =
-      typeof error === 'object' && error !== null && 'code' in error
-        ? (error as { code?: unknown }).code
-        : undefined;
-    if (code === 'ENOENT') {
-      return;
-    }
-    if (code === 'ENOTDIR') {
-      throw new CliUsageError(
-        `--output: a parent path component is a file: ${target}`,
-      );
-    }
-    throw error;
-  }
-  if (stats.isDirectory()) {
+  const stats = await probeOutputPath(target, '--output');
+  if (stats?.isDirectory()) {
     throw new CliUsageError(
       `--output is a directory; use --output-dir or pick a file path: ${target}`,
     );
