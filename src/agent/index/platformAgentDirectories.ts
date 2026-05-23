@@ -1,6 +1,7 @@
 // Local imports - agent index
 import { platform } from '@platform/platform';
 import { isFileNotFoundError } from '@common/errors/errorPredicates';
+import * as logger from '@logger/logUtils';
 import { AgentDirectoryService } from './AgentDirectoryService';
 import {
   BundledAgentDirectorySync,
@@ -45,14 +46,14 @@ function createPlatformAgentDirectories(
     },
     issueReporter: {
       report: async (message, docsId) =>
-        platform().log.warn(
+        logger.warn(
           options.channel,
           `${message}. See documentation: ${docsId}`,
         ),
     },
     logger: {
-      debug: (message) => platform().log.debug(options.channel, message),
-      error: (message) => platform().log.error(options.channel, message),
+      debug: (message) => logger.debug(options.channel, message),
+      error: (message) => logger.error(options.channel, message),
     },
   });
 }
@@ -65,8 +66,8 @@ export async function bootstrapPlatformAgentDirectories(
     storage: new GlobalStorageAgentDirectoryStorage(),
     versionStore: options.versionStore,
     logger: {
-      info: (message) => platform().log.info(options.channel, message),
-      warn: (message) => platform().log.warn(options.channel, message),
+      info: (message) => logger.info(options.channel, message),
+      warn: (message) => logger.warn(options.channel, message),
     },
   });
 

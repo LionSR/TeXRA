@@ -17,11 +17,7 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createWorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 // Local imports - test support
-import {
-  FakeConfigProvider,
-  FakeSecrets,
-  RecordingLogBackend,
-} from '@test/support/FakePlatform';
+import { FakeConfigProvider, FakeSecrets } from '@test/support/FakePlatform';
 import { GlobalStateKey } from '@common/state/stateKeys';
 
 import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
@@ -123,7 +119,6 @@ describe('desktop agent directory bootstrap', () => {
       config: new FakeConfigProvider(),
       globalState: new JsonStateStore(globalStateStore),
       workspaceState: new JsonStateStore(workspaceStateStore),
-      log: new RecordingLogBackend(),
       fs: nodeFilesystem,
       workspace: createNodeWorkspace(() => workspacePath),
       storage,

@@ -3,8 +3,8 @@ import { z } from 'zod';
 
 // Internal imports
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import * as logger from '@agent/core/logger';
 import { toErrorMessage } from '@common/errors';
+import * as logger from '@logger/logUtils';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 
 // Local file imports
