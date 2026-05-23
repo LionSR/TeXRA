@@ -83,9 +83,9 @@ describe('assertOutputDirAvailable', () => {
       await expect(
         assertOutputDirAvailable(through, root),
       ).rejects.toBeInstanceOf(CliUsageError);
-      await expect(
-        assertOutputDirAvailable(through, root),
-      ).rejects.toThrow(/is not a directory/);
+      await expect(assertOutputDirAvailable(through, root)).rejects.toThrow(
+        /is not a directory/,
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -105,9 +105,9 @@ describe('assertOutputDirAvailable', () => {
       try {
         await mkdir(blocked);
         await chmod(blocked, 0o000);
-        await expect(
-          assertOutputDirAvailable(inner, root),
-        ).rejects.toThrow(/(EACCES|permission)/i);
+        await expect(assertOutputDirAvailable(inner, root)).rejects.toThrow(
+          /(EACCES|permission)/i,
+        );
       } finally {
         await chmod(blocked, 0o755).catch(() => undefined);
         await rm(root, { recursive: true, force: true });
