@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import { toErrorMessage } from '@common/errors/errorMessage';
 import { isNonEmptyString } from '@utils/core/stringCore';
 
 import {
@@ -224,7 +225,7 @@ export async function resolveCliCwd(
       throw new CliUsageError(`--cwd: path does not exist: ${requested}`);
     }
     throw new CliUsageError(
-      `--cwd: cannot access ${requested}: ${error instanceof Error ? error.message : String(error)}`,
+      `--cwd: cannot access ${requested}: ${toErrorMessage(error)}`,
     );
   }
   if (!info.isDirectory()) {
