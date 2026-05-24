@@ -1,4 +1,4 @@
-# TeXRA: AI TeX Research Assistant for VS Code
+# TeXRA: Multi-Agent AI Research Assistant for TeX
 
 [![VS Code Marketplace](https://vsmarketplacebadges.dev/version-short/texra-ai.texra.svg)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
 [![Installs](https://vsmarketplacebadges.dev/installs-short/texra-ai.texra.svg)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
@@ -22,13 +22,13 @@
 > [Buy Me a Coffee](https://buymeacoffee.com/texra.ai) to keep the program
 > open for everyone.
 
-**TeXRA is a multi-agent research assistant for VS Code.** Instead of chatting
-with a single model, you direct an **Orchestrator** that delegates to a team of
-specialists—researchers, numericists, reviewers, formalizers, LaTeX
-fixers, presenters—each with their own tools, prompts, and model. The result
-is a coordinated lab in your editor that drafts, reviews, computes, and
-formalizes rigorous scientific work alongside its LaTeX, code, figures, and
-PRs.
+**TeXRA is a multi-agent research assistant for LaTeX — in VS Code and the
+terminal.** Instead of chatting with a single model, you direct an
+**Orchestrator** that delegates to a team of specialists—researchers,
+numericists, reviewers, formalizers, LaTeX fixers, presenters—each with their
+own tools, prompts, and model. The result is a coordinated lab that drafts,
+reviews, computes, and formalizes rigorous scientific work alongside its LaTeX,
+code, figures, and PRs.
 
 TeXRA runs as a **VS Code extension** and as a **terminal CLI**
 (`@texra-ai/cli`) that share the same agents and sign-in — see
