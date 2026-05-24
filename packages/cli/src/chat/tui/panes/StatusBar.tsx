@@ -41,6 +41,10 @@ export interface StatusBarDisplayInput {
   readonly activeProcesses: number;
   readonly approvalDepth: number;
   readonly subagentControlsAvailable: boolean;
+  /** True when more than the root stream exists, i.e. a subagent or
+   *  child stream is live. Gates the stream-navigation hints, which are
+   *  no-ops in a plain single-stream chat. */
+  readonly hasMultipleStreams: boolean;
   readonly model: string;
   readonly apiMode: string;
   readonly shortcutModifierLabel?: string;
@@ -122,10 +126,16 @@ export function defaultShortcutModifierLabel(
   return platform === 'darwin' ? 'Option' : 'Alt';
 }
 
-function statusBarBindings(modifierLabel: string): readonly string[] {
+function statusBarBindings(
+  modifierLabel: string,
+  hasMultipleStreams: boolean,
+): readonly string[] {
   return [
-    '[Tab]streams',
-    `[${modifierLabel}-1..9]focus`,
+    // Stream cycling / numeric focus only do something when there is more
+    // than one stream — hide the hints in a plain single-stream chat.
+    ...(hasMultipleStreams
+      ? ['[Tab]streams', `[${modifierLabel}-1..9]focus`]
+      : []),
     `[${modifierLabel}-p]tasks`,
     '[/status]details',
     '[/model]models',
@@ -137,9 +147,12 @@ function statusBarBindings(modifierLabel: string): readonly string[] {
 
 export function statusBarBindingsText(
   subagentControlsAvailable: boolean,
+  hasMultipleStreams: boolean,
   modifierLabel = defaultShortcutModifierLabel(),
 ): string {
-  const bindings: string[] = [...statusBarBindings(modifierLabel)];
+  const bindings: string[] = [
+    ...statusBarBindings(modifierLabel, hasMultipleStreams),
+  ];
   if (subagentControlsAvailable) {
     const tasksBinding = `[${modifierLabel}-p]tasks`;
     const tasksIndex = bindings.indexOf(tasksBinding);
@@ -203,6 +216,7 @@ export function buildStatusBarDisplay(
         ? `Resume this session with: texra --resume ${input.pendingExitResumeId}`
         : statusBarBindingsText(
             input.subagentControlsAvailable,
+            input.hasMultipleStreams,
             input.shortcutModifierLabel,
           ),
   };
@@ -232,6 +246,7 @@ export function StatusBar(): React.JSX.Element {
     activeProcesses: slice?.activeProcesses.length ?? 0,
     approvalDepth: approvals,
     subagentControlsAvailable: canShowSubagentControls(sessionMeta, slice),
+    hasMultipleStreams: streams.size > 1,
     model: sessionMeta.model,
     apiMode: shortCliApiMode(sessionMeta.apiMode),
   });
