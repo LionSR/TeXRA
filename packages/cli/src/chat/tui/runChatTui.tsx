@@ -780,9 +780,8 @@ export async function runChat(
       })
       .catch((error: unknown) => {
         if (!session.stopRequested) {
-          // Ink owns stdout while the TUI is mounted, so writing to
-          // stderr disappears under the alternate screen. Surface the
-          // failure inline so the user sees why the agent stopped.
+          // Ink owns stdout while the TUI is mounted; surface the failure
+          // inline so the user sees why the agent stopped.
           appendLocalErrorTranscript(toErrorMessage(error));
         }
         session.runExitCode = session.stopRequested
