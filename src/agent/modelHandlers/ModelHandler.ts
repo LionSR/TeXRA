@@ -336,7 +336,7 @@ export abstract class ModelHandler<
       // No access token available - shouldUseServerSideKeys() returned true, meaning isEnabled()
       // returned true. Don't fall back to personal keys - throw an actionable error.
       throw new Error(
-        'Unable to authenticate with server. Please sign out and sign back in, or switch to "Use My Own Keys" mode.',
+        'Unable to authenticate with server. Please sign out and sign back in, or switch to personal API keys.',
       );
     }
 
