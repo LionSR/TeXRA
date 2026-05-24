@@ -10,18 +10,18 @@ import { PDFDocument, StandardFonts } from '@cantoo/pdf-lib';
 
 // Local imports - agent
 import { DEFAULT_MODEL_CAPABILITIES, type ModelCapabilities } from 'llm-zoo';
+import type { AgentTrace } from '@agent/trace';
 import {
   MediaAttachmentProcessor,
   type MediaFileResult,
 } from '@agent/modelHandlers/support/MediaAttachmentProcessor';
-import type { TexraTrace } from '@logger';
 
 // Type imports
 
 // Internal imports
 import { AbsoluteFS, pathToLocation, getShortDisplayPath } from '@utils/files';
 
-interface LoggerStub extends Partial<TexraTrace> {
+interface LoggerStub extends Partial<AgentTrace> {
   streamId: string;
   debugMessages: string[];
   warnMessages: string[];
@@ -29,7 +29,7 @@ interface LoggerStub extends Partial<TexraTrace> {
   fileListEntries: MediaFileResult[][];
 }
 
-function createLoggerStub(): { logger: TexraTrace; stub: LoggerStub } {
+function createLoggerStub(): { logger: AgentTrace; stub: LoggerStub } {
   const stub: LoggerStub = {
     streamId: 'media-test',
     debugMessages: [],
@@ -48,15 +48,15 @@ function createLoggerStub(): { logger: TexraTrace; stub: LoggerStub } {
     error(message: string) {
       this.errorMessages.push(message);
     },
-    filesLoaded(input: {
-      category: string;
-      entries: readonly MediaFileResult[];
-    }) {
-      this.fileListEntries.push([...input.entries]);
+    domain(event) {
+      if (event.key === 'filesLoaded') {
+        const data = event.data as { entries: readonly MediaFileResult[] };
+        this.fileListEntries.push([...data.entries]);
+      }
     },
   };
 
-  return { logger: stub as unknown as TexraTrace, stub };
+  return { logger: stub as unknown as AgentTrace, stub };
 }
 
 describe('MediaAttachmentProcessor', () => {
@@ -97,7 +97,7 @@ describe('MediaAttachmentProcessor', () => {
   });
 
   function createProcessor(
-    logger: TexraTrace,
+    logger: AgentTrace,
     capabilities: Partial<ModelCapabilities>,
     isOpenAIProvider: boolean = true,
   ): MediaAttachmentProcessor {

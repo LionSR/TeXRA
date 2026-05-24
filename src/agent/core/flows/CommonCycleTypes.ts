@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 
-import type { AgentTrace } from '@agent/trace';
+import { logContextStateSnapshot, type AgentTrace } from '@agent/trace';
 import { isRemoteAgent } from '@agent/index/agentRegistry';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { AgentCore } from '@agent/implementations/flows/common/BaseFlowServices';
@@ -175,7 +175,7 @@ export function extractModelResponse(
     const { inputTokens } = normalizedUsage;
     const contextWindow = modelHandler.getEffectiveContextWindow();
     if (inputTokens > 0 && contextWindow > 0) {
-      logger.logContextState(inputTokens, contextWindow);
+      logContextStateSnapshot(logger, inputTokens, contextWindow);
     }
   }
 

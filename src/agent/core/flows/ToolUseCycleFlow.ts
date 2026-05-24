@@ -4,7 +4,15 @@ import { z } from 'zod';
 
 // Local imports - core flow primitives
 import { BaseNode, BatchNode, Flow, Node } from '@agent/node';
-import type { AgentTrace } from '@agent/trace';
+import {
+  emitToolUseCard,
+  endToolUseCard,
+  logUserMessage,
+  logWebFetch,
+  logWebSearch,
+  startToolUseCard,
+  type AgentTrace,
+} from '@agent/trace';
 import { recordCycleMetrics } from '@agent/core/AgentState';
 import {
   BaseCycleFieldsSchema,
@@ -246,7 +254,7 @@ class ToolUsePrepNode<C> extends BaseNode<
     // before the model starts thinking/responding
     if (prepRes.queuedFollowUp) {
       if (!prepRes.synthetic) {
-        this.services.logger.userMessage(prepRes.queuedFollowUp);
+        logUserMessage(this.services.logger, prepRes.queuedFollowUp);
       }
       shared.messages =
         await this.services.modelHandler.createUserFollowUpMessages(
@@ -343,10 +351,10 @@ class ToolUseProcessNode<C> extends BaseNode<
 
     if (!useStreaming) {
       for (const searchResult of serverToolData.webSearchResults) {
-        services.logger.logWebSearch(searchResult);
+        logWebSearch(services.logger, searchResult);
       }
       for (const fetchResult of serverToolData.webFetchResults) {
-        services.logger.logWebFetch(fetchResult);
+        logWebFetch(services.logger, fetchResult);
       }
     }
 
@@ -627,13 +635,14 @@ class ToolUseDispatchNode<C> extends BatchNode<
     // Capture groupId at start. For deferred tools, delay logging until onExecutionReady.
     const logRef: ToolExecutionResult['logRef'] =
       SLOW_TOOLS.has(call.name) && !isDeferred
-        ? options.logger.logToolUseStart(call.name, parsedInput ?? call.raw)
+        ? startToolUseCard(options.logger, call.name, parsedInput ?? call.raw)
         : { logId: undefined, groupId: options.logger.activeStageId() };
 
     const onExecutionReady = isDeferred
       ? () => {
           if (!logRef.logId) {
-            const ref = options.logger.logToolUseStart(
+            const ref = startToolUseCard(
+              options.logger,
               call.name,
               parsedInput ?? call.raw,
               logRef.groupId,
@@ -655,14 +664,14 @@ class ToolUseDispatchNode<C> extends BatchNode<
           outputBuffer = outputBuffer.slice(-STREAM_BUFFER_MAX);
         }
         if (!logRef.logId) return;
-        options.logger.updateToolUse(
-          logRef.logId,
+        endToolUseCard(
+          options.logger,
+          { logId: logRef.logId, groupId: logRef.groupId },
           {
             toolName: call.name,
             input: parsedInput ?? call.raw,
             output: outputBuffer,
           },
-          logRef.groupId,
           'in_progress',
         );
       };
@@ -727,9 +736,14 @@ class ToolUseDispatchNode<C> extends BatchNode<
     // Update in-progress log (slow tools) or create new log (fast tools)
     // Both use the groupId captured at execution start for consistency
     if (logRef.logId) {
-      options.logger.updateToolUse(logRef.logId, toolUseLog, logRef.groupId);
+      endToolUseCard(
+        options.logger,
+        { logId: logRef.logId, groupId: logRef.groupId },
+        toolUseLog,
+      );
     } else {
-      options.logger.emitToolUse(
+      emitToolUseCard(
+        options.logger,
         { ...toolUseLog, status: 'completed' },
         logRef.groupId,
       );

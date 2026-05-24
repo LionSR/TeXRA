@@ -1,4 +1,5 @@
 import { Node } from '@agent/node';
+import { logUserMessage } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { listIdleContinuationProviders } from '@agent/runtime/idleContinuation';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
@@ -165,7 +166,7 @@ export class ToolUseWaitNode<C> extends Node<
     if (!execRes.synthetic) {
       shared.deliveredToOrchestrator = undefined;
       onFollowUpConsumed?.();
-      logger.userMessage(execRes.followUp);
+      logUserMessage(logger, execRes.followUp);
     }
     StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
       runtimeHost,

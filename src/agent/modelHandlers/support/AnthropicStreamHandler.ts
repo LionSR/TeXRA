@@ -3,13 +3,13 @@
  * Encapsulates the streaming event handling logic for improved testability and readability.
  */
 // Third-party imports
+import { logWebFetch, logWebSearch, type AgentTrace } from '@agent/trace';
 import {
   extractDomain,
   type WebFetchResult,
   type WebSearchResult,
   type WebSearchResultEntry,
 } from '@agent/modelHandlers/types/ServerToolTypes';
-import type { TexraTrace } from '@logger';
 import { MESSAGE_TYPES, type StreamDiagnostics } from '@shared/schemas';
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
 import type {
@@ -42,7 +42,7 @@ const MAX_SERVER_TOOL_INPUT_SIZE = 65536;
  */
 interface AnthropicStreamState {
   /** Current output stream for text blocks */
-  outputStream: ReturnType<TexraTrace['openStream']> | null;
+  outputStream: ReturnType<AgentTrace['openStream']> | null;
   /** Index of most recent block (any type) */
   lastBlockIndex: number;
   /** Track web search: tool_use_id → { index, accumulated input JSON } */
@@ -89,8 +89,8 @@ interface StreamHandlerConfig {
  * Factory functions for creating streams.
  */
 interface StreamFactories {
-  createThinkingStream: () => ReturnType<TexraTrace['openStream']>;
-  createOutputStream: () => ReturnType<TexraTrace['openStream']>;
+  createThinkingStream: () => ReturnType<AgentTrace['openStream']>;
+  createOutputStream: () => ReturnType<AgentTrace['openStream']>;
 }
 
 /**
@@ -107,7 +107,7 @@ interface StreamFactories {
 export class AnthropicStreamHandler {
   private readonly thinkingStreams = new Map<
     number,
-    ReturnType<TexraTrace['openStream']>
+    ReturnType<AgentTrace['openStream']>
   >();
   private readonly state: AnthropicStreamState = {
     outputStream: null,
@@ -134,7 +134,7 @@ export class AnthropicStreamHandler {
   };
 
   constructor(
-    private readonly logger: TexraTrace,
+    private readonly logger: AgentTrace,
     private readonly config: StreamHandlerConfig,
     private readonly factories: StreamFactories,
   ) {}
@@ -516,7 +516,7 @@ export class AnthropicStreamHandler {
    */
   private emitWebSearchResult(result: WebSearchResult): void {
     if (this.config.progressViewEnabled) {
-      this.logger.logWebSearch(result);
+      logWebSearch(this.logger, result);
     }
   }
 
@@ -525,7 +525,7 @@ export class AnthropicStreamHandler {
    */
   private emitWebFetchResult(result: WebFetchResult): void {
     if (this.config.progressViewEnabled) {
-      this.logger.logWebFetch(result);
+      logWebFetch(this.logger, result);
     }
   }
 }
