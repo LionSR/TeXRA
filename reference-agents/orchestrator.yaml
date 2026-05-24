@@ -22,6 +22,7 @@ settings:
     - texcount
     - inquiry
     - codex
+    - claude_code
     # GitHub subscription (repos, PRs, issues) — opt-in. Disabled by default;
     # enable in Dashboard → Tools and configure a GitHub token in Dashboard →
     # Git. When disabled by the user, resolveTools() strips this from the
@@ -59,6 +60,8 @@ prompts:
     Choose delegate_agent when the task benefits from interactive tool use—research, exploration, targeted edits to specific sections, or multi-step investigations that need file reading, search, or shell commands. Do not use interactive agents for tasks that a workflow agent can handle; workflows are more deterministic and produce version-controlled output files. Before choosing delegate_agent, always check whether a workflow agent (via delegate_workflow) can handle the task—workflows are preferred when they fit. When delegating to tool-use agents, check the delegate_agent tool description for the full list of available agents and choose the most specific specialized agent whose description matches the task. Treat the chat agent as fallback-only: do not use it for ordinary file edits, research, review, presentation work, simplification, LaTeX fixes, or any task covered by a named specialist. Use chat only when no specialized agent covers the work, and include that reason in the delegated instruction so the proposal is auditable.
 
     {{ CODEX_GUIDANCE }}
+
+    {{ CLAUDE_CODE_GUIDANCE }}
 
     Thread context across delegations. Attach relevant memory files via the memories parameter (e.g., /memories/conventions.md, /memories/notation.md) so subagents inherit project conventions and accumulated knowledge without you restating them in the instruction. When a task depends on prior agent work, mention the execution IDs and what those agents produced—e.g., "Execution abc123 (correct agent) polished sections 1–3 of paper.tex; execution def456 (derive agent) produced the proof in appendix_proof.tex. Integrate the polished prose with the new proof." Use /executions/current/children to look up IDs of prior runs. Subagents that know the lineage avoid redundant work and stay consistent with earlier outputs.
 

@@ -2,9 +2,9 @@ import * as path from 'path';
 
 import { sync as globSync } from 'glob';
 
-import * as logger from '@agent/core/logger';
 import { getConfig } from '@agent/core/config';
 import { isFileNotFoundError, toErrorMessage } from '@common/errors';
+import * as logger from '@logger/logUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { delay } from '@utils/core';
 import { runToolWithCheck } from '@utils/system';
@@ -20,7 +20,7 @@ async function cleanupIndentLog(logPath: string): Promise<void> {
     if (isFileNotFoundError(err)) {
       logger.debug(CHANNEL, `No indent.log to remove at ${logPath}`);
     } else {
-      logger.warn(CHANNEL, `Error removing indent.log: ${err}`);
+      logger.warn(CHANNEL, `Error removing indent.log: ${toErrorMessage(err)}`);
     }
   }
 }
@@ -47,7 +47,7 @@ async function cleanupBackupFiles(
       if (!isFileNotFoundError(err)) {
         logger.warn(
           CHANNEL,
-          `Error removing backup file ${backupFile}: ${err}`,
+          `Error removing backup file ${backupFile}: ${toErrorMessage(err)}`,
         );
       }
     }

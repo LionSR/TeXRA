@@ -5,9 +5,10 @@ import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports - tool definitions
-import * as logger from '@agent/core/logger';
+import { toErrorMessage } from '@common/errors';
 import { isDirectory } from '@common/files/fsEntryType';
 import { isTexFile } from '@common/files/fileTypeUtils';
+import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
 import {
   recordToolFileRead,
@@ -44,7 +45,7 @@ function rethrowWithContext(error: unknown, context: string): never {
   if (error instanceof ToolError) {
     throw error;
   }
-  throw new ToolError(`${context}: ${error}`);
+  throw new ToolError(`${context}: ${toErrorMessage(error)}`, { cause: error });
 }
 
 /** Maps API type versions to their corresponding tool names */

@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+
 /**
  * Allowlist of external filesystem roots that tools may read or write.
  *
@@ -83,8 +85,7 @@ function canonicalise(p: string): string {
       ? fs.realpathSync.native(resolved)
       : fs.realpathSync(resolved);
   } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+    if (!isFileNotFoundError(err) && !isNotADirectoryError(err)) {
       throw err;
     }
     const parent = path.dirname(resolved);

@@ -15,7 +15,7 @@ import { platform } from '@platform/platform';
 
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { bus } from '@eventBus/ProgressEventBus';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelTrace } from '@logger';
 import type {
   ExternalInquiryThreadId,
   ExternalInquiryThreadSummary,
@@ -30,7 +30,7 @@ import {
   type ExternalInquiryThreadManifest,
 } from './externalInquiryStorage';
 
-const logger = new AgentLogger('inquiryContinuation');
+const logger = createChannelTrace('inquiryContinuation');
 
 export type InjectionOutcome = 'sent' | 'queued' | 'resumed' | 'archived';
 

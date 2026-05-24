@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 
+import type { AgentTrace } from '@agent/trace';
 import { isRemoteAgent } from '@agent/index/agentRegistry';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { AgentCore } from '@agent/implementations/flows/common/BaseFlowServices';
@@ -17,7 +18,6 @@ import {
   maybeSaveDebugObject,
   type DebugContext,
 } from '@agent/utils/debugMessageSaver';
-import type { AgentLogger } from '@logger/AgentLogger';
 import { RetryErrorInfoSchema } from '@shared/schemas';
 import type { ExecutionId } from '@shared/schemas';
 import { formatPostCompactionContext } from '@tools/subagentResults';
@@ -37,7 +37,7 @@ export type BaseCycleFields = z.infer<typeof BaseCycleFieldsSchema>;
 
 /** Derive debug context from services at call site. */
 function getDebugContext(
-  services: { logger: AgentLogger; executionId?: ExecutionId },
+  services: { logger: AgentTrace; executionId?: ExecutionId },
   params: { modelName?: string; isRemote?: boolean },
 ): DebugContext {
   return {

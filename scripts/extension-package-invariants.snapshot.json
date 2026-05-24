@@ -1450,8 +1450,7 @@
               "title": "Clean up when you're done"
             }
           ],
-          "title": "Get started with TeXRA",
-          "when": "texra.activated"
+          "title": "Get started with TeXRA"
         }
       ]
     },

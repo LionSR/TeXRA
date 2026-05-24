@@ -47,7 +47,7 @@ export function registerIdleContinuation(
 }
 
 export function listIdleContinuationProviders(): readonly IdleContinuationProvider[] {
-  return providers.slice();
+  return [...providers];
 }
 
 /** Test-only — clears the registry so suites don't leak across runs. */

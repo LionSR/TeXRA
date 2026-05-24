@@ -1,7 +1,56 @@
 // Standard library imports
 import { createInterface } from 'node:readline/promises';
 
-import type { LogRecord, LogSink } from '@logger/structuredLogger';
+import type { LogLevel } from '@shared/schemas';
+
+/**
+ * Minimal structured-log primitives. The CLI uses these to format every
+ * progress event as either NDJSON or human-readable text on stdout/stderr.
+ * Previously lived in `@logger/structuredLogger`; inlined here because the
+ * CLI is the only consumer.
+ */
+export interface LogFields {
+  readonly streamId?: string;
+  readonly runId?: string;
+  readonly groupId?: string;
+  readonly [key: string]: unknown;
+}
+
+export interface LogRecord {
+  readonly ts: string;
+  readonly level: LogLevel;
+  readonly message: string;
+  readonly fields: LogFields;
+}
+
+export interface LogSink {
+  write(record: LogRecord): void;
+  flush?(): Promise<void>;
+  close?(): Promise<void>;
+}
+
+export interface Logger {
+  debug(message: string, fields?: LogFields): void;
+  info(message: string, fields?: LogFields): void;
+  warn(message: string, fields?: LogFields): void;
+  error(message: string, fields?: LogFields): void;
+}
+
+export function createCliLogger(sink: LogSink): Logger {
+  const write = (level: LogLevel, message: string, fields?: LogFields): void =>
+    sink.write({
+      ts: new Date().toISOString(),
+      level,
+      message,
+      fields: fields ?? {},
+    });
+  return {
+    debug: (m, f) => write('debug', m, f),
+    info: (m, f) => write('info', m, f),
+    warn: (m, f) => write('warn', m, f),
+    error: (m, f) => write('error', m, f),
+  };
+}
 
 const closed = { stdout: false, stderr: false };
 
@@ -82,24 +131,11 @@ export async function askCliQuestion(question: string): Promise<string> {
   }
 }
 
-export function createCliLineReader(
-  prompt: string,
-): ReturnType<typeof createInterface> {
-  return createInterface({
-    input: process.stdin,
-    output: process.stderr,
-    prompt,
-  });
-}
-
 export class StderrTextSink implements LogSink {
   write(record: LogRecord): void {
-    const groups = record.groups.length
-      ? ` [${record.groups.join(' > ')}]`
-      : '';
     const stream = record.fields.streamId ? ` [${record.fields.streamId}]` : '';
     writeTextStderr(
-      `${record.ts} ${record.level.toUpperCase()}${stream}${groups} ${record.message}`,
+      `${record.ts} ${record.level.toUpperCase()}${stream} ${record.message}`,
     );
   }
 }

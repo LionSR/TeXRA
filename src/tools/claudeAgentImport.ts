@@ -19,6 +19,7 @@ import { createRequire } from 'module';
 import * as path from 'path';
 
 import { platform } from '@platform/platform';
+import { isModuleNotFoundError } from '@common/errors';
 import { executeCommandSync } from '@utils/system/execUtils';
 
 type QueryFn = (params: {
@@ -52,8 +53,7 @@ export async function importClaudeAgentSdk(): Promise<QueryFn> {
   try {
     mod = await import('@anthropic-ai/claude-agent-sdk');
   } catch (err: unknown) {
-    const code = (err as { code?: string }).code;
-    if (code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND') {
+    if (isModuleNotFoundError(err)) {
       throw new Error(
         '@anthropic-ai/claude-agent-sdk package not found. Reinstall TeXRA or run corepack pnpm install in the TeXRA workspace.',
       );

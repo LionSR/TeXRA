@@ -22,7 +22,8 @@ import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator'
 import { waitForPlanApproval } from '@agent/runtime/runCoordinators';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import type { CurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
-import { AgentLogger } from '@logger/AgentLogger';
+import { toErrorMessage } from '@common/errors';
+import { createChannelTrace } from '@logger';
 import {
   TODO_STATUS,
   STATUS_DISPLAY,
@@ -43,7 +44,7 @@ import { ToolError, type ToolResult } from '@tools/result';
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 
-const logger = new AgentLogger('PlanTool');
+const logger = createChannelTrace('PlanTool');
 
 /** Counter for generating unique approval IDs */
 let approvalCounter = 0;
@@ -405,7 +406,7 @@ Best practices:
             `Objective:\n${objective}`,
         };
       } catch (err) {
-        const reason = err instanceof Error ? err.message : String(err);
+        const reason = toErrorMessage(err);
         logger.warn(
           `Failed to retarget in-flight odyssey for approved plan; returning an explicit error result. ${reason}`,
         );
@@ -438,7 +439,7 @@ Best practices:
           `Objective:\n${objective}`,
       };
     } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
+      const reason = toErrorMessage(err);
       logger.warn(
         `Failed to start odyssey for approved plan; falling back to plain approval. ${reason}`,
       );

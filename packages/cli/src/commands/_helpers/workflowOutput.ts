@@ -6,6 +6,7 @@ import type { AgentConfigPayload } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { OutputFileSummary } from '@agent/runtime/AgentFlowResult';
 import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
+import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import { getRunDir } from '@utils/files';
 
@@ -15,7 +16,65 @@ import {
   type CliRunResult,
   type ExecuteAgentResult,
 } from './terminalStatus';
-import type { CliContext } from '../../runtime/cliContext';
+import { CliUsageError, type CliContext } from '../../runtime/cliContext';
+
+/** Resolve a user-supplied path against `cwd` when it isn't already absolute. */
+function joinCwdRelative(target: string, cwd: string): string {
+  return path.isAbsolute(target) ? target : path.join(cwd, target);
+}
+
+/**
+ * Stat `target` for the output-path guards. Returns `null` when the path
+ * doesn't exist yet (the workflow will create it). `ENOTDIR` (a parent path
+ * component is a file) is surfaced as a Usage error here so callers don't
+ * have to repeat it. Other stat errors propagate with their real cause.
+ */
+async function probeOutputPath(
+  target: string,
+  flagLabel: '--output' | '--output-dir',
+): Promise<Awaited<ReturnType<typeof fs.stat>> | null> {
+  try {
+    return await fs.stat(target);
+  } catch (error: unknown) {
+    if (isFileNotFoundError(error)) return null;
+    if (isNotADirectoryError(error)) {
+      throw new CliUsageError(
+        flagLabel === '--output-dir'
+          ? `--output-dir is not a directory (a parent path component is a file): ${target}`
+          : `--output: a parent path component is a file: ${target}`,
+      );
+    }
+    throw error;
+  }
+}
+
+/** `--output-dir <path>` must point at a directory (or not exist yet). */
+export async function assertOutputDirAvailable(
+  outputDir: string | undefined,
+  cwd: string,
+): Promise<void> {
+  if (!outputDir) return;
+  const target = joinCwdRelative(outputDir, cwd);
+  const stats = await probeOutputPath(target, '--output-dir');
+  if (stats && !stats.isDirectory()) {
+    throw new CliUsageError(`--output-dir is not a directory: ${target}`);
+  }
+}
+
+/** `--output <path>` must end at a writable file path (or not exist yet). */
+export async function assertOutputFileAvailable(
+  outputFile: string | undefined,
+  cwd: string,
+): Promise<void> {
+  if (!outputFile) return;
+  const target = joinCwdRelative(outputFile, cwd);
+  const stats = await probeOutputPath(target, '--output');
+  if (stats?.isDirectory()) {
+    throw new CliUsageError(
+      `--output is a directory; use --output-dir or pick a file path: ${target}`,
+    );
+  }
+}
 
 export type CliWorkflowRunResult = Extract<
   CliRunResult,
@@ -108,9 +167,7 @@ export async function resolveWorkflowOutput(
       ? (options.runDirectory ?? getRunDir(result.executionId))
       : undefined;
   if (outputDir && result.category === AgentCategory.Workflow) {
-    const targetRoot = path.isAbsolute(outputDir)
-      ? outputDir
-      : path.join(context.cwd, outputDir);
+    const targetRoot = joinCwdRelative(outputDir, context.cwd);
     const outputsByRelativePath = new Map<string, OutputFileSummary>();
     for (const output of result.outputs) {
       const relativePath = outputCopyRelativePath(output);
@@ -165,9 +222,7 @@ export async function resolveWorkflowOutput(
     };
   }
 
-  const targetPath = path.isAbsolute(outputFile)
-    ? outputFile
-    : path.join(context.cwd, outputFile);
+  const targetPath = joinCwdRelative(outputFile, context.cwd);
   if (path.resolve(finalOutput.absolutePath) !== path.resolve(targetPath)) {
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
     await fs.copyFile(finalOutput.absolutePath, targetPath);

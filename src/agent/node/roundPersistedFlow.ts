@@ -17,7 +17,7 @@
  */
 
 import type { ExecutionKVStore } from '@agent/storage';
-import type { AgentLogStage } from '@logger/AgentLogger';
+import type { StageHandle } from '@agent/trace';
 import {
   EXECUTION_STATUS,
   type ExecutionStatus,
@@ -63,14 +63,14 @@ export interface RoundCallbacks<S extends RoundAwareState> {
    */
   createRoundStage?: (
     roundIndex: number,
-    parentStage: AgentLogStage | null,
-  ) => Promise<AgentLogStage>;
+    parentStage: StageHandle | null,
+  ) => StageHandle;
 
   /**
    * Called after a new round stage is created.
    * Use for registering usage tracking callbacks etc.
    */
-  onStageCreated?: (stage: AgentLogStage) => void;
+  onStageCreated?: (stage: StageHandle) => void;
 
   /** Check if execution should be interrupted. */
   checkInterruption?: () => boolean;
@@ -100,15 +100,15 @@ export class RoundPersistedFlow<
   Svc = unknown,
 > extends PersistedFlow<S, P, Svc> {
   private readonly callbacks: RoundCallbacks<S>;
-  private readonly parentStage: AgentLogStage | null;
-  private currentRoundStage: AgentLogStage | null = null;
+  private readonly parentStage: StageHandle | null;
+  private currentRoundStage: StageHandle | null = null;
 
   constructor(
     start: BaseNode<any, any>,
     kv: ExecutionKVStore,
     options?: {
       callbacks?: RoundCallbacks<S>;
-      parentStage?: AgentLogStage | null;
+      parentStage?: StageHandle | null;
     },
     runId?: string,
   ) {
@@ -145,7 +145,7 @@ export class RoundPersistedFlow<
 
     try {
       // Create initial round stage (r0)
-      await this.createStage(currentShared.currentRound);
+      this.createStage(currentShared.currentRound);
 
       // Execute all nodes for the current round
       currentShared = await this.executeRoundSteps(currentShared);
@@ -164,9 +164,6 @@ export class RoundPersistedFlow<
           currentShared,
         );
       }
-    } catch (error) {
-      status = EXECUTION_STATUS.ERROR;
-      throw error;
     } finally {
       this.currentRoundStage?.end();
       this.currentRoundStage = null;
@@ -250,15 +247,15 @@ export class RoundPersistedFlow<
     await this.resetNodeHistory(shared);
 
     // Create new stage
-    await this.createStage(shared.currentRound);
+    this.createStage(shared.currentRound);
   }
 
   /**
    * Create a round stage and notify callback.
    */
-  private async createStage(roundIndex: number): Promise<void> {
+  private createStage(roundIndex: number): void {
     if (this.callbacks.createRoundStage) {
-      this.currentRoundStage = await this.callbacks.createRoundStage(
+      this.currentRoundStage = this.callbacks.createRoundStage(
         roundIndex,
         this.parentStage,
       );

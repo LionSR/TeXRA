@@ -1,6 +1,7 @@
 import { access } from 'node:fs/promises';
 import path from 'node:path';
 
+import { toErrorMessage } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import type { ExternalOpener } from '@hosts/externalOpener';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
@@ -42,10 +43,6 @@ export interface DesktopPreviewHostOptions {
    * misbehaves. Defaults to `false` (prefer the in-app overlay).
    */
   forceExternal?: boolean;
-}
-
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function getErrorCode(error: unknown): string | undefined {

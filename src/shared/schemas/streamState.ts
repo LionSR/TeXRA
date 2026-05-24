@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { OdysseyStatusSchema } from '@tools/odyssey/odysseyMeta';
 import {
   AGENT_CATEGORY,
   AgentCategorySchema,
@@ -12,7 +13,6 @@ import { PlanSchema } from './plan';
 import { TodoItemSchema } from './todo';
 import { ContextStateDataSchema } from './contextManagement';
 import { TokenUsageStatsSchema } from './usage';
-import { OdysseyStatusSchema } from '@tools/odyssey/odysseyMeta';
 
 // Active Child Info (shared shape for subagent and process badges)
 

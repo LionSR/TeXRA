@@ -1,5 +1,6 @@
 import * as path from 'path';
 
+import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { getVisibleAgents, type AgentEntry } from '@agent/index/agentRegistry';
 import {
@@ -8,8 +9,7 @@ import {
   AgentCategory,
 } from '@agent/core/AgentDataclass';
 import { getConfig } from '@agent/core/config';
-import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
-import { AgentLogger } from '@logger/AgentLogger';
+import type { TexraTrace } from '@logger';
 import type { FileListEntry } from '@shared/schemas';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
@@ -37,7 +37,7 @@ export type UserVars = Record<string, unknown>;
 /**
  * Information about a loaded file for prompt variable substitution.
  * Extends FileListEntry with required source and varName fields.
- * Compatible with FileListEntry (can be passed to AgentLogger.fileList).
+ * Compatible with FileListEntry (can be passed to AgentTrace.fileList).
  */
 export type LoadedFileEntry = FileListEntry & {
   source: string;
@@ -73,7 +73,7 @@ export async function buildUserVars(
   agentPrompt: AgentPrompt,
   agentPath: string,
   providerFlags: ModelProviderFlags,
-  logger: AgentLogger,
+  logger: TexraTrace,
   workspacePath?: string,
 ): Promise<UserVars> {
   const allLoadedFiles: LoadedFileEntry[] = [];
@@ -93,7 +93,12 @@ export async function buildUserVars(
       () => '',
     ),
     getAttachedMemories(agentConfig.memories),
-    loadRuntimeSkillCatalog(logger),
+    // AVAILABLE_SKILLS is only substituted into TOOL_USE_INSTRUCTIONS, so the
+    // catalog (a multi-source readdir + per-skill realpath/read/parse) is dead
+    // work for workflow agents — gate it on the ToolUse category.
+    agentSetting.agentCategory === AgentCategory.ToolUse
+      ? loadRuntimeSkillCatalog(logger)
+      : Promise.resolve(''),
   ]);
   allLoadedFiles.push(...requiredFiles);
   allLoadedFiles.push(...patternFiles);
@@ -114,7 +119,7 @@ export async function buildUserVars(
 
   // Emit aggregated file list if any files were loaded
   if (allLoadedFiles.length > 0) {
-    logger.fileList(allLoadedFiles);
+    logger.filesLoaded({ category: 'all', entries: allLoadedFiles });
   }
 
   return userVars;
@@ -226,7 +231,7 @@ const FILE_VAR_CATEGORIES = ['INPUT', 'REFERENCE', 'EDITED'];
 async function getFileVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
-  logger: AgentLogger,
+  logger: TexraTrace,
 ): Promise<UserVars> {
   const userVars: UserVars = {};
 
@@ -287,7 +292,7 @@ async function getFileVars(
  * them sequentially to preserve the expected UI display order.
  */
 async function logFileCategoriesWithExistence(
-  logger: AgentLogger,
+  logger: TexraTrace,
   categories: Array<[category: string, files: string[]]>,
 ): Promise<void> {
   // Process all categories in parallel for better performance
@@ -496,6 +501,15 @@ export function getToolFlags(
         "If the thread is still processing, the follow-up waits in that session's queue. " +
         'When multiple codex agents need to edit the same files, or when you want to isolate experimental changes, ' +
         'use a git worktree (`git worktree add ../worktree-name branch-name`) and pass its path as working_directory.'
+      : '',
+    CLAUDE_CODE_GUIDANCE: agentSetting.tools.some(
+      (t) => t.name === 'claude_code',
+    )
+      ? 'Choose claude_code for coding tasks that benefit from a separate Anthropic Claude Code agent — it runs in its own workspace with independent file editing, search, and shell access. ' +
+        'claude_code is async and multi-turn, mirroring delegate_agent: each call returns an execution ID, and results arrive as follow-up messages that include a session_id. ' +
+        'Pass that session_id back on a later claude_code call to continue the same session — the agent retains full history and file context. ' +
+        'Use permission_mode to control how it handles edits (acceptEdits auto-applies file edits; plan keeps it read-only), and set model and effort to trade off speed against depth. ' +
+        'codex and claude_code are both independent sandboxed coders distinct from the in-process delegate_agent specialists; prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.'
       : '',
   };
 

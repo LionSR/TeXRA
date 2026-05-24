@@ -7,11 +7,12 @@
 
 import { z } from 'zod';
 
+import type { StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { normalizeRunId } from '@common/constants/runIds';
-import type { AgentLogger, AgentLogStage } from '@logger/AgentLogger';
+import type { TexraTrace } from '@logger';
 import {
   CompileFailureSchema,
   FileLocationSchema,
@@ -48,7 +49,7 @@ export interface OutputDependencies {
   setting: AgentWorkflowSetting;
   config: AgentConfig;
   baseFiles: FileLocation[];
-  logger: AgentLogger;
+  logger: TexraTrace;
   fileService: TaskRunFileService;
   executionId: string;
   streamId: string;
@@ -67,10 +68,10 @@ export function createOutputState(): OutputState {
 export async function withOutputStage<T>(
   deps: OutputDependencies,
   label: string,
-  parentStage: AgentLogStage | undefined,
-  fn: (stage: AgentLogStage) => Promise<T>,
+  parentStage: StageHandle | undefined,
+  fn: (stage: StageHandle) => Promise<T>,
 ): Promise<T> {
-  const stage = await deps.logger.stage(`Output: ${label}`, {
+  const stage = deps.logger.openStage(`Output: ${label}`, {
     parent: parentStage,
     skip: true,
   });

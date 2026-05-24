@@ -18,6 +18,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { toErrorMessage } from '@common/errors';
 import { globalSM, GlobalStateKey } from '@common/state';
 import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
@@ -80,7 +81,7 @@ async function refreshFileDiagnostics(file: OutputFileInfo): Promise<void> {
   } catch (error) {
     logger.error(
       CHANNEL,
-      `Failed to read ${absolutePath}: ${error instanceof Error ? error.message : String(error)}`,
+      `Failed to read ${absolutePath}: ${toErrorMessage(error)}`,
     );
     return;
   }
@@ -125,7 +126,7 @@ function handleAddOutputFiles(
     (error: unknown) => {
       logger.error(
         CHANNEL,
-        `Failed to refresh criticism diagnostics: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to refresh criticism diagnostics: ${toErrorMessage(error)}`,
       );
     },
   );

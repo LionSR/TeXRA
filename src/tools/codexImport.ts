@@ -18,6 +18,7 @@ import { createRequire } from 'module';
 import * as path from 'path';
 
 import { platform } from '@platform/platform';
+import { isModuleNotFoundError } from '@common/errors';
 import { executeCommandSync } from '@utils/system/execUtils';
 
 type CodexConstructor = new (options?: any) => any;
@@ -43,8 +44,7 @@ export async function importCodexClass(): Promise<CodexConstructor> {
   try {
     mod = await import('@openai/codex-sdk');
   } catch (err: unknown) {
-    const code = (err as { code?: string }).code;
-    if (code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND') {
+    if (isModuleNotFoundError(err)) {
       throw new Error(
         '@openai/codex-sdk package not found. Install with: npm install -g @openai/codex',
       );

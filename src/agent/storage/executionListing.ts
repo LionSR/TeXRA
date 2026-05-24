@@ -12,11 +12,11 @@
 import pMap from 'p-map';
 
 import { type AgentConfig, AgentConfigSchema } from '@agent/core/AgentConfig';
-import * as logger from '@agent/core/logger';
 import { getWorkspaceState } from '@agent/core/stateStore';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import { isFileNotFoundError } from '@common/errors';
+import { toErrorMessage } from '@common/errors/errorMessage';
 import { isDirectory } from '@common/files/fsEntryType';
+import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS, WorkspaceFS } from '@utils/files';
 
@@ -160,11 +160,17 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
 }
 
 /**
- * Delete a single execution and its KV data.
+ * Delete a single execution and its KV data. Returns true if the execution
+ * existed and was removed, false if no such execution was present. The
+ * `clear()` call silently no-ops on a missing directory, so we have to probe
+ * existence ourselves before calling it — otherwise callers can't tell a real
+ * delete apart from a no-op on a typo'd id.
  */
 export async function deleteExecution(
   executionId: ExecutionId,
 ): Promise<boolean> {
+  const existed = await StorageFS.exists(`${EXECUTIONS_DIR}/${executionId}`);
+  if (!existed) return false;
   try {
     await getExecutionStore(executionId).clear();
     invalidateListingCache();

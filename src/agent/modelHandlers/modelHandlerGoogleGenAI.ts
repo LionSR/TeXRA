@@ -49,7 +49,7 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
-import { AgentLogger } from '@logger/AgentLogger';
+import type { TexraTrace } from '@logger';
 
 // Local imports - replacement
 import replacementEngine from '@replacement/engine';
@@ -62,7 +62,7 @@ import type { FileLocation } from '@utils/files';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import { computeCachePercentage } from './utils/usageNormalization';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
-import { tagGoogleSdkError } from './support/sdkErrorAdapters';
+import { tagGoogleSdkError, withSdkErrorTag } from './support/sdkErrorAdapters';
 import { TOOL_USE_SAFETY_BUFFER } from './contextManagementConstants';
 
 // Local file imports
@@ -109,7 +109,7 @@ function extractNonThinkingText(parts: Part[], trim = false): string {
  */
 export function validateGoogleMessageHistory(
   messages: Content[],
-  logger: AgentLogger,
+  logger: TexraTrace,
 ): void {
   let lastRole: string | undefined;
 
@@ -437,12 +437,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   async createResponse(
     options: CreateResponseOptions<Content, GoogleGenAI>,
   ): Promise<CreateResponseResult<GenerateContentResponse, Content>> {
-    try {
-      return await this.createResponseImpl(options);
-    } catch (err) {
-      tagGoogleSdkError(err, this.config.provider);
-      throw err;
-    }
+    return withSdkErrorTag(tagGoogleSdkError, this.config.provider, () =>
+      this.createResponseImpl(options),
+    );
   }
 
   /** Creates a Google response after SDK-boundary error tagging is installed. */

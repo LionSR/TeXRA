@@ -16,10 +16,7 @@ import {
   CLI_BUILTIN_DEFAULT_MODEL,
   resolveConfiguredModel,
 } from '../runtime/cliConfig';
-import {
-  hasCliApprovalDenied,
-  installCliApprovalHandlers,
-} from '../runtime/approvalAdapter';
+import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import {
@@ -45,6 +42,7 @@ import { getCliAuthProvider } from '../runtime/supabaseAuth';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
+import { assertExplicitModelKnown } from './_helpers/modelArg';
 import {
   GLOBAL_ARGS,
   collectStringFlagValues,
@@ -53,6 +51,7 @@ import {
 import {
   createCliRunResult,
   readCliTerminalStatus,
+  terminalStatusExitCode,
   type CliRunResult,
   type ExecuteAgentResult,
 } from './_helpers/terminalStatus';
@@ -73,7 +72,7 @@ interface MultiAgentRunInit {
   readonly instruction: string;
 }
 
-export function resolveMultiAgentRunPlan(
+function resolveMultiAgentRunPlan(
   init: Pick<MultiAgentRunInit, 'preset' | 'agent'>,
 ): CliMultiAgentPresetRunPlan {
   const preset = findCliMultiAgentPreset(
@@ -90,7 +89,34 @@ export function resolveMultiAgentRunPlan(
   });
 }
 
-function writeMissingPresetAgents(plan: CliMultiAgentPresetRunPlan): void {
+/**
+ * Resolve a preset plan, then — when it still has gaps and the user is
+ * authenticated — perform a remote load and replan. Relay-served premium agents
+ * (the team orchestrator and delegation specialists most presets name) are only
+ * visible after a remote load, so a local-only resolve silently degrades the
+ * team (e.g. falling back to the first plain tool-use agent as root). Both the
+ * headless `multi-agent run` path and the interactive `orchestrate` menu route
+ * through here so they can't drift apart again.
+ *
+ * Assumes local agents are already loaded by the caller.
+ */
+export async function fillMultiAgentRunPlanGaps(
+  init: Pick<MultiAgentRunInit, 'preset' | 'agent'>,
+): Promise<CliMultiAgentPresetRunPlan> {
+  let plan = resolveMultiAgentRunPlan(init);
+  if (
+    cliMultiAgentPlanHasGaps(plan) &&
+    (await getCliAuthProvider().isAuthenticated())
+  ) {
+    await loadAgents();
+    plan = resolveMultiAgentRunPlan(init);
+  }
+  return plan;
+}
+
+export function writeMissingPresetAgents(
+  plan: CliMultiAgentPresetRunPlan,
+): void {
   const missing = [
     ...plan.missingWorkflowAgents.map((agent) => `workflow:${agent}`),
     ...plan.missingToolUseAgents.map((agent) => `tool-use:${agent}`),
@@ -206,8 +232,9 @@ async function runMultiAgentPreset(
   context: CliContext,
   init: MultiAgentRunInit,
 ): Promise<number> {
+  const explicitModel = assertExplicitModelKnown(init.model);
   const model =
-    init.model?.trim() ||
+    explicitModel ||
     context.envModel ||
     resolveConfiguredModel(context.cliConfig, 'chat') ||
     CLI_BUILTIN_DEFAULT_MODEL;
@@ -225,7 +252,7 @@ async function runMultiAgentPreset(
   const contextFiles = (
     await Promise.all(
       init.contextFiles.map((spec) =>
-        expandWorkflowInputSpec(spec, runContext.cwd),
+        expandWorkflowInputSpec(spec, runContext.cwd, '--context'),
       ),
     )
   ).flat();
@@ -234,18 +261,7 @@ async function runMultiAgentPreset(
   installCliApprovalHandlers(runContext);
   await loadAgents({ includeRemote: false });
 
-  let plan = resolveMultiAgentRunPlan(init);
-  // Relay-served premium agents (the team orchestrator and delegation
-  // specialists most presets name) are only visible after a remote load. Fill
-  // any preset gap — not just a missing root — so an authenticated, entitled
-  // user runs the full team instead of a silently degraded one.
-  if (
-    cliMultiAgentPlanHasGaps(plan) &&
-    (await getCliAuthProvider().isAuthenticated())
-  ) {
-    await loadAgents();
-    plan = resolveMultiAgentRunPlan(init);
-  }
+  const plan = await fillMultiAgentRunPlanGaps(init);
   if (!plan.rootAgent) {
     writeTextStderr(
       `Multi-agent preset "${init.preset}" has no available tool-use agent to run. Use --agent with an installed tool-use agent, or enable a team with an orchestrator.`,
@@ -301,15 +317,7 @@ async function runMultiAgentPreset(
   );
   writeMultiAgentRunResult(runContext, plan, displayResult);
 
-  if (terminalStatus === EXECUTION_STATUS.ERROR) {
-    return hasCliApprovalDenied(runContext)
-      ? CliExitCode.ApprovalDenied
-      : CliExitCode.AgentError;
-  }
-  if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
-    return CliExitCode.Interrupted;
-  }
-  return CliExitCode.Success;
+  return terminalStatusExitCode(terminalStatus, runContext);
 }
 
 const multiAgentListCommand = defineCommand({

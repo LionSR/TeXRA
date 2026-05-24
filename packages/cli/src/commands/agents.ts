@@ -1,11 +1,16 @@
 import { defineCommand } from 'citty';
 
-import { getVisibleAgents, loadAgents } from '@agent/index';
+import { getAgent, getVisibleAgents, loadAgents } from '@agent/index';
+import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
-import { writeNdjsonStdout, writeTextStdout } from '../runtime/logSinks';
+import {
+  writeNdjsonStdout,
+  writeTextStderr,
+  writeTextStdout,
+} from '../runtime/logSinks';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
@@ -45,6 +50,67 @@ async function listAgents(context: CliContext): Promise<number> {
   return CliExitCode.Success;
 }
 
+function formatAgentDetails(entry: AgentEntry): string {
+  const lines: string[] = [];
+  lines.push(`name: ${entry.name}`);
+  lines.push(`category: ${entry.category}`);
+  lines.push(`source: ${entry.source}`);
+  if (entry.path) lines.push(`path: ${entry.path}`);
+  if (entry.description) {
+    lines.push('');
+    lines.push(entry.description);
+  }
+  const metadataLines: string[] = [];
+  if (entry.tools && entry.tools.length > 0) {
+    metadataLines.push(`tools: ${entry.tools.join(', ')}`);
+  }
+  if (entry.defaultOutputFiles && entry.defaultOutputFiles.length > 0) {
+    metadataLines.push(
+      `defaultOutputFiles: ${entry.defaultOutputFiles.join(', ')}`,
+    );
+  }
+  if (entry.visibility && entry.visibility.length > 0) {
+    metadataLines.push(`visibility: ${entry.visibility.join(', ')}`);
+  }
+  if (metadataLines.length > 0) {
+    lines.push('');
+    lines.push(...metadataLines);
+  }
+  return lines.join('\n');
+}
+
+async function showAgent(context: CliContext, name: string): Promise<number> {
+  await initCliPlatform({
+    ...context,
+    quietLogs: true,
+    skipIncludedModelAccess: true,
+  });
+  await loadAgents({ includeRemote: false });
+
+  const entry = getAgent(name);
+  if (!entry) {
+    writeTextStderr(`Agent not found: ${name}`);
+    return CliExitCode.Usage;
+  }
+
+  if (context.outputFormat === 'json') {
+    writeTextStdout(JSON.stringify(entry, null, 2));
+    return CliExitCode.Success;
+  }
+
+  if (context.outputFormat === 'ndjson') {
+    writeNdjsonStdout({
+      kind: 'agent',
+      ts: new Date().toISOString(),
+      agent: entry,
+    });
+    return CliExitCode.Success;
+  }
+
+  writeTextStdout(formatAgentDetails(entry));
+  return CliExitCode.Success;
+}
+
 const agentsListCommand = defineCommand({
   meta: { name: 'list', description: 'List available agents' },
   args: {
@@ -56,7 +122,27 @@ const agentsListCommand = defineCommand({
   },
 });
 
+const agentsShowCommand = defineCommand({
+  meta: { name: 'show', description: 'Show one agent' },
+  args: {
+    ...GLOBAL_ARGS,
+    name: {
+      type: 'positional',
+      required: true,
+      description:
+        'Agent name from `texra agents list` (use `source:name` to disambiguate when the same name exists in multiple sources)',
+    },
+  },
+  async run(ctx) {
+    const context = await contextFromArgs(ctx.args);
+    setExitCode(await showAgent(context, ctx.args.name));
+  },
+});
+
 export const agentsCommand = defineCommand({
   meta: { name: 'agents', description: 'Inspect TeXRA agents' },
-  subCommands: { list: agentsListCommand },
+  subCommands: {
+    list: agentsListCommand,
+    show: agentsShowCommand,
+  },
 });

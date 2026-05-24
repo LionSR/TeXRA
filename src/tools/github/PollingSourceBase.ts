@@ -11,9 +11,10 @@
  * 24 h detach gate) lives here once.
  */
 
+import type { AgentTrace } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelTrace } from '@logger';
 
 import {
   GitHubAuthError,
@@ -52,7 +53,7 @@ export abstract class PollingSourceBase<
   K extends string,
   S extends BasePollSubscriptionState,
 > {
-  protected readonly logger: AgentLogger;
+  protected readonly logger: AgentTrace;
   private readonly subscriptions = new Map<K, S>();
   private readonly keysChangedListeners = new Set<
     (keys: readonly K[]) => void
@@ -61,7 +62,7 @@ export abstract class PollingSourceBase<
   private tickInFlight = false;
 
   constructor(protected readonly config: PollingSourceConfig) {
-    this.logger = new AgentLogger(config.name);
+    this.logger = createChannelTrace(config.name);
   }
 
   /** Subclass: poll the endpoints for one subscription and emit any new events. */

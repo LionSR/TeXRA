@@ -8,8 +8,8 @@ import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { initPlatform, tryPlatform } from '@platform/platform';
 
 // Local imports - agent index
-import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
+import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 
 // Local imports - auth
 import {
@@ -18,6 +18,7 @@ import {
 } from '@auth/serverKeys';
 
 // Local imports - common state
+import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey } from '@common/state/stateKeys';
 
 // Local imports - logger
@@ -36,7 +37,7 @@ import { createCliStateStores } from './cliStateStores';
 
 // Type imports - platform and CLI runtime
 import type { LifecycleHost } from '@platform/interfaces/lifecycle';
-import type { LogBackend } from '@platform/interfaces/log';
+import type { LogBackend } from './supabaseAuth';
 import type { CliContext } from './cliContext';
 
 let bootstrappedResourcesPath: string | undefined;
@@ -113,7 +114,7 @@ export async function initCliPlatform(
         logAt(
           'warn',
           'cli.lifecycle',
-          `${phase} handler failed: ${error instanceof Error ? error.message : String(error)}`,
+          `${phase} handler failed: ${toErrorMessage(error)}`,
         );
       },
     });
@@ -121,7 +122,6 @@ export async function initCliPlatform(
       config: new JsonConfigProvider({ workspace: configStore }),
       globalState: stateStores.globalState,
       workspaceState: stateStores.workspaceState,
-      log: cliPlatformLog,
       fs: nodeFilesystem,
       workspace: createNodeWorkspace(() => cliWorkspaceCwd),
       storage: stateStores.storage,

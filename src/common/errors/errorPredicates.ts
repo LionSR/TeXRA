@@ -4,6 +4,17 @@ export function isFileNotFoundError(err: unknown): boolean {
   return code === 'ENOENT' || code === 'FileNotFound';
 }
 
+/** Check if an error represents "a parent path component is a file, not a directory". */
+export function isNotADirectoryError(err: unknown): boolean {
+  return (err as { code?: string })?.code === 'ENOTDIR';
+}
+
+/** Check if an error is "dynamic import couldn't find the module" (Node + ESM variants). */
+export function isModuleNotFoundError(err: unknown): boolean {
+  const code = (err as { code?: string })?.code;
+  return code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND';
+}
+
 /** Check if an error represents a "no space left on device" condition. */
 export function isDiskFullError(err: unknown): boolean {
   for (

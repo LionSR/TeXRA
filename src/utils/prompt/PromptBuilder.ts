@@ -1,9 +1,9 @@
 // Local imports - agent
+import type { AgentTrace } from '@agent/trace';
 import type {
   AgentPrompt,
   AgentWorkflowSetting,
 } from '@agent/core/AgentDataclass';
-import type { AgentLogger } from '@logger/AgentLogger';
 import { loadTexraRules } from '@utils/files/rulesUtils';
 import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
 
@@ -126,7 +126,7 @@ export class PromptBuilder {
     private readonly agentPrompt: AgentPrompt,
     private readonly agentSetting: PromptBuilderSetting,
     private readonly userVars: Record<string, any>,
-    private readonly logger?: AgentLogger,
+    private readonly logger?: AgentTrace,
   ) {}
 
   /**
@@ -227,7 +227,7 @@ export type InitialPrompts = Awaited<
 export async function buildInitialToolUsePrompts(
   agentPrompt: AgentPrompt,
   userVars: Record<string, any>,
-  logger?: AgentLogger,
+  logger?: AgentTrace,
   options?: {
     resolvedToolNames?: readonly string[];
     hasDelegationTools?: boolean;

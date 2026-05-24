@@ -8,9 +8,10 @@ import {
   AgentCategory,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
-import * as logger from '@agent/core/logger';
 import { getGlobalState, getWorkspaceState } from '@agent/core/stateStore';
+import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
+import * as logger from '@logger/logUtils';
 import type { AgentOptionData } from '@shared/schemas';
 import { AgentSource } from '@shared/schemas/agent';
 import { agentKey as createKey, agentName } from '@shared/schemas/agent';
@@ -348,6 +349,15 @@ export function getAgentsBySource(source: AgentSource): AgentEntry[] {
   return [...cache.values()].filter((e) => e.source === source);
 }
 
+/**
+ * Whether the local registry has been loaded so `getAgent` lookups are
+ * meaningful. Callers that distinguish "agent absent" from "registry not yet
+ * loaded" must check this first — an empty cache looks identical otherwise.
+ */
+export function isAgentRegistryReady(): boolean {
+  return initialized;
+}
+
 /** Refresh the cache. */
 export async function refresh(): Promise<void> {
   initialized = false;
@@ -396,7 +406,7 @@ async function scanDirectory(
     logger.debug(CHANNEL, `Scanned ${result.length} agents from ${source}`);
     return result;
   } catch (err) {
-    logger.error(CHANNEL, `Failed to scan ${dir}: ${err}`);
+    logger.error(CHANNEL, `Failed to scan ${dir}: ${toErrorMessage(err)}`);
     return [];
   }
 }
@@ -441,7 +451,7 @@ async function scanYaml(
       internal,
     };
   } catch (err) {
-    logger.warn(CHANNEL, `Failed to scan ${yamlPath}: ${err}`);
+    logger.warn(CHANNEL, `Failed to scan ${yamlPath}: ${toErrorMessage(err)}`);
     return null;
   }
 }
@@ -508,7 +518,10 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
       };
     });
   } catch (err) {
-    logger.warn(CHANNEL, `Failed to load remote agents: ${err}`);
+    logger.warn(
+      CHANNEL,
+      `Failed to load remote agents: ${toErrorMessage(err)}`,
+    );
     return [];
   }
 }

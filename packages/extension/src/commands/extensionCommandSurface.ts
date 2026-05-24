@@ -67,19 +67,20 @@ import { type ApiProvider, SecretManager } from '@frontend/secretManager';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { runCleanBuild, runCleanOutput } from '@housekeeping';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
+import type { CommandId } from '@shared/commands/catalog';
 import {
+  awaitTrue,
   definedHandler,
   dispatchCommandFromRegistry,
   type CommandHandler,
 } from '@shared/commands/registry';
+import { AgentCategorySchema, type AgentCategory } from '@shared/schemas/agent';
 import { StreamTabIdSchema } from '@shared/schemas/identifiers';
 import {
   SETTINGS_TAB,
   type SettingsTab,
 } from '@shared/schemas/settingsViewMessages';
-import { AgentCategorySchema, type AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_QUERY } from '@utils/config';
-import type { CommandId } from './catalog';
 
 /**
  * Optional `ApiProvider` argument for `texra.setApiKey`. The schema accepts
@@ -336,19 +337,6 @@ export function createExtensionCommandActions(
       agentHandleCreateAgentWithAI(context, category),
     execute: agentRunExecuteCommand,
   };
-}
-
-/**
- * Dispatch a no-arg `actions.X()` call through the registry while
- * preserving async semantics. Sync handlers that miss this helper
- * regressed in #3778 — the original `void actions.X(); return true;`
- * shape fired-and-forgot the promise, swallowing rejections (#3782).
- *
- * Wrap promise-returning actions through `awaitTrue` so the dispatcher
- * actually awaits the work and surfaces failures.
- */
-function awaitTrue(p: Promise<unknown> | Thenable<unknown>): Promise<boolean> {
-  return Promise.resolve(p).then(() => true);
 }
 
 const EXTENSION_COMMAND_HANDLERS = {

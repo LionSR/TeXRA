@@ -2,10 +2,10 @@ import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import * as logger from '@agent/core/logger';
 import { getGlobalState } from '@agent/core/stateStore';
 import { getConfig } from '@agent/core/config';
 import { GlobalStateKey } from '@common/state/stateKeys';
+import * as logger from '@logger/logUtils';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { LEVEL_TO_EFFORT } from './reasoningEffort';
 

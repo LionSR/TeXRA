@@ -3,7 +3,7 @@ import * as path from 'path';
 import { promises as fs } from 'fs';
 
 import { WORKFLOW_OUTPUT_BASENAME } from '@agent/output/workflowOutputLayout';
-import { toErrorMessage } from '@common/errors';
+import { isFileNotFoundError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import {
   AgentFileLocationSchema,
@@ -311,12 +311,10 @@ export class TaskRunFileService {
 
         const alreadyCaptured = await fs.stat(snapshotPaths.absolute).then(
           () => true,
-          (err: NodeJS.ErrnoException) => {
-            if (err.code !== 'ENOENT') {
-              throw Object.assign(
-                new Error(
-                  `Failed to inspect snapshot destination ${snapshotPaths.absolute}: ${err.message}`,
-                ),
+          (err: unknown) => {
+            if (!isFileNotFoundError(err)) {
+              throw new Error(
+                `Failed to inspect snapshot destination ${snapshotPaths.absolute}: ${toErrorMessage(err)}`,
                 { cause: err },
               );
             }
@@ -328,14 +326,11 @@ export class TaskRunFileService {
         await ensureParentDir(snapshotPaths.absolute);
         await fs.copyFile(target.absolutePath, snapshotPaths.absolute);
       } catch (error) {
-        const err = error as NodeJS.ErrnoException;
-        if (err?.code === 'ENOENT') {
+        if (isFileNotFoundError(error)) {
           return;
         }
-        throw Object.assign(
-          new Error(
-            `Failed to capture original file ${target}: ${toErrorMessage(err)}`,
-          ),
+        throw new Error(
+          `Failed to capture original file ${target}: ${toErrorMessage(error)}`,
           { cause: error },
         );
       }
@@ -522,11 +517,10 @@ export class TaskRunFileService {
             return;
           }
         } catch (error) {
-          const err = error as NodeJS.ErrnoException;
-          if (err?.code !== 'ENOENT') {
+          if (!isFileNotFoundError(error)) {
             logger.debug(
               CHANNEL,
-              `Unable to stat ${destinationAbsolute}: ${toErrorMessage(err)}`,
+              `Unable to stat ${destinationAbsolute}: ${toErrorMessage(error)}`,
             );
           }
           // ENOENT is the common case — no collision, proceed with the link.

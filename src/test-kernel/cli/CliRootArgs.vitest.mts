@@ -23,6 +23,7 @@ import {
   resolveWorkflowOutput,
 } from '../../../packages/cli/src/commands/root';
 import { rejectHeadlessOnlyFlags } from '../../../packages/cli/src/commands/_helpers/globalArgs';
+import { isKnownCliModel } from '../../../packages/cli/src/runtime/cliConfig';
 import type { CliContext } from '../../../packages/cli/src/runtime/cliContext';
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
@@ -258,6 +259,79 @@ describe('CLI root argument routing', () => {
     }
   });
 
+  it('rejects a literal --input file that does not exist', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-inputs-'));
+    try {
+      const missing = path.join(root, 'no-such.tex');
+      // Pure path (no glob magic, not a directory) — previously this was
+      // returned as-is and the workflow ran until the agent ENOENT'd.
+      await expect(expandWorkflowInputSpecs([missing], root)).rejects.toThrow(
+        /--input: file not found/,
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('attributes the missing-path error to the caller-supplied flag label', async () => {
+    // The helper is shared between --input (texra run, multi-agent run input)
+    // and --context (multi-agent run context). The error must name the flag
+    // the user actually passed, not always say --input.
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-flag-'));
+    try {
+      const missing = path.join(root, 'no-such-context.tex');
+      await expect(
+        expandWorkflowInputSpecs([missing], root, '--context'),
+      ).rejects.toThrow(/--context: file not found/);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('expands a glob --context spec the same way --input does', async () => {
+    // `texra run -c '<glob>'` previously stuffed the literal glob string into
+    // the AgentConfig and failed late with raw ENOENT (exit 1). Routing
+    // through expandWorkflowInputSpecs gives it the same expansion semantics
+    // as `--input` (and surfaces missing-path errors as Usage / exit 2).
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-ctx-'));
+    try {
+      await fs.writeFile(path.join(root, 'a.bib'), 'a');
+      await fs.writeFile(path.join(root, 'b.bib'), 'b');
+      await expect(
+        expandWorkflowInputSpecs([path.join(root, '*.bib')], root, '--context'),
+      ).resolves.toEqual(['a.bib', 'b.bib']);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  // Skip on Windows (no POSIX chmod semantics) and when running as root, where
+  // mode-0 doesn't block stat.
+  const skipPermissionTest =
+    process.platform === 'win32' ||
+    (typeof process.getuid === 'function' && process.getuid() === 0);
+  (skipPermissionTest ? it.skip : it)(
+    'propagates non-ENOENT stat errors instead of misreporting as not-found',
+    async () => {
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-perm-'));
+      const blocked = path.join(root, 'blocked');
+      const inner = path.join(blocked, 'paper.tex');
+      try {
+        await fs.mkdir(blocked, { recursive: true });
+        await fs.writeFile(inner, 'draft');
+        // Strip search/execute permission on the parent so stat(inner) fails
+        // with EACCES. The not-found fast path must not swallow this.
+        await fs.chmod(blocked, 0o000);
+        await expect(expandWorkflowInputSpecs([inner], root)).rejects.toThrow(
+          /(EACCES|permission)/i,
+        );
+      } finally {
+        await fs.chmod(blocked, 0o755).catch(() => undefined);
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+
   it('reports missing workflow outputs as a failed copy operation', async () => {
     await expect(
       resolveWorkflowOutput(
@@ -426,6 +500,15 @@ describe('CLI root argument routing', () => {
 
     expect(init.quietLogs).toBe(true);
     expect(init.skipIncludedModelAccess).toBeUndefined();
+  });
+});
+
+describe('CLI model flag validation contract', () => {
+  it('classifies built-in models as known and bogus names as unknown', () => {
+    expect(isKnownCliModel('sonnet46T')).toBe(true);
+    expect(isKnownCliModel('deepseekT')).toBe(true);
+    expect(isKnownCliModel('nonexistent-model-xyz')).toBe(false);
+    expect(isKnownCliModel('')).toBe(false);
   });
 });
 

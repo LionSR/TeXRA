@@ -4,7 +4,11 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { buildCliContext } from '../../../packages/cli/src/runtime/cliContext';
+import {
+  buildCliContext,
+  CliUsageError,
+  resolveCliCwd,
+} from '../../../packages/cli/src/runtime/cliContext';
 import { loadWorkspaceCliConfig } from '../../../packages/cli/src/runtime/cliConfig';
 
 const ambient = {
@@ -57,7 +61,7 @@ describe('CLI context config defaults', () => {
       buildCliContext({
         ambient,
         env: {},
-        globalArgs: { cwd: '/tmp/no-such-texra-workspace' },
+        globalArgs: { cwd: tmpdir() },
       }),
     ).resolves.toMatchObject({
       outputFormat: 'text',
@@ -143,7 +147,7 @@ describe('CLI context config defaults', () => {
     const context = await buildCliContext({
       ambient,
       env: { TEXRA_MODEL: 'claude-opus-4-7' },
-      globalArgs: { cwd: '/tmp/no-such-texra-workspace' },
+      globalArgs: { cwd: tmpdir() },
     });
 
     expect(context.envModel).toBeUndefined();
@@ -154,7 +158,7 @@ describe('CLI context config defaults', () => {
     const context = await buildCliContext({
       ambient,
       env: { TEXRA_API_MODE: 'direct' },
-      globalArgs: { cwd: '/tmp/no-such-texra-workspace' },
+      globalArgs: { cwd: tmpdir() },
     });
 
     expect(context.apiMode).toBe('personal');
@@ -166,7 +170,7 @@ describe('CLI context config defaults', () => {
       env: { TEXRA_API_MODE: 'personal' },
       globalArgs: {
         apiMode: 'included',
-        cwd: '/tmp/no-such-texra-workspace',
+        cwd: tmpdir(),
       },
     });
 
@@ -177,10 +181,52 @@ describe('CLI context config defaults', () => {
     const context = await buildCliContext({
       ambient,
       env: { TEXRA_API_MODE: 'unknown-mode' },
-      globalArgs: { cwd: '/tmp/no-such-texra-workspace' },
+      globalArgs: { cwd: tmpdir() },
     });
 
     expect(context.apiMode).toBeUndefined();
     expect(context.configWarnings?.join('\n')).toContain('TEXRA_API_MODE');
+  });
+});
+
+describe('CLI --cwd validation', () => {
+  it('accepts an existing directory and returns its realpath', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'texra-cli-cwd-'));
+
+    await expect(resolveCliCwd(workspace)).resolves.toBe(
+      await realpath(workspace),
+    );
+  });
+
+  it('rejects a --cwd path that does not exist', async () => {
+    const missing = join(tmpdir(), 'texra-cli-cwd-missing-' + Date.now());
+
+    await expect(resolveCliCwd(missing)).rejects.toBeInstanceOf(CliUsageError);
+    await expect(resolveCliCwd(missing)).rejects.toThrow(/does not exist/);
+  });
+
+  it('rejects a --cwd path that points at a file', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'texra-cli-cwd-'));
+    const filePath = join(workspace, 'config.json');
+    await writeFile(filePath, '{}');
+
+    await expect(resolveCliCwd(filePath)).rejects.toBeInstanceOf(CliUsageError);
+    await expect(resolveCliCwd(filePath)).rejects.toThrow(/not a directory/);
+  });
+
+  it('falls back to process.cwd() when no --cwd flag is given', async () => {
+    // The shell can't put us in a missing directory, so the no-flag path
+    // intentionally skips validation. Trim any platform realpath canonical-
+    // ization for the comparison.
+    const result = await resolveCliCwd(undefined);
+    expect(result).toBe(await realpath(process.cwd()));
+  });
+
+  it('lets a buildCliContext caller surface the --cwd usage error', async () => {
+    const missing = join(tmpdir(), 'texra-cli-cwd-missing-' + Date.now());
+
+    await expect(
+      buildCliContext({ ambient, env: {}, globalArgs: { cwd: missing } }),
+    ).rejects.toBeInstanceOf(CliUsageError);
   });
 });

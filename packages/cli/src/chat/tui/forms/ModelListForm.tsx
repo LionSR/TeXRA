@@ -200,7 +200,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
           <KeyHints
             hints={[
               { key: '↑/↓', action: 'navigate' },
-              { key: '1-9', action: 'select' },
+              { key: '1-9/a-z', action: 'select' },
             ]}
           />
         ) : (

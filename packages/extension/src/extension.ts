@@ -8,7 +8,6 @@ import dotenv from 'dotenv';
 // Local imports - core
 import { initPlatform } from '@platform/platform';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { tryResumeFromSnapshot } from '@commands/agent/resumeFromSnapshot';
 import {
   SHUTDOWN_PHASE,
   type LifecycleHost,
@@ -16,9 +15,9 @@ import {
 import { loadAgents, setAgentDirectories } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
+import { initializeOdysseyPrompts } from '@agent/odyssey';
 import { setDefaultAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
-import { initializeOdysseyPrompts } from '@agent/odyssey';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import {
   getServerSideKeyService,
@@ -34,6 +33,7 @@ import {
   setRuntimeExtensionId,
 } from '@auth/config';
 import { getAuthStatus } from '@auth/authCommands';
+import { tryResumeFromSnapshot } from '@commands/agent/resumeFromSnapshot';
 import { toErrorMessage } from '@common/errors';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import {
@@ -182,7 +182,6 @@ export async function activate(context: vscode.ExtensionContext) {
     config: new VscodeConfigProvider(),
     globalState: context.globalState,
     workspaceState: workspaceSM,
-    log: logger,
     fs: new VscodeFileSystem(),
     workspace: new VscodeWorkspace(),
     storage: new VscodeStorage(context),
@@ -640,14 +639,11 @@ export async function activate(context: vscode.ExtensionContext) {
     mainViewProvider.setProgressViewProvider(progressViewProvider);
   }
 
-  // Gating UI contributions (commandPalette / keybindings / menus / walkthroughs
-  // / views) on `texra.activated` keeps them hidden until every command handler
-  // is registered. This must run after ALL `registerCommand` calls in this
-  // function (including the late ones for `texra.showMainView` and
-  // `texra.toggleView`), otherwise palette entries can fire before their
-  // handlers exist and produce "command not found" errors. It must also run
-  // BEFORE the welcome walkthrough is opened below, because the walkthrough
-  // itself is gated on `texra.activated`.
+  // Gating commandPalette / keybindings / menus / views on `texra.activated`
+  // keeps them hidden until every command handler is registered. This must run
+  // after ALL `registerCommand` calls in this function (including the late ones
+  // for `texra.showMainView` and `texra.toggleView`), otherwise palette entries
+  // can fire before their handlers exist and produce "command not found" errors.
   await vscode.commands.executeCommand('setContext', 'texra.activated', true);
 
   const welcomeKey = 'texra.welcomeShown';

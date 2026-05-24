@@ -74,6 +74,19 @@ describe('SettingsModelSelectionController', () => {
     expect(state.getHelperModel()).toBe('sonnet46T');
   });
 
+  it('falls back to default models when the persisted enabled list is empty', () => {
+    const controller = new SettingsModelSelectionController({
+      state: createState({ enabledModels: [] }),
+    });
+
+    const enabled = controller
+      .buildSelectionData()
+      .models.filter((model) => model.enabled);
+
+    // An empty persisted list must not blank out the helper-model dropdown.
+    expect(enabled.length).toBeGreaterThan(0);
+  });
+
   it('uses the runtime helper default when no helper model is configured', () => {
     const controller = new SettingsModelSelectionController({
       state: createState({

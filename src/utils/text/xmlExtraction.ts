@@ -233,7 +233,7 @@ export const MultipleExtractionResultSchema = z.object({
   documents: z
     .array(z.object({ content: z.string(), name: z.string() }))
     .nullable(),
-  method: z.enum(['simple', 'none']),
+  method: z.enum(['simple', 'latex_document', 'markdown', 'latex', 'none']),
 });
 export type MultipleExtractionResult = z.infer<
   typeof MultipleExtractionResultSchema
@@ -287,19 +287,49 @@ export function extractDocument(
 }
 
 /**
- * Extract multiple documents from XML content with fallback support
+ * Extract multiple documents from XML content with fallback support.
+ *
+ * Primary path looks for <document name="..."> children inside the unified
+ * <documents> container. When that finds nothing and a single-file recovery
+ * hint is supplied, the extractor falls back through the legacy single-doc
+ * shapes (<latex_document>, fenced ```latex block, bare \documentclass) and
+ * synthesizes a one-document result named after the hint. Without a hint,
+ * recovery is skipped because a synthesized document with no name has no
+ * unambiguous destination.
  *
  * @param outputContent The raw output content to extract from
  * @param documentTag The container tag to look for documents within
+ * @param preferredName Recovery hint — when set, treat single-doc legacy
+ *   shapes as a one-document result named after the hint
  * @returns Extraction result with documents array and method used
  */
 export function extractDocuments(
   outputContent: string,
   documentTag: string,
+  preferredName?: string,
 ): MultipleExtractionResult {
   const documents = extractMultipleTextFromTag(outputContent, documentTag);
   if (documents && documents.length > 0) {
     return { documents, method: 'simple' };
   }
+
+  if (preferredName) {
+    // No preferredName is passed into extractDocument, so the 'named' branch
+    // is never taken — narrow the type accordingly for the result mapping.
+    const single = extractDocument(outputContent, 'latex_document');
+    if (single.content && single.method !== 'none') {
+      const method: MultipleExtractionResult['method'] =
+        single.method === 'simple'
+          ? 'latex_document'
+          : single.method === 'markdown' || single.method === 'latex'
+            ? single.method
+            : 'simple';
+      return {
+        documents: [{ content: single.content, name: preferredName }],
+        method,
+      };
+    }
+  }
+
   return { documents: null, method: 'none' };
 }

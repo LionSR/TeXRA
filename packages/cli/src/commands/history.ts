@@ -11,6 +11,7 @@ import {
   formatCliHistoryText,
   listCliHistoryEntries,
   parseCliHistoryId,
+  preflightCliHistoryDeleteAll,
   readCliHistoryDetails,
 } from '../runtime/history';
 import { initCliPlatform } from '../runtime/initPlatform';
@@ -84,16 +85,36 @@ async function runHistoryShow(
 
 async function runHistoryDelete(
   context: CliContext,
-  options: { id?: ExecutionId; all: boolean },
+  options: { id?: ExecutionId; all: boolean; yes: boolean },
 ): Promise<number> {
   await initCliPlatform({
     ...context,
     quietLogs: true,
     skipIncludedModelAccess: true,
   });
+
+  // `--all` is destructive and unrecoverable. Refuse it unless the caller
+  // also passes `--yes`, and quote the count so the stakes are explicit.
+  let preCountForAll: number | undefined;
+  if (options.all) {
+    const preflight = await preflightCliHistoryDeleteAll({
+      all: true,
+      yes: options.yes,
+    });
+    if (!preflight.proceed) {
+      const noun =
+        preflight.count === 1 ? 'stored execution' : 'stored executions';
+      writeTextStderr(
+        `Refusing to delete ${preflight.count} ${noun}. Re-run with --yes to confirm.`,
+      );
+      return CliExitCode.Usage;
+    }
+    preCountForAll = preflight.count;
+  }
+
   let result: Awaited<ReturnType<typeof deleteCliHistory>>;
   try {
-    result = await deleteCliHistory(options);
+    result = await deleteCliHistory({ ...options, preCountForAll });
   } catch (error) {
     writeTextStderr(toErrorMessage(error));
     return CliExitCode.Usage;
@@ -108,7 +129,8 @@ async function runHistoryDelete(
       result,
     });
   } else if (result.deleted === 'all') {
-    writeTextStdout('Deleted all stored executions.');
+    const noun = result.count === 1 ? 'stored execution' : 'stored executions';
+    writeTextStdout(`Deleted ${result.count} ${noun}.`);
   } else if (result.found) {
     writeTextStdout(`Deleted execution ${result.id}.`);
   } else {
@@ -162,7 +184,13 @@ const historyDeleteCommand = defineCommand({
     },
     all: {
       type: 'boolean',
-      description: 'Delete all stored executions',
+      description: 'Delete all stored executions (requires --yes to confirm)',
+    },
+    yes: {
+      type: 'boolean',
+      alias: 'y',
+      description:
+        'Confirm destructive deletes (required with --all; ignored otherwise)',
     },
   },
   async run(ctx) {
@@ -175,7 +203,11 @@ const historyDeleteCommand = defineCommand({
       return;
     }
     setExitCode(
-      await runHistoryDelete(context, { id, all: ctx.args.all === true }),
+      await runHistoryDelete(context, {
+        id,
+        all: ctx.args.all === true,
+        yes: ctx.args.yes === true,
+      }),
     );
   },
 });

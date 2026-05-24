@@ -228,7 +228,7 @@ class ResponseProcessNode<C> extends BaseNode<
       return { kind: 'skipped' };
     }
 
-    const stage = await logger.stage('Process response', {
+    const stage = logger.openStage('Process response', {
       skip: true,
     });
 

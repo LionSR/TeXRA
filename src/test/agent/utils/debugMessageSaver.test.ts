@@ -94,7 +94,7 @@ describe('maybeSaveDebugObject', () => {
       error: (message: string) => {
         errorLogs.push(message);
       },
-    } as unknown as import('@logger/AgentLogger').AgentLogger;
+    } as unknown as import('@agent/trace').AgentTrace;
 
     await maybeSaveDebugObject({
       object: { foo: 'bar' },

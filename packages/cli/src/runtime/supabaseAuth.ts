@@ -14,8 +14,20 @@ import { getCliSecrets } from './cliSecrets';
 import { openBrowser } from './supabaseAuthBrowser';
 import { startLoopbackCallbackServer } from './supabaseAuthCallbackServer';
 
-// Type imports - platform
-import type { LogBackend } from '@platform/interfaces/log';
+/**
+ * Channel-logger contract used by the CLI auth coordinator and supporting
+ * helpers. Shape-compatible with `* as logger from '@logger/logUtils'` so
+ * callers can pass that module directly, but also allows a custom object
+ * literal (e.g. the deferred forwarder below) without depending on the
+ * platform layer.
+ */
+export interface LogBackend {
+  initialize(channel: string, isAgent?: boolean): void;
+  debug(channel: string, message: string): void;
+  info(channel: string, message: string): void;
+  warn(channel: string, message: string): void;
+  error(channel: string, message: string): void;
+}
 
 export interface CliAuthProfile {
   authenticated: boolean;

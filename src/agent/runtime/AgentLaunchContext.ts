@@ -4,6 +4,7 @@ import { ZodError } from 'zod';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { isRemoteAgent, resolveAgent, type ResolvedAgent } from '@agent/index';
+import type { StageHandle } from '@agent/trace';
 import type { AgentCore } from '@agent/implementations/flows/common/BaseFlowServices';
 import {
   AgentConfigSchema,
@@ -21,12 +22,8 @@ import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError, getSdkErrorMessage, toErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
-import {
-  AgentLogger,
-  AgentUsageReporter,
-  getStreamTabId,
-  type AgentLogStage,
-} from '@logger/index';
+import type { TexraTrace } from '@logger';
+import { createRunTrace, getStreamTabId, type RunTrace } from '@logger/index';
 import {
   STREAM_STATUS,
   type ExecutionId,
@@ -51,8 +48,15 @@ import type { AgentRuntimeHost } from './AgentRuntimeHost';
 export interface AgentLaunchContext extends AgentCore {
   usageMonitor: UsageMonitor;
   storageKey: StorageKey;
-  parentStage: AgentLogStage;
+  parentStage: StageHandle;
   coordinators: RunCoordinators;
+  /**
+   * Dispose the run-trace subscribers (channel sink + transcript recorder)
+   * registered by {@link createRunTrace}. Must be called once at end-of-run
+   * to avoid leaking entries in the module-global `activeFlushers` set and
+   * keeping subscribers attached to the trace emitter.
+   */
+  disposeTrace: () => void;
 }
 
 export interface AgentLaunchInput {
@@ -81,7 +85,7 @@ function createExecutionRunContext(ctx: AgentLaunchContext): RunContext {
     runtimeHost: ctx.runtimeHost,
     streamId: ctx.streamId,
     executionId: ctx.executionId,
-    logger: ctx.logger,
+    trace: ctx.logger,
     coordinators: ctx.coordinators,
     model: ctx.config.model,
     agentName: ctx.config.agent,
@@ -147,14 +151,14 @@ async function validateModelExists(
  * therefore renders the instruction before the run group.
  */
 async function beginRunStage(
-  agentLogger: AgentLogger,
+  agentLogger: TexraTrace,
   label: string,
   instruction: string | undefined,
-): Promise<AgentLogStage> {
+): Promise<StageHandle> {
   if (instruction) {
     agentLogger.userMessage(instruction);
   }
-  return agentLogger.stage(label);
+  return agentLogger.openStage(label);
 }
 
 async function assembleAgentLaunchContext(
@@ -163,6 +167,7 @@ async function assembleAgentLaunchContext(
   runtimeHost: AgentRuntimeHost,
   reservedStreamId: StreamTabId | undefined,
   onActivated: (streamId: StreamTabId) => void,
+  onRunTraceCreated: (runTrace: RunTrace) => void,
 ): Promise<AgentLaunchContext> {
   const { configPayload } = input;
   const fullConfig = AgentConfigSchema.parse(configPayload);
@@ -207,13 +212,9 @@ async function assembleAgentLaunchContext(
     reservedStreamId ??
     getStreamTabId(config.agent, fullConfig.model, { executionId });
 
-  const agentLogger = new AgentLogger(streamId, true);
-  const usageReporter = new AgentUsageReporter(
-    agentLogger,
-    streamId,
-    setting.agentCategory,
-    runtimeHost,
-  );
+  const runTrace = createRunTrace(streamId);
+  onRunTraceCreated(runTrace);
+  const agentLogger = runTrace.trace;
   modelHandler.setAgentCategory(setting.agentCategory);
   modelHandler.setLogger(agentLogger);
 
@@ -260,7 +261,7 @@ async function assembleAgentLaunchContext(
   const baseVars =
     setting.agentCategory === AgentCategory.ToolUse
       ? await buildVars()
-      : await parentStage.stage('Init').then((s) => s.run(buildVars));
+      : await parentStage.child('Init').run(buildVars);
 
   const userVarChannels: UserVariableChannels = {
     input: Object.freeze(baseVars),
@@ -269,7 +270,7 @@ async function assembleAgentLaunchContext(
 
   const usageMonitor = new UsageMonitor(
     { capabilities: modelHandler.capabilities, config: modelHandler.config },
-    { logger: agentLogger, usageReporter, storageKey, streamId },
+    { logger: agentLogger, runtimeHost, storageKey, streamId },
     {
       agentName: config.agent,
       agentCategory: setting.agentCategory,
@@ -295,6 +296,7 @@ async function assembleAgentLaunchContext(
       proposal: new AgentProposalCoordinator(runtimeHost),
       retry: new RetryRequestCoordinatorImpl(runtimeHost),
     },
+    disposeTrace: runTrace.dispose,
   };
 }
 
@@ -335,6 +337,10 @@ function compensateFailedActivation(args: {
   activatedStreamId?: StreamTabId;
   runtimeHost: AgentRuntimeHost;
   err: unknown;
+  // The run-trace from assembleAgentLaunchContext when it was created before the
+  // throw. Reused for the error log so we don't allocate a second one; outer
+  // catch disposes it after this returns.
+  runTrace?: RunTrace;
 }): void {
   const {
     configPayload,
@@ -342,10 +348,14 @@ function compensateFailedActivation(args: {
     activatedStreamId,
     runtimeHost,
     err,
+    runTrace,
   } = args;
 
   if (activatedStreamId) {
-    new AgentLogger(activatedStreamId, true).logError(
+    // `activatedStreamId` is set only after `runTrace` is created in
+    // `assembleAgentLaunchContext`, so runTrace is always present here in
+    // practice. Guard for defensiveness.
+    runTrace?.trace.logError(
       `Failed to start agent ${configPayload.agent}: ${getSdkErrorMessage(err)}`,
       err,
       { operation: `start ${configPayload.agent}` },
@@ -391,6 +401,10 @@ export async function buildAgentLaunchContext(
   }
 
   let activatedStreamId: StreamTabId | undefined;
+  // Captured so the outer catch can dispose the trace and let
+  // `compensateFailedActivation` reuse it for the failure log. Released to the
+  // returned context on the success path (cleaned up by runFlowWithLifecycle).
+  let runTrace: RunTrace | undefined;
   try {
     return await assembleAgentLaunchContext(
       input,
@@ -400,6 +414,9 @@ export async function buildAgentLaunchContext(
       (streamId) => {
         activatedStreamId = streamId;
       },
+      (rt) => {
+        runTrace = rt;
+      },
     );
   } catch (err) {
     compensateFailedActivation({
@@ -408,7 +425,9 @@ export async function buildAgentLaunchContext(
       activatedStreamId,
       runtimeHost,
       err,
+      runTrace,
     });
+    runTrace?.dispose();
     if (!input.suppressErrorNotification && !(err instanceof ZodError)) {
       runtimeHost.emit('requestShowError', {
         message: toErrorMessage(err),

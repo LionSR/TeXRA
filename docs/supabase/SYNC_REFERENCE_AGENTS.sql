@@ -196,7 +196,7 @@ VALUES (
   'tool-use/orchestrator.yaml',
   ARRAY['public'],
   'toolUse',
-  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'texcount', 'inquiry', 'codex', 'github_subscription']
+  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'ls', 'extract_figures', 'extract_bib_entries', 'texcount', 'inquiry', 'codex', 'claude_code', 'github_subscription']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,
@@ -312,7 +312,7 @@ VALUES (
   'tool-use-lean/leanOrchestrator.yaml',
   ARRAY['researcher', 'lean'],
   'toolUse',
-  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'ls', 'codex', 'lean_diagnostics', 'lean_inspect', 'lean_loogle', 'lean_file', 'lean_project', 'github_subscription']
+  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'ls', 'codex', 'claude_code', 'lean_diagnostics', 'lean_inspect', 'lean_loogle', 'lean_file', 'lean_project', 'github_subscription']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,

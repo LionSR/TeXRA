@@ -14,10 +14,7 @@ import { toErrorMessage } from '@common/errors/errorMessage';
 import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 
-import {
-  hasCliApprovalDenied,
-  installCliApprovalHandlers,
-} from '../runtime/approvalAdapter';
+import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import { CliUsageError } from '../runtime/cliContext';
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
@@ -35,6 +32,7 @@ import { createCliRuntimeHost } from '../runtime/runtimeHost';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
+import { assertExplicitModelKnown } from './_helpers/modelArg';
 import {
   GLOBAL_ARGS,
   collectStringFlagValues,
@@ -43,11 +41,17 @@ import {
 import { shouldHonorRemoteAgentPriority } from './_helpers/remoteAgents';
 import {
   readCliTerminalStatus,
+  terminalStatusExitCode,
   type CliRunResult,
   type ExecuteAgentResult,
 } from './_helpers/terminalStatus';
-import { expandWorkflowInputSpecs } from './_helpers/workflowInputs';
 import {
+  expandWorkflowInputSpec,
+  expandWorkflowInputSpecs,
+} from './_helpers/workflowInputs';
+import {
+  assertOutputDirAvailable,
+  assertOutputFileAvailable,
   expectedOutputFilesForOutputDir,
   formatWorkflowTextResult,
   resolveWorkflowOutput,
@@ -68,8 +72,9 @@ async function runWorkflowAgent(
   context: CliContext,
   init: WorkflowRunInit,
 ): Promise<number> {
+  const explicitModel = assertExplicitModelKnown(init.model);
   const model =
-    init.model?.trim() ||
+    explicitModel ||
     context.envModel ||
     resolveConfiguredModel(context.cliConfig, 'run') ||
     CLI_BUILTIN_DEFAULT_MODEL;
@@ -83,10 +88,29 @@ async function runWorkflowAgent(
   if (init.output && init.outputDir) {
     throw new CliUsageError('Use either --output or --output-dir, not both.');
   }
+  // Reject `--output-dir <path>` early when the path already points at a
+  // non-directory (else we'd run the full workflow and EEXIST at the end).
+  await assertOutputDirAvailable(init.outputDir, runContext.cwd);
+  // Same fast-fail for `--output <path>`: existing directory or file-typed
+  // parent component blows up at copy time (`EISDIR` / `EEXIST`) after the
+  // full agent run otherwise.
+  await assertOutputFileAvailable(init.output, runContext.cwd);
   const inputFiles = await expandWorkflowInputSpecs(
     init.inputFiles,
     runContext.cwd,
   );
+  // `--context` files are optional, so we can't reuse the plural helper
+  // (which errors on an empty result). Expand each spec individually with
+  // the right flag label so a missing context path fails fast as a Usage
+  // error (exit 2) instead of reaching the agent as a raw ENOENT (exit 1),
+  // and so a glob like `refs/*.bib` actually expands.
+  const contextFiles = (
+    await Promise.all(
+      init.contextFiles.map((spec) =>
+        expandWorkflowInputSpec(spec, runContext.cwd, '--context'),
+      ),
+    )
+  ).flat();
   if (init.output && inputFiles.length > 1) {
     throw new CliUsageError(
       'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.',
@@ -101,6 +125,19 @@ async function runWorkflowAgent(
     await loadAgents();
     agent = getAgent(init.agent);
   }
+  // Pre-validate the resolved agent so usage errors land before the runtime
+  // host starts: an unknown name or wrong category should be exit 2 (Usage),
+  // not exit 1 (AgentError) raised mid-run.
+  if (!agent) {
+    throw new CliUsageError(
+      `Agent not found: ${init.agent}. Use \`texra agents list\` to see available agents.`,
+    );
+  }
+  if (agent.category !== AgentCategory.Workflow) {
+    throw new CliUsageError(
+      `Agent "${init.agent}" is a ${agent.category} agent; use \`texra chat\` or \`texra multi-agent run\` instead.`,
+    );
+  }
 
   const modelOutputFile =
     init.output && path.isAbsolute(init.output)
@@ -110,7 +147,7 @@ async function runWorkflowAgent(
     agent: init.agent,
     model,
     inputFiles,
-    contextFiles: init.contextFiles,
+    contextFiles,
     outputFiles: modelOutputFile ? [modelOutputFile] : [],
     cliOutputFile: init.output,
     instruction: init.instruction,
@@ -177,15 +214,7 @@ async function runWorkflowAgent(
     writeTextStdout(result.status);
   }
 
-  if (terminalStatus === EXECUTION_STATUS.ERROR) {
-    return hasCliApprovalDenied(runContext)
-      ? CliExitCode.ApprovalDenied
-      : CliExitCode.AgentError;
-  }
-  if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
-    return CliExitCode.Interrupted;
-  }
-  return CliExitCode.Success;
+  return terminalStatusExitCode(terminalStatus, runContext);
 }
 
 export const runWorkflowCommand = defineCommand({

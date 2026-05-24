@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   codexBinaryPath,
+  codexBinarySubpathCandidates,
   codexPlatformInfoByKey,
   collectBundledCodexPackages,
   describeBundledCodexPackages,
@@ -521,26 +522,54 @@ async function checkCodexPayload(app, failures) {
 
   for (const platformKey of expectedPlatformKeys) {
     const platformInfo = codexPlatformInfoByKey[platformKey];
-    const unpackedBinaryPath = codexBinaryPath(
+    const bundledPlatformPackages = bundledPackages.filter(
+      (pkg) => pkg.platformKey === platformKey,
+    );
+    const unpackedBinaryPaths = bundledPlatformPackages.flatMap((pkg) =>
+      pkg.locations.flatMap((location) =>
+        codexBinarySubpathCandidates(platformInfo).map((binarySubpath) =>
+          posix.join('app.asar.unpacked', location, binarySubpath),
+        ),
+      ),
+    );
+    const legacyUnpackedBinaryPath = codexBinaryPath(
       'app.asar.unpacked',
       platformInfo,
     );
-    if (!(await app.exists(unpackedBinaryPath))) {
+    if (unpackedBinaryPaths.length === 0) {
+      unpackedBinaryPaths.push(legacyUnpackedBinaryPath);
+    }
+
+    const existingUnpackedBinaryPaths = [];
+    for (const unpackedBinaryPath of unpackedBinaryPaths) {
+      if (await app.exists(unpackedBinaryPath)) {
+        existingUnpackedBinaryPaths.push(unpackedBinaryPath);
+      }
+    }
+
+    if (existingUnpackedBinaryPaths.length === 0) {
       failures.push(
-        `Packaged desktop app is missing the unpacked Codex CLI binary for ${platformKey}: ${unpackedBinaryPath}`,
+        `Packaged desktop app is missing the unpacked Codex CLI binary for ${platformKey}: ${unpackedBinaryPaths.join(
+          ', ',
+        )}`,
       );
       continue;
     }
 
-    const archivedBinaryPath = codexBinaryPath('', platformInfo);
-    if (
-      app.isAsar &&
-      (await app.exists(archivedBinaryPath)) &&
-      !(await app.isUnpacked(archivedBinaryPath))
-    ) {
-      failures.push(
-        `Packaged desktop app keeps the Codex CLI binary inside app.asar for ${platformKey}; it must be unpacked: ${archivedBinaryPath}`,
+    for (const unpackedBinaryPath of existingUnpackedBinaryPaths) {
+      const archivedBinaryPath = unpackedBinaryPath.replace(
+        /^app\.asar\.unpacked\//,
+        '',
       );
+      if (
+        app.isAsar &&
+        (await app.exists(archivedBinaryPath)) &&
+        !(await app.isUnpacked(archivedBinaryPath))
+      ) {
+        failures.push(
+          `Packaged desktop app keeps the Codex CLI binary inside app.asar for ${platformKey}; it must be unpacked: ${archivedBinaryPath}`,
+        );
+      }
     }
   }
 

@@ -12,9 +12,10 @@ import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 // Local imports - errors
 import { toErrorMessage } from '@common/errors';
+import type { TexraTrace } from '@logger';
 
 // Local imports - logger
-import { AgentLogger } from '@logger/AgentLogger';
+import { createRunTrace } from '@logger';
 
 // Local imports - shared
 import type { ExecutionId, StreamTabId, StorageKey } from '@shared/schemas';
@@ -52,7 +53,17 @@ export function createChildStream(
   executionId: ExecutionId,
   parentStreamId: StreamTabId,
   options: CreateChildStreamOptions,
-): { childStreamId: StreamTabId; logger: AgentLogger } {
+): {
+  childStreamId: StreamTabId;
+  logger: TexraTrace;
+  /**
+   * Drop the run-trace subscribers attached by `createRunTrace`. Must be
+   * called once when the child stream finalizes, either via
+   * `finalizeChildStream` (which calls it for you) or directly from a custom
+   * cleanup path.
+   */
+  disposeTrace: () => void;
+} {
   const childStreamId = `${options.streamPrefix}#${executionId}` as StreamTabId;
   const { runtimeHost } = options;
 
@@ -77,7 +88,7 @@ export function createChildStream(
     description: truncateWithEllipsis(options.description, 80),
   });
 
-  const logger = new AgentLogger(childStreamId, true);
+  const runTrace = createRunTrace(childStreamId);
   const handle = new AgentExecutionHandle(
     executionId,
     parentStreamId,
@@ -89,17 +100,33 @@ export function createChildStream(
   if (options.toolName) handle.toolName = options.toolName;
   trackExecution(handle);
 
-  return { childStreamId, logger };
+  return {
+    childStreamId,
+    logger: runTrace.trace,
+    disposeTrace: runTrace.dispose,
+  };
+}
+
+interface FinalizeChildStreamArgs {
+  childStreamId: StreamTabId;
+  executionId: ExecutionId;
+  logger: TexraTrace;
+  /** From `createChildStream` — releases the run-trace subscribers. */
+  disposeTrace: () => void;
+  runtimeHost: AgentRuntimeHost;
+  options?: FinalizeChildStreamOptions;
 }
 
 /** Finalize a child stream tab and untrack its execution handle. */
-export function finalizeChildStream(
-  childStreamId: StreamTabId,
-  executionId: ExecutionId,
-  logger: AgentLogger,
-  runtimeHost: AgentRuntimeHost,
-  options?: FinalizeChildStreamOptions,
-): void {
+export function finalizeChildStream(args: FinalizeChildStreamArgs): void {
+  const {
+    childStreamId,
+    executionId,
+    logger,
+    disposeTrace,
+    runtimeHost,
+    options,
+  } = args;
   const hasError = options?.error != null || options?.errorMessage != null;
 
   if (options?.errorMessage) {
@@ -126,6 +153,7 @@ export function finalizeChildStream(
     );
   }
   untrackExecution(executionId);
+  disposeTrace();
 
   if (options?.autoClose) {
     runtimeHost.emit('removeStream', { streamId: childStreamId });

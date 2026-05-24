@@ -11,11 +11,6 @@
 import * as vscode from 'vscode';
 
 // Shared schemas and dispatchers
-import {
-  SettingsMemoryController,
-  type SettingsMemoryMessage,
-} from '@controllers/settingsView/SettingsMemoryController';
-import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { platform } from '@platform/platform';
 import {
@@ -25,7 +20,6 @@ import {
 } from '@agent/index';
 import {
   getExecutionStore,
-  listExecutions,
   deleteExecution,
   deleteAllExecutions,
 } from '@agent/storage';
@@ -78,8 +72,6 @@ import {
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { buildStreamInfo } from '@progressView/streamInfoUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { OdysseyStore } from '@tools/odyssey';
-import type { HistoryItem } from '@shared/schemas/historyViewMessages';
 import {
   dispatchSettingsViewInbound,
   type SettingsViewInboundHandlerRegistry,
@@ -88,36 +80,35 @@ import {
   SETTINGS_VIEW_CMD,
 } from '@shared/schemas/settingsViewMessages';
 import {
+  buildApprovalSettingsMessage,
+  setBashApprovalEnabled as setBashApprovalEnabledShared,
+  setWorkspaceAgentSetting,
+} from '@shared/settingsView/handlers/approvalHandlers';
+import { buildHistoryMessage } from '@shared/settingsView/handlers/historyHandlers';
+import {
+  buildModelSelectionMessage,
+  createModelSelectionController,
+} from '@shared/settingsView/handlers/modelSelectionHandlers';
+import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
+import { createSettingsMemoryController } from '@shared/settingsView/handlers/memoryControllerFactory';
+import { clampNestedDelegationDepth } from '@shared/constants/delegationPolicy';
+import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
   PROVIDER_VSCODE_SETTINGS,
 } from '@shared/constants/providers';
-import {
-  NESTED_DELEGATION_DEPTH_RANGE,
-  clampNestedDelegationDepth,
-} from '@shared/constants/delegationPolicy';
 import type {
   RemoteAgent,
   ProviderKeyStatus,
   ProviderVscodeSetting,
   NumberVscodeSetting,
 } from '@shared/schemas/profileViewMessages';
+import { OdysseyStore } from '@tools/odyssey';
 import {
   getLastCheckResults,
   refreshToolAvailability,
   refreshDisabledToolCache,
 } from '@tools/toolAvailability';
-import {
-  parseCodexSandboxMode,
-  parseCodexReasoningEffort,
-  parseCodexApprovalPolicy,
-} from '@tools/codexConfig';
-import {
-  CLAUDE_AGENT_DEFAULT_MODEL,
-  parseClaudeAgentEffort,
-  parseClaudeAgentModel,
-  parseClaudeAgentPermissionMode,
-} from '@tools/claudeAgentConfig';
 import { findExternalToolDef } from '@tools/externalToolDefs';
 import {
   issuePollingSource,
@@ -130,19 +121,10 @@ import {
   unbindAllForPR,
   unbindAllForRepo,
 } from '@tools/github';
-import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
-import {
-  MEMORY_STORAGE_ROOT,
-  MAX_PINNED_MEMORIES,
-} from '@tools/memory/constants';
-import {
-  buildFile,
-  countPinnedMemories,
-  parseFrontmatter,
-  setPinnedMeta,
-} from '@tools/memory/memoryMeta';
+import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
+import { readGitAuthorSettingsFromState } from '@utils/system/gitAuthorSettings';
 import { setToolUseMemoryEnabled } from '@utils/config/constants';
 import {
   getGlobalStreaming,
@@ -157,10 +139,10 @@ import {
 } from '@utils/config/providerConfig';
 import { getConfig, updateConfig } from '@utils/config/configUtils';
 import { setToolEnabled } from '@utils/config/constants';
-import { loadMemoryItems, loadMemoryPreview } from './utils/memoryFileSystem';
 import { buildToolDashboardItems } from './utils/toolDashboardData';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
+import type { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 
 // Re-use the shared type helper for extracting specific message types.
@@ -245,32 +227,14 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
   }));
 }
 
-const modelSelectionController = new SettingsModelSelectionController({
-  state: {
-    getEnabledModels: () =>
-      globalSM.get<string[]>(GlobalStateKey.ENABLED_MODELS),
-    setEnabledModels: async (models) => {
-      await globalSM.update(GlobalStateKey.ENABLED_MODELS, models);
-    },
-    getHelperModel: () => globalSM.get<string>(GlobalStateKey.HELPER_MODEL),
-    setHelperModel: async (model) => {
-      await globalSM.update(GlobalStateKey.HELPER_MODEL, model);
-    },
-    getReasoningLevelOverrides: () =>
-      globalSM.get<Record<string, string>>(GlobalStateKey.REASONING_LEVELS),
-    setReasoningLevelOverrides: async (overrides) => {
-      await globalSM.update(GlobalStateKey.REASONING_LEVELS, overrides);
-    },
-    getPreferShortModelNames: () =>
-      globalSM.get<boolean>(GlobalStateKey.PREFER_SHORT_MODEL_NAMES),
-    setPreferShortModelNames: async (enabled) => {
-      await globalSM.update(GlobalStateKey.PREFER_SHORT_MODEL_NAMES, enabled);
-    },
+const modelSelectionController = createModelSelectionController(
+  { workspaceState: workspaceSM, globalState: globalSM },
+  {
+    useIncludedAccess: () =>
+      getServerSideKeyService().getUseIncludedModelAccess(),
+    getUserTier: () => getServerSideKeyService().getUserTier() ?? undefined,
   },
-  useIncludedAccess: () =>
-    getServerSideKeyService().getUseIncludedModelAccess(),
-  getUserTier: () => getServerSideKeyService().getUserTier() ?? undefined,
-});
+);
 
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
@@ -293,20 +257,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       withActiveWebview: (fn) => this.withActiveWebview(fn),
     };
 
-    this.memoryController = new SettingsMemoryController({
+    this.memoryController = createSettingsMemoryController({
+      workspaceState: workspaceSM,
+      globalState: globalSM,
       prompt: new VscodePromptHost(),
-      loadMemoryItems,
-      loadMemoryPreview,
-      isMemoryEnabled: () =>
-        globalSM?.get<boolean>(GlobalStateKey.MEMORY_ENABLED, true) ?? true,
       setMemoryEnabled: setToolUseMemoryEnabled,
-      resolveStoragePath: resolveMemoryStoragePath,
-      storage: StorageFS,
-      maxPinnedMemories: MAX_PINNED_MEMORIES,
-      parseMemoryFile: parseFrontmatter,
-      buildMemoryFile: buildFile,
-      setPinnedMeta,
-      countPinnedMemories,
     });
     this.profileKeyController = new SettingsProfileKeyController({
       prompt: new VscodePromptHost(),
@@ -583,7 +538,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.GET_APPROVAL_SETTINGS]: () =>
         this.withActiveWebview((w) => this.sendApprovalSettings(w)),
       [SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED]: (data) =>
-        this.handleSetApprovalEnabled(BASH_APPROVAL_CONFIG_KEY, data.enabled),
+        this.handleSetApprovalEnabled(data.enabled),
       [SETTINGS_VIEW_COMMANDS.SET_CODEX_SANDBOX_MODE]: (data) =>
         this.updateAgentSetting(
           WorkspaceStateKey.CODEX_SANDBOX_MODE,
@@ -782,20 +737,22 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleGetMemoryPreview(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.GET_MEMORY_PREVIEW>,
   ): Promise<void> {
-    try {
-      await this.postSettingsMemoryMessage(
-        await this.memoryController.getMemoryPreviewMessage(data.storagePath),
-      );
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.channel,
-        'Failed to load memory preview',
-        error,
-      );
-      await this.postSettingsMemoryMessage(
-        this.memoryController.getMemoryPreviewErrorMessage(data.storagePath),
-      );
-    }
+    await this.withActiveWebview(async (webview) => {
+      try {
+        await webview.postMessage(
+          await this.memoryController.getMemoryPreviewMessage(data.storagePath),
+        );
+      } catch (error) {
+        void showLoggedErrorMessage(
+          this.channel,
+          'Failed to load memory preview',
+          error,
+        );
+        await webview.postMessage(
+          this.memoryController.getMemoryPreviewErrorMessage(data.storagePath),
+        );
+      }
+    });
   }
 
   public async sendMemoryEnabled(webview: vscode.Webview): Promise<void> {
@@ -819,40 +776,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendHistoryData(webview: vscode.Webview): Promise<void> {
-    const entries = await listExecutions();
-    const historyItems = entries
-      .filter(
-        (entry) => entry.agentConfig !== null && entry.category !== 'process',
-      )
-      .map((entry): HistoryItem => {
-        const cfg = entry.agentConfig!;
-        const base = {
-          agent: cfg.agent,
-          model: cfg.model,
-          instruction: cfg.instruction,
-        };
-        return {
-          id: entry.id,
-          timestamp: entry.timestamp,
-          agentConfig:
-            cfg.agentCategory === 'toolUse'
-              ? { agentCategory: 'toolUse' as const, ...base }
-              : {
-                  agentCategory: 'workflow' as const,
-                  ...base,
-                  inputFiles: cfg.inputFiles,
-                  mediaFiles: cfg.mediaFiles,
-                  contextFiles: cfg.contextFiles,
-                  outputFiles: cfg.outputFiles,
-                  toolConfig: cfg.toolConfig,
-                },
-          description: entry.description,
-        };
-      });
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY,
-      historyItems,
-    });
+    await webview.postMessage(await buildHistoryMessage());
   }
 
   public async sendProfileData(
@@ -934,11 +858,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendModelSelectionData(webview: vscode.Webview): Promise<void> {
-    const data = modelSelectionController.buildSelectionData();
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-      ...data,
-    });
+    await webview.postMessage(
+      buildModelSelectionMessage(modelSelectionController),
+    );
   }
 
   // ============================================================
@@ -946,28 +868,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
 
   public async sendSuperYoloEnabled(webview: vscode.Webview): Promise<void> {
-    const allowOrchestratorKill = workspaceSM.get<boolean>(
-      WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
-      true,
+    await webview.postMessage(
+      buildSuperYoloMessage({
+        workspaceState: workspaceSM,
+        globalState: globalSM,
+        getReliabilitySettings,
+      }),
     );
-    const detachSubagentsOnStop = workspaceSM.get<boolean>(
-      WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-      false,
-    );
-    const nestedDelegationMaxDepth = clampNestedDelegationDepth(
-      workspaceSM.get<number>(
-        WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH,
-        NESTED_DELEGATION_DEPTH_RANGE.default,
-      ),
-    );
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
-      enabled: true,
-      reliabilitySettings: getReliabilitySettings(),
-      allowOrchestratorKill,
-      detachSubagentsOnStop,
-      nestedDelegationMaxDepth,
-    });
   }
 
   private async updateBooleanAndSendSuperYolo(
@@ -998,7 +905,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
-      ...(settings ?? readGitAuthorSettings()),
+      ...(settings ?? readGitAuthorSettingsFromState(workspaceSM)),
     });
   }
 
@@ -1129,56 +1036,25 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
 
   private async sendApprovalSettings(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
-      bashApprovalEnabled: getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY, true),
-      codexSandboxMode: parseCodexSandboxMode(
-        workspaceSM.get<string>(
-          WorkspaceStateKey.CODEX_SANDBOX_MODE,
-          'workspace-write',
-        ) ?? 'workspace-write',
-      ),
-      codexReasoningEffort: parseCodexReasoningEffort(
-        workspaceSM.get<string>(
-          WorkspaceStateKey.CODEX_REASONING_EFFORT,
-          'high',
-        ) ?? 'high',
-      ),
-      codexApprovalPolicy: parseCodexApprovalPolicy(
-        workspaceSM.get<string>(
-          WorkspaceStateKey.CODEX_APPROVAL_POLICY,
-          'never',
-        ) ?? 'never',
-      ),
-      claudeAgentModel: parseClaudeAgentModel(
-        workspaceSM.get<string>(
-          WorkspaceStateKey.CLAUDE_AGENT_MODEL,
-          CLAUDE_AGENT_DEFAULT_MODEL,
-        ) ?? CLAUDE_AGENT_DEFAULT_MODEL,
-      ),
-      claudeAgentPermissionMode: parseClaudeAgentPermissionMode(
-        workspaceSM.get<string>(
-          WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
-          'acceptEdits',
-        ) ?? 'acceptEdits',
-      ),
-      claudeAgentEffort: parseClaudeAgentEffort(
-        workspaceSM.get<string>(
-          WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
-          'high',
-        ) ?? 'high',
-      ),
-    });
+    await webview.postMessage(
+      buildApprovalSettingsMessage({
+        workspaceState: workspaceSM,
+        globalState: globalSM,
+        config: platform().config,
+      }),
+    );
   }
 
-  private async handleSetApprovalEnabled(
-    configKey: string,
-    enabled: boolean,
-  ): Promise<void> {
-    await updateConfig(configKey, enabled, {
-      target: 'global',
-      prefix: false,
-    });
+  private async handleSetApprovalEnabled(enabled: boolean): Promise<void> {
+    await setBashApprovalEnabledShared(
+      {
+        workspaceState: workspaceSM,
+        globalState: globalSM,
+        config: platform().config,
+      },
+      enabled,
+      'global',
+    );
     await this.withActiveWebview((w) => this.sendApprovalSettings(w));
   }
 
@@ -1186,7 +1062,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     key: WorkspaceStateKey,
     value: string,
   ): Promise<void> {
-    await workspaceSM.update(key, value);
+    await setWorkspaceAgentSetting(
+      { workspaceState: workspaceSM, globalState: globalSM },
+      key,
+      value,
+    );
     await this.withActiveWebview((w) => this.sendApprovalSettings(w));
   }
 
@@ -1250,9 +1130,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.DELETE_MEMORY>,
   ): Promise<void> {
     try {
-      await this.postSettingsMemoryMessage(
-        await this.memoryController.deleteMemory(data),
-      );
+      const message = await this.memoryController.deleteMemory(data);
+      if (message) {
+        await this.withActiveWebview(async (w) => {
+          await w.postMessage(message);
+        });
+      }
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
@@ -1266,9 +1149,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetMemoryEnabled(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MEMORY_ENABLED>,
   ): Promise<void> {
-    await this.postSettingsMemoryMessage(
-      await this.memoryController.setMemoryEnabled(data.enabled),
-    );
+    const message = await this.memoryController.setMemoryEnabled(data.enabled);
+    if (message) {
+      await this.withActiveWebview(async (w) => {
+        await w.postMessage(message);
+      });
+    }
   }
 
   private async handlePinMemory(
@@ -1283,25 +1169,19 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.setMemoryPinned(data.storagePath, false);
   }
 
-  private async postSettingsMemoryMessage(
-    message: SettingsMemoryMessage | null,
-  ): Promise<void> {
-    if (!message) return;
-    await this.withActiveWebview(async (webview) => {
-      await webview.postMessage(message);
-    });
-  }
-
   private async setMemoryPinned(
     storagePath: string,
     pinned: boolean,
   ): Promise<void> {
     try {
-      await this.postSettingsMemoryMessage(
-        pinned
-          ? await this.memoryController.pinMemory(storagePath)
-          : await this.memoryController.unpinMemory(storagePath),
-      );
+      const message = pinned
+        ? await this.memoryController.pinMemory(storagePath)
+        : await this.memoryController.unpinMemory(storagePath);
+      if (message) {
+        await this.withActiveWebview(async (w) => {
+          await w.postMessage(message);
+        });
+      }
     } catch (error) {
       const action = pinned ? 'pin' : 'unpin';
       await showLoggedErrorMessage(

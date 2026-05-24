@@ -20,9 +20,9 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/modelHandlerOpenRouterNative';
+import type { TexraTrace } from '@logger';
 
 // Local imports - logger
-import type { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utils
 import type { FileLocation } from '@utils/files';
@@ -30,7 +30,7 @@ import type { FileLocation } from '@utils/files';
 // Type imports
 import type { ChatMessages } from '@openrouter/sdk/models';
 
-type LoggerStub = Partial<AgentLogger> & {
+type LoggerStub = Partial<TexraTrace> & {
   streamId: string;
 };
 
@@ -49,9 +49,6 @@ function createLoggerStub(): LoggerStub {
     error: () => {
       /* no-op for tests */
     },
-    withCurrentGroup: () => undefined,
-    runWithinCurrentGroup: async (fn: () => any) => fn(),
-    runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
   };
 }
 
@@ -106,7 +103,7 @@ describe('model handler empty prefill behavior', () => {
   it('OpenAI chat preserves user content when prefill is empty', async () => {
     await withMissingOutput(async (outputLocation) => {
       const handler = new ModelHandlerOpenAI(buildConfig(ModelProvider.OPENAI));
-      handler.setLogger(createLoggerStub() as unknown as AgentLogger);
+      handler.setLogger(createLoggerStub() as unknown as TexraTrace);
       const messages = [
         {
           role: 'user',
@@ -139,7 +136,7 @@ describe('model handler empty prefill behavior', () => {
       const handler = new ModelHandlerGoogleGenAI(
         buildConfig(ModelProvider.GOOGLE),
       );
-      handler.setLogger(createLoggerStub() as unknown as AgentLogger);
+      handler.setLogger(createLoggerStub() as unknown as TexraTrace);
       const messages: Content[] = [
         {
           role: 'user',
@@ -176,7 +173,7 @@ describe('model handler empty prefill behavior', () => {
           openrouterFullName: 'openai/test-model',
         }),
       );
-      handler.setLogger(createLoggerStub() as unknown as AgentLogger);
+      handler.setLogger(createLoggerStub() as unknown as TexraTrace);
       const messages: ChatMessages[] = [
         {
           role: 'user',

@@ -32,6 +32,8 @@ export function zshCompletion(commands: readonly CompletionCommand[]): string {
           ? [`1:shell:(${CLI_COMPLETION_SHELLS.join(' ')})`]
           : []),
         ...(key === 'run' ? [`1:agent:($(_texra_agents))`] : []),
+        ...(key === 'agents show' ? [`1:agent:($(_texra_agents))`] : []),
+        ...(key === 'models show' ? [`1:model:($(_texra_models))`] : []),
       ];
       const args = specs.length
         ? `_arguments ${specs.map(shellQuote).join(' ')}`

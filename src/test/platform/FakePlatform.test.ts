@@ -7,7 +7,6 @@ import { FileType } from '@platform/interfaces/filesystem';
 // Local imports - test support
 import {
   FakeFileSystemProvider,
-  RecordingLogBackend,
   createFakePlatform,
 } from '../support/FakePlatform';
 
@@ -129,25 +128,13 @@ describe('FakePlatform', () => {
     assert.equal(changes, 1);
   });
 
-  it('records log entries and supports custom overrides', () => {
-    const log = new RecordingLogBackend();
+  it('supports custom overrides while retaining other fakes', () => {
     const fs = new FakeFileSystemProvider();
-    const platform = createFakePlatform({}, { fs, log });
-
-    platform.log.initialize('TeXRA');
-    platform.log.info('TeXRA', 'ready');
+    const platform = createFakePlatform({}, { fs });
 
     assert.equal(platform.fs, fs);
-    assert.deepEqual(log.initializedChannels, [
-      { channel: 'TeXRA', isAgent: undefined },
-    ]);
-    assert.deepEqual(log.entries, [
-      {
-        level: 'info',
-        channel: 'TeXRA',
-        message: 'ready',
-      },
-    ]);
+    assert.ok(platform.config);
+    assert.ok(platform.secrets);
   });
 
   it('implements in-memory filesystem operations', async () => {

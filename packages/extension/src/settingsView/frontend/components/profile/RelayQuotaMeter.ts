@@ -10,10 +10,10 @@ import { profileViewStyles } from './styles';
 
 const WARNING_THRESHOLD_PCT = 80;
 
-function formatUsd(value: number): string {
-  if (!Number.isFinite(value)) return '$0.00';
-  if (value >= 100) return `$${value.toFixed(0)}`;
-  return `$${value.toFixed(2)}`;
+function formatPercent(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '0%';
+  if (value < 1) return '<1%';
+  return `${Math.round(value)}%`;
 }
 
 type QuotaState = 'ok' | 'warning' | 'exhausted';
@@ -128,9 +128,7 @@ export class RelayQuotaMeter extends LitElement {
       <div class="quota-meter" data-state=${state}>
         <div class="quota-row">
           <span class="quota-label">Relay usage this month</span>
-          <span class="quota-amount"
-            >${formatUsd(s.currentSpend)} / ${formatUsd(s.limit)}</span
-          >
+          <span class="quota-amount">${formatPercent(percent)} used</span>
         </div>
         <div
           class="quota-bar"

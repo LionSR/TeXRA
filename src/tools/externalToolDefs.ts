@@ -13,6 +13,7 @@
 
 // Local imports
 import { platform } from '@platform/platform';
+import { toErrorMessage } from '@common/errors';
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
 import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
 import type { RegisteredToolName } from '@tools/registry';
@@ -487,7 +488,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       try {
         await importCodexClass();
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = toErrorMessage(err);
         if (
           msg.includes('not found') ||
           msg.includes('MODULE_NOT_FOUND') ||
@@ -557,7 +558,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       try {
         await importClaudeAgentSdk();
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = toErrorMessage(err);
         if (
           msg.includes('not found') ||
           msg.includes('MODULE_NOT_FOUND') ||
