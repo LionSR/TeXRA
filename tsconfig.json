@@ -24,6 +24,8 @@
       "@logger/*": ["src/logger/*"],
       "@telemetry": ["src/telemetry"],
       "@telemetry/*": ["src/telemetry/*"],
+      "@transcript": ["src/transcript"],
+      "@transcript/*": ["src/transcript/*"],
       "@latex": ["src/latex"],
       "@latex/*": ["src/latex/*"],
       "@commands/*": ["packages/extension/src/commands/*"],

@@ -14,17 +14,15 @@
  * consumers that only care about agent-general events can still treat it
  * as `AgentTrace` — `TexraTrace extends AgentTrace`.
  */
+import {
+  attachTranscriptRecorder,
+  getDefaultStreamLogStore,
+  type StreamLogStore,
+  type TranscriptRecorderHandle,
+} from '@transcript';
 import type { StreamTabId } from '@shared/schemas';
 
 import { attachChannelSubscriber } from './logUtils';
-import {
-  getDefaultStreamLogStore,
-  type StreamLogStore,
-} from './StreamLogStore';
-import {
-  attachTranscriptRecorder,
-  type TranscriptRecorderHandle,
-} from './TexraTranscriptRecorder';
 import { TexraTraceEmitter } from './TexraTraceEmitter';
 import type { TexraTrace } from './TexraTrace';
 

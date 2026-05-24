@@ -2,11 +2,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - common webview
+import { StreamLogStore, type StreamLogAppendInput } from '@transcript';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
-// Local imports - logger
-import { StreamLogStore } from '@logger/StreamLogStore';
-import type { StreamLogAppendInput } from '@logger/StreamLog';
 
 // Local imports - progress view
 import { WebviewBridge } from '@progressView/managers/WebviewBridge';

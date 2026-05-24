@@ -2,6 +2,7 @@ import pMap from 'p-map';
 
 import { KVStore } from '@common/storage/KVStore';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
+import * as log from '@logger/logUtils';
 import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
 import {
   PersistedStreamLogEntrySchema,
@@ -12,13 +13,13 @@ import {
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
 
+
 import {
   isRunningGroupEntry,
   StreamLog,
   type StreamLogAppendInput,
   type StreamLogUpdatePatch,
 } from './StreamLog';
-import * as log from './logUtils';
 
 const SAVE_DEBOUNCE_MS = 300;
 const STREAM_LOGS_DIR = 'streamLogs';

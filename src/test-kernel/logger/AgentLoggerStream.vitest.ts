@@ -1,12 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  createRunTrace,
-  flushPendingRunTraces,
   getDefaultStreamLogStore,
   setDefaultStreamLogStore,
-} from '@logger';
-import { StreamLogStore } from '@logger/StreamLogStore';
+  StreamLogStore,
+} from '@transcript';
+import { createRunTrace, flushPendingRunTraces } from '@logger';
 import { MESSAGE_TYPES, STREAM_LOG_ENTRY_TYPES } from '@shared/schemas';
 
 describe('AgentLogger stream output', () => {

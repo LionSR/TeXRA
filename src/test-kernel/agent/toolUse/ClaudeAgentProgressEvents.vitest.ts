@@ -1,14 +1,12 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - logger
-import type { TexraTrace } from '@logger';
 import {
-  createRunTrace,
   getDefaultStreamLogStore,
   setDefaultStreamLogStore,
-} from '@logger';
-import { StreamLogStore } from '@logger/StreamLogStore';
+  StreamLogStore,
+} from '@transcript';
+import { createRunTrace, type TexraTrace } from '@logger';
 
 // Local imports - shared
 import { MESSAGE_TYPES } from '@shared/schemas';

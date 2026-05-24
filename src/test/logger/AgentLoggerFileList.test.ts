@@ -2,13 +2,12 @@
 import { strict as assert } from 'assert';
 
 // Local imports
-import type { TexraTrace } from '@logger';
 import {
-  createRunTrace,
   getDefaultStreamLogStore,
   setDefaultStreamLogStore,
-} from '@logger';
-import { StreamLogStore } from '@logger/StreamLogStore';
+  StreamLogStore,
+} from '@transcript';
+import { createRunTrace, type TexraTrace } from '@logger';
 import { MESSAGE_TYPES } from '@shared/schemas';
 
 describe('AgentLogger.logFileCategory', () => {
