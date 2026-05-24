@@ -207,6 +207,7 @@ const baseConfig = {
     'blog/**',
     'design/**',
     'dev/**',
+    'architecture/**',
     'pocketflow/**',
     'prd/**',
     'proposals/**',
