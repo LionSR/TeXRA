@@ -6,7 +6,7 @@
 [![Rating](https://vsmarketplacebadges.dev/rating-short/texra-ai.texra.svg)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
 [![Open VSX Version](https://img.shields.io/open-vsx/v/texra-ai/texra)](https://open-vsx.org/extension/texra-ai/texra)
 [![Open VSX Downloads](https://img.shields.io/open-vsx/dt/texra-ai/texra)](https://open-vsx.org/extension/texra-ai/texra)
-[![License](https://img.shields.io/badge/license-Proprietary-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-Proprietary-blue)](https://texra.ai/terms)
 [![npm version](https://img.shields.io/npm/v/@texra-ai/cli?label=%40texra-ai%2Fcli)](https://www.npmjs.com/package/@texra-ai/cli)
 [![npm downloads](https://img.shields.io/npm/dm/@texra-ai/cli)](https://www.npmjs.com/package/@texra-ai/cli)
 
@@ -215,4 +215,4 @@ Report issues and feature requests on the
 
 © TeXRA Team 2025–2026. All rights reserved.
 
-[Terms of Service](TERMS_OF_SERVICE.md) · [Provider List](https://texra.ai/providers)
+[Terms of Service](https://texra.ai/terms) · [Provider List](https://texra.ai/providers)
