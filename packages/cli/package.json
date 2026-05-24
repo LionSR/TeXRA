@@ -5,6 +5,10 @@
   "license": "SEE LICENSE IN LICENSE.txt",
   "author": "TeXRA.ai",
   "homepage": "https://texra.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/texra-ai/texra-issues.git"
+  },
   "bugs": {
     "url": "https://github.com/texra-ai/texra-issues/issues"
   },
