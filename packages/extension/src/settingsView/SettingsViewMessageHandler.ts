@@ -144,6 +144,7 @@ import { buildToolDashboardItems } from './utils/toolDashboardData';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import type { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
+import type { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 
 // Re-use the shared type helper for extracting specific message types.
@@ -228,15 +229,6 @@ async function getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
   }));
 }
 
-const modelSelectionController = createModelSelectionController(
-  { workspaceState: workspaceSM, globalState: globalSM },
-  {
-    useIncludedAccess: () =>
-      getServerSideKeyService().getUseIncludedModelAccess(),
-    getUserTier: () => getServerSideKeyService().getUserTier() ?? undefined,
-  },
-);
-
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
@@ -246,6 +238,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly agentHandlers: AgentHandlers;
   private readonly latexHandlers: LatexSettingsHandlers;
   private readonly memoryController: SettingsMemoryController;
+  private readonly modelSelectionController: SettingsModelSelectionController;
   private readonly profileKeyController: SettingsProfileKeyController;
 
   /** Used by handleExportChat to locate the bundled HTML export assets. */
@@ -269,6 +262,18 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       prompt: new VscodePromptHost(),
       setMemoryEnabled: setToolUseMemoryEnabled,
     });
+    // Must build inside the constructor: globalSM/workspaceSM are populated
+    // by extension.ts → initializeStateManagers and are still undefined at
+    // module load, so destructuring them at top level captures `undefined`
+    // and every later globalState.get(...) throws.
+    this.modelSelectionController = createModelSelectionController(
+      { workspaceState: workspaceSM, globalState: globalSM },
+      {
+        useIncludedAccess: () =>
+          getServerSideKeyService().getUseIncludedModelAccess(),
+        getUserTier: () => getServerSideKeyService().getUserTier() ?? undefined,
+      },
+    );
     this.profileKeyController = new SettingsProfileKeyController({
       prompt: new VscodePromptHost(),
       externalOpener: new VscodeExternalOpener(),
@@ -867,7 +872,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   public async sendModelSelectionData(webview: vscode.Webview): Promise<void> {
     await webview.postMessage(
-      buildModelSelectionMessage(modelSelectionController),
+      buildModelSelectionMessage(this.modelSelectionController),
     );
   }
 
@@ -1628,7 +1633,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetModelEnabled(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MODEL_ENABLED>,
   ): Promise<void> {
-    await modelSelectionController.setModelEnabled({
+    await this.modelSelectionController.setModelEnabled({
       modelName: data.modelName,
       enabled: data.enabled,
     });
@@ -1642,14 +1647,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetHelperModel(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_HELPER_MODEL>,
   ): Promise<void> {
-    await modelSelectionController.setHelperModel(data.modelName);
+    await this.modelSelectionController.setHelperModel(data.modelName);
     await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 
   private async handleSetModelReasoningLevel(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_MODEL_REASONING_LEVEL>,
   ): Promise<void> {
-    await modelSelectionController.setReasoningLevel({
+    await this.modelSelectionController.setReasoningLevel({
       modelName: data.modelName,
       level: data.level,
     });
@@ -1659,7 +1664,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetPreferShortModelNames(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PREFER_SHORT_MODEL_NAMES>,
   ): Promise<void> {
-    await modelSelectionController.setPreferShortModelNames(data.enabled);
+    await this.modelSelectionController.setPreferShortModelNames(data.enabled);
     await this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 
