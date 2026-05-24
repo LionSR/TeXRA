@@ -1,7 +1,7 @@
+import { logMissingOutputs, type AgentTrace } from '@agent/trace';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { toErrorMessage } from '@common/errors';
-import type { TexraTrace } from '@logger';
 import {
   MESSAGE_TYPES,
   type FileLocation,
@@ -23,7 +23,7 @@ export interface ProcessingContext {
   baseFiles: FileLocation[];
   streamId: string;
   runtimeHost: AgentRuntimeHost;
-  logger: TexraTrace;
+  logger: AgentTrace;
   xmlManager: XmlOutputManager;
   setRoundOutputs: (round: number, outputs: OutputFileInfo[]) => void;
   ensureRoundData: (round: number) => { xmlSummary: OutputXmlSummary };
@@ -129,12 +129,11 @@ export class OutputFileProcessor {
       logger.debug(`Error processing output file: ${toErrorMessage(err)}`, {
         messageType: MESSAGE_TYPES.INTERNAL,
       });
-      const missingOutputsData = {
+      logMissingOutputs(logger, {
         missing: [] as string[],
         xmlFile: outputLocation.absolutePath,
         documentTag: agentSetting.documentTag,
-      };
-      logger.missingOutputs(missingOutputsData);
+      });
       this.ctx.runtimeHost.emit('updateMissingOutputs', {
         streamId: this.ctx.streamId,
         filesByRound: { [currRound]: [] },

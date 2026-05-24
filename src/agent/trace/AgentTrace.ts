@@ -44,6 +44,15 @@ export interface StageOptions {
   readonly skip?: boolean;
   /** Parent handle for nested-stage chains. */
   readonly parent?: StageHandle;
+  /**
+   * Force a root stage with no parent, ignoring the active stage from the
+   * run scope. Use when a stage must not inherit the ambient
+   * AsyncLocalStorage parent — e.g. a child agent's session stage opened
+   * on its own trace while the parent agent's tool-use stage is active
+   * (inheriting would emit a cross-trace parentId the child's subscribers
+   * can't resolve).
+   */
+  readonly root?: boolean;
 }
 
 /** Handle returned by `openStage` — wraps a stage with run/within/end ops. */

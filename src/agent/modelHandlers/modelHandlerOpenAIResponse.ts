@@ -12,6 +12,11 @@ import { ResponsesWS } from 'openai/resources/responses/ws';
 import { WebSocketError } from 'openai/resources/responses/internal-base';
 
 // Local imports - agent
+import {
+  logContextManagementEvent,
+  logProgressStatus,
+  logSdkError,
+} from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { hasEndTag, type AgentSetting } from '@agent/core/AgentDataclass';
 import { type OpenAIAPIResponseUsage } from '@agent/core/ResponseUsage';
@@ -1196,7 +1201,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const reductionPercent = ((reduction / tokensBefore) * 100).toFixed(1);
 
       // Log context management event with structured data
-      this.logger.logContextManagement(
+      logContextManagementEvent(
+        this.logger,
         `Compacted conversation: ${tokensBefore.toLocaleString()} → ${tokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
         {
           action: 'compaction',
@@ -1299,7 +1305,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         )) as ResponseInputMessageContentList;
         userContent.push(...mediaContent);
       } catch (err) {
-        this.logger.logError(
+        logSdkError(
+          this.logger,
           `Error processing media files: ${getSdkErrorMessage(err)}`,
           err,
           { operation: 'process media files' },
@@ -1351,7 +1358,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         )) as ResponseInputMessageContentList;
         roundContent.push(...formattedMediaContent);
       } catch (err) {
-        this.logger.logError(
+        logSdkError(
+          this.logger,
           `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
           err,
           { operation: 'process media files' },
@@ -1511,7 +1519,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         return;
       }
 
-      this.logger.logError(
+      logSdkError(
+        this.logger,
         `Failed to upload file ${filename}: ${getSdkErrorMessage(err)}`,
         err,
         { operation: 'upload file' },
@@ -1667,12 +1676,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // For automatic compaction (threshold-based), this is a no-op since the flag is false.
       this.compactionRequested = false;
       if (wasManualRequest) {
-        this.logger.logProgress(
+        logProgressStatus(
+          this.logger,
           `Compacting conversation (manually requested, ${this.conversationState.cumulativeInputTokens} input tokens)`,
         );
       } else {
         const threshold = this.getCompactionTokenThreshold();
-        this.logger.logProgress(
+        logProgressStatus(
+          this.logger,
           `Compacting conversation (${this.conversationState.cumulativeInputTokens} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
         );
       }
@@ -1782,7 +1793,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
 
         if (validation.adjustedMaxTokens !== maxOutputTokens) {
-          this.logger.logContextManagement(
+          logContextManagementEvent(
+            this.logger,
             `Token count (${inputTokens}) + max_output_tokens (${maxOutputTokens}) exceeds context window (${this.config.contextWindow}). Reducing to ${validation.adjustedMaxTokens}.`,
             {
               action: 'max_tokens_reduced',
@@ -2002,7 +2014,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // 2. Server-side latency when using previous_response_id (unexpected but handled)
       if (this.isBackgroundPending(response)) {
         if (useBackgroundResponses) {
-          this.logger.logProgress(
+          logProgressStatus(
+            this.logger,
             'Running OpenAI in background mode; polling for completion (this may take longer than usual).',
           );
         } else {
@@ -2075,7 +2088,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // Fix: Drop server-side state (clearing previous_response_id discards the
         // hidden reasoning tokens) and compact client-side messages, then retry.
         // The guard !compactedThisCall prevents infinite recursion.
-        this.logger.logProgress(
+        logProgressStatus(
+          this.logger,
           'Context window exceeded — compacting conversation and retrying.',
         );
         this.previousResponseId = null;
@@ -3308,7 +3322,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       )) as ResponseInputMessageContentList;
       lastUserMsg.content.unshift(...formattedMedia);
     } catch (err) {
-      this.logger.logError(
+      logSdkError(
+        this.logger,
         `Error adding media to user message: ${getSdkErrorMessage(err)}`,
         err,
         { operation: 'add media to user message' },

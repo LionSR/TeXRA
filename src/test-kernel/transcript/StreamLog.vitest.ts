@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { StreamLog } from '@logger/StreamLog';
+import { StreamLog } from '@transcript';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,

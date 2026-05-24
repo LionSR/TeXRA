@@ -3,11 +3,11 @@ import { strict as assert } from 'assert';
 
 // Local imports - test
 import {
-  createRunTrace,
   getDefaultStreamLogStore,
   setDefaultStreamLogStore,
-} from '@logger';
-import { StreamLogStore } from '@logger/StreamLogStore';
+  StreamLogStore,
+} from '@transcript';
+import { createRunTrace } from '@logger';
 
 describe('AgentLogger error data', () => {
   beforeEach(async () => {

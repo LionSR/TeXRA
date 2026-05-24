@@ -1,4 +1,4 @@
-import { getDefaultStreamLogStore } from '@logger';
+import { getDefaultStreamLogStore } from '@transcript';
 import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 
 import type {

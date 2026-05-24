@@ -3,8 +3,7 @@ import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
 
-// Local imports - logger
-import type { TaskState } from '@logger/TaskState';
+import type { TaskState } from '@agent/core/TaskState';
 
 // Local imports - shared
 import type { AgentProposal, AgentProposalPermission } from '@shared/schemas';

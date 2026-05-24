@@ -5,12 +5,12 @@ import * as vscode from 'vscode';
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
 
 // Local imports
+import { TaskStateSchema, type TaskState } from '@agent/core/TaskState';
 import { setPendingState } from '@common/state';
 import { COMMON_COMMANDS } from '@common/webview/commands';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
-import { TaskStateSchema, type TaskState } from '@logger/TaskState';
 
 const CHANNEL = 'stateRestoreCommand';
 logger.initialize(CHANNEL);

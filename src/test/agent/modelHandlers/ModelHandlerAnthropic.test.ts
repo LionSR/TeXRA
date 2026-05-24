@@ -15,11 +15,11 @@ import {
   ModelProvider,
   ReasoningEffort,
 } from 'llm-zoo';
+import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory, AgentSettingSchema } from '@agent/core/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
-import type { TexraTrace } from '@logger';
 
 // Type imports
 
@@ -97,7 +97,7 @@ function createLoggerStub(
     info: () => {},
     warn: () => {},
     error: () => {},
-    fileList: () => {},
+    domain: () => {},
     ...overrides,
   };
 }
@@ -107,7 +107,7 @@ function stubHandlerForTest(
   handler: ModelHandlerAnthropic,
   loggerOverrides?: Partial<Record<string, unknown>>,
 ): void {
-  handler.setLogger(createLoggerStub(loggerOverrides) as unknown as TexraTrace);
+  handler.setLogger(createLoggerStub(loggerOverrides) as unknown as AgentTrace);
   (handler as any).getStreamingConfig = () => false;
 }
 
@@ -855,7 +855,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     handler.config.fullName = 'claude-opus-4-6';
     handler.setAgentCategory(AgentCategory.ToolUse);
 
-    stubHandlerForTest(handler, { logContextManagement: () => {} });
+    stubHandlerForTest(handler);
 
     const messages: MessageParam[] = [
       {
@@ -932,7 +932,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     handler.config.fullName = 'claude-opus-4-7';
     handler.setAgentCategory(AgentCategory.ToolUse);
 
-    stubHandlerForTest(handler, { logContextManagement: () => {} });
+    stubHandlerForTest(handler);
 
     const messages: MessageParam[] = [
       {
@@ -1001,7 +1001,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     });
     handler.config.fullName = 'claude-opus-4-7';
 
-    stubHandlerForTest(handler, { logContextManagement: () => {} });
+    stubHandlerForTest(handler);
 
     const messages: MessageParam[] = [
       {
@@ -1053,7 +1053,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     handler.setAgentCategory(AgentCategory.ToolUse);
     handler.requestCompaction();
 
-    stubHandlerForTest(handler, { logContextManagement: () => {} });
+    stubHandlerForTest(handler);
 
     const messages: MessageParam[] = [
       {
@@ -1121,7 +1121,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     handler.config.fullName = 'claude-sonnet-4-5';
     handler.setAgentCategory(AgentCategory.ToolUse);
 
-    stubHandlerForTest(handler, { logContextManagement: () => {} });
+    stubHandlerForTest(handler);
 
     const messages: MessageParam[] = [
       {
@@ -1243,10 +1243,12 @@ describe('ModelHandlerAnthropic message guards', () => {
 
     handler.setLogger(
       createLoggerStub({
-        logContextManagement: (message: string, data: unknown) => {
-          events.push({ message, data });
+        domain: (event: { key: string; text?: string; data?: unknown }) => {
+          if (event.key === 'contextManagement') {
+            events.push({ message: event.text ?? '', data: event.data });
+          }
         },
-      }) as unknown as TexraTrace,
+      }) as unknown as AgentTrace,
     );
 
     (handler as any).logContextManagementFromResponse(
@@ -1521,7 +1523,7 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
       supportsTokenCounting: false,
       supportsReasoning: false,
     });
-    handler.setLogger(createLoggerStub() as unknown as TexraTrace);
+    handler.setLogger(createLoggerStub() as unknown as AgentTrace);
     // Force streaming path so we exercise the pre-message_start catch block.
     (handler as any).getStreamingConfig = () => true;
 

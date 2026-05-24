@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AgentEvent } from '@agent/trace';
-import { TexraTraceEmitter } from '@logger/TexraTraceEmitter';
+import { emitToolUseCard, TraceEmitter, type AgentEvent } from '@agent/trace';
 
-function captureEvents(trace: TexraTraceEmitter): AgentEvent[] {
+function captureEvents(trace: TraceEmitter): AgentEvent[] {
   const events: AgentEvent[] = [];
   trace.subscribe((event) => {
     events.push(event);
@@ -11,12 +10,12 @@ function captureEvents(trace: TexraTraceEmitter): AgentEvent[] {
   return events;
 }
 
-describe('TexraTraceEmitter.emitToolUse', () => {
+describe('emitToolUseCard', () => {
   it('emits only tool.start when no status is passed (slow-tool path)', () => {
-    const trace = new TexraTraceEmitter();
+    const trace = new TraceEmitter();
     const events = captureEvents(trace);
 
-    trace.emitToolUse({ toolName: 'bash', input: { command: 'ls' } });
+    emitToolUseCard(trace, { toolName: 'bash', input: { command: 'ls' } });
 
     const toolEvents = events.filter(
       (e) => e.type === 'tool.start' || e.type === 'tool.end',
@@ -26,10 +25,10 @@ describe('TexraTraceEmitter.emitToolUse', () => {
   });
 
   it('emits tool.start + tool.end when status is completed (fast-tool path)', () => {
-    const trace = new TexraTraceEmitter();
+    const trace = new TraceEmitter();
     const events = captureEvents(trace);
 
-    trace.emitToolUse({
+    emitToolUseCard(trace, {
       toolName: 'todo_write',
       input: { items: [] },
       output: 'ok',
@@ -53,10 +52,10 @@ describe('TexraTraceEmitter.emitToolUse', () => {
   });
 
   it('emits tool.start + tool.end when status is failed', () => {
-    const trace = new TexraTraceEmitter();
+    const trace = new TraceEmitter();
     const events = captureEvents(trace);
 
-    trace.emitToolUse({
+    emitToolUseCard(trace, {
       toolName: 'bash',
       input: { command: 'false' },
       isError: true,
@@ -73,10 +72,10 @@ describe('TexraTraceEmitter.emitToolUse', () => {
   });
 
   it('does not emit tool.end when status is explicitly in_progress', () => {
-    const trace = new TexraTraceEmitter();
+    const trace = new TraceEmitter();
     const events = captureEvents(trace);
 
-    trace.emitToolUse({
+    emitToolUseCard(trace, {
       toolName: 'bash',
       input: { command: 'sleep' },
       status: 'in_progress',

@@ -61,7 +61,7 @@ describe('ToolUseWaitNode', () => {
     const services = {
       checkInterruption: () => interrupted,
       isSubagent: true,
-      logger: { error: vi.fn(), userMessage: vi.fn() },
+      logger: { error: vi.fn(), info: vi.fn() },
       modelHandler: {
         createUserFollowUpMessages: vi.fn(async () => []),
         extractAssistantText: () => undefined,
@@ -114,7 +114,7 @@ describe('ToolUseWaitNode', () => {
     const services = {
       checkInterruption: () => true,
       isSubagent: true,
-      logger: { error: vi.fn(), userMessage: vi.fn() },
+      logger: { error: vi.fn(), info: vi.fn() },
       modelHandler: { extractAssistantText: () => undefined },
       onBeforeWaiting,
       runtimeHost: { emit: vi.fn() },

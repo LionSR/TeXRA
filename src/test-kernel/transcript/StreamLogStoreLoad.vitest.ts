@@ -7,8 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Platform imports
 import { FileType, type FileStat } from '@platform/interfaces/filesystem';
 
-// Local imports - progress persistence
-import { StreamLogStore } from '@logger/StreamLogStore';
+import { StreamLogStore } from '@transcript';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,

@@ -3,11 +3,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
-  createRunTrace,
   getDefaultStreamLogStore,
   setDefaultStreamLogStore,
-} from '@logger';
-import { StreamLogStore } from '@logger/StreamLogStore';
+  StreamLogStore,
+} from '@transcript';
+import { createRunTrace } from '@logger';
 import {
   MESSAGE_TYPES,
   STREAM_STATUS,
