@@ -6,7 +6,6 @@
 import { Box, Text } from 'ink';
 
 import { Markdown } from '../render/Markdown';
-import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import type { ConversationEntry } from '../state/cliState';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
@@ -102,10 +101,22 @@ export function BoundedTranscriptEntry({
 }): React.JSX.Element {
   const rows = Math.max(1, maxRows);
   if (entry.role === 'assistant') {
-    const rendered = renderAnsiMarkdown(entry.text, { width });
+    // This is the in-flight overflow tail (still streaming). Use the same
+    // plain tail-budget wrap as LiveTranscriptEntry instead of
+    // renderAnsiMarkdown over the full buffer — the latter re-parses a
+    // growing document every chunk (O(text^2)) and boundedLines discards
+    // everything above the tail anyway. Finalized entries still render
+    // full markdown through `<Static>`.
+    const cols = Math.max(1, width ?? 80);
+    const wrapBudget = cols * rows * 2;
+    const candidate =
+      entry.text.length > wrapBudget
+        ? entry.text.slice(-wrapBudget)
+        : entry.text;
+    const wrapped = wrapAnsiToWidth(candidate, cols).split('\n');
     return (
       <Box flexDirection="column">
-        <Text>{boundedLines(rendered.split('\n'), rows).join('\n')}</Text>
+        <Text>{boundedLines(wrapped, rows).join('\n')}</Text>
       </Box>
     );
   }
