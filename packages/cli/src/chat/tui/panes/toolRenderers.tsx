@@ -21,8 +21,6 @@ import {
 
 const STATUS_DOT = '●';
 const OUTPUT_CORNER = '⎿';
-const MAX_OUTPUT_LINES = 3;
-const MAX_PATCH_LINES = 10;
 const MAX_HEADER_PREVIEW = 80;
 const MAX_ERROR_PREVIEW = 240;
 
@@ -110,9 +108,7 @@ export function toolUsePatchDisplayLines(
   if (!groups) return [];
   return groups.flatMap((group) => [
     `${OUTPUT_CORNER} ${group.fileLabel}`,
-    ...diffDisplayLines(group.hunks, MAX_PATCH_LINES).map(
-      (line) => `  ${line.text}`,
-    ),
+    ...diffDisplayLines(group.hunks).map((line) => `  ${line.text}`),
   ]);
 }
 
@@ -132,11 +128,7 @@ function visibleOutputLines(toolUse: NormalizedToolUse): {
   readonly hiddenCount: number;
 } {
   const lines = toolUse.outputText ? toolUse.outputText.split('\n') : [];
-  const visible = lines.slice(0, MAX_OUTPUT_LINES);
-  return {
-    lines: visible,
-    hiddenCount: Math.max(0, lines.length - visible.length),
-  };
+  return { lines, hiddenCount: 0 };
 }
 
 function extractExitCode(toolUse: NormalizedToolUse): number | undefined {
@@ -237,7 +229,7 @@ function PatchPreview({
         <Box key={`${group.fileLabel}-${index}`} flexDirection="column">
           <Text dimColor>{`${OUTPUT_CORNER} ${group.fileLabel}`}</Text>
           <Box flexDirection="column" paddingLeft={2}>
-            <DiffView hunks={group.hunks} maxHunkLines={MAX_PATCH_LINES} />
+            <DiffView hunks={group.hunks} />
           </Box>
         </Box>
       ))}

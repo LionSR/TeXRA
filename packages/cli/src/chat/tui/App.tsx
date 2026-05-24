@@ -1,15 +1,17 @@
 // Ink TUI root: conversation, optional side column, status, approval modal,
 // and input bar. Tab / Shift-Tab cycles focus across subagent streams.
 
-import { Box, Text, useInput, useWindowSize } from 'ink';
+import { Box, useInput, useWindowSize } from 'ink';
 import { useState } from 'react';
 
 import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
 import { REVERSE_SEARCH_ROWS } from './input/ReverseSearch';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { ChildControlPicker } from './modals/ChildControlPicker';
-import { ConversationPane } from './panes/ConversationPane';
-import { HeaderPane } from './panes/HeaderPane';
+import {
+  ConversationPane,
+  StaticConversationTranscript,
+} from './panes/ConversationPane';
 import { InputBar } from './panes/InputBar';
 import { StatusBar } from './panes/StatusBar';
 import { StreamTabsStrip } from './panes/StreamTabsStrip';
@@ -32,8 +34,6 @@ const MIN_TRANSCRIPT_WIDTH = 20;
 const FOREGROUND_TRANSCRIPT_ROWS = 1;
 
 const PINNED_CHROME_ROWS = {
-  accent: 1,
-  header: 3,
   tip: 1,
   input: 3,
   streamTabsWorstCase: 1,
@@ -307,45 +307,44 @@ export function App(props: AppProps): React.JSX.Element {
   );
 
   return (
-    <Box flexDirection="column" height={rows}>
-      <Box>
-        <Text color="cyan">{'─'.repeat(columns)}</Text>
-      </Box>
-      <HeaderPane />
-      <Box flexDirection="row" flexGrow={1} overflowY="hidden">
-        <Box flexDirection="column" flexGrow={1} overflowY="hidden">
-          {transcriptRows > 0 ? (
-            <ConversationPane
-              width={transcriptWidth}
-              maxRows={transcriptRows}
-            />
-          ) : null}
-          {foregroundSurface ? (
-            <Box height={foregroundRows} overflowY="hidden">
-              {foregroundSurface}
+    <>
+      <StaticConversationTranscript width={transcriptWidth} />
+      <Box flexDirection="column">
+        <Box flexDirection="row" overflowY="hidden">
+          <Box flexDirection="column" overflowY="hidden">
+            {transcriptRows > 0 ? (
+              <ConversationPane
+                width={transcriptWidth}
+                maxRows={transcriptRows}
+              />
+            ) : null}
+            {foregroundSurface ? (
+              <Box height={foregroundRows} overflowY="hidden">
+                {foregroundSurface}
+              </Box>
+            ) : null}
+          </Box>
+          {showSideColumn ? (
+            <Box
+              flexDirection="column"
+              minWidth={SIDE_COLUMN_WIDTH}
+              height={transcriptRows}
+              overflowY="hidden"
+            >
+              <SubagentList maxRows={subagentRows} />
+              <TodosPlanPanel maxRows={todosPlanRows} />
             </Box>
           ) : null}
         </Box>
-        {showSideColumn ? (
-          <Box
-            flexDirection="column"
-            minWidth={SIDE_COLUMN_WIDTH}
-            height={transcriptRows}
-            overflowY="hidden"
-          >
-            <SubagentList maxRows={subagentRows} />
-            <TodosPlanPanel maxRows={todosPlanRows} />
-          </Box>
-        ) : null}
+        <TipRow />
+        <InputBar
+          onSubmit={props.onSubmit}
+          disabled={inputDisabled}
+          history={props.history}
+        />
+        <StreamTabsStrip width={columns} />
+        <StatusBar />
       </Box>
-      <TipRow />
-      <InputBar
-        onSubmit={props.onSubmit}
-        disabled={inputDisabled}
-        history={props.history}
-      />
-      <StreamTabsStrip width={columns} />
-      <StatusBar />
-    </Box>
+    </>
   );
 }

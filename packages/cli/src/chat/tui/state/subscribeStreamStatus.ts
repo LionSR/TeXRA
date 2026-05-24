@@ -9,6 +9,7 @@ import { finalizeAssistantTranscriptEntries } from './transcript';
 
 const FINAL_TRANSCRIPT_STATUSES: ReadonlySet<StreamStatus> = new Set([
   STREAM_STATUS.ERROR,
+  STREAM_STATUS.READY,
   STREAM_STATUS.STOPPED,
   STREAM_STATUS.WAITING,
 ]);

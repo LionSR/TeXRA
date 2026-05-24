@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   STREAM_STATUS,
   type NormalizedToolUse,
@@ -8,14 +9,27 @@ import {
 
 import { splitTranscriptEntries } from '../../../packages/cli/src/chat/tui/panes/transcriptEntries';
 import {
+  appendStaticTranscriptItems,
+  selectPendingEntriesForViewport,
+} from '../../../packages/cli/src/chat/tui/panes/ConversationPane';
+import {
   cliState,
   patchStream,
   resetCliState,
   type ConversationEntry,
 } from '../../../packages/cli/src/chat/tui/state/cliState';
 import { finalizeAssistantTranscriptEntries } from '../../../packages/cli/src/chat/tui/state/transcript';
+import { subscribeStreamStatus } from '../../../packages/cli/src/chat/tui/state/subscribeStreamStatus';
 
 const STREAM_ID = 'cli-test-stream' as StreamTabId;
+const SESSION_META = {
+  agent: 'research',
+  model: 'deepseekT',
+  cwd: '/tmp/project',
+  apiMode: 'relay',
+  canDelegate: false,
+  version: '0.38.0',
+} as const;
 
 function entry(
   id: string,
@@ -92,6 +106,33 @@ describe('CLI conversation transcript splitting', () => {
     expect(split.pending).toEqual([]);
   });
 
+  it('freezes assistant entries when a stream returns to ready', () => {
+    resetCliState();
+    patchStream(STREAM_ID, (slice) => ({
+      ...slice,
+      entries: [entry('a1', 'assistant', 'A final answer.', false)],
+    }));
+    const dispose = subscribeStreamStatus();
+
+    try {
+      StreamStatusService.set(STREAM_ID, STREAM_STATUS.READY, {
+        runtimeHost: { emit: () => undefined },
+      });
+
+      expect(
+        cliState.streams
+          .get()
+          .get(STREAM_ID)
+          ?.entries.map((item) => ({
+            id: item.id,
+            finalized: item.finalized,
+          })),
+      ).toEqual([{ id: 'a1', finalized: true }]);
+    } finally {
+      dispose();
+    }
+  });
+
   // Regression: pending tool rows must render after preceding live
   // assistant text, not before. The previous renderer used a separate
   // `pendingTools` bucket that always sat above the live region, so a
@@ -140,5 +181,48 @@ describe('CLI conversation transcript splitting', () => {
     );
     expect(split.finalized.map((e) => e.id)).toEqual(['a1', 't1']);
     expect(split.pending).toHaveLength(0);
+  });
+
+  it('keeps a bounded tail when the newest live entry is taller than the viewport', () => {
+    const assistant = entry(
+      'a1',
+      'assistant',
+      Array.from({ length: 12 }, (_, index) => `line ${index + 1}`).join('\n'),
+      false,
+    );
+
+    const selected = selectPendingEntriesForViewport([assistant], 4, 80);
+
+    expect(selected.entries.map((item) => item.id)).toEqual(['a1']);
+    expect(selected.usedRows).toBe(4);
+    expect(selected.rowLimits.get('a1')).toBe(4);
+  });
+
+  it('appends only finalized entries to terminal scrollback items', () => {
+    const user = entry('u1', 'user', 'What is a tensor network?', true);
+    const assistant = entry('a1', 'assistant', 'A decomposition.', false);
+
+    const first = appendStaticTranscriptItems({
+      activeStreamId: STREAM_ID,
+      currentItems: [],
+      entries: [user, assistant],
+      meta: SESSION_META,
+    });
+    expect(first.map((item) => item.id)).toEqual([
+      'session-header',
+      `${STREAM_ID}:u1`,
+    ]);
+
+    const second = appendStaticTranscriptItems({
+      activeStreamId: STREAM_ID,
+      currentItems: first,
+      entries: [user, { ...assistant, finalized: true }],
+      meta: SESSION_META,
+    });
+    expect(second.map((item) => item.id)).toEqual([
+      'session-header',
+      `${STREAM_ID}:u1`,
+      `${STREAM_ID}:a1`,
+    ]);
   });
 });
