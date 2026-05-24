@@ -9,6 +9,7 @@ import { render } from 'ink';
 import PQueue from 'p-queue';
 
 import { getAgent, loadAgents } from '@agent/index';
+import { getDefaultStreamLogStore } from '@transcript';
 import { type AgentConfigPayload } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
@@ -86,11 +87,12 @@ import {
   appendLocalAssistantTranscript,
   appendLocalErrorTranscript,
   appendLocalUserTranscript,
+  finalizeAssistantTranscriptEntries,
   moveLocalTranscriptToStream,
 } from './state/transcript';
 import {
   cleanupTerminalModes,
-  enterTerminalFullScreen,
+  clearTerminalScrollback,
 } from './terminalCleanup';
 
 export interface ChatResult {
@@ -721,7 +723,18 @@ export async function runChat(
     clearApprovals();
     followUpQueue.clear();
     clearTuiSessionRunState(session);
+    // StreamLogStore entries outlive resetCliState (which only clears the
+    // React/signal view). Drop them so syncStreamLog can't replay the
+    // cleared conversation into the fresh `<Static>` scrollback.
+    const store = getDefaultStreamLogStore();
+    for (const streamId of cliState.streams.get().keys()) {
+      store.delete(streamId).catch(() => {
+        // Best-effort: a KV failure leaves the log on disk, but the run
+        // is already torn down — nothing actionable to surface here.
+      });
+    }
     resetCliState(meta);
+    clearTerminalScrollback();
   };
 
   const startAgentRun = (config: AgentConfigPayload): void => {
@@ -771,7 +784,13 @@ export async function runChat(
         // buffer before falling back to `result.lastResponse`. Without
         // this, a reply that finalized between sync ticks would never
         // hit the transcript.
-        if (result.streamId) syncStreamLog(result.streamId);
+        if (result.streamId) {
+          syncStreamLog(result.streamId);
+          // The run is definitively done — promote any still-deferred
+          // assistant/tool rows into `<Static>` even if the status-change
+          // path didn't fire its own finalize.
+          finalizeAssistantTranscriptEntries(result.streamId);
+        }
         if (result.category === AgentCategory.ToolUse) {
           appendAssistantTranscriptIfMissing(
             result.streamId,
@@ -783,9 +802,8 @@ export async function runChat(
       })
       .catch((error: unknown) => {
         if (!session.stopRequested) {
-          // Ink owns stdout while the TUI is mounted, so writing to
-          // stderr disappears under the alternate screen. Surface the
-          // failure inline so the user sees why the agent stopped.
+          // Ink owns stdout while the TUI is mounted; surface the failure
+          // inline so the user sees why the agent stopped.
           appendLocalErrorTranscript(toErrorMessage(error));
         }
         session.runExitCode = session.stopRequested
@@ -880,7 +898,6 @@ export async function runChat(
     });
   };
 
-  enterTerminalFullScreen();
   const ink = render(
     <App
       onSubmit={handleSubmit}
