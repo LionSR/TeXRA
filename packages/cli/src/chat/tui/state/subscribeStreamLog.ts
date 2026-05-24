@@ -123,11 +123,6 @@ function renderLogEntry(
   prev: ConversationEntry | undefined,
   finalizeDeferred: boolean,
 ): ConversationEntry | null {
-  // Once an entry has been promoted to `<Static>` scrollback the printed
-  // line is frozen in the terminal; mutating its text or tool payload here
-  // would let the slice drift from what the user already sees in
-  // scrollback (e.g. trailing tool output landing post-finalize).
-  if (prev?.finalized) return prev;
   if (entry.messageType === MESSAGE_TYPES.TOOL_USE) {
     // Cache hit: same `data` reference as last sync, no re-normalize.
     if (prev?.toolUse && toolUseSourceCache.get(prev) === entry.data) {
