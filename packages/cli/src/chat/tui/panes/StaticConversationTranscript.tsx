@@ -138,13 +138,14 @@ export function StaticConversationTranscript({
   const [items, setItems] = useState<readonly StaticTranscriptItem[]>([]);
 
   useEffect(() => {
-    if (streams.size === 0 && activeStreamId === undefined) {
-      setItems([]);
-      return;
-    }
+    // On a hard reset (e.g. /clear, picker-to-chat handoff) start the
+    // items list from scratch so the header is the first thing the user
+    // sees after the scrollback was wiped. Otherwise extend the existing
+    // items so already-printed `<Static>` lines stay stable.
+    const isHardReset = streams.size === 0 && activeStreamId === undefined;
     setItems((currentItems) =>
       appendStaticTranscriptItems({
-        currentItems,
+        currentItems: isHardReset ? [] : currentItems,
         streams,
         meta: sessionMeta,
       }),
