@@ -69,25 +69,30 @@ function renderNode(node: PreparedNode) {
 function renderHeader(header: PreparedHeader) {
   return serverHtml`<header class="export-header">
     <h1 class="export-title">${header.title}</h1>
-    ${header.subtitle
-      ? serverHtml`<p class="export-subtitle">${header.subtitle}</p>`
-      : ''}
+    ${
+      header.subtitle
+        ? serverHtml`<p class="export-subtitle">${header.subtitle}</p>`
+        : ''
+    }
     <dl class="meta-grid">
       ${header.rows.map(
-        ([label, value]) =>
-          serverHtml`<dt>${label}</dt><dd>${value}</dd>`,
+        ([label, value]) => serverHtml`<dt>${label}</dt><dd>${value}</dd>`,
       )}
     </dl>
-    ${header.instruction
-      ? serverHtml`<div class="instruction-block"><strong
+    ${
+      header.instruction
+        ? serverHtml`<div class="instruction-block"><strong
         >Instruction:</strong> <span>${header.instruction}</span></div>`
-      : ''}
-    ${header.files.length
-      ? serverHtml`<div class="meta-files"><p class="meta-files-title">Files</p><ul>${header.files.map(
-          ([label, value]) =>
-            serverHtml`<li>${label}: <code>${value}</code></li>`,
-        )}</ul></div>`
-      : ''}
+        : ''
+    }
+    ${
+      header.files.length
+        ? serverHtml`<div class="meta-files"><p class="meta-files-title">Files</p><ul>${header.files.map(
+            ([label, value]) =>
+              serverHtml`<li>${label}: <code>${value}</code></li>`,
+          )}</ul></div>`
+        : ''
+    }
   </header>`;
 }
 

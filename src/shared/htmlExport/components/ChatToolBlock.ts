@@ -61,9 +61,7 @@ export class ChatToolBlock extends LitElement {
       <div class="frame">
         <div class="role">${label}</div>
         ${this.name
-          ? html`<div class="tool-name">
-              tool <code>${this.name}</code>
-            </div>`
+          ? html`<div class="tool-name">tool <code>${this.name}</code></div>`
           : nothing}
         <div class="body"><slot></slot></div>
       </div>

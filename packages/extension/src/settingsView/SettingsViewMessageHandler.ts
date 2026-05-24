@@ -1388,9 +1388,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     exportInput: ChatExportInput,
   ): Promise<void> {
     const path = await import('node:path');
-    const { formatChatAsHtml } = await import(
-      '@commands/history/htmlExport/htmlFormatter'
-    );
+    const { formatChatAsHtml } =
+      await import('@commands/history/htmlExport/htmlFormatter');
 
     const folderName = generateExportFolderName(exportInput);
     const folderPath = `executions/${historyId}/${folderName}`;
