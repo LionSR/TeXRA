@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.38.1] - 2026-05-25
+
+### Bug Fixes
+
+- **Settings view tabs load correctly again** — Models, History, Agents, LaTeX, Memory, and approval settings now populate on first open.
+
+### Improvements
+
+- **Cleaner history rows** — each entry now puts the metadata (timestamp, agent, model, inputs) and action buttons on top, keeps Context / Config visible inline, and collapses very long instruction prompts behind a "Show full instructions" toggle.
+
 ## [0.38.0] - 2026-05-24
 
 ### Features
