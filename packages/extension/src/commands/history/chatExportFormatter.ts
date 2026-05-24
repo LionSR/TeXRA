@@ -114,7 +114,7 @@ const UserPartSchema = z.discriminatedUnion('type', [
 ]);
 type UserPart = z.infer<typeof UserPartSchema>;
 
-const ExportNodeSchema = z.discriminatedUnion('kind', [
+export const ExportNodeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('user-message'), parts: z.array(UserPartSchema) }),
   z.object({ kind: z.literal('assistant-text'), text: z.string() }),
   z.object({
@@ -135,7 +135,7 @@ const ExportNodeSchema = z.discriminatedUnion('kind', [
     content: z.string().optional(),
   }),
 ]);
-type ExportNode = z.infer<typeof ExportNodeSchema>;
+export type ExportNode = z.infer<typeof ExportNodeSchema>;
 
 // ============================================================
 // Format specification
@@ -154,9 +154,9 @@ const DocumentMetaSchema = z.object({
   instruction: z.string().optional(),
   files: z.array(z.tuple([z.string(), z.string()])),
 });
-type DocumentMeta = z.infer<typeof DocumentMetaSchema>;
+export type DocumentMeta = z.infer<typeof DocumentMetaSchema>;
 
-interface FormatSpec {
+export interface FormatSpec {
   header: (meta: DocumentMeta) => string;
   footer: string;
   nodes: NodeRenderers;
@@ -374,7 +374,7 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
   }
 }
 
-function normalizeMessages(messages: unknown[]): ExportNode[] {
+export function normalizeMessages(messages: unknown[]): ExportNode[] {
   const nodes: ExportNode[] = [];
   let lastAssistantHadToolUse = false;
 
@@ -563,7 +563,7 @@ function collectFiles(config: ExportConfig): Array<[string, string]> {
   return files;
 }
 
-function extractMeta(input: ChatExportInput): DocumentMeta {
+export function extractMeta(input: ChatExportInput): DocumentMeta {
   return {
     date: new Date(input.timestamp).toLocaleString(),
     agent: input.config.agent,
@@ -802,8 +802,20 @@ export function formatChatAsLatex(input: ChatExportInput): string {
  */
 export function generateExportFilename(
   input: ChatExportInput,
-  extension: 'md' | 'tex',
+  extension: 'md' | 'tex' | 'html',
 ): string {
+  return `${generateExportStem(input)}.${extension}`;
+}
+
+/**
+ * Shared filename stem (no extension) used by both single-file exports
+ * (md/tex) and the HTML export's containing folder.
+ */
+export function generateExportFolderName(input: ChatExportInput): string {
+  return generateExportStem(input);
+}
+
+function generateExportStem(input: ChatExportInput): string {
   const date = new Date(input.timestamp);
   const datePart = date.toISOString().slice(0, 10);
 
@@ -819,10 +831,10 @@ export function generateExportFilename(
     parts.push(sanitizeFilename(shortModel));
   }
 
-  return `${parts.join('-')}.${extension}`;
+  return parts.join('-');
 }
 
-function sanitizeFilename(name: string): string {
+export function sanitizeFilename(name: string): string {
   return name
     .toLowerCase()
     .replaceAll(/[^a-z0-9-]/g, '-')
