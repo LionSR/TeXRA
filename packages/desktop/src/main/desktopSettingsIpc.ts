@@ -1015,6 +1015,9 @@ export function createDesktopSettingsIpc(
         case SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX:
           runAsync(showUnsupportedHistoryAction('LaTeX export'));
           return true;
+        case SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_HTML:
+          runAsync(showUnsupportedHistoryAction('HTML export'));
+          return true;
         case SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA:
           runAsync(postProfileData());
           return true;

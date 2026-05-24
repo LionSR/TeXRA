@@ -30,6 +30,7 @@ export const SETTINGS_VIEW_CMD = {
   CLEAR_HISTORY: 'clearHistory',
   EXPORT_CHAT_MD: 'exportChatMd',
   EXPORT_CHAT_TEX: 'exportChatTex',
+  EXPORT_CHAT_HTML: 'exportChatHtml',
   // Profile commands
   GET_PROFILE_DATA: 'getProfileData',
   SELECT_AGENT: 'selectAgent',
