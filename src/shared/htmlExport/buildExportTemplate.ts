@@ -32,12 +32,7 @@ export interface PreparedMessage {
 
 export interface PreparedToolBlock {
   readonly tag: 'texra-chat-tool-block';
-  readonly kind:
-    | 'call'
-    | 'result'
-    | 'web-search'
-    | 'web-results'
-    | 'web-fetch';
+  readonly kind: 'call' | 'result' | 'web-search' | 'web-results' | 'web-fetch';
   readonly name?: string;
   readonly bodyHtml: string;
 }
