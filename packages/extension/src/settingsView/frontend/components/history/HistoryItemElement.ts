@@ -28,6 +28,8 @@ import { HistoryViewEvents } from './events';
 
 type ConfigValue = string | number | boolean | string[] | null | undefined;
 
+const LONG_INSTRUCTION_CHARS = 400;
+
 @customElement('history-item')
 export class HistoryItemElement extends LitElement {
   static override styles = [
@@ -202,6 +204,37 @@ export class HistoryItemElement extends LitElement {
     return !Array.isArray(value) || value.length > 0;
   }
 
+  private renderInstructionBlock(
+    instructionText: string | null,
+    titleText: string,
+  ): TemplateResult {
+    const body = instructionText
+      ? html`<div class="markdown-content">
+          ${unsafeHTML(this.renderMarkdown(titleText))}
+        </div>`
+      : html`<span>${titleText}</span>`;
+
+    const isLong =
+      !!instructionText && instructionText.length > LONG_INSTRUCTION_CHARS;
+
+    if (!isLong || !this.item) {
+      return html`<div class="history-title">${body}</div>`;
+    }
+
+    return html`
+      <wa-details
+        class="collapsible instruction-collapsible"
+        summary="Show full instructions"
+        ?open=${this.open}
+        @wa-show=${(e: Event) => this.dispatchToggle(e, true)}
+        @wa-hide=${(e: Event) => this.dispatchToggle(e, false)}
+        data-id=${this.item.id}
+      >
+        <div class="history-title">${body}</div>
+      </wa-details>
+    `;
+  }
+
   private renderConfigSection(
     label: string | TemplateResult,
     entries: Array<[string, ConfigValue]>,
@@ -300,12 +333,8 @@ export class HistoryItemElement extends LitElement {
     return html`
       <div class="list-item history-item">
         <div class="list-item-header">
-          <div class="history-title">
-            ${instructionText
-              ? html`<div class="markdown-content">
-                  ${unsafeHTML(this.renderMarkdown(titleText))}
-                </div>`
-              : html`<span>${titleText}</span>`}
+          <div class="text-secondary meta-strip">
+            ${renderDotMeta(metaParts)}
           </div>
           <div
             class="history-actions action-button-group"
@@ -350,23 +379,14 @@ export class HistoryItemElement extends LitElement {
               : nothing}
           </div>
         </div>
+        ${this.renderInstructionBlock(instructionText, titleText)}
         ${summaryText
           ? html`<div class="history-description">${summaryText}</div>`
           : nothing}
-        <div class="text-secondary meta-strip">${renderDotMeta(metaParts)}</div>
         ${extraDetails.length
-          ? html`
-              <wa-details
-                class="collapsible"
-                summary="More details"
-                ?open=${this.open}
-                @wa-show=${(e: Event) => this.dispatchToggle(e, true)}
-                @wa-hide=${(e: Event) => this.dispatchToggle(e, false)}
-                data-id=${this.item.id}
-              >
-                <div class="history-details extra-details">${extraDetails}</div>
-              </wa-details>
-            `
+          ? html`<div class="history-details extra-details">
+              ${extraDetails}
+            </div>`
           : nothing}
       </div>
     `;
