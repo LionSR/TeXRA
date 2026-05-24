@@ -3,12 +3,11 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import type { ExecutionRequest } from '@agent/core/executionRequests';
 
-// Local imports - logger
 import {
   isWorkflowTaskState,
   type TaskState,
   type WorkflowTaskState,
-} from '@logger/TaskState';
+} from '@agent/core/TaskState';
 
 // Local imports - shared
 import type {

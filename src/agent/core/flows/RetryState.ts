@@ -1,6 +1,7 @@
 /** Retry state management: Node retry config, error tracking, and retryable node base class. */
 
 import { Node, type NonIterableObject } from '@agent/node';
+import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { type RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import { waitForRetry } from '@agent/runtime/runCoordinators';
@@ -9,12 +10,7 @@ import { getConfig } from '@agent/core/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { normalizeProviderError, toErrorMessage } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
-import type { TexraTrace } from '@logger';
-import {
-  MESSAGE_TYPES,
-  STREAM_STATUS,
-  type RetryErrorInfo,
-} from '@shared/schemas';
+import { STREAM_STATUS, type RetryErrorInfo } from '@shared/schemas';
 
 const BACKGROUND_MODE_MIN_RETRIES = 3;
 
@@ -48,7 +44,7 @@ export type InvocationResult<TSuccess> =
 interface RetryableNodeServices {
   streamId: string;
   runtimeHost: AgentRuntimeHost;
-  logger: TexraTrace;
+  logger: AgentTrace;
   setAbortController: (ac: AbortController | null) => void;
   refreshClient?: () => Promise<void>;
 }
@@ -59,7 +55,7 @@ interface RetryableNodeServices {
  */
 async function tryRefreshClient(
   refreshClient: (() => Promise<void>) | undefined,
-  logger: TexraTrace,
+  logger: AgentTrace,
   context: string,
 ): Promise<boolean> {
   if (!refreshClient) {
@@ -265,7 +261,8 @@ export abstract class RetryableInvocationNode<
       return { shouldRetry: false, userCancelled: false };
     }
 
-    logger.logErrorData(
+    logErrorData(
+      logger,
       `${operationName} failed: ${formatted.message}`,
       formatted,
     );
@@ -292,7 +289,7 @@ export abstract class RetryableInvocationNode<
       result.action === 'timeout'
         ? 'Retry timed out (no response)'
         : 'Retry cancelled by user';
-    logger.info(message, { messageType: MESSAGE_TYPES.PROGRESS_STATUS });
+    logProgressStatus(logger, message);
     StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
       runtimeHost,
     });
@@ -310,7 +307,8 @@ export abstract class RetryableInvocationNode<
 
     const formatted = normalizeProviderError(error);
     if (!formatted.userRetryable) {
-      this.services.logger.logErrorData(
+      logErrorData(
+        this.services.logger,
         `${this.getOperationName()} failed (no retry available): ${formatted.message}`,
         formatted,
       );
@@ -327,7 +325,7 @@ const EMPTY_RESPONSE_ERROR_MESSAGE =
   'Model response was empty or aborted; this may indicate a server issue or network problem.';
 
 interface InvocationResultHandlerOptions {
-  logger: TexraTrace;
+  logger: AgentTrace;
   operationName: string;
 }
 

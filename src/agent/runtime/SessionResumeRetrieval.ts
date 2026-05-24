@@ -22,9 +22,12 @@ import {
   TOOL_USE_SNAPSHOT_VERSION,
   ToolUseSessionSnapshotSchema,
 } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
+import {
+  isToolUseTaskState,
+  isWorkflowTaskState,
+  type TaskState,
+} from '@agent/core/TaskState';
 import { createChannelTrace } from '@logger';
-import type { TaskState } from '@logger/TaskState';
-import { isToolUseTaskState, isWorkflowTaskState } from '@logger/TaskState';
 import {
   ExecutionIdSchema,
   type StreamTabId,

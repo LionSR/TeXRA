@@ -5,8 +5,7 @@ import { strict as assert } from 'assert';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 
-// Local imports - logger
-import type { TaskState } from '@logger/TaskState';
+import type { TaskState } from '@agent/core/TaskState';
 
 // Local imports - test support
 import {

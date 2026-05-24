@@ -1,6 +1,7 @@
 import * as path from 'path';
 
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
+import { logFileCategory, logFilesLoaded, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { getVisibleAgents, type AgentEntry } from '@agent/index/agentRegistry';
 import {
@@ -9,7 +10,6 @@ import {
   AgentCategory,
 } from '@agent/core/AgentDataclass';
 import { getConfig } from '@agent/core/config';
-import type { TexraTrace } from '@logger';
 import type { FileListEntry } from '@shared/schemas';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
@@ -73,7 +73,7 @@ export async function buildUserVars(
   agentPrompt: AgentPrompt,
   agentPath: string,
   providerFlags: ModelProviderFlags,
-  logger: TexraTrace,
+  logger: AgentTrace,
   workspacePath?: string,
 ): Promise<UserVars> {
   const allLoadedFiles: LoadedFileEntry[] = [];
@@ -119,7 +119,7 @@ export async function buildUserVars(
 
   // Emit aggregated file list if any files were loaded
   if (allLoadedFiles.length > 0) {
-    logger.filesLoaded({ category: 'all', entries: allLoadedFiles });
+    logFilesLoaded(logger, 'all', allLoadedFiles);
   }
 
   return userVars;
@@ -231,7 +231,7 @@ const FILE_VAR_CATEGORIES = ['INPUT', 'REFERENCE', 'EDITED'];
 async function getFileVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
-  logger: TexraTrace,
+  logger: AgentTrace,
 ): Promise<UserVars> {
   const userVars: UserVars = {};
 
@@ -292,7 +292,7 @@ async function getFileVars(
  * them sequentially to preserve the expected UI display order.
  */
 async function logFileCategoriesWithExistence(
-  logger: TexraTrace,
+  logger: AgentTrace,
   categories: Array<[category: string, files: string[]]>,
 ): Promise<void> {
   // Process all categories in parallel for better performance
@@ -320,9 +320,7 @@ async function logFileCategoriesWithExistence(
 
   // Log sequentially to preserve UI display order
   for (const { category, entries } of results) {
-    if (entries.length > 0) {
-      logger.logFileCategory(category, entries);
-    }
+    logFileCategory(logger, category, entries);
   }
 }
 

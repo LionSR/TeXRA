@@ -1,6 +1,7 @@
 import * as path from 'path';
 
 import { writeTerminalStatus } from '@agent/storage';
+import { logSdkError } from '@agent/trace';
 import { createMergeOutputFileLocationGetter } from '@agent/utils/outputFileUtils';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import {
@@ -210,7 +211,7 @@ async function runFlowWithLifecycle(
     // are delivered to the orchestrator below, so avoid adding a second
     // wrapper error that makes a child failure look like the parent failed.
     if (kind !== 'abort' && !options?.isSubagent) {
-      await ctx.logger.logError(errorMsg, err, {
+      logSdkError(ctx.logger, errorMsg, err, {
         operation: `execute ${agentName}`,
       });
     }
