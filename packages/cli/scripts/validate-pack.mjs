@@ -48,6 +48,9 @@ function assertNoForbiddenTarballEntries(entries) {
       relative.startsWith('dist/resources/walkthroughs/') ||
       relative.startsWith('dist/resources/examples/') ||
       relative.startsWith('dist/resources/logo-') ||
+      // Bundled skills and reference agents are not part of the public CLI.
+      relative.startsWith('dist/resources/skills/') ||
+      relative.startsWith('dist/resources/reference-agents/') ||
       relative === 'dist/resources/templates/chatExport.tex'
     );
   });
