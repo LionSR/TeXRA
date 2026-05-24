@@ -204,6 +204,7 @@ describe('CLI conversation transcript splitting', () => {
     const assistant = entry('a1', 'assistant', 'A decomposition.', false);
 
     const first = appendStaticTranscriptItems({
+      activeStreamId: STREAM_ID,
       currentItems: [],
       streams: streamsFromEntries(STREAM_ID, [user, assistant]),
       meta: SESSION_META,
@@ -213,6 +214,7 @@ describe('CLI conversation transcript splitting', () => {
     expect(first.slice(1).map((item) => item.id)).toEqual([`${STREAM_ID}:u1`]);
 
     const second = appendStaticTranscriptItems({
+      activeStreamId: STREAM_ID,
       currentItems: first,
       streams: streamsFromEntries(STREAM_ID, [
         user,
@@ -229,6 +231,7 @@ describe('CLI conversation transcript splitting', () => {
 
   it('appends a fresh header block when session meta changes', () => {
     const first = appendStaticTranscriptItems({
+      activeStreamId: undefined,
       currentItems: [],
       streams: new Map(),
       meta: SESSION_META,
@@ -236,6 +239,7 @@ describe('CLI conversation transcript splitting', () => {
     expect(first).toHaveLength(1);
 
     const switched = appendStaticTranscriptItems({
+      activeStreamId: undefined,
       currentItems: first,
       streams: new Map(),
       meta: { ...SESSION_META, model: 'sonnet' },
@@ -244,25 +248,24 @@ describe('CLI conversation transcript splitting', () => {
     expect(switched.every((item) => item.kind === 'header')).toBe(true);
   });
 
-  it('appends finalized entries from background streams, not just active', () => {
+  it('only feeds the active stream into scrollback, not background subagents', () => {
     const rootUser = entry('u1', 'user', 'do x', true);
     const childAssistant = entry('a1', 'assistant', 'done', true);
     const ROOT = 'root-stream' as StreamTabId;
     const CHILD = 'claude@agent-sdk#1' as StreamTabId;
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [ROOT, sliceWithEntries(ROOT, [rootUser])],
+      [CHILD, sliceWithEntries(CHILD, [childAssistant])],
+    ]);
 
     const items = appendStaticTranscriptItems({
+      activeStreamId: ROOT,
       currentItems: [],
-      streams: new Map<StreamTabId, StreamSlice>([
-        [ROOT, sliceWithEntries(ROOT, [rootUser])],
-        [CHILD, sliceWithEntries(CHILD, [childAssistant])],
-      ]),
+      streams,
       meta: SESSION_META,
     });
 
-    expect(items.slice(1).map((item) => item.id)).toEqual([
-      `${ROOT}:u1`,
-      `${CHILD}:a1`,
-    ]);
+    expect(items.slice(1).map((item) => item.id)).toEqual([`${ROOT}:u1`]);
   });
 });
 

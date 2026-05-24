@@ -95,10 +95,12 @@ function sessionHeaderId(meta: SessionMeta): string {
 }
 
 export function appendStaticTranscriptItems({
+  activeStreamId,
   currentItems,
   streams,
   meta,
 }: {
+  readonly activeStreamId: string | undefined;
   readonly currentItems: readonly StaticTranscriptItem[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly meta: SessionMeta;
@@ -111,18 +113,19 @@ export function appendStaticTranscriptItems({
     seen.add(headerId);
   }
 
-  // Iterate every known stream rather than just the active one — Ink
-  // `<Static>` prints once into the primary buffer, so a subagent or
-  // background tab that finalizes entries while the user is focused
-  // elsewhere would otherwise lose that output forever.
-  for (const [streamId, slice] of streams) {
-    for (const entry of slice.entries) {
-      if (!entry.finalized) continue;
-      const id = staticEntryId(streamId, entry);
-      if (seen.has(id)) continue;
-      nextItems.push({ id, kind: 'entry', entry });
-      seen.add(id);
-    }
+  // Only the active stream feeds the shared `<Static>` scrollback. Dumping
+  // every stream here floods the main transcript with each subagent's tool
+  // calls and file reads, interleaving them with the live side panel.
+  // Subagent activity is surfaced in the live region when its tab is
+  // focused instead.
+  if (!activeStreamId) return nextItems;
+  const slice = streams.get(activeStreamId);
+  for (const entry of slice?.entries ?? []) {
+    if (!entry.finalized) continue;
+    const id = staticEntryId(activeStreamId, entry);
+    if (seen.has(id)) continue;
+    nextItems.push({ id, kind: 'entry', entry });
+    seen.add(id);
   }
   return nextItems;
 }
@@ -145,6 +148,7 @@ export function StaticConversationTranscript({
     const isHardReset = streams.size === 0 && activeStreamId === undefined;
     setItems((currentItems) =>
       appendStaticTranscriptItems({
+        activeStreamId,
         currentItems: isHardReset ? [] : currentItems,
         streams,
         meta: sessionMeta,
