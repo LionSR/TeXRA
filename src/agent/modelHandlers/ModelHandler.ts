@@ -345,7 +345,7 @@ export abstract class ModelHandler<
     if (shouldUseOpenRouter(this.config)) {
       return this.fetchApiKeyOrThrow(
         'openRouter',
-        'Missing API key for OpenRouter. Please set it using the "Set API Key" command.',
+        'Missing API key for OpenRouter. Set your OpenRouter API key to continue.',
       );
     }
 
@@ -359,13 +359,13 @@ export abstract class ModelHandler<
       );
       throw new Error(
         `Model "${this.config.name}" is not available with your current subscription tier. ` +
-          `Switch to "Use My Own Keys" via the TeXRA Profile panel, or select a model included in your tier.`,
+          `Switch to personal API keys, or select a model included in your tier.`,
       );
     }
 
     return this.fetchApiKeyOrThrow(
       this.config.provider.toLowerCase() as ApiProvider,
-      `Missing API key for ${this.config.provider}. Please set it using the "Set API Key" command.`,
+      `Missing API key for ${this.config.provider}. Set your ${this.config.provider} API key to continue.`,
     );
   }
 
