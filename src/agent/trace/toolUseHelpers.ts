@@ -40,8 +40,11 @@ export function startToolUseCard(
 }
 
 /**
- * Close a tool-use card with a terminal status. The `result` patch is
- * forwarded as-is to subscribers.
+ * Emit a `tool.end` for an open card. `status` defaults to `completed`
+ * (the common case), but the streaming path passes `'in_progress'` to push
+ * incremental output to the same card without closing it — subscribers
+ * treat a non-terminal status as a mid-flight update. The `result` patch is
+ * forwarded as-is.
  */
 export function endToolUseCard(
   trace: AgentTrace,
