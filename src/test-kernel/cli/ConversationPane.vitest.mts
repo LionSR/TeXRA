@@ -134,6 +134,31 @@ describe('CLI conversation transcript splitting', () => {
     }
   });
 
+  // Regression: a stream reused for a new run still carries WAITING from
+  // the prior turn. The status must flip to a non-final value before
+  // syncStreamLog derives finalizeDeferred, otherwise the next run's
+  // in-flight entries get finalized early and lose later chunks.
+  it('clears a stale final status before the next run streams', () => {
+    resetCliState();
+    patchStream(STREAM_ID, (slice) => ({
+      ...slice,
+      status: STREAM_STATUS.WAITING,
+    }));
+    const dispose = subscribeStreamStatus();
+
+    try {
+      StreamStatusService.set(STREAM_ID, STREAM_STATUS.RUNNING, {
+        runtimeHost: { emit: () => undefined },
+      });
+
+      expect(cliState.streams.get().get(STREAM_ID)?.status).toBe(
+        STREAM_STATUS.RUNNING,
+      );
+    } finally {
+      dispose();
+    }
+  });
+
   // Regression: pending tool rows must render after preceding live
   // assistant text, not before. The previous renderer used a separate
   // `pendingTools` bucket that always sat above the live region, so a
