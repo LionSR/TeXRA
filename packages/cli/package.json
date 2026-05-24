@@ -43,8 +43,9 @@
     "check:architecture": "node scripts/check-host-imports.mjs",
     "bundle": "node scripts/build-bundle.mjs",
     "copy:resources": "node scripts/copy-resources.mjs",
+    "copy:docs": "node scripts/copy-docs.mjs",
     "smoke:react-compiler": "node scripts/smoke-react-compiler.mjs",
-    "build": "npm run typecheck && npm run check:architecture && npm run smoke:react-compiler && npm run bundle && npm run copy:resources",
+    "build": "npm run typecheck && npm run check:architecture && npm run smoke:react-compiler && npm run bundle && npm run copy:resources && npm run copy:docs",
     "prepack": "npm run build",
     "validate:run": "node scripts/validate-run.mjs",
     "validate:pack": "node scripts/validate-pack.mjs"
