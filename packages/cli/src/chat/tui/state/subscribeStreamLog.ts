@@ -2,7 +2,8 @@
 // `cliState.streams[].entries`. Approval/permission entries land in side
 // panels and modals; tool rows render inline alongside assistant prose.
 
-import { flushPendingRunTraces, getDefaultStreamLogStore } from '@logger';
+import { getDefaultStreamLogStore } from '@transcript';
+import { flushPendingRunTraces } from '@logger';
 import {
   MESSAGE_TYPES,
   type NormalizedToolUse,

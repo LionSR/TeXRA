@@ -3,6 +3,7 @@ import { OpenRouter } from '@openrouter/sdk';
 import { ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
+import { logContextManagementEvent, logSdkError } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -489,7 +490,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       const reductionPercent =
         tokensBefore > 0 ? ((reduction / tokensBefore) * 100).toFixed(1) : '0';
 
-      this.logger.logContextManagement(
+      logContextManagementEvent(
+        this.logger,
         `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${estimatedTokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
         {
           action: 'compaction',
@@ -1221,7 +1223,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         (lastUserMsg.content as ChatContentItems[]).unshift(...formattedMedia);
       }
     } catch (err) {
-      this.logger.logError(
+      logSdkError(
+        this.logger,
         `Error adding media to user message: ${getSdkErrorMessage(err)}`,
         err,
         { operation: 'add media to user message' },

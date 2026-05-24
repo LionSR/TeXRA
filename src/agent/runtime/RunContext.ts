@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'async_hooks';
 
-import { noopTexraTrace, type TexraTrace } from '@logger';
+import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 
@@ -22,9 +22,10 @@ export interface RunContext {
   /**
    * Discriminated-event SDK channel for this run. Subscribe with
    * `trace.subscribe(...)` to receive every event the run emits. Defaults
-   * to `noopTexraTrace` when callers don't provide one.
+   * to `noopTrace` when callers don't provide one. Hosts that need their
+   * own sugar (TeXRA's TexraTrace) may pass in a subtype.
    */
-  readonly trace: TexraTrace;
+  readonly trace: AgentTrace;
   readonly coordinators?: RunCoordinators;
   /** Model short name of the executing agent (e.g. "opus46T", "sonnet46T"). */
   readonly model?: string;
@@ -50,9 +51,9 @@ export interface CreateRunContextOptions {
   executionId?: ExecutionId;
   /**
    * Discriminated-event channel for the run. When omitted, the context uses
-   * `noopTexraTrace`.
+   * `noopTrace`.
    */
-  trace?: TexraTrace;
+  trace?: AgentTrace;
   coordinators?: RunCoordinators;
   model?: string;
   agentName?: string;
@@ -72,7 +73,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     runtimeHost: options.runtimeHost,
     streamId: options.streamId,
     executionId: options.executionId,
-    trace: options.trace ?? noopTexraTrace,
+    trace: options.trace ?? noopTrace,
     coordinators: options.coordinators,
     model: options.model,
     agentName: options.agentName,

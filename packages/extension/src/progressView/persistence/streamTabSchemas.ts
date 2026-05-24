@@ -14,7 +14,7 @@
 
 import { z } from 'zod';
 
-import { TaskStateSchema } from '@logger/TaskState';
+import { TaskStateSchema } from '@agent/core/TaskState';
 import {
   CompileFailureSchema,
   OutputFileInfoSchema,

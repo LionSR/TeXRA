@@ -14,13 +14,13 @@ import {
 } from 'llm-zoo';
 
 // Local imports - agent
+import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory, AgentSettingSchema } from '@agent/core/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/modelHandlerOpenRouterNative';
-import type { TexraTrace } from '@logger';
 
 // Local imports - logger
 
@@ -30,7 +30,7 @@ import type { FileLocation } from '@utils/files';
 // Type imports
 import type { ChatMessages } from '@openrouter/sdk/models';
 
-type LoggerStub = Partial<TexraTrace> & {
+type LoggerStub = Partial<AgentTrace> & {
   streamId: string;
 };
 
@@ -103,7 +103,7 @@ describe('model handler empty prefill behavior', () => {
   it('OpenAI chat preserves user content when prefill is empty', async () => {
     await withMissingOutput(async (outputLocation) => {
       const handler = new ModelHandlerOpenAI(buildConfig(ModelProvider.OPENAI));
-      handler.setLogger(createLoggerStub() as unknown as TexraTrace);
+      handler.setLogger(createLoggerStub() as unknown as AgentTrace);
       const messages = [
         {
           role: 'user',
@@ -136,7 +136,7 @@ describe('model handler empty prefill behavior', () => {
       const handler = new ModelHandlerGoogleGenAI(
         buildConfig(ModelProvider.GOOGLE),
       );
-      handler.setLogger(createLoggerStub() as unknown as TexraTrace);
+      handler.setLogger(createLoggerStub() as unknown as AgentTrace);
       const messages: Content[] = [
         {
           role: 'user',
@@ -173,7 +173,7 @@ describe('model handler empty prefill behavior', () => {
           openrouterFullName: 'openai/test-model',
         }),
       );
-      handler.setLogger(createLoggerStub() as unknown as TexraTrace);
+      handler.setLogger(createLoggerStub() as unknown as AgentTrace);
       const messages: ChatMessages[] = [
         {
           role: 'user',

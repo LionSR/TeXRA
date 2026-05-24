@@ -1,4 +1,5 @@
 // Local imports - agent
+import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -12,9 +13,6 @@ import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 // Local imports - errors
 import { toErrorMessage } from '@common/errors';
-import type { TexraTrace } from '@logger';
-
-// Local imports - logger
 import { createRunTrace } from '@logger';
 
 // Local imports - shared
@@ -55,7 +53,7 @@ export function createChildStream(
   options: CreateChildStreamOptions,
 ): {
   childStreamId: StreamTabId;
-  logger: TexraTrace;
+  logger: AgentTrace;
   /**
    * Drop the run-trace subscribers attached by `createRunTrace`. Must be
    * called once when the child stream finalizes, either via
@@ -110,7 +108,7 @@ export function createChildStream(
 interface FinalizeChildStreamArgs {
   childStreamId: StreamTabId;
   executionId: ExecutionId;
-  logger: TexraTrace;
+  logger: AgentTrace;
   /** From `createChildStream` — releases the run-trace subscribers. */
   disposeTrace: () => void;
   runtimeHost: AgentRuntimeHost;

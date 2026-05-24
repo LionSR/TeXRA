@@ -13,6 +13,7 @@ import {
   midEraWorkflowOutputStem,
   parseWorkflowOutputRoundDir,
 } from '@agent/output/workflowOutputLayout';
+import { getStreamTabId } from '@agent/runtime/streamTab';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import {
   showLoggedErrorMessage,
@@ -34,7 +35,6 @@ import {
   describeMathMarkupOption,
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
-import { getStreamTabId } from '@logger/streamUtils';
 import * as logger from '@logger/logUtils';
 import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
 import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';

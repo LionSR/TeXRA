@@ -1,13 +1,13 @@
 import { getExecutionStore } from '@agent/storage';
 import { getCleanAgentName } from '@agent/index';
 import type { AgentTrace } from '@agent/trace';
-import { createChannelTrace } from '@logger';
 import {
   TaskStateSchema,
   isToolUseTaskState,
   isWorkflowTaskState,
   type TaskState,
-} from '@logger/TaskState';
+} from '@agent/core/TaskState';
+import { createChannelTrace } from '@logger';
 import {
   getStreamTabStore,
   mapStreamTabStorage,
