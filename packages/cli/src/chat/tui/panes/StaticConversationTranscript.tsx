@@ -79,20 +79,7 @@ function staticEntryId(streamId: string, entry: ConversationEntry): string {
   return `${streamId}:${entry.id}`;
 }
 
-// Keyed on the fields the header actually renders. Any agent / model /
-// api-mode / cwd change therefore appends a fresh header block to
-// scrollback, surfacing the transition instead of leaving a stale snapshot
-// pinned at the top.
-function sessionHeaderId(meta: SessionMeta): string {
-  return [
-    'session-header',
-    meta.agent,
-    meta.model,
-    meta.apiMode,
-    meta.cwd,
-    meta.version,
-  ].join('|');
-}
+const SESSION_HEADER_ID = 'session-header';
 
 export function appendStaticTranscriptItems({
   activeStreamId,
@@ -107,10 +94,9 @@ export function appendStaticTranscriptItems({
 }): readonly StaticTranscriptItem[] {
   const nextItems: StaticTranscriptItem[] = [...currentItems];
   const seen = new Set(nextItems.map((item) => item.id));
-  const headerId = sessionHeaderId(meta);
-  if (!seen.has(headerId)) {
-    nextItems.push({ id: headerId, kind: 'header', meta });
-    seen.add(headerId);
+  if (!seen.has(SESSION_HEADER_ID)) {
+    nextItems.push({ id: SESSION_HEADER_ID, kind: 'header', meta });
+    seen.add(SESSION_HEADER_ID);
   }
 
   // Only the active stream feeds the shared `<Static>` scrollback. Dumping

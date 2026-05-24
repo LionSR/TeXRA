@@ -229,7 +229,7 @@ describe('CLI conversation transcript splitting', () => {
     ]);
   });
 
-  it('appends a fresh header block when session meta changes', () => {
+  it('shows the session header exactly once', () => {
     const first = appendStaticTranscriptItems({
       activeStreamId: undefined,
       currentItems: [],
@@ -238,14 +238,13 @@ describe('CLI conversation transcript splitting', () => {
     });
     expect(first).toHaveLength(1);
 
-    const switched = appendStaticTranscriptItems({
+    const again = appendStaticTranscriptItems({
       activeStreamId: undefined,
       currentItems: first,
       streams: new Map(),
       meta: { ...SESSION_META, model: 'sonnet' },
     });
-    expect(switched).toHaveLength(2);
-    expect(switched.every((item) => item.kind === 'header')).toBe(true);
+    expect(again).toHaveLength(1);
   });
 
   it('only feeds the active stream into scrollback, not background subagents', () => {

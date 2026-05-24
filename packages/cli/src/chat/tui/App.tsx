@@ -1,5 +1,6 @@
-// Ink TUI root: conversation, optional side column, status, approval modal,
-// and input bar. Tab / Shift-Tab cycles focus across subagent streams.
+// Ink TUI root: a single vertical column — conversation, optional subagent /
+// todos panels at the bottom, then status, approval modal, and input bar.
+// Tab / Shift-Tab cycles focus across subagent streams.
 
 import { Box, useInput, useWindowSize } from 'ink';
 import { useState } from 'react';
@@ -27,9 +28,11 @@ import { nextFocusBack, nextFocusForward } from './state/focusCycle';
 import { useSignal } from './state/useSignal';
 import type { InputHistory } from './history/inputHistory';
 
-const SIDE_COLUMN_WIDTH = 28;
 const MIN_TRANSCRIPT_WIDTH = 20;
 const FOREGROUND_TRANSCRIPT_ROWS = 1;
+// Cap the bottom subagent/todos panels so they never crowd out the
+// conversation or push the input bar off-screen.
+const BOTTOM_PANEL_MAX_ROWS = 10;
 
 const PINNED_CHROME_ROWS = {
   tip: 1,
@@ -189,8 +192,6 @@ export function App(props: AppProps): React.JSX.Element {
     childControlMode !== undefined;
   const inputDisabled = props.inputDisabled === true || foregroundOpen;
 
-  // Hide the side column when both side panes would render empty —
-  // otherwise the conversation loses 28 columns of width for nothing.
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const subagentControlsAvailable = canShowSubagentControls(
     sessionMeta,
@@ -202,21 +203,25 @@ export function App(props: AppProps): React.JSX.Element {
     !foregroundOpen &&
     activeSlice !== undefined &&
     (activeSlice.todos.length > 0 || activeSlice.plan !== null);
-  const showSideColumn = hasSubagentPanel || hasTodosPlanPanel;
-  const transcriptWidth = Math.max(
-    MIN_TRANSCRIPT_WIDTH,
-    columns - (showSideColumn ? SIDE_COLUMN_WIDTH : 0),
-  );
+  const transcriptWidth = Math.max(MIN_TRANSCRIPT_WIDTH, columns);
   const { foregroundRows, transcriptRows } = allocateMiddleRows({
     foregroundOpen,
     reverseSearchOpen,
     rows,
     slashPaletteOpen,
   });
+  // The subagent/todos panels live at the bottom of the same vertical
+  // column. Carve a bounded slice off the transcript area so the
+  // conversation keeps most of the height and the input stays pinned.
+  const bottomPanelBudget =
+    hasSubagentPanel || hasTodosPlanPanel
+      ? Math.min(BOTTOM_PANEL_MAX_ROWS, Math.floor(transcriptRows / 2))
+      : 0;
+  const conversationRows = transcriptRows - bottomPanelBudget;
   const { subagentRows, todosPlanRows } = allocateSidePanelRows({
     hasSubagentPanel,
     hasTodosPlanPanel,
-    rows: transcriptRows,
+    rows: bottomPanelBudget,
   });
   function renderForegroundSurface(): React.ReactNode {
     if (pending) {
@@ -308,32 +313,25 @@ export function App(props: AppProps): React.JSX.Element {
     <>
       <StaticConversationTranscript width={transcriptWidth} />
       <Box flexDirection="column">
-        <Box flexDirection="row" overflowY="hidden">
-          <Box flexDirection="column" overflowY="hidden">
-            {transcriptRows > 0 ? (
-              <ConversationPane
-                width={transcriptWidth}
-                maxRows={transcriptRows}
-              />
-            ) : null}
-            {foregroundSurface ? (
-              <Box height={foregroundRows} overflowY="hidden">
-                {foregroundSurface}
-              </Box>
-            ) : null}
-          </Box>
-          {showSideColumn ? (
-            <Box
-              flexDirection="column"
-              minWidth={SIDE_COLUMN_WIDTH}
-              height={transcriptRows}
-              overflowY="hidden"
-            >
-              <SubagentList maxRows={subagentRows} />
-              <TodosPlanPanel maxRows={todosPlanRows} />
+        <Box flexDirection="column" overflowY="hidden">
+          {conversationRows > 0 ? (
+            <ConversationPane
+              width={transcriptWidth}
+              maxRows={conversationRows}
+            />
+          ) : null}
+          {foregroundSurface ? (
+            <Box height={foregroundRows} overflowY="hidden">
+              {foregroundSurface}
             </Box>
           ) : null}
         </Box>
+        {bottomPanelBudget > 0 ? (
+          <Box flexDirection="column" overflowY="hidden">
+            <SubagentList maxRows={subagentRows} />
+            <TodosPlanPanel maxRows={todosPlanRows} />
+          </Box>
+        ) : null}
         <TipRow />
         <InputBar
           onSubmit={props.onSubmit}
