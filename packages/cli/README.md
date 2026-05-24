@@ -58,7 +58,6 @@ See what is available:
 
 ```sh
 texra agents list     # workflow + tool-use agents
-texra skills list     # reusable skills
 texra models list     # configured models
 ```
 
