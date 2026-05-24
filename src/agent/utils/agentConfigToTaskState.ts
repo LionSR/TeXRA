@@ -4,7 +4,7 @@ import {
   type TaskState,
   type ToolUseTaskState,
   type WorkflowTaskState,
-} from '@logger/TaskState';
+} from '@agent/core/TaskState';
 import {
   MULTIPLE_DOCUMENT_FILE_TYPES,
   type MultipleDocumentFileType,

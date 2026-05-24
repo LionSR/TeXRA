@@ -1,8 +1,8 @@
 import { createHelperModelKit } from '@agent/runtime/helperModel';
 import { renderPolishPrompt } from '@agent/runtime/polishModel';
+import type { TaskState } from '@agent/core/TaskState';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import type { TaskState } from '@logger/TaskState';
 import { isNonEmptyString } from '@utils/core';
 
 import { extractTextFromTag } from './xmlUtils';

@@ -1,11 +1,12 @@
 import { z } from 'zod';
 
-import { AgentCategory } from '@agent/core/AgentDataclass';
-import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   MULTIPLE_DOCUMENT_FILE_TYPES,
   type MultipleDocumentFileType,
 } from '@shared/schemas/mainView';
+
+import { AgentCategory } from './AgentDataclass';
+import { AgentConfigSchema, type AgentConfig } from './AgentConfig';
 
 const ToolSessionStateSchema = z.object({
   lastFollowUpAt: z.number().optional(),

@@ -5,8 +5,8 @@ import { strict as assert } from 'assert';
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { AgentUsageReporter } from '@agent/runtime/AgentUsageReporter';
 import type { ExtendedTokenUsageStats, StorageKey } from '@shared/schemas';
-import { AgentUsageReporter } from '@/logger/AgentUsageReporter';
 
 function createUsageHost(): { events: unknown[]; host: AgentRuntimeHost } {
   const events: unknown[] = [];

@@ -1,12 +1,13 @@
+import { UsageLogService } from '@telemetry/UsageLogService';
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentRunStateSnapshot } from '@agent/core/AgentState';
 import type { RunUsageTotals } from '@agent/core/RunUsageAccumulator';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 import { shouldUseOpenRouter } from '@agent/modelHandlers/support/ProxyConfigResolver';
+import type { AgentUsageReporter } from '@agent/runtime/AgentUsageReporter';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { toErrorMessage } from '@common/errors';
-import { UsageLogService, type AgentUsageReporter } from '@logger/index';
 import type {
   ExtendedTokenUsageStats,
   StorageKey,

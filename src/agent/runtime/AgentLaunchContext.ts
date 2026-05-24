@@ -22,13 +22,7 @@ import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError, getSdkErrorMessage, toErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
-import type { TexraTrace } from '@logger';
-import {
-  AgentUsageReporter,
-  createRunTrace,
-  getStreamTabId,
-  type RunTrace,
-} from '@logger/index';
+import { createRunTrace, type RunTrace, type TexraTrace } from '@logger';
 import {
   STREAM_STATUS,
   type ExecutionId,
@@ -38,6 +32,7 @@ import {
 import { generateExecutionId } from '@utils/core/executionId';
 
 import { AgentProposalCoordinator } from './AgentProposalCoordinator';
+import { AgentUsageReporter } from './AgentUsageReporter';
 import { PlanApprovalCoordinator } from './PlanApprovalCoordinator';
 import { RetryRequestCoordinatorImpl } from './RetryRequestCoordinator';
 import {
@@ -47,6 +42,7 @@ import {
   type RunCoordinators,
 } from './RunContext';
 import { retainRunCoordinatorsForStream } from './runCoordinators';
+import { getStreamTabId } from './streamTab';
 import { StreamStatusService } from './StreamStatusService';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 

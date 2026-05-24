@@ -1,12 +1,12 @@
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-
 import type {
   ExtendedTokenUsageStats,
   StorageKey,
   StreamTabId,
 } from '@shared/schemas';
+
+import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 export class AgentUsageReporter {
   constructor(
