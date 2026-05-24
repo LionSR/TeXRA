@@ -5,13 +5,20 @@
 // the logic here makes it unit-testable without a TTY.
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import path from 'node:path';
 
-import { CLI_CONFIG_DIR, workspaceCliConfigPath } from './cliConfig';
 import type {
   CliApprovalPolicy,
   CliOutputFormat,
 } from '../schemas/cliSettings';
+import {
+  CLI_CONFIG_DIR,
+  CLI_CONFIG_FILE,
+  workspaceCliConfigPath,
+} from './cliConfig';
+
+export type InitScope = 'workspace' | 'user';
 
 export interface InitAnswers {
   readonly agent: string;
@@ -28,12 +35,11 @@ export interface InitConfigShape {
   readonly chat: { readonly agent: string; readonly model: string };
 }
 
-/**
- * Resolve the workspace config file path. (User-scope config lives in global
- * storage with a different shape and loader; bootstrapping it is a follow-up.)
- */
-export function initConfigPath(cwd: string): string {
-  return workspaceCliConfigPath(cwd);
+/** Resolve the config file path for the chosen scope. */
+export function initConfigPath(scope: InitScope, cwd: string): string {
+  return scope === 'user'
+    ? path.join(homedir(), CLI_CONFIG_DIR, CLI_CONFIG_FILE)
+    : workspaceCliConfigPath(cwd);
 }
 
 /** Map wizard answers to the canonical config object. */

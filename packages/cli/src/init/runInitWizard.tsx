@@ -15,7 +15,7 @@ import {
   type CliApprovalPolicy,
   type CliOutputFormat,
 } from '../schemas/cliSettings';
-import type { InitAnswers } from '../runtime/initConfig';
+import type { InitAnswers, InitScope } from '../runtime/initConfig';
 
 export interface InitWizardAgentOption {
   readonly name: string;
@@ -32,6 +32,7 @@ export interface InitWizardModelOption {
 export interface InitWizardOptions {
   readonly agents: readonly InitWizardAgentOption[];
   readonly models: readonly InitWizardModelOption[];
+  readonly scope: InitScope;
 }
 
 export interface InitWizardResult {
@@ -40,23 +41,10 @@ export interface InitWizardResult {
 }
 
 const APPROVAL_DESCRIPTIONS: Record<CliApprovalPolicy, string> = {
-  never: 'deny every privileged action (no prompt)',
-  ask: 'confirm before privileged actions (recommended)',
+  never: 'never prompt before privileged actions',
+  ask: 'confirm before privileged actions',
   yolo: 'auto-approve every action',
 };
-
-// Display order, derived from the canonical list so a newly added policy can't
-// be silently dropped — the rank table is a Record over the union, so omitting
-// a policy is a compile error. `ask` first highlights the recommended,
-// runtime-default policy instead of the deny-all `never`.
-const APPROVAL_POLICY_RANK: Record<CliApprovalPolicy, number> = {
-  ask: 0,
-  never: 1,
-  yolo: 2,
-};
-const APPROVAL_POLICY_ORDER: readonly CliApprovalPolicy[] = [
-  ...CLI_APPROVAL_POLICIES,
-].sort((a, b) => APPROVAL_POLICY_RANK[a] - APPROVAL_POLICY_RANK[b]);
 
 const OUTPUT_DESCRIPTIONS: Record<CliOutputFormat, string> = {
   text: 'human-readable text (default)',
@@ -66,20 +54,17 @@ const OUTPUT_DESCRIPTIONS: Record<CliOutputFormat, string> = {
 
 type Step = 'agent' | 'model' | 'approval' | 'output' | 'gitignore';
 
-const STEPS: readonly Step[] = [
-  'agent',
-  'model',
-  'approval',
-  'output',
-  'gitignore',
-];
-
 interface Draft {
   agent?: string;
   model?: string;
   approvalPolicy?: CliApprovalPolicy;
   outputFormat?: CliOutputFormat;
   gitignore?: boolean;
+}
+
+function stepsForScope(scope: InitScope): readonly Step[] {
+  const base: Step[] = ['agent', 'model', 'approval', 'output'];
+  return scope === 'workspace' ? [...base, 'gitignore'] : base;
 }
 
 function StepFrame(props: {
@@ -125,10 +110,11 @@ interface WizardAppProps {
 
 function WizardApp(props: WizardAppProps): React.JSX.Element {
   const app = useApp();
-  const stepCount = STEPS.length;
+  const steps = stepsForScope(props.options.scope);
+  const stepCount = steps.length;
   const [index, setIndex] = useState(0);
   const [draft, setDraft] = useState<Draft>({});
-  const step = STEPS[index];
+  const step = steps[index];
 
   const cancel = (): void => {
     props.onResolve(undefined);
@@ -220,7 +206,7 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
       >
         <Select
           key={step}
-          items={APPROVAL_POLICY_ORDER.map((policy) => ({
+          items={CLI_APPROVAL_POLICIES.map((policy) => ({
             value: policy,
             label: policy,
             description: APPROVAL_DESCRIPTIONS[policy],

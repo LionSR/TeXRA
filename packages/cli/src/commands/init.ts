@@ -16,11 +16,17 @@ import {
   initConfigPath,
   writeInitConfig,
   type InitAnswers,
+  type InitScope,
 } from '../runtime/initConfig';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
+import { optString } from './_helpers/globalArgs';
 import type { CliContext } from '../runtime/cliContext';
+
+function resolveScope(value: unknown): InitScope {
+  return value === 'user' ? 'user' : 'workspace';
+}
 
 async function gatherOptions(): Promise<{
   agents: { name: string; description?: string }[];
@@ -52,9 +58,6 @@ function defaultAnswers(
   return {
     agent: BUILTIN_DEFAULT_CHAT_AGENT,
     model: firstAvailable?.value ?? CLI_BUILTIN_DEFAULT_MODEL,
-    // Match the runtime default (see buildCliContext). `ask` prompts in
-    // interactive runs and safely denies in headless ones — unlike `never`,
-    // which silently denies every privileged action.
     approvalPolicy: 'ask',
     outputFormat: 'text',
   };
@@ -89,18 +92,20 @@ function printSummary(
 
 async function runInit(
   context: CliContext,
+  scope: InitScope,
   opts: {
     yes: boolean;
     force: boolean;
     gitignore: boolean | undefined;
   },
 ): Promise<number> {
-  // Don't skip included access: model availability must reflect the user's
-  // real access mode (a signed-in relay user has no personal keys but can use
-  // included models), so the picker annotates and defaults correctly.
-  await initCliPlatform({ ...context, quietLogs: true });
+  await initCliPlatform({
+    ...context,
+    quietLogs: true,
+    skipIncludedModelAccess: true,
+  });
 
-  const filePath = initConfigPath(context.cwd);
+  const filePath = initConfigPath(scope, context.cwd);
   if (!opts.force && (await configFileExists(filePath))) {
     writeTextStderr(
       `Refusing to overwrite existing config at ${filePath}. Re-run with --force to replace it.`,
@@ -121,7 +126,7 @@ async function runInit(
 
   if (interactive) {
     const { runInitWizard } = await import('../init/runInitWizard');
-    const result = await runInitWizard({ agents, models });
+    const result = await runInitWizard({ agents, models, scope });
     if (!result) {
       writeTextStderr('Cancelled. No config written.');
       return CliExitCode.Success;
@@ -135,7 +140,7 @@ async function runInit(
 
   await writeInitConfig(filePath, buildInitConfig(answers));
 
-  if (gitignore) {
+  if (gitignore && scope === 'workspace') {
     const outcome = await ensureTexraGitignored(context.cwd);
     if (outcome !== 'present') {
       writeTextStdout(
@@ -171,11 +176,17 @@ export const initCommand = defineCommand({
       type: 'boolean',
       description: 'Add .texra/ to .gitignore (non-interactive default: false)',
     },
+    scope: {
+      type: 'enum',
+      options: ['workspace', 'user'],
+      description: 'Write ./.texra (workspace) or ~/.texra (user)',
+    },
   },
   async run(ctx) {
     const context = await contextFromArgs(ctx.args);
+    const scope = resolveScope(optString(ctx.args.scope));
     setExitCode(
-      await runInit(context, {
+      await runInit(context, scope, {
         yes: ctx.args.yes === true,
         force: ctx.args.force === true,
         gitignore:
