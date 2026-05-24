@@ -6,9 +6,9 @@
  *   per-channel debug output (no transcript).
  *
  * - `createRunTrace(streamId, store)` — for agent runs. Attaches BOTH the
- *   channel-output subscriber AND the {@link TexraTranscriptRecorder} that
- *   drives the webview transcript. Returns `{ trace, flushPending,
- *   dispose }` so callers can drain in-flight stream chunks at shutdown.
+ *   channel-output subscriber AND the {@link attachTranscriptRecorder} that
+ *   drives the webview transcript. Returns `{ trace, dispose }` so callers
+ *   can release the subscribers when the run ends.
  *
  * The returned trace is `TexraTrace` (the host-extended surface). SDK
  * consumers that only care about agent-general events can still treat it
@@ -21,10 +21,7 @@ import {
   getDefaultStreamLogStore,
   type StreamLogStore,
 } from './StreamLogStore';
-import {
-  attachTranscriptRecorder,
-  type TranscriptRecorderHandle,
-} from './TexraTranscriptRecorder';
+import { attachTranscriptRecorder } from './TexraTranscriptRecorder';
 import { TexraTraceEmitter } from './TexraTraceEmitter';
 import type { TexraTrace } from './TexraTrace';
 
@@ -41,7 +38,6 @@ export function createChannelTrace(name: string): TexraTrace {
 
 export interface RunTrace {
   readonly trace: TexraTrace;
-  readonly flushPending: () => void;
   readonly dispose: () => void;
 }
 
@@ -60,11 +56,7 @@ export function createRunTrace(
     channel: streamId,
     isAgent: true,
   });
-  const transcript: TranscriptRecorderHandle = attachTranscriptRecorder(
-    trace,
-    streamId,
-    store,
-  );
+  const transcript = attachTranscriptRecorder(trace, streamId, store);
 
   // Centralized registry so the static shutdown hook
   // (`flushPendingRunTraces()`) can drain every in-flight stream buffer.
@@ -72,7 +64,6 @@ export function createRunTrace(
 
   return {
     trace,
-    flushPending: transcript.flushPending,
     dispose: () => {
       activeFlushers.delete(transcript.flushPending);
       transcript.unsubscribe();
