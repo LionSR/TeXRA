@@ -12,6 +12,7 @@ import {
   SHUTDOWN_PHASE,
   type LifecycleHost,
 } from '@platform/interfaces/lifecycle';
+import { UsageLogService } from '@telemetry/UsageLogService';
 import { loadAgents, setAgentDirectories } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
@@ -77,7 +78,6 @@ import { VscodeStorage } from '@frontend/vscode/vscodeStorage';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { VscodeConfigProvider } from '@frontend/vscode/vscodeConfig';
 import * as logger from '@logger/logUtils';
-import { UsageLogService } from '@logger/UsageLogService';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { interruptAllCodexSessions } from '@tools/codex';

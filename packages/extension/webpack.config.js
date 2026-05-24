@@ -163,6 +163,8 @@ const extensionConfig = {
       '@eventBus': path.resolve(rootSrc, 'eventBus'),
       '@auth': path.resolve(rootSrc, 'auth'),
       '@platform': path.resolve(rootSrc, 'platform'),
+      '@telemetry': path.resolve(rootSrc, 'telemetry'),
+      '@transcript': path.resolve(rootSrc, 'transcript'),
     },
     fallback: {
       fs: false,

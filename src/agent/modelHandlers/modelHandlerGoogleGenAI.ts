@@ -30,6 +30,11 @@ import {
 
 // Local imports - agent
 import { ReasoningEffort } from 'llm-zoo';
+import {
+  logContextManagementEvent,
+  logSdkError,
+  type AgentTrace,
+} from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import {
@@ -49,9 +54,6 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
-import type { TexraTrace } from '@logger';
-
-// Local imports - replacement
 import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
@@ -109,7 +111,7 @@ function extractNonThinkingText(parts: Part[], trim = false): string {
  */
 export function validateGoogleMessageHistory(
   messages: Content[],
-  logger: TexraTrace,
+  logger: AgentTrace,
 ): void {
   let lastRole: string | undefined;
 
@@ -530,7 +532,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         );
 
         if (validation.adjustedMaxTokens !== originalMaxTokens) {
-          this.logger.logContextManagement(
+          logContextManagementEvent(
+            this.logger,
             `Token count of message plus max tokens exceeds context window: ${totalTokens} + ${originalMaxTokens} > ${this.config.contextWindow}. Reducing max tokens to ${validation.adjustedMaxTokens}.`,
             {
               action: 'max_tokens_reduced',
@@ -1518,7 +1521,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       const formattedMedia = await this.createMediaMessage(mediaFiles);
       lastUserMsg.parts.unshift(...formattedMedia);
     } catch (err) {
-      this.logger.logError(
+      logSdkError(
+        this.logger,
         `Error adding media to user message: ${getSdkErrorMessage(err)}`,
         err,
         { operation: 'add media to user message' },

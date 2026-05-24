@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 
 import type { AgentCategory } from '@agent/core/AgentDataclass';
-import type { TaskState } from '@logger/TaskState';
+import type { TaskState } from '@agent/core/TaskState';
 import type {
   ActiveChildInfo,
   AgentProposalPermission,
