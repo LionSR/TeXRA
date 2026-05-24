@@ -143,7 +143,7 @@ export async function getApiKey(
   const key = await lookupApiKey(secrets, provider);
   if (!key) {
     throw new Error(
-      `No API key found for ${provider}. Please set it using the "Set API Key" command or ${apiKeyEnvName(provider)} environment variable.`,
+      `No API key found for ${provider}. Set the ${apiKeyEnvName(provider)} environment variable, or configure your ${provider} API key.`,
     );
   }
   return key;

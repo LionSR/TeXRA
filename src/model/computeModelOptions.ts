@@ -170,7 +170,7 @@ export async function getModelUnavailableReason(
 
   // Determine the specific reason
   if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
-    return `Model "${model}" requires an OpenRouter API key. Set your OpenRouter key in the extension settings.`;
+    return `Model "${model}" requires an OpenRouter API key.`;
   }
 
   if (availability.kind === 'not-included') {
@@ -181,7 +181,7 @@ export async function getModelUnavailableReason(
   // Personal key mode or unauthenticated — missing provider key
   const providerName =
     PROVIDER_DISPLAY_NAMES[config.provider] ?? config.provider;
-  return `Model "${model}" requires your ${providerName} API key. Set it in the extension settings or enable included access.`;
+  return `Model "${model}" requires your ${providerName} API key. Provide it, or enable included access.`;
 }
 
 /** Build typed model option data for a single model. */
