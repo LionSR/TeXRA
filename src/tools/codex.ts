@@ -551,7 +551,10 @@ function startCodexLoop(params: {
 
   // Start a log group so endRunningGroups() marks it as errored on reload,
   // giving the user a visual cue that the session was interrupted.
-  const sessionStage = logger.openStage('Codex session');
+  // Root stage — see the claudeAgent equivalent: avoid inheriting the
+  // parent agent's active stage (shared AsyncLocalStorage) on the child
+  // session's own trace.
+  const sessionStage = logger.openStage('Codex session', { root: true });
 
   // Register resumed threads immediately — without this, a second codex call
   // with the same thread_id during the first turn would bypass the in-memory

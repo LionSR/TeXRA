@@ -39,7 +39,7 @@ function createHandler(): ModelHandlerAnthropic {
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
-    filesLoaded: vi.fn(),
+    domain: vi.fn(),
   } as unknown as AgentTrace);
   (handler as { getStreamingConfig: () => boolean }).getStreamingConfig = () =>
     false;

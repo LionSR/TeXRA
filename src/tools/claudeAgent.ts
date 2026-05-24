@@ -551,7 +551,11 @@ function startClaudeAgentLoop(params: {
   session.setQueue(queue);
   registerInterruptible(childStreamId, session);
 
-  const sessionStage = logger.openStage('Claude Code session');
+  // Root stage: the child session runs on its own trace, but openStage
+  // would otherwise inherit the parent agent's active stage from the shared
+  // AsyncLocalStorage and emit a cross-trace parentId the child's
+  // subscribers can't resolve.
+  const sessionStage = logger.openStage('Claude Code session', { root: true });
 
   queue.enqueue(initialPrompt);
   StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING, {

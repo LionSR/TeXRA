@@ -139,3 +139,28 @@ describe('tool-use card groupId resolution', () => {
     }
   });
 });
+
+describe('openStage root option', () => {
+  it('forces a root stage even when an active stage is in scope', async () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace('stream').trace;
+      const outer = logger.openStage('outer');
+      await outer.within(async () => {
+        // A child agent's session stage opened on its own trace must NOT
+        // inherit the parent's active stage from the shared AsyncLocalStorage.
+        logger.openStage('child session', { root: true });
+      });
+
+      const entries = store.get('stream')?.getRange(0) ?? [];
+      const child = entries.find((e) => e.text === 'child session');
+      expect(child).toBeDefined();
+      expect(child?.groupId).toBeUndefined();
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+});

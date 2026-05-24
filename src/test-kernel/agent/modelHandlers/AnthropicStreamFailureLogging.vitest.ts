@@ -43,7 +43,7 @@ function createLoggerStub() {
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
-    filesLoaded: vi.fn(),
+    domain: vi.fn(),
   };
 }
 
