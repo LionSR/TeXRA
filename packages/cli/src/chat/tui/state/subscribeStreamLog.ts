@@ -125,7 +125,15 @@ function renderLogEntry(
 ): ConversationEntry | null {
   if (entry.messageType === MESSAGE_TYPES.TOOL_USE) {
     // Cache hit: same `data` reference as last sync, no re-normalize.
+    // Still honor a pending finalize — otherwise a tool row whose payload
+    // stopped changing before the stream went idle would never promote
+    // into `<Static>` scrollback and would vanish per splitTranscriptEntries.
     if (prev?.toolUse && toolUseSourceCache.get(prev) === entry.data) {
+      if (finalizeDeferred && !prev.finalized) {
+        const promoted = { ...prev, finalized: true };
+        toolUseSourceCache.set(promoted, entry.data);
+        return promoted;
+      }
       return prev;
     }
 

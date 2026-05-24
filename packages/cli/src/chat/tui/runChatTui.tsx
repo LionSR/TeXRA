@@ -9,6 +9,7 @@ import { render } from 'ink';
 import PQueue from 'p-queue';
 
 import { getAgent, loadAgents } from '@agent/index';
+import { getDefaultStreamLogStore } from '@transcript';
 import { type AgentConfigPayload } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
@@ -721,6 +722,13 @@ export async function runChat(
     clearApprovals();
     followUpQueue.clear();
     clearTuiSessionRunState(session);
+    // Drop the stream logs too. resetCliState only clears the React/signal
+    // view; without this a later syncStreamLog could rebuild the cleared
+    // conversation from the log and replay it into `<Static>` scrollback.
+    const store = getDefaultStreamLogStore();
+    for (const streamId of cliState.streams.get().keys()) {
+      void store.delete(streamId);
+    }
     resetCliState(meta);
     clearTerminalScrollback();
   };
