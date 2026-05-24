@@ -88,10 +88,7 @@ import {
   appendLocalUserTranscript,
   moveLocalTranscriptToStream,
 } from './state/transcript';
-import {
-  cleanupTerminalModes,
-  enterTerminalFullScreen,
-} from './terminalCleanup';
+import { cleanupTerminalModes } from './terminalCleanup';
 
 export interface ChatResult {
   exitCode: number;
@@ -880,7 +877,6 @@ export async function runChat(
     });
   };
 
-  enterTerminalFullScreen();
   const ink = render(
     <App
       onSubmit={handleSubmit}
