@@ -3,3 +3,8 @@
 # truth lives at the repo root.
 README.md
 CHANGELOG.md
+
+# Copied from node_modules by scripts/copy-html-export-assets.mjs during
+# `pnpm run package:fast` so the HTML chat export ships with KaTeX +
+# highlight.js styling.
+resources/htmlExport/

@@ -15,4 +15,5 @@ export const HISTORY_VIEW_COMMANDS = {
   DELETE_AGENT: 'deleteAgent',
   EXPORT_CHAT_MD: 'exportChatMd',
   EXPORT_CHAT_TEX: 'exportChatTex',
+  EXPORT_CHAT_HTML: 'exportChatHtml',
 } as const;
