@@ -15,6 +15,18 @@ function innerTag(xml: string, tag: string): string | undefined {
   return new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(xml)?.[1]?.trim();
 }
 
+// `<message>` bodies are escapeText()'d by the producer; decode for display.
+// `&amp;` last so an escaped `&lt;` never double-decodes.
+function decodeXmlEntities(text: string): string {
+  if (!text.includes('&')) return text;
+  return text
+    .replaceAll('&quot;', '"')
+    .replaceAll('&apos;', "'")
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&amp;', '&');
+}
+
 function progressDetail(xml: string): string {
   switch (attr(xml, 'type')) {
     case 'started':
@@ -68,6 +80,8 @@ export function summarizeSubagentFollowup(text: string): string {
 
   // <subagent-error>
   const wall = innerTag(trimmed, 'wall-time');
+  const message = innerTag(trimmed, 'message');
   const retryable = attr(trimmed, 'retryable') === 'true';
-  return `✗ ${agent} failed${wall ? ` · ${wall}` : ''}${retryable ? ' (retryable)' : ''}`;
+  const head = `✗ ${agent} failed${wall ? ` · ${wall}` : ''}${retryable ? ' (retryable)' : ''}`;
+  return message ? `${head}\n${decodeXmlEntities(message)}` : head;
 }

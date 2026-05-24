@@ -66,11 +66,19 @@ describe('summarizeSubagentFollowup', () => {
     ).toBe('✓ review stopped · 5sec');
   });
 
-  it('summarizes a retryable error block', () => {
+  it('summarizes a retryable error block without a message', () => {
     expect(
       summarizeSubagentFollowup(
         '<subagent-error id="abc" agent="lean" retryable="true"><wall-time>1sec</wall-time></subagent-error>',
       ),
     ).toBe('✗ lean failed · 1sec (retryable)');
+  });
+
+  it('preserves and decodes the error message', () => {
+    expect(
+      summarizeSubagentFollowup(
+        '<subagent-error id="abc" agent="lean" retryable="false"><wall-time>1sec</wall-time><message>rate limit: &lt;tokens&gt; &amp; retries exhausted</message></subagent-error>',
+      ),
+    ).toBe('✗ lean failed · 1sec\nrate limit: <tokens> & retries exhausted');
   });
 });
