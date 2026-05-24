@@ -1518,6 +1518,7 @@
     "@google/genai": "^2.6.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@lit-labs/signals": "^0.3.0",
+    "@lit-labs/ssr": "^4.1.0",
     "@lit-labs/virtualizer": "^2.1.1",
     "@lit/context": "^1.1.6",
     "@modelcontextprotocol/sdk": "^1.29.0",

@@ -3,12 +3,17 @@
  * webpage that uses the same markdown-it + KaTeX + highlight.js pipeline as
  * the in-app webview, so what you share matches what you see.
  *
- * Output is a string of HTML that references `./assets/{chat,katex.min,...}.css`
- * — the asset folder itself is staged alongside the file by the calling
- * handler (see SettingsViewMessageHandler.handleExportChat).
+ * The pipeline:
+ *   1. normalizeMessages → ExportNode[]            (shared IR)
+ *   2. pre-render each node's body with markdown-it → string of HTML
+ *   3. wrap each into a PreparedNode (custom-element name + attrs + bodyHtml)
+ *   4. build the page as a Lit *server-only* template
+ *   5. render to string via @lit-labs/ssr — emits Declarative Shadow DOM
+ *      so the bubble styling stays scoped without any client-side JS.
  *
- * The renderer is built lazily — markdown-it + KaTeX are heavy and we don't
- * want them in the cold path for callers who only ever export Markdown.
+ * The output references `./assets/{chat,katex.min,...}.css`; the asset
+ * folder is staged alongside the file by the calling handler
+ * (see SettingsViewMessageHandler.handleExportChat).
  */
 
 import katex from 'katex';
@@ -19,9 +24,14 @@ import {
   createMarkdownRenderer,
   type MarkdownProcessor,
 } from '@shared/markdown';
-import { createTexmathPlugin } from '@shared/markdown/texmathPlugin';
 import { highlightCode } from '@shared/highlighting/highlightCode';
+import { createTexmathPlugin } from '@shared/markdown/texmathPlugin';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
+import {
+  buildExportTemplate,
+  type PreparedNode,
+} from '@shared/htmlExport/buildExportTemplate';
+import { renderTemplateToHtml } from '@shared/htmlExport/ssrRender';
 
 import {
   extractMeta,
@@ -59,8 +69,18 @@ function getProcessor(): MarkdownProcessor {
   return cachedProcessor;
 }
 
-function renderMarkdown(text: string): string {
+function md(text: string): string {
   return getProcessor()(text);
+}
+
+/**
+ * Wrap the rendered markdown / preformatted content in a `<div class="md">`
+ * so the chat.css document-level rules (margins, list spacing, table style)
+ * still target it. Components slot this div into shadow DOM via `<slot>`,
+ * but the slotted node itself lives in light DOM where global CSS reaches.
+ */
+function wrapMd(html: string): string {
+  return `<div class="md">${html}</div>`;
 }
 
 const ATTACHMENT_LABELS: Record<string, string> = {
@@ -68,139 +88,98 @@ const ATTACHMENT_LABELS: Record<string, string> = {
   document: 'Document attachment',
 };
 
-const HTML_NODES: { [K in ExportNode['kind']]: (
-  node: Extract<ExportNode, { kind: K }>,
-) => string } = {
-  'user-message': ({ parts }) => {
-    const body = parts
-      .map((p) => {
-        if (p.type === 'text') return renderMarkdown(p.text);
-        return `<span class="attachment-chip">${escapeText(
-          ATTACHMENT_LABELS[p.attachmentType],
-        )}</span>`;
-      })
-      .join('\n');
-    return `<section class="message user">
-  <div class="message-role">User</div>
-  <div class="md">${body}</div>
-</section>`;
-  },
-
-  'assistant-text': ({ text }) => `<section class="message assistant">
-  <div class="message-role">Assistant</div>
-  <div class="md">${renderMarkdown(text)}</div>
-</section>`,
-
-  'tool-call': ({ name, input }) => {
-    const fenced = '```json\n' + input + '\n```';
-    return `<section class="message tool">
-  <div class="message-role">Tool call</div>
-  <div class="tool-meta">tool <span class="tool-name">${escapeText(name)}</span></div>
-  <div class="md">${renderMarkdown(fenced)}</div>
-</section>`;
-  },
-
-  'tool-result': ({ text }) => {
-    const fenced = '```\n' + text + '\n```';
-    return `<section class="message tool-result">
-  <div class="message-role">Tool result</div>
-  <div class="md">${renderMarkdown(fenced)}</div>
-</section>`;
-  },
-
-  'web-search': ({ query }) => `<section class="message tool">
-  <div class="message-role">Web search</div>
-  <div class="md"><p><strong>Query:</strong> ${escapeText(query)}</p></div>
-</section>`,
-
-  'web-search-results': ({ results }) => {
-    const items = results
-      .map(
-        (r) =>
-          `<li><a href="${escapeAttr(r.url)}" rel="noopener noreferrer">${escapeText(
-            r.title,
-          )}</a></li>`,
-      )
-      .join('\n');
-    return `<section class="message tool-result">
-  <div class="message-role">Web results</div>
-  <ul class="web-search-results">${items}</ul>
-</section>`;
-  },
-
-  'web-fetch': ({ url, title, content }) => {
-    const parts: string[] = [];
-    if (url) {
-      parts.push(
-        `<p><strong>URL:</strong> <a href="${escapeAttr(url)}" rel="noopener noreferrer">${escapeText(url)}</a></p>`,
-      );
+function nodeToPrepared(node: ExportNode): PreparedNode {
+  switch (node.kind) {
+    case 'user-message': {
+      const body = node.parts
+        .map((p) => {
+          if (p.type === 'text') return md(p.text);
+          return `<p><span class="attachment-chip">${escapeText(
+            ATTACHMENT_LABELS[p.attachmentType],
+          )}</span></p>`;
+        })
+        .join('\n');
+      return {
+        tag: 'chat-message',
+        role: 'user',
+        bodyHtml: wrapMd(body),
+      };
     }
-    if (title) {
-      parts.push(`<p><strong>Title:</strong> ${escapeText(title)}</p>`);
+    case 'assistant-text':
+      return {
+        tag: 'chat-message',
+        role: 'assistant',
+        bodyHtml: wrapMd(md(node.text)),
+      };
+    case 'tool-call':
+      return {
+        tag: 'chat-tool-block',
+        kind: 'call',
+        name: node.name,
+        bodyHtml: wrapMd(md('```json\n' + node.input + '\n```')),
+      };
+    case 'tool-result':
+      return {
+        tag: 'chat-tool-block',
+        kind: 'result',
+        bodyHtml: wrapMd(md('```\n' + node.text + '\n```')),
+      };
+    case 'web-search':
+      return {
+        tag: 'chat-tool-block',
+        kind: 'web-search',
+        bodyHtml: wrapMd(
+          `<p><strong>Query:</strong> ${escapeText(node.query)}</p>`,
+        ),
+      };
+    case 'web-search-results': {
+      const items = node.results
+        .map(
+          (r) =>
+            `<li><a href="${escapeAttr(r.url)}" rel="noopener noreferrer">${escapeText(
+              r.title,
+            )}</a></li>`,
+        )
+        .join('\n');
+      return {
+        tag: 'chat-tool-block',
+        kind: 'result',
+        bodyHtml: `<ul class="web-search-results">${items}</ul>`,
+      };
     }
-    if (content) {
-      parts.push(renderMarkdown('```\n' + content + '\n```'));
+    case 'web-fetch': {
+      const parts: string[] = [];
+      if (node.url) {
+        parts.push(
+          `<p><strong>URL:</strong> <a href="${escapeAttr(node.url)}" rel="noopener noreferrer">${escapeText(node.url)}</a></p>`,
+        );
+      }
+      if (node.title) {
+        parts.push(`<p><strong>Title:</strong> ${escapeText(node.title)}</p>`);
+      }
+      if (node.content) {
+        parts.push(md('```\n' + node.content + '\n```'));
+      }
+      return {
+        tag: 'chat-tool-block',
+        kind: 'web-fetch',
+        bodyHtml: wrapMd(parts.join('\n')),
+      };
     }
-    return `<section class="message tool-result">
-  <div class="message-role">Web fetch</div>
-  <div class="md">${parts.join('\n')}</div>
-</section>`;
-  },
-};
-
-function renderNode(node: ExportNode): string {
-  return (
-    HTML_NODES as Record<string, (n: ExportNode) => string>
-  )[node.kind](node);
+  }
 }
 
-function renderHeader(meta: DocumentMeta, title: string): string {
-  const rows: string[] = [];
-  rows.push(`<dt>Date</dt><dd>${escapeText(meta.date)}</dd>`);
-  if (meta.agent) {
-    rows.push(`<dt>Agent</dt><dd>${escapeText(meta.agent)}</dd>`);
-  }
-  if (meta.model) {
-    rows.push(`<dt>Model</dt><dd>${escapeText(meta.model)}</dd>`);
-  }
-
-  // Suppress the subtitle when it would echo the title verbatim.
-  const subtitle =
-    meta.description && meta.description !== title
-      ? `<p class="export-subtitle">${escapeText(meta.description)}</p>`
-      : '';
-
-  const instruction = meta.instruction
-    ? `<div class="instruction-block"><strong>Instruction:</strong>\n${escapeText(
-        meta.instruction,
-      )}</div>`
-    : '';
-
-  const files = meta.files.length
-    ? `<div class="meta-files">
-  <p class="meta-files-title">Files</p>
-  <ul>${meta.files
-    .map(
-      ([label, value]) =>
-        `<li>${escapeText(label)}: <code>${escapeText(value)}</code></li>`,
-    )
-    .join('\n')}</ul>
-</div>`
-    : '';
-
-  return `<header class="export-header">
-  <h1 class="export-title">${escapeText(title)}</h1>
-  ${subtitle}
-  <dl class="meta-grid">${rows.join('\n')}</dl>
-  ${instruction}
-  ${files}
-</header>`;
+function headerRows(meta: DocumentMeta): Array<[string, string]> {
+  const rows: Array<[string, string]> = [['Date', meta.date]];
+  if (meta.agent) rows.push(['Agent', meta.agent]);
+  if (meta.model) rows.push(['Model', meta.model]);
+  return rows;
 }
 
 export interface HtmlExportOptions {
   /** Path the document uses to reach the assets folder. Defaults to `./assets`. */
   readonly assetsHref?: string;
-  /** Document <title>. Defaults to the export description or "TeXRA Chat Export". */
+  /** Document `<title>`. Defaults to the export description or "TeXRA Chat Export". */
   readonly title?: string;
 }
 
@@ -209,47 +188,26 @@ export function formatChatAsHtml(
   options: HtmlExportOptions = {},
 ): string {
   const meta = extractMeta(input);
-  const nodes = normalizeMessages(input.messages);
-  const assets = options.assetsHref ?? './assets';
+  const nodes = normalizeMessages(input.messages).map(nodeToPrepared);
   const title =
     options.title ?? input.description ?? meta.agent ?? 'TeXRA Chat Export';
 
-  // Pick a hljs theme by listening to the user's OS preference; both stylesheets
-  // are inert until the matching media query matches.
-  const head = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="generator" content="TeXRA chat export" />
-  <title>${escapeText(title)}</title>
-  <link rel="stylesheet" href="${escapeAttr(assets)}/katex.min.css" />
-  <link rel="stylesheet" href="${escapeAttr(assets)}/texmath.css" />
-  <link
-    rel="stylesheet"
-    href="${escapeAttr(assets)}/hljs-light.css"
-    media="(prefers-color-scheme: light)"
-  />
-  <link
-    rel="stylesheet"
-    href="${escapeAttr(assets)}/hljs-dark.css"
-    media="(prefers-color-scheme: dark)"
-  />
-  <link rel="stylesheet" href="${escapeAttr(assets)}/chat.css" />
-</head>`;
+  const template = buildExportTemplate({
+    title,
+    assetsHref: options.assetsHref ?? './assets',
+    header: {
+      title,
+      // Suppress the subtitle when it would echo the title verbatim.
+      subtitle:
+        meta.description && meta.description !== title
+          ? meta.description
+          : undefined,
+      rows: headerRows(meta),
+      instruction: meta.instruction,
+      files: meta.files,
+    },
+    nodes,
+  });
 
-  const body = `<body>
-  <main class="page">
-    ${renderHeader(meta, title)}
-    <div class="conversation">
-      ${nodes.map(renderNode).join('\n      ')}
-    </div>
-    <footer class="export-footer">
-      Generated by TeXRA — see the original conversation in the TeXRA history pane.
-    </footer>
-  </main>
-</body>
-</html>`;
-
-  return `${head}\n${body}\n`;
+  return renderTemplateToHtml(template);
 }

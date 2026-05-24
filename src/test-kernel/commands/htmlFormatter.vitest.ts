@@ -1,14 +1,11 @@
 // Verifies that the HTML chat export renders markdown, code blocks, and
-// LaTeX math through the shared markdown-it/KaTeX/highlight.js pipeline.
-//
-// `htmlFormatter.ts` lives under `packages/extension/src/commands/history/`
-// (vsce-only); we import it here through its repo-relative path because the
-// alias map doesn't cover the extension package.
+// LaTeX math through the shared markdown-it/KaTeX/highlight.js pipeline,
+// wrapped in the Lit-SSR Declarative-Shadow-DOM components.
 
 import { describe, expect, it } from 'vitest';
 
-import { formatChatAsHtml } from '../../../packages/extension/src/commands/history/htmlExport/htmlFormatter';
-import type { ChatExportInput } from '../../../packages/extension/src/commands/history/chatExportFormatter';
+import { formatChatAsHtml } from '@commands/history/htmlExport/htmlFormatter';
+import type { ChatExportInput } from '@commands/history/chatExportFormatter';
 
 const fixture: ChatExportInput = {
   timestamp: '2026-05-23T10:00:00.000Z',
@@ -98,6 +95,25 @@ describe('formatChatAsHtml', () => {
     expect(html).toContain('Tool call');
     expect(html).toContain('run_python');
     expect(html).toContain('Tool result');
+  });
+
+  it('wraps each message in a Lit custom element with declarative shadow DOM', () => {
+    // SSR emits <chat-message>/<chat-tool-block> as the outer custom element
+    // wrapping <template shadowrootmode="open"> that browsers reify into a
+    // shadow root with no client-side JS required.
+    expect(html).toMatch(/<chat-message[^>]*role="user"/);
+    expect(html).toMatch(/<chat-message[^>]*role="assistant"/);
+    expect(html).toMatch(/<chat-tool-block[^>]*kind="call"/);
+    expect(html).toMatch(/<chat-tool-block[^>]*kind="result"/);
+    expect(html).toMatch(/<template[^>]*shadowrootmode="open"/);
+  });
+
+  it('inlines component-scoped CSS inside the declarative shadow root', () => {
+    // Scoped styles should appear inside <style> inside the DSD template.
+    // Token CSS variables (`--ce-bg-*`) are a tell that chatTokens applied.
+    expect(html).toMatch(
+      /<template[^>]*shadowrootmode="open">\s*<style>[\s\S]*--ce-bg/,
+    );
   });
 
   it('escapes HTML in user input so injection is impossible', () => {

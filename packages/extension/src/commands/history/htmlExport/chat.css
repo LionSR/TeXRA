@@ -1,48 +1,37 @@
 /*
- * Self-contained styling for the HTML chat export.
+ * Light-DOM styling for the HTML chat export.
  *
- * Standalone — does NOT depend on VS Code theme variables. Renders the same
- * markdown / KaTeX / highlight.js output as the in-app webview, but with a
- * neutral light/dark colour scheme so the file looks reasonable opened in any
- * browser. Copied verbatim from the source tree by
- * scripts/copy-html-export-assets.mjs.
+ * The chat bubble frames live inside Declarative Shadow DOM emitted by the
+ * <chat-message> / <chat-tool-block> / <chat-header> components, so their
+ * styles aren't here. This stylesheet covers:
+ *   - document baseline (page background, font, layout)
+ *   - the `<div class="md">` rendered-markdown body slotted into every bubble
+ *   - utility classes used outside shadow DOM (attachment chip, web results list)
+ *   - the footer.
+ *
+ * Copied verbatim from the source tree by scripts/copy-html-export-assets.mjs.
  */
 
 :root {
   color-scheme: light dark;
-  --bg: #ffffff;
-  --bg-elevated: #f6f8fa;
-  --bg-user: #eef4ff;
-  --bg-assistant: #ffffff;
-  --bg-tool: #fff8e6;
-  --border: #d0d7de;
-  --border-strong: #afb8c1;
-  --fg: #1f2328;
-  --fg-muted: #59636e;
-  --accent: #0969da;
-  --accent-soft: #ddf4ff;
-  --code-bg: #f6f8fa;
-  --code-fg: #1f2328;
-  --shadow: 0 1px 0 rgba(31, 35, 40, 0.04);
-  --radius: 8px;
+  --doc-bg: #ffffff;
+  --doc-fg: #1f2328;
+  --doc-fg-muted: #59636e;
+  --doc-border: #d0d7de;
+  --doc-border-strong: #afb8c1;
+  --doc-accent: #0969da;
+  --doc-code-bg: #f6f8fa;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0d1117;
-    --bg-elevated: #161b22;
-    --bg-user: #1c2a3a;
-    --bg-assistant: #161b22;
-    --bg-tool: #2a2415;
-    --border: #30363d;
-    --border-strong: #484f58;
-    --fg: #e6edf3;
-    --fg-muted: #8d96a0;
-    --accent: #2f81f7;
-    --accent-soft: #0c2d6b;
-    --code-bg: #161b22;
-    --code-fg: #e6edf3;
-    --shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+    --doc-bg: #0d1117;
+    --doc-fg: #e6edf3;
+    --doc-fg-muted: #8d96a0;
+    --doc-border: #30363d;
+    --doc-border-strong: #484f58;
+    --doc-accent: #2f81f7;
+    --doc-code-bg: #161b22;
   }
 }
 
@@ -54,8 +43,8 @@ html,
 body {
   margin: 0;
   padding: 0;
-  background: var(--bg);
-  color: var(--fg);
+  background: var(--doc-bg);
+  color: var(--doc-fg);
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial,
     sans-serif;
@@ -69,10 +58,15 @@ body {
   padding: 32px 24px 96px;
 }
 
+.conversation {
+  display: flex;
+  flex-direction: column;
+}
+
 /* ---------- Header ---------- */
 
 .export-header {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--doc-border);
   padding-bottom: 20px;
   margin-bottom: 28px;
 }
@@ -85,7 +79,7 @@ body {
 
 .export-subtitle {
   margin: 0 0 16px;
-  color: var(--fg-muted);
+  color: var(--doc-fg-muted);
   font-size: 14px;
 }
 
@@ -98,7 +92,7 @@ body {
 }
 
 .meta-grid dt {
-  color: var(--fg-muted);
+  color: var(--doc-fg-muted);
   font-weight: 500;
 }
 
@@ -107,19 +101,28 @@ body {
   word-break: break-word;
 }
 
+.instruction-block {
+  margin: 16px 0 0;
+  padding: 12px 16px;
+  background: rgba(9, 105, 218, 0.1);
+  border-left: 3px solid var(--doc-accent);
+  border-radius: 4px;
+  white-space: pre-wrap;
+}
+
 .meta-files {
   margin-top: 12px;
   padding: 12px 14px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--doc-code-bg);
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
   font-size: 13px;
 }
 
 .meta-files-title {
-  font-weight: 600;
   margin: 0 0 6px;
-  color: var(--fg-muted);
+  font-weight: 600;
+  color: var(--doc-fg-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-size: 11px;
@@ -137,77 +140,7 @@ body {
   font-size: 12.5px;
 }
 
-.instruction-block {
-  margin: 16px 0 0;
-  padding: 12px 16px;
-  background: var(--accent-soft);
-  border-left: 3px solid var(--accent);
-  border-radius: 4px;
-  white-space: pre-wrap;
-}
-
-/* ---------- Conversation ---------- */
-
-.conversation {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.message {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px 20px;
-  box-shadow: var(--shadow);
-}
-
-.message-role {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 600;
-  color: var(--fg-muted);
-  margin-bottom: 8px;
-}
-
-.message.user {
-  background: var(--bg-user);
-}
-
-.message.assistant {
-  background: var(--bg-assistant);
-}
-
-.message.tool,
-.message.tool-result {
-  background: var(--bg-tool);
-  font-size: 13.5px;
-}
-
-.message.tool .message-role,
-.message.tool-result .message-role {
-  color: #9a6700;
-}
-
-@media (prefers-color-scheme: dark) {
-  .message.tool .message-role,
-  .message.tool-result .message-role {
-    color: #d4a72c;
-  }
-}
-
-.attachment-chip {
-  display: inline-block;
-  padding: 2px 8px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--bg-elevated);
-  font-size: 12px;
-  color: var(--fg-muted);
-  margin: 2px 4px 2px 0;
-}
-
-/* ---------- Markdown body ---------- */
+/* ---------- Markdown body (slotted into every bubble) ---------- */
 
 .md > *:first-child {
   margin-top: 0;
@@ -242,7 +175,7 @@ body {
 }
 
 .md a {
-  color: var(--accent);
+  color: var(--doc-accent);
 }
 
 .md ul,
@@ -254,13 +187,13 @@ body {
 .md blockquote {
   margin: 8px 0;
   padding: 4px 14px;
-  border-left: 3px solid var(--border-strong);
-  color: var(--fg-muted);
+  border-left: 3px solid var(--doc-border-strong);
+  color: var(--doc-fg-muted);
 }
 
 .md hr {
   border: 0;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--doc-border);
   margin: 18px 0;
 }
 
@@ -271,12 +204,12 @@ body {
 }
 .md th,
 .md td {
-  border: 1px solid var(--border);
+  border: 1px solid var(--doc-border);
   padding: 6px 10px;
   text-align: left;
 }
 .md th {
-  background: var(--bg-elevated);
+  background: var(--doc-code-bg);
 }
 
 /* ---------- Code ---------- */
@@ -289,18 +222,18 @@ body {
 }
 
 .md :not(pre) > code {
-  background: var(--code-bg);
+  background: var(--doc-code-bg);
   padding: 1px 6px;
   border-radius: 4px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--doc-border);
 }
 
 .md pre,
 pre.hljs {
-  background: var(--code-bg);
-  color: var(--code-fg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--doc-code-bg);
+  color: var(--doc-fg);
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
   padding: 12px 14px;
   overflow-x: auto;
   margin: 10px 0;
@@ -315,21 +248,17 @@ pre.hljs code,
   padding: 0;
 }
 
-/* ---------- Tool calls ---------- */
+/* ---------- Misc utilities ---------- */
 
-.tool-meta {
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
-    monospace;
-  font-size: 13px;
-  margin-bottom: 6px;
-}
-.tool-meta .tool-name {
-  background: var(--bg-elevated);
+.attachment-chip {
+  display: inline-block;
   padding: 2px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  font-weight: 600;
+  border: 1px solid var(--doc-border);
+  border-radius: 999px;
+  background: var(--doc-code-bg);
+  font-size: 12px;
+  color: var(--doc-fg-muted);
+  margin: 2px 4px 2px 0;
 }
 
 .web-search-results {
@@ -337,13 +266,11 @@ pre.hljs code,
   padding-left: 20px;
 }
 
-/* ---------- Footer ---------- */
-
 .export-footer {
   margin-top: 48px;
   padding-top: 16px;
-  border-top: 1px solid var(--border);
-  color: var(--fg-muted);
+  border-top: 1px solid var(--doc-border);
+  color: var(--doc-fg-muted);
   font-size: 12px;
   text-align: center;
 }
