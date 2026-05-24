@@ -57,6 +57,7 @@ import { AgentModePresetSchema } from './agentPresets';
 import {
   ClearHistoryMessageSchema,
   DeleteAgentMessageSchema,
+  ExportChatHtmlMessageSchema,
   ExportChatMdMessageSchema,
   ExportChatTexMessageSchema,
   GetHistoryDataMessageSchema,
@@ -1027,6 +1028,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     ClearHistoryMessageSchema,
     ExportChatMdMessageSchema,
     ExportChatTexMessageSchema,
+    ExportChatHtmlMessageSchema,
     // Profile messages
     GetProfileDataMessageSchema,
     SelectAgentInboundMessageSchema,
