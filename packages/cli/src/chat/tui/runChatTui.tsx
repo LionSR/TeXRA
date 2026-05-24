@@ -87,6 +87,7 @@ import {
   appendLocalAssistantTranscript,
   appendLocalErrorTranscript,
   appendLocalUserTranscript,
+  finalizeAssistantTranscriptEntries,
   moveLocalTranscriptToStream,
 } from './state/transcript';
 import {
@@ -780,7 +781,13 @@ export async function runChat(
         // buffer before falling back to `result.lastResponse`. Without
         // this, a reply that finalized between sync ticks would never
         // hit the transcript.
-        if (result.streamId) syncStreamLog(result.streamId);
+        if (result.streamId) {
+          syncStreamLog(result.streamId);
+          // The run is definitively done — promote any still-deferred
+          // assistant/tool rows into `<Static>` even if the status-change
+          // path didn't fire its own finalize.
+          finalizeAssistantTranscriptEntries(result.streamId);
+        }
         if (result.category === AgentCategory.ToolUse) {
           appendAssistantTranscriptIfMissing(
             result.streamId,

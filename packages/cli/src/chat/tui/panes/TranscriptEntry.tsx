@@ -148,7 +148,7 @@ export function BoundedTranscriptEntry({
 // Cap the live tail so a multi-megabyte assistant buffer doesn't re-wrap
 // every chunk. The static `<Static>` transcript owns the full history; we
 // only need enough characters here to fill a typical viewport.
-const LIVE_TAIL_ROWS = 24;
+export const LIVE_TAIL_ROWS = 24;
 
 export function LiveTranscriptEntry({
   entry,
