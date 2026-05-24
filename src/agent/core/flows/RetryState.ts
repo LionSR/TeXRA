@@ -1,7 +1,11 @@
 /** Retry state management: Node retry config, error tracking, and retryable node base class. */
 
 import { Node, type NonIterableObject } from '@agent/node';
-import type { AgentTrace } from '@agent/trace';
+import {
+  logErrorData,
+  logProgressStatus,
+  type AgentTrace,
+} from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { type RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import { waitForRetry } from '@agent/runtime/runCoordinators';
@@ -10,11 +14,7 @@ import { getConfig } from '@agent/core/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { normalizeProviderError, toErrorMessage } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
-import {
-  MESSAGE_TYPES,
-  STREAM_STATUS,
-  type RetryErrorInfo,
-} from '@shared/schemas';
+import { STREAM_STATUS, type RetryErrorInfo } from '@shared/schemas';
 
 const BACKGROUND_MODE_MIN_RETRIES = 3;
 
@@ -265,10 +265,7 @@ export abstract class RetryableInvocationNode<
       return { shouldRetry: false, userCancelled: false };
     }
 
-    logger.error(`${operationName} failed: ${formatted.message}`, {
-      data: formatted,
-      messageType: MESSAGE_TYPES.ERROR,
-    });
+    logErrorData(logger, `${operationName} failed: ${formatted.message}`, formatted);
 
     StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
       runtimeHost,
@@ -292,7 +289,7 @@ export abstract class RetryableInvocationNode<
       result.action === 'timeout'
         ? 'Retry timed out (no response)'
         : 'Retry cancelled by user';
-    logger.info(message, { messageType: MESSAGE_TYPES.PROGRESS_STATUS });
+    logProgressStatus(logger, message);
     StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
       runtimeHost,
     });
@@ -310,12 +307,10 @@ export abstract class RetryableInvocationNode<
 
     const formatted = normalizeProviderError(error);
     if (!formatted.userRetryable) {
-      this.services.logger.error(
+      logErrorData(
+        this.services.logger,
         `${this.getOperationName()} failed (no retry available): ${formatted.message}`,
-        {
-          data: formatted,
-          messageType: MESSAGE_TYPES.ERROR,
-        },
+        formatted,
       );
     }
     return {

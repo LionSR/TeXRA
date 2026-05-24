@@ -5,8 +5,9 @@ import {
   setDefaultStreamLogStore,
   StreamLogStore,
 } from '@transcript';
+import { endToolUseCard, startToolUseCard } from '@agent/trace';
 import { createRunTrace, flushPendingRunTraces } from '@logger';
-import { MESSAGE_TYPES, STREAM_LOG_ENTRY_TYPES } from '@shared/schemas';
+import { MESSAGE_TYPES } from '@shared/schemas';
 
 describe('AgentLogger stream output', () => {
   afterEach(() => {
@@ -107,8 +108,8 @@ describe('AgentLogger stream output', () => {
   });
 });
 
-describe('AgentLogger groupId resolution', () => {
-  it('keeps GROUP_START as a root group even when an active stage exists', async () => {
+describe('tool-use card groupId resolution', () => {
+  it('reuses the captured groupId when endToolUseCard is called with no explicit stage', async () => {
     const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
     setDefaultStreamLogStore(store);
@@ -116,55 +117,23 @@ describe('AgentLogger groupId resolution', () => {
     try {
       const logger = createRunTrace('stream').trace;
       const outer = logger.openStage('outer');
-      await outer.within(async () => {
-        // Sanity: a plain log line emitted from inside the stage nests under it.
-        logger.info('inside outer');
-        // Calling startGroup() with no explicit parent must create a ROOT
-        // group, not nest under the active stage.
-        logger.startGroup('detached');
+      const ref = await outer.within(async () =>
+        startToolUseCard(logger, 'demoTool', { arg: 1 }),
+      );
+
+      expect(ref.groupId).toBeDefined();
+
+      // Mirrors the deferred-tool path: caller passes the captured ref so
+      // the end event lands under the same stage as the start.
+      endToolUseCard(logger, ref, {
+        toolName: 'demoTool',
+        input: { arg: 1 },
+        output: 'ok',
       });
 
       const entries = store.get('stream')?.getRange(0) ?? [];
-      const detached = entries.find(
-        (e) =>
-          e.type === STREAM_LOG_ENTRY_TYPES.GROUP_START &&
-          e.text === 'detached',
-      );
-      expect(detached).toBeDefined();
-      expect(detached?.groupId).toBeUndefined();
-
-      const inside = entries.find((e) => e.text === 'inside outer');
-      expect(inside?.groupId).toBeDefined();
-    } finally {
-      setDefaultStreamLogStore(previousStore);
-    }
-  });
-
-  it('does not clobber a tool-use entry groupId when updateToolUse is called with undefined', async () => {
-    const previousStore = getDefaultStreamLogStore();
-    const store = new StreamLogStore();
-    setDefaultStreamLogStore(store);
-
-    try {
-      const logger = createRunTrace('stream').trace;
-      const outer = logger.openStage('outer');
-      const { logId, groupId: createdGroupId } = await outer.within(async () =>
-        logger.logToolUseStart('demoTool', { arg: 1 }),
-      );
-
-      expect(createdGroupId).toBeDefined();
-
-      // Mirrors the deferred-tool path: caller never copied the resolved
-      // groupId back into its ref, so it passes undefined on update.
-      logger.updateToolUse(
-        logId,
-        { toolName: 'demoTool', input: { arg: 1 }, output: 'ok' },
-        undefined,
-      );
-
-      const entries = store.get('stream')?.getRange(0) ?? [];
-      const toolEntry = entries.find((e) => e.id === logId);
-      expect(toolEntry?.groupId).toBe(createdGroupId);
+      const toolEntry = entries.find((e) => e.id === ref.logId);
+      expect(toolEntry?.groupId).toBe(ref.groupId);
     } finally {
       setDefaultStreamLogStore(previousStore);
     }

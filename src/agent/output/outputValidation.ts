@@ -5,12 +5,12 @@
  * reporting missing files for user notification.
  */
 
-import type { StageHandle } from '@agent/trace';
 import {
-  MESSAGE_TYPES,
-  type FileLocation,
-  type StorageKey,
-} from '@shared/schemas';
+  debugInternal,
+  logMissingOutputs,
+  type StageHandle,
+} from '@agent/trace';
+import type { FileLocation, StorageKey } from '@shared/schemas';
 import { flexibleFS } from '@utils/files';
 
 import {
@@ -52,9 +52,9 @@ export async function checkExpectedOutputs(
       const storageKey = getStorageKey(state);
       const expected = deps.config.outputFiles;
       if (!expected?.length) {
-        deps.logger.debug(
+        debugInternal(
+          deps.logger,
           `No expected outputs for round ${currRound} storageKey=${storageKey}`,
-          { messageType: MESSAGE_TYPES.INTERNAL },
         );
         return { storageKey, currRound, missing: [], xmlExists: false };
       }
@@ -68,14 +68,10 @@ export async function checkExpectedOutputs(
       const xmlExists = await flexibleFS.exists(outputLocation);
 
       if (missing.length > 0) {
-        deps.logger.domain({
-          key: 'missingOutputs',
-          text: `${missing.length} output file${missing.length === 1 ? '' : 's'} missing`,
-          data: {
-            missing,
-            xmlFile: xmlExists ? outputLocation.absolutePath : null,
-            documentTag: deps.setting.documentTag,
-          },
+        logMissingOutputs(deps.logger, {
+          missing,
+          xmlFile: xmlExists ? outputLocation.absolutePath : null,
+          documentTag: deps.setting.documentTag,
         });
         deps.logger.debug(
           `Missing expected outputs for round ${currRound}: ${missing.join(', ')}`,

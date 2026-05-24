@@ -30,6 +30,12 @@ import {
   registerExecution,
   writeTerminalStatus,
 } from '@agent/storage';
+import {
+  emitToolUseCard,
+  endToolUseCard,
+  type AgentTrace,
+  type ToolUseCardRef,
+} from '@agent/trace';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { untrackExecution } from '@agent/runtime/executionRegistry';
@@ -44,7 +50,6 @@ import {
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
-import type { TexraTrace } from '@logger';
 import type {
   StreamTabId,
   ExecutionId,
@@ -281,7 +286,7 @@ function formatClaudeError(
 // Stream tab helpers
 // ============================================================================
 
-type ClaudeToolLogRef = ReturnType<TexraTrace['emitToolUse']> & {
+type ClaudeToolLogRef = ToolUseCardRef & {
   toolLog: ToolUseLog;
 };
 
@@ -300,7 +305,7 @@ function publishClaudeAgentStreamUsage(
 }
 
 function logTurnSummary(
-  logger: TexraTrace,
+  logger: AgentTrace,
   wallTimeMs: number,
   usage: TurnResult['usage'],
 ): void {
@@ -338,7 +343,7 @@ interface SdkMessage {
 export async function runStreamedTurn(params: {
   prompt: string;
   childStreamId: StreamTabId;
-  logger: TexraTrace;
+  logger: AgentTrace;
   abortController: AbortController;
   model: string;
   permissionMode: ClaudeAgentPermissionMode;
@@ -433,7 +438,7 @@ export async function runStreamedTurn(params: {
 
 function handleAssistantBlocks(
   blocks: ClaudeMessageBlock[],
-  logger: TexraTrace,
+  logger: AgentTrace,
   refs: Map<string, ClaudeToolLogRef>,
   responseParts: string[],
 ): void {
@@ -460,7 +465,7 @@ function handleAssistantBlocks(
           input: block.input,
           status: 'in_progress',
         });
-        refs.set(block.id, { ...logger.emitToolUse(toolLog), toolLog });
+        refs.set(block.id, { ...emitToolUseCard(logger, toolLog), toolLog });
         break;
       }
     }
@@ -469,7 +474,7 @@ function handleAssistantBlocks(
 
 function handleToolResults(
   blocks: ClaudeMessageBlock[],
-  logger: TexraTrace,
+  logger: AgentTrace,
   refs: Map<string, ClaudeToolLogRef>,
 ): void {
   for (const block of blocks) {
@@ -490,7 +495,7 @@ function handleToolResults(
         isError: true,
       }),
     };
-    logger.updateToolUse(ref.logId, { ...baseLog, ...update }, ref.groupId);
+    endToolUseCard(logger, ref, { ...baseLog, ...update });
     refs.delete(id);
   }
 }
@@ -519,7 +524,7 @@ function startClaudeAgentLoop(params: {
   childStreamId: StreamTabId;
   parentStreamId: StreamTabId;
   executionId: ExecutionId;
-  logger: TexraTrace;
+  logger: AgentTrace;
   disposeTrace: () => void;
   initialPrompt: string;
   model: string;
@@ -546,7 +551,7 @@ function startClaudeAgentLoop(params: {
   session.setQueue(queue);
   registerInterruptible(childStreamId, session);
 
-  const groupId = logger.startGroup('Claude Code session');
+  const sessionStage = logger.openStage('Claude Code session');
 
   queue.enqueue(initialPrompt);
   StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING, {
@@ -643,7 +648,7 @@ function startClaudeAgentLoop(params: {
         }
       }
     } finally {
-      logger.endGroup(groupId, 'stopped');
+      sessionStage.end('stopped');
       for (const sessionId of storedSessionIds) {
         sessionRegistry.delete(sessionId);
       }

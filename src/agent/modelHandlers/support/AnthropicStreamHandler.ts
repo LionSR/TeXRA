@@ -3,7 +3,7 @@
  * Encapsulates the streaming event handling logic for improved testability and readability.
  */
 // Third-party imports
-import type { AgentTrace } from '@agent/trace';
+import { logWebFetch, logWebSearch, type AgentTrace } from '@agent/trace';
 import {
   extractDomain,
   type WebFetchResult,
@@ -516,7 +516,7 @@ export class AnthropicStreamHandler {
    */
   private emitWebSearchResult(result: WebSearchResult): void {
     if (this.config.progressViewEnabled) {
-      this.logger.domain({ key: 'webSearch', data: result });
+      logWebSearch(this.logger, result);
     }
   }
 
@@ -525,7 +525,7 @@ export class AnthropicStreamHandler {
    */
   private emitWebFetchResult(result: WebFetchResult): void {
     if (this.config.progressViewEnabled) {
-      this.logger.domain({ key: 'webFetch', data: result });
+      logWebFetch(this.logger, result);
     }
   }
 }

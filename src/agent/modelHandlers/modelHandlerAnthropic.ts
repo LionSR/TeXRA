@@ -8,6 +8,7 @@ import {
 } from '@anthropic-ai/sdk';
 
 // Local imports - agent
+import { logContextManagementEvent, logSdkError } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { type AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import {
@@ -26,7 +27,6 @@ import { calculateTokenPrice } from '@agent/utils/priceUtils';
 // Local imports - common
 import { getConfig } from '@agent/core/config';
 import {
-  buildErrorLogData,
   getSdkErrorMessage,
   isContextWindowError,
   attachStreamDiagnostics,
@@ -36,7 +36,6 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 import replacementEngine from '@replacement/engine';
-import { MESSAGE_TYPES } from '@shared/schemas';
 
 // Local imports - replacement
 
@@ -668,10 +667,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
           if (validation.adjustedMaxTokens !== options.max_tokens) {
             const originalMaxTokens = options.max_tokens;
-            this.logger.domain({
-              key: 'contextManagement',
-              text: `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${originalMaxTokens} > ${effectiveContextWindow}. Reducing max tokens to ${validation.adjustedMaxTokens}.`,
-              data: {
+            logContextManagementEvent(
+              this.logger,
+              `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${originalMaxTokens} > ${effectiveContextWindow}. Reducing max tokens to ${validation.adjustedMaxTokens}.`,
+              {
                 action: 'max_tokens_reduced',
                 tokensBefore: inputTokens,
                 contextWindow: effectiveContextWindow,
@@ -682,7 +681,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
                 reducedMaxTokens: validation.adjustedMaxTokens,
                 details: 'Anthropic: max_tokens reduced to fit context window',
               },
-            });
+            );
             options.max_tokens = validation.adjustedMaxTokens;
 
             // Only adjust thinking budget when using manual mode and it would
@@ -959,14 +958,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
         )) as ContentBlockParam[];
         roundContent.push(...formattedMediaContent);
       } catch (err) {
-        this.logger.error(
+        logSdkError(
+          this.logger,
           `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
-          {
-            data: buildErrorLogData(err, {
-              operation: 'process media files',
-            }),
-            messageType: MESSAGE_TYPES.ERROR,
-          },
+          err,
+          { operation: 'process media files' },
         );
       }
     }
@@ -2061,14 +2057,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
         lastUserMsg.content.unshift(...formattedMedia);
       }
     } catch (err) {
-      this.logger.error(
+      logSdkError(
+        this.logger,
         `Error adding media to user message: ${getSdkErrorMessage(err)}`,
-        {
-          data: buildErrorLogData(err, {
-            operation: 'add media to user message',
-          }),
-          messageType: MESSAGE_TYPES.ERROR,
-        },
+        err,
+        { operation: 'add media to user message' },
       );
     }
   }

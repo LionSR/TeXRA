@@ -1,7 +1,11 @@
 import * as path from 'path';
 
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
-import type { AgentTrace } from '@agent/trace';
+import {
+  logFileCategory,
+  logFilesLoaded,
+  type AgentTrace,
+} from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { getVisibleAgents, type AgentEntry } from '@agent/index/agentRegistry';
 import {
@@ -119,11 +123,7 @@ export async function buildUserVars(
 
   // Emit aggregated file list if any files were loaded
   if (allLoadedFiles.length > 0) {
-    logger.domain({
-      key: 'filesLoaded',
-      data: { category: 'all', entries: allLoadedFiles },
-      text: 'all',
-    });
+    logFilesLoaded(logger, 'all', allLoadedFiles);
   }
 
   return userVars;
@@ -324,19 +324,7 @@ async function logFileCategoriesWithExistence(
 
   // Log sequentially to preserve UI display order
   for (const { category, entries } of results) {
-    if (entries.length > 0) {
-      const fullEntries: FileListEntry[] = entries.map((entry) => ({
-        path: entry.path,
-        ok: entry.ok,
-        source: category,
-        sourceDisplay: category,
-      }));
-      logger.domain({
-        key: 'filesLoaded',
-        data: { category, entries: fullEntries },
-        text: category,
-      });
-    }
+    logFileCategory(logger, category, entries);
   }
 }
 

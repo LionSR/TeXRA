@@ -7,11 +7,12 @@ import {
   setDefaultStreamLogStore,
   StreamLogStore,
 } from '@transcript';
-import { createRunTrace, type TexraTrace } from '@logger';
+import { logFileCategory, type AgentTrace } from '@agent/trace';
+import { createRunTrace } from '@logger';
 import { MESSAGE_TYPES } from '@shared/schemas';
 
-describe('AgentLogger.logFileCategory', () => {
-  let logger: TexraTrace;
+describe('logFileCategory', () => {
+  let logger: AgentTrace;
   let capturedMessages: any[];
 
   beforeEach(async () => {
@@ -35,13 +36,13 @@ describe('AgentLogger.logFileCategory', () => {
   };
 
   it('handles empty file array gracefully (no-op)', () => {
-    logger.logFileCategory('Input Files', []);
+    logFileCategory(logger,'Input Files', []);
     refreshCaptured();
     assert.equal(capturedMessages.length, 0);
   });
 
   it('logs files with correct category label', () => {
-    logger.logFileCategory('Input Files', [
+    logFileCategory(logger,'Input Files', [
       { path: '/path/to/file.tex', ok: true },
     ]);
 
@@ -52,7 +53,7 @@ describe('AgentLogger.logFileCategory', () => {
   });
 
   it('counts only files with ok === true as loaded', () => {
-    logger.logFileCategory('Reference Files', [
+    logFileCategory(logger,'Reference Files', [
       { path: '/path/exists.tex', ok: true },
       { path: '/path/missing.tex', ok: false },
       { path: '/path/also-exists.tex', ok: true },
@@ -64,7 +65,7 @@ describe('AgentLogger.logFileCategory', () => {
   });
 
   it('treats undefined ok as false (not loaded)', () => {
-    logger.logFileCategory('Auxiliary Files', [
+    logFileCategory(logger,'Auxiliary Files', [
       { path: '/path/exists.tex', ok: true },
       { path: '/path/unknown.tex' }, // ok is undefined
     ]);
@@ -75,7 +76,7 @@ describe('AgentLogger.logFileCategory', () => {
   });
 
   it('handles all files missing (none exist)', () => {
-    logger.logFileCategory('Media Files', [
+    logFileCategory(logger,'Media Files', [
       { path: '/path/missing1.png', ok: false },
       { path: '/path/missing2.png', ok: false },
     ]);
@@ -86,7 +87,7 @@ describe('AgentLogger.logFileCategory', () => {
   });
 
   it('includes source and sourceDisplay in entry data', () => {
-    logger.logFileCategory('Input Files', [
+    logFileCategory(logger,'Input Files', [
       { path: '/path/file.tex', ok: true },
     ]);
 
@@ -100,7 +101,7 @@ describe('AgentLogger.logFileCategory', () => {
   });
 
   it('maps ok properly in entries (undefined becomes false)', () => {
-    logger.logFileCategory('Test', [
+    logFileCategory(logger,'Test', [
       { path: '/a', ok: true },
       { path: '/b', ok: false },
       { path: '/c' }, // undefined

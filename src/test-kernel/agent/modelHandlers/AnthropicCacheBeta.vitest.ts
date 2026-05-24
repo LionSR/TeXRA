@@ -3,8 +3,8 @@ import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent model handlers
+import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
-import type { TexraTrace } from '@logger';
 
 // Type imports
 import type { ToolDefinition } from '@model';
@@ -40,7 +40,7 @@ function createHandler(): ModelHandlerAnthropic {
     warn: vi.fn(),
     error: vi.fn(),
     filesLoaded: vi.fn(),
-  } as unknown as TexraTrace);
+  } as unknown as AgentTrace);
   (handler as { getStreamingConfig: () => boolean }).getStreamingConfig = () =>
     false;
   return handler;

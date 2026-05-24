@@ -50,3 +50,20 @@ export {
   emitToolUseCard,
   type ToolUseCardRef,
 } from './toolUseHelpers';
+export {
+  logSdkError,
+  logErrorData,
+  logProgressStatus,
+  logUserMessage,
+  logInternal,
+  debugInternal,
+  logScratchpad,
+  logContextManagementEvent,
+  logWebSearch,
+  logWebFetch,
+  logLatexdiff,
+  logFilesLoaded,
+  logFileCategory,
+  logMissingOutputs,
+  logContextStateSnapshot,
+} from './helpers';

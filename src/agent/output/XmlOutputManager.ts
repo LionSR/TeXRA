@@ -2,7 +2,12 @@ import * as path from 'path';
 
 import { XMLParser } from 'fast-xml-parser';
 
-import type { AgentTrace } from '@agent/trace';
+import {
+  debugInternal,
+  logInternal,
+  logMissingOutputs,
+  type AgentTrace,
+} from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
@@ -10,7 +15,7 @@ import { WORKFLOW_OUTPUT_BASENAME } from '@agent/output/workflowOutputLayout';
 import { toErrorMessage } from '@common/errors';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
-import { MESSAGE_TYPES, type OutputFileInfo } from '@shared/schemas';
+import type { OutputFileInfo } from '@shared/schemas';
 import {
   AbsoluteFS,
   createExternalLocation,
@@ -77,16 +82,16 @@ export class XmlOutputManager {
     if (result.documents) {
       const suffix =
         EXTRACTION_METHOD_MESSAGES[result.method] ?? 'using fallback method';
-      this.logger.info(
+      logInternal(
+        this.logger,
         `Recovered ${documentTag} ${suffix} (${result.documents.length} document${result.documents.length === 1 ? '' : 's'})`,
-        { messageType: MESSAGE_TYPES.INTERNAL },
       );
       return result.documents;
     }
 
-    this.logger.debug(
+    debugInternal(
+      this.logger,
       `No ${documentTag} found in output file using fallback method`,
-      { messageType: MESSAGE_TYPES.INTERNAL },
     );
     return null;
   }
@@ -137,17 +142,13 @@ export class XmlOutputManager {
     const regexResult = extractDocument(outputContent, documentTag, filename);
     if (regexResult.content) {
       const suffix = EXTRACTION_METHOD_MESSAGES[regexResult.method];
-      if (suffix) {
-        this.logger.info(`Recovered ${documentTag} ${suffix}`, {
-          messageType: MESSAGE_TYPES.INTERNAL,
-        });
-      }
+      if (suffix) logInternal(this.logger, `Recovered ${documentTag} ${suffix}`);
       await AbsoluteFS.write(texLocation.absolutePath, regexResult.content);
       return { location: texLocation, sourceName };
     }
-    this.logger.debug(
+    debugInternal(
+      this.logger,
       `No ${documentTag} found in output file using fallback method`,
-      { messageType: MESSAGE_TYPES.INTERNAL },
     );
 
     const parser = new XMLParser(XML_PARSER_OPTIONS);
@@ -182,14 +183,10 @@ export class XmlOutputManager {
       (_, i) => `<unextracted document ${i + 1}>`,
     );
 
-    this.logger.domain({
-      key: 'missingOutputs',
-      text: `${missingCount} output file${missingCount === 1 ? '' : 's'} missing`,
-      data: {
-        missing,
-        xmlFile: outputLocation.absolutePath,
-        documentTag: this.agentSetting.documentTag,
-      },
+    logMissingOutputs(this.logger, {
+      missing,
+      xmlFile: outputLocation.absolutePath,
+      documentTag: this.agentSetting.documentTag,
     });
   }
 
@@ -212,15 +209,15 @@ export class XmlOutputManager {
       const root = parser.parse(outputContent);
       documents = extractContentFromXMLbyTagMultiple(root, documentTag);
       if (!documents) {
-        this.logger.debug(
+        debugInternal(
+          this.logger,
           `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
-          { messageType: MESSAGE_TYPES.INTERNAL },
         );
       }
     } catch (err) {
-      this.logger.debug(
+      debugInternal(
+        this.logger,
         `Failed to parse XML content: ${toErrorMessage(err)}, attempting fallback extraction...`,
-        { messageType: MESSAGE_TYPES.INTERNAL },
       );
     }
 

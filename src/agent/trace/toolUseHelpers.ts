@@ -58,17 +58,24 @@ export function endToolUseCard(
 /**
  * Fast-tool variant: open AND close a card in one shot when the call is
  * already complete. Matches the legacy `emitToolUse(payload, gid)` shape
- * where `payload.status` may be terminal.
+ * where `payload.status` may be terminal and `toolName` may be missing
+ * (falls back to `'unknown'`, mirroring the original behavior).
  */
 export function emitToolUseCard(
   trace: AgentTrace,
-  payload: { toolName: string; input?: unknown; status?: ToolStatus } & Record<
-    string,
-    unknown
-  >,
+  payload: {
+    toolName?: string;
+    input?: unknown;
+    status?: ToolStatus;
+  } & Record<string, unknown>,
   stageId?: string,
 ): ToolUseCardRef {
-  const ref = startToolUseCard(trace, payload.toolName, payload.input, stageId);
+  const ref = startToolUseCard(
+    trace,
+    payload.toolName ?? 'unknown',
+    payload.input,
+    stageId,
+  );
   if (payload.status && payload.status !== 'in_progress') {
     endToolUseCard(trace, ref, payload, payload.status);
   }

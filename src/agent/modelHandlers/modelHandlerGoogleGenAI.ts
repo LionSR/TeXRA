@@ -30,7 +30,11 @@ import {
 
 // Local imports - agent
 import { ReasoningEffort } from 'llm-zoo';
-import type { AgentTrace } from '@agent/trace';
+import {
+  logContextManagementEvent,
+  logSdkError,
+  type AgentTrace,
+} from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import {
@@ -44,7 +48,6 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE } from '@agent/core/constants';
 import {
-  buildErrorLogData,
   getSdkErrorMessage,
   isContextWindowError,
   attachPartialText,
@@ -52,7 +55,6 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 import replacementEngine from '@replacement/engine';
-import { MESSAGE_TYPES } from '@shared/schemas';
 
 // Local imports - replacement
 
@@ -532,11 +534,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         );
 
         if (validation.adjustedMaxTokens !== originalMaxTokens) {
-          const message = `Token count of message plus max tokens exceeds context window: ${totalTokens} + ${originalMaxTokens} > ${this.config.contextWindow}. Reducing max tokens to ${validation.adjustedMaxTokens}.`;
-          this.logger.domain({
-            key: 'contextManagement',
-            text: message,
-            data: {
+          logContextManagementEvent(
+            this.logger,
+            `Token count of message plus max tokens exceeds context window: ${totalTokens} + ${originalMaxTokens} > ${this.config.contextWindow}. Reducing max tokens to ${validation.adjustedMaxTokens}.`,
+            {
               action: 'max_tokens_reduced',
               tokensBefore: totalTokens,
               contextWindow: this.config.contextWindow,
@@ -547,7 +548,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
               reducedMaxTokens: validation.adjustedMaxTokens,
               details: 'Google: maxOutputTokens reduced to fit context window',
             },
-          });
+          );
           generationConfig.maxOutputTokens = validation.adjustedMaxTokens;
         }
       } catch (err) {
@@ -1522,14 +1523,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       const formattedMedia = await this.createMediaMessage(mediaFiles);
       lastUserMsg.parts.unshift(...formattedMedia);
     } catch (err) {
-      this.logger.error(
+      logSdkError(
+        this.logger,
         `Error adding media to user message: ${getSdkErrorMessage(err)}`,
-        {
-          data: buildErrorLogData(err, {
-            operation: 'add media to user message',
-          }),
-          messageType: MESSAGE_TYPES.ERROR,
-        },
+        err,
+        { operation: 'add media to user message' },
       );
     }
   }

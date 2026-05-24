@@ -4,7 +4,12 @@ import { ZodError } from 'zod';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { isRemoteAgent, resolveAgent, type ResolvedAgent } from '@agent/index';
-import type { AgentTrace, StageHandle } from '@agent/trace';
+import {
+  logSdkError,
+  logUserMessage,
+  type AgentTrace,
+  type StageHandle,
+} from '@agent/trace';
 import type { AgentCore } from '@agent/implementations/flows/common/BaseFlowServices';
 import {
   AgentConfigSchema,
@@ -24,7 +29,6 @@ import { AgentError, getSdkErrorMessage, toErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
 import { createRunTrace, type RunTrace } from '@logger';
 import {
-  MESSAGE_TYPES,
   STREAM_STATUS,
   type ExecutionId,
   type StorageKey,
@@ -157,9 +161,7 @@ async function beginRunStage(
   label: string,
   instruction: string | undefined,
 ): Promise<StageHandle> {
-  if (instruction) {
-    agentLogger.info(instruction, { messageType: MESSAGE_TYPES.USER_MESSAGE });
-  }
+  if (instruction) logUserMessage(agentLogger, instruction);
   return agentLogger.openStage(label);
 }
 
@@ -363,11 +365,14 @@ function compensateFailedActivation(args: {
     // `activatedStreamId` is set only after `runTrace` is created in
     // `assembleAgentLaunchContext`, so runTrace is always present here in
     // practice. Guard for defensiveness.
-    runTrace?.trace.logError(
-      `Failed to start agent ${configPayload.agent}: ${getSdkErrorMessage(err)}`,
-      err,
-      { operation: `start ${configPayload.agent}` },
-    );
+    if (runTrace) {
+      logSdkError(
+        runTrace.trace,
+        `Failed to start agent ${configPayload.agent}: ${getSdkErrorMessage(err)}`,
+        err,
+        { operation: `start ${configPayload.agent}` },
+      );
+    }
     StreamStatusService.set(activatedStreamId, STREAM_STATUS.ERROR, {
       runtimeHost,
     });

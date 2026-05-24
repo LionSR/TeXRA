@@ -10,6 +10,7 @@ import {
 } from 'llm-zoo';
 import { platform } from '@platform/platform';
 import type { AgentTrace } from '@agent/trace';
+import { logWebFetch, logWebSearch } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory, type AgentSetting } from '@agent/core/AgentDataclass';
 import type {
@@ -237,7 +238,7 @@ export abstract class ModelHandler<
    */
   protected emitWebSearchResult(result: WebSearchResult): void {
     if (this.progressViewEnabled) {
-      this.logger.domain({ key: 'webSearch', data: result });
+      logWebSearch(this.logger, result);
     }
   }
 
@@ -248,7 +249,7 @@ export abstract class ModelHandler<
    */
   protected emitWebFetchResult(result: WebFetchResult): void {
     if (this.progressViewEnabled) {
-      this.logger.domain({ key: 'webFetch', data: result });
+      logWebFetch(this.logger, result);
     }
   }
 

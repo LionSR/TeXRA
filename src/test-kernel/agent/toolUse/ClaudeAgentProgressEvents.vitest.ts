@@ -6,7 +6,8 @@ import {
   setDefaultStreamLogStore,
   StreamLogStore,
 } from '@transcript';
-import { createRunTrace, type TexraTrace } from '@logger';
+import type { AgentTrace } from '@agent/trace';
+import { createRunTrace } from '@logger';
 
 // Local imports - shared
 import { MESSAGE_TYPES } from '@shared/schemas';
@@ -33,7 +34,7 @@ async function* streamMessages(messages: unknown[]): AsyncGenerator<unknown> {
 }
 
 async function runWithLoggerStore<T>(
-  fn: (store: StreamLogStore, logger: TexraTrace) => Promise<T>,
+  fn: (store: StreamLogStore, logger: AgentTrace) => Promise<T>,
 ): Promise<T> {
   const previousStore = getDefaultStreamLogStore();
   const store = new StreamLogStore();
@@ -55,7 +56,7 @@ function collectToolLogs(store: StreamLogStore): unknown[] {
     .map((entry) => entry.data);
 }
 
-function runTurn(logger: TexraTrace) {
+function runTurn(logger: AgentTrace) {
   return runStreamedTurn({
     prompt: 'Run lint',
     childStreamId: streamId,

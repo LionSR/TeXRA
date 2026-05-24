@@ -3,6 +3,7 @@ import { OpenRouter } from '@openrouter/sdk';
 import { ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
+import { logContextManagementEvent, logSdkError } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -11,11 +12,7 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE } from '@agent/core/constants';
 import { getConfig } from '@agent/core/config';
-import {
-  buildErrorLogData,
-  getSdkErrorMessage,
-} from '@common/errors/sdkErrorUtils';
-import { MESSAGE_TYPES } from '@shared/schemas';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Local imports - tools and utils
 import type { ToolFileAttachment } from '@tools/result';
@@ -493,10 +490,10 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       const reductionPercent =
         tokensBefore > 0 ? ((reduction / tokensBefore) * 100).toFixed(1) : '0';
 
-      this.logger.domain({
-        key: 'contextManagement',
-        text: `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${estimatedTokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
-        data: {
+      logContextManagementEvent(
+        this.logger,
+        `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${estimatedTokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
+        {
           action: 'compaction',
           tokensBefore,
           tokensAfter: estimatedTokensAfter,
@@ -509,7 +506,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           ),
           details: `Client-side compaction: ${conversationMessages.length} messages summarized`,
         },
-      });
+      );
 
       return { compactedMessages, didCompact: true };
     } catch (err) {
@@ -1226,14 +1223,11 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         (lastUserMsg.content as ChatContentItems[]).unshift(...formattedMedia);
       }
     } catch (err) {
-      this.logger.error(
+      logSdkError(
+        this.logger,
         `Error adding media to user message: ${getSdkErrorMessage(err)}`,
-        {
-          data: buildErrorLogData(err, {
-            operation: 'add media to user message',
-          }),
-          messageType: MESSAGE_TYPES.ERROR,
-        },
+        err,
+        { operation: 'add media to user message' },
       );
     }
   }

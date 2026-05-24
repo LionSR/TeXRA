@@ -7,6 +7,9 @@ import { BaseNode, BatchNode, Flow, Node } from '@agent/node';
 import {
   emitToolUseCard,
   endToolUseCard,
+  logUserMessage,
+  logWebFetch,
+  logWebSearch,
   startToolUseCard,
   type AgentTrace,
 } from '@agent/trace';
@@ -251,9 +254,7 @@ class ToolUsePrepNode<C> extends BaseNode<
     // before the model starts thinking/responding
     if (prepRes.queuedFollowUp) {
       if (!prepRes.synthetic) {
-        this.services.logger.info(prepRes.queuedFollowUp, {
-          messageType: MESSAGE_TYPES.USER_MESSAGE,
-        });
+        logUserMessage(this.services.logger, prepRes.queuedFollowUp);
       }
       shared.messages =
         await this.services.modelHandler.createUserFollowUpMessages(
@@ -350,10 +351,10 @@ class ToolUseProcessNode<C> extends BaseNode<
 
     if (!useStreaming) {
       for (const searchResult of serverToolData.webSearchResults) {
-        services.logger.domain({ key: 'webSearch', data: searchResult });
+        logWebSearch(services.logger, searchResult);
       }
       for (const fetchResult of serverToolData.webFetchResults) {
-        services.logger.domain({ key: 'webFetch', data: fetchResult });
+        logWebFetch(services.logger, fetchResult);
       }
     }
 

@@ -6,7 +6,7 @@ import { Buffer } from 'buffer';
 import pMap from 'p-map';
 
 // Local imports - agent utils
-import type { AgentTrace } from '@agent/trace';
+import { logFilesLoaded, type AgentTrace } from '@agent/trace';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { toErrorMessage } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
@@ -210,11 +210,7 @@ export class MediaAttachmentProcessor {
       this.logger.warn('Some media files failed to load');
     }
 
-    this.logger.domain({
-      key: 'filesLoaded',
-      data: { category: 'all', entries: results },
-      text: 'all',
-    });
+    logFilesLoaded(this.logger, 'all', results);
   }
 
   private async loadMediaEntry(

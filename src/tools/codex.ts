@@ -26,6 +26,13 @@ import {
   registerExecution,
   writeTerminalStatus,
 } from '@agent/storage';
+import {
+  emitToolUseCard,
+  endToolUseCard,
+  logWebSearch,
+  type AgentTrace,
+  type ToolUseCardRef,
+} from '@agent/trace';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { untrackExecution } from '@agent/runtime/executionRegistry';
@@ -40,7 +47,6 @@ import {
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
-import type { TexraTrace } from '@logger';
 import type {
   StreamTabId,
   ExecutionId,
@@ -288,7 +294,7 @@ function formatCodexError(
 // Stream tab helpers
 // ============================================================================
 
-type CodexToolLogRef = ReturnType<TexraTrace['emitToolUse']>;
+type CodexToolLogRef = ToolUseCardRef;
 type ToolUseStatus = NonNullable<ToolUseLog['status']>;
 
 export function publishCodexTodos(
@@ -325,19 +331,17 @@ function toProgressTodos(item: TodoListItem): TodoItem[] {
 function logCodexItem(
   item: ThreadItem,
   childStreamId: StreamTabId,
-  logger: TexraTrace,
+  logger: AgentTrace,
   runtimeHost: AgentRuntimeHost,
 ): void {
   switch (item.type) {
     case 'command_execution': {
-      logger.emitToolUse(buildCodexCommandToolLog(item));
+      emitToolUseCard(logger, buildCodexCommandToolLog(item));
       break;
     }
     case 'file_change': {
       const fileLog = buildCodexFileChangeToolLog(item);
-      if (fileLog) {
-        logger.emitToolUse(fileLog);
-      }
+      if (fileLog) emitToolUseCard(logger, fileLog);
       break;
     }
     case 'agent_message':
@@ -347,11 +351,11 @@ function logCodexItem(
       logger.info(item.text, { messageType: MESSAGE_TYPES.THINKING });
       break;
     case 'mcp_tool_call': {
-      logger.emitToolUse(buildCodexMcpToolLog(item as McpToolCallItem));
+      emitToolUseCard(logger, buildCodexMcpToolLog(item as McpToolCallItem));
       break;
     }
     case 'web_search':
-      logger.logWebSearch({ query: (item as WebSearchItem).query });
+      logWebSearch(logger, { query: (item as WebSearchItem).query });
       break;
     case 'todo_list': {
       publishCodexTodos(
@@ -388,26 +392,26 @@ function buildCodexLiveToolLog(
 }
 
 function updateCodexLiveToolLog(
-  logger: TexraTrace,
+  logger: AgentTrace,
   refs: Map<string, CodexToolLogRef>,
   item: ThreadItem,
   toolLog: ToolUseLog,
 ): void {
   const existing = refs.get(item.id);
   if (!existing) {
-    refs.set(item.id, logger.emitToolUse(toolLog));
+    refs.set(item.id, emitToolUseCard(logger, toolLog));
     return;
   }
 
   const { status = 'completed', ...rest } = toolLog;
-  logger.updateToolUse(existing.logId, rest, existing.groupId, status);
+  endToolUseCard(logger, existing, rest, status);
 }
 
 function publishCodexItemProgress(params: {
   item: ThreadItem;
   status: ToolUseStatus;
   childStreamId: StreamTabId;
-  logger: TexraTrace;
+  logger: AgentTrace;
   refs: Map<string, CodexToolLogRef>;
   runtimeHost: AgentRuntimeHost;
 }): boolean {
@@ -430,7 +434,7 @@ function publishCodexItemProgress(params: {
 
 /** Log a turn summary to the child stream. */
 function logTurnSummary(
-  logger: TexraTrace,
+  logger: AgentTrace,
   wallTimeMs: number,
   usage: RunResult['usage'],
 ): void {
@@ -451,7 +455,7 @@ export async function runStreamedTurn(
   thread: Thread,
   prompt: string,
   childStreamId: StreamTabId,
-  logger: TexraTrace,
+  logger: AgentTrace,
   runtimeHost: AgentRuntimeHost,
   signal?: AbortSignal,
 ): Promise<RunResult> {
@@ -524,7 +528,7 @@ function startCodexLoop(params: {
   childStreamId: StreamTabId;
   parentStreamId: StreamTabId;
   executionId: ExecutionId;
-  logger: TexraTrace;
+  logger: AgentTrace;
   disposeTrace: () => void;
   initialPrompt: string;
   runtimeHost: AgentRuntimeHost;
@@ -547,7 +551,7 @@ function startCodexLoop(params: {
 
   // Start a log group so endRunningGroups() marks it as errored on reload,
   // giving the user a visual cue that the session was interrupted.
-  const groupId = logger.startGroup('Codex session');
+  const sessionStage = logger.openStage('Codex session');
 
   // Register resumed threads immediately — without this, a second codex call
   // with the same thread_id during the first turn would bypass the in-memory
@@ -647,7 +651,7 @@ function startCodexLoop(params: {
         }
       }
     } finally {
-      logger.endGroup(groupId, 'stopped');
+      sessionStage.end('stopped');
       unregisterInterruptible(childStreamId);
       ToolUseFollowUpQueue.release(childStreamId);
       const threadId = thread.id;

@@ -2,7 +2,7 @@ import * as path from 'path';
 
 import { platform } from '@platform/platform';
 import type { StageHandle } from '@agent/trace';
-import type { AgentTrace } from '@agent/trace';
+import { logLatexdiff, type AgentTrace } from '@agent/trace';
 import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { getWorkspaceState } from '@agent/core/stateStore';
 import { toErrorMessage } from '@common/errors';
@@ -239,11 +239,7 @@ export class LatexDiffManager {
     }
 
     if (aggregated.length > 0) {
-      this.logger.domain({
-        key: 'latexdiff',
-        text: `Latexdiff results: ${aggregated.length}`,
-        data: aggregated,
-      });
+      logLatexdiff(this.logger, aggregated);
     } else {
       this.logger.debug('No latexdiff results to report');
     }

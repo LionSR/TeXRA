@@ -1,5 +1,5 @@
 // Type imports - agent
-import type { AgentTrace } from '@agent/trace';
+import { logContextManagementEvent, type AgentTrace } from '@agent/trace';
 
 // Type imports - Anthropic SDK
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
@@ -190,19 +190,15 @@ export function logContextManagementFromResponse(
     : 'Anthropic native compaction (empty summary)';
   const summary = compactionBlock.content?.trim() || undefined;
 
-  logger.domain({
-    key: 'contextManagement',
-    text: `Server-side compaction: summarized context`,
-    data: {
-      action: 'compaction',
-      tokensBefore,
-      tokensAfter: totalInputTokens,
-      contextWindow,
-      utilizationBefore: (tokensBefore / contextWindow) * 100,
-      utilizationAfter: (totalInputTokens / contextWindow) * 100,
-      details,
-      summary,
-    },
+  logContextManagementEvent(logger, `Server-side compaction: summarized context`, {
+    action: 'compaction',
+    tokensBefore,
+    tokensAfter: totalInputTokens,
+    contextWindow,
+    utilizationBefore: (tokensBefore / contextWindow) * 100,
+    utilizationAfter: (totalInputTokens / contextWindow) * 100,
+    details,
+    summary,
   });
 }
 
