@@ -1,4 +1,4 @@
-# TeXRA: AI TeX Research Assistant for VS Code
+# TeXRA: Multi-Agent AI Research Assistant for TeX
 
 [![VS Code Marketplace](https://vsmarketplacebadges.dev/version-short/texra-ai.texra.svg)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
 [![Installs](https://vsmarketplacebadges.dev/installs-short/texra-ai.texra.svg)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
@@ -6,7 +6,9 @@
 [![Rating](https://vsmarketplacebadges.dev/rating-short/texra-ai.texra.svg)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
 [![Open VSX Version](https://img.shields.io/open-vsx/v/texra-ai/texra)](https://open-vsx.org/extension/texra-ai/texra)
 [![Open VSX Downloads](https://img.shields.io/open-vsx/dt/texra-ai/texra)](https://open-vsx.org/extension/texra-ai/texra)
-[![License](https://img.shields.io/badge/license-Proprietary-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-Proprietary-blue)](https://texra.ai/terms)
+[![npm version](https://img.shields.io/npm/v/@texra-ai/cli?label=%40texra-ai%2Fcli)](https://www.npmjs.com/package/@texra-ai/cli)
+[![npm downloads](https://img.shields.io/npm/dm/@texra-ai/cli)](https://www.npmjs.com/package/@texra-ai/cli)
 
 > **🎓 Free for Researchers!** TeXRA offers a **Researcher Access Program** with
 > complimentary access to budget-friendly models from OpenAI, DeepSeek, Gemini,
@@ -20,13 +22,17 @@
 > [Buy Me a Coffee](https://buymeacoffee.com/texra.ai) to keep the program
 > open for everyone.
 
-**TeXRA is a multi-agent research assistant for VS Code.** Instead of chatting
-with a single model, you direct an **Orchestrator** that delegates to a team of
-specialists—researchers, numericists, reviewers, formalizers, LaTeX
-fixers, presenters—each with their own tools, prompts, and model. The result
-is a coordinated lab in your editor that drafts, reviews, computes, and
-formalizes rigorous scientific work alongside its LaTeX, code, figures, and
-PRs.
+**TeXRA is a multi-agent research assistant for LaTeX — in VS Code and the
+terminal.** Instead of chatting with a single model, you direct an
+**Orchestrator** that delegates to a team of specialists—researchers,
+numericists, reviewers, formalizers, LaTeX fixers, presenters—each with their
+own tools, prompts, and model. The result is a coordinated lab that drafts,
+reviews, computes, and formalizes rigorous scientific work alongside its LaTeX,
+code, figures, and PRs.
+
+TeXRA runs as a **VS Code extension** and as a **terminal CLI**
+(`@texra-ai/cli`) that share the same agents and sign-in — see
+[Use TeXRA from the terminal](#use-texra-from-the-terminal) below.
 
 See [texra.ai](https://texra.ai) or the
 [full documentation](https://texra.ai/guide/) for tutorials, agent recipes, and
@@ -122,6 +128,37 @@ New here? Use the **Create Sample Project** button in the Getting Started
 banner (also available as `TeXRA: Create Sample Project` from the command
 palette) to spin up a fully configured workspace.
 
+## Use TeXRA from the terminal
+
+TeXRA also ships as a standalone CLI for running the same agents on your `.tex`
+projects without an editor — useful for scripts, CI, and remote machines.
+
+```sh
+npm install -g @texra-ai/cli   # requires Node.js >= 22
+texra --help
+```
+
+Authenticate the same way as the extension — sign in for the Researcher Access
+Program, or use your own provider keys (environment or a workspace `.env`, same
+`<PROVIDER>_API_KEY` convention as [Configuring Models](#configuring-models)
+below):
+
+```sh
+texra login      # included access; or set <PROVIDER>_API_KEY and pass --api-mode personal
+texra doctor     # verify environment, sign-in, models, and LaTeX tooling
+```
+
+Run a workflow agent, or start an interactive tool-use session:
+
+```sh
+texra run polish --input paper.tex --output paper.polished.tex --print
+texra chat
+```
+
+Use `--output-format json|ndjson` for scriptable output, and `texra history` to
+inspect or resume stored runs. See the
+[documentation](https://texra.ai/guide/) for the full command reference.
+
 ## Requirements
 
 - **VS Code** 1.105+ (also runs in compatible editors such as Cursor,
@@ -178,4 +215,4 @@ Report issues and feature requests on the
 
 © TeXRA Team 2025–2026. All rights reserved.
 
-[Terms of Service](TERMS_OF_SERVICE.md) · [Provider List](https://texra.ai/providers)
+[Terms of Service](https://texra.ai/terms) · [Provider List](https://texra.ai/providers)
