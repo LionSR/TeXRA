@@ -37,7 +37,6 @@ import {
 import { generateExecutionId } from '@utils/core/executionId';
 
 import { AgentProposalCoordinator } from './AgentProposalCoordinator';
-import { AgentUsageReporter } from './AgentUsageReporter';
 import { PlanApprovalCoordinator } from './PlanApprovalCoordinator';
 import { RetryRequestCoordinatorImpl } from './RetryRequestCoordinator';
 import {
@@ -219,12 +218,6 @@ async function assembleAgentLaunchContext(
   const runTrace = createRunTrace(streamId);
   onRunTraceCreated(runTrace);
   const agentLogger = runTrace.trace;
-  const usageReporter = new AgentUsageReporter(
-    agentLogger,
-    streamId,
-    setting.agentCategory,
-    runtimeHost,
-  );
   modelHandler.setAgentCategory(setting.agentCategory);
   modelHandler.setLogger(agentLogger);
 
@@ -280,7 +273,7 @@ async function assembleAgentLaunchContext(
 
   const usageMonitor = new UsageMonitor(
     { capabilities: modelHandler.capabilities, config: modelHandler.config },
-    { logger: agentLogger, usageReporter, storageKey, streamId },
+    { logger: agentLogger, runtimeHost, storageKey, streamId },
     {
       agentName: config.agent,
       agentCategory: setting.agentCategory,

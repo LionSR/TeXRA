@@ -14,6 +14,10 @@ const MANIFEST_PATHS = [
 
 const VERSION_PATTERN = /^v?(\d+)\.(\d+)\.(\d+)$/;
 
+// Release trains use patch values 0 through 10; after .10, development moves
+// to the next minor train.
+const MAX_PATCH_VERSION = 10;
+
 function printUsage() {
   console.error(
     [
@@ -22,8 +26,8 @@ function printUsage() {
       '  node scripts/bump-workspace-version.mjs --version <version> [--check]',
       '',
       'Examples:',
-      '  node scripts/bump-workspace-version.mjs --from v0.37.8',
-      '  node scripts/bump-workspace-version.mjs --version 0.37.9 --check',
+      '  node scripts/bump-workspace-version.mjs --from v0.37.10',
+      '  node scripts/bump-workspace-version.mjs --version 0.38.0 --check',
     ].join('\n'),
   );
 }
@@ -77,8 +81,8 @@ function parseVersion(rawVersion, label) {
 
   const [, major, minor, patch] = match;
   return {
-    major,
-    minor,
+    major: Number(major),
+    minor: Number(minor),
     patch: Number(patch),
   };
 }
@@ -87,8 +91,17 @@ function formatVersion(version) {
   return `${version.major}.${version.minor}.${version.patch}`;
 }
 
-function nextPatchVersion(rawVersion) {
+function nextWorkspaceVersion(rawVersion) {
   const version = parseVersion(rawVersion, 'Release tag');
+
+  if (version.patch >= MAX_PATCH_VERSION) {
+    return formatVersion({
+      major: version.major,
+      minor: version.minor + 1,
+      patch: 0,
+    });
+  }
+
   return formatVersion({
     ...version,
     patch: version.patch + 1,
@@ -111,7 +124,7 @@ function main() {
   const args = parseArgs(process.argv.slice(2));
   const newVersion =
     args.version == null
-      ? nextPatchVersion(args.from)
+      ? nextWorkspaceVersion(args.from)
       : normalizeVersion(args.version);
 
   const mismatches = [];
