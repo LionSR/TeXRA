@@ -2,12 +2,18 @@
 import { withMermaid } from 'vitepress-plugin-mermaid';
 
 // Define the base VitePress config
+// TEST DEPLOY: served at https://lionsr.github.io/TeXRA/. When we move to
+// the texra.ai custom domain, set base back to '/' and re-add the CNAME
+// step in .github/workflows/docs-deploy.yml.
+const base = '/TeXRA/';
+
 const baseConfig = {
   title: 'TeXRA',
+  base,
   description:
     'Multi-agent AI system for scientific discovery. Specialized agents that polish LaTeX, search literature, generate figures, and build presentations — orchestrated in reproducible workflows inside VS Code.',
   head: [
-    ['link', { rel: 'icon', href: '/logo-128x128.svg' }],
+    ['link', { rel: 'icon', href: `${base}logo-128x128.svg` }],
     [
       'script',
       {},
@@ -183,12 +189,34 @@ const baseConfig = {
       provider: 'local',
     },
     footer: {
-      message:
-        '<a href="/terms">Terms of Service</a> · <a href="/providers">Providers</a> · <a href="/guide/open-source">Open Source</a>',
+      message: `<a href="${base}terms">Terms of Service</a> · <a href="${base}providers">Providers</a> · <a href="${base}guide/open-source">Open Source</a>`,
       copyright: 'Copyright © 2024-2026 TeXRA Team. All rights reserved.',
     },
   },
   ignoreDeadLinks: true,
+  // Public site allowlist: only index.md, launch.md, terms.md, providers.md,
+  // and everything under guide/. Every other markdown file in this directory
+  // is internal and must NOT be published to texra.ai. Static assets under
+  // public/ are served as-is and are fine to expose.
+  srcExclude: [
+    'README.md',
+    'analysis-subagent-updates.md',
+    'desktop-signing-ci.md',
+    'electron-migration-plan.md',
+    'relay-tier-config.md',
+    'blog/**',
+    'design/**',
+    'dev/**',
+    'architecture/**',
+    'pocketflow/**',
+    'prd/**',
+    'proposals/**',
+    'reference/**',
+    'skills/**',
+    'supabase/**',
+    'toolCalls/**',
+    'node_modules/**',
+  ],
   vite: {
     vue: {
       template: {
