@@ -27,7 +27,7 @@ _texra_completion_path() {
     esac
     next="$token"
     [[ -n "$path" ]] && next="$path $token"
-    case " orchestrate chat run resume history history list history show history delete agents agents list agents show skills skills list multi-agent multi-agent list multi-agent show multi-agent run models models list models show login logout usage auth auth status auth usage doctor completion version help " in
+    case " orchestrate chat run resume init history history list history show history delete agents agents list agents show skills skills list multi-agent multi-agent list multi-agent show multi-agent run models models list models show login logout usage auth auth status auth usage doctor completion version help " in
       *" $next "*) path="$next"; ((i++)); continue ;;
     esac
     break
@@ -44,17 +44,19 @@ _texra() {
   case "$prev" in
     --output-format) COMPREPLY=( $(compgen -W 'text json ndjson' -- "$cur") ); return ;;
     --approval-policy) COMPREPLY=( $(compgen -W 'never ask yolo' -- "$cur") ); return ;;
+    --scope) COMPREPLY=( $(compgen -W 'workspace user' -- "$cur") ); return ;;
     --model|-m) COMPREPLY=( $(compgen -W "$(_texra_models)" -- "$cur") ); return ;;
     --agent) COMPREPLY=( $(compgen -W "$(_texra_agents)" -- "$cur") ); return ;;
   esac
 
   path="$(_texra_completion_path)"
   case "$path" in
-    '') subcommands='orchestrate chat run resume history agents skills multi-agent models login logout usage auth doctor completion version help'; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
+    '') subcommands='orchestrate chat run resume init history agents skills multi-agent models login logout usage auth doctor completion version help'; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
     'orchestrate') subcommands=''; flags='--quiet -q --cwd --api-mode --approval-policy' ;;
     'chat') subcommands=''; flags='--quiet -q --cwd --api-mode --approval-policy --agent --model -m' ;;
     'run') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy --input -i --context -c --output --output-dir --model -m --instruction' ;;
     'resume') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
+    'init') subcommands=''; flags='--cwd --yes -y --force --gitignore --scope' ;;
     'history') subcommands='list show delete'; flags='' ;;
     'history list') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
     'history show') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
@@ -81,7 +83,7 @@ _texra() {
     'completion') subcommands=''; flags='--print -p --quiet -q --cwd --api-mode --output-format --approval-policy' ;;
     'version') subcommands=''; flags='' ;;
     'help') subcommands=''; flags='' ;;
-    *) subcommands='orchestrate chat run resume history agents skills multi-agent models login logout usage auth doctor completion version help'; flags='' ;;
+    *) subcommands='orchestrate chat run resume init history agents skills multi-agent models login logout usage auth doctor completion version help'; flags='' ;;
   esac
 
   if [[ "$path" == 'run' && "$cur" != -* ]]; then
@@ -121,6 +123,7 @@ complete -c texra -n '__fish_use_subcommand' -a 'orchestrate' -d 'Choose a chat,
 complete -c texra -n '__fish_use_subcommand' -a 'chat' -d 'Interactive tool-use chat session'
 complete -c texra -n '__fish_use_subcommand' -a 'run' -d 'Run a workflow agent'
 complete -c texra -n '__fish_use_subcommand' -a 'resume' -d 'Re-run a stored execution config'
+complete -c texra -n '__fish_use_subcommand' -a 'init' -d 'Bootstrap a .texra/config.json with sensible defaults'
 complete -c texra -n '__fish_use_subcommand' -a 'history' -d 'Inspect stored executions'
 complete -c texra -n '__fish_use_subcommand' -a 'agents' -d 'Inspect TeXRA agents'
 complete -c texra -n '__fish_use_subcommand' -a 'skills' -d 'Inspect TeXRA skills'
@@ -168,6 +171,11 @@ complete -c texra -n '__fish_seen_subcommand_from resume' -l 'cwd' -r -d 'Workin
 complete -c texra -n '__fish_seen_subcommand_from resume' -l 'api-mode' -r -d 'API access mode: included (TeXRA relay) or personal (your own API keys)'
 complete -c texra -n '__fish_seen_subcommand_from resume' -l 'output-format' -r -a 'text json ndjson' -d 'Output format for headless runs (default: text)'
 complete -c texra -n '__fish_seen_subcommand_from resume' -l 'approval-policy' -r -a 'never ask yolo' -d 'When to ask before privileged tool actions (default: never)'
+complete -c texra -n '__fish_seen_subcommand_from init' -l 'cwd' -r -d 'Working directory to initialize (defaults to $PWD)'
+complete -c texra -n '__fish_seen_subcommand_from init' -l 'yes' -s 'y' -d 'Accept defaults non-interactively'
+complete -c texra -n '__fish_seen_subcommand_from init' -l 'force' -d 'Overwrite an existing config file'
+complete -c texra -n '__fish_seen_subcommand_from init' -l 'gitignore' -d 'Add .texra/ to .gitignore (non-interactive default: false)'
+complete -c texra -n '__fish_seen_subcommand_from init' -l 'scope' -r -a 'workspace user' -d 'Write ./.texra (workspace) or ~/.texra (user)'
 complete -c texra -n '__fish_seen_subcommand_from history' -a 'list' -d 'List stored executions'
 complete -c texra -n '__fish_seen_subcommand_from history' -a 'show' -d 'Show one stored execution'
 complete -c texra -n '__fish_seen_subcommand_from history' -a 'delete' -d 'Delete stored executions'
@@ -336,6 +344,7 @@ _texra() {
     'chat') true; _arguments '--quiet[Suppress progress output and informational logs]' '-q[Suppress progress output and informational logs]' '--cwd[Working directory the agent runs against (defaults to $PWD)]:value:' '--api-mode[API access mode: included (TeXRA relay) or personal (your own API keys)]:value:' '--approval-policy[When to ask before privileged tool actions (default: never)]: :(never ask yolo)' '--agent[Tool-use agent for the session]:value:' '--model[Model for the session]:value:' '-m[Model for the session]:value:' ;;
     'run') true; _arguments '--print[Run non-interactively and print the result to stdout]' '-p[Run non-interactively and print the result to stdout]' '--quiet[Suppress progress output and informational logs]' '-q[Suppress progress output and informational logs]' '--cwd[Working directory the agent runs against (defaults to $PWD)]:value:' '--api-mode[API access mode: included (TeXRA relay) or personal (your own API keys)]:value:' '--output-format[Output format for headless runs (default: text)]: :(text json ndjson)' '--approval-policy[When to ask before privileged tool actions (default: never)]: :(never ask yolo)' '--input[Input file passed to the workflow agent]:value:' '-i[Input file passed to the workflow agent]:value:' '--context[Read-only context file passed to the workflow agent]:value:' '-c[Read-only context file passed to the workflow agent]:value:' '--output[Output file path]:value:' '--output-dir[Directory to copy multi-input workflow outputs into]:value:' '--model[Model for the agent]:value:' '-m[Model for the agent]:value:' '--instruction[Instruction passed to the workflow agent]:value:' '1:agent:($(_texra_agents))' ;;
     'resume') true; _arguments '--print[Run non-interactively and print the result to stdout]' '-p[Run non-interactively and print the result to stdout]' '--quiet[Suppress progress output and informational logs]' '-q[Suppress progress output and informational logs]' '--cwd[Working directory the agent runs against (defaults to $PWD)]:value:' '--api-mode[API access mode: included (TeXRA relay) or personal (your own API keys)]:value:' '--output-format[Output format for headless runs (default: text)]: :(text json ndjson)' '--approval-policy[When to ask before privileged tool actions (default: never)]: :(never ask yolo)' ;;
+    'init') true; _arguments '--cwd[Working directory to initialize (defaults to $PWD)]:value:' '--yes[Accept defaults non-interactively]' '-y[Accept defaults non-interactively]' '--force[Overwrite an existing config file]' '--gitignore[Add .texra/ to .gitignore (non-interactive default: false)]' '--scope[Write ./.texra (workspace) or ~/.texra (user)]: :(workspace user)' ;;
     'history') _values 'subcommands' 'list' 'show' 'delete'; true ;;
     'history list') true; _arguments '--print[Run non-interactively and print the result to stdout]' '-p[Run non-interactively and print the result to stdout]' '--quiet[Suppress progress output and informational logs]' '-q[Suppress progress output and informational logs]' '--cwd[Working directory the agent runs against (defaults to $PWD)]:value:' '--api-mode[API access mode: included (TeXRA relay) or personal (your own API keys)]:value:' '--output-format[Output format for headless runs (default: text)]: :(text json ndjson)' '--approval-policy[When to ask before privileged tool actions (default: never)]: :(never ask yolo)' ;;
     'history show') true; _arguments '--print[Run non-interactively and print the result to stdout]' '-p[Run non-interactively and print the result to stdout]' '--quiet[Suppress progress output and informational logs]' '-q[Suppress progress output and informational logs]' '--cwd[Working directory the agent runs against (defaults to $PWD)]:value:' '--api-mode[API access mode: included (TeXRA relay) or personal (your own API keys)]:value:' '--output-format[Output format for headless runs (default: text)]: :(text json ndjson)' '--approval-policy[When to ask before privileged tool actions (default: never)]: :(never ask yolo)' ;;
@@ -362,7 +371,7 @@ _texra() {
     'completion') true; _arguments '--print[Run non-interactively and print the result to stdout]' '-p[Run non-interactively and print the result to stdout]' '--quiet[Suppress progress output and informational logs]' '-q[Suppress progress output and informational logs]' '--cwd[Working directory the agent runs against (defaults to $PWD)]:value:' '--api-mode[API access mode: included (TeXRA relay) or personal (your own API keys)]:value:' '--output-format[Output format for headless runs (default: text)]: :(text json ndjson)' '--approval-policy[When to ask before privileged tool actions (default: never)]: :(never ask yolo)' '1:shell:(bash zsh fish)' ;;
     'version') true; true ;;
     'help') true; true ;;
-    *) _arguments '--print[Run non-interactively and print the result to stdout]' '-p[Run non-interactively and print the result to stdout]' '--quiet[Suppress progress output and informational logs]' '-q[Suppress progress output and informational logs]' '--cwd[Working directory the agent runs against (defaults to $PWD)]:value:' '--api-mode[API access mode: included (TeXRA relay) or personal (your own API keys)]:value:' '--output-format[Output format for headless runs (default: text)]: :(text json ndjson)' '--approval-policy[When to ask before privileged tool actions (default: never)]: :(never ask yolo)' '1:command:(orchestrate chat run resume history agents skills multi-agent models login logout usage auth doctor completion version help)' ;;
+    *) _arguments '--print[Run non-interactively and print the result to stdout]' '-p[Run non-interactively and print the result to stdout]' '--quiet[Suppress progress output and informational logs]' '-q[Suppress progress output and informational logs]' '--cwd[Working directory the agent runs against (defaults to $PWD)]:value:' '--api-mode[API access mode: included (TeXRA relay) or personal (your own API keys)]:value:' '--output-format[Output format for headless runs (default: text)]: :(text json ndjson)' '--approval-policy[When to ask before privileged tool actions (default: never)]: :(never ask yolo)' '1:command:(orchestrate chat run resume init history agents skills multi-agent models login logout usage auth doctor completion version help)' ;;
   esac
 }
 

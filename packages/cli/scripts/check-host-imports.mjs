@@ -21,6 +21,7 @@ const processInputAllowedFiles = new Set([
   // input pipeline; this file is the TUI I/O boundary.
   'packages/cli/src/chat/tui/runChatTui.tsx',
   'packages/cli/src/orchestration/runOrchestrationTui.tsx',
+  'packages/cli/src/init/runInitWizard.tsx',
 ]);
 
 const processTerminalInputAllowedFiles = new Set([
@@ -36,6 +37,7 @@ const processOutputAllowedFiles = new Set([
   // of the TUI must keep going through logSinks.
   'packages/cli/src/chat/tui/runChatTui.tsx',
   'packages/cli/src/orchestration/runOrchestrationTui.tsx',
+  'packages/cli/src/init/runInitWizard.tsx',
 ]);
 
 const processOutputPatterns = [

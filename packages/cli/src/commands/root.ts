@@ -29,6 +29,7 @@ import { completionCommand } from './completion';
 import { doctorCommand } from './doctor';
 import { helpCommand } from './help';
 import { historyCommand } from './history';
+import { initCommand } from './init';
 import { modelsCommand } from './models';
 import { multiAgentCommand } from './multiAgent';
 import { orchestrationCommand } from './orchestrate';
@@ -63,6 +64,7 @@ export const rootCommand = defineCommand({
     chat: chatCommand,
     run: runWorkflowCommand,
     resume: resumeCommand,
+    init: initCommand,
     history: historyCommand,
     agents: agentsCommand,
     skills: skillsCommand,
