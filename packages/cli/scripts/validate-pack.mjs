@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const cliRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const packageName = '@texra/cli';
+const packageName = '@texra-ai/cli';
 const packageDir = 'package/';
 
 function run(command, args, options = {}) {
@@ -42,6 +42,9 @@ function assertNoForbiddenTarballEntries(entries) {
       relative.endsWith('.ts') ||
       relative.startsWith('src/') ||
       relative.startsWith('scripts/') ||
+      // The only executable that ships under dist/bin is the CLI itself.
+      // Anything else there (e.g. the PTY tui-harness) is a dev/test artifact.
+      (relative.startsWith('dist/bin/') && relative !== 'dist/bin/texra.js') ||
       relative.startsWith('dist/resources/walkthroughs/') ||
       relative.startsWith('dist/resources/examples/') ||
       relative.startsWith('dist/resources/logo-') ||
