@@ -174,8 +174,9 @@ export class TraceEmitter implements AgentTrace {
 
   openStage(label: string, options: StageOptions = {}): StageHandle {
     const defaultStatus = options.defaultStatus ?? END_GROUP_STATUS.STOPPED;
-    const parentId =
-      options.parent?.id ?? options.parentId ?? this.activeStageId();
+    const parentId = options.root
+      ? undefined
+      : (options.parent?.id ?? options.parentId ?? this.activeStageId());
 
     if (options.skip) {
       return new SkippedStageHandle(this, parentId);

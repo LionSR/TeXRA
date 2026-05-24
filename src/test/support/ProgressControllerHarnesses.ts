@@ -14,8 +14,7 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import type { ExecutionRequest } from '@agent/core/executionRequests';
 
-// Local imports - logger
-import type { TaskState, WorkflowTaskState } from '@logger/TaskState';
+import type { TaskState, WorkflowTaskState } from '@agent/core/TaskState';
 
 // Local imports - shared
 import type { OutputFileInfo, StreamTabId } from '@shared/schemas';

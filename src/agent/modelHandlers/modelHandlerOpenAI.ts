@@ -19,6 +19,7 @@ import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
 
 // Local imports - agent components
+import { logContextManagementEvent, logSdkError } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import {
@@ -40,9 +41,9 @@ import {
   isUserAbort,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
+import type { ToolDefinition } from '@model';
 
 // Local imports - tools and utils
-import type { ToolDefinition } from '@model';
 import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
@@ -300,7 +301,8 @@ export class ModelHandlerOpenAI<
       const reductionPercent =
         tokensBefore > 0 ? ((reduction / tokensBefore) * 100).toFixed(1) : '0';
 
-      this.logger.logContextManagement(
+      logContextManagementEvent(
+        this.logger,
         `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${estimatedTokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
         {
           action: 'compaction',
@@ -712,7 +714,8 @@ export class ModelHandlerOpenAI<
         );
 
         if (validation.adjustedMaxTokens !== currentMaxTokens) {
-          this.logger.logContextManagement(
+          logContextManagementEvent(
+            this.logger,
             `Token count (${inputTokens}) + ${maxTokensKey} (${currentMaxTokens}) exceeds context window (${this.config.contextWindow}). Reducing to ${validation.adjustedMaxTokens}.`,
             {
               action: 'max_tokens_reduced',
@@ -1730,7 +1733,8 @@ export class ModelHandlerOpenAI<
         lastUserMsg.content.unshift(...formattedMedia);
       }
     } catch (err) {
-      this.logger.logError(
+      logSdkError(
+        this.logger,
         `Error adding media to user message: ${getSdkErrorMessage(err)}`,
         err,
         { operation: 'add media to user message' },

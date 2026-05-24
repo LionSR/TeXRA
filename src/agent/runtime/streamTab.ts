@@ -1,4 +1,4 @@
-import { getCleanAgentName } from '@agent/index';
+import { getCleanAgentName } from '@agent/index/agentRegistry';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 /**

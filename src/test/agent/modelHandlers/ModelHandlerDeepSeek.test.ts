@@ -10,8 +10,8 @@ import {
 } from 'llm-zoo';
 
 // Local imports - agent
+import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
-import type { TexraTrace } from '@logger';
 
 // Type imports
 import type { ToolDefinition } from '@model';
@@ -50,7 +50,7 @@ function buildConfig(overrides: Partial<ModelConfig> = {}): ModelConfig {
   };
 }
 
-function createLoggerStub(): Partial<TexraTrace> {
+function createLoggerStub(): Partial<AgentTrace> {
   return {
     debug: () => {
       /* no-op */
@@ -166,7 +166,7 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
         },
       }),
     );
-    handler.setLogger(createLoggerStub() as TexraTrace);
+    handler.setLogger(createLoggerStub() as AgentTrace);
     (handler as any).getStreamingConfig = () => false;
 
     let capturedParams: any;
@@ -213,7 +213,7 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
         },
       }),
     );
-    handler.setLogger(createLoggerStub() as TexraTrace);
+    handler.setLogger(createLoggerStub() as AgentTrace);
     (handler as any).getStreamingConfig = () => false;
 
     let capturedParams: any;
@@ -414,7 +414,7 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
 
   it('sends nullable Chat Completions tools without SDK strict auto-parse validation', async () => {
     const handler = new ModelHandlerDeepSeek(buildConfig());
-    handler.setLogger(createLoggerStub() as TexraTrace);
+    handler.setLogger(createLoggerStub() as AgentTrace);
     (handler as any).getStreamingConfig = () => false;
 
     let capturedParams: any;

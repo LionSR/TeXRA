@@ -1,6 +1,6 @@
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
-import type { StreamLogStore } from '@logger/StreamLogStore';
 import type { StreamTabId } from '@shared/schemas';
+import type { StreamLogStore } from '@transcript';
 import type * as vscode from 'vscode';
 
 const FRAME_INTERVAL_MS = 16;

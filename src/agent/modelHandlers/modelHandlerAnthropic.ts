@@ -8,6 +8,7 @@ import {
 } from '@anthropic-ai/sdk';
 
 // Local imports - agent
+import { logContextManagementEvent, logSdkError } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { type AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import {
@@ -34,8 +35,6 @@ import {
   isUserAbort,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
-
-// Local imports - replacement
 import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
@@ -666,7 +665,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
           if (validation.adjustedMaxTokens !== options.max_tokens) {
             const originalMaxTokens = options.max_tokens;
-            this.logger.logContextManagement(
+            logContextManagementEvent(
+              this.logger,
               `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${originalMaxTokens} > ${effectiveContextWindow}. Reducing max tokens to ${validation.adjustedMaxTokens}.`,
               {
                 action: 'max_tokens_reduced',
@@ -956,7 +956,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
         )) as ContentBlockParam[];
         roundContent.push(...formattedMediaContent);
       } catch (err) {
-        this.logger.logError(
+        logSdkError(
+          this.logger,
           `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
           err,
           { operation: 'process media files' },
@@ -2054,7 +2055,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
         lastUserMsg.content.unshift(...formattedMedia);
       }
     } catch (err) {
-      this.logger.logError(
+      logSdkError(
+        this.logger,
         `Error adding media to user message: ${getSdkErrorMessage(err)}`,
         err,
         { operation: 'add media to user message' },
