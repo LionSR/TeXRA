@@ -8,10 +8,8 @@ import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
 import { REVERSE_SEARCH_ROWS } from './input/ReverseSearch';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { ChildControlPicker } from './modals/ChildControlPicker';
-import {
-  ConversationPane,
-  StaticConversationTranscript,
-} from './panes/ConversationPane';
+import { ConversationPane } from './panes/ConversationPane';
+import { StaticConversationTranscript } from './panes/StaticConversationTranscript';
 import { InputBar } from './panes/InputBar';
 import { StatusBar } from './panes/StatusBar';
 import { StreamTabsStrip } from './panes/StreamTabsStrip';
