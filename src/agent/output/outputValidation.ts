@@ -68,10 +68,14 @@ export async function checkExpectedOutputs(
       const xmlExists = await flexibleFS.exists(outputLocation);
 
       if (missing.length > 0) {
-        deps.logger.missingOutputs({
-          missing,
-          xmlFile: xmlExists ? outputLocation.absolutePath : null,
-          documentTag: deps.setting.documentTag,
+        deps.logger.domain({
+          key: 'missingOutputs',
+          text: `${missing.length} output file${missing.length === 1 ? '' : 's'} missing`,
+          data: {
+            missing,
+            xmlFile: xmlExists ? outputLocation.absolutePath : null,
+            documentTag: deps.setting.documentTag,
+          },
         });
         deps.logger.debug(
           `Missing expected outputs for round ${currRound}: ${missing.join(', ')}`,

@@ -23,8 +23,10 @@ import {
   classifyAgentError,
   getSdkErrorMessage,
 } from '@common/errors';
+import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
 import { createChannelTrace } from '@logger';
 import {
+  MESSAGE_TYPES,
   STREAM_STATUS,
   END_GROUP_STATUS,
   EXECUTION_STATUS,
@@ -210,8 +212,9 @@ async function runFlowWithLifecycle(
     // are delivered to the orchestrator below, so avoid adding a second
     // wrapper error that makes a child failure look like the parent failed.
     if (kind !== 'abort' && !options?.isSubagent) {
-      await ctx.logger.logError(errorMsg, err, {
-        operation: `execute ${agentName}`,
+      ctx.logger.error(errorMsg, {
+        data: buildErrorLogData(err, { operation: `execute ${agentName}` }),
+        messageType: MESSAGE_TYPES.ERROR,
       });
     }
 

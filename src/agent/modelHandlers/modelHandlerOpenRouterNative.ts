@@ -11,7 +11,11 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE } from '@agent/core/constants';
 import { getConfig } from '@agent/core/config';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import {
+  buildErrorLogData,
+  getSdkErrorMessage,
+} from '@common/errors/sdkErrorUtils';
+import { MESSAGE_TYPES } from '@shared/schemas';
 
 // Local imports - tools and utils
 import type { ToolFileAttachment } from '@tools/result';
@@ -489,9 +493,10 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       const reductionPercent =
         tokensBefore > 0 ? ((reduction / tokensBefore) * 100).toFixed(1) : '0';
 
-      this.logger.logContextManagement(
-        `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${estimatedTokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
-        {
+      this.logger.domain({
+        key: 'contextManagement',
+        text: `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${estimatedTokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
+        data: {
           action: 'compaction',
           tokensBefore,
           tokensAfter: estimatedTokensAfter,
@@ -504,7 +509,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           ),
           details: `Client-side compaction: ${conversationMessages.length} messages summarized`,
         },
-      );
+      });
 
       return { compactedMessages, didCompact: true };
     } catch (err) {
@@ -1221,10 +1226,14 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         (lastUserMsg.content as ChatContentItems[]).unshift(...formattedMedia);
       }
     } catch (err) {
-      this.logger.logError(
+      this.logger.error(
         `Error adding media to user message: ${getSdkErrorMessage(err)}`,
-        err,
-        { operation: 'add media to user message' },
+        {
+          data: buildErrorLogData(err, {
+            operation: 'add media to user message',
+          }),
+          messageType: MESSAGE_TYPES.ERROR,
+        },
       );
     }
   }

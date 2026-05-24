@@ -26,6 +26,7 @@ import { calculateTokenPrice } from '@agent/utils/priceUtils';
 // Local imports - common
 import { getConfig } from '@agent/core/config';
 import {
+  buildErrorLogData,
   getSdkErrorMessage,
   isContextWindowError,
   attachStreamDiagnostics,
@@ -34,9 +35,10 @@ import {
   isUserAbort,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
+import replacementEngine from '@replacement/engine';
+import { MESSAGE_TYPES } from '@shared/schemas';
 
 // Local imports - replacement
-import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
 import type { ToolFileAttachment } from '@tools/result';
@@ -666,9 +668,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
           if (validation.adjustedMaxTokens !== options.max_tokens) {
             const originalMaxTokens = options.max_tokens;
-            this.logger.logContextManagement(
-              `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${originalMaxTokens} > ${effectiveContextWindow}. Reducing max tokens to ${validation.adjustedMaxTokens}.`,
-              {
+            this.logger.domain({
+              key: 'contextManagement',
+              text: `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${originalMaxTokens} > ${effectiveContextWindow}. Reducing max tokens to ${validation.adjustedMaxTokens}.`,
+              data: {
                 action: 'max_tokens_reduced',
                 tokensBefore: inputTokens,
                 contextWindow: effectiveContextWindow,
@@ -679,7 +682,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
                 reducedMaxTokens: validation.adjustedMaxTokens,
                 details: 'Anthropic: max_tokens reduced to fit context window',
               },
-            );
+            });
             options.max_tokens = validation.adjustedMaxTokens;
 
             // Only adjust thinking budget when using manual mode and it would
@@ -956,10 +959,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
         )) as ContentBlockParam[];
         roundContent.push(...formattedMediaContent);
       } catch (err) {
-        this.logger.logError(
+        this.logger.error(
           `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
-          err,
-          { operation: 'process media files' },
+          {
+            data: buildErrorLogData(err, {
+              operation: 'process media files',
+            }),
+            messageType: MESSAGE_TYPES.ERROR,
+          },
         );
       }
     }
@@ -2054,10 +2061,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
         lastUserMsg.content.unshift(...formattedMedia);
       }
     } catch (err) {
-      this.logger.logError(
+      this.logger.error(
         `Error adding media to user message: ${getSdkErrorMessage(err)}`,
-        err,
-        { operation: 'add media to user message' },
+        {
+          data: buildErrorLogData(err, {
+            operation: 'add media to user message',
+          }),
+          messageType: MESSAGE_TYPES.ERROR,
+        },
       );
     }
   }

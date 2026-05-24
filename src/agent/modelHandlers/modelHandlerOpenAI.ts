@@ -32,6 +32,7 @@ import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@agent/core/constants';
 import { getConfig } from '@agent/core/config';
 import {
+  buildErrorLogData,
   getSdkErrorMessage,
   isContextWindowError,
   isMissingFinishReasonError,
@@ -40,9 +41,10 @@ import {
   isUserAbort,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
+import type { ToolDefinition } from '@model';
+import { MESSAGE_TYPES } from '@shared/schemas';
 
 // Local imports - tools and utils
-import type { ToolDefinition } from '@model';
 import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
@@ -300,9 +302,10 @@ export class ModelHandlerOpenAI<
       const reductionPercent =
         tokensBefore > 0 ? ((reduction / tokensBefore) * 100).toFixed(1) : '0';
 
-      this.logger.logContextManagement(
-        `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${estimatedTokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
-        {
+      this.logger.domain({
+        key: 'contextManagement',
+        text: `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${estimatedTokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
+        data: {
           action: 'compaction',
           tokensBefore,
           tokensAfter: estimatedTokensAfter,
@@ -311,7 +314,7 @@ export class ModelHandlerOpenAI<
           utilizationAfter: Number(utilizationAfter.toFixed(1)),
           details: `Client-side compaction: ${conversationMessages.length} messages summarized`,
         },
-      );
+      });
 
       return { compactedMessages, didCompact: true };
     } catch (err) {
@@ -712,9 +715,10 @@ export class ModelHandlerOpenAI<
         );
 
         if (validation.adjustedMaxTokens !== currentMaxTokens) {
-          this.logger.logContextManagement(
-            `Token count (${inputTokens}) + ${maxTokensKey} (${currentMaxTokens}) exceeds context window (${this.config.contextWindow}). Reducing to ${validation.adjustedMaxTokens}.`,
-            {
+          this.logger.domain({
+            key: 'contextManagement',
+            text: `Token count (${inputTokens}) + ${maxTokensKey} (${currentMaxTokens}) exceeds context window (${this.config.contextWindow}). Reducing to ${validation.adjustedMaxTokens}.`,
+            data: {
               action: 'max_tokens_reduced',
               tokensBefore: inputTokens,
               contextWindow: this.config.contextWindow,
@@ -725,7 +729,7 @@ export class ModelHandlerOpenAI<
               reducedMaxTokens: validation.adjustedMaxTokens,
               details: `OpenAI: ${maxTokensKey} reduced to fit context window`,
             },
-          );
+          });
           if (this.isOReasoningModel) {
             baseParams.max_completion_tokens = validation.adjustedMaxTokens;
           } else {
@@ -1730,10 +1734,14 @@ export class ModelHandlerOpenAI<
         lastUserMsg.content.unshift(...formattedMedia);
       }
     } catch (err) {
-      this.logger.logError(
+      this.logger.error(
         `Error adding media to user message: ${getSdkErrorMessage(err)}`,
-        err,
-        { operation: 'add media to user message' },
+        {
+          data: buildErrorLogData(err, {
+            operation: 'add media to user message',
+          }),
+          messageType: MESSAGE_TYPES.ERROR,
+        },
       );
     }
   }

@@ -4,7 +4,7 @@ import { ZodError } from 'zod';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { isRemoteAgent, resolveAgent, type ResolvedAgent } from '@agent/index';
-import type { StageHandle } from '@agent/trace';
+import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentCore } from '@agent/implementations/flows/common/BaseFlowServices';
 import {
   AgentConfigSchema,
@@ -22,8 +22,9 @@ import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError, getSdkErrorMessage, toErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
-import { createRunTrace, type RunTrace, type TexraTrace } from '@logger';
+import { createRunTrace, type RunTrace } from '@logger';
 import {
+  MESSAGE_TYPES,
   STREAM_STATUS,
   type ExecutionId,
   type StorageKey,
@@ -152,12 +153,12 @@ async function validateModelExists(
  * therefore renders the instruction before the run group.
  */
 async function beginRunStage(
-  agentLogger: TexraTrace,
+  agentLogger: AgentTrace,
   label: string,
   instruction: string | undefined,
 ): Promise<StageHandle> {
   if (instruction) {
-    agentLogger.userMessage(instruction);
+    agentLogger.info(instruction, { messageType: MESSAGE_TYPES.USER_MESSAGE });
   }
   return agentLogger.openStage(label);
 }

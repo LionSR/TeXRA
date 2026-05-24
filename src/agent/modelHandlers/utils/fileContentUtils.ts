@@ -4,8 +4,8 @@
  */
 
 // Local imports - agent workspace
+import type { AgentTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import type { TexraTrace } from '@logger';
 
 // Local imports - replacement
 import { cleanFileContent } from '@replacement/engine';
@@ -49,7 +49,7 @@ export interface PreparedFileContent {
 export async function prepareExistingOutputContent(
   outputLocation: FileLocation,
   workspaceState: AgentWorkspaceState,
-  logger: TexraTrace,
+  logger: AgentTrace,
 ): Promise<PreparedFileContent> {
   // Read and clean the file content
   let content = await flexibleFS.read(outputLocation);
@@ -58,7 +58,7 @@ export async function prepareExistingOutputContent(
   // Extract any existing scratchpad content and log it
   const scratchpad = await extractScratchpad(content, 'scratchpad');
   if (scratchpad) {
-    logger.logScratchpad(scratchpad);
+    logger.domain({ key: 'scratchpad', text: scratchpad });
   }
 
   // Write cleaned content back to file

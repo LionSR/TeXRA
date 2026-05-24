@@ -2,13 +2,13 @@ import * as path from 'path';
 
 import { platform } from '@platform/platform';
 import type { StageHandle } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace';
 import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { getWorkspaceState } from '@agent/core/stateStore';
 import { toErrorMessage } from '@common/errors';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
-import type { TexraTrace } from '@logger';
 import {
   type DiffResult,
   type ExecutionId,
@@ -49,7 +49,7 @@ export class LatexDiffManager {
     private readonly agentSetting: AgentWorkflowSetting,
     private readonly getOutputFiles: () => { [key: number]: OutputFileInfo[] },
     private readonly baseFiles: FileLocation[],
-    private readonly logger: TexraTrace,
+    private readonly logger: AgentTrace,
     private readonly streamId: string,
     private readonly fileService: TaskRunFileService,
   ) {
@@ -239,7 +239,11 @@ export class LatexDiffManager {
     }
 
     if (aggregated.length > 0) {
-      this.logger.latexDiff(aggregated);
+      this.logger.domain({
+        key: 'latexdiff',
+        text: `Latexdiff results: ${aggregated.length}`,
+        data: aggregated,
+      });
     } else {
       this.logger.debug('No latexdiff results to report');
     }

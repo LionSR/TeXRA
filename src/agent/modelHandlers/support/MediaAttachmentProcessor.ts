@@ -6,10 +6,10 @@ import { Buffer } from 'buffer';
 import pMap from 'p-map';
 
 // Local imports - agent utils
+import type { AgentTrace } from '@agent/trace';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { toErrorMessage } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
-import type { TexraTrace } from '@logger';
 
 // Type imports
 import {
@@ -54,11 +54,11 @@ interface MediaAttachmentProcessorOptions {
 
 export class MediaAttachmentProcessor {
   constructor(
-    private logger: TexraTrace,
+    private logger: AgentTrace,
     private readonly options: MediaAttachmentProcessorOptions,
   ) {}
 
-  public setLogger(logger: TexraTrace): void {
+  public setLogger(logger: AgentTrace): void {
     this.logger = logger;
   }
 
@@ -210,7 +210,11 @@ export class MediaAttachmentProcessor {
       this.logger.warn('Some media files failed to load');
     }
 
-    this.logger.filesLoaded({ category: 'all', entries: results });
+    this.logger.domain({
+      key: 'filesLoaded',
+      data: { category: 'all', entries: results },
+      text: 'all',
+    });
   }
 
   private async loadMediaEntry(

@@ -175,7 +175,11 @@ export function extractModelResponse(
     const { inputTokens } = normalizedUsage;
     const contextWindow = modelHandler.getEffectiveContextWindow();
     if (inputTokens > 0 && contextWindow > 0) {
-      logger.logContextState(inputTokens, contextWindow);
+      logger.contextState({
+        inputTokens,
+        contextWindow,
+        utilizationPercent: (inputTokens / contextWindow) * 100,
+      });
     }
   }
 

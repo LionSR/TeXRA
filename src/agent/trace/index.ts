@@ -44,3 +44,9 @@ export type {
 
 export { TraceEmitter } from './TraceEmitter';
 export { noopTrace } from './noopTrace';
+export {
+  startToolUseCard,
+  endToolUseCard,
+  emitToolUseCard,
+  type ToolUseCardRef,
+} from './toolUseHelpers';

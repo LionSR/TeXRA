@@ -22,6 +22,7 @@ import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE } from '@agent/core/constants';
 import { getConfig } from '@agent/core/config';
 import {
+  buildErrorLogData,
   getSdkErrorMessage,
   isContextWindowError,
   isPreviousResponseIdError,
@@ -29,6 +30,7 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
+import { MESSAGE_TYPES } from '@shared/schemas';
 
 // Type imports
 import type { ToolFileAttachment } from '@tools/result';
@@ -1196,9 +1198,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const reductionPercent = ((reduction / tokensBefore) * 100).toFixed(1);
 
       // Log context management event with structured data
-      this.logger.logContextManagement(
-        `Compacted conversation: ${tokensBefore.toLocaleString()} → ${tokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
-        {
+      this.logger.domain({
+        key: 'contextManagement',
+        text: `Compacted conversation: ${tokensBefore.toLocaleString()} → ${tokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
+        data: {
           action: 'compaction',
           tokensBefore,
           tokensAfter,
@@ -1207,7 +1210,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           utilizationAfter: Number(utilizationAfter.toFixed(1)),
           details: `OpenAI Responses API compaction: ${compactedResponse.output.length} items`,
         },
-      );
+      });
 
       // Store compacted messages for use in this request.
       // Mark as pending compaction - state will be finalized after successful API call.
@@ -1299,10 +1302,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         )) as ResponseInputMessageContentList;
         userContent.push(...mediaContent);
       } catch (err) {
-        this.logger.logError(
+        this.logger.error(
           `Error processing media files: ${getSdkErrorMessage(err)}`,
-          err,
-          { operation: 'process media files' },
+          {
+            data: buildErrorLogData(err, { operation: 'process media files' }),
+            messageType: MESSAGE_TYPES.ERROR,
+          },
         );
       }
     }
@@ -1351,10 +1356,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         )) as ResponseInputMessageContentList;
         roundContent.push(...formattedMediaContent);
       } catch (err) {
-        this.logger.logError(
+        this.logger.error(
           `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
-          err,
-          { operation: 'process media files' },
+          {
+            data: buildErrorLogData(err, { operation: 'process media files' }),
+            messageType: MESSAGE_TYPES.ERROR,
+          },
         );
       }
     }
@@ -1511,10 +1518,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         return;
       }
 
-      this.logger.logError(
+      this.logger.error(
         `Failed to upload file ${filename}: ${getSdkErrorMessage(err)}`,
-        err,
-        { operation: 'upload file' },
+        {
+          data: buildErrorLogData(err, { operation: 'upload file' }),
+          messageType: MESSAGE_TYPES.ERROR,
+        },
       );
       throw err;
     } finally {
@@ -1667,13 +1676,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // For automatic compaction (threshold-based), this is a no-op since the flag is false.
       this.compactionRequested = false;
       if (wasManualRequest) {
-        this.logger.logProgress(
+        this.logger.info(
           `Compacting conversation (manually requested, ${this.conversationState.cumulativeInputTokens} input tokens)`,
+          { messageType: MESSAGE_TYPES.PROGRESS_STATUS },
         );
       } else {
         const threshold = this.getCompactionTokenThreshold();
-        this.logger.logProgress(
+        this.logger.info(
           `Compacting conversation (${this.conversationState.cumulativeInputTokens} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
+          { messageType: MESSAGE_TYPES.PROGRESS_STATUS },
         );
       }
       effectiveMessages = await this.compactConversation(
@@ -1782,9 +1793,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
 
         if (validation.adjustedMaxTokens !== maxOutputTokens) {
-          this.logger.logContextManagement(
-            `Token count (${inputTokens}) + max_output_tokens (${maxOutputTokens}) exceeds context window (${this.config.contextWindow}). Reducing to ${validation.adjustedMaxTokens}.`,
-            {
+          this.logger.domain({
+            key: 'contextManagement',
+            text: `Token count (${inputTokens}) + max_output_tokens (${maxOutputTokens}) exceeds context window (${this.config.contextWindow}). Reducing to ${validation.adjustedMaxTokens}.`,
+            data: {
               action: 'max_tokens_reduced',
               tokensBefore: inputTokens,
               contextWindow: this.config.contextWindow,
@@ -1796,7 +1808,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
               details:
                 'OpenAI Response: max_output_tokens reduced to fit context window',
             },
-          );
+          });
           maxOutputTokens = validation.adjustedMaxTokens;
         }
       } catch (err) {
@@ -2002,8 +2014,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // 2. Server-side latency when using previous_response_id (unexpected but handled)
       if (this.isBackgroundPending(response)) {
         if (useBackgroundResponses) {
-          this.logger.logProgress(
+          this.logger.info(
             'Running OpenAI in background mode; polling for completion (this may take longer than usual).',
+            { messageType: MESSAGE_TYPES.PROGRESS_STATUS },
           );
         } else {
           this.logger.debug(
@@ -2075,8 +2088,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // Fix: Drop server-side state (clearing previous_response_id discards the
         // hidden reasoning tokens) and compact client-side messages, then retry.
         // The guard !compactedThisCall prevents infinite recursion.
-        this.logger.logProgress(
+        this.logger.info(
           'Context window exceeded — compacting conversation and retrying.',
+          { messageType: MESSAGE_TYPES.PROGRESS_STATUS },
         );
         this.previousResponseId = null;
         // Don't call resetConversationState() — it zeroes cumulativeInputTokens
@@ -3308,10 +3322,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       )) as ResponseInputMessageContentList;
       lastUserMsg.content.unshift(...formattedMedia);
     } catch (err) {
-      this.logger.logError(
+      this.logger.error(
         `Error adding media to user message: ${getSdkErrorMessage(err)}`,
-        err,
-        { operation: 'add media to user message' },
+        {
+          data: buildErrorLogData(err, {
+            operation: 'add media to user message',
+          }),
+          messageType: MESSAGE_TYPES.ERROR,
+        },
       );
     }
   }

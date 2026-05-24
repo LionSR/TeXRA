@@ -9,6 +9,7 @@ import {
   ReasoningEffort,
 } from 'llm-zoo';
 import { platform } from '@platform/platform';
+import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory, type AgentSetting } from '@agent/core/AgentDataclass';
 import type {
@@ -22,7 +23,6 @@ import { K_SLICE } from '@agent/core/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { MAX_TIER, FREE_TIER } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import type { TexraTrace } from '@logger';
 
 // Local imports - platform
 
@@ -106,7 +106,7 @@ export abstract class ModelHandler<
   public continueLimit: number;
   public inputTokenLimit: number;
   public maxOutputTokensFactor: number;
-  protected logger: TexraTrace;
+  protected logger: AgentTrace;
   protected outputStreaming = false;
   protected backgroundModeSupported = false;
   protected progressViewEnabled = true;
@@ -144,7 +144,7 @@ export abstract class ModelHandler<
     });
   }
 
-  public setLogger(logger: TexraTrace): void {
+  public setLogger(logger: AgentTrace): void {
     this.logger = logger;
     this.mediaProcessor.setLogger(logger);
   }
@@ -237,7 +237,7 @@ export abstract class ModelHandler<
    */
   protected emitWebSearchResult(result: WebSearchResult): void {
     if (this.progressViewEnabled) {
-      this.logger.logWebSearch(result);
+      this.logger.domain({ key: 'webSearch', data: result });
     }
   }
 
@@ -248,7 +248,7 @@ export abstract class ModelHandler<
    */
   protected emitWebFetchResult(result: WebFetchResult): void {
     if (this.progressViewEnabled) {
-      this.logger.logWebFetch(result);
+      this.logger.domain({ key: 'webFetch', data: result });
     }
   }
 

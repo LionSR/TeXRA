@@ -2,7 +2,7 @@ import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { listIdleContinuationProviders } from '@agent/runtime/idleContinuation';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { STREAM_STATUS } from '@shared/schemas';
+import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
 
 import { findLastAssistantText, extractTouchedFiles } from './types';
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
@@ -165,7 +165,9 @@ export class ToolUseWaitNode<C> extends Node<
     if (!execRes.synthetic) {
       shared.deliveredToOrchestrator = undefined;
       onFollowUpConsumed?.();
-      logger.userMessage(execRes.followUp);
+      logger.info(execRes.followUp, {
+        messageType: MESSAGE_TYPES.USER_MESSAGE,
+      });
     }
     StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
       runtimeHost,

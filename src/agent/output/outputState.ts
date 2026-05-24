@@ -7,12 +7,11 @@
 
 import { z } from 'zod';
 
-import type { StageHandle } from '@agent/trace';
+import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { normalizeRunId } from '@common/constants/runIds';
-import type { TexraTrace } from '@logger';
 import {
   CompileFailureSchema,
   FileLocationSchema,
@@ -49,7 +48,7 @@ export interface OutputDependencies {
   setting: AgentWorkflowSetting;
   config: AgentConfig;
   baseFiles: FileLocation[];
-  logger: TexraTrace;
+  logger: AgentTrace;
   fileService: TaskRunFileService;
   executionId: string;
   streamId: string;

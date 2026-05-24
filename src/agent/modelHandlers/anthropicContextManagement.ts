@@ -1,5 +1,5 @@
 // Type imports - agent
-import type { TexraTrace } from '@logger';
+import type { AgentTrace } from '@agent/trace';
 
 // Type imports - Anthropic SDK
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
@@ -162,7 +162,7 @@ export function setupContextManagement(
 export function logContextManagementFromResponse(
   response: BetaMessage,
   contextWindow: number,
-  logger: TexraTrace,
+  logger: AgentTrace,
 ): void {
   const totalInputTokens =
     response.usage.input_tokens +
@@ -190,15 +190,19 @@ export function logContextManagementFromResponse(
     : 'Anthropic native compaction (empty summary)';
   const summary = compactionBlock.content?.trim() || undefined;
 
-  logger.logContextManagement(`Server-side compaction: summarized context`, {
-    action: 'compaction',
-    tokensBefore,
-    tokensAfter: totalInputTokens,
-    contextWindow,
-    utilizationBefore: (tokensBefore / contextWindow) * 100,
-    utilizationAfter: (totalInputTokens / contextWindow) * 100,
-    details,
-    summary,
+  logger.domain({
+    key: 'contextManagement',
+    text: `Server-side compaction: summarized context`,
+    data: {
+      action: 'compaction',
+      tokensBefore,
+      tokensAfter: totalInputTokens,
+      contextWindow,
+      utilizationBefore: (tokensBefore / contextWindow) * 100,
+      utilizationAfter: (totalInputTokens / contextWindow) * 100,
+      details,
+      summary,
+    },
   });
 }
 
