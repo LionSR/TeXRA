@@ -142,7 +142,8 @@ export class XmlOutputManager {
     const regexResult = extractDocument(outputContent, documentTag, filename);
     if (regexResult.content) {
       const suffix = EXTRACTION_METHOD_MESSAGES[regexResult.method];
-      if (suffix) logInternal(this.logger, `Recovered ${documentTag} ${suffix}`);
+      if (suffix)
+        logInternal(this.logger, `Recovered ${documentTag} ${suffix}`);
       await AbsoluteFS.write(texLocation.absolutePath, regexResult.content);
       return { location: texLocation, sourceName };
     }

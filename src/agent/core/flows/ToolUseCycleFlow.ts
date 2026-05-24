@@ -635,11 +635,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
     // Capture groupId at start. For deferred tools, delay logging until onExecutionReady.
     const logRef: ToolExecutionResult['logRef'] =
       SLOW_TOOLS.has(call.name) && !isDeferred
-        ? startToolUseCard(
-            options.logger,
-            call.name,
-            parsedInput ?? call.raw,
-          )
+        ? startToolUseCard(options.logger, call.name, parsedInput ?? call.raw)
         : { logId: undefined, groupId: options.logger.activeStageId() };
 
     const onExecutionReady = isDeferred

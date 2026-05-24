@@ -190,16 +190,20 @@ export function logContextManagementFromResponse(
     : 'Anthropic native compaction (empty summary)';
   const summary = compactionBlock.content?.trim() || undefined;
 
-  logContextManagementEvent(logger, `Server-side compaction: summarized context`, {
-    action: 'compaction',
-    tokensBefore,
-    tokensAfter: totalInputTokens,
-    contextWindow,
-    utilizationBefore: (tokensBefore / contextWindow) * 100,
-    utilizationAfter: (totalInputTokens / contextWindow) * 100,
-    details,
-    summary,
-  });
+  logContextManagementEvent(
+    logger,
+    `Server-side compaction: summarized context`,
+    {
+      action: 'compaction',
+      tokensBefore,
+      tokensAfter: totalInputTokens,
+      contextWindow,
+      utilizationBefore: (tokensBefore / contextWindow) * 100,
+      utilizationAfter: (totalInputTokens / contextWindow) * 100,
+      details,
+      summary,
+    },
+  );
 }
 
 /**

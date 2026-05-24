@@ -1,11 +1,7 @@
 import * as path from 'path';
 
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
-import {
-  logFileCategory,
-  logFilesLoaded,
-  type AgentTrace,
-} from '@agent/trace';
+import { logFileCategory, logFilesLoaded, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { getVisibleAgents, type AgentEntry } from '@agent/index/agentRegistry';
 import {

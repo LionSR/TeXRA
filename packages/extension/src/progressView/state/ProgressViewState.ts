@@ -1,9 +1,6 @@
 import { z } from 'zod';
 
-import {
-  setDefaultStreamLogStore,
-  StreamLogStore,
-} from '@transcript';
+import { setDefaultStreamLogStore, StreamLogStore } from '@transcript';
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';

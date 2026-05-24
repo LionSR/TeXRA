@@ -36,13 +36,13 @@ describe('logFileCategory', () => {
   };
 
   it('handles empty file array gracefully (no-op)', () => {
-    logFileCategory(logger,'Input Files', []);
+    logFileCategory(logger, 'Input Files', []);
     refreshCaptured();
     assert.equal(capturedMessages.length, 0);
   });
 
   it('logs files with correct category label', () => {
-    logFileCategory(logger,'Input Files', [
+    logFileCategory(logger, 'Input Files', [
       { path: '/path/to/file.tex', ok: true },
     ]);
 
@@ -53,7 +53,7 @@ describe('logFileCategory', () => {
   });
 
   it('counts only files with ok === true as loaded', () => {
-    logFileCategory(logger,'Reference Files', [
+    logFileCategory(logger, 'Reference Files', [
       { path: '/path/exists.tex', ok: true },
       { path: '/path/missing.tex', ok: false },
       { path: '/path/also-exists.tex', ok: true },
@@ -65,7 +65,7 @@ describe('logFileCategory', () => {
   });
 
   it('treats undefined ok as false (not loaded)', () => {
-    logFileCategory(logger,'Auxiliary Files', [
+    logFileCategory(logger, 'Auxiliary Files', [
       { path: '/path/exists.tex', ok: true },
       { path: '/path/unknown.tex' }, // ok is undefined
     ]);
@@ -76,7 +76,7 @@ describe('logFileCategory', () => {
   });
 
   it('handles all files missing (none exist)', () => {
-    logFileCategory(logger,'Media Files', [
+    logFileCategory(logger, 'Media Files', [
       { path: '/path/missing1.png', ok: false },
       { path: '/path/missing2.png', ok: false },
     ]);
@@ -87,7 +87,7 @@ describe('logFileCategory', () => {
   });
 
   it('includes source and sourceDisplay in entry data', () => {
-    logFileCategory(logger,'Input Files', [
+    logFileCategory(logger, 'Input Files', [
       { path: '/path/file.tex', ok: true },
     ]);
 
@@ -101,7 +101,7 @@ describe('logFileCategory', () => {
   });
 
   it('maps ok properly in entries (undefined becomes false)', () => {
-    logFileCategory(logger,'Test', [
+    logFileCategory(logger, 'Test', [
       { path: '/a', ok: true },
       { path: '/b', ok: false },
       { path: '/c' }, // undefined

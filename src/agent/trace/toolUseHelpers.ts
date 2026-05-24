@@ -49,10 +49,7 @@ export function endToolUseCard(
   result: unknown,
   status: ToolStatus = 'completed',
 ): void {
-  trace.toolEnd(
-    { logId: ref.logId, status, result },
-    { stageId: ref.groupId },
-  );
+  trace.toolEnd({ logId: ref.logId, status, result }, { stageId: ref.groupId });
 }
 
 /**

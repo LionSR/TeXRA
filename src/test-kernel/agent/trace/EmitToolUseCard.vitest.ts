@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  emitToolUseCard,
-  TraceEmitter,
-  type AgentEvent,
-} from '@agent/trace';
+import { emitToolUseCard, TraceEmitter, type AgentEvent } from '@agent/trace';
 
 function captureEvents(trace: TraceEmitter): AgentEvent[] {
   const events: AgentEvent[] = [];

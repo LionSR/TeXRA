@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { StreamLogStore, type StreamLogAppendInput } from '@transcript';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
-
 // Local imports - progress view
 import { WebviewBridge } from '@progressView/managers/WebviewBridge';
 

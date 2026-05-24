@@ -1,11 +1,7 @@
 /** Retry state management: Node retry config, error tracking, and retryable node base class. */
 
 import { Node, type NonIterableObject } from '@agent/node';
-import {
-  logErrorData,
-  logProgressStatus,
-  type AgentTrace,
-} from '@agent/trace';
+import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { type RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import { waitForRetry } from '@agent/runtime/runCoordinators';
@@ -265,7 +261,11 @@ export abstract class RetryableInvocationNode<
       return { shouldRetry: false, userCancelled: false };
     }
 
-    logErrorData(logger, `${operationName} failed: ${formatted.message}`, formatted);
+    logErrorData(
+      logger,
+      `${operationName} failed: ${formatted.message}`,
+      formatted,
+    );
 
     StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
       runtimeHost,
