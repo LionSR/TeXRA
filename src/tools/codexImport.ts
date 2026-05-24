@@ -17,8 +17,8 @@
 import { createRequire } from 'module';
 import * as path from 'path';
 
-import { isModuleNotFoundError } from '@common/errors';
 import { platform } from '@platform/platform';
+import { isModuleNotFoundError } from '@common/errors';
 import { executeCommandSync } from '@utils/system/execUtils';
 
 type CodexConstructor = new (options?: any) => any;
