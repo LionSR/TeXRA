@@ -90,6 +90,30 @@ function boundedLines(
   return lines.slice(-Math.max(1, maxRows));
 }
 
+// Slice raw text to a tail window before wrapping: ~2 screen widths per
+// visible row covers worst-case wrapping without making the wrap O(text)
+// on every streaming delta. Shared by the live renderers and the viewport
+// row estimator so the cap stays consistent.
+export function tailWindow(
+  text: string,
+  cols: number,
+  tailRows: number,
+): string {
+  const budget = Math.max(1, cols) * tailRows * 2;
+  return text.length > budget ? text.slice(-budget) : text;
+}
+
+function plainWrapTailLines(
+  text: string,
+  cols: number,
+  tailRows: number,
+): readonly string[] {
+  const c = Math.max(1, cols);
+  return wrapAnsiToWidth(tailWindow(text, c, tailRows), c)
+    .split('\n')
+    .slice(-Math.max(1, tailRows));
+}
+
 export function BoundedTranscriptEntry({
   entry,
   maxRows,
@@ -101,22 +125,15 @@ export function BoundedTranscriptEntry({
 }): React.JSX.Element {
   const rows = Math.max(1, maxRows);
   if (entry.role === 'assistant') {
-    // This is the in-flight overflow tail (still streaming). Use the same
-    // plain tail-budget wrap as LiveTranscriptEntry instead of
-    // renderAnsiMarkdown over the full buffer — the latter re-parses a
-    // growing document every chunk (O(text^2)) and boundedLines discards
-    // everything above the tail anyway. Finalized entries still render
-    // full markdown through `<Static>`.
-    const cols = Math.max(1, width ?? 80);
-    const wrapBudget = cols * rows * 2;
-    const candidate =
-      entry.text.length > wrapBudget
-        ? entry.text.slice(-wrapBudget)
-        : entry.text;
-    const wrapped = wrapAnsiToWidth(candidate, cols).split('\n');
+    // In-flight overflow tail (still streaming): plain tail wrap rather
+    // than renderAnsiMarkdown over the full buffer (O(text^2), and the
+    // tail slice discards markdown structure above it anyway). Finalized
+    // entries still render full markdown through `<Static>`.
     return (
       <Box flexDirection="column">
-        <Text>{boundedLines(wrapped, rows).join('\n')}</Text>
+        <Text>
+          {plainWrapTailLines(entry.text, width ?? 80, rows).join('\n')}
+        </Text>
       </Box>
     );
   }
@@ -168,16 +185,7 @@ export function LiveTranscriptEntry({
   readonly entry: ConversationEntry;
   readonly width?: number;
 }): React.JSX.Element {
-  const cols = Math.max(1, width ?? 80);
-  // Slice raw text down to a tail window before wrap: roughly two screen
-  // widths per visible row covers worst-case wrapping without making the
-  // wrap step O(text length) per delta.
-  const wrapBudget = cols * LIVE_TAIL_ROWS * 2;
-  const candidate =
-    entry.text.length > wrapBudget ? entry.text.slice(-wrapBudget) : entry.text;
-  const rows = wrapAnsiToWidth(candidate, cols)
-    .split('\n')
-    .slice(-LIVE_TAIL_ROWS);
+  const rows = plainWrapTailLines(entry.text, width ?? 80, LIVE_TAIL_ROWS);
   return (
     <Box flexDirection="column">
       <Text>{rows.join('\n')}</Text>

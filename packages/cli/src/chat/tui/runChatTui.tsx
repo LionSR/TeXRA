@@ -723,12 +723,15 @@ export async function runChat(
     clearApprovals();
     followUpQueue.clear();
     clearTuiSessionRunState(session);
-    // Drop the stream logs too. resetCliState only clears the React/signal
-    // view; without this a later syncStreamLog could rebuild the cleared
-    // conversation from the log and replay it into `<Static>` scrollback.
+    // StreamLogStore entries outlive resetCliState (which only clears the
+    // React/signal view). Drop them so syncStreamLog can't replay the
+    // cleared conversation into the fresh `<Static>` scrollback.
     const store = getDefaultStreamLogStore();
     for (const streamId of cliState.streams.get().keys()) {
-      void store.delete(streamId);
+      store.delete(streamId).catch(() => {
+        // Best-effort: a KV failure leaves the log on disk, but the run
+        // is already torn down — nothing actionable to surface here.
+      });
     }
     resetCliState(meta);
     clearTerminalScrollback();

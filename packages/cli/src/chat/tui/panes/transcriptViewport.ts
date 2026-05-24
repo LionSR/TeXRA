@@ -3,7 +3,7 @@
 
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
-import { LIVE_TAIL_ROWS } from './TranscriptEntry';
+import { LIVE_TAIL_ROWS, tailWindow } from './TranscriptEntry';
 import { toolUseDisplayLines } from './toolRenderers';
 import type { ConversationEntry } from '../state/cliState';
 
@@ -46,11 +46,16 @@ function estimatePendingEntryRows(
   width = 80,
 ): number {
   // Live assistant text streams as raw wrapped lines (no Markdown parse)
-  // and has no trailing margin row. Cap at the tail LiveTranscriptEntry
-  // actually paints so a long reply doesn't over-reserve rows and crowd
-  // out co-pending tool rows.
+  // and has no trailing margin row. Pre-slice to the same tail window
+  // LiveTranscriptEntry paints, then cap at LIVE_TAIL_ROWS — so a
+  // multi-MB reply never gets split in full just for an estimate that
+  // discards everything above the tail.
   if (entry.role === 'assistant') {
-    return Math.min(LIVE_TAIL_ROWS, estimateWrappedRows(entry.text, width));
+    const cols = Math.max(1, width);
+    return Math.min(
+      LIVE_TAIL_ROWS,
+      estimateWrappedRows(tailWindow(entry.text, cols, LIVE_TAIL_ROWS), cols),
+    );
   }
   return estimateTranscriptEntryRows(entry, width);
 }
