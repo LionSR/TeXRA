@@ -65,7 +65,7 @@ describe('CLI context config defaults', () => {
       }),
     ).resolves.toMatchObject({
       outputFormat: 'text',
-      approvalPolicy: 'never',
+      approvalPolicy: 'ask',
     });
   });
 
