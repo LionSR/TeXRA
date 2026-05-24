@@ -98,13 +98,15 @@ describe('formatChatAsHtml', () => {
   });
 
   it('wraps each message in a Lit custom element with declarative shadow DOM', () => {
-    // SSR emits <chat-message>/<chat-tool-block> as the outer custom element
-    // wrapping <template shadowrootmode="open"> that browsers reify into a
-    // shadow root with no client-side JS required.
-    expect(html).toMatch(/<chat-message[^>]*role="user"/);
-    expect(html).toMatch(/<chat-message[^>]*role="assistant"/);
-    expect(html).toMatch(/<chat-tool-block[^>]*kind="call"/);
-    expect(html).toMatch(/<chat-tool-block[^>]*kind="result"/);
+    // SSR emits <texra-chat-message>/<texra-chat-tool-block> as the outer
+    // custom element wrapping <template shadowrootmode="open"> that browsers
+    // reify into a shadow root with no client-side JS required. The
+    // `texra-` prefix + `data-*` attributes avoid the reserved ARIA `role`
+    // attribute and reduce custom-element name collision risk.
+    expect(html).toMatch(/<texra-chat-message[^>]*data-role="user"/);
+    expect(html).toMatch(/<texra-chat-message[^>]*data-role="assistant"/);
+    expect(html).toMatch(/<texra-chat-tool-block[^>]*data-kind="call"/);
+    expect(html).toMatch(/<texra-chat-tool-block[^>]*data-kind="result"/);
     expect(html).toMatch(/<template[^>]*shadowrootmode="open"/);
   });
 
@@ -123,5 +125,73 @@ describe('formatChatAsHtml', () => {
     });
     expect(malicious).not.toContain('<script>alert(1)</script>');
     expect(malicious).toContain('&lt;script&gt;');
+  });
+
+  it('labels web-search-results distinctly from generic tool results', () => {
+    // A web_search_tool_result block must surface as "Web results", not
+    // re-use the "Tool result" label. The IR is constructed from raw
+    // Anthropic-style content blocks.
+    const withWebResults = formatChatAsHtml({
+      ...fixture,
+      messages: [
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'web_search_tool_result',
+              content: [
+                {
+                  type: 'web_search_result',
+                  url: 'https://en.wikipedia.org/wiki/Riemann_zeta_function',
+                  title: 'Riemann zeta function — Wikipedia',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(withWebResults).toMatch(
+      /<texra-chat-tool-block[^>]*data-kind="web-results"/,
+    );
+    expect(withWebResults).toContain('Web results');
+  });
+
+  it('strips dangerous URL schemes from tool-provided links', () => {
+    // `web_search_result.url` and `web_fetch_tool_result.url` flow from
+    // tool output and could carry `javascript:` (or `data:`) schemes that
+    // would execute when the recipient clicks the link in a shared file.
+    // The exporter renders those as non-clickable <code> instead.
+    const malicious = formatChatAsHtml({
+      ...fixture,
+      messages: [
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'web_search_tool_result',
+              content: [
+                {
+                  type: 'web_search_result',
+                  url: 'javascript:alert("xss")',
+                  title: 'click me',
+                },
+              ],
+            },
+            {
+              type: 'web_fetch_tool_result',
+              url: 'data:text/html,<script>alert(1)</script>',
+              title: 'evil',
+              page_content: 'whatever',
+            },
+          ],
+        },
+      ],
+    });
+    expect(malicious).not.toContain('href="javascript:');
+    expect(malicious).not.toContain('href="data:');
+    // Should still surface the URL as text so reviewers can see what was
+    // attempted, just not as a clickable anchor.
+    expect(malicious).toContain('javascript:alert');
   });
 });

@@ -74,6 +74,33 @@ function md(text: string): string {
 }
 
 /**
+ * Conversation URLs are tool-controlled — `web_search_result.url` and
+ * `web_fetch.url` flow straight from the LLM/tool output. Attribute
+ * escaping prevents HTML injection but does NOT block dangerous URL
+ * schemes: a `javascript:alert(1)` link still becomes a clickable anchor
+ * that fires when the recipient opens the shared file. Allow only the
+ * three schemes a chat export legitimately needs.
+ *
+ * Returns `null` for rejected URLs so callers can fall back to plain
+ * text (or omit the anchor entirely).
+ */
+const SAFE_URL_SCHEMES = new Set(['http:', 'https:', 'mailto:']);
+
+function safeUrl(raw: string): string | null {
+  const trimmed = raw.trim();
+  // Empty / anchor-only / root-relative — no scheme to abuse.
+  if (trimmed === '') return null;
+  if (trimmed.startsWith('#') || trimmed.startsWith('/')) return trimmed;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  return SAFE_URL_SCHEMES.has(url.protocol) ? trimmed : null;
+}
+
+/**
  * Wrap the rendered markdown / preformatted content in a `<div class="md">`
  * so the chat.css document-level rules (margins, list spacing, table style)
  * still target it. Components slot this div into shadow DOM via `<slot>`,
@@ -100,33 +127,33 @@ function nodeToPrepared(node: ExportNode): PreparedNode {
         })
         .join('\n');
       return {
-        tag: 'chat-message',
+        tag: 'texra-chat-message',
         role: 'user',
         bodyHtml: wrapMd(body),
       };
     }
     case 'assistant-text':
       return {
-        tag: 'chat-message',
+        tag: 'texra-chat-message',
         role: 'assistant',
         bodyHtml: wrapMd(md(node.text)),
       };
     case 'tool-call':
       return {
-        tag: 'chat-tool-block',
+        tag: 'texra-chat-tool-block',
         kind: 'call',
         name: node.name,
         bodyHtml: wrapMd(md('```json\n' + node.input + '\n```')),
       };
     case 'tool-result':
       return {
-        tag: 'chat-tool-block',
+        tag: 'texra-chat-tool-block',
         kind: 'result',
         bodyHtml: wrapMd(md('```\n' + node.text + '\n```')),
       };
     case 'web-search':
       return {
-        tag: 'chat-tool-block',
+        tag: 'texra-chat-tool-block',
         kind: 'web-search',
         bodyHtml: wrapMd(
           `<p><strong>Query:</strong> ${escapeText(node.query)}</p>`,
@@ -134,25 +161,32 @@ function nodeToPrepared(node: ExportNode): PreparedNode {
       };
     case 'web-search-results': {
       const items = node.results
-        .map(
-          (r) =>
-            `<li><a href="${escapeAttr(r.url)}" rel="noopener noreferrer">${escapeText(
-              r.title,
-            )}</a></li>`,
-        )
+        .map((r) => {
+          const safe = safeUrl(r.url);
+          // For dangerous URLs (javascript:, data:, etc.) fall back to a
+          // non-clickable <span> so the title is still visible but won't
+          // execute. Includes the raw URL as a code tail for transparency.
+          if (safe === null) {
+            return `<li><span>${escapeText(r.title)}</span> <code>${escapeText(r.url)}</code></li>`;
+          }
+          return `<li><a href="${escapeAttr(safe)}" rel="noopener noreferrer">${escapeText(r.title)}</a></li>`;
+        })
         .join('\n');
       return {
-        tag: 'chat-tool-block',
-        kind: 'result',
+        tag: 'texra-chat-tool-block',
+        kind: 'web-results',
         bodyHtml: `<ul class="web-search-results">${items}</ul>`,
       };
     }
     case 'web-fetch': {
       const parts: string[] = [];
       if (node.url) {
-        parts.push(
-          `<p><strong>URL:</strong> <a href="${escapeAttr(node.url)}" rel="noopener noreferrer">${escapeText(node.url)}</a></p>`,
-        );
+        const safe = safeUrl(node.url);
+        const linkBody =
+          safe === null
+            ? `<code>${escapeText(node.url)}</code>`
+            : `<a href="${escapeAttr(safe)}" rel="noopener noreferrer">${escapeText(node.url)}</a>`;
+        parts.push(`<p><strong>URL:</strong> ${linkBody}</p>`);
       }
       if (node.title) {
         parts.push(`<p><strong>Title:</strong> ${escapeText(node.title)}</p>`);
@@ -161,7 +195,7 @@ function nodeToPrepared(node: ExportNode): PreparedNode {
         parts.push(md('```\n' + node.content + '\n```'));
       }
       return {
-        tag: 'chat-tool-block',
+        tag: 'texra-chat-tool-block',
         kind: 'web-fetch',
         bodyHtml: wrapMd(parts.join('\n')),
       };

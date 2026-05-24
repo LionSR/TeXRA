@@ -12,27 +12,32 @@
  *
  * Each message body is pre-rendered to HTML by the caller (markdown-it
  * + KaTeX + hljs run on the extension host, where the libraries
- * already live) and slotted into `<chat-message>` / `<chat-tool-block>`
- * via the `unsafeHTML` directive.
+ * already live) and slotted into `<texra-chat-message>` /
+ * `<texra-chat-tool-block>` via the `unsafeHTML` directive.
  */
 import { html as serverHtml } from '@lit-labs/ssr';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Side-effecting imports — registers the custom elements so
-// `<chat-message>` etc. resolve to a class during SSR.
+// `<texra-chat-message>` etc. resolve to a class during SSR.
 import './components/ChatMessage';
 import './components/ChatToolBlock';
 
 export interface PreparedMessage {
-  readonly tag: 'chat-message';
+  readonly tag: 'texra-chat-message';
   readonly role: 'user' | 'assistant';
   readonly bodyHtml: string;
 }
 
 export interface PreparedToolBlock {
-  readonly tag: 'chat-tool-block';
-  readonly kind: 'call' | 'result' | 'web-search' | 'web-fetch';
+  readonly tag: 'texra-chat-tool-block';
+  readonly kind:
+    | 'call'
+    | 'result'
+    | 'web-search'
+    | 'web-results'
+    | 'web-fetch';
   readonly name?: string;
   readonly bodyHtml: string;
 }
@@ -55,15 +60,15 @@ export interface ExportDocument {
 }
 
 function renderNode(node: PreparedNode) {
-  if (node.tag === 'chat-message') {
-    return serverHtml`<chat-message role=${node.role}>${unsafeHTML(
+  if (node.tag === 'texra-chat-message') {
+    return serverHtml`<texra-chat-message data-role=${node.role}>${unsafeHTML(
       node.bodyHtml,
-    )}</chat-message>`;
+    )}</texra-chat-message>`;
   }
-  return serverHtml`<chat-tool-block
-    kind=${node.kind}
+  return serverHtml`<texra-chat-tool-block
+    data-kind=${node.kind}
     name=${ifDefined(node.name)}
-  >${unsafeHTML(node.bodyHtml)}</chat-tool-block>`;
+  >${unsafeHTML(node.bodyHtml)}</texra-chat-tool-block>`;
 }
 
 function renderHeader(header: PreparedHeader) {

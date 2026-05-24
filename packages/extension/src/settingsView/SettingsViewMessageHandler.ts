@@ -1395,11 +1395,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const folderPath = `executions/${historyId}/${folderName}`;
     const assetsPath = `${folderPath}/assets`;
 
-    await StorageFS.ensureDir(folderPath);
-
-    const html = formatChatAsHtml(exportInput);
-    await StorageFS.write(`${folderPath}/index.html`, html);
-
+    // Stage assets BEFORE writing index.html so a missing/failed asset
+    // copy can never leave behind an HTML file pointing at empty `./assets`.
     const assetsSrc = path.join(this.extensionPath, 'resources', 'htmlExport');
     const fsExtra = (await import('fs-extra')).default;
     if (!(await fsExtra.pathExists(assetsSrc))) {
@@ -1408,9 +1405,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           `(npm run package:fast) so scripts/copy-html-export-assets.mjs runs.`,
       );
     }
+    await StorageFS.ensureDir(folderPath);
     await fsExtra.copy(assetsSrc, StorageFS.fullPath(assetsPath), {
       overwrite: true,
     });
+
+    const html = formatChatAsHtml(exportInput);
+    await StorageFS.write(`${folderPath}/index.html`, html);
 
     const htmlAbsolute = StorageFS.fullPath(`${folderPath}/index.html`);
     await vscode.env.openExternal(vscode.Uri.file(htmlAbsolute));

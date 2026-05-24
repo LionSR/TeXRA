@@ -1,25 +1,38 @@
 /**
- * `<chat-tool-block kind="call|result|web-search|web-fetch" name?>`
+ * `<texra-chat-tool-block data-kind="call|result|web-search|web-results|web-fetch" name?>`
  *
- * Used for tool calls, tool results, web-search queries, and web-fetch
- * snapshots. The role label and (for tool calls) the tool name chip live
- * in shadow DOM; the body is light-DOM via slot.
+ * Used for tool calls, tool results, web-search queries, web-search
+ * result lists, and web-fetch snapshots. The role label and (for tool
+ * calls) the tool-name chip live in shadow DOM; the body is light-DOM
+ * via slot.
+ *
+ * `data-kind` (not `kind`) — `kind` isn't reserved but pairing it with
+ * `data-role` on ChatMessage keeps the attribute style consistent and
+ * makes the custom-element data obvious to readers.
+ *
+ * The `texra-` prefix on the tag — see ChatMessage for rationale.
  */
 import { LitElement, css, html, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { bubbleFrame, chatTokens } from '../styles/tokens';
 
-export type ToolBlockKind = 'call' | 'result' | 'web-search' | 'web-fetch';
+export type ToolBlockKind =
+  | 'call'
+  | 'result'
+  | 'web-search'
+  | 'web-results'
+  | 'web-fetch';
 
 const ROLE_LABELS: Record<ToolBlockKind, string> = {
   call: 'Tool call',
   result: 'Tool result',
   'web-search': 'Web search',
+  'web-results': 'Web results',
   'web-fetch': 'Web fetch',
 };
 
-@customElement('chat-tool-block')
+@customElement('texra-chat-tool-block')
 export class ChatToolBlock extends LitElement {
   static override styles = [
     chatTokens,
@@ -52,7 +65,8 @@ export class ChatToolBlock extends LitElement {
     `,
   ];
 
-  @property({ reflect: true }) kind: ToolBlockKind = 'call';
+  @property({ reflect: true, attribute: 'data-kind' })
+  kind: ToolBlockKind = 'call';
   @property() name: string | null = null;
 
   override render() {
@@ -71,6 +85,6 @@ export class ChatToolBlock extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'chat-tool-block': ChatToolBlock;
+    'texra-chat-tool-block': ChatToolBlock;
   }
 }
