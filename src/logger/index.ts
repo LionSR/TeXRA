@@ -8,10 +8,6 @@ export {
 } from './TaskState';
 export { UsageLogService } from './UsageLogService';
 export {
-  attachTranscriptRecorder,
-  type TranscriptRecorderHandle,
-} from './TexraTranscriptRecorder';
-export {
   createChannelTrace,
   createRunTrace,
   flushPendingRunTraces,
