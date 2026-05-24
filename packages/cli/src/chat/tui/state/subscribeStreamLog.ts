@@ -14,6 +14,7 @@ import { normalizeToolUseData } from '@shared/toolUse';
 
 import { appendCliApiSwitchHint } from '../../../runtime/approvalAdapter';
 import { cliState, patchStream, type ConversationEntry } from './cliState';
+import { isFinalTranscriptStatus } from './transcript';
 
 const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.ERROR,
@@ -120,10 +121,19 @@ function logEntryRole(
 function renderLogEntry(
   entry: StreamLogEntry,
   prev: ConversationEntry | undefined,
+  finalizeDeferred: boolean,
 ): ConversationEntry | null {
   if (entry.messageType === MESSAGE_TYPES.TOOL_USE) {
     // Cache hit: same `data` reference as last sync, no re-normalize.
+    // Still honor a pending finalize — otherwise a tool row whose payload
+    // stopped changing before the stream went idle would never promote
+    // into `<Static>` scrollback and would vanish per splitTranscriptEntries.
     if (prev?.toolUse && toolUseSourceCache.get(prev) === entry.data) {
+      if (finalizeDeferred && !prev.finalized) {
+        const promoted = { ...prev, finalized: true };
+        toolUseSourceCache.set(promoted, entry.data);
+        return promoted;
+      }
       return prev;
     }
 
@@ -141,7 +151,7 @@ function renderLogEntry(
       id: entry.id,
       role: 'tool',
       text: '',
-      finalized: prev?.finalized ?? false,
+      finalized: finalizeDeferred || (prev?.finalized ?? false),
       toolUse,
     };
     if (prev && entriesEqual(prev, next)) {
@@ -169,7 +179,10 @@ function renderLogEntry(
   // from `prev` so re-syncs after finalize don't de-finalize and drop
   // the entry from `splitTranscriptEntries` once status flips to
   // WAITING.
-  const finalized = role === 'assistant' ? (prev?.finalized ?? false) : true;
+  const finalized =
+    role === 'assistant'
+      ? finalizeDeferred || (prev?.finalized ?? false)
+      : true;
   const next: ConversationEntry = {
     id: entry.id,
     role,
@@ -232,10 +245,15 @@ export function syncStreamLog(streamId: StreamTabId): void {
   patchStream(streamId, (slice) => {
     const existing = new Map(slice.entries.map((e) => [e.id, e]));
     const syntheticEntries = slice.entries.filter((entry) => entry.synthetic);
+    const finalizeDeferred = isFinalTranscriptStatus(slice.status);
     const logEntries: { entry: StreamLogEntry; rendered: ConversationEntry }[] =
       [];
     for (const entry of responses) {
-      const rendered = renderLogEntry(entry, existing.get(entry.id));
+      const rendered = renderLogEntry(
+        entry,
+        existing.get(entry.id),
+        finalizeDeferred,
+      );
       if (!rendered) continue;
       logEntries.push({ entry, rendered });
     }

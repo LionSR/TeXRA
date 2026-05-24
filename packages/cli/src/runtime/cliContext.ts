@@ -271,7 +271,10 @@ export async function buildCliContext(
         loadedConfig.values.approvalPolicy,
       ],
       CLI_APPROVAL_POLICIES,
-      'never',
+      // Default to prompting. The interactive TUI surfaces a prompt; in
+      // headless mode `ask` has no TTY to prompt on and falls through to
+      // denial (see approvalAdapter), so this is safe for `run` too.
+      'ask',
       configWarnings,
       'TEXRA_APPROVAL_POLICY',
     ),

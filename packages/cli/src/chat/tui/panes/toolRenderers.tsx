@@ -21,8 +21,6 @@ import {
 
 const STATUS_DOT = '●';
 const OUTPUT_CORNER = '⎿';
-const MAX_OUTPUT_LINES = 3;
-const MAX_PATCH_LINES = 10;
 const MAX_HEADER_PREVIEW = 80;
 const MAX_ERROR_PREVIEW = 240;
 
@@ -110,9 +108,7 @@ export function toolUsePatchDisplayLines(
   if (!groups) return [];
   return groups.flatMap((group) => [
     `${OUTPUT_CORNER} ${group.fileLabel}`,
-    ...diffDisplayLines(group.hunks, MAX_PATCH_LINES).map(
-      (line) => `  ${line.text}`,
-    ),
+    ...diffDisplayLines(group.hunks).map((line) => `  ${line.text}`),
   ]);
 }
 
@@ -127,16 +123,8 @@ function formatHeader(
   return `${STATUS_DOT} ${displayName}${preview ? ` (${preview})` : ''}`;
 }
 
-function visibleOutputLines(toolUse: NormalizedToolUse): {
-  readonly lines: readonly string[];
-  readonly hiddenCount: number;
-} {
-  const lines = toolUse.outputText ? toolUse.outputText.split('\n') : [];
-  const visible = lines.slice(0, MAX_OUTPUT_LINES);
-  return {
-    lines: visible,
-    hiddenCount: Math.max(0, lines.length - visible.length),
-  };
+function visibleOutputLines(toolUse: NormalizedToolUse): readonly string[] {
+  return toolUse.outputText ? toolUse.outputText.split('\n') : [];
 }
 
 function extractExitCode(toolUse: NormalizedToolUse): number | undefined {
@@ -158,15 +146,9 @@ function extractExitCode(toolUse: NormalizedToolUse): number | undefined {
 }
 
 function outputDisplayLines(toolUse: NormalizedToolUse): string[] {
-  const { lines, hiddenCount } = visibleOutputLines(toolUse);
-  return [
-    ...lines.map((line, index) =>
-      index === 0 ? `${OUTPUT_CORNER} ${line}` : `  ${line}`,
-    ),
-    ...(hiddenCount > 0
-      ? [`  … +${hiddenCount} line${hiddenCount === 1 ? '' : 's'}`]
-      : []),
-  ];
+  return visibleOutputLines(toolUse).map((line, index) =>
+    index === 0 ? `${OUTPUT_CORNER} ${line}` : `  ${line}`,
+  );
 }
 
 export function universalToolUseDisplayLines(
@@ -237,7 +219,7 @@ function PatchPreview({
         <Box key={`${group.fileLabel}-${index}`} flexDirection="column">
           <Text dimColor>{`${OUTPUT_CORNER} ${group.fileLabel}`}</Text>
           <Box flexDirection="column" paddingLeft={2}>
-            <DiffView hunks={group.hunks} maxHunkLines={MAX_PATCH_LINES} />
+            <DiffView hunks={group.hunks} />
           </Box>
         </Box>
       ))}
@@ -247,10 +229,8 @@ function PatchPreview({
 
 function OutputBlock({
   lines,
-  hiddenCount,
 }: {
   readonly lines: readonly string[];
-  readonly hiddenCount: number;
 }): React.JSX.Element | null {
   if (lines.length === 0) return null;
   return (
@@ -261,11 +241,6 @@ function OutputBlock({
           <Text>{line}</Text>
         </Box>
       ))}
-      {hiddenCount > 0 ? (
-        <Text
-          dimColor
-        >{`  … +${hiddenCount} line${hiddenCount === 1 ? '' : 's'}`}</Text>
-      ) : null}
     </Box>
   );
 }
@@ -311,7 +286,7 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
     props.fallbackName ||
     'tool';
 
-  const { patchGroups, preview, visibleOutput, hiddenCount } = useMemo(() => {
+  const { patchGroups, preview, visibleOutput } = useMemo(() => {
     // Bash rows prefer the command text (input) over the generic header summary;
     // all other tools prefer the summary (which is curated per-tool) first.
     const sourceText = preferInputPreview
@@ -320,12 +295,10 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
     const previewText = sourceText
       ? truncateWithEllipsis(collapseWhitespace(sourceText), MAX_HEADER_PREVIEW)
       : '';
-    const { lines, hiddenCount: hidden } = visibleOutputLines(toolUse);
     return {
       patchGroups: showPatch ? toolUsePatchGroups(toolUse) : undefined,
       preview: previewText,
-      visibleOutput: lines,
-      hiddenCount: hidden,
+      visibleOutput: visibleOutputLines(toolUse),
     };
   }, [toolUse, showPatch, preferInputPreview]);
 
@@ -350,7 +323,7 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
           </Text>
         ) : null}
       </Box>
-      <OutputBlock lines={visibleOutput} hiddenCount={hiddenCount} />
+      <OutputBlock lines={visibleOutput} />
       {patchGroups ? <PatchPreview groups={patchGroups} /> : null}
       {toolUse.isError && exitCode !== undefined ? (
         <CornerLine color="red">{`exit ${exitCode}`}</CornerLine>
