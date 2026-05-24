@@ -19,17 +19,32 @@ build step.
 
 You can use TeXRA's included relay access, or your own provider API keys.
 
-**Included access** — sign in with GitHub or Google:
+**Researcher Access Program (included access)** — sign in for complimentary
+access to budget-friendly models, no API keys required:
 
 ```sh
 texra login          # opens a browser; use --no-browser to print the URL
 texra auth status    # confirm sign-in and included usage
 ```
 
-**Personal API keys** — bring your own provider keys and select personal mode:
+**Personal API keys** — bring your own provider keys. Set them in the
+environment or a workspace `.env` file (loaded automatically), then select
+personal mode:
+
+```env
+OPENAI_API_KEY=your_openai_key_here
+ANTHROPIC_API_KEY=your_anthropic_key_here
+GOOGLE_API_KEY=your_google_key_here
+DEEPSEEK_API_KEY=your_deepseek_key_here
+XAI_API_KEY=your_xai_key_here
+OPENROUTER_API_KEY=your_openrouter_key_here
+```
+
+Other providers follow the same `<PROVIDER>_API_KEY` convention
+(`MOONSHOT_API_KEY`, `DASHSCOPE_API_KEY`, `MINIMAX_API_KEY`, `GLM_API_KEY`).
+Add `--api-mode personal` to a run to force your own keys:
 
 ```sh
-export ANTHROPIC_API_KEY=...   # or OPENAI_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, ...
 texra run polish --input paper.tex --api-mode personal
 ```
 
@@ -118,12 +133,15 @@ texra completion fish > ~/.config/fish/completions/texra.fish
 
 Completion covers subcommands, flags, enum values, agent names, and model names.
 
-## Building from source
+## Support & Feedback
 
-Contributors building the CLI from a repository checkout should follow the
-developer guide at `docs/guide/texra-cli.md`.
+Report issues and feature requests on the
+[GitHub issues page](https://github.com/texra-ai/texra-issues/issues) or email
+[contact@texra.ai](mailto:contact@texra.ai). See [texra.ai](https://texra.ai)
+and the [documentation](https://texra.ai/guide/) for tutorials and agent
+recipes.
 
 ## License
 
-Proprietary — all rights reserved. Use is governed by the TeXRA terms of
-service. See [LICENSE.txt](./LICENSE.txt) and <https://texra.ai/terms>.
+© TeXRA Team 2025–2026. All rights reserved. Use is governed by the TeXRA terms
+of service. See [LICENSE.txt](./LICENSE.txt) and <https://texra.ai/terms>.
