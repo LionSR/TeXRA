@@ -2,12 +2,18 @@
 import { withMermaid } from 'vitepress-plugin-mermaid';
 
 // Define the base VitePress config
+// TEST DEPLOY: served at https://lionsr.github.io/TeXRA/. When we move to
+// the texra.ai custom domain, set base back to '/' and re-add the CNAME
+// step in .github/workflows/docs-deploy.yml.
+const base = '/TeXRA/';
+
 const baseConfig = {
   title: 'TeXRA',
+  base,
   description:
     'Multi-agent AI system for scientific discovery. Specialized agents that polish LaTeX, search literature, generate figures, and build presentations — orchestrated in reproducible workflows inside VS Code.',
   head: [
-    ['link', { rel: 'icon', href: '/logo-128x128.svg' }],
+    ['link', { rel: 'icon', href: `${base}logo-128x128.svg` }],
     [
       'script',
       {},

@@ -75,8 +75,9 @@ jobs:
           exit $fail
 
       - name: Configure Pages metadata
+        # TEST DEPLOY: no CNAME so Pages serves at https://lionsr.github.io/TeXRA/.
+        # When moving to production, re-add: echo 'texra.ai' > docs/.vitepress/dist/CNAME
         run: |
-          echo 'texra.ai' > docs/.vitepress/dist/CNAME
           touch docs/.vitepress/dist/.nojekyll
 
       - name: Deploy to gh-pages branch
