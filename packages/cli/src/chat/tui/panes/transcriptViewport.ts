@@ -84,26 +84,18 @@ export function selectPendingEntriesForViewport(
     const entry = entries[index];
     if (!entry) continue;
     const entryRows = estimatePendingEntryRows(entry, width);
-    const markerRows = index > 0 ? 1 : 0;
-    const availableForEntries = maxRows - markerRows;
-    if (availableForEntries <= 0) {
-      hiddenCount = index + 1;
-      usedRows = markerRows;
-      break;
-    }
-    if (usedRows + entryRows > availableForEntries) {
+    if (usedRows + entryRows > maxRows) {
       if (
         selected.length === 0 &&
         (entry.role === 'assistant' || entry.role === 'tool')
       ) {
         selected.unshift(entry);
-        rowLimits.set(entry.id, availableForEntries);
-        usedRows = availableForEntries;
+        rowLimits.set(entry.id, maxRows);
+        usedRows = maxRows;
         hiddenCount = index;
       } else {
         hiddenCount = index + 1;
       }
-      if (hiddenCount > 0) usedRows += 1;
       break;
     }
     selected.unshift(entry);

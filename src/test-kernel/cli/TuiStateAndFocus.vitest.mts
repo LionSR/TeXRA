@@ -689,7 +689,7 @@ describe('CLI transcript state', () => {
 
     expect(selected.entries.map((entry) => entry.id)).toEqual(['tool']);
     expect(selected.hiddenCount).toBe(1);
-    expect(selected.rowLimits.get('tool')).toBe(2);
+    expect(selected.rowLimits.get('tool')).toBe(3);
     expect(selected.usedRows).toBe(3);
   });
 

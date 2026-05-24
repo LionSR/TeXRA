@@ -17,6 +17,7 @@ import {
   patchStream,
   resetCliState,
   type ConversationEntry,
+  type StreamSlice,
 } from '../../../packages/cli/src/chat/tui/state/cliState';
 import { finalizeAssistantTranscriptEntries } from '../../../packages/cli/src/chat/tui/state/transcript';
 import { subscribeStreamStatus } from '../../../packages/cli/src/chat/tui/state/subscribeStreamStatus';
@@ -26,7 +27,7 @@ const SESSION_META = {
   agent: 'research',
   model: 'deepseekT',
   cwd: '/tmp/project',
-  apiMode: 'relay',
+  apiMode: 'personal',
   canDelegate: false,
   version: '0.38.0',
 } as const;
@@ -203,26 +204,93 @@ describe('CLI conversation transcript splitting', () => {
     const assistant = entry('a1', 'assistant', 'A decomposition.', false);
 
     const first = appendStaticTranscriptItems({
-      activeStreamId: STREAM_ID,
       currentItems: [],
-      entries: [user, assistant],
+      streams: streamsFromEntries(STREAM_ID, [user, assistant]),
       meta: SESSION_META,
     });
-    expect(first.map((item) => item.id)).toEqual([
-      'session-header',
-      `${STREAM_ID}:u1`,
-    ]);
+    expect(first).toHaveLength(2);
+    expect(first[0]?.kind).toBe('header');
+    expect(first.slice(1).map((item) => item.id)).toEqual([`${STREAM_ID}:u1`]);
 
     const second = appendStaticTranscriptItems({
-      activeStreamId: STREAM_ID,
       currentItems: first,
-      entries: [user, { ...assistant, finalized: true }],
+      streams: streamsFromEntries(STREAM_ID, [
+        user,
+        { ...assistant, finalized: true },
+      ]),
       meta: SESSION_META,
     });
-    expect(second.map((item) => item.id)).toEqual([
-      'session-header',
+    expect(second).toHaveLength(3);
+    expect(second.slice(1).map((item) => item.id)).toEqual([
       `${STREAM_ID}:u1`,
       `${STREAM_ID}:a1`,
     ]);
   });
+
+  it('appends a fresh header block when session meta changes', () => {
+    const first = appendStaticTranscriptItems({
+      currentItems: [],
+      streams: new Map(),
+      meta: SESSION_META,
+    });
+    expect(first).toHaveLength(1);
+
+    const switched = appendStaticTranscriptItems({
+      currentItems: first,
+      streams: new Map(),
+      meta: { ...SESSION_META, model: 'sonnet' },
+    });
+    expect(switched).toHaveLength(2);
+    expect(switched.every((item) => item.kind === 'header')).toBe(true);
+  });
+
+  it('appends finalized entries from background streams, not just active', () => {
+    const rootUser = entry('u1', 'user', 'do x', true);
+    const childAssistant = entry('a1', 'assistant', 'done', true);
+    const ROOT = 'root-stream' as StreamTabId;
+    const CHILD = 'claude@agent-sdk#1' as StreamTabId;
+
+    const items = appendStaticTranscriptItems({
+      currentItems: [],
+      streams: new Map<StreamTabId, StreamSlice>([
+        [ROOT, sliceWithEntries(ROOT, [rootUser])],
+        [CHILD, sliceWithEntries(CHILD, [childAssistant])],
+      ]),
+      meta: SESSION_META,
+    });
+
+    expect(items.slice(1).map((item) => item.id)).toEqual([
+      `${ROOT}:u1`,
+      `${CHILD}:a1`,
+    ]);
+  });
 });
+
+function sliceWithEntries(
+  streamId: StreamTabId,
+  entries: readonly ConversationEntry[],
+): StreamSlice {
+  return {
+    streamId,
+    status: undefined,
+    description: undefined,
+    usage: undefined,
+    conversation: undefined,
+    entries,
+    queuedFollowUps: 0,
+    activeSubagents: [],
+    activeProcesses: [],
+    childStreams: [],
+    todos: [],
+    plan: null,
+    processOutput: new Map(),
+    bypass: { toolEdit: false, superYolo: false },
+  };
+}
+
+function streamsFromEntries(
+  streamId: StreamTabId,
+  entries: readonly ConversationEntry[],
+): ReadonlyMap<StreamTabId, StreamSlice> {
+  return new Map([[streamId, sliceWithEntries(streamId, entries)]]);
+}

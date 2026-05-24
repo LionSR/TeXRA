@@ -88,7 +88,10 @@ import {
   appendLocalUserTranscript,
   moveLocalTranscriptToStream,
 } from './state/transcript';
-import { cleanupTerminalModes } from './terminalCleanup';
+import {
+  cleanupTerminalModes,
+  clearTerminalScrollback,
+} from './terminalCleanup';
 
 export interface ChatResult {
   exitCode: number;
@@ -719,6 +722,7 @@ export async function runChat(
     followUpQueue.clear();
     clearTuiSessionRunState(session);
     resetCliState(meta);
+    clearTerminalScrollback();
   };
 
   const startAgentRun = (config: AgentConfigPayload): void => {

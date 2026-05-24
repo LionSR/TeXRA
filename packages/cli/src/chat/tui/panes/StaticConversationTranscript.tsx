@@ -12,7 +12,9 @@ import {
   cliState,
   type ConversationEntry,
   type SessionMeta,
+  type StreamSlice,
 } from '../state/cliState';
+import type { StreamTabId } from '@shared/schemas';
 import { useSignal } from '../state/useSignal';
 import { TranscriptEntry } from './TranscriptEntry';
 import { shortCliApiMode } from '../../../runtime/apiAccessMode';
@@ -77,32 +79,50 @@ function staticEntryId(streamId: string, entry: ConversationEntry): string {
   return `${streamId}:${entry.id}`;
 }
 
+// Keyed on the fields the header actually renders. Any agent / model /
+// api-mode / cwd change therefore appends a fresh header block to
+// scrollback, surfacing the transition instead of leaving a stale snapshot
+// pinned at the top.
+function sessionHeaderId(meta: SessionMeta): string {
+  return [
+    'session-header',
+    meta.agent,
+    meta.model,
+    meta.apiMode,
+    meta.cwd,
+    meta.version,
+  ].join('|');
+}
+
 export function appendStaticTranscriptItems({
-  activeStreamId,
   currentItems,
-  entries,
+  streams,
   meta,
 }: {
-  readonly activeStreamId: string | undefined;
   readonly currentItems: readonly StaticTranscriptItem[];
-  readonly entries: readonly ConversationEntry[];
+  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly meta: SessionMeta;
 }): readonly StaticTranscriptItem[] {
   const nextItems: StaticTranscriptItem[] = [...currentItems];
   const seen = new Set(nextItems.map((item) => item.id));
-  const headerId = 'session-header';
+  const headerId = sessionHeaderId(meta);
   if (!seen.has(headerId)) {
     nextItems.push({ id: headerId, kind: 'header', meta });
     seen.add(headerId);
   }
-  if (!activeStreamId) return nextItems;
 
-  for (const entry of entries) {
-    if (!entry.finalized) continue;
-    const id = staticEntryId(activeStreamId, entry);
-    if (seen.has(id)) continue;
-    nextItems.push({ id, kind: 'entry', entry });
-    seen.add(id);
+  // Iterate every known stream rather than just the active one — Ink
+  // `<Static>` prints once into the primary buffer, so a subagent or
+  // background tab that finalizes entries while the user is focused
+  // elsewhere would otherwise lose that output forever.
+  for (const [streamId, slice] of streams) {
+    for (const entry of slice.entries) {
+      if (!entry.finalized) continue;
+      const id = staticEntryId(streamId, entry);
+      if (seen.has(id)) continue;
+      nextItems.push({ id, kind: 'entry', entry });
+      seen.add(id);
+    }
   }
   return nextItems;
 }
@@ -115,8 +135,6 @@ export function StaticConversationTranscript({
   const activeStreamId = useSignal(cliState.activeStreamId);
   const streams = useSignal(cliState.streams);
   const sessionMeta = useSignal(cliState.sessionMeta);
-  const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
-  const entries = slice?.entries ?? [];
   const [items, setItems] = useState<readonly StaticTranscriptItem[]>([]);
 
   useEffect(() => {
@@ -126,17 +144,16 @@ export function StaticConversationTranscript({
     }
     setItems((currentItems) =>
       appendStaticTranscriptItems({
-        activeStreamId,
         currentItems,
-        entries,
+        streams,
         meta: sessionMeta,
       }),
     );
-  }, [activeStreamId, entries, sessionMeta, streams.size]);
+  }, [activeStreamId, streams, sessionMeta]);
 
   return (
     <Static items={[...items]}>
-      {(item) => (
+      {(item: StaticTranscriptItem) => (
         <Box key={item.id} flexDirection="column">
           {item.kind === 'header' ? (
             <SessionHeaderBlock meta={item.meta} width={width} />

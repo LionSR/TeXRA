@@ -145,6 +145,11 @@ export function BoundedTranscriptEntry({
   );
 }
 
+// Cap the live tail so a multi-megabyte assistant buffer doesn't re-wrap
+// every chunk. The static `<Static>` transcript owns the full history; we
+// only need enough characters here to fill a typical viewport.
+const LIVE_TAIL_ROWS = 24;
+
 export function LiveTranscriptEntry({
   entry,
   width,
@@ -152,8 +157,16 @@ export function LiveTranscriptEntry({
   readonly entry: ConversationEntry;
   readonly width?: number;
 }): React.JSX.Element {
-  const cols = width ?? 80;
-  const rows = wrapAnsiToWidth(entry.text, cols).split('\n');
+  const cols = Math.max(1, width ?? 80);
+  // Slice raw text down to a tail window before wrap: roughly two screen
+  // widths per visible row covers worst-case wrapping without making the
+  // wrap step O(text length) per delta.
+  const wrapBudget = cols * LIVE_TAIL_ROWS * 2;
+  const candidate =
+    entry.text.length > wrapBudget ? entry.text.slice(-wrapBudget) : entry.text;
+  const rows = wrapAnsiToWidth(candidate, cols)
+    .split('\n')
+    .slice(-LIVE_TAIL_ROWS);
   return (
     <Box flexDirection="column">
       <Text>{rows.join('\n')}</Text>
