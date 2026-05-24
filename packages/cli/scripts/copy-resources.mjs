@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const packageDir = path.resolve(scriptDir, '..');
-const repoRoot = path.resolve(packageDir, '../..');
 const source = path.resolve(packageDir, '../extension/resources');
 const target = path.resolve(packageDir, 'dist/resources');
 const runtimeResourceEntries = [
@@ -28,6 +27,3 @@ await Promise.all(
     }),
   ),
 );
-await cp(path.join(repoRoot, 'skills'), path.join(target, 'skills'), {
-  recursive: true,
-});
