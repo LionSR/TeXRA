@@ -340,6 +340,12 @@ export class HistoryItemElement extends LitElement {
                     title: 'Export as LaTeX/PDF',
                     action: 'export-tex',
                   })}
+                  ${renderIconActionButton({
+                    icon: 'globe',
+                    label: 'Export HTML',
+                    title: 'Export as shareable HTML webpage',
+                    action: 'export-html',
+                  })}
                 `
               : nothing}
           </div>
