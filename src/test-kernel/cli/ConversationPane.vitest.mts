@@ -211,7 +211,7 @@ describe('CLI conversation transcript splitting', () => {
     });
     expect(first).toHaveLength(2);
     expect(first[0]?.kind).toBe('header');
-    expect(first.slice(1).map((item) => item.id)).toEqual([`${STREAM_ID}:u1`]);
+    expect(first.slice(1).map((item) => item.id)).toEqual(['u1']);
 
     const second = appendStaticTranscriptItems({
       activeStreamId: STREAM_ID,
@@ -223,10 +223,7 @@ describe('CLI conversation transcript splitting', () => {
       meta: SESSION_META,
     });
     expect(second).toHaveLength(3);
-    expect(second.slice(1).map((item) => item.id)).toEqual([
-      `${STREAM_ID}:u1`,
-      `${STREAM_ID}:a1`,
-    ]);
+    expect(second.slice(1).map((item) => item.id)).toEqual(['u1', 'a1']);
   });
 
   it('shows the session header exactly once', () => {
@@ -264,7 +261,7 @@ describe('CLI conversation transcript splitting', () => {
       meta: SESSION_META,
     });
 
-    expect(items.slice(1).map((item) => item.id)).toEqual([`${ROOT}:u1`]);
+    expect(items.slice(1).map((item) => item.id)).toEqual(['u1']);
   });
 });
 

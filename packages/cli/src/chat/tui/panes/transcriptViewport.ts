@@ -54,7 +54,6 @@ function estimatePendingEntryRows(
 
 export interface PendingEntrySelection {
   readonly entries: readonly ConversationEntry[];
-  readonly hiddenCount: number;
   readonly rowLimits: ReadonlyMap<string, number>;
   readonly usedRows: number;
 }
@@ -68,17 +67,11 @@ export function selectPendingEntriesForViewport(
   width = 80,
 ): PendingEntrySelection {
   if (!Number.isFinite(maxRows) || maxRows <= 0) {
-    return {
-      entries: [],
-      hiddenCount: entries.length,
-      rowLimits: new Map(),
-      usedRows: 0,
-    };
+    return { entries: [], rowLimits: new Map(), usedRows: 0 };
   }
 
   const selected: ConversationEntry[] = [];
   const rowLimits = new Map<string, number>();
-  let hiddenCount = 0;
   let usedRows = 0;
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
@@ -92,14 +85,11 @@ export function selectPendingEntriesForViewport(
         selected.unshift(entry);
         rowLimits.set(entry.id, maxRows);
         usedRows = maxRows;
-        hiddenCount = index;
-      } else {
-        hiddenCount = index + 1;
       }
       break;
     }
     selected.unshift(entry);
     usedRows += entryRows;
   }
-  return { entries: selected, hiddenCount, rowLimits, usedRows };
+  return { entries: selected, rowLimits, usedRows };
 }

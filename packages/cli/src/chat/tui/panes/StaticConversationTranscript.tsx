@@ -2,11 +2,13 @@
 // land in ordinary terminal scrollback. The session header is the first
 // static item; finalized conversation entries follow as they promote.
 
-import os from 'node:os';
 import path from 'node:path';
 
 import { useEffect, useState } from 'react';
 import { Box, Static, Text } from 'ink';
+
+import type { StreamTabId } from '@shared/schemas';
+import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
   cliState,
@@ -14,7 +16,6 @@ import {
   type SessionMeta,
   type StreamSlice,
 } from '../state/cliState';
-import type { StreamTabId } from '@shared/schemas';
 import { useSignal } from '../state/useSignal';
 import { TranscriptEntry } from './TranscriptEntry';
 import { shortCliApiMode } from '../../../runtime/apiAccessMode';
@@ -32,7 +33,8 @@ export type StaticTranscriptItem =
     };
 
 function shortenCwd(cwd: string): string {
-  const home = os.homedir();
+  const home = safeHomedir();
+  if (!home) return cwd;
   if (cwd === home) return '~';
   const sep = path.sep;
   if (cwd.startsWith(`${home}${sep}`)) {
@@ -75,10 +77,12 @@ function SessionHeaderBlock({
   );
 }
 
-function staticEntryId(streamId: string, entry: ConversationEntry): string {
-  return `${streamId}:${entry.id}`;
-}
-
+// Dedupe `<Static>` rows by the entry's own id (a randomUUID from the
+// stream log, or a unique `local:…` id for synthetic rows) rather than
+// pairing it with the stream id. `moveLocalTranscriptToStream` re-homes
+// pre-agent local rows onto the real stream keeping their id; a
+// stream-scoped key would treat the moved rows as new and print them
+// twice.
 const SESSION_HEADER_ID = 'session-header';
 
 export function appendStaticTranscriptItems({
@@ -92,8 +96,8 @@ export function appendStaticTranscriptItems({
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly meta: SessionMeta;
 }): readonly StaticTranscriptItem[] {
+  const seen = new Set(currentItems.map((item) => item.id));
   const nextItems: StaticTranscriptItem[] = [...currentItems];
-  const seen = new Set(nextItems.map((item) => item.id));
   if (!seen.has(SESSION_HEADER_ID)) {
     nextItems.push({ id: SESSION_HEADER_ID, kind: 'header', meta });
     seen.add(SESSION_HEADER_ID);
@@ -108,12 +112,13 @@ export function appendStaticTranscriptItems({
   const slice = streams.get(activeStreamId);
   for (const entry of slice?.entries ?? []) {
     if (!entry.finalized) continue;
-    const id = staticEntryId(activeStreamId, entry);
-    if (seen.has(id)) continue;
-    nextItems.push({ id, kind: 'entry', entry });
-    seen.add(id);
+    if (seen.has(entry.id)) continue;
+    nextItems.push({ id: entry.id, kind: 'entry', entry });
+    seen.add(entry.id);
   }
-  return nextItems;
+  // Same reference when nothing was appended so the `setItems` functional
+  // update doesn't schedule a re-render on every stream-sync tick.
+  return nextItems.length === currentItems.length ? currentItems : nextItems;
 }
 
 export function StaticConversationTranscript({
