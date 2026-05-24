@@ -7,15 +7,14 @@ import { flushPendingRunTraces } from '@logger';
 import {
   MESSAGE_TYPES,
   type NormalizedToolUse,
-  STREAM_STATUS,
   type StreamLogEntry,
   type StreamTabId,
-  type StreamStatus,
 } from '@shared/schemas';
 import { normalizeToolUseData } from '@shared/toolUse';
 
 import { appendCliApiSwitchHint } from '../../../runtime/approvalAdapter';
 import { cliState, patchStream, type ConversationEntry } from './cliState';
+import { isFinalTranscriptStatus } from './transcript';
 
 const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.ERROR,
@@ -197,17 +196,6 @@ type TranscriptCandidate = {
   readonly tieBreak: number;
 };
 
-function shouldFinalizeDeferredEntries(
-  status: StreamStatus | undefined,
-): boolean {
-  return (
-    status === STREAM_STATUS.ERROR ||
-    status === STREAM_STATUS.READY ||
-    status === STREAM_STATUS.STOPPED ||
-    status === STREAM_STATUS.WAITING
-  );
-}
-
 export function subscribeStreamLog(): () => void {
   const store = getDefaultStreamLogStore();
   const pendingTimers = new Map<StreamTabId, ReturnType<typeof setTimeout>>();
@@ -249,7 +237,7 @@ export function syncStreamLog(streamId: StreamTabId): void {
   patchStream(streamId, (slice) => {
     const existing = new Map(slice.entries.map((e) => [e.id, e]));
     const syntheticEntries = slice.entries.filter((entry) => entry.synthetic);
-    const finalizeDeferred = shouldFinalizeDeferredEntries(slice.status);
+    const finalizeDeferred = isFinalTranscriptStatus(slice.status);
     const logEntries: { entry: StreamLogEntry; rendered: ConversationEntry }[] =
       [];
     for (const entry of responses) {

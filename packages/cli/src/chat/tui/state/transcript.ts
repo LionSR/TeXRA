@@ -1,5 +1,9 @@
 import { getDefaultStreamLogStore } from '@transcript';
-import type { StreamTabId } from '@shared/schemas';
+import {
+  STREAM_STATUS,
+  type StreamStatus,
+  type StreamTabId,
+} from '@shared/schemas';
 
 import {
   cliState,
@@ -10,6 +14,21 @@ import {
 } from './cliState';
 
 export const CLI_LOCAL_STREAM_ID = 'cli-local' as StreamTabId;
+
+/** Stream statuses at which deferred-finalization entries (assistant text
+ *  and tool rows) are promoted into `<Static>` scrollback. */
+const FINAL_TRANSCRIPT_STATUSES: ReadonlySet<StreamStatus> = new Set([
+  STREAM_STATUS.ERROR,
+  STREAM_STATUS.READY,
+  STREAM_STATUS.STOPPED,
+  STREAM_STATUS.WAITING,
+]);
+
+export function isFinalTranscriptStatus(
+  status: StreamStatus | undefined,
+): boolean {
+  return status !== undefined && FINAL_TRANSCRIPT_STATUSES.has(status);
+}
 
 let localEntrySeq = 0;
 
