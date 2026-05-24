@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-05-24
+
 ### Features
 
 - **Export chat history as a shareable webpage** — Settings → History gets a new HTML export button alongside Markdown and PDF. The export uses the same markdown / KaTeX / syntax-highlighting pipeline as the in-app webview, ships its own CSS + fonts, and opens straight in your browser so you can share or demo a project run with anyone.
