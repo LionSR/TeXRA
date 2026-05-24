@@ -44,8 +44,6 @@ import {
 } from '../../../packages/cli/src/chat/tui/state/completedProcessTranscript';
 import {
   estimateTranscriptEntryRows,
-  selectConversationEntriesForViewport,
-  selectFinalizedEntriesForViewport,
   selectPendingEntriesForViewport,
   splitTranscriptEntries,
 } from '../../../packages/cli/src/chat/tui/panes/ConversationPane';
@@ -125,7 +123,7 @@ describe('CLI TUI row allocation', () => {
     });
 
     expect(layout.transcriptRows).toBe(1);
-    expect(layout.foregroundRows).toBe(12);
+    expect(layout.foregroundRows).toBe(16);
   });
 
   it('uses the whole middle region for the transcript without foreground UI', () => {
@@ -136,7 +134,7 @@ describe('CLI TUI row allocation', () => {
       slashPaletteOpen: false,
     });
 
-    expect(layout.transcriptRows).toBe(13);
+    expect(layout.transcriptRows).toBe(17);
     expect(layout.foregroundRows).toBe(0);
   });
 
@@ -148,11 +146,11 @@ describe('CLI TUI row allocation', () => {
       slashPaletteOpen: false,
     });
 
-    expect(layout.transcriptRows).toBe(8);
+    expect(layout.transcriptRows).toBe(12);
     expect(layout.foregroundRows).toBe(0);
   });
 
-  it('does not invent middle rows when pinned chrome fills the terminal', () => {
+  it('returns former header rows to the transcript when slash palette is open', () => {
     const layout = allocateMiddleRows({
       foregroundOpen: false,
       reverseSearchOpen: false,
@@ -160,7 +158,7 @@ describe('CLI TUI row allocation', () => {
       slashPaletteOpen: true,
     });
 
-    expect(layout.transcriptRows).toBe(0);
+    expect(layout.transcriptRows).toBe(4);
     expect(layout.foregroundRows).toBe(0);
   });
 
@@ -554,6 +552,40 @@ describe('CLI transcript state', () => {
     }
   });
 
+  it('finalizes a delayed first model-response sync after the stream is idle', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      logger.info('A delayed final answer.', {
+        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+      });
+      patchStream(root, (slice) => ({
+        ...slice,
+        status: STREAM_STATUS.WAITING,
+      }));
+
+      syncStreamLog(root);
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({
+        role: 'assistant',
+        text: 'A delayed final answer.',
+        finalized: true,
+      });
+      const split = splitTranscriptEntries(entries, STREAM_STATUS.WAITING);
+      expect(split.finalized.map((entry) => entry.id)).toEqual([
+        entries[0]?.id,
+      ]);
+      expect(split.pending).toEqual([]);
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
   it('keeps repeated local slash-command responses after stream-log syncs', () => {
     const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
@@ -611,40 +643,6 @@ describe('CLI transcript state', () => {
     expect(finalized.map((entry) => entry.id)).toEqual(['local-help']);
   });
 
-  it('selects a viewport-limited finalized transcript tail', () => {
-    const entries = [
-      {
-        id: 'old',
-        role: 'assistant',
-        text: 'old answer',
-        finalized: true,
-      },
-      {
-        id: 'middle',
-        role: 'user',
-        text: 'middle question',
-        finalized: true,
-      },
-      {
-        id: 'latest',
-        role: 'assistant',
-        text: 'latest answer',
-        finalized: true,
-      },
-    ] as const;
-
-    const latestRows = estimateTranscriptEntryRows(entries[2], 80);
-    const selected = selectFinalizedEntriesForViewport(
-      entries,
-      latestRows + 1,
-      80,
-    );
-
-    expect(selected.entries.map((entry) => entry.id)).toEqual(['latest']);
-    expect(selected.hiddenCount).toBe(2);
-    expect(selected.usedRows).toBe(latestRows + 1);
-  });
-
   it('estimates finalized assistant rows from rendered markdown', () => {
     const text = ['A paragraph.', '', '- abcdef ghijkl mnopqr'].join('\n');
     const width = 10;
@@ -657,51 +655,6 @@ describe('CLI transcript state', () => {
     } as const;
 
     expect(estimateTranscriptEntryRows(entry, width)).toBe(renderedRows + 1);
-  });
-
-  it('does not reserve pending rows while idle', () => {
-    const finalized = [
-      {
-        id: 'latest',
-        role: 'assistant',
-        text: 'latest answer',
-        finalized: true,
-      },
-    ] as const;
-    const selected = selectConversationEntriesForViewport({
-      finalized,
-      maxRows: 4,
-      pending: [],
-      width: 80,
-    });
-
-    expect(selected.pendingRows).toBe(0);
-    expect(selected.finalizedRows).toBe(4);
-    expect(selected.visibleFinalized.entries).toEqual(finalized);
-  });
-
-  it('does not force finalized entries into rows reserved for live output', () => {
-    const entries = [
-      {
-        id: 'old',
-        role: 'assistant',
-        text: 'old answer',
-        finalized: true,
-      },
-      {
-        id: 'latest',
-        role: 'user',
-        text: 'latest question',
-        finalized: true,
-      },
-    ] as const;
-
-    const latestRows = estimateTranscriptEntryRows(entries[1], 80);
-    const selected = selectFinalizedEntriesForViewport(entries, latestRows, 80);
-
-    expect(selected.entries).toEqual([]);
-    expect(selected.hiddenCount).toBe(2);
-    expect(selected.usedRows).toBe(1);
   });
 
   it('keeps pending transcript rows within their viewport budget', () => {
@@ -734,26 +687,12 @@ describe('CLI transcript state', () => {
 
     const selected = selectPendingEntriesForViewport(pending, 3, 80);
 
-    expect(selected.entries).toEqual([]);
-    expect(selected.hiddenCount).toBe(2);
-    expect(selected.usedRows).toBe(1);
+    expect(selected.entries.map((entry) => entry.id)).toEqual(['tool']);
+    expect(selected.rowLimits.get('tool')).toBe(3);
+    expect(selected.usedRows).toBe(3);
   });
 
-  it('reserves a history marker row while live output fills the viewport', () => {
-    const finalized = [
-      {
-        id: 'old',
-        role: 'assistant',
-        text: 'old answer',
-        finalized: true,
-      },
-      {
-        id: 'latest',
-        role: 'user',
-        text: 'latest question',
-        finalized: true,
-      },
-    ] as const;
+  it('lets live output fill the viewport instead of reserving a history marker row', () => {
     const pending = [
       {
         id: 'assistant',
@@ -763,20 +702,10 @@ describe('CLI transcript state', () => {
       },
     ] as const;
 
-    const selected = selectConversationEntriesForViewport({
-      finalized,
-      maxRows: 13,
-      pending,
-      width: 80,
-    });
+    const selected = selectPendingEntriesForViewport(pending, 13, 80);
 
-    expect(selected.pendingRows).toBe(12);
-    expect(selected.visiblePending.entries.map((entry) => entry.id)).toEqual([
-      'assistant',
-    ]);
-    expect(selected.visibleFinalized.entries).toEqual([]);
-    expect(selected.visibleFinalized.hiddenCount).toBe(2);
-    expect(selected.visibleFinalized.usedRows).toBe(1);
+    expect(selected.usedRows).toBe(13);
+    expect(selected.entries.map((entry) => entry.id)).toEqual(['assistant']);
   });
 
   it('moves pre-session local slash-command output onto the resolved stream', () => {

@@ -6,6 +6,7 @@ import type {
 } from '../runtime/orchestration';
 import { Select } from '../chat/tui/ui/Select';
 import { KeyHints } from '../chat/tui/ui/KeyHints';
+import { clearTerminalScrollback } from '../chat/tui/terminalCleanup';
 
 interface OrchestrationAppProps {
   readonly items: readonly CliOrchestrationItem[];
@@ -61,15 +62,14 @@ export async function runOrchestrationTui(
   items: readonly CliOrchestrationItem[],
 ): Promise<CliOrchestrationAction> {
   return new Promise((resolve) => {
-    let settled = false;
-    const settle = (action: CliOrchestrationAction): void => {
-      if (settled) return;
-      settled = true;
-      resolve(action);
+    let chosen: CliOrchestrationAction | undefined;
+    const record = (action: CliOrchestrationAction): void => {
+      if (chosen) return;
+      chosen = action;
     };
 
     const instance = render(
-      <OrchestrationApp items={items} onResolve={settle} />,
+      <OrchestrationApp items={items} onResolve={record} />,
       {
         stdout: process.stdout,
         stderr: process.stderr,
@@ -77,6 +77,12 @@ export async function runOrchestrationTui(
       },
     );
 
-    void instance.waitUntilExit().then(() => settle({ kind: 'exit' }));
+    // Wipe the picker out of primary-buffer scrollback once Ink has
+    // finished unmounting; the chat / resume / help screen that follows
+    // then starts on a clean buffer instead of stacking under the menu.
+    void instance.waitUntilExit().then(() => {
+      clearTerminalScrollback();
+      resolve(chosen ?? { kind: 'exit' });
+    });
   });
 }
