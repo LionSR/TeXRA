@@ -23,6 +23,7 @@ describe('CLI StatusBar display model', () => {
       activeProcesses: 0,
       approvalDepth: 0,
       subagentControlsAvailable: false,
+      hasMultipleStreams: false,
       model: 'deepseekT',
       apiMode: 'api',
       shortcutModifierLabel: 'Alt',
@@ -40,6 +41,9 @@ describe('CLI StatusBar display model', () => {
     // (see #4399) but used to be discoverable only via source diving.
     expect(display.bindings).toContain('[Ctrl-J]newline');
     expect(display.bindings).not.toContain('[Alt-s]subagents');
+    // Stream-navigation hints stay hidden in a single-stream chat.
+    expect(display.bindings).not.toContain('[Tab]streams');
+    expect(display.bindings).not.toContain('[Alt-1..9]focus');
     expect(display.left.map(statusBarSegmentText)).not.toContain('deepseekT');
   });
 
@@ -56,6 +60,7 @@ describe('CLI StatusBar display model', () => {
       activeProcesses: 1,
       approvalDepth: 3,
       subagentControlsAvailable: true,
+      hasMultipleStreams: true,
       model: 'deepseekT',
       apiMode: 'relay',
       shortcutModifierLabel: 'Alt',
@@ -73,6 +78,9 @@ describe('CLI StatusBar display model', () => {
     ]);
     expect(display.right).toBe('queued: 2');
     expect(display.bindings).toContain('[Alt-s]subagents');
+    // Stream-navigation hints appear once more than one stream is live.
+    expect(display.bindings).toContain('[Tab]streams');
+    expect(display.bindings).toContain('[Alt-1..9]focus');
   });
 
   it('preserves YOLO and BYPASS badges without agent/model text', () => {
@@ -88,6 +96,7 @@ describe('CLI StatusBar display model', () => {
       activeProcesses: 0,
       approvalDepth: 0,
       subagentControlsAvailable: false,
+      hasMultipleStreams: false,
       model: 'deepseekT',
       apiMode: 'api',
       shortcutModifierLabel: 'Alt',
@@ -123,6 +132,7 @@ describe('CLI StatusBar display model', () => {
       activeProcesses: 0,
       approvalDepth: 0,
       subagentControlsAvailable: false,
+      hasMultipleStreams: false,
       model: 'deepseekT',
       apiMode: 'api',
       shortcutModifierLabel: 'Alt',
@@ -151,6 +161,7 @@ describe('CLI StatusBar display model', () => {
       activeProcesses: 0,
       approvalDepth: 0,
       subagentControlsAvailable: true,
+      hasMultipleStreams: true,
       model: 'deepseekT',
       apiMode: 'api',
       shortcutModifierLabel: defaultShortcutModifierLabel('darwin'),
