@@ -13,14 +13,23 @@ import { MESSAGE_TYPES } from '@shared/schemas';
 
 describe('logFileCategory', () => {
   let logger: AgentTrace;
+  let disposeTrace: () => void;
   let capturedMessages: any[];
 
   beforeEach(async () => {
     const store = new StreamLogStore();
     setDefaultStreamLogStore(store);
     await store.clear();
-    logger = createRunTrace('TestFileListLogger').trace;
+    const runTrace = createRunTrace('TestFileListLogger');
+    logger = runTrace.trace;
+    disposeTrace = runTrace.dispose;
     capturedMessages = [];
+  });
+
+  afterEach(() => {
+    // Release the run-trace subscribers so `activeFlushers` in runTrace.ts
+    // doesn't accumulate dead closures across the suite.
+    disposeTrace();
   });
 
   const refreshCaptured = (): void => {
