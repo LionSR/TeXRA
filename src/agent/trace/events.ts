@@ -83,7 +83,15 @@ export interface ToolStartEvent extends StageStamp {
   readonly input: unknown;
 }
 
-/** Tool call finished. */
+/**
+ * Patch to an open tool call, correlated by `logId`. Usually a terminal
+ * update (`status: 'completed' | 'failed'`) that closes the call, but a
+ * streaming tool emits repeated `tool.end` events with
+ * `status: 'in_progress'` to push incremental output to the same card
+ * before it finishes. Subscribers should treat the event as an
+ * upsert keyed on `logId` and rely on `status` for terminality rather than
+ * assuming the call is done.
+ */
 export interface ToolEndEvent extends StageStamp {
   readonly type: 'tool.end';
   readonly logId: string;

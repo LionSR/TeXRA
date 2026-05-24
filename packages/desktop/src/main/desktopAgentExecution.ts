@@ -11,6 +11,7 @@ import { ProgressAgentProposalController } from '@controllers/progressView/Progr
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform, tryPlatform } from '@platform/platform';
+import { setDefaultStreamLogStore, StreamLogStore } from '@transcript';
 import {
   buildStreamTabInfo,
   peekWorktreeInfo,
@@ -47,8 +48,7 @@ import type { ExternalOpener } from '@hosts/externalOpener';
 import { getAcceptedFileTarget } from '@latex/acceptedFileTarget';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
-import { createChannelTrace, setDefaultStreamLogStore } from '@logger';
-import { StreamLogStore } from '@logger/StreamLogStore';
+import { createChannelTrace } from '@logger';
 import {
   STREAM_STATUS,
   type ActiveChildInfo,

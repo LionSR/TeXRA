@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
+import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { OutputNode } from '@agent/implementations/flows/reflection/nodes/OutputNode';
 import type { ReflectionServices } from '@agent/implementations/flows/reflection/ReflectionServices';
@@ -12,7 +13,6 @@ import {
 } from '@agent/output/OutputFileProcessor';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { normalizeRunId } from '@common/constants/runIds';
-import type { TexraTrace } from '@logger';
 import type {
   AgentFileLocation,
   FileLocation,
@@ -107,8 +107,8 @@ describe('output progress events', () => {
     const roundData = new Map<number, RoundData>();
     const logger = {
       debug: () => {},
-      missingOutputs: () => {},
-    } as unknown as TexraTrace;
+      domain: () => {},
+    } as unknown as AgentTrace;
     const xmlManager = {
       processSingleXmlOutput: async () => {
         throw new Error('invalid xml');

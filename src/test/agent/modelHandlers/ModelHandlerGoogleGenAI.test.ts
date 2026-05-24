@@ -15,12 +15,12 @@ import {
   type ModelConfig,
   ModelProvider,
 } from 'llm-zoo';
+import type { AgentTrace } from '@agent/trace';
 import {
   ModelHandlerGoogleGenAI,
   validateGoogleMessageHistory,
 } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
 import { MediaEntry } from '@agent/utils/mediaTypes';
-import type { TexraTrace } from '@logger';
 
 // Type imports
 
@@ -36,12 +36,12 @@ import type {
   Content,
 } from '@google/genai';
 
-interface LoggerStub extends Partial<TexraTrace> {
+interface LoggerStub extends Partial<AgentTrace> {
   streamId: string;
   fileListEntries: Array<Array<{ path: string; ok: boolean }>>;
 }
 
-function createLoggerStub(): { logger: TexraTrace; stub: LoggerStub } {
+function createLoggerStub(): { logger: AgentTrace; stub: LoggerStub } {
   const stub: LoggerStub = {
     streamId: 'test-channel',
     fileListEntries: [],
@@ -57,17 +57,17 @@ function createLoggerStub(): { logger: TexraTrace; stub: LoggerStub } {
     error: () => {
       /* no-op for tests */
     },
-    filesLoaded(input: {
-      category: string;
-      entries: Array<{ path: string; ok: boolean }>;
-    }) {
-      this.fileListEntries.push(
-        input.entries as Array<{ path: string; ok: boolean }>,
-      );
+    domain(event) {
+      if (event.key === 'filesLoaded') {
+        const data = event.data as {
+          entries: Array<{ path: string; ok: boolean }>;
+        };
+        this.fileListEntries.push(data.entries);
+      }
     },
   };
 
-  return { logger: stub as unknown as TexraTrace, stub };
+  return { logger: stub as unknown as AgentTrace, stub };
 }
 
 function buildGoogleConfig(
@@ -320,7 +320,7 @@ describe('validateGoogleMessageHistory', () => {
     const logger = {
       warn: (msg: string) => warnings.push(msg),
       debug: () => {},
-    } as unknown as TexraTrace;
+    } as unknown as AgentTrace;
 
     const messages: Content[] = [
       { role: 'user', parts: [createPartFromText('first')] },
@@ -338,7 +338,7 @@ describe('validateGoogleMessageHistory', () => {
     const logger = {
       warn: (msg: string) => warnings.push(msg),
       debug: () => {},
-    } as unknown as TexraTrace;
+    } as unknown as AgentTrace;
 
     const messages: Content[] = [
       { role: 'user', parts: [createPartFromText('hello')] },

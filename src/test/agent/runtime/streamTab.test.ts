@@ -2,8 +2,8 @@
 import { strict as assert } from 'assert';
 
 // Local imports
+import { getStreamTabId } from '@agent/runtime/streamTab';
 import type { ExecutionId } from '@shared/schemas';
-import { getStreamTabId } from '@/logger/streamUtils';
 
 describe('getStreamTabId', () => {
   const EXEC_ID = 'abcdef012345' as ExecutionId;
