@@ -11,7 +11,7 @@ link the bundled CLI binary into the global pnpm bin directory:
 
 ```bash
 corepack pnpm install
-corepack pnpm --filter @texra/cli build
+corepack pnpm --filter @texra-ai/cli build
 corepack pnpm setup    # one-time; then restart your shell or source its rc file
 PNPM_BIN="$(corepack pnpm bin -g)"
 mkdir -p "$PNPM_BIN"
@@ -52,7 +52,7 @@ The linked command points to `packages/cli/dist/bin/texra.js`. Rebuild after
 changing CLI code or shared runtime code:
 
 ```bash
-corepack pnpm --filter @texra/cli build
+corepack pnpm --filter @texra-ai/cli build
 ```
 
 The symlink is used instead of `pnpm link --global` because the CLI package
@@ -188,11 +188,11 @@ The CLI build performs type checking, architecture checks, bundling, and resourc
 copying:
 
 ```bash
-corepack pnpm --filter @texra/cli build
+corepack pnpm --filter @texra-ai/cli build
 ```
 
 For a deterministic local run check that does not require provider credentials:
 
 ```bash
-corepack pnpm --filter @texra/cli validate:run
+corepack pnpm --filter @texra-ai/cli validate:run
 ```

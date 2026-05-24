@@ -1,5 +1,5 @@
 {
-  "name": "@texra/cli",
+  "name": "@texra-ai/cli",
   "version": "0.38.0",
   "description": "TeXRA CLI — AI-powered LaTeX research assistant for the terminal.",
   "license": "SEE LICENSE IN LICENSE.txt",
@@ -21,6 +21,7 @@
   ],
   "files": [
     "dist",
+    "!dist/bin/tui-harness.js",
     "LICENSE.txt"
   ],
   "type": "module",
