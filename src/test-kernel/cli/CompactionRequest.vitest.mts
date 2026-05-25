@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { requestCliCompaction } from '../../../packages/cli/src/chat/tui/state/compactionRequest';
+import { requestCliCompaction } from '@cli/chat/tui/state/compactionRequest';
 
 function compactableFlow() {
   return {

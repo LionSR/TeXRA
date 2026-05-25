@@ -7,6 +7,7 @@ import path from 'node:path';
 import { useEffect, useState } from 'react';
 import { Box, Static, Text } from 'ink';
 
+import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import type { StreamTabId } from '@shared/schemas';
 import { safeHomedir } from '@utils/system/platformPaths';
 
@@ -18,7 +19,6 @@ import {
 } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
 import { TranscriptEntry } from './TranscriptEntry';
-import { shortCliApiMode } from '../../../runtime/apiAccessMode';
 
 export type StaticTranscriptItem =
   | {

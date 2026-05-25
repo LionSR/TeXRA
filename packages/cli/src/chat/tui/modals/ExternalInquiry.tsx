@@ -3,9 +3,9 @@ import { Box, Text, useInput } from 'ink';
 
 import type { ExternalInquiryPermission } from '@shared/schemas';
 
-import type { ApprovalDecision } from '../state/approvalQueue';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { KeyHints } from '../ui/KeyHints';
+import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface ExternalInquiryProps {
   readonly payload: ExternalInquiryPermission;

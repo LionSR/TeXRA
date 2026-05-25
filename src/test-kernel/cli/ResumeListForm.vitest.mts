@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   resumeEntryDescription,
   resumeSelectWindow,
-} from '../../../packages/cli/src/chat/tui/forms/ResumeListForm';
+} from '@cli/chat/tui/forms/ResumeListForm';
 
 describe('CLI ResumeListForm row budget', () => {
   it('windows long execution lists inside the available foreground rows', () => {

@@ -55,4 +55,19 @@ describe('StreamLog', () => {
       'message-2500',
     ]);
   });
+
+  it('does not mark no-op updates dirty', () => {
+    const log = new StreamLog();
+    log.append({
+      id: 'message',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1,
+      text: 'unchanged',
+      messageType: MESSAGE_TYPES.DEFAULT,
+    });
+
+    expect(log.update('message', { text: 'unchanged' })).toBeUndefined();
+    expect(log.drainDirtyUpdates()).toEqual([]);
+  });
 });

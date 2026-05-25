@@ -1,12 +1,12 @@
 import {
   CLI_OUTPUT_FORMATS,
   type CliOutputFormat,
-} from '../../runtime/cliConfig';
+} from '@cli/runtime/cliConfig';
 import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
-} from '../../runtime/approvalPolicy';
-import { CliUsageError } from '../../runtime/cliContext';
+} from '@cli/runtime/approvalPolicy';
+import { CliUsageError } from '@cli/runtime/cliContext';
 
 /**
  * Single source of truth for the global flags accepted by every TeXRA

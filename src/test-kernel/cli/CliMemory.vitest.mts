@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import type { MemoryViewItem } from '@shared/schemas';
-
 import {
   cliMemoryItemDescription,
   formatCliMemoryList,
   resolveCliMemoryStoragePath,
-} from '../../../packages/cli/src/runtime/memory';
-import { memorySelectWindow } from '../../../packages/cli/src/chat/tui/forms/MemoryListForm';
+} from '@cli/runtime/memory';
+import { memorySelectWindow } from '@cli/chat/tui/forms/MemoryListForm';
+import type { MemoryViewItem } from '@shared/schemas';
 
 const item: MemoryViewItem = {
   displayPath: '/memories/project.md',

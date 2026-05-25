@@ -6,12 +6,12 @@ import { Box, Text, type BoxProps } from 'ink';
 import { useInput } from 'ink';
 
 import { confirmCardKeyAction, confirmCardKeyHints } from './ConfirmCardState';
+import { BaseTextInput } from '../input/BaseTextInput';
+import { KeyHints } from '../ui/KeyHints';
 import type {
   ApprovalBypassKind,
   ApprovalDecision,
 } from '../state/approvalQueue';
-import { BaseTextInput } from '../input/BaseTextInput';
-import { KeyHints } from '../ui/KeyHints';
 
 export interface ConfirmCardProps {
   readonly borderStyle: BoxProps['borderStyle'];

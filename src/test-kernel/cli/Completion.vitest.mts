@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { rootCommand } from '../../../packages/cli/src/commands/root';
+import { rootCommand } from '@cli/commands/root';
 import {
   CLI_COMPLETION_SHELLS,
   generateCompletionScript,
-} from '../../../packages/cli/src/runtime/completion';
-import { collectCommands } from '../../../packages/cli/src/runtime/completionCommandTree';
+} from '@cli/runtime/completion';
+import { collectCommands } from '@cli/runtime/completionCommandTree';
 
 describe('CLI shell completion', () => {
   for (const shell of CLI_COMPLETION_SHELLS) {

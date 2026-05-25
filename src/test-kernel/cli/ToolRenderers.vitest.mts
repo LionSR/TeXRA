@@ -2,13 +2,13 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - shared schemas
-import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
-
-// Local imports - CLI TUI rendering
 import {
   pickToolRenderer,
   toolUseDisplayLines,
-} from '../../../packages/cli/src/chat/tui/panes/toolRenderers';
+} from '@cli/chat/tui/panes/toolRenderers';
+import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
+
+// Local imports - CLI TUI rendering
 
 function toolUse(
   toolName: string,
@@ -117,7 +117,20 @@ describe('CLI tool renderer registry', () => {
     expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
       [
         "● CustomTool (paper.tex)",
-        "⎿ (no output)",
+      ]
+    `);
+  });
+
+  it('keeps read_file rows compact instead of printing file contents', () => {
+    const entry = toolUse(
+      'read_file',
+      { path: 'paper.tex' },
+      { outputText: 'Large file contents\nwith many lines' },
+    );
+
+    expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
+      [
+        "● read_file (paper.tex)",
       ]
     `);
   });

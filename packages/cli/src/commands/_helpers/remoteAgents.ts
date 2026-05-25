@@ -1,4 +1,4 @@
-import { getCliAuthProvider } from '../../runtime/supabaseAuth';
+import { getCliAuthProvider } from '@cli/runtime/supabaseAuth';
 
 export async function shouldHonorRemoteAgentPriority(
   agentName: string,

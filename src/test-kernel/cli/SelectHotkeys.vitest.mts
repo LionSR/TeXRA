@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   selectHotkeyForIndex,
   selectIndexForHotkey,
-} from '../../../packages/cli/src/chat/tui/ui/Select';
+} from '@cli/chat/tui/ui/Select';
 
 describe('Select hotkeys', () => {
   it('numbers the first nine rows 1-9, then letters a-z for 10-35', () => {

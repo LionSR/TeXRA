@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { agentProposalCategoryLabel } from '@cli/chat/tui/modals/AgentProposalDisplay';
 import { AGENT_CATEGORY } from '@shared/schemas';
-
-import { agentProposalCategoryLabel } from '../../../packages/cli/src/chat/tui/modals/AgentProposalDisplay';
 
 describe('CLI AgentProposal display model', () => {
   it('uses human-facing category labels', () => {

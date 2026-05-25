@@ -1,5 +1,5 @@
-import { CliUsageError } from '../../runtime/cliContext';
-import { isKnownCliModel } from '../../runtime/cliConfig';
+import { CliUsageError } from '@cli/runtime/cliContext';
+import { isKnownCliModel } from '@cli/runtime/cliConfig';
 
 /** Trim `-m`; throw a Usage error for unknown ids; undefined when absent. */
 export function assertExplicitModelKnown(

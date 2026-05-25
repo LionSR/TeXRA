@@ -83,6 +83,14 @@ export class StreamLog {
     if (index === undefined) return undefined;
 
     const current = this.entries[index];
+    if (
+      Object.entries(patch).every(([key, value]) =>
+        Object.is(current[key as keyof StreamLogUpdatePatch], value),
+      )
+    ) {
+      return undefined;
+    }
+
     // Direct merge — no Zod parse. update() is on the streaming hot path
     // (tool output chunks at ~200/sec) and receives trusted data from
     // AgentLogger. Persisted entries are parsed when loaded from storage.
