@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-// Node.js imports
 import fs from 'node:fs';
 import process from 'node:process';
 

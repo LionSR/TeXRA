@@ -7,8 +7,8 @@
  * if the two diverge, builds will silently follow the root.
  */
 
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 export function loadAliases(rootDir) {
   const tsconfig = readTsconfig(resolve(rootDir, 'tsconfig.json'));
