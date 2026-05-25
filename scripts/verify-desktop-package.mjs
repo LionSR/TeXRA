@@ -226,7 +226,8 @@ function createAsarAppReader(asarPath) {
       try {
         return statFile(asarPath, candidate).unpacked === true;
       } catch {
-        // Try the next normalized candidate.
+        // statFile throws when the path is not in the archive; try the next
+        // normalized candidate before giving up.
       }
     }
     return false;
