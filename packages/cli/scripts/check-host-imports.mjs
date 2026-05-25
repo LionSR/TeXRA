@@ -73,7 +73,7 @@ function importSources(source) {
   ];
   for (const pattern of patterns) {
     let match;
-    while ((match = pattern.exec(source)) != null) {
+    while ((match = pattern.exec(source)) !== null) {
       sources.push(match[1]);
     }
   }

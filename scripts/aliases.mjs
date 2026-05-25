@@ -3,8 +3,8 @@
  * Single source of truth for esbuild and Vite build configs.
  */
 
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { loadAliases } from './aliasUtils.mjs';
 
