@@ -9,8 +9,8 @@ import {
   registerSlashCommand,
   slashPickIntent,
   unregisterSlashCommand,
-} from '../../../packages/cli/src/chat/tui/commands/slashRegistry';
-import { registerBuiltinSlashCommands } from '../../../packages/cli/src/chat/tui/commands/registerBuiltins';
+} from '@cli/chat/tui/commands/slashRegistry';
+import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);

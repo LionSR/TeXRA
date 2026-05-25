@@ -58,7 +58,7 @@ export class PlanView extends LitElement {
         border-bottom: var(--border-thin) solid var(--color-border);
       }
 
-      .plan-collapsible::part(body) {
+      .plan-body {
         max-height: var(--height-xlarge);
         overflow-y: auto;
       }
@@ -216,13 +216,15 @@ export class PlanView extends LitElement {
         @wa-show=${this.handleShow}
         @wa-hide=${this.handleHide}
       >
-        <div class="plan-summary">${this.plan.summary}</div>
-        <div id=${ELEMENT_IDS.PLAN_VIEW} class="plan-steps">
-          ${repeat(
-            this.plan.steps,
-            (_step, index) => index,
-            (step, index) => this.renderStep(step, index),
-          )}
+        <div class="plan-body">
+          <div class="plan-summary">${this.plan.summary}</div>
+          <div id=${ELEMENT_IDS.PLAN_VIEW} class="plan-steps">
+            ${repeat(
+              this.plan.steps,
+              (_step, index) => index,
+              (step, index) => this.renderStep(step, index),
+            )}
+          </div>
         </div>
       </wa-details>
     `;

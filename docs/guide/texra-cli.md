@@ -138,6 +138,27 @@ The interactive chat also accepts `/resume`. With no id it prints recent
 executions; with an id it starts from the stored execution configuration. A
 missing or malformed id exits with code 2 in headless commands.
 
+## Tools and Integrations
+
+The CLI can inspect the same external agent integrations shown in the extension
+settings:
+
+```bash
+texra tools list
+texra tools status codex
+texra tools disable codex
+texra tools enable codex
+texra tools install codex
+texra tools auth codex
+```
+
+`tools list` reports each integration id, name, category, enabled state, and
+detection result. Use `--output-format json` or `--output-format ndjson` for
+scripts. `tools install <id>` prints the install guide and registered command;
+it only runs the command when passed `--run`. In the interactive TUI, `/tools`
+opens the same integration list and toggles integrations that support enabling
+or disabling.
+
 ## Workspace Defaults
 
 The CLI reads optional, non-secret defaults from `.texra/config.json` in the

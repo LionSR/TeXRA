@@ -218,6 +218,10 @@ export class ServerSideKeyService {
     return this.quotaAutoSwitchActive && !this.useIncludedModelAccess;
   }
 
+  isRelayQuotaExceeded(): boolean {
+    return this.tierService.isQuotaExceeded();
+  }
+
   async setUseIncludedModelAccess(
     value: boolean,
     cacheOptions: ClearServerSideKeyCachesOptions = {},

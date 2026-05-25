@@ -12,7 +12,7 @@
 // Multiplexer-aware DCS wrapping for tmux/screen is deferred per
 // docs/prd/cli-tui-ink/30-reference.md#16-risks (R9).
 
-import { writeRawStdout } from '../../../runtime/logSinks';
+import { writeRawStdout } from '@cli/runtime/logSinks';
 import { terminalCapabilities } from '../state/terminalCapabilities';
 
 export type NotificationKind = 'agentFinished' | 'approvalNeeded';

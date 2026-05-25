@@ -3,9 +3,8 @@ import * as path from 'node:path';
 
 import { glob, hasMagic } from 'glob';
 
+import { CliUsageError } from '@cli/runtime/cliContext';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-
-import { CliUsageError } from '../../runtime/cliContext';
 
 function resolveAgainstCwd(candidate: string, cwd: string): string {
   return path.isAbsolute(candidate)

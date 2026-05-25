@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   confirmCardKeyAction,
   confirmCardKeyHints,
-} from '../../../packages/cli/src/chat/tui/modals/ConfirmCardState';
+} from '@cli/chat/tui/modals/ConfirmCardState';
 
 describe('CLI confirm-card key handling', () => {
   it('keeps y/n and escape approval behavior', () => {

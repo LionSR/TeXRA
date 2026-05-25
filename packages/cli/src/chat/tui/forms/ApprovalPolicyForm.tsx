@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink';
 
-import type { CliApprovalPolicy } from '../../../runtime/approvalPolicy';
+import type { CliApprovalPolicy } from '@cli/runtime/approvalPolicy';
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
 

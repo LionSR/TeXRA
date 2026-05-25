@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { STREAM_STATUS } from '@shared/schemas';
-
 import {
   buildStatusBarDisplay,
   defaultShortcutModifierLabel,
   statusBarSegmentText,
-} from '../../../packages/cli/src/chat/tui/panes/StatusBar';
-import { NO_BYPASS } from '../../../packages/cli/src/chat/tui/state/cliState';
+} from '@cli/chat/tui/panes/StatusBar';
+import { NO_BYPASS } from '@cli/chat/tui/state/cliState';
+import { STREAM_STATUS } from '@shared/schemas';
 
 describe('CLI StatusBar display model', () => {
   it('keeps idle state compact and omits static agent/model names', () => {

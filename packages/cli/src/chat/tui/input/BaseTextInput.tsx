@@ -17,7 +17,7 @@ import {
   insertText,
   type TextEdit,
 } from './textInputEditing';
-import { isPlainReturnInput } from './inputKeys';
+import { isPlainReturnInput, metaChordInput } from './inputKeys';
 
 export interface BaseTextInputProps {
   readonly value: string;
@@ -134,7 +134,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         return;
       }
       // Drop unhandled control/meta combos; pass printable input through.
-      if (key.ctrl || key.meta || !input) return;
+      if (key.ctrl || key.meta || metaChordInput(input, key) || !input) return;
       applyEdit(insertText(value, cursor, input));
     },
     { isActive: focus },

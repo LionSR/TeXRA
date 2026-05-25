@@ -663,7 +663,7 @@ async function proposeAndExecute(
 // ============================================================================
 
 /** Schema for delegate_workflow tool (document processing). */
-const WorkflowAgentInputSchema = z.object({
+const WorkflowAgentInputSchema = z.strictObject({
   agent: z.string().describe('Name of the workflow agent to execute'),
   model: z
     .string()
@@ -844,7 +844,7 @@ Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instructi
 // ============================================================================
 
 /** Schema for delegate_agent tool (tool-use agents). */
-const DelegateAgentInputSchema = z.object({
+const DelegateAgentInputSchema = z.strictObject({
   agent: z
     .string()
     .nullish()
