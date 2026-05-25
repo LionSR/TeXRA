@@ -52,7 +52,10 @@ function defaultAnswers(
   return {
     agent: BUILTIN_DEFAULT_CHAT_AGENT,
     model: firstAvailable?.value ?? CLI_BUILTIN_DEFAULT_MODEL,
-    approvalPolicy: 'never',
+    // Match the runtime default (see buildCliContext). `ask` prompts in
+    // interactive runs and safely denies in headless ones — unlike `never`,
+    // which silently denies every privileged action.
+    approvalPolicy: 'ask',
     outputFormat: 'text',
   };
 }

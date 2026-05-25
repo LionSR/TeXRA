@@ -230,17 +230,22 @@ export const runWorkflowCommand = defineCommand({
       type: 'string',
       alias: 'i',
       required: true,
-      description: 'Input file passed to the workflow agent',
+      description: 'Input file passed to the workflow agent (repeatable)',
     },
     context: {
       type: 'string',
       alias: 'c',
-      description: 'Read-only context file passed to the workflow agent',
+      description:
+        'Read-only context file passed to the workflow agent (repeatable)',
     },
-    output: { type: 'string', description: 'Output file path' },
+    output: {
+      type: 'string',
+      description:
+        'Output file for a single-input run (use --output-dir for multi-input)',
+    },
     'output-dir': {
       type: 'string',
-      description: 'Directory to copy multi-input workflow outputs into',
+      description: 'Directory to copy outputs into for multi-input runs',
     },
     model: {
       type: 'string',

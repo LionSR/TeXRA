@@ -98,7 +98,8 @@ async function runOrchestration(context: CliContext): Promise<number> {
 export const orchestrationCommand = defineCommand({
   meta: {
     name: 'orchestrate',
-    description: 'Choose a chat, resume, or team preset',
+    description:
+      'Interactive launcher (runs by default on bare `texra` in a TTY): pick a chat, resume, or team preset',
   },
   args: {
     ...INTERACTIVE_GLOBAL_ARGS,

@@ -176,8 +176,8 @@ const toolsListCommand = defineCommand({
   },
 });
 
-const toolsStatusCommand = defineCommand({
-  meta: { name: 'status', description: 'Show one tool integration status' },
+const toolsShowCommand = defineCommand({
+  meta: { name: 'show', description: 'Show one tool integration' },
   args: {
     ...GLOBAL_ARGS,
     id: {
@@ -253,7 +253,10 @@ export const toolsCommand = defineCommand({
   meta: { name: 'tools', description: 'Inspect external tool integrations' },
   subCommands: {
     list: toolsListCommand,
-    status: toolsStatusCommand,
+    // `show` is canonical (matches agents/models/history); `status` stays as a
+    // back-compat alias.
+    show: toolsShowCommand,
+    status: toolsShowCommand,
     enable: toggleCommand('enable', true),
     disable: toggleCommand('disable', false),
     install: toolsInstallCommand,

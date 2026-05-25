@@ -299,6 +299,17 @@ export const usageCommand = defineCommand({
 });
 
 export const authCommand = defineCommand({
-  meta: { name: 'auth', description: 'Authentication commands' },
-  subCommands: { status: authStatusCommand, usage: usageCommand },
+  meta: {
+    name: 'auth',
+    description: 'Sign in, sign out, and check TeXRA account status and usage',
+  },
+  // Canonical home for every auth verb. `login`/`logout` are also exposed as
+  // top-level shortcuts in root.ts (a common CLI convention); everything else
+  // lives only here so there is one predictable place to look.
+  subCommands: {
+    login: loginCommand,
+    logout: logoutCommand,
+    status: authStatusCommand,
+    usage: usageCommand,
+  },
 });

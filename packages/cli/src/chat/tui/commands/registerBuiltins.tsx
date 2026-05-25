@@ -177,11 +177,13 @@ export function registerBuiltinSlashCommands(options?: {
   registerSlashCommand({
     name: 'agent',
     description: 'List or choose the root agent',
+    aliases: ['agents'],
     formComponent: AgentListFormAdapter,
   });
   registerSlashCommand({
     name: 'model',
     description: 'List available models',
+    aliases: ['models'],
     formComponent: ModelListFormAdapter,
   });
   registerSlashCommand({

@@ -10,7 +10,6 @@ import { KeyHints } from '../chat/tui/ui/KeyHints';
 import { Select } from '../chat/tui/ui/Select';
 import { clearTerminalScrollback } from '../chat/tui/terminalCleanup';
 import {
-  CLI_APPROVAL_POLICIES,
   CLI_OUTPUT_FORMATS,
   type CliApprovalPolicy,
   type CliOutputFormat,
@@ -40,10 +39,18 @@ export interface InitWizardResult {
 }
 
 const APPROVAL_DESCRIPTIONS: Record<CliApprovalPolicy, string> = {
-  never: 'never prompt before privileged actions',
-  ask: 'confirm before privileged actions',
+  never: 'deny every privileged action (no prompt)',
+  ask: 'confirm before privileged actions (recommended)',
   yolo: 'auto-approve every action',
 };
+
+// `ask` first so the wizard highlights the recommended, runtime-default policy
+// instead of the deny-all `never`.
+const APPROVAL_POLICY_ORDER: readonly CliApprovalPolicy[] = [
+  'ask',
+  'never',
+  'yolo',
+];
 
 const OUTPUT_DESCRIPTIONS: Record<CliOutputFormat, string> = {
   text: 'human-readable text (default)',
@@ -207,7 +214,7 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
       >
         <Select
           key={step}
-          items={CLI_APPROVAL_POLICIES.map((policy) => ({
+          items={APPROVAL_POLICY_ORDER.map((policy) => ({
             value: policy,
             label: policy,
             description: APPROVAL_DESCRIPTIONS[policy],

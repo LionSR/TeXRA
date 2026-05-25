@@ -51,7 +51,7 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
   'api-mode': {
     type: 'string',
     description:
-      'API access mode: included (TeXRA relay) or personal (your own API keys)',
+      'API access mode: included (TeXRA relay) or personal (your own API keys); also accepts relay/byok',
   },
   'output-format': {
     type: 'enum',
@@ -61,7 +61,8 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
   'approval-policy': {
     type: 'enum',
     options: [...CLI_APPROVAL_POLICIES],
-    description: 'When to ask before privileged tool actions (default: never)',
+    description:
+      'Privileged tool actions: never (deny all), ask (prompt; default), or yolo (auto-approve)',
   },
 };
 
