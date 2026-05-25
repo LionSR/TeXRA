@@ -21,40 +21,37 @@ import { reactCompilerPlugin } from './reactCompilerPlugin.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 const smokeFile = resolve(here, '../src/chat/tui/App.tsx');
 
-const recorded = {
-  contents: undefined,
-};
-
+let loadHandler;
 const fakeBuildApi = {
   onLoad(_filter, handler) {
-    fakeBuildApi._handler = handler;
+    loadHandler = handler;
   },
 };
 
 const plugin = reactCompilerPlugin();
 plugin.setup(fakeBuildApi);
 
-if (typeof fakeBuildApi._handler !== 'function') {
+if (typeof loadHandler !== 'function') {
   console.error('react-compiler smoke: plugin did not register onLoad hook');
   process.exit(1);
 }
 
 const args = { path: smokeFile, namespace: 'file' };
-const result = await fakeBuildApi._handler(args);
+const result = await loadHandler(args);
 if (!result || typeof result.contents !== 'string') {
   console.error(
     `react-compiler smoke: plugin returned no transformed contents for ${smokeFile}`,
   );
   process.exit(1);
 }
-recorded.contents = result.contents;
+const contents = result.contents;
 
-if (!recorded.contents.includes('react/compiler-runtime')) {
+if (!contents.includes('react/compiler-runtime')) {
   console.error(
     'react-compiler smoke: expected the compiler to import `react/compiler-runtime` (was the compiler skipped?)',
   );
   console.error('---transformed output snippet---');
-  console.error(recorded.contents.slice(0, 800));
+  console.error(contents.slice(0, 800));
   process.exit(1);
 }
 
@@ -76,7 +73,7 @@ function collectBareImports(code) {
 }
 
 const sourceImports = collectBareImports(source);
-const outputImports = collectBareImports(recorded.contents);
+const outputImports = collectBareImports(contents);
 
 const ALLOWLIST = new Set([
   // The compiler adds its runtime.

@@ -10,6 +10,7 @@ import {
   formatOutput,
   hasExited,
   readPendingExit,
+  readPositiveNumber,
   stopChild,
   waitForClose,
   waitForExit,
@@ -48,11 +49,6 @@ const fatalLogPatterns = [
       /Failed to load URL:.*ERR_FILE_NOT_FOUND|Unable to load preload script|preload\/index\.cjs not found/i,
   },
 ];
-
-function readPositiveNumber(value, fallback) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
 
 function defaultPackagedExecutable() {
   if (process.platform !== 'darwin') return undefined;
@@ -105,7 +101,7 @@ function findFatalLog(output) {
 
 function failIfFatalLog(output) {
   const fatalLog = findFatalLog(output);
-  if (!fatalLog) return false;
+  if (!fatalLog) return;
 
   console.error(`Desktop launch smoke failed: ${fatalLog.label}.`);
   console.error(formatOutput(output));
