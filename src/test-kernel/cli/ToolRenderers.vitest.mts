@@ -117,7 +117,20 @@ describe('CLI tool renderer registry', () => {
     expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
       [
         "● CustomTool (paper.tex)",
-        "⎿ (no output)",
+      ]
+    `);
+  });
+
+  it('keeps read_file rows compact instead of printing file contents', () => {
+    const entry = toolUse(
+      'read_file',
+      { path: 'paper.tex' },
+      { outputText: 'Large file contents\nwith many lines' },
+    );
+
+    expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
+      [
+        "● read_file (paper.tex)",
       ]
     `);
   });

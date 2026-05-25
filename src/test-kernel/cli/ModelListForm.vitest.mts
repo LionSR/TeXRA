@@ -54,6 +54,22 @@ describe('CLI ModelListForm status text', () => {
       ),
     ).toBe('relay: unavailable; api key set');
   });
+
+  it('distinguishes exhausted relay quota from tier exclusion', () => {
+    expect(
+      formatModelStatusForCliMode(
+        access(
+          {
+            availability: 'relay-quota-exhausted',
+            availabilityLabel: 'Relay quota exhausted',
+            disabled: true,
+          },
+          'relay quota exhausted',
+        ),
+        'included',
+      ),
+    ).toBe('relay: quota exhausted');
+  });
 });
 
 describe('Select render keys', () => {

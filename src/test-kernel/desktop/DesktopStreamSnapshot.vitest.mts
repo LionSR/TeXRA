@@ -22,6 +22,7 @@ type Snapshot = {
   lastKnownStatus: string;
   description?: string;
   executionId?: string;
+  parentStreamId?: string;
   creationTimestamp: number;
   lastTimestamp?: number;
   persistedAt: number;
@@ -117,6 +118,22 @@ describe('DesktopStreamSnapshot', () => {
     expect(
       reopened.hydrated.every((s) => s.lastKnownStatus === 'stopped'),
     ).toBe(true);
+  });
+
+  it('preserves parent stream links on hydrate', async () => {
+    const { openDesktopStreamSnapshotStore } = await loadModule();
+    const filePath = await tempFilePath();
+
+    const writer = await openDesktopStreamSnapshotStore(filePath);
+    await writer.upsert(
+      makeSnapshot({
+        streamId: 'child@2',
+        parentStreamId: 'parent@1',
+      }),
+    );
+
+    const reopened = await openDesktopStreamSnapshotStore(filePath);
+    expect(reopened.hydrated[0]?.parentStreamId).toBe('parent@1');
   });
 
   it('upsert overwrites an existing snapshot with the same id', async () => {

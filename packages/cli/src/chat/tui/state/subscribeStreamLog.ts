@@ -78,6 +78,12 @@ export function stripOrchestratorFollowup(text: string): string {
   return match?.[1]?.trim() ?? text;
 }
 
+export function isSubagentContinuationMessage(text: string): boolean {
+  return /^<subagent-(progress|result)(?:\s[^>]*)?(?:\/>|>[\s\S]*<\/subagent-\1>)$/.test(
+    text.trim(),
+  );
+}
+
 // `normalizeToolUseData` is dominated by a Zod parse + YAML stringify
 // of `entry.data`. `StreamLog.update` spreads its patch into a fresh
 // `data` object every tick, so reference equality is a reliable signal

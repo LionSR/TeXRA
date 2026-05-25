@@ -324,6 +324,13 @@ export abstract class ModelHandler<
       ? await serverSideKeyService.canUseServerSideKeys()
       : false;
 
+    if (useIncludedAccess && serverSideKeyService.wasQuotaAutoSwitched()) {
+      throw new Error(
+        `Model "${this.config.name}" cannot use the TeXRA relay because your monthly relay quota is exhausted. ` +
+          `Switch to "Use My Own Keys" via the TeXRA Profile panel, or wait for the next quota period.`,
+      );
+    }
+
     // Use centralized check to ensure consistency with getBaseUrl()
     if (this.shouldUseServerSideKeys()) {
       const accessToken = await SupabaseClient.getAccessToken();

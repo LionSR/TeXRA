@@ -8,7 +8,10 @@ import {
   deleteToStart,
   insertText,
 } from '../../../packages/cli/src/chat/tui/input/textInputEditing';
-import { isPlainReturnInput } from '../../../packages/cli/src/chat/tui/input/inputKeys';
+import {
+  isPlainReturnInput,
+  metaChordInput,
+} from '../../../packages/cli/src/chat/tui/input/inputKeys';
 
 describe('CLI TUI text input editing', () => {
   it('recognizes normalized and raw Enter without stealing Ctrl-J', () => {
@@ -17,6 +20,14 @@ describe('CLI TUI text input editing', () => {
     expect(isPlainReturnInput('\n', {})).toBe(true);
     expect(isPlainReturnInput('j', { ctrl: true })).toBe(false);
     expect(isPlainReturnInput('\n', { ctrl: true })).toBe(false);
+    expect(isPlainReturnInput('\u001Bp', {})).toBe(false);
+  });
+
+  it('recognizes Option/Alt chords from normalized meta and ESC-prefixed input', () => {
+    expect(metaChordInput('p', { meta: true })).toBe('p');
+    expect(metaChordInput('\u001Bp', {})).toBe('p');
+    expect(metaChordInput('\u001B3', {})).toBe('3');
+    expect(metaChordInput('p', { ctrl: true, meta: true })).toBeUndefined();
   });
 
   it('inserts pasted multi-line text without submitting embedded newlines', () => {

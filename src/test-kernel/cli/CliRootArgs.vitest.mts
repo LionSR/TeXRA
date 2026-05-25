@@ -161,6 +161,10 @@ describe('CLI root argument routing', () => {
         helpCommand: 'texra skills',
       },
     );
+    await expect(detectUnknownCliCommand(['tools', 'bogus'])).resolves.toEqual({
+      typedCommand: 'texra tools bogus',
+      helpCommand: 'texra tools',
+    });
   });
 
   it('formats unknown command usage guidance', () => {

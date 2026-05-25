@@ -32,6 +32,7 @@ import {
   nextFocusForward,
 } from '../../../packages/cli/src/chat/tui/state/focusCycle';
 import {
+  isSubagentContinuationMessage,
   stripOrchestratorFollowup,
   syncStreamLog,
 } from '../../../packages/cli/src/chat/tui/state/subscribeStreamLog';
@@ -356,6 +357,50 @@ describe('CLI transcript state', () => {
     expect(stripOrchestratorFollowup('ordinary user text')).toBe(
       'ordinary user text',
     );
+  });
+
+  it('recognizes subagent continuation protocol messages', () => {
+    expect(
+      isSubagentContinuationMessage(
+        '<subagent-progress id="abc" agent="review" type="started" />',
+      ),
+    ).toBe(true);
+    expect(
+      isSubagentContinuationMessage(
+        '<subagent-result id="abc" agent="review" category="toolUse" status="completed">\nDone.\n</subagent-result>',
+      ),
+    ).toBe(true);
+    expect(
+      isSubagentContinuationMessage(
+        'The subagent-result tag is mentioned in prose.',
+      ),
+    ).toBe(false);
+  });
+
+  it('suppresses subagent protocol continuations from the visible transcript', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      logger.info('Please solve the problem.', {
+        messageType: MESSAGE_TYPES.USER_MESSAGE,
+      });
+      logger.info(
+        '<subagent-result id="abc" agent="review" category="toolUse" status="completed">\nDone.\n</subagent-result>',
+        { messageType: MESSAGE_TYPES.USER_MESSAGE },
+      );
+
+      syncStreamLog(root);
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual([
+        'Please solve the problem.',
+      ]);
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
   });
 
   it('mirrors error log entries into the transcript', () => {

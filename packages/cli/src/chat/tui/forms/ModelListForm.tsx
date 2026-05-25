@@ -65,6 +65,8 @@ export function formatModelStatusForCliMode(
       return 'relay: included';
     case 'not-included':
       return 'relay: not included';
+    case 'relay-quota-exhausted':
+      return 'relay: quota exhausted';
     case 'provider-key':
       return 'relay: unavailable; api key set';
     case 'openrouter-key':

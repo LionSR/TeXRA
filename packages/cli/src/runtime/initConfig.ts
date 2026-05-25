@@ -7,11 +7,11 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { CLI_CONFIG_DIR, workspaceCliConfigPath } from './cliConfig';
 import type {
   CliApprovalPolicy,
   CliOutputFormat,
 } from '../schemas/cliSettings';
-import { CLI_CONFIG_DIR, workspaceCliConfigPath } from './cliConfig';
 
 export interface InitAnswers {
   readonly agent: string;
