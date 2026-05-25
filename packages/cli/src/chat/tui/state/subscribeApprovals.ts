@@ -19,6 +19,15 @@ import {
   resolveProposal,
   triggerRetry,
 } from '@agent/runtime/runCoordinators';
+import {
+  denyMessage,
+  immediateDecision,
+  immediateDecisionForApproval,
+  markApprovalDenied,
+} from '@cli/runtime/approvalAdapter';
+import { setCliApiMode } from '@cli/runtime/apiAccessMode';
+import type { CliContext } from '@cli/runtime/cliContext';
+import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
@@ -31,13 +40,6 @@ import {
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 
-import {
-  denyMessage,
-  immediateDecision,
-  immediateDecisionForApproval,
-  markApprovalDenied,
-} from '../../../runtime/approvalAdapter';
-import { setCliApiMode } from '../../../runtime/apiAccessMode';
 import { assertNever } from '../assertNever';
 import { cliState } from './cliState';
 import {
@@ -45,8 +47,6 @@ import {
   type ApprovalDecision,
   type ApprovalPayload,
 } from './approvalQueue';
-import type { CliContext } from '../../../runtime/cliContext';
-import type { CliRuntimeHost } from '../../../runtime/runtimeHost';
 
 type Emit = <K extends ProgressEvent>(
   event: K,

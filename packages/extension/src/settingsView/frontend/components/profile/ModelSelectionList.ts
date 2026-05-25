@@ -381,7 +381,11 @@ export class ModelSelectionList extends LitElement {
           @change=${this.handleHelperModelChange}
         >
           ${enabledModels.map(
-            (m) => html`<wa-option value=${m.name}> ${m.name} </wa-option>`,
+            (m) => html`
+              <wa-option value=${m.name}>
+                ${m.label === m.name ? m.name : `${m.label} (${m.name})`}
+              </wa-option>
+            `,
           )}
         </wa-select>
       </div>

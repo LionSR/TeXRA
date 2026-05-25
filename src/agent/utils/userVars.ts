@@ -95,8 +95,10 @@ export async function buildUserVars(
     getAttachedMemories(agentConfig.memories),
     // AVAILABLE_SKILLS is only substituted into TOOL_USE_INSTRUCTIONS, so the
     // catalog (a multi-source readdir + per-skill realpath/read/parse) is dead
-    // work for workflow agents — gate it on the ToolUse category.
-    agentSetting.agentCategory === AgentCategory.ToolUse
+    // work for workflow agents. The settings toggle gives users a hard off
+    // switch that skips discovery and leaves AVAILABLE_SKILLS empty.
+    agentSetting.agentCategory === AgentCategory.ToolUse &&
+    getConfig<boolean>('texra.skills.enabled', true)
       ? loadRuntimeSkillCatalog(logger)
       : Promise.resolve(''),
   ]);

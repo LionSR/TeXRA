@@ -46,6 +46,8 @@ export const RestoredStreamSnapshotSchema = z.object({
   description: z.string().optional(),
   /** Execution id for storage lookup (powers resume / transcript view). */
   executionId: ExecutionIdSchema.optional(),
+  /** Parent stream id for subagent streams, if this row is nested. */
+  parentStreamId: StreamTabIdSchema.optional(),
   /** Original creation timestamp (ms since epoch). */
   creationTimestamp: z.number(),
   /** Last activity timestamp (ms since epoch) — used to sort the rail. */

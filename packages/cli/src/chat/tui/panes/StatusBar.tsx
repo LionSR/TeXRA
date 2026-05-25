@@ -4,6 +4,7 @@ import { Box, Text } from 'ink';
 import { Badge } from '@inkjs/ui';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
+import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   STREAM_STATUS,
   type ConversationProgress,
@@ -18,7 +19,6 @@ import {
   type BypassState,
 } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
-import { shortCliApiMode } from '../../../runtime/apiAccessMode';
 
 type StatusBarColor = 'cyan' | 'yellow' | 'red' | 'dim';
 

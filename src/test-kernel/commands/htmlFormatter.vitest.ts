@@ -194,4 +194,30 @@ describe('formatChatAsHtml', () => {
     // attempted, just not as a clickable anchor.
     expect(malicious).toContain('javascript:alert');
   });
+
+  it('strips protocol-relative URLs from tool-provided links', () => {
+    const malicious = formatChatAsHtml({
+      ...fixture,
+      messages: [
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'web_search_tool_result',
+              content: [
+                {
+                  type: 'web_search_result',
+                  url: '//evil.example.com/path',
+                  title: 'protocol-relative',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(malicious).not.toContain('href="//evil.example.com/path"');
+    expect(malicious).toContain('//evil.example.com/path');
+  });
 });

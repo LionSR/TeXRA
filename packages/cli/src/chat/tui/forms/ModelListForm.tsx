@@ -6,16 +6,13 @@ import { Box, Text, useInput } from 'ink';
 import { Spinner } from '@inkjs/ui';
 import { useEffect, useState } from 'react';
 
-import { Select } from '../ui/Select';
-import { KeyHints } from '../ui/KeyHints';
 import {
   getCliModelAccessList,
   type CliModelAccess,
-} from '../../../runtime/modelAccess';
-import {
-  formatCliApiMode,
-  type CliApiMode,
-} from '../../../runtime/apiAccessMode';
+} from '@cli/runtime/modelAccess';
+import { formatCliApiMode, type CliApiMode } from '@cli/runtime/apiAccessMode';
+import { Select } from '../ui/Select';
+import { KeyHints } from '../ui/KeyHints';
 
 export interface ModelListFormProps {
   readonly currentModel: string;
@@ -65,6 +62,8 @@ export function formatModelStatusForCliMode(
       return 'relay: included';
     case 'not-included':
       return 'relay: not included';
+    case 'relay-quota-exhausted':
+      return 'relay: quota exhausted';
     case 'provider-key':
       return 'relay: unavailable; api key set';
     case 'openrouter-key':

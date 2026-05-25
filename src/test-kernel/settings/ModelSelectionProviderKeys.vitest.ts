@@ -8,6 +8,7 @@ import { useLitComponentTestDom } from './litComponentTestUtils';
 
 type ModelSelectionListElement = HTMLElement & {
   models: ModelSelectionItem[];
+  helperModel: string;
   providerKeyStatuses: ProviderKeyStatus[];
   updateComplete: Promise<boolean>;
 };
@@ -55,5 +56,23 @@ describe('ModelSelectionList provider key actions', () => {
     setKeyButton!.click();
 
     expect(events).toEqual([{ provider: 'deepseek' }]);
+  });
+
+  it('shows helper model labels together with short ids', async () => {
+    const list = document.createElement(
+      'model-selection-list',
+    ) as ModelSelectionListElement;
+    list.models = [deepseekModel];
+    list.helperModel = 'deepseek';
+    document.body.append(list);
+    await list.updateComplete;
+
+    const helperOption = list.shadowRoot!.querySelector(
+      '.helper-model-select wa-option',
+    );
+
+    expect(helperOption?.textContent?.trim()).toBe(
+      'DeepSeek V4 Flash (deepseek)',
+    );
   });
 });

@@ -5,7 +5,7 @@ import {
   updateUserQuestionAnswers,
   USER_QUESTION_SKIPPED_FEEDBACK,
   userQuestionDecision,
-} from '../../../packages/cli/src/chat/tui/modals/UserQuestionState';
+} from '@cli/chat/tui/modals/UserQuestionState';
 
 const question = {
   question: 'Which path should the agent take?',

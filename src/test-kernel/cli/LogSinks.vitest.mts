@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isCliPipeClosureError } from '../../../packages/cli/src/runtime/logSinks';
+import { isCliPipeClosureError } from '@cli/runtime/logSinks';
 
 describe('CLI log sinks', () => {
   it('recognizes pipe closure errors as non-fatal output events', () => {

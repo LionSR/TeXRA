@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { agentSelectWindow } from '../../../packages/cli/src/chat/tui/forms/AgentListForm';
+import { agentSelectWindow } from '@cli/chat/tui/forms/AgentListForm';
 
 describe('CLI AgentListForm row budget', () => {
   it('windows long agent lists inside the available foreground rows', () => {

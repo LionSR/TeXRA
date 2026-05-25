@@ -1,4 +1,4 @@
-import { CliExitCode } from '../../runtime/exitCodes';
+import { CliExitCode } from '@cli/runtime/exitCodes';
 
 // One CLI invocation per process — module-level pending exit code is the
 // simplest way to surface handler exit codes back to `bin/texra.ts` after

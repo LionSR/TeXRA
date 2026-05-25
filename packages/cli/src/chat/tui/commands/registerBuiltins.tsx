@@ -1,5 +1,7 @@
 // Registers the slash commands the input palette surfaces.
 
+import type { CliApiMode } from '@cli/runtime/apiAccessMode';
+import type { CliApprovalPolicy } from '@cli/runtime/approvalPolicy';
 import type { ExecutionId } from '@shared/schemas';
 
 import { ApiModeForm } from '../forms/ApiModeForm';
@@ -8,10 +10,9 @@ import { ApprovalPolicyForm } from '../forms/ApprovalPolicyForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
 import { ModelListForm } from '../forms/ModelListForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
+import { ToolsListForm } from '../forms/ToolsListForm';
 import { cliState } from '../state/cliState';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
-import type { CliApiMode } from '../../../runtime/apiAccessMode';
-import type { CliApprovalPolicy } from '../../../runtime/approvalPolicy';
 
 type AgentSelectHandler = (value: string) => void | Promise<void>;
 type ApprovalPolicySelectHandler = (
@@ -156,6 +157,15 @@ export function registerBuiltinSlashCommands(options?: {
     );
   }
 
+  function ToolsListFormAdapter(props: SlashFormProps): React.JSX.Element {
+    return (
+      <ToolsListForm
+        availableRows={props.availableRows}
+        onClose={() => props.onDone(undefined)}
+      />
+    );
+  }
+
   registerSlashCommand({
     name: 'help',
     description: 'Show available slash commands',
@@ -205,6 +215,11 @@ export function registerBuiltinSlashCommands(options?: {
     name: 'memory',
     description: 'List stored memories',
     formComponent: MemoryListFormAdapter,
+  });
+  registerSlashCommand({
+    name: 'tools',
+    description: 'List or toggle external integrations',
+    formComponent: ToolsListFormAdapter,
   });
   registerSlashCommand({
     name: 'compact',
