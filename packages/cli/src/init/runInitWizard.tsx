@@ -15,7 +15,7 @@ import {
   type CliApprovalPolicy,
   type CliOutputFormat,
 } from '../schemas/cliSettings';
-import type { InitAnswers, InitScope } from '../runtime/initConfig';
+import type { InitAnswers } from '../runtime/initConfig';
 
 export interface InitWizardAgentOption {
   readonly name: string;
@@ -32,7 +32,6 @@ export interface InitWizardModelOption {
 export interface InitWizardOptions {
   readonly agents: readonly InitWizardAgentOption[];
   readonly models: readonly InitWizardModelOption[];
-  readonly scope: InitScope;
 }
 
 export interface InitWizardResult {
@@ -54,17 +53,20 @@ const OUTPUT_DESCRIPTIONS: Record<CliOutputFormat, string> = {
 
 type Step = 'agent' | 'model' | 'approval' | 'output' | 'gitignore';
 
+const STEPS: readonly Step[] = [
+  'agent',
+  'model',
+  'approval',
+  'output',
+  'gitignore',
+];
+
 interface Draft {
   agent?: string;
   model?: string;
   approvalPolicy?: CliApprovalPolicy;
   outputFormat?: CliOutputFormat;
   gitignore?: boolean;
-}
-
-function stepsForScope(scope: InitScope): readonly Step[] {
-  const base: Step[] = ['agent', 'model', 'approval', 'output'];
-  return scope === 'workspace' ? [...base, 'gitignore'] : base;
 }
 
 function StepFrame(props: {
@@ -110,11 +112,10 @@ interface WizardAppProps {
 
 function WizardApp(props: WizardAppProps): React.JSX.Element {
   const app = useApp();
-  const steps = stepsForScope(props.options.scope);
-  const stepCount = steps.length;
+  const stepCount = STEPS.length;
   const [index, setIndex] = useState(0);
   const [draft, setDraft] = useState<Draft>({});
-  const step = steps[index];
+  const step = STEPS[index];
 
   const cancel = (): void => {
     props.onResolve(undefined);
