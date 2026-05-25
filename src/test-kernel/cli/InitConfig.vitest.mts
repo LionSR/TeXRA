@@ -1,4 +1,3 @@
-import { homedir } from 'node:os';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -40,14 +39,8 @@ describe('serializeInitConfig', () => {
 
 describe('initConfigPath', () => {
   it('resolves the workspace path under cwd', () => {
-    expect(initConfigPath('workspace', '/projects/paper')).toBe(
+    expect(initConfigPath('/projects/paper')).toBe(
       path.join('/projects/paper', '.texra', 'config.json'),
-    );
-  });
-
-  it('resolves the user path under the home directory', () => {
-    expect(initConfigPath('user', '/projects/paper')).toBe(
-      path.join(homedir(), '.texra', 'config.json'),
     );
   });
 });
