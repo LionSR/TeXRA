@@ -76,11 +76,11 @@ describe('computeModelOptionsData relay quota state', () => {
     expect(model.disabled).toBe(true);
   });
 
-  it('falls back to personal keys after quota auto-switch disables included access', async () => {
+  it('falls back to personal keys when included access is disabled without quota auto-switch', async () => {
     installServerSideKeyService({
       useIncludedAccess: false,
       relayQuotaExceeded: true,
-      quotaAutoSwitched: true,
+      quotaAutoSwitched: false,
     });
 
     const [model] = await computeModelOptionsData();

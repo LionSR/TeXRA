@@ -128,12 +128,12 @@ async function resolveModelAvailability(
       : AVAILABILITY_STATUS['missing-key'];
   }
 
-  if (canUseIncludedAccessForModel(model, config, ctx)) {
-    return AVAILABILITY_STATUS['included-access'];
-  }
-
   if (ctx.relayQuotaExhausted) {
     return AVAILABILITY_STATUS['relay-quota-exhausted'];
+  }
+
+  if (canUseIncludedAccessForModel(model, config, ctx)) {
+    return AVAILABILITY_STATUS['included-access'];
   }
 
   // Fall back to personal API keys when the user opted out of included access
@@ -164,7 +164,8 @@ async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
     hasOpenRouter,
     hasServerAccess,
     relayQuotaExhausted:
-      useIncludedAccess && serverSideKeyService.isRelayQuotaExceeded(),
+      serverSideKeyService.wasQuotaAutoSwitched() ||
+      (useIncludedAccess && serverSideKeyService.isRelayQuotaExceeded()),
     useOpenRouter: getUseOpenRouter(),
     useIncludedAccess,
     serverSideKeyService,
