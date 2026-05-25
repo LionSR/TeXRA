@@ -52,7 +52,9 @@
         "node_modules/@openrouter/sdk/esm/models/index.d.ts"
       ],
       "@controllers/*": ["src/controllers/*"],
-      "@test/*": ["src/test/*"]
+      "@test/*": ["src/test/*"],
+      "@cli/*": ["packages/cli/src/*"],
+      "@desktop/*": ["packages/desktop/src/*"]
     },
     "moduleResolution": "node",
     "strict": true,

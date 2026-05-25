@@ -1,12 +1,12 @@
 import { render, Box, Text, useApp, useInput, useWindowSize } from 'ink';
 
+import { Select } from '../chat/tui/ui/Select';
+import { KeyHints } from '../chat/tui/ui/KeyHints';
+import { clearTerminalScrollback } from '../chat/tui/terminalCleanup';
 import type {
   CliOrchestrationAction,
   CliOrchestrationItem,
 } from '../runtime/orchestration';
-import { Select } from '../chat/tui/ui/Select';
-import { KeyHints } from '../chat/tui/ui/KeyHints';
-import { clearTerminalScrollback } from '../chat/tui/terminalCleanup';
 
 interface OrchestrationAppProps {
   readonly items: readonly CliOrchestrationItem[];

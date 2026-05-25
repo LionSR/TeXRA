@@ -54,7 +54,7 @@ const logger = createChannelTrace('InquiryTool');
 // Schemas
 // ============================================================================
 
-const AskSchema = z.object({
+const AskSchema = z.strictObject({
   command: z
     .literal('ask')
     .describe(
@@ -94,7 +94,7 @@ const AskSchema = z.object({
     ),
 });
 
-const ReadSchema = z.object({
+const ReadSchema = z.strictObject({
   command: z
     .literal('read')
     .describe(
@@ -105,7 +105,7 @@ const ReadSchema = z.object({
   thread_id: ExternalInquiryThreadIdSchema.describe('The thread to read.'),
 });
 
-const ListSchema = z.object({
+const ListSchema = z.strictObject({
   command: z
     .literal('list')
     .describe(

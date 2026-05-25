@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { cliModelRecord } from '@cli/commands/models';
 import type { ModelOptionData } from '@shared/schemas';
-
-import { cliModelRecord } from '../../../packages/cli/src/commands/models';
 
 function model(overrides: Partial<ModelOptionData> = {}): ModelOptionData {
   return {

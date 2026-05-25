@@ -7,7 +7,7 @@ import {
   parseUtcMonth,
   summarizeRelayUsage,
   type RelayUsageRow,
-} from '../../../packages/cli/src/runtime/relayUsage';
+} from '@cli/runtime/relayUsage';
 
 function row(input: Partial<RelayUsageRow>): RelayUsageRow {
   return {

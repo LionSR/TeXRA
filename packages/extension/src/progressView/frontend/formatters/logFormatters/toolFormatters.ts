@@ -203,12 +203,19 @@ type ToolSectionOptions = {
 /**
  * Build a tool section with appropriate code highlighting based on tool type.
  */
+function toolDisplayText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value == null) return '';
+  return String(value);
+}
+
 function buildToolSection(
   label: string,
-  text: string,
+  text: unknown,
   options: ToolSectionOptions = {},
 ): TemplateResult {
   const { toolName = '', language: contentLanguage, extraClass = '' } = options;
+  const displayText = toolDisplayText(text);
 
   // Determine language: tool config > content metadata > plaintext
   const toolLanguage = TOOL_OUTPUT_LANGUAGES.get(toolName);
@@ -216,24 +223,24 @@ function buildToolSection(
   const shouldHighlight = language && language !== 'plaintext';
 
   const content = shouldHighlight
-    ? buildCodeBlock(text, {
+    ? buildCodeBlock(displayText, {
         language,
         className: extraClass,
         showLanguage: true,
         showCopy: true,
       })
-    : wrapInPre(text, extraClass);
+    : wrapInPre(displayText, extraClass);
 
   return buildToolUseSection(label, content);
 }
 
 /** Build a read-only terminal section for shell output. */
-function buildTerminalSection(label: string, text: string): TemplateResult {
+function buildTerminalSection(label: string, text: unknown): TemplateResult {
   return buildToolUseSection(
     label,
     html`<terminal-output
       class="tool-output-terminal"
-      .text=${text}
+      .text=${toolDisplayText(text)}
     ></terminal-output>`,
   );
 }
@@ -308,13 +315,18 @@ function buildFileContentSections(ctx: ToolSectionContext): TemplateResult[] {
   if (!filePath) return [];
   const writeInput = input as WriteInput;
   const contentLanguage = getLanguageFromPath(filePath);
-  return [
+  const sections = [
     buildToolUseSection('File:', buildFileLinkWithLines(filePath)),
-    buildToolSection('', writeInput.content, {
-      toolName,
-      language: contentLanguage,
-    }),
   ];
+  if (typeof writeInput.content === 'string') {
+    sections.push(
+      buildToolSection('', writeInput.content, {
+        toolName,
+        language: contentLanguage,
+      }),
+    );
+  }
+  return sections;
 }
 
 function buildMemorySections(ctx: ToolSectionContext): TemplateResult[] {

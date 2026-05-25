@@ -1,8 +1,8 @@
 import { Box, Text } from 'ink';
 
+import { isCliApiSwitchableRetry } from '@cli/runtime/approvalAdapter';
 import type { RetryPermission } from '@shared/schemas';
 
-import { isCliApiSwitchableRetry } from '../../../runtime/approvalAdapter';
 import { ConfirmCard } from './ConfirmCard';
 import type { ApprovalDecision } from '../state/approvalQueue';
 

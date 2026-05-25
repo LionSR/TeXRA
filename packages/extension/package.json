@@ -605,6 +605,17 @@
         }
       },
       {
+        "title": "Skills",
+        "properties": {
+          "texra.skills.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Discover imported skills and expose them to tool-use agent prompts",
+            "scope": "resource"
+          }
+        }
+      },
+      {
         "title": "Tool Use Agents",
         "properties": {
           "texra.toolUse.requireEditApproval": {

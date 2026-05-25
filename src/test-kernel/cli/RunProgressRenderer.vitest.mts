@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { AgentCategory } from '@agent/core/AgentDataclass';
-
-import { pickGlobalArgs } from '../../../packages/cli/src/runtime/globalArgs';
+import { pickGlobalArgs } from '@cli/runtime/globalArgs';
 import {
   createRunProgressRenderer,
   shouldRenderRunProgress,
-} from '../../../packages/cli/src/runtime/runProgressRenderer';
-import { createCliRuntimeHost } from '../../../packages/cli/src/runtime/runtimeHost';
-import type { CliContext } from '../../../packages/cli/src/runtime/cliContext';
+} from '@cli/runtime/runProgressRenderer';
+import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
+import { AgentCategory } from '@agent/core/AgentDataclass';
+import type { CliContext } from '@cli/runtime/cliContext';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
   return {

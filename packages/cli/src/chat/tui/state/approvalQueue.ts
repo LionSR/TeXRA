@@ -10,6 +10,7 @@
 import { signal, type Signal } from '@lit-labs/signals';
 import PQueue from 'p-queue';
 
+import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type {
   AgentProposalPermission,
   BashPermission,
@@ -20,7 +21,6 @@ import type {
   UserQuestionPermission,
 } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import type { CliApiMode } from '../../../runtime/apiAccessMode';
 
 export type ApprovalBypassKind = 'toolEdit' | 'superYolo';
 

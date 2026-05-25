@@ -5,13 +5,13 @@ import * as agentRegistry from '@agent/index/agentRegistry';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { SupabaseSession } from '@auth/SupabaseSession';
 import { setServerSideKeyService } from '@auth/serverKeys';
-import { createDesktopProtocolCallbackRouter } from '../../../packages/desktop/src/main/desktopProtocolCallbacks';
+import { createDesktopProtocolCallbackRouter } from '@desktop/main/desktopProtocolCallbacks';
 import {
   createDesktopAuthCallbackState,
   createDesktopSupabaseAuth,
   type DesktopOAuthClient,
   type DesktopAuthProfileData,
-} from '../../../packages/desktop/src/main/desktopSupabaseAuth';
+} from '@desktop/main/desktopSupabaseAuth';
 import type { StateStore } from '@platform/interfaces/state';
 
 function createCoordinator() {

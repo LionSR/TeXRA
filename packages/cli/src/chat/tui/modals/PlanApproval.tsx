@@ -3,8 +3,8 @@ import { ConfirmInput } from '@inkjs/ui';
 
 import type { PlanApprovalPermission } from '@shared/schemas';
 
-import type { ApprovalDecision } from '../state/approvalQueue';
 import { KeyHints } from '../ui/KeyHints';
+import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface PlanApprovalProps {
   readonly payload: PlanApprovalPermission;

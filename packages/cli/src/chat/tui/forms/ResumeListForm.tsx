@@ -5,12 +5,12 @@ import { Box, Text, useInput } from 'ink';
 import { Spinner } from '@inkjs/ui';
 import { useEffect, useState } from 'react';
 
-import type { ExecutionId } from '@shared/schemas';
-
 import {
   listCliHistoryEntries,
   type CliHistoryEntry,
-} from '../../../runtime/history';
+} from '@cli/runtime/history';
+import type { ExecutionId } from '@shared/schemas';
+
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
 

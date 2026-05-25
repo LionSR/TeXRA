@@ -1,26 +1,25 @@
 import { describe, expect, it } from 'vitest';
 
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import {
-  STREAM_STATUS,
-  type NormalizedToolUse,
-  type StreamTabId,
-} from '@shared/schemas';
-
-import { splitTranscriptEntries } from '../../../packages/cli/src/chat/tui/panes/transcriptEntries';
+import { splitTranscriptEntries } from '@cli/chat/tui/panes/transcriptEntries';
 import {
   appendStaticTranscriptItems,
   selectPendingEntriesForViewport,
-} from '../../../packages/cli/src/chat/tui/panes/ConversationPane';
+} from '@cli/chat/tui/panes/ConversationPane';
 import {
   cliState,
   patchStream,
   resetCliState,
   type ConversationEntry,
   type StreamSlice,
-} from '../../../packages/cli/src/chat/tui/state/cliState';
-import { finalizeAssistantTranscriptEntries } from '../../../packages/cli/src/chat/tui/state/transcript';
-import { subscribeStreamStatus } from '../../../packages/cli/src/chat/tui/state/subscribeStreamStatus';
+} from '@cli/chat/tui/state/cliState';
+import { finalizeAssistantTranscriptEntries } from '@cli/chat/tui/state/transcript';
+import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import {
+  STREAM_STATUS,
+  type NormalizedToolUse,
+  type StreamTabId,
+} from '@shared/schemas';
 
 const STREAM_ID = 'cli-test-stream' as StreamTabId;
 const SESSION_META = {
