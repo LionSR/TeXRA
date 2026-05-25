@@ -58,6 +58,12 @@ const AVAILABILITY_STATUS: Record<
     available: false,
     requiresKey: false,
   },
+  'relay-quota-exhausted': {
+    kind: 'relay-quota-exhausted',
+    label: 'Relay quota exhausted',
+    available: false,
+    requiresKey: false,
+  },
 };
 
 /** Check whether a model is available through a personal provider or OpenRouter key. */
@@ -90,6 +96,7 @@ async function getPersonalAccessKindForModel(
 interface ModelAvailabilityContext {
   hasOpenRouter: boolean;
   hasServerAccess: boolean;
+  relayQuotaExhausted: boolean;
   useOpenRouter: boolean;
   useIncludedAccess: boolean;
   serverSideKeyService: ReturnType<typeof getServerSideKeyService>;
@@ -121,6 +128,10 @@ async function resolveModelAvailability(
       : AVAILABILITY_STATUS['missing-key'];
   }
 
+  if (ctx.relayQuotaExhausted) {
+    return AVAILABILITY_STATUS['relay-quota-exhausted'];
+  }
+
   if (canUseIncludedAccessForModel(model, config, ctx)) {
     return AVAILABILITY_STATUS['included-access'];
   }
@@ -144,6 +155,7 @@ async function resolveModelAvailability(
 
 async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
   const serverSideKeyService = getServerSideKeyService();
+  const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
   const [hasOpenRouter, hasServerAccess] = await Promise.all([
     apiKeyExists(platform().secrets, 'openRouter'),
     serverSideKeyService.canUseServerSideKeys(),
@@ -151,8 +163,11 @@ async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
   return {
     hasOpenRouter,
     hasServerAccess,
+    relayQuotaExhausted:
+      serverSideKeyService.wasQuotaAutoSwitched() ||
+      (useIncludedAccess && serverSideKeyService.isRelayQuotaExceeded()),
     useOpenRouter: getUseOpenRouter(),
-    useIncludedAccess: serverSideKeyService.getUseIncludedModelAccess(),
+    useIncludedAccess,
     serverSideKeyService,
   };
 }
@@ -176,6 +191,10 @@ export async function getModelUnavailableReason(
   if (availability.kind === 'not-included') {
     // User has server access but model isn't available on their tier
     return `Model "${model}" is not available with your current subscription tier. Upgrade your plan or switch to a different model.`;
+  }
+
+  if (availability.kind === 'relay-quota-exhausted') {
+    return `Model "${model}" is unavailable because your monthly TeXRA relay quota is exhausted. Switch to personal API keys or wait for the next quota period.`;
   }
 
   // Personal key mode or unauthenticated — missing provider key

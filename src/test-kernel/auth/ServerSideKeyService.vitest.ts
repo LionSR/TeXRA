@@ -132,6 +132,7 @@ describe('ServerSideKeyService quota fallback', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(service.getUseIncludedModelAccess()).toBe(false);
     expect(service.wasQuotaAutoSwitched()).toBe(true);
+    expect(service.isRelayQuotaExceeded()).toBe(true);
 
     await service.setUseIncludedModelAccess(true);
 

@@ -153,12 +153,17 @@ function outputDisplayLines(toolUse: NormalizedToolUse): string[] {
 
 export function universalToolUseDisplayLines(
   toolUse: NormalizedToolUse,
-  options: { readonly displayName?: string } = {},
+  options: {
+    readonly displayName?: string;
+    readonly showOutput?: boolean;
+  } = {},
 ): readonly string[] {
   const patchLines = toolUsePatchDisplayLines(toolUse);
   const errorText = toolUse.isError ? toolUse.errorText || '(error)' : '';
-  const outputLines = outputDisplayLines(toolUse);
+  const outputLines =
+    options.showOutput === true ? outputDisplayLines(toolUse) : [];
   const showNoOutput =
+    options.showOutput === true &&
     toolUse.status === TOOL_USE_STATUS.COMPLETED &&
     outputLines.length === 0 &&
     patchLines.length === 0 &&
@@ -268,6 +273,7 @@ interface ToolRowProps {
   readonly fallbackName?: string;
   readonly previewColor?: 'cyan';
   readonly showPatch?: boolean;
+  readonly showOutput?: boolean;
   readonly showExitCode?: boolean;
   readonly preferInputPreview?: boolean;
 }
@@ -277,6 +283,7 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
     toolUse,
     previewColor,
     showPatch = false,
+    showOutput = false,
     showExitCode = false,
     preferInputPreview = false,
   } = props;
@@ -298,9 +305,9 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
     return {
       patchGroups: showPatch ? toolUsePatchGroups(toolUse) : undefined,
       preview: previewText,
-      visibleOutput: visibleOutputLines(toolUse),
+      visibleOutput: showOutput ? visibleOutputLines(toolUse) : [],
     };
-  }, [toolUse, showPatch, preferInputPreview]);
+  }, [toolUse, showPatch, showOutput, preferInputPreview]);
 
   const errorText = toolUse.isError ? toolUse.errorText || '(error)' : '';
   const exitCode = showExitCode ? extractExitCode(toolUse) : undefined;
@@ -344,12 +351,19 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
 export function UniversalToolRow({
   toolUse,
   displayName,
+  showOutput,
 }: {
   readonly toolUse: NormalizedToolUse;
   readonly displayName?: string;
+  readonly showOutput?: boolean;
 }): React.JSX.Element {
   return (
-    <ToolRow toolUse={toolUse} displayName={displayName} showPatch={true} />
+    <ToolRow
+      toolUse={toolUse}
+      displayName={displayName}
+      showPatch={true}
+      showOutput={showOutput}
+    />
   );
 }
 
@@ -363,6 +377,7 @@ function BashToolRow({
       toolUse={toolUse}
       fallbackName="bash"
       previewColor="cyan"
+      showOutput={true}
       showExitCode={true}
       preferInputPreview={true}
     />
@@ -398,11 +413,13 @@ const mcpRenderer: ToolRenderer = {
     <UniversalToolRow
       toolUse={toolUse}
       displayName={displayMcpToolName(toolUse.toolName)}
+      showOutput={true}
     />
   ),
   displayLines: (toolUse) =>
     universalToolUseDisplayLines(toolUse, {
       displayName: displayMcpToolName(toolUse.toolName),
+      showOutput: true,
     }),
 };
 

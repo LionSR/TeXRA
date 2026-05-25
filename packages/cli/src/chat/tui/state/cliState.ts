@@ -7,6 +7,7 @@
 
 import { signal, type Signal } from '@lit-labs/signals';
 
+import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type {
   ActiveChildInfo,
   ConversationProgress,
@@ -17,7 +18,6 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-import type { CliApiMode } from '../../../runtime/apiAccessMode';
 
 export interface ConversationEntry {
   /** Same id as the upstream `StreamLogEntry.id` — stable across deltas. */

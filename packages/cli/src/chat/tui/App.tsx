@@ -18,6 +18,7 @@ import { SubagentList } from './panes/SubagentList';
 import { TipRow } from './panes/TipRow';
 import { TodosPlanPanel } from './panes/TodosPlanPanel';
 import { currentApproval } from './state/approvalQueue';
+import { metaChordDigit, metaChordInput } from './input/inputKeys';
 import {
   hasChildExecutionRows,
   numericFocusTarget,
@@ -271,8 +272,9 @@ export function App(props: AppProps): React.JSX.Element {
 
   useInput(
     (input, key) => {
-      if (!key.meta) return;
-      const lower = input.toLowerCase();
+      const metaInput = metaChordInput(input, key);
+      if (!metaInput) return;
+      const lower = metaInput.toLowerCase();
       if (lower === 's') {
         if (!subagentControlsAvailable) return;
         setChildControlMode('subagents');
@@ -282,8 +284,8 @@ export function App(props: AppProps): React.JSX.Element {
         setChildControlMode('tasks');
         return;
       }
-      const digit = Number(input);
-      if (Number.isInteger(digit) && digit >= 1 && digit <= 9) {
+      const digit = metaChordDigit(input, key);
+      if (digit !== undefined) {
         const target = numericFocusTarget(activeSlice, digit - 1);
         if (target) cliState.activeStreamId.set(target);
       }

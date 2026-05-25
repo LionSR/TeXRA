@@ -13,8 +13,10 @@ import { loadAliasEntries } from './scripts/aliasUtils.mjs';
 const INTERNAL_ALIAS_NAMES = [
   'agent',
   'auth',
+  'cli',
   'commands',
   'common',
+  'desktop',
   'eventBus',
   'explorer',
   'frontend',
@@ -364,6 +366,7 @@ export default tseslint.config(
       'packages/extension/src/**/*.ts',
       'packages/desktop/src/**/*.ts',
       'packages/cli/src/**/*.ts',
+      'packages/cli/src/**/*.tsx',
     ],
     extends: [...tseslint.configs.recommended],
     languageOptions: {

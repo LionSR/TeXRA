@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 
+import { parseUserQuestionAnswer } from '@cli/runtime/userQuestionAnswer';
 import type {
   UserQuestionAnswers,
   UserQuestionPermission,
@@ -13,12 +14,11 @@ import {
   USER_QUESTION_SKIPPED_FEEDBACK,
   userQuestionDecision,
 } from './UserQuestionState';
-import type { ApprovalDecision } from '../state/approvalQueue';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { isPlainReturnInput } from '../input/inputKeys';
 import { Select } from '../ui/Select';
 import { KeyHints, type KeyHint } from '../ui/KeyHints';
-import { parseUserQuestionAnswer } from '../../../runtime/userQuestionAnswer';
+import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface UserQuestionProps {
   readonly payload: UserQuestionPermission;

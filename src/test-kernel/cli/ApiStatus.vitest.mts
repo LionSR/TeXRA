@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatRelayUsageStatus } from '../../../packages/cli/src/runtime/apiStatus';
-import type { RelayUsageSummary } from '../../../packages/cli/src/runtime/relayUsage';
+import { formatRelayUsageStatus } from '@cli/runtime/apiStatus';
+import type { RelayUsageSummary } from '@cli/runtime/relayUsage';
 
 describe('CLI API status text', () => {
   it('shows relay quota usage as a percentage', () => {

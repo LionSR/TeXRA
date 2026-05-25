@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Local imports - progress schemas
 import { COMMON_COMMANDS } from '@common/webview/commonCommands';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
+import { DESKTOP_SHELL_COMMANDS } from '@desktop/desktopShellMessages';
 import {
   AGENT_CATEGORY,
   LOG_LEVELS,
@@ -15,7 +16,6 @@ import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-import { DESKTOP_SHELL_COMMANDS } from '../../../packages/desktop/src/desktopShellMessages';
 
 type Bridge = {
   openFileCompile(filePath: string): Promise<void>;

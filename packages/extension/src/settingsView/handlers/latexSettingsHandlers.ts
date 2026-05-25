@@ -15,6 +15,7 @@ import { toErrorMessage } from '@common/errors';
 import { workspaceSM } from '@common/state';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import {
+  DEFAULT_LATEX_SETTINGS_STATUS,
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
   type LatexSettingsStatus,
@@ -95,8 +96,21 @@ export class LatexSettingsHandlers {
       !this.latexSettingsCache ||
       now - this.latexSettingsCache.timestamp >= LATEX_SETTINGS_CACHE_TTL
     ) {
+      let settings: LatexSettingsStatus;
+      try {
+        settings = await this.toolingController.detectStatus();
+      } catch (error) {
+        this.ctx.logger.error(
+          this.ctx.channel,
+          `Failed to load LaTeX settings status: ${toErrorMessage(error)}`,
+        );
+        settings = {
+          ...DEFAULT_LATEX_SETTINGS_STATUS,
+          platform: normalizePlatform(process.platform),
+        };
+      }
       this.latexSettingsCache = {
-        settings: await this.toolingController.detectStatus(),
+        settings,
         timestamp: now,
       };
     }

@@ -1,19 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
+import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
+import {
+  streamTabSegmentText,
+  streamTabsDisplayItems,
+} from '@cli/chat/tui/panes/StreamTabsStrip';
 import {
   STREAM_STATUS,
   type ActiveChildInfo,
   type StreamTabId,
 } from '@shared/schemas';
-
-import {
-  NO_BYPASS,
-  type StreamSlice,
-} from '../../../packages/cli/src/chat/tui/state/cliState';
-import {
-  streamTabSegmentText,
-  streamTabsDisplayItems,
-} from '../../../packages/cli/src/chat/tui/panes/StreamTabsStrip';
 
 function streamId(value: string): StreamTabId {
   return value as StreamTabId;
