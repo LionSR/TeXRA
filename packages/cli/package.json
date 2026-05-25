@@ -64,7 +64,7 @@
     "cli-highlight": "^2.1.11",
     "diff": "^9.0.0",
     "esbuild": "^0.28.0",
-    "ink": "^7.0.3",
+    "ink": "^7.0.4",
     "markdown-it": "^14.1.1",
     "p-queue": "^9.3.0",
     "picocolors": "^1.1.1",
