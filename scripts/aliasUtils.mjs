@@ -8,7 +8,7 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { resolve } from 'path';
+import { resolve } from 'node:path';
 
 export function loadAliases(rootDir) {
   const tsconfig = readTsconfig(resolve(rootDir, 'tsconfig.json'));
