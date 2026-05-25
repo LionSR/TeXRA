@@ -7,7 +7,7 @@
  * if the two diverge, builds will silently follow the root.
  */
 
-import { readFileSync } from 'fs';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'path';
 
 export function loadAliases(rootDir) {
