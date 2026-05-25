@@ -14,6 +14,7 @@ import { normalizeToolUseData } from '@shared/toolUse';
 
 import { appendCliApiSwitchHint } from '../../../runtime/approvalAdapter';
 import { cliState, patchStream, type ConversationEntry } from './cliState';
+import { summarizeSubagentFollowup } from './subagentFollowup';
 import { isFinalTranscriptStatus } from './transcript';
 
 const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
@@ -173,7 +174,7 @@ function renderLogEntry(
     role === 'error'
       ? appendCliApiSwitchHint(text)
       : role === 'user'
-        ? stripOrchestratorFollowup(text)
+        ? summarizeSubagentFollowup(stripOrchestratorFollowup(text))
         : text;
   // Assistant entries defer finalization (see comment above); inherit
   // from `prev` so re-syncs after finalize don't de-finalize and drop
