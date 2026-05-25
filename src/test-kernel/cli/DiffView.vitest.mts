@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   boundedDiffDisplayLines,
   buildHunks,
-} from '../../../packages/cli/src/chat/tui/render/DiffView';
+} from '@cli/chat/tui/render/DiffView';
 
 describe('CLI diff display', () => {
   it('keeps the overflow marker inside the total display budget', () => {

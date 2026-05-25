@@ -3,6 +3,7 @@
 // not handled here — `subscribeApprovals.ts` owns the typed-modal pipeline.
 
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type {
   ProgressEvent,
   ProgressEventPayloads,
@@ -18,7 +19,6 @@ import {
 } from './cliState';
 import { mergeChildStreams } from './childStreamMerge';
 import { appendCompletedProcessEntries } from './completedProcessTranscript';
-import type { CliRuntimeHost } from '../../../runtime/runtimeHost';
 
 type Emit = <K extends ProgressEvent>(
   event: K,

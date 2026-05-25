@@ -301,6 +301,9 @@ export class DesktopProgressBridge {
       if (snapshot.executionId) {
         this.executionIds.set(snapshot.streamId, snapshot.executionId);
       }
+      if (snapshot.parentStreamId) {
+        this.parentStreams.set(snapshot.streamId, snapshot.parentStreamId);
+      }
     }
   }
 
@@ -335,6 +338,8 @@ export class DesktopProgressBridge {
         STREAM_STATUS.STOPPED,
       description: this.descriptions.get(streamId) ?? restored?.description,
       executionId: this.executionIds.get(streamId) ?? restored?.executionId,
+      parentStreamId:
+        this.parentStreams.get(streamId) ?? restored?.parentStreamId,
       creationTimestamp: this.getCreationTimestamp(streamId),
       lastTimestamp:
         this.streamLogs.getLastTimestamp(streamId) ?? restored?.lastTimestamp,
@@ -541,6 +546,7 @@ export class DesktopProgressBridge {
       },
       creationTimestamp: snapshot.creationTimestamp,
       executionId: snapshot.executionId,
+      parentStreamId: snapshot.parentStreamId,
       description: snapshot.description,
     });
   }
@@ -735,6 +741,7 @@ export class DesktopProgressBridge {
           stream: data.childStreamId,
           parentStreamId: data.parentStreamId ?? undefined,
         });
+        this.persistStreamSnapshot(data.childStreamId);
         break;
       }
       case 'updateActiveSubagents':

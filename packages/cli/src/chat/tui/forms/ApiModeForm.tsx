@@ -1,8 +1,8 @@
 import { Box, Text } from 'ink';
 import { useEffect, useState } from 'react';
 
-import { type CliApiMode } from '../../../runtime/apiAccessMode';
-import { loadCliApiStatusLines } from '../../../runtime/apiStatus';
+import { type CliApiMode } from '@cli/runtime/apiAccessMode';
+import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
 

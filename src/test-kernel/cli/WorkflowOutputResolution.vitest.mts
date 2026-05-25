@@ -4,11 +4,11 @@ import { tmpdir } from 'node:os';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { resolveWorkflowOutput } from '@cli/commands/root';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { END_GROUP_STATUS, EXECUTION_STATUS } from '@shared/schemas';
 
-import { resolveWorkflowOutput } from '../../../packages/cli/src/commands/root';
-import type { CliContext } from '../../../packages/cli/src/runtime/cliContext';
+import type { CliContext } from '@cli/runtime/cliContext';
 
 type WorkflowResult = Parameters<typeof resolveWorkflowOutput>[2];
 

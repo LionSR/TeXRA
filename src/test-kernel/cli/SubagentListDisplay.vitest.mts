@@ -4,7 +4,7 @@ import {
   childStatusColor,
   childStatusMarker,
   childStatusPulses,
-} from '../../../packages/cli/src/chat/tui/panes/SubagentListDisplay';
+} from '@cli/chat/tui/panes/SubagentListDisplay';
 
 describe('CLI SubagentList display model', () => {
   it('pulses running statuses', () => {

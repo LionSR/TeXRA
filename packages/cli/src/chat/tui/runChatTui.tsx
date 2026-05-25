@@ -8,8 +8,8 @@
 import { render } from 'ink';
 import PQueue from 'p-queue';
 
-import { getAgent, loadAgents } from '@agent/index';
 import { getDefaultStreamLogStore } from '@transcript';
+import { getAgent, loadAgents } from '@agent/index';
 import { type AgentConfigPayload } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
@@ -26,40 +26,40 @@ import {
   getInterruptible,
   getToolUseFlowContext,
 } from '@agent/toolUse/ToolUseAgentRegistry';
-import { toErrorMessage } from '@common/errors/errorMessage';
-import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
-import {
-  STREAM_STATUS,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
-import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
-import { generateExecutionId } from '@utils/core/executionId';
-
-import { type CliContext, readCliVersion } from '../../runtime/cliContext';
-import { hasCliApprovalDenied } from '../../runtime/approvalAdapter';
+import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
+import { hasCliApprovalDenied } from '@cli/runtime/approvalAdapter';
 import {
   formatCliApiMode,
   getCliApiMode,
   parseCliApiMode,
   setCliApiMode,
   type CliApiMode,
-} from '../../runtime/apiAccessMode';
-import { loadCliApiStatusLines } from '../../runtime/apiStatus';
-import { resolveChatDefaults } from '../../runtime/chatDefaults';
-import { CliExitCode } from '../../runtime/exitCodes';
-import { initCliPlatform, setCliHelperModel } from '../../runtime/initPlatform';
-import { createCliRuntimeHost } from '../../runtime/runtimeHost';
-import { writeTextStderr } from '../../runtime/logSinks';
+} from '@cli/runtime/apiAccessMode';
+import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
+import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
+import { CliExitCode } from '@cli/runtime/exitCodes';
+import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
+import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
+import { writeTextStderr } from '@cli/runtime/logSinks';
 import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
-} from '../../runtime/approvalPolicy';
-import { parseCliHistoryId, readCliHistoryConfig } from '../../runtime/history';
+} from '@cli/runtime/approvalPolicy';
+import { parseCliHistoryId, readCliHistoryConfig } from '@cli/runtime/history';
 import {
   formatCliMemoryList,
   formatCliMemoryPreview,
-} from '../../runtime/memory';
+} from '@cli/runtime/memory';
+import { toErrorMessage } from '@common/errors/errorMessage';
+import {
+  STREAM_STATUS,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
+import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
+import { generateExecutionId } from '@utils/core/executionId';
+
 import { App } from './App';
 import { AgentListForm } from './forms/AgentListForm';
 import { ApiModeForm } from './forms/ApiModeForm';
@@ -115,7 +115,7 @@ export interface ClearableTuiSessionState {
   stopRequested: boolean;
 }
 
-interface TuiSession extends ClearableTuiSessionState {}
+type TuiSession = ClearableTuiSessionState;
 
 export function clearTuiSessionRunState(
   session: ClearableTuiSessionState,
@@ -647,7 +647,7 @@ export async function runChat(
     initialAgent: agent,
     initialModel: model,
     interruptActive,
-    requestInputExit: () => requestInputExit?.(),
+    requestInputExit,
     getApprovalPolicy,
     setApprovalPolicy,
     resetSession: resetSessionForClear,
@@ -689,8 +689,6 @@ export async function runChat(
   };
 
   const followUpQueue = new PQueue({ concurrency: 1 });
-  let requestInputExit: (() => void) | undefined;
-
   const interruptActive = (): void => {
     clearApprovals();
     if (!session.streamId) return;
@@ -963,11 +961,11 @@ export async function runChat(
     interruptActive();
     exitNow(129);
   };
-  requestInputExit = () => {
+  function requestInputExit(): void {
     removeProcessHandlers();
     clearPendingExit();
     ink.unmount();
-  };
+  }
   process.on('SIGINT', handleSigint);
   process.on('SIGTERM', handleSigterm);
   process.on('SIGHUP', handleSighup);

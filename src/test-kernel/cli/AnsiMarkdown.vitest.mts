@@ -12,8 +12,8 @@ import {
   _ansiMarkdownStatsForTests,
   _resetAnsiMarkdownForTests,
   renderAnsiMarkdown,
-} from '../../../packages/cli/src/chat/tui/render/ansiMarkdown';
-import { wrapAnsiToWidth } from '../../../packages/cli/src/chat/tui/render/ansiWrap';
+} from '@cli/chat/tui/render/ansiMarkdown';
+import { wrapAnsiToWidth } from '@cli/chat/tui/render/ansiWrap';
 
 function displayWidthForTest(line: string): number {
   let width = 0;

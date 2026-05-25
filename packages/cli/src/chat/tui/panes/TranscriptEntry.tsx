@@ -7,10 +7,10 @@ import { Box, Text } from 'ink';
 
 import { Markdown } from '../render/Markdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
-import type { ConversationEntry } from '../state/cliState';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
 import { ToolUseRow } from './ToolUseRow';
 import { toolUseDisplayLines } from './toolRenderers';
+import type { ConversationEntry } from '../state/cliState';
 
 function ProcessEntryRow({
   process,

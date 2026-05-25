@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 
+import { writeTextStderr } from '@cli/runtime/logSinks';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { ReverseSearch } from '../input/ReverseSearch';
 import { SlashPalette } from '../commands/SlashPalette';
 import { matchSlashCommands, parseSlashInput } from '../commands/slashRegistry';
-import type { InputHistory } from '../history/inputHistory';
-import { writeTextStderr } from '../../../runtime/logSinks';
 import { cliState } from '../state/cliState';
+import type { InputHistory } from '../history/inputHistory';
 
 export interface InputBarProps {
   /** Forwarded to BaseTextInput; called only on real (non-paste) Enter. */

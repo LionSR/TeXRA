@@ -5,9 +5,9 @@ import {
   doctorExitCode,
   doctorNdjsonRecords,
   formatDoctorText,
-} from '../../../packages/cli/src/runtime/doctor';
-import { CliExitCode } from '../../../packages/cli/src/runtime/exitCodes';
-import type { CliContext } from '../../../packages/cli/src/runtime/cliContext';
+} from '@cli/runtime/doctor';
+import { CliExitCode } from '@cli/runtime/exitCodes';
+import type { CliContext } from '@cli/runtime/cliContext';
 
 const context: CliContext = {
   cwd: '/workspace',

@@ -5,6 +5,7 @@
 
 // Local imports - formatter helpers
 import type { LogMessageData, MessageType } from '@shared/schemas';
+import { isPlainObject } from '@shared/utils/string';
 import { safeFormat, type FormatOptions } from './baseLogFormatter';
 import {
   formatBannerContentTemplate,
@@ -68,6 +69,19 @@ function wrapWithErrorHandling(
   };
 }
 
+/** Name the tool in formatter errors so a bad card is actionable. */
+function getToolUseRenderLabel(message: LogMessageData): string {
+  const data = message.data;
+  if (!isPlainObject(data)) return 'tool use';
+  const toolName =
+    typeof data.toolName === 'string'
+      ? data.toolName
+      : typeof data.tool === 'string'
+        ? data.tool
+        : '';
+  return toolName.trim() ? `tool use (${toolName.trim()})` : 'tool use';
+}
+
 /** Map of message types to their formatter functions. */
 const TEMPLATE_FORMATTERS: Record<string, TemplateFormatterFn | null> = {
   // Collapsible content banners
@@ -75,7 +89,17 @@ const TEMPLATE_FORMATTERS: Record<string, TemplateFormatterFn | null> = {
   scratchpad: wrapWithErrorHandling(formatBannerContentTemplate, 'scratchpad'),
 
   // Tool/search/fetch results
-  toolUse: wrapWithErrorHandling(formatToolUseTemplate, 'tool use'),
+  toolUse: (message, options) => {
+    const label = getToolUseRenderLabel(message);
+    const result = safeFormat(
+      () => formatToolUseTemplate(message, options),
+      label,
+    );
+    if (!result.ok) {
+      return formatRenderError(label, result.error);
+    }
+    return result.value;
+  },
   webSearch: wrapWithErrorHandling(formatWebSearchTemplate, 'web search'),
   webFetch: wrapWithErrorHandling(formatWebFetchTemplate, 'web fetch'),
 

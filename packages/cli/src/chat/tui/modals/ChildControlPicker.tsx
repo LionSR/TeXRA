@@ -17,9 +17,9 @@ import {
   type ChildControlItem,
   type ChildControlMode,
 } from '../state/childControls';
-import type { StreamSlice } from '../state/cliState';
 import { KeyHints } from '../ui/KeyHints';
 import { SELECT_LABEL_MAX_COLS } from '../ui/Select';
+import type { StreamSlice } from '../state/cliState';
 
 export interface ChildControlPickerProps {
   readonly activeStreamId: StreamTabId | undefined;
