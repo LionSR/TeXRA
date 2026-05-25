@@ -35,6 +35,7 @@ import { multiAgentCommand } from './multiAgent';
 import { orchestrationCommand } from './orchestrate';
 import { resumeCommand } from './resume';
 import { skillsCommand } from './skills';
+import { toolsCommand } from './tools';
 import { versionCommand } from './version';
 import { runWorkflowCommand } from './workflow';
 
@@ -68,6 +69,7 @@ export const rootCommand = defineCommand({
     history: historyCommand,
     agents: agentsCommand,
     skills: skillsCommand,
+    tools: toolsCommand,
     'multi-agent': multiAgentCommand,
     models: modelsCommand,
     login: loginCommand,
