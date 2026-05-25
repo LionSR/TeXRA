@@ -1,9 +1,6 @@
-import { buildCliContext, type CliContext } from '../../runtime/cliContext';
-import {
-  pickGlobalArgs,
-  type ParsedGlobalArgs,
-} from '../../runtime/globalArgs';
-import { writeTextStderr } from '../../runtime/logSinks';
+import { buildCliContext, type CliContext } from '@cli/runtime/cliContext';
+import { pickGlobalArgs, type ParsedGlobalArgs } from '@cli/runtime/globalArgs';
+import { writeTextStderr } from '@cli/runtime/logSinks';
 
 export async function contextFromArgs(
   args: ParsedGlobalArgs,

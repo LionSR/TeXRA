@@ -78,6 +78,7 @@ export const ModelAvailabilityKindSchema = z.enum([
   'openrouter-key',
   'missing-key',
   'not-included',
+  'relay-quota-exhausted',
 ]);
 export type ModelAvailabilityKind = z.infer<typeof ModelAvailabilityKindSchema>;
 

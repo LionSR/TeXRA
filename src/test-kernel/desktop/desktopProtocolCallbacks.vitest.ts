@@ -4,7 +4,7 @@ import { describe, it } from 'vitest';
 import {
   installDesktopProtocolCallbackLifecycle,
   type DesktopProtocolApp,
-} from '../../../packages/desktop/src/main/desktopProtocolCallbacks';
+} from '@desktop/main/desktopProtocolCallbacks';
 
 type SecondInstanceListener = (
   event: unknown,

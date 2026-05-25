@@ -4,11 +4,11 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { CliUsageError } from '../../../packages/cli/src/runtime/cliContext';
+import { CliUsageError } from '@cli/runtime/cliContext';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
-} from '../../../packages/cli/src/commands/_helpers/workflowOutput';
+} from '@cli/commands/_helpers/workflowOutput';
 
 describe('assertOutputDirAvailable', () => {
   it('no-ops when --output-dir was not passed', async () => {

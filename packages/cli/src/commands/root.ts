@@ -29,11 +29,13 @@ import { completionCommand } from './completion';
 import { doctorCommand } from './doctor';
 import { helpCommand } from './help';
 import { historyCommand } from './history';
+import { initCommand } from './init';
 import { modelsCommand } from './models';
 import { multiAgentCommand } from './multiAgent';
 import { orchestrationCommand } from './orchestrate';
 import { resumeCommand } from './resume';
 import { skillsCommand } from './skills';
+import { toolsCommand } from './tools';
 import { versionCommand } from './version';
 import { runWorkflowCommand } from './workflow';
 
@@ -63,9 +65,11 @@ export const rootCommand = defineCommand({
     chat: chatCommand,
     run: runWorkflowCommand,
     resume: resumeCommand,
+    init: initCommand,
     history: historyCommand,
     agents: agentsCommand,
     skills: skillsCommand,
+    tools: toolsCommand,
     'multi-agent': multiAgentCommand,
     models: modelsCommand,
     login: loginCommand,

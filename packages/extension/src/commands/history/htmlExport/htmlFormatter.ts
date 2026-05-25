@@ -88,9 +88,11 @@ const SAFE_URL_SCHEMES = new Set(['http:', 'https:', 'mailto:']);
 
 function safeUrl(raw: string): string | null {
   const trimmed = raw.trim();
-  // Empty / anchor-only / root-relative — no scheme to abuse.
+  // Empty / anchor-only / root-relative — no scheme to abuse. Protocol-
+  // relative URLs (`//example.com`) must still go through scheme validation.
   if (trimmed === '') return null;
-  if (trimmed.startsWith('#') || trimmed.startsWith('/')) return trimmed;
+  if (trimmed.startsWith('#')) return trimmed;
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return trimmed;
   let url: URL;
   try {
     url = new URL(trimmed);

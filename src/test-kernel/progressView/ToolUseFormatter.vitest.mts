@@ -48,4 +48,29 @@ describe('tool-use formatter', () => {
     expect(title?.textContent).not.toContain('Built Mathlib');
     expect(body?.textContent).toContain('Built Mathlib.Example.Module19');
   });
+
+  it('renders write_file cards even when compact logs omit content', async () => {
+    const { formatLogEntry } =
+      await import('@progressView/frontend/formatters');
+    const { render } = await import('lit');
+    const message: LogMessageData = {
+      id: 'write-file-compact',
+      text: '',
+      level: LOG_LEVELS.INFO,
+      timestamp: 1,
+      messageType: 'toolUse',
+      data: {
+        toolName: 'write_file',
+        input: { path: 'src/main.ts' },
+        output: 'Wrote src/main.ts',
+      },
+    };
+
+    const container = document.createElement('div');
+    render(formatLogEntry(message), container);
+
+    expect(container.textContent).toContain('write_file');
+    expect(container.textContent).toContain('src/main.ts');
+    expect(container.textContent).not.toContain('Failed to render');
+  });
 });

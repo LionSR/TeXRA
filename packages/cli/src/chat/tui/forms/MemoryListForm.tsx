@@ -5,13 +5,13 @@ import { Box, Text, useInput } from 'ink';
 import { Spinner } from '@inkjs/ui';
 import { useEffect, useState } from 'react';
 
-import type { MemoryViewItem } from '@shared/schemas';
-import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
-
 import {
   CLI_MEMORY_LIST_LIMIT,
   cliMemoryItemDescription,
-} from '../../../runtime/memory';
+} from '@cli/runtime/memory';
+import type { MemoryViewItem } from '@shared/schemas';
+import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
+
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
 

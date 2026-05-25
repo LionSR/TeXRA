@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseUserQuestionAnswer } from '../../../packages/cli/src/runtime/userQuestionAnswer';
+import { parseUserQuestionAnswer } from '@cli/runtime/userQuestionAnswer';
 
 const question = {
   question: 'How long should this take?',

@@ -9,7 +9,7 @@ import {
   formatCliSkillList,
   readCliSkills,
   skillListRecord,
-} from '../../../packages/cli/src/runtime/skills';
+} from '@cli/runtime/skills';
 
 const tempRoots: string[] = [];
 

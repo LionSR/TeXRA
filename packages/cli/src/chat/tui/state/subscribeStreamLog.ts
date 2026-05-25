@@ -3,6 +3,7 @@
 // panels and modals; tool rows render inline alongside assistant prose.
 
 import { getDefaultStreamLogStore } from '@transcript';
+import { appendCliApiSwitchHint } from '@cli/runtime/approvalAdapter';
 import { flushPendingRunTraces } from '@logger';
 import {
   MESSAGE_TYPES,
@@ -12,7 +13,6 @@ import {
 } from '@shared/schemas';
 import { normalizeToolUseData } from '@shared/toolUse';
 
-import { appendCliApiSwitchHint } from '../../../runtime/approvalAdapter';
 import { cliState, patchStream, type ConversationEntry } from './cliState';
 import { summarizeSubagentFollowup } from './subagentFollowup';
 import { isFinalTranscriptStatus } from './transcript';

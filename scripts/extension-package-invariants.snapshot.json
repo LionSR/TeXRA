@@ -913,6 +913,17 @@
         },
         {
           "properties": {
+            "texra.skills.enabled": {
+              "default": true,
+              "description": "Discover imported skills and expose them to tool-use agent prompts",
+              "scope": "resource",
+              "type": "boolean"
+            }
+          },
+          "title": "Skills"
+        },
+        {
+          "properties": {
             "texra.toolUse.persistence.enabled": {
               "default": true,
               "description": "Persist tool-use conversations across VS Code restarts",

@@ -238,6 +238,9 @@ export const DEFAULT_CORE_SETTINGS = {
     saveDebugObjects: false,
     saveInputPrompt: false,
   },
+  skills: {
+    enabled: true,
+  },
   toolUse: {
     requireEditApproval: true,
     requireBashApproval: true,
@@ -477,6 +480,11 @@ export const CoreSettingsShape = {
         .prefault(DEFAULT_CORE_SETTINGS.debug.saveInputPrompt),
     })
     .prefault(DEFAULT_CORE_SETTINGS.debug),
+  skills: z
+    .strictObject({
+      enabled: z.boolean().prefault(DEFAULT_CORE_SETTINGS.skills.enabled),
+    })
+    .prefault(DEFAULT_CORE_SETTINGS.skills),
   toolUse: z
     .strictObject({
       requireEditApproval: z
@@ -561,6 +569,7 @@ export const CORE_SETTING_PATHS = [
   'logger.debugMode',
   'debug.saveDebugObjects',
   'debug.saveInputPrompt',
+  'skills.enabled',
   'toolUse.requireEditApproval',
   'toolUse.requireBashApproval',
   'toolUse.persistence.enabled',
