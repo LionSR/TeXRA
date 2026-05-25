@@ -99,7 +99,8 @@ const memoryShowCommand = defineCommand({
     path: {
       type: 'positional',
       required: true,
-      description: 'Memory path from `texra memory list` (e.g. memories/<file>)',
+      description:
+        'Memory path from `texra memory list` (e.g. memories/<file>)',
     },
   },
   async run(ctx) {
