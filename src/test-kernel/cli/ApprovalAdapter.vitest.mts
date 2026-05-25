@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import {
   appendCliApiSwitchHint,
   formatRetryRequestMessage,
   immediateDecisionForApproval,
   isCliApiSwitchableRetry,
-} from '../../../packages/cli/src/runtime/approvalAdapter';
-import type { CliContext } from '../../../packages/cli/src/runtime/cliContext';
+} from '@cli/runtime/approvalAdapter';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { CliContext } from '@cli/runtime/cliContext';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
   return {

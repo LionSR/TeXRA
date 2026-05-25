@@ -5,13 +5,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 
 // Local imports - command catalog and shared schemas
+import type { DesktopCommandActions } from '@desktop/desktopCommandSurface';
 import { commandCatalogById, type CommandId } from '@shared/commands/catalog';
 import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-import type { DesktopCommandActions } from '../../../packages/desktop/src/desktopCommandSurface';
 
 interface DesktopCommandSurfaceModule {
   DESKTOP_LOCAL_COMMANDS: {

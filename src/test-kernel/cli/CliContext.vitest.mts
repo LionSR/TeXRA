@@ -8,8 +8,8 @@ import {
   buildCliContext,
   CliUsageError,
   resolveCliCwd,
-} from '../../../packages/cli/src/runtime/cliContext';
-import { loadWorkspaceCliConfig } from '../../../packages/cli/src/runtime/cliConfig';
+} from '@cli/runtime/cliContext';
+import { loadWorkspaceCliConfig } from '@cli/runtime/cliConfig';
 
 const ambient = {
   isCi: true,

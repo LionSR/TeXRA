@@ -155,6 +155,7 @@ async function resolveModelAvailability(
 
 async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
   const serverSideKeyService = getServerSideKeyService();
+  const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
   const [hasOpenRouter, hasServerAccess] = await Promise.all([
     apiKeyExists(platform().secrets, 'openRouter'),
     serverSideKeyService.canUseServerSideKeys(),
@@ -163,11 +164,9 @@ async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
     hasOpenRouter,
     hasServerAccess,
     relayQuotaExhausted:
-      serverSideKeyService.wasQuotaAutoSwitched() ||
-      (serverSideKeyService.getUseIncludedModelAccess() &&
-        serverSideKeyService.isRelayQuotaExceeded()),
+      useIncludedAccess && serverSideKeyService.isRelayQuotaExceeded(),
     useOpenRouter: getUseOpenRouter(),
-    useIncludedAccess: serverSideKeyService.getUseIncludedModelAccess(),
+    useIncludedAccess,
     serverSideKeyService,
   };
 }

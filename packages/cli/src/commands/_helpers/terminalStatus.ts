@@ -1,11 +1,11 @@
 import { getExecutionStore } from '@agent/storage';
 import type { OutputFileSummary } from '@agent/runtime/AgentFlowResult';
 import { runValidatedExecutionRequest } from '@agent/runtime/runExecutionRequest';
-import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
+import { CliExitCode } from '@cli/runtime/exitCodes';
+import { hasCliApprovalDenied } from '@cli/runtime/approvalAdapter';
 
-import { hasCliApprovalDenied } from '../../runtime/approvalAdapter';
-import { CliExitCode } from '../../runtime/exitCodes';
-import type { CliContext } from '../../runtime/cliContext';
+import type { CliContext } from '@cli/runtime/cliContext';
+import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 
 export type ExecuteAgentResult = Awaited<
   ReturnType<typeof runValidatedExecutionRequest>

@@ -6,7 +6,7 @@ import {
   installDesktopProtocolCallbackLifecycle,
   parseDesktopProtocolCallback,
   type DesktopProtocolApp,
-} from '../../../packages/desktop/src/main/desktopProtocolCallbacks';
+} from '@desktop/main/desktopProtocolCallbacks';
 
 function createFakeProtocolApp(
   overrides: Partial<DesktopProtocolApp> = {},

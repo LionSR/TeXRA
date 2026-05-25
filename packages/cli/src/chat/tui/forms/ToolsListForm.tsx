@@ -6,10 +6,11 @@ import { Spinner } from '@inkjs/ui';
 import { useEffect, useState } from 'react';
 
 import {
+  formatCliBoolean,
   readCliToolStatuses,
   setCliToolEnabled,
   type CliToolStatusRecord,
-} from '../../../runtime/tools';
+} from '@cli/runtime/tools';
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
 
@@ -40,14 +41,9 @@ function ToolsFrame(props: ToolsFrameProps): React.JSX.Element {
   );
 }
 
-function yesNo(value: boolean | null): string {
-  if (value == null) return '-';
-  return value ? 'yes' : 'no';
-}
-
 function toolDescription(tool: CliToolStatusRecord): string {
-  const enabled = `enabled ${yesNo(tool.enabled)}`;
-  const detected = `detected ${yesNo(tool.detected)}`;
+  const enabled = `enabled ${formatCliBoolean(tool.enabled)}`;
+  const detected = `detected ${formatCliBoolean(tool.detected)}`;
   const status = tool.statusLabel ?? tool.status;
   return `${enabled}; ${detected}; ${status}`;
 }

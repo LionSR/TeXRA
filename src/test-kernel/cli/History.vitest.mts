@@ -41,7 +41,7 @@ import {
   preflightCliHistoryDeleteAll,
   readCliHistoryConfig,
   readCliHistoryDetails,
-} from '../../../packages/cli/src/runtime/history';
+} from '@cli/runtime/history';
 
 const config = {
   agent: 'correct',

@@ -5,20 +5,20 @@ import { describe, expect, it } from 'vitest';
 import {
   computePickerListLayout,
   computeTaskDetailLayout,
-} from '../../../packages/cli/src/chat/tui/modals/ChildControlPicker';
+} from '@cli/chat/tui/modals/ChildControlPicker';
 import {
   buildChildControlItems,
   childPickerKeyAction,
   hasChildExecutionRows,
   nextPickerIndex,
   numericFocusTarget,
-} from '../../../packages/cli/src/chat/tui/state/childControls';
-import { visibleSubagentRows } from '../../../packages/cli/src/chat/tui/state/childStreamMerge';
-import { NO_BYPASS } from '../../../packages/cli/src/chat/tui/state/cliState';
+} from '@cli/chat/tui/state/childControls';
+import { visibleSubagentRows } from '@cli/chat/tui/state/childStreamMerge';
+import { NO_BYPASS } from '@cli/chat/tui/state/cliState';
 import type {
   ProcessOutputTail,
   StreamSlice,
-} from '../../../packages/cli/src/chat/tui/state/cliState';
+} from '@cli/chat/tui/state/cliState';
 
 function tail(stdout: string, stderr = ''): ProcessOutputTail {
   return { stdout, stderr };

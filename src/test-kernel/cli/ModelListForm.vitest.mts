@@ -1,16 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ModelOptionData } from '@shared/schemas';
-
 import {
   formatModelStatusForCliMode,
   modelSelectWindow,
-} from '../../../packages/cli/src/chat/tui/forms/ModelListForm';
+} from '@cli/chat/tui/forms/ModelListForm';
 import {
   selectItemRenderKey,
   visibleSelectRange,
-} from '../../../packages/cli/src/chat/tui/ui/Select';
-import type { CliModelAccess } from '../../../packages/cli/src/runtime/modelAccess';
+} from '@cli/chat/tui/ui/Select';
+import type { ModelOptionData } from '@shared/schemas';
+import type { CliModelAccess } from '@cli/runtime/modelAccess';
 
 function access(
   model: Partial<ModelOptionData>,

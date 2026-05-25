@@ -92,7 +92,7 @@ export async function setCliToolEnabled(
   return true;
 }
 
-function yesNo(value: boolean | null): string {
+export function formatCliBoolean(value: boolean | null): string {
   if (value == null) return '-';
   return value ? 'yes' : 'no';
 }
@@ -107,8 +107,8 @@ export function formatCliToolList(
       record.id,
       record.name,
       record.category,
-      yesNo(record.enabled),
-      yesNo(record.detected),
+      formatCliBoolean(record.enabled),
+      formatCliBoolean(record.detected),
       record.note ?? '',
     ].join('\t'),
   );
@@ -121,8 +121,8 @@ export function formatCliToolStatus(record: CliToolStatusRecord): string {
     `name: ${record.name}`,
     `category: ${record.category}`,
     `status: ${record.status}`,
-    `enabled: ${yesNo(record.enabled)}`,
-    `detected: ${yesNo(record.detected)}`,
+    `enabled: ${formatCliBoolean(record.enabled)}`,
+    `detected: ${formatCliBoolean(record.detected)}`,
   ];
   if (record.statusLabel) lines.push(`statusLabel: ${record.statusLabel}`);
   if (record.note) lines.push(`note: ${record.note}`);

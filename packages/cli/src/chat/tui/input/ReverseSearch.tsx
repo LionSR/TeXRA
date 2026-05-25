@@ -7,9 +7,9 @@
 import { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 
-import type { InputHistory } from '../history/inputHistory';
 import { KeyHints } from '../ui/KeyHints';
 import { BaseTextInput } from './BaseTextInput';
+import type { InputHistory } from '../history/inputHistory';
 
 export interface ReverseSearchProps {
   readonly history: InputHistory;

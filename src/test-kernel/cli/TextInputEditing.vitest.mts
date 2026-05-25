@@ -7,11 +7,12 @@ import {
   deleteToEnd,
   deleteToStart,
   insertText,
-} from '../../../packages/cli/src/chat/tui/input/textInputEditing';
+} from '@cli/chat/tui/input/textInputEditing';
 import {
   isPlainReturnInput,
+  metaChordDigit,
   metaChordInput,
-} from '../../../packages/cli/src/chat/tui/input/inputKeys';
+} from '@cli/chat/tui/input/inputKeys';
 
 describe('CLI TUI text input editing', () => {
   it('recognizes normalized and raw Enter without stealing Ctrl-J', () => {
@@ -28,6 +29,13 @@ describe('CLI TUI text input editing', () => {
     expect(metaChordInput('\u001Bp', {})).toBe('p');
     expect(metaChordInput('\u001B3', {})).toBe('3');
     expect(metaChordInput('p', { ctrl: true, meta: true })).toBeUndefined();
+  });
+
+  it('parses Option/Alt digit shortcuts after chord normalization', () => {
+    expect(metaChordDigit('3', { meta: true })).toBe(3);
+    expect(metaChordDigit('\u001B3', {})).toBe(3);
+    expect(metaChordDigit('\u001Bp', {})).toBeUndefined();
+    expect(metaChordDigit('\u001B0', {})).toBeUndefined();
   });
 
   it('inserts pasted multi-line text without submitting embedded newlines', () => {

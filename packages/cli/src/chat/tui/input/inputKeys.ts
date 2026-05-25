@@ -15,6 +15,18 @@ export function metaChordInput(
     : undefined;
 }
 
+export function metaChordDigit(
+  input: string,
+  key: Pick<ReturnKeyInput, 'ctrl' | 'meta'>,
+): number | undefined {
+  const chord = metaChordInput(input, key);
+  if (!chord) return undefined;
+  const digit = Number(chord);
+  return Number.isInteger(digit) && digit >= 1 && digit <= 9
+    ? digit
+    : undefined;
+}
+
 export function isPlainReturnInput(
   input: string,
   key: ReturnKeyInput,

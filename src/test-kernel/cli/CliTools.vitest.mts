@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   cliToolIds,
+  formatCliBoolean,
   formatCliToolList,
   formatCliToolStatus,
   type CliToolStatusRecord,
-} from '../../../packages/cli/src/runtime/tools';
+} from '@cli/runtime/tools';
 
 function record(
   overrides: Partial<CliToolStatusRecord> = {},
@@ -31,6 +32,12 @@ describe('CLI tools runtime', () => {
     expect(cliToolIds()).toEqual(
       expect.arrayContaining(['codex', 'claude-agent', 'external-inquiry']),
     );
+  });
+
+  it('formats nullable booleans consistently', () => {
+    expect(formatCliBoolean(true)).toBe('yes');
+    expect(formatCliBoolean(false)).toBe('no');
+    expect(formatCliBoolean(null)).toBe('-');
   });
 
   it('formats tool list rows for text output', () => {

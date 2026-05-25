@@ -5,8 +5,8 @@ import {
   currentApproval,
   enqueueApproval,
   type ApprovalPayload,
-} from '../../../packages/cli/src/chat/tui/state/approvalQueue';
-import { approvalPayloadStreamId } from '../../../packages/cli/src/chat/tui/state/subscribeApprovals';
+} from '@cli/chat/tui/state/approvalQueue';
+import { approvalPayloadStreamId } from '@cli/chat/tui/state/subscribeApprovals';
 
 function bashPayload(streamId: string): ApprovalPayload {
   return {

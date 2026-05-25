@@ -8,7 +8,7 @@ import {
   initConfigPath,
   serializeInitConfig,
   type InitAnswers,
-} from '../../../packages/cli/src/runtime/initConfig';
+} from '@cli/runtime/initConfig';
 
 const ANSWERS: InitAnswers = {
   agent: 'chat',

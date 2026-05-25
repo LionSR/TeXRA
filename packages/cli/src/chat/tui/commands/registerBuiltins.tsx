@@ -1,5 +1,7 @@
 // Registers the slash commands the input palette surfaces.
 
+import type { CliApiMode } from '@cli/runtime/apiAccessMode';
+import type { CliApprovalPolicy } from '@cli/runtime/approvalPolicy';
 import type { ExecutionId } from '@shared/schemas';
 
 import { ApiModeForm } from '../forms/ApiModeForm';
@@ -11,8 +13,6 @@ import { ResumeListForm } from '../forms/ResumeListForm';
 import { ToolsListForm } from '../forms/ToolsListForm';
 import { cliState } from '../state/cliState';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
-import type { CliApiMode } from '../../../runtime/apiAccessMode';
-import type { CliApprovalPolicy } from '../../../runtime/approvalPolicy';
 
 type AgentSelectHandler = (value: string) => void | Promise<void>;
 type ApprovalPolicySelectHandler = (

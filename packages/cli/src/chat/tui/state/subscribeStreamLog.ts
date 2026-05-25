@@ -3,6 +3,7 @@
 // panels and modals; tool rows render inline alongside assistant prose.
 
 import { getDefaultStreamLogStore } from '@transcript';
+import { appendCliApiSwitchHint } from '@cli/runtime/approvalAdapter';
 import { flushPendingRunTraces } from '@logger';
 import {
   MESSAGE_TYPES,
@@ -12,7 +13,6 @@ import {
 } from '@shared/schemas';
 import { normalizeToolUseData } from '@shared/toolUse';
 
-import { appendCliApiSwitchHint } from '../../../runtime/approvalAdapter';
 import { cliState, patchStream, type ConversationEntry } from './cliState';
 import { summarizeSubagentFollowup } from './subagentFollowup';
 import { isFinalTranscriptStatus } from './transcript';
@@ -76,12 +76,6 @@ export function stripOrchestratorFollowup(text: string): string {
     /^<orchestrator-followup>\s*([\s\S]*?)\s*<\/orchestrator-followup>$/,
   );
   return match?.[1]?.trim() ?? text;
-}
-
-export function isSubagentContinuationMessage(text: string): boolean {
-  return /^<subagent-(progress|result)(?:\s[^>]*)?(?:\/>|>[\s\S]*<\/subagent-\1>)$/.test(
-    text.trim(),
-  );
 }
 
 // `normalizeToolUseData` is dominated by a Zod parse + YAML stringify

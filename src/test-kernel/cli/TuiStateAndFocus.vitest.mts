@@ -7,12 +7,6 @@ import {
   setDefaultStreamLogStore,
   StreamLogStore,
 } from '@transcript';
-import { createRunTrace } from '@logger';
-import {
-  MESSAGE_TYPES,
-  STREAM_STATUS,
-  type StreamTabId,
-} from '@shared/schemas';
 
 import {
   cliState,
@@ -20,50 +14,55 @@ import {
   removeStream,
   resetCliState,
   setParentStream,
-} from '../../../packages/cli/src/chat/tui/state/cliState';
+} from '@cli/chat/tui/state/cliState';
 import {
   allocateMiddleRows,
   allocateSidePanelRows,
   appEscapeInterruptActive,
   appFocusShortcutsActive,
-} from '../../../packages/cli/src/chat/tui/App';
+} from '@cli/chat/tui/App';
 import {
   nextFocusBack,
   nextFocusForward,
-} from '../../../packages/cli/src/chat/tui/state/focusCycle';
+} from '@cli/chat/tui/state/focusCycle';
 import {
-  isSubagentContinuationMessage,
   stripOrchestratorFollowup,
   syncStreamLog,
-} from '../../../packages/cli/src/chat/tui/state/subscribeStreamLog';
-import { wrapRuntimeHost } from '../../../packages/cli/src/chat/tui/state/subscribeRuntimeHost';
+} from '@cli/chat/tui/state/subscribeStreamLog';
+import { wrapRuntimeHost } from '@cli/chat/tui/state/subscribeRuntimeHost';
 import {
   COMPLETED_PROCESS_TAIL_LINES,
   buildCompletedProcessTranscript,
   completedProcessDisplayLines,
   isCompletedProcessError,
-} from '../../../packages/cli/src/chat/tui/state/completedProcessTranscript';
+} from '@cli/chat/tui/state/completedProcessTranscript';
 import {
   estimateTranscriptEntryRows,
   selectPendingEntriesForViewport,
   splitTranscriptEntries,
-} from '../../../packages/cli/src/chat/tui/panes/ConversationPane';
-import { renderAnsiMarkdown } from '../../../packages/cli/src/chat/tui/render/ansiMarkdown';
+} from '@cli/chat/tui/panes/ConversationPane';
+import { renderAnsiMarkdown } from '@cli/chat/tui/render/ansiMarkdown';
 import {
   chatTuiCanInterruptActiveRun,
   chatTuiCanStartRootRun,
   chatTuiActiveChildFollowUpTarget,
   clearTuiSessionRunState,
-} from '../../../packages/cli/src/chat/tui/runChatTui';
-import { CliExitCode } from '../../../packages/cli/src/runtime/exitCodes';
+} from '@cli/chat/tui/runChatTui';
+import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
   appendAssistantTranscriptIfMissing,
   appendLocalAssistantTranscript,
   appendLocalErrorTranscript,
   CLI_LOCAL_STREAM_ID,
   moveLocalTranscriptToStream,
-} from '../../../packages/cli/src/chat/tui/state/transcript';
-import type { CliRuntimeHost } from '../../../packages/cli/src/runtime/runtimeHost';
+} from '@cli/chat/tui/state/transcript';
+import { createRunTrace } from '@logger';
+import {
+  MESSAGE_TYPES,
+  STREAM_STATUS,
+  type StreamTabId,
+} from '@shared/schemas';
+import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 
 const root = 'root' as StreamTabId;
 const child1 = 'child-1' as StreamTabId;
@@ -359,25 +358,7 @@ describe('CLI transcript state', () => {
     );
   });
 
-  it('recognizes subagent continuation protocol messages', () => {
-    expect(
-      isSubagentContinuationMessage(
-        '<subagent-progress id="abc" agent="review" type="started" />',
-      ),
-    ).toBe(true);
-    expect(
-      isSubagentContinuationMessage(
-        '<subagent-result id="abc" agent="review" category="toolUse" status="completed">\nDone.\n</subagent-result>',
-      ),
-    ).toBe(true);
-    expect(
-      isSubagentContinuationMessage(
-        'The subagent-result tag is mentioned in prose.',
-      ),
-    ).toBe(false);
-  });
-
-  it('suppresses subagent protocol continuations from the visible transcript', () => {
+  it('summarizes subagent protocol continuations in the visible transcript', () => {
     const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
     setDefaultStreamLogStore(store);
@@ -397,6 +378,7 @@ describe('CLI transcript state', () => {
       const entries = cliState.streams.get().get(root)?.entries ?? [];
       expect(entries.map((entry) => entry.text)).toEqual([
         'Please solve the problem.',
+        '✓ review completed',
       ]);
     } finally {
       setDefaultStreamLogStore(previousStore);
