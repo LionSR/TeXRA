@@ -400,11 +400,15 @@ export class FileList extends LitElement {
     if (!file?.location) return nothing;
 
     const location = file.location;
-    // Prefer: workspace original → source doc name → run-storage relative path
+    // Prefer: workspace original → source doc name → run-storage relative path.
+    // Use the compact variant so an external location (e.g. a run-storage file
+    // outside the workspace root, like the merge agent's `_full.tex`) shows its
+    // basename instead of a long absolute path; the full path stays in the
+    // tooltip below.
     const displayPath =
-      this.getDisplayPath(file.lineage?.original) ||
+      this.getCompactDisplayPath(file.lineage?.original) ||
       this.getSourceDisplayPath(file.source) ||
-      this.getDisplayPath(location);
+      this.getCompactDisplayPath(location);
     const { dir, basename } = parsePath(displayPath);
     const tooltipPath = this.getDisplayPath(location);
     const effectiveBase =
@@ -507,6 +511,23 @@ export class FileList extends LitElement {
     return loc.kind === 'workspace' || loc.kind === 'runStorage'
       ? loc.relativePath
       : loc.absolutePath;
+  }
+
+  /**
+   * Like {@link getDisplayPath} but collapses an external location to its
+   * basename so a long absolute path (e.g. a run-storage file resolved as
+   * external because it sits outside the workspace root) doesn't dominate the
+   * row. The full path remains available via the row's tooltip.
+   */
+  private getCompactDisplayPath(
+    loc: OutputFileInfo['location'] | null | undefined,
+  ): string {
+    if (!loc) return '';
+    if (loc.kind === 'workspace' || loc.kind === 'runStorage') {
+      return loc.relativePath;
+    }
+    const normalized = loc.absolutePath.replaceAll('\\', '/');
+    return normalized.slice(normalized.lastIndexOf('/') + 1);
   }
 
   /**
