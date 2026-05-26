@@ -16,9 +16,9 @@ All notable changes to this project will be documented in this file.
 
 ### Improvements
 
-- **Cleaner history rows** — each entry now puts the metadata (timestamp, agent, model, inputs) and action buttons on top, keeps Context / Config visible inline, and collapses very long instruction prompts behind a "Show full instructions" toggle.
-- **Merge shows up on the progress board** — running a merge now creates a normal task entry with progress, logs, and outputs like every other agent, and saves its result under the input filename instead of `_full.tex`.
-- **CLI auth grouped under `texra auth`** — `login`, `logout`, `status`, and `usage` now live under `texra auth` (with `texra login` / `texra logout` kept as top-level shortcuts). Clearer `--approval-policy` help, safer defaults (`texra init` defaults to `ask`), and disambiguated `--output` vs `--output-dir`.
+- **Cleaner history rows** — restructured layout with metadata on top, inline Context/Config, and collapsible long prompts.
+- **Merge shows up on the progress board** — runs now appear as a normal task and save their result under the input filename.
+- **CLI auth grouped under `texra auth`** — `login`, `logout`, `status`, and `usage` now live under `texra auth` (top-level `texra login` / `texra logout` kept as shortcuts). Clearer `--approval-policy` help, safer defaults, and disambiguated `--output` vs `--output-dir`.
 
 ## [0.38.0] - 2026-05-24
 
