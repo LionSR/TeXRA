@@ -14,7 +14,7 @@ import {
   preflightCliHistoryDeleteAll,
   readCliHistoryDetails,
 } from '../runtime/history';
-import { initReadonlyCliPlatform } from '../runtime/initPlatform';
+import { initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 
 import { contextFromArgs } from './_helpers/context';
@@ -24,7 +24,7 @@ import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
 async function runHistoryList(context: CliContext): Promise<number> {
-  await initReadonlyCliPlatform(context);
+  await initLocalCliPlatform(context);
   const entries = await listCliHistoryEntries();
 
   emitCliResult(context, {
@@ -41,7 +41,7 @@ async function runHistoryShow(
   context: CliContext,
   id: ExecutionId,
 ): Promise<number> {
-  await initReadonlyCliPlatform(context);
+  await initLocalCliPlatform(context);
   const details = await readCliHistoryDetails(id);
   if (!details) {
     writeTextStderr(`Execution not found: ${id}`);
@@ -60,7 +60,7 @@ async function runHistoryDelete(
   context: CliContext,
   options: { id?: ExecutionId; all: boolean; yes: boolean },
 ): Promise<number> {
-  await initReadonlyCliPlatform(context);
+  await initLocalCliPlatform(context);
 
   // `--all` is destructive and unrecoverable. Refuse it unless the caller
   // also passes `--yes`, and quote the count so the stakes are explicit.

@@ -91,11 +91,15 @@ export async function setCliHelperModel(
 }
 
 /**
- * Read-only init for inspect commands (history, agents, memory, multi-agent
- * list/show, orchestrate): quiet logs and no included-model-access probe, since
- * they only read local config rather than run a model.
+ * Init for commands that act on local state only (no model invocation):
+ * inspect paths (history/agents/memory/multi-agent list+show, orchestrate)
+ * plus local-destructive paths (history delete). Quiet logs and skip the
+ * included-model-access probe, since no model is run.
+ *
+ * Not actually read-only — the name describes the boundary (local-only,
+ * no provider calls), not safety. Destructive local operations belong here.
  */
-export async function initReadonlyCliPlatform(
+export async function initLocalCliPlatform(
   context: Pick<
     CliContext,
     'apiMode' | 'cwd' | 'resourcesPath' | 'helperModel'

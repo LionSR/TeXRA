@@ -20,7 +20,7 @@ import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
   initCliPlatform,
-  initReadonlyCliPlatform,
+  initLocalCliPlatform,
 } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
@@ -168,7 +168,7 @@ function writeMultiAgentRunResult(
 }
 
 async function runMultiAgentList(context: CliContext): Promise<number> {
-  await initReadonlyCliPlatform(context);
+  await initLocalCliPlatform(context);
   const presets = readCliMultiAgentPresets();
 
   emitCliResult(context, {
@@ -183,7 +183,7 @@ async function runMultiAgentShow(
   context: CliContext,
   presetIdOrName: string,
 ): Promise<number> {
-  await initReadonlyCliPlatform(context);
+  await initLocalCliPlatform(context);
   const presets = readCliMultiAgentPresets();
   const preset = findCliMultiAgentPreset(presets, presetIdOrName);
   if (!preset) {

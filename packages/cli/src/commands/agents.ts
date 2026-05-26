@@ -5,7 +5,7 @@ import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 
 import { CliExitCode } from '../runtime/exitCodes';
-import { initReadonlyCliPlatform } from '../runtime/initPlatform';
+import { initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 
 import { contextFromArgs } from './_helpers/context';
@@ -15,7 +15,7 @@ import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
 async function listAgents(context: CliContext): Promise<number> {
-  await initReadonlyCliPlatform(context);
+  await initLocalCliPlatform(context);
   await loadAgents({ includeRemote: false });
   const agents = [AgentCategory.Workflow, AgentCategory.ToolUse].flatMap(
     (category) =>
@@ -65,7 +65,7 @@ function formatAgentDetails(entry: AgentEntry): string {
 }
 
 async function showAgent(context: CliContext, name: string): Promise<number> {
-  await initReadonlyCliPlatform(context);
+  await initLocalCliPlatform(context);
   await loadAgents({ includeRemote: false });
 
   const entry = getAgent(name);

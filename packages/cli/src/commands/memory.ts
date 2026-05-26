@@ -8,7 +8,7 @@ import {
 import { toDisplayPath } from '@tools/memory/memoryUtils';
 
 import { CliExitCode } from '../runtime/exitCodes';
-import { initReadonlyCliPlatform } from '../runtime/initPlatform';
+import { initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import {
   formatCliMemoryList,
@@ -23,7 +23,7 @@ import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
 async function runMemoryList(context: CliContext): Promise<number> {
-  await initReadonlyCliPlatform(context);
+  await initLocalCliPlatform(context);
   // Pass the full list to `formatCliMemoryList`; it owns truncation (the
   // `Memories (N):` total and `... N more` overflow line) and JSON/NDJSON
   // consumers should see every memory, not a capped slice.
@@ -41,7 +41,7 @@ async function runMemoryShow(
   context: CliContext,
   inputPath: string,
 ): Promise<number> {
-  await initReadonlyCliPlatform(context);
+  await initLocalCliPlatform(context);
 
   if (context.outputFormat === 'text') {
     writeTextStdout(await formatCliMemoryPreview(inputPath));

@@ -31,7 +31,10 @@ export function emitCliResult(
       ? result.ndjson
       : [result.ndjson];
     for (const record of records) {
-      writeNdjsonStdout('ts' in record ? record : { ts, ...record });
+      // Append `ts` rather than prepending so call sites that put `kind`
+      // first keep it as the first JSON key — line-oriented consumers
+      // (`grep`, `awk`) often anchor on `{"kind":` at the start of each line.
+      writeNdjsonStdout('ts' in record ? record : { ...record, ts });
     }
     return;
   }
