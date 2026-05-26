@@ -8,12 +8,8 @@ import {
 import { toDisplayPath } from '@tools/memory/memoryUtils';
 
 import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
-import {
-  writeNdjsonStdout,
-  writeTextStderr,
-  writeTextStdout,
-} from '../runtime/logSinks';
+import { initReadonlyCliPlatform } from '../runtime/initPlatform';
+import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import {
   CLI_MEMORY_LIST_LIMIT,
   formatCliMemoryList,
@@ -24,28 +20,18 @@ import {
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
+import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
 async function runMemoryList(context: CliContext): Promise<number> {
-  await initCliPlatform({
-    ...context,
-    quietLogs: true,
-    skipIncludedModelAccess: true,
-  });
+  await initReadonlyCliPlatform(context);
   const items = (await loadMemoryItems()).slice(0, CLI_MEMORY_LIST_LIMIT);
 
-  if (context.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(items, null, 2));
-    return CliExitCode.Success;
-  }
-  if (context.outputFormat === 'ndjson') {
-    const ts = new Date().toISOString();
-    for (const memory of items) {
-      writeNdjsonStdout({ kind: 'memory', ts, memory });
-    }
-    return CliExitCode.Success;
-  }
-  writeTextStdout(formatCliMemoryList(items));
+  emitCliResult(context, {
+    json: items,
+    ndjson: items.map((memory) => ({ kind: 'memory', memory })),
+    text: formatCliMemoryList(items),
+  });
   return CliExitCode.Success;
 }
 
@@ -53,33 +39,25 @@ async function runMemoryShow(
   context: CliContext,
   inputPath: string,
 ): Promise<number> {
-  await initCliPlatform({
-    ...context,
-    quietLogs: true,
-    skipIncludedModelAccess: true,
-  });
+  await initReadonlyCliPlatform(context);
 
-  if (context.outputFormat === 'json' || context.outputFormat === 'ndjson') {
-    const storagePath = resolveCliMemoryStoragePath(inputPath);
-    const preview = await loadMemoryPreview(storagePath);
-    const record = {
-      path: toDisplayPath(storagePath),
-      lineCount: preview.lineCount,
-      preview: preview.preview,
-    };
-    if (context.outputFormat === 'json') {
-      writeTextStdout(JSON.stringify(record, null, 2));
-    } else {
-      writeNdjsonStdout({
-        kind: 'memory-detail',
-        ts: new Date().toISOString(),
-        ...record,
-      });
-    }
+  if (context.outputFormat === 'text') {
+    writeTextStdout(await formatCliMemoryPreview(inputPath));
     return CliExitCode.Success;
   }
 
-  writeTextStdout(await formatCliMemoryPreview(inputPath));
+  const storagePath = resolveCliMemoryStoragePath(inputPath);
+  const preview = await loadMemoryPreview(storagePath);
+  const record = {
+    path: toDisplayPath(storagePath),
+    lineCount: preview.lineCount,
+    preview: preview.preview,
+  };
+  emitCliResult(context, {
+    json: record,
+    ndjson: { kind: 'memory-detail', ...record },
+    text: '',
+  });
   return CliExitCode.Success;
 }
 

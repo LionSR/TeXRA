@@ -6,11 +6,7 @@ import { toErrorMessage } from '@common/errors';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
-import {
-  writeNdjsonStdout,
-  writeTextStderr,
-  writeTextStdout,
-} from '../runtime/logSinks';
+import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import {
   findCliToolDef,
   formatCliToolList,
@@ -23,6 +19,7 @@ import {
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
+import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
 async function withCliPlatform<T>(
@@ -36,20 +33,11 @@ async function withCliPlatform<T>(
 async function listTools(context: CliContext): Promise<number> {
   const records = await withCliPlatform(context, readCliToolStatuses);
 
-  if (context.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(records, null, 2));
-    return CliExitCode.Success;
-  }
-
-  if (context.outputFormat === 'ndjson') {
-    const ts = new Date().toISOString();
-    for (const tool of records) {
-      writeNdjsonStdout({ kind: 'tool-status', ts, tool });
-    }
-    return CliExitCode.Success;
-  }
-
-  writeTextStdout(formatCliToolList(records));
+  emitCliResult(context, {
+    json: records,
+    ndjson: records.map((tool) => ({ kind: 'tool-status', tool })),
+    text: formatCliToolList(records),
+  });
   return CliExitCode.Success;
 }
 
@@ -60,21 +48,11 @@ async function showTool(context: CliContext, id: string): Promise<number> {
     return CliExitCode.Usage;
   }
 
-  if (context.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(record, null, 2));
-    return CliExitCode.Success;
-  }
-
-  if (context.outputFormat === 'ndjson') {
-    writeNdjsonStdout({
-      kind: 'tool-status',
-      ts: new Date().toISOString(),
-      tool: record,
-    });
-    return CliExitCode.Success;
-  }
-
-  writeTextStdout(formatCliToolStatus(record));
+  emitCliResult(context, {
+    json: record,
+    ndjson: { kind: 'tool-status', tool: record },
+    text: formatCliToolStatus(record),
+  });
   return CliExitCode.Success;
 }
 

@@ -11,17 +11,14 @@ import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import { CliExitCode } from '../runtime/exitCodes';
 import { readCliHistoryConfig, parseCliHistoryId } from '../runtime/history';
 import { initCliPlatform } from '../runtime/initPlatform';
-import {
-  writeNdjsonStdout,
-  writeTextStderr,
-  writeTextStdout,
-} from '../runtime/logSinks';
+import { writeTextStderr } from '../runtime/logSinks';
 import { shouldRenderRunProgress } from '../runtime/runProgressRenderer';
 import { createCliRuntimeHost } from '../runtime/runtimeHost';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
+import { emitCliResult } from './_helpers/output';
 import { shouldHonorRemoteAgentPriority } from './_helpers/remoteAgents';
 import {
   readCliTerminalStatus,
@@ -94,19 +91,14 @@ export async function runResumeExecution(
     return CliExitCode.AgentError;
   }
 
-  if (runContext.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(displayResult, null, 2));
-  } else if (runContext.outputFormat === 'ndjson') {
-    writeNdjsonStdout({
-      kind: 'result',
-      ts: new Date().toISOString(),
-      result: displayResult,
-    });
-  } else if (displayResult.category === AgentCategory.Workflow) {
-    writeTextStdout(formatWorkflowTextResult(displayResult));
-  } else {
-    writeTextStdout(displayResult.status);
-  }
+  emitCliResult(runContext, {
+    json: displayResult,
+    ndjson: { kind: 'result', result: displayResult },
+    text:
+      displayResult.category === AgentCategory.Workflow
+        ? formatWorkflowTextResult(displayResult)
+        : displayResult.status,
+  });
 
   return terminalStatusExitCode(terminalStatus, runContext);
 }

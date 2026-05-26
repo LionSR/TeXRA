@@ -4,11 +4,7 @@ import type { ModelOptionData } from '@shared/schemas';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
-import {
-  writeNdjsonStdout,
-  writeTextStderr,
-  writeTextStdout,
-} from '../runtime/logSinks';
+import { writeTextStderr } from '../runtime/logSinks';
 import { getCliModelAccessList } from '../runtime/modelAccess';
 
 import { contextFromArgs } from './_helpers/context';
@@ -18,6 +14,7 @@ import {
   suppressCliFetchStackLogs,
 } from './_helpers/fetchSilencer';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
+import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
 type ModelAccessList = Awaited<ReturnType<typeof getCliModelAccessList>>;
@@ -55,28 +52,16 @@ async function listModels(context: CliContext): Promise<number> {
     return CliExitCode.ModelOrNetworkError;
   }
 
-  if (context.outputFormat === 'json') {
-    writeTextStdout(
-      JSON.stringify(
-        result.map(({ model }) => cliModelRecord(model)),
-        null,
-        2,
-      ),
-    );
-    return CliExitCode.Success;
-  }
-
-  if (context.outputFormat === 'ndjson') {
-    const ts = new Date().toISOString();
-    for (const { model } of result) {
-      writeNdjsonStdout({ kind: 'model', ts, model: cliModelRecord(model) });
-    }
-    return CliExitCode.Success;
-  }
-
-  for (const { model, status } of result) {
-    writeTextStdout(`${model.value}\t${model.label}\t${status}`);
-  }
+  emitCliResult(context, {
+    json: result.map(({ model }) => cliModelRecord(model)),
+    ndjson: result.map(({ model }) => ({
+      kind: 'model',
+      model: cliModelRecord(model),
+    })),
+    text: result
+      .map(({ model, status }) => `${model.value}\t${model.label}\t${status}`)
+      .join('\n'),
+  });
   return CliExitCode.Success;
 }
 
@@ -121,21 +106,11 @@ async function showModel(context: CliContext, id: string): Promise<number> {
     return CliExitCode.Usage;
   }
 
-  if (context.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(cliModelRecord(entry.model), null, 2));
-    return CliExitCode.Success;
-  }
-
-  if (context.outputFormat === 'ndjson') {
-    writeNdjsonStdout({
-      kind: 'model',
-      ts: new Date().toISOString(),
-      model: cliModelRecord(entry.model),
-    });
-    return CliExitCode.Success;
-  }
-
-  writeTextStdout(formatModelDetails(entry));
+  emitCliResult(context, {
+    json: cliModelRecord(entry.model),
+    ndjson: { kind: 'model', model: cliModelRecord(entry.model) },
+    text: formatModelDetails(entry),
+  });
   return CliExitCode.Success;
 }
 

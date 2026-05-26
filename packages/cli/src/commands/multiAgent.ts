@@ -18,12 +18,11 @@ import {
 } from '../runtime/cliConfig';
 import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
 import {
-  writeNdjsonStdout,
-  writeTextStderr,
-  writeTextStdout,
-} from '../runtime/logSinks';
+  initCliPlatform,
+  initReadonlyCliPlatform,
+} from '../runtime/initPlatform';
+import { writeTextStderr } from '../runtime/logSinks';
 import {
   cliMultiAgentPlanHasGaps,
   cliMultiAgentPresetNdjsonRecords,
@@ -43,6 +42,7 @@ import { getCliAuthProvider } from '../runtime/supabaseAuth';
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
 import { assertExplicitModelKnown } from './_helpers/modelArg';
+import { emitCliResult } from './_helpers/output';
 import {
   GLOBAL_ARGS,
   collectStringFlagValues,
@@ -158,43 +158,24 @@ function writeMultiAgentRunResult(
     result,
   };
 
-  if (context.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(payload, null, 2));
-  } else if (context.outputFormat === 'ndjson') {
-    writeNdjsonStdout({
-      kind: 'multi-agent-result',
-      ts: new Date().toISOString(),
-      ...payload,
-    });
-  } else {
-    writeTextStdout(
+  emitCliResult(context, {
+    json: payload,
+    ndjson: { kind: 'multi-agent-result', ...payload },
+    text:
       result.lastResponse?.trim() ||
-        `${result.status}\nExecution: ${result.executionId}`,
-    );
-  }
+      `${result.status}\nExecution: ${result.executionId}`,
+  });
 }
 
 async function runMultiAgentList(context: CliContext): Promise<number> {
-  await initCliPlatform({
-    ...context,
-    quietLogs: true,
-    skipIncludedModelAccess: true,
-  });
+  await initReadonlyCliPlatform(context);
   const presets = readCliMultiAgentPresets();
 
-  if (context.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(presets, null, 2));
-    return CliExitCode.Success;
-  }
-
-  if (context.outputFormat === 'ndjson') {
-    for (const record of cliMultiAgentPresetNdjsonRecords(presets)) {
-      writeNdjsonStdout(record);
-    }
-    return CliExitCode.Success;
-  }
-
-  writeTextStdout(formatCliMultiAgentPresetList(presets));
+  emitCliResult(context, {
+    json: presets,
+    ndjson: cliMultiAgentPresetNdjsonRecords(presets),
+    text: formatCliMultiAgentPresetList(presets),
+  });
   return CliExitCode.Success;
 }
 
@@ -202,11 +183,7 @@ async function runMultiAgentShow(
   context: CliContext,
   presetIdOrName: string,
 ): Promise<number> {
-  await initCliPlatform({
-    ...context,
-    quietLogs: true,
-    skipIncludedModelAccess: true,
-  });
+  await initReadonlyCliPlatform(context);
   const presets = readCliMultiAgentPresets();
   const preset = findCliMultiAgentPreset(presets, presetIdOrName);
   if (!preset) {
@@ -214,17 +191,11 @@ async function runMultiAgentShow(
     return CliExitCode.Usage;
   }
 
-  if (context.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(preset, null, 2));
-  } else if (context.outputFormat === 'ndjson') {
-    writeNdjsonStdout({
-      kind: 'multi-agent-preset',
-      ts: new Date().toISOString(),
-      preset,
-    });
-  } else {
-    writeTextStdout(formatCliMultiAgentPresetDetails(preset));
-  }
+  emitCliResult(context, {
+    json: preset,
+    ndjson: { kind: 'multi-agent-preset', preset },
+    text: formatCliMultiAgentPresetDetails(preset),
+  });
   return CliExitCode.Success;
 }
 

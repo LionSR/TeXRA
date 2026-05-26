@@ -90,6 +90,21 @@ export async function setCliHelperModel(
   await tryPlatform()?.globalState.update(GlobalStateKey.HELPER_MODEL, model);
 }
 
+/**
+ * Read-only init for inspect commands (history, agents, memory, multi-agent
+ * list/show, orchestrate): quiet logs and no included-model-access probe, since
+ * they only read local config rather than run a model.
+ */
+export async function initReadonlyCliPlatform(
+  context: Pick<CliContext, 'apiMode' | 'cwd' | 'resourcesPath' | 'helperModel'>,
+): Promise<void> {
+  await initCliPlatform({
+    ...context,
+    quietLogs: true,
+    skipIncludedModelAccess: true,
+  });
+}
+
 export async function initCliPlatform(
   context: Pick<
     CliContext,

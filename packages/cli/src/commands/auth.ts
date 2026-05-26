@@ -7,11 +7,7 @@ import { isNonEmptyString } from '@utils/core/stringCore';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
-import {
-  writeNdjsonStdout,
-  writeTextStderr,
-  writeTextStdout,
-} from '../runtime/logSinks';
+import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import {
   fetchRelayUsageSummary,
   parseUtcMonth,
@@ -26,6 +22,7 @@ import {
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
+import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
 export function resolveLoginProvider(
@@ -81,29 +78,17 @@ async function runLogin(context: CliContext, init: LoginInit): Promise<number> {
     return CliExitCode.ModelOrNetworkError;
   }
 
-  if (context.outputFormat === 'json') {
-    writeTextStdout(
-      JSON.stringify(
-        {
-          authenticated: true,
-          account: session.account,
-          expiresAt: new Date(session.expiresAt).toISOString(),
-        },
-        null,
-        2,
-      ),
-    );
-  } else if (context.outputFormat === 'ndjson') {
-    writeNdjsonStdout({
+  const expiresAt = new Date(session.expiresAt).toISOString();
+  emitCliResult(context, {
+    json: { authenticated: true, account: session.account, expiresAt },
+    ndjson: {
       kind: 'auth',
-      ts: new Date().toISOString(),
       authenticated: true,
       account: session.account,
-      expiresAt: new Date(session.expiresAt).toISOString(),
-    });
-  } else {
-    writeTextStdout(`Signed in as ${session.account.label}.`);
-  }
+      expiresAt,
+    },
+    text: `Signed in as ${session.account.label}.`,
+  });
   return CliExitCode.Success;
 }
 
@@ -168,17 +153,11 @@ export const logoutCommand = defineCommand({
       return;
     }
 
-    if (context.outputFormat === 'json') {
-      writeTextStdout(JSON.stringify({ authenticated: false }, null, 2));
-    } else if (context.outputFormat === 'ndjson') {
-      writeNdjsonStdout({
-        kind: 'auth',
-        ts: new Date().toISOString(),
-        authenticated: false,
-      });
-    } else {
-      writeTextStdout('Signed out.');
-    }
+    emitCliResult(context, {
+      json: { authenticated: false },
+      ndjson: { kind: 'auth', authenticated: false },
+      text: 'Signed out.',
+    });
     setExitCode(CliExitCode.Success);
   },
 });
@@ -200,21 +179,13 @@ const authStatusCommand = defineCommand({
       return;
     }
 
-    if (context.outputFormat === 'json') {
-      writeTextStdout(JSON.stringify(profile, null, 2));
-    } else if (context.outputFormat === 'ndjson') {
-      writeNdjsonStdout({
-        kind: 'auth-status',
-        ts: new Date().toISOString(),
-        ...profile,
-      });
-    } else if (profile.authenticated) {
-      writeTextStdout(
-        `Signed in as ${profile.accountLabel ?? 'unknown'} (${profile.tier ?? 'unknown'}).`,
-      );
-    } else {
-      writeTextStdout('Not signed in.');
-    }
+    emitCliResult(context, {
+      json: profile,
+      ndjson: { kind: 'auth-status', ...profile },
+      text: profile.authenticated
+        ? `Signed in as ${profile.accountLabel ?? 'unknown'} (${profile.tier ?? 'unknown'}).`
+        : 'Not signed in.',
+    });
     setExitCode(CliExitCode.Success);
   },
 });
@@ -223,23 +194,11 @@ function writeRelayUsageSummary(
   context: CliContext,
   summary: RelayUsageSummary,
 ): void {
-  if (context.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(summary, null, 2));
-    return;
-  }
-
-  if (context.outputFormat === 'ndjson') {
-    writeNdjsonStdout({
-      kind: 'relay-usage',
-      ts: new Date().toISOString(),
-      ...summary,
-    });
-    return;
-  }
-
   const month = summary.periodStart.slice(0, 7);
-  writeTextStdout(
-    [
+  emitCliResult(context, {
+    json: summary,
+    ndjson: { kind: 'relay-usage', ...summary },
+    text: [
       `Relay usage for ${month} (${summary.tier})`,
       `Spend: $${summary.costUsd.toFixed(2)} / $${summary.limitUsd.toFixed(2)} (${summary.usagePercent.toFixed(1)}%)`,
       `Remaining: $${summary.remainingUsd.toFixed(2)}`,
@@ -247,7 +206,7 @@ function writeRelayUsageSummary(
       `Tokens: ${summary.inputTokens} input (${summary.cachedTokens} cached), ${summary.outputTokens} output, ${summary.reasoningTokens} reasoning`,
       `Models: ${summary.modelsUsed}; providers: ${summary.providersUsed}`,
     ].join('\n'),
-  );
+  });
 }
 
 export const usageCommand = defineCommand({

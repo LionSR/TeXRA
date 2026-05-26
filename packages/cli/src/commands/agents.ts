@@ -5,48 +5,30 @@ import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 
 import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
-import {
-  writeNdjsonStdout,
-  writeTextStderr,
-  writeTextStdout,
-} from '../runtime/logSinks';
+import { initReadonlyCliPlatform } from '../runtime/initPlatform';
+import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
+import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
 async function listAgents(context: CliContext): Promise<number> {
-  await initCliPlatform({
-    ...context,
-    quietLogs: true,
-    skipIncludedModelAccess: true,
-  });
+  await initReadonlyCliPlatform(context);
   await loadAgents({ includeRemote: false });
   const agents = [AgentCategory.Workflow, AgentCategory.ToolUse].flatMap(
     (category) =>
       getVisibleAgents(category).map((agent) => ({ ...agent, category })),
   );
 
-  if (context.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(agents, null, 2));
-    return CliExitCode.Success;
-  }
-
-  if (context.outputFormat === 'ndjson') {
-    const ts = new Date().toISOString();
-    for (const agent of agents) {
-      writeNdjsonStdout({ kind: 'agent', ts, agent });
-    }
-    return CliExitCode.Success;
-  }
-
-  for (const agent of agents) {
-    writeTextStdout(
-      `${agent.category}\t${agent.name}\t${agent.description ?? ''}`,
-    );
-  }
+  emitCliResult(context, {
+    json: agents,
+    ndjson: agents.map((agent) => ({ kind: 'agent', agent })),
+    text: agents
+      .map((agent) => `${agent.category}\t${agent.name}\t${agent.description ?? ''}`)
+      .join('\n'),
+  });
   return CliExitCode.Success;
 }
 
@@ -80,11 +62,7 @@ function formatAgentDetails(entry: AgentEntry): string {
 }
 
 async function showAgent(context: CliContext, name: string): Promise<number> {
-  await initCliPlatform({
-    ...context,
-    quietLogs: true,
-    skipIncludedModelAccess: true,
-  });
+  await initReadonlyCliPlatform(context);
   await loadAgents({ includeRemote: false });
 
   const entry = getAgent(name);
@@ -93,21 +71,11 @@ async function showAgent(context: CliContext, name: string): Promise<number> {
     return CliExitCode.Usage;
   }
 
-  if (context.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(entry, null, 2));
-    return CliExitCode.Success;
-  }
-
-  if (context.outputFormat === 'ndjson') {
-    writeNdjsonStdout({
-      kind: 'agent',
-      ts: new Date().toISOString(),
-      agent: entry,
-    });
-    return CliExitCode.Success;
-  }
-
-  writeTextStdout(formatAgentDetails(entry));
+  emitCliResult(context, {
+    json: entry,
+    ndjson: { kind: 'agent', agent: entry },
+    text: formatAgentDetails(entry),
+  });
   return CliExitCode.Success;
 }
 
