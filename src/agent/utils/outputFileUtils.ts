@@ -1,12 +1,9 @@
 import * as path from 'path';
 
 import {
-  WORKFLOW_DOCUMENT_OUTPUT_EXT,
   WORKFLOW_OUTPUT_BASENAME,
-  workflowMergeOutputPath,
   workflowOutputPath,
 } from '@agent/output/workflowOutputLayout';
-import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
 
 /**
  * Generates a runDir-relative output path under a round subfolder:
@@ -92,34 +89,4 @@ export function getExtractedDocOutputFileName(
       ? `${WORKFLOW_OUTPUT_BASENAME}_extracted`
       : safe.name;
   return path.join(roundDir, safe.dir, `${safeName}${safe.ext}`);
-}
-
-/**
- * Creates a merge-specific output file location getter.
- *
- * Merge is a single-output workflow: the round number is not reflected in
- * the filename and the same location is returned for every round. The
- * merge output lives at the runDir root as `_full.tex`; per-execution
- * isolation keeps it from colliding with other runs.
- *
- * The fileService MUST carry an executionId; the fixed `_full.tex` path
- * relies on run-storage isolation for uniqueness. Without it, every merge
- * in the workspace would clobber the same file.
- *
- * Merge is always a LaTeX workflow, so the output extension is fixed rather
- * than configurable through agent YAML.
- */
-export function createMergeOutputFileLocationGetter(
-  fileService: TaskRunFileService,
-): (round: number) => AgentFileLocation {
-  if (!fileService.hasRunDirectory()) {
-    throw new Error(
-      'createMergeOutputFileLocationGetter requires a TaskRunFileService bound to an executionId; the `_full.tex` path is only collision-safe inside per-execution run storage.',
-    );
-  }
-  const outputPath = workflowMergeOutputPath({
-    ext: WORKFLOW_DOCUMENT_OUTPUT_EXT,
-  });
-  const location = fileService.createLocation(outputPath) as AgentFileLocation;
-  return (_round: number): AgentFileLocation => location;
 }
