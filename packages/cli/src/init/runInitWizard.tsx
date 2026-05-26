@@ -10,6 +10,7 @@ import { KeyHints } from '../chat/tui/ui/KeyHints';
 import { Select } from '../chat/tui/ui/Select';
 import { clearTerminalScrollback } from '../chat/tui/terminalCleanup';
 import {
+  CLI_APPROVAL_POLICIES,
   CLI_OUTPUT_FORMATS,
   type CliApprovalPolicy,
   type CliOutputFormat,
@@ -44,13 +45,18 @@ const APPROVAL_DESCRIPTIONS: Record<CliApprovalPolicy, string> = {
   yolo: 'auto-approve every action',
 };
 
-// `ask` first so the wizard highlights the recommended, runtime-default policy
-// instead of the deny-all `never`.
+// Display order, derived from the canonical list so a newly added policy can't
+// be silently dropped — the rank table is a Record over the union, so omitting
+// a policy is a compile error. `ask` first highlights the recommended,
+// runtime-default policy instead of the deny-all `never`.
+const APPROVAL_POLICY_RANK: Record<CliApprovalPolicy, number> = {
+  ask: 0,
+  never: 1,
+  yolo: 2,
+};
 const APPROVAL_POLICY_ORDER: readonly CliApprovalPolicy[] = [
-  'ask',
-  'never',
-  'yolo',
-];
+  ...CLI_APPROVAL_POLICIES,
+].sort((a, b) => APPROVAL_POLICY_RANK[a] - APPROVAL_POLICY_RANK[b]);
 
 const OUTPUT_DESCRIPTIONS: Record<CliOutputFormat, string> = {
   text: 'human-readable text (default)',

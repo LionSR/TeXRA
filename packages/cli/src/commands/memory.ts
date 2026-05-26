@@ -11,7 +11,6 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initReadonlyCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import {
-  CLI_MEMORY_LIST_LIMIT,
   formatCliMemoryList,
   formatCliMemoryPreview,
   resolveCliMemoryStoragePath,
@@ -25,7 +24,10 @@ import type { CliContext } from '../runtime/cliContext';
 
 async function runMemoryList(context: CliContext): Promise<number> {
   await initReadonlyCliPlatform(context);
-  const items = (await loadMemoryItems()).slice(0, CLI_MEMORY_LIST_LIMIT);
+  // Pass the full list to `formatCliMemoryList`; it owns truncation (the
+  // `Memories (N):` total and `... N more` overflow line) and JSON/NDJSON
+  // consumers should see every memory, not a capped slice.
+  const items = await loadMemoryItems();
 
   emitCliResult(context, {
     json: items,
@@ -66,7 +68,12 @@ const memoryListCommand = defineCommand({
   args: { ...GLOBAL_ARGS },
   async run(ctx) {
     const context = await contextFromArgs(ctx.args);
-    setExitCode(await runMemoryList(context));
+    try {
+      setExitCode(await runMemoryList(context));
+    } catch (error) {
+      writeTextStderr(toErrorMessage(error));
+      setExitCode(CliExitCode.AgentError);
+    }
   },
 });
 

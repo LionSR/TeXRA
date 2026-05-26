@@ -154,21 +154,25 @@ const toolsListCommand = defineCommand({
   },
 });
 
-const toolsShowCommand = defineCommand({
-  meta: { name: 'show', description: 'Show one tool integration' },
-  args: {
-    ...GLOBAL_ARGS,
-    id: {
-      type: 'positional',
-      required: true,
-      description: 'Tool integration id from `texra tools list`',
+// Built per key so the usage banner (citty reads `meta.name`) matches the
+// invoked alias: `texra tools status --help` prints `tools status`, not `show`.
+function toolsShowCommandNamed(name: 'show' | 'status') {
+  return defineCommand({
+    meta: { name, description: 'Show one tool integration' },
+    args: {
+      ...GLOBAL_ARGS,
+      id: {
+        type: 'positional',
+        required: true,
+        description: 'Tool integration id from `texra tools list`',
+      },
     },
-  },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
-    setExitCode(await showTool(context, ctx.args.id));
-  },
-});
+    async run(ctx) {
+      const context = await contextFromArgs(ctx.args);
+      setExitCode(await showTool(context, ctx.args.id));
+    },
+  });
+}
 
 function toggleCommand(name: 'enable' | 'disable', enabled: boolean) {
   return defineCommand({
@@ -233,8 +237,8 @@ export const toolsCommand = defineCommand({
     list: toolsListCommand,
     // `show` is canonical (matches agents/models/history); `status` stays as a
     // back-compat alias.
-    show: toolsShowCommand,
-    status: toolsShowCommand,
+    show: toolsShowCommandNamed('show'),
+    status: toolsShowCommandNamed('status'),
     enable: toggleCommand('enable', true),
     disable: toggleCommand('disable', false),
     install: toolsInstallCommand,

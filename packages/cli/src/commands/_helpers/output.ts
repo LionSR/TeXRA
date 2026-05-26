@@ -35,5 +35,7 @@ export function emitCliResult(
     }
     return;
   }
-  writeTextStdout(result.text);
+  // Skip the write for empty text so list commands print nothing (not a bare
+  // newline) when there are no rows — matching the pre-helper per-row loops.
+  if (result.text) writeTextStdout(result.text);
 }

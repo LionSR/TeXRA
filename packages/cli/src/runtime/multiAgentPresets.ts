@@ -93,7 +93,7 @@ export function formatCliMultiAgentPresetDetails(
 
 export function cliMultiAgentPresetNdjsonRecords(
   presets: readonly CliMultiAgentPreset[],
-): unknown[] {
+): object[] {
   const ts = new Date().toISOString();
   return presets.map((preset) => ({
     kind: 'multi-agent-preset',

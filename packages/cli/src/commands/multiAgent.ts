@@ -331,12 +331,13 @@ const multiAgentRunCommand = defineCommand({
       type: 'string',
       alias: 'i',
       required: true,
-      description: 'Input file passed to the team orchestrator',
+      description: 'Input file passed to the team orchestrator (repeatable)',
     },
     context: {
       type: 'string',
       alias: 'c',
-      description: 'Read-only context file passed to the team orchestrator',
+      description:
+        'Read-only context file passed to the team orchestrator (repeatable)',
     },
     agent: {
       type: 'string',
