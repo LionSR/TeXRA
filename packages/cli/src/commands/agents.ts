@@ -26,7 +26,10 @@ async function listAgents(context: CliContext): Promise<number> {
     json: agents,
     ndjson: agents.map((agent) => ({ kind: 'agent', agent })),
     text: agents
-      .map((agent) => `${agent.category}\t${agent.name}\t${agent.description ?? ''}`)
+      .map(
+        (agent) =>
+          `${agent.category}\t${agent.name}\t${agent.description ?? ''}`,
+      )
       .join('\n'),
   });
   return CliExitCode.Success;

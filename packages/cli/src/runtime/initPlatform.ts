@@ -96,7 +96,10 @@ export async function setCliHelperModel(
  * they only read local config rather than run a model.
  */
 export async function initReadonlyCliPlatform(
-  context: Pick<CliContext, 'apiMode' | 'cwd' | 'resourcesPath' | 'helperModel'>,
+  context: Pick<
+    CliContext,
+    'apiMode' | 'cwd' | 'resourcesPath' | 'helperModel'
+  >,
 ): Promise<void> {
   await initCliPlatform({
     ...context,
