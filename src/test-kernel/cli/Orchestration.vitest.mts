@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildCliOrchestrationItems } from '@cli/runtime/orchestration';
 import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { ExecutionId } from '@shared/schemas';
+import { buildCliOrchestrationItems } from '@cli/runtime/orchestration';
 
 import type { CliHistoryEntry } from '@cli/runtime/history';
 import type { CliMultiAgentPreset } from '@cli/runtime/multiAgentPresets';
+import type { ExecutionId } from '@shared/schemas';
 
 function historyEntry(
   id: string,
