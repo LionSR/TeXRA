@@ -4,9 +4,6 @@
  * Current format (runDir-relative):
  *   r{round}/output.<ext>
  *
- * Merge output (single-output, non-round, runDir-relative):
- *   _full.<ext>
- *
  * Legacy format (frozen; pre-r{round}/ refactor):
  *   <inputDir>/<inputBase>_<agentChunk>_r{round}_<normalizedModel>.*
  *
@@ -42,15 +39,6 @@ export function workflowOutputPath(params: {
   round: number;
 }): string {
   return `r${params.round}/${WORKFLOW_OUTPUT_BASENAME}.${params.ext}`;
-}
-
-// ---------------------------------------------------------------------------
-// Merge layout — runDir-relative, fixed basename
-// ---------------------------------------------------------------------------
-
-/** Build the runDir-relative merge output path. */
-export function workflowMergeOutputPath(params: { ext: string }): string {
-  return `_full.${params.ext}`;
 }
 
 // ---------------------------------------------------------------------------
