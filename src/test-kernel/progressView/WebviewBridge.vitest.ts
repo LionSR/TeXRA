@@ -47,6 +47,7 @@ describe('WebviewBridge', () => {
       () => activeStream,
     );
 
+    bridge.syncStream(activeStream);
     store.append(activeStream, logEntry('active-1', 'active log', 100));
     await vi.advanceTimersByTimeAsync(20);
 
