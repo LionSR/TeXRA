@@ -414,9 +414,23 @@ export class FileList extends LitElement {
     const diffBase = file.lineage?.diffBase?.absolutePath;
 
     const filePath = location.absolutePath;
+    // Compare against the live workspace document (lineage.original) so the
+    // diff opens the user's real, editable file rather than the immutable
+    // run-storage snapshot. Fall back to the snapshot base when the output IS
+    // the workspace file (true in-place overwrite) — diffing it against
+    // itself would show nothing.
+    const workspaceOriginal = file.lineage?.original?.absolutePath;
+    const compareBase =
+      workspaceOriginal && workspaceOriginal !== filePath
+        ? workspaceOriginal
+        : effectiveBase;
     const failure = this.failureByPath.get(`${round}:${filePath}`);
     const diffStats = this.renderDiffStats(file);
-    const baseActions = this.renderBaseActions(filePath, effectiveBase);
+    const baseActions = this.renderBaseActions(
+      filePath,
+      effectiveBase,
+      compareBase,
+    );
     const previousAction = this.renderPreviousAction(
       filePath,
       effectiveBase,
@@ -539,6 +553,7 @@ export class FileList extends LitElement {
   private renderBaseActions(
     filePath: string,
     basePath: string,
+    compareBase: string,
   ): TemplateResult | typeof nothing {
     if (!basePath) return nothing;
 
@@ -550,7 +565,7 @@ export class FileList extends LitElement {
         className: 'compare-btn',
         command: PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL,
         file: filePath,
-        base: basePath,
+        base: compareBase,
       })}
       ${renderFileActionButton({
         icon: 'diff-multiple',
