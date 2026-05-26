@@ -12,6 +12,7 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { OutputFileInfo, FileLocation } from '@shared/schemas';
 import {
+  AbsoluteFS,
   createWorkspaceLocation,
   flexibleFS,
   getComparablePath,
@@ -75,11 +76,21 @@ async function computeDiffStats(
  *  diffs — and lets the user edit — their real file rather than the
  *  read-only run-storage copy. Snapshot locations carry the workspace-relative
  *  path, so re-resolve them to a workspace location; the snapshot copy itself
- *  is left untouched. Non-snapshot locations pass through unchanged. */
-function toWorkspaceOrigin(loc: FileLocation | null): FileLocation | null {
+ *  is left untouched. The snapshot is kept when the live workspace file is
+ *  gone (e.g. the source was renamed or deleted after a historical run) so
+ *  "compare" doesn't abort on a missing base. Non-snapshot locations pass
+ *  through unchanged. */
+async function toWorkspaceOrigin(
+  loc: FileLocation | null,
+): Promise<FileLocation | null> {
   if (!loc || loc.kind !== 'runStorage') return loc;
   const resolved = WorkspaceFS.locatePath(loc.relativePath);
-  if (resolved.kind !== 'workspace') return loc;
+  if (
+    resolved.kind !== 'workspace' ||
+    !(await AbsoluteFS.isFile(resolved.absolutePath))
+  ) {
+    return loc;
+  }
   return createWorkspaceLocation(resolved.absolutePath, resolved.relativePath);
 }
 
@@ -138,7 +149,7 @@ export async function computeOutputDiffStats(
 
       const effectiveOriginal = suppressLineage
         ? null
-        : toWorkspaceOrigin(originalLocation);
+        : await toWorkspaceOrigin(originalLocation);
       const effectiveDiffBase = suppressLineage ? null : diffBaseLocation;
       const stats = await computeDiffStats(effectiveDiffBase, location);
 
