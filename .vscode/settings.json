@@ -19,5 +19,8 @@
     "vsc-extension-quickstart.md": true // set this to false to include "vsc-extension-quickstart" folder in search results
   },
   // Turn off tsc task auto detection since we have the necessary tasks as npm scripts
-  "typescript.tsc.autoDetect": "off"
+  "typescript.tsc.autoDetect": "off",
+  // Use the workspace TypeScript (6.0.3) so the editor matches the build; the
+  // bundled VS Code TS server is older and rejects `ignoreDeprecations: "6.0"`.
+  "typescript.tsdk": "node_modules/typescript/lib"
 }
