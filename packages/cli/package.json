@@ -54,7 +54,7 @@
   "devDependencies": {
     "@babel/core": "^7.29.7",
     "@babel/preset-react": "^7.28.5",
-    "@babel/preset-typescript": "^7.28.5",
+    "@babel/preset-typescript": "^7.29.7",
     "@inkjs/ui": "^2.0.0",
     "@lit-labs/signals": "^0.3.0",
     "@texra/core": "workspace:*",
