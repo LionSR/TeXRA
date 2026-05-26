@@ -56,13 +56,13 @@ import {
   CLI_LOCAL_STREAM_ID,
   moveLocalTranscriptToStream,
 } from '@cli/chat/tui/state/transcript';
+import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { createRunTrace } from '@logger';
 import {
   MESSAGE_TYPES,
   STREAM_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
-import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 
 const root = 'root' as StreamTabId;
 const child1 = 'child-1' as StreamTabId;
