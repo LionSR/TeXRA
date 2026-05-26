@@ -1245,15 +1245,21 @@ export class DesktopProgressBridge {
     baseFile: string,
     editedFile: string,
   ): Promise<void> {
-    const [{ executeMergeAgent }, { getHelperModelName }] = await Promise.all([
+    const [{ executeAgent }, { getHelperModelName }] = await Promise.all([
       import('@agent/runtime/executeAgent'),
       import('@agent/runtime/helperModel'),
     ]);
-    await executeMergeAgent(
-      getHelperModelName(),
-      baseFile,
-      editedFile,
-      this.runtimeHost,
+    // Merge runs as a normal workflow agent (merge.yaml): original as the
+    // input file, the partially-edited document as the edited file.
+    await executeAgent(
+      {
+        agent: 'merge',
+        model: getHelperModelName(),
+        inputFiles: [baseFile],
+        editedFile,
+      },
+      undefined,
+      { runtimeHost: this.runtimeHost },
     );
   }
 
