@@ -18,10 +18,7 @@ import {
 } from '../runtime/cliConfig';
 import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import { CliExitCode } from '../runtime/exitCodes';
-import {
-  initCliPlatform,
-  initLocalCliPlatform,
-} from '../runtime/initPlatform';
+import { initCliPlatform, initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
   cliMultiAgentPlanHasGaps,
