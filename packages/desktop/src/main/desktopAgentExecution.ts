@@ -1249,8 +1249,12 @@ export class DesktopProgressBridge {
     baseFile: string,
     editedFile: string,
   ): Promise<void> {
-    const { getHelperModelName } = await import('@agent/runtime/helperModel');
-    await this.runExecution({
+    const [{ getHelperModelName }, { validateExecutionRequest }] =
+      await Promise.all([
+        import('@agent/runtime/helperModel'),
+        import('@agent/core/executionRequests'),
+      ]);
+    const validation = validateExecutionRequest({
       config: {
         agent: 'merge',
         model: getHelperModelName(),
@@ -1258,6 +1262,11 @@ export class DesktopProgressBridge {
         editedFile,
       },
     });
+    if (!validation.valid) {
+      await this.showErrorMessage(`Merge: ${validation.message}`);
+      return;
+    }
+    await this.runExecution(validation.request);
   }
 
   private async acceptEditedFile(
