@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import type { AgentEntry } from '@agent/index';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
   cliMultiAgentPlanHasGaps,
   cliMultiAgentPresets,
@@ -9,8 +11,6 @@ import {
   planCliMultiAgentPresetRun,
   parseCliCustomAgentPresets,
 } from '@cli/runtime/multiAgentPresets';
-import type { AgentEntry } from '@agent/index';
-import { AgentCategory } from '@agent/core/AgentDataclass';
 
 function agent(
   name: string,

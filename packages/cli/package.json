@@ -42,6 +42,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:architecture": "node scripts/check-host-imports.mjs",
     "bundle": "node scripts/build-bundle.mjs",
+    "bundle:harness": "node scripts/build-harness.mjs",
     "copy:resources": "node scripts/copy-resources.mjs",
     "copy:docs": "node scripts/copy-docs.mjs",
     "smoke:react-compiler": "node scripts/smoke-react-compiler.mjs",

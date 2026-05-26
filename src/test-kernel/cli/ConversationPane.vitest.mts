@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { splitTranscriptEntries } from '@cli/chat/tui/panes/transcriptEntries';
 import {
   appendStaticTranscriptItems,
@@ -14,7 +15,6 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import { finalizeAssistantTranscriptEntries } from '@cli/chat/tui/state/transcript';
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   STREAM_STATUS,
   type NormalizedToolUse,
