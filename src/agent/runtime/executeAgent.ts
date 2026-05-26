@@ -2,7 +2,6 @@ import * as path from 'path';
 
 import { writeTerminalStatus } from '@agent/storage';
 import { logSdkError } from '@agent/trace';
-import { createMergeOutputFileLocationGetter } from '@agent/utils/outputFileUtils';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import {
   runToolUseFlow,
@@ -513,59 +512,6 @@ export async function executeAgent(
       },
     );
   });
-}
-
-export async function executeMergeAgent(
-  model: string,
-  inputFile: string,
-  editedFile: string,
-  runtimeHost: AgentRuntimeHost,
-): Promise<void> {
-  const configPayload: AgentConfigPayload = {
-    agent: 'merge',
-    model,
-    inputFiles: [inputFile],
-    editedFile,
-  };
-  const ctx = await buildAgentLaunchContext({
-    configPayload,
-    runtimeHost,
-    taskType: 'Merge task',
-  });
-  const { streamId, executionId } = ctx;
-
-  await withExecutionRunContext(ctx, () =>
-    runFlowWithLifecycle(ctx, streamId, 'merge', async () => {
-      StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
-        runtimeHost: ctx.runtimeHost,
-      });
-
-      const taskStage = logger.openStage(`Task: merge@${model}`);
-      return taskStage.run(async () => {
-        logger.info(`Executing merge with model ${model}`);
-
-        if (!isWorkflowSetting(ctx.setting)) {
-          throw new AgentError('merge agent must be a workflow agent');
-        }
-        const fileService = new TaskRunFileService(executionId);
-        const result = await runReflectionFlow({
-          ...ctx,
-          ...createInterruptCallbacks(),
-          onRoundFinalized: (run) => ctx.usageMonitor.recordUsage(run),
-          setting: ctx.setting,
-          getOutputFileLocation:
-            createMergeOutputFileLocationGetter(fileService),
-          parentStage: ctx.parentStage,
-          onRoundCompleted: createRoundProgressCallback(
-            ctx.executionId,
-            streamId,
-            ctx.runtimeHost,
-          ),
-        });
-        return buildWorkflowFlowResult(result, ctx.executionId, streamId);
-      });
-    }),
-  );
 }
 
 export async function resumeToolUseFromSnapshot(
