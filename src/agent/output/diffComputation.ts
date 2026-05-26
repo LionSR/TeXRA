@@ -11,7 +11,13 @@ import type { DiffStats } from '@agent/types/DiffTypes';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { OutputFileInfo, FileLocation } from '@shared/schemas';
-import { flexibleFS, getComparablePath } from '@utils/files';
+import {
+  AbsoluteFS,
+  createWorkspaceLocation,
+  flexibleFS,
+  getComparablePath,
+  WorkspaceFS,
+} from '@utils/files';
 import { countLines } from '@utils/text/stringUtils';
 
 import { traceFileLineage } from './lineageMapping';
@@ -61,6 +67,31 @@ async function computeDiffStats(
     );
     return {};
   }
+}
+
+/** The +/- diff stats must be computed against the immutable pre-run
+ *  snapshot (in-place workflows overwrite the live file, so the snapshot is
+ *  the only surviving "before"). But the lineage `original` exposed to the
+ *  UI should point at the live workspace document so the "compare" action
+ *  diffs — and lets the user edit — their real file rather than the
+ *  read-only run-storage copy. Snapshot locations carry the workspace-relative
+ *  path, so re-resolve them to a workspace location; the snapshot copy itself
+ *  is left untouched. The snapshot is kept when the live workspace file is
+ *  gone (e.g. the source was renamed or deleted after a historical run) so
+ *  "compare" doesn't abort on a missing base. Non-snapshot locations pass
+ *  through unchanged. */
+async function toWorkspaceOrigin(
+  loc: FileLocation | null,
+): Promise<FileLocation | null> {
+  if (!loc || loc.kind !== 'runStorage') return loc;
+  const resolved = WorkspaceFS.locatePath(loc.relativePath);
+  if (
+    resolved.kind !== 'workspace' ||
+    !(await AbsoluteFS.isFile(resolved.absolutePath))
+  ) {
+    return loc;
+  }
+  return createWorkspaceLocation(resolved.absolutePath, resolved.relativePath);
 }
 
 // ============================================================================
@@ -116,7 +147,9 @@ export async function computeOutputDiffStats(
         }
       }
 
-      const effectiveOriginal = suppressLineage ? null : originalLocation;
+      const effectiveOriginal = suppressLineage
+        ? null
+        : await toWorkspaceOrigin(originalLocation);
       const effectiveDiffBase = suppressLineage ? null : diffBaseLocation;
       const stats = await computeDiffStats(effectiveDiffBase, location);
 
