@@ -18,6 +18,15 @@ export class WebviewBridge {
   ) {
     this.unsubscribe = this.store.onChange((streamId) => {
       if (streamId !== this.getActiveStream()) return;
+      // A stream is mirrored to the webview only after `syncStream` seeds its
+      // cursor. That call is the registration handshake, run once the webview
+      // knows the stream exists. A run appends its earliest entries (the "Init"
+      // stage and files-loaded logs) during launch, before that handshake;
+      // streaming them here would post a LOG_DELTA the frontend drops (no
+      // streamState yet) while this bridge advances its cursor past them,
+      // losing them until a manual reload. Until then the on-disk log is
+      // authoritative and `syncStream` replays it in full.
+      if (!this.cursors.has(streamId)) return;
       this.changedStreams.add(streamId);
       this.scheduleFlush();
     });
@@ -74,6 +83,11 @@ export class WebviewBridge {
       return;
     }
 
+    // `changedStreams` is a subset of `cursors`: onChange only enqueues a
+    // stream whose cursor is already seeded (the `syncStream` handshake), and
+    // syncStream seeds it before enqueuing. Thus a stream present here has a
+    // cursor here. The `?? 0` is therefore unreachable, kept only to satisfy
+    // the type.
     const cursor = this.cursors.get(activeStream) ?? 0;
     const entries = log.getRange(cursor, log.head);
     const updates = log.drainDirtyUpdates(cursor);
