@@ -485,6 +485,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           this.provider.state.meta.getExecutionId(stream),
         getOutputFiles: (stream) =>
           this.provider.state.outputFiles.getFiles(stream),
+        getAgentModel: (stream) => {
+          const taskState = this.provider.state.meta.getTaskState(stream);
+          return taskState
+            ? {
+                agent: taskState.agentConfig.agent,
+                model: taskState.agentConfig.model,
+              }
+            : undefined;
+        },
       },
       host: {
         compareFiles: async (baseFile, editedFile) => {
@@ -495,12 +504,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             pathToLocation(editedFile),
           );
         },
-        acceptEditedFile: async (baseFile, editedFile) => {
-          await vscode.commands.executeCommand(
+        acceptEditedFile: async (baseFile, editedFile, copyMeta) => {
+          return vscode.commands.executeCommand<boolean>(
             'texra.acceptEdited',
             pathToLocation(''), // inputFile unused
             pathToLocation(baseFile),
             pathToLocation(editedFile),
+            copyMeta,
           );
         },
         mergeFile: async (baseFile, editedFile) => {

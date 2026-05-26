@@ -901,7 +901,10 @@ async function runLatexdiffFromMetadata(params: {
 
   for (const [round, infos] of rounds.entries()) {
     for (const info of infos) {
-      const base = info.lineage?.original ?? null;
+      // Prefer the immutable pre-run snapshot (diffBase): lineage.original now
+      // points at the live workspace file, which for in-place rewrites is the
+      // post-run file itself, so latexdiff would compare it against itself.
+      const base = info.lineage?.diffBase ?? info.lineage?.original ?? null;
       const description = `${getFileLabel(info)} (r${round})`;
 
       if (!base) {

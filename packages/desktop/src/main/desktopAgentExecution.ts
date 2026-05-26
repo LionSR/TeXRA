@@ -209,6 +209,10 @@ export class DesktopProgressBridge {
         getActiveStream: () => this.activeStream,
         getExecutionId: (stream) => this.executionIds.get(stream),
         getOutputFiles: (stream) => new Map(this.outputFiles.get(stream) ?? []),
+        // The desktop bridge has no quick-pick UI, so Accept always replaces
+        // the workspace file. Returning undefined keeps the controller from
+        // building copy metadata that the desktop host would silently drop.
+        getAgentModel: () => undefined,
       },
       host: {
         compareFiles: (baseFile, editedFile) =>

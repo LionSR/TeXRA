@@ -9,10 +9,21 @@ import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
 // Local imports - utilities
 import { ensureRunDir, getRunDir, resolveRunDir } from '@utils/files';
 
+/** Agent + model for the run that produced a file, used to build the
+ *  legacy `<base>_<agent>_r<round>_<model>` postfix when accepting a copy. */
+export interface AcceptCopyMeta {
+  agent: string;
+  model: string;
+  round: number;
+}
+
 export interface ProgressWorkflowFileActionsState {
   getActiveStream(): StreamTabId | '';
   getExecutionId(stream: StreamTabId): string | undefined;
   getOutputFiles(stream: StreamTabId): Map<number, OutputFileInfo[]>;
+  getAgentModel(
+    stream: StreamTabId,
+  ): { agent: string; model: string } | undefined;
 }
 
 export interface ProgressWorkflowFileActionsHost {
@@ -20,6 +31,7 @@ export interface ProgressWorkflowFileActionsHost {
   acceptEditedFile(
     baseFile: string,
     editedFile: string,
+    copyMeta?: AcceptCopyMeta,
   ): Promise<boolean | void>;
   mergeFile(baseFile: string, editedFile: string): Promise<void>;
   latexdiffFile(baseFile: string, editedFile: string): Promise<void>;
@@ -129,12 +141,15 @@ export class ProgressWorkflowFileActionsController {
       }
     }
 
+    const copyMeta =
+      activeStream && file ? this.buildCopyMeta(activeStream, file) : undefined;
+
     const accepted = await this.executeWithBaseFile(
       file,
       base,
       'Accept',
       async (targetFile, baseFile) => {
-        return this.deps.host.acceptEditedFile(baseFile, targetFile);
+        return this.deps.host.acceptEditedFile(baseFile, targetFile, copyMeta);
       },
     );
     if (!accepted) return;
@@ -222,6 +237,35 @@ export class ProgressWorkflowFileActionsController {
     } catch {
       // Best-effort: backup only informs the accepted-edit follow-up.
     }
+  }
+
+  /** Resolve the agent/model/round for an output file so "Accept" can offer
+   *  a postfixed copy. Returns undefined when the run's agent/model or the
+   *  file's round can't be determined (the quick-pick then just replaces). */
+  private buildCopyMeta(
+    stream: StreamTabId,
+    file: string,
+  ): AcceptCopyMeta | undefined {
+    const config = this.deps.state.getAgentModel(stream);
+    if (!config) return undefined;
+
+    // Use the matched entry's own `round` and prefer the most recent match:
+    // in-place workflows reuse the same workspace path across rounds, so the
+    // Map key (and the first match) would mislabel the `r<round>` postfix.
+    let round: number | undefined;
+    for (const infos of this.deps.state.getOutputFiles(stream).values()) {
+      for (const info of infos) {
+        if (
+          info.location.absolutePath === file &&
+          (round === undefined || info.round > round)
+        ) {
+          round = info.round;
+        }
+      }
+    }
+    if (round === undefined) return undefined;
+
+    return { agent: config.agent, model: config.model, round };
   }
 
   private findOutputDirectory(
