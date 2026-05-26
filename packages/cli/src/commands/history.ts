@@ -14,43 +14,26 @@ import {
   preflightCliHistoryDeleteAll,
   readCliHistoryDetails,
 } from '../runtime/history';
-import { initCliPlatform } from '../runtime/initPlatform';
-import {
-  writeNdjsonStdout,
-  writeTextStderr,
-  writeTextStdout,
-} from '../runtime/logSinks';
+import { initLocalCliPlatform } from '../runtime/initPlatform';
+import { writeTextStderr } from '../runtime/logSinks';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
+import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
 async function runHistoryList(context: CliContext): Promise<number> {
-  await initCliPlatform({
-    ...context,
-    quietLogs: true,
-    skipIncludedModelAccess: true,
-  });
+  await initLocalCliPlatform(context);
   const entries = await listCliHistoryEntries();
 
-  if (context.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(entries, null, 2));
-    return CliExitCode.Success;
-  }
-
-  if (context.outputFormat === 'ndjson') {
-    for (const record of cliHistoryNdjsonRecords(entries)) {
-      writeNdjsonStdout(record);
-    }
-    return CliExitCode.Success;
-  }
-
-  writeTextStdout(
-    entries.length
+  emitCliResult(context, {
+    json: entries,
+    ndjson: cliHistoryNdjsonRecords(entries),
+    text: entries.length
       ? formatCliHistoryText(entries)
       : 'No execution history found.',
-  );
+  });
   return CliExitCode.Success;
 }
 
@@ -58,28 +41,18 @@ async function runHistoryShow(
   context: CliContext,
   id: ExecutionId,
 ): Promise<number> {
-  await initCliPlatform({
-    ...context,
-    quietLogs: true,
-    skipIncludedModelAccess: true,
-  });
+  await initLocalCliPlatform(context);
   const details = await readCliHistoryDetails(id);
   if (!details) {
     writeTextStderr(`Execution not found: ${id}`);
     return CliExitCode.Usage;
   }
 
-  if (context.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(details, null, 2));
-  } else if (context.outputFormat === 'ndjson') {
-    writeNdjsonStdout({
-      kind: 'history-detail',
-      ts: new Date().toISOString(),
-      detail: details,
-    });
-  } else {
-    writeTextStdout(formatCliHistoryDetailsText(details));
-  }
+  emitCliResult(context, {
+    json: details,
+    ndjson: { kind: 'history-detail', detail: details },
+    text: formatCliHistoryDetailsText(details),
+  });
   return CliExitCode.Success;
 }
 
@@ -87,11 +60,7 @@ async function runHistoryDelete(
   context: CliContext,
   options: { id?: ExecutionId; all: boolean; yes: boolean },
 ): Promise<number> {
-  await initCliPlatform({
-    ...context,
-    quietLogs: true,
-    skipIncludedModelAccess: true,
-  });
+  await initLocalCliPlatform(context);
 
   // `--all` is destructive and unrecoverable. Refuse it unless the caller
   // also passes `--yes`, and quote the count so the stakes are explicit.
@@ -120,23 +89,33 @@ async function runHistoryDelete(
     return CliExitCode.Usage;
   }
 
-  if (context.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(result, null, 2));
-  } else if (context.outputFormat === 'ndjson') {
-    writeNdjsonStdout({
-      kind: 'history-delete',
-      ts: new Date().toISOString(),
-      result,
-    });
-  } else if (result.deleted === 'all') {
-    const noun = result.count === 1 ? 'stored execution' : 'stored executions';
-    writeTextStdout(`Deleted ${result.count} ${noun}.`);
-  } else if (result.found) {
-    writeTextStdout(`Deleted execution ${result.id}.`);
-  } else {
+  // JSON/NDJSON consumers get the structured result (including `found:false`)
+  // so scripts can branch on it; text consumers get a stderr error + Usage
+  // exit because the human-readable path can't render "not found" usefully.
+  if (
+    result.deleted === 'one' &&
+    !result.found &&
+    context.outputFormat === 'text'
+  ) {
     writeTextStderr(`Execution not found: ${result.id}`);
     return CliExitCode.Usage;
   }
+
+  let text: string;
+  if (result.deleted === 'all') {
+    const noun = result.count === 1 ? 'stored execution' : 'stored executions';
+    text = `Deleted ${result.count} ${noun}.`;
+  } else if (result.found) {
+    text = `Deleted execution ${result.id}.`;
+  } else {
+    text = '';
+  }
+
+  emitCliResult(context, {
+    json: result,
+    ndjson: { kind: 'history-delete', result },
+    text,
+  });
   return CliExitCode.Success;
 }
 
