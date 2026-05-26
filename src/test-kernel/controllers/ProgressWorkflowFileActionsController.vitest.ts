@@ -15,6 +15,7 @@ function createDeps(
       getActiveStream: () => '',
       getExecutionId: () => undefined,
       getOutputFiles: () => new Map(),
+      getAgentModel: () => undefined,
     },
     host: {
       compareFiles: async () => {},

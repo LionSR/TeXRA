@@ -583,7 +583,7 @@ export class FileList extends LitElement {
         className: 'accept-btn',
         command: PROGRESS_VIEW_COMMANDS.ACCEPT_FILE,
         file: filePath,
-        base: basePath,
+        base: compareBase,
       })}
       ${renderFileActionButton({
         icon: 'git-merge',

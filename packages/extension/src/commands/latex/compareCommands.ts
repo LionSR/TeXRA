@@ -11,11 +11,20 @@ import {
   toErrorMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
+import { legacyWorkflowOutputStem } from '@agent/output/workflowOutputLayout';
 import { getAcceptedFileTarget } from '@latex/acceptedFileTarget';
 import * as logger from '@logger/logUtils';
 import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latex';
-import { flexibleFS } from '@utils/files';
+import {
+  createExternalLocation,
+  createRunStorageLocation,
+  createWorkspaceLocation,
+  flexibleFS,
+} from '@utils/files';
 import type { FileLocation } from '@utils/files';
+
+/** Run agent/model/round used to build the legacy postfixed copy name. */
+type AcceptCopyMeta = { agent: string; model: string; round: number };
 
 const CHANNEL = 'CompareCommands';
 logger.initialize(CHANNEL);
@@ -130,11 +139,127 @@ async function handleCompare(
   }
 }
 
+/** Build the legacy `<base>_<agent>_r<round>_<model>` copy target beside the
+ *  base file, preserving the base's location kind. */
+function buildCopyTarget(
+  baseLocation: FileLocation,
+  copyMeta: AcceptCopyMeta,
+): { targetLocation: FileLocation; targetFileName: string } {
+  const ext = path.extname(baseLocation.absolutePath);
+  const stem = legacyWorkflowOutputStem({
+    base: path.parse(baseLocation.absolutePath).name,
+    agent: copyMeta.agent,
+    model: copyMeta.model,
+    round: copyMeta.round,
+  });
+  const targetFileName = `${stem}${ext}`;
+  const targetAbsolute = path.join(
+    path.dirname(baseLocation.absolutePath),
+    targetFileName,
+  );
+
+  if (baseLocation.kind === 'external') {
+    return {
+      targetLocation: createExternalLocation(targetAbsolute),
+      targetFileName,
+    };
+  }
+
+  const targetRelative = path.join(
+    path.dirname(baseLocation.relativePath),
+    targetFileName,
+  );
+  const targetLocation =
+    baseLocation.kind === 'workspace'
+      ? createWorkspaceLocation(targetAbsolute, targetRelative)
+      : createRunStorageLocation(
+          targetAbsolute,
+          targetRelative,
+          baseLocation.executionId,
+        );
+  return { targetLocation, targetFileName };
+}
+
+/** Original single-confirm flow used when no run metadata is available. */
+async function confirmReplace(
+  target: ReturnType<typeof getAcceptedFileTarget>,
+  basePath: string,
+  editedPath: string,
+): Promise<boolean> {
+  const { targetLocation, targetFileName, isNewFile } = target;
+  const targetExists = isNewFile && (await flexibleFS.exists(targetLocation));
+  const baseExt = path.extname(basePath).toLowerCase();
+  const editedExt = path.extname(editedPath).toLowerCase();
+
+  const action = targetExists
+    ? 'overwrite existing'
+    : isNewFile
+      ? 'create'
+      : 'overwrite';
+  const extensionNote = isNewFile
+    ? `Extensions differ (${baseExt} vs ${editedExt}). `
+    : '';
+  const confirmMessage = `${extensionNote}This will ${action} '${targetFileName}' with content from '${path.basename(editedPath)}'. Are you sure?`;
+
+  const answer = await vscode.window.showWarningMessage(
+    confirmMessage,
+    { modal: true },
+    'Yes',
+    'Cancel',
+  );
+  return answer === 'Yes';
+}
+
+/** Resolve which target to write: a quick-pick (replace vs postfixed copy)
+ *  when run metadata is available, otherwise the legacy confirm dialog.
+ *  Returns undefined when the user cancels. */
+async function resolveAcceptTarget(
+  baseLocation: FileLocation,
+  editedPath: string,
+  copyMeta: AcceptCopyMeta | undefined,
+): Promise<
+  { targetLocation: FileLocation; targetFileName: string } | undefined
+> {
+  const replaceTarget = getAcceptedFileTarget(baseLocation, editedPath);
+
+  if (!copyMeta) {
+    const confirmed = await confirmReplace(
+      replaceTarget,
+      baseLocation.absolutePath,
+      editedPath,
+    );
+    return confirmed ? replaceTarget : undefined;
+  }
+
+  const copyTarget = buildCopyTarget(baseLocation, copyMeta);
+  const pick = await vscode.window.showQuickPick(
+    [
+      {
+        label: '$(replace) Replace original',
+        description: replaceTarget.targetFileName,
+        target: replaceTarget,
+      },
+      {
+        label: '$(files) Save as copy',
+        description: copyTarget.targetFileName,
+        target: copyTarget,
+      },
+    ],
+    {
+      title: 'Accept edits',
+      placeHolder: `Accept '${path.basename(editedPath)}' into the workspace`,
+      ignoreFocusOut: true,
+    },
+  );
+  return pick?.target;
+}
+
 async function handleAcceptEdited(
   inputLocation: FileLocation,
   baseLocation: FileLocation,
   editedLocation: FileLocation,
-) {
+  copyMeta?: AcceptCopyMeta,
+): Promise<boolean> {
   try {
     const fileToUseLocation = validateFileLocations(
       inputLocation,
@@ -142,48 +267,26 @@ async function handleAcceptEdited(
       editedLocation,
       'Both base file and edited file must be selected to accept changes',
     );
-    if (!fileToUseLocation) return;
+    if (!fileToUseLocation) return false;
 
     if (!(await validateFilesExist(fileToUseLocation, editedLocation))) {
-      return;
+      return false;
     }
 
-    const basePath = fileToUseLocation.absolutePath;
     const editedPath = editedLocation.absolutePath;
     const editedFileName = path.basename(editedPath);
-    const baseExt = path.extname(basePath).toLowerCase();
-    const editedExt = path.extname(editedPath).toLowerCase();
 
-    const { targetLocation, targetFileName, isNewFile } = getAcceptedFileTarget(
+    const resolved = await resolveAcceptTarget(
       fileToUseLocation,
       editedPath,
+      copyMeta,
     );
+    if (!resolved) return false;
 
-    const targetExists = isNewFile && (await flexibleFS.exists(targetLocation));
-
-    let action: string;
-    if (targetExists) {
-      action = 'overwrite existing';
-    } else if (isNewFile) {
-      action = 'create';
-    } else {
-      action = 'overwrite';
-    }
-    const extensionNote = isNewFile
-      ? `Extensions differ (${baseExt} vs ${editedExt}). `
-      : '';
-    const confirmMessage = `${extensionNote}This will ${action} '${targetFileName}' with content from '${editedFileName}'. Are you sure?`;
-
-    const answer = await vscode.window.showWarningMessage(
-      confirmMessage,
-      { modal: true },
-      'Yes',
-      'Cancel',
-    );
-
-    if (answer !== 'Yes') {
-      return;
-    }
+    const { targetLocation, targetFileName } = resolved;
+    const operation = (await flexibleFS.exists(targetLocation))
+      ? 'replaced'
+      : 'created';
 
     const editedContent = await flexibleFS.read(editedLocation);
     await flexibleFS.write(targetLocation, editedContent);
@@ -194,12 +297,12 @@ async function handleAcceptEdited(
       });
     }
 
-    const operation = isNewFile && !targetExists ? 'created' : 'replaced';
     const successMessage = `Successfully ${operation} '${targetFileName}' with content from '${editedFileName}'`;
-
     vscode.window.showInformationMessage(successMessage);
     logger.info(CHANNEL, successMessage);
+    return true;
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error accepting changes', err);
+    return false;
   }
 }
