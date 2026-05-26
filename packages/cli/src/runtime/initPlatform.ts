@@ -90,6 +90,28 @@ export async function setCliHelperModel(
   await tryPlatform()?.globalState.update(GlobalStateKey.HELPER_MODEL, model);
 }
 
+/**
+ * Init for commands that act on local state only (no model invocation):
+ * inspect paths (history/agents/memory/multi-agent list+show, orchestrate)
+ * plus local-destructive paths (history delete). Quiet logs and skip the
+ * included-model-access probe, since no model is run.
+ *
+ * Not actually read-only — the name describes the boundary (local-only,
+ * no provider calls), not safety. Destructive local operations belong here.
+ */
+export async function initLocalCliPlatform(
+  context: Pick<
+    CliContext,
+    'apiMode' | 'cwd' | 'resourcesPath' | 'helperModel'
+  >,
+): Promise<void> {
+  await initCliPlatform({
+    ...context,
+    quietLogs: true,
+    skipIncludedModelAccess: true,
+  });
+}
+
 export async function initCliPlatform(
   context: Pick<
     CliContext,

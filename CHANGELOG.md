@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### CLI
+
+- **Auth commands grouped under `texra auth`** — `login`, `logout`, `status`, and `usage` now live under `texra auth`, with `texra login` / `texra logout` kept as top-level shortcuts. The standalone top-level `texra usage` was removed; use `texra auth usage`.
+- **Inspect stored memories from the terminal** — new `texra memory list` and `texra memory show` mirror the in-chat `/memory` view.
+- **`texra tools show`** is now the canonical per-tool inspector (matching `agents`/`models`), with `texra tools status` kept as an alias.
+- **Clearer, safer help and defaults** — `--approval-policy` now documents that `ask` is the default and that `never` denies every privileged action; `texra init` defaults to `ask` instead of the deny-all `never`; `run --input`/`--context` are marked repeatable and `--output` vs `--output-dir` are disambiguated.
+
 ## [0.38.1] - 2026-05-25
 
 ### Bug Fixes
