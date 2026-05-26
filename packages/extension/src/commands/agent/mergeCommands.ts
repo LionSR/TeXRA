@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { executeMergeAgent } from '@agent/runtime/executeAgent';
+import { executeAgent } from '@agent/runtime/executeAgent';
 import { getHelperModelName } from '@agent/runtime/helperModel';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
@@ -31,10 +31,17 @@ async function handleMerge(
     return;
   }
 
-  await executeMergeAgent(
-    model ?? getHelperModelName(),
-    baseFile ?? inputFile,
-    editedFile,
-    extensionAgentRuntimeHost,
+  // Merge is a normal prompt-driven workflow agent (see merge.yaml); it runs
+  // through the generic agent path with the original as the input file and the
+  // partially-edited document as the edited file.
+  await executeAgent(
+    {
+      agent: 'merge',
+      model: model ?? getHelperModelName(),
+      inputFiles: [baseFile ?? inputFile],
+      editedFile,
+    },
+    undefined,
+    { runtimeHost: extensionAgentRuntimeHost },
   );
 }
