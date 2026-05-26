@@ -4,22 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### CLI
+## [0.38.1] - 2026-05-27
 
-- **Auth commands grouped under `texra auth`** — `login`, `logout`, `status`, and `usage` now live under `texra auth`, with `texra login` / `texra logout` kept as top-level shortcuts. The standalone top-level `texra usage` was removed; use `texra auth usage`.
-- **Inspect stored memories from the terminal** — new `texra memory list` and `texra memory show` mirror the in-chat `/memory` view.
-- **`texra tools show`** is now the canonical per-tool inspector (matching `agents`/`models`), with `texra tools status` kept as an alias.
-- **Clearer, safer help and defaults** — `--approval-policy` now documents that `ask` is the default and that `never` denies every privileged action; `texra init` defaults to `ask` instead of the deny-all `never`; `run --input`/`--context` are marked repeatable and `--output` vs `--output-dir` are disambiguated.
+### Features
 
-## [0.38.1] - 2026-05-25
+- **CLI tools, memory, and init** — new `texra tools` (`list`, `show`, `enable`, `disable`, `install`, `auth`) and `texra memory` (`list`, `show`) command groups, plus a `texra init` wizard that writes `.texra/config.json` and gitignores it. The TUI gets a matching `/tools` slash command.
 
 ### Bug Fixes
 
-- **Settings view tabs load correctly again** — Models, History, Agents, LaTeX, Memory, and approval settings now populate on first open.
+- Bug fixes on settings tabs loading, "Compare with base" diffing against the live workspace file, and progress-log replay preserving initial entries.
 
 ### Improvements
 
-- **Cleaner history rows** — each entry now puts the metadata (timestamp, agent, model, inputs) and action buttons on top, keeps Context / Config visible inline, and collapses very long instruction prompts behind a "Show full instructions" toggle.
+- **Cleaner history rows** — restructured layout with metadata on top, inline Context/Config, and collapsible long prompts.
+- **Merge shows up on the progress board** — runs now appear as a normal task and save their result under the input filename.
+- **CLI auth grouped under `texra auth`** — `login`, `logout`, `status`, and `usage` now live under `texra auth` (top-level `texra login` / `texra logout` kept as shortcuts). Clearer `--approval-policy` help, safer defaults, and disambiguated `--output` vs `--output-dir`.
 
 ## [0.38.0] - 2026-05-24
 
