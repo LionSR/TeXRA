@@ -249,12 +249,23 @@ export class ProgressWorkflowFileActionsController {
     const config = this.deps.state.getAgentModel(stream);
     if (!config) return undefined;
 
-    for (const [round, infos] of this.deps.state.getOutputFiles(stream)) {
-      if (infos.some((info) => info.location.absolutePath === file)) {
-        return { agent: config.agent, model: config.model, round };
+    // Use the matched entry's own `round` and prefer the most recent match:
+    // in-place workflows reuse the same workspace path across rounds, so the
+    // Map key (and the first match) would mislabel the `r<round>` postfix.
+    let round: number | undefined;
+    for (const infos of this.deps.state.getOutputFiles(stream).values()) {
+      for (const info of infos) {
+        if (
+          info.location.absolutePath === file &&
+          (round === undefined || info.round > round)
+        ) {
+          round = info.round;
+        }
       }
     }
-    return undefined;
+    if (round === undefined) return undefined;
+
+    return { agent: config.agent, model: config.model, round };
   }
 
   private findOutputDirectory(
