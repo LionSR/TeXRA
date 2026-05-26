@@ -32,6 +32,8 @@ vi.mock('@utils/files/taskRunStorage', () => ({
   resolveStoragePath: vi.fn(async () => undefined),
 }));
 
+// Imported after vi.mock so the mocked dependencies are in place.
+// eslint-disable-next-line import/order
 import {
   cliHistoryNdjsonRecords,
   deleteCliHistory,
