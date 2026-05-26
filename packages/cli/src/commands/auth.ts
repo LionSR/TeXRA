@@ -209,7 +209,7 @@ function writeRelayUsageSummary(
   });
 }
 
-export const usageCommand = defineCommand({
+const usageCommand = defineCommand({
   meta: { name: 'usage', description: 'Show relay usage for this account' },
   args: {
     ...GLOBAL_ARGS,

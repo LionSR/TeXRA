@@ -89,15 +89,27 @@ async function runHistoryDelete(
     return CliExitCode.Usage;
   }
 
-  if (result.deleted === 'one' && !result.found) {
+  // JSON/NDJSON consumers get the structured result (including `found:false`)
+  // so scripts can branch on it; text consumers get a stderr error + Usage
+  // exit because the human-readable path can't render "not found" usefully.
+  if (
+    result.deleted === 'one' &&
+    !result.found &&
+    context.outputFormat === 'text'
+  ) {
     writeTextStderr(`Execution not found: ${result.id}`);
     return CliExitCode.Usage;
   }
 
-  const text =
-    result.deleted === 'all'
-      ? `Deleted ${result.count} ${result.count === 1 ? 'stored execution' : 'stored executions'}.`
-      : `Deleted execution ${result.id}.`;
+  let text: string;
+  if (result.deleted === 'all') {
+    const noun = result.count === 1 ? 'stored execution' : 'stored executions';
+    text = `Deleted ${result.count} ${noun}.`;
+  } else if (result.found) {
+    text = `Deleted execution ${result.id}.`;
+  } else {
+    text = '';
+  }
 
   emitCliResult(context, {
     json: result,
