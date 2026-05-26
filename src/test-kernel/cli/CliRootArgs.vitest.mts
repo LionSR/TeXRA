@@ -4,6 +4,7 @@ import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
   cliTerminalStatus,
   collectStringFlagValues,
@@ -21,9 +22,8 @@ import {
 } from '@cli/commands/root';
 import { rejectHeadlessOnlyFlags } from '@cli/commands/_helpers/globalArgs';
 import { isKnownCliModel } from '@cli/runtime/cliConfig';
-import { AgentCategory } from '@agent/core/AgentDataclass';
-import { END_GROUP_STATUS, EXECUTION_STATUS } from '@shared/schemas';
 import type { CliContext } from '@cli/runtime/cliContext';
+import { END_GROUP_STATUS, EXECUTION_STATUS } from '@shared/schemas';
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   return {

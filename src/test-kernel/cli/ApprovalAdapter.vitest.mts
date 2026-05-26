@@ -6,8 +6,8 @@ import {
   immediateDecisionForApproval,
   isCliApiSwitchableRetry,
 } from '@cli/runtime/approvalAdapter';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { CliContext } from '@cli/runtime/cliContext';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
   return {

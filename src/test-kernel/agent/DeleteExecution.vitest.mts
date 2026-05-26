@@ -22,6 +22,8 @@ vi.mock('@agent/storage/ExecutionKVStore', () => ({
   getExecutionStore: vi.fn(() => ({ clear: mocks.clear })),
 }));
 
+// Imported after vi.mock so the mocked ExecutionKVStore is in place.
+// eslint-disable-next-line import/order
 import { deleteExecution } from '@agent/storage/executionListing';
 
 beforeEach(() => {

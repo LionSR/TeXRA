@@ -8,8 +8,8 @@ import {
   selectItemRenderKey,
   visibleSelectRange,
 } from '@cli/chat/tui/ui/Select';
-import type { ModelOptionData } from '@shared/schemas';
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
+import type { ModelOptionData } from '@shared/schemas';
 
 function access(
   model: Partial<ModelOptionData>,
