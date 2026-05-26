@@ -57,7 +57,6 @@ prompts:
 
     Provide your output as complete \LaTeX document{% if INPUT_FILES[1] %}s{% endif %}. Accuracy is paramount - even small discrepancies can affect diff tools.
 
-    {% if INPUT_FILES | length %}
     <documents>
     {% for output in INPUT_FILES %}
     <document name="{{ output }}">
@@ -65,10 +64,3 @@ prompts:
     </document>
     {% endfor %}
     </documents>
-    {% else %}
-    <documents>
-    <document name="_full.tex">
-    % Your merged \LaTeX document here
-    </document>
-    </documents>
-    {% endif %}
