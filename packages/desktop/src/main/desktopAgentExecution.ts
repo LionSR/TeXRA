@@ -209,6 +209,15 @@ export class DesktopProgressBridge {
         getActiveStream: () => this.activeStream,
         getExecutionId: (stream) => this.executionIds.get(stream),
         getOutputFiles: (stream) => new Map(this.outputFiles.get(stream) ?? []),
+        getAgentModel: (stream) => {
+          const taskState = this.taskStates.get(stream);
+          return taskState
+            ? {
+                agent: taskState.agentConfig.agent,
+                model: taskState.agentConfig.model,
+              }
+            : undefined;
+        },
       },
       host: {
         compareFiles: (baseFile, editedFile) =>
