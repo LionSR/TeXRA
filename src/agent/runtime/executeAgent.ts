@@ -76,7 +76,10 @@ function toOutputSummaries(roundOutputs: RoundOutput[]): OutputFileSummary[] {
           : o.location.absolutePath,
       absolutePath: o.location.absolutePath,
       location: o.location.kind,
-      originalPath: o.lineage?.original?.absolutePath ?? null,
+      originalPath:
+        o.lineage?.diffBase?.absolutePath ??
+        o.lineage?.original?.absolutePath ??
+        null,
       added: o.diff?.added ?? null,
       removed: o.diff?.removed ?? null,
     })),
