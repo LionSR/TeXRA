@@ -1,4 +1,4 @@
-# TeXRA: Multi-Agent AI Research Assistant for TeX
+# TeXRA: Multi-Agent AI Research Assistant for Theorists
 
 [![VS Code Marketplace](https://vsmarketplacebadges.dev/version-short/texra-ai.texra.svg)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
 [![Installs](https://vsmarketplacebadges.dev/installs-short/texra-ai.texra.svg)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
@@ -6,7 +6,6 @@
 [![Rating](https://vsmarketplacebadges.dev/rating-short/texra-ai.texra.svg)](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
 [![Open VSX Version](https://img.shields.io/open-vsx/v/texra-ai/texra)](https://open-vsx.org/extension/texra-ai/texra)
 [![Open VSX Downloads](https://img.shields.io/open-vsx/dt/texra-ai/texra)](https://open-vsx.org/extension/texra-ai/texra)
-[![License](https://img.shields.io/badge/license-Proprietary-blue)](https://texra.ai/terms)
 [![npm version](https://img.shields.io/npm/v/@texra-ai/cli?label=%40texra-ai%2Fcli)](https://www.npmjs.com/package/@texra-ai/cli)
 [![npm downloads](https://img.shields.io/npm/dm/@texra-ai/cli)](https://www.npmjs.com/package/@texra-ai/cli)
 
@@ -22,7 +21,7 @@
 > [Buy Me a Coffee](https://buymeacoffee.com/texra.ai) to keep the program
 > open for everyone.
 
-**TeXRA is a multi-agent research assistant for LaTeX — in VS Code and the
+**TeXRA is a multi-agent research assistant for theorists (Physics, Math, CS, Engineering, etc.)— in VS Code and the
 terminal.** Instead of chatting with a single model, you direct an
 **Orchestrator** that delegates to a team of specialists—researchers,
 numericists, reviewers, formalizers, LaTeX fixers, presenters—each with their

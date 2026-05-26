@@ -526,8 +526,7 @@ export class FileList extends LitElement {
     if (loc.kind === 'workspace' || loc.kind === 'runStorage') {
       return loc.relativePath;
     }
-    const normalized = loc.absolutePath.replaceAll('\\', '/');
-    return normalized.slice(normalized.lastIndexOf('/') + 1);
+    return parsePath(loc.absolutePath).basename;
   }
 
   /**
