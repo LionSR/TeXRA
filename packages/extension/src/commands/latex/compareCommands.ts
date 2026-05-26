@@ -12,15 +12,14 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import { legacyWorkflowOutputStem } from '@agent/output/workflowOutputLayout';
-import { getAcceptedFileTarget } from '@latex/acceptedFileTarget';
+import {
+  getAcceptedFileTarget,
+  siblingLocation,
+  type AcceptedFileTarget,
+} from '@latex/acceptedFileTarget';
 import * as logger from '@logger/logUtils';
 import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latex';
-import {
-  createExternalLocation,
-  createRunStorageLocation,
-  createWorkspaceLocation,
-  flexibleFS,
-} from '@utils/files';
+import { flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 
 /** Run agent/model/round used to build the legacy postfixed copy name. */
@@ -145,60 +144,44 @@ function buildCopyTarget(
   baseLocation: FileLocation,
   copyMeta: AcceptCopyMeta,
 ): { targetLocation: FileLocation; targetFileName: string } {
-  const ext = path.extname(baseLocation.absolutePath);
+  const parsed = path.parse(baseLocation.absolutePath);
   const stem = legacyWorkflowOutputStem({
-    base: path.parse(baseLocation.absolutePath).name,
+    base: parsed.name,
     agent: copyMeta.agent,
     model: copyMeta.model,
     round: copyMeta.round,
   });
-  const targetFileName = `${stem}${ext}`;
-  const targetAbsolute = path.join(
-    path.dirname(baseLocation.absolutePath),
+  const targetFileName = `${stem}${parsed.ext}`;
+  return {
+    targetLocation: siblingLocation(baseLocation, targetFileName),
     targetFileName,
-  );
-
-  if (baseLocation.kind === 'external') {
-    return {
-      targetLocation: createExternalLocation(targetAbsolute),
-      targetFileName,
-    };
-  }
-
-  const targetRelative = path.join(
-    path.dirname(baseLocation.relativePath),
-    targetFileName,
-  );
-  const targetLocation =
-    baseLocation.kind === 'workspace'
-      ? createWorkspaceLocation(targetAbsolute, targetRelative)
-      : createRunStorageLocation(
-          targetAbsolute,
-          targetRelative,
-          baseLocation.executionId,
-        );
-  return { targetLocation, targetFileName };
+  };
 }
 
 /** Original single-confirm flow used when no run metadata is available. */
 async function confirmReplace(
-  target: ReturnType<typeof getAcceptedFileTarget>,
+  target: AcceptedFileTarget,
   basePath: string,
   editedPath: string,
 ): Promise<boolean> {
   const { targetLocation, targetFileName, isNewFile } = target;
   const targetExists = isNewFile && (await flexibleFS.exists(targetLocation));
-  const baseExt = path.extname(basePath).toLowerCase();
-  const editedExt = path.extname(editedPath).toLowerCase();
 
-  const action = targetExists
-    ? 'overwrite existing'
-    : isNewFile
-      ? 'create'
-      : 'overwrite';
-  const extensionNote = isNewFile
-    ? `Extensions differ (${baseExt} vs ${editedExt}). `
-    : '';
+  let action: string;
+  if (targetExists) {
+    action = 'overwrite existing';
+  } else if (isNewFile) {
+    action = 'create';
+  } else {
+    action = 'overwrite';
+  }
+
+  let extensionNote = '';
+  if (isNewFile) {
+    const baseExt = path.extname(basePath).toLowerCase();
+    const editedExt = path.extname(editedPath).toLowerCase();
+    extensionNote = `Extensions differ (${baseExt} vs ${editedExt}). `;
+  }
   const confirmMessage = `${extensionNote}This will ${action} '${targetFileName}' with content from '${path.basename(editedPath)}'. Are you sure?`;
 
   const answer = await vscode.window.showWarningMessage(
