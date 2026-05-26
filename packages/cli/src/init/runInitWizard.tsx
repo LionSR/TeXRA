@@ -40,10 +40,23 @@ export interface InitWizardResult {
 }
 
 const APPROVAL_DESCRIPTIONS: Record<CliApprovalPolicy, string> = {
-  never: 'never prompt before privileged actions',
-  ask: 'confirm before privileged actions',
+  never: 'deny every privileged action (no prompt)',
+  ask: 'confirm before privileged actions (recommended)',
   yolo: 'auto-approve every action',
 };
+
+// Display order, derived from the canonical list so a newly added policy can't
+// be silently dropped — the rank table is a Record over the union, so omitting
+// a policy is a compile error. `ask` first highlights the recommended,
+// runtime-default policy instead of the deny-all `never`.
+const APPROVAL_POLICY_RANK: Record<CliApprovalPolicy, number> = {
+  ask: 0,
+  never: 1,
+  yolo: 2,
+};
+const APPROVAL_POLICY_ORDER: readonly CliApprovalPolicy[] = [
+  ...CLI_APPROVAL_POLICIES,
+].sort((a, b) => APPROVAL_POLICY_RANK[a] - APPROVAL_POLICY_RANK[b]);
 
 const OUTPUT_DESCRIPTIONS: Record<CliOutputFormat, string> = {
   text: 'human-readable text (default)',
@@ -207,7 +220,7 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
       >
         <Select
           key={step}
-          items={CLI_APPROVAL_POLICIES.map((policy) => ({
+          items={APPROVAL_POLICY_ORDER.map((policy) => ({
             value: policy,
             label: policy,
             description: APPROVAL_DESCRIPTIONS[policy],

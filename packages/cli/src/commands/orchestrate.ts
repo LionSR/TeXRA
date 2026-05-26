@@ -5,7 +5,7 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { listCliHistoryEntries } from '../runtime/history';
-import { initCliPlatform } from '../runtime/initPlatform';
+import { initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
   readCliMultiAgentPresets,
@@ -39,11 +39,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
     return CliExitCode.Usage;
   }
 
-  await initCliPlatform({
-    ...context,
-    quietLogs: true,
-    skipIncludedModelAccess: true,
-  });
+  await initLocalCliPlatform(context);
   await loadAgents({ includeRemote: false });
   const history = await listCliHistoryEntries();
   const items = buildCliOrchestrationItems({
@@ -98,7 +94,8 @@ async function runOrchestration(context: CliContext): Promise<number> {
 export const orchestrationCommand = defineCommand({
   meta: {
     name: 'orchestrate',
-    description: 'Choose a chat, resume, or team preset',
+    description:
+      'Interactive launcher (runs by default on bare `texra` in a TTY): pick a chat, resume, or team preset',
   },
   args: {
     ...INTERACTIVE_GLOBAL_ARGS,

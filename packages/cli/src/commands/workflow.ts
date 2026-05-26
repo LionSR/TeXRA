@@ -22,17 +22,14 @@ import {
 } from '../runtime/cliConfig';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
-import {
-  writeNdjsonStdout,
-  writeTextStderr,
-  writeTextStdout,
-} from '../runtime/logSinks';
+import { writeTextStderr } from '../runtime/logSinks';
 import { shouldRenderRunProgress } from '../runtime/runProgressRenderer';
 import { createCliRuntimeHost } from '../runtime/runtimeHost';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
 import { assertExplicitModelKnown } from './_helpers/modelArg';
+import { emitCliResult } from './_helpers/output';
 import {
   GLOBAL_ARGS,
   collectStringFlagValues,
@@ -200,19 +197,14 @@ async function runWorkflowAgent(
     return CliExitCode.AgentError;
   }
 
-  if (runContext.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(displayResult, null, 2));
-  } else if (runContext.outputFormat === 'ndjson') {
-    writeNdjsonStdout({
-      kind: 'result',
-      ts: new Date().toISOString(),
-      result: displayResult,
-    });
-  } else if (displayResult.category === AgentCategory.Workflow) {
-    writeTextStdout(formatWorkflowTextResult(displayResult));
-  } else {
-    writeTextStdout(result.status);
-  }
+  emitCliResult(runContext, {
+    json: displayResult,
+    ndjson: { kind: 'result', result: displayResult },
+    text:
+      displayResult.category === AgentCategory.Workflow
+        ? formatWorkflowTextResult(displayResult)
+        : result.status,
+  });
 
   return terminalStatusExitCode(terminalStatus, runContext);
 }
@@ -230,17 +222,22 @@ export const runWorkflowCommand = defineCommand({
       type: 'string',
       alias: 'i',
       required: true,
-      description: 'Input file passed to the workflow agent',
+      description: 'Input file passed to the workflow agent (repeatable)',
     },
     context: {
       type: 'string',
       alias: 'c',
-      description: 'Read-only context file passed to the workflow agent',
+      description:
+        'Read-only context file passed to the workflow agent (repeatable)',
     },
-    output: { type: 'string', description: 'Output file path' },
+    output: {
+      type: 'string',
+      description:
+        'Output file for a single-input run (use --output-dir for multi-input)',
+    },
     'output-dir': {
       type: 'string',
-      description: 'Directory to copy multi-input workflow outputs into',
+      description: 'Directory to copy outputs into for multi-input runs',
     },
     model: {
       type: 'string',

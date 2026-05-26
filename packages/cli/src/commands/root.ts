@@ -23,13 +23,14 @@ import { getExitCode, resetExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 
 import { agentsCommand } from './agents';
-import { authCommand, loginCommand, logoutCommand, usageCommand } from './auth';
+import { authCommand, loginCommand, logoutCommand } from './auth';
 import { chatCommand } from './chat';
 import { completionCommand } from './completion';
 import { doctorCommand } from './doctor';
 import { helpCommand } from './help';
 import { historyCommand } from './history';
 import { initCommand } from './init';
+import { memoryCommand } from './memory';
 import { modelsCommand } from './models';
 import { multiAgentCommand } from './multiAgent';
 import { orchestrationCommand } from './orchestrate';
@@ -67,14 +68,16 @@ export const rootCommand = defineCommand({
     resume: resumeCommand,
     init: initCommand,
     history: historyCommand,
+    memory: memoryCommand,
     agents: agentsCommand,
     skills: skillsCommand,
     tools: toolsCommand,
     'multi-agent': multiAgentCommand,
     models: modelsCommand,
+    // `login`/`logout` are convenience shortcuts; the full auth surface
+    // (login, logout, status, usage) lives under `auth`.
     login: loginCommand,
     logout: logoutCommand,
-    usage: usageCommand,
     auth: authCommand,
     doctor: doctorCommand,
     completion: completionCommand,
