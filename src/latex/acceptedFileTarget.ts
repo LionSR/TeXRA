@@ -18,6 +18,36 @@ export type AcceptedFileTarget = {
   isNewFile: boolean;
 };
 
+/**
+ * Build a FileLocation that sits beside {@link baseLocation} but uses
+ * {@link targetFileName}, preserving the base's location kind (workspace,
+ * runStorage, or external) and propagating its workspace-relative directory.
+ */
+export function siblingLocation(
+  baseLocation: FileLocation,
+  targetFileName: string,
+): FileLocation {
+  const targetAbsolutePath = path.join(
+    path.dirname(baseLocation.absolutePath),
+    targetFileName,
+  );
+  if (baseLocation.kind === 'external') {
+    return createExternalLocation(targetAbsolutePath);
+  }
+  const targetRelativePath = path.join(
+    path.dirname(baseLocation.relativePath),
+    targetFileName,
+  );
+  if (baseLocation.kind === 'workspace') {
+    return createWorkspaceLocation(targetAbsolutePath, targetRelativePath);
+  }
+  return createRunStorageLocation(
+    targetAbsolutePath,
+    targetRelativePath,
+    baseLocation.executionId,
+  );
+}
+
 export function getAcceptedFileTarget(
   baseLocation: FileLocation,
   editedPath: string,
@@ -43,28 +73,10 @@ export function getAcceptedFileTarget(
   const targetFileName = agentSuffix
     ? `${baseNameWithoutExt}_${agentSuffix}${editedExt}`
     : path.basename(editedPath);
-  const targetAbsolutePath = path.join(path.dirname(basePath), targetFileName);
 
-  if (baseLocation.kind === 'external') {
-    return {
-      targetLocation: createExternalLocation(targetAbsolutePath),
-      targetFileName,
-      isNewFile: true,
-    };
-  }
-
-  const targetRelativePath = path.join(
-    path.dirname(baseLocation.relativePath),
+  return {
+    targetLocation: siblingLocation(baseLocation, targetFileName),
     targetFileName,
-  );
-  const targetLocation =
-    baseLocation.kind === 'workspace'
-      ? createWorkspaceLocation(targetAbsolutePath, targetRelativePath)
-      : createRunStorageLocation(
-          targetAbsolutePath,
-          targetRelativePath,
-          baseLocation.executionId,
-        );
-
-  return { targetLocation, targetFileName, isNewFile: true };
+    isNewFile: true,
+  };
 }
