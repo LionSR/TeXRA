@@ -6,7 +6,6 @@ import {
   normalizeMetafilePath,
   resolveMetafileImportPath,
 } from '../../../scripts/desktop-package-metafile-paths.mjs';
-// @ts-expect-error verifier helper is JavaScript.
 import { expectedCodexPlatformKeysFromLabel } from '../../../scripts/desktop-package-targets.mjs';
 
 describe('desktop package verifier metafile paths', () => {
