@@ -15,11 +15,7 @@ import {
   readCliHistoryDetails,
 } from '../runtime/history';
 import { initReadonlyCliPlatform } from '../runtime/initPlatform';
-import {
-  writeNdjsonStdout,
-  writeTextStderr,
-  writeTextStdout,
-} from '../runtime/logSinks';
+import { writeTextStderr } from '../runtime/logSinks';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
@@ -93,23 +89,21 @@ async function runHistoryDelete(
     return CliExitCode.Usage;
   }
 
-  if (context.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(result, null, 2));
-  } else if (context.outputFormat === 'ndjson') {
-    writeNdjsonStdout({
-      kind: 'history-delete',
-      ts: new Date().toISOString(),
-      result,
-    });
-  } else if (result.deleted === 'all') {
-    const noun = result.count === 1 ? 'stored execution' : 'stored executions';
-    writeTextStdout(`Deleted ${result.count} ${noun}.`);
-  } else if (result.found) {
-    writeTextStdout(`Deleted execution ${result.id}.`);
-  } else {
+  if (result.deleted === 'one' && !result.found) {
     writeTextStderr(`Execution not found: ${result.id}`);
     return CliExitCode.Usage;
   }
+
+  const text =
+    result.deleted === 'all'
+      ? `Deleted ${result.count} ${result.count === 1 ? 'stored execution' : 'stored executions'}.`
+      : `Deleted execution ${result.id}.`;
+
+  emitCliResult(context, {
+    json: result,
+    ndjson: { kind: 'history-delete', result },
+    text,
+  });
   return CliExitCode.Success;
 }
 
