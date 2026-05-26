@@ -480,6 +480,7 @@ async function handleTuiSlashCommand(
       context.requestInputExit();
       return true;
     case 'agent':
+    case 'agents':
       if (!chatTuiCanStartRootRun(context.session) && rest) {
         appendLocalAssistantTranscript(
           'The agent is fixed for this chat session. Start a new chat to use a different agent.',
@@ -491,6 +492,7 @@ async function handleTuiSlashCommand(
       }
       return true;
     case 'model':
+    case 'models':
       openCliModelListForm(context);
       return true;
     case 'api':
