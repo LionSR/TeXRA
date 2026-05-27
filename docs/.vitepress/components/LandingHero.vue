@@ -897,8 +897,6 @@ function copyCli() {
 .sh-pulse {
   display: inline-flex;
   color: #c89be0;
-}
-.sh-pulse {
   font-size: 11px;
 }
 .sh-tools {
@@ -910,8 +908,6 @@ function copyCli() {
 }
 .shi {
   display: inline-flex;
-}
-.shi {
   font-size: 13px;
 }
 
@@ -937,8 +933,6 @@ function copyCli() {
   display: inline-flex;
   color: #7a7a7a;
   flex-shrink: 0;
-}
-.chev {
   font-size: 11px;
 }
 .panel-body {
@@ -986,8 +980,6 @@ function copyCli() {
   display: inline-flex;
   color: var(--color-success);
   flex-shrink: 0;
-}
-.td-ic {
   font-size: 12px;
 }
 .td-sp {
@@ -1011,8 +1003,6 @@ function copyCli() {
   display: inline-flex;
   color: #75beff;
   flex-shrink: 0;
-}
-.task-ic {
   font-size: 13px;
 }
 .task-name {
@@ -1070,8 +1060,6 @@ function copyCli() {
 .umsg-ic {
   display: inline-flex;
   color: var(--color-text-secondary);
-}
-.umsg-ic {
   font-size: 11px;
 }
 .umsg-body {
