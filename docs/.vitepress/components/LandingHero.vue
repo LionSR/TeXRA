@@ -10,11 +10,8 @@ const copied = ref(false);
 
 const CLI = 'npm install -g @texra-ai/cli';
 
-// Codicon-style glyphs matching the real ProgressBoard tool icons.
-const ICON_AGENT =
-  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="5.3" r="2.5"/><path d="M3 13.5c0-2.9 10-2.9 10 0"/></svg>';
-const ICON_DIFF =
-  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M5 2v8M5 13.5v.5"/><path d="M11 6v8M11 2v.5"/><path d="M3 6h4M9 10h4"/></svg>';
+// Real product logo, served from docs/public.
+const LOGO = withBase('/logo-128x128.svg');
 
 // Editors all resolve to their respective marketplaces; Cursor, Windsurf and
 // other VS Code forks install TeXRA from Open VSX.
@@ -125,47 +122,74 @@ function copyCli() {
         <span class="dot dot-r"></span>
         <span class="dot dot-y"></span>
         <span class="dot dot-g"></span>
-        <span class="win-title">spectral-gap.tex — TeXRA</span>
+        <span class="win-title">spectral-gap — texra-paper</span>
       </div>
       <div class="win-body">
         <!-- VS Code activity bar -->
         <nav class="act">
-          <span class="act-i">▢</span>
-          <span class="act-i">⌕</span>
-          <span class="act-i">⑂</span>
-          <span class="act-i act-on"><span class="act-glyph">🧠</span></span>
-          <span class="act-i">⚙</span>
+          <span class="act-i"
+            ><wa-icon library="texra" name="files"></wa-icon
+          ></span>
+          <span class="act-i"
+            ><wa-icon library="texra" name="search"></wa-icon
+          ></span>
+          <span class="act-i"
+            ><wa-icon library="texra" name="source-control"></wa-icon
+          ></span>
+          <span class="act-i"
+            ><wa-icon library="texra" name="debug-alt"></wa-icon
+          ></span>
+          <span class="act-i act-on"
+            ><img class="act-logo" :src="LOGO" alt="TeXRA"
+          /></span>
+          <span class="act-i act-bottom"
+            ><wa-icon library="texra" name="settings-gear"></wa-icon
+          ></span>
         </nav>
 
-        <!-- Left: the TeXRA ProgressBoard (orchestrator = tool-use agent) -->
+        <!-- Left: the TeXRA sidebar on the Progress tab (orchestrator = tool-use agent) -->
         <aside class="board">
           <div class="board-tabs">
-            <span class="bt">Problems</span>
-            <span class="bt">Output</span>
-            <span class="bt">Terminal</span>
-            <span class="bt bt-on">TeXRA ProgressBoard</span>
+            <span class="bt"
+              ><wa-icon library="texra" name="pencil"></wa-icon> Launcher</span
+            >
+            <span class="bt bt-on"
+              ><wa-icon library="texra" name="robot"></wa-icon> Progress</span
+            >
           </div>
 
           <div class="stream-head">
             <span class="sh-name">orchestrator@opus47</span>
             <span class="sh-dot" title="Running"></span>
-            <span class="sh-badge"><span class="sh-pulse"></span>3 turns</span>
-            <span class="sh-tools">▢ ↻ ⟂</span>
+            <span class="sh-badge"
+              ><wa-icon class="sh-pulse" library="texra" name="pulse"></wa-icon
+              >3 turns, 12 tool calls</span
+            >
+            <span class="sh-tools">
+              <wa-icon class="shi" library="texra" name="debug-stop"></wa-icon>
+              <wa-icon class="shi" library="texra" name="history"></wa-icon>
+              <wa-icon class="shi" library="texra" name="diff"></wa-icon>
+            </span>
           </div>
 
           <div class="board-scroll">
             <!-- Todos panel -->
             <div class="panel">
               <div class="panel-sum">
-                <span class="chev">▾</span> Todos (2/3)
+                <wa-icon
+                  class="chev"
+                  library="texra"
+                  name="chevron-down"
+                ></wa-icon>
+                Todos (2/3)
               </div>
               <div class="panel-body todos">
                 <div class="todo done">
-                  <span class="td-ic">✓</span
+                  <wa-icon class="td-ic" library="texra" name="check"></wa-icon
                   ><span class="td-tx">Derive the spectral-gap bound</span>
                 </div>
                 <div class="todo done">
-                  <span class="td-ic">✓</span
+                  <wa-icon class="td-ic" library="texra" name="check"></wa-icon
                   ><span class="td-tx">Cross-check λ₂ numerically</span>
                 </div>
                 <div class="todo prog">
@@ -178,17 +202,31 @@ function copyCli() {
             <!-- Background Tasks → Subagents -->
             <div class="panel">
               <div class="panel-sum">
-                <span class="chev">▾</span> Background Tasks
+                <wa-icon
+                  class="chev"
+                  library="texra"
+                  name="chevron-down"
+                ></wa-icon>
+                Background Tasks
               </div>
               <div class="panel-body">
                 <div class="sec-label">
-                  <span class="chev">▾</span> Subagents · 1 active · 3 done
+                  <wa-icon
+                    class="chev"
+                    library="texra"
+                    name="chevron-down"
+                  ></wa-icon>
+                  Subagents · 1 active · 3 done
                 </div>
                 <div class="task">
-                  <span class="task-ic">🤖</span>
+                  <wa-icon
+                    class="task-ic"
+                    library="texra"
+                    name="robot"
+                  ></wa-icon>
                   <span class="task-name">correct</span>
                   <span class="task-desc">(revising spectral-gap.tex)</span>
-                  <span class="task-elapsed">(0:18)</span>
+                  <span class="task-elapsed">0:18</span>
                   <span class="task-tag">running</span>
                 </div>
               </div>
@@ -196,10 +234,22 @@ function copyCli() {
 
             <!-- Conversation log: user message, reasoning, tool-use cards -->
             <div class="log">
-              <div class="umsg">
-                <span class="umsg-ic">❝</span>
-                Derive the spectral-gap bound for d-regular random graphs,
-                cross-check it numerically, and tighten the notation in §2–3.
+              <div class="umsg-wrap">
+                <div class="umsg">
+                  <div class="umsg-head">
+                    <wa-icon
+                      class="umsg-ic"
+                      library="texra"
+                      name="comment"
+                    ></wa-icon>
+                    <span class="umsg-time">11:13:50</span>
+                  </div>
+                  <div class="umsg-body">
+                    Derive the spectral-gap bound for d-regular random graphs,
+                    cross-check it numerically, and tighten the notation in
+                    §2–3.
+                  </div>
+                </div>
               </div>
 
               <div class="reason">
@@ -212,7 +262,12 @@ function copyCli() {
                 :class="{ active: view === 'diff' }"
                 @click="view = 'diff'"
               >
-                <span class="tc-ic" v-html="ICON_AGENT"></span>
+                <wa-icon
+                  class="chev tc-chev"
+                  library="texra"
+                  name="chevron-right"
+                ></wa-icon>
+                <wa-icon class="tc-ic" library="texra" name="account"></wa-icon>
                 <span class="tc-main">
                   <span class="tc-label"
                     ><span class="tc-tool">delegate_agent</span> —
@@ -220,7 +275,7 @@ function copyCli() {
                   >
                   <span class="tc-sub">derive λ₂ bound</span>
                 </span>
-                <span class="chev tc-chev">▸</span>
+                <span class="tc-time">11:13:55</span>
               </button>
 
               <button
@@ -228,7 +283,12 @@ function copyCli() {
                 :class="{ active: view === 'wolfram' }"
                 @click="view = 'wolfram'"
               >
-                <span class="tc-ic" v-html="ICON_AGENT"></span>
+                <wa-icon
+                  class="chev tc-chev"
+                  library="texra"
+                  name="chevron-right"
+                ></wa-icon>
+                <wa-icon class="tc-ic" library="texra" name="account"></wa-icon>
                 <span class="tc-main">
                   <span class="tc-label"
                     ><span class="tc-tool">delegate_agent</span> —
@@ -236,7 +296,7 @@ function copyCli() {
                   >
                   <span class="tc-sub">cross-check N=2000 in Wolfram</span>
                 </span>
-                <span class="chev tc-chev">▸</span>
+                <span class="tc-time">11:14:07</span>
               </button>
 
               <button
@@ -244,49 +304,91 @@ function copyCli() {
                 :class="{ active: view === 'lean' }"
                 @click="view = 'lean'"
               >
-                <span class="tc-ic" v-html="ICON_AGENT"></span>
+                <wa-icon
+                  class="chev tc-chev"
+                  library="texra"
+                  name="chevron-right"
+                ></wa-icon>
+                <wa-icon class="tc-ic" library="texra" name="account"></wa-icon>
                 <span class="tc-main">
                   <span class="tc-label"
                     ><span class="tc-tool">delegate_agent</span> — lean</span
                   >
                   <span class="tc-sub">prove d − λ₂ &gt; 0</span>
                 </span>
-                <span class="chev tc-chev">▸</span>
+                <span class="tc-time">11:14:38</span>
               </button>
 
-              <button
-                class="tcard run"
-                :class="{ active: view === 'diff' }"
-                @click="view = 'diff'"
-              >
-                <span class="tc-sp"></span>
-                <span class="tc-main">
-                  <span class="tc-label"
-                    ><span class="tc-tool">delegate_workflow</span> —
-                    correct</span
-                  >
-                  <span class="tc-sub">unify λ₂ notation across §2–3</span>
-                </span>
-                <span class="chev tc-chev down">▾</span>
-              </button>
+              <!-- in-progress delegation, expanded to show real card body -->
+              <div class="tcard run open" @click="view = 'diff'">
+                <div class="tcard-sum">
+                  <wa-icon
+                    class="chev tc-chev open"
+                    library="texra"
+                    name="chevron-right"
+                  ></wa-icon>
+                  <span class="tc-sp"></span>
+                  <span class="tc-main">
+                    <span class="tc-label"
+                      ><span class="tc-tool">delegate_workflow</span> —
+                      correct</span
+                    >
+                  </span>
+                  <span class="tc-time tc-timer">0:18</span>
+                </div>
+                <div class="tc-body">
+                  <div class="tc-row">
+                    <span class="tc-k">Agent</span
+                    ><code class="tc-code">correct</code
+                    ><span class="tc-model">(gemini25p)</span>
+                  </div>
+                  <div class="tc-row">
+                    <span class="tc-k">Instruction</span
+                    ><span class="tc-v"
+                      >Unify λ₂ notation across §2–3 and resolve label
+                      conflicts.</span
+                    >
+                  </div>
+                  <div class="tc-row">
+                    <span class="tc-k">Files</span
+                    ><span class="tc-file">spectral-gap.tex</span
+                    ><span class="tc-src">(Input)</span>
+                  </div>
+                </div>
+              </div>
 
-              <div class="ldiff" @click="view = 'diff'">
-                <span class="ldiff-ic" v-html="ICON_DIFF"></span>
-                <span class="ldiff-lbl">Latexdiff result</span>
+              <details class="ldiff" open @click.prevent="view = 'diff'">
+                <summary class="ldiff-sum">
+                  <wa-icon
+                    class="chev"
+                    library="texra"
+                    name="chevron-down"
+                  ></wa-icon>
+                  <wa-icon
+                    class="ldiff-ic"
+                    library="texra"
+                    name="diff"
+                  ></wa-icon>
+                  <span class="ldiff-lbl">Latexdiff result</span>
+                </summary>
                 <div class="ldiff-row">
-                  <span class="ldiff-ok">✓</span>
+                  <wa-icon
+                    class="ldiff-ok"
+                    library="texra"
+                    name="check"
+                  ></wa-icon>
                   <span class="ldiff-file">spectral-gap.tex</span>
                   <span class="ldiff-r">[r0]</span>
                   <span class="ldiff-arrow">→</span>
                   <span class="ldiff-r">[r1]</span>
                   (<span class="ldiff-link">diff</span>)
                 </div>
-              </div>
+              </details>
             </div>
           </div>
         </aside>
 
-        <!-- Right: the result, viewable three ways -->
+        <!-- Right: the result — files the run produced, open in the editor -->
         <section class="result">
           <div class="tabs">
             <button
@@ -295,7 +397,12 @@ function copyCli() {
               :class="{ active: view === 'diff' }"
               @click="view = 'diff'"
             >
-              <span class="tab-dot td-diff"></span>spectral-gap.tex
+              <wa-icon
+                class="t-ic t-pdf"
+                library="texra"
+                name="file-pdf"
+              ></wa-icon
+              >spectral-gap-diff.pdf
             </button>
             <button
               type="button"
@@ -303,7 +410,12 @@ function copyCli() {
               :class="{ active: view === 'wolfram' }"
               @click="view = 'wolfram'"
             >
-              <span class="tab-dot td-wolf"></span>Wolfram
+              <wa-icon
+                class="t-ic t-wolf"
+                library="texra"
+                name="file-code"
+              ></wa-icon
+              >cross_check.wls
             </button>
             <button
               type="button"
@@ -311,11 +423,11 @@ function copyCli() {
               :class="{ active: view === 'lean' }"
               @click="view = 'lean'"
             >
-              <span class="tab-dot td-lean"></span>Lean&nbsp;4
+              <span class="t-ic t-lean">λ</span>SpectralGap.lean
             </button>
           </div>
 
-          <!-- Rendered latexdiff, on a white "PDF" page -->
+          <!-- Compiled latexdiff, shown in the PDF preview -->
           <div v-show="view === 'diff'" class="page">
             <h3 class="pg-h">2&nbsp;&nbsp;Preliminaries</h3>
             <p class="pg-p">
@@ -356,19 +468,19 @@ function copyCli() {
             </p>
           </div>
 
-          <!-- Numeric cross-check -->
+          <!-- Numeric cross-check (WolframScript) -->
           <div v-show="view === 'wolfram'" class="term">
-            <div class="cell-in">
-              <span class="prompt">In[1]:=</span> A =
-              AdjacencyMatrix[RandomRegularGraph[6, 2000]];
+            <div class="cmt">
+              (* second eigenvalue of a random 6-regular graph, N = 2000 *)
             </div>
-            <div class="cell-in">
-              <span class="prompt">In[2]:=</span>
-              Rest[ReverseSort@Eigenvalues[N@A]] // First
+            <div class="wl">A = AdjacencyMatrix @ RandomGraph @</div>
+            <div class="wl indent">
+              DegreeGraphDistribution @ ConstantArray[6, 2000];
             </div>
-            <div class="cell-out">
-              <span class="prompt out">Out[2]=</span> 4.41
+            <div class="wl">
+              λ2 = Max @ Rest @ ReverseSort @ Eigenvalues @ N @ A
             </div>
+            <div class="wl out">4.41</div>
             <div class="term-note">
               analytic bound&nbsp;&nbsp;2√(d−1) = 2√5 ≈ 4.472&nbsp;… the
               measured λ₂ = 4.41 sits just inside the Ramanujan limit.
@@ -643,16 +755,18 @@ function copyCli() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 10px;
-  gap: 14px;
+  padding: 10px 0;
+  gap: 16px;
 }
 .act-i {
-  color: #7a7a7a;
-  font-size: 1.1rem;
+  color: #858585;
   width: 100%;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   position: relative;
-  line-height: 1.4;
+  padding: 2px 0;
+  font-size: 20px;
 }
 .act-on {
   color: #fff;
@@ -661,14 +775,18 @@ function copyCli() {
   content: '';
   position: absolute;
   left: 0;
-  top: -2px;
-  bottom: -2px;
+  top: -4px;
+  bottom: -4px;
   width: 2px;
   background: #c89be0;
 }
-.act-glyph {
-  font-size: 0.95rem;
-  filter: grayscale(0.1);
+.act-logo {
+  width: 23px;
+  height: 23px;
+  display: block;
+}
+.act-bottom {
+  margin-top: auto;
 }
 
 /* ProgressBoard */
@@ -681,25 +799,29 @@ function copyCli() {
 }
 .board-tabs {
   display: flex;
-  align-items: center;
-  gap: 14px;
-  height: 34px;
-  padding: 0 12px;
+  align-items: stretch;
+  height: 36px;
+  padding: 0 8px;
   background: #252526;
   border-bottom: 1px solid #000;
   overflow: hidden;
 }
 .bt {
-  font-size: 0.72rem;
-  color: #7c7c7c;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  font-size: 0.74rem;
+  color: #8a8a8a;
   white-space: nowrap;
+}
+.bt wa-icon {
+  font-size: 12px;
 }
 .bt-on {
   color: #fff;
   font-weight: 600;
   box-shadow: inset 0 -2px 0 #c89be0;
-  padding-bottom: 7px;
-  padding-top: 7px;
 }
 /* Stream header */
 .stream-head {
@@ -752,16 +874,24 @@ function copyCli() {
   flex-shrink: 0;
 }
 .sh-pulse {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #c89be0;
+  display: inline-flex;
+  color: #c89be0;
+}
+.sh-pulse {
+  font-size: 11px;
 }
 .sh-tools {
   margin-left: auto;
+  display: flex;
+  gap: 9px;
   color: #6f6f6f;
-  letter-spacing: 2px;
   flex-shrink: 0;
+}
+.shi {
+  display: inline-flex;
+}
+.shi {
+  font-size: 13px;
 }
 
 .board-scroll {
@@ -783,8 +913,12 @@ function copyCli() {
   font-weight: 600;
 }
 .chev {
+  display: inline-flex;
   color: #7a7a7a;
-  font-size: 0.6rem;
+  flex-shrink: 0;
+}
+.chev {
+  font-size: 11px;
 }
 .panel-body {
   padding: 2px 12px 9px 14px;
@@ -828,9 +962,12 @@ function copyCli() {
   font-weight: 600;
 }
 .td-ic {
+  display: inline-flex;
   color: #3fb950;
-  font-weight: 700;
   flex-shrink: 0;
+}
+.td-ic {
+  font-size: 12px;
 }
 .td-sp {
   width: 11px;
@@ -850,8 +987,12 @@ function copyCli() {
   padding: 3px 0;
 }
 .task-ic {
-  font-size: 0.8rem;
+  display: inline-flex;
+  color: #75beff;
   flex-shrink: 0;
+}
+.task-ic {
+  font-size: 13px;
 }
 .task-name {
   color: #e0e0e0;
@@ -886,20 +1027,37 @@ function copyCli() {
   flex-direction: column;
   gap: 7px;
 }
+.umsg-wrap {
+  display: flex;
+  justify-content: flex-end;
+}
 .umsg {
-  background: #2a2140;
-  color: #e9e2f3;
-  border: 1px solid #3a2c57;
-  border-radius: 8px;
-  padding: 8px 10px;
-  line-height: 1.5;
-  font-family: var(--vp-font-family-base);
-  font-size: 0.78rem;
+  max-width: 88%;
+  background: rgba(86, 110, 150, 0.22);
+  border: 1px solid #3a3f4a;
+  border-radius: 6px;
+  padding: 6px 9px;
+}
+.umsg-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 3px;
+  font-size: 0.64rem;
+  color: #9a9a9a;
 }
 .umsg-ic {
-  color: #b39ddb;
-  margin-right: 4px;
-  font-weight: 700;
+  display: inline-flex;
+  color: #9a9a9a;
+}
+.umsg-ic {
+  font-size: 11px;
+}
+.umsg-body {
+  color: #d4d4d4;
+  line-height: 1.5;
+  font-family: var(--vp-font-family-base);
+  font-size: 0.77rem;
 }
 .reason {
   color: #b9b9b9;
@@ -936,11 +1094,7 @@ function copyCli() {
   color: #75beff;
   flex-shrink: 0;
   display: inline-flex;
-}
-.tc-ic :deep(svg) {
-  width: 14px;
-  height: 14px;
-  display: block;
+  font-size: 13px;
 }
 .tc-sp {
   width: 12px;
@@ -975,11 +1129,70 @@ function copyCli() {
   text-overflow: ellipsis;
 }
 .tc-chev {
-  flex-shrink: 0;
   align-self: center;
 }
-.tc-chev.down {
+.tc-chev.open {
+  transform: rotate(90deg);
+}
+.tc-time {
+  flex-shrink: 0;
+  align-self: center;
+  font-size: 0.66rem;
+  color: #6f6f6f;
+}
+.tc-timer {
+  color: #d7a93e;
+}
+
+/* Expanded (in-progress) delegation card */
+.tcard.open {
+  display: block;
+  padding: 0;
+}
+.tcard-sum {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+}
+.tc-body {
+  border-top: 1px solid #2c2c2c;
+  padding: 7px 9px 8px 27px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tc-row {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+.tc-k {
+  color: #8a8a8a;
+  flex-shrink: 0;
+  min-width: 64px;
+}
+.tc-v {
+  color: #c4c4c4;
+  font-family: var(--vp-font-family-base);
+}
+.tc-code {
   color: #c89be0;
+  background: rgba(200, 155, 224, 0.12);
+  border-radius: 3px;
+  padding: 0 5px;
+}
+.tc-model {
+  color: #7c7c7c;
+}
+.tc-file {
+  color: #4daafc;
+}
+.tc-src {
+  color: #7c7c7c;
+  font-style: italic;
 }
 
 /* Latexdiff result banner */
@@ -990,15 +1203,20 @@ function copyCli() {
   padding: 6px 9px;
   cursor: pointer;
 }
+.ldiff-sum {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+  cursor: pointer;
+}
+.ldiff-sum::-webkit-details-marker {
+  display: none;
+}
 .ldiff-ic {
   color: #c89be0;
   display: inline-flex;
-  vertical-align: -2px;
-  margin-right: 5px;
-}
-.ldiff-ic :deep(svg) {
-  width: 13px;
-  height: 13px;
+  font-size: 12px;
 }
 .ldiff-lbl {
   color: #c4c4c4;
@@ -1007,13 +1225,14 @@ function copyCli() {
   display: flex;
   align-items: center;
   gap: 5px;
-  margin-top: 5px;
-  padding-left: 2px;
+  margin-top: 6px;
+  padding-left: 18px;
   color: #8a8a8a;
 }
 .ldiff-ok {
+  display: inline-flex;
   color: #3fb950;
-  font-weight: 700;
+  font-size: 11px;
 }
 .ldiff-file {
   color: #4daafc;
@@ -1053,12 +1272,12 @@ function copyCli() {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  background: transparent;
+  background: #2d2d2d;
   border: none;
   border-right: 1px solid #1a1a1a;
   color: #9a9a9a;
-  font-size: 0.78rem;
-  padding: 8px 16px;
+  font-size: 0.76rem;
+  padding: 8px 14px;
   cursor: pointer;
   font-family: var(--vp-font-family-mono);
 }
@@ -1068,22 +1287,26 @@ function copyCli() {
 .tab.active {
   background: #1e1e1e;
   color: #fff;
-  box-shadow: inset 0 -2px 0 #c89be0;
+  box-shadow: inset 0 2px 0 #c89be0;
 }
-.tab-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  display: inline-block;
+.t-ic {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: 12px;
 }
-.td-diff {
-  background: #4daafc;
+.t-pdf {
+  color: #e0524f;
 }
-.td-wolf {
-  background: #d97a1a;
+.t-wolf {
+  color: #d9491c;
 }
-.td-lean {
-  background: #9a5fc0;
+.t-lean {
+  color: #b388e0;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 0.9rem;
+  line-height: 1;
 }
 
 /* Rendered diff "PDF" page */
@@ -1138,18 +1361,18 @@ function copyCli() {
   line-height: 1.75;
   color: #d4d4d4;
 }
-.cell-in {
-  color: #dcdcaa;
-}
-.cell-out {
-  color: #9cdcfe;
-}
-.prompt {
+.cmt {
   color: #6a9955;
-  margin-right: 8px;
 }
-.prompt.out {
-  color: #c586c0;
+.wl {
+  color: #d4d4d4;
+}
+.wl.indent {
+  padding-left: 1.5em;
+}
+.wl.out {
+  color: #9cdcfe;
+  margin-top: 4px;
 }
 .term-note {
   margin-top: 14px;
