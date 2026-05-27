@@ -61,7 +61,8 @@ Workflow agent prompts receive:
 - `{{ INSTRUCTION }}` — the user's free-text instruction for this run
 - `{{ INPUT_FILES }}` — ordered list of input filenames. Editing agents should
   output one document for each input, preserving the same names and order. Use
-  `{{ INPUT_FILES | join(", ") }}` for a human-readable list.
+  `{{ INPUT_FILES | default([], true) | join(", ") }}` for a human-readable list
+  (guards against null/absent `INPUT_FILES` so the prompt renders safely).
 - `{{ OUTPUT_FILES }}` — ordered list of declared generated filenames. This is
   only populated when the agent has explicit `outputFiles` or
   `settings.defaultOutputFiles`.
