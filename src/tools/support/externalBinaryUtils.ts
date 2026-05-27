@@ -9,7 +9,7 @@
 
 import { platform } from '@platform/platform';
 
-export type ElectronProcess = NodeJS.Process & {
+type ElectronProcess = NodeJS.Process & {
   defaultApp?: boolean;
   resourcesPath?: string;
 };
