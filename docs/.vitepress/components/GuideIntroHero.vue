@@ -386,9 +386,6 @@ const view = ref('search');
   color: var(--wa-color-text-normal);
   font-weight: 600;
 }
-.td-pending {
-  color: var(--color-text-secondary) !important;
-}
 .td-ic {
   display: inline-flex;
   color: var(--color-success);
@@ -403,13 +400,6 @@ const view = ref('search');
   border-top-color: #c89be0;
   border-radius: 50%;
   animation: mk-spin 0.9s linear infinite;
-}
-.td-todo {
-  width: 11px;
-  height: 11px;
-  flex-shrink: 0;
-  border: 1.5px solid var(--color-text-tertiary);
-  border-radius: 50%;
 }
 
 /* Conversation log */
