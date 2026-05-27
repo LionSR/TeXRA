@@ -1,6 +1,10 @@
 # LaTeX Diff
 
-A core design philosophy of TeXRA is to provide transparency and control over the AI's modifications. The integrated LaTeX diff functionality is central to this, allowing you to precisely see and evaluate the changes suggested by AI agents before deciding how to incorporate them.
+A core design philosophy of TeXRA is transparency and control over the AI's modifications. You see and evaluate every change an agent suggests, in the typeset document, before deciding how to incorporate it.
+
+<LatexDiffHero />
+
+<p class="hero-caption">Pick a base and an edited file (or a git commit), press latexdiff, and TeXRA compiles and opens the marked-up PDF — additions underlined in blue, deletions struck through in red.</p>
 
 TeXRA automatically generates diff files after agent runs that modify `.tex` files (like `correct` or `polish`), comparing the agent's task-storage output (`r0/output.tex` or `r1/output.tex`) against the original input or the previous round's output. This provides immediate observability into the agent's actions.
 
@@ -32,9 +36,7 @@ Unlike standard text diff tools (which can look like hieroglyphics when comparin
 
 ## The LaTeXdiffs Section
 
-The LaTeX diff functionality is accessible through the "LaTeXdiffs" section (<wa-icon library="texra" name="chevron-down"></wa-icon> LaTeXDiffs) in the TeXRA interface:
-
-<!-- ![LaTeXdiffs Section](/images/latexdiffs-section.png) -->
+The LaTeX diff functionality is accessible through the "LaTeXdiffs" section (<wa-icon library="texra" name="chevron-down"></wa-icon> LaTeXDiffs) in the TeXRA interface, shown in the slice above.
 
 This section provides several key features:
 
@@ -76,8 +78,6 @@ The generated diff document will highlight:
 - **Additions**: Usually in blue or underlined
 - **Deletions**: Usually in red or struck through
 - **Changes**: Shown as deletions followed by additions
-
-<!-- ![LaTeX Diff Example](/images/latex-diff-example.png) -->
 
 ## Git-Based Version Comparison
 

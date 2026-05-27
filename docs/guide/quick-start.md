@@ -2,6 +2,10 @@
 
 You have a paper draft and a deadline. Let's get TeXRA working for you in under five minutes.
 
+<QuickStartHero />
+
+<p class="hero-caption">The Launcher tab: point it at your file, pick an agent and a model, write one sentence, and press Execute.</p>
+
 ## Overview
 
 TeXRA sits inside VS Code and helps you polish writing, fix errors, create figures, and transform documents—without leaving your editor. Here's the short version:
@@ -72,8 +76,6 @@ Select **Never remind again** to hide it permanently.
 ::: info Multiple Files
 For complex documents with multiple input files, use the "Multiple" dropdown to select additional files.
 :::
-
-<!-- ![File Selection](/images/file-selection.png) -->
 
 ### Step 3: Choose Agent and Model
 
