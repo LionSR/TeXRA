@@ -96,6 +96,11 @@ export function readCliArgv(): string[] {
   return process.argv.slice(2);
 }
 
+/** Path the CLI was invoked as (argv[1]), or '' when unavailable. */
+export function readCliEntrypointPath(): string {
+  return process.argv[1] ?? '';
+}
+
 let cachedVersion: Promise<string> | undefined;
 
 export function readCliVersion(): Promise<string> {

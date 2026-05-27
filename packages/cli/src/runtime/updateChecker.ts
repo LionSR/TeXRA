@@ -6,6 +6,7 @@ import { gt as semverGt, valid as semverValid } from 'semver';
 import {
   cliEnvValue,
   readCliAmbientState,
+  readCliEntrypointPath,
   type CliContext,
 } from './cliContext';
 import { askCliQuestion, writeTextStderr } from './logSinks';
@@ -58,7 +59,7 @@ function currentModulePath(): string {
   try {
     return fileURLToPath(import.meta.url);
   } catch {
-    return process.argv[1] ?? '';
+    return readCliEntrypointPath();
   }
 }
 
