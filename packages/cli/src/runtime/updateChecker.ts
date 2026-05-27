@@ -9,6 +9,7 @@ import {
   type CliContext,
 } from './cliContext';
 import { askCliQuestion, writeTextStderr } from './logSinks';
+import { createCliStyle } from './style';
 
 /** Published package name on npm; the `texra` bin lives here. */
 export const CLI_PACKAGE_NAME = '@texra-ai/cli';
@@ -155,26 +156,33 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
 
   const method = detectInstallMethod();
   const updateCmd = formatUpdateCommand(method);
+  const style = createCliStyle(context.colorEnabled);
   writeTextStderr(
-    `A new version of texra is available: ${context.version} → ${latest}`,
+    `A new version of texra is available: ${context.version} → ${style.emphasis(style.success(latest))}`,
   );
 
   let answer: string;
   try {
-    answer = await askCliQuestion(`Update now with \`${updateCmd}\`? [Y/n] `);
+    answer = await askCliQuestion(
+      `Update now with \`${style.command(updateCmd)}\`? [Y/n] `,
+    );
   } catch {
     return;
   }
   if (!affirmative(answer)) {
-    writeTextStderr(`Skipped. Update later with: ${updateCmd}`);
+    writeTextStderr(
+      style.muted('Skipped. Update later with: ') + style.command(updateCmd),
+    );
     return;
   }
 
-  writeTextStderr(`Updating via ${method}…`);
+  writeTextStderr(style.muted(`Updating via ${method}…`));
   const ok = await runCliUpdate(method);
   writeTextStderr(
     ok
-      ? `Updated to ${latest}. Restart texra to use the new version.`
-      : `Update failed. Run manually: ${updateCmd}`,
+      ? style.success(
+          `Updated to ${latest}. Restart texra to use the new version.`,
+        )
+      : `${style.error('Update failed.')} Run manually: ${style.command(updateCmd)}`,
   );
 }
