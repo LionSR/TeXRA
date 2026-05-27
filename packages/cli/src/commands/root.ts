@@ -154,26 +154,3 @@ export async function runCli(
   }
   return { exitCode: getExitCode() };
 }
-
-// Re-exports retained for the existing test surface
-// (`src/test-kernel/cli/*`). Keep this list narrow — new tests should import
-// from the helper modules directly.
-export { collectStringFlagValues } from './_helpers/globalArgs';
-export {
-  formatUnknownCliCommand,
-  normalizeRootShortcuts,
-  reorderGlobalFlags,
-  type UnknownCliCommand,
-} from './_helpers/dispatch';
-export {
-  isCliFetchStackLog,
-  formatCliModelListError,
-} from './_helpers/fetchSilencer';
-export { cliTerminalStatus } from './_helpers/terminalStatus';
-export { expandWorkflowInputSpecs } from './_helpers/workflowInputs';
-export {
-  resolveWorkflowOutput,
-  resumeWorkflowOutputFile,
-} from './_helpers/workflowOutput';
-export { resolveLoginProvider } from './auth';
-export { doctorPlatformInitContext } from './doctor';

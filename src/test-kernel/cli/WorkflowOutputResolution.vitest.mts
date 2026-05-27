@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { resolveWorkflowOutput } from '@cli/commands/root';
+import { resolveWorkflowOutput } from '@cli/commands/_helpers/workflowOutput';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { END_GROUP_STATUS, EXECUTION_STATUS } from '@shared/schemas';
 
