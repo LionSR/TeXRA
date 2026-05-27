@@ -352,7 +352,10 @@ async function validateCodeReviewActionHelpers() {
   try {
     const resultJson = path.join(reviewCwd, 'result.json');
     const outputFile = path.join(reviewCwd, 'review.md');
-    writeFileSync(resultJson, JSON.stringify({ status: 'success' }));
+    writeFileSync(
+      resultJson,
+      JSON.stringify({ lastResponse: 'success', status: 'success' }),
+    );
     const { finalMessage } = normalizeReviewFile({
       resultJson,
       outputFile,

@@ -2,6 +2,19 @@ const fs = require('node:fs');
 const crypto = require('node:crypto');
 const path = require('node:path');
 
+const STATUS_ONLY_MESSAGES = new Set([
+  'complete',
+  'completed',
+  'done',
+  'ok',
+  'success',
+  'succeeded',
+]);
+
+function isStatusOnlyMessage(value) {
+  return STATUS_ONLY_MESSAGES.has(value.trim().toLowerCase());
+}
+
 function integerOrUndefined(value) {
   return typeof value === 'number' && Number.isInteger(value)
     ? value
@@ -151,9 +164,11 @@ function normalizeReviewFile({
   const raw = fs.readFileSync(resultJson, 'utf8');
   const payload = JSON.parse(raw);
   const result = payload.result ?? payload;
+  const candidateFinalMessage = String(result.lastResponse || '').trim();
   const rawFinalMessage =
-    String(result.lastResponse || '').trim() ||
-    'TeXRA completed without a final review message.';
+    candidateFinalMessage && !isStatusOnlyMessage(candidateFinalMessage)
+      ? candidateFinalMessage
+      : 'TeXRA completed without a final review message.';
   const review = normalizeReview(rawFinalMessage);
   const finalMessage = review.body.trim();
   const resolvedOutputFile =

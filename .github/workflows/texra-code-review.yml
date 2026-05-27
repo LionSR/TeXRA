@@ -194,7 +194,13 @@ jobs:
           approval-policy: never
 
       - name: Write TeXRA review failure fallback
-        if: always() && steps.texra-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true' && steps.texra-review-trusted.outputs.review-json == '' && steps.texra-review-bootstrap.outputs.review-json == ''
+        if: >
+          always() &&
+          steps.texra-switch.outputs.skip != 'true' &&
+          steps.provider-token.outputs.skip != 'true' &&
+          steps.trusted-texra-action.outputs.available == 'true' &&
+          steps.texra-review-trusted.outputs.review-json == '' &&
+          steps.texra-review-bootstrap.outputs.review-json == ''
         id: texra-review-fallback
         run: |
           mkdir -p .texra-action
@@ -208,7 +214,14 @@ jobs:
           echo "review-json=.texra-action/texra-review-fallback.json" >> "$GITHUB_OUTPUT"
 
       - name: Post TeXRA pull request review
-        if: always() && (steps.texra-review-trusted.outputs.review-json != '' || steps.texra-review-bootstrap.outputs.review-json != '' || steps.texra-review-fallback.outputs.review-json != '')
+        if: >
+          always() &&
+          steps.trusted-texra-action.outputs.available == 'true' &&
+          (
+            steps.texra-review-trusted.outputs.review-json != '' ||
+            steps.texra-review-bootstrap.outputs.review-json != '' ||
+            steps.texra-review-fallback.outputs.review-json != ''
+          )
         uses: actions/github-script@v7
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
