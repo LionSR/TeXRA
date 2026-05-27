@@ -1,7 +1,7 @@
 // Third-party imports
 import { useMemo } from 'react';
 
-import { Box, Text } from 'ink';
+import { Box, Text, useWindowSize } from 'ink';
 
 // Local imports - shared schemas and utilities
 import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
@@ -106,6 +106,9 @@ export function toolUsePatchDisplayLines(
 ): readonly string[] {
   const groups = toolUsePatchGroups(toolUse);
   if (!groups) return [];
+  // Plain text only: the colored full-width bands come from the `DiffView`
+  // component (live cards + scrollback render through it); these lines feed the
+  // transcript viewer and stay uncolored.
   return groups.flatMap((group) => [
     `${OUTPUT_CORNER} ${group.fileLabel}`,
     ...diffDisplayLines(group.hunks).map((line) => `  ${line.text}`),
@@ -218,19 +221,28 @@ function PatchPreview({
 }: {
   readonly groups: readonly InlinePatchGroup[];
 }): React.JSX.Element {
+  // The diff sits under two nested `paddingLeft={2}` boxes; derive its width
+  // from the real terminal so the full-row bands fill exactly the available
+  // columns instead of padding to a fixed default and wrapping on narrow
+  // terminals. `DiffView` floors this at its own minimum.
+  const { columns } = useWindowSize();
+  const diffWidth = columns - PATCH_PREVIEW_INDENT;
   return (
     <Box flexDirection="column" paddingLeft={2}>
       {groups.map((group, index) => (
         <Box key={`${group.fileLabel}-${index}`} flexDirection="column">
           <Text dimColor>{`${OUTPUT_CORNER} ${group.fileLabel}`}</Text>
           <Box flexDirection="column" paddingLeft={2}>
-            <DiffView hunks={group.hunks} />
+            <DiffView hunks={group.hunks} width={diffWidth} />
           </Box>
         </Box>
       ))}
     </Box>
   );
 }
+
+/** Combined left padding of the two nested boxes wrapping the patch diff. */
+const PATCH_PREVIEW_INDENT = 4;
 
 function OutputBlock({
   lines,
