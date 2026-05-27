@@ -65,7 +65,13 @@ async function collectTexraThreads({ github, context, core }) {
     return emptyPayload;
   }
 
-  const reviewThreads = data.repository.pullRequest.reviewThreads;
+  const reviewThreads = data.repository?.pullRequest?.reviewThreads;
+  if (!reviewThreads) {
+    core.warning('Previous TeXRA review thread data was unavailable.');
+    fs.writeFileSync(outputPath, `${JSON.stringify(emptyPayload, null, 2)}\n`);
+    core.setOutput('path', outputPath);
+    return emptyPayload;
+  }
   if (reviewThreads.pageInfo.hasNextPage) {
     core.warning('Only the first 100 previous TeXRA review threads were read.');
   }

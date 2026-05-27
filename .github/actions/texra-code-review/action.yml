@@ -256,12 +256,16 @@ runs:
         else
           texra_command=(texra)
         fi
+        set +e
         "${texra_command[@]}" "${args[@]}" > "$result_json" 2> "$stderr_log"
+        texra_status=$?
+        set -e
 
         if [ -s "$stderr_log" ]; then
           cat "$stderr_log" >&2
         fi
         echo "result-json=$result_json" >> "$GITHUB_OUTPUT"
+        exit "$texra_status"
 
     - name: Parse TeXRA result
       id: parse

@@ -33,7 +33,7 @@ function markedBody(body, marker = process.env.TEXRA_REVIEW_MARKER) {
   return `${marker || '<!-- texra-review -->'}\n${text || '## TeXRA Code Review\n\nNo review body was produced.'}`;
 }
 
-function normalizeComment(comment, marker) {
+function formatReviewComment(comment, marker) {
   const result = {
     path: comment.path,
     body: markedBody(comment.body, marker),
@@ -128,7 +128,7 @@ async function postTexraReview({ github, context, core }) {
   const knownThreadStates = loadKnownThreadStates();
   const canResolveThreads = process.env.TEXRA_RESOLVE_THREADS === 'true';
   const comments = Array.isArray(review.comments)
-    ? review.comments.map((comment) => normalizeComment(comment, marker))
+    ? review.comments.map((comment) => formatReviewComment(comment, marker))
     : [];
   const inlineComments = [];
   const unplacedComments = [];
@@ -145,7 +145,6 @@ async function postTexraReview({ github, context, core }) {
   if (unplacedComments.length > 0) {
     body = `${body}\n\n### Inline comments not placed\n\n${fallbackItems(unplacedComments, marker)}`;
   }
-  body = `${body}${reviewAttributionFooter()}`;
 
   async function createReview(reviewComments, reviewBody) {
     await github.rest.pulls.createReview({
@@ -160,14 +159,14 @@ async function postTexraReview({ github, context, core }) {
   }
 
   try {
-    await createReview(inlineComments, body);
+    await createReview(inlineComments, `${body}${reviewAttributionFooter()}`);
   } catch (error) {
     if (inlineComments.length === 0) throw error;
     core.warning(
       `Could not create inline TeXRA review comments; falling back to review body only: ${error.message}`,
     );
     body = `${body}\n\n### Inline comments that could not be placed\n\n${fallbackItems(inlineComments, marker)}`;
-    await createReview([], body);
+    await createReview([], `${body}${reviewAttributionFooter()}`);
   }
 
   async function replyToThread(threadId, replyBody) {
@@ -254,7 +253,7 @@ module.exports = {
   loadKnownThreadIds,
   loadKnownThreadStates,
   loadCommentableLines,
-  normalizeComment,
+  formatReviewComment,
   postTexraReview,
   reviewAttributionFooter,
 };

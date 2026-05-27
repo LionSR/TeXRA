@@ -204,6 +204,9 @@ async function runToolUseAgent(
       resolveToolUseInstruction(init, runContext.cwd),
     ]);
   } catch (error: unknown) {
+    if (!(error instanceof CliUsageError)) {
+      throw error;
+    }
     writeTextStderr(toErrorMessage(error));
     return CliExitCode.Usage;
   }

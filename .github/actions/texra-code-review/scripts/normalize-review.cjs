@@ -53,7 +53,7 @@ function parseModelJson(text) {
   return undefined;
 }
 
-function normalizeComment(comment) {
+function normalizeModelComment(comment) {
   if (!comment || typeof comment !== 'object') return undefined;
   const pathValue = stringOrUndefined(comment.path);
   const body = stringOrUndefined(comment.body);
@@ -109,7 +109,7 @@ function normalizeReview(rawText) {
     stringOrUndefined(modelPayload.summary) ??
     rawText;
   const comments = Array.isArray(modelPayload.comments)
-    ? modelPayload.comments.map(normalizeComment).filter(Boolean)
+    ? modelPayload.comments.map(normalizeModelComment).filter(Boolean)
     : [];
   const rawThreadActions = [
     ...(Array.isArray(modelPayload.thread_actions)
@@ -186,7 +186,7 @@ if (require.main === module) {
 }
 
 module.exports = {
-  normalizeComment,
+  normalizeModelComment,
   normalizeReview,
   normalizeReviewFile,
   normalizeThreadAction,

@@ -416,6 +416,29 @@ async function validateCodeReviewActionHelpers() {
       JSON.parse(readFileSync(threadsOutput, 'utf8')).threads.length === 0,
       'thread collection should create custom output directories',
     );
+    const unavailableThreadsOutput = path.join(
+      threadsCwd,
+      'nested',
+      'threads-unavailable.json',
+    );
+    process.env.TEXRA_THREADS_OUTPUT = unavailableThreadsOutput;
+    const unavailablePayload = await collectTexraThreads({
+      github: {
+        graphql: async () => ({ repository: null }),
+      },
+      context: {
+        repo: { owner: 'owner', repo: 'repo' },
+        payload: { pull_request: { number: 1 } },
+      },
+      core: {
+        warning: () => undefined,
+        setOutput: () => undefined,
+      },
+    });
+    assert(
+      unavailablePayload.threads.length === 0,
+      'thread collection should return an empty payload when GraphQL data is unavailable',
+    );
     writeFileSync(
       threadsOutput,
       JSON.stringify({ threads: [{ id: 'PRRT_known_thread' }] }),
@@ -464,6 +487,13 @@ async function validateCodeReviewActionHelpers() {
       providerKeys: { deepseek: 'key' },
     }).model === 'gemini31p',
     'review model resolution should honor the global model override',
+  );
+  assert(
+    readFileSync(
+      path.join(repoRoot, '.github/actions/texra-code-review/action.yml'),
+      'utf8',
+    ).includes('texra_status=$?'),
+    'TeXRA action should preserve command stderr before exiting on failure',
   );
 
   const promptContextCwd = mkdtempSync(
@@ -591,6 +621,45 @@ async function validateCodeReviewActionHelpers() {
     assert(
       !postedInlineComments[0]?.body.includes('Reviewed by TeXRA agent'),
       'inline comments should not include TeXRA reviewer attribution',
+    );
+
+    let fallbackAttempt = 0;
+    let fallbackReviewBody = '';
+    await postTexraReview({
+      github: {
+        rest: {
+          pulls: {
+            createReview: async ({ body }) => {
+              fallbackAttempt += 1;
+              if (fallbackAttempt === 1) {
+                throw new Error('invalid inline anchor');
+              }
+              fallbackReviewBody = body;
+            },
+          },
+        },
+        graphql: async () => undefined,
+      },
+      context: {
+        repo: { owner: 'owner', repo: 'repo' },
+        payload: { pull_request: { number: 1 } },
+      },
+      core: {
+        notice: () => undefined,
+        warning: () => undefined,
+      },
+    });
+    assert(
+      fallbackReviewBody.includes(
+        '### Inline comments that could not be placed',
+      ),
+      'inline fallback should preserve unposted inline comments in the review body',
+    );
+    assert(
+      fallbackReviewBody
+        .trim()
+        .endsWith('Reviewed by TeXRA agent `review` with model `deepseekT`.'),
+      'posted review fallback body should keep TeXRA reviewer attribution at the end',
     );
   } finally {
     for (const [name, value] of Object.entries(previousPostEnv)) {
