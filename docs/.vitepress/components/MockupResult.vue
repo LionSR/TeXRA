@@ -136,45 +136,8 @@ const view = defineModel('view', { type: String, default: 'diff' });
 </template>
 
 <style scoped>
-/* Design tokens are defined on .win in LandingHero.vue and inherit here. */
-.result {
-  display: flex;
-  flex-direction: column;
-  background: #1e1e1e;
-  min-width: 0;
-}
-.tabs {
-  display: flex;
-  background: #252526;
-  border-bottom: 1px solid #000;
-}
-.tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  background: #2d2d2d;
-  border: none;
-  border-right: 1px solid #1a1a1a;
-  color: var(--color-text-secondary);
-  font-size: 0.76rem;
-  padding: 8px 14px;
-  cursor: pointer;
-  font-family: var(--vp-font-family-mono);
-}
-.tab:hover {
-  color: var(--wa-color-text-normal);
-}
-.tab.active {
-  background: #1e1e1e;
-  color: #fff;
-  box-shadow: inset 0 2px 0 #c89be0;
-}
-.t-ic {
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-  font-size: 12px;
-}
+/* Window chrome, editor shell, and design tokens come from MockupFrame +
+   theme/mockup.css; this file styles only the three artifact panes. */
 .t-pdf {
   color: #e0524f;
 }
@@ -249,9 +212,6 @@ const view = defineModel('view', { type: String, default: 'diff' });
   font-size: 0.82rem;
   line-height: 1.75;
   color: var(--wa-color-text-normal);
-}
-.cmt {
-  color: #6a9955;
 }
 .wl {
   color: var(--wa-color-text-normal);

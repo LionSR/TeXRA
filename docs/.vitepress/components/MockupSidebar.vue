@@ -168,40 +168,10 @@ const view = defineModel('view', { type: String, default: 'diff' });
 </template>
 
 <style scoped>
-/* Design tokens (--wa-space-*, --color-*, --brand, …) are defined on .win in
-   LandingHero.vue and inherit into this component's DOM. */
+/* Window chrome, sidebar shell, and design tokens come from MockupFrame +
+   theme/mockup.css; this file styles only the Progress-board internals. */
 .board {
-  background: #1e1e1e;
-  border-right: 1px solid #000;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.board-tabs {
-  display: flex;
-  align-items: stretch;
-  height: 36px;
-  padding: 0 8px;
-  background: #252526;
-  border-bottom: 1px solid #000;
-  overflow: hidden;
-}
-.bt {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 12px;
-  font-size: 0.74rem;
-  color: var(--color-text-secondary);
-  white-space: nowrap;
-}
-.bt wa-icon {
-  font-size: 12px;
-}
-.bt-on {
-  color: #fff;
-  font-weight: 600;
-  box-shadow: inset 0 -2px 0 #c89be0;
+  width: 340px;
 }
 
 /* Stream header */
