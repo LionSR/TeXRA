@@ -2,6 +2,13 @@
 
 TeXRA lets AI agents analyse, reference, and generate figures inside your documents — from `.png` screenshots to embedded TikZ diagrams and PDFs.
 
+::: tip CLI
+This page covers the VS Code **Media** selector. From the [`texra` CLI](./texra-cli.md),
+pass image and PDF files to an agent with `--input` / `--context` (a
+vision-capable model reads them directly), or describe the figure to a tool-use
+agent in `texra chat`.
+:::
+
 ## <wa-icon library="texra" name="rocket"></wa-icon> Quick Task: Add a Figure Caption
 
 1. Select the `polish` agent from the agent dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>).
