@@ -317,10 +317,10 @@ importers:
         version: 3.17.5
       webpack:
         specifier: ^5.107.2
-        version: 5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
+        version: 5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.3)
       webpack-cli:
-        specifier: ^7.0.2
-        version: 7.0.2(webpack@5.107.2)
+        specifier: ^7.0.3
+        version: 7.0.3(webpack@5.107.2)
       zod-v3-to-v4:
         specifier: ^1.21.2
         version: 1.21.2
@@ -751,10 +751,10 @@ importers:
         version: 3.17.5
       webpack:
         specifier: ^5.107.2
-        version: 5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
+        version: 5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.3)
       webpack-cli:
-        specifier: ^7.0.2
-        version: 7.0.2(webpack@5.107.2)
+        specifier: ^7.0.3
+        version: 7.0.3(webpack@5.107.2)
       zod-v3-to-v4:
         specifier: ^1.21.2
         version: 1.21.2
@@ -1143,8 +1143,8 @@ packages:
     resolution: {integrity: sha512-0cp4PsWQ/9avqTVMCtZ+GirikIA36ikvjtHweU4/j8yLtgObI0+JUPhYFScgwlteveGB1rt3Cm8UhN04XayDig==}
     engines: {node: '>= 8.9.0'}
 
-  '@discoveryjs/json-ext@1.0.0':
-    resolution: {integrity: sha512-dDlz3W405VMFO4w5kIP9DOmELBcvFQGmLoKSdIRstBDubKFYwaNHV1NnlzMCQpXQFGWVALmeMORAuiLx18AvZQ==}
+  '@discoveryjs/json-ext@1.1.0':
+    resolution: {integrity: sha512-Xc3VhU02wqZ1HvHRJUwL09HkZSTvidqY5Ya0NXBSYOxAp+Ln9dcJr9fySI+CkONzP3PekQo9WdzCv0PGER/mOA==}
     engines: {node: '>=14.17.0'}
 
   '@electron/asar@3.4.1':
@@ -3725,10 +3725,6 @@ packages:
     resolution: {integrity: sha512-6bIM7fsJxeo3uXv7OncQYsBAMPJ7V16Slahl/6M98C/i2q+vB1+4a0MtrvYwDFEUrwDSbAmeLDRXsOBwrL7yAg==}
     hasBin: true
 
-  fastest-levenshtein@1.0.16:
-    resolution: {integrity: sha512-eRnCtTTtGZFpQCwhJiUOuxPQWRXVKYDn0b2PeHfXL6/Zi53SLAzAHfVhVWK2AryC/WH05kGfxhFIPvTF0SXQzg==}
-    engines: {node: '>= 4.9.1'}
-
   fastq@1.20.1:
     resolution: {integrity: sha512-GGToxJ/w1x32s/D2EKND7kTil4n8OVk/9mycTc4VDza13lOvpUZTGX3mFSCtV9ksdGBVzvsyAVLM6mHFThxXxw==}
 
@@ -4255,6 +4251,10 @@ packages:
 
   is-core-module@2.16.1:
     resolution: {integrity: sha512-UfoeMA6fIJ8wTYFEUjelnaGI67v6+N7qXJEvQuIGa99l4xsCruSYOVSQ0uPANn4dAzm8lkYPaKLrrijLq7x23w==}
+    engines: {node: '>= 0.4'}
+
+  is-core-module@2.16.2:
+    resolution: {integrity: sha512-evOr8xfXKxE6qSR0hSXL2r3sd7ALj8+7jQEUvPYcm5sgZFdJ+AYzT6yNmJenvIYQBgIGwfwz08sL8zoL7yq2BA==}
     engines: {node: '>= 0.4'}
 
   is-data-view@1.0.2:
@@ -6497,8 +6497,8 @@ packages:
     resolution: {integrity: sha512-BMhLD/Sw+GbJC21C/UgyaZX41nPt8bUTg+jWyDeg7e7YN4xOM05YPSIXceACnXVtqyEw/LMClUQMtMZ+PGGpqQ==}
     engines: {node: '>=20'}
 
-  webpack-cli@7.0.2:
-    resolution: {integrity: sha512-dB0R4T+C/8YuvM+fabdvil6QE44/ChDXikV5lOOkrUeCkW5hTJv2pGLE3keh+D5hjYw8icBaJkZzpFoaHV4T+g==}
+  webpack-cli@7.0.3:
+    resolution: {integrity: sha512-2E2C6A1e2El7791zQgTH7LPIuwLjRliow9OHS/qlJc9pwhZlCoL/uiwqd/1WSlXT83wJfmfDbkcqHXuXoPJZ3g==}
     engines: {node: '>=20.9.0'}
     hasBin: true
     peerDependencies:
@@ -7225,7 +7225,7 @@ snapshots:
       ajv: 6.15.0
       ajv-keywords: 3.5.2(ajv@6.15.0)
 
-  '@discoveryjs/json-ext@1.0.0': {}
+  '@discoveryjs/json-ext@1.1.0': {}
 
   '@electron/asar@3.4.1':
     dependencies:
@@ -9552,7 +9552,7 @@ snapshots:
       postcss-value-parser: 4.2.0
       semver: 7.7.4
     optionalDependencies:
-      webpack: 5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
+      webpack: 5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.3)
 
   css-select@5.2.2:
     dependencies:
@@ -10293,8 +10293,6 @@ snapshots:
       strnum: 2.3.0
       xml-naming: 0.1.0
 
-  fastest-levenshtein@1.0.16: {}
-
   fastq@1.20.1:
     dependencies:
       reusify: 1.1.0
@@ -10881,6 +10879,10 @@ snapshots:
   is-callable@1.2.7: {}
 
   is-core-module@2.16.1:
+    dependencies:
+      hasown: 2.0.3
+
+  is-core-module@2.16.2:
     dependencies:
       hasown: 2.0.3
 
@@ -11605,7 +11607,7 @@ snapshots:
   node-loader@2.1.0(webpack@5.107.2):
     dependencies:
       loader-utils: 2.0.4
-      webpack: 5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
+      webpack: 5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.3)
 
   node-pandoc@0.3.0: {}
 
@@ -12213,7 +12215,7 @@ snapshots:
   resolve@1.22.12:
     dependencies:
       es-errors: 1.3.0
-      is-core-module: 2.16.1
+      is-core-module: 2.16.2
       path-parse: 1.0.7
       supports-preserve-symlinks-flag: 1.0.0
 
@@ -12691,7 +12693,7 @@ snapshots:
 
   style-loader@4.0.0(webpack@5.107.2):
     dependencies:
-      webpack: 5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
+      webpack: 5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.3)
 
   sumchecker@3.0.1:
     dependencies:
@@ -12778,7 +12780,7 @@ snapshots:
       jest-worker: 27.5.1
       schema-utils: 4.3.3
       terser: 5.47.1
-      webpack: 5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
+      webpack: 5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.3)
     optionalDependencies:
       esbuild: 0.28.0
       postcss: 8.5.13
@@ -12871,7 +12873,7 @@ snapshots:
       semver: 7.7.4
       source-map: 0.7.6
       typescript: 6.0.3
-      webpack: 5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
+      webpack: 5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.3)
 
   ts-morph@27.0.2:
     dependencies:
@@ -13150,17 +13152,16 @@ snapshots:
 
   webidl-conversions@8.0.1: {}
 
-  webpack-cli@7.0.2(webpack@5.107.2):
+  webpack-cli@7.0.3(webpack@5.107.2):
     dependencies:
-      '@discoveryjs/json-ext': 1.0.0
+      '@discoveryjs/json-ext': 1.1.0
       commander: 14.0.3
       cross-spawn: 7.0.6
       envinfo: 7.21.0
-      fastest-levenshtein: 1.0.16
       import-local: 3.2.0
       interpret: 3.1.1
       rechoir: 0.8.0
-      webpack: 5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2)
+      webpack: 5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.3)
       webpack-merge: 6.0.1
 
   webpack-merge@6.0.1:
@@ -13171,7 +13172,7 @@ snapshots:
 
   webpack-sources@3.5.0: {}
 
-  webpack@5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.2):
+  webpack@5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.3):
     dependencies:
       '@types/estree': 1.0.9
       '@types/json-schema': 7.0.15
@@ -13197,7 +13198,7 @@ snapshots:
       watchpack: 2.5.1
       webpack-sources: 3.5.0
     optionalDependencies:
-      webpack-cli: 7.0.2(webpack@5.107.2)
+      webpack-cli: 7.0.3(webpack@5.107.2)
     transitivePeerDependencies:
       - '@minify-html/node'
       - '@swc/core'
