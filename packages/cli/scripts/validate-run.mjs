@@ -347,6 +347,11 @@ ${JSON.stringify({
     normalized.thread_actions[0]?.action === 'unresolve',
     'TeXRA review normalization should preserve unresolve thread actions',
   );
+  assert(
+    normalizeReview('{"body":"   ","comments":[]}').body ===
+      'TeXRA completed without a final review message.',
+    'TeXRA review normalization should not post raw JSON when body and summary are empty',
+  );
 
   const anchors = parseCommentableLines(`diff --git a/paper.tex b/paper.tex
 --- a/paper.tex
@@ -369,6 +374,25 @@ ${JSON.stringify({
   assert(
     JSON.stringify(file?.left) === JSON.stringify([{ start: 2, end: 3 }]),
     'commentable line parser should report removed base lines',
+  );
+  const suppressedBlankAnchors =
+    parseCommentableLines(`diff --git a/paper.tex b/paper.tex
+--- a/paper.tex
++++ b/paper.tex
+@@ -1,4 +1,4 @@
+ unchanged
+
+-old
++new
+ after
+`);
+  const suppressedBlankFile = suppressedBlankAnchors.files.find(
+    (entry) => entry.path === 'paper.tex',
+  );
+  assert(
+    JSON.stringify(suppressedBlankFile?.right) ===
+      JSON.stringify([{ start: 3, end: 3 }]),
+    'commentable line parser should count bare empty context lines',
   );
 
   const reviewCwd = mkdtempSync(path.join(tmpdir(), 'texra-review-output-'));

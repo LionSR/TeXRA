@@ -3,6 +3,7 @@ const path = require('node:path');
 
 const { writeOutput } = require('./github-output.cjs');
 
+const DEFAULT_REVIEW_BODY = 'TeXRA completed without a final review message.';
 const STATUS_ONLY_MESSAGES = new Set([
   'complete',
   'completed',
@@ -113,7 +114,7 @@ function normalizeReview(rawText) {
   const body =
     stringOrUndefined(modelPayload.body) ??
     stringOrUndefined(modelPayload.summary) ??
-    rawText;
+    DEFAULT_REVIEW_BODY;
   const comments = Array.isArray(modelPayload.comments)
     ? modelPayload.comments.map(normalizeModelComment).filter(Boolean)
     : [];
@@ -166,7 +167,7 @@ function normalizeReviewFile({
   const rawFinalMessage =
     candidateFinalMessage && !isStatusOnlyMessage(candidateFinalMessage)
       ? candidateFinalMessage
-      : 'TeXRA completed without a final review message.';
+      : DEFAULT_REVIEW_BODY;
   const review = normalizeReview(rawFinalMessage);
   const finalMessage = review.body.trim();
   const resolvedOutputFile =

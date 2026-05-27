@@ -32,8 +32,11 @@ function parseCommentableLines(diffText) {
   let oldLine = 0;
   let newLine = 0;
   let inHunk = false;
+  const lines = diffText.endsWith('\n')
+    ? diffText.slice(0, -1).split('\n')
+    : diffText.split('\n');
 
-  for (const line of diffText.split('\n')) {
+  for (const line of lines) {
     const fileMatch = line.match(/^diff --git a\/(.+) b\/(.+)$/);
     if (fileMatch) {
       currentPath = fileMatch[2];
@@ -67,7 +70,7 @@ function parseCommentableLines(diffText) {
     } else if (line.startsWith('-')) {
       addAnchor(anchors, currentPath, 'LEFT', oldLine);
       oldLine += 1;
-    } else if (line.startsWith(' ')) {
+    } else if (line.startsWith(' ') || line === '') {
       oldLine += 1;
       newLine += 1;
     }
