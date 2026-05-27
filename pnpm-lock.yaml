@@ -18,8 +18,8 @@ importers:
         specifier: ^3.7.0
         version: 3.7.0(@floating-ui/utils@0.2.11)(@types/react@19.2.15)
       '@cantoo/pdf-lib':
-        specifier: ^2.6.5
-        version: 2.6.5
+        specifier: ^2.7.1
+        version: 2.7.1
       '@fortawesome/free-solid-svg-icons':
         specifier: ^7.2.0
         version: 7.2.0
@@ -458,8 +458,8 @@ importers:
         specifier: ^3.7.0
         version: 3.7.0(@floating-ui/utils@0.2.11)(@types/react@19.2.15)
       '@cantoo/pdf-lib':
-        specifier: ^2.6.5
-        version: 2.6.5
+        specifier: ^2.7.1
+        version: 2.7.1
       '@fortawesome/free-solid-svg-icons':
         specifier: ^7.2.0
         version: 7.2.0
@@ -1090,8 +1090,8 @@ packages:
     resolution: {integrity: sha512-ctxtJ/eA+t+6q2++vj5j7FYX3nRu311q1wfYH3xjlLOsczhlhxAg2FWNUXhpGvAw3BWo1xBcvOV6/YLc2r5FJw==}
     hasBin: true
 
-  '@cantoo/pdf-lib@2.6.5':
-    resolution: {integrity: sha512-3eMHEaqKHt/G/q+6QjT06A3lz0S/a8x3+myiSN7FNeL3uWcedO0lpfs6TWofa4C03Z1wz3tWeHoa4CsI7DrTSA==}
+  '@cantoo/pdf-lib@2.7.1':
+    resolution: {integrity: sha512-oHVfp0JrHYodyF18dG1r85LStjJJs42LLoiu+elB9qZu9YfYoE66omF5hJ3gEKEXk6PPUUEDpBngeZiHMSnueQ==}
 
   '@clack/core@1.0.1':
     resolution: {integrity: sha512-WKeyK3NOBwDOzagPR5H08rFk9D/WuN705yEbuZvKqlkmoLM2woKtXb10OO2k1NoSU4SFG947i2/SCYh+2u5e4g==}
@@ -7173,7 +7173,7 @@ snapshots:
     dependencies:
       css-tree: 3.2.1
 
-  '@cantoo/pdf-lib@2.6.5':
+  '@cantoo/pdf-lib@2.7.1':
     dependencies:
       '@pdf-lib/standard-fonts': 1.0.0
       '@pdf-lib/upng': 1.0.1
