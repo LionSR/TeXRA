@@ -90,7 +90,8 @@ function MultiSelectQuestion(
   const options = props.question.options;
 
   useInput((input, key) => {
-    if (key.escape || (key.ctrl && input.toLowerCase() === 'c')) {
+    // Esc cancels; Ctrl+C is owned by the App's unified handler (exits the app).
+    if (key.escape) {
       props.onCancel();
       return;
     }
@@ -165,8 +166,9 @@ interface FreeTextQuestionProps {
 
 function FreeTextQuestion(props: FreeTextQuestionProps): React.JSX.Element {
   const [answer, setAnswer] = useState('');
-  useInput((input, key) => {
-    if (key.escape || (key.ctrl && input.toLowerCase() === 'c')) {
+  useInput((_input, key) => {
+    // Esc cancels; Ctrl+C is owned by the App's unified handler (exits the app).
+    if (key.escape) {
       props.onCancel();
     }
   });
