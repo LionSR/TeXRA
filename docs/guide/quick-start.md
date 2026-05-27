@@ -88,8 +88,6 @@ When you first open the agent or model dropdown, a tooltip explains its role.
 You can dismiss these prompts with **Never remind again**.
 :::
 
-![Agent and Model Selection](/images/agent-model-selection.png)
-
 ### Step 4: Write Instructions
 
 In the instruction text area, provide specific guidance for the AI. For example:
@@ -124,7 +122,9 @@ Enable the `texra.debug.saveInputPrompt` setting if you want TeXRA to store the 
 2. The ProgressBoard panel (typically at the bottom) will show the progress. See the [ProgressBoard guide](./progress-board.md) for more details on interpreting the logs.
 3. Wait for the process to complete - this may take a few moments depending on the document size and model choice
 
-![Execution Progress](/images/texra-progressboard.png)
+<GuideIntroHero />
+
+<p class="hero-caption">The ProgressBoard streams the run live — todos, delegated subagents, and the tool-use log — with the output files alongside.</p>
 
 ### Step 7: Review Results
 
