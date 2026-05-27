@@ -53,9 +53,10 @@ Use the commentable line anchors file when choosing JSON `comments` line
 numbers.
 
 When a previous TeXRA thread has been addressed by the current pull request
-state, add a thread action that replies with a concise mathematical or physical
-reason and resolves the thread. When a previous TeXRA thread remains valid, do
-not duplicate it as a new inline comment; reply only if there is new information.
+state, add a `resolve` thread action. Omit the `body` unless there is a new
+mathematical or physical reason that the existing thread does not already
+record. When a previous TeXRA thread remains valid, do not duplicate it as a
+new inline comment; reply only if there is new information.
 
 Return exactly one JSON object and no Markdown fence. Use this schema:
 

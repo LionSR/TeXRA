@@ -29,7 +29,7 @@ const { parseCommentableLines } = require(
     '.github/actions/texra-code-review/scripts/write-commentable-lines.cjs',
   ),
 );
-const { loadKnownThreadIds } = require(
+const { loadKnownThreadIds, postTexraReview } = require(
   path.join(
     repoRoot,
     '.github/actions/texra-code-review/scripts/post-review.cjs',
@@ -419,6 +419,92 @@ async function validateCodeReviewActionHelpers() {
       process.env.TEXRA_THREADS_OUTPUT = previousThreadsOutput;
     }
     rmSync(threadsCwd, { recursive: true, force: true });
+  }
+
+  const postCwd = mkdtempSync(path.join(tmpdir(), 'texra-review-post-'));
+  const previousPostEnv = {
+    HEAD_SHA: process.env.HEAD_SHA,
+    TEXRA_COMMENTABLE_LINES_JSON: process.env.TEXRA_COMMENTABLE_LINES_JSON,
+    TEXRA_RESOLVE_THREADS: process.env.TEXRA_RESOLVE_THREADS,
+    TEXRA_REVIEW_JSON: process.env.TEXRA_REVIEW_JSON,
+    TEXRA_THREADS_JSON: process.env.TEXRA_THREADS_JSON,
+  };
+  try {
+    const reviewJson = path.join(postCwd, 'review.json');
+    const threadJson = path.join(postCwd, 'threads.json');
+    writeFileSync(
+      reviewJson,
+      JSON.stringify({
+        body: '## TeXRA Code Review\n\nNo new findings.',
+        comments: [],
+        thread_actions: [
+          {
+            action: 'resolve',
+            thread_id: 'PRRT_thread',
+            body: 'Confirmed fixed.',
+          },
+          {
+            action: 'reply',
+            thread_id: 'PRRT_thread',
+            body: 'Additional note.',
+          },
+        ],
+      }),
+    );
+    writeFileSync(
+      threadJson,
+      JSON.stringify({ threads: [{ id: 'PRRT_thread', isResolved: false }] }),
+    );
+    process.env.HEAD_SHA = 'HEAD';
+    process.env.TEXRA_COMMENTABLE_LINES_JSON = path.join(
+      postCwd,
+      'missing-commentable-lines.json',
+    );
+    process.env.TEXRA_RESOLVE_THREADS = 'false';
+    process.env.TEXRA_REVIEW_JSON = reviewJson;
+    process.env.TEXRA_THREADS_JSON = threadJson;
+
+    const replies = [];
+    const notices = [];
+    await postTexraReview({
+      github: {
+        rest: {
+          pulls: {
+            createReview: async () => undefined,
+          },
+        },
+        graphql: async (query, variables) => {
+          if (query.includes('addPullRequestReviewThreadReply')) {
+            replies.push(variables.body);
+          }
+        },
+      },
+      context: {
+        repo: { owner: 'owner', repo: 'repo' },
+        payload: { pull_request: { number: 1 } },
+      },
+      core: {
+        notice: (message) => notices.push(message),
+        warning: () => undefined,
+      },
+    });
+    assert(
+      replies.length === 1 && replies[0].includes('Additional note.'),
+      'thread state actions should not add replies when resolution is unavailable',
+    );
+    assert(
+      notices.some((message) => message.includes('resolve/unresolve')),
+      'skipped thread state changes should produce a notice',
+    );
+  } finally {
+    for (const [name, value] of Object.entries(previousPostEnv)) {
+      if (value == null) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
+    }
+    rmSync(postCwd, { recursive: true, force: true });
   }
 }
 
