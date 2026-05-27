@@ -680,10 +680,47 @@ function copyCli() {
 
 /* ============================================
    PRODUCT WINDOW — faithful TeXRA / VS Code
+
+   The board/log/card rules below consume the same design tokens the real
+   webview components use (src/shared/styles/litStyles.ts + Web Awesome),
+   resolved here to the dark VS Code surface values the extension gets from
+   the host theme (the docs site has no --vscode-* / dark --wa-* theme).
    ============================================ */
 .win {
+  /* Spacing scale (Web Awesome) */
+  --wa-space-3xs: 2px;
+  --wa-space-2xs: 4px;
+  --wa-space-xs: 8px;
+  --wa-space-s: 12px;
+  /* Borders & radii (litStyles designTokens) */
+  --border-thin: 1px;
+  --border-medium: 2px;
+  --border-radius-small: 2px;
+  --border-radius: 3px;
+  --border-radius-large: 6px;
+  /* Weights */
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  /* Surfaces / text (dark editor host theme) */
+  --editor-bg: #1e1e1e;
+  --surface-bg: #181818;
+  --panel-bg: #252526;
+  --color-border: #2a2a2a;
+  --wa-color-text-normal: #cccccc;
+  --color-text-secondary: #8a8a8a;
+  --color-text-tertiary: #6f6f6f;
+  --color-text-link: #4daafc;
+  /* Status colors (litStyles designTokens fallbacks + logEntryStyles) */
+  --color-success: #2ea043;
+  --color-warning: #cca700;
+  --color-error: #f14c4c;
+  --wa-color-icon-info: #75beff;
+  --wa-color-debug-name: #4b9ef9;
+  --brand: #c89be0;
+
   text-align: left;
-  background: #1e1e1e;
+  background: var(--editor-bg);
   border: 1px solid #000;
   border-radius: 12px;
   overflow: hidden;
@@ -796,7 +833,7 @@ function copyCli() {
   gap: 6px;
   padding: 0 12px;
   font-size: 0.74rem;
-  color: #8a8a8a;
+  color: var(--color-text-secondary);
   white-space: nowrap;
 }
 .bt wa-icon {
@@ -813,14 +850,14 @@ function copyCli() {
   align-items: center;
   gap: 7px;
   padding: 8px 12px;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--color-border);
   font-family: var(--vp-font-family-mono);
   font-size: 0.76rem;
   min-width: 0;
   white-space: nowrap;
 }
 .sh-name {
-  color: #e6e6e6;
+  color: var(--wa-color-text-normal);
   font-weight: 600;
   min-width: 0;
   overflow: hidden;
@@ -830,7 +867,7 @@ function copyCli() {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #3fb950;
+  background: var(--color-success);
   flex-shrink: 0;
   box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.6);
   animation: shpulse 1.8s infinite;
@@ -868,7 +905,7 @@ function copyCli() {
   margin-left: auto;
   display: flex;
   gap: 9px;
-  color: #6f6f6f;
+  color: var(--color-text-tertiary);
   flex-shrink: 0;
 }
 .shi {
@@ -886,14 +923,14 @@ function copyCli() {
 
 /* Collapsible panels (Todos, Background Tasks) */
 .panel {
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--color-border);
 }
 .panel-sum {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 7px 12px;
-  color: #c4c4c4;
+  color: var(--wa-color-text-normal);
   font-weight: 600;
 }
 .chev {
@@ -916,7 +953,7 @@ function copyCli() {
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #8a8a8a;
+  color: var(--color-text-secondary);
 }
 
 /* Todos */
@@ -939,15 +976,15 @@ function copyCli() {
 }
 .todo.done .td-tx {
   text-decoration: line-through;
-  color: #8a8a8a;
+  color: var(--color-text-secondary);
 }
 .todo.prog .td-tx {
-  color: #e6e6e6;
+  color: var(--wa-color-text-normal);
   font-weight: 600;
 }
 .td-ic {
   display: inline-flex;
-  color: #3fb950;
+  color: var(--color-success);
   flex-shrink: 0;
 }
 .td-ic {
@@ -983,14 +1020,14 @@ function copyCli() {
   flex-shrink: 0;
 }
 .task-desc {
-  color: #8a8a8a;
+  color: var(--color-text-secondary);
   font-size: 0.7rem;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .task-elapsed {
-  color: #8a8a8a;
+  color: var(--color-text-secondary);
   font-size: 0.7rem;
   flex-shrink: 0;
 }
@@ -1028,17 +1065,17 @@ function copyCli() {
   gap: 5px;
   margin-bottom: 3px;
   font-size: 0.64rem;
-  color: #9a9a9a;
+  color: var(--color-text-secondary);
 }
 .umsg-ic {
   display: inline-flex;
-  color: #9a9a9a;
+  color: var(--color-text-secondary);
 }
 .umsg-ic {
   font-size: 11px;
 }
 .umsg-body {
-  color: #d4d4d4;
+  color: var(--wa-color-text-normal);
   line-height: 1.5;
   font-family: var(--vp-font-family-base);
   font-size: 0.77rem;
@@ -1083,20 +1120,20 @@ function copyCli() {
   height: 12px;
   flex-shrink: 0;
   border: 2px solid rgba(215, 169, 62, 0.3);
-  border-top-color: #d7a93e;
+  border-top-color: var(--color-warning);
   border-radius: 50%;
   animation: spin 0.9s linear infinite;
 }
 .tc-label {
   flex: 1;
   min-width: 0;
-  color: #d8d8d8;
+  color: var(--wa-color-text-normal);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .tc-tool {
-  color: #9a9a9a;
+  color: var(--color-text-secondary);
 }
 .tc-chev {
   align-self: center;
@@ -1108,10 +1145,10 @@ function copyCli() {
   flex-shrink: 0;
   align-self: center;
   font-size: 0.66rem;
-  color: #6f6f6f;
+  color: var(--color-text-tertiary);
 }
 .tc-timer {
-  color: #d7a93e;
+  color: var(--color-warning);
 }
 
 /* Expanded (in-progress) delegation card */
@@ -1141,12 +1178,12 @@ function copyCli() {
   line-height: 1.4;
 }
 .tc-k {
-  color: #8a8a8a;
+  color: var(--color-text-secondary);
   flex-shrink: 0;
   min-width: 64px;
 }
 .tc-v {
-  color: #c4c4c4;
+  color: var(--wa-color-text-normal);
   font-family: var(--vp-font-family-base);
 }
 .tc-code {
@@ -1156,13 +1193,13 @@ function copyCli() {
   padding: 0 5px;
 }
 .tc-model {
-  color: #7c7c7c;
+  color: var(--color-text-secondary);
 }
 .tc-file {
-  color: #4daafc;
+  color: var(--color-text-link);
 }
 .tc-src {
-  color: #7c7c7c;
+  color: var(--color-text-secondary);
   font-style: italic;
 }
 
@@ -1189,7 +1226,7 @@ function copyCli() {
   font-size: 12px;
 }
 .ldiff-lbl {
-  color: #c4c4c4;
+  color: var(--wa-color-text-normal);
 }
 .ldiff-row {
   display: flex;
@@ -1197,24 +1234,24 @@ function copyCli() {
   gap: 5px;
   margin-top: 5px;
   padding-left: 26px;
-  color: #8a8a8a;
+  color: var(--color-text-secondary);
 }
 .ldiff-ok {
   display: inline-flex;
-  color: #3fb950;
+  color: var(--color-success);
   font-size: 11px;
 }
 .ldiff-r {
-  color: #8a8a8a;
+  color: var(--color-text-secondary);
 }
 .ldiff-arrow {
-  color: #6f6f6f;
+  color: var(--color-text-tertiary);
 }
 /* File references behave like the real clickable file-links */
 .ldiff-file,
 .ldiff-link,
 .tc-file {
-  color: #4daafc;
+  color: var(--color-text-link);
   cursor: pointer;
 }
 .ldiff-file:hover,
@@ -1248,14 +1285,14 @@ function copyCli() {
   background: #2d2d2d;
   border: none;
   border-right: 1px solid #1a1a1a;
-  color: #9a9a9a;
+  color: var(--color-text-secondary);
   font-size: 0.76rem;
   padding: 8px 14px;
   cursor: pointer;
   font-family: var(--vp-font-family-mono);
 }
 .tab:hover {
-  color: #d4d4d4;
+  color: var(--wa-color-text-normal);
 }
 .tab.active {
   background: #1e1e1e;
@@ -1336,18 +1373,18 @@ function copyCli() {
   margin: 16px;
   padding: 16px 18px;
   background: #141414;
-  border: 1px solid #2a2a2a;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   font-family: var(--vp-font-family-mono);
   font-size: 0.82rem;
   line-height: 1.75;
-  color: #d4d4d4;
+  color: var(--wa-color-text-normal);
 }
 .cmt {
   color: #6a9955;
 }
 .wl {
-  color: #d4d4d4;
+  color: var(--wa-color-text-normal);
 }
 .wl.indent {
   padding-left: 1.5em;
@@ -1359,11 +1396,11 @@ function copyCli() {
 .term-note {
   margin-top: 14px;
   padding-top: 12px;
-  border-top: 1px solid #2a2a2a;
+  border-top: 1px solid var(--color-border);
   font-family: var(--vp-font-family-base);
   font-size: 0.8rem;
   line-height: 1.55;
-  color: #9a9a9a;
+  color: var(--color-text-secondary);
 }
 .term-ok {
   display: inline-block;
