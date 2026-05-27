@@ -22,4 +22,5 @@ export const KNOWN_TEXRA_KEYS: ReadonlySet<string> = new Set<string>([
   'texra.git.markCommits',
   'texra.git.authorName',
   'texra.git.authorEmail',
+  'texra.git.worktreeSupport',
 ]);
