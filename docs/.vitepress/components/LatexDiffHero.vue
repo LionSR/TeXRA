@@ -174,10 +174,4 @@ import MockupFrame from './MockupFrame.vue';
 .s-mute {
   color: var(--color-text-secondary);
 }
-
-@media (max-width: 820px) {
-  .board {
-    width: auto;
-  }
-}
 </style>

@@ -222,10 +222,4 @@ import MockupFrame from './MockupFrame.vue';
 .run wa-icon {
   font-size: 13px;
 }
-
-@media (max-width: 820px) {
-  .board {
-    width: auto;
-  }
-}
 </style>

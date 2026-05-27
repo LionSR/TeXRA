@@ -219,10 +219,4 @@ import MockupFrame from './MockupFrame.vue';
 .fi-rm:hover {
   color: var(--color-error);
 }
-
-@media (max-width: 820px) {
-  .board {
-    width: auto;
-  }
-}
 </style>
