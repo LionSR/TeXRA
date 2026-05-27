@@ -1,13 +1,29 @@
 # TeXRA CLI
 
 The TeXRA CLI provides a local `texra` command for running TeXRA agents from a
-terminal. It is currently a repository-built preview package, not a published
-npm package.
+terminal. It is published to npm as [`@texra-ai/cli`](https://www.npmjs.com/package/@texra-ai/cli).
+
+## Install From npm
+
+Install the CLI globally (requires Node.js 22 or newer):
+
+```bash
+npm install -g @texra-ai/cli
+```
+
+Verify the command:
+
+```bash
+texra --help
+texra version
+texra agents list
+```
 
 ## Install From a Checkout
 
-Clone the repository, install workspace dependencies, build the CLI package, and
-link the bundled CLI binary into the global pnpm bin directory:
+To track unreleased changes, clone the repository, install workspace
+dependencies, build the CLI package, and link the bundled CLI binary into the
+global pnpm bin directory:
 
 ```bash
 corepack pnpm install
@@ -18,13 +34,8 @@ mkdir -p "$PNPM_BIN"
 ln -sf "$(pwd)/packages/cli/dist/bin/texra.js" "$PNPM_BIN/texra"
 ```
 
-Verify the command:
-
-```bash
-texra --help
-texra version
-texra agents list
-```
+The linked binary takes precedence over a globally-installed npm copy, so `texra`
+now runs your local build.
 
 ## Shell Completion
 

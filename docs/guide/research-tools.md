@@ -1,6 +1,6 @@
 # Research Tools
 
-You're deep in a manuscript and realise you need to cite "that attention paper from 2017" but can't remember the title. Or you want to verify an integral in your appendix. Or you need to pull twenty BibTeX entries from your Zotero library into a new project. TeXRA's research agents handle all of this without leaving VS Code.
+You're deep in a manuscript and realise you need to cite "that attention paper from 2017" but can't remember the title. Or you want to verify an integral in your appendix. Or you need to pull twenty BibTeX entries from your Zotero library into a new project. TeXRA's research agents handle all of this without leaving your editor — in VS Code, the desktop app, or the `texra` CLI.
 
 ## What You Can Do
 
@@ -84,9 +84,8 @@ The `inquiry` tool lets a TeXRA agent ask one question in an external chat (Chat
 | Agent      | Best for                                                       |
 | ---------- | -------------------------------------------------------------- |
 | `search`   | Finding papers, literature reviews, fact-checking              |
-| `research` | Computational verification with Wolfram and literature lookups |
+| `research` | Computational verification with Wolfram, literature lookups, and quick questions about your documents |
 | `discuss`  | Brainstorming research directions with literature context      |
-| `ask`      | Quick lookups about your documents and related work            |
 
 Pick any of them from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). Check `Dashboard → Agents` (<wa-icon library="texra" name="sparkle"></wa-icon>) to see exactly which tools each one has enabled.
 

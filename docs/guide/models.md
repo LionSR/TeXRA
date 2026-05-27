@@ -136,11 +136,10 @@ To access additional models or alternative pricing:
 
 ## Streaming
 
-Enable streaming for long responses in settings:
-
-```json
-"texra.model.useStreaming": true
-```
+Streaming is configured per provider rather than through a single global
+setting. Open the **Dashboard → Models** tab, expand a provider's **API
+Configuration**, and toggle streaming there. Enabling it makes long responses
+arrive incrementally instead of in one large reply.
 
 ## Next Steps
 

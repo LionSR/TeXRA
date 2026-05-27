@@ -1,8 +1,10 @@
 # Introduction
 
-TeXRA is a multi-agent AI system for rigorous scientific work. Built as a VS Code extension, it orchestrates **specialized agents** — for literature search, manuscript drafting, figure generation, formal verification, symbolic computation, and result communication — and coordinates them through reproducible workflows where every output is auditable and every citation is grounded.
+TeXRA is a multi-agent AI system for rigorous scientific work. It orchestrates **specialized agents** — for literature search, manuscript drafting, figure generation, formal verification, symbolic computation, and result communication — and coordinates them through reproducible workflows where every output is auditable and every citation is grounded. TeXRA runs in three places that share the same agents and run history: the **VS Code extension**, the **`texra` command-line interface**, and the standalone **desktop app** (beta).
 
 <a href="https://marketplace.visualstudio.com/items?itemName=texra-ai.texra" target="_blank" style="display: inline-block; background-color: #007ACC; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 10px 0;">Install from VS Code Marketplace</a>
+
+Prefer the terminal? Install the CLI with `npm install -g @texra-ai/cli` (Node.js 22+) — see [TeXRA CLI](./texra-cli.md).
 
 ## Why multi-agent?
 
@@ -41,14 +43,14 @@ graph TB
 
 ### Two types of agents
 
-**Workflow agents** (`polish`, `correct`, `draw`, `paper2slide`, `paper2poster`, `ocr`, `transcribe_audio`, `merge`) execute structured pipelines:
+**Workflow agents** (`polish`, `correct`, `paper2slide`, `paper2poster`, `ocr`, `transcribe_audio`, `merge`) execute structured pipelines:
 
 1. Analyze your input files and instructions
 2. Plan and execute changes via LLM calls
 3. Optionally reflect on their output and iterate
 4. Produce task-scoped output files (`r0/output.*`, `r1/output.*`) with diffs
 
-**Interactive agents** include `ask`, `research`, `review`, `lean`, and `presenter`, which operate conversationally with tool access:
+**Interactive agents** include `research`, `numerics`, `review`, `lean`, and `presenter`, which operate conversationally with tool access:
 
 - Read and edit files across your entire workspace
 - Search arXiv, Crossref, and Zotero for references with verified BibTeX
@@ -71,7 +73,7 @@ The agent system is built on three established AI design patterns:
 | -------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Polish a manuscript  | `polish`                      | Rewrites for clarity and precision, preserving all math environments and cross-references. Outputs a reviewable diff.                                    |
 | Fix LaTeX errors     | `correct`                     | Finds and repairs compilation errors, notation inconsistencies, broken references, and formatting issues across multi-file projects.                     |
-| Generate figures     | `draw`                        | Creates TikZ diagrams — commutative diagrams, Feynman diagrams, phase portraits, lattice structures. Compiles and visually verifies every figure.        |
+| Generate figures     | `research` / `presenter`      | Tool-use agents write TikZ diagrams — commutative diagrams, Feynman diagrams, phase portraits, lattice structures — then compile and visually verify every figure. |
 | Search literature    | `research`                    | Queries arXiv, Crossref, Zotero. Returns verified citations with BibTeX — no hallucinated references.                                                    |
 | Verify manuscript    | `review`                      | Systematically audits mathematical correctness, derivation soundness, notation consistency, and goal achievement.                                        |
 | Work with Lean 4     | `lean`                        | Search Mathlib theorems via Loogle by type signature, inspect proof states, check diagnostics, manage builds and cache.                                  |
@@ -92,7 +94,7 @@ The agent system is built on three established AI design patterns:
 
 All API calls go **directly from your machine** to the model provider you choose (Anthropic, OpenAI, Google, etc.). TeXRA does not operate intermediate servers. Your unpublished proofs, manuscripts, and API keys never leave your machine except to the provider endpoint.
 
-API keys are stored in VS Code's built-in Secret Storage.
+API keys are stored in your operating system's secure credential store — VS Code's built-in Secret Storage in the extension, and the OS keychain (or a local config file) for the CLI and desktop app. They can also be supplied via environment variables or a `.env` file in your project.
 
 ## Next steps
 

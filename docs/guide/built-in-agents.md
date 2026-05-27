@@ -6,17 +6,20 @@ TeXRA ships with built-in agents for common research tasks—polishing prose, fi
 
 | Agent              | Type     | Purpose                                                                   |
 | ------------------ | -------- | ------------------------------------------------------------------------- |
-| `ask`              | Tool-use | Read-only questions and exploration                                       |
-| `research`         | Tool-use | Computational verification with Wolfram                                   |
+| `research`         | Tool-use | Analytical derivations and numerical programming with Wolfram             |
 | `review`           | Tool-use | Mathematical and manuscript verification                                  |
+| `numerics`         | Tool-use | Design, run, and validate computational experiments                       |
 | `lean`             | Tool-use | Lean 4 proof development                                                  |
-| `presenter`        | Tool-use | Interactive presentation builder                                          |
+| `presenter`        | Tool-use | Interactive presentation and poster builder                               |
+| `latexFixer`       | Tool-use | Diagnose and fix LaTeX compilation errors, warnings, and bad boxes        |
+| `latexDiff`        | Tool-use | Generate a visual latexdiff PDF between two LaTeX versions                 |
+| `creator`          | Tool-use | Design, write, and test new TeXRA agents                                  |
+| `setup`            | Tool-use | Setup wizard: diagnose environment, install dependencies, configure       |
 | `chat`             | Tool-use | General assistance, file editing (opt-in; not in any default team preset) |
 | `correct`          | Workflow | Fix errors without style changes                                          |
 | `polish`           | Workflow | Improve writing quality                                                   |
 | `paper2slide`      | Workflow | Convert papers to beamer slides                                           |
 | `paper2poster`     | Workflow | Create academic posters                                                   |
-| `draw`             | Workflow | Create/enhance TikZ figures                                               |
 | `ocr`              | Workflow | Extract text from images/PDFs                                             |
 | `transcribe_audio` | Workflow | Transcribe audio to text                                                  |
 | `merge`            | Workflow | Intelligently merge document versions                                     |
@@ -48,18 +51,6 @@ Review my introduction in paper.tex and suggest improvements for clarity.
 Then update the file with your changes.
 ```
 
-### `ask`
-
-A read-only assistant for exploring your workspace. It can answer questions about your project without touching any files—safe to use when you just want to understand what's there.
-
-**Best for:** Quick questions, understanding existing code, safe exploration
-
-**Example instruction:**
-
-```
-What packages does this LaTeX project use? Summarize the document structure.
-```
-
 ## Research & Discovery Agents
 
 ### `research`
@@ -73,6 +64,19 @@ A hands-on research agent that can edit your files **and** verify mathematics co
 ```
 Derive the variational equations for the Lagrangian in equations.tex.
 Verify each step computationally and update the file with results.
+```
+
+### `numerics`
+
+A numerical-experiments agent that designs, implements, and validates computational experiments following the scientific method. Use it when a claim needs to be backed by code and reproducible results rather than symbolic derivation alone.
+
+**Best for:** Convergence studies, benchmarking, simulation-backed results, sanity-checking numerics
+
+**Example instruction:**
+
+```
+Implement and run a convergence study for the solver in solver.py.
+Sweep the step size, plot the error, and report the observed order of accuracy.
 ```
 
 ## Verification Agents
@@ -233,27 +237,39 @@ Include sections for Introduction, Methodology, Results, and Conclusions.
 Highlight key figures and tables. Make it visually appealing with appropriate columns.
 ```
 
-## Figure & Media Agents
+::: tip Creating figures
+There is no longer a dedicated `draw` agent. To generate or enhance TikZ figures, use a tool-use agent (`research`, `chat`, or `presenter`) and describe the figure — the agent writes compilable TikZ, compiles it, and visually verifies the result. See [Working with Figures](./working-with-figures.md) and [TikZ Figures](./tikz-figures.md).
+:::
 
-### `draw`
+## LaTeX & Build Agents
 
-Creates or enhances TikZ figures from textual descriptions or existing code.
+### `latexFixer`
 
-> **User story:** You need a neural-network architecture diagram for your paper. Describe the layers and connections in the instruction box, and `draw` generates compilable TikZ code.
+Diagnoses and fixes LaTeX compilation errors, warnings, and bad boxes. Point it at a project that won't compile (or compiles with ugly overfull boxes) and it reads the build log, locates the cause, and iterates until the document is clean.
 
-**Best for:**
-
-- Creating diagrams, flowcharts, or schematics from descriptions
-- Improving existing TikZ figures
-- Converting descriptions into LaTeX visualizations
+**Best for:** Resolving build failures, clearing warnings, fixing overfull/underfull boxes
 
 **Example instruction:**
 
 ```
-Create a TikZ figure illustrating a neural network with an input layer (3 nodes),
-two hidden layers (5 nodes each), and an output layer (2 nodes).
-Use appropriate colors and add labels for each layer.
+This project fails to compile. Read the latexmk log, fix the underlying errors,
+and rebuild until it produces a clean PDF.
 ```
+
+### `latexDiff`
+
+Generates a visual diff PDF between two LaTeX versions using `latexdiff`, so you can see exactly what changed between drafts.
+
+**Best for:** Reviewing changes between versions, preparing "changes marked" PDFs for co-authors or referees
+
+**Example instruction:**
+
+```
+Produce a latexdiff PDF comparing the submitted version (v1/main.tex) with the
+current revision (main.tex), highlighting additions and deletions.
+```
+
+## Figure & Media Agents
 
 ### `ocr`
 
@@ -308,6 +324,34 @@ Preserve mathematical notation and citations from the original.
 ```
 
 See [Intelligent Merge](./intelligent-merge.md) for details on the merge workflow.
+
+## Setup & Meta Agents
+
+### `setup`
+
+A setup wizard that diagnoses your environment, installs missing dependencies, configures TeXRA, and orchestrates your first task. If you are new to TeXRA or moving to a new machine, start here.
+
+**Best for:** First-time setup, diagnosing missing dependencies, getting unblocked
+
+**Example instruction:**
+
+```
+Check whether my environment has everything TeXRA needs, install anything missing,
+and help me run my first agent on this project.
+```
+
+### `creator`
+
+Designs, writes, and tests new TeXRA agents through conversation. Describe the behavior you want and `creator` drafts the agent YAML, then helps you refine and validate it.
+
+**Best for:** Building [custom agents](./custom-agents.md) without hand-writing YAML from scratch
+
+**Example instruction:**
+
+```
+Help me build a custom agent that rewrites abstracts to a 150-word limit while
+preserving every numerical result. Draft the YAML and walk me through testing it.
+```
 
 ## Remote Agents
 
