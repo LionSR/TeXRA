@@ -7,6 +7,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +16,19 @@ import { spawnSync } from 'node:child_process';
 const cliRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const repoRoot = path.dirname(path.dirname(cliRoot));
 const binaryPath = path.join(cliRoot, 'dist/bin/texra.js');
+const require = createRequire(import.meta.url);
+const { normalizeReview, parseModelJson } = require(
+  path.join(
+    repoRoot,
+    '.github/actions/texra-code-review/scripts/normalize-review.cjs',
+  ),
+);
+const { parseCommentableLines } = require(
+  path.join(
+    repoRoot,
+    '.github/actions/texra-code-review/scripts/write-commentable-lines.cjs',
+  ),
+);
 const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER';
 const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG';
 const validationFlagContent = 'texra-cli-run-validation\n';
@@ -253,6 +267,71 @@ function validateToolUseAgentRunCommand() {
   }
 }
 
+function validateCodeReviewActionHelpers() {
+  assert(
+    parseModelJson('{"body":"direct"}').body === 'direct',
+    'TeXRA review parser should parse direct JSON',
+  );
+  assert(
+    parseModelJson('```json\n{"body":"fenced"}\n```').body === 'fenced',
+    'TeXRA review parser should parse fenced JSON',
+  );
+  assert(
+    parseModelJson('text before {"body":"embedded"} text after').body ===
+      'embedded',
+    'TeXRA review parser should parse embedded JSON',
+  );
+
+  const normalized = normalizeReview(`\`\`\`json
+{
+  "body": "## TeXRA Code Review\\n\\nLooks correct.",
+  "comments": [
+    {
+      "path": "paper.tex",
+      "line": 3,
+      "side": "RIGHT",
+      "body": "Check this equation."
+    }
+  ],
+  "threadActions": [
+    {
+      "action": "unresolve",
+      "threadId": "thread-id",
+      "body": "This is relevant again."
+    }
+  ]
+}
+\`\`\``);
+  assert(
+    normalized.comments.length === 1,
+    'TeXRA review normalization should preserve valid inline comments',
+  );
+  assert(
+    normalized.thread_actions[0]?.action === 'unresolve',
+    'TeXRA review normalization should preserve unresolve thread actions',
+  );
+
+  const anchors = parseCommentableLines(`diff --git a/paper.tex b/paper.tex
+--- a/paper.tex
++++ b/paper.tex
+@@ -1,3 +1,4 @@
+ unchanged
+-old
++new
++added
+ done
+`);
+  const file = anchors.files.find((entry) => entry.path === 'paper.tex');
+  assert(
+    JSON.stringify(file?.right) === JSON.stringify([{ start: 2, end: 3 }]),
+    'commentable line parser should report changed head lines',
+  );
+  assert(
+    JSON.stringify(file?.left) === JSON.stringify([{ start: 2, end: 2 }]),
+    'commentable line parser should report removed base lines',
+  );
+}
+
 try {
   const buildResult = run('pnpm', ['run', 'build'], {
     cwd: cliRoot,
@@ -262,6 +341,7 @@ try {
   validateBinarySmoke();
   validateRunCommand();
   validateToolUseAgentRunCommand();
+  validateCodeReviewActionHelpers();
   console.log('CLI run validation passed');
 } finally {
   const rebuildResult = run('pnpm', ['run', 'build'], {

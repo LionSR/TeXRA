@@ -326,7 +326,8 @@ const agentsRunCommand = defineCommand({
     },
     'instruction-file': {
       type: 'string',
-      description: 'File whose contents are passed as the agent instruction',
+      description:
+        'File whose contents are passed before --instruction when both are set',
     },
   },
   async run(ctx) {
