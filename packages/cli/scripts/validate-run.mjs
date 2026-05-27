@@ -197,6 +197,62 @@ function validateRunCommand() {
   }
 }
 
+function validateToolUseAgentRunCommand() {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-agent-run-'));
+  try {
+    const promptPath = path.join(cwd, 'review-prompt.md');
+    const contextPath = path.join(cwd, 'pr.diff');
+    const validationFlagPath = path.join(
+      cwd,
+      '.texra-internal-validation-model-handler',
+    );
+    writeFileSync(
+      promptPath,
+      'Review this change for mathematical and physical correctness.\n',
+    );
+    writeFileSync(
+      contextPath,
+      'diff --git a/paper.tex b/paper.tex\n+\\\\section{Validation}\n',
+    );
+    writeFileSync(validationFlagPath, validationFlagContent);
+
+    const result = run(
+      process.execPath,
+      [
+        binaryPath,
+        'agents',
+        'run',
+        'review',
+        '--instruction-file',
+        'review-prompt.md',
+        '--context',
+        'pr.diff',
+        '--cwd',
+        cwd,
+        '--approval-policy',
+        'never',
+        '--output-format',
+        'json',
+        '--print',
+      ],
+      { cwd: repoRoot, validationModel: true, validationFlagPath },
+    );
+    assertSuccess(result, 'texra agents run review JSON');
+
+    const jsonResult = JSON.parse(result.stdout);
+    assert(
+      jsonResult.category === 'toolUse',
+      'JSON agent run output should serialize the tool-use result',
+    );
+    assert(
+      String(jsonResult.lastResponse ?? '').includes('Validated CLI Runtime'),
+      'tool-use agent run should return the validation model response',
+    );
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
 try {
   const buildResult = run('pnpm', ['run', 'build'], {
     cwd: cliRoot,
@@ -205,6 +261,7 @@ try {
   assertSuccess(buildResult, 'pnpm run build');
   validateBinarySmoke();
   validateRunCommand();
+  validateToolUseAgentRunCommand();
   console.log('CLI run validation passed');
 } finally {
   const rebuildResult = run('pnpm', ['run', 'build'], {

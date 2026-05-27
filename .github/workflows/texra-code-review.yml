@@ -1,0 +1,356 @@
+name: TeXRA Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+concurrency:
+  group: texra-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  texra-review:
+    # Repository variable kill switch:
+    #   TEXRA_REVIEW_ENABLED=false disables TeXRA-powered PR review.
+    #   unset or any other value preserves the default enabled behavior.
+    if: vars.TEXRA_REVIEW_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      TEXRA_REVIEW_MARKER: '<!-- texra-review -->'
+      XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+
+    steps:
+      - name: Check TeXRA review switch
+        id: texra-switch
+        env:
+          TEXRA_REVIEW_ENABLED: ${{ vars.TEXRA_REVIEW_ENABLED }}
+        run: |
+          if [ "$TEXRA_REVIEW_ENABLED" = "false" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping TeXRA code review: TEXRA_REVIEW_ENABLED=false"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check model provider token
+        if: steps.texra-switch.outputs.skip != 'true'
+        id: provider-token
+        run: |
+          if [ -n "${ANTHROPIC_API_KEY}${DEEPSEEK_API_KEY}${GOOGLE_API_KEY}${OPENAI_API_KEY}${OPENROUTER_API_KEY}${XAI_API_KEY}" ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping TeXRA code review: no model provider API key is configured."
+          fi
+
+      - name: Checkout repository under review
+        if: steps.texra-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Checkout trusted automation
+        if: steps.texra-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          path: .trusted-actions
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Check trusted TeXRA action
+        if: steps.texra-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true'
+        id: trusted-texra-action
+        run: |
+          if [ -f .trusted-actions/.github/actions/texra-code-review/action.yml ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping TeXRA code review: trusted base branch does not yet contain texra-code-review."
+          fi
+
+      - name: Prepare PR diff
+        if: steps.texra-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true' && steps.trusted-texra-action.outputs.available == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p .texra-action
+          git diff --find-renames "$BASE_SHA" "$HEAD_SHA" > .texra-action/pr.diff
+
+      - name: Collect previous TeXRA review threads
+        if: steps.texra-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true' && steps.trusted-texra-action.outputs.available == 'true'
+        id: texra-threads
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('node:fs');
+
+            const outputPath = '.texra-action/previous-texra-review-threads.json';
+            const marker = process.env.TEXRA_REVIEW_MARKER;
+            const emptyPayload = {
+              marker,
+              threads: [],
+              note: 'No previous TeXRA review threads were found.',
+            };
+
+            fs.mkdirSync('.texra-action', { recursive: true });
+
+            const query = `
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    id
+                    reviewThreads(first: 100) {
+                      nodes {
+                        id
+                        isResolved
+                        comments(first: 20) {
+                          nodes {
+                            id
+                            body
+                            author {
+                              login
+                            }
+                            createdAt
+                            url
+                            path
+                            line
+                            diffHunk
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `;
+
+            let data;
+            try {
+              data = await github.graphql(query, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                number: context.payload.pull_request.number,
+              });
+            } catch (error) {
+              core.warning(`Could not read previous TeXRA review threads: ${error.message}`);
+              fs.writeFileSync(outputPath, `${JSON.stringify(emptyPayload, null, 2)}\n`);
+              core.setOutput('path', outputPath);
+              return;
+            }
+
+            const threads =
+              data.repository.pullRequest.reviewThreads.nodes
+                .filter((thread) =>
+                  thread.comments.nodes.some((comment) =>
+                    String(comment.body || '').includes(marker),
+                  ),
+                )
+                .map((thread) => ({
+                  id: thread.id,
+                  isResolved: thread.isResolved,
+                  comments: thread.comments.nodes.map((comment) => ({
+                    id: comment.id,
+                    author: comment.author?.login ?? null,
+                    createdAt: comment.createdAt,
+                    url: comment.url,
+                    path: comment.path,
+                    line: comment.line,
+                    diffHunk: comment.diffHunk,
+                    body: String(comment.body || '')
+                      .replaceAll(marker, '')
+                      .trim(),
+                  })),
+                }));
+
+            fs.writeFileSync(
+              outputPath,
+              `${JSON.stringify({ marker, threads }, null, 2)}\n`,
+            );
+            core.setOutput('path', outputPath);
+
+      - name: Run TeXRA single-agent review
+        if: steps.texra-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true' && steps.trusted-texra-action.outputs.available == 'true'
+        id: texra-review
+        uses: ./.trusted-actions/.github/actions/texra-code-review
+        with:
+          prompt-file: .trusted-actions/.github/prompts/texra-code-review-prompt.md
+          prompt-context: |
+            PR number: ${{ github.event.pull_request.number }}
+            Repository: ${{ github.repository }}
+            Repository owner: ${{ github.repository_owner }}
+            Repository name: ${{ github.event.repository.name }}
+            Pull request title: ${{ github.event.pull_request.title }}
+            Pull request body:
+            ${{ github.event.pull_request.body }}
+            Base ref: ${{ github.event.pull_request.base.ref }}
+            Base SHA: ${{ github.event.pull_request.base.sha }}
+            Head ref: ${{ github.event.pull_request.head.ref }}
+            Head SHA: ${{ github.event.pull_request.head.sha }}
+            Trigger event: ${{ github.event.action }}
+          review-context-file: .texra-action/pr.diff
+          review-thread-context-file: ${{ steps.texra-threads.outputs.path }}
+          texra-version: ${{ vars.TEXRA_CLI_VERSION || '' }}
+          agent: review
+          model: ${{ vars.TEXRA_REVIEW_MODEL || 'deepseekT' }}
+          api-mode: personal
+          approval-policy: never
+
+      - name: Post TeXRA pull request review
+        if: steps.texra-review.outputs.review-json != ''
+        uses: actions/github-script@v7
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          TEXRA_REVIEW_JSON: ${{ steps.texra-review.outputs.review-json }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('node:fs');
+
+            const review = JSON.parse(
+              fs.readFileSync(process.env.TEXRA_REVIEW_JSON, 'utf8'),
+            );
+            const marker = process.env.TEXRA_REVIEW_MARKER;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pull_number = context.payload.pull_request.number;
+
+            function markedBody(body) {
+              const text = String(body || '').trim();
+              return `${marker}\n${text || '## TeXRA Code Review\n\nNo review body was produced.'}`;
+            }
+
+            function normalizeComment(comment) {
+              const result = {
+                path: comment.path,
+                body: markedBody(comment.body),
+              };
+              if (comment.position != null) {
+                result.position = comment.position;
+              } else {
+                result.line = comment.line;
+                result.side = comment.side || 'RIGHT';
+                if (comment.start_line != null) {
+                  result.start_line = comment.start_line;
+                }
+                if (comment.start_side) {
+                  result.start_side = comment.start_side;
+                }
+              }
+              return result;
+            }
+
+            async function createReview(comments, body) {
+              await github.rest.pulls.createReview({
+                owner,
+                repo,
+                pull_number,
+                commit_id: process.env.HEAD_SHA,
+                event: 'COMMENT',
+                body,
+                comments,
+              });
+            }
+
+            const comments = Array.isArray(review.comments)
+              ? review.comments.map(normalizeComment)
+              : [];
+            let body = markedBody(review.body);
+
+            try {
+              await createReview(comments, body);
+            } catch (error) {
+              if (comments.length === 0) throw error;
+              core.warning(
+                `Could not create inline TeXRA review comments; falling back to review body only: ${error.message}`,
+              );
+              const fallback = comments
+                .map(
+                  (comment) =>
+                    `- \`${comment.path}\`${comment.line ? `:${comment.line}` : ''}: ${comment.body.replace(marker, '').trim()}`,
+                )
+                .join('\n');
+              body = `${body}\n\n### Inline comments that could not be placed\n\n${fallback}`;
+              await createReview([], body);
+            }
+
+            async function replyToThread(threadId, body) {
+              await github.graphql(
+                `mutation($threadId: ID!, $body: String!) {
+                  addPullRequestReviewThreadReply(input: {
+                    pullRequestReviewThreadId: $threadId,
+                    body: $body
+                  }) {
+                    comment {
+                      id
+                    }
+                  }
+                }`,
+                { threadId, body: markedBody(body) },
+              );
+            }
+
+            async function resolveThread(threadId) {
+              await github.graphql(
+                `mutation($threadId: ID!) {
+                  resolveReviewThread(input: { threadId: $threadId }) {
+                    thread {
+                      id
+                    }
+                  }
+                }`,
+                { threadId },
+              );
+            }
+
+            async function unresolveThread(threadId) {
+              await github.graphql(
+                `mutation($threadId: ID!) {
+                  unresolveReviewThread(input: { threadId: $threadId }) {
+                    thread {
+                      id
+                    }
+                  }
+                }`,
+                { threadId },
+              );
+            }
+
+            const threadActions = Array.isArray(review.thread_actions)
+              ? review.thread_actions
+              : [];
+            for (const action of threadActions) {
+              try {
+                if (action.action === 'reply') {
+                  await replyToThread(action.thread_id, action.body);
+                } else if (action.action === 'resolve') {
+                  if (action.body) {
+                    await replyToThread(action.thread_id, action.body);
+                  }
+                  await resolveThread(action.thread_id);
+                } else if (action.action === 'unresolve') {
+                  if (action.body) {
+                    await replyToThread(action.thread_id, action.body);
+                  }
+                  await unresolveThread(action.thread_id);
+                }
+              } catch (error) {
+                core.warning(
+                  `Could not apply TeXRA thread action ${action.action} for ${action.thread_id}: ${error.message}`,
+                );
+              }
+            }
