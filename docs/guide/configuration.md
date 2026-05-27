@@ -3,11 +3,13 @@
 TeXRA provides extensive configuration options that allow you to customize its behavior to match your workflow (don't worry, the defaults are sensible!). This guide explains the available settings and how to adjust them for optimal performance.
 
 ::: tip CLI and desktop
-This page describes the VS Code extension's Dashboard and settings. The CLI and
-desktop app read the same kinds of settings from a `.texra/config.json` file in
-your project (run `texra init` to scaffold one), and expose models, tools, and
-agents through `texra models`, `texra tools`, and `texra agents`. The setting
-names below map directly onto the keys in that file.
+This page describes the VS Code extension's Dashboard and settings. The same
+setting names apply on the other surfaces, but they live in different places:
+the **CLI** reads a per-project `.texra/config.json` (run `texra init` to
+scaffold one) and exposes models, tools, and agents through `texra models`,
+`texra tools`, and `texra agents`; the **desktop app** stores its config in the
+application's own data directory and manages it through the app's UI, not from a
+project `.texra` folder.
 :::
 
 ## The TeXRA Dashboard
