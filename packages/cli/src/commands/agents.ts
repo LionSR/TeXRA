@@ -43,7 +43,7 @@ import {
   terminalStatusExitCode,
   type CliRunResult,
 } from './_helpers/terminalStatus';
-import { expandWorkflowInputSpec } from './_helpers/workflowInputs';
+import { expandWorkflowInputSpecs } from './_helpers/workflowInputs';
 import type { CliContext } from '../runtime/cliContext';
 
 type CliToolUseRunResult = Extract<CliRunResult, { category: 'toolUse' }>;
@@ -125,19 +125,6 @@ async function showAgent(context: CliContext, name: string): Promise<number> {
   return CliExitCode.Success;
 }
 
-async function expandOptionalInputSpecs(
-  specs: readonly string[],
-  cwd: string,
-  flagLabel: string,
-): Promise<string[]> {
-  const expanded = (
-    await Promise.all(
-      specs.map((spec) => expandWorkflowInputSpec(spec, cwd, flagLabel)),
-    )
-  ).flat();
-  return [...new Set(expanded)];
-}
-
 async function readInstructionFile(
   instructionFile: string | undefined,
   cwd: string,
@@ -208,8 +195,12 @@ async function runToolUseAgent(
   let instruction: string;
   try {
     [inputFiles, contextFiles, instruction] = await Promise.all([
-      expandOptionalInputSpecs(init.inputFiles, runContext.cwd, '--input'),
-      expandOptionalInputSpecs(init.contextFiles, runContext.cwd, '--context'),
+      expandWorkflowInputSpecs(init.inputFiles, runContext.cwd, '--input', {
+        allowEmpty: true,
+      }),
+      expandWorkflowInputSpecs(init.contextFiles, runContext.cwd, '--context', {
+        allowEmpty: true,
+      }),
       resolveToolUseInstruction(init, runContext.cwd),
     ]);
   } catch (error: unknown) {
