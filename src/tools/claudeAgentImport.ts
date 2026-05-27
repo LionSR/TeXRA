@@ -18,9 +18,12 @@
 import { createRequire } from 'module';
 import * as path from 'path';
 
-import { platform } from '@platform/platform';
 import { isModuleNotFoundError } from '@common/errors';
 import { executeCommandSync } from '@utils/system/execUtils';
+import {
+  getPackagedElectronResourcesPath,
+  pathExists,
+} from './support/externalBinaryUtils';
 
 type QueryFn = (params: {
   prompt: string | AsyncIterable<unknown>;
@@ -28,10 +31,6 @@ type QueryFn = (params: {
 }) => AsyncGenerator<unknown, void>;
 
 type PlatformInfo = { pkgs: readonly string[] };
-type ElectronProcess = NodeJS.Process & {
-  defaultApp?: boolean;
-  resourcesPath?: string;
-};
 
 // ---------------------------------------------------------------------------
 // SDK import
@@ -226,13 +225,6 @@ async function findClaudeBinaryInElectronResources(
   return undefined;
 }
 
-function getPackagedElectronResourcesPath(): string | undefined {
-  const electronProcess = process as ElectronProcess;
-  if (electronProcess.versions.electron == null) return undefined;
-  if (electronProcess.defaultApp === true) return undefined;
-  return electronProcess.resourcesPath;
-}
-
 /**
  * Resolve the native Claude binary from a directory that contains (or nests)
  * the platform-specific package. Returns the binary path if found, or
@@ -258,9 +250,3 @@ async function resolveClaudeBinary(
   return undefined;
 }
 
-async function pathExists(target: string): Promise<boolean> {
-  return platform()
-    .fs.stat(target)
-    .then(() => true)
-    .catch(() => false);
-}
