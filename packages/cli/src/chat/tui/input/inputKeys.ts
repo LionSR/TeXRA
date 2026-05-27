@@ -69,14 +69,3 @@ const KITTY_KEYPAD_ENTER = new Set([
 export function isKittyKeypadEnter(data: string): boolean {
   return KITTY_KEYPAD_ENTER.has(data);
 }
-
-// Under the same disambiguate flag, Ctrl+C is reported as a CSI-u sequence
-// (codepoint 99 = "c", modifier 5 = ctrl) instead of the raw \x03 byte that
-// would raise SIGINT — so the TUI's SIGINT-based interrupt/exit never fires.
-// App.tsx re-raises SIGINT when it sees this. Matches only the unmodified
-// Ctrl+C (no shift/alt), leaving other Ctrl+Shift/Alt+C combos untouched.
-const KITTY_CTRL_C = `${String.fromCharCode(27)}[99;5u`;
-
-export function isKittyCtrlC(data: string): boolean {
-  return data === KITTY_CTRL_C;
-}
