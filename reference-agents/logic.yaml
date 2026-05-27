@@ -302,7 +302,7 @@ prompts:
 
       Remember: If appendix derivations are questionable, add comments in the main text where those results are used, warning about the shaky foundation. Be proactive with improvements that don't cross section boundaries, delete substantial content, or require cross-document coordination; leave major reorganization and cross-document changes as issue comments for the human to decide.
 
-      Did later documents receive less attention than earlier ones? Re-read the last document now. Ensure that the output documents are in the following order: {{ INPUT_FILES | join(', ') }}.
+      Did later documents receive less attention than earlier ones? Re-read the last document now. Ensure that the output documents are in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}.
 
       <documents>
       {% for output in INPUT_FILES %}

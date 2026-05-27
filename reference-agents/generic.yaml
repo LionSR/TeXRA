@@ -79,7 +79,7 @@ prompts:
     - |
       Now critically reflect on the work you've just completed across all documents and output a further refined version. Check for accuracy, notation consistency within and across documents, structural coherence, formatting issues, and clarity. Include all the work from the previous step plus the new refinements.
 
-      Ensure that the output documents are in the following order: {{ INPUT_FILES | join(', ') }}
+      Ensure that the output documents are in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}
 
       <documents>
       {% for output in INPUT_FILES %}
