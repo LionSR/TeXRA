@@ -1,34 +1,32 @@
 ---
 layout: home
-hero:
-  name: TeXRA
-  text: Reliable Multi-Agent AI for Theorists
-  tagline: Agents that search, derive, calculate, compile, and verify — built for work where correctness is non-negotiable.
-  image:
-    src: /logo-1024x1024.svg
-    alt: TeXRA Logo
-  actions:
-    - theme: brand
-      text: Get Started
-      link: /guide/
-    - theme: alt
-      text: Install from Marketplace
-      link: vscode:extension/texra-ai.texra
-
-features:
-  - icon: 🔬
-    title: Grounded, not generative
-    details: Every citation from a real database. Every figure compiled. Every diff reviewable.
-  - icon: 🔁
-    title: Agents that reflect
-    details: Plan, execute, self-critique, revise — the same loop a careful collaborator follows.
-  - icon: 🛡️
-    title: Three levels of verification
-    details: LLM prose, Wolfram algebra, Lean 4 formal proof — connected in one environment.
+title: TeXRA — Multi-agent AI for theorists
+titleTemplate: false
 ---
 
+<LandingHero />
+
+<section class="trust-row">
+  <div class="trust-card">
+    <span class="trust-icon">🔬</span>
+    <h3>Grounded, not generated</h3>
+    <p>Every citation comes from a real database. Every figure is compiled. Every edit lands as a diff you can read line by line.</p>
+  </div>
+  <div class="trust-card">
+    <span class="trust-icon">🧑‍🔬</span>
+    <h3>A team, not a chatbot</h3>
+    <p>One orchestrator decomposes the task and delegates to researchers, numericists, reviewers, and formalizers — each with its own tools and model.</p>
+  </div>
+  <div class="trust-card">
+    <span class="trust-icon">🛡️</span>
+    <h3>Three levels of verification</h3>
+    <p>LLM prose, Wolfram algebra, and Lean 4 formal proof — connected in one environment for work where correctness is non-negotiable.</p>
+  </div>
+</section>
+
 <section class="architecture-section">
-  <h2>Multi-agent orchestration</h2>
+  <h2>One orchestrator, a team of specialists</h2>
+  <p class="arch-subtitle">You describe the task. The orchestrator breaks it into sub-tasks, delegates to specialist agents in parallel, and returns proposals you approve before they touch your files.</p>
 
   <!-- Research Lifecycle -->
   <div class="lifecycle">
@@ -48,8 +46,8 @@ features:
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
       </div>
       <div class="phase-name">Derive</div>
-      <div class="phase-agents">research &middot; lean</div>
-      <div class="phase-desc">Wolfram, Lean, bash</div>
+      <div class="phase-agents">research &middot; numerics</div>
+      <div class="phase-desc">Wolfram, bash</div>
     </div>
     <div class="lifecycle-arrow">
       <svg width="28" height="16" viewBox="0 0 28 16"><path d="M0 8h24M18 2l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
@@ -174,11 +172,11 @@ features:
 
 <section class="bottom-cta">
   <h2>Start in under two minutes</h2>
-  <p>Install from the VS Code Marketplace, add an API key, and run your first agent.</p>
+  <p>Install from the VS Code Marketplace, sign in for free researcher access or add your own API key, and run your first agent.</p>
   <div class="cta-buttons">
     <a href="/guide/quick-start" class="cta-button cta-primary">Quick Start Guide</a>
     <a href="/guide/built-in-agents" class="cta-button cta-secondary">Browse All Agents</a>
-    <a href="/guide/desktop" class="cta-button cta-secondary">Desktop Beta</a>
+    <a href="/guide/texra-cli" class="cta-button cta-secondary">Use the CLI</a>
   </div>
 </section>
 
@@ -187,7 +185,7 @@ features:
 
   <details>
     <summary>What models does it support?</summary>
-    <p>Claude, GPT, Gemini, DeepSeek, Grok, and more via OpenRouter. Bring your own API key, or sign in for free researcher access.</p>
+    <p>OpenAI, Anthropic Claude, Google Gemini, DeepSeek, xAI Grok, Moonshot Kimi, Qwen, GLM, and more via OpenRouter. Bring your own API key, or sign in for free researcher access — each agent on a team can run a different model.</p>
   </details>
 
   <details>
@@ -201,18 +199,18 @@ features:
   </details>
 
   <details>
+    <summary>Can I use it without VS Code?</summary>
+    <p>Yes — the <code>@texra-ai/cli</code> terminal client runs the same agents and sign-in on your <code>.tex</code> projects, for scripts, CI, and remote machines. See the <a href="/guide/texra-cli">CLI guide</a>.</p>
+  </details>
+
+  <details>
     <summary>Is my data private?</summary>
-    <p>All API calls go directly from your machine to the model provider. No TeXRA servers in the middle.</p>
+    <p>With your own keys, API calls go directly from your machine to the model provider. Researcher Access Program traffic is relayed through TeXRA's hosted orchestrator.</p>
   </details>
 
   <details>
     <summary>Can I build custom agents?</summary>
     <p>Yes — agents are YAML files you can modify or create from scratch. See <a href="/guide/custom-agents">Custom Agents</a>.</p>
-  </details>
-
-  <details>
-    <summary>Is there a standalone desktop app?</summary>
-    <p>The desktop app is in beta development. See the <a href="/guide/desktop">Desktop App guide</a> for platform, setup, log, and update notes.</p>
   </details>
 
   <details>
@@ -245,6 +243,8 @@ section h2 {
   font-weight: 700;
   margin-bottom: 1.25rem;
   color: var(--vp-c-text-1);
+  border-top: none;
+  padding-top: 0;
 }
 section p {
   font-size: 0.95rem;
@@ -253,11 +253,39 @@ section p {
 }
 
 /* ============================================
+   TRUST ROW (replaces frontmatter features)
+   ============================================ */
+.trust-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+.trust-card {
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+.trust-icon {
+  font-size: 1.6rem;
+  display: block;
+  margin-bottom: 0.6rem;
+}
+.trust-card h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1.02rem;
+  color: var(--vp-c-text-1);
+}
+.trust-card p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+/* ============================================
    ARCHITECTURE SCHEMATIC
    ============================================ */
-.architecture-section {
-  border-top: none !important;
-}
 .arch-subtitle {
   text-align: center;
   max-width: 640px;
@@ -608,6 +636,10 @@ section p {
 @media (max-width: 768px) {
   section {
     padding: 1.25rem 1.25rem;
+  }
+  .trust-row {
+    grid-template-columns: 1fr;
+    gap: 1rem;
   }
   .lifecycle {
     flex-wrap: wrap;
