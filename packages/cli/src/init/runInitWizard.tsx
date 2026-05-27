@@ -41,7 +41,7 @@ export interface InitWizardResult {
 
 const APPROVAL_DESCRIPTIONS: Record<CliApprovalPolicy, string> = {
   never: 'never prompt before privileged actions',
-  ask: 'confirm before privileged actions',
+  ask: 'confirm before privileged actions (recommended)',
   yolo: 'auto-approve every action',
 };
 
@@ -207,6 +207,10 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
       >
         <Select
           key={step}
+          // Pre-highlight `ask` (the runtime default) rather than the deny-all
+          // `never` that leads the canonical list, so pressing Enter accepts
+          // the recommended policy.
+          initialIndex={CLI_APPROVAL_POLICIES.indexOf('ask')}
           items={CLI_APPROVAL_POLICIES.map((policy) => ({
             value: policy,
             label: policy,
