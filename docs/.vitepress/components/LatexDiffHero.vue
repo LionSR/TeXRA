@@ -189,36 +189,9 @@ import MockupFrame from './MockupFrame.vue';
   color: var(--wa-color-text-normal);
 }
 
-.frow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
 .lbl-ic {
   font-size: 11px;
   color: var(--color-text-tertiary);
-}
-.acts {
-  display: flex;
-  gap: 1px;
-}
-.act {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  color: var(--color-text-secondary);
-  font-size: 12px;
-}
-.act:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--wa-color-text-normal);
-}
-.act-on {
-  color: #c89be0;
 }
 .s-mute {
   color: var(--color-text-secondary);

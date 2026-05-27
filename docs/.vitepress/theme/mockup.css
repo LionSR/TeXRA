@@ -123,6 +123,35 @@
   flex-shrink: 0;
 }
 
+/* Labelled row with a trailing icon-action toolbar (LaTeXDiffs / file groups) */
+.mockup .frow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mockup .acts {
+  display: flex;
+  gap: 1px;
+}
+.mockup .act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+.mockup .act:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--wa-color-text-normal);
+}
+.mockup .act-on {
+  color: #c89be0;
+}
+
 /* Code / terminal output surface (editor body) */
 .mockup .surface {
   flex: 1;
