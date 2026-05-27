@@ -21,21 +21,28 @@
 > [Buy Me a Coffee](https://buymeacoffee.com/texra.ai) to keep the program
 > open for everyone.
 
-**TeXRA is a multi-agent research assistant for theorists (Physics, Math, CS, Engineering, etc.)— in VS Code and the
-terminal.** Instead of chatting with a single model, you direct an
+**TeXRA is a multi-agent research assistant for theorists (Physics, Math, CS,
+Engineering, etc.).** Instead of chatting with a single model, you direct an
 **Orchestrator** that delegates to a team of specialists—researchers,
 numericists, reviewers, formalizers, LaTeX fixers, presenters—each with their
 own tools, prompts, and model. The result is a coordinated lab that drafts,
 reviews, computes, and formalizes rigorous scientific work alongside its LaTeX,
 code, figures, and PRs.
 
-TeXRA runs as a **VS Code extension** and as a **terminal CLI**
-(`@texra-ai/cli`) that share the same agents and sign-in — see
-[Use TeXRA from the terminal](#use-texra-from-the-terminal) below.
+### One assistant, two surfaces
 
-See [texra.ai](https://texra.ai) or the
-[full documentation](https://texra.ai/guide/) for tutorials, agent recipes, and
-a web-based launch page.
+The same agents, account, and model providers are available wherever you work:
+
+|               | **VS Code extension**                                                                                                                         | **Terminal CLI**                                          |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Best for      | Interactive writing, side-by-side diffs, figure previews                                                                                      | Scripts, CI, remote/headless machines, the keyboard-first |
+| Install       | [Marketplace](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra) / [Open VSX](https://open-vsx.org/extension/texra-ai/texra) | `npm install -g @texra-ai/cli`                            |
+| Drive it with | Sidebar chat + the **progress board**                                                                                                         | `texra chat` (TUI) and `texra run` (headless)             |
+
+Pick whichever fits the moment—both run the same teams on the same `.tex`
+projects. The deeper walkthroughs live at
+[texra.ai](https://texra.ai) and the
+[full documentation](https://texra.ai/guide/).
 
 ## Why TeXRA
 
@@ -47,8 +54,9 @@ a web-based launch page.
   sessions.
 - **Curated team presets** – switch to **Physicist**, **Mathematician**,
   **Computer Scientist (ML)**, or **Lean Project** in one click from the
-  Multi-Agent settings tab. Each preset is a preconfigured roster of workflow
-  and tool-use agents tuned for that discipline; you can also save your own.
+  Multi-Agent settings tab, or with `texra multi-agent run <preset>` in the
+  terminal. Each preset is a preconfigured roster of workflow and tool-use
+  agents tuned for that discipline; you can also save your own.
 - **A full cast of specialists** – locally bundled tool-use agents include
   `research`, `numerics`, `review`, `presenter`, `latexFixer`, `latexDiff`,
   `creator`, `lean`, `chat`, and the **Setup Wizard** (`setup`); workflow
@@ -62,13 +70,13 @@ a web-based launch page.
   GitHub PR subscriptions, and can delegate reasoning turns to the Codex
   CLI—each tool call gated by per-stream approval (with an optional YOLO
   bypass).
-- **Live, persistent runs** – the **progress board** streams reasoning, tool
-  calls, sub-agent file diffs, and per-run token usage and cost for active
-  and recently completed runs in your workspace. Saved task state can be
-  reopened later via **Show Agent Execution History**, tool-use agents can
-  be resumed via **Resume Tool-Use Agent**, and **Pack Output into History
-  Folder** archives a finished run's outputs into the workspace's `History/`
-  directory.
+- **Live, persistent runs** – watch reasoning, tool calls, sub-agent file
+  diffs, and per-run token usage and cost stream in real time—on the VS Code
+  **progress board** or in the `texra chat` terminal UI. Each surface saves its
+  runs so you can reopen and resume them later: via **Show Agent Execution
+  History** and **Resume Tool-Use Agent** in VS Code, or `texra history` and
+  `texra resume <id>` in the terminal. Finished outputs can be archived into
+  the workspace's `History/` directory.
 - **Odyssey mode (experimental)** – let a tool-use agent run a long task to
   completion on its own. A configurable budget auto-pauses the run for your
   approval before going further, and a dedicated panel shows progress so
@@ -90,12 +98,18 @@ a web-based launch page.
 | **Computer Scientist (ML)** | Algorithm design, experiments and ablations, literature search, critical review, and reproducibility.  |
 | **Lean Project**            | Lean 4 projects—theorem search, tactic simplification, and blueprint-driven formalization.             |
 
-Switch teams from the Multi-Agent tab in Settings, or build your own roster of
-workflow and tool-use agents. Teams that include remote specialists (e.g. the
+Switch teams from the Multi-Agent tab in Settings (or `texra multi-agent` in
+the terminal), or build your own roster of workflow and tool-use agents. Teams
+that include remote specialists (e.g. the
 Orchestrator, `search`, `simplifier`) require sign-in or your own API keys
 configured for the providers those agents use.
 
 ## Quick Start
+
+Both surfaces share the same sign-in and agents, so set up whichever you'll
+use—or both.
+
+### In VS Code
 
 1. Install the extension from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
    or [Open VSX](https://open-vsx.org/extension/texra-ai/texra).
@@ -127,41 +141,38 @@ New here? Use the **Create Sample Project** button in the Getting Started
 banner (also available as `TeXRA: Create Sample Project` from the command
 palette) to spin up a fully configured workspace.
 
-## Use TeXRA from the terminal
+### In the terminal
 
-TeXRA also ships as a standalone CLI for running the same agents on your `.tex`
-projects without an editor — useful for scripts, CI, and remote machines.
+Run the same agents on your `.tex` projects without an editor—ideal for
+scripts, CI, and remote machines.
 
 ```sh
 npm install -g @texra-ai/cli   # requires Node.js >= 22
-texra --help
-```
 
-Authenticate the same way as the extension — sign in for the Researcher Access
-Program, or use your own provider keys (environment or a workspace `.env`, same
-`<PROVIDER>_API_KEY` convention as [Configuring Models](#configuring-models)
-below):
-
-```sh
-texra login      # included access; or set <PROVIDER>_API_KEY and pass --api-mode personal
+texra login      # Researcher Access sign-in; or set <PROVIDER>_API_KEY and use --api-mode personal
 texra doctor     # verify environment, sign-in, models, and LaTeX tooling
 ```
 
-Run a workflow agent, or start an interactive tool-use session:
+Then drive a whole research team from the prompt:
 
 ```sh
+texra              # interactive launcher: pick a chat, team, or run to resume
+texra chat         # interactive tool-use session (Orchestrator and specialists)
 texra run polish --input paper.tex --output paper.polished.tex --print
-texra chat
 ```
 
-Use `--output-format json|ndjson` for scriptable output, and `texra history` to
-inspect or resume stored runs. See the
+The CLI exposes the full toolkit—`texra agents`, `models`, `tools`, and
+`multi-agent` to inspect and launch teams; `texra history` and `texra resume`
+to revisit or re-run past work; `texra init` to drop a project `.texra/config.json`.
+For automation, every headless command takes `--output-format json|ndjson` and
+`--approval-policy never|ask|yolo`. Run `texra --help` or see the
 [documentation](https://texra.ai/guide/) for the full command reference.
 
 ## Requirements
 
-- **VS Code** 1.105+ (also runs in compatible editors such as Cursor,
-  Windsurf, and Google Antigravity)
+- **VS Code** 1.105+ for the extension (also runs in compatible editors such
+  as Cursor, Windsurf, and Google Antigravity), **or Node.js 22+** for the
+  terminal CLI
 - **LaTeX distribution** (TeX Live, MiKTeX, or MacTeX) for compilation and
   related tooling
 - **Perl** (required by `latexindent` and `latexdiff`)
@@ -173,10 +184,13 @@ The Setup Wizard checks for and helps install most of the above for you.
 
 ## Configuring Models
 
-Sign in through the Profile view to use the Researcher Access Program (which
-also unlocks the hosted Orchestrator and remote specialists), or store your
-own API keys via the **`TeXRA: Set API Key`** command (kept in VS Code's
-encrypted SecretStorage), or place them in a workspace `.env` file:
+Sign in to the Researcher Access Program—via the Profile view in VS Code or
+`texra login` in the terminal—to use the hosted Orchestrator and remote
+specialists. To bring your own keys instead, the extension reads them from the
+**`TeXRA: Set API Key`** command (stored in VS Code's encrypted SecretStorage)
+or a workspace `.env` file it loads automatically; the CLI reads the same
+`<PROVIDER>_API_KEY` variables from your environment when run with
+`--api-mode personal`:
 
 ```env
 OPENAI_API_KEY=your_openai_key_here
@@ -189,7 +203,7 @@ OPENROUTER_API_KEY=your_openrouter_key_here
 
 Other supported providers follow the same `<PROVIDER>_API_KEY` convention:
 `MOONSHOT_API_KEY`, `DASHSCOPE_API_KEY` (Qwen), `MINIMAX_API_KEY`,
-`GLM_API_KEY`. TeXRA loads the `.env` file automatically at startup. Each
+`GLM_API_KEY`. Each
 agent in a team can use a different model, so you can pair a flagship reasoner
 for the orchestrator with cheaper, faster models for routine sub-tasks. See
 the [installation guide](https://texra.ai/guide/installation.html) and the
@@ -201,8 +215,10 @@ Configure agents, prompts, models, and reliability policy in VS Code settings
 or the unified Settings view (Memory, History, Models, Agents, Multi-Agent,
 Tools, Git, LaTeX tabs). The Multi-Agent tab covers team presets, parallel
 tool-call limits, compaction thresholds, retry/backoff, and the orchestrator
-kill toggle. Power users can define new workflow or tool-use agents in YAML
-or register new model handlers.
+kill toggle. In the terminal, `texra init` writes a project
+`.texra/config.json` with the same knobs, and any setting can be overridden
+per run with a command-line flag. Power users on either surface can define new
+workflow or tool-use agents in YAML or register new model handlers.
 
 ## Support & Feedback
 
