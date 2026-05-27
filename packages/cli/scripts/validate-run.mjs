@@ -238,7 +238,9 @@ function validateToolUseAgentRunCommand() {
     );
     writeFileSync(
       contextPath,
-      'diff --git a/paper.tex b/paper.tex\n+\\\\section{Validation}\n',
+      String.raw`diff --git a/paper.tex b/paper.tex
++\section{Validation}
+`,
     );
     writeFileSync(validationFlagPath, validationFlagContent);
 
