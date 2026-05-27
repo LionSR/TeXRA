@@ -264,7 +264,7 @@ prompts:
 
       Remember: Be proactive with local notation improvements (within sections, 2-5 equations), but document all non-trivial changes with comments. Leave systemic and cross-document notation changes as issue comments for the human to decide, but ALWAYS provide graceful solutions that minimize changes.
 
-      Ensure that the output documents are in the following order: {{ INPUT_FILES | join(', ') }}.
+      Ensure that the output documents are in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}.
 
       <documents>
       {% for output in INPUT_FILES %}
