@@ -249,4 +249,3 @@ async function resolveClaudeBinary(
   }
   return undefined;
 }
-

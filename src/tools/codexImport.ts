@@ -265,4 +265,3 @@ async function resolveCodexBinaryFromPlatformPackage(
   );
   return (await pathExists(binary)) ? binary : undefined;
 }
-
