@@ -21,6 +21,8 @@ export interface CliExecuteOptions {
    * stored config and must leave the prior terminal status untouched.
    */
   readonly markErrorOnThrow?: boolean;
+  /** Stop a tool-use execution after one model/tool cycle. */
+  readonly stopAfterCycle?: boolean;
   /** Wrap the run (e.g. multi-agent preset visibility) without leaking the
    *  runtime-host lifecycle into the caller. */
   readonly wrap?: (
@@ -46,6 +48,7 @@ export async function executeCliRequest(
       runtimeHost,
       enforceCategory: options.enforceCategory,
       registerExecution: options.registerExecution,
+      stopAfterCycle: options.stopAfterCycle,
     });
 
   let result: ExecuteAgentResult;
