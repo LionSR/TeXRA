@@ -68,7 +68,7 @@ titleTemplate: false
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
       </div>
       <div class="phase-name">Write</div>
-      <div class="phase-agents">polish &middot; correct &middot; draw</div>
+      <div class="phase-agents">polish &middot; correct &middot; research</div>
       <div class="phase-desc">LaTeX, figures, diffs</div>
     </div>
     <div class="lifecycle-arrow">

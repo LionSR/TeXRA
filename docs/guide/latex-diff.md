@@ -6,6 +6,13 @@ TeXRA automatically generates diff files after agent runs that modify `.tex` fil
 
 This guide explains how to use TeXRA's dedicated LaTeXdiff features for comparing arbitrary file versions and understanding the results.
 
+::: tip CLI and desktop
+The automatic post-run diffs and the buttons described below belong to the VS Code
+extension. To produce a diff PDF from the terminal, use the [`latexDiff`
+agent](./built-in-agents.md#latexdiff), which wraps `latexdiff` to compare two
+LaTeX versions.
+:::
+
 ### Controlling Between-Round Diffs
 
 TeXRA compares each round of agent output to your original input and can also create diffs between consecutive rounds (`_diff_rN-rM.tex`). Between-round diffs are disabled by default—enable them by setting **TeXRA › LaTeXdiff › Generate Between Round Diffs** (`texra.latexdiff.generateBetweenRoundDiffs`) to `true` in VS Code's settings. When left off, the run command and progress notifications only account for the original-vs-round comparisons, reducing the number of diff files created.
