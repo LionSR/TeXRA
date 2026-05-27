@@ -224,51 +224,6 @@ import MockupFrame from './MockupFrame.vue';
   color: var(--color-text-secondary);
 }
 
-/* Compiled diff PDF page */
-.t-pdf {
-  color: #e0524f;
-}
-.page {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  background: #fdfdfb;
-  color: #1a1a1a;
-  margin: 16px;
-  padding: 22px 26px;
-  border-radius: 4px;
-  font-family: 'Latin Modern Roman', Georgia, 'Times New Roman', serif;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
-}
-.pg-h {
-  font-size: 1.05rem;
-  font-weight: 700;
-  margin: 0.4rem 0 0.55rem;
-  color: #111;
-  border: none;
-  padding: 0;
-}
-.pg-h:first-child {
-  margin-top: 0;
-}
-.pg-p {
-  font-size: 0.84rem;
-  line-height: 1.65;
-  margin: 0 0 0.7rem;
-  color: #1a1a1a;
-}
-.page del {
-  color: #c0392b;
-  text-decoration: line-through;
-}
-.page ins {
-  color: #1f4fd6;
-  text-decoration: underline;
-}
-.page sub {
-  font-size: 0.7em;
-}
-
 @media (max-width: 820px) {
   .board {
     width: auto;

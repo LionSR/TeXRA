@@ -562,41 +562,8 @@ const view = ref('search');
   color: var(--color-text-link);
 }
 
-/* Editor: terminal-style artifact surface */
-.t-bib {
-  color: #69b06a;
-}
-.t-wolf {
-  color: #d9491c;
-}
-.t-lean {
-  color: #b388e0;
-  font-style: italic;
-  font-weight: 700;
-  font-size: 0.9rem;
-  line-height: 1;
-}
-.term {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  margin: 16px;
-  padding: 16px 18px;
-  background: #141414;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.82rem;
-  line-height: 1.7;
-  color: var(--wa-color-text-normal);
-}
-.wl {
-  color: var(--wa-color-text-normal);
-}
-.wl.out {
-  color: #9cdcfe;
-  margin-top: 4px;
-}
+/* BibTeX result (search pane) — the rest of the terminal surface comes from
+   theme/mockup.css. */
 .bib {
   margin-top: 4px;
 }
@@ -617,35 +584,5 @@ const view = ref('search');
   color: var(--color-success);
   font-size: 11px;
   vertical-align: middle;
-}
-.term-note {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--color-border);
-  font-family: var(--vp-font-family-base);
-  font-size: 0.8rem;
-  line-height: 1.55;
-  color: var(--color-text-secondary);
-}
-.term-ok {
-  display: inline-block;
-  margin-top: 6px;
-  color: #6abf69;
-  font-weight: 600;
-}
-.term-lean .ln {
-  white-space: pre;
-}
-.term-lean .kw {
-  color: #c586c0;
-}
-.term-lean .tac {
-  color: #4ec9b0;
-}
-.indent {
-  padding-left: 1.2em;
-}
-.indent2 {
-  padding-left: 2.4em;
 }
 </style>

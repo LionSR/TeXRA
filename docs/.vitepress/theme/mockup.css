@@ -144,6 +144,120 @@
   color: #9cdcfe;
 }
 
+/* Editor body — rendered diff "PDF" page (latexdiff preview) */
+.mockup .page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: #fdfdfb;
+  color: #1a1a1a;
+  margin: 16px;
+  padding: 22px 26px;
+  border-radius: 4px;
+  font-family: 'Latin Modern Roman', Georgia, 'Times New Roman', serif;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+.mockup .pg-h {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0.4rem 0 0.55rem;
+  color: #111;
+  border: none;
+  padding: 0;
+}
+.mockup .pg-h:first-child {
+  margin-top: 0;
+}
+.mockup .pg-p {
+  font-size: 0.84rem;
+  line-height: 1.65;
+  margin: 0 0 0.7rem;
+  color: #1a1a1a;
+}
+.mockup .page del {
+  color: #c0392b;
+  text-decoration: line-through;
+}
+.mockup .page ins {
+  color: #1f4fd6;
+  text-decoration: underline;
+}
+.mockup .page sub,
+.mockup .page sup {
+  font-size: 0.7em;
+}
+
+/* Editor body — terminal-style artifact (Wolfram / Lean / BibTeX) */
+.mockup .term {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 16px;
+  padding: 16px 18px;
+  background: #141414;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.82rem;
+  line-height: 1.7;
+  color: var(--wa-color-text-normal);
+}
+.mockup .wl {
+  color: var(--wa-color-text-normal);
+}
+.mockup .wl.out {
+  color: #9cdcfe;
+  margin-top: 4px;
+}
+.mockup .tac {
+  color: #4ec9b0;
+}
+.mockup .term-lean .ln {
+  white-space: pre;
+}
+.mockup .term-note {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+  font-family: var(--vp-font-family-base);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+.mockup .term-ok {
+  display: inline-block;
+  margin-top: 6px;
+  color: #6abf69;
+  font-weight: 600;
+}
+.mockup .indent {
+  padding-left: 1.2em;
+}
+.mockup .indent2 {
+  padding-left: 2.4em;
+}
+
+/* Editor tab file-type icon colors */
+.mockup .t-pdf {
+  color: #e0524f;
+}
+.mockup .t-wolf {
+  color: #d9491c;
+}
+.mockup .t-bib {
+  color: #69b06a;
+}
+.mockup .t-tex {
+  color: #4daafc;
+}
+.mockup .t-lean {
+  color: #b388e0;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
 @keyframes mk-spin {
   to {
     transform: rotate(360deg);

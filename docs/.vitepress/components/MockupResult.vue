@@ -136,122 +136,14 @@ const view = defineModel('view', { type: String, default: 'diff' });
 </template>
 
 <style scoped>
-/* Window chrome, editor shell, and design tokens come from MockupFrame +
-   theme/mockup.css; this file styles only the three artifact panes. */
-.t-pdf {
-  color: #e0524f;
-}
-.t-wolf {
-  color: #d9491c;
-}
-.t-lean {
-  color: #b388e0;
-  font-style: italic;
-  font-weight: 700;
-  font-size: 0.9rem;
-  line-height: 1;
-}
-
-/* Rendered diff "PDF" page — fills the editor like a real PDF preview */
-.page {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  background: #fdfdfb;
-  color: #1a1a1a;
-  margin: 16px;
-  padding: 22px 26px;
-  border-radius: 4px;
-  font-family: 'Latin Modern Roman', Georgia, 'Times New Roman', serif;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
-}
-.pg-h {
-  font-size: 1.05rem;
-  font-weight: 700;
-  margin: 0.4rem 0 0.55rem;
-  color: #111;
-  border: none;
-  padding: 0;
-}
-.pg-h:first-child {
-  margin-top: 0;
-}
-.pg-p {
-  font-size: 0.84rem;
-  line-height: 1.65;
-  margin: 0 0 0.7rem;
-  color: #1a1a1a;
-}
-.page del {
-  color: #c0392b;
-  text-decoration: line-through;
-}
-.page ins {
-  color: #1f4fd6;
-  text-decoration: underline;
-}
-.page sub,
-.page sup {
-  font-size: 0.7em;
-}
-.qed {
-  float: right;
-}
-
-/* Wolfram / Lean panes */
-.term {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  margin: 16px;
-  padding: 16px 18px;
-  background: #141414;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.82rem;
-  line-height: 1.75;
-  color: var(--wa-color-text-normal);
-}
-.wl {
-  color: var(--wa-color-text-normal);
-}
+/* Window chrome, editor shell, tokens, and the shared diff-page / terminal
+   surfaces come from MockupFrame + theme/mockup.css; this file adds only the
+   rules unique to these panes. */
 .wl.indent {
   padding-left: 1.5em;
 }
-.wl.out {
-  color: #9cdcfe;
-  margin-top: 4px;
-}
-.term-note {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--color-border);
-  font-family: var(--vp-font-family-base);
-  font-size: 0.8rem;
-  line-height: 1.55;
-  color: var(--color-text-secondary);
-}
-.term-ok {
-  display: inline-block;
-  margin-top: 6px;
-  color: #6abf69;
-  font-weight: 600;
-}
-.term-lean .ln {
-  white-space: pre;
-}
-.term-lean .kw {
-  color: #c586c0;
-}
-.term-lean .tac {
-  color: #4ec9b0;
-}
-.indent {
-  padding-left: 1.2em;
-}
-.indent2 {
-  padding-left: 2.4em;
+.qed {
+  float: right;
 }
 
 @media (max-width: 820px) {

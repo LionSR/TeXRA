@@ -200,18 +200,7 @@ const view = defineModel('view', { type: String, default: 'diff' });
   background: var(--color-success);
   flex-shrink: 0;
   box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.6);
-  animation: shpulse 1.8s infinite;
-}
-@keyframes shpulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.5);
-  }
-  70% {
-    box-shadow: 0 0 0 5px rgba(63, 185, 80, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(63, 185, 80, 0);
-  }
+  animation: mk-shpulse 1.8s infinite;
 }
 .sh-badge {
   display: inline-flex;
@@ -319,7 +308,7 @@ const view = defineModel('view', { type: String, default: 'diff' });
   border: 2px solid rgba(200, 155, 224, 0.3);
   border-top-color: #c89be0;
   border-radius: 50%;
-  animation: spin 0.9s linear infinite;
+  animation: mk-spin 0.9s linear infinite;
 }
 
 /* Background task item */
@@ -440,7 +429,7 @@ const view = defineModel('view', { type: String, default: 'diff' });
   border: 2px solid rgba(215, 169, 62, 0.3);
   border-top-color: var(--color-warning);
   border-radius: 50%;
-  animation: spin 0.9s linear infinite;
+  animation: mk-spin 0.9s linear infinite;
 }
 .tc-label {
   flex: 1;
@@ -575,17 +564,7 @@ const view = defineModel('view', { type: String, default: 'diff' });
   text-decoration: underline;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 @media (max-width: 820px) {
-  .board {
-    border-right: none;
-    border-bottom: 1px solid #000;
-  }
   .board-tabs {
     gap: 10px;
   }
