@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.38.2] - 2026-05-27
+
+### Features
+
+- **Stay on the latest CLI** — `texra` notices when a newer version is on npm and offers to update for you.
+- **Shift+Enter for newlines** in the CLI chat input — write multi-line prompts without leaving the input.
+- **Easier-to-read diffs** — added and removed lines show as full-width green and red bands in the terminal, matching the editor view.
+
+### Bug Fixes
+
+- **Ctrl+C works on modern terminals again** — cancel a run or exit `texra chat` on kitty, WezTerm, and Ghostty.
+- **Approval prompts stay compact** — they no longer stretch to fill the terminal and push the input off-screen.
+- **No more empty "(no output)" lines** in the chat transcript for tools that intentionally hide their output.
+- **Readable text in high-contrast themes** — user messages no longer blend into the background.
+
 ## [0.38.1] - 2026-05-27
 
 ### Features
