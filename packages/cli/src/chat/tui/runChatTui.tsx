@@ -672,7 +672,7 @@ export async function runChat(
   // when `useInput` mounts) caused capability discovery to flip raw mode off
   // ~250ms in, breaking input. Capability-gated notifications fall back to
   // BEL during this window (~250ms typical, hard 250ms cap on no DA1 reply).
-  await discoverTerminalCapabilities({
+  const terminalCaps = await discoverTerminalCapabilities({
     stdin: process.stdin,
     stdout: process.stdout,
   });
@@ -913,6 +913,14 @@ export async function runChat(
       stdout: process.stdout,
       stderr: process.stderr,
       stdin: process.stdin,
+      // Enable the Kitty keyboard protocol (disambiguate flag only) when the
+      // terminal supports it — already confirmed by discoverTerminalCapabilities
+      // above, so use 'enabled' to skip Ink's redundant detection query. This
+      // is what lets Ink distinguish Shift+Enter (newline) from Enter (submit);
+      // plain Enter stays a legacy `\r`, and Ink pops the protocol on unmount.
+      kittyKeyboard: {
+        mode: terminalCaps.kittyKeyboard ? 'enabled' : 'disabled',
+      },
     },
   );
 
