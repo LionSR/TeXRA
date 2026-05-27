@@ -61,6 +61,20 @@ npm run typecheck
 
 Alternatively, use `npm run compile:safe` which runs type checking before building.
 
+### Local CLI (`texra-local`)
+
+To run your locally-built CLI alongside a globally-installed published `texra`:
+
+```bash
+npm run texra-local:build   # bundle the CLI + copy resources/docs into packages/cli/dist
+npm run texra-local:link    # symlink `texra-local` into ~/.local/bin (one-time)
+```
+
+`texra-local` is a symlink to `packages/cli/dist/bin/texra.js`, which each build
+overwrites in place — so it always runs your latest local build, no relinking
+needed. Re-run `texra-local:build` to refresh. Override the install dir with
+`TEXRA_LOCAL_BIN_DIR=/some/dir npm run texra-local:link`.
+
 ### Legacy Webpack Builds
 
 The original webpack-based commands are still available:
