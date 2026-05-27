@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+import { gt as semverGt, valid as semverValid } from 'semver';
+
 import {
   cliEnvValue,
   readCliAmbientState,
@@ -17,44 +19,19 @@ const DEFAULT_TIMEOUT_MS = 2500;
 /** Package manager the running binary was installed with. */
 export type InstallMethod = 'npm' | 'pnpm' | 'yarn' | 'bun';
 
-interface ParsedSemver {
-  readonly major: number;
-  readonly minor: number;
-  readonly patch: number;
-  /** Empty when the version is a plain release (no `-rc.1` suffix). */
-  readonly prerelease: string;
-}
-
-export function parseSemver(version: string): ParsedSemver | undefined {
-  const match = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/.exec(
-    version.trim(),
-  );
-  if (!match) return undefined;
-  return {
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3]),
-    prerelease: match[4] ?? '',
-  };
-}
-
 /**
- * True when `latest` is strictly newer than `current`. A plain release ranks
- * above any prerelease of the same `x.y.z` (so `1.2.0` beats `1.2.0-rc.1`); two
- * prereleases compare lexically, which is enough for an update *hint* without
- * pulling in a full semver dependency.
+ * True when `latest` is strictly newer than `current`, using full semver
+ * precedence (a plain release outranks any prerelease of the same `x.y.z`, and
+ * prereleases compare numerically — so `1.2.0-rc.10` correctly beats
+ * `1.2.0-rc.2`). Unparseable inputs yield `false` so a malformed registry
+ * response can never push a bogus update prompt. The leading `v` some tags
+ * carry is tolerated by `semver`.
  */
 export function isNewerVersion(latest: string, current: string): boolean {
-  const a = parseSemver(latest);
-  const b = parseSemver(current);
+  const a = semverValid(latest.trim(), { loose: true });
+  const b = semverValid(current.trim(), { loose: true });
   if (!a || !b) return false;
-  if (a.major !== b.major) return a.major > b.major;
-  if (a.minor !== b.minor) return a.minor > b.minor;
-  if (a.patch !== b.patch) return a.patch > b.patch;
-  if (a.prerelease === b.prerelease) return false;
-  if (a.prerelease === '') return true; // release > any prerelease
-  if (b.prerelease === '') return false; // prerelease !> release
-  return a.prerelease > b.prerelease;
+  return semverGt(a, b);
 }
 
 /**
@@ -69,7 +46,10 @@ export function detectInstallMethod(
   if (segments.some((part) => part === 'bun' || part === '.bun')) return 'bun';
   if (segments.some((part) => part === 'pnpm' || part === '.pnpm'))
     return 'pnpm';
-  if (segments.includes('yarn')) return 'yarn';
+  // Yarn Classic's global bin lives under `~/.yarn/bin`, so match the
+  // dotted variant too — same as bun/pnpm above.
+  if (segments.some((part) => part === 'yarn' || part === '.yarn'))
+    return 'yarn';
   return 'npm';
 }
 

@@ -6,26 +6,7 @@ import {
   fetchLatestCliVersion,
   formatUpdateCommand,
   isNewerVersion,
-  parseSemver,
 } from '@cli/runtime/updateChecker';
-
-describe('parseSemver', () => {
-  it('parses plain and prerelease versions', () => {
-    expect(parseSemver('1.2.3')).toEqual({
-      major: 1,
-      minor: 2,
-      patch: 3,
-      prerelease: '',
-    });
-    expect(parseSemver('v0.38.2')).toMatchObject({ major: 0, minor: 38 });
-    expect(parseSemver('1.2.0-rc.1')?.prerelease).toBe('rc.1');
-  });
-
-  it('rejects non-semver strings', () => {
-    expect(parseSemver('unknown')).toBeUndefined();
-    expect(parseSemver('1.2')).toBeUndefined();
-  });
-});
 
 describe('isNewerVersion', () => {
   it('compares numerically across all components', () => {
@@ -57,6 +38,8 @@ describe('detectInstallMethod', () => {
       'pnpm',
     );
     expect(detectInstallMethod('/Users/me/.config/yarn/global/x')).toBe('yarn');
+    // Yarn Classic's global bin: dotted `.yarn` segment.
+    expect(detectInstallMethod('/Users/me/.yarn/bin/x')).toBe('yarn');
     expect(detectInstallMethod('/Users/me/.bun/install/global/x')).toBe('bun');
   });
 
