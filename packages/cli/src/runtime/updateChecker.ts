@@ -158,7 +158,12 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   const ambient = readCliAmbientState();
   if (process.env.TEXRA_NO_UPDATE_CHECK) return;
   if (ambient.isCi) return;
-  if (!ambient.stdinIsTty || !ambient.stderrIsTty) return;
+  // Require all three standard streams to be a TTY. stdout matters even though
+  // the prompt uses stdin/stderr: a half-redirected invocation like
+  // `texra chat > out` is an interactive-mode usage error the command rejects
+  // later, and we must not prompt for (or run) a self-update before it does.
+  if (!ambient.stdinIsTty || !ambient.stdoutIsTty || !ambient.stderrIsTty)
+    return;
   if (context.outputFormat === 'ndjson' || context.quietLogs === true) return;
 
   const latest = await fetchLatestCliVersion();
