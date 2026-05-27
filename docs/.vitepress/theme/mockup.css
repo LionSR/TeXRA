@@ -287,6 +287,313 @@
   line-height: 1;
 }
 
+/* Collapsible section header (LaTeXDiffs / Files) */
+.mockup .sechead {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+.mockup .sec-lbl {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--wa-color-text-normal);
+}
+.mockup .lbl-ic {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+.mockup .chev {
+  display: inline-flex;
+  color: #7a7a7a;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+/* Code-line surface rows (Launcher / file-selection editor panes) */
+.mockup .cl {
+  white-space: pre-wrap;
+  min-height: 1.4em;
+}
+.mockup .cl.indent {
+  padding-left: 1.4em;
+}
+
+/* ============================================
+   PROGRESS-BOARD SIDEBAR
+   Shared by MockupSidebar (landing) and GuideIntroHero (guide). Each component
+   adds only its own extras (background tasks, latexdiff result, BibTeX, etc.).
+   ============================================ */
+.mockup .stream-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.76rem;
+  min-width: 0;
+  white-space: nowrap;
+}
+.mockup .sh-name {
+  color: var(--wa-color-text-normal);
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mockup .sh-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-success);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.6);
+  animation: mk-shpulse 1.8s infinite;
+}
+.mockup .sh-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.68rem;
+  color: #c89be0;
+  background: rgba(200, 155, 224, 0.12);
+  border-radius: 999px;
+  padding: 1px 8px;
+  flex-shrink: 0;
+}
+.mockup .sh-pulse {
+  display: inline-flex;
+  color: #c89be0;
+  font-size: 11px;
+}
+.mockup .sh-tools {
+  margin-left: auto;
+  display: flex;
+  gap: 9px;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+.mockup .shi {
+  display: inline-flex;
+  font-size: 13px;
+}
+.mockup .board-scroll {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.76rem;
+  overflow: hidden;
+}
+.mockup .panel {
+  border-bottom: 1px solid var(--color-border);
+}
+.mockup .panel-sum {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  color: var(--wa-color-text-normal);
+  font-weight: 600;
+}
+.mockup .panel-body {
+  padding: 2px 12px 9px 14px;
+}
+
+/* Todos */
+.mockup .todos {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.mockup .todo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.mockup .todo .td-tx {
+  color: #cccccc;
+}
+.mockup .todo.done {
+  opacity: 0.55;
+}
+.mockup .todo.done .td-tx {
+  text-decoration: line-through;
+  color: var(--color-text-secondary);
+}
+.mockup .todo.prog .td-tx {
+  color: var(--wa-color-text-normal);
+  font-weight: 600;
+}
+.mockup .td-ic {
+  display: inline-flex;
+  color: var(--color-success);
+  flex-shrink: 0;
+  font-size: 12px;
+}
+.mockup .td-sp {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  border: 2px solid rgba(200, 155, 224, 0.3);
+  border-top-color: #c89be0;
+  border-radius: 50%;
+  animation: mk-spin 0.9s linear infinite;
+}
+
+/* Conversation log */
+.mockup .log {
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.mockup .umsg-wrap {
+  display: flex;
+  justify-content: flex-end;
+}
+.mockup .umsg {
+  max-width: 88%;
+  background: rgba(86, 110, 150, 0.22);
+  border: 1px solid #3a3f4a;
+  border-radius: 6px;
+  padding: 6px 9px;
+}
+.mockup .umsg-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 3px;
+  font-size: 0.64rem;
+  color: var(--color-text-secondary);
+}
+.mockup .umsg-ic {
+  display: inline-flex;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+.mockup .umsg-body {
+  color: var(--wa-color-text-normal);
+  line-height: 1.5;
+  font-family: var(--vp-font-family-base);
+  font-size: 0.77rem;
+}
+.mockup .reason {
+  color: #b9b9b9;
+  line-height: 1.5;
+  font-family: var(--vp-font-family-base);
+  font-size: 0.78rem;
+  padding: 0 2px;
+}
+
+/* Tool-use / delegate cards */
+.mockup .tcard {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  padding: 4px 6px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.mockup .tcard:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.mockup .tcard.active {
+  background: rgba(200, 155, 224, 0.13);
+}
+.mockup .tcard.open {
+  display: block;
+  padding: 4px 6px;
+}
+.mockup .tcard.open:hover {
+  background: rgba(200, 155, 224, 0.13);
+}
+.mockup .tcard-sum {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.mockup .tc-ic {
+  color: #75beff;
+  flex-shrink: 0;
+  display: inline-flex;
+  font-size: 13px;
+}
+.mockup .tc-label {
+  flex: 1;
+  min-width: 0;
+  color: var(--wa-color-text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mockup .tc-tool {
+  color: var(--color-text-secondary);
+}
+.mockup .tc-chev {
+  align-self: center;
+}
+.mockup .tc-chev.open {
+  transform: rotate(90deg);
+}
+.mockup .tc-time {
+  flex-shrink: 0;
+  align-self: center;
+  font-size: 0.66rem;
+  color: var(--color-text-tertiary);
+}
+.mockup .tc-timer {
+  color: var(--color-warning);
+}
+.mockup .tc-body {
+  padding: 5px 0 2px 27px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mockup .tc-row {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+.mockup .tc-k {
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  min-width: 64px;
+}
+.mockup .tc-v {
+  color: var(--wa-color-text-normal);
+  font-family: var(--vp-font-family-base);
+}
+.mockup .tc-code {
+  color: #c89be0;
+  background: rgba(200, 155, 224, 0.12);
+  border-radius: 3px;
+  padding: 0 5px;
+}
+.mockup .tc-model {
+  color: var(--color-text-secondary);
+}
+.mockup .tc-src {
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+.mockup .tc-file {
+  color: var(--color-text-link);
+  cursor: pointer;
+}
+.mockup .tc-file:hover {
+  text-decoration: underline;
+}
+
 @keyframes mk-spin {
   to {
     transform: rotate(360deg);

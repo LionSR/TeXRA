@@ -166,32 +166,10 @@ import MockupFrame from './MockupFrame.vue';
   padding: 12px;
   font-family: var(--vp-font-family-base);
 }
-.sechead {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--color-border);
-}
-.chev {
-  display: inline-flex;
-  color: #7a7a7a;
-  font-size: 11px;
-}
 .sec-ic {
   display: inline-flex;
   color: #c89be0;
   font-size: 13px;
-}
-.sec-lbl {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--wa-color-text-normal);
-}
-
-.lbl-ic {
-  font-size: 11px;
-  color: var(--color-text-tertiary);
 }
 .s-mute {
   color: var(--color-text-secondary);

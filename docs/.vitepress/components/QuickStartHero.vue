@@ -18,7 +18,7 @@ import MockupFrame from './MockupFrame.vue';
         >
       </div>
 
-      <div class="panel">
+      <div class="lpanel">
         <div class="phead">
           <div class="seg">
             <span class="seg-opt">Interactive</span>
@@ -111,7 +111,7 @@ import MockupFrame from './MockupFrame.vue';
 .board {
   width: 320px;
 }
-.panel {
+.lpanel {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -221,17 +221,6 @@ import MockupFrame from './MockupFrame.vue';
 }
 .run wa-icon {
   font-size: 13px;
-}
-
-.t-tex {
-  color: #4daafc;
-}
-.cl {
-  white-space: pre-wrap;
-  min-height: 1.4em;
-}
-.cl.indent {
-  padding-left: 1.4em;
 }
 
 @media (max-width: 820px) {

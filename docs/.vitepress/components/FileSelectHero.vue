@@ -181,27 +181,6 @@ import MockupFrame from './MockupFrame.vue';
   padding: 12px;
   font-family: var(--vp-font-family-base);
 }
-.sechead {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--color-border);
-}
-.chev {
-  display: inline-flex;
-  color: #7a7a7a;
-  font-size: 11px;
-}
-.sec-lbl {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--wa-color-text-normal);
-}
-.lbl-ic {
-  font-size: 11px;
-  color: var(--color-text-tertiary);
-}
 
 /* Multiple-file list */
 .flist {
@@ -239,17 +218,6 @@ import MockupFrame from './MockupFrame.vue';
 }
 .fi-rm:hover {
   color: var(--color-error);
-}
-
-.t-tex {
-  color: #4daafc;
-}
-.cl {
-  white-space: pre-wrap;
-  min-height: 1.4em;
-}
-.cl.indent {
-  padding-left: 1.4em;
 }
 
 @media (max-width: 820px) {
