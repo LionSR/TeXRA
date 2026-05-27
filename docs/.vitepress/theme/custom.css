@@ -1,1 +1,26 @@
-/* Intentionally empty — using VitePress defaults for sidebar */
+/* TeXRA brand palette — derived from the logo aubergine (#4D2161). */
+:root {
+  --vp-c-brand-1: #6e2f8c;
+  --vp-c-brand-2: #843aa6;
+  --vp-c-brand-3: #5a2773;
+  --vp-c-brand-soft: rgba(110, 47, 140, 0.14);
+
+  /* Legacy aliases still referenced by index.md section styles. */
+  --vp-c-brand: var(--vp-c-brand-1);
+  --vp-c-brand-light: var(--vp-c-brand-2);
+  --vp-c-brand-dark: var(--vp-c-brand-3);
+
+  /* Home hero accent. */
+  --vp-home-hero-name-color: var(--vp-c-brand-1);
+}
+
+.dark {
+  --vp-c-brand-1: #c89be0;
+  --vp-c-brand-2: #b885d6;
+  --vp-c-brand-3: #9a5fc0;
+  --vp-c-brand-soft: rgba(200, 155, 224, 0.16);
+
+  --vp-c-brand: var(--vp-c-brand-1);
+  --vp-c-brand-light: var(--vp-c-brand-2);
+  --vp-c-brand-dark: var(--vp-c-brand-3);
+}

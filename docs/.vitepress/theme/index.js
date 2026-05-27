@@ -2,6 +2,7 @@
 import DefaultTheme from 'vitepress/theme';
 import './custom.css';
 import LaunchPage from '../components/LaunchPage.vue';
+import LandingHero from '../components/LandingHero.vue';
 
 // Web Awesome: load default theme tokens and the <wa-icon> custom element,
 // then register the texra icon library so codicon-style names work in
@@ -26,6 +27,7 @@ export default {
     // at build time in `docs/.vitepress/config.js` under
     // `vite.vue.template.compilerOptions` so SSR also recognises wa-* tags.
     app.component('LaunchPage', LaunchPage);
+    app.component('LandingHero', LandingHero);
 
     // Side-effect: load WA icon component + register texra library on the
     // client. Skipped during SSR (build-time HTML generation).
