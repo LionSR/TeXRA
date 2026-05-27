@@ -185,7 +185,7 @@ prompts:
 
       Then, following your plan in the scratchpad, please output revised version(s) of the LaTeX document(s) that transform the fully derived mathematical drafts into polished scientific papers with an appropriate level of detail. Focus on addressing the original instruction while maintaining scientific clarity and proper motivation. Remember, the goal is not to show every mathematical step unless specifically required by the instruction, but to present the mathematics in a way that best serves the scientific content.
 
-      Ensure that the output documents are in the following order: {{ INPUT_FILES | join(', ') }}.
+      Ensure that the output documents are in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}.
 
       <documents>
       {% for output in INPUT_FILES %}
