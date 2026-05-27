@@ -1,10 +1,7 @@
-import { WorkspaceStateKey } from '@common/state/stateKeys';
 import {
-  DEFAULT_GIT_AUTHOR_EMAIL,
-  DEFAULT_GIT_AUTHOR_NAME,
-  DEFAULT_GIT_MARK_COMMITS,
-} from '@shared/constants/git';
-import { applyGitAuthorSettings } from '@utils/system/gitAuthorSettings';
+  applyGitAuthorSettings,
+  readGitAuthorSettingsFromState,
+} from '@utils/system/gitAuthorSettings';
 
 import type { ConfigProvider } from '@platform/interfaces/config';
 
@@ -22,20 +19,5 @@ import type { ConfigProvider } from '@platform/interfaces/config';
  * - `texra.git.worktreeSupport` (default `false`) — subagent worktree opt-in.
  */
 export function applyCliGitAuthorConfig(config: ConfigProvider): void {
-  applyGitAuthorSettings({
-    markCommits: config.get<boolean>(
-      WorkspaceStateKey.GIT_MARK_COMMITS,
-      DEFAULT_GIT_MARK_COMMITS,
-    ),
-    authorName:
-      config.get<string>(WorkspaceStateKey.GIT_AUTHOR_NAME, '') ||
-      DEFAULT_GIT_AUTHOR_NAME,
-    authorEmail:
-      config.get<string>(WorkspaceStateKey.GIT_AUTHOR_EMAIL, '') ||
-      DEFAULT_GIT_AUTHOR_EMAIL,
-    worktreeSupport: config.get<boolean>(
-      WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-      false,
-    ),
-  });
+  applyGitAuthorSettings(readGitAuthorSettingsFromState(config));
 }
