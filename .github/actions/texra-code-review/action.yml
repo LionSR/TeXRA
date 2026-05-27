@@ -1,0 +1,278 @@
+name: 'TeXRA Tool-Use Agent'
+description: 'Run one @texra-ai/cli tool-use agent headlessly and expose its final message.'
+
+inputs:
+  texra-version:
+    description: 'Version of @texra-ai/cli to install. Empty or latest installs the latest published version. Use workspace to build the local checkout.'
+    required: false
+    default: ''
+  prompt:
+    description: 'Inline review prompt. Provide this or prompt-file.'
+    required: false
+    default: ''
+  prompt-file:
+    description: 'Path to a file containing the review prompt. Provide this or prompt.'
+    required: false
+    default: ''
+  prompt-context:
+    description: 'Runtime context appended to the review prompt.'
+    required: false
+    default: ''
+  prompt-context-file:
+    description: 'Path to a file containing runtime context appended to the review prompt.'
+    required: false
+    default: ''
+  review-context-file:
+    description: 'Optional workspace-relative file containing the PR diff or other review context.'
+    required: false
+    default: ''
+  commentable-lines-file:
+    description: 'Optional workspace-relative file listing valid GitHub inline-review line anchors.'
+    required: false
+    default: ''
+  review-thread-context-file:
+    description: 'Optional workspace-relative JSON file containing previous TeXRA review threads.'
+    required: false
+    default: ''
+  working-directory:
+    description: 'Repository directory the TeXRA agent should inspect.'
+    required: false
+    default: ''
+  agent:
+    description: 'Single TeXRA tool-use agent to run.'
+    required: false
+    default: 'review'
+  model:
+    description: 'Optional TeXRA model id. Empty uses the CLI default or TEXRA_MODEL.'
+    required: false
+    default: ''
+  anthropic-api-key:
+    description: 'Optional Anthropic API key.'
+    required: false
+    default: ''
+  deepseek-api-key:
+    description: 'Optional DeepSeek API key.'
+    required: false
+    default: ''
+  google-api-key:
+    description: 'Optional Google API key.'
+    required: false
+    default: ''
+  openai-api-key:
+    description: 'Optional OpenAI API key.'
+    required: false
+    default: ''
+  openrouter-api-key:
+    description: 'Optional OpenRouter API key.'
+    required: false
+    default: ''
+  xai-api-key:
+    description: 'Optional xAI API key.'
+    required: false
+    default: ''
+  api-mode:
+    description: 'TeXRA API mode. Use personal in GitHub Actions so provider API keys are used instead of TeXRA login.'
+    required: false
+    default: 'personal'
+  approval-policy:
+    description: 'TeXRA approval policy for privileged tool actions.'
+    required: false
+    default: 'never'
+  output-file:
+    description: 'File where the final review message is written. Empty writes under RUNNER_TEMP.'
+    required: false
+    default: ''
+
+outputs:
+  final-message:
+    description: 'Final TeXRA review message.'
+    value: ${{ steps.parse.outputs.final-message }}
+  output-file:
+    description: 'Path to the final review message file.'
+    value: ${{ steps.parse.outputs.output-file }}
+  result-json:
+    description: 'Path to the raw TeXRA JSON result.'
+    value: ${{ steps.run.outputs.result-json }}
+  review-json:
+    description: 'Path to the normalized structured review JSON.'
+    value: ${{ steps.parse.outputs.review-json }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Ensure Node.js available
+      uses: actions/setup-node@v5
+      with:
+        node-version: '22'
+        package-manager-cache: false
+
+    - name: Install TeXRA CLI
+      shell: bash
+      env:
+        TEXRA_VERSION: ${{ inputs['texra-version'] }}
+        INPUT_WORKING_DIRECTORY: ${{ inputs['working-directory'] }}
+      run: |
+        set -euo pipefail
+        if [ "$TEXRA_VERSION" = "workspace" ]; then
+          working_directory="$INPUT_WORKING_DIRECTORY"
+          if [ -z "$working_directory" ]; then
+            working_directory="$GITHUB_WORKSPACE"
+          fi
+          working_directory="$(cd "$working_directory" && pwd)"
+          cd "$working_directory"
+          corepack enable
+          corepack pnpm install --frozen-lockfile
+          corepack pnpm --filter @texra-ai/cli run build
+          node packages/cli/dist/bin/texra.js version
+          exit 0
+        fi
+
+        package='@texra-ai/cli'
+        if [ -n "$TEXRA_VERSION" ] && [ "$TEXRA_VERSION" != "latest" ]; then
+          package="${package}@${TEXRA_VERSION}"
+        fi
+        npm install -g "$package"
+        texra version
+
+    - name: Resolve review prompt
+      id: prompt
+      shell: bash
+      env:
+        INPUT_PROMPT: ${{ inputs.prompt }}
+        INPUT_PROMPT_FILE: ${{ inputs['prompt-file'] }}
+        INPUT_PROMPT_CONTEXT: ${{ inputs['prompt-context'] }}
+        INPUT_PROMPT_CONTEXT_FILE: ${{ inputs['prompt-context-file'] }}
+        INPUT_REVIEW_CONTEXT_FILE: ${{ inputs['review-context-file'] }}
+        INPUT_COMMENTABLE_LINES_FILE: ${{ inputs['commentable-lines-file'] }}
+        INPUT_REVIEW_THREAD_CONTEXT_FILE: ${{ inputs['review-thread-context-file'] }}
+        INPUT_WORKING_DIRECTORY: ${{ inputs['working-directory'] }}
+      run: |
+        set -euo pipefail
+
+        working_directory="$INPUT_WORKING_DIRECTORY"
+        if [ -z "$working_directory" ]; then
+          working_directory="$GITHUB_WORKSPACE"
+        fi
+        working_directory="$(cd "$working_directory" && pwd)"
+
+        prompt="$INPUT_PROMPT"
+        if [ -z "$prompt" ] && [ -n "$INPUT_PROMPT_FILE" ]; then
+          if [ ! -f "$INPUT_PROMPT_FILE" ]; then
+            echo "::error::TeXRA prompt file not found: $INPUT_PROMPT_FILE"
+            exit 1
+          fi
+          prompt="$(cat "$INPUT_PROMPT_FILE")"
+        fi
+        if [ -z "$prompt" ]; then
+          echo "::error::Either prompt or prompt-file must be provided."
+          exit 1
+        fi
+
+        mkdir -p "$working_directory/.texra-action"
+        prompt_path="$working_directory/.texra-action/code-review-prompt.md"
+
+        {
+          printf '%s\n' "$prompt"
+          if [ -n "$INPUT_PROMPT_CONTEXT" ]; then
+            printf '\n## Runtime Context\n%s\n' "$INPUT_PROMPT_CONTEXT"
+          fi
+          if [ -n "$INPUT_PROMPT_CONTEXT_FILE" ]; then
+            if [ ! -f "$INPUT_PROMPT_CONTEXT_FILE" ]; then
+              echo "::error::TeXRA prompt context file not found: $INPUT_PROMPT_CONTEXT_FILE"
+              exit 1
+            fi
+            printf '\n## Runtime Context\n'
+            cat "$INPUT_PROMPT_CONTEXT_FILE"
+            printf '\n'
+          fi
+          if [ -n "$INPUT_REVIEW_CONTEXT_FILE" ]; then
+            printf '\nReview context file: `%s`\n' "$INPUT_REVIEW_CONTEXT_FILE"
+          fi
+          if [ -n "$INPUT_COMMENTABLE_LINES_FILE" ]; then
+            printf '\nCommentable line anchors file: `%s`\n' "$INPUT_COMMENTABLE_LINES_FILE"
+          fi
+          if [ -n "$INPUT_REVIEW_THREAD_CONTEXT_FILE" ]; then
+            printf '\nPrevious TeXRA review threads file: `%s`\n' "$INPUT_REVIEW_THREAD_CONTEXT_FILE"
+          fi
+        } > "$prompt_path"
+
+        prompt_relative="$(node -e 'const path = require("node:path"); console.log(path.relative(process.argv[1], process.argv[2]).split(path.sep).join("/"))' "$working_directory" "$prompt_path")"
+        {
+          echo "working-directory=$working_directory"
+          echo "prompt-path=$prompt_path"
+          echo "prompt-relative=$prompt_relative"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Run TeXRA
+      id: run
+      shell: bash
+      env:
+        ANTHROPIC_API_KEY: ${{ inputs['anthropic-api-key'] }}
+        DEEPSEEK_API_KEY: ${{ inputs['deepseek-api-key'] }}
+        GOOGLE_API_KEY: ${{ inputs['google-api-key'] }}
+        OPENAI_API_KEY: ${{ inputs['openai-api-key'] }}
+        OPENROUTER_API_KEY: ${{ inputs['openrouter-api-key'] }}
+        TEXRA_AGENT: ${{ inputs.agent }}
+        TEXRA_VERSION_INPUT: ${{ inputs['texra-version'] }}
+        TEXRA_MODEL_INPUT: ${{ inputs.model }}
+        TEXRA_API_MODE_INPUT: ${{ inputs['api-mode'] }}
+        TEXRA_APPROVAL_POLICY_INPUT: ${{ inputs['approval-policy'] }}
+        TEXRA_WORKING_DIRECTORY: ${{ steps.prompt.outputs.working-directory }}
+        TEXRA_PROMPT_RELATIVE: ${{ steps.prompt.outputs.prompt-relative }}
+        TEXRA_REVIEW_CONTEXT_FILE: ${{ inputs['review-context-file'] }}
+        TEXRA_COMMENTABLE_LINES_FILE: ${{ inputs['commentable-lines-file'] }}
+        TEXRA_REVIEW_THREAD_CONTEXT_FILE: ${{ inputs['review-thread-context-file'] }}
+        XAI_API_KEY: ${{ inputs['xai-api-key'] }}
+      run: |
+        set -euo pipefail
+
+        result_json="${RUNNER_TEMP:-/tmp}/texra-code-review-result.json"
+        stderr_log="${RUNNER_TEMP:-/tmp}/texra-code-review-stderr.log"
+
+        args=(
+          agents run "$TEXRA_AGENT"
+          --instruction-file "$TEXRA_PROMPT_RELATIVE"
+          --cwd "$TEXRA_WORKING_DIRECTORY"
+          --api-mode "$TEXRA_API_MODE_INPUT"
+          --approval-policy "$TEXRA_APPROVAL_POLICY_INPUT"
+          --output-format json
+          --print
+        )
+        if [ -n "$TEXRA_MODEL_INPUT" ]; then
+          args+=(--model "$TEXRA_MODEL_INPUT")
+        fi
+        if [ -n "$TEXRA_REVIEW_CONTEXT_FILE" ]; then
+          args+=(--context "$TEXRA_REVIEW_CONTEXT_FILE")
+        fi
+        if [ -n "$TEXRA_COMMENTABLE_LINES_FILE" ]; then
+          args+=(--context "$TEXRA_COMMENTABLE_LINES_FILE")
+        fi
+        if [ -n "$TEXRA_REVIEW_THREAD_CONTEXT_FILE" ]; then
+          args+=(--context "$TEXRA_REVIEW_THREAD_CONTEXT_FILE")
+        fi
+
+        if [ "$TEXRA_VERSION_INPUT" = "workspace" ]; then
+          texra_command=(node "$TEXRA_WORKING_DIRECTORY/packages/cli/dist/bin/texra.js")
+        else
+          texra_command=(texra)
+        fi
+        set +e
+        "${texra_command[@]}" "${args[@]}" > "$result_json" 2> "$stderr_log"
+        texra_status=$?
+        set -e
+
+        if [ -s "$stderr_log" ]; then
+          cat "$stderr_log" >&2
+        fi
+        echo "result-json=$result_json" >> "$GITHUB_OUTPUT"
+        exit "$texra_status"
+
+    - name: Parse TeXRA result
+      id: parse
+      shell: bash
+      env:
+        RESULT_JSON: ${{ steps.run.outputs.result-json }}
+        INPUT_OUTPUT_FILE: ${{ inputs['output-file'] }}
+      run: |
+        set -euo pipefail
+        node "$GITHUB_ACTION_PATH/scripts/normalize-review.cjs"
