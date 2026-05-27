@@ -9,7 +9,6 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { runValidatedExecutionRequest } from '@agent/runtime/runExecutionRequest';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
@@ -24,7 +23,6 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import { shouldRenderRunProgress } from '../runtime/runProgressRenderer';
-import { createCliRuntimeHost } from '../runtime/runtimeHost';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
@@ -36,16 +34,12 @@ import {
   optString,
 } from './_helpers/globalArgs';
 import { shouldHonorRemoteAgentPriority } from './_helpers/remoteAgents';
+import { executeCliRequest } from './_helpers/runExecution';
 import {
-  readCliTerminalStatus,
   terminalStatusExitCode,
   type CliRunResult,
-  type ExecuteAgentResult,
 } from './_helpers/terminalStatus';
-import {
-  expandWorkflowInputSpec,
-  expandWorkflowInputSpecs,
-} from './_helpers/workflowInputs';
+import { expandRunInputs } from './_helpers/workflowInputs';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
@@ -92,22 +86,11 @@ async function runWorkflowAgent(
   // parent component blows up at copy time (`EISDIR` / `EEXIST`) after the
   // full agent run otherwise.
   await assertOutputFileAvailable(init.output, runContext.cwd);
-  const inputFiles = await expandWorkflowInputSpecs(
+  const { inputFiles, contextFiles } = await expandRunInputs(
     init.inputFiles,
+    init.contextFiles,
     runContext.cwd,
   );
-  // `--context` files are optional, so we can't reuse the plural helper
-  // (which errors on an empty result). Expand each spec individually with
-  // the right flag label so a missing context path fails fast as a Usage
-  // error (exit 2) instead of reaching the agent as a raw ENOENT (exit 1),
-  // and so a glob like `refs/*.bib` actually expands.
-  const contextFiles = (
-    await Promise.all(
-      init.contextFiles.map((spec) =>
-        expandWorkflowInputSpec(spec, runContext.cwd, '--context'),
-      ),
-    )
-  ).flat();
   if (init.output && inputFiles.length > 1) {
     throw new CliUsageError(
       'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.',
@@ -132,7 +115,7 @@ async function runWorkflowAgent(
   }
   if (agent.category !== AgentCategory.Workflow) {
     throw new CliUsageError(
-      `Agent "${init.agent}" is a ${agent.category} agent; use \`texra chat\` or \`texra multi-agent run\` instead.`,
+      `Agent "${init.agent}" is a ${agent.category} agent; \`texra run\` only handles workflow agents. Start it interactively with \`texra chat --agent ${init.agent}\`, or run a headless team with \`texra multi-agent run\`.`,
     );
   }
 
@@ -154,25 +137,11 @@ async function runWorkflowAgent(
 
   const executionId = generateExecutionId();
   const registeredConfig = AgentConfigSchema.parse(config);
-  const runtimeHost = createCliRuntimeHost(runContext);
-  let result: ExecuteAgentResult;
-  try {
-    result = await runValidatedExecutionRequest(
-      { config: registeredConfig, executionId },
-      {
-        runtimeHost,
-        enforceCategory: true,
-        registerExecution: true,
-      },
-    );
-  } catch (error) {
-    await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
-    throw error;
-  } finally {
-    await runtimeHost.close();
-  }
-
-  const terminalStatus = await readCliTerminalStatus(result);
+  const { result, terminalStatus } = await executeCliRequest(
+    { config: registeredConfig, executionId },
+    runContext,
+    { enforceCategory: true, registerExecution: true, markErrorOnThrow: true },
+  );
   let displayResult: CliRunResult;
   try {
     ({ displayResult } = await resolveWorkflowOutput(
