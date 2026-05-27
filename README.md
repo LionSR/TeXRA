@@ -33,11 +33,11 @@ code, figures, and PRs.
 
 The same agents, sign-in, history, and memory are available wherever you work:
 
-| | **VS Code extension** | **Terminal CLI** |
-| --- | --- | --- |
-| Best for | Interactive writing, side-by-side diffs, figure previews | Scripts, CI, remote/headless machines, the keyboard-first |
-| Install | [Marketplace](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra) / [Open VSX](https://open-vsx.org/extension/texra-ai/texra) | `npm install -g @texra-ai/cli` |
-| Drive it with | Sidebar chat + the **progress board** | `texra chat` (TUI) and `texra run` (headless) |
+|               | **VS Code extension**                                                                                                                         | **Terminal CLI**                                          |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Best for      | Interactive writing, side-by-side diffs, figure previews                                                                                      | Scripts, CI, remote/headless machines, the keyboard-first |
+| Install       | [Marketplace](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra) / [Open VSX](https://open-vsx.org/extension/texra-ai/texra) | `npm install -g @texra-ai/cli`                            |
+| Drive it with | Sidebar chat + the **progress board**                                                                                                         | `texra chat` (TUI) and `texra run` (headless)             |
 
 Pick whichever fits the moment—or move between them mid-project, since runs,
 history, and memory are shared. The deeper walkthroughs live at
