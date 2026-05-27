@@ -48,13 +48,13 @@ Open **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) 
 
 The built-in `lean` agent is always available. The **Lean Project** team adds four more agents — a `leanOrchestrator` plus the specialists it delegates to — which are [remote agents](./remote-agents.md), so [sign in](./remote-agents.md) to sync them.
 
-| Agent             | Availability        | Best for                                                                 |
-| ----------------- | ------------------- | ------------------------------------------------------------------------ |
-| `lean`            | Built-in            | Writing and debugging proofs; iterating until a file compiles            |
-| `leanSearch`      | Remote / Lean team  | Finding the right Mathlib lemma, exploring APIs, formalization questions  |
-| `leanSimplifier`  | Remote / Lean team  | Cleaning up proofs to Mathlib-quality, upstream-ready standards          |
-| `leanBlueprint`   | Remote / Lean team  | Building dependency-tracked LeanBlueprint LaTeX that bridges math ↔ Lean  |
-| `leanOrchestrator`| Remote / Lean team  | Coordinating a whole formalization project across the agents above       |
+| Agent              | Availability       | Best for                                                                 |
+| ------------------ | ------------------ | ------------------------------------------------------------------------ |
+| `lean`             | Built-in           | Writing and debugging proofs; iterating until a file compiles            |
+| `leanSearch`       | Remote / Lean team | Finding the right Mathlib lemma, exploring APIs, formalization questions |
+| `leanSimplifier`   | Remote / Lean team | Cleaning up proofs to Mathlib-quality, upstream-ready standards          |
+| `leanBlueprint`    | Remote / Lean team | Building dependency-tracked LeanBlueprint LaTeX that bridges math ↔ Lean |
+| `leanOrchestrator` | Remote / Lean team | Coordinating a whole formalization project across the agents above       |
 
 To load the full set, open the **Multi-Agent** tab and select the **Lean Project** team. Formalizing a paper that's also part LaTeX? The **Mathematician** team bundles the `lean` agent alongside the LaTeX and research agents.
 
