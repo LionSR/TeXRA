@@ -365,6 +365,8 @@ export interface ExecuteAgentOptions {
   onFollowUpConsumed?: () => void;
   /** Fires on meaningful progress: todo changes, round completions, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
+  /** Stop a tool-use execution after one model/tool cycle instead of waiting for follow-up input. */
+  stopAfterCycle?: boolean;
   /** Fires after flow completes but BEFORE untrackExecution, so follow-ups are enqueued before waiters resolve. */
   onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
   /** Fires when a subagent fails and should report the failure to its orchestrator. */
@@ -452,6 +454,7 @@ export async function executeAgent(
               setting,
               isSubagent,
               onBeforeWaiting: options.onBeforeWaiting,
+              stopAfterCycle: options.stopAfterCycle,
               onProgress: (update) => {
                 if (update.kind === 'overview') {
                   toolUseTurns++;

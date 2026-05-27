@@ -93,6 +93,7 @@ export async function expandWorkflowInputSpecs(
   inputSpecs: readonly string[],
   cwd: string,
   flagLabel: string = '--input',
+  options: { readonly allowEmpty?: boolean } = {},
 ): Promise<string[]> {
   const expanded = (
     await Promise.all(
@@ -100,7 +101,7 @@ export async function expandWorkflowInputSpecs(
     )
   ).flat();
   const unique = [...new Set(expanded)];
-  if (unique.length === 0) {
+  if (unique.length === 0 && options.allowEmpty !== true) {
     throw new CliUsageError('At least one workflow input file is required.');
   }
   return unique;
