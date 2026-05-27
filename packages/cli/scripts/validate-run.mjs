@@ -29,6 +29,12 @@ const { parseCommentableLines } = require(
     '.github/actions/texra-code-review/scripts/write-commentable-lines.cjs',
   ),
 );
+const { loadKnownThreadIds } = require(
+  path.join(
+    repoRoot,
+    '.github/actions/texra-code-review/scripts/post-review.cjs',
+  ),
+);
 const { collectTexraThreads } = require(
   path.join(
     repoRoot,
@@ -392,6 +398,14 @@ async function validateCodeReviewActionHelpers() {
     assert(
       JSON.parse(readFileSync(threadsOutput, 'utf8')).threads.length === 0,
       'thread collection should create custom output directories',
+    );
+    writeFileSync(
+      threadsOutput,
+      JSON.stringify({ threads: [{ id: 'PRRT_known_thread' }] }),
+    );
+    assert(
+      loadKnownThreadIds(threadsOutput).has('PRRT_known_thread'),
+      'thread action validation should read known thread ids',
     );
   } finally {
     if (previousThreadsOutput == null) {

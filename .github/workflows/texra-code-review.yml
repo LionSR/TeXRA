@@ -214,7 +214,9 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           TEXRA_COMMENTABLE_LINES_JSON: .texra-action/commentable-lines.json
           TEXRA_POST_REVIEW_SCRIPT: ${{ steps.trusted-texra-action.outputs.source == 'trusted' && './.trusted-actions/.github/actions/texra-code-review/scripts/post-review.cjs' || './.github/actions/texra-code-review/scripts/post-review.cjs' }}
+          TEXRA_RESOLVE_THREADS: ${{ secrets.TEXRA_REVIEW_GITHUB_TOKEN != '' && 'true' || 'false' }}
           TEXRA_REVIEW_JSON: ${{ steps.texra-review-trusted.outputs.review-json || steps.texra-review-bootstrap.outputs.review-json || steps.texra-review-fallback.outputs.review-json }}
+          TEXRA_THREADS_JSON: .texra-action/previous-texra-review-threads.json
         with:
           github-token: ${{ secrets.TEXRA_REVIEW_GITHUB_TOKEN || github.token }}
           script: |

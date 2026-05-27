@@ -82,6 +82,21 @@ function fallbackItems(comments, marker) {
     .join('\n');
 }
 
+function loadKnownThreadIds(
+  threadContextPath = process.env.TEXRA_THREADS_JSON ||
+    '.texra-action/previous-texra-review-threads.json',
+) {
+  if (!fs.existsSync(threadContextPath)) return null;
+  const payload = JSON.parse(fs.readFileSync(threadContextPath, 'utf8'));
+  const ids = new Set();
+  for (const thread of Array.isArray(payload.threads) ? payload.threads : []) {
+    if (typeof thread.id === 'string' && thread.id.trim()) {
+      ids.add(thread.id.trim());
+    }
+  }
+  return ids;
+}
+
 async function postTexraReview({ github, context, core }) {
   const review = JSON.parse(
     fs.readFileSync(process.env.TEXRA_REVIEW_JSON, 'utf8'),
@@ -91,6 +106,8 @@ async function postTexraReview({ github, context, core }) {
   const repo = context.repo.repo;
   const pull_number = context.payload.pull_request.number;
   const commentableLines = loadCommentableLines();
+  const knownThreadIds = loadKnownThreadIds();
+  const canResolveThreads = process.env.TEXRA_RESOLVE_THREADS === 'true';
   const comments = Array.isArray(review.comments)
     ? review.comments.map((comment) => normalizeComment(comment, marker))
     : [];
@@ -166,15 +183,30 @@ async function postTexraReview({ github, context, core }) {
   const threadActions = Array.isArray(review.thread_actions)
     ? review.thread_actions
     : [];
+  let skippedThreadStateChanges = 0;
   for (const action of threadActions) {
+    if (knownThreadIds && !knownThreadIds.has(action.thread_id)) {
+      core.warning(
+        `Skipping TeXRA thread action ${action.action}: thread id ${action.thread_id} was not found in the previous TeXRA thread context.`,
+      );
+      continue;
+    }
     try {
       if (action.action === 'reply') {
         await replyToThread(action.thread_id, action.body);
       } else if (action.action === 'resolve') {
         if (action.body) await replyToThread(action.thread_id, action.body);
+        if (!canResolveThreads) {
+          skippedThreadStateChanges += 1;
+          continue;
+        }
         await setThreadResolved(action.thread_id, true);
       } else if (action.action === 'unresolve') {
         if (action.body) await replyToThread(action.thread_id, action.body);
+        if (!canResolveThreads) {
+          skippedThreadStateChanges += 1;
+          continue;
+        }
         await setThreadResolved(action.thread_id, false);
       }
     } catch (error) {
@@ -183,10 +215,16 @@ async function postTexraReview({ github, context, core }) {
       );
     }
   }
+  if (skippedThreadStateChanges > 0) {
+    core.notice(
+      `Skipped ${skippedThreadStateChanges} TeXRA thread state change(s). Configure TEXRA_REVIEW_GITHUB_TOKEN to allow resolve/unresolve mutations.`,
+    );
+  }
 }
 
 module.exports = {
   isCommentable,
+  loadKnownThreadIds,
   loadCommentableLines,
   normalizeComment,
   postTexraReview,
