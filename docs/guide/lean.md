@@ -4,7 +4,7 @@ You're formalizing a theorem and Lean is fighting you: the proof state isn't wha
 
 ## Prerequisites
 
-Lean support is **not bundled** with Lean — you bring your own toolchain. TeXRA can drive Lean in two ways depending on how you run it.
+TeXRA doesn't ship a Lean toolchain — you bring your own. It then drives Lean in one of two ways, depending on how you run TeXRA.
 
 ::: tip You always need a Lake project
 Lean tools only work on `.lean` files that live inside a **Lake project** — a folder (or ancestor folder) containing a `lakefile.lean` or `lakefile.toml`. If there's no lakefile, the language server has nothing to attach to. Create one with `lake new myproject` or `lake init`.
@@ -46,7 +46,7 @@ Open **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) 
 
 ## Choosing an Agent
 
-The built-in `lean` agent is always available. The **Lean Project** team adds four specialist agents that the orchestrator can delegate to — these are [remote agents](./remote-agents.md), so [sign in](./remote-agents.md) to sync them.
+The built-in `lean` agent is always available. The **Lean Project** team adds four more agents — a `leanOrchestrator` plus the specialists it delegates to — which are [remote agents](./remote-agents.md), so [sign in](./remote-agents.md) to sync them.
 
 | Agent             | Availability        | Best for                                                                 |
 | ----------------- | ------------------- | ------------------------------------------------------------------------ |
