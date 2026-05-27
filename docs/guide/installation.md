@@ -35,20 +35,6 @@ You can also install TeXRA directly in your preferred editor using protocol-base
 - [Open in Cursor](cursor:extension/texra-ai.texra)
 - [Open in Windsurf](windsurf:extension/texra-ai.texra)
 
-### Desktop App Beta
-
-The standalone desktop app is in beta development. Public signed installers and
-automatic updates are not enabled until the desktop release pipeline is
-complete. See [Desktop App](./desktop.md) for supported platforms, current beta
-installation expectations, logs, and update behavior.
-
-::: tip Desktop app migration
-If you are moving from the VS Code extension to the desktop app, treat the first
-desktop launch as a fresh setup. Open the same project folder, then
-re-authenticate and reconfigure local provider, agent, Git, and LaTeX settings.
-See [Migrating to the Desktop App](./desktop-migration.md).
-:::
-
 ### CLI
 
 The standalone `texra` command is published to npm. Install it globally (requires
@@ -245,7 +231,9 @@ sudo apt-get install ghostscript
 
 ## Setting Up API Keys
 
-TeXRA requires API keys to access language models. Here's how to set them up:
+TeXRA requires API keys to access language models.
+
+### In the VS Code Extension
 
 1. Open VS Code with TeXRA installed
 2. Click on the TeXRA icon in the Activity Bar
@@ -254,6 +242,30 @@ TeXRA requires API keys to access language models. Here's how to set them up:
 5. Enter your API key when prompted
 
 You can also manage API keys from the **Models tab** in the TeXRA Dashboard, which provides inline set/remove controls for each provider.
+
+### In the CLI
+
+The `texra` CLI reads the same provider keys from environment variables or a
+project `.env` file (for example `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or
+`GOOGLE_API_KEY`). Set them in your shell or in a `.env` file at the workspace
+root and run a quick check:
+
+```bash
+texra doctor
+```
+
+Alternatively, sign in for included relay access instead of bringing your own
+keys:
+
+```bash
+texra login
+texra auth status
+```
+
+See [TeXRA CLI](./texra-cli.md) for sign-in, workspace defaults, and choosing
+between relay and personal-key access.
+
+### Shared Across Surfaces
 
 TeXRA also loads environment variables from a `.env` file in your workspace. Define variables like `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in this file to avoid entering keys manually.
 

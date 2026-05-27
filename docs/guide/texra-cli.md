@@ -37,6 +37,56 @@ ln -sf "$(pwd)/packages/cli/dist/bin/texra.js" "$PNPM_BIN/texra"
 The linked binary takes precedence over a globally-installed npm copy, so `texra`
 now runs your local build.
 
+## Authentication
+
+The CLI can run two ways: with **included relay access** after signing in, or
+with your **own provider API keys**.
+
+Sign in with your GitHub or Google account for included access:
+
+```bash
+texra login                 # opens a browser to complete sign-in
+texra login github          # choose the OAuth provider explicitly
+texra login --no-browser    # print the sign-in URL instead of opening a browser
+```
+
+Check the current account, sign out, or review relay usage:
+
+```bash
+texra auth status
+texra auth usage            # relay usage for the current account
+texra logout
+```
+
+To use your own provider keys instead of relay access, set the provider
+environment variables (for example `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or
+`GOOGLE_API_KEY`) or a project `.env` file, then force personal-key mode:
+
+```bash
+texra run polish --input paper.tex --api-mode personal
+```
+
+`texra doctor` reports which runtime dependencies were found, the active sign-in
+profile, and which models are reachable with the current credentials.
+
+## Interactive Chat
+
+`texra chat` opens an interactive tool-use session in the terminal — the CLI
+equivalent of the extension's chat webview. It streams reasoning, tool calls,
+and diffs, and shares run history with the other surfaces.
+
+```bash
+texra chat                          # default chat agent and model
+texra chat --agent research         # pick a tool-use agent for the session
+texra chat --model deepseekT        # override the session model
+```
+
+Inside the session, slash commands mirror the dashboard: `/tools` toggles
+integrations, `/api` switches between relay and personal-key access, and
+`/resume` restores a stored execution. Chat requires an interactive terminal;
+for scripted, non-interactive runs use `texra run` with `--print` or
+`--output-format json|ndjson`.
+
 ## Shell Completion
 
 TeXRA can print completion scripts for Bash, Zsh, and Fish:
@@ -173,9 +223,11 @@ or disabling.
 ## Workspace Defaults
 
 The CLI reads optional, non-secret defaults from `.texra/config.json` in the
-current workspace. Command-line flags override environment variables,
-environment variables override the workspace file, and the workspace file
-overrides built-in defaults.
+current workspace. Scaffold one with `texra init` (add `--yes` to accept
+defaults non-interactively, or `--gitignore` to add `.texra/` to `.gitignore`).
+Command-line flags override environment variables, environment variables
+override the workspace file, and the workspace file overrides built-in
+defaults.
 
 ```json
 {

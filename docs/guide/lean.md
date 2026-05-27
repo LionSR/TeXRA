@@ -20,7 +20,7 @@ TeXRA detects the running Lean 4 extension and routes its tools through it — s
 
 <a href="https://marketplace.visualstudio.com/items?itemName=leanprover.lean4" target="_blank" style="display: inline-block; background-color: #007ACC; color: white; padding: 8px 12px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 10px 0;">Install the Lean 4 extension</a>
 
-### <wa-icon library="texra" name="terminal"></wa-icon> In the CLI or Desktop App
+### <wa-icon library="texra" name="terminal"></wa-icon> In the CLI
 
 There's no Lean 4 extension to lean on, so TeXRA spawns its own server (`lake env lean --server`, one process per project). You need `lake` on your `PATH`:
 
@@ -41,7 +41,7 @@ If you don't have elan yet, see the [Lean community install guide](https://leanp
 There is **no switch to flip**. Lean support turns on automatically the moment a Lean-capable agent runs a Lean tool on a `.lean` file in a Lake project. To get going, just pick a Lean-capable agent (see below) and ask it to work on your proof.
 
 ::: tip Check that it's working
-Open **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) → **Lean 4 Proof Assistant** (<wa-icon library="texra" name="beaker"></wa-icon>) to confirm your setup is detected. The panel shows whether the Lean 4 extension is available (VS Code) or whether `lake` was found (CLI/desktop), and lists any active language servers — one per Lake project root.
+Open **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) → **Lean 4 Proof Assistant** (<wa-icon library="texra" name="beaker"></wa-icon>) to confirm your setup is detected. The panel shows whether the Lean 4 extension is available (VS Code) or whether `lake` was found (CLI), and lists any active language servers — one per Lake project root.
 :::
 
 ## Choosing an Agent
@@ -111,7 +111,7 @@ The `lean_project` tool runs project-wide commands without a target file:
 - **Setup (VS Code only):** `install_elan`, `update_elan`, `install_deps`, `select_toolchain`
 
 ::: warning Setup commands are VS Code-only
-The setup commands drive the Lean 4 extension's installers, so they only work in the VS Code build. In the CLI or desktop app they fail with a "run the shell command directly" message — manage your toolchain with `elan` and `lake` directly instead (for example `elan self update`, `elan toolchain install`, or `lake update`). See the [Lean install guide](https://leanprover-community.github.io/install/).
+The setup commands drive the Lean 4 extension's installers, so they only work in the VS Code build. In the CLI they fail with a "run the shell command directly" message — manage your toolchain with `elan` and `lake` directly instead (for example `elan self update`, `elan toolchain install`, or `lake update`). See the [Lean install guide](https://leanprover-community.github.io/install/).
 :::
 
 ::: tip Build output
@@ -122,7 +122,7 @@ The setup commands drive the Lean 4 extension's installers, so they only work in
 
 **"No Lean project found"** — The file isn't inside a Lake project. Make sure a `lakefile.lean` or `lakefile.toml` exists in the file's folder or an ancestor. Create one with `lake new` / `lake init`.
 
-**"Failed to spawn `lake env lean --server`" (CLI/desktop)** — `lake` isn't on your `PATH`. Install elan and confirm `lake --version` works in a fresh shell.
+**"Failed to spawn `lake env lean --server`" (CLI)** — `lake` isn't on your `PATH`. Install elan and confirm `lake --version` works in a fresh shell.
 
 **Tools fail in VS Code** — Install the **Lean 4** extension (`leanprover.lean4`) and open the project so its language server starts.
 

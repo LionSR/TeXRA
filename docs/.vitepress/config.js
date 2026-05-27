@@ -112,11 +112,6 @@ const baseConfig = {
           items: [
             { text: 'Introduction', link: '/guide/' },
             { text: 'Installation', link: '/guide/installation' },
-            { text: 'Desktop App', link: '/guide/desktop' },
-            {
-              text: 'Desktop Migration',
-              link: '/guide/desktop-migration',
-            },
             { text: 'Quick Start', link: '/guide/quick-start' },
           ],
         },
@@ -157,6 +152,7 @@ const baseConfig = {
               link: '/guide/working-with-overleaf',
             },
             { text: 'TeXRA CLI', link: '/guide/texra-cli' },
+            { text: 'Code Review', link: '/guide/code-review' },
             { text: 'Codex CLI', link: '/guide/codex-cli' },
             { text: 'File Management', link: '/guide/file-management' },
             { text: 'ProgressBoard', link: '/guide/progress-board' },
@@ -186,15 +182,18 @@ const baseConfig = {
   },
   ignoreDeadLinks: true,
   // Public site allowlist: only index.md, launch.md, terms.md, providers.md,
-  // and everything under guide/. Every other markdown file in this directory
-  // is internal and must NOT be published to texra.ai. Static assets under
-  // public/ are served as-is and are fine to expose.
+  // and everything under guide/ except the desktop pages, which stay internal
+  // while the desktop app is in beta. Every other markdown file in this
+  // directory is internal and must NOT be published to texra.ai. Static assets
+  // under public/ are served as-is and are fine to expose.
   srcExclude: [
     'README.md',
     'analysis-subagent-updates.md',
     'desktop-signing-ci.md',
     'electron-migration-plan.md',
     'relay-tier-config.md',
+    'guide/desktop.md',
+    'guide/desktop-migration.md',
     'blog/**',
     'design/**',
     'dev/**',
