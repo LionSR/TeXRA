@@ -266,7 +266,7 @@ prompts:
 
       The goal is writing that makes a reviewer think: ``This is a well-written, important paper.''
 
-      Ensure that the output documents are in the following order: {{ INPUT_FILES | join(', ') }}
+      Ensure that the output documents are in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}
 
       <documents>
       {% for output in INPUT_FILES %}
