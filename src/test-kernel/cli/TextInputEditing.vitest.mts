@@ -24,8 +24,9 @@ describe('CLI TUI text input editing', () => {
     expect(isPlainReturnInput('\r', {})).toBe(true);
     expect(isPlainReturnInput('\n', {})).toBe(true);
     expect(isPlainReturnInput('j', { ctrl: true })).toBe(false);
-    // Shift+Enter (Kitty protocol) must NOT submit — it inserts a newline.
-    expect(isPlainReturnInput('', { return: true, shift: true })).toBe(false);
+    // Shift-agnostic: Shift+Enter still confirms in modals/Select. The editor
+    // routes it to a newline by testing isShiftReturnInput first (see below).
+    expect(isPlainReturnInput('', { return: true, shift: true })).toBe(true);
     expect(isPlainReturnInput('\n', { ctrl: true })).toBe(false);
     expect(isPlainReturnInput('\u001Bp', {})).toBe(false);
   });

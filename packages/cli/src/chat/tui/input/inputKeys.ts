@@ -28,12 +28,17 @@ export function metaChordDigit(
     : undefined;
 }
 
+// A return keypress that should act as Enter (submit / confirm / select).
+// Deliberately shift-agnostic: in modals, Select, and the child-control picker
+// Shift+Enter has no newline meaning and must still confirm. The text editor is
+// the only place Shift+Enter differs (→ newline), and it discriminates by
+// testing `isShiftReturnInput` *before* this — so accepting shift here can't
+// make Shift+Enter also submit in the editor.
 export function isPlainReturnInput(
   input: string,
   key: ReturnKeyInput,
 ): boolean {
-  if (key.ctrl || key.meta || key.shift || metaChordInput(input, key))
-    return false;
+  if (key.ctrl || key.meta || metaChordInput(input, key)) return false;
   return key.return === true || input === '\r' || input === '\n';
 }
 
