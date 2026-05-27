@@ -39,11 +39,36 @@ describe('CLI StatusBar display model', () => {
     // [Ctrl-J]newline must be visible — the binding exists in BaseTextInput
     // (see #4399) but used to be discoverable only via source diving.
     expect(display.bindings).toContain('[Ctrl-J]newline');
+    expect(display.bindings).not.toContain('[Shift-Enter]newline');
     expect(display.bindings).not.toContain('[Alt-s]subagents');
     // Stream-navigation hints stay hidden in a single-stream chat.
     expect(display.bindings).not.toContain('[Tab]streams');
     expect(display.bindings).not.toContain('[Alt-1..9]focus');
     expect(display.left.map(statusBarSegmentText)).not.toContain('deepseekT');
+  });
+
+  it('advertises Shift-Enter for newline when the Kitty protocol is active', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.WAITING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUps: 0,
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
+      shiftEnterNewline: true,
+    });
+
+    expect(display.bindings).toContain('[Shift-Enter]newline');
+    expect(display.bindings).not.toContain('[Ctrl-J]newline');
   });
 
   it('shows live running signals and approval depth', () => {
