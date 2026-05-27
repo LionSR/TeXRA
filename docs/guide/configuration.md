@@ -2,6 +2,16 @@
 
 TeXRA provides extensive configuration options that allow you to customize its behavior to match your workflow (don't worry, the defaults are sensible!). This guide explains the available settings and how to adjust them for optimal performance.
 
+::: tip CLI and desktop
+This page describes the VS Code extension's Dashboard and settings. The same
+setting names apply on the other surfaces, but they live in different places:
+the **CLI** reads a per-project `.texra/config.json` (run `texra init` to
+scaffold one) and exposes models, tools, and agents through `texra models`,
+`texra tools`, and `texra agents`; the **desktop app** stores its config in the
+application's own data directory and manages it through the app's UI, not from a
+project `.texra` folder.
+:::
+
 ## The TeXRA Dashboard
 
 The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open it from the Command Palette (`Ctrl+Shift+P`) with **TeXRA: Show Dashboard**.
@@ -35,8 +45,9 @@ You can also configure TeXRA through VS Code's standard settings:
 
 Agent visibility is managed through the **Agents** tab in the TeXRA Dashboard
 (`TeXRA: Show Agents` from the Command Palette). The split-panel browser lets
-you toggle individual agents on or off for the current workspace. Agents with a
-matching `_multiple.yaml` file are flagged with a multi-output badge.
+you toggle individual agents on or off for the current workspace. Agents that
+declare `defaultOutputFiles` (and so can produce more than one output file in a
+single run) are flagged with a multi-output badge.
 
 ### Model Configuration
 
