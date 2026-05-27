@@ -325,7 +325,6 @@ export async function runToolUseFlow<C = unknown>(
           services.modelHandler.extractAssistantText(m),
         ) ||
         shared.lastResponse ||
-        shared.stateSlices?.workspaceSnapshot.assembly.lastResponse ||
         undefined;
       const extractedTouchedFiles = extractTouchedFiles(shared.stateSlices);
       touchedFiles = extractedTouchedFiles.length

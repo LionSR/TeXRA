@@ -29,6 +29,12 @@ const { parseCommentableLines } = require(
     '.github/actions/texra-code-review/scripts/write-commentable-lines.cjs',
   ),
 );
+const { collectTexraThreads } = require(
+  path.join(
+    repoRoot,
+    '.github/actions/texra-code-review/scripts/collect-threads.cjs',
+  ),
+);
 const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER';
 const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG';
 const validationFlagContent = 'texra-cli-run-validation\n';
@@ -267,7 +273,7 @@ function validateToolUseAgentRunCommand() {
   }
 }
 
-function validateCodeReviewActionHelpers() {
+async function validateCodeReviewActionHelpers() {
   assert(
     parseModelJson('{"body":"direct"}').body === 'direct',
     'TeXRA review parser should parse direct JSON',
@@ -314,22 +320,68 @@ function validateCodeReviewActionHelpers() {
   const anchors = parseCommentableLines(`diff --git a/paper.tex b/paper.tex
 --- a/paper.tex
 +++ b/paper.tex
-@@ -1,3 +1,4 @@
+@@ -1,4 +1,5 @@
  unchanged
 -old
+---flag
 +new
-+added
++++count;
++--sql
  done
 `);
   const file = anchors.files.find((entry) => entry.path === 'paper.tex');
   assert(
-    JSON.stringify(file?.right) === JSON.stringify([{ start: 2, end: 3 }]),
+    JSON.stringify(file?.right) === JSON.stringify([{ start: 2, end: 4 }]),
     'commentable line parser should report changed head lines',
   );
   assert(
-    JSON.stringify(file?.left) === JSON.stringify([{ start: 2, end: 2 }]),
+    JSON.stringify(file?.left) === JSON.stringify([{ start: 2, end: 3 }]),
     'commentable line parser should report removed base lines',
   );
+
+  const threadsCwd = mkdtempSync(path.join(tmpdir(), 'texra-review-threads-'));
+  const threadsOutput = path.join(threadsCwd, 'nested', 'threads.json');
+  const previousThreadsOutput = process.env.TEXRA_THREADS_OUTPUT;
+  try {
+    process.env.TEXRA_THREADS_OUTPUT = threadsOutput;
+    const payload = await collectTexraThreads({
+      github: {
+        graphql: async () => {
+          throw new Error('validation failure');
+        },
+      },
+      context: {
+        repo: { owner: 'owner', repo: 'repo' },
+        payload: { pull_request: { number: 1 } },
+      },
+      core: {
+        warning: () => undefined,
+        setOutput: (name, value) => {
+          if (name === 'path') {
+            assert(
+              value === threadsOutput,
+              'thread collection should report the custom output path',
+            );
+          }
+        },
+      },
+    });
+    assert(
+      payload.threads.length === 0,
+      'thread collection should return an empty payload on GraphQL failure',
+    );
+    assert(
+      JSON.parse(readFileSync(threadsOutput, 'utf8')).threads.length === 0,
+      'thread collection should create custom output directories',
+    );
+  } finally {
+    if (previousThreadsOutput == null) {
+      delete process.env.TEXRA_THREADS_OUTPUT;
+    } else {
+      process.env.TEXRA_THREADS_OUTPUT = previousThreadsOutput;
+    }
+    rmSync(threadsCwd, { recursive: true, force: true });
+  }
 }
 
 try {
@@ -341,7 +393,7 @@ try {
   validateBinarySmoke();
   validateRunCommand();
   validateToolUseAgentRunCommand();
-  validateCodeReviewActionHelpers();
+  await validateCodeReviewActionHelpers();
   console.log('CLI run validation passed');
 } finally {
   const rebuildResult = run('pnpm', ['run', 'build'], {

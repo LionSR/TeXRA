@@ -77,7 +77,7 @@ function fallbackItems(comments, marker) {
   return comments
     .map(
       (comment) =>
-        `- \`${comment.path}\`${comment.line ? `:${comment.line}` : ''}: ${comment.body.replace(marker, '').trim()}`,
+        `- \`${comment.path}\`${comment.line ? `:${comment.line}` : ''}: ${comment.body.replaceAll(marker, '').trim()}`,
     )
     .join('\n');
 }

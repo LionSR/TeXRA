@@ -1,4 +1,5 @@
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const path = require('node:path');
 
 function integerOrUndefined(value) {
@@ -135,7 +136,7 @@ function normalizeReview(rawText) {
 
 function writeOutput(name, value, outputPath = process.env.GITHUB_OUTPUT) {
   if (!outputPath) return;
-  const delimiter = `__texra_${name}_${Date.now()}__`;
+  const delimiter = `__texra_${name}_${crypto.randomBytes(16).toString('hex')}__`;
   fs.appendFileSync(
     outputPath,
     `${name}<<${delimiter}\n${value}\n${delimiter}\n`,

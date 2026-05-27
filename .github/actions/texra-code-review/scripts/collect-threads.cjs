@@ -1,4 +1,5 @@
 const fs = require('node:fs');
+const path = require('node:path');
 
 async function collectTexraThreads({ github, context, core }) {
   const outputPath =
@@ -11,17 +12,23 @@ async function collectTexraThreads({ github, context, core }) {
     note: 'No previous TeXRA review threads were found.',
   };
 
-  fs.mkdirSync('.texra-action', { recursive: true });
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 
   const query = `
     query($owner: String!, $repo: String!, $number: Int!) {
       repository(owner: $owner, name: $repo) {
         pullRequest(number: $number) {
           reviewThreads(first: 100) {
+            pageInfo {
+              hasNextPage
+            }
             nodes {
               id
               isResolved
               comments(first: 20) {
+                pageInfo {
+                  hasNextPage
+                }
                 nodes {
                   id
                   body
@@ -58,7 +65,19 @@ async function collectTexraThreads({ github, context, core }) {
     return emptyPayload;
   }
 
-  const threads = data.repository.pullRequest.reviewThreads.nodes
+  const reviewThreads = data.repository.pullRequest.reviewThreads;
+  if (reviewThreads.pageInfo.hasNextPage) {
+    core.warning('Only the first 100 previous TeXRA review threads were read.');
+  }
+  for (const thread of reviewThreads.nodes) {
+    if (thread.comments.pageInfo.hasNextPage) {
+      core.warning(
+        `Only the first 20 comments were read for TeXRA review thread ${thread.id}.`,
+      );
+    }
+  }
+
+  const threads = reviewThreads.nodes
     .filter((thread) =>
       thread.comments.nodes.some((comment) =>
         String(comment.body || '').includes(marker),

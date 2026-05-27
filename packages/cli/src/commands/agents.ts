@@ -24,7 +24,7 @@ import {
 } from '../runtime/cliConfig';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform, initLocalCliPlatform } from '../runtime/initPlatform';
-import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
+import { writeTextStderr } from '../runtime/logSinks';
 import { shouldRenderRunProgress } from '../runtime/runProgressRenderer';
 
 import { contextFromArgs } from './_helpers/context';

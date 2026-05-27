@@ -150,15 +150,14 @@ jobs:
           texra-version: ${{ vars.TEXRA_CLI_VERSION || '' }}
           agent: review
           model: ${{ vars.TEXRA_REVIEW_MODEL || 'deepseekT' }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
+          google-api-key: ${{ secrets.GOOGLE_API_KEY }}
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+          xai-api-key: ${{ secrets.XAI_API_KEY }}
           api-mode: personal
           approval-policy: never
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
 
       - name: Run bootstrap TeXRA single-agent review
         if: steps.texra-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true' && steps.trusted-texra-action.outputs.source == 'bootstrap'
@@ -185,15 +184,14 @@ jobs:
           texra-version: workspace
           agent: review
           model: ${{ vars.TEXRA_REVIEW_MODEL || 'deepseekT' }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
+          google-api-key: ${{ secrets.GOOGLE_API_KEY }}
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+          xai-api-key: ${{ secrets.XAI_API_KEY }}
           api-mode: personal
           approval-policy: never
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
 
       - name: Post TeXRA pull request review
         if: steps.texra-review-trusted.outputs.review-json != '' || steps.texra-review-bootstrap.outputs.review-json != ''
