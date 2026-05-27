@@ -4,9 +4,16 @@ Overleaf is the go-to platform for collaborative LaTeX writing. But what if you 
 
 This guide outlines a workflow to clone your Overleaf project, leverage TeXRA locally in VS Code, and seamlessly sync your changes back. Get the best of both worlds: Overleaf for collaboration, TeXRA for AI-powered local editing.
 
+::: tip Works from the CLI too
+The clone → edit → push loop below is equally at home in the terminal. After
+cloning, run agents with the [`texra` CLI](./texra-cli.md) (e.g.
+`texra run polish --input main.tex`) instead of the VS Code panel, then commit
+and push as usual.
+:::
+
 ## Why Bridge Overleaf and TeXRA?
 
-- **AI Superpowers:** Apply TeXRA\'s specialized agents (`correct`, `polish`, `draw`, `paper2slide`, etc.) locally.
+- **AI Superpowers:** Apply TeXRA\'s specialized agents (`correct`, `polish`, `research`, `paper2slide`, etc.) locally.
 - **Local Tooling:** Use `latexdiff` for precise change tracking, local compilation for previews.
 - **VS Code Environment:** Benefit from VS Code\'s features and extensions (like LaTeX Workshop).
 - **Robust Git:** Employ granular version control, branching, and offline work locally.

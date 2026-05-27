@@ -14,6 +14,14 @@ TeXRA sits inside VS Code and helps you polish writing, fix errors, create figur
 
 > 💡 **Tip:** Inside VS Code you can open the **Run your first TeXRA workflow** walkthrough from the Get Started page (or by running `TeXRA: Open Getting Started Walkthrough`). It mirrors this guide step-by-step and links directly to the relevant commands.
 
+::: tip Prefer the terminal?
+This guide walks through the VS Code extension. If you installed the
+[CLI](./texra-cli.md), the same agents run from the command line — start an
+interactive session with `texra chat`, or run a single agent with
+`texra run polish --input draft.tex`. Run `texra agents list` to see what's
+available.
+:::
+
 ## Set Up API Keys
 
 Before you can use TeXRA's AI features, you need to provide API keys for the services you intend to use (like Anthropic, OpenAI, Google, etc.). TeXRA stores these keys securely using VS Code's secret storage.
@@ -31,7 +39,7 @@ You can also place a `.env` file in your workspace with variables like `OPENAI_A
 The typical TeXRA workflow consists of these steps:
 
 1. Select files to process (input, reference, auxiliary, figures)
-2. Choose the appropriate agent (correct, polish, draw, etc.)
+2. Choose the appropriate agent (correct, polish, research, etc.)
 3. Select the AI model to use
 4. Provide specific instructions
 5. Execute the agent
