@@ -60,7 +60,7 @@ const view = ref('diff');
             </li>
             <li>
               <span class="step-name">numerics</span>
-              <span class="step-detail">N=2000, max|λ₂| = 1.918</span>
+              <span class="step-detail">N=2000, λ₂ = 4.41</span>
               <span class="step-ok">✓</span>
             </li>
             <li>
@@ -136,11 +136,11 @@ const view = ref('diff');
           <!-- Numeric cross-check -->
           <div v-show="view === 'wolfram'" class="term">
             <div class="cell-in"><span class="prompt">In[1]:=</span> A = AdjacencyMatrix[RandomRegularGraph[6, 2000]];</div>
-            <div class="cell-in"><span class="prompt">In[2]:=</span> Max[Abs[Rest@ReverseSort@Eigenvalues[N@A]]]</div>
-            <div class="cell-out"><span class="prompt out">Out[2]=</span> 1.918</div>
+            <div class="cell-in"><span class="prompt">In[2]:=</span> Rest[ReverseSort@Eigenvalues[N@A]] // First</div>
+            <div class="cell-out"><span class="prompt out">Out[2]=</span> 4.41</div>
             <div class="term-note">
-              analytic bound&nbsp;&nbsp;2√(d−1) = 2√5 ≈ 4.472&nbsp;… second eigenvalue
-              well inside the Alon–Boppana window.
+              analytic bound&nbsp;&nbsp;2√(d−1) = 2√5 ≈ 4.472&nbsp;… the measured
+              λ₂ = 4.41 sits just inside the Ramanujan limit.
               <span class="term-ok">✓ bound holds</span>
             </div>
           </div>
