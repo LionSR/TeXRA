@@ -3,7 +3,7 @@ description: 'Run one @texra-ai/cli tool-use agent headlessly and expose its fin
 
 inputs:
   texra-version:
-    description: 'Version of @texra-ai/cli to install. Empty or latest installs the latest published version.'
+    description: 'Version of @texra-ai/cli to install. Empty or latest installs the latest published version. Use workspace to build the local checkout.'
     required: false
     default: ''
   prompt:
@@ -77,8 +77,22 @@ runs:
       shell: bash
       env:
         TEXRA_VERSION: ${{ inputs['texra-version'] }}
+        INPUT_WORKING_DIRECTORY: ${{ inputs['working-directory'] }}
       run: |
         set -euo pipefail
+        if [ "$TEXRA_VERSION" = "workspace" ]; then
+          working_directory="$INPUT_WORKING_DIRECTORY"
+          if [ -z "$working_directory" ]; then
+            working_directory="$GITHUB_WORKSPACE"
+          fi
+          working_directory="$(cd "$working_directory" && pwd)"
+          cd "$working_directory"
+          corepack pnpm install --frozen-lockfile
+          corepack pnpm --filter @texra-ai/cli run build
+          node packages/cli/dist/bin/texra.js version
+          exit 0
+        fi
+
         package='@texra-ai/cli'
         if [ -n "$TEXRA_VERSION" ] && [ "$TEXRA_VERSION" != "latest" ]; then
           package="${package}@${TEXRA_VERSION}"
@@ -146,6 +160,7 @@ runs:
       shell: bash
       env:
         TEXRA_AGENT: ${{ inputs.agent }}
+        TEXRA_VERSION_INPUT: ${{ inputs['texra-version'] }}
         TEXRA_MODEL_INPUT: ${{ inputs.model }}
         TEXRA_API_MODE_INPUT: ${{ inputs['api-mode'] }}
         TEXRA_APPROVAL_POLICY_INPUT: ${{ inputs['approval-policy'] }}
@@ -178,7 +193,12 @@ runs:
           args+=(--context "$TEXRA_REVIEW_THREAD_CONTEXT_FILE")
         fi
 
-        texra "${args[@]}" > "$result_json" 2> "$stderr_log"
+        if [ "$TEXRA_VERSION_INPUT" = "workspace" ]; then
+          texra_command=(node "$TEXRA_WORKING_DIRECTORY/packages/cli/dist/bin/texra.js")
+        else
+          texra_command=(texra)
+        fi
+        "${texra_command[@]}" "${args[@]}" > "$result_json" 2> "$stderr_log"
 
         if [ -s "$stderr_log" ]; then
           cat "$stderr_log" >&2
