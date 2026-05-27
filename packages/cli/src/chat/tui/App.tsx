@@ -19,7 +19,6 @@ import { TipRow } from './panes/TipRow';
 import { TodosPlanPanel } from './panes/TodosPlanPanel';
 import { currentApproval } from './state/approvalQueue';
 import {
-  isKittyCtrlC,
   isKittyKeypadEnter,
   metaChordDigit,
   metaChordInput,
@@ -203,13 +202,13 @@ export function App(props: AppProps): React.JSX.Element {
     ChildControlMode | undefined
   >(undefined);
 
-  // The Kitty disambiguate flag remaps two keys onto CSI-u sequences that the
-  // TUI's normal paths don't see, so we patch them on Ink's own input channel:
-  //   • keypad Enter (kpenter) — useInput surfaces no field for it; re-dispatch
-  //     as a plain Enter (CR) so submit/confirm keeps working.
-  //   • Ctrl+C — arrives as a CSI-u sequence, not the \x03 that Ink's
-  //     exitOnCtrlC watches for; call exit() to reproduce that same shutdown.
-  // Both are inert when the protocol is off — the sequences never arrive.
+  // Under the Kitty disambiguate flag (enabled in runChatTui for Shift+Enter),
+  // keypad Enter becomes its own key (codepoint 57414) that Ink parses but
+  // exposes no `useInput` field for — so it would silently stop submitting.
+  // Re-dispatch it on Ink's own input channel as a plain Enter (CR) so every
+  // submit/confirm path that keys off `key.return` keeps working. Inert when the
+  // protocol is off — the sequence never arrives. (Ctrl+C needs no such bridge:
+  // Ink decodes its CSI-u form to a normal ctrl+c key, handled in useInput below.)
   const stdin = useStdin();
   useEffect(() => {
     const emitter = (
@@ -219,13 +218,11 @@ export function App(props: AppProps): React.JSX.Element {
     const onInput = (data: string): void => {
       if (isKittyKeypadEnter(data)) {
         emitter.emit('input', String.fromCharCode(13));
-      } else if (isKittyCtrlC(data)) {
-        exit();
       }
     };
     emitter.on('input', onInput);
     return () => emitter.off('input', onInput);
-  }, [stdin, exit]);
+  }, [stdin]);
   const foregroundOpen =
     pending !== undefined ||
     activeForm !== undefined ||
@@ -297,26 +294,39 @@ export function App(props: AppProps): React.JSX.Element {
     slashPaletteOpen,
   });
 
-  // Tab / Shift-Tab cycles stream focus at the App layer. Stand down while a
-  // modal/form/input overlay owns the keyboard. Ink broadcasts useInput, so
-  // both handlers would otherwise fire on the same chord.
-  useInput(
-    (_input, key) => {
-      if (!key.tab) return;
+  // Single App-level keyboard entry point. Ink broadcasts every keystroke to all
+  // mounted useInput handlers, so keeping the App's shortcuts in one always-on
+  // handler (gating internally) is clearer than several hooks racing on the same
+  // chord. Stays mounted so Ctrl+C works even while a modal/form owns the input.
+  useInput((input, key) => {
+    // Ctrl+C exits, even over a foreground surface. We render with
+    // exitOnCtrlC: false (see runChatTui), so Ink neither auto-exits nor filters
+    // Ctrl+C out of useInput — this handler is the single exit path. Ink decodes
+    // both the raw \x03 and the Kitty CSI-u form (ESC[99;5u, emitted under the
+    // disambiguate flag) to a ctrl+c key, so this one branch covers every
+    // terminal; exit() is Ink's app-level shutdown (≡ useApp().exit).
+    if (key.ctrl && input === 'c') {
+      exit();
+      return;
+    }
+
+    // Everything below stands down while a modal/form/input overlay owns the
+    // keyboard.
+    if (!focusShortcutsActive) return;
+
+    // Tab / Shift-Tab cycles stream focus.
+    if (key.tab) {
       const next = key.shift ? nextFocusBack() : nextFocusForward();
       if (next) cliState.activeStreamId.set(next);
-    },
-    { isActive: focusShortcutsActive },
-  );
+      return;
+    }
 
-  useInput(
-    (input, key) => {
-      const metaInput = metaChordInput(input, key);
-      if (!metaInput) return;
+    // Option/Alt chords: s → subagent controls, p → tasks, 1-9 → focus stream.
+    const metaInput = metaChordInput(input, key);
+    if (metaInput) {
       const lower = metaInput.toLowerCase();
       if (lower === 's') {
-        if (!subagentControlsAvailable) return;
-        setChildControlMode('subagents');
+        if (subagentControlsAvailable) setChildControlMode('subagents');
         return;
       }
       if (lower === 'p') {
@@ -328,27 +338,22 @@ export function App(props: AppProps): React.JSX.Element {
         const target = numericFocusTarget(activeSlice, digit - 1);
         if (target) cliState.activeStreamId.set(target);
       }
-    },
-    { isActive: focusShortcutsActive },
-  );
+      return;
+    }
 
-  useInput(
-    (_input, key) => {
-      if (!key.escape) return;
-      if (
-        !appEscapeInterruptActive({
-          inputDisabled,
-          reverseSearchOpen,
-          runPending: props.canInterruptActiveRun(),
-          slashPaletteOpen,
-        })
-      ) {
-        return;
-      }
+    // Escape interrupts an active run.
+    if (
+      key.escape &&
+      appEscapeInterruptActive({
+        inputDisabled,
+        reverseSearchOpen,
+        runPending: props.canInterruptActiveRun(),
+        slashPaletteOpen,
+      })
+    ) {
       props.onInterruptActive();
-    },
-    { isActive: focusShortcutsActive },
-  );
+    }
+  });
 
   return (
     <>
