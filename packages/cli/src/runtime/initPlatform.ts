@@ -29,6 +29,7 @@ import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter'
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 
 // Local imports - CLI runtime
+import { applyCliGitAuthorConfig } from './gitAuthor';
 import { getCliSecrets } from './cliSecrets';
 import { writeTextStderr } from './logSinks';
 import { workspaceCliConfigPath } from './cliConfig';
@@ -140,8 +141,9 @@ export async function initCliPlatform(
         );
       },
     });
+    const config = new JsonConfigProvider({ workspace: configStore });
     initPlatform({
-      config: new JsonConfigProvider({ workspace: configStore }),
+      config,
       globalState: stateStores.globalState,
       workspaceState: stateStores.workspaceState,
       fs: nodeFilesystem,
@@ -159,6 +161,10 @@ export async function initCliPlatform(
     const leanAdapter = createDirectLspLeanAdapter();
     setLeanLanguageServices(leanAdapter);
     lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => leanAdapter.dispose());
+
+    // Attribute agent-authored commits to the TeXRA identity by default;
+    // configurable via `.texra/config.json` `texra.git.markCommits`.
+    applyCliGitAuthorConfig(config);
   }
 
   if (!serverSideKeysInitialized) {
