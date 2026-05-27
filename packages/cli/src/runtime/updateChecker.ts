@@ -1,7 +1,11 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-import { readCliAmbientState, type CliContext } from './cliContext';
+import {
+  cliEnvValue,
+  readCliAmbientState,
+  type CliContext,
+} from './cliContext';
 import { askCliQuestion, writeTextStderr } from './logSinks';
 
 /** Published package name on npm; the `texra` bin lives here. */
@@ -62,7 +66,7 @@ export function detectInstallMethod(
   modulePath: string = currentModulePath(),
 ): InstallMethod {
   const segments = modulePath.toLowerCase().split(/[\\/]+/);
-  if (segments.includes('.bun') || segments.includes('bun')) return 'bun';
+  if (segments.some((part) => part === 'bun' || part === '.bun')) return 'bun';
   if (segments.some((part) => part === 'pnpm' || part === '.pnpm'))
     return 'pnpm';
   if (segments.includes('yarn')) return 'yarn';
@@ -130,7 +134,7 @@ export async function fetchLatestCliVersion(options?: {
 function runCliUpdate(method: InstallMethod): Promise<boolean> {
   const { command, args } = buildUpdateCommand(method);
   return new Promise<boolean>((resolve) => {
-    const child = spawn(command, [...args], { stdio: 'inherit' });
+    const child = spawn(command, args, { stdio: 'inherit' });
     child.on('error', () => resolve(false));
     child.on('close', (code) => resolve(code === 0));
   });
@@ -156,7 +160,7 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   notified = true;
 
   const ambient = readCliAmbientState();
-  if (process.env.TEXRA_NO_UPDATE_CHECK) return;
+  if (cliEnvValue('TEXRA_NO_UPDATE_CHECK')) return;
   if (ambient.isCi) return;
   // Require all three standard streams to be a TTY. stdout matters even though
   // the prompt uses stdin/stderr: a half-redirected invocation like
@@ -170,22 +174,19 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   if (!latest || !isNewerVersion(latest, context.version)) return;
 
   const method = detectInstallMethod();
+  const updateCmd = formatUpdateCommand(method);
   writeTextStderr(
     `A new version of texra is available: ${context.version} → ${latest}`,
   );
 
   let answer: string;
   try {
-    answer = await askCliQuestion(
-      `Update now with \`${formatUpdateCommand(method)}\`? [Y/n] `,
-    );
+    answer = await askCliQuestion(`Update now with \`${updateCmd}\`? [Y/n] `);
   } catch {
     return;
   }
   if (!affirmative(answer)) {
-    writeTextStderr(
-      `Skipped. Update later with: ${formatUpdateCommand(method)}`,
-    );
+    writeTextStderr(`Skipped. Update later with: ${updateCmd}`);
     return;
   }
 
@@ -194,11 +195,6 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   writeTextStderr(
     ok
       ? `Updated to ${latest}. Restart texra to use the new version.`
-      : `Update failed. Run manually: ${formatUpdateCommand(method)}`,
+      : `Update failed. Run manually: ${updateCmd}`,
   );
-}
-
-/** Test-only: reset the once-per-process guard. */
-export function resetUpdateNotifierForTests(): void {
-  notified = false;
 }
