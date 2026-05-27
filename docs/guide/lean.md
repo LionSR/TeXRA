@@ -108,7 +108,11 @@ The `lean_project` tool runs project-wide commands without a target file:
 
 - **Server:** `restart_server`, `stop_server`
 - **Build:** `build`, `clean`, `fetch_cache` (whole project), `fetch_file_cache` (current file's imports — faster)
-- **Setup:** `install_elan`, `update_elan`, `install_deps`, `select_toolchain`
+- **Setup (VS Code only):** `install_elan`, `update_elan`, `install_deps`, `select_toolchain`
+
+::: warning Setup commands are VS Code-only
+The setup commands drive the Lean 4 extension's installers, so they only work in the VS Code build. In the CLI or desktop app they fail with a "run the shell command directly" message — manage your toolchain with `elan` and `lake` directly instead (for example `elan self update`, `elan toolchain install`, or `lake update`). See the [Lean install guide](https://leanprover-community.github.io/install/).
+:::
 
 ::: tip Build output
 `lean_project`'s `build` command starts a build but doesn't capture its output. To see errors afterward, the agent runs `lean_diagnostics` on the relevant files (or `lake build` directly via the bash tool when it needs the raw log).
