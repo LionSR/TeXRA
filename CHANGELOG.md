@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.38.3] - 2026-05-27
+
+### Features
+
+- **Run tool-use agents headlessly** — new `texra agents run <agent>` command runs a tool-use agent non-interactively with `--instruction`/`--instruction-file`, `--input`, `--context`, and `--output-format`. This powers the TeXRA GitHub code-review action.
+
 ## [0.38.2] - 2026-05-27
 
 ### Features
