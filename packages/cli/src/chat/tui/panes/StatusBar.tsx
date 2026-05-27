@@ -12,6 +12,7 @@ import {
 } from '@shared/schemas';
 
 import { approvalQueueDepth } from '../state/approvalQueue';
+import { terminalCapabilities } from '../state/terminalCapabilities';
 import {
   canShowSubagentControls,
   cliState,
@@ -48,6 +49,9 @@ export interface StatusBarDisplayInput {
   readonly model: string;
   readonly apiMode: string;
   readonly shortcutModifierLabel?: string;
+  /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
+   *  active; otherwise the universal Ctrl-J is the only reliable binding. */
+  readonly shiftEnterNewline?: boolean;
 }
 
 export interface StatusBarDisplay {
@@ -129,6 +133,7 @@ export function defaultShortcutModifierLabel(
 function statusBarBindings(
   modifierLabel: string,
   hasMultipleStreams: boolean,
+  shiftEnterNewline: boolean,
 ): readonly string[] {
   return [
     // Stream cycling / numeric focus only do something when there is more
@@ -140,7 +145,7 @@ function statusBarBindings(
     '[/status]details',
     '[/model]models',
     '[/api]api',
-    '[Ctrl-J]newline',
+    shiftEnterNewline ? '[Shift-Enter]newline' : '[Ctrl-J]newline',
     '[Ctrl-C]stop',
   ];
 }
@@ -149,9 +154,10 @@ export function statusBarBindingsText(
   subagentControlsAvailable: boolean,
   hasMultipleStreams: boolean,
   modifierLabel = defaultShortcutModifierLabel(),
+  shiftEnterNewline = false,
 ): string {
   const bindings: string[] = [
-    ...statusBarBindings(modifierLabel, hasMultipleStreams),
+    ...statusBarBindings(modifierLabel, hasMultipleStreams, shiftEnterNewline),
   ];
   if (subagentControlsAvailable) {
     const tasksBinding = `[${modifierLabel}-p]tasks`;
@@ -218,6 +224,7 @@ export function buildStatusBarDisplay(
             input.subagentControlsAvailable,
             input.hasMultipleStreams,
             input.shortcutModifierLabel,
+            input.shiftEnterNewline,
           ),
   };
 }
@@ -233,6 +240,7 @@ export function StatusBar(): React.JSX.Element {
   const pendingExitHint = useSignal(cliState.pendingExitHint);
   const pendingExitResumeId = useSignal(cliState.pendingExitResumeId);
   const approvals = useSignal(approvalQueueDepth);
+  const caps = useSignal(terminalCapabilities);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const display = buildStatusBarDisplay({
     status: slice?.status,
@@ -249,6 +257,7 @@ export function StatusBar(): React.JSX.Element {
     hasMultipleStreams: streams.size > 1,
     model: sessionMeta.model,
     apiMode: shortCliApiMode(sessionMeta.apiMode),
+    shiftEnterNewline: caps.kittyKeyboard,
   });
 
   return (
