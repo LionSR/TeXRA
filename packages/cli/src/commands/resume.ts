@@ -3,7 +3,6 @@ import { defineCommand } from 'citty';
 import { getAgent, loadAgents } from '@agent/index';
 import { writeTerminalStatus } from '@agent/storage';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { runValidatedExecutionRequest } from '@agent/runtime/runExecutionRequest';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
 
@@ -13,18 +12,16 @@ import { readCliHistoryConfig, parseCliHistoryId } from '../runtime/history';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import { shouldRenderRunProgress } from '../runtime/runProgressRenderer';
-import { createCliRuntimeHost } from '../runtime/runtimeHost';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import { shouldHonorRemoteAgentPriority } from './_helpers/remoteAgents';
+import { executeCliRequest } from './_helpers/runExecution';
 import {
-  readCliTerminalStatus,
   terminalStatusExitCode,
   type CliRunResult,
-  type ExecuteAgentResult,
 } from './_helpers/terminalStatus';
 import {
   formatWorkflowTextResult,
@@ -60,18 +57,10 @@ export async function runResumeExecution(
     await loadAgents();
   }
 
-  const runtimeHost = createCliRuntimeHost(runContext);
-  let result: ExecuteAgentResult;
-  try {
-    result = await runValidatedExecutionRequest(
-      { config, executionId: id },
-      { runtimeHost },
-    );
-  } finally {
-    await runtimeHost.close();
-  }
-
-  const terminalStatus = await readCliTerminalStatus(result);
+  const { result, terminalStatus } = await executeCliRequest(
+    { config, executionId: id },
+    runContext,
+  );
   let displayResult: CliRunResult;
   try {
     ({ displayResult } = await resolveWorkflowOutput(

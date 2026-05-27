@@ -140,7 +140,7 @@ complete -c texra -n '__fish_use_subcommand' -a 'memory' -d 'Inspect stored memo
 complete -c texra -n '__fish_use_subcommand' -a 'agents' -d 'Inspect TeXRA agents'
 complete -c texra -n '__fish_use_subcommand' -a 'skills' -d 'Inspect TeXRA skills'
 complete -c texra -n '__fish_use_subcommand' -a 'tools' -d 'Inspect external tool integrations'
-complete -c texra -n '__fish_use_subcommand' -a 'multi-agent' -d 'Inspect multi-agent teams'
+complete -c texra -n '__fish_use_subcommand' -a 'multi-agent' -d 'List, inspect, and run multi-agent team presets'
 complete -c texra -n '__fish_use_subcommand' -a 'models' -d 'Inspect TeXRA models'
 complete -c texra -n '__fish_use_subcommand' -a 'login' -d 'Sign in to TeXRA for included access'
 complete -c texra -n '__fish_use_subcommand' -a 'logout' -d 'Sign out of TeXRA'
