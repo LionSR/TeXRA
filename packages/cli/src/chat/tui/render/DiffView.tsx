@@ -6,6 +6,7 @@
 
 import { Box, Text } from 'ink';
 import { structuredPatch, type StructuredPatchHunk } from 'diff';
+import stringWidth from 'string-width';
 
 import { wrapAnsiToWidth } from './ansiWrap';
 
@@ -189,6 +190,29 @@ export function DiffView(props: DiffViewProps): React.JSX.Element {
   );
 }
 
+/**
+ * Full-width band backgrounds for changed lines — a muted green/red that fills
+ * the whole row (GitHub/Codex-style), so additions and removals read as solid
+ * bands rather than just tinted text. Context lines stay un-banded and dim.
+ */
+export const DIFF_BAND_BG: Partial<Record<DiffDisplayLine['kind'], string>> = {
+  added: '#1f3a28',
+  removed: '#4a2526',
+};
+
+/**
+ * Pad every visual row out to `width` columns. Ink only paints a background
+ * behind the glyphs it draws, so without this the band would stop at the end
+ * of the text; padding extends it across the full row. `string-width` measures
+ * display columns so wide glyphs (σ, ℂ, ∑ …) and emoji pad correctly.
+ */
+export function fillRows(text: string, width: number): string {
+  return text
+    .split('\n')
+    .map((row) => row + ' '.repeat(Math.max(0, width - stringWidth(row))))
+    .join('\n');
+}
+
 function DiffLine({
   line,
   truncate = false,
@@ -198,29 +222,20 @@ function DiffLine({
   readonly truncate?: boolean;
   readonly width: number;
 }): React.JSX.Element {
-  if (truncate) {
-    if (line.kind === 'added') {
-      return (
-        <Text color="green" wrap="truncate-end">
-          {line.text}
-        </Text>
-      );
-    }
-    if (line.kind === 'removed') {
-      return (
-        <Text color="red" wrap="truncate-end">
-          {line.text}
-        </Text>
-      );
-    }
+  // Truncate mode keeps each entry on one row (clip the overflow); otherwise
+  // pre-wrap to the diff width so a banded line wraps as multiple full rows.
+  const content = truncate ? line.text : wrapAnsiToWidth(line.text, width);
+  const bg = DIFF_BAND_BG[line.kind];
+  if (bg) {
     return (
-      <Text dimColor wrap="truncate-end">
-        {line.text}
+      <Text backgroundColor={bg} wrap={truncate ? 'truncate-end' : undefined}>
+        {fillRows(content, width)}
       </Text>
     );
   }
-  const wrapped = wrapAnsiToWidth(line.text, width);
-  if (line.kind === 'added') return <Text color="green">{wrapped}</Text>;
-  if (line.kind === 'removed') return <Text color="red">{wrapped}</Text>;
-  return <Text dimColor>{wrapped}</Text>;
+  return (
+    <Text dimColor wrap={truncate ? 'truncate-end' : undefined}>
+      {content}
+    </Text>
+  );
 }
