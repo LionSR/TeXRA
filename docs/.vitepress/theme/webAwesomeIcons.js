@@ -50,6 +50,7 @@ import { faCode } from '@fortawesome/free-solid-svg-icons/faCode';
 import { faCodeBranch } from '@fortawesome/free-solid-svg-icons/faCodeBranch';
 import { faCodeCompare } from '@fortawesome/free-solid-svg-icons/faCodeCompare';
 import { faCodeMerge } from '@fortawesome/free-solid-svg-icons/faCodeMerge';
+import { faCompass } from '@fortawesome/free-solid-svg-icons/faCompass';
 import { faComment } from '@fortawesome/free-solid-svg-icons/faComment';
 import { faComments } from '@fortawesome/free-solid-svg-icons/faComments';
 import { faCopy } from '@fortawesome/free-solid-svg-icons/faCopy';
@@ -179,6 +180,7 @@ const icons = {
   'code-merge': faCodeMerge,
   comment: faComment,
   comments: faComments,
+  compass: faCompass,
   copy: faCopy,
   cube: faCube,
   database: faDatabase,
