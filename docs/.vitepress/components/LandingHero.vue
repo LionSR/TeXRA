@@ -190,7 +190,7 @@ function copyCli() {
                 </div>
                 <div class="todo done">
                   <wa-icon class="td-ic" library="texra" name="check"></wa-icon
-                  ><span class="td-tx">Cross-check λ₂ numerically</span>
+                  ><span class="td-tx">Verify it in Wolfram and Lean</span>
                 </div>
                 <div class="todo prog">
                   <span class="td-sp"></span
@@ -216,7 +216,7 @@ function copyCli() {
                     library="texra"
                     name="chevron-down"
                   ></wa-icon>
-                  Subagents · 1 active · 3 done
+                  Subagents · 1 active · 1 done
                 </div>
                 <div class="task">
                   <wa-icon
@@ -253,31 +253,14 @@ function copyCli() {
               </div>
 
               <div class="reason">
-                I'll delegate the derivation, verify it two ways — numerically
-                and in Lean — then revise the prose and return a diff.
+                I'll hand the derivation and its checks to a research agent,
+                then have the correct workflow tighten the prose and return a
+                diff.
               </div>
 
               <button
                 class="tcard"
-                :class="{ active: view === 'diff' }"
-                @click="view = 'diff'"
-              >
-                <wa-icon
-                  class="chev tc-chev"
-                  library="texra"
-                  name="chevron-right"
-                ></wa-icon>
-                <wa-icon class="tc-ic" library="texra" name="account"></wa-icon>
-                <span class="tc-label"
-                  ><span class="tc-tool">delegate_agent</span> — derive the
-                  spectral-gap bound for d-regular graphs</span
-                >
-                <span class="tc-time">11:13:55</span>
-              </button>
-
-              <button
-                class="tcard"
-                :class="{ active: view === 'wolfram' }"
+                :class="{ active: view === 'wolfram' || view === 'lean' }"
                 @click="view = 'wolfram'"
               >
                 <wa-icon
@@ -287,26 +270,8 @@ function copyCli() {
                 ></wa-icon>
                 <wa-icon class="tc-ic" library="texra" name="account"></wa-icon>
                 <span class="tc-label"
-                  ><span class="tc-tool">delegate_agent</span> — cross-check λ₂
-                  numerically at N=2000</span
-                >
-                <span class="tc-time">11:14:07</span>
-              </button>
-
-              <button
-                class="tcard"
-                :class="{ active: view === 'lean' }"
-                @click="view = 'lean'"
-              >
-                <wa-icon
-                  class="chev tc-chev"
-                  library="texra"
-                  name="chevron-right"
-                ></wa-icon>
-                <wa-icon class="tc-ic" library="texra" name="account"></wa-icon>
-                <span class="tc-label"
-                  ><span class="tc-tool">delegate_agent</span> — prove the gap
-                  is positive in Lean 4</span
+                  ><span class="tc-tool">delegate_agent</span> — derive the
+                  spectral-gap bound, then verify it in Wolfram and Lean</span
                 >
                 <span class="tc-time">11:14:38</span>
               </button>
@@ -330,7 +295,7 @@ function copyCli() {
                   <div class="tc-row">
                     <span class="tc-k">Agent</span
                     ><code class="tc-code">correct</code
-                    ><span class="tc-model">(gemini25p)</span>
+                    ><span class="tc-model">(gemini31p)</span>
                   </div>
                   <div class="tc-row">
                     <span class="tc-k">Instruction</span
