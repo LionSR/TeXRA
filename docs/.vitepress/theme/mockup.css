@@ -59,7 +59,7 @@
   border: none;
   border-right: 1px solid #1a1a1a;
   color: var(--color-text-secondary);
-  font-size: 0.74rem;
+  font-size: 0.76rem;
   padding: 8px 14px;
   cursor: pointer;
   font-family: var(--vp-font-family-mono);
@@ -228,7 +228,7 @@
   border-radius: 6px;
   font-family: var(--vp-font-family-mono);
   font-size: 0.82rem;
-  line-height: 1.7;
+  line-height: 1.75;
   color: var(--wa-color-text-normal);
 }
 .mockup .wl {
