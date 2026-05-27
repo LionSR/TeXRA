@@ -402,8 +402,9 @@ export class FileList extends LitElement {
     const location = file.location;
     // Prefer: workspace original → source doc name → run-storage relative path.
     // Use the compact variant so an external location (e.g. a run-storage file
-    // outside the workspace root) shows its basename instead of a long absolute
-    // path; the full path stays in the tooltip below.
+    // outside the workspace root, like the merge agent's `_full.tex`) shows its
+    // basename instead of a long absolute path; the full path stays in the
+    // tooltip below.
     const displayPath =
       this.getCompactDisplayPath(file.lineage?.original) ||
       this.getSourceDisplayPath(file.source) ||
