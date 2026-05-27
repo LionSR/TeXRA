@@ -12,6 +12,7 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
+import { isPlainObject } from '@shared/utils/string';
 import { getStreamTabStore, mapStreamTabStorage } from './StreamTabStore';
 import type {
   StreamTabMeta,
@@ -180,9 +181,6 @@ function isNonNullObject(value: unknown): value is Record<string, unknown> {
 function extractTaskStateEntries(
   raw: Record<string, unknown>,
 ): [string, unknown][] {
-  const isPlainObject = (v: unknown): v is Record<string, unknown> =>
-    typeof v === 'object' && v !== null && !Array.isArray(v);
-
   const legacyBuckets = [raw.workflow, raw.toolUse].filter(isPlainObject);
   if (legacyBuckets.length > 0) {
     return legacyBuckets.flatMap((bucket) =>
