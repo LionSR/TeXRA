@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveLoginProvider } from '@cli/commands/root';
+import { resolveLoginProvider } from '@cli/commands/auth';
 
 describe('CLI login arguments (texra login)', () => {
   it('defaults texra login to GitHub sign-in', () => {
