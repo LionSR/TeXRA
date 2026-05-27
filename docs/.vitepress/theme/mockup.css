@@ -1,0 +1,632 @@
+/* Shared chrome for the docs product mockups (MockupFrame + its page heroes).
+   Scoped under `.mockup` — which only MockupFrame carries — so it never
+   touches the landing-page hero, which has its own self-contained styles.
+   Each hero keeps only the markup unique to its panel; the sidebar shell,
+   editor tab-strip, form controls, and animations live here. */
+
+/* Sidebar shell (board). Width is set per hero (content differs). */
+.mockup .board {
+  flex-shrink: 0;
+  background: #1e1e1e;
+  border-right: 1px solid #000;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mockup .board-tabs {
+  display: flex;
+  height: 36px;
+  padding: 0 8px;
+  background: #252526;
+  border-bottom: 1px solid #000;
+}
+.mockup .bt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  font-size: 0.74rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.mockup .bt wa-icon {
+  font-size: 12px;
+}
+.mockup .bt-on {
+  color: #fff;
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 #c89be0;
+}
+
+/* Editor pane + tab strip */
+.mockup .result {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  background: #1e1e1e;
+  min-width: 0;
+}
+.mockup .tabs {
+  display: flex;
+  background: #252526;
+  border-bottom: 1px solid #000;
+}
+.mockup .tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #2d2d2d;
+  border: none;
+  border-right: 1px solid #1a1a1a;
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-family: var(--vp-font-family-mono);
+  white-space: nowrap;
+}
+.mockup .tab:hover {
+  color: var(--wa-color-text-normal);
+}
+.mockup .tab.active {
+  background: #1e1e1e;
+  color: #fff;
+  box-shadow: inset 0 2px 0 #c89be0;
+}
+.mockup .t-ic {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+/* Form controls (labeled dropdowns in the Launcher + LaTeXDiffs panels) */
+.mockup .field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.mockup .f-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+.mockup .f-label wa-icon {
+  font-size: 11px;
+}
+.mockup .select {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: #2c2c2c;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  padding: 6px 9px;
+  font-size: 0.78rem;
+  color: var(--wa-color-text-normal);
+}
+.mockup .s-val {
+  font-family: var(--vp-font-family-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mockup .s-caret {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+/* Labelled row with a trailing icon-action toolbar (LaTeXDiffs / file groups) */
+.mockup .frow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mockup .acts {
+  display: flex;
+  gap: 1px;
+}
+.mockup .act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+.mockup .act:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--wa-color-text-normal);
+}
+.mockup .act-on {
+  color: #c89be0;
+}
+
+/* Code / terminal output surface (editor body) */
+.mockup .surface {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 14px 18px;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.82rem;
+  line-height: 1.75;
+  color: var(--wa-color-text-normal);
+}
+.mockup .cmt {
+  color: #6a9955;
+}
+.mockup .kw {
+  color: #c586c0;
+}
+.mockup .m {
+  color: #9cdcfe;
+}
+
+/* Editor body — rendered diff "PDF" page (latexdiff preview) */
+.mockup .page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: #fdfdfb;
+  color: #1a1a1a;
+  margin: 16px;
+  padding: 22px 26px;
+  border-radius: 4px;
+  font-family: 'Latin Modern Roman', Georgia, 'Times New Roman', serif;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+.mockup .pg-h {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0.4rem 0 0.55rem;
+  color: #111;
+  border: none;
+  padding: 0;
+}
+.mockup .pg-h:first-child {
+  margin-top: 0;
+}
+.mockup .pg-p {
+  font-size: 0.84rem;
+  line-height: 1.65;
+  margin: 0 0 0.7rem;
+  color: #1a1a1a;
+}
+.mockup .page del {
+  color: #c0392b;
+  text-decoration: line-through;
+}
+.mockup .page ins {
+  color: #1f4fd6;
+  text-decoration: underline;
+}
+.mockup .page sub,
+.mockup .page sup {
+  font-size: 0.7em;
+}
+
+/* Editor body — terminal-style artifact (Wolfram / Lean / BibTeX) */
+.mockup .term {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 16px;
+  padding: 16px 18px;
+  background: #141414;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.82rem;
+  line-height: 1.75;
+  color: var(--wa-color-text-normal);
+}
+.mockup .wl {
+  color: var(--wa-color-text-normal);
+}
+.mockup .wl.out {
+  color: #9cdcfe;
+  margin-top: 4px;
+}
+.mockup .tac {
+  color: #4ec9b0;
+}
+.mockup .term-lean .ln {
+  white-space: pre;
+}
+.mockup .term-note {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+  font-family: var(--vp-font-family-base);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+.mockup .term-ok {
+  display: inline-block;
+  margin-top: 6px;
+  color: #6abf69;
+  font-weight: 600;
+}
+.mockup .indent {
+  padding-left: 1.2em;
+}
+.mockup .indent2 {
+  padding-left: 2.4em;
+}
+
+/* Editor tab file-type icon colors */
+.mockup .t-pdf {
+  color: #e0524f;
+}
+.mockup .t-wolf {
+  color: #d9491c;
+}
+.mockup .t-bib {
+  color: #69b06a;
+}
+.mockup .t-tex {
+  color: #4daafc;
+}
+.mockup .t-lean {
+  color: #b388e0;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+/* Collapsible section header (LaTeXDiffs / Files) */
+.mockup .sechead {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+.mockup .sec-lbl {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--wa-color-text-normal);
+}
+.mockup .lbl-ic {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+.mockup .chev {
+  display: inline-flex;
+  color: #7a7a7a;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+/* Code-line surface rows (Launcher / file-selection editor panes) */
+.mockup .cl {
+  white-space: pre-wrap;
+  min-height: 1.4em;
+}
+.mockup .cl.indent {
+  padding-left: 1.4em;
+}
+
+/* ============================================
+   PROGRESS-BOARD SIDEBAR
+   Shared by MockupSidebar (landing) and GuideIntroHero (guide). Each component
+   adds only its own extras (background tasks, latexdiff result, BibTeX, etc.).
+   ============================================ */
+.mockup .stream-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.76rem;
+  min-width: 0;
+  white-space: nowrap;
+}
+.mockup .sh-name {
+  color: var(--wa-color-text-normal);
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mockup .sh-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-success);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.6);
+  animation: mk-shpulse 1.8s infinite;
+}
+.mockup .sh-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.68rem;
+  color: #c89be0;
+  background: rgba(200, 155, 224, 0.12);
+  border-radius: 999px;
+  padding: 1px 8px;
+  flex-shrink: 0;
+}
+.mockup .sh-pulse {
+  display: inline-flex;
+  color: #c89be0;
+  font-size: 11px;
+}
+.mockup .sh-tools {
+  margin-left: auto;
+  display: flex;
+  gap: 9px;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+.mockup .shi {
+  display: inline-flex;
+  font-size: 13px;
+}
+.mockup .board-scroll {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.76rem;
+  overflow: hidden;
+}
+.mockup .panel {
+  border-bottom: 1px solid var(--color-border);
+}
+.mockup .panel-sum {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  color: var(--wa-color-text-normal);
+  font-weight: 600;
+}
+.mockup .panel-body {
+  padding: 2px 12px 9px 14px;
+}
+
+/* Todos */
+.mockup .todos {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.mockup .todo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.mockup .todo .td-tx {
+  color: #cccccc;
+}
+.mockup .todo.done {
+  opacity: 0.55;
+}
+.mockup .todo.done .td-tx {
+  text-decoration: line-through;
+  color: var(--color-text-secondary);
+}
+.mockup .todo.prog .td-tx {
+  color: var(--wa-color-text-normal);
+  font-weight: 600;
+}
+.mockup .td-ic {
+  display: inline-flex;
+  color: var(--color-success);
+  flex-shrink: 0;
+  font-size: 12px;
+}
+.mockup .td-sp {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  border: 2px solid rgba(200, 155, 224, 0.3);
+  border-top-color: #c89be0;
+  border-radius: 50%;
+  animation: mk-spin 0.9s linear infinite;
+}
+
+/* Conversation log */
+.mockup .log {
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.mockup .umsg-wrap {
+  display: flex;
+  justify-content: flex-end;
+}
+.mockup .umsg {
+  max-width: 88%;
+  background: rgba(86, 110, 150, 0.22);
+  border: 1px solid #3a3f4a;
+  border-radius: 6px;
+  padding: 6px 9px;
+}
+.mockup .umsg-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 3px;
+  font-size: 0.64rem;
+  color: var(--color-text-secondary);
+}
+.mockup .umsg-ic {
+  display: inline-flex;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+.mockup .umsg-body {
+  color: var(--wa-color-text-normal);
+  line-height: 1.5;
+  font-family: var(--vp-font-family-base);
+  font-size: 0.77rem;
+}
+.mockup .reason {
+  color: #b9b9b9;
+  line-height: 1.5;
+  font-family: var(--vp-font-family-base);
+  font-size: 0.78rem;
+  padding: 0 2px;
+}
+
+/* Tool-use / delegate cards */
+.mockup .tcard {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  padding: 4px 6px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.mockup .tcard:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.mockup .tcard.active {
+  background: rgba(200, 155, 224, 0.13);
+}
+.mockup .tcard.open {
+  display: block;
+  padding: 4px 6px;
+}
+.mockup .tcard.open:hover {
+  background: rgba(200, 155, 224, 0.13);
+}
+.mockup .tcard-sum {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.mockup .tc-ic {
+  color: #75beff;
+  flex-shrink: 0;
+  display: inline-flex;
+  font-size: 13px;
+}
+.mockup .tc-label {
+  flex: 1;
+  min-width: 0;
+  color: var(--wa-color-text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mockup .tc-tool {
+  color: var(--color-text-secondary);
+}
+.mockup .tc-chev {
+  align-self: center;
+}
+.mockup .tc-chev.open {
+  transform: rotate(90deg);
+}
+.mockup .tc-time {
+  flex-shrink: 0;
+  align-self: center;
+  font-size: 0.66rem;
+  color: var(--color-text-tertiary);
+}
+.mockup .tc-timer {
+  color: var(--color-warning);
+}
+.mockup .tc-body {
+  padding: 5px 0 2px 27px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mockup .tc-row {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+.mockup .tc-k {
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  min-width: 64px;
+}
+.mockup .tc-v {
+  color: var(--wa-color-text-normal);
+  font-family: var(--vp-font-family-base);
+}
+.mockup .tc-code {
+  color: #c89be0;
+  background: rgba(200, 155, 224, 0.12);
+  border-radius: 3px;
+  padding: 0 5px;
+}
+.mockup .tc-model {
+  color: var(--color-text-secondary);
+}
+.mockup .tc-src {
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+.mockup .tc-file {
+  color: var(--color-text-link);
+  cursor: pointer;
+}
+.mockup .tc-file:hover {
+  text-decoration: underline;
+}
+
+@keyframes mk-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes mk-shpulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 5px rgba(63, 185, 80, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(63, 185, 80, 0);
+  }
+}
+@keyframes mk-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* The Progress hero has the tallest sidebar (todos + tasks + log); give it
+   room so the expanded delegate card isn't clipped by the frame. */
+.mockup.tall .win-body {
+  min-height: 520px;
+}
+
+/* Stack the sidebar above the editor on narrow screens. */
+@media (max-width: 820px) {
+  .mockup .board {
+    width: auto !important;
+    border-right: none;
+    border-bottom: 1px solid #000;
+  }
+}
