@@ -2,6 +2,10 @@
 
 You have a paper draft and a deadline. Let's get TeXRA working for you in under five minutes.
 
+<QuickStartHero />
+
+<p class="hero-caption">The Launcher tab: point it at your file, pick an agent and a model, write one sentence, and press Execute.</p>
+
 ## Overview
 
 TeXRA sits inside VS Code and helps you polish writing, fix errors, create figures, and transform documents—without leaving your editor. Here's the short version:
@@ -73,8 +77,6 @@ Select **Never remind again** to hide it permanently.
 For complex documents with multiple input files, use the "Multiple" dropdown to select additional files.
 :::
 
-<!-- ![File Selection](/images/file-selection.png) -->
-
 ### Step 3: Choose Agent and Model
 
 1. In the dropdown menus at the bottom of the instruction box, select:
@@ -85,8 +87,6 @@ For complex documents with multiple input files, use the "Multiple" dropdown to 
 When you first open the agent or model dropdown, a tooltip explains its role.
 You can dismiss these prompts with **Never remind again**.
 :::
-
-![Agent and Model Selection](/images/agent-model-selection.png)
 
 ### Step 4: Write Instructions
 
@@ -122,7 +122,9 @@ Enable the `texra.debug.saveInputPrompt` setting if you want TeXRA to store the 
 2. The ProgressBoard panel (typically at the bottom) will show the progress. See the [ProgressBoard guide](./progress-board.md) for more details on interpreting the logs.
 3. Wait for the process to complete - this may take a few moments depending on the document size and model choice
 
-![Execution Progress](/images/texra-progressboard.png)
+<GuideIntroHero />
+
+<p class="hero-caption">The ProgressBoard streams the run live — todos, delegated subagents, and the tool-use log — with the output files alongside.</p>
 
 ### Step 7: Review Results
 

@@ -1,8 +1,10 @@
 # Introduction
 
-TeXRA is a multi-agent AI system for rigorous scientific work. It orchestrates **specialized agents** — for literature search, manuscript drafting, figure generation, formal verification, symbolic computation, and result communication — and coordinates them through reproducible workflows where every output is auditable and every citation is grounded. TeXRA runs in three places that share the same agents and run history: the **VS Code extension**, the **`texra` command-line interface**, and the standalone **desktop app** (beta).
+TeXRA is a multi-agent AI system for rigorous scientific work. You direct one orchestrator; it delegates to **specialized agents** — for literature search, manuscript drafting, figure generation, formal verification, and symbolic computation — each grounded in its own tools and model. Every citation is real, every figure compiles, and every edit comes back as a diff you approve. TeXRA runs in three places that share the same agents and run history: the **VS Code extension**, the **`texra` command-line interface**, and the standalone **desktop app** (beta).
 
-<a href="https://marketplace.visualstudio.com/items?itemName=texra-ai.texra" target="_blank" style="display: inline-block; background-color: #007ACC; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 10px 0;">Install from VS Code Marketplace</a>
+<GuideIntroHero />
+
+<p class="hero-caption">A single task, split across three specialists in the Progress view — click a delegation to see what it produced.</p>
 
 Prefer the terminal? Install the CLI with `npm install -g @texra-ai/cli` (Node.js 22+) — see [TeXRA CLI](./texra-cli.md).
 
