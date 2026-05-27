@@ -5,6 +5,45 @@ import { withBase } from 'vitepress';
 // Right-panel view of the same task: the written diff, the numeric
 // cross-check, or the formal proof. One task, three ways to trust it.
 const view = ref('diff');
+const installOpen = ref(false);
+const copied = ref(false);
+
+const CLI = 'npm install -g @texra-ai/cli';
+
+// Editors all resolve to their respective marketplaces; Cursor, Windsurf and
+// other VS Code forks install TeXRA from Open VSX.
+const editors = [
+  {
+    name: 'VS Code',
+    note: 'Marketplace',
+    href: 'https://marketplace.visualstudio.com/items?itemName=texra-ai.texra',
+  },
+  {
+    name: 'Cursor',
+    note: 'Open VSX',
+    href: 'https://open-vsx.org/extension/texra-ai/texra',
+  },
+  {
+    name: 'Windsurf',
+    note: 'Open VSX',
+    href: 'https://open-vsx.org/extension/texra-ai/texra',
+  },
+  {
+    name: 'Other editors',
+    note: 'Open VSX',
+    href: 'https://open-vsx.org/extension/texra-ai/texra',
+  },
+];
+
+function copyCli() {
+  try {
+    navigator.clipboard?.writeText(CLI);
+    copied.value = true;
+    setTimeout(() => (copied.value = false), 1600);
+  } catch {
+    /* clipboard unavailable */
+  }
+}
 </script>
 
 <template>
@@ -17,16 +56,52 @@ const view = ref('diff');
     <p class="lh-tagline">
       You direct an orchestrator. It delegates to specialist agents that search
       real databases, compute in Wolfram, prove in Lean&nbsp;4 — and hand back
-      every change as a diff you approve. In VS&nbsp;Code and the terminal.
+      every change as a diff you approve. In VS&nbsp;Code, its forks, and the
+      terminal.
     </p>
+
     <div class="lh-actions">
       <a class="lh-btn lh-btn-primary" :href="withBase('/guide/quick-start')">Get started</a>
-      <a
-        class="lh-btn lh-btn-alt"
-        href="https://marketplace.visualstudio.com/items?itemName=texra-ai.texra"
-        >Install for VS&nbsp;Code</a
-      >
+      <div class="lh-install">
+        <button
+          type="button"
+          class="lh-btn lh-btn-alt lh-install-trigger"
+          :aria-expanded="installOpen"
+          @click="installOpen = !installOpen"
+        >
+          Add to your editor
+          <span class="lh-caret" :class="{ open: installOpen }">▾</span>
+        </button>
+        <div v-show="installOpen" class="lh-menu" role="menu">
+          <a
+            v-for="e in editors"
+            :key="e.name"
+            class="lh-menu-item"
+            role="menuitem"
+            :href="e.href"
+            target="_blank"
+            rel="noopener"
+            @click="installOpen = false"
+          >
+            <span class="lh-menu-name">{{ e.name }}</span>
+            <span class="lh-menu-note">{{ e.note }}</span>
+          </a>
+        </div>
+      </div>
     </div>
+
+    <!-- CLI install, kept prominent -->
+    <div class="lh-cli">
+      <span class="lh-cli-label">or run it anywhere from your terminal</span>
+      <div class="lh-cli-pill">
+        <code><span class="lh-cli-dollar">$</span> {{ CLI }}</code>
+        <button type="button" class="lh-copy" @click="copyCli">
+          {{ copied ? 'copied' : 'copy' }}
+        </button>
+      </div>
+    </div>
+
+    <div v-show="installOpen" class="lh-backdrop" @click="installOpen = false"></div>
 
     <!-- Product slice: a real TeXRA run, not a marketing illustration -->
     <div class="win" role="group" aria-label="TeXRA running an orchestrated research task in VS Code">
@@ -37,70 +112,101 @@ const view = ref('diff');
         <span class="win-title">spectral-gap.tex — TeXRA</span>
       </div>
       <div class="win-body">
-        <!-- Left: the agent panel, orchestrator delegating -->
-        <aside class="chat">
-          <div class="chat-head">
-            <span class="chat-agent">
-              <span class="chat-glyph">◇</span> orchestrator
-            </span>
-            <span class="chat-model">Claude Opus 4.7</span>
+        <!-- VS Code activity bar -->
+        <nav class="act">
+          <span class="act-i">▢</span>
+          <span class="act-i">⌕</span>
+          <span class="act-i">⑂</span>
+          <span class="act-i act-on"><span class="act-glyph">🧠</span></span>
+          <span class="act-i">⚙</span>
+        </nav>
+
+        <!-- Left: the TeXRA ProgressBoard -->
+        <aside class="board">
+          <div class="board-tabs">
+            <span class="bt">Problems</span>
+            <span class="bt">Output</span>
+            <span class="bt">Terminal</span>
+            <span class="bt bt-on">TeXRA ProgressBoard</span>
           </div>
-          <div class="msg msg-user">
-            Derive the spectral-gap bound for <i>d</i>-regular random graphs,
-            cross-check it numerically, and tighten the notation in §2–3.
+
+          <div class="stream-head">
+            <span class="sh-name">orchestrator@opus47</span>
+            <span class="sh-file">: spectral-gap.tex</span>
+            <span class="sh-dot" title="Running"></span>
+            <span class="sh-badge">⟳ 3 turns</span>
           </div>
-          <div class="msg msg-agent">
-            Breaking this into three steps and delegating to specialists.
-          </div>
-          <ul class="steps">
-            <li>
-              <span class="step-name">research</span>
-              <span class="step-detail">derived λ₂ ≲ 2√(d−1)</span>
-              <span class="step-ok">✓</span>
-            </li>
-            <li>
-              <span class="step-name">numerics</span>
-              <span class="step-detail">N=2000, λ₂ = 4.41</span>
-              <span class="step-ok">✓</span>
-            </li>
-            <li>
-              <span class="step-name">correct</span>
-              <span class="step-detail">18 edits · diff ready</span>
-              <span class="step-ok">✓</span>
-            </li>
-          </ul>
-          <div class="approve">
-            <button class="approve-btn" type="button" tabindex="-1">Approve all</button>
-            <span class="approve-hint">review every diff first</span>
+
+          <div class="tree">
+            <div class="grp done">
+              <span class="ic-ok">✓</span>
+              <span class="grp-title">Initialization</span>
+              <span class="grp-time">19:10:12 · 4ms</span>
+            </div>
+
+            <div class="grp run">
+              <span class="ic-spin"></span>
+              <span class="grp-title">Run: orchestrator@opus47</span>
+              <span class="grp-time">19:10:13</span>
+            </div>
+
+            <div class="grp-body">
+              <div class="logline">
+                <span class="bullet"></span><span class="ts">[19:10:13.060]</span>
+                <span class="lvl-info">INFO</span> Decomposed task — delegating to specialists
+              </div>
+
+              <button class="sub done" :class="{ active: view === 'diff' }" @click="view = 'diff'">
+                <span class="ic-ok">✓</span>
+                <span class="sub-name">research<span class="sub-model">@sonnet46</span></span>
+                <span class="sub-detail">derived λ₂ ≲ 2√(d−1)</span>
+                <span class="grp-time">12.4s</span>
+              </button>
+
+              <button class="sub done" :class="{ active: view === 'wolfram' }" @click="view = 'wolfram'">
+                <span class="ic-ok">✓</span>
+                <span class="sub-name">numerics<span class="sub-model">@gpt5</span></span>
+                <span class="sub-detail">cross-check λ₂ = 4.41</span>
+                <span class="grp-time">8.1s</span>
+              </button>
+
+              <button class="sub done" :class="{ active: view === 'lean' }" @click="view = 'lean'">
+                <span class="ic-ok">✓</span>
+                <span class="sub-name">lean<span class="sub-model">@opus47</span></span>
+                <span class="sub-detail">proof compiles · 0 sorry</span>
+                <span class="grp-time">31s</span>
+              </button>
+
+              <button class="sub run" :class="{ active: view === 'diff' }" @click="view = 'diff'">
+                <span class="ic-spin"></span>
+                <span class="sub-name">correct<span class="sub-model">@gemini25p</span></span>
+                <span class="sub-detail">18 edits · diff ready</span>
+                <span class="grp-time">19:10:34</span>
+              </button>
+
+              <div class="ldiff" @click="view = 'diff'">
+                <span class="ldiff-ic">⟂</span>
+                <span class="ldiff-file">spectral-gap.tex</span>
+                <span class="ldiff-r">[r0]</span>
+                <span class="ldiff-arrow">→</span>
+                <span class="ldiff-r">[r1]</span>
+                <span class="ldiff-paren">(<span class="ldiff-link">diff</span>)</span>
+              </div>
+            </div>
           </div>
         </aside>
 
         <!-- Right: the result, viewable three ways -->
         <section class="result">
           <div class="tabs">
-            <button
-              type="button"
-              class="tab"
-              :class="{ active: view === 'diff' }"
-              @click="view = 'diff'"
-            >
-              Diff
+            <button type="button" class="tab" :class="{ active: view === 'diff' }" @click="view = 'diff'">
+              <span class="tab-dot td-diff"></span>spectral-gap.tex
             </button>
-            <button
-              type="button"
-              class="tab"
-              :class="{ active: view === 'wolfram' }"
-              @click="view = 'wolfram'"
-            >
-              Wolfram
+            <button type="button" class="tab" :class="{ active: view === 'wolfram' }" @click="view = 'wolfram'">
+              <span class="tab-dot td-wolf"></span>Wolfram
             </button>
-            <button
-              type="button"
-              class="tab"
-              :class="{ active: view === 'lean' }"
-              @click="view = 'lean'"
-            >
-              Lean 4
+            <button type="button" class="tab" :class="{ active: view === 'lean' }" @click="view = 'lean'">
+              <span class="tab-dot td-lean"></span>Lean&nbsp;4
             </button>
           </div>
 
@@ -167,6 +273,7 @@ const view = ref('diff');
   margin: 0 auto;
   padding: 3.5rem 1.5rem 0;
   text-align: center;
+  position: relative;
 }
 .lh-eyebrow {
   font-size: 0.8rem;
@@ -192,20 +299,28 @@ const view = ref('diff');
   line-height: 1.6;
   color: var(--vp-c-text-2);
 }
+
+/* ---- Actions: Get started + editor dropdown ---- */
 .lh-actions {
   display: flex;
   gap: 0.75rem;
   justify-content: center;
   flex-wrap: wrap;
-  margin-bottom: 3rem;
+  margin-bottom: 1rem;
+  position: relative;
+  z-index: 30;
 }
 .lh-btn {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
   padding: 0.7rem 1.5rem;
   border-radius: 9px;
   font-size: 0.95rem;
   font-weight: 600;
   text-decoration: none !important;
+  cursor: pointer;
+  font-family: inherit;
   transition: transform 0.15s, background-color 0.2s, border-color 0.2s;
 }
 .lh-btn:hover {
@@ -215,6 +330,7 @@ const view = ref('diff');
 .lh-btn-primary {
   background: var(--vp-c-brand-1);
   color: #fff !important;
+  border: 1px solid var(--vp-c-brand-1);
 }
 .lh-btn-primary:hover {
   background: var(--vp-c-brand-2);
@@ -227,14 +343,119 @@ const view = ref('diff');
 .lh-btn-alt:hover {
   border-color: var(--vp-c-brand-1);
 }
+.lh-install {
+  position: relative;
+}
+.lh-caret {
+  font-size: 0.7rem;
+  transition: transform 0.2s;
+}
+.lh-caret.open {
+  transform: rotate(180deg);
+}
+.lh-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 230px;
+  background: var(--vp-c-bg);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 11px;
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.3);
+  padding: 0.4rem;
+  z-index: 40;
+}
+.lh-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.7rem;
+  border-radius: 7px;
+  text-decoration: none !important;
+  color: var(--vp-c-text-1) !important;
+}
+.lh-menu-item:hover {
+  background: var(--vp-c-brand-soft);
+}
+.lh-menu-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.lh-menu-note {
+  font-size: 0.74rem;
+  color: var(--vp-c-text-3);
+  font-family: var(--vp-font-family-mono);
+}
+.lh-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
 
-/* ---- Product window (always dark, like a real editor) ---- */
+/* ---- CLI pill ---- */
+.lh-cli {
+  margin-bottom: 3rem;
+}
+.lh-cli-label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--vp-c-text-3);
+  margin-bottom: 0.5rem;
+}
+.lh-cli-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--vp-c-bg-alt);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 9px;
+  padding: 0.5rem 0.5rem 0.5rem 0.9rem;
+  max-width: 100%;
+}
+.lh-cli-pill code {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.9rem;
+  color: var(--vp-c-text-1);
+  white-space: nowrap;
+  overflow-x: auto;
+  background: none;
+  padding: 0;
+}
+.lh-cli-dollar {
+  color: var(--vp-c-brand-1);
+  margin-right: 0.35rem;
+  user-select: none;
+}
+.lh-copy {
+  flex-shrink: 0;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--vp-c-text-2);
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+  padding: 0.3rem 0.7rem;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.lh-copy:hover {
+  color: var(--vp-c-brand-1);
+  border-color: var(--vp-c-brand-1);
+}
+
+/* ============================================
+   PRODUCT WINDOW — faithful TeXRA / VS Code
+   ============================================ */
 .win {
   text-align: left;
   background: #1e1e1e;
   border: 1px solid #000;
   border-radius: 12px;
   overflow: hidden;
+  position: relative;
+  z-index: 1;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.04) inset,
     0 24px 60px -20px rgba(0, 0, 0, 0.55),
@@ -249,12 +470,7 @@ const view = ref('diff');
   background: #323233;
   border-bottom: 1px solid #000;
 }
-.dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  display: inline-block;
-}
+.dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
 .dot-r { background: #ff5f57; }
 .dot-y { background: #febc2e; }
 .dot-g { background: #28c840; }
@@ -268,135 +484,218 @@ const view = ref('diff');
 }
 .win-body {
   display: grid;
-  grid-template-columns: 320px 1fr;
-  min-height: 420px;
+  grid-template-columns: 46px 340px 1fr;
+  min-height: 440px;
 }
 
-/* Chat / agent panel */
-.chat {
-  background: #181818;
+/* Activity bar */
+.act {
+  background: #2c2c2c;
   border-right: 1px solid #000;
-  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-}
-.chat-head {
-  display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding-bottom: 6px;
-  border-bottom: 1px solid #2a2a2a;
+  padding-top: 10px;
+  gap: 14px;
 }
-.chat-agent {
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.84rem;
-  color: #e6e6e6;
-  font-weight: 600;
-}
-.chat-glyph { color: #c89be0; }
-.chat-model {
-  font-size: 0.68rem;
-  color: #8a8a8a;
-  background: #242424;
-  border: 1px solid #333;
-  border-radius: 5px;
-  padding: 2px 7px;
-}
-.msg {
-  font-size: 0.82rem;
-  line-height: 1.5;
-  border-radius: 9px;
-  padding: 9px 11px;
-}
-.msg-user {
-  background: #2a2140;
-  color: #e9e2f3;
-  border: 1px solid #3a2c57;
-}
-.msg-agent {
-  background: #202020;
-  color: #c4c4c4;
-  border: 1px solid #2c2c2c;
-}
-.steps {
-  list-style: none;
-  margin: 2px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-.steps li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.78rem;
-  background: #1c1c1c;
-  border: 1px solid #2a2a2a;
-  border-left: 2px solid #4ec9b0;
-  border-radius: 7px;
-  padding: 7px 9px;
-}
-.step-name {
-  font-family: var(--vp-font-family-mono);
-  color: #c89be0;
-  font-weight: 600;
-}
-.step-detail {
-  flex: 1;
-  color: #9a9a9a;
-}
-.step-ok { color: #6abf69; font-weight: 700; }
-.approve {
-  margin-top: auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-top: 8px;
-}
-.approve-btn {
-  background: #4d2161;
-  color: #f0e7f6;
-  border: 1px solid #6a2f86;
-  border-radius: 7px;
-  padding: 7px 14px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: default;
-}
-.approve-hint {
-  font-size: 0.72rem;
+.act-i {
   color: #7a7a7a;
+  font-size: 1.1rem;
+  width: 100%;
+  text-align: center;
+  position: relative;
+  line-height: 1.4;
 }
+.act-on { color: #fff; }
+.act-on::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: #c89be0;
+}
+.act-glyph { font-size: 0.95rem; filter: grayscale(0.1); }
 
-/* Result panel */
-.result {
+/* ProgressBoard */
+.board {
+  background: #1e1e1e;
+  border-right: 1px solid #000;
   display: flex;
   flex-direction: column;
-  background: #1e1e1e;
+  min-width: 0;
 }
-.tabs {
+.board-tabs {
   display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 34px;
+  padding: 0 12px;
   background: #252526;
   border-bottom: 1px solid #000;
+  overflow: hidden;
 }
+.bt {
+  font-size: 0.72rem;
+  color: #7c7c7c;
+  white-space: nowrap;
+}
+.bt-on {
+  color: #fff;
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 #c89be0;
+  padding-bottom: 7px;
+  padding-top: 7px;
+}
+.stream-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #2a2a2a;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.76rem;
+  min-width: 0;
+  white-space: nowrap;
+}
+.sh-name { color: #e6e6e6; font-weight: 600; flex-shrink: 0; }
+.sh-file {
+  color: #4daafc;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sh-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3fb950;
+  margin-left: auto;
+  box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.6);
+  animation: shpulse 1.8s infinite;
+  flex-shrink: 0;
+}
+@keyframes shpulse {
+  0% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.5); }
+  70% { box-shadow: 0 0 0 5px rgba(63, 185, 80, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0); }
+}
+.sh-badge {
+  font-size: 0.68rem;
+  color: #c89be0;
+  background: rgba(200, 155, 224, 0.12);
+  border-radius: 999px;
+  padding: 1px 8px;
+  flex-shrink: 0;
+}
+.tree {
+  padding: 8px 10px;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.76rem;
+  overflow: hidden;
+}
+.grp {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  margin: 2px 0;
+  border-radius: 4px;
+  border-left: 2px solid #3a3a3a;
+}
+.grp.done { border-left-color: #3fb950; }
+.grp.run { border-left-color: #d7a93e; }
+.grp-title { font-weight: 700; color: #d8d8d8; flex: 1; min-width: 0; }
+.grp-time { font-size: 0.7rem; color: #7a7a7a; white-space: nowrap; }
+.grp-body {
+  padding-left: 10px;
+  margin-left: 6px;
+  border-left: 1px dashed #353535;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.logline { color: #cfcfcf; padding: 3px 4px; display: flex; align-items: center; gap: 6px; }
+.bullet {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #3fb950; flex-shrink: 0;
+}
+.ts { color: #6f6f6f; }
+.lvl-info { color: #75beff; font-weight: 700; }
+
+.sub {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-left: 2px solid transparent;
+  border-radius: 4px;
+  padding: 5px 8px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.sub.done { border-left-color: rgba(63, 185, 80, 0.5); }
+.sub.run { border-left-color: rgba(215, 169, 62, 0.6); }
+.sub:hover { background: #242424; }
+.sub.active { background: #2a2331; border-left-color: #c89be0; }
+.sub-name { color: #e0e0e0; font-weight: 600; }
+.sub-model { color: #7c7c7c; font-weight: 400; }
+.sub-detail { flex: 1; min-width: 0; color: #9a9a9a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ldiff {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  margin-left: 14px;
+  cursor: pointer;
+  color: #9a9a9a;
+}
+.ldiff:hover .ldiff-link { text-decoration: underline; }
+.ldiff-ic { color: #c89be0; }
+.ldiff-file { color: #4daafc; }
+.ldiff-r { color: #8a8a8a; }
+.ldiff-arrow { color: #6f6f6f; }
+.ldiff-link { color: #4daafc; }
+
+/* Status icons */
+.ic-ok { color: #3fb950; font-weight: 700; flex-shrink: 0; }
+.ic-spin {
+  width: 11px; height: 11px; flex-shrink: 0;
+  border: 2px solid rgba(215, 169, 62, 0.3);
+  border-top-color: #d7a93e;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- Result panel ---- */
+.result { display: flex; flex-direction: column; background: #1e1e1e; min-width: 0; }
+.tabs { display: flex; background: #252526; border-bottom: 1px solid #000; }
 .tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   background: transparent;
   border: none;
   border-right: 1px solid #1a1a1a;
   color: #9a9a9a;
-  font-size: 0.8rem;
-  padding: 9px 18px;
+  font-size: 0.78rem;
+  padding: 8px 16px;
   cursor: pointer;
   font-family: var(--vp-font-family-mono);
 }
 .tab:hover { color: #d4d4d4; }
-.tab.active {
-  background: #1e1e1e;
-  color: #fff;
-  box-shadow: inset 0 2px 0 #c89be0;
-}
+.tab.active { background: #1e1e1e; color: #fff; box-shadow: inset 0 -2px 0 #c89be0; }
+.tab-dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.td-diff { background: #4daafc; }
+.td-wolf { background: #d97a1a; }
+.td-lean { background: #9a5fc0; }
 
 /* Rendered diff "PDF" page */
 .page {
@@ -409,32 +708,14 @@ const view = ref('diff');
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
   overflow: hidden;
 }
-.pg-h {
-  font-size: 1.05rem;
-  font-weight: 700;
-  margin: 0.4rem 0 0.55rem;
-  color: #111;
-  border: none;
-  padding: 0;
-}
+.pg-h { font-size: 1.05rem; font-weight: 700; margin: 0.4rem 0 0.55rem; color: #111; border: none; padding: 0; }
 .pg-h:first-child { margin-top: 0; }
-.pg-p {
-  font-size: 0.84rem;
-  line-height: 1.65;
-  margin: 0 0 0.7rem;
-  color: #1a1a1a;
-}
-.page del {
-  color: #c0392b;
-  text-decoration: line-through;
-}
-.page ins {
-  color: #1f4fd6;
-  text-decoration: underline;
-}
+.pg-p { font-size: 0.84rem; line-height: 1.65; margin: 0 0 0.7rem; color: #1a1a1a; }
+.page del { color: #c0392b; text-decoration: line-through; }
+.page ins { color: #1f4fd6; text-decoration: underline; }
 .page sub { font-size: 0.7em; }
 
-/* Wolfram / Lean terminal panes */
+/* Wolfram / Lean panes */
 .term {
   margin: 16px;
   padding: 16px 18px;
@@ -459,28 +740,24 @@ const view = ref('diff');
   line-height: 1.55;
   color: #9a9a9a;
 }
-.term-ok {
-  display: inline-block;
-  margin-top: 6px;
-  color: #6abf69;
-  font-weight: 600;
-}
+.term-ok { display: inline-block; margin-top: 6px; color: #6abf69; font-weight: 600; }
 .term-lean .ln { white-space: pre; }
 .term-lean .kw { color: #c586c0; }
 .term-lean .tac { color: #4ec9b0; }
 .indent { padding-left: 1.2em; }
 .indent2 { padding-left: 2.4em; }
 
-@media (max-width: 760px) {
-  .lh { padding-top: 2.5rem; }
-  .win-body {
-    grid-template-columns: 1fr;
-  }
-  .chat {
-    border-right: none;
-    border-bottom: 1px solid #000;
-  }
+@media (max-width: 820px) {
+  .win-body { grid-template-columns: 1fr; }
+  .act { flex-direction: row; justify-content: flex-start; gap: 18px; padding: 0 12px; height: 40px; border-right: none; border-bottom: 1px solid #000; }
+  .act-on::before { left: -2px; top: auto; bottom: 0; right: -2px; width: auto; height: 2px; }
+  .board { border-right: none; border-bottom: 1px solid #000; }
   .win-title { margin-right: 0; }
   .page { font-size: 0.78rem; }
+  .board-tabs { gap: 10px; }
+  .bt { font-size: 0.68rem; }
+}
+@media (max-width: 760px) {
+  .lh { padding-top: 2.5rem; }
 }
 </style>
