@@ -7,6 +7,7 @@
  * paths (PR / repo / issue).
  */
 
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
 
 const WEBHOOK_TAG = 'github-webhook-activity';
@@ -64,8 +65,7 @@ export function sections(
 
 export function truncate(s: string | null | undefined, max: number): string {
   const body = (s ?? '').trim();
-  if (body.length <= max) return body;
-  return body.slice(0, max) + '…';
+  return truncateWithEllipsis(body, max + 1);
 }
 
 /** Newest `updated_at` (falling back to `created_at`) in a list, or undefined. */
