@@ -29,6 +29,18 @@ const { parseCommentableLines } = require(
     '.github/actions/texra-code-review/scripts/write-commentable-lines.cjs',
   ),
 );
+const { resolveReviewModel } = require(
+  path.join(
+    repoRoot,
+    '.github/actions/texra-code-review/scripts/resolve-model.cjs',
+  ),
+);
+const { promptContextText, writePromptContext } = require(
+  path.join(
+    repoRoot,
+    '.github/actions/texra-code-review/scripts/write-prompt-context.cjs',
+  ),
+);
 const { loadKnownThreadIds, postTexraReview } = require(
   path.join(
     repoRoot,
@@ -421,12 +433,79 @@ async function validateCodeReviewActionHelpers() {
     rmSync(threadsCwd, { recursive: true, force: true });
   }
 
+  assert(
+    resolveReviewModel({
+      providerKeys: { deepseek: 'key', openai: 'key' },
+    }).model === 'deepseekproT',
+    'review model resolution should default DeepSeek reviews to DeepSeek Pro Thinking',
+  );
+  assert(
+    resolveReviewModel({
+      providerKeys: { openai: 'key' },
+    }).model === 'gpt55',
+    'review model resolution should choose an OpenAI model when only OpenAI is configured',
+  );
+  assert(
+    resolveReviewModel({
+      providerKeys: { openRouter: 'key' },
+    }).model === 'gptoss',
+    'review model resolution should choose an OpenRouter-routed model when only OpenRouter is configured',
+  );
+  assert(
+    resolveReviewModel({
+      providerKeys: { deepseek: 'key' },
+      providerModels: { deepseek: 'deepseekT' },
+    }).model === 'deepseekT',
+    'review model resolution should honor provider-specific model overrides',
+  );
+  assert(
+    resolveReviewModel({
+      configuredModel: 'gemini31p',
+      providerKeys: { deepseek: 'key' },
+    }).model === 'gemini31p',
+    'review model resolution should honor the global model override',
+  );
+
+  const promptContextCwd = mkdtempSync(
+    path.join(tmpdir(), 'texra-review-prompt-context-'),
+  );
+  try {
+    const outputPath = path.join(promptContextCwd, 'nested', 'context.md');
+    const contextText = promptContextText({
+      PR_NUMBER: '7',
+      REPOSITORY: 'owner/repo',
+      PR_TITLE_JSON: '"safe title"',
+      TEXRA_REVIEW_MODEL: 'deepseekproT',
+    });
+    assert(
+      contextText.includes('PR number: 7') &&
+        contextText.includes(
+          'Pull request title JSON (untrusted): "safe title"',
+        ) &&
+        contextText.includes('TeXRA review model: deepseekproT'),
+      'prompt context text should include review metadata in a stable format',
+    );
+    assert(
+      writePromptContext({ env: { PR_NUMBER: '8' }, outputPath }) ===
+        outputPath,
+      'prompt context writer should return the output path',
+    );
+    assert(
+      readFileSync(outputPath, 'utf8').includes('PR number: 8'),
+      'prompt context writer should create parent directories and write metadata',
+    );
+  } finally {
+    rmSync(promptContextCwd, { recursive: true, force: true });
+  }
+
   const postCwd = mkdtempSync(path.join(tmpdir(), 'texra-review-post-'));
   const previousPostEnv = {
     HEAD_SHA: process.env.HEAD_SHA,
     TEXRA_COMMENTABLE_LINES_JSON: process.env.TEXRA_COMMENTABLE_LINES_JSON,
+    TEXRA_REVIEW_AGENT: process.env.TEXRA_REVIEW_AGENT,
     TEXRA_RESOLVE_THREADS: process.env.TEXRA_RESOLVE_THREADS,
     TEXRA_REVIEW_JSON: process.env.TEXRA_REVIEW_JSON,
+    TEXRA_REVIEW_MODEL: process.env.TEXRA_REVIEW_MODEL,
     TEXRA_THREADS_JSON: process.env.TEXRA_THREADS_JSON,
   };
   try {
@@ -436,7 +515,7 @@ async function validateCodeReviewActionHelpers() {
       reviewJson,
       JSON.stringify({
         body: '## TeXRA Code Review\n\nNo new findings.',
-        comments: [],
+        comments: [{ path: 'paper.tex', line: 1, body: 'Inline finding.' }],
         thread_actions: [
           {
             action: 'resolve',
@@ -460,17 +539,24 @@ async function validateCodeReviewActionHelpers() {
       postCwd,
       'missing-commentable-lines.json',
     );
+    process.env.TEXRA_REVIEW_AGENT = 'review';
     process.env.TEXRA_RESOLVE_THREADS = 'false';
     process.env.TEXRA_REVIEW_JSON = reviewJson;
+    process.env.TEXRA_REVIEW_MODEL = 'deepseekT';
     process.env.TEXRA_THREADS_JSON = threadJson;
 
+    let postedReviewBody = '';
+    let postedInlineComments = [];
     const replies = [];
     const notices = [];
     await postTexraReview({
       github: {
         rest: {
           pulls: {
-            createReview: async () => undefined,
+            createReview: async ({ body, comments }) => {
+              postedReviewBody = body;
+              postedInlineComments = comments;
+            },
           },
         },
         graphql: async (query, variables) => {
@@ -495,6 +581,16 @@ async function validateCodeReviewActionHelpers() {
     assert(
       notices.some((message) => message.includes('review-thread action')),
       'skipped thread actions should produce a notice',
+    );
+    assert(
+      postedReviewBody.includes(
+        'Reviewed by TeXRA agent `review` with model `deepseekT`.',
+      ),
+      'posted review body should include TeXRA reviewer attribution',
+    );
+    assert(
+      !postedInlineComments[0]?.body.includes('Reviewed by TeXRA agent'),
+      'inline comments should not include TeXRA reviewer attribution',
     );
   } finally {
     for (const [name, value] of Object.entries(previousPostEnv)) {

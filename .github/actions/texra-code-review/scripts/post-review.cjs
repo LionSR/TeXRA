@@ -82,6 +82,17 @@ function fallbackItems(comments, marker) {
     .join('\n');
 }
 
+function reviewAttributionFooter({
+  agent = process.env.TEXRA_REVIEW_AGENT,
+  model = process.env.TEXRA_REVIEW_MODEL,
+} = {}) {
+  const parts = [];
+  if (agent) parts.push(`agent \`${agent}\``);
+  if (model) parts.push(`model \`${model}\``);
+  if (parts.length === 0) return '';
+  return `\n\n---\n\nReviewed by TeXRA ${parts.join(' with ')}.`;
+}
+
 function loadKnownThreadIds(
   threadContextPath = process.env.TEXRA_THREADS_JSON ||
     '.texra-action/previous-texra-review-threads.json',
@@ -134,6 +145,7 @@ async function postTexraReview({ github, context, core }) {
   if (unplacedComments.length > 0) {
     body = `${body}\n\n### Inline comments not placed\n\n${fallbackItems(unplacedComments, marker)}`;
   }
+  body = `${body}${reviewAttributionFooter()}`;
 
   async function createReview(reviewComments, reviewBody) {
     await github.rest.pulls.createReview({
@@ -244,4 +256,5 @@ module.exports = {
   loadCommentableLines,
   normalizeComment,
   postTexraReview,
+  reviewAttributionFooter,
 };

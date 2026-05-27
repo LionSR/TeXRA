@@ -1,6 +1,7 @@
 const fs = require('node:fs');
-const crypto = require('node:crypto');
 const path = require('node:path');
+
+const { writeOutput } = require('./github-output.cjs');
 
 const STATUS_ONLY_MESSAGES = new Set([
   'complete',
@@ -145,15 +146,6 @@ function normalizeReview(rawText) {
       .filter(Boolean)
       .slice(0, 50),
   };
-}
-
-function writeOutput(name, value, outputPath = process.env.GITHUB_OUTPUT) {
-  if (!outputPath) return;
-  const delimiter = `__texra_${name}_${crypto.randomBytes(16).toString('hex')}__`;
-  fs.appendFileSync(
-    outputPath,
-    `${name}<<${delimiter}\n${value}\n${delimiter}\n`,
-  );
 }
 
 function normalizeReviewFile({

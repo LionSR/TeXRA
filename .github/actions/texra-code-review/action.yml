@@ -18,6 +18,10 @@ inputs:
     description: 'Runtime context appended to the review prompt.'
     required: false
     default: ''
+  prompt-context-file:
+    description: 'Path to a file containing runtime context appended to the review prompt.'
+    required: false
+    default: ''
   review-context-file:
     description: 'Optional workspace-relative file containing the PR diff or other review context.'
     required: false
@@ -137,6 +141,7 @@ runs:
         INPUT_PROMPT: ${{ inputs.prompt }}
         INPUT_PROMPT_FILE: ${{ inputs['prompt-file'] }}
         INPUT_PROMPT_CONTEXT: ${{ inputs['prompt-context'] }}
+        INPUT_PROMPT_CONTEXT_FILE: ${{ inputs['prompt-context-file'] }}
         INPUT_REVIEW_CONTEXT_FILE: ${{ inputs['review-context-file'] }}
         INPUT_COMMENTABLE_LINES_FILE: ${{ inputs['commentable-lines-file'] }}
         INPUT_REVIEW_THREAD_CONTEXT_FILE: ${{ inputs['review-thread-context-file'] }}
@@ -170,6 +175,15 @@ runs:
           printf '%s\n' "$prompt"
           if [ -n "$INPUT_PROMPT_CONTEXT" ]; then
             printf '\n## Runtime Context\n%s\n' "$INPUT_PROMPT_CONTEXT"
+          fi
+          if [ -n "$INPUT_PROMPT_CONTEXT_FILE" ]; then
+            if [ ! -f "$INPUT_PROMPT_CONTEXT_FILE" ]; then
+              echo "::error::TeXRA prompt context file not found: $INPUT_PROMPT_CONTEXT_FILE"
+              exit 1
+            fi
+            printf '\n## Runtime Context\n'
+            cat "$INPUT_PROMPT_CONTEXT_FILE"
+            printf '\n'
           fi
           if [ -n "$INPUT_REVIEW_CONTEXT_FILE" ]; then
             printf '\nReview context file: `%s`\n' "$INPUT_REVIEW_CONTEXT_FILE"
