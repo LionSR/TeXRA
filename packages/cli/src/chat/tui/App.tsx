@@ -2,7 +2,7 @@
 // todos panels at the bottom, then status, approval modal, and input bar.
 // Tab / Shift-Tab cycles focus across subagent streams.
 
-import { Box, useInput, useStdin, useWindowSize } from 'ink';
+import { Box, useApp, useInput, useStdin, useWindowSize } from 'ink';
 import { useEffect, useState } from 'react';
 
 import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
@@ -19,6 +19,7 @@ import { TipRow } from './panes/TipRow';
 import { TodosPlanPanel } from './panes/TodosPlanPanel';
 import { currentApproval } from './state/approvalQueue';
 import {
+  isKittyCtrlC,
   isKittyKeypadEnter,
   metaChordDigit,
   metaChordInput,
@@ -197,15 +198,18 @@ export function App(props: AppProps): React.JSX.Element {
   const slashPaletteOpen = useSignal(cliState.slashPaletteOpen);
   const reverseSearchOpen = useSignal(cliState.reverseSearchOpen);
   const { columns, rows } = useWindowSize();
+  const { exit } = useApp();
   const [childControlMode, setChildControlMode] = useState<
     ChildControlMode | undefined
   >(undefined);
 
-  // The Kitty disambiguate flag makes keypad Enter a distinct key that Ink's
-  // `useInput` never surfaces (see isKittyKeypadEnter). Re-dispatch it on Ink's
-  // own input channel as a plain Enter (CR) so every submit/confirm path that
-  // keys off `key.return` keeps working. Inert when the protocol is off — the
-  // sequence simply never arrives.
+  // The Kitty disambiguate flag remaps two keys onto CSI-u sequences that the
+  // TUI's normal paths don't see, so we patch them on Ink's own input channel:
+  //   • keypad Enter (kpenter) — useInput surfaces no field for it; re-dispatch
+  //     as a plain Enter (CR) so submit/confirm keeps working.
+  //   • Ctrl+C — arrives as a CSI-u sequence, not the \x03 that Ink's
+  //     exitOnCtrlC watches for; call exit() to reproduce that same shutdown.
+  // Both are inert when the protocol is off — the sequences never arrive.
   const stdin = useStdin();
   useEffect(() => {
     const emitter = (
@@ -213,12 +217,15 @@ export function App(props: AppProps): React.JSX.Element {
     ).internal_eventEmitter;
     if (!emitter) return;
     const onInput = (data: string): void => {
-      if (isKittyKeypadEnter(data))
+      if (isKittyKeypadEnter(data)) {
         emitter.emit('input', String.fromCharCode(13));
+      } else if (isKittyCtrlC(data)) {
+        exit();
+      }
     };
     emitter.on('input', onInput);
     return () => emitter.off('input', onInput);
-  }, [stdin]);
+  }, [stdin, exit]);
   const foregroundOpen =
     pending !== undefined ||
     activeForm !== undefined ||
