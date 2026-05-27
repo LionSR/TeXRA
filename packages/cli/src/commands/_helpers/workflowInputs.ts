@@ -105,3 +105,24 @@ export async function expandWorkflowInputSpecs(
   }
   return unique;
 }
+
+/**
+ * Expand the `--input` (required) and `--context` (optional) specs a headless
+ * run accepts. `--context` is expanded per-spec so a missing path fails as a
+ * Usage error (exit 2) attributed to `--context`, rather than reaching the
+ * agent as a raw ENOENT — and so the plural helper's "at least one" guard
+ * doesn't reject an empty (legitimate) context list.
+ */
+export async function expandRunInputs(
+  inputSpecs: readonly string[],
+  contextSpecs: readonly string[],
+  cwd: string,
+): Promise<{ inputFiles: string[]; contextFiles: string[] }> {
+  const inputFiles = await expandWorkflowInputSpecs(inputSpecs, cwd);
+  const contextFiles = (
+    await Promise.all(
+      contextSpecs.map((spec) => expandWorkflowInputSpec(spec, cwd, '--context')),
+    )
+  ).flat();
+  return { inputFiles, contextFiles };
+}
