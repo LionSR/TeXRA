@@ -312,6 +312,7 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
   const errorText = toolUse.isError ? toolUse.errorText || '(error)' : '';
   const exitCode = showExitCode ? extractExitCode(toolUse) : undefined;
   const showNoOutput =
+    showOutput &&
     toolUse.status === TOOL_USE_STATUS.COMPLETED &&
     visibleOutput.length === 0 &&
     !patchGroups &&
