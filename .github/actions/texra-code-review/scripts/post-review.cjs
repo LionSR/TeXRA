@@ -126,7 +126,7 @@ async function postTexraReview({ github, context, core }) {
   const pull_number = context.payload.pull_request.number;
   const commentableLines = loadCommentableLines();
   const knownThreadStates = loadKnownThreadStates();
-  const canResolveThreads = process.env.TEXRA_RESOLVE_THREADS === 'true';
+  const canActOnThreads = process.env.TEXRA_RESOLVE_THREADS === 'true';
   const comments = Array.isArray(review.comments)
     ? review.comments.map((comment) => formatReviewComment(comment, marker))
     : [];
@@ -213,14 +213,14 @@ async function postTexraReview({ github, context, core }) {
     }
     try {
       if (action.action === 'reply') {
-        if (!canResolveThreads) {
+        if (!canActOnThreads) {
           skippedThreadActions += 1;
           continue;
         }
         await replyToThread(action.thread_id, action.body);
       } else if (action.action === 'resolve') {
         if (knownThreadState?.isResolved === true) continue;
-        if (!canResolveThreads) {
+        if (!canActOnThreads) {
           skippedThreadActions += 1;
           continue;
         }
@@ -228,7 +228,7 @@ async function postTexraReview({ github, context, core }) {
         await setThreadResolved(action.thread_id, true);
       } else if (action.action === 'unresolve') {
         if (knownThreadState?.isResolved === false) continue;
-        if (!canResolveThreads) {
+        if (!canActOnThreads) {
           skippedThreadActions += 1;
           continue;
         }
