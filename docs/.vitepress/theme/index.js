@@ -1,6 +1,7 @@
 // Default theme
 import DefaultTheme from 'vitepress/theme';
 import './custom.css';
+import './mockup.css';
 import LaunchPage from '../components/LaunchPage.vue';
 import LandingHero from '../components/LandingHero.vue';
 import GuideIntroHero from '../components/GuideIntroHero.vue';

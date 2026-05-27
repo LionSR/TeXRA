@@ -1,25 +1,38 @@
 <script setup>
-// LaTeX Diff product slice: the LaTeXdiffs section (base vs. edited pickers,
-// the latexdiff button, git-commit comparison) beside the compiled, color-
-// coded diff PDF that TeXRA opens for you.
+// LaTeX Diff product slice: the LaTeXDiffs section beside the compiled, color-
+// coded diff PDF. Mirrors LatexDiffsSection.ts — a source-control-labelled
+// collapsible with Base / Edited / Commit rows, each a labelled <wa-select>
+// fronted by a toolbar of icon actions.
 import MockupFrame from './MockupFrame.vue';
 </script>
 
 <template>
   <MockupFrame title="spectral-gap — texra-paper">
     <aside class="board">
-      <div class="board-tabs">
-        <span class="bt bt-on"
-          ><wa-icon library="texra" name="chevron-down"></wa-icon>
-          LaTeXdiffs</span
-        >
-      </div>
-
       <div class="diffui">
+        <div class="sechead">
+          <wa-icon class="chev" library="texra" name="chevron-up"></wa-icon>
+          <wa-icon
+            class="sec-ic"
+            library="texra"
+            name="source-control"
+          ></wa-icon>
+          <span class="sec-lbl">LaTeXDiffs</span>
+        </div>
+
+        <!-- Base -->
         <div class="field">
-          <span class="f-label"
-            ><wa-icon library="texra" name="file"></wa-icon> Base</span
-          >
+          <div class="frow">
+            <span class="f-label">Base</span>
+            <div class="acts">
+              <span class="act" title="Set current file as base"
+                ><wa-icon library="texra" name="file-code"></wa-icon
+              ></span>
+              <span class="act" title="Clear base file"
+                ><wa-icon library="texra" name="close"></wa-icon
+              ></span>
+            </div>
+          </div>
           <div class="select">
             <span class="s-val">spectral-gap.tex</span>
             <wa-icon
@@ -30,10 +43,28 @@ import MockupFrame from './MockupFrame.vue';
           </div>
         </div>
 
+        <!-- Edited -->
         <div class="field">
-          <span class="f-label"
-            ><wa-icon library="texra" name="edit"></wa-icon> Edited</span
-          >
+          <div class="frow">
+            <span class="f-label"
+              ><wa-icon class="lbl-ic" library="texra" name="edit"></wa-icon>
+              Edited</span
+            >
+            <div class="acts">
+              <span class="act" title="Accept changes"
+                ><wa-icon library="texra" name="check"></wa-icon
+              ></span>
+              <span class="act" title="Compare files"
+                ><wa-icon library="texra" name="diff"></wa-icon
+              ></span>
+              <span class="act" title="Merge edits"
+                ><wa-icon library="texra" name="merge"></wa-icon
+              ></span>
+              <span class="act act-on" title="LaTeXdiff"
+                ><wa-icon library="texra" name="diff-single"></wa-icon
+              ></span>
+            </div>
+          </div>
           <div class="select">
             <span class="s-val">spectral-gap_polish_r1.tex</span>
             <wa-icon
@@ -44,33 +75,37 @@ import MockupFrame from './MockupFrame.vue';
           </div>
         </div>
 
-        <div class="btn-row">
-          <button class="btn btn-primary">
-            <wa-icon library="texra" name="diff-single"></wa-icon> latexdiff
-          </button>
-          <button class="btn">
-            <wa-icon library="texra" name="git-merge"></wa-icon> Merge
-          </button>
-        </div>
-
-        <div class="sep">Git comparison</div>
-
+        <!-- Commit (git) -->
         <div class="field">
-          <span class="f-label"
-            ><wa-icon library="texra" name="git-commit"></wa-icon> Commit</span
-          >
-          <div class="select">
-            <span class="s-val s-mono">a3f9c1 · unify notation</span>
-            <wa-icon class="s-caret" library="texra" name="refresh"></wa-icon>
+          <div class="frow">
+            <span class="f-label"
+              ><wa-icon
+                class="lbl-ic"
+                library="texra"
+                name="git-commit"
+              ></wa-icon>
+              Commit</span
+            >
+            <div class="acts">
+              <span class="act" title="LaTeXdiff with commit"
+                ><wa-icon library="texra" name="diff-single"></wa-icon
+              ></span>
+              <span class="act" title="Pack latexdiff output"
+                ><wa-icon library="texra" name="archive"></wa-icon
+              ></span>
+              <span class="act" title="Clean latexdiff output"
+                ><wa-icon library="texra" name="trash"></wa-icon
+              ></span>
+            </div>
           </div>
-        </div>
-        <button class="btn btn-wide">
-          <wa-icon library="texra" name="diff-single"></wa-icon> latexdiff-vc
-        </button>
-
-        <div class="hint">
-          The compiled diff opens automatically — additions in blue, deletions
-          struck through in red.
+          <div class="select">
+            <span class="s-val s-mute">a3f9c1 · unify notation</span>
+            <wa-icon
+              class="s-caret"
+              library="texra"
+              name="chevron-down"
+            ></wa-icon>
+          </div>
         </div>
       </div>
     </aside>
@@ -122,170 +157,74 @@ import MockupFrame from './MockupFrame.vue';
 
 <style scoped>
 .board {
-  flex-shrink: 0;
   width: 300px;
-  background: #1e1e1e;
-  border-right: 1px solid #000;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
 }
-.board-tabs {
-  display: flex;
-  height: 36px;
-  padding: 0 8px;
-  background: #252526;
-  border-bottom: 1px solid #000;
-}
-.bt {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 12px;
-  font-size: 0.74rem;
-  color: var(--color-text-secondary);
-  white-space: nowrap;
-}
-.bt wa-icon {
-  font-size: 11px;
-}
-.bt-on {
-  color: #fff;
-  font-weight: 600;
-  box-shadow: inset 0 -2px 0 #c89be0;
-}
-
 .diffui {
   display: flex;
   flex-direction: column;
-  gap: 11px;
-  padding: 14px 12px;
+  gap: 12px;
+  padding: 12px;
   font-family: var(--vp-font-family-base);
 }
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.f-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--color-text-secondary);
-}
-.f-label wa-icon {
-  font-size: 11px;
-}
-.select {
+.sechead {
   display: flex;
   align-items: center;
   gap: 7px;
-  background: #2c2c2c;
-  border: 1px solid var(--color-border);
-  border-radius: 5px;
-  padding: 6px 9px;
-  font-size: 0.78rem;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+.chev {
+  display: inline-flex;
+  color: #7a7a7a;
+  font-size: 11px;
+}
+.sec-ic {
+  display: inline-flex;
+  color: #c89be0;
+  font-size: 13px;
+}
+.sec-lbl {
+  font-size: 0.82rem;
+  font-weight: 600;
   color: var(--wa-color-text-normal);
 }
-.s-val {
-  font-family: var(--vp-font-family-mono);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+
+.frow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
-.s-mono {
-  color: var(--color-text-secondary);
-}
-.s-caret {
-  margin-left: auto;
+.lbl-ic {
   font-size: 11px;
   color: var(--color-text-tertiary);
-  flex-shrink: 0;
 }
-.btn-row {
+.acts {
   display: flex;
-  gap: 7px;
+  gap: 1px;
 }
-.btn {
+.act {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  flex: 1;
-  border: 1px solid var(--color-border);
-  border-radius: 5px;
-  padding: 7px 9px;
-  background: #2c2c2c;
-  color: var(--wa-color-text-normal);
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: var(--vp-font-family-base);
-}
-.btn wa-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  color: var(--color-text-secondary);
   font-size: 12px;
 }
-.btn-primary {
-  background: #8957b5;
-  border-color: #8957b5;
-  color: #fff;
+.act:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--wa-color-text-normal);
 }
-.btn-wide {
-  width: 100%;
+.act-on {
+  color: #c89be0;
 }
-.sep {
-  margin-top: 2px;
-  font-size: 0.64rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--color-text-tertiary);
-  border-top: 1px solid var(--color-border);
-  padding-top: 10px;
-}
-.hint {
-  margin-top: 4px;
-  font-size: 0.72rem;
-  line-height: 1.5;
+.s-mute {
   color: var(--color-text-secondary);
 }
 
-/* Editor / diff PDF */
-.result {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  background: #1e1e1e;
-  min-width: 0;
-}
-.tabs {
-  display: flex;
-  background: #252526;
-  border-bottom: 1px solid #000;
-}
-.tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  background: #1e1e1e;
-  border: none;
-  border-right: 1px solid #1a1a1a;
-  color: #fff;
-  font-size: 0.74rem;
-  padding: 8px 14px;
-  cursor: default;
-  font-family: var(--vp-font-family-mono);
-  box-shadow: inset 0 2px 0 #c89be0;
-}
-.t-ic {
-  display: inline-flex;
-  flex-shrink: 0;
-  font-size: 12px;
-}
+/* Compiled diff PDF page */
 .t-pdf {
   color: #e0524f;
 }
@@ -333,8 +272,6 @@ import MockupFrame from './MockupFrame.vue';
 @media (max-width: 820px) {
   .board {
     width: auto;
-    border-right: none;
-    border-bottom: 1px solid #000;
   }
 }
 </style>

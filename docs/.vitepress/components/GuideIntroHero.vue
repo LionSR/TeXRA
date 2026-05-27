@@ -3,6 +3,8 @@
 // delegated one task to a team of specialists. Clicking a delegation row in
 // the Progress sidebar switches the editor to that specialist's artifact —
 // grounded literature search, a Wolfram cross-check, a Lean 4 proof.
+// Mirrors StreamHeader.ts, TodoList.ts, BackgroundTasksPanel.ts, and the
+// delegate_agent tool-use card from toolFormatters.ts.
 import { ref } from 'vue';
 import MockupFrame from './MockupFrame.vue';
 
@@ -10,7 +12,7 @@ const view = ref('search');
 </script>
 
 <template>
-  <MockupFrame title="entanglement-paper — texra" class="gi">
+  <MockupFrame title="entanglement-paper — texra" class="tall">
     <!-- Progress sidebar: orchestrator + specialist roster -->
     <aside class="board">
       <div class="board-tabs">
@@ -23,8 +25,12 @@ const view = ref('search');
       </div>
 
       <div class="stream-head">
-        <span class="sh-name">orchestrator@opus47</span>
-        <span class="sh-dot"></span>
+        <span class="sh-name">orchestrator</span>
+        <span class="sh-dot" title="Running"></span>
+        <span class="odyssey"
+          ><wa-icon class="ody-ic" library="texra" name="compass"></wa-icon
+          >Odyssey</span
+        >
         <span class="sh-badge"
           ><wa-icon class="sh-pulse" library="texra" name="pulse"></wa-icon>4
           turns, 18 tool calls</span
@@ -39,7 +45,7 @@ const view = ref('search');
         <div class="panel">
           <div class="panel-sum">
             <wa-icon class="chev" library="texra" name="chevron-down"></wa-icon>
-            Todos (2/4)
+            Todos (2/3)
           </div>
           <div class="panel-body todos">
             <div class="todo done">
@@ -53,27 +59,6 @@ const view = ref('search');
             <div class="todo prog">
               <span class="td-sp"></span
               ><span class="td-tx">Formalize subadditivity in Lean</span>
-            </div>
-            <div class="todo">
-              <span class="td-todo"></span
-              ><span class="td-tx td-pending">Write up §3</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-sum">
-            <wa-icon class="chev" library="texra" name="chevron-down"></wa-icon>
-            Background Tasks
-          </div>
-          <div class="panel-body">
-            <div class="sec-label">
-              <wa-icon
-                class="chev"
-                library="texra"
-                name="chevron-down"
-              ></wa-icon>
-              Subagents · 1 active · 2 done
             </div>
           </div>
         </div>
@@ -90,15 +75,14 @@ const view = ref('search');
                 <span class="umsg-time">09:02:11</span>
               </div>
               <div class="umsg-body">
-                Survey recent results on steady-state entanglement, derive the
-                concurrence, and formalize the entropy bound.
+                Survey steady-state entanglement, derive the concurrence, and
+                formalize the entropy bound.
               </div>
             </div>
           </div>
 
           <div class="reason">
-            I'll split this across three specialists — each grounded in its own
-            tools — and assemble their results.
+            I'll split this across three specialists and assemble their results.
           </div>
 
           <button
@@ -111,16 +95,12 @@ const view = ref('search');
               library="texra"
               name="chevron-right"
             ></wa-icon>
-            <wa-icon
-              class="tc-ic ic-done"
-              library="texra"
-              name="check"
-            ></wa-icon>
+            <wa-icon class="tc-ic" library="texra" name="account"></wa-icon>
             <span class="tc-label"
               ><span class="tc-tool">delegate_agent</span> — search · arXiv +
               Crossref</span
             >
-            <span class="tc-model">gpt55</span>
+            <span class="tc-time">0:31</span>
           </button>
 
           <button
@@ -133,35 +113,50 @@ const view = ref('search');
               library="texra"
               name="chevron-right"
             ></wa-icon>
-            <wa-icon
-              class="tc-ic ic-done"
-              library="texra"
-              name="check"
-            ></wa-icon>
+            <wa-icon class="tc-ic" library="texra" name="account"></wa-icon>
             <span class="tc-label"
               ><span class="tc-tool">delegate_agent</span> — research · derive
               in Wolfram</span
             >
-            <span class="tc-model">opus47T</span>
+            <span class="tc-time">1:12</span>
           </button>
 
-          <button
-            class="tcard"
+          <!-- active delegation, expanded to show the real card body -->
+          <div
+            class="tcard open"
             :class="{ active: view === 'lean' }"
             @click="view = 'lean'"
           >
-            <wa-icon
-              class="chev tc-chev"
-              library="texra"
-              name="chevron-right"
-            ></wa-icon>
-            <span class="tc-sp"></span>
-            <span class="tc-label"
-              ><span class="tc-tool">delegate_agent</span> — lean · formalize
-              the bound</span
-            >
-            <span class="tc-time tc-timer">0:24</span>
-          </button>
+            <div class="tc-sum">
+              <wa-icon
+                class="chev tc-chev tc-open"
+                library="texra"
+                name="chevron-right"
+              ></wa-icon>
+              <wa-icon class="tc-ic" library="texra" name="account"></wa-icon>
+              <span class="tc-label"
+                ><span class="tc-tool">delegate_agent</span> — lean</span
+              >
+              <span class="tc-time tc-timer">0:24</span>
+            </div>
+            <div class="tc-body">
+              <div class="tc-row">
+                <span class="tc-k">Agent</span><code class="tc-code">lean</code
+                ><span class="tc-model">(opus47T)</span>
+              </div>
+              <div class="tc-row">
+                <span class="tc-k">Instruction</span
+                ><span class="tc-v"
+                  >Formalize subadditivity of the von Neumann entropy.</span
+                >
+              </div>
+              <div class="tc-row">
+                <span class="tc-k">Files</span
+                ><span class="tc-file">Entropy.lean</span
+                ><span class="tc-src">(input)</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </aside>
@@ -263,41 +258,16 @@ const view = ref('search');
 </template>
 
 <style scoped>
-/* Sidebar + editor reuse the same idioms as the landing mockup. Tokens come
-   from MockupFrame's .win. */
 .board {
-  flex-shrink: 0;
   width: 256px;
-  background: #1e1e1e;
-  border-right: 1px solid #000;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
 }
-.board-tabs {
-  display: flex;
-  height: 36px;
-  padding: 0 8px;
-  background: #252526;
-  border-bottom: 1px solid #000;
+/* Three editor tabs are tight at content width — shrink them to fit. */
+.tabs .tab {
+  font-size: 0.69rem;
+  padding: 8px 8px;
 }
-.bt {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 12px;
-  font-size: 0.74rem;
-  color: var(--color-text-secondary);
-  white-space: nowrap;
-}
-.bt wa-icon {
-  font-size: 12px;
-}
-.bt-on {
-  color: #fff;
-  font-weight: 600;
-  box-shadow: inset 0 -2px 0 #c89be0;
-}
+
+/* Stream header */
 .stream-head {
   display: flex;
   align-items: center;
@@ -320,18 +290,22 @@ const view = ref('search');
   border-radius: 50%;
   background: var(--color-success);
   flex-shrink: 0;
-  animation: shpulse 1.8s infinite;
+  animation: mk-shpulse 1.8s infinite;
 }
-@keyframes shpulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.5);
-  }
-  70% {
-    box-shadow: 0 0 0 5px rgba(63, 185, 80, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(63, 185, 80, 0);
-  }
+.odyssey {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.66rem;
+  color: #cda6e6;
+  background: rgba(200, 155, 224, 0.12);
+  border: 1px solid rgba(200, 155, 224, 0.3);
+  border-radius: 999px;
+  padding: 1px 7px;
+  flex-shrink: 0;
+}
+.ody-ic {
+  font-size: 10px;
 }
 .sh-badge {
   display: inline-flex;
@@ -359,6 +333,7 @@ const view = ref('search');
   display: inline-flex;
   font-size: 13px;
 }
+
 .board-scroll {
   font-family: var(--vp-font-family-mono);
   font-size: 0.76rem;
@@ -384,17 +359,8 @@ const view = ref('search');
 .panel-body {
   padding: 2px 12px 9px 14px;
 }
-.sec-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 0;
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-text-secondary);
-}
+
+/* Todos */
 .todos {
   display: flex;
   flex-direction: column;
@@ -436,7 +402,7 @@ const view = ref('search');
   border: 2px solid rgba(200, 155, 224, 0.3);
   border-top-color: #c89be0;
   border-radius: 50%;
-  animation: spin 0.9s linear infinite;
+  animation: mk-spin 0.9s linear infinite;
 }
 .td-todo {
   width: 11px;
@@ -445,6 +411,8 @@ const view = ref('search');
   border: 1.5px solid var(--color-text-tertiary);
   border-radius: 50%;
 }
+
+/* Conversation log */
 .log {
   padding: 9px 12px;
   display: flex;
@@ -487,6 +455,8 @@ const view = ref('search');
   font-size: 0.78rem;
   padding: 0 2px;
 }
+
+/* Tool-use / delegate cards */
 .tcard {
   display: flex;
   align-items: center;
@@ -508,21 +478,10 @@ const view = ref('search');
   background: rgba(200, 155, 224, 0.13);
 }
 .tc-ic {
+  color: #75beff;
   flex-shrink: 0;
   display: inline-flex;
   font-size: 13px;
-}
-.ic-done {
-  color: var(--color-success);
-}
-.tc-sp {
-  width: 12px;
-  height: 12px;
-  flex-shrink: 0;
-  border: 2px solid rgba(215, 169, 62, 0.3);
-  border-top-color: var(--color-warning);
-  border-radius: 50%;
-  animation: spin 0.9s linear infinite;
 }
 .tc-label {
   flex: 1;
@@ -538,11 +497,8 @@ const view = ref('search');
 .tc-chev {
   align-self: center;
 }
-.tc-model {
-  flex-shrink: 0;
-  align-self: center;
-  font-size: 0.64rem;
-  color: var(--color-text-secondary);
+.tc-open {
+  transform: rotate(90deg);
 }
 .tc-time {
   flex-shrink: 0;
@@ -554,47 +510,59 @@ const view = ref('search');
   color: var(--color-warning);
 }
 
-/* Editor pane */
-.result {
+/* Expanded delegate card */
+.tcard.open {
+  display: block;
+  padding: 4px 6px;
+}
+.tcard.open:hover {
+  background: rgba(200, 155, 224, 0.13);
+}
+.tc-sum {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.tc-body {
+  padding: 5px 0 2px 27px;
   display: flex;
   flex-direction: column;
-  flex: 1;
-  background: #1e1e1e;
-  min-width: 0;
+  gap: 4px;
 }
-.tabs {
+.tc-row {
   display: flex;
-  background: #252526;
-  border-bottom: 1px solid #000;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 0.72rem;
+  line-height: 1.4;
 }
-.tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #2d2d2d;
-  border: none;
-  border-right: 1px solid #1a1a1a;
+.tc-k {
   color: var(--color-text-secondary);
-  font-size: 0.69rem;
-  padding: 8px 8px;
-  cursor: pointer;
-  font-family: var(--vp-font-family-mono);
-  white-space: nowrap;
-}
-.tab:hover {
-  color: var(--wa-color-text-normal);
-}
-.tab.active {
-  background: #1e1e1e;
-  color: #fff;
-  box-shadow: inset 0 2px 0 #c89be0;
-}
-.t-ic {
-  display: inline-flex;
-  align-items: center;
   flex-shrink: 0;
-  font-size: 12px;
+  min-width: 64px;
 }
+.tc-v {
+  color: var(--wa-color-text-normal);
+  font-family: var(--vp-font-family-base);
+}
+.tc-code {
+  color: #c89be0;
+  background: rgba(200, 155, 224, 0.12);
+  border-radius: 3px;
+  padding: 0 5px;
+}
+.tc-model {
+  color: var(--color-text-secondary);
+}
+.tc-src {
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+.tc-file {
+  color: var(--color-text-link);
+}
+
+/* Editor: terminal-style artifact surface */
 .t-bib {
   color: #69b06a;
 }
@@ -621,9 +589,6 @@ const view = ref('search');
   font-size: 0.82rem;
   line-height: 1.7;
   color: var(--wa-color-text-normal);
-}
-.cmt {
-  color: #6a9955;
 }
 .wl {
   color: var(--wa-color-text-normal);
@@ -682,17 +647,5 @@ const view = ref('search');
 }
 .indent2 {
   padding-left: 2.4em;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (max-width: 820px) {
-  .board {
-    width: auto;
-    border-right: none;
-    border-bottom: 1px solid #000;
-  }
 }
 </style>

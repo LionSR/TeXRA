@@ -14,7 +14,7 @@ const LOGO = withBase('/logo-128x128.svg');
 </script>
 
 <template>
-  <div class="win" role="group">
+  <div class="win mockup" role="group">
     <div class="win-bar">
       <span class="dot dot-r"></span>
       <span class="dot dot-y"></span>
@@ -125,7 +125,7 @@ const LOGO = withBase('/logo-128x128.svg');
 }
 .win-body {
   display: flex;
-  min-height: 440px;
+  min-height: 470px;
 }
 .win-content {
   display: flex;
