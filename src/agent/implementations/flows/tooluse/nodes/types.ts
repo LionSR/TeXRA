@@ -32,6 +32,8 @@ export interface ToolUseRunShared {
   userCancelledRetry?: boolean;
   /** Distinguishes failure from cancellation during resume. */
   lastError?: RetryErrorInfo;
+  /** Last assembled assistant response, retained without persisting full assembly strings. */
+  lastResponse?: string;
   /** True after a tool-use subagent delivered a cycle result to its parent. */
   deliveredToOrchestrator?: boolean;
 }

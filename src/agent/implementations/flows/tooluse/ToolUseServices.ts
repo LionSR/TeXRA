@@ -27,6 +27,8 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
     touchedFiles: string[],
   ) => boolean | void | Promise<boolean | void>;
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
+  /** Stop after one cycle instead of waiting for a conversational follow-up. */
+  readonly stopAfterCycle?: boolean;
   /** Persist todos to the execution KV store. Injected by runToolUseFlow. */
   readonly persistTodos?: (todos: TodoItem[]) => Promise<void>;
   /** True when this agent was launched as a subagent by an orchestrator. */

@@ -12,6 +12,7 @@ export interface RunExecutionRequestOptions {
   openWorkflowOutput?: (result: WorkflowFlowResult) => Promise<void>;
   enforceCategory?: boolean;
   registerExecution?: boolean;
+  stopAfterCycle?: boolean;
 }
 
 export async function runValidatedExecutionRequest(
@@ -36,6 +37,7 @@ export async function runValidatedExecutionRequest(
   const result = await executeAgent(request.config, executionId, {
     runtimeHost: options.runtimeHost,
     enforceCategory: options.enforceCategory,
+    stopAfterCycle: options.stopAfterCycle,
   });
   if (result.category === 'workflow') {
     await options.openWorkflowOutput?.(result);
