@@ -149,6 +149,21 @@ export class UserMessage extends LitElement {
       .user-message-timestamp {
         font-size: var(--font-size-xs);
       }
+
+      /*
+       * High-contrast themes: the selection-background fill clashes with the
+       * editor-foreground text (rendering the bubble unreadable) and the panel
+       * border resolves to transparent. Fall back to the editor background plus
+       * a solid contrast border so the message stays visible and delineated.
+       */
+      :host-context(.vscode-high-contrast) .user-message,
+      :host-context(.vscode-high-contrast-light) .user-message {
+        background-color: var(--wa-color-surface-default);
+        border-color: var(
+          --vscode-contrastBorder,
+          var(--wa-color-surface-border)
+        );
+      }
     `,
   ];
 
