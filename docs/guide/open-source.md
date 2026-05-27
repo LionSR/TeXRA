@@ -131,8 +131,79 @@ mcp-server-mathematica powers TeXRA's mathematical verification capabilities. It
 
 ---
 
+## TeXRA Scientific Skills
+
+**A collection of agent skills for scientific writing, peer review, and figure creation.**
+
+[![GitHub](https://img.shields.io/github/stars/texra-ai/texra-scientific-skills)](https://github.com/texra-ai/texra-scientific-skills)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/texra-ai/texra-scientific-skills/blob/main/LICENSE)
+
+The capabilities that power TeXRA, packaged as portable agent skills. **texra-scientific-skills** distributes specialized skills for working with LaTeX manuscripts, mathematical content, and scientific communication, usable as Claude Code plugins or Codex skill bundles.
+
+### Skills
+
+- **Inline Paper Critic** — adds compile-safe review comments to LaTeX manuscripts
+- **Literature Search** — discovers and synthesizes academic sources with proper grounding
+- **Manuscript Review** — audits technical documents for mathematical accuracy and consistency
+- **Math OCR** — converts handwritten math into LaTeX
+- **Mathematical Enhancer** — improves proofs, derivations, and mathematical clarity
+- **Scientific Presenter** — creates presentations and Beamer decks
+- **Scientific Simplifier** — streamlines code, LaTeX, and writing while preserving meaning
+- **TikZ Figure Builder** — creates and refines scientific diagrams with iterative compilation
+- **Writing Commenter** — provides inline editorial feedback
+
+### Quick Start
+
+```text
+# Claude Code
+/plugin marketplace add texra-ai/texra-scientific-skills
+```
+
+Skills use the standardized `SKILL.md` format and can also be installed via Codex or by symlinking individual skill directories into your agent's skills location.
+
+::: tip Use Case
+These skills bring TeXRA's research workflows to any agent system that supports the `SKILL.md` format, so your own AI assistant can draft, review, and illustrate scientific work.
+:::
+
+[GitHub Repository](https://github.com/texra-ai/texra-scientific-skills)
+
+---
+
+## TeXRA Lean Skills
+
+**Agent skills for Lean 4 and Mathlib formalization work.**
+
+[![GitHub](https://img.shields.io/github/stars/texra-ai/texra-lean-skills)](https://github.com/texra-ai/texra-lean-skills)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/texra-ai/texra-lean-skills/blob/main/LICENSE)
+
+**texra-lean-skills** helps AI agents assist with mathematical formalization in Lean 4, bridging informal mathematics and formal code. Distributed as a Claude Code plugin or Codex skills bundle following the standard skill format.
+
+### Skills
+
+- **lean-blueprint** — authors and maintains documents connecting informal mathematics to Lean declarations
+- **lean-proof-assistant** — develops and debugs Lean proofs with goal inspection and lemma search
+- **lean-search** — locates existing Lean 4 and Mathlib lemmas, APIs, and formalization patterns
+- **lean-simplifier** — refactors code toward Mathlib-quality style while preserving meaning
+
+### Quick Start
+
+```text
+# Claude Code
+/plugin marketplace add texra-ai/texra-lean-skills
+```
+
+Skills can also be installed via Codex or by symlinking individual skill directories into your agent's skills location.
+
+::: tip Use Case
+If you formalize mathematics in Lean 4, these skills let AI assistants search Mathlib, draft and debug proofs, and keep blueprints in sync with formal declarations.
+:::
+
+[GitHub Repository](https://github.com/texra-ai/texra-lean-skills)
+
+---
+
 ## Contributing
 
-Both projects are MIT-licensed and welcome contributions. If you find a bug, want to add a model to llm-zoo, or want to extend the Mathematica tools — open an issue or submit a pull request on the respective GitHub repository.
+All of these projects are MIT-licensed and welcome contributions. If you find a bug, want to add a model to llm-zoo, extend the Mathematica tools, or contribute a new agent skill — open an issue or submit a pull request on the respective GitHub repository.
 
 - [texra-ai on GitHub](https://github.com/texra-ai)
