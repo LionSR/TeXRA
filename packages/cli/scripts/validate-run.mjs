@@ -347,6 +347,21 @@ ${JSON.stringify({
     normalized.thread_actions[0]?.action === 'unresolve',
     'TeXRA review normalization should preserve unresolve thread actions',
   );
+  const normalizedThreadActions = normalizeReview(
+    JSON.stringify({
+      body: '## TeXRA Code Review\n\nLooks correct.',
+      thread_actions: [{ action: 'resolve', thread_id: 'PRRT_thread' }],
+      threadActions: [
+        { action: 'resolve', threadId: 'PRRT_thread', body: 'Fixed.' },
+      ],
+      resolved_threads: [{ thread_id: 'PRRT_thread' }],
+    }),
+  ).thread_actions;
+  assert(
+    normalizedThreadActions.length === 1 &&
+      normalizedThreadActions[0]?.body === 'Fixed.',
+    'TeXRA review normalization should deduplicate thread action aliases',
+  );
   assert(
     normalizeReview('{"body":"   ","comments":[]}').body ===
       'TeXRA completed without a final review message.',
@@ -523,12 +538,20 @@ ${JSON.stringify({
     }).model === 'gemini31p',
     'review model resolution should honor the global model override',
   );
+  const actionText = readFileSync(
+    path.join(repoRoot, '.github/actions/texra-code-review/action.yml'),
+    'utf8',
+  );
+  assert(
+    actionText.includes('texra_status=$?'),
+    'TeXRA action should preserve command stderr before exiting on failure',
+  );
   assert(
     readFileSync(
-      path.join(repoRoot, '.github/actions/texra-code-review/action.yml'),
+      path.join(repoRoot, '.github/workflows/texra-code-review.yml'),
       'utf8',
-    ).includes('texra_status=$?'),
-    'TeXRA action should preserve command stderr before exiting on failure',
+    ).includes('git merge-base "$BASE_SHA" "$HEAD_SHA"'),
+    'TeXRA review workflow should diff from the PR merge base',
   );
 
   const promptContextCwd = mkdtempSync(
@@ -656,6 +679,70 @@ ${JSON.stringify({
     assert(
       !postedInlineComments[0]?.body.includes('Reviewed by TeXRA agent'),
       'inline comments should not include TeXRA reviewer attribution',
+    );
+
+    const threadMutations = [];
+    process.env.TEXRA_RESOLVE_THREADS = 'true';
+    writeFileSync(
+      reviewJson,
+      JSON.stringify({
+        body: '## TeXRA Code Review\n\nNo new findings.',
+        comments: [],
+        thread_actions: [
+          { action: 'resolve', thread_id: 'PRRT_thread' },
+          { action: 'unresolve', thread_id: 'PRRT_thread' },
+        ],
+      }),
+    );
+    await postTexraReview({
+      github: {
+        rest: {
+          pulls: {
+            createReview: async () => undefined,
+          },
+        },
+        graphql: async (query) => {
+          if (query.includes('unresolveReviewThread')) {
+            threadMutations.push('unresolve');
+          } else if (query.includes('resolveReviewThread')) {
+            threadMutations.push('resolve');
+          }
+        },
+      },
+      context: {
+        repo: { owner: 'owner', repo: 'repo' },
+        payload: { pull_request: { number: 1 } },
+      },
+      core: {
+        notice: () => undefined,
+        warning: () => undefined,
+      },
+    });
+    assert(
+      JSON.stringify(threadMutations) ===
+        JSON.stringify(['resolve', 'unresolve']),
+      'thread action posting should update resolved state within a batch',
+    );
+
+    process.env.TEXRA_RESOLVE_THREADS = 'false';
+    writeFileSync(
+      reviewJson,
+      JSON.stringify({
+        body: '## TeXRA Code Review\n\nNo new findings.',
+        comments: [{ path: 'paper.tex', line: 1, body: 'Inline finding.' }],
+        thread_actions: [
+          {
+            action: 'resolve',
+            thread_id: 'PRRT_thread',
+            body: 'Confirmed fixed.',
+          },
+          {
+            action: 'reply',
+            thread_id: 'PRRT_thread',
+            body: 'Additional note.',
+          },
+        ],
+      }),
     );
 
     let fallbackAttempt = 0;

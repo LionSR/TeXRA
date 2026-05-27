@@ -105,6 +105,18 @@ function normalizeThreadAction(action) {
   };
 }
 
+function dedupeThreadActions(actions) {
+  const actionsByThread = new Map();
+  for (const action of actions) {
+    const key = `${action.action}\0${action.thread_id}`;
+    const existing = actionsByThread.get(key);
+    if (!existing || (!existing.body && action.body)) {
+      actionsByThread.set(key, action);
+    }
+  }
+  return [...actionsByThread.values()];
+}
+
 function normalizeReview(rawText) {
   const modelPayload = parseModelJson(rawText);
   if (!modelPayload || typeof modelPayload !== 'object') {
@@ -148,10 +160,9 @@ function normalizeReview(rawText) {
   return {
     body,
     comments: comments.slice(0, 50),
-    thread_actions: rawThreadActions
-      .map(normalizeThreadAction)
-      .filter(Boolean)
-      .slice(0, 50),
+    thread_actions: dedupeThreadActions(
+      rawThreadActions.map(normalizeThreadAction).filter(Boolean),
+    ).slice(0, 50),
   };
 }
 
@@ -193,6 +204,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  dedupeThreadActions,
   fencedJsonBlocks,
   normalizeModelComment,
   normalizeReview,

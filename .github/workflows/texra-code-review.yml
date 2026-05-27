@@ -137,7 +137,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .texra-action
-          git diff --find-renames "$BASE_SHA" "$HEAD_SHA" > .texra-action/pr.diff
+          MERGE_BASE_SHA="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+          git diff --find-renames "$MERGE_BASE_SHA" "$HEAD_SHA" > .texra-action/pr.diff
           node "${{ steps.trusted-texra-action.outputs.script-root }}/write-commentable-lines.cjs"
 
       - name: Write TeXRA review prompt context

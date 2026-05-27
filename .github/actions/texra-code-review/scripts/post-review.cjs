@@ -126,6 +126,14 @@ async function postTexraReview({ github, context, core }) {
   const pull_number = context.payload.pull_request.number;
   const commentableLines = loadCommentableLines();
   const knownThreadStates = loadKnownThreadStates();
+  const currentThreadStates = knownThreadStates
+    ? new Map(
+        [...knownThreadStates.entries()].map(([threadId, state]) => [
+          threadId,
+          { ...state },
+        ]),
+      )
+    : null;
   const canActOnThreads = process.env.TEXRA_RESOLVE_THREADS === 'true';
   const comments = Array.isArray(review.comments)
     ? review.comments.map((comment) => formatReviewComment(comment, marker))
@@ -204,8 +212,8 @@ async function postTexraReview({ github, context, core }) {
     : [];
   let skippedThreadActions = 0;
   for (const action of threadActions) {
-    const knownThreadState = knownThreadStates?.get(action.thread_id);
-    if (knownThreadStates && !knownThreadState) {
+    const currentThreadState = currentThreadStates?.get(action.thread_id);
+    if (currentThreadStates && !currentThreadState) {
       core.warning(
         `Skipping TeXRA thread action ${action.action}: thread id ${action.thread_id} was not found in the previous TeXRA thread context.`,
       );
@@ -219,21 +227,23 @@ async function postTexraReview({ github, context, core }) {
         }
         await replyToThread(action.thread_id, action.body);
       } else if (action.action === 'resolve') {
-        if (knownThreadState?.isResolved === true) continue;
+        if (currentThreadState?.isResolved === true) continue;
         if (!canActOnThreads) {
           skippedThreadActions += 1;
           continue;
         }
         if (action.body) await replyToThread(action.thread_id, action.body);
         await setThreadResolved(action.thread_id, true);
+        if (currentThreadState) currentThreadState.isResolved = true;
       } else if (action.action === 'unresolve') {
-        if (knownThreadState?.isResolved === false) continue;
+        if (currentThreadState?.isResolved === false) continue;
         if (!canActOnThreads) {
           skippedThreadActions += 1;
           continue;
         }
         if (action.body) await replyToThread(action.thread_id, action.body);
         await setThreadResolved(action.thread_id, false);
+        if (currentThreadState) currentThreadState.isResolved = false;
       }
     } catch (error) {
       core.warning(
