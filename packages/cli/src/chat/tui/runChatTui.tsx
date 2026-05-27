@@ -913,6 +913,13 @@ export async function runChat(
       stdout: process.stdout,
       stderr: process.stderr,
       stdin: process.stdin,
+      // Own Ctrl+C ourselves (App's unified useInput → exit()) instead of via
+      // Ink's built-in handler. Ink's exitOnCtrlC only matches the raw \x03,
+      // which never arrives under the Kitty protocol (Ctrl+C becomes ESC[99;5u);
+      // worse, while it's enabled Ink's useInput *filters out* Ctrl+C before any
+      // handler runs (build/hooks/use-input.js). Disabling it lets the parsed
+      // ctrl+c key reach our handler uniformly on every terminal.
+      exitOnCtrlC: false,
       // Enable the Kitty keyboard protocol (disambiguate flag only) when the
       // terminal supports it — already confirmed by discoverTerminalCapabilities
       // above, so use 'enabled' to skip Ink's redundant detection query. This

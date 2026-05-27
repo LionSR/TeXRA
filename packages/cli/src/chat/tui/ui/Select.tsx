@@ -139,13 +139,18 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
       if (choice && !choice.disabled) props.onSelect(choice.value);
       return;
     }
-    // Single-key jumps (1-9, then a-z) for direct selection.
-    const idx = selectIndexForHotkey(input);
-    if (idx != null && idx < props.items.length) {
-      const choice = props.items[idx];
-      if (choice && !choice.disabled) {
-        setHighlight(idx);
-        props.onSelect(choice.value);
+    // Single-key jumps (1-9, then a-z) for direct selection. Ignore modified
+    // chords: Ctrl+C exits the app (the App's unified handler owns it now that
+    // we render with exitOnCtrlC: false, so Ink no longer mutes it), and
+    // Ctrl/Alt+<letter> were never meant as row hotkeys.
+    if (!key.ctrl && !key.meta) {
+      const idx = selectIndexForHotkey(input);
+      if (idx != null && idx < props.items.length) {
+        const choice = props.items[idx];
+        if (choice && !choice.disabled) {
+          setHighlight(idx);
+          props.onSelect(choice.value);
+        }
       }
     }
   });
