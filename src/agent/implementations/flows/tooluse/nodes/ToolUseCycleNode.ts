@@ -154,6 +154,8 @@ export class ToolUseCycleNode<C> extends Node<
       workspaceSnapshot,
       userChannels: prepRes.userChannels,
     };
+    shared.lastResponse =
+      prepRes.workspaceState.assembly.lastResponse || shared.lastResponse;
 
     if (execRes.outcome === 'completed') {
       const { interactions } = prepRes.workspaceState;

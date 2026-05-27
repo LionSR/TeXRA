@@ -84,6 +84,10 @@ export class ToolUseWaitNode<C> extends Node<
         onBeforeWaiting !== undefined && delivered !== false;
     }
 
+    if (this.services.stopAfterCycle) {
+      return { kind: 'stop' };
+    }
+
     // Idle-continuation providers run BEFORE `waitForFollowUp` blocks; once
     // inside the wait, a continuation check is unreachable. Skipped after a
     // failed/cancelled cycle so the user-recovery path still fires. The
