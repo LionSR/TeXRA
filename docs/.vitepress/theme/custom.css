@@ -24,3 +24,18 @@
   --vp-c-brand-light: var(--vp-c-brand-2);
   --vp-c-brand-dark: var(--vp-c-brand-3);
 }
+
+/* Product-mockup heroes on guide pages fill the prose column. */
+.vp-doc .win {
+  margin-top: 1.5rem;
+}
+
+/* Caption under the product-mockup heroes on guide pages. */
+.vp-doc .hero-caption {
+  margin: 0.85rem auto 2rem;
+  max-width: 640px;
+  text-align: center;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--vp-c-text-3);
+}
