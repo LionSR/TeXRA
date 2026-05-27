@@ -6,12 +6,13 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
-import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
+import { writeTextStderr } from '../runtime/logSinks';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
+import { agentsRunCommand } from './agentsRun';
 import type { CliContext } from '../runtime/cliContext';
 
 async function listAgents(context: CliContext): Promise<number> {
@@ -115,5 +116,6 @@ export const agentsCommand = defineCommand({
   subCommands: {
     list: agentsListCommand,
     show: agentsShowCommand,
+    run: agentsRunCommand,
   },
 });
