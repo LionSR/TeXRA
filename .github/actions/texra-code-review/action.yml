@@ -72,6 +72,7 @@ runs:
       uses: actions/setup-node@v5
       with:
         node-version: '22'
+        package-manager-cache: false
 
     - name: Install TeXRA CLI
       shell: bash
@@ -87,6 +88,7 @@ runs:
           fi
           working_directory="$(cd "$working_directory" && pwd)"
           cd "$working_directory"
+          corepack enable
           corepack pnpm install --frozen-lockfile
           corepack pnpm --filter @texra-ai/cli run build
           node packages/cli/dist/bin/texra.js version
