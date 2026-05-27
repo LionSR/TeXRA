@@ -5,22 +5,28 @@ import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import { detectUnknownCliCommand } from '@cli/commands/root';
+import { resolveLoginProvider } from '@cli/commands/auth';
+import { doctorPlatformInitContext } from '@cli/commands/doctor';
 import {
-  cliTerminalStatus,
-  collectStringFlagValues,
-  detectUnknownCliCommand,
-  doctorPlatformInitContext,
-  expandWorkflowInputSpecs,
-  formatCliModelListError,
   formatUnknownCliCommand,
-  isCliFetchStackLog,
   normalizeRootShortcuts,
   reorderGlobalFlags,
-  resolveLoginProvider,
-  resumeWorkflowOutputFile,
+} from '@cli/commands/_helpers/dispatch';
+import {
+  formatCliModelListError,
+  isCliFetchStackLog,
+} from '@cli/commands/_helpers/fetchSilencer';
+import {
+  collectStringFlagValues,
+  rejectHeadlessOnlyFlags,
+} from '@cli/commands/_helpers/globalArgs';
+import { cliTerminalStatus } from '@cli/commands/_helpers/terminalStatus';
+import { expandWorkflowInputSpecs } from '@cli/commands/_helpers/workflowInputs';
+import {
   resolveWorkflowOutput,
-} from '@cli/commands/root';
-import { rejectHeadlessOnlyFlags } from '@cli/commands/_helpers/globalArgs';
+  resumeWorkflowOutputFile,
+} from '@cli/commands/_helpers/workflowOutput';
 import { isKnownCliModel } from '@cli/runtime/cliConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { END_GROUP_STATUS, EXECUTION_STATUS } from '@shared/schemas';
