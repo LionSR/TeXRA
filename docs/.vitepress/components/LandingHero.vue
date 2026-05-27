@@ -268,13 +268,10 @@ function copyCli() {
                   name="chevron-right"
                 ></wa-icon>
                 <wa-icon class="tc-ic" library="texra" name="account"></wa-icon>
-                <span class="tc-main">
-                  <span class="tc-label"
-                    ><span class="tc-tool">delegate_agent</span> —
-                    research</span
-                  >
-                  <span class="tc-sub">derive λ₂ bound</span>
-                </span>
+                <span class="tc-label"
+                  ><span class="tc-tool">delegate_agent</span> — derive the
+                  spectral-gap bound for d-regular graphs</span
+                >
                 <span class="tc-time">11:13:55</span>
               </button>
 
@@ -289,13 +286,10 @@ function copyCli() {
                   name="chevron-right"
                 ></wa-icon>
                 <wa-icon class="tc-ic" library="texra" name="account"></wa-icon>
-                <span class="tc-main">
-                  <span class="tc-label"
-                    ><span class="tc-tool">delegate_agent</span> —
-                    numerics</span
-                  >
-                  <span class="tc-sub">cross-check N=2000 in Wolfram</span>
-                </span>
+                <span class="tc-label"
+                  ><span class="tc-tool">delegate_agent</span> — cross-check λ₂
+                  numerically at N=2000</span
+                >
                 <span class="tc-time">11:14:07</span>
               </button>
 
@@ -310,12 +304,10 @@ function copyCli() {
                   name="chevron-right"
                 ></wa-icon>
                 <wa-icon class="tc-ic" library="texra" name="account"></wa-icon>
-                <span class="tc-main">
-                  <span class="tc-label"
-                    ><span class="tc-tool">delegate_agent</span> — lean</span
-                  >
-                  <span class="tc-sub">prove d − λ₂ &gt; 0</span>
-                </span>
+                <span class="tc-label"
+                  ><span class="tc-tool">delegate_agent</span> — prove the gap
+                  is positive in Lean 4</span
+                >
                 <span class="tc-time">11:14:38</span>
               </button>
 
@@ -328,12 +320,10 @@ function copyCli() {
                     name="chevron-right"
                   ></wa-icon>
                   <span class="tc-sp"></span>
-                  <span class="tc-main">
-                    <span class="tc-label"
-                      ><span class="tc-tool">delegate_workflow</span> —
-                      correct</span
-                    >
-                  </span>
+                  <span class="tc-label"
+                    ><span class="tc-tool">delegate_workflow</span> — unify λ₂
+                    notation across §2–3</span
+                  >
                   <span class="tc-time tc-timer">0:18</span>
                 </div>
                 <div class="tc-body">
@@ -465,6 +455,35 @@ function copyCli() {
                 λ₁&nbsp;=&nbsp;d</ins
               >. The spectral gap, defined as d&nbsp;−&nbsp;λ₂, plays a crucial
               role in the expansion properties of the graph.
+            </p>
+            <p class="pg-p">
+              <b>Theorem 2 (Alon–Boppana).</b>
+              <i
+                >For a d-regular graph on n vertices, <del>λ₂ is large</del
+                ><ins
+                  >λ₂&nbsp;≥&nbsp;2√(d−1)&nbsp;−&nbsp;o(1) as
+                  n&nbsp;→&nbsp;∞</ins
+                >.</i
+              >
+              A d-regular graph meeting this bound with equality is called a
+              <del>good expander</del><ins>Ramanujan graph</ins>.
+            </p>
+            <p class="pg-p">
+              <i>Proof.</i> <del>It follows from counting walks.</del
+              ><ins
+                >Count closed walks of length 2k rooted at a fixed vertex. The
+                number of such walks in the d-regular tree is the
+                Catalan-weighted moment C<sub>k</sub>&nbsp;(d−1)<sup>k</sup>,
+                and</ins
+              >
+              comparing with
+              tr(A<sup>2k</sup>)&nbsp;=&nbsp;Σ<sub>i</sub>&nbsp;λ<sub>i</sub
+              ><sup>2k</sup>
+              <ins
+                >as n&nbsp;→&nbsp;∞ forces
+                λ₂&nbsp;≥&nbsp;2√(d−1)&nbsp;−&nbsp;o(1).</ins
+              >
+              <span class="qed">∎</span>
             </p>
           </div>
 
@@ -1067,28 +1086,26 @@ function copyCli() {
   padding: 0 2px;
 }
 
-/* Tool-use cards (banner-details summary rows) */
+/* Tool-use cards — flush, borderless collapsible log rows */
 .tcard {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   width: 100%;
   text-align: left;
-  background: #1c1c1c;
-  border: 1px solid #2c2c2c;
-  border-radius: 6px;
-  padding: 7px 9px;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  padding: 4px 6px;
   cursor: pointer;
   font: inherit;
   color: inherit;
 }
 .tcard:hover {
-  background: #232323;
-  border-color: #383838;
+  background: rgba(255, 255, 255, 0.04);
 }
 .tcard.active {
-  background: #2a2331;
-  border-color: #5a4072;
+  background: rgba(200, 155, 224, 0.13);
 }
 .tc-ic {
   color: #75beff;
@@ -1105,14 +1122,9 @@ function copyCli() {
   border-radius: 50%;
   animation: spin 0.9s linear infinite;
 }
-.tc-main {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-  flex: 1;
-}
 .tc-label {
+  flex: 1;
+  min-width: 0;
   color: #d8d8d8;
   white-space: nowrap;
   overflow: hidden;
@@ -1120,13 +1132,6 @@ function copyCli() {
 }
 .tc-tool {
   color: #9a9a9a;
-}
-.tc-sub {
-  color: #7c7c7c;
-  font-size: 0.7rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .tc-chev {
   align-self: center;
@@ -1147,17 +1152,18 @@ function copyCli() {
 /* Expanded (in-progress) delegation card */
 .tcard.open {
   display: block;
-  padding: 0;
+  padding: 4px 6px;
+}
+.tcard.open:hover {
+  background: rgba(200, 155, 224, 0.13);
 }
 .tcard-sum {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 9px;
+  gap: 7px;
 }
 .tc-body {
-  border-top: 1px solid #2c2c2c;
-  padding: 7px 9px 8px 27px;
+  padding: 5px 0 2px 27px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1195,12 +1201,11 @@ function copyCli() {
   font-style: italic;
 }
 
-/* Latexdiff result banner */
+/* Latexdiff result — flush borderless banner */
 .ldiff {
-  background: #1c1c1c;
-  border: 1px solid #2c2c2c;
-  border-radius: 6px;
-  padding: 6px 9px;
+  background: none;
+  border: none;
+  padding: 4px 6px;
   cursor: pointer;
 }
 .ldiff-sum {
@@ -1225,8 +1230,8 @@ function copyCli() {
   display: flex;
   align-items: center;
   gap: 5px;
-  margin-top: 6px;
-  padding-left: 18px;
+  margin-top: 5px;
+  padding-left: 26px;
   color: #8a8a8a;
 }
 .ldiff-ok {
@@ -1234,19 +1239,22 @@ function copyCli() {
   color: #3fb950;
   font-size: 11px;
 }
-.ldiff-file {
-  color: #4daafc;
-}
 .ldiff-r {
   color: #8a8a8a;
 }
 .ldiff-arrow {
   color: #6f6f6f;
 }
-.ldiff-link {
+/* File references behave like the real clickable file-links */
+.ldiff-file,
+.ldiff-link,
+.tc-file {
   color: #4daafc;
+  cursor: pointer;
 }
-.ldiff:hover .ldiff-link {
+.ldiff-file:hover,
+.ldiff-link:hover,
+.tc-file:hover {
   text-decoration: underline;
 }
 
@@ -1309,16 +1317,18 @@ function copyCli() {
   line-height: 1;
 }
 
-/* Rendered diff "PDF" page */
+/* Rendered diff "PDF" page — fills the editor like a real PDF preview */
 .page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   background: #fdfdfb;
   color: #1a1a1a;
   margin: 16px;
-  padding: 20px 24px;
+  padding: 22px 26px;
   border-radius: 4px;
   font-family: 'Latin Modern Roman', Georgia, 'Times New Roman', serif;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
-  overflow: hidden;
 }
 .pg-h {
   font-size: 1.05rem;
@@ -1345,12 +1355,19 @@ function copyCli() {
   color: #1f4fd6;
   text-decoration: underline;
 }
-.page sub {
+.page sub,
+.page sup {
   font-size: 0.7em;
+}
+.qed {
+  float: right;
 }
 
 /* Wolfram / Lean panes */
 .term {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   margin: 16px;
   padding: 16px 18px;
   background: #141414;
