@@ -154,7 +154,7 @@ The capabilities that power TeXRA, packaged as portable agent skills. **texra-sc
 
 ### Quick Start
 
-```bash
+```text
 # Claude Code
 /plugin marketplace add texra-ai/texra-scientific-skills
 ```
@@ -162,7 +162,7 @@ The capabilities that power TeXRA, packaged as portable agent skills. **texra-sc
 Skills use the standardized `SKILL.md` format and can also be installed via Codex or by symlinking individual skill directories into your agent's skills location.
 
 ::: tip Use Case
-These skills bring TeXRA's research workflows to any agent system that supports the `SKILL.md` format — bring scientific writing, review, and figure creation into your own AI assistant.
+These skills bring TeXRA's research workflows to any agent system that supports the `SKILL.md` format, so your own AI assistant can draft, review, and illustrate scientific work.
 :::
 
 [GitHub Repository](https://github.com/texra-ai/texra-scientific-skills)
@@ -187,7 +187,7 @@ These skills bring TeXRA's research workflows to any agent system that supports 
 
 ### Quick Start
 
-```bash
+```text
 # Claude Code
 /plugin marketplace add texra-ai/texra-lean-skills
 ```
