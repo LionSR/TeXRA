@@ -29,7 +29,7 @@ graph TB
     Orchestrator --> WA[Workflow Agents]
     Orchestrator --> IA[Interactive Agents]
 
-    WA --> |polish, correct, draw| Output[Versioned Output Files]
+    WA --> |polish, correct, merge| Output[Versioned Output Files]
     Output --> Diff[Color-Coded Diff]
 
     IA --> Tools[Tool Access]
