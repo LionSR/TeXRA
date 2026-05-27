@@ -121,7 +121,9 @@ export async function expandRunInputs(
   const inputFiles = await expandWorkflowInputSpecs(inputSpecs, cwd);
   const contextFiles = (
     await Promise.all(
-      contextSpecs.map((spec) => expandWorkflowInputSpec(spec, cwd, '--context')),
+      contextSpecs.map((spec) =>
+        expandWorkflowInputSpec(spec, cwd, '--context'),
+      ),
     )
   ).flat();
   return { inputFiles, contextFiles };

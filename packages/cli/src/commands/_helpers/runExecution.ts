@@ -6,7 +6,10 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 
-import { readCliTerminalStatus, type ExecuteAgentResult } from './terminalStatus';
+import {
+  readCliTerminalStatus,
+  type ExecuteAgentResult,
+} from './terminalStatus';
 
 export interface CliExecuteOptions {
   /** Forwarded to `runValidatedExecutionRequest`. */
@@ -20,7 +23,9 @@ export interface CliExecuteOptions {
   readonly markErrorOnThrow?: boolean;
   /** Wrap the run (e.g. multi-agent preset visibility) without leaking the
    *  runtime-host lifecycle into the caller. */
-  readonly wrap?: (run: () => Promise<ExecuteAgentResult>) => Promise<ExecuteAgentResult>;
+  readonly wrap?: (
+    run: () => Promise<ExecuteAgentResult>,
+  ) => Promise<ExecuteAgentResult>;
 }
 
 /**
