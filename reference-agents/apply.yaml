@@ -108,7 +108,7 @@ prompts:
 
       Verify before output: all fixes are correct, logical flow is preserved (no notation used before defined), and the document is complete. Cross-document consistency must hold (aligned notation, consistent definitions, matching results). Match the document's existing comment style (\criticize / \todo / \comment / %) when annotating changes.
 
-      Output the final revised documents in the following order: {{ INPUT_FILES | join(', ') }}.
+      Output the final revised documents in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}.
 
       <documents>
       {% for output in INPUT_FILES %}

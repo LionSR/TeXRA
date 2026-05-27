@@ -62,7 +62,7 @@ prompts:
 
       Output further enhanced and complete versions of all \LaTeX documents in the format below, incorporating the fixes above. Include all the changes you added in the previous step. Only modify sections explicitly mentioned in the instruction, unless changes in one section directly necessitate adjustments in another for consistency. Did later documents receive less attention than earlier ones? Re-read the last document now.
 
-      Ensure that the output documents are in the following order: {{ INPUT_FILES | join(', ') }}
+      Ensure that the output documents are in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}
 
       <documents>
       {% for output in INPUT_FILES %}
