@@ -2,8 +2,8 @@
 // todos panels at the bottom, then status, approval modal, and input bar.
 // Tab / Shift-Tab cycles focus across subagent streams.
 
-import { Box, useInput, useWindowSize } from 'ink';
-import { useState } from 'react';
+import { Box, useInput, useStdin, useWindowSize } from 'ink';
+import { useEffect, useState } from 'react';
 
 import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
 import { REVERSE_SEARCH_ROWS } from './input/ReverseSearch';
@@ -18,7 +18,11 @@ import { SubagentList } from './panes/SubagentList';
 import { TipRow } from './panes/TipRow';
 import { TodosPlanPanel } from './panes/TodosPlanPanel';
 import { currentApproval } from './state/approvalQueue';
-import { metaChordDigit, metaChordInput } from './input/inputKeys';
+import {
+  isKittyKeypadEnter,
+  metaChordDigit,
+  metaChordInput,
+} from './input/inputKeys';
 import {
   hasChildExecutionRows,
   numericFocusTarget,
@@ -28,6 +32,15 @@ import { canShowSubagentControls, cliState } from './state/cliState';
 import { nextFocusBack, nextFocusForward } from './state/focusCycle';
 import { useSignal } from './state/useSignal';
 import type { InputHistory } from './history/inputHistory';
+
+// Subset of Ink's internal stdin event emitter (the same channel `useInput`
+// consumes) needed to re-inject a synthesized Enter. Not part of `useStdin`'s
+// public type, so we narrow to just what we touch.
+interface InputEventEmitterLike {
+  emit(event: 'input', data: string): void;
+  on(event: 'input', listener: (data: string) => void): void;
+  off(event: 'input', listener: (data: string) => void): void;
+}
 
 const MIN_TRANSCRIPT_WIDTH = 20;
 const FOREGROUND_TRANSCRIPT_ROWS = 1;
@@ -187,6 +200,25 @@ export function App(props: AppProps): React.JSX.Element {
   const [childControlMode, setChildControlMode] = useState<
     ChildControlMode | undefined
   >(undefined);
+
+  // The Kitty disambiguate flag makes keypad Enter a distinct key that Ink's
+  // `useInput` never surfaces (see isKittyKeypadEnter). Re-dispatch it on Ink's
+  // own input channel as a plain Enter (CR) so every submit/confirm path that
+  // keys off `key.return` keeps working. Inert when the protocol is off — the
+  // sequence simply never arrives.
+  const stdin = useStdin();
+  useEffect(() => {
+    const emitter = (
+      stdin as unknown as { internal_eventEmitter?: InputEventEmitterLike }
+    ).internal_eventEmitter;
+    if (!emitter) return;
+    const onInput = (data: string): void => {
+      if (isKittyKeypadEnter(data))
+        emitter.emit('input', String.fromCharCode(13));
+    };
+    emitter.on('input', onInput);
+    return () => emitter.off('input', onInput);
+  }, [stdin]);
   const foregroundOpen =
     pending !== undefined ||
     activeForm !== undefined ||

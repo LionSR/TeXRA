@@ -49,3 +49,18 @@ export function isShiftReturnInput(
   if (key.ctrl || key.meta || key.shift !== true) return false;
   return key.return === true || input === '\r' || input === '\n';
 }
+
+// Under the Kitty disambiguate flag, terminals report keypad Enter as its own
+// key (codepoint 57414, "kpenter") distinct from the main Enter (codepoint 13).
+// Ink parses it but `useInput` surfaces no field for it, so keypad Enter would
+// silently stop submitting once the protocol is on. App.tsx re-dispatches this
+// raw sequence as a plain Enter. Matches only the unmodified form (bare, or the
+// explicit "no modifiers" `;1`) so Ctrl/Alt+keypad-Enter pass through untouched.
+const KITTY_KEYPAD_ENTER = new Set([
+  `${String.fromCharCode(27)}[57414u`,
+  `${String.fromCharCode(27)}[57414;1u`,
+]);
+
+export function isKittyKeypadEnter(data: string): boolean {
+  return KITTY_KEYPAD_ENTER.has(data);
+}

@@ -9,11 +9,14 @@ import {
   insertText,
 } from '@cli/chat/tui/input/textInputEditing';
 import {
+  isKittyKeypadEnter,
   isPlainReturnInput,
   isShiftReturnInput,
   metaChordDigit,
   metaChordInput,
 } from '@cli/chat/tui/input/inputKeys';
+
+const ESC = String.fromCharCode(27);
 
 describe('CLI TUI text input editing', () => {
   it('recognizes normalized and raw Enter without stealing Ctrl-J', () => {
@@ -33,6 +36,15 @@ describe('CLI TUI text input editing', () => {
     expect(isShiftReturnInput('', { return: true })).toBe(false);
     expect(isShiftReturnInput('j', { ctrl: true })).toBe(false);
     expect(isShiftReturnInput('', { return: true, meta: true })).toBe(false);
+  });
+
+  it('recognizes the Kitty keypad-Enter sequence for re-dispatch as Enter', () => {
+    expect(isKittyKeypadEnter(`${ESC}[57414u`)).toBe(true);
+    expect(isKittyKeypadEnter(`${ESC}[57414;1u`)).toBe(true);
+    // Main Enter, plain CR, and modified keypad Enter must not match.
+    expect(isKittyKeypadEnter('\r')).toBe(false);
+    expect(isKittyKeypadEnter(`${ESC}[13u`)).toBe(false);
+    expect(isKittyKeypadEnter(`${ESC}[57414;5u`)).toBe(false);
   });
 
   it('recognizes Option/Alt chords from normalized meta and ESC-prefixed input', () => {
