@@ -66,6 +66,8 @@ export interface RunToolUseFlowInput<
   ) => boolean | void | Promise<boolean | void>;
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
+  /** Stop after one cycle instead of waiting for a conversational follow-up. */
+  stopAfterCycle?: boolean;
   /** Fires after a running tool-use chat changes its model. */
   onModelChanged?: (
     modelHandler: ToolUseServices['modelHandler'],
@@ -318,9 +320,12 @@ export async function runToolUseFlow<C = unknown>(
           ? EXECUTION_STATUS.INTERRUPTED
           : EXECUTION_STATUS.COMPLETED;
       status = executionToEndStatus(execStatus) as EndGroupStatus;
-      lastResponse = findLastAssistantText(shared.messages, (m) =>
-        services.modelHandler.extractAssistantText(m),
-      );
+      lastResponse =
+        findLastAssistantText(shared.messages, (m) =>
+          services.modelHandler.extractAssistantText(m),
+        ) ||
+        shared.lastResponse ||
+        undefined;
       const extractedTouchedFiles = extractTouchedFiles(shared.stateSlices);
       touchedFiles = extractedTouchedFiles.length
         ? extractedTouchedFiles
