@@ -38,13 +38,13 @@ const editors = [
   },
 ];
 
-function copyCli() {
+async function copyCli() {
   try {
-    navigator.clipboard?.writeText(CLI);
+    await navigator.clipboard.writeText(CLI);
     copied.value = true;
     setTimeout(() => (copied.value = false), 1600);
   } catch {
-    /* clipboard unavailable */
+    /* clipboard unavailable or write denied — leave label unchanged */
   }
 }
 </script>
@@ -344,7 +344,7 @@ function copyCli() {
         </aside>
 
         <!-- Right: the result — files the run produced, open in the editor -->
-        <section class="result">
+        <div class="result">
           <div class="tabs">
             <button
               type="button"
@@ -489,7 +489,7 @@ function copyCli() {
               <span class="term-ok">✓ proof compiles · 0 errors · 0 sorry</span>
             </div>
           </div>
-        </section>
+        </div>
       </div>
     </div>
   </div>
