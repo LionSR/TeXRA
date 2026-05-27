@@ -16,8 +16,16 @@ Access the merge functionality via the "LaTeXdiffs" section (<wa-icon library="t
 
 1.  **Select Base File**: Choose the original document you want to merge changes _into_ using the "Base File" dropdown (<wa-icon library="texra" name="file"></wa-icon> Base).
 2.  **Select Edited File**: Choose the document containing the suggested changes using the "Edited File" dropdown (<wa-icon library="texra" name="edit"></wa-icon> Edited).
-3.  **Choose Merge Model**: Select an appropriate language model from the main Model dropdown (<wa-icon library="texra" name="robot"></wa-icon> Model) below the instruction box. Models capable of strong reasoning (like GPT-4, Claude 3 Opus) are recommended for complex merges.
+3.  **Choose Merge Model**: Select an appropriate language model from the main Model dropdown (<wa-icon library="texra" name="robot"></wa-icon> Model) below the instruction box. Models capable of strong reasoning (like Claude Opus 4.7, GPT-5.5, or Gemini 3.1 Pro) are recommended for complex merges.
 4.  **Click Merge**: Press the "Merge" button (<wa-icon library="texra" name="merge"></wa-icon>) located in the "Edited File" row.
+
+::: info VS Code feature
+The Intelligent Merge button pairs a **Base File** with a separate **Edited
+File**, which the VS Code extension supplies through its file dropdowns. The
+`texra run` CLI command takes only `--input`/`--context` files and has no
+edited-file slot, so this merge workflow currently runs from the VS Code
+extension (or desktop app), not the CLI.
+:::
 
 TeXRA will then invoke the specialized `merge` agent:
 
