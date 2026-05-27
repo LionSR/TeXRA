@@ -10,6 +10,12 @@ const copied = ref(false);
 
 const CLI = 'npm install -g @texra-ai/cli';
 
+// Codicon-style glyphs matching the real ProgressBoard tool icons.
+const ICON_AGENT =
+  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="5.3" r="2.5"/><path d="M3 13.5c0-2.9 10-2.9 10 0"/></svg>';
+const ICON_DIFF =
+  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M5 2v8M5 13.5v.5"/><path d="M11 6v8M11 2v.5"/><path d="M3 6h4M9 10h4"/></svg>';
+
 // Editors all resolve to their respective marketplaces; Cursor, Windsurf and
 // other VS Code forks install TeXRA from Open VSX.
 const editors = [
@@ -121,7 +127,7 @@ function copyCli() {
           <span class="act-i">⚙</span>
         </nav>
 
-        <!-- Left: the TeXRA ProgressBoard -->
+        <!-- Left: the TeXRA ProgressBoard (orchestrator = tool-use agent) -->
         <aside class="board">
           <div class="board-tabs">
             <span class="bt">Problems</span>
@@ -132,65 +138,97 @@ function copyCli() {
 
           <div class="stream-head">
             <span class="sh-name">orchestrator@opus47</span>
-            <span class="sh-file">: spectral-gap.tex</span>
             <span class="sh-dot" title="Running"></span>
-            <span class="sh-badge">⟳ 3 turns</span>
+            <span class="sh-badge"><span class="sh-pulse"></span>3 turns</span>
+            <span class="sh-tools">▢ ↻ ⟂</span>
           </div>
 
-          <div class="tree">
-            <div class="grp done">
-              <span class="ic-ok">✓</span>
-              <span class="grp-title">Initialization</span>
-              <span class="grp-time">19:10:12 · 4ms</span>
+          <div class="board-scroll">
+            <!-- Todos panel -->
+            <div class="panel">
+              <div class="panel-sum"><span class="chev">▾</span> Todos (2/3)</div>
+              <div class="panel-body todos">
+                <div class="todo done"><span class="td-ic">✓</span><span class="td-tx">Derive the spectral-gap bound</span></div>
+                <div class="todo done"><span class="td-ic">✓</span><span class="td-tx">Cross-check λ₂ numerically</span></div>
+                <div class="todo prog"><span class="td-sp"></span><span class="td-tx">Revising notation in §2–3</span></div>
+              </div>
             </div>
 
-            <div class="grp run">
-              <span class="ic-spin"></span>
-              <span class="grp-title">Run: orchestrator@opus47</span>
-              <span class="grp-time">19:10:13</span>
+            <!-- Background Tasks → Subagents -->
+            <div class="panel">
+              <div class="panel-sum"><span class="chev">▾</span> Background Tasks</div>
+              <div class="panel-body">
+                <div class="sec-label"><span class="chev">▾</span> Subagents · 1 active · 3 done</div>
+                <div class="task">
+                  <span class="task-ic">🤖</span>
+                  <span class="task-name">correct</span>
+                  <span class="task-desc">(revising spectral-gap.tex)</span>
+                  <span class="task-elapsed">(0:18)</span>
+                  <span class="task-tag">running</span>
+                </div>
+              </div>
             </div>
 
-            <div class="grp-body">
-              <div class="logline">
-                <span class="bullet"></span><span class="ts">[19:10:13.060]</span>
-                <span class="lvl-info">INFO</span> Decomposed task — delegating to specialists
+            <!-- Conversation log: user message, reasoning, tool-use cards -->
+            <div class="log">
+              <div class="umsg">
+                <span class="umsg-ic">❝</span>
+                Derive the spectral-gap bound for d-regular random graphs,
+                cross-check it numerically, and tighten the notation in §2–3.
               </div>
 
-              <button class="sub done" :class="{ active: view === 'diff' }" @click="view = 'diff'">
-                <span class="ic-ok">✓</span>
-                <span class="sub-name">research<span class="sub-model">@sonnet46</span></span>
-                <span class="sub-detail">derived λ₂ ≲ 2√(d−1)</span>
-                <span class="grp-time">12.4s</span>
+              <div class="reason">
+                I'll delegate the derivation, verify it two ways — numerically
+                and in Lean — then revise the prose and return a diff.
+              </div>
+
+              <button class="tcard" :class="{ active: view === 'diff' }" @click="view = 'diff'">
+                <span class="tc-ic" v-html="ICON_AGENT"></span>
+                <span class="tc-main">
+                  <span class="tc-label"><span class="tc-tool">delegate_agent</span> — research</span>
+                  <span class="tc-sub">derive λ₂ bound</span>
+                </span>
+                <span class="chev tc-chev">▸</span>
               </button>
 
-              <button class="sub done" :class="{ active: view === 'wolfram' }" @click="view = 'wolfram'">
-                <span class="ic-ok">✓</span>
-                <span class="sub-name">numerics<span class="sub-model">@gpt5</span></span>
-                <span class="sub-detail">cross-check λ₂ = 4.41</span>
-                <span class="grp-time">8.1s</span>
+              <button class="tcard" :class="{ active: view === 'wolfram' }" @click="view = 'wolfram'">
+                <span class="tc-ic" v-html="ICON_AGENT"></span>
+                <span class="tc-main">
+                  <span class="tc-label"><span class="tc-tool">delegate_agent</span> — numerics</span>
+                  <span class="tc-sub">cross-check N=2000 in Wolfram</span>
+                </span>
+                <span class="chev tc-chev">▸</span>
               </button>
 
-              <button class="sub done" :class="{ active: view === 'lean' }" @click="view = 'lean'">
-                <span class="ic-ok">✓</span>
-                <span class="sub-name">lean<span class="sub-model">@opus47</span></span>
-                <span class="sub-detail">proof compiles · 0 sorry</span>
-                <span class="grp-time">31s</span>
+              <button class="tcard" :class="{ active: view === 'lean' }" @click="view = 'lean'">
+                <span class="tc-ic" v-html="ICON_AGENT"></span>
+                <span class="tc-main">
+                  <span class="tc-label"><span class="tc-tool">delegate_agent</span> — lean</span>
+                  <span class="tc-sub">prove d − λ₂ &gt; 0</span>
+                </span>
+                <span class="chev tc-chev">▸</span>
               </button>
 
-              <button class="sub run" :class="{ active: view === 'diff' }" @click="view = 'diff'">
-                <span class="ic-spin"></span>
-                <span class="sub-name">correct<span class="sub-model">@gemini25p</span></span>
-                <span class="sub-detail">18 edits · diff ready</span>
-                <span class="grp-time">19:10:34</span>
+              <button class="tcard run" :class="{ active: view === 'diff' }" @click="view = 'diff'">
+                <span class="tc-sp"></span>
+                <span class="tc-main">
+                  <span class="tc-label"><span class="tc-tool">delegate_workflow</span> — correct</span>
+                  <span class="tc-sub">unify λ₂ notation across §2–3</span>
+                </span>
+                <span class="chev tc-chev down">▾</span>
               </button>
 
               <div class="ldiff" @click="view = 'diff'">
-                <span class="ldiff-ic">⟂</span>
-                <span class="ldiff-file">spectral-gap.tex</span>
-                <span class="ldiff-r">[r0]</span>
-                <span class="ldiff-arrow">→</span>
-                <span class="ldiff-r">[r1]</span>
-                <span class="ldiff-paren">(<span class="ldiff-link">diff</span>)</span>
+                <span class="ldiff-ic" v-html="ICON_DIFF"></span>
+                <span class="ldiff-lbl">Latexdiff result</span>
+                <div class="ldiff-row">
+                  <span class="ldiff-ok">✓</span>
+                  <span class="ldiff-file">spectral-gap.tex</span>
+                  <span class="ldiff-r">[r0]</span>
+                  <span class="ldiff-arrow">→</span>
+                  <span class="ldiff-r">[r1]</span>
+                  (<span class="ldiff-link">diff</span>)
+                </div>
               </div>
             </div>
           </div>
@@ -548,10 +586,11 @@ function copyCli() {
   padding-bottom: 7px;
   padding-top: 7px;
 }
+/* Stream header */
 .stream-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   padding: 8px 12px;
   border-bottom: 1px solid #2a2a2a;
   font-family: var(--vp-font-family-mono);
@@ -559,22 +598,12 @@ function copyCli() {
   min-width: 0;
   white-space: nowrap;
 }
-.sh-name { color: #e6e6e6; font-weight: 600; flex-shrink: 0; }
-.sh-file {
-  color: #4daafc;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+.sh-name { color: #e6e6e6; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .sh-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #3fb950;
-  margin-left: auto;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #3fb950; flex-shrink: 0;
   box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.6);
   animation: shpulse 1.8s infinite;
-  flex-shrink: 0;
 }
 @keyframes shpulse {
   0% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.5); }
@@ -582,96 +611,120 @@ function copyCli() {
   100% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0); }
 }
 .sh-badge {
-  font-size: 0.68rem;
-  color: #c89be0;
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.68rem; color: #c89be0;
   background: rgba(200, 155, 224, 0.12);
-  border-radius: 999px;
-  padding: 1px 8px;
-  flex-shrink: 0;
+  border-radius: 999px; padding: 1px 8px; flex-shrink: 0;
 }
-.tree {
-  padding: 8px 10px;
+.sh-pulse { width: 6px; height: 6px; border-radius: 50%; background: #c89be0; }
+.sh-tools { margin-left: auto; color: #6f6f6f; letter-spacing: 2px; flex-shrink: 0; }
+
+.board-scroll {
   font-family: var(--vp-font-family-mono);
   font-size: 0.76rem;
   overflow: hidden;
 }
-.grp {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 8px;
-  margin: 2px 0;
-  border-radius: 4px;
-  border-left: 2px solid #3a3a3a;
-}
-.grp.done { border-left-color: #3fb950; }
-.grp.run { border-left-color: #d7a93e; }
-.grp-title { font-weight: 700; color: #d8d8d8; flex: 1; min-width: 0; }
-.grp-time { font-size: 0.7rem; color: #7a7a7a; white-space: nowrap; }
-.grp-body {
-  padding-left: 10px;
-  margin-left: 6px;
-  border-left: 1px dashed #353535;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.logline { color: #cfcfcf; padding: 3px 4px; display: flex; align-items: center; gap: 6px; }
-.bullet {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: #3fb950; flex-shrink: 0;
-}
-.ts { color: #6f6f6f; }
-.lvl-info { color: #75beff; font-weight: 700; }
 
-.sub {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  width: 100%;
-  text-align: left;
-  background: transparent;
-  border: none;
-  border-left: 2px solid transparent;
-  border-radius: 4px;
-  padding: 5px 8px;
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
+/* Collapsible panels (Todos, Background Tasks) */
+.panel { border-bottom: 1px solid #2a2a2a; }
+.panel-sum {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 12px;
+  color: #c4c4c4; font-weight: 600;
 }
-.sub.done { border-left-color: rgba(63, 185, 80, 0.5); }
-.sub.run { border-left-color: rgba(215, 169, 62, 0.6); }
-.sub:hover { background: #242424; }
-.sub.active { background: #2a2331; border-left-color: #c89be0; }
-.sub-name { color: #e0e0e0; font-weight: 600; }
-.sub-model { color: #7c7c7c; font-weight: 400; }
-.sub-detail { flex: 1; min-width: 0; color: #9a9a9a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chev { color: #7a7a7a; font-size: 0.6rem; }
+.panel-body { padding: 2px 12px 9px 14px; }
+.sec-label {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 0;
+  font-size: 0.68rem; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: #8a8a8a;
+}
 
+/* Todos */
+.todos { display: flex; flex-direction: column; gap: 3px; }
+.todo { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.todo .td-tx { color: #cccccc; }
+.todo.done { opacity: 0.55; }
+.todo.done .td-tx { text-decoration: line-through; color: #8a8a8a; }
+.todo.prog .td-tx { color: #e6e6e6; font-weight: 600; }
+.td-ic { color: #3fb950; font-weight: 700; flex-shrink: 0; }
+.td-sp {
+  width: 11px; height: 11px; flex-shrink: 0;
+  border: 2px solid rgba(200, 155, 224, 0.3);
+  border-top-color: #c89be0; border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+/* Background task item */
+.task { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
+.task-ic { font-size: 0.8rem; flex-shrink: 0; }
+.task-name { color: #e0e0e0; flex-shrink: 0; }
+.task-desc { color: #8a8a8a; font-size: 0.7rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.task-elapsed { color: #8a8a8a; font-size: 0.7rem; flex-shrink: 0; }
+.task-tag {
+  margin-left: auto; flex-shrink: 0;
+  font-size: 0.64rem; color: #e0b341;
+  background: rgba(215, 169, 62, 0.16);
+  border-radius: 4px; padding: 1px 7px;
+}
+
+/* Conversation log */
+.log { padding: 9px 12px; display: flex; flex-direction: column; gap: 7px; }
+.umsg {
+  background: #2a2140; color: #e9e2f3;
+  border: 1px solid #3a2c57; border-radius: 8px;
+  padding: 8px 10px; line-height: 1.5;
+  font-family: var(--vp-font-family-base); font-size: 0.78rem;
+}
+.umsg-ic { color: #b39ddb; margin-right: 4px; font-weight: 700; }
+.reason {
+  color: #b9b9b9; line-height: 1.5;
+  font-family: var(--vp-font-family-base); font-size: 0.78rem;
+  padding: 0 2px;
+}
+
+/* Tool-use cards (banner-details summary rows) */
+.tcard {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; text-align: left;
+  background: #1c1c1c; border: 1px solid #2c2c2c;
+  border-radius: 6px; padding: 7px 9px;
+  cursor: pointer; font: inherit; color: inherit;
+}
+.tcard:hover { background: #232323; border-color: #383838; }
+.tcard.active { background: #2a2331; border-color: #5a4072; }
+.tc-ic { color: #75beff; flex-shrink: 0; display: inline-flex; }
+.tc-ic :deep(svg) { width: 14px; height: 14px; display: block; }
+.tc-sp {
+  width: 12px; height: 12px; flex-shrink: 0;
+  border: 2px solid rgba(215, 169, 62, 0.3);
+  border-top-color: #d7a93e; border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+.tc-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.tc-label { color: #d8d8d8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-tool { color: #9a9a9a; }
+.tc-sub { color: #7c7c7c; font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-chev { flex-shrink: 0; align-self: center; }
+.tc-chev.down { color: #c89be0; }
+
+/* Latexdiff result banner */
 .ldiff {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  margin-left: 14px;
-  cursor: pointer;
-  color: #9a9a9a;
+  background: #1c1c1c; border: 1px solid #2c2c2c;
+  border-radius: 6px; padding: 6px 9px; cursor: pointer;
 }
-.ldiff:hover .ldiff-link { text-decoration: underline; }
-.ldiff-ic { color: #c89be0; }
+.ldiff-ic { color: #c89be0; display: inline-flex; vertical-align: -2px; margin-right: 5px; }
+.ldiff-ic :deep(svg) { width: 13px; height: 13px; }
+.ldiff-lbl { color: #c4c4c4; }
+.ldiff-row { display: flex; align-items: center; gap: 5px; margin-top: 5px; padding-left: 2px; color: #8a8a8a; }
+.ldiff-ok { color: #3fb950; font-weight: 700; }
 .ldiff-file { color: #4daafc; }
 .ldiff-r { color: #8a8a8a; }
 .ldiff-arrow { color: #6f6f6f; }
 .ldiff-link { color: #4daafc; }
+.ldiff:hover .ldiff-link { text-decoration: underline; }
 
-/* Status icons */
-.ic-ok { color: #3fb950; font-weight: 700; flex-shrink: 0; }
-.ic-spin {
-  width: 11px; height: 11px; flex-shrink: 0;
-  border: 2px solid rgba(215, 169, 62, 0.3);
-  border-top-color: #d7a93e;
-  border-radius: 50%;
-  animation: spin 0.9s linear infinite;
-}
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ---- Result panel ---- */
