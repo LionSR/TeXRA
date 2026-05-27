@@ -272,6 +272,18 @@ Never compensate for data model problems at render time. Renderers should only t
 
 **Fix:** Store data once at the source with all metadata (timestamps, IDs). If renderers need to generate or deduplicate, the upstream code path is missing data.
 
+### Terminal UI (CLI / Ink) discipline
+
+The `texra` CLI ships an Ink (React) TUI under `packages/cli/src/chat/tui/`. It deliberately does **not** take over the viewport (no alternate screen); it appends finalized content to native scrollback and only repaints a small live region at the bottom. Keep it that way — the terminal already implements scrolling, search, and mouse-scroll, so don't reinvent them.
+
+- **The terminal owns finalized history.** Every finalized transcript entry prints exactly once through Ink `<Static>` (`panes/StaticConversationTranscript.tsx`) so native scrollback / search / mouse-scroll keep working. Never re-render a finalized turn in the live region, and never reprint a `<Static>` item — dedupe by the entry's own stable id, not a stream-scoped key (see `appendStaticTranscriptItems`).
+- **Keep the live region minimal.** Only in-flight content belongs in the redrawn `<Box>` below `<Static>`: the streaming tail, spinners, side panels, input bar, and the active approval modal. A smaller live region flickers less and costs less to repaint. Size it explicitly (`selectPendingEntriesForViewport` in `panes/transcriptViewport.ts`) and cap panels (`BOTTOM_PANEL_MAX_ROWS`) so chrome never pushes the input off-screen. Don't park finalized content in the live region "for now."
+- **Stateless renderers.** Tool / diff / markdown components are props-in → JSX-out (the "Render-Time Workarounds" rule, applied to the TUI). No `Date.now()`, synthetic ids, or dedup at render time. Collapse/expand is a global `verbose` flag, not per-tool local state.
+- **Defer non-terminal content to the host.** The TUI does not render PDFs, LaTeX figures, or inline images (iTerm2 / Kitty / Sixel). Hand previews to the webview/desktop or the OS opener. The terminal is for chat, text, and diffs; rebuilding a document viewer in cells is out of scope.
+- **Capability-gate terminal features.** Negotiate support via the DA1-sentinel discovery (`state/terminalCapabilities.ts`) before emitting Kitty-keyboard, OSC color, bracketed-paste, or notification sequences. No "assume a modern terminal" feature use.
+- **Headless parity is sacred.** The TUI runs only on an interactive TTY. `texra run`, `--print/-p`, and `--output-format json|ndjson` must stay byte-identical — never let Ink rendering, ANSI chrome, or spinners leak into the piped / non-TTY path.
+- **Width changes invalidate wrapped lines.** Soft-wrap is width-dependent: recompute live-region layout from `useWindowSize()` columns on every render; never cache wrapped output across a width change. Already-printed `<Static>` lines keep their original wrap — that is an accepted scrollback tradeoff, not a bug to "fix" by repainting history.
+
 ### Separation of Concerns: VS Code Coupling
 
 For good separation of concerns, testability, and platform independence, core business logic should not depend on the `vscode` module. Keeping domain logic free of host-specific imports makes the code easier to test, reason about, and reuse.
