@@ -96,21 +96,15 @@ const baseConfig = {
   themeConfig: {
     logo: '/logo-128x128.svg',
     nav: [
-      { text: 'Home', link: '/' },
       {
         text: 'Docs',
         link: '/guide/',
-        activeMatch: '/guide/(?!built-in-agents|agent-architecture)',
+        activeMatch: '/guide/(?!built-in-agents)',
       },
       {
         text: 'Agents',
         link: '/guide/built-in-agents',
         activeMatch: '/guide/built-in-agents',
-      },
-      {
-        text: 'Workflow',
-        link: '/guide/agent-architecture',
-        activeMatch: '/guide/agent-architecture',
       },
       { text: 'Launch', link: '/launch' },
       { text: 'GitHub', link: 'https://github.com/texra-ai/texra-issues' },
