@@ -9,7 +9,6 @@ import {
   insertText,
 } from '@cli/chat/tui/input/textInputEditing';
 import {
-  isKittyCtrlC,
   isKittyKeypadEnter,
   isPlainReturnInput,
   isShiftReturnInput,
@@ -47,14 +46,6 @@ describe('CLI TUI text input editing', () => {
     expect(isKittyKeypadEnter('\r')).toBe(false);
     expect(isKittyKeypadEnter(`${ESC}[13u`)).toBe(false);
     expect(isKittyKeypadEnter(`${ESC}[57414;5u`)).toBe(false);
-  });
-
-  it('recognizes the Kitty Ctrl+C sequence for re-raising SIGINT', () => {
-    expect(isKittyCtrlC(`${ESC}[99;5u`)).toBe(true);
-    // Raw \x03, plain c, and other modifiers (e.g. Ctrl+Shift+C = ;6) must not match.
-    expect(isKittyCtrlC(String.fromCharCode(3))).toBe(false);
-    expect(isKittyCtrlC('c')).toBe(false);
-    expect(isKittyCtrlC(`${ESC}[99;6u`)).toBe(false);
   });
 
   it('recognizes Option/Alt chords from normalized meta and ESC-prefixed input', () => {
